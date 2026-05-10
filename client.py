@@ -1175,7 +1175,7 @@ class GameClient:
         elif card.def_id == 'Chromosome':
             discard = self.game_state.get('you', {}).get('discard', [])
             if not discard:
-                self._show_game_dialog("提示", "弃牌堆为空", "warning")
+                messagebox.showinfo("提示", "弃牌堆为空")
                 return False
             options = [f"{CARD_DEFS.get(c.get('def_id', ''), CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn}" for c in discard]
             sel = self._simple_choice("从弃牌堆选择一张牌", options)
@@ -1187,7 +1187,7 @@ class GameClient:
             destroyable = [e for e in opp_eq if 'indestructible' not in CARD_DEFS.get(
                 e.get('card_instance', {}).get('def_id', ''), CardDef('', '', '', 0, 0, '', 0, '', '', '', flags=set())).flags]
             if not destroyable:
-                self._show_game_dialog("提示", "敌方没有可摧毁的装备", "warning")
+                messagebox.showinfo("提示", "敌方没有可摧毁的装备")
                 return False
             options = [f"{CARD_DEFS.get(e.get('card_instance', {}).get('def_id', ''), CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn}" for e in destroyable]
             sel = self._simple_choice("选择要摧毁的装备", options)
@@ -1401,7 +1401,7 @@ class GameClient:
             attacks = [c for c in self.game_state.get('you', {}).get('hand', [])
                        if CARD_DEFS.get(c.get('def_id', ''), CardDef('', '', '', 0, 0, '', 0, '', '', '')).card_type == 'attack']
             if not attacks:
-                self._show_game_dialog("提示", "手中没有攻击牌", "warning")
+                messagebox.showinfo("提示", "手中没有攻击牌")
             else:
                 options = [f"{CARD_DEFS.get(a.get('def_id', ''), CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn}" for a in attacks]
                 sel = self._simple_choice(f"为{card_name}选择攻击牌", options)
@@ -1410,7 +1410,7 @@ class GameClient:
         elif choice_type == 'choose_enemy_equipment':
             opp_eq = self.game_state.get('opponent', {}).get('equipment', [])
             if not opp_eq:
-                self._show_game_dialog("提示", "敌方没有装备", "warning")
+                messagebox.showinfo("提示", "敌方没有装备")
             else:
                 options = [f"{CARD_DEFS.get(e.get('card_instance', {}).get('def_id', ''), CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn}" for e in opp_eq]
                 sel = self._simple_choice(f"为{card_name}选择目标装备", options)
@@ -1428,7 +1428,7 @@ class GameClient:
         elif choice_type == 'choose_card_from_deck':
             deck = self.game_state.get('you', {}).get('deck', [])
             if not deck:
-                self._show_game_dialog("提示", "牌堆为空", "warning")
+                messagebox.showinfo("提示", "牌堆为空")
             else:
                 options = [f"{CARD_DEFS.get(c.get('def_id', ''), CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn}" for c in deck]
                 sel = self._simple_choice(f"为{card_name}从牌堆选牌", options)
@@ -1437,7 +1437,7 @@ class GameClient:
         elif choice_type == 'choose_card_from_discard':
             discard = self.game_state.get('you', {}).get('discard', [])
             if not discard:
-                self._show_game_dialog("提示", "弃牌堆为空", "warning")
+                messagebox.showinfo("提示", "弃牌堆为空")
             else:
                 options = [f"{CARD_DEFS.get(c.get('def_id', ''), CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn}" for c in discard]
                 sel = self._simple_choice(f"为{card_name}从弃牌堆选牌", options)
