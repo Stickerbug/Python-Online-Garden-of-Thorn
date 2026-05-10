@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import threading
 import time
 import socket
@@ -433,10 +433,10 @@ class GameClient:
             elif msg.msg_type == 'invite_received':
                 self._show_invite_dialog(msg.data)
             elif msg.msg_type == 'invite_declined':
-                self._show_game_dialog("邀请", "对方拒绝了你的邀请", "info")
+                messagebox.showinfo("邀请", "对方拒绝了你的邀请")
                 self._update_status(f"大厅 | {self.nickname}")
             elif msg.msg_type == 'opponent_disconnected':
-                self._show_game_dialog("提示", "对手已断开连接，返回大厅", "info")
+                messagebox.showinfo("提示", "对手已断开连接，返回大厅")
                 self._send(NetworkMessage('return_lobby', {}))
             elif msg.msg_type == 'game_phase':
                 self.phase = msg.data.get('phase', '')
@@ -519,79 +519,6 @@ class GameClient:
         elif self.phase == 'game_over':
             self._show_game_over()
 
-    def _show_game_dialog(self, title: str, message: str, dialog_type: str = 'info'):
-        dialog = tk.Toplevel(self.root)
-        dialog.title(title)
-        dialog.geometry("360x180")
-        dialog.configure(bg=COLORS['bg_page'])
-        dialog.transient(self.root)
-        dialog.grab_set()
-        dialog.resizable(False, False)
-        if dialog_type == 'info':
-            icon_text = "ℹ"
-            icon_color = COLORS['magic']
-            btn_bg = COLORS['magic_bg']
-            btn_fg = COLORS['magic_text']
-        elif dialog_type == 'warning':
-            icon_text = "⚠"
-            icon_color = COLORS['elixir']
-            btn_bg = COLORS['elixir_bg']
-            btn_fg = COLORS['elixir_text']
-        elif dialog_type == 'error':
-            icon_text = "✗"
-            icon_color = COLORS['damage']
-            btn_bg = COLORS['damage_bg']
-            btn_fg = COLORS['damage']
-        else:
-            icon_text = "✓"
-            icon_color = COLORS['health']
-            btn_bg = COLORS['health_bg']
-            btn_fg = COLORS['health_text']
-        tk.Label(dialog, text=icon_text, font=_font(_f, 32),
-                 fg=icon_color, bg=COLORS['bg_page']).pack(pady=(20, 5))
-        tk.Label(dialog, text=message, font=_font(_f, 12),
-                 fg=COLORS['text_primary'], bg=COLORS['bg_page'],
-                 wraplength=300).pack(pady=10)
-        tk.Button(dialog, text="确定", font=_font(_f, 12),
-                  command=dialog.destroy, bg=btn_bg, fg=btn_fg,
-                  width=10).pack(pady=15)
-        dialog.update_idletasks()
-        x = self.root.winfo_x() + (self.root.winfo_width() - dialog.winfo_width()) // 2
-        y = self.root.winfo_y() + (self.root.winfo_height() - dialog.winfo_height()) // 2
-        dialog.geometry(f"+{x}+{y}")
-        dialog.wait_window()
-
-    def _show_game_confirm(self, title: str, message: str) -> bool:
-        dialog = tk.Toplevel(self.root)
-        dialog.title(title)
-        dialog.geometry("360x200")
-        dialog.configure(bg=COLORS['bg_page'])
-        dialog.transient(self.root)
-        dialog.grab_set()
-        dialog.resizable(False, False)
-        result = [False]
-        tk.Label(dialog, text="?", font=_font(_f, 32),
-                 fg=COLORS['bloom'], bg=COLORS['bg_page']).pack(pady=(20, 5))
-        tk.Label(dialog, text=message, font=_font(_f, 12),
-                 fg=COLORS['text_primary'], bg=COLORS['bg_page'],
-                 wraplength=300).pack(pady=10)
-        btn_frame = tk.Frame(dialog, bg=COLORS['bg_page'])
-        btn_frame.pack(pady=15)
-        tk.Button(btn_frame, text="是", font=_font(_f, 12),
-                  command=lambda: [result.__setitem__(0, True), dialog.destroy()],
-                  bg=COLORS['health_bg'], fg=COLORS['health_text'],
-                  width=8).pack(side=tk.LEFT, padx=10)
-        tk.Button(btn_frame, text="否", font=_font(_f, 12),
-                  command=dialog.destroy,
-                  bg=COLORS['damage_bg'], fg=COLORS['damage'],
-                  width=8).pack(side=tk.LEFT, padx=10)
-        dialog.update_idletasks()
-        x = self.root.winfo_x() + (self.root.winfo_width() - dialog.winfo_width()) // 2
-        y = self.root.winfo_y() + (self.root.winfo_height() - dialog.winfo_height()) // 2
-        dialog.geometry(f"+{x}+{y}")
-        dialog.wait_window()
-        return result[0]
-
     def _build_ui(self):
         self.main_frame = tk.Frame(self.root, bg=COLORS['bg_page'])
         self.main_frame.pack(fill=tk.BOTH, expand=True)
@@ -648,15 +575,8 @@ class GameClient:
                   command=self._back_to_login, width=14).pack(pady=10)
 
     def _on_invite(self, target_id: int):
-        target_name = "?"
-        for p in self.lobby_players:
-            if p['player_id'] == target_id:
-                target_name = p['nickname']
-                break
-        result = self._show_game_confirm("邀请对局", f"确定要邀请 {target_name} 进行对局吗？")
-        if result:
-            self._send(NetworkMessage('invite', {'target_id': target_id}))
-            self._update_status("邀请已发送，等待对方回应...")
+        self._send(NetworkMessage('invite', {'target_id': target_id}))
+        self._update_status("邀请已发送，等待对方回应...")
 
     def _back_to_login(self):
         if self.conn and self.conn.connected:
@@ -674,8 +594,8 @@ class GameClient:
     def _show_invite_dialog(self, data: dict):
         inviter_name = data.get('inviter_name', '?')
         inviter_id = data.get('inviter_id', -1)
-        result = self._show_game_confirm("收到邀请",
-                                         f"{inviter_name} 邀请你进行对局！\n是否接受？")
+        result = messagebox.askyesno("收到邀请",
+                                     f"{inviter_name} 邀请你进行对局！\n是否接受？")
         if result:
             self._send(NetworkMessage('accept_invite', {'inviter_id': inviter_id}))
         else:
@@ -1216,7 +1136,7 @@ class GameClient:
                        if CARD_DEFS.get(c.get('def_id', ''), CardDef('', '', '', 0, 0, '', 0, '', '', '')).card_type == 'attack'
                        and c.get('instance_id') != card.instance_id]
             if not attacks:
-                self._show_game_dialog("提示", "手中没有攻击牌可以作为裂变目标", "warning")
+                messagebox.showinfo("提示", "手中没有攻击牌可以作为裂变目标")
                 return False
             options = [f"{CARD_DEFS.get(a.get('def_id', ''), CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn}" for a in attacks]
             sel = self._simple_choice("选择裂变目标", options)
@@ -1232,7 +1152,7 @@ class GameClient:
                 same_name_groups.setdefault(a.get('def_id', ''), []).append(a)
             valid_groups = {k: v for k, v in same_name_groups.items() if len(v) >= 2}
             if not valid_groups:
-                self._show_game_dialog("提示", "手中没有足够的同名攻击牌", "warning")
+                messagebox.showinfo("提示", "手中没有足够的同名攻击牌")
                 return False
             group_options = [f"{CARD_DEFS.get(k, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn} x{len(v)}" for k, v in valid_groups.items()]
             sel = self._simple_choice("选择聚变卡组", group_options)
@@ -1245,7 +1165,7 @@ class GameClient:
             others = [c for c in self.game_state.get('you', {}).get('hand', [])
                       if c.get('instance_id') != card.instance_id]
             if not others:
-                self._show_game_dialog("提示", "手中没有其他卡牌", "warning")
+                messagebox.showinfo("提示", "手中没有其他卡牌")
                 return False
             options = [f"{CARD_DEFS.get(c.get('def_id', ''), CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn}" for c in others]
             sel = self._simple_choice("选择拟态目标", options)
