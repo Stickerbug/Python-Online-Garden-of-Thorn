@@ -333,7 +333,6 @@ class GameEngine:
             ps = self.players[i]
             ps.cards_played_this_turn = {}
             ps.magic_battery_m_this_turn = 0
-            drawn = ps.draw_cards(DRAW_PER_TURN)
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         self._start_player_turn(self.first_player)
 
@@ -413,8 +412,10 @@ class GameEngine:
             self.log_msg(f"玩家{player_id + 1}无敌，免疫{source}伤害！")
             return
         actual = amount
-        if self._get_corruption_active():
-            actual = int(actual * 2)
+        corruption_count = self._get_corruption_count()
+        if corruption_count > 0:
+            actual = actual * (2 ** corruption_count)
+            self.log_msg(f"腐化效果：伤害×{2 ** corruption_count}")
         if ps.vulnerable > 0:
             actual += ps.vulnerable
         ps.health -= actual
@@ -448,13 +449,14 @@ class GameEngine:
                         ps.nazar_active = False
                         ps.nazar_big_hits = 0
                         self.log_msg(f"玩家{target_id + 1}的邪眼护符被击碎！")
+            corruption_count = self._get_corruption_count()
+            if corruption_count > 0:
+                dmg = dmg * (2 ** corruption_count)
+                self.log_msg(f"腐化效果：伤害×{2 ** corruption_count}")
             dmg = max(0, dmg - ps.armor)
             if ps.vulnerable > 0:
                 dmg += ps.vulnerable
                 self.log_msg(f"易伤效果：伤害+{ps.vulnerable}")
-            if self._get_corruption_active():
-                dmg = int(dmg * 2)
-                self.log_msg(f"腐化效果：伤害翻倍为{dmg}")
             ps.health -= dmg
             total_dealt += dmg
             self.log_msg(f"玩家{target_id + 1}受到{dmg}点伤害（H={ps.health}）")
@@ -474,12 +476,13 @@ class GameEngine:
                 break
         return total_dealt
 
-    def _get_corruption_active(self) -> bool:
+    def _get_corruption_count(self) -> int:
+        count = 0
         for ps in self.players:
             for eq in ps.equipment:
                 if eq.def_id == 'Corruption' and eq.corruption_active:
-                    return True
-        return False
+                    count += 1
+        return count
 
     def _check_yggdrasil(self, player_id: int):
         ps = self.players[player_id]
@@ -625,12 +628,9 @@ class GameEngine:
             ps.dodge += 1
             self.log_msg(f"玩家{responder_id + 1}获得1层闪避")
         elif counter_card.def_id == 'Nazar':
-            if not ps.nazar_active:
-                ps.nazar_active = True
-                ps.nazar_big_hits = 0
-                self.log_msg(f"玩家{responder_id + 1}获得邪眼护符效果")
-            else:
-                self.log_msg(f"玩家{responder_id + 1}已有邪眼护符，不可叠加")
+            ps.nazar_active = True
+            ps.nazar_big_hits = 0
+            self.log_msg(f"玩家{responder_id + 1}获得邪眼护符效果")
         elif counter_card.def_id == 'MagicNazar':
             ps.equipment_protection += 1
             self.log_msg(f"玩家{responder_id + 1}获得1层装备保护")
@@ -1040,8 +1040,6 @@ class GameEngine:
         return {'needs_response': False}
 
     def use_trigger(self, player_id: int, equipment_instance_id: int) -> dict:
-        if self.current_player != player_id:
-            return {'success': False, 'error': '不是你的回合'}
         ps = self.players[player_id]
         eq = ps.find_equipment(equipment_instance_id)
         if eq is None:
@@ -1062,8 +1060,10 @@ class GameEngine:
         elif eq.def_id == 'Mark':
             destroyed = self._destroy_equipment(player_id, eq)
             if destroyed:
-                self.players[opp_id].skip_turn = True
-                self.log_msg(f"玩家{player_id + 1}触发标记！敌方下回合禁止行动")
+                self.log_msg(f"玩家{player_id + 1}触发标记！敌方回合立即结束")
+                self.pending_response = None
+                if self.current_player == opp_id:
+                    self._end_player_turn(opp_id)
         elif eq.def_id == 'Mine':
             destroyed = self._destroy_equipment(player_id, eq)
             if destroyed:
@@ -1087,6 +1087,8 @@ class GameEngine:
             ps.hand.remove(c)
             ps.exile.append(c)
             self.log_msg(f"玩家{player_id + 1}的{c.name_cn}因虚无被放逐")
+        ps.draw_cards(DRAW_PER_TURN)
+        self.log_msg(f"玩家{player_id + 1}抽{DRAW_PER_TURN}张牌")
         if player_id == self.first_player:
             other = 1 - self.first_player
             self._start_player_turn(other)

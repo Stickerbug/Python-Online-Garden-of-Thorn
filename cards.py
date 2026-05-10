@@ -120,7 +120,7 @@ _reg(CardDef('Bone', 'Bone', '骨头', 2, 0, 'attack', 5, 'Common',
              '坚固且好用。', '造成12D'))
 
 _reg(CardDef('Stinger', 'Stinger', '刺', 4, 0, 'attack', 5, 'Common',
-             '一击造成大量伤害。', '造成20D'))
+             '一击造成大量伤害。', '造成20D', flags={'precision'}))
 
 _reg(CardDef('Sand', 'Sand', '沙子', 2, 0, 'attack', 5, 'Common',
              '因为是一把，所以可以造成多次伤害。', '造成3×4D（4子瓣）'))
@@ -141,7 +141,7 @@ _reg(CardDef('MagicBone', 'Magic Bone', '魔法骨头', 0, 4, 'attack', 5, 'Comm
              '魔力凝聚的骨头，穿透力更强。', '造成15D'))
 
 _reg(CardDef('MagicStinger', 'Magic Stinger', '魔法刺', 0, 8, 'attack', 5, 'Common',
-             '魔力加持的尖刺，威力巨大。', '造成30D'))
+             '魔力加持的尖刺，威力巨大。', '造成30D', flags={'precision'}))
 
 _reg(CardDef('Fission', 'Fission', '裂变', 0, 0, 'skill', 2, 'Common',
              '将一次攻击分裂为多次。', '选择一张手中的攻击牌，使其下次打出时额外打出2次但伤害将为1/3（向上取整）',
@@ -278,10 +278,15 @@ def build_draft_pool() -> List[CardInstance]:
 
 def generate_draft_options(pool: List[CardInstance], card_type: str, count: int = 3) -> List[CardInstance]:
     type_cards = [c for c in pool if c.card_def.card_type == card_type]
-    if len(type_cards) < count:
-        type_cards = [c for c in pool if c.card_def.card_type == card_type]
-    chosen = random.sample(type_cards, min(count, len(type_cards)))
-    return chosen
+    seen_def_ids = set()
+    unique_cards = []
+    for c in type_cards:
+        if c.def_id not in seen_def_ids:
+            seen_def_ids.add(c.def_id)
+            unique_cards.append(c)
+    if len(unique_cards) < count:
+        return unique_cards
+    return random.sample(unique_cards, count)
 
 
 def create_deck_from_draft(picked_def_ids: List[str]) -> List[CardInstance]:
