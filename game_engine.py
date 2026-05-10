@@ -625,9 +625,12 @@ class GameEngine:
             ps.dodge += 1
             self.log_msg(f"玩家{responder_id + 1}获得1层闪避")
         elif counter_card.def_id == 'Nazar':
-            ps.nazar_active = True
-            ps.nazar_big_hits = 0
-            self.log_msg(f"玩家{responder_id + 1}获得邪眼护符效果")
+            if not ps.nazar_active:
+                ps.nazar_active = True
+                ps.nazar_big_hits = 0
+                self.log_msg(f"玩家{responder_id + 1}获得邪眼护符效果")
+            else:
+                self.log_msg(f"玩家{responder_id + 1}已有邪眼护符，不可叠加")
         elif counter_card.def_id == 'MagicNazar':
             ps.equipment_protection += 1
             self.log_msg(f"玩家{responder_id + 1}获得1层装备保护")
@@ -742,44 +745,33 @@ class GameEngine:
             self.log_msg(f"玩家{player_id + 1}使用了{card.name_cn}")
 
     def _effect_basic(self, player_id: int, card: CardInstance, choice=None):
-        hits = 1
         dmg = 6
         if card.fission_count > 0:
-            hits = 1 + card.fission_count
             dmg = math.ceil(dmg / 3)
         dmg = int(dmg * card.fusion_multiplier)
-        self.log_msg(f"玩家{player_id + 1}使用基本攻击！造成{dmg}×{hits}伤害")
-        self.deal_attack_damage(1 - player_id, dmg, hits)
+        self.log_msg(f"玩家{player_id + 1}使用基本攻击！造成{dmg}伤害")
+        self.deal_attack_damage(1 - player_id, dmg)
 
     def _effect_bone(self, player_id: int, card: CardInstance, choice=None):
         dmg = 12
         if card.fission_count > 0:
-            hits = 1 + card.fission_count
             dmg = math.ceil(dmg / 3)
-            self.log_msg(f"玩家{player_id + 1}使用骨头（裂变）！造成{dmg}×{hits}伤害")
-            self.deal_attack_damage(1 - player_id, dmg, hits)
-        else:
-            dmg = int(dmg * card.fusion_multiplier)
-            self.log_msg(f"玩家{player_id + 1}使用骨头！造成{dmg}伤害")
-            self.deal_attack_damage(1 - player_id, dmg)
+        dmg = int(dmg * card.fusion_multiplier)
+        self.log_msg(f"玩家{player_id + 1}使用骨头！造成{dmg}伤害")
+        self.deal_attack_damage(1 - player_id, dmg)
 
     def _effect_stinger(self, player_id: int, card: CardInstance, choice=None):
         dmg = 20
         if card.fission_count > 0:
-            hits = 1 + card.fission_count
             dmg = math.ceil(dmg / 3)
-            self.log_msg(f"玩家{player_id + 1}使用刺（裂变）！造成{dmg}×{hits}伤害")
-            self.deal_attack_damage(1 - player_id, dmg, hits)
-        else:
-            dmg = int(dmg * card.fusion_multiplier)
-            self.log_msg(f"玩家{player_id + 1}使用刺！造成{dmg}伤害")
-            self.deal_attack_damage(1 - player_id, dmg)
+        dmg = int(dmg * card.fusion_multiplier)
+        self.log_msg(f"玩家{player_id + 1}使用刺！造成{dmg}伤害")
+        self.deal_attack_damage(1 - player_id, dmg)
 
     def _effect_sand(self, player_id: int, card: CardInstance, choice=None):
         dmg = 3
         hits = 4
         if card.fission_count > 0:
-            hits = hits * (1 + card.fission_count)
             dmg = math.ceil(dmg / 3)
         dmg = int(dmg * card.fusion_multiplier)
         self.log_msg(f"玩家{player_id + 1}使用沙子！造成{dmg}×{hits}伤害")
@@ -789,7 +781,6 @@ class GameEngine:
         dmg = 8
         hits = 2
         if card.fission_count > 0:
-            hits = hits * (1 + card.fission_count)
             dmg = math.ceil(dmg / 3)
         dmg = int(dmg * card.fusion_multiplier)
         self.log_msg(f"玩家{player_id + 1}使用翅膀！造成{dmg}×{hits}伤害")
@@ -799,7 +790,6 @@ class GameEngine:
         dmg = 2
         hits = 2
         if card.fission_count > 0:
-            hits = hits * (1 + card.fission_count)
             dmg = math.ceil(dmg / 3)
         dmg = int(dmg * card.fusion_multiplier)
         self.log_msg(f"玩家{player_id + 1}使用轻！造成{dmg}×{hits}伤害")
@@ -808,50 +798,37 @@ class GameEngine:
     def _effect_fang(self, player_id: int, card: CardInstance, choice=None):
         dmg = 8
         if card.fission_count > 0:
-            hits = 1 + card.fission_count
             dmg = math.ceil(dmg / 3)
-            self.deal_attack_damage(1 - player_id, dmg, hits)
-        else:
-            dmg = int(dmg * card.fusion_multiplier)
-            self.deal_attack_damage(1 - player_id, dmg)
+        dmg = int(dmg * card.fusion_multiplier)
+        self.deal_attack_damage(1 - player_id, dmg)
         self.players[player_id].heal(4)
         self.log_msg(f"玩家{player_id + 1}使用尖牙！造成{dmg}伤害，回复4H")
 
     def _effect_triangle(self, player_id: int, card: CardInstance, choice=None):
         ps = self.players[player_id]
+        if ps.triangle_stacks < 4:
+            ps.triangle_stacks += 1
         dmg = 6 + 3 * ps.triangle_stacks
         if card.fission_count > 0:
-            hits = ps.triangle_stacks + 2
             dmg = math.ceil(dmg / 3)
-            ps.triangle_stacks += 1
-            self.log_msg(f"玩家{player_id + 1}使用三角形（裂变）！造成{dmg}×{hits}伤害，三角形层数+1（{ps.triangle_stacks}）")
-            self.deal_attack_damage(1 - player_id, dmg, hits)
-        else:
-            ps.triangle_stacks += 1
-            dmg = int(dmg * card.fusion_multiplier)
-            self.log_msg(f"玩家{player_id + 1}使用三角形！造成{dmg}伤害，三角形层数+1（{ps.triangle_stacks}）")
-            self.deal_attack_damage(1 - player_id, dmg)
+        dmg = int(dmg * card.fusion_multiplier)
+        self.log_msg(f"玩家{player_id + 1}使用三角形！造成{dmg}伤害，三角形层数+1（{ps.triangle_stacks}）")
+        self.deal_attack_damage(1 - player_id, dmg)
 
     def _effect_magicbone(self, player_id: int, card: CardInstance, choice=None):
         dmg = 15
         if card.fission_count > 0:
-            hits = 1 + card.fission_count
             dmg = math.ceil(dmg / 3)
-            self.deal_attack_damage(1 - player_id, dmg, hits)
-        else:
-            dmg = int(dmg * card.fusion_multiplier)
-            self.deal_attack_damage(1 - player_id, dmg)
+        dmg = int(dmg * card.fusion_multiplier)
+        self.deal_attack_damage(1 - player_id, dmg)
         self.log_msg(f"玩家{player_id + 1}使用魔法骨头！造成{dmg}伤害")
 
     def _effect_magicstinger(self, player_id: int, card: CardInstance, choice=None):
         dmg = 30
         if card.fission_count > 0:
-            hits = 1 + card.fission_count
             dmg = math.ceil(dmg / 3)
-            self.deal_attack_damage(1 - player_id, dmg, hits)
-        else:
-            dmg = int(dmg * card.fusion_multiplier)
-            self.deal_attack_damage(1 - player_id, dmg)
+        dmg = int(dmg * card.fusion_multiplier)
+        self.deal_attack_damage(1 - player_id, dmg)
         self.log_msg(f"玩家{player_id + 1}使用魔法刺！造成{dmg}伤害")
 
     def _effect_fission(self, player_id: int, card: CardInstance, choice=None):
@@ -861,6 +838,12 @@ class GameEngine:
             if target and target.card_type == 'attack':
                 target.fission_count = 2
                 self.log_msg(f"玩家{player_id + 1}使用裂变！{target.name_cn}将额外打出2次，伤害变为1/3")
+                for _ in range(1 + target.fission_count):
+                    self._apply_card_effect(player_id, target)
+                    if self.game_over:
+                        break
+                ps.remove_hand_card(target.instance_id)
+                ps.discard.append(target)
         else:
             self.log_msg(f"玩家{player_id + 1}使用裂变，但未选择目标")
 
@@ -1057,6 +1040,8 @@ class GameEngine:
         return {'needs_response': False}
 
     def use_trigger(self, player_id: int, equipment_instance_id: int) -> dict:
+        if self.current_player != player_id:
+            return {'success': False, 'error': '不是你的回合'}
         ps = self.players[player_id]
         eq = ps.find_equipment(equipment_instance_id)
         if eq is None:

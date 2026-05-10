@@ -681,6 +681,9 @@ class GameClient:
                                       bg=COLORS['damage_bg'], fg=COLORS['damage'],
                                       width=14)
         self.end_turn_btn.pack(side=tk.LEFT, padx=8)
+        tk.Button(btn_frame, text="查看牌堆", font=_font(_f, 11),
+                  command=self._view_deck, bg=COLORS['magic_bg'], fg=COLORS['magic_text'],
+                  width=10).pack(side=tk.LEFT, padx=4)
         self.response_frame = tk.Frame(self.game_frame, bg=COLORS['bg_page'])
         self.response_frame.pack(fill=tk.X, padx=10, pady=3)
         self.opp_h_canvas, self.opp_h_bar, self.opp_h_txt = self._make_bar(self.opp_panel, 'H', COLORS['health'], COLORS['health_bg'])
@@ -1317,6 +1320,35 @@ class GameClient:
     def _on_end_turn(self):
         self._send(NetworkMessage('end_turn', {}))
 
+    def _view_deck(self):
+        deck = self.game_state.get('you', {}).get('deck', [])
+        if not deck:
+            messagebox.showinfo("牌堆", "牌堆为空")
+            return
+        from collections import Counter
+        counts = Counter()
+        for c in deck:
+            cd = CARD_DEFS.get(c.get('def_id', ''), None)
+            if cd:
+                counts[cd.name_cn] += 1
+        lines = [f"牌堆共{len(deck)}张："]
+        for name, cnt in sorted(counts.items()):
+            lines.append(f"  {name} ×{cnt}")
+        dialog = tk.Toplevel(self.root)
+        dialog.title("查看牌堆")
+        dialog.geometry("300x400")
+        dialog.configure(bg=COLORS['bg_page'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        txt = tk.Text(dialog, font=_font(_f, 12), bg=COLORS['bg_card'],
+                      fg=COLORS['text_primary'], state=tk.NORMAL, wrap=tk.WORD)
+        txt.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        txt.insert(tk.END, '\n'.join(lines))
+        txt.config(state=tk.DISABLED)
+        tk.Button(dialog, text="关闭", command=dialog.destroy,
+                  font=_font(_f, 12), bg=COLORS['damage_bg'], fg=COLORS['damage'],
+                  width=8).pack(pady=8)
+
     def _show_response_ui(self):
         if not hasattr(self, 'response_frame') or not self.response_frame.winfo_exists():
             self._on_respond(None)
@@ -1451,7 +1483,7 @@ class GameClient:
                 same_name_groups.setdefault(a.get('def_id', ''), []).append(a)
             valid_groups = {k: v for k, v in same_name_groups.items() if len(v) >= 2}
             if not valid_groups:
-                self._show_game_dialog("提示", "手中没有足够的同名攻击牌", "warning")
+                messagebox.showinfo("提示", "手中没有足够的同名攻击牌")
             else:
                 group_options = [f"{CARD_DEFS.get(k, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn} x{len(v)}" for k, v in valid_groups.items()]
                 sel = self._simple_choice(f"为{card_name}选择攻击牌组", group_options)
