@@ -217,6 +217,18 @@ class PlayerState:
 
 
 class GameEngine:
+    OPENING_EVENTS = {
+        1: {'id': 1, 'name': '生命强化', 'desc': '最大生命值+20', 'position': 1},
+        2: {'id': 2, 'name': '魔力转化', 'desc': '将最多三张牌转化为魔法牌(3选1)，开局回5M', 'position': 2},
+        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多五张牌转化为Light', 'position': 2},
+        8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为Yggdrasil', 'position': 2},
+        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对敌方施加2灼烧', 'position': 3},
+        5: {'id': 5, 'name': '命运抽签', 'desc': '前二回合开始时抽牌至手牌已满', 'position': 3},
+        6: {'id': 6, 'name': '能量涌动', 'desc': '前三回合开始时额外回1E', 'position': 3},
+        7: {'id': 7, 'name': '先手压制', 'desc': '必定先手(对面未选同事件时)且先手只抽3张', 'position': 3},
+    }
+    MAGIC_CARD_POOL = ['MagicBone', 'MagicStinger', 'MagicSewage', 'MagicNazar', 'MagicBubble']
+
     def __init__(self):
         self.players = [PlayerState(0), PlayerState(1)]
         self.current_player: int = 0
@@ -236,6 +248,10 @@ class GameEngine:
         self.winner: int = -1
         self.negated_card: bool = False
         self._yggdrasil_check: bool = True
+        self.opening_event_options: List[List[dict]] = [[], []]
+        self.opening_event_picks: List[Optional[int]] = [None, None]
+        self.opening_event_sub_choices: List[Optional[dict]] = [None, None]
+        self.opening_event_magic_options: List[List[str]] = [[], []]
 
     def log_msg(self, msg: str):
         self.log.append(msg)
@@ -253,6 +269,7 @@ class GameEngine:
             'log': self.log[-50:],
             'pending_response': self.pending_response,
             'pending_choice': self.pending_choice,
+            'opening_event_picks': self.opening_event_picks,
         }
 
     def start_draft(self):
@@ -265,18 +282,24 @@ class GameEngine:
         for card_type, count in DRAFT_RATIO.items():
             self.draft_type_order.extend([card_type] * count)
         random.shuffle(self.draft_type_order)
-        self._generate_draft_options()
+        self._generate_draft_options_for_player(0)
+        self._generate_draft_options_for_player(1)
+
+    def _generate_draft_options_for_player(self, player_id: int):
+        if len(self.draft_picks[player_id]) >= DECK_SIZE:
+            if len(self.draft_picks[0]) >= DECK_SIZE and len(self.draft_picks[1]) >= DECK_SIZE:
+                self.phase = 'event_select'
+                self._generate_opening_events()
+            return
+        card_type = self.draft_type_order[len(self.draft_picks[player_id])]
+        self.draft_options[player_id] = generate_draft_options(self.draft_pool, card_type, 3)
 
     def _generate_draft_options(self):
-        if self.draft_round >= DECK_SIZE:
-            self.phase = 'draft_complete'
-            return
-        card_type = self.draft_type_order[self.draft_round]
-        self.draft_options[0] = generate_draft_options(self.draft_pool, card_type, 3)
-        self.draft_options[1] = generate_draft_options(self.draft_pool, card_type, 3)
+        self._generate_draft_options_for_player(0)
+        self._generate_draft_options_for_player(1)
 
     def draft_pick(self, player_id: int, def_id: str) -> bool:
-        if len(self.draft_picks[player_id]) > self.draft_round:
+        if len(self.draft_picks[player_id]) >= DECK_SIZE:
             return False
         options = self.draft_options[player_id]
         found = None
@@ -287,24 +310,54 @@ class GameEngine:
         if found is None:
             return False
         self.draft_picks[player_id].append(def_id)
-        self.draft_options[player_id] = [o for o in self.draft_options[player_id] if o.def_id != def_id]
-        if len(self.draft_picks[0]) > self.draft_round and len(self.draft_picks[1]) > self.draft_round:
-            self.draft_round += 1
-            self._generate_draft_options()
+        self._generate_draft_options_for_player(player_id)
         return True
 
     def draft_reroll(self, player_id: int) -> bool:
         if self.draft_rerolls[player_id] <= 0:
             return False
+        if len(self.draft_picks[player_id]) >= DECK_SIZE:
+            return False
         self.draft_rerolls[player_id] -= 1
-        card_type = self.draft_type_order[self.draft_round]
+        card_type = self.draft_type_order[len(self.draft_picks[player_id])]
         options = generate_draft_options(self.draft_pool, card_type, 3)
         self.draft_options[player_id] = options
         return True
 
+    def _generate_opening_events(self):
+        pos1 = [e for e in self.OPENING_EVENTS.values() if e['position'] == 1]
+        pos2 = [e for e in self.OPENING_EVENTS.values() if e['position'] == 2]
+        pos3 = [e for e in self.OPENING_EVENTS.values() if e['position'] == 3]
+        for i in range(2):
+            slot1 = pos1[0] if pos1 else None
+            slot2 = random.choice(pos2) if pos2 else None
+            slot3 = random.choice(pos3) if pos3 else None
+            self.opening_event_options[i] = [slot1, slot2, slot3]
+            self.opening_event_magic_options[i] = random.sample(
+                self.MAGIC_CARD_POOL, min(3, len(self.MAGIC_CARD_POOL)))
+
+    def select_opening_event(self, player_id: int, event_id: int) -> bool:
+        if self.phase != 'event_select':
+            return False
+        valid = any(e['id'] == event_id for e in self.opening_event_options[player_id] if e)
+        if not valid:
+            return False
+        self.opening_event_picks[player_id] = event_id
+        return True
+
+    def both_events_selected(self) -> bool:
+        return self.opening_event_picks[0] is not None and self.opening_event_picks[1] is not None
+
     def start_game(self):
         self.phase = 'playing'
-        self.first_player = random.randint(0, 1)
+        force_first = []
+        for i in range(2):
+            if self.opening_event_picks[i] == 7:
+                force_first.append(i)
+        if len(force_first) == 1:
+            self.first_player = force_first[0]
+        else:
+            self.first_player = random.randint(0, 1)
         self.current_player = self.first_player
         for i in range(2):
             ps = self.players[i]
@@ -315,17 +368,100 @@ class GameEngine:
             ps.base_max_health = BASE_MAX_HEALTH
             ps.elixir = INITIAL_ELIXIR
             ps.magic = INITIAL_MAGIC
-            if i == self.first_player:
-                ps.elixir = FIRST_PLAYER_ELIXIR
-                ps.draw_cards(FIRST_PLAYER_HAND_SIZE)
-            else:
+        for i in range(2):
+            ps = self.players[i]
+            if i != self.first_player:
                 ps.health = SECOND_PLAYER_HEALTH
                 ps.max_health = SECOND_PLAYER_HEALTH
+                ps.base_max_health = SECOND_PLAYER_HEALTH
+        for i in range(2):
+            self._apply_opening_event(i)
+        for i in range(2):
+            ps = self.players[i]
+            if i == self.first_player:
+                ps.elixir = FIRST_PLAYER_ELIXIR
+                hand_size = FIRST_PLAYER_HAND_SIZE
+                if self.opening_event_picks[i] == 7:
+                    hand_size = 3
+                ps.draw_cards(hand_size)
+            else:
                 ps.draw_cards(INITIAL_HAND_SIZE)
         self.round_num = 1
         self.log_msg(f"游戏开始！玩家{self.first_player + 1}先手。")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         self._start_player_turn(self.first_player)
+
+    def _apply_opening_event(self, player_id: int):
+        ps = self.players[player_id]
+        opp = self.players[1 - player_id]
+        event_id = self.opening_event_picks[player_id]
+        sub = self.opening_event_sub_choices[player_id]
+        if event_id == 1:
+            ps.max_health += 20
+            ps.base_max_health += 20
+            ps.health += 20
+            self.log_msg(f"玩家{player_id + 1}【生命强化】：最大生命值+20")
+        elif event_id == 2:
+            ps.gain_magic(5)
+            self.log_msg(f"玩家{player_id + 1}【魔力转化】：+5M")
+            if sub and 'convert_def_id' in sub and 'convert_def_ids' in sub:
+                target_def = sub['convert_def_id']
+                source_def_ids = list(sub['convert_def_ids'])
+                converted = 0
+                for source_def in source_def_ids:
+                    for j in range(len(ps.deck)):
+                        if ps.deck[j].def_id == source_def and converted < 3:
+                            ps.deck[j] = CardInstance(def_id=target_def)
+                            converted += 1
+                            break
+                name = CARD_DEFS.get(target_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
+                self.log_msg(f"玩家{player_id + 1}【魔力转化】：{converted}张牌变为{name}")
+            elif sub and 'convert_def_id' in sub:
+                target_def = sub['convert_def_id']
+                count = min(3, sum(1 for c in ps.deck if c.def_id != target_def))
+                converted = 0
+                for j in range(len(ps.deck) - 1, -1, -1):
+                    if ps.deck[j].def_id != target_def and converted < 3:
+                        ps.deck[j] = CardInstance(def_id=target_def)
+                        converted += 1
+                name = CARD_DEFS.get(target_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
+                self.log_msg(f"玩家{player_id + 1}【魔力转化】：{converted}张牌变为{name}")
+        elif event_id == 3:
+            if sub and 'convert_def_ids' in sub:
+                target_def_ids = list(sub['convert_def_ids'])
+                converted = 0
+                for target_def in target_def_ids:
+                    for j in range(len(ps.deck)):
+                        if ps.deck[j].def_id == target_def and converted < 5:
+                            ps.deck[j] = CardInstance(def_id='Light')
+                            converted += 1
+                            break
+                self.log_msg(f"玩家{player_id + 1}【光之洗礼】：{converted}张牌变为Light")
+            else:
+                converted = 0
+                for j in range(len(ps.deck) - 1, -1, -1):
+                    if ps.deck[j].def_id != 'Light' and converted < 5:
+                        ps.deck[j] = CardInstance(def_id='Light')
+                        converted += 1
+                self.log_msg(f"玩家{player_id + 1}【光之洗礼】：{converted}张牌变为Light")
+        elif event_id == 4:
+            opp.fire += 2
+            self.log_msg(f"玩家{player_id + 1}【烈焰预兆】：敌方+2灼烧")
+        elif event_id == 5:
+            self.log_msg(f"玩家{player_id + 1}【命运抽签】：前二回合抽牌至手牌满")
+        elif event_id == 6:
+            self.log_msg(f"玩家{player_id + 1}【能量涌动】：前三回合额外回1E")
+        elif event_id == 7:
+            self.log_msg(f"玩家{player_id + 1}【先手压制】：先手且只抽3张")
+        elif event_id == 8:
+            ps.max_health -= 20
+            ps.base_max_health -= 20
+            ps.health -= 20
+            for j in range(len(ps.deck) - 1, -1, -1):
+                if ps.deck[j].def_id != 'Yggdrasil':
+                    ps.deck[j] = CardInstance(def_id='Yggdrasil')
+                    self.log_msg(f"玩家{player_id + 1}【绝境求生】：最大生命值-20，一张牌变为Yggdrasil")
+                    break
 
     def _start_draw_phase(self):
         self.phase = 'draw'
@@ -377,6 +513,14 @@ class GameEngine:
                     self.log_msg(f"玩家{player_id + 1}受螫针影响，能量回复-1")
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"玩家{player_id + 1}回复{elixir_recovery}E")
+        if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
+            draw_needed = HAND_LIMIT - len(ps.hand)
+            if draw_needed > 0:
+                ps.draw_cards(draw_needed)
+                self.log_msg(f"玩家{player_id + 1}【命运抽签】：抽{draw_needed}张至手牌满")
+        if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
+            ps.gain_elixir(1)
+            self.log_msg(f"玩家{player_id + 1}【能量涌动】：额外+1E")
         for eq in ps.equipment:
             eq.turns_equipped += 1
             if eq.def_id == 'Leaf':

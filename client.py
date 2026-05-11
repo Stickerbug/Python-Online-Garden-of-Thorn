@@ -75,6 +75,13 @@ CARD_TYPE_COLORS = {
     'counter': COLORS['bloom'],
 }
 
+CARD_FLAGS = {
+    'precision': ('精准', COLORS['precise'], COLORS['precise_bg']),
+    'exile': ('放逐', COLORS['banish'], COLORS['banish_bg']),
+    'non_stackable': ('不可叠加', COLORS['non_stack'], COLORS['non_stack_bg']),
+    'indestructible': ('不可摧毁', COLORS['indestructible'], COLORS['indestructible_bg']),
+}
+
 
 def _scale():
     return SCALE
@@ -150,7 +157,9 @@ class GameClient:
         self._running = True
         self._dragging = False
         self._drag_card_id = None
-        self._drag_card_def = None
+        self._drag_card = None
+        self._drag_total_e = 0
+        self._drag_total_m = 0
         self._ghost = None
         self._drag_source_widget = None
         self._drag_placeholder = None
@@ -226,6 +235,8 @@ class GameClient:
         self.nick_entry = tk.Entry(nick_frame, font=_font(_f, 13), width=18,
                                    bg=COLORS['bg_card'], fg=COLORS['text_primary'])
         self.nick_entry.pack(side=tk.LEFT, padx=5)
+        if self.nickname:
+            self.nick_entry.insert(0, self.nickname)
         self._nick_error_label = tk.Label(nick_frame, text="", font=_font(_f, 10),
                                           fg=COLORS['damage'], bg=COLORS['bg_page'])
         self._nick_error_label.pack(side=tk.LEFT, padx=5)
@@ -445,6 +456,10 @@ class GameClient:
                 elif self.phase == 'playing':
                     self._clear_content()
                     self._update_status("游戏加载中...")
+            elif msg.msg_type == 'event_select':
+                self.phase = 'event_select'
+                self.event_select_data = msg.data
+                self._show_event_select_ui()
             elif msg.msg_type == 'draft_state':
                 self.draft_state = msg.data
                 self._update_draft_ui()
@@ -516,6 +531,8 @@ class GameClient:
             self._update_game_ui()
         elif self.phase == 'draft' and self.draft_state:
             self._show_draft_ui()
+        elif self.phase == 'event_select' and hasattr(self, 'event_select_data') and self.event_select_data:
+            self._show_event_select_ui()
         elif self.phase == 'game_over':
             self._show_game_over()
 
@@ -583,7 +600,6 @@ class GameClient:
             self.conn.close()
         self.conn = None
         self.player_id = None
-        self.nickname = None
         self.phase = 'login'
         self.game_state = None
         self.draft_state = None
@@ -610,15 +626,39 @@ class GameClient:
                       highlightthickness=1, highlightbackground=COLORS['border_color'])
         c.pack(side=tk.LEFT, padx=2)
         bar = c.create_rectangle(1, 1, BAR_W(), BAR_H(), fill=color, outline='')
-        txt = c.create_text(BAR_W() // 2, BAR_H() // 2, text="", font=_font(_f, 9, True),
-                            fill='white')
-        return c, bar, txt
+        txt_stroke = []
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            t = c.create_text(BAR_W() // 2 + dx, BAR_H() // 2 + dy, text="", font=_font(_f, 9, True), fill=color)
+            txt_stroke.append(t)
+        txt_bg = c.create_text(BAR_W() // 2, BAR_H() // 2, text="", font=_font(_f, 9, True),
+                               fill=color)
+        txt_fg = c.create_text(BAR_W() // 2, BAR_H() // 2, text="", font=_font(_f, 9, True),
+                               fill='white')
+        return c, bar, txt_stroke, txt_bg, txt_fg
 
-    def _update_bar(self, canvas, bar, txt, cur, mx):
+    def _update_bar(self, canvas, bar, txt_stroke, txt_bg, txt_fg, cur, mx):
         ratio = max(0, min(1, cur / mx)) if mx > 0 else 0
         fill_w = max(1, int(BAR_W() * ratio))
         canvas.coords(bar, 1, 1, fill_w, BAR_H())
-        canvas.itemconfig(txt, text=f"{cur}/{mx}")
+        text_str = f"{cur}/{mx}"
+        cx, cy = BAR_W() // 2, BAR_H() // 2
+        for i, (dx, dy) in enumerate([(-1, 0), (1, 0), (0, -1), (0, 1)]):
+            canvas.itemconfig(txt_stroke[i], text=text_str)
+            canvas.coords(txt_stroke[i], cx + dx, cy + dy)
+        canvas.itemconfig(txt_bg, text=text_str)
+        canvas.itemconfig(txt_fg, text=text_str)
+        canvas.coords(txt_bg, cx, cy)
+        canvas.coords(txt_fg, cx, cy)
+        canvas.delete('bar_clip')
+        for t in txt_stroke:
+            canvas.tag_lower(t)
+        canvas.tag_lower(txt_bg)
+        canvas.tag_raise(bar, txt_bg)
+        canvas.tag_raise(txt_fg, bar)
+        if fill_w < BAR_W() - 1:
+            clip = canvas.create_rectangle(fill_w, 0, BAR_W(), BAR_H(),
+                                           fill=canvas['bg'], outline='', tags='bar_clip')
+            canvas.tag_raise(clip, txt_fg)
 
     def _build_game_ui(self):
         self._clear_content()
@@ -686,17 +726,17 @@ class GameClient:
                   width=10).pack(side=tk.LEFT, padx=4)
         self.response_frame = tk.Frame(self.game_frame, bg=COLORS['bg_page'])
         self.response_frame.pack(fill=tk.X, padx=10, pady=3)
-        self.opp_h_canvas, self.opp_h_bar, self.opp_h_txt = self._make_bar(self.opp_panel, 'H', COLORS['health'], COLORS['health_bg'])
-        self.opp_e_canvas, self.opp_e_bar, self.opp_e_txt = self._make_bar(self.opp_panel, 'E', COLORS['elixir'], COLORS['elixir_bg'])
-        self.opp_m_canvas, self.opp_m_bar, self.opp_m_txt = self._make_bar(self.opp_panel, 'M', COLORS['magic'], COLORS['magic_bg'])
+        self.opp_h_canvas, self.opp_h_bar, self.opp_h_stroke, self.opp_h_txt_bg, self.opp_h_txt_fg = self._make_bar(self.opp_panel, 'H', COLORS['health'], COLORS['health_bg'])
+        self.opp_e_canvas, self.opp_e_bar, self.opp_e_stroke, self.opp_e_txt_bg, self.opp_e_txt_fg = self._make_bar(self.opp_panel, 'E', COLORS['elixir'], COLORS['elixir_bg'])
+        self.opp_m_canvas, self.opp_m_bar, self.opp_m_stroke, self.opp_m_txt_bg, self.opp_m_txt_fg = self._make_bar(self.opp_panel, 'M', COLORS['magic'], COLORS['magic_bg'])
         self.opp_status_frame = tk.Frame(self.opp_panel, bg=COLORS['bg_page'])
         self.opp_status_frame.pack(side=tk.LEFT, padx=8)
         self.opp_info_label = tk.Label(self.opp_panel, text="", font=_font(_f, 10),
                                        fg=COLORS['text_secondary'], bg=COLORS['bg_page'])
         self.opp_info_label.pack(side=tk.RIGHT, padx=4)
-        self.you_h_canvas, self.you_h_bar, self.you_h_txt = self._make_bar(self.you_panel, 'H', COLORS['health'], COLORS['health_bg'])
-        self.you_e_canvas, self.you_e_bar, self.you_e_txt = self._make_bar(self.you_panel, 'E', COLORS['elixir'], COLORS['elixir_bg'])
-        self.you_m_canvas, self.you_m_bar, self.you_m_txt = self._make_bar(self.you_panel, 'M', COLORS['magic'], COLORS['magic_bg'])
+        self.you_h_canvas, self.you_h_bar, self.you_h_stroke, self.you_h_txt_bg, self.you_h_txt_fg = self._make_bar(self.you_panel, 'H', COLORS['health'], COLORS['health_bg'])
+        self.you_e_canvas, self.you_e_bar, self.you_e_stroke, self.you_e_txt_bg, self.you_e_txt_fg = self._make_bar(self.you_panel, 'E', COLORS['elixir'], COLORS['elixir_bg'])
+        self.you_m_canvas, self.you_m_bar, self.you_m_stroke, self.you_m_txt_bg, self.you_m_txt_fg = self._make_bar(self.you_panel, 'M', COLORS['magic'], COLORS['magic_bg'])
         self.you_status_frame = tk.Frame(self.you_panel, bg=COLORS['bg_page'])
         self.you_status_frame.pack(side=tk.LEFT, padx=8)
         self.you_info_label = tk.Label(self.you_panel, text="", font=_font(_f, 10),
@@ -715,22 +755,22 @@ class GameClient:
         you = gs.get('you', {})
         opp = gs.get('opponent', {})
         try:
-            self._update_bar(self.opp_h_canvas, self.opp_h_bar, self.opp_h_txt,
+            self._update_bar(self.opp_h_canvas, self.opp_h_bar, self.opp_h_stroke, self.opp_h_txt_bg, self.opp_h_txt_fg,
                              opp.get('health', 0), opp.get('max_health', 100))
-            self._update_bar(self.opp_e_canvas, self.opp_e_bar, self.opp_e_txt,
+            self._update_bar(self.opp_e_canvas, self.opp_e_bar, self.opp_e_stroke, self.opp_e_txt_bg, self.opp_e_txt_fg,
                              opp.get('elixir', 0), opp.get('max_elixir', 10))
-            self._update_bar(self.opp_m_canvas, self.opp_m_bar, self.opp_m_txt,
+            self._update_bar(self.opp_m_canvas, self.opp_m_bar, self.opp_m_stroke, self.opp_m_txt_bg, self.opp_m_txt_fg,
                              opp.get('magic', 0), opp.get('max_magic', 10))
             self._update_status_tags(self.opp_status_frame, opp)
             self.opp_info_label.config(text=f"手牌:{opp.get('hand_count', 0)} 牌堆:{opp.get('deck_count', 0)}")
         except Exception:
             pass
         try:
-            self._update_bar(self.you_h_canvas, self.you_h_bar, self.you_h_txt,
+            self._update_bar(self.you_h_canvas, self.you_h_bar, self.you_h_stroke, self.you_h_txt_bg, self.you_h_txt_fg,
                              you.get('health', 0), you.get('max_health', 100))
-            self._update_bar(self.you_e_canvas, self.you_e_bar, self.you_e_txt,
+            self._update_bar(self.you_e_canvas, self.you_e_bar, self.you_e_stroke, self.you_e_txt_bg, self.you_e_txt_fg,
                              you.get('elixir', 0), you.get('max_elixir', 10))
-            self._update_bar(self.you_m_canvas, self.you_m_bar, self.you_m_txt,
+            self._update_bar(self.you_m_canvas, self.you_m_bar, self.you_m_stroke, self.you_m_txt_bg, self.you_m_txt_fg,
                              you.get('magic', 0), you.get('max_magic', 10))
             self._update_status_tags(self.you_status_frame, you)
             self.you_info_label.config(text=f"手牌:{you.get('hand_count', 0)} 牌堆:{you.get('deck_count', 0)} 弃牌:{you.get('discard_count', 0)}")
@@ -824,6 +864,7 @@ class GameClient:
                 card_def = card.card_def
                 dup = self.game_state.get('you', {}).get('cards_played_this_turn', {}).get(card.def_id, 0)
                 total_e = card.cost_e + dup
+                total_m = card.cost_m
                 type_str = {'attack': 'Thorn', 'skill': 'Bloom', 'equipment': 'Root', 'counter': 'Guard'}.get(card.card_type, '?')
                 type_color = CARD_TYPE_COLORS.get(card.card_type, COLORS['text_primary'])
                 cf = tk.Frame(self.hand_frame, bg=COLORS['bg_card'], width=CARD_W(), height=CARD_H(),
@@ -847,7 +888,7 @@ class GameClient:
                 m_canvas.pack(side=tk.RIGHT)
                 m_canvas.create_oval(1, 1, m_r - 1, m_r - 1, fill=COLORS['magic_bg'],
                                      outline=COLORS['magic'], width=1)
-                m_canvas.create_text(m_r // 2, m_r // 2, text=str(card.cost_m),
+                m_canvas.create_text(m_r // 2, m_r // 2, text=str(total_m),
                                      font=_font(_fc, 14, True), fill=COLORS['magic_text'])
                 tk.Label(cf, text=f"{card_def.name_cn}", font=_font(_fc, 10, True),
                          fg=type_color, bg=COLORS['bg_card']).pack(pady=(_p(1), 0))
@@ -856,14 +897,24 @@ class GameClient:
                 tk.Label(cf, text=card_def.effect_text, font=_font(_fc, 7),
                          fg=COLORS['text_secondary'], bg=COLORS['bg_card'],
                          wraplength=CARD_W() - _p(6)).pack(pady=(0, _p(2)))
+                flags_to_show = [f for f in card.flags if f in CARD_FLAGS]
+                if flags_to_show:
+                    flags_frame = tk.Frame(cf, bg=COLORS['bg_card'])
+                    flags_frame.pack(pady=(0, _p(2)))
+                    for flag in flags_to_show:
+                        label, fg_color, bg_color = CARD_FLAGS[flag]
+                        tk.Label(flags_frame, text=label, font=_font(_fc, 7),
+                                 fg=fg_color, bg=bg_color, relief=tk.GROOVE, bd=1,
+                                 padx=_p(2)).pack(side=tk.LEFT, padx=_p(1))
                 if is_my_turn and card.card_type != 'counter':
+                    drag_data = (card, total_e, total_m)
                     for child in cf.winfo_children():
-                        child.bind('<ButtonPress-1>', lambda e, cid=card.instance_id, cd=card_def: self._on_card_press(e, cid, cd))
-                        child.bind('<B1-Motion>', lambda e, cid=card.instance_id, cd=card_def: self._on_card_drag(e, cid, cd))
+                        child.bind('<ButtonPress-1>', lambda e, cid=card.instance_id, dd=drag_data: self._on_card_press(e, cid, dd))
+                        child.bind('<B1-Motion>', lambda e, cid=card.instance_id, dd=drag_data: self._on_card_drag(e, cid, dd))
                         child.bind('<ButtonRelease-1>', lambda e, cid=card.instance_id: self._on_card_release(e, cid))
                         child.configure(cursor='hand2')
-                    cf.bind('<ButtonPress-1>', lambda e, cid=card.instance_id, cd=card_def: self._on_card_press(e, cid, cd))
-                    cf.bind('<B1-Motion>', lambda e, cid=card.instance_id, cd=card_def: self._on_card_drag(e, cid, cd))
+                    cf.bind('<ButtonPress-1>', lambda e, cid=card.instance_id, dd=drag_data: self._on_card_press(e, cid, dd))
+                    cf.bind('<B1-Motion>', lambda e, cid=card.instance_id, dd=drag_data: self._on_card_drag(e, cid, dd))
                     cf.bind('<ButtonRelease-1>', lambda e, cid=card.instance_id: self._on_card_release(e, cid))
                 else:
                     for child in cf.winfo_children():
@@ -877,10 +928,13 @@ class GameClient:
                 print(f"渲染手牌错误: {ex}, card_dict={card_dict}")
                 continue
 
-    def _on_card_press(self, event, card_id, card_def):
+    def _on_card_press(self, event, card_id, drag_data):
+        card, total_e, total_m = drag_data
         self._dragging = True
         self._drag_card_id = card_id
-        self._drag_card_def = card_def
+        self._drag_card = card
+        self._drag_total_e = total_e
+        self._drag_total_m = total_m
         self._drag_start_x = event.x_root
         self._drag_start_y = event.y_root
         w = event.widget
@@ -912,7 +966,7 @@ class GameClient:
             else:
                 self._drag_placeholder.pack(side=tk.LEFT, padx=_p(4), pady=_p(2))
 
-    def _on_card_drag(self, event, card_id, card_def):
+    def _on_card_drag(self, event, card_id, drag_data):
         if not self._dragging:
             return
         dx = abs(event.x_root - self._drag_start_x)
@@ -920,6 +974,8 @@ class GameClient:
         if dx + dy < 8:
             return
         if self._ghost is None:
+            card, total_e, total_m = drag_data
+            card_def = card.card_def
             self._ghost = tk.Toplevel(self.root)
             self._ghost.overrideredirect(True)
             try:
@@ -941,7 +997,7 @@ class GameClient:
             e_canvas.pack(side=tk.LEFT)
             e_canvas.create_oval(1, 1, e_r - 1, e_r - 1, fill=COLORS['elixir_bg'],
                                  outline=COLORS['elixir'], width=1)
-            e_canvas.create_text(e_r // 2, e_r // 2, text=str(card_def.cost_e),
+            e_canvas.create_text(e_r // 2, e_r // 2, text=str(total_e),
                                  font=_font(_fc, 14, True), fill=COLORS['elixir_text'])
             m_r = _p(38)
             m_canvas = tk.Canvas(top_row, width=m_r, height=m_r, bg=COLORS['bg_card'],
@@ -949,7 +1005,7 @@ class GameClient:
             m_canvas.pack(side=tk.RIGHT)
             m_canvas.create_oval(1, 1, m_r - 1, m_r - 1, fill=COLORS['magic_bg'],
                                  outline=COLORS['magic'], width=1)
-            m_canvas.create_text(m_r // 2, m_r // 2, text=str(card_def.cost_m),
+            m_canvas.create_text(m_r // 2, m_r // 2, text=str(total_m),
                                  font=_font(_fc, 14, True), fill=COLORS['magic_text'])
             tk.Label(gf, text=card_def.name_cn, font=_font(_fc, 10, True),
                      fg=type_color, bg=COLORS['bg_card']).pack(pady=(_p(1), 0))
@@ -958,6 +1014,15 @@ class GameClient:
             tk.Label(gf, text=card_def.effect_text, font=_font(_fc, 7),
                      fg=COLORS['text_secondary'], bg=COLORS['bg_card'],
                      wraplength=CARD_W() - _p(6)).pack(pady=(0, _p(2)))
+            flags_to_show = [f for f in card.flags if f in CARD_FLAGS]
+            if flags_to_show:
+                flags_frame = tk.Frame(gf, bg=COLORS['bg_card'])
+                flags_frame.pack(pady=(0, _p(2)))
+                for flag in flags_to_show:
+                    label, fg_color, bg_color = CARD_FLAGS[flag]
+                    tk.Label(flags_frame, text=label, font=_font(_fc, 7),
+                             fg=fg_color, bg=bg_color, relief=tk.GROOVE, bd=1,
+                             padx=_p(2)).pack(side=tk.LEFT, padx=_p(1))
             if self._drag_source_widget and self._drag_source_widget.winfo_exists():
                 self._insert_placeholder(self._drag_source_widget)
                 try:
@@ -1061,7 +1126,9 @@ class GameClient:
             self.play_zone.config(bg=COLORS['bg_page'], relief=tk.GROOVE)
             self.play_zone_label.config(bg=COLORS['bg_page'], fg=COLORS['text_secondary'])
         self._drag_card_id = None
-        self._drag_card_def = None
+        self._drag_card = None
+        self._drag_total_e = 0
+        self._drag_total_m = 0
 
     def _restore_drag_card(self):
         if self._drag_source_widget and self._drag_source_widget.winfo_exists():
@@ -1503,6 +1570,265 @@ class GameClient:
         self._send(NetworkMessage('resolve_choice', {'choice': choice_result}))
         self.choice_pending = False
 
+    def _show_event_select_ui(self):
+        self._clear_content()
+        self._update_status("选择开局事件")
+        data = self.event_select_data
+        events = data.get('events', [])
+        opp_selected = data.get('opponent_selected', False)
+        my_pick = data.get('my_pick', None)
+
+        outer = tk.Frame(self.content_frame, bg=COLORS['bg_page'])
+        outer.pack(fill=tk.BOTH, expand=True)
+
+        canvas = tk.Canvas(outer, bg=COLORS['bg_page'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(outer, orient=tk.VERTICAL, command=canvas.yview)
+        scroll_frame = tk.Frame(canvas, bg=COLORS['bg_page'])
+        scroll_frame.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas_win_id = canvas.create_window((0, 0), window=scroll_frame, anchor='center')
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def _center_scroll_frame(event=None):
+            cw = canvas.winfo_width()
+            fw = scroll_frame.winfo_reqwidth()
+            x = max(0, (cw - fw) // 2)
+            canvas.coords(canvas_win_id, x, 0)
+
+        canvas.bind('<Configure>', lambda e: (_center_scroll_frame(), canvas.configure(scrollregion=canvas.bbox('all'))))
+
+        frame = tk.Frame(scroll_frame, bg=COLORS['bg_page'], padx=40, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(frame, text="⚔ 选择开局事件 ⚔", font=_font(_f, 20, True),
+                 fg=COLORS['damage'], bg=COLORS['bg_page']).pack(pady=(10, 5))
+        tk.Label(frame, text="选择一个事件影响本局游戏", font=_font(_f, 12),
+                 fg=COLORS['text_secondary'], bg=COLORS['bg_page']).pack(pady=(0, 15))
+
+        if my_pick is not None:
+            event_name = '?'
+            for ev in events:
+                if ev and ev.get('id') == my_pick:
+                    event_name = ev.get('name', '?')
+                    break
+            tk.Label(frame, text=f"✓ 你已选择: {event_name}", font=_font(_f, 16, True),
+                     fg=COLORS['health'], bg=COLORS['health_bg'],
+                     relief=tk.GROOVE, padx=20, pady=10).pack(pady=15)
+            if not opp_selected:
+                tk.Label(frame, text="⏳ 等待对手选择...", font=_font(_f, 14),
+                         fg=COLORS['magic_text'], bg=COLORS['bg_page']).pack(pady=10)
+            else:
+                tk.Label(frame, text="✓ 对手已选择", font=_font(_f, 14),
+                         fg=COLORS['health'], bg=COLORS['bg_page']).pack(pady=10)
+            return
+
+        opp_status = "✓ 对手已选择" if opp_selected else "⏳ 对手选择中..."
+        tk.Label(frame, text=opp_status, font=_font(_f, 11),
+                 fg=COLORS['health'] if opp_selected else COLORS['text_secondary'],
+                 bg=COLORS['bg_page']).pack(pady=(0, 10))
+
+        events_frame = tk.Frame(frame, bg=COLORS['bg_page'])
+        events_frame.pack(pady=10)
+
+        for i, event in enumerate(events):
+            if event is None:
+                continue
+            eid = event.get('id')
+            name = event.get('name', '?')
+            desc = event.get('desc', '')
+
+            pos_labels = {1: 'Ⅰ', 2: 'Ⅱ', 3: 'Ⅲ'}
+            pos_label = pos_labels.get(i + 1, '?')
+
+            card_bg = COLORS['bg_card']
+            border_color = COLORS['magic']
+            if eid == 1:
+                border_color = COLORS['health']
+            elif eid in (2, 3, 8):
+                border_color = COLORS['magic']
+            elif eid in (4, 5, 6, 7):
+                border_color = COLORS['fire']
+
+            ef = tk.Frame(events_frame, bg=card_bg, relief=tk.RAISED, bd=2,
+                          highlightbackground=border_color, highlightthickness=3,
+                          width=int(320 * SCALE), height=int(240 * SCALE))
+            ef.pack(side=tk.LEFT, padx=int(15 * SCALE), pady=10)
+            ef.pack_propagate(False)
+
+            header = tk.Frame(ef, bg=border_color, height=int(40 * SCALE))
+            header.pack(fill=tk.X)
+            header.pack_propagate(False)
+            tk.Label(header, text=f" {pos_label} {name}", font=_font(_f, 14, True),
+                     fg='white', bg=border_color, anchor='center').pack(fill=tk.BOTH, expand=True, padx=8, pady=4)
+
+            desc_label = tk.Label(ef, text=desc, font=_font(_f, 11),
+                                  fg=COLORS['text_primary'], bg=card_bg,
+                                  wraplength=int(280 * SCALE), justify=tk.LEFT)
+            desc_label.pack(padx=12, pady=(10, 5), anchor='w')
+
+            select_btn = tk.Button(ef, text="选择此事件", font=_font(_f, 11, True),
+                                   bg=COLORS['bloom_bg'], fg=COLORS['bloom'],
+                                   activebackground=COLORS['bloom'],
+                                   activeforeground='white',
+                                   relief=tk.RAISED, bd=2,
+                                   command=lambda e=eid: self._on_event_select(e))
+            select_btn.pack(pady=(5, 10))
+
+            for child in ef.winfo_children():
+                if child != select_btn:
+                    child.bind('<Button-1>', lambda ev, e=eid: self._on_event_select(e))
+                    try:
+                        child.configure(cursor='hand2')
+                    except tk.TclError:
+                        pass
+
+    def _on_event_select(self, event_id):
+        data = self.event_select_data
+        sub_choice = None
+
+        if event_id == 2:
+            magic_options = data.get('magic_options', [])
+            draft_picks = data.get('draft_picks', [])
+            if magic_options:
+                magic_choice = self._show_magic_card_choice(magic_options)
+                if magic_choice is None:
+                    return
+                if draft_picks:
+                    card_choice = self._show_card_conversion_choice(
+                        draft_picks, 3, f"选择要转化为魔法牌的牌（最多3张）")
+                    if card_choice is None:
+                        return
+                    sub_choice = {
+                        'convert_def_id': magic_choice['convert_def_id'],
+                        'convert_def_ids': card_choice['convert_def_ids'],
+                    }
+                else:
+                    sub_choice = magic_choice
+        elif event_id == 3:
+            draft_picks = data.get('draft_picks', [])
+            if draft_picks:
+                sub_choice = self._show_light_conversion_choice(draft_picks)
+                if sub_choice is None:
+                    return
+
+        self._send(NetworkMessage('select_opening_event', {
+            'event_id': event_id,
+            'sub_choice': sub_choice,
+        }))
+        self._update_status("已选择事件，等待对手...")
+
+    def _show_magic_card_choice(self, magic_options):
+        options = []
+        for def_id in magic_options:
+            card_def = CARD_DEFS.get(def_id)
+            if card_def:
+                options.append(f"{card_def.name_cn} ({card_def.cost_e}E/{card_def.cost_m}M) {card_def.effect_text}")
+        if not options:
+            return None
+        sel = self._simple_choice("选择一种魔法牌（最多3张牌将转化为该牌）", options)
+        if sel is None:
+            return None
+        return {'convert_def_id': magic_options[sel]}
+
+    def _show_light_conversion_choice(self, draft_picks):
+        return self._show_card_conversion_choice(draft_picks, 5, "选择要转化为Light的牌（最多5张）")
+
+    def _show_card_conversion_choice(self, draft_picks, max_count, title):
+        from collections import Counter
+        counts = Counter(draft_picks)
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(title)
+        dialog.geometry(f"{int(520*SCALE)}x{int(600*SCALE)}")
+        dialog.configure(bg=COLORS['bg_page'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        result = [None]
+
+        tk.Label(dialog, text=title, font=_font(_f, 14, True),
+                 fg=COLORS['magic_text'], bg=COLORS['bg_page']).pack(pady=(12, 4))
+        tk.Label(dialog, text=f"每种牌可选择转化数量，最多共{max_count}张", font=_font(_f, 10),
+                 fg=COLORS['text_secondary'], bg=COLORS['bg_page']).pack(pady=(0, 8))
+
+        scroll_frame = tk.Frame(dialog, bg=COLORS['bg_page'])
+        scroll_frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
+        canvas = tk.Canvas(scroll_frame, bg=COLORS['bg_page'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(scroll_frame, orient=tk.VERTICAL, command=canvas.yview)
+        inner = tk.Frame(canvas, bg=COLORS['bg_page'])
+        inner.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.create_window((0, 0), window=inner, anchor='nw')
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        card_entries = []
+        for def_id, count in sorted(counts.items(), key=lambda x: CARD_DEFS.get(x[0], CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn):
+            if def_id == 'Light' and max_count == 5:
+                continue
+            card_def = CARD_DEFS.get(def_id)
+            if not card_def:
+                continue
+            cf = tk.Frame(inner, bg=COLORS['bg_card'], relief=tk.GROOVE, bd=1)
+            cf.pack(fill=tk.X, padx=8, pady=3)
+
+            type_color = CARD_TYPE_COLORS.get(card_def.card_type, COLORS['text_primary'])
+            tk.Label(cf, text=f"{card_def.name_cn}", font=_font(_f, 12, True),
+                     fg=type_color, bg=COLORS['bg_card']).pack(side=tk.LEFT, padx=(8, 4))
+            tk.Label(cf, text=f"x{count}", font=_font(_f, 11),
+                     fg=COLORS['text_secondary'], bg=COLORS['bg_card']).pack(side=tk.LEFT, padx=4)
+
+            var = tk.IntVar(value=0)
+            max_convert = min(count, max_count)
+            spin = tk.Spinbox(cf, from_=0, to=max_convert, textvariable=var,
+                              width=3, font=_font(_f, 11), state='readonly')
+            spin.pack(side=tk.RIGHT, padx=8)
+            tk.Label(cf, text="转化:", font=_font(_f, 10),
+                     fg=COLORS['text_secondary'], bg=COLORS['bg_card']).pack(side=tk.RIGHT)
+            card_entries.append((def_id, var, count))
+
+        count_label = tk.Label(dialog, text=f"已选: 0/{max_count}", font=_font(_f, 12, True),
+                               fg=COLORS['magic_text'], bg=COLORS['bg_page'])
+        count_label.pack(pady=4)
+
+        def update_count(*args):
+            total = sum(v.get() for _, v, _ in card_entries)
+            color = COLORS['damage'] if total > max_count else COLORS['magic_text']
+            count_label.config(text=f"已选: {total}/{max_count}", fg=color)
+
+        for _, var, _ in card_entries:
+            var.trace_add('write', update_count)
+
+        def on_ok():
+            total = sum(v.get() for _, v, _ in card_entries)
+            if total > max_count:
+                messagebox.showwarning("提示", f"最多选择{max_count}张", parent=dialog)
+                return
+            selected = []
+            for def_id, var, _ in card_entries:
+                for _ in range(var.get()):
+                    selected.append(def_id)
+            result[0] = {'convert_def_ids': selected} if selected else None
+            dialog.destroy()
+
+        def on_cancel():
+            dialog.destroy()
+
+        btn_frame = tk.Frame(dialog, bg=COLORS['bg_page'])
+        btn_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=12, pady=8)
+        tk.Button(btn_frame, text="确定", command=on_ok,
+                  font=_font(_f, 12), bg=COLORS['health_bg'],
+                  fg=COLORS['health_text'], width=8).pack(side=tk.LEFT, padx=6)
+        tk.Button(btn_frame, text="取消", command=on_cancel,
+                  font=_font(_f, 12), bg=COLORS['damage_bg'],
+                  fg=COLORS['damage'], width=8).pack(side=tk.RIGHT, padx=6)
+
+        dialog.lift()
+        dialog.focus_force()
+        dialog.wait_window()
+        return result[0]
+
     def _show_draft_ui(self):
         self._clear_content()
         self._update_status("选牌阶段")
@@ -1529,15 +1855,16 @@ class GameClient:
         if not hasattr(self, 'draft_frame') or not self.draft_frame.winfo_exists():
             self._show_draft_ui()
         ds = self.draft_state
-        round_num = ds.get('round', 0) + 1
+        round_num = ds.get('round', 1)
         total = ds.get('total_rounds', 15)
         rerolls = ds.get('rerolls', 0)
-        has_picked = ds.get('has_picked_this_round', False)
-        self.draft_info.config(text=f"第 {min(round_num, total)}/{total} 轮 | 重选次数: {rerolls}")
+        opp_count = ds.get('opponent_picks_count', 0)
+        my_count = len(ds.get('picks', []))
+        self.draft_info.config(text=f"第 {round_num}/{total} 轮 | 重选次数: {rerolls} | 对手已选: {opp_count}张")
         for w in self.draft_options_frame.winfo_children():
             w.destroy()
-        if has_picked:
-            tk.Label(self.draft_options_frame, text="已选牌，等待对手...",
+        if my_count >= total:
+            tk.Label(self.draft_options_frame, text="已选完15张牌，等待对手...",
                      font=_font(_f, 14), fg=COLORS['health'],
                      bg=COLORS['bg_page']).pack(pady=20)
         else:
@@ -1556,7 +1883,7 @@ class GameClient:
         picks = ds.get('picks', [])
         picks_cn = [CARD_DEFS.get(pid, CardDef('', '', pid, 0, 0, '', 0, '', '', '')).name_cn for pid in picks]
         self.draft_picks_label.config(text=f"已选({len(picks)}): {', '.join(picks_cn)}")
-        self.draft_reroll_btn.config(state=tk.NORMAL if rerolls > 0 else tk.DISABLED)
+        self.draft_reroll_btn.config(state=tk.NORMAL if rerolls > 0 and my_count < total else tk.DISABLED)
 
     def _on_draft_pick(self, def_id):
         self._send(NetworkMessage('draft_pick', {'def_id': def_id}))

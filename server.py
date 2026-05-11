@@ -334,8 +334,8 @@ class GameServer:
                     room.draft_ready[pidx] = True
                     for pi, p in enumerate(room.player_ids):
                         self._send_draft_state_to(room, pi)
-                    if engine.phase == 'draft_complete':
-                        self._start_game(room)
+                    if engine.phase == 'event_select':
+                        self._start_event_select(room)
                 else:
                     self.players[pid]['conn'].send(
                         NetworkMessage('error', {'message': '选牌失败'}))
@@ -347,6 +347,19 @@ class GameServer:
             else:
                 self.players[pid]['conn'].send(
                     NetworkMessage('error', {'message': '重选次数已用完'}))
+        elif msg.msg_type == 'select_opening_event':
+            event_id = msg.data.get('event_id')
+            sub_choice = msg.data.get('sub_choice')
+            if event_id is not None:
+                success = engine.select_opening_event(pidx, event_id)
+                if success:
+                    if sub_choice:
+                        engine.opening_event_sub_choices[pidx] = sub_choice
+                    if engine.both_events_selected():
+                        self._start_game(room)
+                    else:
+                        for pi, p in enumerate(room.player_ids):
+                            self._send_event_state_to(room, pi)
         elif msg.msg_type == 'play_card':
             card_instance_id = msg.data.get('card_instance_id')
             choice = msg.data.get('choice')
@@ -414,16 +427,14 @@ class GameServer:
         options = engine.draft_options[pidx]
         picks = engine.draft_picks[pidx]
         rerolls = engine.draft_rerolls[pidx]
-        has_picked = len(picks) > engine.draft_round
         opp_pidx = 1 - pidx
         self.players[pid]['conn'].send(NetworkMessage('draft_state', {
             'options': [c.to_dict() for c in options],
             'picks': picks,
             'rerolls': rerolls,
-            'round': engine.draft_round,
+            'round': len(picks) + 1,
             'total_rounds': 15,
             'opponent_picks_count': len(engine.draft_picks[opp_pidx]),
-            'has_picked_this_round': has_picked,
         }))
 
     def _broadcast_game_state(self, room: GameRoom):
@@ -434,6 +445,25 @@ class GameServer:
             opp_pid = room.player_ids[opp_pidx]
             state['opponent_name'] = self.players[opp_pid]['nickname']
             self.players[pid]['conn'].send(NetworkMessage('state_update', state))
+
+    def _start_event_select(self, room: GameRoom):
+        engine = room.engine
+        for pi, pid in enumerate(room.player_ids):
+            self._send_event_state_to(room, pi)
+
+    def _send_event_state_to(self, room: GameRoom, player_idx: int):
+        engine = room.engine
+        pid = room.player_ids[player_idx]
+        events = engine.opening_event_options[player_idx]
+        opp_idx = 1 - player_idx
+        opp_selected = engine.opening_event_picks[opp_idx] is not None
+        self.players[pid]['conn'].send(NetworkMessage('event_select', {
+            'events': events,
+            'opponent_selected': opp_selected,
+            'my_pick': engine.opening_event_picks[player_idx],
+            'magic_options': engine.opening_event_magic_options[player_idx],
+            'draft_picks': engine.draft_picks[player_idx],
+        }))
 
     def _start_game(self, room: GameRoom):
         room.engine.start_game()
@@ -623,20 +653,27 @@ class GameServer:
         if args.strip():
             return self._extra_args_error("draftfill", args)
         e = room.engine
-        if e.phase != 'draft':
+        if e.phase not in ('draft', 'event_select'):
             return f"当前不是选牌阶段(当前:{e.phase})"
         filled = 0
         while e.phase == 'draft':
+            made_progress = False
             for pidx in range(2):
-                if len(e.draft_picks[pidx]) <= e.draft_round:
+                if len(e.draft_picks[pidx]) < 15:
                     options = e.draft_options[pidx]
                     if options:
                         pick = options[0]
                         e.draft_pick(pidx, pick.def_id)
                         filled += 1
-                    else:
-                        break
-        self._start_game(room)
+                        made_progress = True
+            if not made_progress:
+                break
+        if e.phase == 'event_select':
+            for pidx in range(2):
+                options = e.opening_event_options[pidx]
+                if options and options[0]:
+                    e.select_opening_event(pidx, options[0]['id'])
+            self._start_game(room)
         return f"已自动选牌{filled}张，游戏开始!"
 
     def cmd_endgame(self, args: str):

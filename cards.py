@@ -132,10 +132,10 @@ _reg(CardDef('Light', 'Light', '轻', 0, 0, 'attack', 5, 'Common',
              '轻如鸿毛，却能伤人两次。', '造成2×2D（2子瓣）'))
 
 _reg(CardDef('Fang', 'Fang', '尖牙', 2, 0, 'attack', 5, 'Common',
-             '吸取对手的生命来为你回复。', '造成8D; +4H'))
+             '吸取对手的生命来为你回复。', '造成8D; 造成伤害时+4H'))
 
 _reg(CardDef('Triangle', 'Triangle', '三角形', 2, 0, 'attack', 8, 'Common',
-             '量变引起质变。', '造成(6+3×三角形层数)D；获得一层三角形'))
+             '量变引起质变。', '造成(6+3×三角形层数)D；造成伤害时获得一层三角形'))
 
 _reg(CardDef('MagicBone', 'Magic Bone', '魔法骨头', 0, 4, 'attack', 5, 'Common',
              '魔力凝聚的骨头，穿透力更强。', '造成15D'))
@@ -223,30 +223,30 @@ _reg(CardDef('Cancer', 'Cancer', '癌细胞', 7, 0, 'equipment', 2, 'Common',
              '无法根除的恶性细胞。', '对敌方施加2层易伤', flags={'indestructible'}))
 
 _reg(CardDef('Corruption', 'Corruption', '腐化', 0, 0, 'equipment', 2, 'Common',
-             '你怎么脸红了？', '自下个敌方回合开始，全场所有伤害翻倍', flags={'indestructible'}))
+             '伤敌一千，自损八百。', '自下个敌方回合开始，全场所有伤害翻倍', flags={'indestructible'}))
 
 _reg(CardDef('Mark', 'Mark', '标记', 4, 0, 'equipment', 3, 'Common',
-             '你被标记了！', '',
+             '你被标记了！', '禁止敌方行动一回合',
              trigger_cost_e=0, trigger_effect_text='若已装备一回合则摧毁此装备，直到敌方下回合结束敌方禁止行动'))
 
 _reg(CardDef('Mine', 'Mine', '地雷', 3, 0, 'equipment', 3, 'Common',
-             '它很危险，但需要一回合准备。', '',
+             '它很危险，但需要一回合准备。', '下回合造成20D',
              trigger_cost_e=0, trigger_effect_text='若已装备一回合则摧毁此装备，造成20D'))
 
 _reg(CardDef('Bubble', 'Bubble', '泡泡', 2, 0, 'counter', 10, 'Common',
-             '闪！', '获得一层闪避',
+             '闪！', '获得一层闪避（敌方使用攻击牌时）',
              response_trigger='attack'))
 
 _reg(CardDef('Nazar', 'Nazar', '邪眼护符', 5, 0, 'counter', 3, 'Common',
-             '邪眼的力量似乎为你减免了大部分伤害。', '所有物理伤害减少9(最少减至1)，受到两次10点或以上物理伤害后效果消失',
+             '邪眼的力量似乎为你减免了大部分伤害。', '所有物理伤害减少9(最少减至1)，受到两次10点及以上物理伤害后效果消失（敌方使用攻击牌时）',
              response_trigger='attack'))
 
 _reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 0, 3, 'counter', 3, 'Common',
-             '有魔力的护符，保护你的装备不被摧毁。', '获得一层装备保护',
+             '有魔力的护符，保护你的装备不被摧毁。', '获得一层装备保护（敌方摧毁装备牌时）',
              response_trigger='equipment_destroy'))
 
 _reg(CardDef('MagicBubble', 'Magic Bubble', '魔法泡泡', 0, 4, 'counter', 3, 'Common',
-             '泡泡的魔法版本。', '使敌方下次使用的技能牌失效',
+             '泡泡的魔法版本。', '使敌方使用的技能牌失效（敌方使用技能牌时）',
              response_trigger='skill'))
 
 
@@ -271,6 +271,8 @@ FIRST_PLAYER_HAND_SIZE = 4
 def build_draft_pool() -> List[CardInstance]:
     pool = []
     for def_id, card_def in CARD_DEFS.items():
+        if def_id == 'Yggdrasil':
+            continue
         for _ in range(card_def.count):
             pool.append(CardInstance(def_id=def_id))
     return pool
