@@ -40,6 +40,7 @@ class CardInstance:
     fission_count: int = 0
     fusion_multiplier: float = 1.0
     mimic_discount: int = 0
+    instance_flags: Set[str] = field(default_factory=set)
 
     @property
     def card_def(self) -> CardDef:
@@ -68,7 +69,7 @@ class CardInstance:
 
     @property
     def flags(self) -> Set[str]:
-        return self.card_def.flags
+        return self.card_def.flags | self.instance_flags
 
     def to_dict(self) -> dict:
         return {
@@ -79,6 +80,7 @@ class CardInstance:
             'fission_count': self.fission_count,
             'fusion_multiplier': self.fusion_multiplier,
             'mimic_discount': self.mimic_discount,
+            'instance_flags': list(self.instance_flags) if self.instance_flags else [],
         }
 
     @staticmethod
@@ -91,6 +93,7 @@ class CardInstance:
             fission_count=d.get('fission_count', 0),
             fusion_multiplier=d.get('fusion_multiplier', 1.0),
             mimic_discount=d.get('mimic_discount', 0),
+            instance_flags=set(d.get('instance_flags', [])),
         )
 
     def copy(self) -> 'CardInstance':
@@ -102,6 +105,7 @@ class CardInstance:
             fission_count=self.fission_count,
             fusion_multiplier=self.fusion_multiplier,
             mimic_discount=self.mimic_discount,
+            instance_flags=set(self.instance_flags),
         )
         return c
 
@@ -153,7 +157,7 @@ _reg(CardDef('Fusion', 'Fusion', '聚变', 0, 0, 'skill', 2, 'Common',
 _reg(CardDef('Iris', 'Iris', '鸢尾', 3, 0, 'skill', 3, 'Common',
              '美丽而致命。', '施加10层中毒'))
 
-_reg(CardDef('Fire', 'Fire', '火', 3, 0, 'skill', 3, 'Common',
+_reg(CardDef('Fire', 'Fire', '火', 2, 0, 'skill', 3, 'Common',
              '缓慢但持久地灼烧对手。', '造成2层灼烧'))
 
 _reg(CardDef('Fries', 'Fries', '薯条', 2, 0, 'skill', 5, 'Common',
@@ -219,8 +223,8 @@ _reg(CardDef('GoldenLeaf', 'Golden Leaf', '黄金叶', 3, 0, 'equipment', 5, 'Co
 _reg(CardDef('Pincer', 'Pincer', '螫针', 4, 0, 'equipment', 3, 'Common',
              '毒素可以减缓对手行动。', '敌方回合开始时费用回复-1E'))
 
-_reg(CardDef('Cancer', 'Cancer', '癌细胞', 7, 0, 'equipment', 2, 'Common',
-             '无法根除的恶性细胞。', '对敌方施加2层易伤', flags={'indestructible'}))
+_reg(CardDef('Cancer', 'Cancer', '癌细胞', 4, 0, 'equipment', 2, 'Common',
+             '无法根除的恶性细胞。', '对敌方施加1层淬毒', flags={'indestructible'}))
 
 _reg(CardDef('Corruption', 'Corruption', '腐化', 0, 0, 'equipment', 2, 'Common',
              '伤敌一千，自损八百。', '自下个敌方回合开始，全场所有伤害翻倍', flags={'indestructible'}))

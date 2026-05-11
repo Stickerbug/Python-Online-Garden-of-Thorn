@@ -59,6 +59,7 @@ class PlayerState:
         self.poison: int = 0
         self.fire: int = 0
         self.vulnerable: int = 0
+        self.toxic: int = 0
         self.triangle_stacks: int = 0
         self.dodge: int = 0
         self.nazar_active: bool = False
@@ -92,6 +93,7 @@ class PlayerState:
             'poison': self.poison,
             'fire': self.fire,
             'vulnerable': self.vulnerable,
+            'toxic': self.toxic,
             'triangle_stacks': self.triangle_stacks,
             'dodge': self.dodge,
             'nazar_active': self.nazar_active,
@@ -131,6 +133,7 @@ class PlayerState:
         ps.poison = d['poison']
         ps.fire = d['fire']
         ps.vulnerable = d['vulnerable']
+        ps.toxic = d.get('toxic', 0)
         ps.triangle_stacks = d.get('triangle_stacks', 0)
         ps.dodge = d.get('dodge', 0)
         ps.nazar_active = d.get('nazar_active', False)
@@ -182,6 +185,7 @@ class PlayerState:
 
     def draw_cards(self, count: int) -> List[CardInstance]:
         drawn = []
+        sprout_queue = []
         for _ in range(count):
             if not self.deck:
                 if not self.discard:
@@ -204,6 +208,25 @@ class PlayerState:
             else:
                 self.hand.append(card)
                 drawn.append(card)
+            if 'sprout' in card.flags and card in self.hand:
+                sprout_queue.append(card)
+        while sprout_queue:
+            trigger = sprout_queue.pop(0)
+            if not self.deck:
+                if not self.discard:
+                    break
+                self.deck = self.discard[:]
+                self.discard = []
+                random.shuffle(self.deck)
+            if self.deck:
+                extra = self.deck.pop(0)
+                if len(self.hand) < HAND_LIMIT:
+                    self.hand.append(extra)
+                    drawn.append(extra)
+                    if 'sprout' in extra.flags:
+                        sprout_queue.append(extra)
+                else:
+                    self.discard.append(extra)
         return drawn
 
     def heal(self, amount: int):
@@ -225,7 +248,7 @@ class GameEngine:
         4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对敌方施加2灼烧', 'position': 3},
         5: {'id': 5, 'name': '命运抽签', 'desc': '前二回合开始时抽牌至手牌已满', 'position': 3},
         6: {'id': 6, 'name': '能量涌动', 'desc': '前三回合开始时额外回1E', 'position': 3},
-        7: {'id': 7, 'name': '先手压制', 'desc': '必定先手(对面未选同事件时)且先手只抽3张', 'position': 3},
+        7: {'id': 7, 'name': '先手压制', 'desc': '必定先手(对面未选同事件时)，先手回复3E抽4张牌', 'position': 3},
     }
     MAGIC_CARD_POOL = ['MagicBone', 'MagicStinger', 'MagicSewage', 'MagicNazar', 'MagicBubble']
 
@@ -301,6 +324,8 @@ class GameEngine:
     def draft_pick(self, player_id: int, def_id: str) -> bool:
         if len(self.draft_picks[player_id]) >= DECK_SIZE:
             return False
+        if not self.draft_options[player_id]:
+            self._generate_draft_options_for_player(player_id)
         options = self.draft_options[player_id]
         found = None
         for opt in options:
@@ -382,7 +407,8 @@ class GameEngine:
                 ps.elixir = FIRST_PLAYER_ELIXIR
                 hand_size = FIRST_PLAYER_HAND_SIZE
                 if self.opening_event_picks[i] == 7:
-                    hand_size = 3
+                    hand_size = 4
+                    ps.elixir += 3
                 ps.draw_cards(hand_size)
             else:
                 ps.draw_cards(INITIAL_HAND_SIZE)
@@ -433,17 +459,21 @@ class GameEngine:
                 for target_def in target_def_ids:
                     for j in range(len(ps.deck)):
                         if ps.deck[j].def_id == target_def and converted < 5:
-                            ps.deck[j] = CardInstance(def_id='Light')
+                            light_card = CardInstance(def_id='Light')
+                            light_card.flags = {'sprout', 'symbiosis'}
+                            ps.deck[j] = light_card
                             converted += 1
                             break
-                self.log_msg(f"玩家{player_id + 1}【光之洗礼】：{converted}张牌变为Light")
+                self.log_msg(f"玩家{player_id + 1}【光之洗礼】：{converted}张牌变为Light(萌芽+共生)")
             else:
                 converted = 0
                 for j in range(len(ps.deck) - 1, -1, -1):
                     if ps.deck[j].def_id != 'Light' and converted < 5:
-                        ps.deck[j] = CardInstance(def_id='Light')
+                        light_card = CardInstance(def_id='Light')
+                        light_card.flags = {'sprout', 'symbiosis'}
+                        ps.deck[j] = light_card
                         converted += 1
-                self.log_msg(f"玩家{player_id + 1}【光之洗礼】：{converted}张牌变为Light")
+                self.log_msg(f"玩家{player_id + 1}【光之洗礼】：{converted}张牌变为Light(萌芽+共生)")
         elif event_id == 4:
             opp.fire += 2
             self.log_msg(f"玩家{player_id + 1}【烈焰预兆】：敌方+2灼烧")
@@ -452,16 +482,24 @@ class GameEngine:
         elif event_id == 6:
             self.log_msg(f"玩家{player_id + 1}【能量涌动】：前三回合额外回1E")
         elif event_id == 7:
-            self.log_msg(f"玩家{player_id + 1}【先手压制】：先手且只抽3张")
+            self.log_msg(f"玩家{player_id + 1}【先手压制】：先手回复3E抽4张牌")
         elif event_id == 8:
             ps.max_health -= 20
             ps.base_max_health -= 20
             ps.health -= 20
-            for j in range(len(ps.deck) - 1, -1, -1):
-                if ps.deck[j].def_id != 'Yggdrasil':
-                    ps.deck[j] = CardInstance(def_id='Yggdrasil')
-                    self.log_msg(f"玩家{player_id + 1}【绝境求生】：最大生命值-20，一张牌变为Yggdrasil")
-                    break
+            if sub and 'yggdrasil_convert_def_id' in sub:
+                target_def = sub['yggdrasil_convert_def_id']
+                for j in range(len(ps.deck)):
+                    if ps.deck[j].def_id == target_def:
+                        ps.deck[j] = CardInstance(def_id='Yggdrasil')
+                        self.log_msg(f"玩家{player_id + 1}【绝境求生】：最大生命值-20，{CARD_DEFS.get(target_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn}变为Yggdrasil")
+                        break
+            else:
+                for j in range(len(ps.deck) - 1, -1, -1):
+                    if ps.deck[j].def_id != 'Yggdrasil':
+                        ps.deck[j] = CardInstance(def_id='Yggdrasil')
+                        self.log_msg(f"玩家{player_id + 1}【绝境求生】：最大生命值-20，一张牌变为Yggdrasil")
+                        break
 
     def _start_draw_phase(self):
         self.phase = 'draw'
@@ -476,13 +514,13 @@ class GameEngine:
         self.current_player = player_id
         ps = self.players[player_id]
         opp = self.players[1 - player_id]
+        self._apply_turn_start_effects(player_id)
+        if self.game_over:
+            return
         if ps.skip_turn:
             ps.skip_turn = False
             self.log_msg(f"玩家{player_id + 1}被眩晕，跳过本回合！")
             self._end_player_turn(player_id)
-            return
-        self._apply_turn_start_effects(player_id)
-        if self.game_over:
             return
         if ps.health <= 0:
             self._check_game_over()
@@ -492,6 +530,10 @@ class GameEngine:
     def _apply_turn_start_effects(self, player_id: int):
         ps = self.players[player_id]
         opp = self.players[1 - player_id]
+        for eq in opp.equipment:
+            if eq.def_id == 'Corruption' and not eq.corruption_active:
+                eq.corruption_active = True
+                self.log_msg(f"玩家{1 - player_id + 1}的腐化效果激活！全场伤害翻倍！")
         if ps.poison > 0:
             dmg = ps.poison
             self._deal_direct_damage(player_id, dmg, '中毒')
@@ -543,12 +585,8 @@ class GameEngine:
                 self.log_msg(f"玩家{player_id + 1}的黄金叶效果：多抽1张牌")
         for eq in ps.equipment:
             if eq.def_id == 'Cancer':
-                opp.vulnerable += 2
-                self.log_msg(f"玩家{player_id + 1}的癌细胞效果：敌方+2易伤")
-        for eq in opp.equipment:
-            if eq.def_id == 'Corruption' and not eq.corruption_active:
-                eq.corruption_active = True
-                self.log_msg(f"玩家{1 - player_id + 1}的腐化效果激活！全场伤害翻倍！")
+                opp.toxic += 1
+                self.log_msg(f"玩家{player_id + 1}的癌细胞效果：敌方+1淬毒")
 
     def _deal_direct_damage(self, player_id: int, amount: int, source: str = ''):
         ps = self.players[player_id]
@@ -560,8 +598,6 @@ class GameEngine:
         if corruption_count > 0:
             actual = actual * (2 ** corruption_count)
             self.log_msg(f"腐化效果：伤害×{2 ** corruption_count}")
-        if ps.vulnerable > 0:
-            actual += ps.vulnerable
         ps.health -= actual
         self.log_msg(f"玩家{player_id + 1}受到{actual}点{source}伤害（H={ps.health}）")
         self._check_yggdrasil(player_id)
@@ -598,12 +634,12 @@ class GameEngine:
                 dmg = dmg * (2 ** corruption_count)
                 self.log_msg(f"腐化效果：伤害×{2 ** corruption_count}")
             dmg = max(0, dmg - ps.armor)
-            if ps.vulnerable > 0:
-                dmg += ps.vulnerable
-                self.log_msg(f"易伤效果：伤害+{ps.vulnerable}")
             ps.health -= dmg
             total_dealt += dmg
             self.log_msg(f"玩家{target_id + 1}受到{dmg}点伤害（H={ps.health}）")
+            if ps.toxic > 0:
+                ps.poison += ps.toxic
+                self.log_msg(f"淬毒效果：玩家{target_id + 1}+{ps.toxic}层中毒")
             if not is_battery:
                 for eq in ps.equipment:
                     if eq.def_id == 'Battery':
@@ -659,6 +695,15 @@ class GameEngine:
                 self.log_msg(f"玩家{i + 1}生命值归零！玩家{self.winner + 1}获胜！")
                 return
 
+    def surrender(self, player_id: int):
+        if self.game_over:
+            return {'success': False, 'error': '游戏已结束'}
+        self.game_over = True
+        self.winner = 1 - player_id
+        self.phase = 'game_over'
+        self.log_msg(f"玩家{player_id + 1}投降！玩家{self.winner + 1}获胜！")
+        return {'success': True}
+
     def can_play_card(self, player_id: int, card: CardInstance) -> Tuple[bool, str]:
         ps = self.players[player_id]
         card_def = card.card_def
@@ -666,14 +711,20 @@ class GameEngine:
             return False, "反制卡只能通过响应机制使用"
         if self.phase != 'action' or self.current_player != player_id:
             return False, "不是你的回合"
-        dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
-        extra_e = dup_count
+        extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = card.cost_e + extra_e
         if total_e > ps.elixir:
             return False, f"能量不足（需要{total_e}E，当前{ps.elixir}E）"
         if card.cost_m > ps.magic:
             return False, f"魔力不足（需要{card.cost_m}M，当前{ps.magic}M）"
         return True, ""
+
+    def _get_extra_e_for_card(self, player_id: int, card: CardInstance) -> int:
+        ps = self.players[player_id]
+        dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
+        if 'symbiosis' in card.flags:
+            return 0
+        return dup_count
 
     def play_card(self, player_id: int, card_instance_id: int, choice: Optional[dict] = None) -> dict:
         if self.pending_response is not None:
@@ -685,21 +736,23 @@ class GameEngine:
         can_play, reason = self.can_play_card(player_id, card)
         if not can_play:
             return {'success': False, 'error': reason}
-        dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
-        extra_e = dup_count
+        extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = card.cost_e + extra_e
         ps.elixir -= total_e
         ps.magic -= card.cost_m
-        ps.cards_played_this_turn[card.def_id] = dup_count + 1
+        ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
         card_removed = ps.remove_hand_card(card_instance_id)
         if card_removed is None:
             return {'success': False, 'error': '移除手牌失败'}
         needs_response = self._check_response_needed(player_id, card)
+        if not needs_response:
+            needs_response = self._check_precision_response_needed(player_id, card)
         if needs_response:
             self.pending_response = {
                 'card': card.to_dict(),
                 'player_id': player_id,
                 'original_choice': choice,
+                'is_precision': 'precision' in card.flags,
             }
             return {'success': True, 'needs_response': True, 'card': card.to_dict()}
         return self._execute_card_effect(player_id, card, choice)
@@ -720,6 +773,15 @@ class GameEngine:
             for c in opp.hand:
                 if c.card_def.response_trigger == 'equipment_destroy':
                     return True
+        return False
+
+    def _check_precision_response_needed(self, player_id: int, card: CardInstance) -> bool:
+        if 'precision' not in card.flags:
+            return False
+        opp = self.players[1 - player_id]
+        for c in opp.hand:
+            if c.card_def.response_trigger == 'attack':
+                return True
         return False
 
     def _would_destroy_equipment(self, card: CardInstance) -> bool:
@@ -757,7 +819,11 @@ class GameEngine:
                 return self._execute_card_effect(player_id, card, choice)
             self.log_msg(f"玩家{responder_id + 1}使用{counter_removed.name_cn}进行反制！")
             self._execute_counter_effect(responder_id, counter_removed, card)
+            is_precision = pending.get('is_precision', False)
             if counter_removed.def_id == 'Bubble':
+                if is_precision:
+                    self._execute_card_effect_half_damage(player_id, card, choice)
+                    return {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()}
                 self._execute_card_effect(player_id, card, choice)
                 return {'success': True, 'countered': True, 'card': card.to_dict()}
             if counter_removed.def_id == 'MagicBubble':
@@ -833,6 +899,33 @@ class GameEngine:
             ps.discard.append(card)
         self._check_game_over()
         return result
+
+    def _execute_card_effect_half_damage(self, player_id: int, card: CardInstance, choice: Optional[dict] = None) -> dict:
+        self.log_msg(f"玩家{player_id + 1}的精准牌被闪避反制，伤害减半！")
+        old_fission = card.fission_count
+        old_fusion = card.fusion_multiplier
+        card.fission_count = 0
+        card.fusion_multiplier = 1.0
+        base_dmg = self._get_card_base_damage(card)
+        halved_dmg = math.ceil(base_dmg / 2)
+        card.fission_count = old_fission
+        card.fusion_multiplier = halved_dmg / base_dmg if base_dmg > 0 else 0
+        result = self._execute_card_effect(player_id, card, choice)
+        card.fission_count = old_fission
+        card.fusion_multiplier = old_fusion
+        return result
+
+    def _get_card_base_damage(self, card: CardInstance) -> int:
+        dmg_map = {
+            'Basic': 6, 'Bone': 12, 'Stinger': 20, 'Sand': 3,
+            'Wing': 8, 'Light': 2, 'Fang': 8, 'Triangle': 6,
+            'MagicBone': 15, 'MagicStinger': 30,
+        }
+        base = dmg_map.get(card.def_id, 0)
+        if card.fission_count > 0:
+            base = math.ceil(base / 3)
+        base = int(base * card.fusion_multiplier)
+        return base
 
     def _card_needs_choice(self, card: CardInstance) -> bool:
         return card.def_id in ('Fission', 'Fusion', 'Mimic', 'Chromosome', 'Sewage', 'Chilli')
@@ -944,20 +1037,26 @@ class GameEngine:
         if card.fission_count > 0:
             dmg = math.ceil(dmg / 3)
         dmg = int(dmg * card.fusion_multiplier)
-        self.deal_attack_damage(1 - player_id, dmg)
-        self.players[player_id].heal(4)
-        self.log_msg(f"玩家{player_id + 1}使用尖牙！造成{dmg}伤害，回复4H")
+        dealt = self.deal_attack_damage(1 - player_id, dmg)
+        if dealt > 0:
+            self.players[player_id].heal(4)
+            self.log_msg(f"玩家{player_id + 1}使用尖牙！造成{dealt}伤害，回复4H")
+        else:
+            self.log_msg(f"玩家{player_id + 1}使用尖牙！未造成伤害")
 
     def _effect_triangle(self, player_id: int, card: CardInstance, choice=None):
         ps = self.players[player_id]
-        if ps.triangle_stacks < 4:
-            ps.triangle_stacks += 1
         dmg = 6 + 3 * ps.triangle_stacks
         if card.fission_count > 0:
             dmg = math.ceil(dmg / 3)
         dmg = int(dmg * card.fusion_multiplier)
-        self.log_msg(f"玩家{player_id + 1}使用三角形！造成{dmg}伤害，三角形层数+1（{ps.triangle_stacks}）")
-        self.deal_attack_damage(1 - player_id, dmg)
+        dealt = self.deal_attack_damage(1 - player_id, dmg)
+        if dealt > 0:
+            if ps.triangle_stacks < 4:
+                ps.triangle_stacks += 1
+            self.log_msg(f"玩家{player_id + 1}使用三角形！造成{dealt}伤害，三角形层数+1（{ps.triangle_stacks}）")
+        else:
+            self.log_msg(f"玩家{player_id + 1}使用三角形！未造成伤害")
 
     def _effect_magicbone(self, player_id: int, card: CardInstance, choice=None):
         dmg = 15
@@ -981,7 +1080,15 @@ class GameEngine:
             target = ps.find_hand_card(choice['target_instance_id'])
             if target and target.card_type == 'attack':
                 target.fission_count = 2
-                self.log_msg(f"玩家{player_id + 1}使用裂变！{target.name_cn}将额外打出2次，伤害变为1/3")
+                extra_e = self._get_extra_e_for_card(player_id, target)
+                total_e = target.cost_e + extra_e
+                if total_e > ps.elixir or target.cost_m > ps.magic:
+                    self.log_msg(f"玩家{player_id + 1}裂变目标费用不足（需要{total_e}E/{target.cost_m}M）")
+                    return
+                ps.elixir -= total_e
+                ps.magic -= target.cost_m
+                ps.cards_played_this_turn[target.def_id] = ps.cards_played_this_turn.get(target.def_id, 0) + 1
+                self.log_msg(f"玩家{player_id + 1}使用裂变！消耗{total_e}E/{target.cost_m}M，{target.name_cn}将额外打出2次，伤害变为1/3")
                 for _ in range(1 + target.fission_count):
                     self._apply_card_effect(player_id, target)
                     if self.game_over:
@@ -1009,6 +1116,8 @@ class GameEngine:
                 ps.hand.remove(c)
                 ps.discard.append(c)
             self.log_msg(f"玩家{player_id + 1}使用聚变！{first.name_cn}伤害×{multiplier}，丢弃{len(cards) - 1}张")
+        else:
+            self.log_msg(f"玩家{player_id + 1}使用聚变，但未选择目标")
 
     def _effect_iris(self, player_id: int, card: CardInstance, choice=None):
         self.players[1 - player_id].poison += 10
@@ -1196,6 +1305,7 @@ class GameEngine:
             return {'success': False, 'error': '能量不足'}
         ps.elixir -= eq.card_def.trigger_cost_e
         opp_id = 1 - player_id
+        opp = self.players[opp_id]
         if eq.def_id == 'Leaf':
             destroyed = self._destroy_equipment(player_id, eq)
             if destroyed:
@@ -1204,10 +1314,8 @@ class GameEngine:
         elif eq.def_id == 'Mark':
             destroyed = self._destroy_equipment(player_id, eq)
             if destroyed:
-                self.log_msg(f"玩家{player_id + 1}触发标记！敌方回合立即结束")
-                self.pending_response = None
-                if self.current_player == opp_id:
-                    self._end_player_turn(opp_id)
+                opp.skip_turn = True
+                self.log_msg(f"玩家{player_id + 1}触发标记！敌方下回合不能行动")
         elif eq.def_id == 'Mine':
             destroyed = self._destroy_equipment(player_id, eq)
             if destroyed:

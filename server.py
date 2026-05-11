@@ -62,6 +62,7 @@ class GameRoom:
         self.player_ids = player_ids
         self.engine = GameEngine()
         self.draft_ready = {pid: False for pid in player_ids}
+        self.spectators: List[int] = []
 
     def player_index(self, player_id: int) -> int:
         return self.player_ids.index(player_id) if player_id in self.player_ids else -1
@@ -221,6 +222,12 @@ class GameServer:
                 self._handle_return_lobby(pid)
             elif msg.msg_type == 'rematch':
                 self._handle_rematch(pid)
+            elif msg.msg_type == 'spectate':
+                self._handle_spectate(pid, msg)
+            elif msg.msg_type == 'leave_spectate':
+                self._handle_leave_spectate(pid)
+            elif msg.msg_type == 'switch_spectate_perspective':
+                self._handle_switch_spectate_perspective(pid)
             else:
                 player = self.players.get(pid)
                 if not player or player['room_id'] is None:
@@ -287,6 +294,9 @@ class GameServer:
         player = self.players.get(pid)
         if not player:
             return
+        if player.get('spectating_room') is not None:
+            self._handle_leave_spectate(pid)
+            return
         room_id = player['room_id']
         if room_id is not None and room_id in self.rooms:
             room = self.rooms[room_id]
@@ -300,6 +310,82 @@ class GameServer:
         player['room_id'] = None
         player['status'] = 'lobby'
         self._broadcast_lobby()
+
+    def _handle_spectate(self, pid: int, msg: NetworkMessage):
+        player = self.players.get(pid)
+        if not player or player['status'] != 'lobby':
+            self.players[pid]['conn'].send(NetworkMessage('error', {'message': '只能在大厅观战'}))
+            return
+        room_id = msg.data.get('room_id')
+        if room_id is None or room_id not in self.rooms:
+            self.players[pid]['conn'].send(NetworkMessage('error', {'message': '对局不存在'}))
+            return
+        room = self.rooms[room_id]
+        phase = room.engine.phase
+        if phase not in ('action', 'draw'):
+            self.players[pid]['conn'].send(NetworkMessage('error', {'message': '该对局当前无法观战'}))
+            return
+        player['status'] = 'spectating'
+        player['spectating_room'] = room_id
+        room.spectators.append(pid)
+        p1 = self.players.get(room.player_ids[0], {}).get('nickname', '?')
+        p2 = self.players.get(room.player_ids[1], {}).get('nickname', '?')
+        self.players[pid]['conn'].send(NetworkMessage('spectate_enter', {
+            'room_id': room_id,
+            'player1': p1,
+            'player2': p2,
+        }))
+        self._send_spectate_state(pid, room)
+
+    def _handle_leave_spectate(self, pid: int):
+        player = self.players.get(pid)
+        if not player:
+            return
+        room_id = player.get('spectating_room')
+        if room_id is not None and room_id in self.rooms:
+            room = self.rooms[room_id]
+            if pid in room.spectators:
+                room.spectators.remove(pid)
+        player['spectating_room'] = None
+        player['spectate_perspective'] = 0
+        player['status'] = 'lobby'
+        self.players[pid]['conn'].send(NetworkMessage('spectate_leave', {}))
+        self._broadcast_lobby()
+
+    def _handle_switch_spectate_perspective(self, pid: int):
+        player = self.players.get(pid)
+        if not player or player.get('spectating_room') is None:
+            return
+        room_id = player['spectating_room']
+        if room_id not in self.rooms:
+            return
+        current = player.get('spectate_perspective', 0)
+        new_perspective = 1 - current
+        player['spectate_perspective'] = new_perspective
+        room = self.rooms[room_id]
+        self._send_spectate_state(pid, room)
+
+    def _send_spectate_state(self, pid: int, room: GameRoom):
+        engine = room.engine
+        perspective = self.players[pid].get('spectate_perspective', 0)
+        state = engine.get_public_state(for_player=perspective)
+        state['spectating'] = True
+        state['spectate_perspective'] = perspective
+        state['player1_name'] = self.players.get(room.player_ids[0], {}).get('nickname', '?')
+        state['player2_name'] = self.players.get(room.player_ids[1], {}).get('nickname', '?')
+        self.players[pid]['conn'].send(NetworkMessage('state_update', state))
+
+    def _broadcast_spectate_state(self, room: GameRoom):
+        for spid in room.spectators:
+            if spid in self.players:
+                perspective_data = self.players[spid].get('spectate_perspective', 0)
+                engine = room.engine
+                state = engine.get_public_state(for_player=perspective_data)
+                state['spectating'] = True
+                state['spectate_perspective'] = perspective_data
+                state['player1_name'] = self.players.get(room.player_ids[0], {}).get('nickname', '?')
+                state['player2_name'] = self.players.get(room.player_ids[1], {}).get('nickname', '?')
+                self.players[spid]['conn'].send(NetworkMessage('state_update', state))
 
     def _handle_rematch(self, pid: int):
         player = self.players.get(pid)
@@ -330,6 +416,10 @@ class GameServer:
             def_id = msg.data.get('def_id')
             if def_id:
                 success = engine.draft_pick(pidx, def_id)
+                if not success:
+                    if not engine.draft_options[pidx]:
+                        engine._generate_draft_options_for_player(pidx)
+                    success = engine.draft_pick(pidx, def_id)
                 if success:
                     room.draft_ready[pidx] = True
                     for pi, p in enumerate(room.player_ids):
@@ -420,6 +510,15 @@ class GameServer:
             if not result.get('success'):
                 self.players[pid]['conn'].send(
                     NetworkMessage('error', {'message': result.get('error', '结束回合失败')}))
+        elif msg.msg_type == 'surrender':
+            result = engine.surrender(pidx)
+            if result.get('success'):
+                self._broadcast_game_state(room)
+                for p_id in room.player_ids:
+                    self.players[p_id]['conn'].send(NetworkMessage('game_phase', {'phase': 'game_over'}))
+            else:
+                self.players[pid]['conn'].send(
+                    NetworkMessage('error', {'message': result.get('error', '投降失败')}))
 
     def _send_draft_state_to(self, room: GameRoom, pidx: int):
         pid = room.player_ids[pidx]
@@ -445,6 +544,7 @@ class GameServer:
             opp_pid = room.player_ids[opp_pidx]
             state['opponent_name'] = self.players[opp_pid]['nickname']
             self.players[pid]['conn'].send(NetworkMessage('state_update', state))
+        self._broadcast_spectate_state(room)
 
     def _start_event_select(self, room: GameRoom):
         engine = room.engine
@@ -476,11 +576,24 @@ class GameServer:
         for pid, p in self.players.items():
             if p['status'] == 'lobby':
                 lobby_list.append({'player_id': pid, 'nickname': p['nickname']})
+        ongoing_games = []
+        for rid, room in self.rooms.items():
+            phase = room.engine.phase
+            if phase in ('action', 'draw', 'response', 'choice'):
+                p1 = self.players.get(room.player_ids[0], {}).get('nickname', '?')
+                p2 = self.players.get(room.player_ids[1], {}).get('nickname', '?')
+                ongoing_games.append({
+                    'room_id': rid,
+                    'player1': p1,
+                    'player2': p2,
+                    'round': room.engine.round_num,
+                })
         for pid, p in self.players.items():
             if p['status'] == 'lobby':
                 p['conn'].send(NetworkMessage('lobby_update', {
                     'players': lobby_list,
                     'your_id': pid,
+                    'ongoing_games': ongoing_games,
                 }))
 
     def stop(self):
@@ -914,4 +1027,4 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         server.stop()
         sys.stdout.write('\r' + ' ' * 80 + '\r')
-        print("[服务器] 已关闭")
+        print("[服务器] 服务器已关闭")

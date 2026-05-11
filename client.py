@@ -80,6 +80,8 @@ CARD_FLAGS = {
     'exile': ('放逐', COLORS['banish'], COLORS['banish_bg']),
     'non_stackable': ('不可叠加', COLORS['non_stack'], COLORS['non_stack_bg']),
     'indestructible': ('不可摧毁', COLORS['indestructible'], COLORS['indestructible_bg']),
+    'sprout': ('萌芽', '#2ecc71', '#27ae60'),
+    'symbiosis': ('共生', '#3498db', '#2980b9'),
 }
 
 
@@ -167,6 +169,9 @@ class GameClient:
         self._pass_btn = None
         self._response_countdown = 0
         self._pending_play_card = None
+        self._is_spectating = False
+        self._spectate_perspective = 0
+        self._surrender_pending = False
         self._build_ui()
 
     def connect_and_login(self, host: str, port: int, nickname: str):
@@ -439,6 +444,7 @@ class GameClient:
             elif msg.msg_type == 'lobby_update':
                 self.lobby_players = msg.data.get('players', [])
                 self.player_id = msg.data.get('your_id', self.player_id)
+                self.lobby_ongoing_games = msg.data.get('ongoing_games', [])
                 self.phase = 'lobby'
                 self._show_lobby_ui()
             elif msg.msg_type == 'invite_received':
@@ -488,6 +494,16 @@ class GameClient:
             elif msg.msg_type == 'rematch_requested':
                 self._rematch_pending = True
                 self._show_rematch_request(msg.data)
+            elif msg.msg_type == 'spectate_enter':
+                self._is_spectating = True
+                self._spectate_perspective = 0
+                self.phase = 'playing'
+                self._build_game_ui()
+            elif msg.msg_type == 'spectate_leave':
+                self._is_spectating = False
+                self._spectate_perspective = 0
+                self.phase = 'lobby'
+                self._show_lobby_ui()
         except Exception as e:
             print(f"处理消息错误: {e}")
             import traceback
@@ -587,6 +603,23 @@ class GameClient:
         tk.Label(frame, text=f"在线人数: {len(self.lobby_players)}",
                  font=_font(_f, 11), fg=COLORS['text_secondary'],
                  bg=COLORS['bg_page']).pack(pady=10)
+
+        ongoing = getattr(self, 'lobby_ongoing_games', [])
+        if ongoing:
+            tk.Label(frame, text="正在进行的对局", font=_font(_f, 16, True),
+                     fg=COLORS['damage'], bg=COLORS['bg_page']).pack(pady=(15, 5))
+            games_frame = tk.Frame(frame, bg=COLORS['bg_card'], relief=tk.SUNKEN, bd=1)
+            games_frame.pack(fill=tk.X, pady=5)
+            for g in ongoing:
+                row = tk.Frame(games_frame, bg=COLORS['bg_card'])
+                row.pack(fill=tk.X, padx=10, pady=4)
+                tk.Label(row, text=f"{g['player1']} vs {g['player2']} (第{g['round']}回合)",
+                         font=_font(_f, 12), fg=COLORS['text_primary'],
+                         bg=COLORS['bg_card']).pack(side=tk.LEFT, padx=10)
+                tk.Button(row, text="观战", font=_font(_f, 11),
+                          bg=COLORS['magic_bg'], fg=COLORS['magic_text'],
+                          command=lambda rid=g['room_id']: self._on_spectate(rid)).pack(side=tk.RIGHT, padx=10)
+
         tk.Button(frame, text="返回主界面", font=_font(_f, 12),
                   bg=COLORS['armor_bg'], fg=COLORS['armor_text'],
                   command=self._back_to_login, width=14).pack(pady=10)
@@ -594,6 +627,17 @@ class GameClient:
     def _on_invite(self, target_id: int):
         self._send(NetworkMessage('invite', {'target_id': target_id}))
         self._update_status("邀请已发送，等待对方回应...")
+
+    def _on_spectate(self, room_id):
+        self._send(NetworkMessage('spectate', {'room_id': room_id}))
+        self._update_status("正在进入观战...")
+
+    def _on_switch_perspective(self):
+        self._spectate_perspective = 1 - self._spectate_perspective
+        self._send(NetworkMessage('switch_spectate_perspective', {}))
+
+    def _on_leave_spectate(self):
+        self._send(NetworkMessage('leave_spectate', {}))
 
     def _back_to_login(self):
         if self.conn and self.conn.connected:
@@ -626,34 +670,23 @@ class GameClient:
                       highlightthickness=1, highlightbackground=COLORS['border_color'])
         c.pack(side=tk.LEFT, padx=2)
         bar = c.create_rectangle(1, 1, BAR_W(), BAR_H(), fill=color, outline='')
-        txt_stroke = []
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            t = c.create_text(BAR_W() // 2 + dx, BAR_H() // 2 + dy, text="", font=_font(_f, 9, True), fill=color)
-            txt_stroke.append(t)
-        txt_bg = c.create_text(BAR_W() // 2, BAR_H() // 2, text="", font=_font(_f, 9, True),
-                               fill=color)
-        txt_fg = c.create_text(BAR_W() // 2, BAR_H() // 2, text="", font=_font(_f, 9, True),
-                               fill='white')
-        return c, bar, txt_stroke, txt_bg, txt_fg
+        txt_stroke = c.create_text(BAR_W() // 2, BAR_H() // 2, text="", font=_font(_f, 10, True), fill=color)
+        txt_fg = c.create_text(BAR_W() // 2, BAR_H() // 2, text="", font=_font(_f, 9, True), fill='white')
+        return c, bar, txt_stroke, txt_fg
 
-    def _update_bar(self, canvas, bar, txt_stroke, txt_bg, txt_fg, cur, mx):
+    def _update_bar(self, canvas, bar, txt_stroke, txt_fg, cur, mx):
         ratio = max(0, min(1, cur / mx)) if mx > 0 else 0
         fill_w = max(1, int(BAR_W() * ratio))
         canvas.coords(bar, 1, 1, fill_w, BAR_H())
         text_str = f"{cur}/{mx}"
         cx, cy = BAR_W() // 2, BAR_H() // 2
-        for i, (dx, dy) in enumerate([(-1, 0), (1, 0), (0, -1), (0, 1)]):
-            canvas.itemconfig(txt_stroke[i], text=text_str)
-            canvas.coords(txt_stroke[i], cx + dx, cy + dy)
-        canvas.itemconfig(txt_bg, text=text_str)
+        canvas.itemconfig(txt_stroke, text=text_str)
+        canvas.coords(txt_stroke, cx, cy)
         canvas.itemconfig(txt_fg, text=text_str)
-        canvas.coords(txt_bg, cx, cy)
         canvas.coords(txt_fg, cx, cy)
         canvas.delete('bar_clip')
-        for t in txt_stroke:
-            canvas.tag_lower(t)
-        canvas.tag_lower(txt_bg)
-        canvas.tag_raise(bar, txt_bg)
+        canvas.tag_lower(txt_stroke)
+        canvas.tag_raise(bar, txt_stroke)
         canvas.tag_raise(txt_fg, bar)
         if fill_w < BAR_W() - 1:
             clip = canvas.create_rectangle(fill_w, 0, BAR_W(), BAR_H(),
@@ -724,19 +757,32 @@ class GameClient:
         tk.Button(btn_frame, text="查看牌堆", font=_font(_f, 11),
                   command=self._view_deck, bg=COLORS['magic_bg'], fg=COLORS['magic_text'],
                   width=10).pack(side=tk.LEFT, padx=4)
+        self.surrender_btn = tk.Button(btn_frame, text="投降", font=_font(_f, 11),
+                                       command=self._on_surrender,
+                                       bg=COLORS['bg_card'], fg=COLORS['text_secondary'],
+                                       width=6)
+        self.surrender_btn.pack(side=tk.LEFT, padx=4)
+        self.switch_perspective_btn = tk.Button(btn_frame, text="切换视角", font=_font(_f, 11),
+                                                 command=self._on_switch_perspective,
+                                                 bg=COLORS['magic_bg'], fg=COLORS['magic_text'],
+                                                 width=10)
+        self.leave_spectate_btn = tk.Button(btn_frame, text="退出观战", font=_font(_f, 11),
+                                             command=self._on_leave_spectate,
+                                             bg=COLORS['damage_bg'], fg=COLORS['damage'],
+                                             width=10)
         self.response_frame = tk.Frame(self.game_frame, bg=COLORS['bg_page'])
         self.response_frame.pack(fill=tk.X, padx=10, pady=3)
-        self.opp_h_canvas, self.opp_h_bar, self.opp_h_stroke, self.opp_h_txt_bg, self.opp_h_txt_fg = self._make_bar(self.opp_panel, 'H', COLORS['health'], COLORS['health_bg'])
-        self.opp_e_canvas, self.opp_e_bar, self.opp_e_stroke, self.opp_e_txt_bg, self.opp_e_txt_fg = self._make_bar(self.opp_panel, 'E', COLORS['elixir'], COLORS['elixir_bg'])
-        self.opp_m_canvas, self.opp_m_bar, self.opp_m_stroke, self.opp_m_txt_bg, self.opp_m_txt_fg = self._make_bar(self.opp_panel, 'M', COLORS['magic'], COLORS['magic_bg'])
+        self.opp_h_canvas, self.opp_h_bar, self.opp_h_stroke, self.opp_h_txt_fg = self._make_bar(self.opp_panel, 'H', COLORS['health'], COLORS['health_bg'])
+        self.opp_e_canvas, self.opp_e_bar, self.opp_e_stroke, self.opp_e_txt_fg = self._make_bar(self.opp_panel, 'E', COLORS['elixir'], COLORS['elixir_bg'])
+        self.opp_m_canvas, self.opp_m_bar, self.opp_m_stroke, self.opp_m_txt_fg = self._make_bar(self.opp_panel, 'M', COLORS['magic'], COLORS['magic_bg'])
         self.opp_status_frame = tk.Frame(self.opp_panel, bg=COLORS['bg_page'])
         self.opp_status_frame.pack(side=tk.LEFT, padx=8)
         self.opp_info_label = tk.Label(self.opp_panel, text="", font=_font(_f, 10),
                                        fg=COLORS['text_secondary'], bg=COLORS['bg_page'])
         self.opp_info_label.pack(side=tk.RIGHT, padx=4)
-        self.you_h_canvas, self.you_h_bar, self.you_h_stroke, self.you_h_txt_bg, self.you_h_txt_fg = self._make_bar(self.you_panel, 'H', COLORS['health'], COLORS['health_bg'])
-        self.you_e_canvas, self.you_e_bar, self.you_e_stroke, self.you_e_txt_bg, self.you_e_txt_fg = self._make_bar(self.you_panel, 'E', COLORS['elixir'], COLORS['elixir_bg'])
-        self.you_m_canvas, self.you_m_bar, self.you_m_stroke, self.you_m_txt_bg, self.you_m_txt_fg = self._make_bar(self.you_panel, 'M', COLORS['magic'], COLORS['magic_bg'])
+        self.you_h_canvas, self.you_h_bar, self.you_h_stroke, self.you_h_txt_fg = self._make_bar(self.you_panel, 'H', COLORS['health'], COLORS['health_bg'])
+        self.you_e_canvas, self.you_e_bar, self.you_e_stroke, self.you_e_txt_fg = self._make_bar(self.you_panel, 'E', COLORS['elixir'], COLORS['elixir_bg'])
+        self.you_m_canvas, self.you_m_bar, self.you_m_stroke, self.you_m_txt_fg = self._make_bar(self.you_panel, 'M', COLORS['magic'], COLORS['magic_bg'])
         self.you_status_frame = tk.Frame(self.you_panel, bg=COLORS['bg_page'])
         self.you_status_frame.pack(side=tk.LEFT, padx=8)
         self.you_info_label = tk.Label(self.you_panel, text="", font=_font(_f, 10),
@@ -755,22 +801,22 @@ class GameClient:
         you = gs.get('you', {})
         opp = gs.get('opponent', {})
         try:
-            self._update_bar(self.opp_h_canvas, self.opp_h_bar, self.opp_h_stroke, self.opp_h_txt_bg, self.opp_h_txt_fg,
+            self._update_bar(self.opp_h_canvas, self.opp_h_bar, self.opp_h_stroke, self.opp_h_txt_fg,
                              opp.get('health', 0), opp.get('max_health', 100))
-            self._update_bar(self.opp_e_canvas, self.opp_e_bar, self.opp_e_stroke, self.opp_e_txt_bg, self.opp_e_txt_fg,
+            self._update_bar(self.opp_e_canvas, self.opp_e_bar, self.opp_e_stroke, self.opp_e_txt_fg,
                              opp.get('elixir', 0), opp.get('max_elixir', 10))
-            self._update_bar(self.opp_m_canvas, self.opp_m_bar, self.opp_m_stroke, self.opp_m_txt_bg, self.opp_m_txt_fg,
+            self._update_bar(self.opp_m_canvas, self.opp_m_bar, self.opp_m_stroke, self.opp_m_txt_fg,
                              opp.get('magic', 0), opp.get('max_magic', 10))
             self._update_status_tags(self.opp_status_frame, opp)
             self.opp_info_label.config(text=f"手牌:{opp.get('hand_count', 0)} 牌堆:{opp.get('deck_count', 0)}")
         except Exception:
             pass
         try:
-            self._update_bar(self.you_h_canvas, self.you_h_bar, self.you_h_stroke, self.you_h_txt_bg, self.you_h_txt_fg,
+            self._update_bar(self.you_h_canvas, self.you_h_bar, self.you_h_stroke, self.you_h_txt_fg,
                              you.get('health', 0), you.get('max_health', 100))
-            self._update_bar(self.you_e_canvas, self.you_e_bar, self.you_e_stroke, self.you_e_txt_bg, self.you_e_txt_fg,
+            self._update_bar(self.you_e_canvas, self.you_e_bar, self.you_e_stroke, self.you_e_txt_fg,
                              you.get('elixir', 0), you.get('max_elixir', 10))
-            self._update_bar(self.you_m_canvas, self.you_m_bar, self.you_m_stroke, self.you_m_txt_bg, self.you_m_txt_fg,
+            self._update_bar(self.you_m_canvas, self.you_m_bar, self.you_m_stroke, self.you_m_txt_fg,
                              you.get('magic', 0), you.get('max_magic', 10))
             self._update_status_tags(self.you_status_frame, you)
             self.you_info_label.config(text=f"手牌:{you.get('hand_count', 0)} 牌堆:{you.get('deck_count', 0)} 弃牌:{you.get('discard_count', 0)}")
@@ -792,13 +838,30 @@ class GameClient:
             pass
         try:
             is_my_turn = self._is_my_turn()
-            self.end_turn_btn.config(state=tk.NORMAL if is_my_turn else tk.DISABLED)
-            if is_my_turn:
-                self.play_zone.config(bg=COLORS['bloom_bg'], relief=tk.SOLID)
-                self.play_zone_label.config(fg=COLORS['bloom'], bg=COLORS['bloom_bg'])
+            is_spectating = self._is_spectating
+            if is_spectating:
+                self.end_turn_btn.pack_forget()
+                self.surrender_btn.pack_forget()
+                self.switch_perspective_btn.pack(side=tk.LEFT, padx=4)
+                self.leave_spectate_btn.pack(side=tk.LEFT, padx=4)
+                self.play_zone.pack_forget()
+                perspective = gs.get('spectate_perspective', 0)
+                p1_name = gs.get('player1_name', '玩家1')
+                p2_name = gs.get('player2_name', '玩家2')
+                self.switch_perspective_btn.config(
+                    text=f"切换到{p2_name if perspective == 0 else p1_name}视角")
             else:
-                self.play_zone.config(bg=COLORS['bg_page'], relief=tk.GROOVE)
-                self.play_zone_label.config(fg=COLORS['text_secondary'], bg=COLORS['bg_page'])
+                self.end_turn_btn.config(state=tk.NORMAL if is_my_turn else tk.DISABLED)
+                self.end_turn_btn.pack(side=tk.LEFT, padx=8)
+                self.surrender_btn.pack(side=tk.LEFT, padx=4)
+                self.switch_perspective_btn.pack_forget()
+                self.leave_spectate_btn.pack_forget()
+                if is_my_turn:
+                    self.play_zone.config(bg=COLORS['bloom_bg'], relief=tk.SOLID)
+                    self.play_zone_label.config(fg=COLORS['bloom'], bg=COLORS['bloom_bg'])
+                else:
+                    self.play_zone.config(bg=COLORS['bg_page'], relief=tk.GROOVE)
+                    self.play_zone_label.config(fg=COLORS['text_secondary'], bg=COLORS['bg_page'])
         except Exception:
             is_my_turn = False
         phase = gs.get('phase', '')
@@ -818,7 +881,6 @@ class GameClient:
         tags = []
         p = player_data.get('poison', 0)
         f = player_data.get('fire', 0)
-        v = player_data.get('vulnerable', 0)
         tri = player_data.get('triangle_stacks', 0)
         d = player_data.get('dodge', 0)
         n = player_data.get('nazar_active', False)
@@ -826,9 +888,10 @@ class GameClient:
         inv = player_data.get('invincible', False)
         sk = player_data.get('skip_turn', False)
         ep = player_data.get('equipment_protection', 0)
+        tx = player_data.get('toxic', 0)
         if p > 0: tags.append(('中毒', str(p), COLORS['poison'], COLORS['poison_bg']))
         if f > 0: tags.append(('灼烧', str(f), COLORS['fire'], COLORS['fire_bg']))
-        if v > 0: tags.append(('易伤', str(v), COLORS['vulnus'], COLORS['vulnus_bg']))
+        if tx > 0: tags.append(('淬毒', str(tx), '#8e44ad', '#6c3483'))
         if tri > 0: tags.append(('三角形', str(tri), COLORS['non_stack'], COLORS['non_stack_bg']))
         if d > 0: tags.append(('闪避', str(d), COLORS['guard'], COLORS['guard_bg']))
         if n: tags.append(('邪眼', f'{n_hits}/2', COLORS['magic'], COLORS['magic_bg']))
@@ -846,7 +909,7 @@ class GameClient:
         for _ in range(count):
             f = tk.Frame(self.opp_hand_frame, bg=COLORS['armor_bg'],
                          width=CARD_BACK_W(), height=CARD_BACK_H(),
-                         relief=tk.RAISED, bd=1,
+                         relief=tk.FLAT, bd=0,
                          highlightbackground=COLORS['armor_text'], highlightthickness=1)
             f.pack(side=tk.LEFT, padx=_p(3), pady=_p(2))
             f.pack_propagate(False)
@@ -863,13 +926,15 @@ class GameClient:
                 card = CardInstance.from_dict(card_dict)
                 card_def = card.card_def
                 dup = self.game_state.get('you', {}).get('cards_played_this_turn', {}).get(card.def_id, 0)
+                if 'symbiosis' in card.flags:
+                    dup = 0
                 total_e = card.cost_e + dup
                 total_m = card.cost_m
                 type_str = {'attack': 'Thorn', 'skill': 'Bloom', 'equipment': 'Root', 'counter': 'Guard'}.get(card.card_type, '?')
                 type_color = CARD_TYPE_COLORS.get(card.card_type, COLORS['text_primary'])
                 cf = tk.Frame(self.hand_frame, bg=COLORS['bg_card'], width=CARD_W(), height=CARD_H(),
-                              relief=tk.RAISED, bd=2,
-                              highlightbackground=type_color, highlightthickness=2)
+                              relief=tk.FLAT, bd=0,
+                              highlightbackground=type_color, highlightthickness=1)
                 cf.pack(side=tk.LEFT, padx=_p(4), pady=_p(2))
                 cf.pack_propagate(False)
                 top_row = tk.Frame(cf, bg=COLORS['bg_card'])
@@ -929,6 +994,8 @@ class GameClient:
                 continue
 
     def _on_card_press(self, event, card_id, drag_data):
+        if self._is_spectating:
+            return
         card, total_e, total_m = drag_data
         self._dragging = True
         self._drag_card_id = card_id
@@ -985,8 +1052,8 @@ class GameClient:
             type_color = CARD_TYPE_COLORS.get(card_def.card_type, COLORS['text_primary'])
             type_str = {'attack': 'Thorn', 'skill': 'Bloom', 'equipment': 'Root', 'counter': 'Guard'}.get(card_def.card_type, '?')
             gf = tk.Frame(self._ghost, bg=COLORS['bg_card'], width=CARD_W(), height=CARD_H(),
-                          relief=tk.RAISED, bd=2,
-                          highlightbackground=type_color, highlightthickness=2)
+                          relief=tk.FLAT, bd=0,
+                          highlightbackground=type_color, highlightthickness=1)
             gf.pack()
             gf.pack_propagate(False)
             top_row = tk.Frame(gf, bg=COLORS['bg_card'])
@@ -1073,6 +1140,8 @@ class GameClient:
         elixir = you.get('elixir', 0)
         magic = you.get('magic', 0)
         dup = you.get('cards_played_this_turn', {}).get(card.def_id, 0)
+        if 'symbiosis' in card.flags:
+            dup = 0
         total_e = card.cost_e + dup
         if total_e > elixir:
             return False
@@ -1387,6 +1456,21 @@ class GameClient:
     def _on_end_turn(self):
         self._send(NetworkMessage('end_turn', {}))
 
+    def _on_surrender(self):
+        if not self._surrender_pending:
+            self._surrender_pending = True
+            self.surrender_btn.config(text="确认?", bg=COLORS['damage_bg'], fg=COLORS['damage'])
+            self.root.after(3000, self._reset_surrender_btn)
+        else:
+            self._surrender_pending = False
+            self.surrender_btn.config(text="投降", bg=COLORS['bg_card'], fg=COLORS['text_secondary'])
+            self._send(NetworkMessage('surrender', {}))
+
+    def _reset_surrender_btn(self):
+        self._surrender_pending = False
+        if hasattr(self, 'surrender_btn') and self.surrender_btn.winfo_exists():
+            self.surrender_btn.config(text="投降", bg=COLORS['bg_card'], fg=COLORS['text_secondary'])
+
     def _view_deck(self):
         deck = self.game_state.get('you', {}).get('deck', [])
         if not deck:
@@ -1417,6 +1501,8 @@ class GameClient:
                   width=8).pack(pady=8)
 
     def _show_response_ui(self):
+        if self._is_spectating:
+            return
         if not hasattr(self, 'response_frame') or not self.response_frame.winfo_exists():
             self._on_respond(None)
             return
@@ -1491,6 +1577,8 @@ class GameClient:
         self._send(NetworkMessage('response', {'card_instance_id': card_instance_id}))
 
     def _show_choice_ui(self):
+        if self._is_spectating:
+            return
         choice_type = self.choice_data.get('choice_type', '')
         card_dict = self.choice_data.get('card', {})
         card_def = CARD_DEFS.get(card_dict.get('def_id', ''), None)
@@ -1650,8 +1738,8 @@ class GameClient:
             elif eid in (4, 5, 6, 7):
                 border_color = COLORS['fire']
 
-            ef = tk.Frame(events_frame, bg=card_bg, relief=tk.RAISED, bd=2,
-                          highlightbackground=border_color, highlightthickness=3,
+            ef = tk.Frame(events_frame, bg=card_bg, relief=tk.FLAT, bd=0,
+                          highlightbackground=border_color, highlightthickness=1,
                           width=int(320 * SCALE), height=int(240 * SCALE))
             ef.pack(side=tk.LEFT, padx=int(15 * SCALE), pady=10)
             ef.pack_propagate(False)
@@ -1711,6 +1799,13 @@ class GameClient:
                 sub_choice = self._show_light_conversion_choice(draft_picks)
                 if sub_choice is None:
                     return
+        elif event_id == 8:
+            draft_picks = data.get('draft_picks', [])
+            if draft_picks:
+                ygg_choice = self._show_yggdrasil_conversion_choice(draft_picks)
+                if ygg_choice is None:
+                    return
+                sub_choice = ygg_choice
 
         self._send(NetworkMessage('select_opening_event', {
             'event_id': event_id,
@@ -1733,6 +1828,26 @@ class GameClient:
 
     def _show_light_conversion_choice(self, draft_picks):
         return self._show_card_conversion_choice(draft_picks, 5, "选择要转化为Light的牌（最多5张）")
+
+    def _show_yggdrasil_conversion_choice(self, draft_picks):
+        from collections import Counter
+        counts = Counter(draft_picks)
+        options = []
+        for def_id in sorted(counts.keys(), key=lambda x: CARD_DEFS.get(x, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn):
+            if def_id == 'Yggdrasil':
+                continue
+            card_def = CARD_DEFS.get(def_id)
+            if card_def:
+                options.append(f"{card_def.name_cn} (x{counts[def_id]})")
+        if not options:
+            return None
+        sel = self._simple_choice("选择要转化为Yggdrasil的牌", options)
+        if sel is None:
+            return None
+        def_ids = [d for d in sorted(counts.keys(), key=lambda x: CARD_DEFS.get(x, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn) if d != 'Yggdrasil']
+        if sel < len(def_ids):
+            return {'yggdrasil_convert_def_id': def_ids[sel]}
+        return None
 
     def _show_card_conversion_choice(self, draft_picks, max_count, title):
         from collections import Counter
