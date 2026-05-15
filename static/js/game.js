@@ -65,6 +65,7 @@ const I18N = {
         settings_lang: '语言', settings_mods: '模组', settings_theme_light: '明亮',
         settings_theme_dark: '深色', no_games: '暂无进行中的对局',
         back_to_home: '返回主页', settings_btn: '设置',
+        settings_server: '服务器', settings_server_addr: '地址',
     },
     en: {
         round: 'Round', your_turn: 'Your Turn', opponent_turn: "Opponent's Turn",
@@ -132,6 +133,7 @@ const I18N = {
         settings_lang: 'Language', settings_mods: 'Mods', settings_theme_light: 'Light',
         settings_theme_dark: 'Dark', no_games: 'No ongoing games',
         back_to_home: 'Back to Home', settings_btn: 'Settings',
+        settings_server: 'Server', settings_server_addr: 'Address',
     }
 };
 
@@ -186,6 +188,7 @@ let lobbyOngoingGames = [];
 let playerId = -1;
 let mySid = '';
 let nickname = '';
+const DEFAULT_SERVER = 'python-online-garden-of-thorn.onrender.com';
 let phase = 'connecting';
 let responsePending = false;
 let responseData = {};
@@ -283,6 +286,12 @@ function updateStaticText() {
     if (noMods) noMods.textContent = currentLang === 'zh' ? '未找到模组文件' : 'No mod files found';
     const btnSettingsClose = $('btn-settings-close');
     if (btnSettingsClose) btnSettingsClose.textContent = UI.ok;
+    const settingsServer = $('settings-section-server');
+    if (settingsServer) settingsServer.textContent = UI.settings_server;
+    const settingsLabelServer = $('settings-label-server');
+    if (settingsLabelServer) settingsLabelServer.textContent = UI.settings_server_addr;
+    const serverInput = $('settings-server-input');
+    if (serverInput) serverInput.placeholder = currentLang === 'zh' ? '留空使用默认服务器' : 'Leave empty for default';
 }
 
 function $(id) { return document.getElementById(id); }
@@ -438,7 +447,12 @@ function connectSocket(serverUrl) {
         socket.disconnect();
         socket = null;
     }
-    socket = io(serverUrl);
+    let url = serverUrl;
+    let opts = { transports: ['websocket', 'polling'] };
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+    }
+    socket = io(url, opts);
     socket.on('connect', () => {
         console.log('[客户端] Socket已连接, 发送login: nickname=', nickname);
         const disabledMods = getDisabledMods();
@@ -646,15 +660,16 @@ function onLogin() {
         if (err) err.textContent = currentLang === 'zh' ? '-和_不能连续出现' : '- and _ cannot appear consecutively';
         return;
     }
-    const server = $('input-server').value.trim();
-    if (!server) {
-        if (err) err.textContent = currentLang === 'zh' ? '请输入服务器地址' : 'Please enter server address';
-        return;
-    }
+    const server = getServerAddress();
     nickname = nick;
     if (err) err.textContent = '';
     updateStatus(UI.connecting);
     connectSocket(server);
+}
+
+function getServerAddress() {
+    const custom = localStorage.getItem('got_server') || '';
+    return custom.trim() || DEFAULT_SERVER;
 }
 
 function renderLobby(data) {
@@ -1559,6 +1574,17 @@ function openSettings() {
     const panel = $('settings-panel');
     if (panel) panel.classList.remove('hidden');
     loadSettingsMods();
+    const serverInput = $('settings-server-input');
+    if (serverInput) {
+        const custom = localStorage.getItem('got_server') || '';
+        serverInput.value = custom;
+    }
+    const serverHint = $('settings-server-hint');
+    if (serverHint) {
+        serverHint.textContent = currentLang === 'zh'
+            ? `默认: ${DEFAULT_SERVER}（留空使用默认）`
+            : `Default: ${DEFAULT_SERVER} (leave empty for default)`;
+    }
 }
 
 function closeSettings() {
@@ -1634,6 +1660,10 @@ function saveDisabledMods() {
         }
     });
     localStorage.setItem('got_disabled_mods', JSON.stringify(disabled));
+    const serverInput = $('settings-server-input');
+    if (serverInput) {
+        localStorage.setItem('got_server', serverInput.value.trim());
+    }
 }
 
 function initModEditor() {

@@ -20,10 +20,6 @@
 <input type="text" id="input-nickname" maxlength="12" placeholder="输入昵称">
 </div>
 <div class="form-row">
-<label for="input-server">服务器</label>
-<input type="text" id="input-server" value="localhost:5000" placeholder="服务器地址">
-</div>
-<div class="form-row">
 <button id="btn-connect" class="btn btn-primary" style="width:100%;padding:12px;font-size:15px;font-weight:700;">进入大厅</button>
 </div>
 <div class="form-row">
@@ -180,6 +176,14 @@
 <option value="en">English</option>
 </select>
 </div>
+</div>
+<div class="settings-section">
+<h4 id="settings-section-server">服务器</h4>
+<div class="settings-theme-row">
+<label id="settings-label-server">地址</label>
+<input type="text" id="settings-server-input" placeholder="留空使用默认服务器">
+</div>
+<p id="settings-server-hint" class="info-text" style="font-size:11px;margin-top:4px;"></p>
 </div>
 <div class="settings-section">
 <h4 id="settings-section-mods">模组</h4>
