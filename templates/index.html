@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garden of Thorn 荆棘花园</title>
+<link rel="stylesheet" href="/static/css/style.css?v=11">
+</head>
+<body>
+<div id="app">
+
+<div id="view-login" class="view">
+<div class="login-container">
+<h1 class="title-main">Garden of Thorn</h1>
+<h2 class="title-sub">荆棘花园</h2>
+<p class="subtitle">局域网联机卡牌对战</p>
+<div class="login-form">
+<div class="form-row">
+<label for="input-nickname">昵称</label>
+<input type="text" id="input-nickname" maxlength="12" placeholder="输入昵称">
+</div>
+<div class="form-row">
+<label for="input-server">服务器</label>
+<input type="text" id="input-server" value="localhost:5000" placeholder="服务器地址">
+</div>
+<div class="form-row">
+<button id="btn-connect" class="btn btn-primary" style="width:100%;padding:12px;font-size:15px;font-weight:700;">进入大厅</button>
+</div>
+<div class="form-row">
+<button id="btn-open-settings" class="btn-settings">设置</button>
+</div>
+</div>
+<p id="login-error" class="error-text"></p>
+</div>
+</div>
+
+<div id="view-lobby" class="view hidden">
+<div class="lobby-container">
+<div class="lobby-header">
+<h2>大厅</h2>
+<button id="btn-lobby-back" class="btn btn-secondary btn-small">返回主页</button>
+</div>
+<div class="lobby-content">
+<div class="lobby-section">
+<h3>在线玩家</h3>
+<div id="lobby-players" class="player-list"></div>
+<p id="lobby-online-count" class="info-text">在线人数: 0</p>
+</div>
+<div class="lobby-section">
+<h3>正在进行的对局</h3>
+<div id="lobby-games" class="game-list"></div>
+</div>
+<div class="lobby-section lobby-chat">
+<h3>聊天</h3>
+<div id="lobby-chat-log" class="chat-log"></div>
+<div class="chat-input-row">
+<input type="text" id="lobby-chat-input" placeholder="输入消息..." maxlength="200">
+<button id="btn-lobby-chat-send" class="btn btn-small">发送</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div id="view-draft" class="view hidden">
+<div class="draft-container">
+<h2>选牌阶段</h2>
+<p id="draft-info" class="info-text"></p>
+<div id="draft-options" class="draft-options"></div>
+<div id="draft-picks" class="draft-picks"></div>
+<button id="btn-draft-reroll" class="btn btn-magic">重选</button>
+</div>
+</div>
+
+<div id="view-event-select" class="view hidden">
+<div class="event-container">
+<h2>选择开局事件</h2>
+<p class="event-desc">选择一个事件影响本局游戏</p>
+<div id="event-options" class="event-options"></div>
+</div>
+</div>
+
+<div id="view-game" class="view hidden">
+<div class="game-container">
+  <div class="opp-section">
+    <div class="player-info-bar">
+      <span class="player-label opp-label">对手</span>
+      <div id="opp-bars" class="bars-row"></div>
+      <div id="opp-status" class="status-tags"></div>
+      <span id="opp-info" class="info-extra">手牌:0 牌堆:0</span>
+    </div>
+    <div class="opp-hand-equip">
+      <div id="opp-hand" class="opp-hand-row"></div>
+      <div id="opp-equip" class="equip-row"></div>
+    </div>
+  </div>
+  <div class="middle-section">
+    <div id="battle-log" class="battle-log">
+      <div class="log-header">战斗日志</div>
+      <div class="log-content"></div>
+    </div>
+  </div>
+  <div class="player-section">
+    <div class="player-info-bar">
+      <span class="player-label you-label">你</span>
+      <div id="you-bars" class="bars-row"></div>
+      <div id="you-status" class="status-tags"></div>
+      <span id="you-info" class="info-extra">手牌:0 牌堆:0 弃牌:0</span>
+    </div>
+    <div id="you-equip" class="equip-row"></div>
+    <div class="hand-play-row">
+      <div id="you-hand" class="hand-area"></div>
+      <div id="play-zone" class="play-zone">
+        <span class="play-zone-hint">拖牌至此</span>
+      </div>
+    </div>
+  </div>
+  <div class="controls-bar">
+    <div id="game-controls" class="controls-group">
+      <button id="btn-end-turn" class="btn btn-danger" disabled>结束回合</button>
+      <button id="btn-view-deck" class="btn btn-magic">查看牌堆</button>
+      <button id="btn-surrender" class="btn btn-secondary">投降</button>
+    </div>
+    <div id="spectate-controls" class="controls-group hidden">
+      <button id="btn-switch-perspective" class="btn btn-magic">切换视角</button>
+      <button id="btn-leave-spectate" class="btn btn-danger">退出观战</button>
+    </div>
+    <div class="controls-group controls-right">
+      <input type="text" id="game-chat-input" placeholder="聊天..." maxlength="200">
+      <button id="btn-game-chat-send" class="btn btn-small">发送</button>
+    </div>
+  </div>
+  <div id="response-panel" class="response-panel hidden"></div>
+</div>
+</div>
+
+<div id="view-gameover" class="view hidden">
+<div class="gameover-container">
+<h1 id="gameover-title" class="gameover-text"></h1>
+<div id="gameover-log" class="gameover-log"></div>
+<div class="gameover-buttons">
+<button id="btn-rematch" class="btn btn-bloom">再来一局</button>
+<button id="btn-return-lobby" class="btn btn-secondary">返回大厅</button>
+</div>
+</div>
+</div>
+
+<div id="view-mod-editor" class="view hidden">
+<div class="mod-editor-container">
+<h2>模组编辑器</h2>
+<div class="mod-editor-body">
+<textarea id="mod-editor-area" class="mod-textarea" spellcheck="false" placeholder="在此粘贴或编辑模组JSON..."></textarea>
+</div>
+<div class="mod-editor-footer">
+<button id="btn-mod-load" class="btn btn-primary">加载模组</button>
+<button id="btn-mod-save" class="btn btn-bloom">保存</button>
+<button id="btn-mod-validate" class="btn btn-magic">验证JSON</button>
+<button id="btn-mod-back" class="btn btn-secondary">返回</button>
+<span id="mod-editor-status" class="mod-status"></span>
+</div>
+</div>
+</div>
+
+<div id="settings-panel" class="settings-panel hidden">
+<div class="settings-inner">
+<h3 id="settings-title">设置</h3>
+<div class="settings-section">
+<h4 id="settings-section-appearance">外观</h4>
+<div class="settings-theme-row">
+<label id="settings-label-theme">主题</label>
+<select id="settings-theme-select">
+<option value="light">明亮</option>
+<option value="dark">深色</option>
+</select>
+</div>
+<div class="settings-lang-row">
+<label id="settings-label-lang">语言</label>
+<select id="settings-lang-select">
+<option value="zh">简体中文</option>
+<option value="en">English</option>
+</select>
+</div>
+</div>
+<div class="settings-section">
+<h4 id="settings-section-mods">模组</h4>
+<div id="settings-mods-list" class="settings-mods-list"></div>
+<p id="settings-no-mods" class="info-text">未找到模组文件</p>
+</div>
+<div class="settings-footer">
+<button id="btn-settings-close" class="btn btn-primary">确定</button>
+</div>
+</div>
+</div>
+
+<div id="game-alert" class="game-alert">
+<div class="game-alert-inner">
+<div id="game-alert-icon" class="game-alert-icon"></div>
+<div id="game-alert-title" class="game-alert-title"></div>
+<div id="game-alert-message" class="game-alert-message"></div>
+<div id="game-alert-buttons" class="game-alert-buttons"></div>
+</div>
+</div>
+
+<div id="game-prompt" class="game-prompt">
+<div class="game-prompt-inner">
+<div id="game-prompt-title" class="game-prompt-title"></div>
+<div id="game-prompt-options" class="game-prompt-options"></div>
+<div class="game-prompt-buttons">
+<button id="game-prompt-cancel" class="btn btn-secondary">取消</button>
+</div>
+</div>
+</div>
+
+<div id="modal" class="modal">
+<div id="modal-content" class="modal-inner"></div>
+</div>
+
+<div class="status-bar">
+<span id="status-text">Garden of Thorn 荆棘花园</span>
+</div>
+
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="/static/js/game.js?v=11"></script>
+</body>
+</html>
