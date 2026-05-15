@@ -44,6 +44,10 @@ class NetworkConnection:
         self.buffer = MessageBuffer()
         self.lock = threading.Lock()
         self.connected = True
+        try:
+            self.addr = sock.getpeername()
+        except Exception:
+            self.addr = ('', 0)
 
     def send(self, msg: NetworkMessage):
         if not self.connected:

@@ -1,0 +1,389 @@
+{
+  "info": {
+    "name": "CardSupplementTest1",
+    "version": "1.1.0",
+    "author": "Stickerbug",
+    "description": "卡牌补充测试1",
+    "game_version": "无"
+  },
+  "cards": [
+    {
+      "id": "Bandage",
+      "name_cn": "绷带",
+      "name_en": "Bandage",
+      "cost_e": 4,
+      "cost_m": 0,
+      "card_type": "guard",
+      "count": 3,
+      "quality": "Uncommon",
+      "description": "用绷带缠住自己了，短时间还下不了场。",
+      "effect_text": "受到致命伤害后无敌直到下个友方回合结束，然后死亡",
+      "flags": [],
+      "effects": [
+        {
+          "type": "counter_set_invincible_then_die",
+          "log": "玩家{p}的绷带：受到致命伤害时无敌至下个友方回合结束"
+        }
+      ],
+      "damage": 0,
+      "hits": 0,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "thorn"
+    },
+    {
+      "id": "Jelly",
+      "name_cn": "果冻",
+      "name_en": "Jelly",
+      "cost_e": 1,
+      "cost_m": 0,
+      "card_type": "guard",
+      "count": 3,
+      "quality": "Uncommon",
+      "description": "有弹性的果冻会吸收攻击。",
+      "effect_text": "敌方这回合不能再攻击（响应：敌方使用攻击牌时）",
+      "flags": [],
+      "effects": [
+        {
+          "type": "counter_block_enemy_attacks",
+          "params": {
+            "duration": 1
+          },
+          "log": "果冻效果：敌方本回合无法使用攻击牌"
+        }
+      ],
+      "damage": 0,
+      "hits": 0,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "thorn"
+    },
+    {
+      "id": "Shovel",
+      "name_cn": "铲子",
+      "name_en": "Shovel",
+      "cost_e": 2,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 3,
+      "quality": "Uncommon",
+      "description": "挖个坑躲起来。",
+      "effect_text": "直到下个友方回合无法行动，但无法被攻击选中（仍然会爆牌和爆费）",
+      "flags": [],
+      "effects": [
+        {
+          "type": "set_untargetable",
+          "log": "铲子：无法被攻击选中"
+        },
+        {
+          "type": "block_own_actions",
+          "log": "铲子：无法使用卡牌"
+        }
+      ],
+      "damage": 0,
+      "hits": 0,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": ""
+    },
+    {
+      "id": "Compass",
+      "name_cn": "指南针",
+      "name_en": "Compass",
+      "cost_e": 1,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 3,
+      "quality": "Uncommon",
+      "description": "指引你找到需要的牌。",
+      "effect_text": "从抽牌堆选择一张牌将其置入手中",
+      "flags": [],
+      "effects": [
+        {
+          "type": "choose_from_deck",
+          "log": "指南针：从牌堆选择一张牌"
+        }
+      ],
+      "damage": 0,
+      "hits": 0,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": ""
+    },
+    {
+      "id": "Sponge",
+      "name_cn": "海绵",
+      "name_en": "Sponge",
+      "cost_e": 4,
+      "cost_m": 0,
+      "card_type": "root",
+      "count": 3,
+      "quality": "Uncommon",
+      "description": "吸收伤害的海绵，但炸了就不好受了。",
+      "effect_text": "受伤时将伤害转为下取整减半的毒伤，被摧毁时去除所有中毒层数并受到层数两倍的物理伤害",
+      "flags": [],
+      "effects": [
+        {
+          "type": "equip_sponge",
+          "log": "海绵：伤害转为毒伤"
+        },
+        {
+          "type": "equip_on_destroy_remove_poison_damage",
+          "params": {
+            "multiplier": 2
+          },
+          "log": "海绵被摧毁！去除中毒并受到物理伤害"
+        }
+      ],
+      "damage": 0,
+      "hits": 0,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": ""
+    },
+    {
+      "id": "Poo",
+      "name_cn": "便便",
+      "name_en": "Poo",
+      "cost_e": 2,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 3,
+      "quality": "Uncommon",
+      "description": "没人会想接近它。",
+      "effect_text": "下回合敌方无法使用攻击牌",
+      "flags": [],
+      "effects": [
+        {
+          "type": "block_enemy_attacks",
+          "params": {
+            "duration": 1
+          },
+          "log": "便便：敌方下回合无法使用攻击牌"
+        }
+      ],
+      "damage": 0,
+      "hits": 0,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": ""
+    },
+    {
+      "id": "Honey",
+      "name_cn": "蜂蜜",
+      "name_en": "Honey",
+      "cost_e": 2,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 3,
+      "quality": "Uncommon",
+      "description": "甜蜜的束缚。",
+      "effect_text": "下回合敌方仅可使用攻击牌",
+      "flags": [],
+      "effects": [
+        {
+          "type": "force_enemy_attacks_only",
+          "params": {
+            "duration": 1
+          },
+          "log": "蜂蜜：敌方下回合仅可使用攻击牌"
+        }
+      ],
+      "damage": 0,
+      "hits": 0,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": ""
+    },
+    {
+      "id": "Pill",
+      "name_cn": "药丸",
+      "name_en": "Pill",
+      "cost_e": 4,
+      "cost_m": 0,
+      "card_type": "root",
+      "count": 2,
+      "quality": "Rare",
+      "description": "有副作用的强效药丸",
+      "effect_text": "将血量设为60，己方每回合少抽一牌少回1E",
+      "flags": [
+        "indestructible"
+      ],
+      "effects": [
+        {
+          "type": "equip_set_health",
+          "params": {
+            "amount": 60
+          },
+          "log": "药丸：血量设为60"
+        },
+        {
+          "type": "equip_reduce_own_draw",
+          "params": {
+            "amount": 1
+          },
+          "log": "药丸：己方每回合少抽1牌"
+        },
+        {
+          "type": "equip_reduce_own_e",
+          "params": {
+            "amount": 1
+          },
+          "log": "药丸：己方每回合少回1E"
+        }
+      ],
+      "damage": 0,
+      "hits": 0,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": ""
+    },
+    {
+      "id": "Magnet",
+      "name_cn": "磁铁",
+      "name_en": "Magnet",
+      "cost_e": 4,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 2,
+      "quality": "Rare",
+      "description": "我们在牌里安装了铁块，所以你可以用磁铁吸引它们。",
+      "effect_text": "展示敌方所有手牌，从敌方手牌中选一张加入己方手牌（不可取消）",
+      "flags": [
+        "uncancellable"
+      ],
+      "effects": [
+        {
+          "type": "reveal_enemy_hand",
+          "log": "磁铁：窥探敌方手牌"
+        },
+        {
+          "type": "steal_enemy_card",
+          "log": "磁铁：从敌方手中夺取一张牌"
+        }
+      ],
+      "damage": 0,
+      "hits": 0,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": ""
+    },
+    {
+      "id": "Antenna",
+      "name_cn": "触角",
+      "name_en": "Antenna",
+      "cost_e": 1,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 3,
+      "quality": "Uncommon",
+      "description": "感知敌人的一切。",
+      "effect_text": "展示敌方所有手牌",
+      "flags": [
+        "uncancellable"
+      ],
+      "effects": [
+        {
+          "type": "reveal_enemy_hand",
+          "log": "触角：窥探敌方手牌"
+        }
+      ],
+      "damage": 0,
+      "hits": 0,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": ""
+    }
+  ],
+  "events": []
+}
