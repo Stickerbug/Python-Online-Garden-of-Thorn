@@ -4,9 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
-<link rel="stylesheet" href="/static/css/style.css?v=16">
+<link rel="stylesheet" href="/static/css/style.css?v=17">
 </head>
 <body>
+<div id="fullscreen-prompt" class="fullscreen-prompt hidden">
+  <div class="fullscreen-prompt-content">
+    <p>建议使用全屏模式以获得最佳体验</p>
+    <button id="btn-fullscreen" class="btn btn-primary">进入全屏</button>
+    <button id="btn-dismiss-fullscreen" class="btn btn-secondary">继续</button>
+  </div>
+</div>
 <div id="app">
 
 <div id="view-login" class="view">
@@ -34,7 +41,6 @@
 <div class="lobby-container">
 <div class="lobby-header">
 <h2>大厅</h2>
-<button id="btn-lobby-back" class="btn btn-secondary btn-small">返回主页</button>
 </div>
 <div class="lobby-content">
 <div class="lobby-section">
@@ -54,6 +60,9 @@
 <button id="btn-lobby-chat-send" class="btn btn-small">发送</button>
 </div>
 </div>
+</div>
+<div class="lobby-footer">
+<button id="btn-lobby-back" class="btn btn-secondary btn-small">返回主页</button>
 </div>
 </div>
 </div>

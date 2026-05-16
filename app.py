@@ -247,6 +247,21 @@ def reconnect_timeout(room_id, old_sid):
     broadcast_lobby()
 
 
+def both_disconnected_cleanup(room_id):
+    global _next_room_id
+    with _lock:
+        if room_id not in rooms:
+            return
+        room = rooms[room_id]
+        for t in room.reconnect_timers.values():
+            t.cancel()
+        room.reconnect_timers.clear()
+        if hasattr(room, 'both_dc_timer'):
+            room.both_dc_timer = None
+        del rooms[room_id]
+    broadcast_lobby()
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -583,6 +598,14 @@ def on_disconnect():
                 room.reconnect_timers[sid] = timer
                 timer.daemon = True
                 timer.start()
+                both_dc = all(s in room.disconnected_players for s in room.player_sids[:2])
+                if both_dc:
+                    for t in room.reconnect_timers.values():
+                        t.cancel()
+                    room.reconnect_timers.clear()
+                    room.both_dc_timer = threading.Timer(60.0, both_disconnected_cleanup, args=[room_id])
+                    room.both_dc_timer.daemon = True
+                    room.both_dc_timer.start()
                 del players[sid]
                 broadcast_lobby()
                 return
@@ -625,6 +648,9 @@ def on_reconnect_accept(data):
         if old_sid in room.reconnect_timers:
             room.reconnect_timers[old_sid].cancel()
             del room.reconnect_timers[old_sid]
+        if hasattr(room, 'both_dc_timer') and room.both_dc_timer:
+            room.both_dc_timer.cancel()
+            room.both_dc_timer = None
         pidx = dc_info['player_index']
         room.player_sids[pidx] = sid
         del room.disconnected_players[old_sid]

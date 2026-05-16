@@ -213,6 +213,7 @@ body {
 .view {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -390,8 +391,12 @@ body {
 }
 
 @media (max-width: 768px) {
+  #view-game {
+    position: relative;
+  }
+
   .card {
-    width: clamp(70px, calc((100vw - 30px) / 8.5), 120px);
+    width: clamp(60px, calc((100vw - 40px) / 7.5), 110px);
   }
 
   .card-name {
@@ -446,6 +451,7 @@ body {
   .hand-play-row {
     gap: 4px;
     padding: 2px 6px 4px;
+    min-height: 70px;
   }
 
   .hand-area {
@@ -454,7 +460,7 @@ body {
   }
 
   .play-zone {
-    width: clamp(70px, calc((100vw - 30px) / 8.5), 120px);
+    width: clamp(60px, calc((100vw - 40px) / 7.5), 110px);
     aspect-ratio: 63/88;
   }
 
@@ -465,6 +471,17 @@ body {
   .controls-bar {
     gap: 4px;
     padding: 3px 6px;
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .btn-end-turn {
+    padding: 8px 16px;
+    font-size: 14px;
   }
 
   .btn {
@@ -502,10 +519,22 @@ body {
 
   .middle-section {
     flex-direction: column;
+    min-height: 40px;
+    max-height: 80px;
+    overflow: hidden;
+  }
+
+  .battle-log .log-content {
+    max-height: 50px;
   }
 
   .player-section {
     min-height: 100px;
+    flex-shrink: 0;
+  }
+
+  .opp-section {
+    flex-shrink: 0;
   }
 
   .opp-section .opp-hand-row .card {
@@ -619,7 +648,7 @@ body {
 
 @media (max-width: 768px) and (orientation: landscape) {
   .card {
-    width: clamp(60px, calc((100vh - 30px) / 8.5 * 63 / 88), 100px);
+    width: clamp(50px, calc((100vh - 40px) / 7.5 * 63 / 88), 100px);
   }
 
   .player-info-bar {
@@ -674,7 +703,7 @@ body {
   }
 
   .play-zone {
-    width: clamp(60px, calc((100vh - 30px) / 8.5 * 63 / 88), 100px);
+    width: clamp(50px, calc((100vh - 40px) / 7.5 * 63 / 88), 100px);
     aspect-ratio: 63/88;
   }
 
@@ -933,9 +962,33 @@ body {
   height: 100%;
 }
 
+.lobby-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 800px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.lobby-footer {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 0;
+  flex-shrink: 0;
+  margin-top: auto;
+}
+
+.lobby-footer .btn {
+  padding: 10px 28px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
 .lobby-section {
   width: 100%;
-  max-width: 560px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -1181,17 +1234,17 @@ body {
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 600;
-  border-radius: var(--radius-sm);
+  border-radius: 2px;
   border: 1px solid var(--border-light);
-  background: rgba(0, 0, 0, 0.2);
-  color: var(--text-secondary);
+  background: var(--bg-card);
+  color: var(--text-primary);
 }
 
 .event-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 16px;
   gap: 12px;
   overflow-y: auto;
@@ -1200,6 +1253,7 @@ body {
 
 .event-card {
   width: clamp(160px, 22vw, 240px);
+  aspect-ratio: 1;
   background: var(--bg-card);
   border-radius: var(--radius-xl);
   border: 2px solid var(--magic);
@@ -1276,7 +1330,7 @@ body {
 
 .middle-section {
   flex: 1;
-  min-height: 60px;
+  min-height: 80px;
   overflow: hidden;
   display: flex;
 }
@@ -1557,7 +1611,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   user-select: none;
-  width: clamp(100px, calc((100vw - 40px) / 8.5), 160px);
+  width: clamp(80px, calc((100vw - 60px) / 7.5), 140px);
   aspect-ratio: 63/88;
   flex-shrink: 0;
   container-type: inline-size;
@@ -1790,15 +1844,17 @@ body {
 .card-flags {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 1.5cqi;
   padding: 1.5cqi 3cqi 3cqi;
+  margin-top: auto;
 }
 
 .card-flag {
   font-size: 5cqi;
   font-weight: 600;
   padding: 0.5cqi 3cqi;
-  border-radius: var(--radius-sm);
+  border-radius: 2px;
   border: 1px solid;
 }
 
@@ -1889,7 +1945,7 @@ body {
 }
 
 .play-zone {
-  width: clamp(100px, calc((100vw - 40px) / 8.5), 160px);
+  width: clamp(80px, calc((100vw - 60px) / 7.5), 140px);
   aspect-ratio: 63/88;
   border: 2px dashed var(--border-light);
   border-radius: var(--radius-lg);
@@ -3080,6 +3136,40 @@ body {
     gap: 4px;
     padding: 4px 8px;
   }
+}
+
+.fullscreen-prompt {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.fullscreen-prompt.hidden {
+  display: none;
+}
+
+.fullscreen-prompt-content {
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  padding: 24px 32px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 320px;
+}
+
+.fullscreen-prompt-content p {
+  font-size: 15px;
+  color: var(--text-primary);
+  margin: 0;
 }
 
 .game-alert {

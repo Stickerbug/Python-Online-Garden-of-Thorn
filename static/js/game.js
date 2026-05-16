@@ -812,11 +812,15 @@ function renderDraft(data) {
         rerollBtn.style.cursor = canReroll ? 'pointer' : 'not-allowed';
         rerollBtn.disabled = false;
         rerollBtn.removeAttribute('disabled');
-        rerollBtn.onclick = () => {
-            if (canReroll && socket) {
+        const newBtn = rerollBtn.cloneNode(true);
+        rerollBtn.parentNode.replaceChild(newBtn, rerollBtn);
+        newBtn.addEventListener('click', () => {
+            const currentRerolls = draftState ? draftState.rerolls : 0;
+            const currentPicks = draftState ? (draftState.picks || []).length : 0;
+            if (currentRerolls > 0 && currentPicks < (draftState ? draftState.total_rounds || 15 : 15) && socket) {
                 socket.emit('draft_reroll');
             }
-        };
+        });
     }
 }
 
@@ -1119,19 +1123,19 @@ function renderStatusTags(containerId, playerData) {
     const p = playerData;
     if (p.poison > 0) tags.push({ name: UI.status_poison, val: p.poison, fg: COLORS.poison, bg: COLORS.poison_bg });
     if (p.fire > 0) tags.push({ name: UI.status_fire, val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
-    if (p.toxic > 0) tags.push({ name: UI.status_toxic, val: p.toxic, fg: '#8e44ad', bg: '#6c3483' });
+    if (p.toxic > 0) tags.push({ name: UI.status_toxic, val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
     if (p.triangle_stacks > 0) tags.push({ name: UI.status_triangle, val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
     if (p.dodge > 0) tags.push({ name: UI.status_dodge, val: p.dodge, fg: COLORS.guard, bg: COLORS.guard_bg });
-    if (p.nazar_active) tags.push({ name: UI.status_nazar, val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic, bg: COLORS.magic_bg });
+    if (p.nazar_active) tags.push({ name: UI.status_nazar, val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
     if (p.equipment_protection > 0) tags.push({ name: UI.status_equip_protect, val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
-    if (p.invincible) tags.push({ name: UI.status_invincible, val: '', fg: COLORS.elixir, bg: COLORS.elixir_bg });
+    if (p.invincible) tags.push({ name: UI.status_invincible, val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
     if (p.skip_turn) tags.push({ name: UI.status_stunned, val: '', fg: COLORS.damage, bg: COLORS.damage_bg });
-    if (p.attack_blocked > 0) tags.push({ name: UI.status_attack_blocked, val: p.attack_blocked, fg: '#e74c3c', bg: '#c0392b' });
-    if (p.attack_only > 0) tags.push({ name: UI.status_attack_only, val: p.attack_only, fg: '#e67e22', bg: '#d35400' });
-    if (p.untargetable) tags.push({ name: UI.status_untargetable, val: '', fg: '#3498db', bg: '#2980b9' });
-    if (p.bandage_active) tags.push({ name: UI.status_bandage, val: '', fg: '#2ecc71', bg: '#27ae60' });
-    if (p.sponge_active) tags.push({ name: UI.status_sponge, val: '', fg: '#9b59b6', bg: '#8e44ad' });
-    if (p.shovel_active) tags.push({ name: UI.status_shovel, val: '', fg: '#7f8c8d', bg: '#6c7a7d' });
+    if (p.attack_blocked > 0) tags.push({ name: UI.status_attack_blocked, val: p.attack_blocked, fg: '#C0392B', bg: '#FDEDEC' });
+    if (p.attack_only > 0) tags.push({ name: UI.status_attack_only, val: p.attack_only, fg: '#D35400', bg: '#FEF5E7' });
+    if (p.untargetable) tags.push({ name: UI.status_untargetable, val: '', fg: '#1A5276', bg: '#EBF5FB' });
+    if (p.bandage_active) tags.push({ name: UI.status_bandage, val: '', fg: '#1E8449', bg: '#E8F8F5' });
+    if (p.sponge_active) tags.push({ name: UI.status_sponge, val: '', fg: '#6C3483', bg: '#F4ECF7' });
+    if (p.shovel_active) tags.push({ name: UI.status_shovel, val: '', fg: '#5D4037', bg: '#EFEBE9' });
     tags.forEach(t => {
         const el = document.createElement('span');
         el.className = 'status-tag';
@@ -1414,6 +1418,19 @@ async function simpleChoice(title, options) {
 
 function showResponseUI(data) {
     if (isSpectating) return;
+    const counterCards = data.counter_cards || [];
+    const you = gameState.you || {};
+    const myElixir = you.elixir || 0;
+    const myMagic = you.magic || 0;
+    let hasAffordable = false;
+    counterCards.forEach(cc => {
+        const ccDef = getCardDef(cc.def_id);
+        if (ccDef && ccDef.cost_e <= myElixir && ccDef.cost_m <= myMagic) hasAffordable = true;
+    });
+    if (!counterCards.length || !hasAffordable) {
+        onRespond(null);
+        return;
+    }
     const container = $('response-panel');
     if (!container) { onRespond(null); return; }
     container.innerHTML = '';
@@ -1432,15 +1449,6 @@ function showResponseUI(data) {
     label.className = 'response-label';
     label.innerHTML = `⚠ ${triggerDesc}：${cardName}`;
     container.appendChild(label);
-    const you = gameState.you || {};
-    const myElixir = you.elixir || 0;
-    const myMagic = you.magic || 0;
-    const counterCards = data.counter_cards || [];
-    let hasAffordable = false;
-    counterCards.forEach(cc => {
-        const ccDef = getCardDef(cc.def_id);
-        if (ccDef && ccDef.cost_e <= myElixir && ccDef.cost_m <= myMagic) hasAffordable = true;
-    });
     counterCards.forEach(cc => {
         const ccDef = getCardDef(cc.def_id);
         if (!ccDef) return;
@@ -1453,7 +1461,7 @@ function showResponseUI(data) {
         btn.onclick = () => onRespond(cc.instance_id);
         container.appendChild(btn);
     });
-    responseCountdown = hasAffordable ? 5 : 3;
+    responseCountdown = 5;
     const passBtn = document.createElement('button');
     passBtn.className = 'btn btn-danger';
     passBtn.id = 'pass-btn';
@@ -1866,6 +1874,34 @@ function initModEditor() {
     }
 }
 
+function setupFullscreenPrompt() {
+    const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent) || 
+                     (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+    if (!isMobile) return;
+    const dismissed = sessionStorage.getItem('got_fullscreen_dismissed');
+    if (dismissed) return;
+    const prompt = document.getElementById('fullscreen-prompt');
+    if (!prompt) return;
+    prompt.classList.remove('hidden');
+    const btnFs = document.getElementById('btn-fullscreen');
+    const btnDismiss = document.getElementById('btn-dismiss-fullscreen');
+    if (btnFs) {
+        btnFs.onclick = () => {
+            const el = document.documentElement;
+            if (el.requestFullscreen) el.requestFullscreen();
+            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+            prompt.classList.add('hidden');
+            sessionStorage.setItem('got_fullscreen_dismissed', '1');
+        };
+    }
+    if (btnDismiss) {
+        btnDismiss.onclick = () => {
+            prompt.classList.add('hidden');
+            sessionStorage.setItem('got_fullscreen_dismissed', '1');
+        };
+    }
+}
+
 async function init() {
     console.log('[INIT] === 游戏初始化开始 ===');
 
@@ -1918,6 +1954,7 @@ async function init() {
     setupPlayZoneDrop();
     initModEditor();
     showView('view-login');
+    setupFullscreenPrompt();
     console.log('[INIT] === 游戏初始化完成 ===');
     console.log('[INIT] btn-end-turn element=', !!$('btn-end-turn'));
     console.log('[INIT] onEndTurn function=', typeof onEndTurn);
