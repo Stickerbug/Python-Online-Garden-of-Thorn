@@ -485,6 +485,7 @@ function connectSocket(serverUrl) {
         }
     }
     socket = io(url, opts);
+
     socket.on('connect', () => {
         console.log('[客户端] Socket已连接, 发送login: nickname=', nickname);
         const disabledMods = getDisabledMods();
@@ -557,9 +558,11 @@ function connectSocket(serverUrl) {
         }
     });
     socket.on('draft_state', (data) => {
-        console.log('[客户端] 收到draft_state: round=', data.round);
+        const oldOptIds = draftState && draftState.options ? draftState.options.map(o => o.def_id) : [];
+        const newOptIds = data.options ? data.options.map(o => o.def_id) : [];
+        const isReroll = oldOptIds.length > 0 && JSON.stringify(oldOptIds) !== JSON.stringify(newOptIds) && (draftState ? draftState.rerolls : 0) > (data.rerolls || 0);
         draftState = data;
-        renderDraft(data);
+        renderDraft(data, isReroll);
     });
     socket.on('event_select', (data) => {
         console.log('[客户端] 收到event_select');
@@ -763,7 +766,7 @@ function renderLobby(data) {
     updateStatus(UI.lobby_status.replace('{0}', nickname));
 }
 
-function renderDraft(data) {
+function renderDraft(data, isReroll) {
     showView('view-draft');
     const picks = data.picks || [];
     const options = data.options || [];
@@ -785,10 +788,20 @@ function renderDraft(data) {
         if (picks.length >= totalRounds) {
             optionsEl.innerHTML = `<div class="empty-hint">${UI.draft_waiting}</div>`;
         } else {
-            options.forEach(opt => {
+            options.forEach((opt, i) => {
                 const card = createCardElement(opt, {});
                 card.style.cursor = 'pointer';
                 card.onclick = () => socket.emit('draft_pick', { def_id: opt.def_id });
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.6)';
+                card.style.transition = 'opacity 0.15s ease-out, transform 0.15s ease-out';
+                card.style.transitionDelay = (i * 0.05) + 's';
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        card.style.opacity = '1';
+                        card.style.transform = 'scale(1)';
+                    });
+                });
                 optionsEl.appendChild(card);
             });
         }
@@ -808,19 +821,19 @@ function renderDraft(data) {
     const rerollBtn = $('btn-draft-reroll');
     if (rerollBtn) {
         const canReroll = rerolls > 0 && picks.length < totalRounds;
+        rerollBtn.disabled = !canReroll;
         rerollBtn.style.opacity = canReroll ? '1' : '0.4';
         rerollBtn.style.cursor = canReroll ? 'pointer' : 'not-allowed';
-        rerollBtn.disabled = false;
-        rerollBtn.removeAttribute('disabled');
-        const newBtn = rerollBtn.cloneNode(true);
-        rerollBtn.parentNode.replaceChild(newBtn, rerollBtn);
-        newBtn.addEventListener('click', () => {
+        rerollBtn.style.pointerEvents = canReroll ? 'auto' : 'none';
+
+        rerollBtn.onclick = function(e) {
             const currentRerolls = draftState ? draftState.rerolls : 0;
             const currentPicks = draftState ? (draftState.picks || []).length : 0;
-            if (currentRerolls > 0 && currentPicks < (draftState ? draftState.total_rounds || 15 : 15) && socket) {
+            const currentTotal = draftState ? (draftState.total_rounds || 15) : 15;
+            if (currentRerolls > 0 && currentPicks < currentTotal && socket) {
                 socket.emit('draft_reroll');
             }
-        });
+        };
     }
 }
 
@@ -863,6 +876,16 @@ function renderEventSelect(data) {
         `;
         card.onclick = () => onEventSelect(ev.id);
         card.style.cursor = 'pointer';
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.6)';
+        card.style.transition = 'opacity 0.15s ease-out, transform 0.15s ease-out';
+        card.style.transitionDelay = (i * 0.05) + 's';
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                card.style.opacity = '1';
+                card.style.transform = 'scale(1)';
+            });
+        });
         eventsRow.appendChild(card);
     });
     container.appendChild(eventsRow);
@@ -1290,7 +1313,11 @@ function appendLobbyChat(nick, text) {
     if (!container) return;
     const el = document.createElement('div');
     el.className = 'chat-msg';
-    el.textContent = `[${nick}] ${text}`;
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'chat-nick';
+    nameSpan.textContent = `${nick}: `;
+    el.appendChild(nameSpan);
+    el.appendChild(document.createTextNode(text));
     container.appendChild(el);
     container.scrollTop = container.scrollHeight;
 }
@@ -1306,7 +1333,11 @@ function appendGameChat(nick, text) {
     }
     const el = document.createElement('div');
     el.className = 'log-entry log-chat';
-    el.textContent = `[${nick}] ${text}`;
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'chat-nick';
+    nameSpan.textContent = `${nick}: `;
+    el.appendChild(nameSpan);
+    el.appendChild(document.createTextNode(text));
     content.appendChild(el);
     content.scrollTop = content.scrollHeight;
 }
@@ -1877,6 +1908,17 @@ function initModEditor() {
 function setupFullscreenPrompt() {
     const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent) || 
                      (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+    if (!isMobile) {
+        const rotateHint = document.getElementById('rotate-hint');
+        if (rotateHint) rotateHint.style.display = 'none';
+    }
+    const rotateDismiss = document.getElementById('btn-dismiss-rotate');
+    if (rotateDismiss) {
+        rotateDismiss.onclick = () => {
+            const rotateHint = document.getElementById('rotate-hint');
+            if (rotateHint) rotateHint.style.display = 'none';
+        };
+    }
     if (!isMobile) return;
     const dismissed = sessionStorage.getItem('got_fullscreen_dismissed');
     if (dismissed) return;
@@ -1904,10 +1946,6 @@ function setupFullscreenPrompt() {
 
 async function init() {
     console.log('[INIT] === 游戏初始化开始 ===');
-
-    document.addEventListener('click', (e) => {
-        console.log('[GLOBAL CLICK] target=', e.target.tagName, '#'+e.target.id, '.'+e.target.className);
-    }, true);
 
     document.addEventListener('contextmenu', (e) => {
         if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {

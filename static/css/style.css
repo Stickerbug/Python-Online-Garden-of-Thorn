@@ -384,7 +384,7 @@ body {
   margin-top: 4px;
 }
 
-@media (max-width: 768px) and (orientation: portrait) {
+@media (max-width: 768px) and (orientation: portrait) and (hover: none) and (pointer: coarse) {
   .rotate-hint {
     display: flex;
   }
@@ -579,8 +579,17 @@ body {
     font-size: 12px;
   }
 
+  .lobby-body {
+    flex-direction: column;
+  }
+
+  .lobby-left, .lobby-right {
+    flex: none;
+  }
+
   .lobby-chat-log {
-    height: 120px;
+    min-height: 120px;
+    max-height: 200px;
     font-size: 11px;
   }
 
@@ -962,15 +971,30 @@ body {
   height: 100%;
 }
 
-.lobby-content {
+.lobby-body {
   flex: 1;
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  max-width: 900px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lobby-left {
+  flex: 2;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  width: 100%;
-  max-width: 800px;
+  min-width: 0;
   overflow-y: auto;
-  min-height: 0;
+}
+
+.lobby-right {
+  flex: 3;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .lobby-footer {
@@ -1086,16 +1110,30 @@ body {
   background: rgba(52, 152, 219, 0.25);
 }
 
+.lobby-right .lobby-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 .lobby-chat-log {
   flex: 1;
   overflow-y: auto;
   padding: 8px;
   font-size: 12px;
   line-height: 1.6;
-  min-height: 120px;
-  max-height: 200px;
+  min-height: 0;
   background: rgba(0, 0, 0, 0.03);
   border-radius: var(--radius-md);
+}
+
+.chat-nick {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.chat-msg {
+  color: var(--text-primary);
 }
 
 .chat-input-row {
@@ -1927,21 +1965,23 @@ body {
   font-weight: 600;
 }
 
-.equip-trigger-btn {
-  padding: 3px 8px;
+.equip-trigger-btn,
+.btn-equip-trigger {
+  padding: 4px 10px;
   font-size: 11px;
   font-weight: 600;
   font-family: var(--font-main);
-  background: var(--root-bg);
-  color: var(--root);
-  border: 1px solid rgba(141, 110, 99, 0.3);
+  background: var(--root);
+  color: #fff;
+  border: 1px solid var(--root);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background var(--transition-fast);
 }
 
-.equip-trigger-btn:hover {
-  background: rgba(141, 110, 99, 0.3);
+.equip-trigger-btn:hover,
+.btn-equip-trigger:hover {
+  background: #6D4C41;
 }
 
 .play-zone {

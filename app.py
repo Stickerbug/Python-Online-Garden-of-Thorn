@@ -507,6 +507,34 @@ def on_connect():
     print(f"[服务器] Socket连接: sid={sid}")
 
 
+@socketio.on('draft_reroll')
+def on_draft_reroll(data=None):
+    sid = request.sid
+    try:
+        with _lock:
+            if sid not in players:
+                return
+            player = players[sid]
+            room_id = player.get('room_id')
+            if room_id is None or room_id not in rooms:
+                return
+            room = rooms[room_id]
+            pidx = room.player_index(sid)
+            if pidx < 0:
+                return
+            engine = room.engine
+            success = engine.draft_reroll(pidx)
+            if success:
+                for pi in range(len(room.player_sids)):
+                    send_draft_state(room, pi)
+            else:
+                emit('server_error', {'message': '重选次数已用完'})
+    except Exception as e:
+        print(f'[REROLL] EXCEPTION: {type(e).__name__}: {e}')
+        import traceback
+        traceback.print_exc()
+
+
 @socketio.on('login')
 def on_login(data):
     global _next_room_id
@@ -847,29 +875,6 @@ def on_draft_pick(data):
                 start_event_select(room)
         else:
             emit('server_error', {'message': '选牌失败'})
-
-
-@socketio.on('draft_reroll')
-def on_draft_reroll(data):
-    sid = request.sid
-    with _lock:
-        if sid not in players:
-            return
-        player = players[sid]
-        room_id = player.get('room_id')
-        if room_id is None or room_id not in rooms:
-            return
-        room = rooms[room_id]
-        pidx = room.player_index(sid)
-        if pidx < 0:
-            return
-        engine = room.engine
-        success = engine.draft_reroll(pidx)
-        if success:
-            for pi in range(len(room.player_sids)):
-                send_draft_state(room, pi)
-        else:
-            emit('server_error', {'message': '重选次数已用完'})
 
 
 @socketio.on('select_opening_event')

@@ -42,7 +42,8 @@
 <div class="lobby-header">
 <h2>大厅</h2>
 </div>
-<div class="lobby-content">
+<div class="lobby-body">
+<div class="lobby-left">
 <div class="lobby-section">
 <h3>在线玩家</h3>
 <div id="lobby-players" class="player-list"></div>
@@ -52,17 +53,20 @@
 <h3>正在进行的对局</h3>
 <div id="lobby-games" class="game-list"></div>
 </div>
+</div>
+<div class="lobby-right">
 <div class="lobby-section lobby-chat">
 <h3>聊天</h3>
-<div id="lobby-chat-log" class="chat-log"></div>
+<div id="lobby-chat-log" class="lobby-chat-log"></div>
 <div class="chat-input-row">
 <input type="text" id="lobby-chat-input" placeholder="输入消息..." maxlength="200">
 <button id="btn-lobby-chat-send" class="btn btn-small">发送</button>
 </div>
 </div>
 </div>
+</div>
 <div class="lobby-footer">
-<button id="btn-lobby-back" class="btn btn-secondary btn-small">返回主页</button>
+<button id="btn-lobby-back" class="btn btn-secondary">返回主页</button>
 </div>
 </div>
 </div>
@@ -233,6 +237,7 @@
     <div class="rotate-icon">📱↔</div>
     <div class="rotate-text">请横屏游玩</div>
     <div class="rotate-text-en">Rotate to Landscape</div>
+    <button id="btn-dismiss-rotate" class="btn btn-secondary" style="margin-top:16px;">继续进入</button>
   </div>
 </div>
 
@@ -243,6 +248,6 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="/static/js/game.js?v=16"></script>
+<script src="/static/js/game.js?v=18"></script>
 </body>
 </html>

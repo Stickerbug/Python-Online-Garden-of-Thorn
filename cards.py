@@ -293,7 +293,7 @@ def build_draft_pool() -> List[CardInstance]:
     return pool
 
 
-def generate_draft_options(pool: List[CardInstance], card_type: str, count: int = 3) -> List[CardInstance]:
+def generate_draft_options(pool: List[CardInstance], card_type: str, count: int = 3, exclude_def_ids: List[str] = None) -> List[CardInstance]:
     type_cards = [c for c in pool if c.card_def.card_type == card_type]
     seen_def_ids = set()
     unique_cards = []
@@ -301,9 +301,17 @@ def generate_draft_options(pool: List[CardInstance], card_type: str, count: int 
         if c.def_id not in seen_def_ids:
             seen_def_ids.add(c.def_id)
             unique_cards.append(c)
-    if len(unique_cards) < count:
-        return unique_cards
-    return random.sample(unique_cards, count)
+    exclude = set(exclude_def_ids) if exclude_def_ids else set()
+    available = [c for c in unique_cards if c.def_id not in exclude]
+    if len(available) >= count:
+        return random.sample(available, count)
+    if len(available) > 0:
+        needed = count - len(available)
+        fallback = [c for c in unique_cards if c.def_id in exclude]
+        if fallback:
+            return available + random.sample(fallback, min(needed, len(fallback)))
+        return available
+    return random.sample(unique_cards, min(count, len(unique_cards)))
 
 
 def create_deck_from_draft(picked_def_ids: List[str]) -> List[CardInstance]:

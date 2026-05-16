@@ -472,9 +472,10 @@ class GameEngine:
             return False
         if len(self.draft_picks[player_id]) >= DECK_SIZE:
             return False
+        old_ids = [c.def_id for c in self.draft_options[player_id]]
         self.draft_rerolls[player_id] -= 1
         card_type = self.draft_type_order[len(self.draft_picks[player_id])]
-        options = generate_draft_options(self.draft_pool, card_type, 3)
+        options = generate_draft_options(self.draft_pool, card_type, 3, exclude_def_ids=old_ids)
         self.draft_options[player_id] = options
         return True
 
