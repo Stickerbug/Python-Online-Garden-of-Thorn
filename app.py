@@ -998,47 +998,71 @@ def on_use_trigger(data):
 @socketio.on('end_turn')
 def on_end_turn(data):
     sid = request.sid
-    with _lock:
-        if sid not in players:
-            return
-        player = players[sid]
-        room_id = player.get('room_id')
-        if room_id is None or room_id not in rooms:
-            return
-        room = rooms[room_id]
-        pidx = room.player_index(sid)
-        if pidx < 0:
-            return
-        engine = room.engine
-        result = engine.end_turn(pidx)
-        broadcast_game_state(room)
-        if not result.get('success'):
-            emit('server_error', {'message': result.get('error', '结束回合失败')})
+    print(f'[服务端] 收到end_turn, sid={sid}')
+    try:
+        with _lock:
+            if sid not in players:
+                print(f'[服务端] end_turn: 玩家未找到, sid={sid}')
+                emit('server_error', {'message': '玩家未找到'})
+                return
+            player = players[sid]
+            room_id = player.get('room_id')
+            if room_id is None or room_id not in rooms:
+                print(f'[服务端] end_turn: 未在对局中, room_id={room_id}')
+                emit('server_error', {'message': '未在对局中'})
+                return
+            room = rooms[room_id]
+            pidx = room.player_index(sid)
+            if pidx < 0:
+                print(f'[服务端] end_turn: 玩家不在对局中, pidx={pidx}')
+                emit('server_error', {'message': '玩家不在对局中'})
+                return
+            engine = room.engine
+            print(f'[服务端] end_turn: pidx={pidx}, phase={engine.phase}, current_player={engine.current_player}, pending_response={engine.pending_response is not None}')
+            result = engine.end_turn(pidx)
+            print(f'[服务端] end_turn result: {result}')
+            broadcast_game_state(room)
+            if not result.get('success'):
+                emit('server_error', {'message': result.get('error', '结束回合失败')})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f'[服务端] end_turn异常: {e}')
+        emit('server_error', {'message': f'结束回合出错: {str(e)}'})
 
 
 @socketio.on('surrender')
 def on_surrender(data):
     sid = request.sid
-    with _lock:
-        if sid not in players:
-            return
-        player = players[sid]
-        room_id = player.get('room_id')
-        if room_id is None or room_id not in rooms:
-            return
-        room = rooms[room_id]
-        pidx = room.player_index(sid)
-        if pidx < 0:
-            return
-        engine = room.engine
-        result = engine.surrender(pidx)
-        if result.get('success'):
-            broadcast_game_state(room)
-            for psid in room.player_sids:
-                if psid in players:
-                    socketio.emit('game_phase', {'phase': 'game_over'}, room=psid)
-        else:
-            emit('server_error', {'message': result.get('error', '投降失败')})
+    try:
+        with _lock:
+            if sid not in players:
+                emit('server_error', {'message': '玩家未找到'})
+                return
+            player = players[sid]
+            room_id = player.get('room_id')
+            if room_id is None or room_id not in rooms:
+                emit('server_error', {'message': '未在对局中'})
+                return
+            room = rooms[room_id]
+            pidx = room.player_index(sid)
+            if pidx < 0:
+                emit('server_error', {'message': '玩家不在对局中'})
+                return
+            engine = room.engine
+            result = engine.surrender(pidx)
+            if result.get('success'):
+                broadcast_game_state(room)
+                for psid in room.player_sids:
+                    if psid in players:
+                        socketio.emit('game_phase', {'phase': 'game_over'}, room=psid)
+            else:
+                emit('server_error', {'message': result.get('error', '投降失败')})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f'[服务端] surrender异常: {e}')
+        emit('server_error', {'message': f'投降出错: {str(e)}'})
 
 
 @socketio.on('rematch')

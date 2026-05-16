@@ -196,7 +196,6 @@ let choicePending = false;
 let choiceData = {};
 let isSpectating = false;
 let spectatePerspective = 0;
-let surrenderPending = false;
 let responseTimerId = null;
 let responseCountdown = 0;
 let pendingPlayCard = null;
@@ -450,7 +449,11 @@ function connectSocket(serverUrl) {
     let url = serverUrl;
     let opts = { transports: ['websocket', 'polling'] };
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
+        if (url.includes('localhost') || url.includes('127.0.0.1')) {
+            url = 'http://' + url;
+        } else {
+            url = 'https://' + url;
+        }
     }
     socket = io(url, opts);
     socket.on('connect', () => {
@@ -519,7 +522,7 @@ function connectSocket(serverUrl) {
             showView('view-game');
             updateStatus(UI.game_loading || '游戏加载中...');
         } else if (phase === 'game_over') {
-            showView('view-game');
+            showView('view-gameover');
         } else if (phase === 'action' || phase === 'draw' || phase === 'response' || phase === 'choice') {
             showView('view-game');
         }
@@ -536,7 +539,7 @@ function connectSocket(serverUrl) {
         renderEventSelect(data);
     });
     socket.on('state_update', (data) => {
-        console.log('[客户端] 收到state_update: phase=', data.phase);
+        console.log('[客户端] 收到state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null);
         gameState = data;
         phase = data.phase || phase;
         if (data.your_id != null) playerId = data.your_id;
@@ -571,6 +574,7 @@ function connectSocket(serverUrl) {
         }
     });
     socket.on('server_error', (data) => {
+        console.log('[客户端] 收到server_error:', data.message);
         updateStatus(UI.error_msg.replace('{0}', data.message || ''));
         gameAlert(UI.notice, data.message || '');
         pendingPlayCard = null;
@@ -920,6 +924,8 @@ function renderGame(data) {
     const gs = data || gameState;
     const you = gs.you || {};
     const opp = gs.opponent || {};
+    const myTurn = isMyTurn();
+    console.log('[RENDER] renderGame: phase=', gs.phase, 'current_player=', gs.current_player, 'playerId=', playerId, 'myTurn=', myTurn);
     renderPlayerBars('opp-bars', opp);
     renderPlayerBars('you-bars', you);
     renderStatusTags('opp-status', opp);
@@ -929,13 +935,18 @@ function renderGame(data) {
     renderEquipment('opp-equip', opp, false);
     renderEquipment('you-equip', you, true);
     renderLog(gs.log || []);
-    const myTurn = isMyTurn();
     const phaseText = gs.phase === 'action' ? (myTurn ? UI.your_turn : UI.opponent_turn)
         : gs.phase === 'draw' ? UI.draw_phase
         : gs.phase === 'game_over' ? UI.game_over : '';
     updateStatus(UI.round_status.replace('{0}', gs.round_num || 0).replace('{1}', phaseText));
     const endTurnBtn = $('btn-end-turn');
-    if (endTurnBtn) endTurnBtn.disabled = !myTurn;
+    if (endTurnBtn) {
+        endTurnBtn.disabled = false;
+        endTurnBtn.removeAttribute('disabled');
+        endTurnBtn.style.opacity = myTurn ? '1' : '0.5';
+        endTurnBtn.style.cursor = 'pointer';
+        endTurnBtn.onclick = onEndTurn;
+    }
     const playZone = $('play-zone');
     if (playZone) {
         if (myTurn && !isSpectating) {
@@ -1325,7 +1336,7 @@ function showResponseUI(data) {
         const canAfford = ccDef.cost_e <= myElixir && ccDef.cost_m <= myMagic;
         const costStr = ccDef.cost_m === 0 ? `${ccDef.cost_e}E` : `${ccDef.cost_e}E/${ccDef.cost_m}M`;
         const btn = document.createElement('button');
-        btn.className = 'btn ' + (canAfford ? 'btn-primary' : 'btn-disabled');
+        btn.className = 'btn ' + (canAfford ? 'btn-primary' : 'btn-counter-disabled');
         btn.textContent = `${UI.use_card.replace('{0}', ccDef.name_cn).replace('{1}', costStr)}${canAfford ? '' : ' ' + UI.insufficient_resources}`;
         btn.disabled = !canAfford;
         btn.onclick = () => onRespond(cc.instance_id);
@@ -1502,26 +1513,51 @@ function showOpponentDCWaiting(data) {
     }, 1000);
 }
 
-function onSurrender() {
-    if (!surrenderPending) {
-        surrenderPending = true;
-        const btn = $('btn-surrender');
-        if (btn) {
-            btn.textContent = UI.confirm_surrender;
-            btn.classList.add('btn-danger');
-        }
-        setTimeout(() => {
-            surrenderPending = false;
-            const btn2 = $('btn-surrender');
-            if (btn2) {
-                btn2.textContent = UI.surrender;
-                btn2.classList.remove('btn-danger');
-            }
-        }, 5000);
-    } else {
-        surrenderPending = false;
-        socket.emit('surrender');
+function onEndTurn() {
+    console.log('[END_TURN] ===== onEndTurn被调用 =====');
+    console.log('[END_TURN] gameState=', JSON.stringify(gameState).substring(0, 200));
+    console.log('[END_TURN] playerId=', playerId, 'isMyTurn=', isMyTurn());
+    console.log('[END_TURN] socket=', !!socket, 'socket.id=', socket ? socket.id : 'N/A');
+    console.log('[END_TURN] socket.connected=', socket ? socket.connected : 'N/A');
+    if (!isMyTurn()) {
+        let reason = '';
+        if (gameState.phase !== 'action') reason = '当前阶段: ' + gameState.phase;
+        else if (gameState.current_player !== playerId) reason = '不是你的回合';
+        else reason = '未知原因';
+        console.log('[END_TURN] 不是你的回合, reason=', reason);
+        gameAlert(UI.notice, reason);
+        return;
     }
+    if (socket) {
+        console.log('[END_TURN] 发送end_turn事件, socket.id=', socket.id, 'connected=', socket.connected);
+        socket.emit('end_turn', {}, (ack) => {
+            console.log('[END_TURN] 服务器ack:', ack);
+        });
+        const oldPhase = gameState.phase;
+        const oldPlayer = gameState.current_player;
+        setTimeout(() => {
+            if (gameState.phase === oldPhase && gameState.current_player === oldPlayer) {
+                console.log('[END_TURN] 3秒后状态未变化，可能服务端未处理');
+                gameAlert(UI.notice, '服务器未响应，请检查网络连接或刷新页面重试');
+            }
+        }, 3000);
+    } else {
+        console.log('[END_TURN] socket为空!');
+        updateStatus('未连接到服务器');
+    }
+}
+
+function onSurrender() {
+    console.log('[客户端] onSurrender called, socket=', !!socket);
+    gameAlert(UI.confirm_surrender, '', [
+        { text: UI.ok, cls: 'btn-danger', action: () => {
+            console.log('[客户端] 发送surrender事件');
+            if (socket) {
+                socket.emit('surrender', {});
+            }
+        }},
+        { text: UI.cancel, cls: 'btn-secondary', action: () => {} }
+    ]);
 }
 
 function onViewDeck() {
@@ -1720,6 +1756,12 @@ function initModEditor() {
 }
 
 async function init() {
+    console.log('[INIT] === 游戏初始化开始 ===');
+
+    document.addEventListener('click', (e) => {
+        console.log('[GLOBAL CLICK] target=', e.target.tagName, '#'+e.target.id, '.'+e.target.className);
+    }, true);
+
     document.addEventListener('contextmenu', (e) => {
         if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
             e.preventDefault();
@@ -1729,7 +1771,9 @@ async function init() {
     applyTheme(savedTheme);
     const savedLang = localStorage.getItem('got_lang') || 'zh';
     applyLang(savedLang);
+    console.log('[INIT] 主题/语言已设置');
     await fetchCardDefs();
+    console.log('[INIT] 卡牌定义已加载, 数量=', Object.keys(CARD_DEFS).length);
     $('btn-connect').addEventListener('click', onLogin);
     $('input-nickname').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') onLogin();
@@ -1744,7 +1788,6 @@ async function init() {
         phase = 'login';
     });
     $('btn-draft-reroll').addEventListener('click', () => { if (socket) socket.emit('draft_reroll'); });
-    $('btn-end-turn').addEventListener('click', () => { if (socket) socket.emit('end_turn'); });
     $('btn-surrender').addEventListener('click', onSurrender);
     $('btn-view-deck').addEventListener('click', onViewDeck);
     $('btn-rematch').addEventListener('click', () => { if (socket) socket.emit('rematch'); });
@@ -1765,6 +1808,10 @@ async function init() {
     setupPlayZoneDrop();
     initModEditor();
     showView('view-login');
+    console.log('[INIT] === 游戏初始化完成 ===');
+    console.log('[INIT] btn-end-turn element=', !!$('btn-end-turn'));
+    console.log('[INIT] onEndTurn function=', typeof onEndTurn);
 }
 
 document.addEventListener('DOMContentLoaded', init);
+console.log('[LOAD] game.js 已加载, onEndTurn=', typeof onEndTurn);

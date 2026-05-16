@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
-<link rel="stylesheet" href="/static/css/style.css?v=11">
+<link rel="stylesheet" href="/static/css/style.css?v=15">
 </head>
 <body>
 <div id="app">
@@ -113,7 +113,7 @@
   </div>
   <div class="controls-bar">
     <div id="game-controls" class="controls-group">
-      <button id="btn-end-turn" class="btn btn-danger" disabled>结束回合</button>
+      <button id="btn-end-turn" class="btn btn-danger" onclick="console.log('[BTN] onclick fired');onEndTurn()">结束回合</button>
       <button id="btn-view-deck" class="btn btn-magic">查看牌堆</button>
       <button id="btn-surrender" class="btn btn-secondary">投降</button>
     </div>
@@ -226,6 +226,6 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="/static/js/game.js?v=11"></script>
+<script src="/static/js/game.js?v=15"></script>
 </body>
 </html>
