@@ -342,6 +342,412 @@ body {
   color: var(--text-primary);
 }
 
+.rotate-hint {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-primary);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+}
+
+.rotate-hint-inner {
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.rotate-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  animation: rotateHint 2s ease-in-out infinite;
+}
+
+@keyframes rotateHint {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(90deg); }
+  75% { transform: rotate(90deg); }
+}
+
+.rotate-text {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.rotate-text-en {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+@media (max-width: 768px) and (orientation: portrait) {
+  .rotate-hint {
+    display: flex;
+  }
+}
+
+@media (max-width: 768px) {
+  .card {
+    width: clamp(70px, calc((100vw - 30px) / 8.5), 120px);
+  }
+
+  .card-name {
+    font-size: 8cqi;
+  }
+
+  .card-effect {
+    font-size: 6.5cqi;
+  }
+
+  .player-info-bar {
+    gap: 4px;
+    padding: 3px 6px;
+  }
+
+  .player-label {
+    font-size: 11px;
+  }
+
+  .bar-track {
+    width: clamp(50px, 14vw, 90px);
+    height: 14px;
+  }
+
+  .bar-text {
+    font-size: 8px;
+  }
+
+  .bar-label {
+    font-size: 10px;
+  }
+
+  .info-extra {
+    font-size: 9px;
+  }
+
+  .status-tag {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+
+  .opp-hand-equip {
+    padding: 2px 6px 4px;
+    gap: 4px;
+  }
+
+  .equip-row {
+    padding: 1px 6px;
+    gap: 4px;
+  }
+
+  .hand-play-row {
+    gap: 4px;
+    padding: 2px 6px 4px;
+  }
+
+  .hand-area {
+    gap: 2px;
+    min-height: 60px;
+  }
+
+  .play-zone {
+    width: clamp(70px, calc((100vw - 30px) / 8.5), 120px);
+    aspect-ratio: 63/88;
+  }
+
+  .play-zone-hint {
+    font-size: 10px;
+  }
+
+  .controls-bar {
+    gap: 4px;
+    padding: 3px 6px;
+  }
+
+  .btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .btn-small {
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+
+  .controls-right input {
+    width: clamp(60px, 20vw, 120px);
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+
+  .battle-log {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    font-size: 10px;
+    padding: 4px;
+  }
+
+  .log-header {
+    font-size: 10px;
+    padding: 2px 4px;
+  }
+
+  .log-content {
+    max-height: 60px;
+  }
+
+  .middle-section {
+    flex-direction: column;
+  }
+
+  .player-section {
+    min-height: 100px;
+  }
+
+  .opp-section .opp-hand-row .card {
+    width: clamp(30px, 6vw, 50px);
+    min-width: 25px;
+  }
+
+  .opp-section .opp-hand-row .card-facedown {
+    width: clamp(20px, 5vw, 35px);
+    min-width: 18px;
+    height: auto;
+    aspect-ratio: 63/88;
+  }
+
+  .equip-row .card {
+    width: clamp(40px, 8vw, 70px);
+    min-width: 35px;
+  }
+
+  .login-container {
+    padding: 20px;
+  }
+
+  .title-main {
+    font-size: 28px;
+  }
+
+  .title-sub {
+    font-size: 16px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+  }
+
+  .lobby-header h2 {
+    font-size: 16px;
+  }
+
+  .lobby-player-row {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .lobby-chat-log {
+    height: 120px;
+    font-size: 11px;
+  }
+
+  .draft-options {
+    gap: 6px;
+  }
+
+  .draft-options .card {
+    width: clamp(80px, 25vw, 140px);
+    min-width: 70px;
+  }
+
+  .settings-inner {
+    padding: 16px;
+    min-width: auto;
+    max-width: 95vw;
+  }
+
+  .game-alert-inner {
+    padding: 16px 20px;
+    min-width: 240px;
+  }
+
+  .game-alert-icon {
+    font-size: 32px;
+  }
+
+  .game-alert-title {
+    font-size: 15px;
+  }
+
+  .game-alert-message {
+    font-size: 12px;
+  }
+
+  .game-alert-buttons .btn {
+    padding: 6px 14px;
+    font-size: 12px;
+  }
+
+  .modal-inner {
+    padding: 16px;
+    min-width: auto;
+    max-width: 95vw;
+  }
+
+  .event-container {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .event-option {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .event-option .event-title {
+    font-size: 13px;
+  }
+
+  .event-option .event-desc {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+  .card {
+    width: clamp(60px, calc((100vh - 30px) / 8.5 * 63 / 88), 100px);
+  }
+
+  .player-info-bar {
+    gap: 3px;
+    padding: 2px 6px;
+  }
+
+  .bar-track {
+    width: clamp(50px, 10vh, 80px);
+    height: 12px;
+  }
+
+  .bar-text {
+    font-size: 7px;
+  }
+
+  .bar-label {
+    font-size: 9px;
+  }
+
+  .player-label {
+    font-size: 10px;
+  }
+
+  .info-extra {
+    font-size: 8px;
+  }
+
+  .status-tag {
+    font-size: 8px;
+    padding: 1px 3px;
+  }
+
+  .opp-hand-equip {
+    padding: 1px 6px 2px;
+    gap: 3px;
+  }
+
+  .equip-row {
+    padding: 1px 6px;
+    gap: 3px;
+  }
+
+  .hand-play-row {
+    gap: 3px;
+    padding: 2px 6px 3px;
+  }
+
+  .hand-area {
+    gap: 2px;
+    min-height: 50px;
+  }
+
+  .play-zone {
+    width: clamp(60px, calc((100vh - 30px) / 8.5 * 63 / 88), 100px);
+    aspect-ratio: 63/88;
+  }
+
+  .play-zone-hint {
+    font-size: 9px;
+  }
+
+  .controls-bar {
+    gap: 3px;
+    padding: 2px 6px;
+  }
+
+  .btn {
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+
+  .btn-small {
+    padding: 2px 5px;
+    font-size: 9px;
+  }
+
+  .controls-right input {
+    width: clamp(50px, 15vh, 100px);
+    padding: 2px 5px;
+    font-size: 9px;
+  }
+
+  .battle-log {
+    font-size: 9px;
+    padding: 3px;
+  }
+
+  .log-header {
+    font-size: 9px;
+    padding: 1px 3px;
+  }
+
+  .log-content {
+    max-height: 40px;
+  }
+
+  .player-section {
+    min-height: 70px;
+  }
+
+  .opp-section .opp-hand-row .card {
+    width: clamp(25px, 4vh, 40px);
+    min-width: 20px;
+  }
+
+  .opp-section .opp-hand-row .card-facedown {
+    width: clamp(16px, 3vh, 28px);
+    min-width: 14px;
+  }
+
+  .equip-row .card {
+    width: clamp(35px, 6vh, 55px);
+    min-width: 30px;
+  }
+
+  .game-alert-inner {
+    padding: 12px 16px;
+    min-width: 200px;
+  }
+
+  .modal-inner {
+    padding: 12px;
+    min-width: auto;
+    max-width: 90vw;
+  }
+}
+
 .settings-section {
   margin-bottom: 16px;
 }
@@ -391,6 +797,41 @@ body {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+.login-form .form-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-form .form-row label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 50px;
+  font-family: var(--font-main);
+}
+
+.login-form .form-row input[type="text"] {
+  flex: 1;
+  padding: 12px 16px;
+  font-size: 16px;
+  font-family: var(--font-main);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.login-form .form-row input[type="text"]:focus {
+  border-color: var(--magic);
+}
+
+.login-form .form-row input[type="text"]::placeholder {
+  color: var(--text-muted);
 }
 
 .login-field {
@@ -1116,10 +1557,9 @@ body {
   flex-direction: column;
   overflow: hidden;
   user-select: none;
-  width: clamp(110px, 15vw, 180px);
+  width: clamp(100px, calc((100vw - 40px) / 8.5), 160px);
   aspect-ratio: 63/88;
-  flex-shrink: 1;
-  min-width: 90px;
+  flex-shrink: 0;
   container-type: inline-size;
 }
 
@@ -1195,10 +1635,17 @@ body {
 
 .card-draggable {
   cursor: grab;
+  touch-action: none;
 }
 
 .card-draggable:active {
   cursor: grabbing;
+}
+
+.card-selected {
+  border-color: var(--bloom) !important;
+  box-shadow: 0 0 8px var(--bloom-glow), 0 0 16px var(--bloom-glow);
+  transform: translateY(-4px);
 }
 
 .card.dragging {
@@ -1230,7 +1677,7 @@ body {
   border: 1cqi solid var(--elixir);
   background: var(--elixir-bg);
   color: var(--elixir);
-  font-size: 8cqi;
+  font-size: 9cqi;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -1245,7 +1692,7 @@ body {
   border: 1cqi solid var(--magic);
   background: var(--magic-bg);
   color: var(--magic);
-  font-size: 8cqi;
+  font-size: 9cqi;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -1289,36 +1736,55 @@ body {
   color: var(--guard);
 }
 
+.card-type-label-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 0 2cqi;
+}
+
 .card-type-label {
   font-size: 6.5cqi;
   text-align: center;
-  padding: 0 4cqi;
-  opacity: 0.8;
+  padding: 0.5cqi 3cqi;
+  border-radius: 2cqi;
+  background: rgba(0,0,0,0.05);
+  display: inline-block;
+  opacity: 0.85;
 }
 
 .card.thorn .card-type-label {
   color: var(--thorn);
+  background: var(--thorn-bg);
 }
 
 .card.bloom .card-type-label {
   color: var(--bloom);
+  background: var(--bloom-bg);
 }
 
 .card.root .card-type-label {
   color: var(--root);
+  background: var(--root-bg);
 }
 
 .card.guard .card-type-label {
   color: var(--guard);
+  background: var(--guard-bg);
 }
 
 .card-effect {
-  flex: 1;
-  padding: 1cqi 2.5cqi;
-  font-size: 8.5cqi;
+  padding: 6cqi 2.5cqi;
+  font-size: 9cqi;
   color: var(--text-secondary);
   line-height: 1.3;
   overflow-y: auto;
+}
+
+.card-description {
+  padding: 2cqi 2.5cqi 1cqi;
+  font-size: 7.5cqi;
+  color: var(--text-muted);
+  line-height: 1.3;
 }
 
 .card-flags {
@@ -1423,8 +1889,8 @@ body {
 }
 
 .play-zone {
-  width: clamp(80px, 10vw, 130px);
-  min-height: clamp(90px, 12vw, 160px);
+  width: clamp(100px, calc((100vw - 40px) / 8.5), 160px);
+  aspect-ratio: 63/88;
   border: 2px dashed var(--border-light);
   border-radius: var(--radius-lg);
   display: flex;
@@ -1463,7 +1929,7 @@ body {
 .hand-area {
   display: flex;
   align-items: stretch;
-  justify-content: center;
+  justify-content: flex-start;
   gap: clamp(2px, 0.4vw, 6px);
   flex: 1;
   min-height: 80px;
@@ -1473,8 +1939,7 @@ body {
 }
 
 .hand-area .card {
-  flex: 1 1 0;
-  max-width: 180px;
+  flex: none;
 }
 
 .opp-hand-row {
@@ -1490,6 +1955,7 @@ body {
   background: rgba(0, 0, 0, 0.03);
   min-width: 0;
   overflow: hidden;
+  min-height: 0;
 }
 
 .battle-log .log-header {
@@ -1507,6 +1973,7 @@ body {
   padding: 6px 8px;
   font-size: 12px;
   line-height: 1.5;
+  min-height: 0;
 }
 
 .log-entry {
@@ -2607,16 +3074,6 @@ body {
 
   .bar-text {
     font-size: 9px;
-  }
-
-  .hand-play-row {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .play-zone {
-    width: 100%;
-    min-height: 60px;
   }
 
   .controls-bar {
