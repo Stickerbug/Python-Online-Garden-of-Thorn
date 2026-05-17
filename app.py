@@ -269,7 +269,7 @@ def index():
 
 @app.route('/fonts/<path:filename>')
 def serve_font(filename):
-    fonts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
+    fonts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'fonts')
     return send_from_directory(fonts_dir, filename)
 
 
@@ -953,9 +953,9 @@ def on_play_card(data):
             trigger_types = []
             if played_def:
                 if played_def.card_type == 'thorn':
-                    trigger_types.append('attack')
+                    trigger_types.append('thorn')
                 elif played_def.card_type == 'bloom':
-                    trigger_types.append('skill')
+                    trigger_types.append('bloom')
                 if played_def.id in ('Sewage', 'MagicSewage'):
                     trigger_types.append('equipment_destroy')
             counter_cards = []

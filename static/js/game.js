@@ -66,6 +66,8 @@ const I18N = {
         settings_theme_dark: '黑暗', no_games: '暂无进行中的对局',
         back_to_home: '返回主页', settings_btn: '设置',
         settings_server: '服务器', settings_server_addr: '地址',
+        not_your_turn: '不是你的回合', counter_insufficient: '提示：反制牌所需消耗不足', default_status: 'Garden of Thorn 荆棘花园',
+        game_loading: '游戏加载中...', server_no_response: '服务器未响应，请检查网络连接或刷新页面重试',
     },
     en: {
         round: 'Round', your_turn: 'Your Turn', opponent_turn: "Opponent's Turn",
@@ -134,6 +136,288 @@ const I18N = {
         settings_theme_dark: 'Dark', no_games: 'No ongoing games',
         back_to_home: 'Back to Home', settings_btn: 'Settings',
         settings_server: 'Server', settings_server_addr: 'Address',
+        not_your_turn: "Not your turn", counter_insufficient: 'Tip: Insufficient resources for counter cards', default_status: 'Garden of Thorn',
+        game_loading: 'Loading...', server_no_response: 'Server not responding. Check your connection or refresh.',
+    },
+    fr: {
+        round: 'Tour', your_turn: 'Votre Tour', opponent_turn: 'Tour de l\'adversaire',
+        draw_phase: 'Phase de Pioche', game_over: 'Fin de Partie',
+        invite: 'Inviter', accept: 'Accepter', decline: 'Refuser', return_lobby: 'Retour au Salon',
+        draft_phase: 'Phase de Draft', draft_reroll: 'Relancer', draft_selected: 'Sélectionné',
+        select_event: 'Choisir Événement', waiting_opponent: 'En attente de l\'adversaire',
+        play_card: 'Jouer', end_turn: 'Fin du Tour', surrender: 'Abandonner', view_deck: 'Voir le Deck',
+        counter: 'Contre', no_counter: 'Pas de Contre', waiting_response: 'En attente de réponse',
+        victory: 'Victoire', defeat: 'Défaite', rematch: 'Rejouer',
+        connecting: 'Connexion...', disconnected: 'Déconnecté',
+        login_failed: 'Échec de connexion', nickname: 'Pseudo', enter_lobby: 'Entrer dans le Salon',
+        online_players: 'Joueurs en ligne', no_other_players: 'Aucun autre joueur',
+        invite_sent: 'Invitation envoyée', invite_received: 'Invitation reçue',
+        invite_message: 'vous invite à jouer', invite_declined: 'Invitation refusée',
+        ongoing_games: 'Parties en cours', spectate: 'Observer',
+        draft_info: 'Draft', draft_complete: 'Draft terminé', draft_waiting: 'En attente de l\'adversaire',
+        draft_cost: 'Coût', select_this_event: 'Choisir cet événement',
+        event_selected: 'Événement choisi', event_waiting: 'En attente du choix de l\'adversaire',
+        drag_to_play: 'Glisser pour jouer', cannot_play: 'Impossible de jouer',
+        enemy_attack: 'Attaque ennemie', enemy_skill: 'Compétence ennemie', enemy_destroy_equip: 'Destruction d\'équipement ennemi',
+        use_card: 'Utiliser', insufficient_resources: 'Ressources insuffisantes',
+        choose_attack_for: 'Choisir une attaque pour', choose_equip_for: 'Choisir un équipement',
+        choose_discard_for: 'Choisir une carte à défausser', choose_from_deck_for: 'Choisir depuis le deck',
+        choose_from_discard_for: 'Choisir depuis la défausse', choose_hand_for: 'Choisir depuis la main',
+        choose_from_enemy_hand_for: 'Choisir depuis la main ennemie',
+        choose_attack_group_for: 'Choisir un groupe d\'attaque',
+        no_attack_cards: 'Aucune carte d\'attaque', no_enemy_equipment: 'Aucun équipement ennemi',
+        no_enemy_hand: 'Aucune main ennemie', deck_empty: 'Deck vide', discard_empty: 'Défausse vide',
+        no_same_attack: 'Aucune carte d\'attaque identique',
+        confirm_surrender: 'Confirmer l\'abandon ?', request_rematch: 'Demander une revanche',
+        opponent_rematch: 'L\'adversaire demande une revanche', rematch_sent: 'Demande de revanche envoyée',
+        rematch_waiting: 'En attente de l\'adversaire', rematch_agreed: 'Revanche acceptée',
+        agree_rematch: 'Accepter la revanche', you_win: 'Victoire !', you_lose: 'Défaite !',
+        send: 'Envoyer', cancel: 'Annuler', ok: 'OK', close: 'Fermer', notice: 'Notice',
+        opponent_disconnected: 'Adversaire déconnecté', opponent_reconnected: 'Adversaire reconnecté',
+        reconnect_title: 'Reconnexion', reconnect_prompt: 'Se reconnecter à la partie précédente ?',
+        reconnecting: 'Reconnexion...', reconnect_timeout: 'Délai de reconnexion écoulé',
+        mod_mismatch_title: 'Mods incompatibles', mod_mismatch_msg: 'Les mods ne correspondent pas, impossible de commencer',
+        switch_perspective: 'Changer de perspective', leave_spectate: 'Quitter l\'observation',
+        switch_to_perspective: 'Passer à la perspective de {0}',
+        battle_log: 'Journal de combat', equip_info: '{0}({1} tours)', equip_corruption: '[Corrompu]',
+        equip_trigger_cost: '{0} Déclencher:{1}E', status_poison: 'Poison', status_fire: 'Brûlure',
+        status_toxic: 'Toxique', status_triangle: 'Triangle', status_dodge: 'Esquive',
+        status_nazar: 'Nazar', status_equip_protect: 'Prot. Équip.', status_invincible: 'Invincible',
+        status_stunned: 'Étourdi', status_attack_blocked: 'Atq bloquée', status_attack_only: 'Atq seule',
+        status_untargetable: 'Non ciblable', status_bandage: 'Bandage', status_sponge: 'Éponge',
+        status_shovel: 'Pelle',
+        flag_precision: 'Précision', flag_exile: 'Exil', flag_non_stackable: 'Non-cumul',
+        flag_indestructible: 'Indestructible', flag_sprout: 'Pousse', flag_symbiosis: 'Symbiose',
+        choose_convert_count: 'Nombre de conversions', choose_magic_card_n: 'Carte magie n°{0}',
+        choose_source_card_n: 'Carte source n°{0}', choose_light_cards: 'Cartes de conversion Lumière',
+        choose_yggdrasil_card: 'Carte de conversion Yggdrasil', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
+        selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}',
+        deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
+        hand_deck_info_opp: 'Main:{0} Deck:{1}',
+        hand_deck_discard_info: 'Main:{0} Deck:{1} Défausse:{2}',
+        round_status: 'Tour {0} - {1}',
+        server_broadcast: 'Serveur : {0}', error_msg: 'Erreur : {0}',
+        lobby_status: 'Salon - {0}', no_counter_countdown: 'Pas de contre({0})',
+        select_event_desc: 'Choisir un événement de départ',
+        opponent_selected: 'Adversaire a choisi', opponent_selecting: 'Adversaire choisit...',
+        card_type_thorn: 'Épine', card_type_bloom: 'Floraison', card_type_root: 'Racine', card_type_guard: 'Garde',
+        settings_title: 'Paramètres', settings_appearance: 'Apparence', settings_theme: 'Thème',
+        settings_lang: 'Langue', settings_mods: 'Mods', settings_theme_light: 'Clair',
+        settings_theme_dark: 'Sombre', no_games: 'Aucune partie en cours',
+        back_to_home: 'Retour à l\'accueil', settings_btn: 'Paramètres',
+        settings_server: 'Serveur', settings_server_addr: 'Adresse',
+        not_your_turn: 'Ce n\'est pas votre tour', counter_insufficient: 'Conseil : Ressources insuffisantes pour les cartes de contre', default_status: 'Garden of Thorn',
+        game_loading: 'Chargement...', server_no_response: 'Le serveur ne répond pas. Vérifiez votre connexion.',
+    },
+    pt: {
+        round: 'Turno', your_turn: 'Seu Turno', opponent_turn: 'Turno do Oponente',
+        draw_phase: 'Fase de Compra', game_over: 'Fim de Jogo',
+        invite: 'Convidar', accept: 'Aceitar', decline: 'Recusar', return_lobby: 'Voltar ao Lobby',
+        draft_phase: 'Fase de Draft', draft_reroll: 'Rerrolar', draft_selected: 'Selecionado',
+        select_event: 'Escolher Evento', waiting_opponent: 'Aguardando Oponente',
+        play_card: 'Jogar', end_turn: 'Finalizar Turno', surrender: 'Render-se', view_deck: 'Ver Deck',
+        counter: 'Contra-atacar', no_counter: 'Sem Contra', waiting_response: 'Aguardando resposta',
+        victory: 'Vitória', defeat: 'Derrota', rematch: 'Jogar Novamente',
+        connecting: 'Conectando...', disconnected: 'Desconectado',
+        login_failed: 'Falha no login', nickname: 'Apelido', enter_lobby: 'Entrar no Lobby',
+        online_players: 'Jogadores Online', no_other_players: 'Nenhum outro jogador',
+        invite_sent: 'Convite Enviado', invite_received: 'Convite Recebido',
+        invite_message: 'convida você para uma partida', invite_declined: 'Convite Recusado',
+        ongoing_games: 'Partidas em Andamento', spectate: 'Assistir',
+        draft_info: 'Draft', draft_complete: 'Draft Completo', draft_waiting: 'Aguardando oponente terminar o draft',
+        draft_cost: 'Custo', select_this_event: 'Selecionar Este Evento',
+        event_selected: 'Evento Selecionado', event_waiting: 'Aguardando oponente selecionar evento',
+        drag_to_play: 'Arraste para Jogar', cannot_play: 'Não Pode Jogar',
+        enemy_attack: 'Ataque Inimigo', enemy_skill: 'Habilidade Inimiga', enemy_destroy_equip: 'Destruir Equipamento Inimigo',
+        use_card: 'Usar', insufficient_resources: 'Recursos Insuficientes',
+        choose_attack_for: 'Escolher ataque para', choose_equip_for: 'Escolher equipamento',
+        choose_discard_for: 'Escolher descarte', choose_from_deck_for: 'Escolher do deck',
+        choose_from_discard_for: 'Escolher da pilha de descarte', choose_hand_for: 'Escolher da mão',
+        choose_from_enemy_hand_for: 'Escolher da mão inimiga',
+        choose_attack_group_for: 'Escolher grupo de ataque',
+        no_attack_cards: 'Sem cartas de ataque', no_enemy_equipment: 'Sem equipamento inimigo',
+        no_enemy_hand: 'Sem mão inimiga', deck_empty: 'Deck vazio', discard_empty: 'Pilha de descarte vazia',
+        no_same_attack: 'Sem cartas de ataque iguais',
+        confirm_surrender: 'Confirmar rendição?', request_rematch: 'Pedir revanche',
+        opponent_rematch: 'Oponente pede revanche', rematch_sent: 'Pedido de revanche enviado',
+        rematch_waiting: 'Aguardando oponente', rematch_agreed: 'Revanche aceita',
+        agree_rematch: 'Aceitar revanche', you_win: 'Vitória!', you_lose: 'Derrota!',
+        send: 'Enviar', cancel: 'Cancelar', ok: 'OK', close: 'Fechar', notice: 'Aviso',
+        opponent_disconnected: 'Oponente desconectou', opponent_reconnected: 'Oponente reconectou',
+        reconnect_title: 'Reconectar', reconnect_prompt: 'Reconectar à partida anterior?',
+        reconnecting: 'Reconectando...', reconnect_timeout: 'Tempo de reconexão esgotado',
+        mod_mismatch_title: 'Mods incompatíveis', mod_mismatch_msg: 'Mods inconsistentes, não é possível iniciar a partida',
+        switch_perspective: 'Trocar Perspectiva', leave_spectate: 'Sair da Observação',
+        switch_to_perspective: 'Trocar para perspectiva de {0}',
+        battle_log: 'Registro de Batalha', equip_info: '{0}({1} turnos)', equip_corruption: '[Corrompido]',
+        equip_trigger_cost: '{0} Ativar:{1}E', status_poison: 'Veneno', status_fire: 'Queima',
+        status_toxic: 'Tóxico', status_triangle: 'Triângulo', status_dodge: 'Esquiva',
+        status_nazar: 'Nazar', status_equip_protect: 'Prot. Equip.', status_invincible: 'Invencível',
+        status_stunned: 'Atordoado', status_attack_blocked: 'Atq Bloqueado', status_attack_only: 'Só Atq',
+        status_untargetable: 'Inalvejável', status_bandage: 'Bandagem', status_sponge: 'Esponja',
+        status_shovel: 'Pá',
+        flag_precision: 'Precisão', flag_exile: 'Exílio', flag_non_stackable: 'Não-acumulável',
+        flag_indestructible: 'Indestrutível', flag_sprout: 'Brotar', flag_symbiosis: 'Simbiose',
+        choose_convert_count: 'Escolher quantidade de conversão', choose_magic_card_n: 'Carta mágica n°{0}',
+        choose_source_card_n: 'Carta fonte n°{0}', choose_light_cards: 'Cartas de conversão Luz',
+        choose_yggdrasil_card: 'Carta de conversão Yggdrasil', convert_label: 'Converter', convert_per_type: 'Máx {0} por tipo',
+        selected_count: 'Selecionado {0}/{1}', max_selection_warning: 'Não pode exceder {0}',
+        deck_total: 'Deck: {0} cartas', view_deck_title: 'Ver Deck',
+        hand_deck_info_opp: 'Mão:{0} Deck:{1}',
+        hand_deck_discard_info: 'Mão:{0} Deck:{1} Descarte:{2}',
+        round_status: 'Turno {0} - {1}',
+        server_broadcast: 'Servidor: {0}', error_msg: 'Erro: {0}',
+        lobby_status: 'Lobby - {0}', no_counter_countdown: 'Sem Contra({0})',
+        select_event_desc: 'Escolha um evento inicial',
+        opponent_selected: 'Oponente Selecionou', opponent_selecting: 'Oponente Selecionando...',
+        card_type_thorn: 'Espinho', card_type_bloom: 'Floração', card_type_root: 'Raiz', card_type_guard: 'Guarda',
+        settings_title: 'Configurações', settings_appearance: 'Aparência', settings_theme: 'Tema',
+        settings_lang: 'Idioma', settings_mods: 'Mods', settings_theme_light: 'Claro',
+        settings_theme_dark: 'Escuro', no_games: 'Nenhuma partida em andamento',
+        back_to_home: 'Voltar ao Início', settings_btn: 'Configurações',
+        settings_server: 'Servidor', settings_server_addr: 'Endereço',
+        not_your_turn: 'Não é seu turno', counter_insufficient: 'Dica: Recursos insuficientes para cartas de contra-ataque', default_status: 'Garden of Thorn',
+        game_loading: 'Carregando...', server_no_response: 'Servidor sem resposta. Verifique sua conexão.',
+    },
+    ru: {
+        round: 'Раунд', your_turn: 'Ваш Ход', opponent_turn: 'Ход Соперника',
+        draw_phase: 'Фаза Розыгрыша', game_over: 'Конец Игры',
+        invite: 'Пригласить', accept: 'Принять', decline: 'Отклонить', return_lobby: 'Вернуться в Лобби',
+        draft_phase: 'Фаза Драфта', draft_reroll: 'Перебрать', draft_selected: 'Выбрано',
+        select_event: 'Выбрать Событие', waiting_opponent: 'Ожидание соперника',
+        play_card: 'Разыграть', end_turn: 'Конец Хода', surrender: 'Сдаться', view_deck: 'Посмотреть Колоду',
+        counter: 'Контр-атака', no_counter: 'Без Контр-атаки', waiting_response: 'Ожидание ответа',
+        victory: 'Победа', defeat: 'Поражение', rematch: 'Реванш',
+        connecting: 'Подключение...', disconnected: 'Отключено',
+        login_failed: 'Ошибка входа', nickname: 'Псевдоним', enter_lobby: 'Войти в Лобби',
+        online_players: 'Игроки Онлайн', no_other_players: 'Нет других игроков',
+        invite_sent: 'Приглашение отправлено', invite_received: 'Приглашение получено',
+        invite_message: 'приглашает вас на матч', invite_declined: 'Приглашение отклонено',
+        ongoing_games: 'Текущие Матчи', spectate: 'Наблюдать',
+        draft_info: 'Драфт', draft_complete: 'Драфт Завершён', draft_waiting: 'Ожидание завершения драфта соперника',
+        draft_cost: 'Стоимость', select_this_event: 'Выбрать Это Событие',
+        event_selected: 'Событие Выбрано', event_waiting: 'Ожидание выбора события соперником',
+        drag_to_play: 'Перетащите для игры', cannot_play: 'Нельзя Играть',
+        enemy_attack: 'Атака Врага', enemy_skill: 'Способность Врага', enemy_destroy_equip: 'Уничтожение Снаряжения Врага',
+        use_card: 'Использовать', insufficient_resources: 'Недостаточно ресурсов',
+        choose_attack_for: 'Выбрать атаку для', choose_equip_for: 'Выбрать снаряжение',
+        choose_discard_for: 'Выбрать сброс', choose_from_deck_for: 'Выбрать из колоды',
+        choose_from_discard_for: 'Выбрать из сброса', choose_hand_for: 'Выбрать из руки',
+        choose_from_enemy_hand_for: 'Выбрать из руки врага',
+        choose_attack_group_for: 'Выбрать группу атаки',
+        no_attack_cards: 'Нет карт атаки', no_enemy_equipment: 'Нет снаряжения врага',
+        no_enemy_hand: 'Нет руки врага', deck_empty: 'Колода пуста', discard_empty: 'Сброс пуст',
+        no_same_attack: 'Нет одинаковых карт атаки',
+        confirm_surrender: 'Подтвердить сдачу?', request_rematch: 'Запросить реванш',
+        opponent_rematch: 'Соперник запрашивает реванш', rematch_sent: 'Запрос реванша отправлен',
+        rematch_waiting: 'Ожидание соперника', rematch_agreed: 'Реванш принят',
+        agree_rematch: 'Принять реванш', you_win: 'Победа!', you_lose: 'Поражение!',
+        send: 'Отправить', cancel: 'Отмена', ok: 'ОК', close: 'Закрыть', notice: 'Уведомление',
+        opponent_disconnected: 'Соперник отключился', opponent_reconnected: 'Соперник переподключился',
+        reconnect_title: 'Переподключение', reconnect_prompt: 'Переподключиться к предыдущему матчу?',
+        reconnecting: 'Переподключение...', reconnect_timeout: 'Тайм-аут переподключения',
+        mod_mismatch_title: 'Несовместимость модов', mod_mismatch_msg: 'Моды не совпадают, невозможно начать матч',
+        switch_perspective: 'Сменить Перспективу', leave_spectate: 'Покинуть Наблюдение',
+        switch_to_perspective: 'Переключиться на перспективу {0}',
+        battle_log: 'Журнал Боя', equip_info: '{0}({1} ходов)', equip_corruption: '[Осквернено]',
+        equip_trigger_cost: '{0} Активировать:{1}E', status_poison: 'Яд', status_fire: 'Горение',
+        status_toxic: 'Токсичность', status_triangle: 'Треугольник', status_dodge: 'Уклонение',
+        status_nazar: 'Назар', status_equip_protect: 'Защита Снар.', status_invincible: 'Неуязвимость',
+        status_stunned: 'Оглушение', status_attack_blocked: 'Атк Заблок.', status_attack_only: 'Только Атк',
+        status_untargetable: 'Недоступен', status_bandage: 'Бинт', status_sponge: 'Губка',
+        status_shovel: 'Лопата',
+        flag_precision: 'Точность', flag_exile: 'Изгнание', flag_non_stackable: 'Нескладываемый',
+        flag_indestructible: 'Неразрушимый', flag_sprout: 'Росток', flag_symbiosis: 'Симбиоз',
+        choose_convert_count: 'Количество конвертации', choose_magic_card_n: 'Магическая карта №{0}',
+        choose_source_card_n: 'Исходная карта №{0}', choose_light_cards: 'Карты конвертации Света',
+        choose_yggdrasil_card: 'Карта конвертации Иггдрасиль', convert_label: 'Конвертировать', convert_per_type: 'Макс {0} на тип',
+        selected_count: 'Выбрано {0}/{1}', max_selection_warning: 'Нельзя превышать {0}',
+        deck_total: 'Колода: {0} карт', view_deck_title: 'Посмотреть Колоду',
+        hand_deck_info_opp: 'Рука:{0} Колода:{1}',
+        hand_deck_discard_info: 'Рука:{0} Колода:{1} Сброс:{2}',
+        round_status: 'Раунд {0} - {1}',
+        server_broadcast: 'Сервер: {0}', error_msg: 'Ошибка: {0}',
+        lobby_status: 'Лобби - {0}', no_counter_countdown: 'Без контр-атаки({0})',
+        select_event_desc: 'Выберите начальное событие',
+        opponent_selected: 'Соперник выбрал', opponent_selecting: 'Соперник выбирает...',
+        card_type_thorn: 'Шип', card_type_bloom: 'Цветение', card_type_root: 'Корень', card_type_guard: 'Страж',
+        settings_title: 'Настройки', settings_appearance: 'Внешний вид', settings_theme: 'Тема',
+        settings_lang: 'Язык', settings_mods: 'Моды', settings_theme_light: 'Светлая',
+        settings_theme_dark: 'Тёмная', no_games: 'Нет текущих матчей',
+        back_to_home: 'Вернуться на главную', settings_btn: 'Настройки',
+        settings_server: 'Сервер', settings_server_addr: 'Адрес',
+        not_your_turn: 'Не ваш ход', counter_insufficient: 'Подсказка: Недостаточно ресурсов для контр-атаки', default_status: 'Garden of Thorn',
+        game_loading: 'Загрузка...', server_no_response: 'Сервер не отвечает. Проверьте подключение.',
+    },
+    ja: {
+        round: 'ターン', your_turn: 'あなたのターン', opponent_turn: '相手のターン',
+        draw_phase: 'ドローフェイズ', game_over: 'ゲーム終了',
+        invite: '招待', accept: '承諾', decline: '拒否', return_lobby: 'ロビーに戻る',
+        draft_phase: 'ドラフトフェイズ', draft_reroll: 'リロール', draft_selected: '選択済み',
+        select_event: 'イベント選択', waiting_opponent: '相手を待っています',
+        play_card: 'プレイ', end_turn: 'ターン終了', surrender: '降参', view_deck: 'デッキ確認',
+        counter: 'カウンター', no_counter: 'カウンターなし', waiting_response: '応答待ち',
+        victory: '勝利', defeat: '敗北', rematch: '再戦',
+        connecting: '接続中...', disconnected: '切断されました',
+        login_failed: 'ログイン失敗', nickname: 'ニックネーム', enter_lobby: 'ロビーに入る',
+        online_players: 'オンラインプレイヤー', no_other_players: '他のプレイヤーはいません',
+        invite_sent: '招待を送信しました', invite_received: '招待を受信しました',
+        invite_message: 'が対戦に招待しています', invite_declined: '招待が拒否されました',
+        ongoing_games: '進行中の対戦', spectate: '観戦',
+        draft_info: 'ドラフト', draft_complete: 'ドラフト完了', draft_waiting: '相手のドラフト完了を待っています',
+        draft_cost: 'コスト', select_this_event: 'このイベントを選択',
+        event_selected: 'イベント選択済み', event_waiting: '相手のイベント選択を待っています',
+        drag_to_play: 'ドラッグしてプレイ', cannot_play: 'プレイ不可',
+        enemy_attack: '敵の攻撃', enemy_skill: '敵のスキル', enemy_destroy_equip: '敵の装備破壊',
+        use_card: '使用', insufficient_resources: 'リソース不足',
+        choose_attack_for: '攻撃カードを選択', choose_equip_for: '装備を選択',
+        choose_discard_for: '捨て札を選択', choose_from_deck_for: 'デッキから選択',
+        choose_from_discard_for: '捨て札から選択', choose_hand_for: '手札から選択',
+        choose_from_enemy_hand_for: '相手の手札から選択',
+        choose_attack_group_for: '攻撃グループを選択',
+        no_attack_cards: '攻撃カードなし', no_enemy_equipment: '敵の装備なし',
+        no_enemy_hand: '敵の手札なし', deck_empty: 'デッキ空', discard_empty: '捨て札空',
+        no_same_attack: '同じ攻撃カードなし',
+        confirm_surrender: '降参しますか？', request_rematch: '再戦をリクエスト',
+        opponent_rematch: '相手が再戦をリクエストしています', rematch_sent: '再戦リクエスト送信済み',
+        rematch_waiting: '相手の確認待ち', rematch_agreed: '再戦が合意されました',
+        agree_rematch: '再戦に同意', you_win: '勝利！', you_lose: '敗北！',
+        send: '送信', cancel: 'キャンセル', ok: 'OK', close: '閉じる', notice: 'お知らせ',
+        opponent_disconnected: '相手が切断しました', opponent_reconnected: '相手が再接続しました',
+        reconnect_title: '再接続', reconnect_prompt: '前の対戦に再接続しますか？',
+        reconnecting: '再接続中...', reconnect_timeout: '再接続タイムアウト',
+        mod_mismatch_title: 'Mod不一致', mod_mismatch_msg: 'Modが一致しません。対戦を開始できません',
+        switch_perspective: '視点切替', leave_spectate: '観戦終了',
+        switch_to_perspective: '{0}の視点に切替',
+        battle_log: 'バトルログ', equip_info: '{0}({1}ターン)', equip_corruption: '[腐敗]',
+        equip_trigger_cost: '{0} 発動:{1}E', status_poison: '毒', status_fire: '火傷',
+        status_toxic: '猛毒', status_triangle: '三角形', status_dodge: '回避',
+        status_nazar: 'ナザール', status_equip_protect: '装備保護', status_invincible: '無敵',
+        status_stunned: 'スタン', status_attack_blocked: '攻撃封印', status_attack_only: '攻撃のみ',
+        status_untargetable: '対象不可', status_bandage: '包帯', status_sponge: 'スポンジ',
+        status_shovel: 'シャベル',
+        flag_precision: '精密', flag_exile: '追放', flag_non_stackable: '非スタック',
+        flag_indestructible: '破壊不可', flag_sprout: '発芽', flag_symbiosis: '共生',
+        choose_convert_count: '変換回数を選択', choose_magic_card_n: 'マジックカード第{0}枚',
+        choose_source_card_n: 'ソースカード第{0}枚', choose_light_cards: '光変換カードを選択',
+        choose_yggdrasil_card: 'ユグドラシル変換カードを選択', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
+        selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません',
+        deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
+        hand_deck_info_opp: '手札:{0} デッキ:{1}',
+        hand_deck_discard_info: '手札:{0} デッキ:{1} 捨て札:{2}',
+        round_status: '第{0}ターン - {1}',
+        server_broadcast: 'サーバー: {0}', error_msg: 'エラー: {0}',
+        lobby_status: 'ロビー - {0}', no_counter_countdown: 'カウンターなし({0})',
+        select_event_desc: 'オープニングイベントを選択',
+        opponent_selected: '相手が選択済み', opponent_selecting: '相手が選択中...',
+        card_type_thorn: '棘', card_type_bloom: '花', card_type_root: '根', card_type_guard: '守護',
+        settings_title: '設定', settings_appearance: '外観', settings_theme: 'テーマ',
+        settings_lang: '言語', settings_mods: 'Mod', settings_theme_light: 'ライト',
+        settings_theme_dark: 'ダーク', no_games: '進行中の対戦なし',
+        back_to_home: 'ホームに戻る', settings_btn: '設定',
+        settings_server: 'サーバー', settings_server_addr: 'アドレス',
+        not_your_turn: 'あなたのターンではありません', counter_insufficient: 'ヒント：カウンターに必要なリソースが不足しています', default_status: 'Garden of Thorn',
+        game_loading: '読み込み中...', server_no_response: 'サーバーが応答しません。接続を確認してください。',
     }
 };
 
@@ -259,6 +543,7 @@ function applyTheme(theme) {
 function applyLang(lang) {
     currentLang = lang;
     localStorage.setItem('got_lang', lang);
+    document.documentElement.setAttribute('lang', lang);
     const sel = $('settings-lang-select');
     if (sel) sel.value = lang;
     updateStaticText();
@@ -283,7 +568,11 @@ function updateStaticText() {
     const langSelect = $('settings-lang-select');
     if (langSelect) {
         langSelect.options[0].textContent = '简体中文';
-        langSelect.options[1].textContent = 'English';
+        langSelect.options[1].textContent = 'English (US)';
+        langSelect.options[2].textContent = 'Français';
+        langSelect.options[3].textContent = 'Português (Brasil)';
+        langSelect.options[4].textContent = 'Русский';
+        langSelect.options[5].textContent = '日本語';
     }
     const btnSettings = $('btn-open-settings');
     if (btnSettings) btnSettings.textContent = UI.settings_btn;
@@ -313,7 +602,30 @@ function showView(viewId) {
 
 function updateStatus(text) {
     const s = $('status-text');
-    if (s) s.textContent = text;
+    if (s) {
+        s.textContent = text;
+        s.style.color = '';
+        s.style.fontWeight = '';
+    }
+}
+
+let _statusTimeout = null;
+let _prevStatusText = '';
+function flashStatus(text, duration) {
+    const s = $('status-text');
+    if (!s) return;
+    if (_statusTimeout) { clearTimeout(_statusTimeout); _statusTimeout = null; }
+    else { _prevStatusText = s.textContent || ''; }
+    s.textContent = text;
+    s.style.color = '#C0392B';
+    s.style.fontWeight = '700';
+    _statusTimeout = setTimeout(() => {
+        s.style.color = '';
+        s.style.fontWeight = '';
+        s.textContent = _prevStatusText || UI.default_status;
+        _prevStatusText = '';
+        _statusTimeout = null;
+    }, duration || 2000);
 }
 
 function showModal(html) {
@@ -493,7 +805,7 @@ function connectSocket(serverUrl) {
     });
     socket.on('disconnect', () => {
         console.log('[客户端] Socket已断开');
-        updateStatus(UI.disconnected);
+        flashStatus(UI.disconnected, 3000);
         phase = 'connecting';
     });
     socket.on('login_ok', (data) => {
@@ -538,7 +850,7 @@ function connectSocket(serverUrl) {
         };
     });
     socket.on('invite_declined', () => {
-        updateStatus(UI.invite_declined);
+        flashStatus(UI.invite_declined, 2000);
     });
     socket.on('game_phase', (data) => {
         console.log('[客户端] 收到game_phase:', data.phase);
@@ -591,6 +903,7 @@ function connectSocket(serverUrl) {
         }
     });
     socket.on('response_request', (data) => {
+        console.log('[RESPONSE] 收到response_request, counter_cards:', (data.counter_cards || []).length);
         responsePending = true;
         responseData = data;
         showResponseUI(data);
@@ -611,7 +924,6 @@ function connectSocket(serverUrl) {
     });
     socket.on('server_error', (data) => {
         console.log('[客户端] 收到server_error:', data.message);
-        updateStatus(UI.error_msg.replace('{0}', data.message || ''));
         gameAlert(UI.notice, data.message || '');
         pendingPlayCard = null;
     });
@@ -631,7 +943,7 @@ function connectSocket(serverUrl) {
         }
     });
     socket.on('opponent_reconnected', () => {
-        updateStatus(UI.opponent_reconnected);
+        flashStatus(UI.opponent_reconnected, 2000);
         hideModal();
     });
     socket.on('reconnect_available', (data) => {
@@ -653,7 +965,7 @@ function connectSocket(serverUrl) {
         };
     });
     socket.on('reconnect_timeout', () => {
-        updateStatus(UI.reconnect_timeout);
+        flashStatus(UI.reconnect_timeout, 3000);
         phase = 'lobby';
     });
     socket.on('rematch_requested', () => {
@@ -685,7 +997,7 @@ function connectSocket(serverUrl) {
         showView('view-lobby');
     });
     socket.on('server_broadcast', (data) => {
-        updateStatus(UI.server_broadcast.replace('{0}', data.message || ''));
+        flashStatus(UI.server_broadcast.replace('{0}', data.message || ''), 4000);
     });
 }
 
@@ -1051,6 +1363,85 @@ async function showCardConversionChoice(draftPicks, maxCount, title) {
     return null;
 }
 
+function debugLayout() {
+    const gc = document.querySelector('.game-container');
+    const view = document.getElementById('view-game');
+    const app = document.getElementById('app');
+    const oppSection = gc ? gc.querySelector('.opp-section') : null;
+    const playerSection = gc ? gc.querySelector('.player-section') : null;
+    const middleSection = gc ? gc.querySelector('.middle-section') : null;
+    const battleLog = gc ? gc.querySelector('.battle-log') : null;
+    const logContent = gc ? gc.querySelector('.log-content') : null;
+    const logHeader = gc ? gc.querySelector('.log-header') : null;
+    
+    console.log('[LAYOUT DEBUG] =====');
+    console.log('[LAYOUT DEBUG] app: display=', app ? getComputedStyle(app).display : '?', 
+                'height=', app ? app.clientHeight : '?',
+                'computedH=', app ? getComputedStyle(app).height : '?');
+    console.log('[LAYOUT DEBUG] view-game: display=', view ? getComputedStyle(view).display : '?',
+                'flex=', view ? getComputedStyle(view).flex : '?',
+                'height=', view ? view.clientHeight : '?',
+                'computedH=', view ? getComputedStyle(view).height : '?');
+    console.log('[LAYOUT DEBUG] game-container: display=', gc ? getComputedStyle(gc).display : '?',
+                'gridRows=', gc ? getComputedStyle(gc).gridTemplateRows : '?',
+                'height=', gc ? gc.clientHeight : '?',
+                'computedH=', gc ? getComputedStyle(gc).height : '?');
+    console.log('[LAYOUT DEBUG] opp-section: gridRow=', oppSection ? getComputedStyle(oppSection).gridRow : '?',
+                'height=', oppSection ? oppSection.offsetHeight : '?');
+    console.log('[LAYOUT DEBUG] middle-section: gridRow=', middleSection ? getComputedStyle(middleSection).gridRow : '?',
+                'display=', middleSection ? getComputedStyle(middleSection).display : '?',
+                'flexDir=', middleSection ? getComputedStyle(middleSection).flexDirection : '?',
+                'height=', middleSection ? middleSection.offsetHeight : '?',
+                'computedH=', middleSection ? getComputedStyle(middleSection).height : '?');
+    console.log('[LAYOUT DEBUG] player-section: gridRow=', playerSection ? getComputedStyle(playerSection).gridRow : '?',
+                'height=', playerSection ? playerSection.offsetHeight : '?');
+    console.log('[LAYOUT DEBUG] battle-log: flex=', battleLog ? getComputedStyle(battleLog).flex : '?',
+                'height=', battleLog ? battleLog.offsetHeight : '?',
+                'computedH=', battleLog ? getComputedStyle(battleLog).height : '?');
+    console.log('[LAYOUT DEBUG] log-header: height=', logHeader ? logHeader.offsetHeight : '?');
+    console.log('[LAYOUT DEBUG] log-content: flex=', logContent ? getComputedStyle(logContent).flex : '?',
+                'maxHeight=', logContent ? getComputedStyle(logContent).maxHeight : '?',
+                'height=', logContent ? logContent.offsetHeight : '?',
+                'computedH=', logContent ? getComputedStyle(logContent).height : '?');
+    console.log('[LAYOUT DEBUG] sum=', (oppSection ? oppSection.offsetHeight : 0) + (middleSection ? middleSection.offsetHeight : 0) + (playerSection ? playerSection.offsetHeight : 0));
+}
+
+function adjustCardSize() {
+    const gc = document.querySelector('.game-container');
+    if (!gc) return;
+    const oppSection = gc.querySelector('.opp-section');
+    const playerSection = gc.querySelector('.player-section');
+    if (!oppSection || !playerSection) return;
+    const gcHeight = gc.clientHeight;
+    if (gcHeight <= 0) return;
+    const oppH = oppSection.offsetHeight;
+    const playerH = playerSection.offsetHeight;
+    const totalNeeded = oppH + playerH;
+    if (totalNeeded <= gcHeight) return;
+    const currentCardW = gc.querySelector('.card') ? gc.querySelector('.card').offsetWidth : 100;
+    const scale = gcHeight / totalNeeded;
+    const newW = Math.max(40, Math.floor(currentCardW * scale * 0.9));
+    gc.style.setProperty('--card-w', newW + 'px');
+    requestAnimationFrame(() => {
+        const oppH2 = oppSection.offsetHeight;
+        const playerH2 = playerSection.offsetHeight;
+        const total2 = oppH2 + playerH2;
+        if (total2 > gcHeight) {
+            const newerW = Math.max(40, Math.floor(newW * gcHeight / total2 * 0.9));
+            gc.style.setProperty('--card-w', newerW + 'px');
+        }
+    });
+}
+
+let _adjustTimer = null;
+function scheduleAdjust() {
+    if (_adjustTimer) clearTimeout(_adjustTimer);
+    _adjustTimer = setTimeout(() => {
+        adjustCardSize();
+        _adjustTimer = null;
+    }, 80);
+}
+
 function isMyTurn() {
     if (!gameState) return false;
     if (playerId < 0) return false;
@@ -1117,6 +1508,8 @@ function renderGame(data) {
     if (oppInfo) oppInfo.textContent = UI.hand_deck_info_opp.replace('{0}', opp.hand_count || 0).replace('{1}', opp.deck_count || 0);
     const youInfo = $('you-info');
     if (youInfo) youInfo.textContent = UI.hand_deck_discard_info.replace('{0}', you.hand_count || 0).replace('{1}', you.deck_count || 0).replace('{2}', you.discard_count || 0);
+    scheduleAdjust();
+    setTimeout(debugLayout, 200);
 }
 
 function renderPlayerBars(containerId, playerData) {
@@ -1360,7 +1753,7 @@ async function onPlayCard(cardInstanceId) {
     const cardDict = hand.find(c => c.instance_id === cardInstanceId);
     if (!cardDict) return;
     if (!canPlayCard(cardDict)) {
-        updateStatus(UI.cannot_play);
+        flashStatus(UI.cannot_play, 2000);
         return;
     }
     const choice = await getCardChoice(cardDict);
@@ -1450,14 +1843,23 @@ function showResponseUI(data) {
     const you = gameState.you || {};
     const myElixir = you.elixir || 0;
     const myMagic = you.magic || 0;
-    let hasAffordable = false;
-    counterCards.forEach(cc => {
-        const ccDef = getCardDef(cc.def_id);
-        if (ccDef && ccDef.cost_e <= myElixir && ccDef.cost_m <= myMagic) hasAffordable = true;
-    });
-    if (!counterCards.length || !hasAffordable) {
+    console.log('[RESPONSE] showResponseUI: counterCards=', counterCards.length, 'myElixir=', myElixir, 'myMagic=', myMagic);
+    if (!counterCards.length) {
+        console.log('[RESPONSE] 无反制牌，自动跳过');
         onRespond(null);
         return;
+    }
+    let hasAffordable = false;
+    const cardCosts = counterCards.map(cc => {
+        const ccDef = getCardDef(cc.def_id);
+        const costE = cc.cost_e_override != null ? cc.cost_e_override : (ccDef ? ccDef.cost_e : 0);
+        const costM = cc.cost_m_override != null ? cc.cost_m_override : (ccDef ? ccDef.cost_m : 0);
+        const canAfford = costE <= myElixir && costM <= myMagic;
+        if (canAfford) hasAffordable = true;
+        return { cc, ccDef, costE, costM, canAfford };
+    });
+    if (!hasAffordable) {
+        flashStatus(UI.counter_insufficient, 3000);
     }
     const container = $('response-panel');
     if (!container) { onRespond(null); return; }
@@ -1477,18 +1879,19 @@ function showResponseUI(data) {
     label.className = 'response-label';
     label.innerHTML = `⚠ ${triggerDesc}：${cardName}`;
     container.appendChild(label);
-    counterCards.forEach(cc => {
-        const ccDef = getCardDef(cc.def_id);
+    const btnRow = document.createElement('div');
+    btnRow.className = 'response-btn-row';
+    cardCosts.forEach(({ cc, ccDef, costE, costM, canAfford }) => {
         if (!ccDef) return;
-        const canAfford = ccDef.cost_e <= myElixir && ccDef.cost_m <= myMagic;
-        const costStr = ccDef.cost_m === 0 ? `${ccDef.cost_e}E` : `${ccDef.cost_e}E/${ccDef.cost_m}M`;
+        const costStr = costM === 0 ? `${costE}E` : `${costE}E/${costM}M`;
         const btn = document.createElement('button');
         btn.className = 'btn ' + (canAfford ? 'btn-primary' : 'btn-counter-disabled');
-        btn.textContent = `${UI.use_card.replace('{0}', getCardName(ccDef)).replace('{1}', costStr)}${canAfford ? '' : ' ' + UI.insufficient_resources}`;
+        btn.textContent = `${getCardName(ccDef)}[${costStr}]`;
         btn.disabled = !canAfford;
         btn.onclick = () => onRespond(cc.instance_id);
-        container.appendChild(btn);
+        btnRow.appendChild(btn);
     });
+    container.appendChild(btnRow);
     responseCountdown = 5;
     const passBtn = document.createElement('button');
     passBtn.className = 'btn btn-danger';
@@ -1695,12 +2098,7 @@ function onEndTurn() {
     console.log('[END_TURN] socket=', !!socket, 'socket.id=', socket ? socket.id : 'N/A');
     console.log('[END_TURN] socket.connected=', socket ? socket.connected : 'N/A');
     if (!isMyTurn()) {
-        let reason = '';
-        if (gameState.phase !== 'action') reason = '当前阶段: ' + gameState.phase;
-        else if (gameState.current_player !== playerId) reason = '不是你的回合';
-        else reason = '未知原因';
-        console.log('[END_TURN] 不是你的回合, reason=', reason);
-        gameAlert(UI.notice, reason);
+        flashStatus(UI.not_your_turn, 2000);
         return;
     }
     if (socket) {
@@ -1713,7 +2111,7 @@ function onEndTurn() {
         setTimeout(() => {
             if (gameState.phase === oldPhase && gameState.current_player === oldPlayer) {
                 console.log('[END_TURN] 3秒后状态未变化，可能服务端未处理');
-                gameAlert(UI.notice, '服务器未响应，请检查网络连接或刷新页面重试');
+                flashStatus(UI.server_no_response, 3000);
             }
         }, 3000);
     } else {
@@ -1943,29 +2341,6 @@ function setupFullscreenPrompt() {
             if (rotateHint) rotateHint.style.display = 'none';
         };
     }
-    if (!isMobile) return;
-    const dismissed = sessionStorage.getItem('got_fullscreen_dismissed');
-    if (dismissed) return;
-    const prompt = document.getElementById('fullscreen-prompt');
-    if (!prompt) return;
-    prompt.classList.remove('hidden');
-    const btnFs = document.getElementById('btn-fullscreen');
-    const btnDismiss = document.getElementById('btn-dismiss-fullscreen');
-    if (btnFs) {
-        btnFs.onclick = () => {
-            const el = document.documentElement;
-            if (el.requestFullscreen) el.requestFullscreen();
-            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-            prompt.classList.add('hidden');
-            sessionStorage.setItem('got_fullscreen_dismissed', '1');
-        };
-    }
-    if (btnDismiss) {
-        btnDismiss.onclick = () => {
-            prompt.classList.add('hidden');
-            sessionStorage.setItem('got_fullscreen_dismissed', '1');
-        };
-    }
 }
 
 async function init() {
@@ -2026,4 +2401,9 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+window.addEventListener('resize', () => {
+    const gc = document.querySelector('.game-container');
+    if (gc) gc.style.removeProperty('--card-w');
+    scheduleAdjust();
+});
 console.log('[LOAD] game.js 已加载, onEndTurn=', typeof onEndTurn);

@@ -412,7 +412,7 @@ body {
   }
 
   .card {
-    width: clamp(60px, calc((100vw - 40px) / 7.5), 110px);
+    width: var(--card-w, clamp(60px, min(calc((100vw - 40px) / 7.5), calc((100vh - 240px) * 63 / 88)), 110px));
   }
 
   .card-name {
@@ -530,27 +530,19 @@ body {
   }
 
   .log-content {
-    max-height: 60px;
   }
 
   .middle-section {
-    flex-direction: column;
     min-height: 40px;
-    max-height: 80px;
     overflow: hidden;
+    flex-direction: column;
   }
 
   .battle-log .log-content {
-    max-height: 50px;
   }
 
   .player-section {
     min-height: auto;
-    flex-shrink: 1;
-  }
-
-  .opp-section {
-    flex-shrink: 1;
   }
 
   .opp-section .opp-hand-row .card {
@@ -768,7 +760,6 @@ body {
   }
 
   .log-content {
-    max-height: 40px;
   }
 
   .player-section {
@@ -1356,33 +1347,34 @@ body {
 }
 
 .game-container {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
   width: 100%;
-  flex: 1;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 
 .opp-section {
-  flex-shrink: 1;
+  grid-row: 1;
   min-height: 0;
   border-bottom: 1px solid var(--border-color);
   background: rgba(0, 0, 0, 0.03);
 }
 
 .player-section {
-  flex-shrink: 1;
+  grid-row: 3;
   min-height: 0;
   border-top: 1px solid var(--border-color);
   background: rgba(0, 0, 0, 0.03);
 }
 
 .middle-section {
-  flex: 1 1 0%;
-  min-height: 80px;
+  grid-row: 2;
+  min-height: 40px;
   overflow: hidden;
   display: flex;
+  flex-direction: column;
 }
 
 .player-info-bar {
@@ -1450,7 +1442,7 @@ body {
   gap: 8px;
   padding: 4px 12px 6px;
   min-height: 0;
-  flex: 1 1 0%;
+  flex: 0 0 auto;
   overflow: hidden;
 }
 
@@ -1664,7 +1656,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   user-select: none;
-  width: clamp(80px, calc((100vw - 60px) / 7.5), 140px);
+  width: var(--card-w, clamp(60px, min(calc((100vw - 60px) / 7.5), calc((100vh - 280px) * 63 / 88)), 140px));
   aspect-ratio: 63/88;
   flex-shrink: 0;
   container-type: inline-size;
@@ -2000,7 +1992,7 @@ body {
 }
 
 .play-zone {
-  width: clamp(80px, calc((100vw - 60px) / 7.5), 140px);
+  width: var(--card-w, clamp(60px, min(calc((100vw - 60px) / 7.5), calc((100vh - 280px) * 63 / 88)), 140px));
   aspect-ratio: 63/88;
   border: 2px dashed var(--border-light);
   border-radius: var(--radius-lg);
@@ -2067,6 +2059,7 @@ body {
   min-width: 0;
   overflow: hidden;
   min-height: 0;
+  width: 100%;
 }
 
 .battle-log .log-header {
@@ -2124,7 +2117,6 @@ body {
 .log-chat {
   color: #88ccff;
   font-size: 11px;
-  font-style: italic;
 }
 
 .log-entry.damage {
@@ -2159,7 +2151,6 @@ body {
 .log-entry.chat {
   color: #88ccff;
   font-size: 11px;
-  font-style: italic;
 }
 
 .log-entry.info {
@@ -2198,6 +2189,21 @@ body {
   font-weight: 700;
   color: var(--damage);
   margin-right: 8px;
+}
+
+.response-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.btn-counter-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(128, 128, 128, 0.15);
+  color: #999;
+  border-color: rgba(128, 128, 128, 0.3);
 }
 
 .counter-btn {
@@ -3297,11 +3303,11 @@ body {
 
 @media (max-aspect-ratio: 4/3) {
   .card {
-    width: clamp(50px, calc((100vw - 80px) / 7.5), 110px);
+    width: var(--card-w, clamp(50px, min(calc((100vw - 80px) / 7.5), calc((100vh - 240px) * 63 / 88)), 110px));
   }
 
   .play-zone {
-    width: clamp(50px, calc((100vw - 80px) / 7.5), 110px);
+    width: var(--card-w, clamp(50px, min(calc((100vw - 80px) / 7.5), calc((100vh - 240px) * 63 / 88)), 110px));
     aspect-ratio: 63/88;
   }
 
@@ -3386,28 +3392,25 @@ body {
   }
 
   .middle-section {
-    flex: 1 1 0%;
-    min-height: 50px;
-    max-height: 35vh;
+    min-height: 40px;
   }
 
   .player-section {
-    flex: 1 1 0%;
-    min-height: 0;
+    min-height: auto;
   }
 
   .opp-section {
-    flex: 0 0 auto;
+    min-height: auto;
   }
 }
 
 @media (max-aspect-ratio: 1/1) {
   .card {
-    width: clamp(45px, calc((100vw - 80px) / 7.5), 100px);
+    width: var(--card-w, clamp(45px, min(calc((100vw - 80px) / 7.5), calc((100vh - 220px) * 63 / 88)), 100px));
   }
 
   .play-zone {
-    width: clamp(45px, calc((100vw - 80px) / 7.5), 100px);
+    width: var(--card-w, clamp(45px, min(calc((100vw - 80px) / 7.5), calc((100vh - 220px) * 63 / 88)), 100px));
     aspect-ratio: 63/88;
   }
 
@@ -3493,18 +3496,15 @@ body {
   }
 
   .middle-section {
-    flex: 1 1 0%;
-    min-height: 40px;
-    max-height: 30vh;
+    min-height: 30px;
   }
 
   .player-section {
-    flex: 1 1 0%;
-    min-height: 0;
+    min-height: auto;
   }
 
   .opp-section {
-    flex: 0 0 auto;
+    min-height: auto;
   }
 
   .opp-section .opp-hand-row .card {
@@ -3537,6 +3537,25 @@ body {
   .play-zone {
     width: clamp(60px, calc((100vh - 80px) / 7.5 * 63 / 88), 140px);
   }
+}
+
+[lang="en"] .card-name,
+[lang="fr"] .card-name,
+[lang="pt"] .card-name,
+[lang="ru"] .card-name {
+  font-size: 8.5cqi;
+}
+
+[lang="en"] .card-costs .card-name,
+[lang="fr"] .card-costs .card-name,
+[lang="pt"] .card-costs .card-name,
+[lang="ru"] .card-costs .card-name {
+  font-size: 8.5cqi;
+}
+
+[lang="ja"] .card-name,
+[lang="ja"] .card-costs .card-name {
+  font-size: 8.5cqi;
 }
 
 .fullscreen-prompt {
