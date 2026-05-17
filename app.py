@@ -637,14 +637,15 @@ def on_disconnect():
                 del players[sid]
                 broadcast_lobby()
                 return
-            for other_sid in room.player_sids:
-                if other_sid != sid and other_sid in players:
-                    socketio.emit('opponent_disconnected', {}, room=other_sid)
-                    players[other_sid]['room_id'] = None
-                    players[other_sid]['status'] = 'lobby'
-            for t in room.reconnect_timers.values():
-                t.cancel()
-            del rooms[room_id]
+            if pidx >= 0 and room.engine.phase == 'game_over':
+                for other_sid in room.player_sids:
+                    if other_sid != sid and other_sid in players:
+                        socketio.emit('opponent_disconnected', {'timeout': True}, room=other_sid)
+                        players[other_sid]['room_id'] = None
+                        players[other_sid]['status'] = 'lobby'
+                for t in room.reconnect_timers.values():
+                    t.cancel()
+                del rooms[room_id]
         for inv_sid, target_sid in list(invites.items()):
             if inv_sid == sid or target_sid == sid:
                 del invites[inv_sid]

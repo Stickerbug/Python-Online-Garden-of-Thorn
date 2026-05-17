@@ -46,8 +46,8 @@ const I18N = {
         status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻',
         status_untargetable: '不可选', status_bandage: '绷带', status_sponge: '海绵',
         status_shovel: '铲子',
-        flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不叠加',
-        flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生',
+        flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加',
+        flag_indestructible: '不可被摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生',
         choose_convert_count: '选择转换次数', choose_magic_card_n: '选择第{0}张魔法牌',
         choose_source_card_n: '选择第{0}张源牌', choose_light_cards: '选择光明转换牌',
         choose_yggdrasil_card: '选择世界树转换牌', convert_label: '转换', convert_per_type: '每种最多{0}张',
@@ -63,7 +63,7 @@ const I18N = {
         card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard',
         settings_title: '设置', settings_appearance: '外观', settings_theme: '主题',
         settings_lang: '语言', settings_mods: '模组', settings_theme_light: '明亮',
-        settings_theme_dark: '深色', no_games: '暂无进行中的对局',
+        settings_theme_dark: '黑暗', no_games: '暂无进行中的对局',
         back_to_home: '返回主页', settings_btn: '设置',
         settings_server: '服务器', settings_server_addr: '地址',
     },
@@ -544,6 +544,7 @@ function connectSocket(serverUrl) {
         console.log('[客户端] 收到game_phase:', data.phase);
         phase = data.phase;
         if (phase === 'draft') {
+            rematchRequestedByOpponent = false;
             showView('view-draft');
         } else if (phase === 'event_select') {
             showView('view-event-select');
@@ -615,11 +616,15 @@ function connectSocket(serverUrl) {
         if (data && data.timeout) {
             updateStatus(UI.opponent_disconnected);
             socket.emit('return_lobby');
+            showView('view-lobby');
+            phase = 'lobby';
         } else if (data && data.reconnect_timeout > 0) {
             showOpponentDCWaiting(data);
         } else {
             updateStatus(UI.opponent_disconnected);
             socket.emit('return_lobby');
+            showView('view-lobby');
+            phase = 'lobby';
         }
     });
     socket.on('opponent_reconnected', () => {
@@ -649,10 +654,13 @@ function connectSocket(serverUrl) {
         phase = 'lobby';
     });
     socket.on('rematch_requested', () => {
+        rematchRequestedByOpponent = true;
         const btn = $('btn-rematch');
         if (btn) {
             btn.textContent = UI.agree_rematch;
+            btn.disabled = false;
             btn.onclick = () => {
+                if (!socket) return;
                 socket.emit('rematch');
                 btn.textContent = UI.rematch_sent;
                 btn.disabled = true;
@@ -774,12 +782,15 @@ function renderDraft(data, isReroll) {
     const round = data.round || 0;
     const totalRounds = data.total_rounds || 15;
     const oppPicksCount = data.opponent_picks_count || 0;
+    const prevPicks = draftState ? (draftState.picks || []).length : -1;
+    const iJustPicked = picks.length > prevPicks;
+    const shouldAnimate = isReroll || iJustPicked;
     const info = $('draft-info');
     if (info) {
         if (picks.length >= totalRounds) {
-            info.textContent = `${UI.draft_complete} | ${UI.draft_selected}: ${picks.length} | ${UI.waiting_opponent}: ${oppPicksCount}`;
+            info.textContent = `${UI.draft_complete} | ${UI.waiting_opponent}: ${oppPicksCount}`;
         } else {
-            info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_selected}: ${picks.length} | ${UI.draft_reroll}: ${rerolls}`;
+            info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${UI.waiting_opponent}: ${oppPicksCount}`;
         }
     }
     const optionsEl = $('draft-options');
@@ -792,16 +803,20 @@ function renderDraft(data, isReroll) {
                 const card = createCardElement(opt, {});
                 card.style.cursor = 'pointer';
                 card.onclick = () => socket.emit('draft_pick', { def_id: opt.def_id });
-                card.style.opacity = '0';
-                card.style.transform = 'scale(0.6)';
-                card.style.transition = 'opacity 0.15s ease-out, transform 0.15s ease-out';
-                card.style.transitionDelay = (i * 0.05) + 's';
-                requestAnimationFrame(() => {
+                if (shouldAnimate) {
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(0.6)';
+                    card.style.transition = 'opacity 0.15s ease-out, transform 0.15s ease-out';
+                    if (isReroll) {
+                        card.style.transitionDelay = (i * 0.05) + 's';
+                    }
                     requestAnimationFrame(() => {
-                        card.style.opacity = '1';
-                        card.style.transform = 'scale(1)';
+                        requestAnimationFrame(() => {
+                            card.style.opacity = '1';
+                            card.style.transform = 'scale(1)';
+                        });
                     });
-                });
+                }
                 optionsEl.appendChild(card);
             });
         }
@@ -859,6 +874,9 @@ function renderEventSelect(data) {
     const oppStatus = document.createElement('div');
     oppStatus.className = 'waiting-msg';
     oppStatus.textContent = oppSelected ? UI.opponent_selected : UI.opponent_selecting;
+    oppStatus.style.width = '100%';
+    oppStatus.style.textAlign = 'center';
+    oppStatus.style.marginBottom = '8px';
     container.appendChild(oppStatus);
     const eventsRow = document.createElement('div');
     eventsRow.className = 'event-options';
@@ -879,7 +897,6 @@ function renderEventSelect(data) {
         card.style.opacity = '0';
         card.style.transform = 'scale(0.6)';
         card.style.transition = 'opacity 0.15s ease-out, transform 0.15s ease-out';
-        card.style.transitionDelay = (i * 0.05) + 's';
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 card.style.opacity = '1';
@@ -1071,12 +1088,6 @@ function renderGame(data) {
         } else {
             playZone.classList.remove('active');
         }
-        playZone.onclick = () => {
-            if (selectedCardId != null) {
-                onPlayCard(selectedCardId);
-                selectedCardId = null;
-            }
-        };
     }
     if (pendingPlayCard) {
         renderPendingCard();
@@ -1188,8 +1199,6 @@ function renderOppHand(oppData) {
     }
 }
 
-let selectedCardId = null;
-
 function renderPlayerHand(playerData) {
     const container = $('you-hand');
     if (!container) return;
@@ -1202,24 +1211,8 @@ function renderPlayerHand(playerData) {
         const card = createCardElement(cardDict, {
             draggable: canPlay && cardDef && cardDef.card_type !== 'guard',
         });
-        if (canPlay && cardDef && cardDef.card_type !== 'guard') {
-            card.addEventListener('dblclick', () => onPlayCard(cardDict.instance_id));
-            card.addEventListener('click', () => {
-                if (selectedCardId === cardDict.instance_id) {
-                    onPlayCard(cardDict.instance_id);
-                    selectedCardId = null;
-                } else {
-                    selectedCardId = cardDict.instance_id;
-                    document.querySelectorAll('#you-hand .card').forEach(c => c.classList.remove('card-selected'));
-                    card.classList.add('card-selected');
-                }
-            });
-        }
         if (!canPlay) {
             card.classList.add('card-disabled');
-        }
-        if (selectedCardId === cardDict.instance_id) {
-            card.classList.add('card-selected');
         }
         container.appendChild(card);
     });
@@ -1614,6 +1607,8 @@ async function showChoiceUI(data) {
     choicePending = false;
 }
 
+let rematchRequestedByOpponent = false;
+
 function renderGameOver(data) {
     showView('view-gameover');
     const gs = data || gameState;
@@ -1637,12 +1632,33 @@ function renderGameOver(data) {
     }
     const rematchBtn = $('btn-rematch');
     if (rematchBtn) {
-        rematchBtn.textContent = UI.rematch;
-        rematchBtn.disabled = false;
-        rematchBtn.onclick = () => {
-            socket.emit('rematch');
-            rematchBtn.textContent = UI.rematch_sent;
-            rematchBtn.disabled = true;
+        if (rematchRequestedByOpponent) {
+            rematchBtn.textContent = UI.agree_rematch;
+            rematchBtn.disabled = false;
+            rematchBtn.onclick = () => {
+                if (!socket) return;
+                socket.emit('rematch');
+                rematchBtn.textContent = UI.rematch_sent;
+                rematchBtn.disabled = true;
+            };
+        } else {
+            rematchBtn.textContent = UI.rematch;
+            rematchBtn.disabled = false;
+            rematchBtn.onclick = () => {
+                if (!socket) return;
+                socket.emit('rematch');
+                rematchBtn.textContent = UI.rematch_sent;
+                rematchBtn.disabled = true;
+            };
+        }
+    }
+    const returnLobbyBtn = $('btn-return-lobby');
+    if (returnLobbyBtn) {
+        returnLobbyBtn.onclick = () => {
+            if (!socket) return;
+            socket.emit('return_lobby');
+            showView('view-lobby');
+            phase = 'lobby';
         };
     }
 }
@@ -1906,12 +1922,11 @@ function initModEditor() {
 }
 
 function setupFullscreenPrompt() {
+    const rotateHint = document.getElementById('rotate-hint');
+    if (rotateHint) rotateHint.style.display = 'none';
     const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent) || 
                      (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
-    if (!isMobile) {
-        const rotateHint = document.getElementById('rotate-hint');
-        if (rotateHint) rotateHint.style.display = 'none';
-    }
+    if (!isMobile) return;
     const rotateDismiss = document.getElementById('btn-dismiss-rotate');
     if (rotateDismiss) {
         rotateDismiss.onclick = () => {
@@ -1975,7 +1990,11 @@ async function init() {
     $('btn-surrender').addEventListener('click', onSurrender);
     $('btn-view-deck').addEventListener('click', onViewDeck);
     $('btn-rematch').addEventListener('click', () => { if (socket) socket.emit('rematch'); });
-    $('btn-return-lobby').addEventListener('click', () => { if (socket) socket.emit('return_lobby'); });
+    $('btn-return-lobby').addEventListener('click', () => {
+        if (socket) socket.emit('return_lobby');
+        showView('view-lobby');
+        phase = 'lobby';
+    });
     $('btn-leave-spectate').addEventListener('click', () => { if (socket) socket.emit('leave_spectate'); });
     $('btn-switch-perspective').addEventListener('click', () => {
         spectatePerspective = 1 - spectatePerspective;

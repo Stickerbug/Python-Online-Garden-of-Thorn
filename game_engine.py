@@ -408,7 +408,7 @@ class GameEngine:
             if ct in ('choose_from_enemy_hand',):
                 opp_data['hand'] = [c.to_dict() for c in self.players[opponent].hand]
         if self._antenna_reveal[for_player]:
-            opp_data['revealed_hand'] = self._antenna_reveal[for_player]
+            opp_data['revealed_hand'] = [c.to_dict() for c in self.players[opponent].hand]
         return {
             'phase': self.phase,
             'current_player': self.current_player,
@@ -1070,6 +1070,8 @@ class GameEngine:
         ps = self.players[player_id]
         opp = self.players[1 - player_id]
         result = {'success': True, 'card': card.to_dict()}
+        if card.card_type == 'thorn' and (card.fission_count > 0 or card.fusion_multiplier > 1):
+            self.log_msg(f"[特效] {card.name_cn} fission={card.fission_count} fusion={card.fusion_multiplier}")
         if self.negated_card and card.card_type == 'bloom':
             self.negated_card = False
             self.log_msg(f"{self.pn(player_id)}的{card.name_cn}被魔法泡泡反制，失效！")
@@ -1255,6 +1257,8 @@ class GameEngine:
         amount = params.get('amount', 6)
         hits = params.get('hits', 1)
         is_precision = params.get('is_precision', False)
+        amount = self._fission_dmg(amount, card)
+        amount = int(amount * card.fusion_multiplier)
         dealt = self.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
         self.log_msg(log or f"{self.pn(player_id)}对{self.pn(target_id)}造成{dealt}伤害")
 
