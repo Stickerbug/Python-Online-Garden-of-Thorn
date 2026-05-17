@@ -544,8 +544,10 @@ function connectSocket(serverUrl) {
         console.log('[客户端] 收到game_phase:', data.phase);
         phase = data.phase;
         if (phase === 'draft') {
+            console.log('[客户端] 进入选牌阶段, rematchRequestedByOpponent重置');
             rematchRequestedByOpponent = false;
             showView('view-draft');
+            updateStatus(UI.draft_phase);
         } else if (phase === 'event_select') {
             showView('view-event-select');
             updateStatus(UI.select_event);
@@ -554,6 +556,7 @@ function connectSocket(serverUrl) {
             updateStatus(UI.game_loading || '游戏加载中...');
         } else if (phase === 'game_over') {
             showView('view-gameover');
+            updateStatus(UI.game_over);
         } else if (phase === 'action' || phase === 'draw' || phase === 'response' || phase === 'choice') {
             showView('view-game');
         }
@@ -575,8 +578,8 @@ function connectSocket(serverUrl) {
         console.log('[客户端] 收到state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null);
         gameState = data;
         phase = data.phase || phase;
-        if (data.your_id != null) playerId = data.your_id;
-        if (data.pending_response != null) {
+        if (!isSpectating && data.your_id != null) playerId = data.your_id;
+        if (!isSpectating && data.pending_response != null) {
             pendingPlayCard = pendingPlayCard || data.pending_response;
         } else if (!responsePending) {
             pendingPlayCard = null;
@@ -654,6 +657,7 @@ function connectSocket(serverUrl) {
         phase = 'lobby';
     });
     socket.on('rematch_requested', () => {
+        console.log('[客户端] 收到rematch_requested');
         rematchRequestedByOpponent = true;
         const btn = $('btn-rematch');
         if (btn) {
@@ -1617,8 +1621,11 @@ function renderGameOver(data) {
     const title = $('gameover-title');
     if (title) {
         title.textContent = isWin ? UI.victory : UI.defeat;
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         title.style.color = isWin ? COLORS.health : COLORS.damage;
-        title.style.background = isWin ? COLORS.health_bg : COLORS.damage_bg;
+        title.style.background = isWin
+            ? (isDark ? 'rgba(46, 204, 113, 0.15)' : COLORS.health_bg)
+            : (isDark ? 'rgba(192, 57, 43, 0.15)' : COLORS.damage_bg);
     }
     const logContainer = $('gameover-log');
     if (logContainer) {
@@ -1636,7 +1643,8 @@ function renderGameOver(data) {
             rematchBtn.textContent = UI.agree_rematch;
             rematchBtn.disabled = false;
             rematchBtn.onclick = () => {
-                if (!socket) return;
+                if (!socket) { console.log('[REMATCH] socket为空，无法发送'); return; }
+                console.log('[REMATCH] 发送rematch事件(同意重赛)');
                 socket.emit('rematch');
                 rematchBtn.textContent = UI.rematch_sent;
                 rematchBtn.disabled = true;
@@ -1645,7 +1653,8 @@ function renderGameOver(data) {
             rematchBtn.textContent = UI.rematch;
             rematchBtn.disabled = false;
             rematchBtn.onclick = () => {
-                if (!socket) return;
+                if (!socket) { console.log('[REMATCH] socket为空，无法发送'); return; }
+                console.log('[REMATCH] 发送rematch事件(请求重赛)');
                 socket.emit('rematch');
                 rematchBtn.textContent = UI.rematch_sent;
                 rematchBtn.disabled = true;
@@ -1989,7 +1998,6 @@ async function init() {
     });
     $('btn-surrender').addEventListener('click', onSurrender);
     $('btn-view-deck').addEventListener('click', onViewDeck);
-    $('btn-rematch').addEventListener('click', () => { if (socket) socket.emit('rematch'); });
     $('btn-return-lobby').addEventListener('click', () => {
         if (socket) socket.emit('return_lobby');
         showView('view-lobby');

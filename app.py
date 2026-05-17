@@ -638,14 +638,30 @@ def on_disconnect():
                 broadcast_lobby()
                 return
             if pidx >= 0 and room.engine.phase == 'game_over':
+                room._rematch_votes.discard(sid)
                 for other_sid in room.player_sids:
                     if other_sid != sid and other_sid in players:
                         socketio.emit('opponent_disconnected', {'timeout': True}, room=other_sid)
-                        players[other_sid]['room_id'] = None
-                        players[other_sid]['status'] = 'lobby'
-                for t in room.reconnect_timers.values():
-                    t.cancel()
-                del rooms[room_id]
+                if not any(s in room.disconnected_players for s in room.player_sids if s != sid):
+                    for t in room.reconnect_timers.values():
+                        t.cancel()
+                    del rooms[room_id]
+                else:
+                    for other_sid in room.player_sids:
+                        if other_sid != sid and other_sid in players:
+                            players[other_sid]['room_id'] = None
+                            players[other_sid]['status'] = 'lobby'
+                    for t in room.reconnect_timers.values():
+                        t.cancel()
+                    del rooms[room_id]
+            if pidx < 0 and player.get('spectating_room') is not None:
+                spec_room_id = player['spectating_room']
+                if spec_room_id is not None and spec_room_id in rooms:
+                    spec_room = rooms[spec_room_id]
+                    if sid in spec_room.spectators:
+                        spec_room.spectators.remove(sid)
+                player['spectating_room'] = None
+                player['spectate_perspective'] = 0
         for inv_sid, target_sid in list(invites.items()):
             if inv_sid == sid or target_sid == sid:
                 del invites[inv_sid]
@@ -1098,36 +1114,46 @@ def on_surrender(data):
 
 
 @socketio.on('rematch')
-def on_rematch(data):
+def on_rematch(data=None):
     sid = request.sid
-    with _lock:
-        if sid not in players:
-            return
-        player = players[sid]
-        room_id = player.get('room_id')
-        if room_id is None or room_id not in rooms:
-            return
-        room = rooms[room_id]
-        room._rematch_votes.add(sid)
-        for other_sid in room.player_sids:
-            if other_sid != sid and other_sid in players:
-                socketio.emit('rematch_requested', {'player_name': player['nickname']}, room=other_sid)
-        if len(room._rematch_votes) == len(room.player_sids):
-            room._rematch_votes = set()
-            room.engine = GameEngine()
-            names = []
-            for pidx, psid in enumerate(room.player_sids):
-                if psid in players:
-                    names.append(players[psid]['nickname'])
-                else:
-                    names.append(f'玩家{pidx + 1}')
-            room.engine.player_names = names
-            room.engine.start_draft()
-            for pidx in range(len(room.player_sids)):
-                psid = room.player_sids[pidx]
-                if psid in players:
-                    socketio.emit('game_phase', {'phase': 'draft'}, room=psid)
-                    send_draft_state(room, pidx)
+    try:
+        with _lock:
+            if sid not in players:
+                print(f'[服务端] rematch: sid {sid[:8]} 不在players中')
+                return
+            player = players[sid]
+            room_id = player.get('room_id')
+            if room_id is None or room_id not in rooms:
+                print(f'[服务端] rematch: room_id={room_id} 无效, rooms={list(rooms.keys())}')
+                return
+            room = rooms[room_id]
+            room._rematch_votes.add(sid)
+            print(f'[服务端] rematch: {player["nickname"]} 投票重赛, 当前投票: {len(room._rematch_votes)}/{len(room.player_sids)}')
+            for other_sid in room.player_sids:
+                if other_sid != sid and other_sid in players:
+                    socketio.emit('rematch_requested', {'player_name': player['nickname']}, room=other_sid)
+            if len(room._rematch_votes) == len(room.player_sids):
+                print(f'[服务端] rematch: 双方同意重赛, 开始新游戏')
+                room._rematch_votes = set()
+                room.engine = GameEngine()
+                names = []
+                for pidx, psid in enumerate(room.player_sids):
+                    if psid in players:
+                        names.append(players[psid]['nickname'])
+                    else:
+                        names.append(f'玩家{pidx + 1}')
+                room.engine.player_names = names
+                room.engine.start_draft()
+                for pidx in range(len(room.player_sids)):
+                    psid = room.player_sids[pidx]
+                    if psid in players:
+                        socketio.emit('game_phase', {'phase': 'draft'}, room=psid)
+                        send_draft_state(room, pidx)
+                print(f'[服务端] rematch: 新游戏已开始, draft_state已发送')
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f'[服务端] rematch异常: {e}')
 
 
 @socketio.on('return_lobby')

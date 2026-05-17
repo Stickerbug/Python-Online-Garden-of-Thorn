@@ -647,8 +647,10 @@ class GameEngine:
             self._end_player_turn(player_id)
             return
         if ps.health <= 0:
-            self._check_game_over()
-            return
+            self._check_yggdrasil(player_id)
+            if ps.health <= 0:
+                self._check_game_over()
+                return
         self.phase = 'action'
 
     def _apply_turn_start_effects(self, player_id: int):
@@ -1102,6 +1104,7 @@ class GameEngine:
                 card.fission_hit = hit_idx
                 self._apply_card_effect(player_id, card)
             card.fission_hit = 0
+            card.fission_count = 0
         if card.card_type == 'root':
             eq = EquipmentInstance(card, player_id)
             if eq.def_id == 'Disc':
@@ -1967,7 +1970,9 @@ class GameEngine:
 
     def _fission_dmg(self, base: int, card: CardInstance) -> int:
         if card.fission_count > 0:
-            return math.ceil(base / (card.fission_count + 1)) + card.fission_hit
+            if card.def_id == 'Triangle':
+                return math.ceil(base / (card.fission_count + 1)) + card.fission_hit
+            return math.ceil(base / (card.fission_count + 1))
         return base
 
     def _effect_basic(self, player_id: int, card: CardInstance, choice=None):
@@ -2247,6 +2252,7 @@ class GameEngine:
                 physical_dmg = poison_layers * 2
                 ps.health -= physical_dmg
                 self.log_msg(f"海绵被摧毁！去除{poison_layers}层中毒，受到{physical_dmg}点物理伤害")
+                self._check_yggdrasil(player_id)
             else:
                 self.log_msg(f"海绵被摧毁！无中毒层数")
         if eq.def_id == 'Pill':

@@ -191,6 +191,13 @@ body {
   background: var(--bg-primary);
 }
 
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -211,9 +218,9 @@ body {
 }
 
 .view {
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1071,16 +1078,9 @@ body {
   margin-left: 6px;
 }
 
-.lobby-player-row .invite-btn {
-  padding: 4px 12px;
-  font-size: 12px;
-  font-family: var(--font-main);
-  background: var(--bloom-bg);
-  color: var(--bloom);
-  border: 1px solid rgba(26, 188, 156, 0.3);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background var(--transition-fast);
+.lobby-player-row .btn-primary {
+  padding: 8px 20px;
+  font-size: 14px;
 }
 
 .lobby-player-row .invite-btn:hover {
@@ -1359,8 +1359,8 @@ body {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100vh;
-  height: 100dvh;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -2395,10 +2395,16 @@ body {
 
 .modal-buttons {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  justify-content: center;
+  gap: 12px;
   padding: 12px 20px;
   border-top: 1px solid var(--border-color);
+}
+
+.modal-buttons .btn {
+  padding: 8px 20px;
+  font-size: 14px;
+  min-width: 80px;
 }
 
 #modal {
@@ -2427,7 +2433,7 @@ body {
   font-weight: 600;
   font-family: var(--font-main);
   border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border-radius: 4px;
   cursor: pointer;
   transition: background var(--transition-fast), border-color var(--transition-fast);
   outline: none;
@@ -2722,6 +2728,12 @@ body {
 .draft-info {
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+#btn-draft-reroll {
+  padding: 10px 24px;
+  font-size: 15px;
+  margin-top: 12px;
 }
 
 .draft-options {
@@ -3285,20 +3297,21 @@ body {
 
 @media (max-aspect-ratio: 4/3) {
   .card {
-    width: clamp(50px, calc((100vh - 100px) / 7.5 * 63 / 88), 120px);
+    width: clamp(50px, calc((100vw - 80px) / 7.5), 110px);
   }
 
   .play-zone {
-    width: clamp(50px, calc((100vh - 100px) / 7.5 * 63 / 88), 120px);
+    width: clamp(50px, calc((100vw - 80px) / 7.5), 110px);
+    aspect-ratio: 63/88;
   }
 
   .player-info-bar {
-    gap: 2px;
+    gap: 3px;
     padding: 2px 6px;
   }
 
   .bar-track {
-    width: clamp(50px, 10vh, 80px);
+    width: clamp(50px, 12vw, 90px);
     height: 14px;
   }
 
@@ -3358,32 +3371,44 @@ body {
   }
 
   .opp-section .opp-hand-row .card {
-    width: clamp(25px, 4vh, 40px);
+    width: clamp(25px, 5vw, 40px);
     min-width: 20px;
   }
 
   .opp-section .opp-hand-row .card-facedown {
-    width: clamp(16px, 3vh, 28px);
+    width: clamp(16px, 3vw, 28px);
     min-width: 14px;
   }
 
   .equip-row .card {
-    width: clamp(35px, 6vh, 55px);
+    width: clamp(35px, 7vw, 55px);
     min-width: 30px;
   }
 
   .middle-section {
-    min-height: 60px;
+    flex: 1 1 0%;
+    min-height: 50px;
+    max-height: 35vh;
+  }
+
+  .player-section {
+    flex: 1 1 0%;
+    min-height: 0;
+  }
+
+  .opp-section {
+    flex: 0 0 auto;
   }
 }
 
 @media (max-aspect-ratio: 1/1) {
   .card {
-    width: clamp(45px, calc((100vh - 120px) / 7.5 * 63 / 88), 100px);
+    width: clamp(45px, calc((100vw - 80px) / 7.5), 100px);
   }
 
   .play-zone {
-    width: clamp(45px, calc((100vh - 120px) / 7.5 * 63 / 88), 100px);
+    width: clamp(45px, calc((100vw - 80px) / 7.5), 100px);
+    aspect-ratio: 63/88;
   }
 
   .player-info-bar {
@@ -3392,7 +3417,7 @@ body {
   }
 
   .bar-track {
-    width: clamp(40px, 8vh, 70px);
+    width: clamp(40px, 10vw, 70px);
     height: 12px;
   }
 
@@ -3468,21 +3493,32 @@ body {
   }
 
   .middle-section {
-    min-height: 50px;
+    flex: 1 1 0%;
+    min-height: 40px;
+    max-height: 30vh;
+  }
+
+  .player-section {
+    flex: 1 1 0%;
+    min-height: 0;
+  }
+
+  .opp-section {
+    flex: 0 0 auto;
   }
 
   .opp-section .opp-hand-row .card {
-    width: clamp(20px, 3vh, 30px);
+    width: clamp(20px, 4vw, 30px);
     min-width: 16px;
   }
 
   .opp-section .opp-hand-row .card-facedown {
-    width: clamp(14px, 2.5vh, 22px);
+    width: clamp(14px, 2.5vw, 22px);
     min-width: 12px;
   }
 
   .equip-row .card {
-    width: clamp(30px, 5vh, 45px);
+    width: clamp(30px, 6vw, 45px);
     min-width: 25px;
   }
 
