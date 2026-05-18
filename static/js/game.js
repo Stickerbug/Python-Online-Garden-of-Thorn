@@ -1,6 +1,6 @@
 const I18N = {
     zh: {
-        round: '回合', your_turn: '你的回合', opponent_turn: '对手回合',
+        round: '回合', your_turn: '你的回合', opponent_turn: '对手回合', you: '你', opponent: '对手',
         draw_phase: '抽牌阶段', game_over: '游戏结束',
         invite: '邀请', accept: '接受', decline: '拒绝', return_lobby: '返回大厅',
         draft_phase: '选牌阶段', draft_reroll: '重选', draft_selected: '已选',
@@ -71,7 +71,7 @@ const I18N = {
         spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线人数: {0}', chat_title: '聊天',
     },
     en: {
-        round: 'Round', your_turn: 'Your Turn', opponent_turn: "Opponent's Turn",
+        round: 'Round', your_turn: 'Your Turn', opponent_turn: "Opponent's Turn", you: 'You', opponent: 'Opponent',
         draw_phase: 'Draw Phase', game_over: 'Game Over',
         invite: 'Invite', accept: 'Accept', decline: 'Decline', return_lobby: 'Return to Lobby',
         draft_phase: 'Draft Phase', draft_reroll: 'Reroll', draft_selected: 'Selected',
@@ -142,7 +142,7 @@ const I18N = {
         spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat',
     },
     fr: {
-        round: 'Tour', your_turn: 'Votre Tour', opponent_turn: 'Tour de l\'adversaire',
+        round: 'Tour', your_turn: 'Votre Tour', opponent_turn: 'Tour de l\'adversaire', you: 'Vous', opponent: 'Adversaire',
         draw_phase: 'Phase de Pioche', game_over: 'Fin de Partie',
         invite: 'Inviter', accept: 'Accepter', decline: 'Refuser', return_lobby: 'Retour au Salon',
         draft_phase: 'Phase de Draft', draft_reroll: 'Relancer', draft_selected: 'Sélectionné',
@@ -213,7 +213,7 @@ const I18N = {
         spectator_prefix: 'Spectateur', lobby_title: 'Salon', online_count: 'En ligne: {0}', chat_title: 'Chat',
     },
     pt: {
-        round: 'Turno', your_turn: 'Seu Turno', opponent_turn: 'Turno do Oponente',
+        round: 'Turno', your_turn: 'Seu Turno', opponent_turn: 'Turno do Oponente', you: 'Você', opponent: 'Oponente',
         draw_phase: 'Fase de Compra', game_over: 'Fim de Jogo',
         invite: 'Convidar', accept: 'Aceitar', decline: 'Recusar', return_lobby: 'Voltar ao Lobby',
         draft_phase: 'Fase de Draft', draft_reroll: 'Rerrolar', draft_selected: 'Selecionado',
@@ -284,7 +284,7 @@ const I18N = {
         spectator_prefix: 'Espectar', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat',
     },
     ru: {
-        round: 'Раунд', your_turn: 'Ваш Ход', opponent_turn: 'Ход Соперника',
+        round: 'Раунд', your_turn: 'Ваш Ход', opponent_turn: 'Ход Соперника', you: 'Вы', opponent: 'Соперник',
         draw_phase: 'Фаза Розыгрыша', game_over: 'Конец Игры',
         invite: 'Пригласить', accept: 'Принять', decline: 'Отклонить', return_lobby: 'Вернуться в Лобби',
         draft_phase: 'Фаза Драфта', draft_reroll: 'Перебрать', draft_selected: 'Выбрано',
@@ -355,7 +355,7 @@ const I18N = {
         spectator_prefix: 'Наблюдатель', lobby_title: 'Лобби', online_count: 'Онлайн: {0}', chat_title: 'Чат',
     },
     ja: {
-        round: 'ターン', your_turn: 'あなたのターン', opponent_turn: '相手のターン',
+        round: 'ターン', your_turn: 'あなたのターン', opponent_turn: '相手のターン', you: 'あなた', opponent: '相手',
         draw_phase: 'ドローフェイズ', game_over: 'ゲーム終了',
         invite: '招待', accept: '承諾', decline: '拒否', return_lobby: 'ロビーに戻る',
         draft_phase: 'ドラフトフェイズ', draft_reroll: 'リロール', draft_selected: '選択済み',
@@ -1557,6 +1557,17 @@ function renderGame(data) {
     const opp = gs.opponent || {};
     const myTurn = isMyTurn();
     console.log('[RENDER] renderGame: phase=', gs.phase, 'current_player=', gs.current_player, 'playerId=', playerId, 'myTurn=', myTurn);
+    const oppLabel = $('opp-label');
+    const youLabel = $('you-label');
+    if (isSpectating) {
+        const p1Name = gs.player1_name || 'P1';
+        const p2Name = gs.player2_name || 'P2';
+        if (oppLabel) oppLabel.textContent = spectatePerspective === 0 ? p2Name : p1Name;
+        if (youLabel) youLabel.textContent = spectatePerspective === 0 ? p1Name : p2Name;
+    } else {
+        if (oppLabel) oppLabel.textContent = gs.opponent_name || UI.opponent;
+        if (youLabel) youLabel.textContent = gs.your_name || UI.you;
+    }
     renderPlayerBars('opp-bars', opp);
     renderPlayerBars('you-bars', you);
     renderStatusTags('opp-status', opp);
@@ -1760,7 +1771,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
         }
         let text = UI.equip_info.replace('{0}', getCardName(cardDef)).replace('{1}', turns);
         if (corruption) text += UI.equip_corruption;
-        if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && isMyTurn()) {
+        if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && isMyTurn() && !isSpectating) {
             const btn = document.createElement('button');
             btn.className = 'btn btn-small btn-equip-trigger';
             btn.textContent = UI.equip_trigger_cost.replace('{0}', text).replace('{1}', cardDef.trigger_cost_e);
@@ -2480,8 +2491,12 @@ async function init() {
         showView('view-lobby');
         phase = 'lobby';
     });
-    $('btn-leave-spectate').addEventListener('click', () => { if (socket) socket.emit('leave_spectate'); });
+    $('btn-leave-spectate').addEventListener('click', () => {
+        console.log('[SPECTATE] 退出观战按钮点击, socket=', !!socket, 'isSpectating=', isSpectating);
+        if (socket) socket.emit('leave_spectate');
+    });
     $('btn-switch-perspective').addEventListener('click', () => {
+        console.log('[SPECTATE] 切换视角按钮点击, socket=', !!socket, 'isSpectating=', isSpectating, 'perspective=', spectatePerspective);
         if (socket) socket.emit('switch_spectate_perspective');
     });
     $('btn-lobby-chat-send').addEventListener('click', onLobbyChatSend);

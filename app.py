@@ -168,6 +168,7 @@ def broadcast_game_state(room):
             state['opponent_name'] = players[opp_sid]['nickname']
         else:
             state['opponent_name'] = '?'
+        state['your_name'] = players[sid]['nickname'] if sid in players else '?'
         socketio.emit('state_update', state, room=sid)
     broadcast_spectate_state(room)
 
@@ -191,6 +192,7 @@ def send_game_state_to(room, pidx):
             state['opponent_name'] = players[opp_sid]['nickname']
         else:
             state['opponent_name'] = '?'
+        state['your_name'] = players[sid]['nickname'] if sid in players else '?'
         socketio.emit('state_update', state, room=sid)
 
 
@@ -1278,6 +1280,7 @@ def _handle_leave_spectate_internal(sid):
 @socketio.on('leave_spectate')
 def on_leave_spectate(data):
     sid = request.sid
+    print(f'[服务端] leave_spectate: sid={sid[:8]}')
     with _lock:
         _handle_leave_spectate_internal(sid)
     broadcast_lobby()
@@ -1286,15 +1289,19 @@ def on_leave_spectate(data):
 @socketio.on('switch_spectate_perspective')
 def on_switch_spectate_perspective(data):
     sid = request.sid
+    print(f'[服务端] switch_spectate_perspective: sid={sid[:8]}')
     with _lock:
         if sid not in players:
+            print(f'[服务端] switch_spectate_perspective: sid {sid[:8]} 不在players中')
             return
         player = players[sid]
         room_id = player.get('spectating_room')
         if room_id is None or room_id not in rooms:
+            print(f'[服务端] switch_spectate_perspective: room_id={room_id} 无效')
             return
         current = player.get('spectate_perspective', 0)
         player['spectate_perspective'] = 1 - current
+        print(f'[服务端] switch_spectate_perspective: {player["nickname"]} 切换视角 {current}->{1-current}')
         room = rooms[room_id]
         _send_spectate_state_internal(sid, room)
 

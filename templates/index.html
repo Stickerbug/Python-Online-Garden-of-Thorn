@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
-<link rel="stylesheet" href="/static/css/style.css?v=35">
+<link rel="stylesheet" href="/static/css/style.css?v=36">
 </head>
 <body>
 <div id="app">
@@ -86,7 +86,7 @@
 <div class="game-container">
   <div class="opp-section">
     <div class="player-info-bar">
-      <span class="player-label opp-label">对手</span>
+      <span id="opp-label" class="player-label opp-label">对手</span>
       <div id="opp-bars" class="bars-row"></div>
       <div id="opp-status" class="status-tags"></div>
       <span id="opp-info" class="info-extra">手牌:0 牌堆:0</span>
@@ -104,7 +104,7 @@
   </div>
   <div class="player-section">
     <div class="player-info-bar">
-      <span class="player-label you-label">你</span>
+      <span id="you-label" class="player-label you-label">你</span>
       <div id="you-bars" class="bars-row"></div>
       <div id="you-status" class="status-tags"></div>
       <span id="you-info" class="info-extra">手牌:0 牌堆:0 弃牌:0</span>
@@ -245,6 +245,6 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="/static/js/game.js?v=40"></script>
+<script src="/static/js/game.js?v=41"></script>
 </body>
 </html>
