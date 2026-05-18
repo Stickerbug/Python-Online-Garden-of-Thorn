@@ -14,9 +14,12 @@ from cards import CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_p
 from mod_loader import merge_mod_cards_to_card_defs, load_all_mods, save_mod, Mod, get_mods_summary
 
 try:
-    merge_mod_cards_to_card_defs()
-except Exception:
-    pass
+    merged = merge_mod_cards_to_card_defs()
+    print(f'[启动] 模组加载完成，合并了 {len(merged)} 张卡牌')
+except Exception as e:
+    print(f'[启动] 模组加载失败: {type(e).__name__}: {e}')
+    import traceback
+    traceback.print_exc()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'garden_of_thorn_secret'
@@ -842,13 +845,23 @@ def on_chat(data):
             return
         player = players[sid]
         room_id = player.get('room_id')
+        spectating_room = player.get('spectating_room')
         text = data.get('text', '')[:200]
         if not text.strip():
             return
         nickname = player['nickname']
-        chat_data = {'nickname': nickname, 'text': text}
+        is_spectator = player.get('status') == 'spectating'
+        chat_data = {'nickname': nickname, 'text': text, 'is_spectator': is_spectator}
         if room_id is not None and room_id in rooms:
             room = rooms[room_id]
+            for other_sid in room.player_sids:
+                if other_sid in players:
+                    socketio.emit('chat', chat_data, room=other_sid)
+            for spid in room.spectators:
+                if spid in players:
+                    socketio.emit('chat', chat_data, room=spid)
+        elif spectating_room is not None and spectating_room in rooms:
+            room = rooms[spectating_room]
             for other_sid in room.player_sids:
                 if other_sid in players:
                     socketio.emit('chat', chat_data, room=other_sid)

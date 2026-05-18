@@ -68,6 +68,7 @@ const I18N = {
         settings_server: '服务器', settings_server_addr: '地址',
         not_your_turn: '不是你的回合', counter_insufficient: '提示：反制牌所需消耗不足', default_status: 'Garden of Thorn 荆棘花园',
         game_loading: '游戏加载中...', server_no_response: '服务器未响应，请检查网络连接或刷新页面重试',
+        spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线人数: {0}', chat_title: '聊天',
     },
     en: {
         round: 'Round', your_turn: 'Your Turn', opponent_turn: "Opponent's Turn",
@@ -138,6 +139,7 @@ const I18N = {
         settings_server: 'Server', settings_server_addr: 'Address',
         not_your_turn: "Not your turn", counter_insufficient: 'Tip: Insufficient resources for counter cards', default_status: 'Garden of Thorn',
         game_loading: 'Loading...', server_no_response: 'Server not responding. Check your connection or refresh.',
+        spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat',
     },
     fr: {
         round: 'Tour', your_turn: 'Votre Tour', opponent_turn: 'Tour de l\'adversaire',
@@ -208,6 +210,7 @@ const I18N = {
         settings_server: 'Serveur', settings_server_addr: 'Adresse',
         not_your_turn: 'Ce n\'est pas votre tour', counter_insufficient: 'Conseil : Ressources insuffisantes pour les cartes de contre', default_status: 'Garden of Thorn',
         game_loading: 'Chargement...', server_no_response: 'Le serveur ne répond pas. Vérifiez votre connexion.',
+        spectator_prefix: 'Spectateur', lobby_title: 'Salon', online_count: 'En ligne: {0}', chat_title: 'Chat',
     },
     pt: {
         round: 'Turno', your_turn: 'Seu Turno', opponent_turn: 'Turno do Oponente',
@@ -278,6 +281,7 @@ const I18N = {
         settings_server: 'Servidor', settings_server_addr: 'Endereço',
         not_your_turn: 'Não é seu turno', counter_insufficient: 'Dica: Recursos insuficientes para cartas de contra-ataque', default_status: 'Garden of Thorn',
         game_loading: 'Carregando...', server_no_response: 'Servidor sem resposta. Verifique sua conexão.',
+        spectator_prefix: 'Espectar', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat',
     },
     ru: {
         round: 'Раунд', your_turn: 'Ваш Ход', opponent_turn: 'Ход Соперника',
@@ -348,6 +352,7 @@ const I18N = {
         settings_server: 'Сервер', settings_server_addr: 'Адрес',
         not_your_turn: 'Не ваш ход', counter_insufficient: 'Подсказка: Недостаточно ресурсов для контр-атаки', default_status: 'Garden of Thorn',
         game_loading: 'Загрузка...', server_no_response: 'Сервер не отвечает. Проверьте подключение.',
+        spectator_prefix: 'Наблюдатель', lobby_title: 'Лобби', online_count: 'Онлайн: {0}', chat_title: 'Чат',
     },
     ja: {
         round: 'ターン', your_turn: 'あなたのターン', opponent_turn: '相手のターン',
@@ -418,6 +423,7 @@ const I18N = {
         settings_server: 'サーバー', settings_server_addr: 'アドレス',
         not_your_turn: 'あなたのターンではありません', counter_insufficient: 'ヒント：カウンターに必要なリソースが不足しています', default_status: 'Garden of Thorn',
         game_loading: '読み込み中...', server_no_response: 'サーバーが応答しません。接続を確認してください。',
+        spectator_prefix: '観戦', lobby_title: 'ロビー', online_count: 'オンライン: {0}', chat_title: 'チャット',
     }
 };
 
@@ -590,6 +596,40 @@ function updateStaticText() {
     if (settingsLabelServer) settingsLabelServer.textContent = UI.settings_server_addr;
     const serverInput = $('settings-server-input');
     if (serverInput) serverInput.placeholder = currentLang === 'zh' ? '留空使用默认服务器' : 'Leave empty for default';
+    const lobbyHeader = document.querySelector('#view-lobby .lobby-header h2');
+    if (lobbyHeader) lobbyHeader.textContent = UI.lobby_title;
+    const onlinePlayersH3 = document.querySelector('#view-lobby .lobby-left .lobby-section:first-child h3');
+    if (onlinePlayersH3) onlinePlayersH3.textContent = UI.online_players;
+    const ongoingGamesH3 = document.querySelector('#view-lobby .lobby-left .lobby-section:last-child h3');
+    if (ongoingGamesH3) ongoingGamesH3.textContent = UI.ongoing_games;
+    const chatH3 = document.querySelector('#view-lobby .lobby-right .lobby-section h3');
+    if (chatH3) chatH3.textContent = UI.chat_title;
+    const nicknameLabel = document.querySelector('label[for="input-nickname"]');
+    if (nicknameLabel) nicknameLabel.textContent = UI.nickname;
+    const nicknameInput = $('input-nickname');
+    if (nicknameInput) nicknameInput.placeholder = UI.nickname;
+    const gameChatInput = $('game-chat-input');
+    if (gameChatInput) gameChatInput.placeholder = UI.send + '...';
+    const lobbyChatInput = $('lobby-chat-input');
+    if (lobbyChatInput) lobbyChatInput.placeholder = UI.send + '...';
+    const draftH2 = document.querySelector('#view-draft h2');
+    if (draftH2) draftH2.textContent = UI.draft_phase;
+    const btnDraftReroll = $('btn-draft-reroll');
+    if (btnDraftReroll) btnDraftReroll.textContent = UI.draft_reroll;
+    const btnReturnLobby = $('btn-return-lobby');
+    if (btnReturnLobby) btnReturnLobby.textContent = UI.return_lobby;
+    const btnRematch = $('btn-rematch');
+    if (btnRematch) btnRematch.textContent = UI.rematch;
+    const btnSurrender = $('btn-surrender');
+    if (btnSurrender) btnSurrender.textContent = UI.surrender;
+    const btnViewDeck = $('btn-view-deck');
+    if (btnViewDeck) btnViewDeck.textContent = UI.view_deck;
+    const btnEndTurn = $('btn-end-turn');
+    if (btnEndTurn) btnEndTurn.textContent = UI.end_turn;
+    const btnLobbyChatSend = $('btn-lobby-chat-send');
+    if (btnLobbyChatSend) btnLobbyChatSend.textContent = UI.send;
+    const btnGameChatSend = $('btn-game-chat-send');
+    if (btnGameChatSend) btnGameChatSend.textContent = UI.send;
 }
 
 function $(id) { return document.getElementById(id); }
@@ -674,7 +714,7 @@ function createCardElement(cardDict, options = {}) {
     const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
     const typeLabel = getCardTypeLabel(cardDef.card_type) || cardDef.card_type;
     const flags = new Set([...(cardDef.flags || []), ...(cardDict.instance_flags || [])]);
-    const dup = (gameState.you && gameState.you.cards_played_this_turn && gameState.you.cards_played_this_turn[defId]) || 0;
+    const dup = (phase === 'playing' && gameState.you && gameState.you.cards_played_this_turn && gameState.you.cards_played_this_turn[defId]) || 0;
     const symbiosis = flags.has('symbiosis');
     const totalE = (cardDict.cost_e_override != null ? cardDict.cost_e_override : cardDef.cost_e) - (cardDict.mimic_discount || 0) + (symbiosis ? 0 : dup);
     const totalM = cardDict.cost_m_override != null ? cardDict.cost_m_override : cardDef.cost_m;
@@ -760,27 +800,44 @@ function onDocumentPointerMove(e) {
     }
 }
 
+function cleanupDragState() {
+    if (!dragState) return;
+    dragState.originalCard.style.opacity = '';
+    if (dragState.ghost && dragState.ghost.parentNode) {
+        dragState.ghost.remove();
+    }
+    const playZone = document.getElementById('play-zone');
+    if (playZone) playZone.classList.remove('drag-over');
+    dragState = null;
+}
+
 function onDocumentPointerUp(e) {
     if (!dragState) return;
     const pos = getPointerPos(e);
     const playZone = document.getElementById('play-zone');
+    let shouldPlay = false;
     if (playZone) {
         const r = playZone.getBoundingClientRect();
         if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.top && pos.y <= r.bottom) {
-            onPlayCard(parseInt(dragState.instanceId));
+            shouldPlay = true;
         }
-        playZone.classList.remove('drag-over');
     }
-    dragState.originalCard.style.opacity = '';
-    dragState.ghost.remove();
-    dragState = null;
+    const instanceId = dragState.instanceId;
+    cleanupDragState();
+    if (shouldPlay) {
+        onPlayCard(parseInt(instanceId));
+    }
+}
+
+function onDocumentTouchCancel(e) {
+    cleanupDragState();
 }
 
 document.addEventListener('mousemove', onDocumentPointerMove);
 document.addEventListener('mouseup', onDocumentPointerUp);
 document.addEventListener('touchmove', onDocumentPointerMove, { passive: false });
 document.addEventListener('touchend', onDocumentPointerUp);
-document.addEventListener('touchcancel', onDocumentPointerUp);
+document.addEventListener('touchcancel', onDocumentTouchCancel);
 
 function connectSocket(serverUrl) {
     if (socket) {
@@ -887,14 +944,24 @@ function connectSocket(serverUrl) {
         renderEventSelect(data);
     });
     socket.on('state_update', (data) => {
-        console.log('[客户端] 收到state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null);
+        console.log('[客户端] 收到state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null, 'spectating=', data.spectating);
         gameState = data;
         phase = data.phase || phase;
+        if (data.spectating) {
+            isSpectating = true;
+            if (data.spectate_perspective != null) spectatePerspective = data.spectate_perspective;
+        }
         if (!isSpectating && data.your_id != null) playerId = data.your_id;
         if (!isSpectating && data.pending_response != null) {
             pendingPlayCard = pendingPlayCard || data.pending_response;
         } else if (!responsePending) {
             pendingPlayCard = null;
+        }
+        if (pendingPlayCard && data.you && data.you.hand) {
+            const stillInHand = data.you.hand.some(c => c.instance_id === pendingPlayCard.instance_id);
+            if (!stillInHand) {
+                pendingPlayCard = null;
+            }
         }
         if (phase === 'game_over') {
             renderGameOver(data);
@@ -915,11 +982,12 @@ function connectSocket(serverUrl) {
         showChoiceUI(data);
     });
     socket.on('chat', (data) => {
-        console.log('[客户端] 收到chat:', data.nickname, data.text);
+        console.log('[客户端] 收到chat:', data.nickname, data.text, 'spectator=', data.is_spectator);
+        const nick = data.is_spectator ? `[${UI.spectator_prefix}]${data.nickname}` : data.nickname;
         if (phase === 'lobby') {
-            appendLobbyChat(data.nickname, data.text);
+            appendLobbyChat(nick, data.text);
         } else {
-            appendGameChat(data.nickname, data.text);
+            appendGameChat(nick, data.text);
         }
     });
     socket.on('server_error', (data) => {
@@ -1289,6 +1357,14 @@ async function showLightConversionChoice() {
         const optsEl = $('game-prompt-options');
         optsEl.innerHTML = '';
         const inputs = {};
+        const MAX_TOTAL = 5;
+        function getTotal(exclude) {
+            let t = 0;
+            entries.forEach(([did]) => {
+                if (did !== exclude) t += Math.max(0, parseInt(inputs[did]?.value) || 0);
+            });
+            return t;
+        }
         entries.forEach(([did, cnt]) => {
             const cd = getCardDef(did);
             const row = document.createElement('div');
@@ -1300,7 +1376,7 @@ async function showLightConversionChoice() {
             const input = document.createElement('input');
             input.type = 'number';
             input.min = '0';
-            input.max = String(Math.min(cnt, 5));
+            input.max = String(Math.min(cnt, MAX_TOTAL));
             input.value = '0';
             input.style.width = '48px';
             input.style.textAlign = 'center';
@@ -1311,24 +1387,50 @@ async function showLightConversionChoice() {
             input.style.borderRadius = 'var(--radius-sm)';
             input.style.outline = 'none';
             input.addEventListener('click', (e) => e.stopPropagation());
+            input.addEventListener('input', () => {
+                let val = parseInt(input.value);
+                if (isNaN(val) || val < 0) val = 0;
+                const othersTotal = getTotal(did);
+                const maxAllowed = Math.min(cnt, MAX_TOTAL - othersTotal);
+                if (val > maxAllowed) {
+                    val = Math.max(0, maxAllowed);
+                    input.value = val;
+                }
+            });
             inputs[did] = input;
             row.appendChild(label);
             row.appendChild(input);
             optsEl.appendChild(row);
         });
         const cancelBtn = $('game-prompt-cancel');
-        cancelBtn.textContent = UI.ok;
+        cancelBtn.textContent = UI.cancel;
         cancelBtn.onclick = () => {
+            el.classList.remove('active');
+            resolve(null);
+        };
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'btn btn-primary';
+        confirmBtn.textContent = UI.ok;
+        confirmBtn.style.marginLeft = '8px';
+        confirmBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             el.classList.remove('active');
             const convertDefIds = [];
             let total = 0;
             entries.forEach(([did, cnt]) => {
-                const val = Math.min(parseInt(inputs[did].value) || 0, Math.min(cnt, 5 - total));
+                const val = Math.min(parseInt(inputs[did].value) || 0, Math.min(cnt, MAX_TOTAL - total));
                 for (let i = 0; i < val; i++) convertDefIds.push(did);
                 total += val;
             });
             resolve(convertDefIds.length ? { convert_def_ids: convertDefIds } : null);
+        });
+        cancelBtn.parentNode.appendChild(confirmBtn);
+        const cleanup = () => {
+            if (confirmBtn.parentNode) confirmBtn.parentNode.removeChild(confirmBtn);
         };
+        const origCancelClick = cancelBtn.onclick;
+        cancelBtn.onclick = () => { cleanup(); origCancelClick(); };
+        confirmBtn.addEventListener('click', () => { cleanup(); }, { once: true });
         el.classList.add('active');
     });
 }
@@ -1658,7 +1760,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
         }
         let text = UI.equip_info.replace('{0}', getCardName(cardDef)).replace('{1}', turns);
         if (corruption) text += UI.equip_corruption;
-        if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1) {
+        if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && isMyTurn()) {
             const btn = document.createElement('button');
             btn.className = 'btn btn-small btn-equip-trigger';
             btn.textContent = UI.equip_trigger_cost.replace('{0}', text).replace('{1}', cardDef.trigger_cost_e);
@@ -2380,7 +2482,6 @@ async function init() {
     });
     $('btn-leave-spectate').addEventListener('click', () => { if (socket) socket.emit('leave_spectate'); });
     $('btn-switch-perspective').addEventListener('click', () => {
-        spectatePerspective = 1 - spectatePerspective;
         if (socket) socket.emit('switch_spectate_perspective');
     });
     $('btn-lobby-chat-send').addEventListener('click', onLobbyChatSend);

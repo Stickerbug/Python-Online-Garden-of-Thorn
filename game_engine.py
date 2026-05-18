@@ -537,7 +537,7 @@ class GameEngine:
             if i == self.first_player:
                 ps.elixir = FIRST_PLAYER_ELIXIR
                 hand_size = FIRST_PLAYER_HAND_SIZE
-                if self.opening_event_picks[i] == 7:
+                if self.opening_event_picks[i] == 7 and len(force_first) == 1:
                     hand_size = 4
                     ps.elixir += 3
                 ps.draw_cards(hand_size)
@@ -795,17 +795,21 @@ class GameEngine:
             if ps.toxic > 0:
                 ps.poison += ps.toxic
                 self.log_msg(f"淬毒效果：{self.pn(target_id)}+{ps.toxic}层中毒")
-            if not is_battery:
+            self._check_yggdrasil(target_id)
+            if self.game_over:
+                break
+            if dmg > 0 and not is_battery:
                 for eq in ps.equipment:
                     if eq.def_id == 'Battery':
                         self.log_msg(f"{self.pn(target_id)}的电池效果：对敌方造成3D")
                         self._deal_direct_damage(opp_id, 3, '电池')
+                        if self.game_over:
+                            break
                     if eq.def_id == 'MagicBattery':
                         if ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
                             ps.magic_battery_m_this_turn += 1
                             self.log_msg(f"{self.pn(target_id)}的魔法电池效果：+1M")
-            self._check_yggdrasil(target_id)
             if ps.health <= 0:
                 self._check_game_over()
                 break
@@ -2275,6 +2279,8 @@ class GameEngine:
         return {'needs_response': False}
 
     def use_trigger(self, player_id: int, equipment_instance_id: int) -> dict:
+        if self.current_player != player_id:
+            return {'success': False, 'error': '不是你的回合'}
         ps = self.players[player_id]
         eq = ps.find_equipment(equipment_instance_id)
         if eq is None:

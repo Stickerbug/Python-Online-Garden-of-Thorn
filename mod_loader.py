@@ -14,7 +14,7 @@ MODS_DIR = os.path.join(_get_base_dir(), 'mods')
 GAME_VERSION = 'v0.3.1-alpha'
 
 VALID_CARD_TYPES = {'thorn', 'bloom', 'root', 'guard'}
-VALID_QUALITIES = {'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'}
+VALID_QUALITIES = {'Common', 'Uncommon', 'Unusual', 'Rare', 'Epic', 'Legendary'}
 VALID_FLAGS = {'exile', 'precision', 'indestructible', 'non_stack', 'non_stackable', 'sprout', 'symbiosis', 'uncancellable'}
 VALID_EFFECTS = {
     'deal_damage', 'deal_damage_multi', 'heal', 'draw', 'gain_e', 'gain_m', 'gain_armor', 'gain_dodge',
@@ -330,10 +330,20 @@ def merge_mod_cards_to_card_defs() -> List[str]:
     from cards import CARD_DEFS
     mods = get_enabled_mods()
     active = [m for m in mods if m.enabled and not m.errors]
+    for mod in mods:
+        if mod.errors:
+            print(f'[模组] 跳过模组 {mod.info.name if mod.info else mod.filename}，验证错误: {mod.errors}')
+        elif not mod.enabled:
+            print(f'[模组] 跳过已禁用模组 {mod.info.name if mod.info else mod.filename}')
     merged = []
     for mod in active:
         for mc in mod.cards:
             card_def = mc.to_card_def()
             CARD_DEFS[mc.id] = card_def
             merged.append(mc.id)
+        print(f'[模组] 已加载模组 {mod.info.name if mod.info else mod.filename}: {len(mod.cards)} 张卡牌')
+    if merged:
+        print(f'[模组] 共合并 {len(merged)} 张模组卡牌到 CARD_DEFS')
+    else:
+        print('[模组] 没有模组卡牌被合并（可能没有启用的模组，或所有模组都有验证错误）')
     return merged
