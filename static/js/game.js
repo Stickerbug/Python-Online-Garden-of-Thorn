@@ -7,7 +7,7 @@ const I18N = {
         select_event: '选择事件', waiting_opponent: '等待对手',
         play_card: '出牌', end_turn: '结束回合', surrender: '投降', view_deck: '查看牌堆',
         counter: '反制', no_counter: '不反制', waiting_response: '等待响应',
-        victory: '胜利', defeat: '失败', rematch: '再来一局',
+        victory: '胜利', defeat: '失败', draw: '平局', rematch: '再来一局',
         connecting: '连接中...', disconnected: '已断开连接',
         login_failed: '登录失败', nickname: '昵称', enter_lobby: '进入大厅',
         online_players: '在线玩家', no_other_players: '暂无其他玩家',
@@ -31,7 +31,7 @@ const I18N = {
         confirm_surrender: '确认投降?', request_rematch: '请求重赛',
         opponent_rematch: '对手请求重赛', rematch_sent: '重赛请求已发送',
         rematch_waiting: '等待对手确认', rematch_agreed: '双方同意重赛',
-        agree_rematch: '同意重赛', you_win: '胜利!', you_lose: '失败!',
+        agree_rematch: '同意重赛', you_win: '胜利!', you_lose: '失败!', you_draw: '平局!',
         send: '发送', cancel: '取消', ok: '确定', close: '关闭', notice: '提示',
         opponent_disconnected: '对手已断开连接', opponent_reconnected: '对手已重连',
         reconnect_title: '重连', reconnect_prompt: '是否重连到之前的对局?',
@@ -69,6 +69,9 @@ const I18N = {
         not_your_turn: '不是你的回合', counter_insufficient: '提示：反制牌所需消耗不足', default_status: 'Garden of Thorn 荆棘花园',
         game_loading: '游戏加载中...', server_no_response: '服务器未响应，请检查网络连接或刷新页面重试',
         spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线人数: {0}', chat_title: '聊天',
+        solo_training: '单人训练场', load_last: '载入上次', save_decks: '保存牌堆', start_training: '开始训练',
+        solo_deck_a: '我方牌堆', solo_deck_b: '对方牌堆', search_cards: '搜索卡牌', pause_edit: '暂停编辑',
+        set_next_draw: '设置下次抽牌', solo_saved: '训练场牌堆已保存', solo_need_15: '双方牌堆都必须正好15张',
     },
     en: {
         round: 'Round', your_turn: 'Your Turn', opponent_turn: "Opponent's Turn", you: 'You', opponent: 'Opponent',
@@ -78,7 +81,7 @@ const I18N = {
         select_event: 'Select Event', waiting_opponent: 'Waiting for Opponent',
         play_card: 'Play Card', end_turn: 'End Turn', surrender: 'Surrender', view_deck: 'View Deck',
         counter: 'Counter', no_counter: 'No Counter', waiting_response: 'Waiting for Response',
-        victory: 'Victory', defeat: 'Defeat', rematch: 'Rematch',
+        victory: 'Victory', defeat: 'Defeat', draw: 'Draw', rematch: 'Rematch',
         connecting: 'Connecting...', disconnected: 'Disconnected',
         login_failed: 'Login Failed', nickname: 'Nickname', enter_lobby: 'Enter Lobby',
         online_players: 'Online Players', no_other_players: 'No other players',
@@ -102,7 +105,7 @@ const I18N = {
         confirm_surrender: 'Confirm Surrender?', request_rematch: 'Request Rematch',
         opponent_rematch: 'Opponent Requests Rematch', rematch_sent: 'Rematch Request Sent',
         rematch_waiting: 'Waiting for Opponent', rematch_agreed: 'Rematch Agreed',
-        agree_rematch: 'Agree to Rematch', you_win: 'You Win!', you_lose: 'You Lose!',
+        agree_rematch: 'Agree to Rematch', you_win: 'You Win!', you_lose: 'You Lose!', you_draw: 'Draw!',
         send: 'Send', cancel: 'Cancel', ok: 'OK', close: 'Close', notice: 'Notice',
         opponent_disconnected: 'Opponent Disconnected', opponent_reconnected: 'Opponent Reconnected',
         reconnect_title: 'Reconnect', reconnect_prompt: 'Reconnect to previous match?',
@@ -140,6 +143,9 @@ const I18N = {
         not_your_turn: "Not your turn", counter_insufficient: 'Tip: Insufficient resources for counter cards', default_status: 'Garden of Thorn',
         game_loading: 'Loading...', server_no_response: 'Server not responding. Check your connection or refresh.',
         spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat',
+        solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training',
+        solo_deck_a: 'Your Deck', solo_deck_b: 'Opponent Deck', search_cards: 'Search cards', pause_edit: 'Pause & Edit',
+        set_next_draw: 'Set Next Draw', solo_saved: 'Training decks saved', solo_need_15: 'Both decks must have exactly 15 cards',
     },
     fr: {
         round: 'Tour', your_turn: 'Votre Tour', opponent_turn: 'Tour de l\'adversaire', you: 'Vous', opponent: 'Adversaire',
@@ -149,7 +155,7 @@ const I18N = {
         select_event: 'Choisir Événement', waiting_opponent: 'En attente de l\'adversaire',
         play_card: 'Jouer', end_turn: 'Fin du Tour', surrender: 'Abandonner', view_deck: 'Voir le Deck',
         counter: 'Contre', no_counter: 'Pas de Contre', waiting_response: 'En attente de réponse',
-        victory: 'Victoire', defeat: 'Défaite', rematch: 'Rejouer',
+        victory: 'Victoire', defeat: 'Défaite', draw: 'Égalité', rematch: 'Rejouer',
         connecting: 'Connexion...', disconnected: 'Déconnecté',
         login_failed: 'Échec de connexion', nickname: 'Pseudo', enter_lobby: 'Entrer dans le Salon',
         online_players: 'Joueurs en ligne', no_other_players: 'Aucun autre joueur',
@@ -173,7 +179,7 @@ const I18N = {
         confirm_surrender: 'Confirmer l\'abandon ?', request_rematch: 'Demander une revanche',
         opponent_rematch: 'L\'adversaire demande une revanche', rematch_sent: 'Demande de revanche envoyée',
         rematch_waiting: 'En attente de l\'adversaire', rematch_agreed: 'Revanche acceptée',
-        agree_rematch: 'Accepter la revanche', you_win: 'Victoire !', you_lose: 'Défaite !',
+        agree_rematch: 'Accepter la revanche', you_win: 'Victoire !', you_lose: 'Défaite !', you_draw: 'Égalité !',
         send: 'Envoyer', cancel: 'Annuler', ok: 'OK', close: 'Fermer', notice: 'Notice',
         opponent_disconnected: 'Adversaire déconnecté', opponent_reconnected: 'Adversaire reconnecté',
         reconnect_title: 'Reconnexion', reconnect_prompt: 'Se reconnecter à la partie précédente ?',
@@ -211,6 +217,9 @@ const I18N = {
         not_your_turn: 'Ce n\'est pas votre tour', counter_insufficient: 'Conseil : Ressources insuffisantes pour les cartes de contre', default_status: 'Garden of Thorn',
         game_loading: 'Chargement...', server_no_response: 'Le serveur ne répond pas. Vérifiez votre connexion.',
         spectator_prefix: 'Spectateur', lobby_title: 'Salon', online_count: 'En ligne: {0}', chat_title: 'Chat',
+        solo_training: 'Entraînement solo', load_last: 'Charger', save_decks: 'Sauver decks', start_training: 'Commencer',
+        solo_deck_a: 'Votre deck', solo_deck_b: 'Deck adverse', search_cards: 'Chercher cartes', pause_edit: 'Pause édition',
+        set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks doivent avoir exactement 15 cartes',
     },
     pt: {
         round: 'Turno', your_turn: 'Seu Turno', opponent_turn: 'Turno do Oponente', you: 'Você', opponent: 'Oponente',
@@ -220,7 +229,7 @@ const I18N = {
         select_event: 'Escolher Evento', waiting_opponent: 'Aguardando Oponente',
         play_card: 'Jogar', end_turn: 'Finalizar Turno', surrender: 'Render-se', view_deck: 'Ver Deck',
         counter: 'Contra-atacar', no_counter: 'Sem Contra', waiting_response: 'Aguardando resposta',
-        victory: 'Vitória', defeat: 'Derrota', rematch: 'Jogar Novamente',
+        victory: 'Vitória', defeat: 'Derrota', draw: 'Empate', rematch: 'Jogar Novamente',
         connecting: 'Conectando...', disconnected: 'Desconectado',
         login_failed: 'Falha no login', nickname: 'Apelido', enter_lobby: 'Entrar no Lobby',
         online_players: 'Jogadores Online', no_other_players: 'Nenhum outro jogador',
@@ -244,7 +253,7 @@ const I18N = {
         confirm_surrender: 'Confirmar rendição?', request_rematch: 'Pedir revanche',
         opponent_rematch: 'Oponente pede revanche', rematch_sent: 'Pedido de revanche enviado',
         rematch_waiting: 'Aguardando oponente', rematch_agreed: 'Revanche aceita',
-        agree_rematch: 'Aceitar revanche', you_win: 'Vitória!', you_lose: 'Derrota!',
+        agree_rematch: 'Aceitar revanche', you_win: 'Vitória!', you_lose: 'Derrota!', you_draw: 'Empate!',
         send: 'Enviar', cancel: 'Cancelar', ok: 'OK', close: 'Fechar', notice: 'Aviso',
         opponent_disconnected: 'Oponente desconectou', opponent_reconnected: 'Oponente reconectou',
         reconnect_title: 'Reconectar', reconnect_prompt: 'Reconectar à partida anterior?',
@@ -282,6 +291,9 @@ const I18N = {
         not_your_turn: 'Não é seu turno', counter_insufficient: 'Dica: Recursos insuficientes para cartas de contra-ataque', default_status: 'Garden of Thorn',
         game_loading: 'Carregando...', server_no_response: 'Servidor sem resposta. Verifique sua conexão.',
         spectator_prefix: 'Espectar', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat',
+        solo_training: 'Treino Solo', load_last: 'Carregar Último', save_decks: 'Salvar Decks', start_training: 'Iniciar Treino',
+        solo_deck_a: 'Seu Deck', solo_deck_b: 'Deck Oponente', search_cards: 'Buscar cartas', pause_edit: 'Pausar e Editar',
+        set_next_draw: 'Definir Próxima Compra', solo_saved: 'Decks salvos', solo_need_15: 'Ambos os decks devem ter exatamente 15 cartas',
     },
     ru: {
         round: 'Раунд', your_turn: 'Ваш Ход', opponent_turn: 'Ход Соперника', you: 'Вы', opponent: 'Соперник',
@@ -291,7 +303,7 @@ const I18N = {
         select_event: 'Выбрать Событие', waiting_opponent: 'Ожидание соперника',
         play_card: 'Разыграть', end_turn: 'Конец Хода', surrender: 'Сдаться', view_deck: 'Посмотреть Колоду',
         counter: 'Контр-атака', no_counter: 'Без Контр-атаки', waiting_response: 'Ожидание ответа',
-        victory: 'Победа', defeat: 'Поражение', rematch: 'Реванш',
+        victory: 'Победа', defeat: 'Поражение', draw: 'Ничья', rematch: 'Реванш',
         connecting: 'Подключение...', disconnected: 'Отключено',
         login_failed: 'Ошибка входа', nickname: 'Псевдоним', enter_lobby: 'Войти в Лобби',
         online_players: 'Игроки Онлайн', no_other_players: 'Нет других игроков',
@@ -315,7 +327,7 @@ const I18N = {
         confirm_surrender: 'Подтвердить сдачу?', request_rematch: 'Запросить реванш',
         opponent_rematch: 'Соперник запрашивает реванш', rematch_sent: 'Запрос реванша отправлен',
         rematch_waiting: 'Ожидание соперника', rematch_agreed: 'Реванш принят',
-        agree_rematch: 'Принять реванш', you_win: 'Победа!', you_lose: 'Поражение!',
+        agree_rematch: 'Принять реванш', you_win: 'Победа!', you_lose: 'Поражение!', you_draw: 'Ничья!',
         send: 'Отправить', cancel: 'Отмена', ok: 'ОК', close: 'Закрыть', notice: 'Уведомление',
         opponent_disconnected: 'Соперник отключился', opponent_reconnected: 'Соперник переподключился',
         reconnect_title: 'Переподключение', reconnect_prompt: 'Переподключиться к предыдущему матчу?',
@@ -353,6 +365,9 @@ const I18N = {
         not_your_turn: 'Не ваш ход', counter_insufficient: 'Подсказка: Недостаточно ресурсов для контр-атаки', default_status: 'Garden of Thorn',
         game_loading: 'Загрузка...', server_no_response: 'Сервер не отвечает. Проверьте подключение.',
         spectator_prefix: 'Наблюдатель', lobby_title: 'Лобби', online_count: 'Онлайн: {0}', chat_title: 'Чат',
+        solo_training: 'Одиночная тренировка', load_last: 'Загрузить', save_decks: 'Сохранить колоды', start_training: 'Начать',
+        solo_deck_a: 'Ваша колода', solo_deck_b: 'Колода соперника', search_cards: 'Поиск карт', pause_edit: 'Пауза и правка',
+        set_next_draw: 'Задать следующую карту', solo_saved: 'Колоды сохранены', solo_need_15: 'В обеих колодах должно быть ровно 15 карт',
     },
     ja: {
         round: 'ターン', your_turn: 'あなたのターン', opponent_turn: '相手のターン', you: 'あなた', opponent: '相手',
@@ -362,7 +377,7 @@ const I18N = {
         select_event: 'イベント選択', waiting_opponent: '相手を待っています',
         play_card: 'プレイ', end_turn: 'ターン終了', surrender: '降参', view_deck: 'デッキ確認',
         counter: 'カウンター', no_counter: 'カウンターなし', waiting_response: '応答待ち',
-        victory: '勝利', defeat: '敗北', rematch: '再戦',
+        victory: '勝利', defeat: '敗北', draw: '引き分け', rematch: '再戦',
         connecting: '接続中...', disconnected: '切断されました',
         login_failed: 'ログイン失敗', nickname: 'ニックネーム', enter_lobby: 'ロビーに入る',
         online_players: 'オンラインプレイヤー', no_other_players: '他のプレイヤーはいません',
@@ -386,7 +401,7 @@ const I18N = {
         confirm_surrender: '降参しますか？', request_rematch: '再戦をリクエスト',
         opponent_rematch: '相手が再戦をリクエストしています', rematch_sent: '再戦リクエスト送信済み',
         rematch_waiting: '相手の確認待ち', rematch_agreed: '再戦が合意されました',
-        agree_rematch: '再戦に同意', you_win: '勝利！', you_lose: '敗北！',
+        agree_rematch: '再戦に同意', you_win: '勝利！', you_lose: '敗北！', you_draw: '引き分け！',
         send: '送信', cancel: 'キャンセル', ok: 'OK', close: '閉じる', notice: 'お知らせ',
         opponent_disconnected: '相手が切断しました', opponent_reconnected: '相手が再接続しました',
         reconnect_title: '再接続', reconnect_prompt: '前の対戦に再接続しますか？',
@@ -424,6 +439,9 @@ const I18N = {
         not_your_turn: 'あなたのターンではありません', counter_insufficient: 'ヒント：カウンターに必要なリソースが不足しています', default_status: 'Garden of Thorn',
         game_loading: '読み込み中...', server_no_response: 'サーバーが応答しません。接続を確認してください。',
         spectator_prefix: '観戦', lobby_title: 'ロビー', online_count: 'オンライン: {0}', chat_title: 'チャット',
+        solo_training: 'ソロ練習場', load_last: '前回を読み込む', save_decks: 'デッキ保存', start_training: '開始',
+        solo_deck_a: '自分のデッキ', solo_deck_b: '相手デッキ', search_cards: 'カード検索', pause_edit: '中断して編集',
+        set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '両方のデッキは15枚ちょうど必要です',
     }
 };
 
@@ -498,6 +516,11 @@ let isSpectating = false;
 let spectatePerspective = 0;
 let responseTimerId = null;
 let responseCountdown = 0;
+let soloMode = false;
+let soloDeckA = [];
+let soloDeckB = [];
+let soloTargetDeck = 'a';
+let pendingSoloStart = false;
 let pendingPlayCard = null;
 
 function gameAlert(title, message, buttons) {
@@ -586,6 +609,8 @@ function updateStaticText() {
     if (btnLobbyBack) btnLobbyBack.textContent = UI.back_to_home;
     const btnConnect = $('btn-connect');
     if (btnConnect) btnConnect.textContent = UI.enter_lobby;
+    const btnSoloTraining = $('btn-solo-training');
+    if (btnSoloTraining) btnSoloTraining.textContent = UI.solo_training;
     const noMods = $('settings-no-mods');
     if (noMods) noMods.textContent = currentLang === 'zh' ? '未找到模组文件' : 'No mod files found';
     const btnSettingsClose = $('btn-settings-close');
@@ -626,6 +651,26 @@ function updateStaticText() {
     if (btnViewDeck) btnViewDeck.textContent = UI.view_deck;
     const btnEndTurn = $('btn-end-turn');
     if (btnEndTurn) btnEndTurn.textContent = UI.end_turn;
+    const btnSoloNextDraw = $('btn-solo-next-draw');
+    if (btnSoloNextDraw) btnSoloNextDraw.textContent = UI.set_next_draw;
+    const btnSoloEdit = $('btn-solo-edit');
+    if (btnSoloEdit) btnSoloEdit.textContent = UI.pause_edit;
+    const soloTitle = $('solo-title');
+    if (soloTitle) soloTitle.textContent = UI.solo_training;
+    const btnSoloLoad = $('btn-solo-load');
+    if (btnSoloLoad) btnSoloLoad.textContent = UI.load_last;
+    const btnSoloSave = $('btn-solo-save');
+    if (btnSoloSave) btnSoloSave.textContent = UI.save_decks;
+    const btnSoloStart = $('btn-solo-start');
+    if (btnSoloStart) btnSoloStart.textContent = UI.start_training;
+    const btnSoloBack = $('btn-solo-back');
+    if (btnSoloBack) btnSoloBack.textContent = UI.back_to_home;
+    const soloSearch = $('solo-card-search');
+    if (soloSearch) soloSearch.placeholder = UI.search_cards;
+    const soloDeckATitle = $('solo-deck-a-title');
+    if (soloDeckATitle) soloDeckATitle.textContent = UI.solo_deck_a;
+    const soloDeckBTitle = $('solo-deck-b-title');
+    if (soloDeckBTitle) soloDeckBTitle.textContent = UI.solo_deck_b;
     const btnLobbyChatSend = $('btn-lobby-chat-send');
     if (btnLobbyChatSend) btnLobbyChatSend.textContent = UI.send;
     const btnGameChatSend = $('btn-game-chat-send');
@@ -651,13 +696,17 @@ function updateStatus(text) {
 
 let _statusTimeout = null;
 let _prevStatusText = '';
-function flashStatus(text, duration) {
+function flashStatus(text, duration, type) {
     const s = $('status-text');
     if (!s) return;
     if (_statusTimeout) { clearTimeout(_statusTimeout); _statusTimeout = null; }
     else { _prevStatusText = s.textContent || ''; }
     s.textContent = text;
-    s.style.color = '#C0392B';
+    if (type === 'error') {
+        s.style.color = '#C0392B';
+    } else {
+        s.style.color = '#E67E22';
+    }
     s.style.fontWeight = '700';
     _statusTimeout = setTimeout(() => {
         s.style.color = '';
@@ -694,6 +743,15 @@ function getCardDef(defId) {
     return CARD_DEFS[defId] || null;
 }
 
+function getCardLayerLabel(cardDict) {
+    const fusionLevel = Number(cardDict.fusion_level || 1);
+    const fissionLevel = Number(cardDict.fission_level || 1);
+    const parts = [];
+    if (fusionLevel > 1) parts.push(`聚变:${fusionLevel}`);
+    if (fissionLevel > 1) parts.push(`裂变:${fissionLevel}`);
+    return parts.length ? ` (${parts.join(' ')})` : '';
+}
+
 function createCardElement(cardDict, options = {}) {
     const { faceDown = false, small = false, draggable = false, onClick = null } = options;
     const el = document.createElement('div');
@@ -727,6 +785,14 @@ function createCardElement(cardDict, options = {}) {
         if (style) {
             flagsHtml += `<span class="card-flag" style="color:${style.fg};background:${style.bg}">${style.label}</span>`;
         }
+    }
+    const fusionLevel = Number(cardDict.fusion_level || 1);
+    const fissionLevel = Number(cardDict.fission_level || 1);
+    if (fusionLevel > 1) {
+        flagsHtml += `<span class="card-flag fusion-layer">聚变: ${fusionLevel}</span>`;
+    }
+    if (fissionLevel > 1) {
+        flagsHtml += `<span class="card-flag fission-layer">裂变: ${fissionLevel}</span>`;
     }
     el.innerHTML = `
         <div class="card-costs">
@@ -862,13 +928,18 @@ function connectSocket(serverUrl) {
     });
     socket.on('disconnect', () => {
         console.log('[客户端] Socket已断开');
-        flashStatus(UI.disconnected, 3000);
+        flashStatus(UI.disconnected, 3000, 'error');
         phase = 'connecting';
     });
     socket.on('login_ok', (data) => {
         console.log('[客户端] 登录成功: sid=', data.sid, 'nickname=', data.nickname);
         mySid = data.sid || '';
         nickname = data.nickname || nickname;
+        if (pendingSoloStart) {
+            pendingSoloStart = false;
+            emitSoloStart();
+            return;
+        }
         phase = 'lobby';
         updateStatus(UI.lobby_status.replace('{0}', nickname));
     });
@@ -969,6 +1040,18 @@ function connectSocket(serverUrl) {
             renderGame(data);
         }
     });
+    socket.on('solo_state', (data) => {
+        soloMode = true;
+        isSpectating = false;
+        gameState = data;
+        phase = data.phase || phase;
+        playerId = data.your_id;
+        if (phase === 'game_over') {
+            renderGame(data);
+        } else {
+            renderGame(data);
+        }
+    });
     socket.on('response_request', (data) => {
         console.log('[RESPONSE] 收到response_request, counter_cards:', (data.counter_cards || []).length);
         responsePending = true;
@@ -1033,7 +1116,7 @@ function connectSocket(serverUrl) {
         };
     });
     socket.on('reconnect_timeout', () => {
-        flashStatus(UI.reconnect_timeout, 3000);
+        flashStatus(UI.reconnect_timeout, 3000, 'error');
         phase = 'lobby';
     });
     socket.on('rematch_requested', () => {
@@ -1067,6 +1150,25 @@ function connectSocket(serverUrl) {
     socket.on('server_broadcast', (data) => {
         flashStatus(UI.server_broadcast.replace('{0}', data.message || ''), 4000);
     });
+    socket.on('solo_paused', () => {
+        soloMode = false;
+        showSoloTraining();
+    });
+}
+
+function displayWidth(str) {
+    let w = 0;
+    for (const ch of str) {
+        const code = ch.codePointAt(0);
+        if ((code >= 0x4e00 && code <= 0x9fff) || (code >= 0x3040 && code <= 0x30ff) ||
+            (code >= 0xac00 && code <= 0xd7af) || (code >= 0xff00 && code <= 0xffef) ||
+            (code >= 0x2000 && code <= 0x206f)) {
+            w += 2;
+        } else {
+            w += 1;
+        }
+    }
+    return w;
 }
 
 function onLogin() {
@@ -1074,6 +1176,10 @@ function onLogin() {
     const err = $('login-error');
     if (!nick) {
         if (err) err.textContent = currentLang === 'zh' ? '请输入昵称' : 'Please enter a nickname';
+        return;
+    }
+    if (displayWidth(nick) > 16) {
+        if (err) err.textContent = currentLang === 'zh' ? '昵称过长（最多8个汉字或16个字母）' : 'Nickname too long (max 8 CJK or 16 Latin chars)';
         return;
     }
     if (/^\d+$/.test(nick)) {
@@ -1090,6 +1196,7 @@ function onLogin() {
     }
     const server = getServerAddress();
     nickname = nick;
+    localStorage.setItem('got_nickname', nick);
     if (err) err.textContent = '';
     updateStatus(UI.connecting);
     connectSocket(server);
@@ -1098,6 +1205,105 @@ function onLogin() {
 function getServerAddress() {
     const custom = localStorage.getItem('got_server') || '';
     return custom.trim() || DEFAULT_SERVER;
+}
+
+function showSoloTraining() {
+    soloMode = false;
+    phase = 'solo_edit';
+    loadSoloDecks(false);
+    renderSoloBuilder();
+    showView('view-solo');
+    updateStatus(UI.solo_training);
+}
+
+function loadSoloDecks(showNotice = true) {
+    const saved = JSON.parse(localStorage.getItem('got_solo_decks') || 'null');
+    if (saved && Array.isArray(saved.deck0) && Array.isArray(saved.deck1)) {
+        soloDeckA = saved.deck0.filter(did => CARD_DEFS[did]).slice(0, 15);
+        soloDeckB = saved.deck1.filter(did => CARD_DEFS[did]).slice(0, 15);
+        if (showNotice) flashStatus(UI.load_last, 1200);
+    }
+}
+
+function saveSoloDecks() {
+    localStorage.setItem('got_solo_decks', JSON.stringify({ deck0: soloDeckA, deck1: soloDeckB }));
+    flashStatus(UI.solo_saved, 1600);
+}
+
+function cardSearchText(defId) {
+    const cd = getCardDef(defId);
+    return cd ? `${cd.id} ${cd.name_cn} ${cd.name_en} ${cd.effect_text || ''} ${cd.description || ''}`.toLowerCase() : defId.toLowerCase();
+}
+
+function renderSoloBuilder() {
+    const q = (($('solo-card-search') || {}).value || '').trim().toLowerCase();
+    const list = $('solo-card-list');
+    if (list) {
+        list.innerHTML = '';
+        Object.keys(CARD_DEFS)
+            .filter(defId => !q || cardSearchText(defId).includes(q))
+            .sort((a, b) => getCardName(CARD_DEFS[a]).localeCompare(getCardName(CARD_DEFS[b])))
+            .forEach(defId => {
+                const row = document.createElement('div');
+                row.className = 'solo-card-row';
+                const cd = CARD_DEFS[defId];
+                row.innerHTML = `<span>${getCardName(cd)}</span><small>${getCardTypeLabel(cd.card_type)} ${cd.cost_e}E/${cd.cost_m}M</small>`;
+                row.onclick = () => addSoloCard(defId);
+                list.appendChild(row);
+            });
+    }
+    renderSoloDeck('a', soloDeckA);
+    renderSoloDeck('b', soloDeckB);
+}
+
+function renderSoloDeck(which, deck) {
+    const el = $(which === 'a' ? 'solo-deck-a' : 'solo-deck-b');
+    const count = $(which === 'a' ? 'solo-deck-a-count' : 'solo-deck-b-count');
+    if (count) count.textContent = `${deck.length}/15`;
+    if (!el) return;
+    el.innerHTML = '';
+    el.classList.toggle('active', soloTargetDeck === which);
+    el.onclick = () => { soloTargetDeck = which; renderSoloBuilder(); };
+    deck.forEach((defId, idx) => {
+        const cd = getCardDef(defId);
+        const row = document.createElement('div');
+        row.className = 'solo-deck-card';
+        row.innerHTML = `<span>${idx + 1}. ${cd ? getCardName(cd) : defId}</span><button class="btn btn-small">×</button>`;
+        row.querySelector('button').onclick = (e) => {
+            e.stopPropagation();
+            deck.splice(idx, 1);
+            renderSoloBuilder();
+        };
+        el.appendChild(row);
+    });
+}
+
+function addSoloCard(defId) {
+    const deck = soloTargetDeck === 'a' ? soloDeckA : soloDeckB;
+    if (deck.length >= 15) return;
+    deck.push(defId);
+    renderSoloBuilder();
+}
+
+function startSoloTraining() {
+    if (soloDeckA.length !== 15 || soloDeckB.length !== 15) {
+        gameAlert(UI.notice, UI.solo_need_15);
+        return;
+    }
+    saveSoloDecks();
+    if (!socket) {
+        nickname = ($('input-nickname').value || '').trim() || 'Solo';
+        pendingSoloStart = true;
+        connectSocket(getServerAddress());
+        return;
+    }
+    emitSoloStart();
+}
+
+function emitSoloStart() {
+    if (!socket) return;
+    soloMode = true;
+    socket.emit('solo_start', { deck0: soloDeckA, deck1: soloDeckB });
 }
 
 function renderLobby(data) {
@@ -1568,6 +1774,13 @@ function renderGame(data) {
         if (oppLabel) oppLabel.textContent = gs.opponent_name || UI.opponent;
         if (youLabel) youLabel.textContent = gs.your_name || UI.you;
     }
+    if (soloMode && gs.phase === 'game_over') {
+        const winner = gs.winner;
+        const youResult = winner === -1 ? UI.draw : (winner === playerId ? UI.victory : UI.defeat);
+        const oppResult = winner === -1 ? UI.draw : (winner === playerId ? UI.defeat : UI.victory);
+        if (youLabel) youLabel.textContent = `${gs.your_name || UI.you} · ${youResult}`;
+        if (oppLabel) oppLabel.textContent = `${gs.opponent_name || UI.opponent} · ${oppResult}`;
+    }
     renderPlayerBars('opp-bars', opp);
     renderPlayerBars('you-bars', you);
     renderStatusTags('opp-status', opp);
@@ -1583,12 +1796,14 @@ function renderGame(data) {
     updateStatus(UI.round_status.replace('{0}', gs.round_num || 0).replace('{1}', phaseText));
     const endTurnBtn = $('btn-end-turn');
     if (endTurnBtn) {
-        endTurnBtn.disabled = false;
-        endTurnBtn.removeAttribute('disabled');
-        endTurnBtn.style.opacity = myTurn ? '1' : '0.5';
-        endTurnBtn.style.cursor = 'pointer';
-        endTurnBtn.onclick = onEndTurn;
+        endTurnBtn.disabled = !myTurn || isSpectating || gs.phase === 'game_over';
     }
+    const soloNextDrawBtn = $('btn-solo-next-draw');
+    if (soloNextDrawBtn) soloNextDrawBtn.classList.toggle('hidden', !soloMode || gs.phase === 'game_over');
+    const soloEditBtn = $('btn-solo-edit');
+    if (soloEditBtn) soloEditBtn.classList.toggle('hidden', !soloMode);
+    const surrenderBtn = $('btn-surrender');
+    if (surrenderBtn) surrenderBtn.classList.toggle('hidden', soloMode && gs.phase === 'game_over');
     const playZone = $('play-zone');
     if (playZone) {
         if (myTurn && !isSpectating) {
@@ -1601,6 +1816,14 @@ function renderGame(data) {
         renderPendingCard();
     } else if (playZone) {
         playZone.innerHTML = `<div class="play-zone-hint">${UI.drag_to_play}</div>`;
+    }
+    if (soloMode && gs.phase === 'game_over' && playZone) {
+        playZone.innerHTML = `
+            <div class="solo-gameover-actions">
+                <button class="btn btn-primary" onclick="startSoloTraining()">${UI.rematch}</button>
+                <button class="btn btn-secondary" onclick="showSoloTraining()">${UI.return_lobby}</button>
+            </div>
+        `;
     }
     const spectateControls = $('spectate-controls');
     const gameControls = $('game-controls');
@@ -1622,7 +1845,6 @@ function renderGame(data) {
     const youInfo = $('you-info');
     if (youInfo) youInfo.textContent = UI.hand_deck_discard_info.replace('{0}', you.hand_count || 0).replace('{1}', you.deck_count || 0).replace('{2}', you.discard_count || 0);
     scheduleAdjust();
-    setTimeout(debugLayout, 200);
 }
 
 function renderPlayerBars(containerId, playerData) {
@@ -1775,7 +1997,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             const btn = document.createElement('button');
             btn.className = 'btn btn-small btn-equip-trigger';
             btn.textContent = UI.equip_trigger_cost.replace('{0}', text).replace('{1}', cardDef.trigger_cost_e);
-            btn.onclick = () => socket.emit('use_trigger', { equipment_instance_id: cardInst.instance_id });
+            btn.onclick = () => socket.emit(soloMode ? 'solo_use_trigger' : 'use_trigger', { equipment_instance_id: cardInst.instance_id });
             container.appendChild(btn);
         } else {
             el.textContent = text;
@@ -1866,14 +2088,14 @@ async function onPlayCard(cardInstanceId) {
     const cardDict = hand.find(c => c.instance_id === cardInstanceId);
     if (!cardDict) return;
     if (!canPlayCard(cardDict)) {
-        flashStatus(UI.cannot_play, 2000);
+        flashStatus(UI.cannot_play, 2000, 'error');
         return;
     }
     const choice = await getCardChoice(cardDict);
     if (choice === false) return;
     pendingPlayCard = cardDict;
     renderPendingCard();
-    socket.emit('play_card', { card_instance_id: cardInstanceId, choice });
+    socket.emit(soloMode ? 'solo_play_card' : 'play_card', { card_instance_id: cardInstanceId, choice });
 }
 
 async function getCardChoice(cardDict) {
@@ -1885,7 +2107,7 @@ async function getCardChoice(cardDict) {
             return cd && cd.card_type === 'thorn' && c.instance_id !== cardDict.instance_id;
         });
         if (!attacks.length) { gameAlert(UI.notice, UI.no_attack_cards); return false; }
-        const options = attacks.map(a => getCardDef(a.def_id) ? getCardName(getCardDef(a.def_id)) : a.def_id);
+        const options = attacks.map(a => `${getCardDef(a.def_id) ? getCardName(getCardDef(a.def_id)) : a.def_id}${getCardLayerLabel(a)}`);
         const sel = await simpleChoice(UI.choose_attack_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
         if (sel < 0) return false;
         return { target_instance_id: attacks[sel].instance_id };
@@ -1904,8 +2126,20 @@ async function getCardChoice(cardDict) {
         const groupOptions = validGroups.map(([k, v]) => `${getCardDef(k) ? getCardName(getCardDef(k)) : k} x${v.length}`);
         const sel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), groupOptions);
         if (sel < 0) return false;
-        const group = validGroups[sel][1].slice(0, 3);
-        return { target_instance_ids: group.map(c => c.instance_id) };
+        const group = validGroups[sel][1];
+        const combos = [];
+        for (let i = 0; i < group.length; i++) {
+            for (let j = i + 1; j < group.length; j++) {
+                combos.push([group[i], group[j]]);
+                for (let k = j + 1; k < group.length; k++) {
+                    combos.push([group[i], group[j], group[k]]);
+                }
+            }
+        }
+        const comboOptions = combos.map(combo => combo.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`).join(' + '));
+        const comboSel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), comboOptions);
+        if (comboSel < 0) return false;
+        return { target_instance_ids: combos[comboSel].map(c => c.instance_id) };
     } else if (defId === 'Mimic') {
         const others = hand.filter(c => c.instance_id !== cardDict.instance_id);
         if (!others.length) { gameAlert(UI.notice, UI.no_attack_cards); return false; }
@@ -2005,7 +2239,7 @@ function showResponseUI(data) {
         btnRow.appendChild(btn);
     });
     container.appendChild(btnRow);
-    responseCountdown = 5;
+    responseCountdown = hasAffordable ? 5 : 2;
     const passBtn = document.createElement('button');
     passBtn.className = 'btn btn-danger';
     passBtn.id = 'pass-btn';
@@ -2029,7 +2263,7 @@ function onRespond(cardInstanceId) {
     responsePending = false;
     const container = $('response-panel');
     if (container) { container.innerHTML = ''; container.classList.add('hidden'); container.classList.remove('visible'); }
-    socket.emit('response', { card_instance_id: cardInstanceId });
+    socket.emit(soloMode ? 'solo_response' : 'response', { card_instance_id: cardInstanceId });
 }
 
 async function showChoiceUI(data) {
@@ -2046,7 +2280,7 @@ async function showChoiceUI(data) {
         });
         if (!attacks.length) { gameAlert(UI.notice, UI.no_attack_cards); }
         else {
-            const options = attacks.map(a => getCardDef(a.def_id) ? getCardName(getCardDef(a.def_id)) : a.def_id);
+            const options = attacks.map(a => `${getCardDef(a.def_id) ? getCardName(getCardDef(a.def_id)) : a.def_id}${getCardLayerLabel(a)}`);
             const sel = await simpleChoice(UI.choose_attack_for.replace('{0}', cardName), options);
             if (sel >= 0 && sel < attacks.length) choiceResult = { target_instance_id: attacks[sel].instance_id };
         }
@@ -2094,8 +2328,19 @@ async function showChoiceUI(data) {
             const groupOptions = validGroups.map(([k, v]) => `${getCardDef(k) ? getCardName(getCardDef(k)) : k} x${v.length}`);
             const sel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', cardName), groupOptions);
             if (sel >= 0) {
-                const group = validGroups[sel][1].slice(0, 3);
-                choiceResult = { target_instance_ids: group.map(c => c.instance_id) };
+                const group = validGroups[sel][1];
+                const combos = [];
+                for (let i = 0; i < group.length; i++) {
+                    for (let j = i + 1; j < group.length; j++) {
+                        combos.push([group[i], group[j]]);
+                        for (let k = j + 1; k < group.length; k++) {
+                            combos.push([group[i], group[j], group[k]]);
+                        }
+                    }
+                }
+                const comboOptions = combos.map(combo => combo.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`).join(' + '));
+                const comboSel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', cardName), comboOptions);
+                if (comboSel >= 0) choiceResult = { target_instance_ids: combos[comboSel].map(c => c.instance_id) };
             }
         }
     } else if (choiceType === 'choose_card_from_hand') {
@@ -2123,7 +2368,7 @@ async function showChoiceUI(data) {
             else if (oppHand.length) choiceResult = { target_instance_id: oppHand[0].instance_id };
         }
     }
-    socket.emit('resolve_choice', { choice: choiceResult });
+    socket.emit(soloMode ? 'solo_resolve_choice' : 'resolve_choice', { choice: choiceResult });
     choicePending = false;
 }
 
@@ -2133,15 +2378,21 @@ function renderGameOver(data) {
     showView('view-gameover');
     const gs = data || gameState;
     const winner = gs.winner;
+    const isDraw = winner === -1 || winner === null || winner === undefined;
     const isWin = winner === playerId;
     const title = $('gameover-title');
     if (title) {
-        title.textContent = isWin ? UI.victory : UI.defeat;
+        title.textContent = isDraw ? UI.draw : (isWin ? UI.victory : UI.defeat);
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        title.style.color = isWin ? COLORS.health : COLORS.damage;
-        title.style.background = isWin
-            ? (isDark ? 'rgba(46, 204, 113, 0.15)' : COLORS.health_bg)
-            : (isDark ? 'rgba(192, 57, 43, 0.15)' : COLORS.damage_bg);
+        if (isDraw) {
+            title.style.color = isDark ? '#E5E7EB' : '#374151';
+            title.style.background = isDark ? 'rgba(229, 231, 235, 0.14)' : 'rgba(55, 65, 81, 0.12)';
+        } else {
+            title.style.color = isWin ? COLORS.health : COLORS.damage;
+            title.style.background = isWin
+                ? (isDark ? 'rgba(46, 204, 113, 0.15)' : COLORS.health_bg)
+                : (isDark ? 'rgba(192, 57, 43, 0.15)' : COLORS.damage_bg);
+        }
     }
     const logContainer = $('gameover-log');
     if (logContainer) {
@@ -2205,41 +2456,45 @@ function showOpponentDCWaiting(data) {
 }
 
 function onEndTurn() {
-    console.log('[END_TURN] ===== onEndTurn被调用 =====');
-    console.log('[END_TURN] gameState=', JSON.stringify(gameState).substring(0, 200));
-    console.log('[END_TURN] playerId=', playerId, 'isMyTurn=', isMyTurn());
-    console.log('[END_TURN] socket=', !!socket, 'socket.id=', socket ? socket.id : 'N/A');
-    console.log('[END_TURN] socket.connected=', socket ? socket.connected : 'N/A');
     if (!isMyTurn()) {
-        flashStatus(UI.not_your_turn, 2000);
+        flashStatus(UI.not_your_turn, 2000, 'error');
         return;
     }
     if (socket) {
-        console.log('[END_TURN] 发送end_turn事件, socket.id=', socket.id, 'connected=', socket.connected);
-        socket.emit('end_turn', {}, (ack) => {
-            console.log('[END_TURN] 服务器ack:', ack);
-        });
+        socket.emit(soloMode ? 'solo_end_turn' : 'end_turn', {});
         const oldPhase = gameState.phase;
         const oldPlayer = gameState.current_player;
         setTimeout(() => {
             if (gameState.phase === oldPhase && gameState.current_player === oldPlayer) {
-                console.log('[END_TURN] 3秒后状态未变化，可能服务端未处理');
-                flashStatus(UI.server_no_response, 3000);
+                flashStatus(UI.server_no_response, 3000, 'error');
             }
         }, 3000);
     } else {
-        console.log('[END_TURN] socket为空!');
         updateStatus('未连接到服务器');
     }
 }
 
+async function onSoloNextDraw() {
+    if (!soloMode || !socket) return;
+    const deck = (gameState.you || {}).deck || [];
+    if (!deck.length) {
+        gameAlert(UI.notice, UI.deck_empty);
+        return;
+    }
+    const options = deck.map(c => {
+        const cd = getCardDef(c.def_id);
+        return cd ? getCardName(cd) : c.def_id;
+    });
+    const sel = await simpleChoice(UI.set_next_draw, options);
+    if (sel < 0) return;
+    socket.emit('solo_set_next_draw', { def_id: deck[sel].def_id });
+}
+
 function onSurrender() {
-    console.log('[客户端] onSurrender called, socket=', !!socket);
     gameAlert(UI.confirm_surrender, '', [
         { text: UI.ok, cls: 'btn-danger', action: () => {
-            console.log('[客户端] 发送surrender事件');
             if (socket) {
-                socket.emit('surrender', {});
+                socket.emit(soloMode ? 'solo_pause' : 'surrender', {});
             }
         }},
         { text: UI.cancel, cls: 'btn-secondary', action: () => {} }
@@ -2472,7 +2727,19 @@ async function init() {
     await fetchCardDefs();
     console.log('[INIT] 卡牌定义已加载, 数量=', Object.keys(CARD_DEFS).length);
     $('btn-connect').addEventListener('click', onLogin);
-    $('input-nickname').addEventListener('keydown', (e) => {
+    $('btn-solo-training').addEventListener('click', showSoloTraining);
+    const savedNick = localStorage.getItem('got_nickname') || '';
+    const nickInput = $('input-nickname');
+    if (savedNick && displayWidth(savedNick) <= 16) nickInput.value = savedNick;
+    nickInput.removeAttribute('maxlength');
+    nickInput.addEventListener('input', () => {
+        let val = nickInput.value;
+        while (val && displayWidth(val) > 16) {
+            val = val.slice(0, -1);
+        }
+        if (val !== nickInput.value) nickInput.value = val;
+    });
+    nickInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') onLogin();
     });
     $('btn-open-settings').addEventListener('click', openSettings);
@@ -2485,19 +2752,25 @@ async function init() {
         phase = 'login';
     });
     $('btn-surrender').addEventListener('click', onSurrender);
+    $('btn-end-turn').addEventListener('click', onEndTurn);
     $('btn-view-deck').addEventListener('click', onViewDeck);
+    $('btn-solo-next-draw').addEventListener('click', onSoloNextDraw);
+    $('btn-solo-edit').addEventListener('click', () => { if (socket) socket.emit('solo_pause', {}); else showSoloTraining(); });
+    $('solo-card-search').addEventListener('input', renderSoloBuilder);
+    $('btn-solo-load').addEventListener('click', () => { loadSoloDecks(true); renderSoloBuilder(); });
+    $('btn-solo-save').addEventListener('click', saveSoloDecks);
+    $('btn-solo-start').addEventListener('click', startSoloTraining);
+    $('btn-solo-back').addEventListener('click', () => showView('view-login'));
     $('btn-return-lobby').addEventListener('click', () => {
-        if (socket) socket.emit('return_lobby');
+        if (socket) socket.emit('return_lobby', {});
         showView('view-lobby');
         phase = 'lobby';
     });
     $('btn-leave-spectate').addEventListener('click', () => {
-        console.log('[SPECTATE] 退出观战按钮点击, socket=', !!socket, 'isSpectating=', isSpectating);
-        if (socket) socket.emit('leave_spectate');
+        if (socket) socket.emit('leave_spectate', {});
     });
     $('btn-switch-perspective').addEventListener('click', () => {
-        console.log('[SPECTATE] 切换视角按钮点击, socket=', !!socket, 'isSpectating=', isSpectating, 'perspective=', spectatePerspective);
-        if (socket) socket.emit('switch_spectate_perspective');
+        if (socket) socket.emit('switch_spectate_perspective', {});
     });
     $('btn-lobby-chat-send').addEventListener('click', onLobbyChatSend);
     $('lobby-chat-input').addEventListener('keydown', (e) => {
@@ -2511,9 +2784,6 @@ async function init() {
     initModEditor();
     showView('view-login');
     setupFullscreenPrompt();
-    console.log('[INIT] === 游戏初始化完成 ===');
-    console.log('[INIT] btn-end-turn element=', !!$('btn-end-turn'));
-    console.log('[INIT] onEndTurn function=', typeof onEndTurn);
 }
 
 document.addEventListener('DOMContentLoaded', init);

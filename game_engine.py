@@ -269,13 +269,13 @@ class PlayerState:
 class GameEngine:
     OPENING_EVENTS = {
         1: {'id': 1, 'name': '生命强化', 'desc': '最大生命值+20', 'position': 1},
-        2: {'id': 2, 'name': '魔力转化', 'desc': '选择1-3张牌，每张分别3选1魔法牌转化，开局回5M', 'position': 2},
-        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多五张牌转化为Light', 'position': 2},
-        8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为Yggdrasil', 'position': 2},
-        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对敌方施加2灼烧', 'position': 3},
+        2: {'id': 2, 'name': '魔力转化', 'desc': '选择1-3张牌，每张分别3选1魔法牌转化，开局回复5M', 'position': 2},
+        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多五张牌转化为Light（萌芽+共生）', 'position': 2},
+        8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为世界树之叶', 'position': 2},
+        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对敌方施加2层灼烧', 'position': 3},
         5: {'id': 5, 'name': '命运抽签', 'desc': '前二回合开始时抽牌至手牌已满', 'position': 3},
         6: {'id': 6, 'name': '能量涌动', 'desc': '前三回合开始时额外回1E', 'position': 3},
-        7: {'id': 7, 'name': '先手压制', 'desc': '必定先手(对面未选同事件时)，先手回复3E抽4张牌', 'position': 3},
+        7: {'id': 7, 'name': '先手压制', 'desc': '必定先手(对面未选同事件时)，先手多回复3E抽4张牌', 'position': 3},
     }
     MAGIC_CARD_POOL = ['MagicBone', 'MagicStinger', 'MagicSewage', 'MagicNazar', 'MagicBubble']
 
@@ -885,6 +885,12 @@ class GameEngine:
                             return
 
     def _check_game_over(self):
+        if self.players[0].health <= 0 and self.players[1].health <= 0:
+            self.game_over = True
+            self.winner = -1
+            self.phase = 'game_over'
+            self.log_msg("双方生命值同时归零！平局！")
+            return
         for i in range(2):
             if self.players[i].health <= 0:
                 self.game_over = True
@@ -1072,19 +1078,31 @@ class GameEngine:
         else:
             ps.discard.append(counter_card)
 
+    def _reset_one_shot_attack_attrs(self, card: CardInstance):
+        card.fission_level = 1
+        card.fusion_level = 1
+        card.fission_count = 0
+        card.fusion_multiplier = 1.0
+        card.fission_hit = 0
+
+    def _discard_card(self, ps, card: CardInstance):
+        if card.card_type == 'thorn':
+            self._reset_one_shot_attack_attrs(card)
+        ps.discard.append(card)
+
     def _execute_card_effect(self, player_id: int, card: CardInstance, choice: Optional[dict] = None) -> dict:
         ps = self.players[player_id]
         opp = self.players[1 - player_id]
         result = {'success': True, 'card': card.to_dict()}
-        if card.card_type == 'thorn' and (card.fission_count > 0 or card.fusion_multiplier > 1):
-            self.log_msg(f"[特效] {card.name_cn} fission={card.fission_count} fusion={card.fusion_multiplier}")
+        if card.card_type == 'thorn' and (card.fission_level > 1 or card.fusion_level > 1):
+            self.log_msg(f"[特效] {card.name_cn} 聚变={card.fusion_level} 裂变={card.fission_level}")
         if self.negated_card and card.card_type == 'bloom':
             self.negated_card = False
             self.log_msg(f"{self.pn(player_id)}的{card.name_cn}被魔法泡泡反制，失效！")
             if 'exile' in card.flags:
                 ps.exile.append(card)
             else:
-                ps.discard.append(card)
+                self._discard_card(ps, card)
             return result
         self.negated_card = False
         needs_choice = self._card_needs_choice(card)
@@ -1099,16 +1117,16 @@ class GameEngine:
             ps.magic += card.cost_m
             ps.cards_played_this_turn[card.def_id] = max(0, ps.cards_played_this_turn.get(card.def_id, 1) - 1)
             return {'success': True, 'needs_choice': True, 'choice_type': self._get_choice_type(card), 'card': card.to_dict()}
-        self._apply_card_effect(player_id, card, choice)
-        if card.card_type == 'thorn' and card.fission_count > 0:
-            fc = card.fission_count
-            for hit_idx in range(1, fc + 1):
+        if card.card_type == 'thorn':
+            fission_level = max(1, int(getattr(card, 'fission_level', 1)))
+            for hit_idx in range(fission_level):
                 if self.game_over:
                     break
                 card.fission_hit = hit_idx
-                self._apply_card_effect(player_id, card)
+                self._apply_card_effect(player_id, card, choice if hit_idx == 0 else None)
             card.fission_hit = 0
-            card.fission_count = 0
+        else:
+            self._apply_card_effect(player_id, card, choice)
         if card.card_type == 'root':
             eq = EquipmentInstance(card, player_id)
             if eq.def_id == 'Disc':
@@ -1127,7 +1145,7 @@ class GameEngine:
             ps.exile.append(card)
             self.log_msg(f"{self.pn(player_id)}的{card.name_cn}被放逐")
         else:
-            ps.discard.append(card)
+            self._discard_card(ps, card)
         self._check_game_over()
         return result
 
@@ -1145,9 +1163,7 @@ class GameEngine:
             'MagicBone': 15, 'MagicStinger': 30,
         }
         base = dmg_map.get(card.def_id, 0)
-        base = self._fission_dmg(base, card)
-        base = int(base * card.fusion_multiplier)
-        return base
+        return self._modified_attack_damage(base, card)
 
     def _card_needs_choice(self, card: CardInstance) -> bool:
         if card.def_id in ('Fission', 'Fusion', 'Mimic', 'Chromosome', 'Sewage', 'Chilli', 'Compass', 'Magnet'):
@@ -1264,8 +1280,7 @@ class GameEngine:
         amount = params.get('amount', 6)
         hits = params.get('hits', 1)
         is_precision = params.get('is_precision', False)
-        amount = self._fission_dmg(amount, card)
-        amount = int(amount * card.fusion_multiplier)
+        amount = self._modified_attack_damage(amount, card)
         dealt = self.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
         self.log_msg(log or f"{self.pn(player_id)}对{self.pn(target_id)}造成{dealt}伤害")
 
@@ -1594,7 +1609,7 @@ class GameEngine:
         ps = self.players[player_id]
         for _ in range(min(amount, len(ps.hand))):
             c = ps.hand.pop()
-            ps.discard.append(c)
+            self._discard_card(ps, c)
         self.log_msg(log or f"{self.pn(player_id)}丢弃{amount}张手牌")
 
     def _atomic_choose_from_exile(self, player_id, card, params, log, choice, context):
@@ -1806,13 +1821,13 @@ class GameEngine:
         targets = [c for c in ps.hand if c.card_def.card_type == card_type and c is not card]
         if targets:
             t = targets[0]
-            t.fission_count = getattr(t, 'fission_count', 0) + times
+            t.fission_level = max(1, int(getattr(t, 'fission_level', 1))) + times
+            t.fission_count = t.fission_level - 1
             self.log_msg(log or f"{self.pn(player_id)}的{t.name_cn}裂变+{times}")
         else:
             self.log_msg(log or f"{self.pn(player_id)}没有可裂变的{card_type}牌")
 
     def _atomic_multiply_next_damage(self, player_id, card, params, log, choice, context):
-        multiplier = params.get('multiplier', 2)
         ps = self.players[player_id]
         ps.damage_multiplier = getattr(ps, 'damage_multiplier', 1.0) * multiplier
         self.log_msg(log or f"{self.pn(player_id)}下次伤害×{multiplier}")
@@ -1832,15 +1847,19 @@ class GameEngine:
     def _atomic_fusion(self, player_id, card, params, log, choice, context):
         count = params.get('count', 2)
         card_type = params.get('card_type', 'thorn')
-        multiplier = params.get('multiplier', 2)
         ps = self.players[player_id]
         same_type = [c for c in ps.hand if c.card_def.card_type == card_type and c is not card]
         if len(same_type) >= count:
-            same_type[0].fusion_multiplier = getattr(same_type[0], 'fusion_multiplier', 1.0) * multiplier
-            for c in same_type[1:count]:
+            selected = same_type[:count]
+            keep = selected[0]
+            keep.fusion_level = sum(max(1, int(getattr(c, 'fusion_level', 1))) for c in selected)
+            keep.fission_level = max(max(1, int(getattr(c, 'fission_level', 1))) for c in selected)
+            keep.fusion_multiplier = float(keep.fusion_level)
+            keep.fission_count = keep.fission_level - 1
+            for c in selected[1:]:
                 ps.hand.remove(c)
-                ps.discard.append(c)
-            self.log_msg(log or f"{self.pn(player_id)}聚变：{same_type[0].name_cn}伤害×{multiplier}")
+                self._discard_card(ps, c)
+            self.log_msg(log or f"{self.pn(player_id)}聚变：{keep.name_cn}聚变{keep.fusion_level} 裂变{keep.fission_level}")
         else:
             self.log_msg(log or f"{self.pn(player_id)}没有足够的{card_type}牌聚变")
 
@@ -1972,55 +1991,49 @@ class GameEngine:
         formula = params.get('formula', 'value')
         self.log_msg(log or f"修改伤害公式：{formula}")
 
+    def _modified_attack_damage(self, base: int, card: CardInstance) -> int:
+        fusion = max(1, int(getattr(card, 'fusion_level', 1)))
+        fission = max(1, int(getattr(card, 'fission_level', 1)))
+        return math.ceil(base * fusion / fission)
+
     def _fission_dmg(self, base: int, card: CardInstance) -> int:
-        if card.fission_count > 0:
-            if card.def_id == 'Triangle':
-                return math.ceil(base / (card.fission_count + 1)) + card.fission_hit
-            return math.ceil(base / (card.fission_count + 1))
-        return base
+        return self._modified_attack_damage(base, card)
 
     def _effect_basic(self, player_id: int, card: CardInstance, choice=None):
-        dmg = self._fission_dmg(6, card)
-        dmg = int(dmg * card.fusion_multiplier)
+        dmg = self._modified_attack_damage(6, card)
         self.log_msg(f"{self.pn(player_id)}使用基本攻击！造成{dmg}伤害")
         self.deal_attack_damage(1 - player_id, dmg)
 
     def _effect_bone(self, player_id: int, card: CardInstance, choice=None):
-        dmg = self._fission_dmg(12, card)
-        dmg = int(dmg * card.fusion_multiplier)
+        dmg = self._modified_attack_damage(12, card)
         self.log_msg(f"{self.pn(player_id)}使用骨头！造成{dmg}伤害")
         self.deal_attack_damage(1 - player_id, dmg)
 
     def _effect_stinger(self, player_id: int, card: CardInstance, choice=None):
-        dmg = self._fission_dmg(20, card)
-        dmg = int(dmg * card.fusion_multiplier)
+        dmg = self._modified_attack_damage(20, card)
         self.log_msg(f"{self.pn(player_id)}使用刺！造成{dmg}伤害")
         self.deal_attack_damage(1 - player_id, dmg, is_precision=True)
 
     def _effect_sand(self, player_id: int, card: CardInstance, choice=None):
-        dmg = self._fission_dmg(3, card)
+        dmg = self._modified_attack_damage(3, card)
         hits = 4
-        dmg = int(dmg * card.fusion_multiplier)
         self.log_msg(f"{self.pn(player_id)}使用沙子！造成{dmg}×{hits}伤害")
         self.deal_attack_damage(1 - player_id, dmg, hits)
 
     def _effect_wing(self, player_id: int, card: CardInstance, choice=None):
-        dmg = self._fission_dmg(8, card)
+        dmg = self._modified_attack_damage(8, card)
         hits = 2
-        dmg = int(dmg * card.fusion_multiplier)
         self.log_msg(f"{self.pn(player_id)}使用翅膀！造成{dmg}×{hits}伤害")
         self.deal_attack_damage(1 - player_id, dmg, hits)
 
     def _effect_light(self, player_id: int, card: CardInstance, choice=None):
-        dmg = self._fission_dmg(2, card)
+        dmg = self._modified_attack_damage(2, card)
         hits = 2
-        dmg = int(dmg * card.fusion_multiplier)
         self.log_msg(f"{self.pn(player_id)}使用轻！造成{dmg}×{hits}伤害")
         self.deal_attack_damage(1 - player_id, dmg, hits)
 
     def _effect_fang(self, player_id: int, card: CardInstance, choice=None):
-        dmg = self._fission_dmg(8, card)
-        dmg = int(dmg * card.fusion_multiplier)
+        dmg = self._modified_attack_damage(8, card)
         dealt = self.deal_attack_damage(1 - player_id, dmg)
         if dealt > 0:
             self.players[player_id].heal(4)
@@ -2030,11 +2043,8 @@ class GameEngine:
 
     def _effect_triangle(self, player_id: int, card: CardInstance, choice=None):
         ps = self.players[player_id]
-        if card.fission_hit == 0:
-            card._triangle_base = 6 + 3 * ps.triangle_stacks
-        base = getattr(card, '_triangle_base', 6 + 3 * ps.triangle_stacks)
-        dmg = self._fission_dmg(base, card)
-        dmg = int(dmg * card.fusion_multiplier)
+        base = 6 + 3 * ps.triangle_stacks
+        dmg = self._modified_attack_damage(base, card)
         dealt = self.deal_attack_damage(1 - player_id, dmg)
         if dealt > 0:
             if ps.triangle_stacks < 4:
@@ -2044,14 +2054,12 @@ class GameEngine:
             self.log_msg(f"{self.pn(player_id)}使用三角形！未造成伤害")
 
     def _effect_magicbone(self, player_id: int, card: CardInstance, choice=None):
-        dmg = self._fission_dmg(15, card)
-        dmg = int(dmg * card.fusion_multiplier)
+        dmg = self._modified_attack_damage(15, card)
         self.deal_attack_damage(1 - player_id, dmg)
         self.log_msg(f"{self.pn(player_id)}使用魔法骨头！造成{dmg}伤害")
 
     def _effect_magicstinger(self, player_id: int, card: CardInstance, choice=None):
-        dmg = self._fission_dmg(30, card)
-        dmg = int(dmg * card.fusion_multiplier)
+        dmg = self._modified_attack_damage(30, card)
         self.deal_attack_damage(1 - player_id, dmg, is_precision=True)
         self.log_msg(f"{self.pn(player_id)}使用魔法刺！造成{dmg}伤害")
 
@@ -2060,8 +2068,9 @@ class GameEngine:
         if choice and 'target_instance_id' in choice:
             target = ps.find_hand_card(choice['target_instance_id'])
             if target and target.card_type == 'thorn':
-                target.fission_count = 2
-                self.log_msg(f"{self.pn(player_id)}使用裂变！{target.name_cn}下次打出时额外打出2次，伤害变为1/3")
+                target.fission_level = max(1, int(getattr(target, 'fission_level', 1))) + 2
+                target.fission_count = target.fission_level - 1
+                self.log_msg(f"{self.pn(player_id)}使用裂变！{target.name_cn}裂变层数+2")
             else:
                 self.log_msg(f"{self.pn(player_id)}使用裂变，但目标无效")
         else:
@@ -2078,13 +2087,20 @@ class GameEngine:
             cards = [c for c in cards if c is not None]
             if len(cards) < 2:
                 return
+            if len(cards) > 3:
+                cards = cards[:3]
+            if any(c.card_type != 'thorn' for c in cards) or len({c.def_id for c in cards}) != 1:
+                self.log_msg(f"{self.pn(player_id)}使用聚变，但目标不是同名攻击牌")
+                return
             first = cards[0]
-            multiplier = len(cards)
-            first.fusion_multiplier = multiplier
+            first.fusion_level = sum(max(1, int(getattr(c, 'fusion_level', 1))) for c in cards)
+            first.fission_level = max(max(1, int(getattr(c, 'fission_level', 1))) for c in cards)
+            first.fusion_multiplier = float(first.fusion_level)
+            first.fission_count = first.fission_level - 1
             for c in cards[1:]:
                 ps.hand.remove(c)
-                ps.discard.append(c)
-            self.log_msg(f"{self.pn(player_id)}使用聚变！{first.name_cn}伤害×{multiplier}，丢弃{len(cards) - 1}张")
+                self._discard_card(ps, c)
+            self.log_msg(f"{self.pn(player_id)}使用聚变！{first.name_cn}聚变{first.fusion_level} 裂变{first.fission_level}，合并{len(cards)}张")
         else:
             self.log_msg(f"{self.pn(player_id)}使用聚变，但未选择目标")
 

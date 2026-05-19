@@ -48,6 +48,8 @@ class CardInstance:
     cost_m_override: Optional[int] = None
     fission_count: int = 0
     fusion_multiplier: float = 1.0
+    fission_level: int = 1
+    fusion_level: int = 1
     mimic_discount: int = 0
     fission_hit: int = 0
     instance_flags: Set[str] = field(default_factory=set)
@@ -89,6 +91,8 @@ class CardInstance:
             'cost_m_override': self.cost_m_override,
             'fission_count': self.fission_count,
             'fusion_multiplier': self.fusion_multiplier,
+            'fission_level': self.fission_level,
+            'fusion_level': self.fusion_level,
             'mimic_discount': self.mimic_discount,
             'instance_flags': list(self.instance_flags) if self.instance_flags else [],
         }
@@ -102,6 +106,8 @@ class CardInstance:
             cost_m_override=d.get('cost_m_override'),
             fission_count=d.get('fission_count', 0),
             fusion_multiplier=d.get('fusion_multiplier', 1.0),
+            fission_level=max(1, int(d.get('fission_level', d.get('fission_count', 0) + 1))),
+            fusion_level=max(1, int(d.get('fusion_level', d.get('fusion_multiplier', 1.0)))),
             mimic_discount=d.get('mimic_discount', 0),
             instance_flags=set(d.get('instance_flags', [])),
         )
@@ -114,6 +120,8 @@ class CardInstance:
             cost_m_override=self.cost_m_override,
             fission_count=self.fission_count,
             fusion_multiplier=self.fusion_multiplier,
+            fission_level=self.fission_level,
+            fusion_level=self.fusion_level,
             mimic_discount=self.mimic_discount,
             instance_flags=set(self.instance_flags),
         )
@@ -158,11 +166,11 @@ _reg(CardDef('MagicStinger', 'Magic Stinger', '魔法刺', 0, 8, 'thorn', 5, 'Co
              '魔力加持的尖刺，威力巨大。', '造成30D', flags={'precision'}))
 
 _reg(CardDef('Fission', 'Fission', '裂变', 0, 0, 'bloom', 2, 'Common',
-             '将一次攻击分裂为多次。', '选择一张手中的攻击牌，使其下次打出时额外打出2次但伤害将为1/3（向上取整）',
+             '将一次攻击分裂为多次。', '选择一张手中的攻击牌，将其裂变层数增加2',
              flags={'exile'}))
 
 _reg(CardDef('Fusion', 'Fusion', '聚变', 0, 0, 'bloom', 2, 'Common',
-             '将相同的攻击聚合为一击。', '选择手中2-3张相同的攻击牌，使第一张下次打出时获得伤害增加1-2倍，丢弃余下的'))
+             '将相同的攻击聚合为一击。', '选择手中2-3张同名攻击牌，将它们聚变层数相加，裂变层数取最大值，变为一张牌'))
 
 _reg(CardDef('Iris', 'Iris', '鸢尾', 3, 0, 'bloom', 3, 'Common',
              '美丽而致命。', '施加10层中毒'))

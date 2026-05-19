@@ -968,6 +968,143 @@ body {
   background: #1dd1a1;
 }
 
+#btn-solo-training {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-main);
+}
+
+.solo-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  gap: 14px;
+  background: var(--bg-primary);
+}
+
+.solo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.solo-header h2,
+.solo-deck-head h3 {
+  color: var(--text-primary);
+}
+
+.solo-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.solo-builder {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) 1fr 1fr;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+
+.solo-card-browser,
+.solo-deck-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  min-height: 0;
+}
+
+.solo-card-browser {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 10px;
+}
+
+.solo-card-browser input {
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.solo-card-list,
+.solo-deck-list {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.solo-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.solo-card-row,
+.solo-deck-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.solo-card-row {
+  cursor: pointer;
+}
+
+.solo-card-row:hover {
+  border-color: var(--bloom);
+}
+
+.solo-card-row small {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.solo-deck-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.solo-deck-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.solo-deck-list {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.solo-deck-list.active {
+  outline: 2px solid var(--bloom);
+  outline-offset: -2px;
+}
+
+.solo-gameover-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 .lobby-container {
   display: flex;
   flex-direction: column;
@@ -1941,6 +2078,18 @@ body {
   color: #2471a3;
   background: rgba(36, 113, 163, 0.15);
   border-color: rgba(36, 113, 163, 0.3);
+}
+
+.card-flag.fusion-layer {
+  color: #8e44ad;
+  background: rgba(142, 68, 173, 0.14);
+  border-color: rgba(142, 68, 173, 0.32);
+}
+
+.card-flag.fission-layer {
+  color: #0f766e;
+  background: rgba(15, 118, 110, 0.14);
+  border-color: rgba(15, 118, 110, 0.32);
 }
 
 .equip-item {
@@ -3196,6 +3345,19 @@ body {
 }
 
 @media (max-width: 900px) {
+  .solo-container {
+    padding: 10px;
+  }
+
+  .solo-builder {
+    grid-template-columns: 1fr;
+  }
+
+  .solo-card-browser,
+  .solo-deck-panel {
+    min-height: 180px;
+  }
+
   .player-info-bar {
     gap: 4px;
     padding: 4px 8px;
@@ -3792,6 +3954,11 @@ body {
   text-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
 }
 
+[data-theme="dark"] .bar-text {
+  color: var(--text-primary);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+}
+
 .login-form .btn-settings {
   width: 100%;
   padding: 10px;
@@ -3809,4 +3976,352 @@ body {
 .login-form .btn-settings:hover {
   background: var(--bg-card-hover);
   color: var(--text-primary);
+}
+
+/* UI refresh overrides */
+.login-container {
+  padding: clamp(18px, 5vw, 40px);
+}
+
+.title-main {
+  font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.05;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.title-sub {
+  font-size: clamp(16px, 2.2vw, 22px);
+  font-weight: 700;
+  color: var(--thorn);
+}
+
+.subtitle {
+  font-size: clamp(12px, 1.5vw, 15px);
+  color: var(--text-secondary);
+}
+
+.login-form {
+  width: min(360px, calc(100vw - 40px));
+}
+
+#btn-connect {
+  min-height: 48px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.lobby-container {
+  padding: clamp(16px, 3vw, 32px);
+  gap: 12px;
+}
+
+.lobby-header h2 {
+  font-size: clamp(20px, 3vw, 28px);
+  line-height: 1.1;
+}
+
+.lobby-body {
+  max-width: 1080px;
+  gap: 14px;
+}
+
+.lobby-section {
+  box-shadow: var(--shadow-sm);
+}
+
+.lobby-chat {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lobby-chat-log {
+  flex: 1;
+  min-height: 220px;
+}
+
+.game-container {
+  grid-template-rows: minmax(76px, auto) minmax(56px, 1fr) auto;
+}
+
+.player-info-bar {
+  min-height: 36px;
+}
+
+.bars-row {
+  flex: 1 1 auto;
+  min-width: 220px;
+}
+
+.status-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.hand-play-row {
+  align-items: flex-end;
+}
+
+.controls-bar {
+  gap: 8px;
+  min-height: 48px;
+}
+
+.controls-group {
+  min-width: 0;
+}
+
+.controls-right {
+  flex: 1 1 220px;
+  justify-content: flex-end;
+}
+
+.controls-right input {
+  flex: 1 1 140px;
+  min-width: 90px;
+  max-width: 220px;
+}
+
+.btn-end-turn,
+.btn-view-deck,
+.btn-surrender,
+.btn-switch-perspective,
+.btn-leave-spectate {
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+}
+
+.btn-end-turn {
+  font-weight: 800;
+}
+
+#spectate-controls:not(.hidden) {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.btn-switch-perspective {
+  background: var(--magic);
+  color: #fff;
+  border-color: var(--magic);
+}
+
+.btn-leave-spectate {
+  background: var(--thorn);
+  color: #fff;
+  border-color: var(--thorn);
+}
+
+.settings-inner {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.settings-theme-row,
+.settings-lang-row {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-theme-row input,
+.settings-theme-row select,
+.settings-lang-row select {
+  width: 100%;
+  min-width: 0;
+}
+
+.status-bar {
+  min-height: 28px;
+  padding: 4px 10px;
+}
+
+@media (max-width: 900px) {
+  .lobby-body {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .lobby-left,
+  .lobby-right {
+    flex: none;
+    overflow: visible;
+  }
+
+  .lobby-chat-log {
+    min-height: 160px;
+    max-height: 34vh;
+  }
+
+  .draft-container,
+  .event-container {
+    padding: 12px;
+  }
+
+  .draft-options,
+  .event-options {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .controls-bar {
+    align-items: stretch;
+  }
+
+  .controls-group {
+    flex-wrap: wrap;
+  }
+
+  .controls-right {
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  .controls-right input {
+    max-width: none;
+  }
+}
+
+@media (max-width: 768px) {
+  html,
+  body {
+    font-size: 13px;
+  }
+
+  .login-container {
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .login-form {
+    gap: 10px;
+  }
+
+  .form-row {
+    width: 100%;
+  }
+
+  .form-row label {
+    display: block;
+    margin-bottom: 5px;
+  }
+
+  .game-container {
+    grid-template-rows: auto minmax(42px, 1fr) auto;
+  }
+
+  .player-info-bar {
+    min-height: 30px;
+    gap: 4px;
+  }
+
+  .bars-row {
+    min-width: 0;
+    gap: 4px;
+  }
+
+  .bar-track {
+    width: clamp(48px, 18vw, 82px);
+  }
+
+  .info-extra {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+
+  .opp-hand-equip,
+  .equip-row,
+  .hand-play-row,
+  .controls-bar {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .battle-log .log-header {
+    padding: 3px 6px;
+  }
+
+  .battle-log .log-content {
+    padding: 4px 6px;
+  }
+
+  .btn-end-turn,
+  .btn-view-deck,
+  .btn-surrender,
+  .btn-switch-perspective,
+  .btn-leave-spectate {
+    flex: 1 1 auto;
+    min-width: 84px;
+    padding: 7px 10px;
+  }
+
+  .settings-inner {
+    max-height: calc(100vh - 32px);
+    padding: 18px;
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .login-container {
+    justify-content: flex-start;
+    padding-top: 16px;
+    gap: 7px;
+  }
+
+  .title-main {
+    font-size: 28px;
+  }
+
+  .title-sub,
+  .subtitle {
+    margin: 0;
+  }
+
+  .login-form {
+    margin-top: 6px;
+    gap: 7px;
+  }
+
+  #btn-connect,
+  .login-form .btn-settings {
+    min-height: 40px;
+    padding: 8px 10px;
+  }
+
+  .status-bar {
+    min-height: 22px;
+    font-size: 10px;
+  }
+
+  .game-container {
+    grid-template-rows: auto minmax(34px, 1fr) auto;
+  }
+
+  .player-info-bar {
+    min-height: 26px;
+  }
+
+  .controls-bar {
+    min-height: 38px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+
+  .controls-right {
+    flex-basis: 180px;
+    order: initial;
+  }
+
+  .btn-end-turn,
+  .btn-view-deck,
+  .btn-surrender,
+  .btn-switch-perspective,
+  .btn-leave-spectate {
+    min-height: 30px;
+    padding: 5px 8px;
+    font-size: 11px;
+  }
 }

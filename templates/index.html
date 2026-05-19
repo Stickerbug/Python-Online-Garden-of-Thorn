@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
-<link rel="stylesheet" href="/static/css/style.css?v=36">
+<link rel="stylesheet" href="/static/css/style.css?v=46">
 </head>
 <body>
 <div id="app">
@@ -17,16 +17,53 @@
 <div class="login-form">
 <div class="form-row">
 <label for="input-nickname">昵称</label>
-<input type="text" id="input-nickname" maxlength="12" placeholder="输入昵称">
+<input type="text" id="input-nickname" maxlength="16" placeholder="输入昵称">
 </div>
 <div class="form-row">
-<button id="btn-connect" class="btn btn-primary" style="width:100%;padding:12px;font-size:15px;font-weight:700;">进入大厅</button>
+<button id="btn-connect" class="btn btn-primary">进入大厅</button>
+</div>
+<div class="form-row">
+<button id="btn-solo-training" class="btn btn-magic">单人训练场</button>
 </div>
 <div class="form-row">
 <button id="btn-open-settings" class="btn-settings">设置</button>
 </div>
 </div>
 <p id="login-error" class="error-text"></p>
+</div>
+</div>
+
+<div id="view-solo" class="view hidden">
+<div class="solo-container">
+  <div class="solo-header">
+    <h2 id="solo-title">单人训练场</h2>
+    <div class="solo-actions">
+      <button id="btn-solo-load" class="btn btn-secondary">载入上次</button>
+      <button id="btn-solo-save" class="btn btn-bloom">保存牌堆</button>
+      <button id="btn-solo-start" class="btn btn-primary">开始训练</button>
+      <button id="btn-solo-back" class="btn btn-secondary">返回</button>
+    </div>
+  </div>
+  <div class="solo-builder">
+    <aside class="solo-card-browser">
+      <input id="solo-card-search" type="text" placeholder="搜索卡牌">
+      <div id="solo-card-list" class="solo-card-list"></div>
+    </aside>
+    <section class="solo-deck-panel">
+      <div class="solo-deck-head">
+        <h3 id="solo-deck-a-title">我方牌堆</h3>
+        <span id="solo-deck-a-count">0/15</span>
+      </div>
+      <div id="solo-deck-a" class="solo-deck-list"></div>
+    </section>
+    <section class="solo-deck-panel">
+      <div class="solo-deck-head">
+        <h3 id="solo-deck-b-title">对方牌堆</h3>
+        <span id="solo-deck-b-count">0/15</span>
+      </div>
+      <div id="solo-deck-b" class="solo-deck-list"></div>
+    </section>
+  </div>
 </div>
 </div>
 
@@ -118,13 +155,15 @@
     </div>
     <div class="controls-bar">
       <div id="game-controls" class="controls-group">
-        <button id="btn-end-turn" class="btn btn-danger" onclick="console.log('[BTN] onclick fired');onEndTurn()">结束回合</button>
-        <button id="btn-view-deck" class="btn btn-magic">查看牌堆</button>
-        <button id="btn-surrender" class="btn btn-secondary">投降</button>
+        <button id="btn-end-turn" class="btn btn-danger btn-end-turn">结束回合</button>
+        <button id="btn-view-deck" class="btn btn-magic btn-view-deck">查看牌堆</button>
+        <button id="btn-solo-next-draw" class="btn btn-magic hidden">设置下次抽牌</button>
+        <button id="btn-solo-edit" class="btn btn-secondary hidden">暂停编辑</button>
+        <button id="btn-surrender" class="btn btn-secondary btn-surrender">投降</button>
       </div>
       <div id="spectate-controls" class="controls-group hidden">
-        <button id="btn-switch-perspective" class="btn btn-magic">切换视角</button>
-        <button id="btn-leave-spectate" class="btn btn-danger">退出观战</button>
+        <button id="btn-switch-perspective" class="btn btn-magic btn-switch-perspective">切换视角</button>
+        <button id="btn-leave-spectate" class="btn btn-danger btn-leave-spectate">退出观战</button>
       </div>
       <div class="controls-group controls-right">
         <input type="text" id="game-chat-input" placeholder="聊天..." maxlength="200">
@@ -245,6 +284,6 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="/static/js/game.js?v=41"></script>
+<script src="/static/js/game.js?v=46"></script>
 </body>
 </html>

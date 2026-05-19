@@ -10,7 +10,11 @@ import copy
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from game_engine import GameEngine
-from cards import CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options
+from cards import (
+    CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
+    INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
+    SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE,
+)
 from mod_loader import merge_mod_cards_to_card_defs, load_all_mods, save_mod, Mod, get_mods_summary
 
 try:
@@ -31,6 +35,7 @@ _next_room_id = 0
 players = {}
 rooms = {}
 invites = {}
+solo_sessions = {}
 
 
 class GameRoom:
@@ -49,15 +54,27 @@ class GameRoom:
         return -1
 
 
+def _display_width(s):
+    w = 0
+    for ch in s:
+        if ('\u4e00' <= ch <= '\u9fff' or '\u3040' <= ch <= '\u30ff' or
+                '\uac00' <= ch <= '\ud7af' or '\uff00' <= ch <= '\uffef' or
+                '\u2000' <= ch <= '\u206f'):
+            w += 2
+        else:
+            w += 1
+    return w
+
+
 def sanitize_nickname(raw):
     name = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', raw)
     name = re.sub(r'[\u3000\s]+', '', name)
-    name = re.sub(r'[^\w\u4e00-\u9fff\-]', '', name)
+    name = re.sub(r'[^\w\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af\-]', '', name)
     return name.strip()
 
 
 def validate_nickname(name):
-    if not name or len(name) > 12:
+    if not name or _display_width(name) > 16:
         return False
     if re.match(r'^[\d]+$', name):
         return False
@@ -207,6 +224,104 @@ def start_game(room):
         if sid in players:
             socketio.emit('game_phase', {'phase': 'playing'}, room=sid)
     broadcast_game_state(room)
+
+
+def _reset_player_for_solo(ps, deck_ids, is_first):
+    ps.health = INITIAL_HEALTH if is_first else SECOND_PLAYER_HEALTH
+    ps.max_health = ps.health
+    ps.base_max_health = ps.health
+    ps.elixir = FIRST_PLAYER_ELIXIR if is_first else INITIAL_ELIXIR
+    ps.max_elixir = 10
+    ps.magic = INITIAL_MAGIC
+    ps.max_magic = 10
+    ps.armor = 0
+    ps.poison = 0
+    ps.fire = 0
+    ps.vulnerable = 0
+    ps.toxic = 0
+    ps.triangle_stacks = 0
+    ps.dodge = 0
+    ps.nazar_active = False
+    ps.nazar_big_hits = 0
+    ps.equipment_protection = 0
+    ps.magic_battery_m_this_turn = 0
+    ps.coffee_first_use = True
+    ps.invincible = False
+    ps.skip_turn = False
+    ps.damage_multiplier = 1.0
+    ps.bandage_active = False
+    ps.bandage_death_pending = False
+    ps.attack_blocked = 0
+    ps.untargetable = False
+    ps.sponge_active = False
+    ps.shovel_active = False
+    ps.attack_only = 0
+    ps.enemy_draw_reduction = 0
+    ps.enemy_e_reduction = 0
+    ps.hand = []
+    ps.deck = [CardInstance(def_id=did) for did in deck_ids if did in CARD_DEFS]
+    ps.discard = []
+    ps.exile = []
+    ps.equipment = []
+    ps.cards_played_this_turn = {}
+    ps.negate_next_skill = False
+    ps.is_first_player = is_first
+
+
+def create_solo_engine(deck0, deck1):
+    engine = GameEngine()
+    engine.player_names = ['Player A', 'Player B']
+    engine.phase = 'playing'
+    engine.first_player = 0
+    engine.current_player = 0
+    engine.round_num = 1
+    engine.opening_event_picks = [None, None]
+    engine.opening_event_sub_choices = [None, None]
+    engine.log = []
+    engine.pending_response = None
+    engine.pending_choice = None
+    _reset_player_for_solo(engine.players[0], deck0, True)
+    _reset_player_for_solo(engine.players[1], deck1, False)
+    engine.players[0].draw_cards(FIRST_PLAYER_HAND_SIZE)
+    engine.players[1].draw_cards(INITIAL_HAND_SIZE)
+    engine.log_msg("单人训练场开始！Player A 先手。")
+    engine.log_msg(f"=== 第{engine.round_num}回合 ===")
+    engine._start_player_turn(0)
+    return engine
+
+
+def send_solo_state(sid, perspective=None):
+    engine = solo_sessions.get(sid)
+    if not engine:
+        return
+    if perspective is None:
+        perspective = engine.current_player if not engine.game_over else 0
+    state = engine.get_public_state(perspective)
+    state['your_id'] = perspective
+    state['your_name'] = 'Player A' if perspective == 0 else 'Player B'
+    state['opponent_name'] = 'Player B' if perspective == 0 else 'Player A'
+    state['solo'] = True
+    socketio.emit('solo_state', state, room=sid)
+
+
+def emit_solo_response_request(sid, engine, pidx, played_card):
+    opp_pidx = 1 - pidx
+    played_def = CARD_DEFS.get(played_card.get('def_id', ''), None)
+    trigger_types = []
+    if played_def:
+        if played_def.card_type == 'thorn':
+            trigger_types.append('thorn')
+        elif played_def.card_type == 'bloom':
+            trigger_types.append('bloom')
+        if played_def.id in ('Sewage', 'MagicSewage'):
+            trigger_types.append('equipment_destroy')
+    counter_cards = []
+    for tt in trigger_types:
+        counter_cards.extend(engine.get_counter_cards(opp_pidx, tt))
+    socketio.emit('response_request', {
+        'card': played_card,
+        'counter_cards': [c.to_dict() for c in counter_cards],
+    }, room=sid)
 
 
 def broadcast_spectate_state(room):
@@ -610,6 +725,7 @@ def on_disconnect():
         if sid not in players:
             return
         player = players[sid]
+        solo_sessions.pop(sid, None)
         room_id = player.get('room_id')
         nickname = player['nickname']
         if room_id is not None and room_id in rooms:
@@ -939,6 +1055,128 @@ def on_select_opening_event(data):
                     send_event_state(room, pi)
 
 
+@socketio.on('solo_start')
+def on_solo_start(data):
+    sid = request.sid
+    deck0 = data.get('deck0', []) if data else []
+    deck1 = data.get('deck1', []) if data else []
+    if len(deck0) != DECK_SIZE or len(deck1) != DECK_SIZE:
+        emit('server_error', {'message': '训练场牌堆必须各为15张'})
+        return
+    if any(did not in CARD_DEFS for did in deck0 + deck1):
+        emit('server_error', {'message': '训练场牌堆包含未知卡牌'})
+        return
+    with _lock:
+        solo_sessions[sid] = create_solo_engine(deck0, deck1)
+        if sid in players:
+            players[sid]['status'] = 'solo'
+        socketio.emit('game_phase', {'phase': 'playing', 'solo': True}, room=sid)
+        send_solo_state(sid)
+
+
+@socketio.on('solo_play_card')
+def on_solo_play_card(data):
+    sid = request.sid
+    with _lock:
+        engine = solo_sessions.get(sid)
+        if not engine:
+            emit('server_error', {'message': '训练场未开始'})
+            return
+        pidx = engine.current_player
+        result = engine.play_card(pidx, data.get('card_instance_id'), data.get('choice'))
+        if result.get('needs_response'):
+            send_solo_state(sid, 1 - pidx)
+            emit_solo_response_request(sid, engine, pidx, result['card'])
+        elif result.get('needs_choice'):
+            send_solo_state(sid)
+            socketio.emit('choice_request', {
+                'choice_type': result['choice_type'],
+                'card': result['card'],
+            }, room=sid)
+        elif result.get('success'):
+            send_solo_state(sid)
+        else:
+            emit('server_error', {'message': result.get('error', '训练场出牌失败')})
+
+
+@socketio.on('solo_response')
+def on_solo_response(data):
+    sid = request.sid
+    with _lock:
+        engine = solo_sessions.get(sid)
+        if not engine:
+            return
+        responder = 1 - engine.pending_response['player_id'] if engine.pending_response else engine.current_player
+        engine.handle_response(responder, data.get('card_instance_id') if data else None)
+        send_solo_state(sid)
+
+
+@socketio.on('solo_resolve_choice')
+def on_solo_resolve_choice(data):
+    sid = request.sid
+    with _lock:
+        engine = solo_sessions.get(sid)
+        if not engine:
+            return
+        pidx = engine.pending_choice.get('player_id', engine.current_player) if engine.pending_choice else engine.current_player
+        engine.resolve_choice(pidx, data.get('choice') if data else None)
+        send_solo_state(sid)
+
+
+@socketio.on('solo_use_trigger')
+def on_solo_use_trigger(data):
+    sid = request.sid
+    with _lock:
+        engine = solo_sessions.get(sid)
+        if not engine:
+            return
+        result = engine.use_trigger(engine.current_player, data.get('equipment_instance_id'))
+        if not result.get('success'):
+            emit('server_error', {'message': result.get('error', '训练场触发失败')})
+        send_solo_state(sid)
+
+
+@socketio.on('solo_end_turn')
+def on_solo_end_turn(data=None):
+    sid = request.sid
+    with _lock:
+        engine = solo_sessions.get(sid)
+        if not engine:
+            return
+        result = engine.end_turn(engine.current_player)
+        if not result.get('success'):
+            emit('server_error', {'message': result.get('error', '训练场结束回合失败')})
+        send_solo_state(sid)
+
+
+@socketio.on('solo_set_next_draw')
+def on_solo_set_next_draw(data):
+    sid = request.sid
+    def_id = data.get('def_id') if data else None
+    with _lock:
+        engine = solo_sessions.get(sid)
+        if not engine or not def_id:
+            return
+        ps = engine.players[engine.current_player]
+        idx = next((i for i, c in enumerate(ps.deck) if c.def_id == def_id), -1)
+        if idx < 0:
+            emit('server_error', {'message': '当前牌堆中没有这张牌，无法设置下次抽牌'})
+            return
+        card = ps.deck.pop(idx)
+        ps.deck.insert(0, card)
+        engine.log_msg(f"训练场：{engine.pn(engine.current_player)} 将下次抽牌设为 {card.name_cn}")
+        send_solo_state(sid)
+
+
+@socketio.on('solo_pause')
+def on_solo_pause(data=None):
+    sid = request.sid
+    solo_sessions.pop(sid, None)
+    if sid in players:
+        players[sid]['status'] = 'lobby'
+    socketio.emit('solo_paused', {}, room=sid)
+
+
 @socketio.on('play_card')
 def on_play_card(data):
     sid = request.sid
@@ -1172,7 +1410,7 @@ def on_rematch(data=None):
 
 
 @socketio.on('return_lobby')
-def on_return_lobby(data):
+def on_return_lobby(data=None):
     global _next_room_id
     sid = request.sid
     with _lock:
@@ -1278,7 +1516,7 @@ def _handle_leave_spectate_internal(sid):
 
 
 @socketio.on('leave_spectate')
-def on_leave_spectate(data):
+def on_leave_spectate(data=None):
     sid = request.sid
     print(f'[服务端] leave_spectate: sid={sid[:8]}')
     with _lock:
@@ -1287,7 +1525,7 @@ def on_leave_spectate(data):
 
 
 @socketio.on('switch_spectate_perspective')
-def on_switch_spectate_perspective(data):
+def on_switch_spectate_perspective(data=None):
     sid = request.sid
     print(f'[服务端] switch_spectate_perspective: sid={sid[:8]}')
     with _lock:
