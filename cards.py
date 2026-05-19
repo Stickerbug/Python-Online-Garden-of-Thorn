@@ -170,7 +170,8 @@ _reg(CardDef('Fission', 'Fission', '裂变', 0, 0, 'bloom', 2, 'Common',
              flags={'exile'}))
 
 _reg(CardDef('Fusion', 'Fusion', '聚变', 0, 0, 'bloom', 2, 'Common',
-             '将相同的攻击聚合为一击。', '选择手中2-3张同名攻击牌，将它们聚变层数相加，裂变层数取最大值，变为一张牌'))
+             '将相同的攻击聚合为一击。', '选择手中2-3张同名攻击牌，将它们的聚变层数相加，裂变层数取最大值，变为一张牌',
+             flags={'exile'}))
 
 _reg(CardDef('Iris', 'Iris', '鸢尾', 3, 0, 'bloom', 3, 'Common',
              '美丽而致命。', '施加10层中毒'))

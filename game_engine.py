@@ -1145,6 +1145,7 @@ class GameEngine:
             ps.exile.append(card)
             self.log_msg(f"{self.pn(player_id)}的{card.name_cn}被放逐")
         else:
+            card.mimic_discount = 0
             self._discard_card(ps, card)
         self._check_game_over()
         return result
