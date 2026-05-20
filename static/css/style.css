@@ -2066,6 +2066,8 @@ body {
   color: var(--text-secondary);
   line-height: 1.3;
   overflow-y: auto;
+  overflow-x: hidden;
+  word-break: break-word;
 }
 
 .card-description {
@@ -2087,7 +2089,7 @@ body {
 .card-flag {
   font-size: 6cqi;
   font-weight: 600;
-  padding: 0.8cqi 3.5cqi;
+  padding: 0.6cqi 2.2cqi;
   border-radius: 2px;
   border: 1px solid;
 }
@@ -2351,8 +2353,13 @@ body {
 }
 
 .log-entry.chat {
-  color: #88ccff;
+  color: var(--text-primary);
   font-size: 11px;
+}
+
+.log-entry.chat .chat-nick {
+  color: #7a2f1f;
+  font-weight: 700;
 }
 
 .log-entry.info {
@@ -3820,6 +3827,11 @@ body {
   font-size: 8.5cqi;
 }
 
+[lang="zh"] .card-name,
+[lang="zh"] .card-costs .card-name {
+  font-size: 10.2cqi;
+}
+
 .fullscreen-prompt {
   position: fixed;
   top: 0;
@@ -4418,5 +4430,120 @@ body {
     min-height: 30px;
     padding: 5px 8px;
     font-size: 11px;
+  }
+}
+
+.boot-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.boot-loader.hidden { display: none; }
+.boot-loader-inner {
+  width: min(420px, 92vw);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  padding: 18px;
+}
+.boot-title { font: 700 22px/1.1 var(--font-card); color: var(--text-primary); }
+.boot-sub { margin-top: 6px; color: var(--text-secondary); font-size: 13px; }
+.boot-step { margin-top: 14px; color: var(--text-primary); font-size: 13px; min-height: 20px; }
+.boot-progress {
+  margin-top: 10px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border-light);
+  overflow: hidden;
+}
+.boot-progress-fill {
+  width: 0%;
+  height: 100%;
+  background: var(--magic);
+  transition: width .2s ease;
+}
+
+/* 2026 UI pass: unified, denser, cleaner surfaces */
+:root {
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+}
+
+.btn {
+  border-radius: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.btn-primary, .btn-magic, .btn-bloom, .btn-danger, .btn-secondary {
+  box-shadow: var(--shadow-sm);
+}
+
+.login-container, .lobby-container, .draft-container, .event-container, .solo-container, .settings-inner {
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+}
+
+.lobby-section, .battle-log, .opp-section, .player-section, .controls-bar {
+  border-radius: 10px;
+}
+
+.game-alert-inner, .game-prompt-inner, .modal-inner {
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.game-alert-title, .game-prompt-title {
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+
+.game-alert-message, .game-prompt-options {
+  padding: 2px 2px 6px 2px;
+}
+
+.status-tags .status-tag, .card-flag {
+  border-radius: 4px;
+  padding: 0 3px;
+}
+
+.card {
+  border-radius: 10px;
+}
+
+.player-info-bar {
+  padding: 6px 8px;
+}
+
+.controls-bar {
+  gap: 8px;
+  padding: 8px;
+}
+
+.controls-right input, .chat-input-row input, .login-form input, .settings-inner input, .settings-inner select {
+  border-radius: 8px;
+}
+
+.game-container {
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .controls-bar {
+    padding: 6px;
+    gap: 6px;
+  }
+  .player-info-bar {
+    padding: 4px 6px;
+  }
+  .game-alert-inner, .game-prompt-inner, .modal-inner {
+    width: min(94vw, 520px);
+    padding: 12px;
   }
 }

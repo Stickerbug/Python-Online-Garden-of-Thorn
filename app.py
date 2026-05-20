@@ -1226,12 +1226,31 @@ def on_solo_end_turn(data=None):
 @socketio.on('solo_set_next_draw')
 def on_solo_set_next_draw(data):
     sid = request.sid
-    def_id = data.get('def_id') if data else None
+    def_ids = []
+    if data:
+        if isinstance(data.get('def_ids'), list):
+            def_ids = [x for x in data.get('def_ids') if x]
+        elif data.get('def_id'):
+            def_ids = [data.get('def_id')]
     with _lock:
         engine = solo_sessions.get(sid)
-        if not engine or not def_id:
+        if not engine or not def_ids:
             return
         ps = engine.players[engine.current_player]
+        picked = []
+        for did in def_ids:
+            idx2 = next((i for i, c in enumerate(ps.deck) if c.def_id == did), -1)
+            if idx2 >= 0:
+                picked.append(ps.deck.pop(idx2))
+        if not picked:
+            emit('server_error', {'message': '当前牌堆中没有这些牌，无法设置下次抽牌'})
+            return
+        for c in reversed(picked):
+            ps.deck.insert(0, c)
+        names = '、'.join([c.name_cn for c in picked])
+        engine.log_msg(f"训练场：{engine.pn(engine.current_player)} 将下次抽牌设为 {names}")
+        send_solo_state(sid)
+        return
         idx = next((i for i, c in enumerate(ps.deck) if c.def_id == def_id), -1)
         if idx < 0:
             emit('server_error', {'message': '当前牌堆中没有这张牌，无法设置下次抽牌'})

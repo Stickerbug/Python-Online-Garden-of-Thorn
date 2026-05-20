@@ -1,6 +1,7 @@
 ﻿import random
 import math
 from typing import List, Dict, Optional, Tuple, Set
+from engine_runtime_ext import install_runtime_ext
 from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DRAFT_REROLLS,
     HAND_LIMIT, DRAW_PER_TURN, ELIXIR_RECOVERY, BASE_MAX_HEALTH,
@@ -85,6 +86,7 @@ class PlayerState:
         self.exile: List[CardInstance] = []
         self.equipment: List[EquipmentInstance] = []
         self.cards_played_this_turn: Dict[str, int] = {}
+        self.custom_vars: Dict[str, int] = {}
         self.negate_next_skill: bool = False
         self.is_first_player: bool = False
 
@@ -135,6 +137,7 @@ class PlayerState:
             d['discard'] = [c.to_dict() for c in self.discard]
             d['exile'] = [c.to_dict() for c in self.exile]
             d['cards_played_this_turn'] = dict(self.cards_played_this_turn)
+            d['custom_vars'] = dict(self.custom_vars)
         return d
 
     @staticmethod
@@ -184,6 +187,8 @@ class PlayerState:
             ps.equipment = [EquipmentInstance.from_dict(e) for e in d['equipment']]
         if 'cards_played_this_turn' in d:
             ps.cards_played_this_turn = d['cards_played_this_turn']
+        if 'custom_vars' in d:
+            ps.custom_vars = d.get('custom_vars', {})
         return ps
 
     def find_hand_card(self, instance_id: int) -> Optional[CardInstance]:
@@ -367,6 +372,56 @@ class GameEngine:
             return random.choice([player_id, 1 - player_id])
         return player_id
 
+    def _resolve_targets(self, player_id, target_str):
+        if target_str in ('both', 'random_side'):
+            return [0, 1]
+        if target_str in ('friendly', 'self', None, ''):
+            return [player_id]
+        if target_str == 'teammate':
+            return [player_id]
+        if target_str == 'enemy':
+            return [1 - player_id]
+        if target_str == 'random_friendly':
+            return [player_id]
+        if target_str == 'random_enemy':
+            return [1 - player_id]
+        if target_str == 'random_player':
+            return [random.choice([0, 1])]
+        rid = self._resolve_target(player_id, target_str)
+        if rid == -1:
+            return [0, 1]
+        return [rid]
+
+    def _match_card_selector(self, player_id, cards, selector, card=None):
+        if not isinstance(selector, dict):
+            return list(cards)
+        st = selector.get('selector')
+        if st == 'by_id':
+            cid = selector.get('id')
+            return [c for c in cards if c.def_id == cid]
+        if st == 'by_type':
+            ctype = selector.get('card_type')
+            return [c for c in cards if c.card_type == ctype]
+        if st == 'by_tag':
+            tag = selector.get('tag')
+            out = []
+            for c in cards:
+                inst_flags = getattr(c, 'instance_flags', set())
+                base_flags = set(getattr(c.card_def, 'flags', set()) or [])
+                if tag in inst_flags or tag in base_flags:
+                    out.append(c)
+            return out
+        if st == 'all':
+            return list(cards)
+        if st == 'random':
+            pool = list(cards)
+            if not pool:
+                return []
+            n = max(1, int(self._eval_expr(player_id, selector.get('count', 1), card)))
+            random.shuffle(pool)
+            return pool[:min(n, len(pool))]
+        return list(cards)
+
     def __init__(self):
         self.players = [PlayerState(0), PlayerState(1)]
         self.current_player: int = 0
@@ -395,6 +450,9 @@ class GameEngine:
         self.opening_event_sub_choices: List[Optional[dict]] = [None, None]
         self.opening_event_magic_options: List[List[List[str]]] = [[[], [], []], [[], [], []]]
         self.player_names: List[str] = ['玩家1', '玩家2']
+        self.debug_selector_log: bool = False
+        self._last_damage_value: List[int] = [0, 0]
+        self._incoming_damage_hint: List[int] = [0, 0]
 
     def pn(self, pid: int) -> str:
         return self.player_names[pid] if 0 <= pid < len(self.player_names) else f'玩家{pid+1}'
@@ -1287,7 +1345,9 @@ class GameEngine:
         hits = params.get('hits', 1)
         is_precision = params.get('is_precision', False)
         amount = self._modified_attack_damage(amount, card)
+        self._incoming_damage_hint[target_id] = int(amount)
         dealt = self.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
+        self._last_damage_value[target_id] = int(dealt)
         self.log_msg(log or f"{self.pn(player_id)}对{self.pn(target_id)}造成{dealt}伤害")
 
     def _atomic_heal(self, player_id, card, params, log, choice, context):
@@ -1373,12 +1433,16 @@ class GameEngine:
 
     def _atomic_choose_from_deck(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
+        selector = params.get('selector')
+        if isinstance(selector, dict):
+            matched = self._match_card_selector(player_id, ps.deck, selector, card)
+            if self.debug_selector_log:
+                self.log_msg(f"选择器命中(牌堆)：{len(matched)}")
         if choice and 'target_instance_id' in choice:
-            target = None
-            for c in ps.deck:
-                if c.instance_id == choice['target_instance_id']:
-                    target = c
-                    break
+            target = next((c for c in ps.deck if c.instance_id == choice['target_instance_id']), None)
+            if target is None and isinstance(selector, dict):
+                matched = self._match_card_selector(player_id, ps.deck, selector, card)
+                target = matched[0] if matched else None
             if target and len(ps.hand) < HAND_LIMIT:
                 ps.deck.remove(target)
                 ps.hand.append(target)
@@ -1390,12 +1454,18 @@ class GameEngine:
 
     def _atomic_choose_from_discard(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
+        selector = params.get('selector')
+        if isinstance(selector, dict):
+            matched = self._match_card_selector(player_id, ps.discard, selector, card)
+            if self.debug_selector_log:
+                self.log_msg(f"选择器命中(弃牌)：{len(matched)}")
         if choice and 'target_def_id' in choice:
-            target = None
-            for c in ps.discard:
-                if c.def_id == choice['target_def_id']:
-                    target = c
-                    break
+            sel = {'selector': 'by_id', 'id': choice['target_def_id']}
+            matched = self._match_card_selector(player_id, ps.discard, sel, card)
+            target = matched[0] if matched else None
+            if target is None and isinstance(selector, dict):
+                matched2 = self._match_card_selector(player_id, ps.discard, selector, card)
+                target = matched2[0] if matched2 else None
             if target and len(ps.hand) < HAND_LIMIT:
                 ps.discard.remove(target)
                 ps.hand.append(target)
@@ -1620,16 +1690,15 @@ class GameEngine:
 
     def _atomic_choose_from_exile(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
+        target = None
         if choice and 'target_def_id' in choice:
-            target = None
-            for c in ps.exile:
-                if c.def_id == choice['target_def_id']:
-                    target = c
-                    break
-            if target and len(ps.hand) < HAND_LIMIT:
-                ps.exile.remove(target)
-                ps.hand.append(target)
-                self.log_msg(log or f"{self.pn(player_id)}从放逐区取出{target.name_cn}")
+            sel = {'selector': 'by_id', 'id': choice['target_def_id']}
+            matched = self._match_card_selector(player_id, ps.exile, sel, card)
+            target = matched[0] if matched else None
+        if target and len(ps.hand) < HAND_LIMIT:
+            ps.exile.remove(target)
+            ps.hand.append(target)
+            self.log_msg(log or f"{self.pn(player_id)}从放逐区取出{target.name_cn}")
         else:
             self.log_msg(log or f"{self.pn(player_id)}未选择牌")
 
@@ -1730,11 +1799,12 @@ class GameEngine:
         ts = self.players[target_id]
         zone_map = {'hand': ts.hand, 'deck': ts.deck, 'discard': ts.discard, 'exile': ts.exile}
         target_zone = zone_map.get(zone, ts.hand)
-        for c in target_zone[:]:
-            if c.def_id == card_ref:
-                target_zone.remove(c)
-                self.log_msg(log or f"{self.pn(target_id)}的{c.name_cn}从{zone}中被消除")
-                break
+        sel = card_ref if isinstance(card_ref, dict) else {'selector': 'by_id', 'id': card_ref}
+        matched = self._match_card_selector(player_id, target_zone, sel, card)
+        if matched:
+            c = matched[0]
+            target_zone.remove(c)
+            self.log_msg(log or f"{self.pn(target_id)}的{c.name_cn}从{zone}中被消除")
 
     def _atomic_destroy_random_equip(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -1996,6 +2066,327 @@ class GameEngine:
     def _atomic_modify_damage(self, player_id, card, params, log, choice, context):
         formula = params.get('formula', 'value')
         self.log_msg(log or f"修改伤害公式：{formula}")
+
+    def _eval_expr(self, player_id, expr, card=None):
+        if isinstance(expr, (int, float, bool)):
+            return expr
+        if isinstance(expr, str):
+            try:
+                return int(expr)
+            except Exception:
+                return expr
+        if not isinstance(expr, dict):
+            return 0
+        ref = expr.get('ref')
+        if ref == 'var':
+            tid = self._resolve_target(player_id, expr.get('target', 'self'))
+            name = str(expr.get('name', 'var'))
+            return int(self.players[tid].custom_vars.get(name, 0))
+        if ref == 'target_attribute':
+            tid = self._resolve_target(player_id, expr.get('target', 'self'))
+            return int(getattr(self.players[tid], expr.get('attr', 'health'), 0))
+        if ref == 'math_op':
+            a = int(self._eval_expr(player_id, expr.get('a', 0), card))
+            b = int(self._eval_expr(player_id, expr.get('b', 0), card))
+            op = expr.get('op', '+')
+            if op == '+': return a + b
+            if op == '-': return a - b
+            if op == '*': return a * b
+            if op == '/': return 0 if b == 0 else a // b
+            return 0
+        if ref == 'status_count':
+            tid = self._resolve_target(player_id, expr.get('target', 'self'))
+            ps = self.players[tid]
+            status = str(expr.get('status', ''))
+            return int({'poison': ps.poison, 'burn': ps.fire, 'vulnus': ps.vulnerable, 'toxic': ps.toxic, 'dodge': ps.dodge}.get(status, 0))
+        if ref == 'hand_size':
+            tid = self._resolve_target(player_id, expr.get('target', 'self'))
+            return len(self.players[tid].hand)
+        if ref == 'discard_size':
+            tid = self._resolve_target(player_id, expr.get('target', 'self'))
+            return len(self.players[tid].discard)
+        if ref == 'exile_size':
+            tid = self._resolve_target(player_id, expr.get('target', 'self'))
+            return len(self.players[tid].exile)
+        if ref == 'deck_remaining':
+            tid = self._resolve_target(player_id, expr.get('target', 'self'))
+            return len(self.players[tid].deck)
+        if ref == 'turn_number':
+            return int(self.round_num)
+        if ref == 'play_count':
+            return int(getattr(card, 'play_count', 0)) if card is not None else 0
+        if ref == 'equip_turns':
+            return int(getattr(card, 'equip_turns', 0)) if card is not None else 0
+        if ref == 'durability':
+            return int(getattr(card, 'durability', 0)) if card is not None else 0
+        if ref == 'incoming_damage':
+            return int(self._incoming_damage_hint[player_id])
+        if ref == 'last_damage':
+            tid = self._resolve_target(player_id, expr.get('target', 'self')) if isinstance(expr, dict) else player_id
+            return int(self._last_damage_value[tid])
+        if ref == 'equip_count':
+            tid = self._resolve_target(player_id, expr.get('target', 'self'))
+            return len(self.players[tid].equipment)
+        if ref == 'round':
+            v = float(self._eval_expr(player_id, expr.get('value', 0), card))
+            mode = expr.get('mode', 'round')
+            return int(math.ceil(v) if mode == 'ceil' else math.floor(v) if mode == 'floor' else round(v))
+        if ref == 'min_max':
+            a = int(self._eval_expr(player_id, expr.get('a', 0), card))
+            b = int(self._eval_expr(player_id, expr.get('b', 0), card))
+            return max(a, b) if expr.get('mode', 'max') == 'max' else min(a, b)
+        if ref == 'clamp':
+            v = int(self._eval_expr(player_id, expr.get('value', 0), card))
+            mn = int(self._eval_expr(player_id, expr.get('min', 0), card))
+            mx = int(self._eval_expr(player_id, expr.get('max', 99), card))
+            return max(mn, min(mx, v))
+        return 0
+
+    def _eval_condition(self, player_id, cond, card=None):
+        if isinstance(cond, bool):
+            return cond
+        if isinstance(cond, str):
+            if cond in ('true', 'True'): return True
+            if cond in ('false', 'False'): return False
+            return False
+        if not isinstance(cond, dict):
+            return False
+        op = cond.get('op')
+        if op == 'compare':
+            a = self._eval_expr(player_id, cond.get('a', 0), card)
+            b = self._eval_expr(player_id, cond.get('b', 0), card)
+            cmp = cond.get('operator', '=')
+            return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
+        if op == 'var_compare':
+            tid = self._resolve_target(player_id, cond.get('target', 'self'))
+            name = str(cond.get('name', 'var'))
+            a = int(self.players[tid].custom_vars.get(name, 0))
+            b = int(self._eval_expr(player_id, cond.get('value', 0), card))
+            cmp = cond.get('operator', '=')
+            return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
+        if op == 'has_status_named':
+            tid = self._resolve_target(player_id, cond.get('target', 'self'))
+            status = str(cond.get('status', '')).strip()
+            if status == '邪眼':
+                return bool(self.players[tid].nazar_active)
+            return False
+        if op == 'has_status':
+            tid = self._resolve_target(player_id, cond.get('target', 'self'))
+            status = str(cond.get('status', '')).strip()
+            ps = self.players[tid]
+            status_map = {
+                'poison': ps.poison > 0,
+                'burn': ps.fire > 0,
+                'vulnus': ps.vulnerable > 0,
+                'toxic': ps.toxic > 0,
+                'dodge': ps.dodge > 0,
+                'invincible': bool(ps.invincible),
+                'untargetable': bool(ps.untargetable),
+            }
+            return bool(status_map.get(status, False))
+        if op == 'target_attribute':
+            tid = self._resolve_target(player_id, cond.get('target', 'self'))
+            a = int(getattr(self.players[tid], cond.get('attr', 'health'), 0))
+            b = int(self._eval_expr(player_id, cond.get('value', 0), card))
+            cmp = cond.get('operator', '=')
+            return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
+        if op == 'and':
+            return bool(self._eval_condition(player_id, cond.get('a'), card) and self._eval_condition(player_id, cond.get('b'), card))
+        if op == 'or':
+            return bool(self._eval_condition(player_id, cond.get('a'), card) or self._eval_condition(player_id, cond.get('b'), card))
+        if op == 'not':
+            return not bool(self._eval_condition(player_id, cond.get('value'), card))
+        if op == 'turn_number':
+            a = int(self.round_num)
+            b = int(self._eval_expr(player_id, cond.get('value', 0), card))
+            cmp = cond.get('operator', '=')
+            return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
+        if op == 'hand_full':
+            tid = self._resolve_target(player_id, cond.get('target', 'self'))
+            return len(self.players[tid].hand) >= HAND_LIMIT
+        if op == 'hand_has_type':
+            tid = self._resolve_target(player_id, cond.get('target', 'self'))
+            ctype = cond.get('card_type', 'thorn')
+            return any(c.card_type == ctype for c in self.players[tid].hand)
+        if op == 'zone_contains':
+            tid = self._resolve_target(player_id, cond.get('target', 'self'))
+            zone = cond.get('zone', 'hand')
+            card_selector = cond.get('card')
+            zone_map = {'hand': self.players[tid].hand, 'deck': self.players[tid].deck, 'discard': self.players[tid].discard, 'exile': self.players[tid].exile}
+            pool = zone_map.get(zone, [])
+            if isinstance(card_selector, dict):
+                return len(self._match_card_selector(player_id, pool, card_selector, card)) > 0
+            return len(pool) > 0
+        if op == 'event_card_type':
+            return bool(card is not None and card.card_type == cond.get('card_type'))
+        if op == 'equip_turns':
+            a = int(getattr(card, 'equip_turns', 0)) if card is not None else 0
+            b = int(self._eval_expr(player_id, cond.get('value', 0), card))
+            cmp = cond.get('operator', '=')
+            return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
+        if op == 'durability':
+            a = int(getattr(card, 'durability', 0)) if card is not None else 0
+            b = int(self._eval_expr(player_id, cond.get('value', 0), card))
+            cmp = cond.get('operator', '=')
+            return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
+        if op == 'damage_value':
+            a = int(self._incoming_damage_hint[player_id])
+            b = int(self._eval_expr(player_id, cond.get('value', 0), card))
+            cmp = cond.get('operator', '=')
+            return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
+        if op == 'has_equip':
+            tid = self._resolve_target(player_id, cond.get('target', 'self'))
+            return len(self.players[tid].equipment) > 0
+        return False
+
+    def _run_effect_list(self, player_id, card, effects, choice, context):
+        for eff in effects or []:
+            et = eff if isinstance(eff, str) else eff.get('type', '')
+            pm = {} if isinstance(eff, str) else eff.get('params', {})
+            lg = None if isinstance(eff, str) else eff.get('log')
+            rt = self._EFFECT_ALIASES.get(et, et)
+            fn = getattr(self, f'_atomic_{rt}', None)
+            if callable(fn):
+                fn(player_id, card, pm, lg, choice, context)
+            elif lg:
+                self.log_msg(lg)
+            else:
+                self.log_msg(f"未实现效果: {et}")
+
+    def _atomic_if(self, player_id, card, params, log, choice, context):
+        if self._eval_condition(player_id, params.get('condition'), card):
+            self._run_effect_list(player_id, card, params.get('then', []), choice, context)
+
+    def _atomic_if_else(self, player_id, card, params, log, choice, context):
+        if self._eval_condition(player_id, params.get('condition'), card):
+            self._run_effect_list(player_id, card, params.get('then', []), choice, context)
+        else:
+            self._run_effect_list(player_id, card, params.get('else', []), choice, context)
+
+    def _atomic_repeat(self, player_id, card, params, log, choice, context):
+        times = max(0, int(self._eval_expr(player_id, params.get('times', 1), card)))
+        body = params.get('body', [])
+        for _ in range(times):
+            self._run_effect_list(player_id, card, body, choice, context)
+
+    def _atomic_repeat_until(self, player_id, card, params, log, choice, context):
+        body = params.get('body', [])
+        max_loops = 64
+        loops = 0
+        while loops < max_loops and not self._eval_condition(player_id, params.get('condition'), card):
+            self._run_effect_list(player_id, card, body, choice, context)
+            loops += 1
+
+    def _atomic_for_each(self, player_id, card, params, log, choice, context):
+        body = params.get('body', [])
+        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
+            self._run_effect_list(tid, card, body, choice, context)
+
+    def _atomic_after_all(self, player_id, card, params, log, choice, context):
+        self._run_effect_list(player_id, card, params.get('body', []), choice, context)
+
+    def _atomic_random(self, player_id, card, params, log, choice, context):
+        branch = params.get('a', []) if random.random() < 0.5 else params.get('b', [])
+        self._run_effect_list(player_id, card, branch, choice, context)
+
+    def _atomic_var_set(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            name = str(params.get('name', 'var'))
+            ps.custom_vars[name] = int(params.get('value', 0))
+            self.log_msg(log or f"{self.pn(tid)}变量[{name}]={ps.custom_vars[name]}")
+
+    def _atomic_var_add(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            name = str(params.get('name', 'var'))
+            ps.custom_vars[name] = int(ps.custom_vars.get(name, 0) + int(params.get('value', 0)))
+            self.log_msg(log or f"{self.pn(tid)}变量[{name}]={ps.custom_vars[name]}")
+
+    def _atomic_var_sub(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            name = str(params.get('name', 'var'))
+            ps.custom_vars[name] = int(ps.custom_vars.get(name, 0) - int(params.get('value', 0)))
+            self.log_msg(log or f"{self.pn(tid)}变量[{name}]={ps.custom_vars[name]}")
+
+    def _atomic_var_mul(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            name = str(params.get('name', 'var'))
+            ps.custom_vars[name] = int(ps.custom_vars.get(name, 0) * int(params.get('value', 1)))
+            self.log_msg(log or f"{self.pn(tid)}变量[{name}]={ps.custom_vars[name]}")
+
+    def _atomic_var_div(self, player_id, card, params, log, choice, context):
+        div = max(1, int(params.get('value', 1)))
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            name = str(params.get('name', 'var'))
+            ps.custom_vars[name] = int(ps.custom_vars.get(name, 0) // div)
+            self.log_msg(log or f"{self.pn(tid)}变量[{name}]={ps.custom_vars[name]}")
+
+    def _atomic_batch_var_add(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
+            self._atomic_var_add(player_id, card, {'target': 'self' if tid == player_id else 'enemy', 'name': params.get('name', 'var'), 'value': params.get('value', 0)}, log, choice, context)
+
+    def _atomic_batch_var_sub(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
+            self._atomic_var_sub(player_id, card, {'target': 'self' if tid == player_id else 'enemy', 'name': params.get('name', 'var'), 'value': params.get('value', 0)}, log, choice, context)
+
+    def _atomic_batch_var_mul(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
+            self._atomic_var_mul(player_id, card, {'target': 'self' if tid == player_id else 'enemy', 'name': params.get('name', 'var'), 'value': params.get('value', 1)}, log, choice, context)
+
+    def _atomic_batch_var_div(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
+            self._atomic_var_div(player_id, card, {'target': 'self' if tid == player_id else 'enemy', 'name': params.get('name', 'var'), 'value': params.get('value', 1)}, log, choice, context)
+
+    def _atomic_status_add_named(self, player_id, card, params, log, choice, context):
+        status = str(params.get('status', '')).strip()
+        amount = int(params.get('amount', 1))
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            if status == '邪眼':
+                ps.nazar_active = True
+                ps.nazar_big_hits = max(0, ps.nazar_big_hits + amount)
+            self.log_msg(log or f"{self.pn(tid)}获得状态[{status}] {amount}")
+
+    def _atomic_status_remove_named(self, player_id, card, params, log, choice, context):
+        status = str(params.get('status', '')).strip()
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            if status == '邪眼':
+                ps.nazar_active = False
+                ps.nazar_big_hits = 0
+            self.log_msg(log or f"{self.pn(tid)}移除状态[{status}]")
+
+    def _atomic_batch_status_add(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
+            self._atomic_status_add_named(player_id, card, {'target': 'self' if tid == player_id else 'enemy', 'status': params.get('status', ''), 'amount': params.get('amount', 1)}, log, choice, context)
+
+    def _atomic_batch_status_remove(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
+            self._atomic_status_remove_named(player_id, card, {'target': 'self' if tid == player_id else 'enemy', 'status': params.get('status', '')}, log, choice, context)
+
+    def _atomic_tag_add_named(self, player_id, card, params, log, choice, context):
+        tag = str(params.get('tag', '')).strip()
+        if tag and card:
+            card.instance_flags = getattr(card, 'instance_flags', set())
+            card.instance_flags.add(tag)
+            self.log_msg(log or f"{card.name_cn}添加标签[{tag}]")
+
+    def _atomic_tag_remove_named(self, player_id, card, params, log, choice, context):
+        tag = str(params.get('tag', '')).strip()
+        if tag and card:
+            card.instance_flags = getattr(card, 'instance_flags', set())
+            card.instance_flags.discard(tag)
+            self.log_msg(log or f"{card.name_cn}移除标签[{tag}]")
+
+    def _atomic_batch_tag_add(self, player_id, card, params, log, choice, context):
+        self._atomic_tag_add_named(player_id, card, {'tag': params.get('tag', '')}, log, choice, context)
+
+    def _atomic_batch_tag_remove(self, player_id, card, params, log, choice, context):
+        self._atomic_tag_remove_named(player_id, card, {'tag': params.get('tag', '')}, log, choice, context)
 
     def _modified_attack_damage(self, base: int, card: CardInstance) -> int:
         fusion = max(1, int(getattr(card, 'fusion_level', 1)))
@@ -2391,3 +2782,6 @@ class GameEngine:
 
     def get_enemy_equipment(self, player_id: int) -> List[EquipmentInstance]:
         return self.players[1 - player_id].equipment
+
+
+install_runtime_ext(GameEngine)

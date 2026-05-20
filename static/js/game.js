@@ -544,6 +544,28 @@ let openingEventMagicPool = [];
 let soloEventA = '';
 let soloEventB = '';
 let pendingPlayCard = null;
+let gameTimelineEntries = [];
+let renderedBattleLogCount = 0;
+const bootLoader = {
+    el: null, stepEl: null, fillEl: null, value: 0,
+    init() {
+        this.el = document.getElementById('boot-loader');
+        this.stepEl = document.getElementById('boot-step');
+        this.fillEl = document.getElementById('boot-progress-fill');
+    },
+    step(text, pct) {
+        if (!this.el) this.init();
+        if (this.stepEl) this.stepEl.textContent = text;
+        if (typeof pct === 'number') {
+            this.value = Math.max(this.value, pct);
+            if (this.fillEl) this.fillEl.style.width = `${this.value}%`;
+        }
+    },
+    done() {
+        this.step('加载完成', 100);
+        setTimeout(() => this.el && this.el.classList.add('hidden'), 120);
+    }
+};
 
 function gameAlert(title, message, buttons) {
     const el = $('game-alert');
@@ -706,6 +728,11 @@ function showView(viewId) {
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     const el = $(viewId);
     if (el) el.classList.remove('hidden');
+    if (viewId !== 'view-game') {
+        gameTimelineEntries = [];
+        renderedBattleLogCount = 0;
+        updateModeSpecificControls({ solo: false, phase: '' });
+    }
 }
 
 function updateStatus(text) {
@@ -754,6 +781,7 @@ function hideModal() {
 
 async function fetchCardDefs() {
     try {
+        bootLoader.step('加载卡牌与模组数据 (/api/cards)...', 60);
         const disabledMods = encodeURIComponent(getDisabledMods().join(','));
         const resp = await fetch(`/api/cards?disabled_mods=${disabledMods}`);
         CARD_DEFS = await resp.json();
@@ -765,6 +793,7 @@ async function fetchCardDefs() {
 
 async function fetchOpeningEvents() {
     try {
+        bootLoader.step('加载开局事件 (/api/opening-events)...', 78);
         const resp = await fetch('/api/opening-events');
         const data = await resp.json();
         openingEvents = data.events || [];
@@ -782,6 +811,19 @@ function getCardDef(defId) {
 
 function getFlagLabel(flag) {
     return UI[`tag_${flag}`] || UI[`flag_${flag}`] || flag;
+}
+
+function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
+    const baseE = cardDict.cost_e_override != null ? cardDict.cost_e_override : cardDef.cost_e;
+    const baseM = cardDict.cost_m_override != null ? cardDict.cost_m_override : cardDef.cost_m;
+    const mimicDiscount = Number(cardDict.mimic_discount || 0);
+    const flags = new Set([...(cardDef.flags || []), ...(cardDict.instance_flags || [])]);
+    const dup = ownerState && ownerState.cards_played_this_turn
+        ? Number(ownerState.cards_played_this_turn[cardDict.def_id] || 0)
+        : 0;
+    const effectiveBaseE = Math.max(0, baseE - mimicDiscount);
+    const totalE = effectiveBaseE + (flags.has('symbiosis') ? 0 : dup);
+    return { totalE, totalM: baseM, flags };
 }
 
 function getCardLayerLabel(cardDict) {
@@ -812,11 +854,7 @@ function createCardElement(cardDict, options = {}) {
     }
     const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
     const typeLabel = getCardTypeLabel(cardDef.card_type) || cardDef.card_type;
-    const flags = new Set([...(cardDef.flags || []), ...(cardDict.instance_flags || [])]);
-    const dup = (phase === 'playing' && gameState.you && gameState.you.cards_played_this_turn && gameState.you.cards_played_this_turn[defId]) || 0;
-    const symbiosis = flags.has('symbiosis');
-    const totalE = (cardDict.cost_e_override != null ? cardDict.cost_e_override : cardDef.cost_e) - (cardDict.mimic_discount || 0) + (symbiosis ? 0 : dup);
-    const totalM = cardDict.cost_m_override != null ? cardDict.cost_m_override : cardDef.cost_m;
+    const { totalE, totalM, flags } = getCardDisplayCosts(cardDict, cardDef, gameState && gameState.you);
     el.style.borderColor = typeColor;
     el.dataset.instanceId = cardDict.instance_id;
     el.dataset.defId = defId;
@@ -1922,6 +1960,43 @@ function isMyTurn() {
     return gameState.phase === 'action' && gameState.current_player === playerId;
 }
 
+function updateModeSpecificControls(gs) {
+    const inSoloGame = !!gs?.solo;
+    const gameOver = gs?.phase === 'game_over';
+    const soloNextDrawBtn = $('btn-solo-next-draw');
+    const soloEditBtn = $('btn-solo-edit');
+    const surrenderBtn = $('btn-surrender');
+    const spectateControls = $('spectate-controls');
+    const gameControls = $('game-controls');
+    const playZone = $('play-zone');
+
+    const showSoloNextDraw = inSoloGame && !gameOver && !isSpectating;
+    const showSoloEdit = inSoloGame && !isSpectating;
+    const showSpectateControls = !!isSpectating;
+    const showGameControls = !isSpectating;
+    const showPlayZone = !isSpectating;
+
+    if (soloNextDrawBtn) {
+        soloNextDrawBtn.classList.toggle('hidden', !showSoloNextDraw);
+        soloNextDrawBtn.style.display = showSoloNextDraw ? '' : 'none';
+    }
+    if (soloEditBtn) {
+        soloEditBtn.classList.toggle('hidden', !showSoloEdit);
+        soloEditBtn.style.display = showSoloEdit ? '' : 'none';
+    }
+    if (surrenderBtn) {
+        const showSurrender = !(inSoloGame && gameOver);
+        surrenderBtn.classList.toggle('hidden', !showSurrender);
+        surrenderBtn.style.display = showSurrender ? '' : 'none';
+    }
+    if (spectateControls) {
+        spectateControls.classList.toggle('hidden', !showSpectateControls);
+        spectateControls.style.display = showSpectateControls ? '' : 'none';
+    }
+    if (gameControls) gameControls.style.display = showGameControls ? '' : 'none';
+    if (playZone) playZone.style.display = showPlayZone ? '' : 'none';
+}
+
 function renderGame(data) {
     showView('view-game');
     const gs = data || gameState;
@@ -1965,12 +2040,6 @@ function renderGame(data) {
         endTurnBtn.disabled = !myTurn || isSpectating || gs.phase === 'game_over';
     }
     const inSoloGame = !!gs.solo;
-    const soloNextDrawBtn = $('btn-solo-next-draw');
-    if (soloNextDrawBtn) soloNextDrawBtn.classList.toggle('hidden', !inSoloGame || gs.phase === 'game_over' || isSpectating);
-    const soloEditBtn = $('btn-solo-edit');
-    if (soloEditBtn) soloEditBtn.classList.toggle('hidden', !inSoloGame || isSpectating);
-    const surrenderBtn = $('btn-surrender');
-    if (surrenderBtn) surrenderBtn.classList.toggle('hidden', inSoloGame && gs.phase === 'game_over');
     const playZone = $('play-zone');
     if (playZone) {
         if (myTurn && !isSpectating) {
@@ -1992,20 +2061,12 @@ function renderGame(data) {
             </div>
         `;
     }
-    const spectateControls = $('spectate-controls');
-    const gameControls = $('game-controls');
+    updateModeSpecificControls(gs);
     if (isSpectating) {
-        if (spectateControls) spectateControls.classList.remove('hidden');
-        if (gameControls) gameControls.style.display = 'none';
-        if (playZone) playZone.style.display = 'none';
         const p1Name = gs.player1_name || 'P1';
         const p2Name = gs.player2_name || 'P2';
         const switchBtn = $('btn-switch-perspective');
         if (switchBtn) switchBtn.textContent = UI.switch_to_perspective.replace('{0}', spectatePerspective === 0 ? p2Name : p1Name);
-    } else {
-        if (spectateControls) spectateControls.classList.add('hidden');
-        if (gameControls) gameControls.style.display = '';
-        if (playZone) playZone.style.display = '';
     }
     const oppInfo = $('opp-info');
     if (oppInfo) oppInfo.textContent = UI.hand_deck_info_opp.replace('{0}', opp.hand_count || 0).replace('{1}', opp.deck_count || 0);
@@ -2130,11 +2191,7 @@ function canPlayCard(cardDict) {
     if ((you.attack_only || 0) > 0 && cardDef.card_type !== 'thorn') return false;
     const elixir = you.elixir || 0;
     const magic = you.magic || 0;
-    const dup = (you.cards_played_this_turn || {})[cardDict.def_id] || 0;
-    const flags = new Set([...(cardDef.flags || []), ...(cardDict.instance_flags || [])]);
-    const symbiosis = flags.has('symbiosis');
-    const totalE = (cardDict.cost_e_override != null ? cardDict.cost_e_override : cardDef.cost_e) - (cardDict.mimic_discount || 0) + (symbiosis ? 0 : dup);
-    const totalM = cardDict.cost_m_override != null ? cardDict.cost_m_override : cardDef.cost_m;
+    const { totalE, totalM } = getCardDisplayCosts(cardDict, cardDef, you);
     if (totalE > elixir) return false;
     if (totalM > magic) return false;
     return true;
@@ -2183,18 +2240,40 @@ function renderLog(log) {
         container.appendChild(content);
     }
     const wasAtBottom = content.scrollTop + content.clientHeight >= content.scrollHeight - 30;
+    if (!Array.isArray(log)) log = [];
+    if (log.length < renderedBattleLogCount) {
+        gameTimelineEntries = gameTimelineEntries.filter(entry => entry.type === 'chat');
+        renderedBattleLogCount = 0;
+    }
+    for (let i = renderedBattleLogCount; i < log.length; i++) {
+        gameTimelineEntries.push({ type: 'battle', text: log[i] });
+    }
+    renderedBattleLogCount = log.length;
+    if (gameTimelineEntries.length > 200) {
+        gameTimelineEntries = gameTimelineEntries.slice(-200);
+    }
     content.innerHTML = '';
-    log.forEach(line => {
+    gameTimelineEntries.forEach(entry => {
         const el = document.createElement('div');
-        el.className = 'log-entry';
-        if (line.includes('伤害') || line.includes('D')) el.classList.add('log-damage');
-        else if (line.includes('+H') || line.includes('回复')) el.classList.add('log-heal');
-        else if (line.includes('中毒')) el.classList.add('log-poison');
-        else if (line.includes('灼烧')) el.classList.add('log-fire');
-        else if (line.includes('+E') || line.includes('能量')) el.classList.add('log-elixir');
-        else if (line.includes('+M') || line.includes('魔力')) el.classList.add('log-magic');
-        else if (line.includes('===')) el.classList.add('log-round');
-        el.textContent = line;
+        if (entry.type === 'chat') {
+            el.className = 'log-entry log-chat';
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'chat-nick';
+            nameSpan.textContent = `${entry.nick}: `;
+            el.appendChild(nameSpan);
+            el.appendChild(document.createTextNode(entry.text));
+        } else {
+            const line = entry.text || '';
+            el.className = 'log-entry';
+            if (line.includes('伤害') || line.includes('D')) el.classList.add('log-damage');
+            else if (line.includes('+H') || line.includes('回复')) el.classList.add('log-heal');
+            else if (line.includes('中毒')) el.classList.add('log-poison');
+            else if (line.includes('灼烧')) el.classList.add('log-fire');
+            else if (line.includes('+E') || line.includes('能量')) el.classList.add('log-elixir');
+            else if (line.includes('+M') || line.includes('魔力')) el.classList.add('log-magic');
+            else if (line.includes('===')) el.classList.add('log-round');
+            el.textContent = line;
+        }
         content.appendChild(el);
     });
     if (wasAtBottom) content.scrollTop = content.scrollHeight;
@@ -2215,23 +2294,9 @@ function appendLobbyChat(nick, text) {
 }
 
 function appendGameChat(nick, text) {
-    const container = $('battle-log');
-    if (!container) return;
-    let content = container.querySelector('.log-content');
-    if (!content) {
-        content = document.createElement('div');
-        content.className = 'log-content';
-        container.appendChild(content);
-    }
-    const el = document.createElement('div');
-    el.className = 'log-entry log-chat';
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'chat-nick';
-    nameSpan.textContent = `${nick}: `;
-    el.appendChild(nameSpan);
-    el.appendChild(document.createTextNode(text));
-    content.appendChild(el);
-    content.scrollTop = content.scrollHeight;
+    gameTimelineEntries.push({ type: 'chat', nick, text });
+    if (gameTimelineEntries.length > 200) gameTimelineEntries = gameTimelineEntries.slice(-200);
+    renderLog((gameState && gameState.log) || []);
 }
 
 function renderPendingCard() {
@@ -2650,13 +2715,23 @@ async function onSoloNextDraw() {
         gameAlert(UI.notice, UI.deck_empty);
         return;
     }
-    const options = deck.map(c => {
-        const cd = getCardDef(c.def_id);
-        return cd ? getCardName(cd) : c.def_id;
-    });
-    const sel = await simpleChoice(UI.set_next_draw, options);
-    if (sel < 0) return;
-    socket.emit('solo_set_next_draw', { def_id: deck[sel].def_id });
+    const maxCount = Math.min(5, deck.length);
+    const countOptions = Array.from({ length: maxCount }, (_, i) => String(i + 1));
+    const countSel = await simpleChoice(`${UI.set_next_draw}（张数）`, countOptions);
+    if (countSel < 0) return;
+    const pickCount = countSel + 1;
+    const pool = deck.map(c => ({ def_id: c.def_id, label: getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id }));
+    const chosen = [];
+    for (let i = 0; i < pickCount; i++) {
+        if (!pool.length) break;
+        const options = pool.map((p, idx) => `${idx + 1}. ${p.label}`);
+        const sel = await simpleChoice(`${UI.set_next_draw}（${i + 1}/${pickCount}）`, options);
+        if (sel < 0) return;
+        chosen.push(pool[sel].def_id);
+        pool.splice(sel, 1);
+    }
+    if (!chosen.length) return;
+    socket.emit('solo_set_next_draw', { def_ids: chosen });
 }
 
 function onSurrender() {
@@ -2885,6 +2960,8 @@ function setupFullscreenPrompt() {
 }
 
 async function init() {
+    bootLoader.init();
+    bootLoader.step('初始化脚本...', 10);
     console.log('[INIT] === 游戏初始化开始 ===');
 
     document.addEventListener('contextmenu', (e) => {
@@ -2896,9 +2973,16 @@ async function init() {
     applyTheme(savedTheme);
     const savedLang = localStorage.getItem('got_lang') || 'zh';
     applyLang(savedLang);
+    bootLoader.step('应用主题与语言...', 24);
+    bootLoader.step('加载字体文件...', 36);
+    if (document.fonts && document.fonts.ready) {
+        try { await document.fonts.ready; } catch (_) {}
+    }
+    bootLoader.step('字体加载完成', 48);
     console.log('[INIT] 主题/语言已设置');
     await fetchCardDefs();
     await fetchOpeningEvents();
+    bootLoader.step('绑定界面事件...', 90);
     console.log('[INIT] 卡牌定义已加载, 数量=', Object.keys(CARD_DEFS).length);
     $('btn-connect').addEventListener('click', onLogin);
     $('btn-solo-training').addEventListener('click', showSoloTraining);
@@ -2960,6 +3044,7 @@ async function init() {
     initModEditor();
     showView('view-login');
     setupFullscreenPrompt();
+    bootLoader.done();
 }
 
 document.addEventListener('DOMContentLoaded', init);

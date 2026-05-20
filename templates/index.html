@@ -4,10 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
-<link rel="stylesheet" href="/static/css/style.css?v=49">
+<link rel="stylesheet" href="/static/css/style.css?v=50">
 </head>
 <body>
 <div id="app">
+<div id="boot-loader" class="boot-loader">
+  <div class="boot-loader-inner">
+    <div class="boot-title">Garden of Thorn</div>
+    <div class="boot-sub">启动中</div>
+    <div id="boot-step" class="boot-step">准备加载...</div>
+    <div class="boot-progress">
+      <div id="boot-progress-fill" class="boot-progress-fill"></div>
+    </div>
+  </div>
+</div>
 
 <div id="view-login" class="view">
 <div class="login-container">
@@ -294,6 +304,6 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="/static/js/game.js?v=49"></script>
+<script src="/static/js/game.js?v=50"></script>
 </body>
 </html>
