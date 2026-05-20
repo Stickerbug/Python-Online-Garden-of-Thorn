@@ -445,7 +445,7 @@ const I18N = {
         lobby_status: 'ロビー - {0}', no_counter_countdown: 'カウンターなし({0})',
         select_event_desc: 'オープニングイベントを選択',
         opponent_selected: '相手が選択済み', opponent_selecting: '相手が選択中...',
-        card_type_thorn: '棘', card_type_bloom: '花', card_type_root: '根', card_type_guard: '守護',
+        card_type_thorn: '棘', card_type_bloom: '花', card_type_root: '根', card_type_guard: '護',
         settings_title: '設定', settings_appearance: '外観', settings_theme: 'テーマ',
         settings_lang: '言語', settings_mods: 'Mod', settings_theme_light: 'ライト',
         settings_theme_dark: 'ダーク', no_games: '進行中の対戦なし',
@@ -1940,7 +1940,7 @@ function renderGame(data) {
         if (oppLabel) oppLabel.textContent = gs.opponent_name || UI.opponent;
         if (youLabel) youLabel.textContent = gs.your_name || UI.you;
     }
-    if (soloMode && gs.phase === 'game_over') {
+    if (!!gs.solo && gs.phase === 'game_over') {
         const winner = gs.winner;
         const youResult = winner === -1 ? UI.draw : (winner === playerId ? UI.victory : UI.defeat);
         const oppResult = winner === -1 ? UI.draw : (winner === playerId ? UI.defeat : UI.victory);
@@ -1966,9 +1966,9 @@ function renderGame(data) {
     }
     const inSoloGame = !!gs.solo;
     const soloNextDrawBtn = $('btn-solo-next-draw');
-    if (soloNextDrawBtn) soloNextDrawBtn.classList.toggle('hidden', !inSoloGame || gs.phase === 'game_over');
+    if (soloNextDrawBtn) soloNextDrawBtn.classList.toggle('hidden', !inSoloGame || gs.phase === 'game_over' || isSpectating);
     const soloEditBtn = $('btn-solo-edit');
-    if (soloEditBtn) soloEditBtn.classList.toggle('hidden', !inSoloGame);
+    if (soloEditBtn) soloEditBtn.classList.toggle('hidden', !inSoloGame || isSpectating);
     const surrenderBtn = $('btn-surrender');
     if (surrenderBtn) surrenderBtn.classList.toggle('hidden', inSoloGame && gs.phase === 'game_over');
     const playZone = $('play-zone');

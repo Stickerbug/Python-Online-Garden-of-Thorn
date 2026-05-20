@@ -1,4 +1,4 @@
-import random
+﻿import random
 import math
 from typing import List, Dict, Optional, Tuple, Set
 from cards import (
@@ -269,13 +269,13 @@ class PlayerState:
 class GameEngine:
     OPENING_EVENTS = {
         1: {'id': 1, 'name': '生命强化', 'desc': '最大生命值+20', 'position': 1},
-        2: {'id': 2, 'name': '魔力转化', 'desc': '选择1-3张牌，每张分别3选1魔法牌转化，开局回复5M', 'position': 2},
-        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多五张牌转化为Light（萌芽+共生）', 'position': 2},
+        2: {'id': 2, 'name': '魔力转化', 'desc': '选择1-3张牌，分别选择魔法牌转化，开局回复5M', 'position': 2},
+        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多五张牌转化为Light（萌芽、共生）', 'position': 2},
         8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为世界树之叶', 'position': 2},
-        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对敌方施加2层灼烧', 'position': 3},
+        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对敌方施加3层灼烧', 'position': 3},
         5: {'id': 5, 'name': '命运抽签', 'desc': '前二回合开始时抽牌至手牌已满', 'position': 3},
-        6: {'id': 6, 'name': '能量涌动', 'desc': '前三回合开始时额外回1E', 'position': 3},
-        7: {'id': 7, 'name': '先手压制', 'desc': '必定先手(对面未选同事件时)，先手多回复3E抽4张牌', 'position': 3},
+        6: {'id': 6, 'name': '能量涌动', 'desc': '前三回合开始时额外回复2E', 'position': 3},
+        7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手多回复3E并抽4张牌', 'position': 3},
     }
     MAGIC_CARD_POOL = ['MagicBone', 'MagicStinger', 'MagicSewage', 'MagicNazar', 'MagicBubble']
 
@@ -386,6 +386,7 @@ class GameEngine:
         self.halve_next_attack: bool = False
         self.game_over: bool = False
         self.winner: int = -1
+        self._game_over_defer_depth: int = 0
         self.negated_card: bool = False
         self._yggdrasil_check: bool = True
         self._antenna_reveal: List[Optional[list]] = [None, None]
@@ -605,9 +606,9 @@ class GameEngine:
         elif event_id == 5:
             self.log_msg(f"{self.pn(player_id)}【命运抽签】：前二回合抽牌至手牌满")
         elif event_id == 6:
-            self.log_msg(f"{self.pn(player_id)}【能量涌动】：前三回合额外回1E")
+            self.log_msg(f"{self.pn(player_id)}【能量涌动】：前三回合额外回复2E")
         elif event_id == 7:
-            self.log_msg(f"{self.pn(player_id)}【先手压制】：先手回复3E抽4张牌")
+            self.log_msg(f"{self.pn(player_id)}【先手压制】：先手回复3E并抽4张牌")
         elif event_id == 8:
             ps.max_health -= 20
             ps.base_max_health -= 20
@@ -617,7 +618,8 @@ class GameEngine:
                 for j in range(len(ps.deck)):
                     if ps.deck[j].def_id == target_def:
                         ps.deck[j] = CardInstance(def_id='Yggdrasil')
-                        self.log_msg(f"{self.pn(player_id)}【绝境求生】：最大生命值-20，{CARD_DEFS.get(target_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn}变为Yggdrasil")
+                        target_name = CARD_DEFS.get(target_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
+                        self.log_msg(f"{self.pn(player_id)}【绝境求生】：最大生命值-20，{target_name}变为Yggdrasil")
                         break
             else:
                 for j in range(len(ps.deck) - 1, -1, -1):
@@ -696,7 +698,7 @@ class GameEngine:
             for eq in opp.equipment:
                 if eq.def_id == 'Pincer':
                     elixir_recovery -= 1
-                    self.log_msg(f"{self.pn(player_id)}受螫针影响，能量回复-1")
+                    self.log_msg(f"{self.pn(player_id)}受到螫针影响，能量回复-1")
             elixir_recovery -= ps.enemy_e_reduction
             elixir_recovery = max(0, elixir_recovery)
             ps.gain_elixir(elixir_recovery)
@@ -739,7 +741,7 @@ class GameEngine:
         corruption_count = self._get_corruption_count()
         if corruption_count > 0:
             actual = actual * (2 ** corruption_count)
-            self.log_msg(f"腐化效果：伤害×{2 ** corruption_count}")
+            self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
         ps.health -= actual
         self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={ps.health}）")
         self._check_yggdrasil(player_id)
@@ -769,21 +771,21 @@ class GameEngine:
             dmg = amount
             if self.halve_next_attack:
                 dmg = math.ceil(dmg / 2)
-                self.log_msg(f"精准被反制，伤害减半：{amount}→{dmg}")
+                self.log_msg(f"精准被反制，伤害减半：{amount}->{dmg}")
             corruption_count = self._get_corruption_count()
             if corruption_count > 0:
                 dmg = dmg * (2 ** corruption_count)
-                self.log_msg(f"腐化效果：伤害×{2 ** corruption_count}")
+                self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
             if ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
-                self.log_msg(f"邪眼护符效果：伤害{original_dmg}→{dmg}")
+                self.log_msg(f"邪眼护符效果：伤害{original_dmg}->{dmg}")
                 if original_dmg >= 10:
                     ps.nazar_big_hits += 1
                     if ps.nazar_big_hits >= 2:
                         ps.nazar_active = False
                         ps.nazar_big_hits = 0
-                        self.log_msg(f"{self.pn(target_id)}的邪眼护符被击碎！")
+                        self.log_msg(f"{self.pn(target_id)}的邪眼护符被击破！")
             dmg = max(0, dmg - ps.armor)
             if ps.sponge_active and dmg > 0:
                 poison_add = dmg // 2
@@ -796,22 +798,22 @@ class GameEngine:
             if ps.toxic > 0:
                 ps.poison += ps.toxic
                 self.log_msg(f"淬毒效果：{self.pn(target_id)}+{ps.toxic}层中毒")
-            self._check_yggdrasil(target_id)
-            if self.game_over:
-                break
-            if dmg > 0 and not is_battery:
-                for eq in ps.equipment:
-                    if eq.def_id == 'Battery':
-                        self.log_msg(f"{self.pn(target_id)}的电池效果：对敌方造成3D")
-                        self._deal_direct_damage(opp_id, 3, '电池')
-                        if self.game_over:
-                            break
-                    if eq.def_id == 'MagicBattery':
-                        if ps.magic_battery_m_this_turn < 3:
-                            ps.gain_magic(1)
-                            ps.magic_battery_m_this_turn += 1
-                            self.log_msg(f"{self.pn(target_id)}的魔法电池效果：+1M")
-            if ps.health <= 0:
+            self._game_over_defer_depth += 1
+            try:
+                self._check_yggdrasil(target_id)
+                if dmg > 0 and not is_battery:
+                    for eq in list(ps.equipment):
+                        if eq.def_id == 'Battery':
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对敌方造成3D")
+                            self._deal_direct_damage(opp_id, 3, '电池')
+                        if eq.def_id == 'MagicBattery':
+                            if ps.magic_battery_m_this_turn < 3:
+                                ps.gain_magic(1)
+                                ps.magic_battery_m_this_turn += 1
+                                self.log_msg(f"{self.pn(target_id)}的魔法电池效果：+1M")
+            finally:
+                self._game_over_defer_depth -= 1
+            if ps.health <= 0 or opp.health <= 0:
                 self._check_game_over()
                 break
         return total_dealt
@@ -886,6 +888,8 @@ class GameEngine:
                             return
 
     def _check_game_over(self):
+        if self._game_over_defer_depth > 0:
+            return
         if self.players[0].health <= 0 and self.players[1].health <= 0:
             self.game_over = True
             self.winner = -1
@@ -906,14 +910,14 @@ class GameEngine:
         self.game_over = True
         self.winner = 1 - player_id
         self.phase = 'game_over'
-        self.log_msg(f"{self.pn(player_id)}投降！{self.pn(self.winner)}获胜！")
+        self.log_msg(f"{self.pn(player_id)}投降，{self.pn(self.winner)}获胜！")
         return {'success': True}
 
     def can_play_card(self, player_id: int, card: CardInstance) -> Tuple[bool, str]:
         ps = self.players[player_id]
         card_def = card.card_def
         if card_def.card_type == 'guard':
-            return False, "反制卡只能通过响应机制使用"
+            return False, "反制牌只能通过响应机制使用"
         if self.phase != 'action' or self.current_player != player_id:
             return False, "不是你的回合"
         if ps.attack_blocked > 0 and card_def.card_type == 'thorn':
@@ -921,7 +925,7 @@ class GameEngine:
         if ps.attack_only > 0 and card_def.card_type != 'thorn':
             return False, "本回合只能使用攻击牌"
         if ps.shovel_active:
-            return False, "铲子效果中，无法使用卡牌"
+            return False, "链子效果中，无法使用卡牌"
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = card.cost_e + extra_e
         if total_e > ps.elixir:
@@ -954,7 +958,7 @@ class GameEngine:
         ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
         card_removed = ps.remove_hand_card(card_instance_id)
         if card_removed is None:
-            return {'success': False, 'error': '移除手牌失败'}
+            return {'success': False, 'error': '移出手牌失败'}
         needs_response = self._check_response_needed(player_id, card)
         if not needs_response:
             needs_response = self._check_precision_response_needed(player_id, card)
@@ -1133,7 +1137,7 @@ class GameEngine:
             if eq.def_id == 'Disc':
                 has_disc = any(e.def_id == 'Disc' for e in ps.equipment)
                 if has_disc:
-                    self.log_msg(f"圆盘不可叠加，旧圆盘被替换")
+                    self.log_msg("圆盘不可叠加，旧圆盘被替换")
                     old_disc = [e for e in ps.equipment if e.def_id == 'Disc']
                     for od in old_disc:
                         ps.armor = max(0, ps.armor - 2)
@@ -1419,13 +1423,13 @@ class GameEngine:
         duration = params.get('duration', 1)
         opp = self.players[1 - player_id]
         opp.attack_blocked = max(opp.attack_blocked, duration)
-        self.log_msg(log or f"{self.pn(1 - player_id)}无法使用攻击牌({duration}回合)")
+        self.log_msg(log or f"{self.pn(1 - player_id)}无法使用攻击牌{duration}回合")
 
     def _atomic_force_enemy_attacks_only(self, player_id, card, params, log, choice, context):
         duration = params.get('duration', 1)
         opp = self.players[1 - player_id]
         opp.attack_only = max(opp.attack_only, duration)
-        self.log_msg(log or f"{self.pn(1 - player_id)}仅可使用攻击牌({duration}回合)")
+        self.log_msg(log or f"{self.pn(1 - player_id)}仅可使用攻击牌{duration}回合")
 
     def _atomic_block_own_actions(self, player_id, card, params, log, choice, context):
         self.players[player_id].shovel_active = True
@@ -1512,7 +1516,7 @@ class GameEngine:
         total = 0
         for _ in range(times):
             total += self.deal_attack_damage(target_id, amount)
-        self.log_msg(log or f"{self.pn(player_id)}对{self.pn(target_id)}造成{times}×{amount}={total}伤害")
+        self.log_msg(log or f"{self.pn(player_id)}对{self.pn(target_id)}造成{times}x{amount}={total}伤害")
 
     def _atomic_remove_armor(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -1729,7 +1733,7 @@ class GameEngine:
         for c in target_zone[:]:
             if c.def_id == card_ref:
                 target_zone.remove(c)
-                self.log_msg(log or f"{self.pn(target_id)}的{c.name_cn}从{zone}中被消耗")
+                self.log_msg(log or f"{self.pn(target_id)}的{c.name_cn}从{zone}中被消除")
                 break
 
     def _atomic_destroy_random_equip(self, player_id, card, params, log, choice, context):
@@ -1753,7 +1757,7 @@ class GameEngine:
         for pid in [0, 1]:
             for eq in self.players[pid].equipment[:]:
                 self._destroy_equipment(pid, eq)
-        self.log_msg(log or f"场上所有装备被摧毁")
+        self.log_msg(log or "场上所有装备被摧毁")
 
     def _atomic_remove_equip_protection(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -1778,7 +1782,7 @@ class GameEngine:
         elif card_type == 'bloom':
             ts.skill_blocked = getattr(ts, 'skill_blocked', 0)
             ts.skill_blocked = max(ts.skill_blocked, duration)
-        self.log_msg(log or f"{self.pn(target_id)}无法使用{card_type}牌({duration}回合)")
+        self.log_msg(log or f"{self.pn(target_id)}无法使用{card_type}牌{duration}回合")
 
     def _atomic_force_card_type(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -1787,7 +1791,7 @@ class GameEngine:
         ts = self.players[target_id]
         if card_type == 'thorn':
             ts.attack_only = max(ts.attack_only, duration)
-        self.log_msg(log or f"{self.pn(target_id)}仅可使用{card_type}牌({duration}回合)")
+        self.log_msg(log or f"{self.pn(target_id)}仅可使用{card_type}牌{duration}回合")
 
     def _atomic_nullify_current_card(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -1800,7 +1804,7 @@ class GameEngine:
     def _atomic_skip_turn(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         self.players[target_id].skip_turn = True
-        self.log_msg(log or f"{self.pn(target_id)}的下一回合将被跳过")
+        self.log_msg(log or f"{self.pn(target_id)}的下一个回合将被跳过")
 
     def _atomic_extra_turn(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -1832,7 +1836,7 @@ class GameEngine:
     def _atomic_multiply_next_damage(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
         ps.damage_multiplier = getattr(ps, 'damage_multiplier', 1.0) * multiplier
-        self.log_msg(log or f"{self.pn(player_id)}下次伤害×{multiplier}")
+        self.log_msg(log or f"{self.pn(player_id)}下次伤害x{multiplier}")
 
     def _atomic_reduce_next_cost(self, player_id, card, params, log, choice, context):
         amount = params.get('amount', 1)
@@ -1958,17 +1962,17 @@ class GameEngine:
     def _atomic_global_damage_mult(self, player_id, card, params, log, choice, context):
         multiplier = params.get('multiplier', 1.0)
         self.global_damage_mult = getattr(self, 'global_damage_mult', 1.0) * multiplier
-        self.log_msg(log or f"全场伤害倍率×{multiplier}")
+        self.log_msg(log or f"全场伤害倍率x{multiplier}")
 
     def _atomic_global_heal_mult(self, player_id, card, params, log, choice, context):
         multiplier = params.get('multiplier', 1.0)
         self.global_heal_mult = getattr(self, 'global_heal_mult', 1.0) * multiplier
-        self.log_msg(log or f"全场治疗倍率×{multiplier}")
+        self.log_msg(log or f"全场治疗倍率x{multiplier}")
 
     def _atomic_global_cost_mult(self, player_id, card, params, log, choice, context):
         multiplier = params.get('multiplier', 1.0)
         self.global_cost_mult = getattr(self, 'global_cost_mult', 1.0) * multiplier
-        self.log_msg(log or f"全场费用倍率×{multiplier}")
+        self.log_msg(log or f"全场费用倍率x{multiplier}")
 
     def _atomic_swap_health(self, player_id, card, params, log, choice, context):
         t1 = self._resolve_target(player_id, params.get('target1', 'self'))
@@ -2019,19 +2023,19 @@ class GameEngine:
     def _effect_sand(self, player_id: int, card: CardInstance, choice=None):
         dmg = self._modified_attack_damage(3, card)
         hits = 4
-        self.log_msg(f"{self.pn(player_id)}使用沙子！造成{dmg}×{hits}伤害")
+        self.log_msg(f"{self.pn(player_id)}使用沙子！造成{dmg}x{hits}伤害")
         self.deal_attack_damage(1 - player_id, dmg, hits)
 
     def _effect_wing(self, player_id: int, card: CardInstance, choice=None):
         dmg = self._modified_attack_damage(8, card)
         hits = 2
-        self.log_msg(f"{self.pn(player_id)}使用翅膀！造成{dmg}×{hits}伤害")
+        self.log_msg(f"{self.pn(player_id)}使用翅膀！造成{dmg}x{hits}伤害")
         self.deal_attack_damage(1 - player_id, dmg, hits)
 
     def _effect_light(self, player_id: int, card: CardInstance, choice=None):
         dmg = self._modified_attack_damage(2, card)
         hits = 2
-        self.log_msg(f"{self.pn(player_id)}使用轻！造成{dmg}×{hits}伤害")
+        self.log_msg(f"{self.pn(player_id)}使用轻！造成{dmg}x{hits}伤害")
         self.deal_attack_damage(1 - player_id, dmg, hits)
 
     def _effect_fang(self, player_id: int, card: CardInstance, choice=None):
@@ -2072,7 +2076,7 @@ class GameEngine:
             if target and target.card_type == 'thorn':
                 target.fission_level = max(1, int(getattr(target, 'fission_level', 1))) + 2
                 target.fission_count = target.fission_level - 1
-                self.log_msg(f"{self.pn(player_id)}使用裂变！{target.name_cn}裂变层数+2")
+                self.log_msg(f"{self.pn(player_id)}使用裂变：{target.name_cn}裂变层数+2")
             else:
                 self.log_msg(f"{self.pn(player_id)}使用裂变，但目标无效")
         else:
@@ -2102,7 +2106,7 @@ class GameEngine:
             for c in cards[1:]:
                 ps.hand.remove(c)
                 self._discard_card(ps, c)
-            self.log_msg(f"{self.pn(player_id)}使用聚变！{first.name_cn}聚变{first.fusion_level} 裂变{first.fission_level}，合并{len(cards)}张")
+            self.log_msg(f"{self.pn(player_id)}使用聚变：{first.name_cn}聚变{first.fusion_level} 裂变{first.fission_level}，合并{len(cards)}张")
         else:
             self.log_msg(f"{self.pn(player_id)}使用聚变，但未选择目标")
 
@@ -2116,15 +2120,15 @@ class GameEngine:
 
     def _effect_fries(self, player_id: int, card: CardInstance, choice=None):
         self.players[player_id].heal(12)
-        self.log_msg(f"{self.pn(player_id)}使用薯条！+12H")
+        self.log_msg(f"{self.pn(player_id)}使用薯条：+12H")
 
     def _effect_rose(self, player_id: int, card: CardInstance, choice=None):
         self.players[player_id].heal(7)
-        self.log_msg(f"{self.pn(player_id)}使用玫瑰！+7H")
+        self.log_msg(f"{self.pn(player_id)}使用玫瑰：+7H")
 
     def _effect_manaorb(self, player_id: int, card: CardInstance, choice=None):
         self.players[player_id].gain_magic(3)
-        self.log_msg(f"{self.pn(player_id)}使用魔法球！+3M")
+        self.log_msg(f"{self.pn(player_id)}使用魔法球：+3M")
 
     def _effect_coffee(self, player_id: int, card: CardInstance, choice=None):
         ps = self.players[player_id]
@@ -2133,7 +2137,7 @@ class GameEngine:
             bonus = 2
             ps.coffee_first_use = False
         ps.gain_elixir(bonus)
-        self.log_msg(f"{self.pn(player_id)}使用咖啡！+{bonus}E")
+        self.log_msg(f"{self.pn(player_id)}使用咖啡：+{bonus}E")
 
     def _effect_chilli(self, player_id: int, card: CardInstance, choice=None):
         ps = self.players[player_id]
@@ -2247,7 +2251,7 @@ class GameEngine:
     def _effect_cancer(self, player_id: int, card: CardInstance, choice=None):
         opp = self.players[1 - player_id]
         opp.toxic += 1
-        self.log_msg(f"{self.pn(player_id)}装备癌细胞！敌方+1淬毒")
+        self.log_msg(f"{self.pn(player_id)}装备了癌细胞！敌方+1淬毒")
 
     def _effect_corruption(self, player_id: int, card: CardInstance, choice=None):
         self.log_msg(f"{self.pn(player_id)}装备了腐化！下回合起全场伤害翻倍")
@@ -2276,11 +2280,11 @@ class GameEngine:
                 self.log_msg(f"海绵被摧毁！去除{poison_layers}层中毒，受到{physical_dmg}点物理伤害")
                 self._check_yggdrasil(player_id)
             else:
-                self.log_msg(f"海绵被摧毁！无中毒层数")
+                self.log_msg("海绵被摧毁！无中毒层数")
         if eq.def_id == 'Pill':
             ps.enemy_draw_reduction = max(0, ps.enemy_draw_reduction - 1)
             ps.enemy_e_reduction = max(0, ps.enemy_e_reduction - 1)
-            self.log_msg(f"药丸被摧毁！己方抽牌和回E恢复正常")
+            self.log_msg("药丸被摧毁！己方抽牌和回E恢复正常")
         ps.equipment.remove(eq)
         if 'exile' in eq.card_def.flags:
             ps.exile.append(eq.card_instance)
