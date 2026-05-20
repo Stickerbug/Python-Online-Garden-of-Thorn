@@ -52,11 +52,6 @@ VALID_EFFECTS = {
     'exile_this', 'move_to_discard', 'move_to_deck',
     'global_damage_mult', 'global_heal_mult', 'global_cost_mult',
     'swap_health', 'swap_hands', 'broadcast_event', 'modify_damage',
-    'var_set', 'var_add', 'var_sub', 'var_mul', 'var_div',
-    'batch_var_add', 'batch_status_add', 'call_procedure',
-    'batch_var_sub', 'batch_var_mul', 'batch_var_div',
-    'batch_status_remove', 'batch_tag_add', 'batch_tag_remove',
-    'status_add_named', 'status_remove_named', 'tag_add_named', 'tag_remove_named',
     'trigger_on_enemy_use_type', 'trigger_on_friendly_use_type',
     'trigger_on_self_magic_heal_cumulative', 'trigger_manual', 'response_declare',
     'trigger_on_event',
@@ -186,22 +181,14 @@ class Mod:
 
     def to_dict(self) -> dict:
         return {
-            'format_version': 1,
             'info': self.info.to_dict() if self.info else {},
             'cards': [c.to_dict() for c in self.cards],
             'events': [e.to_dict() for e in self.events],
-            'variables': [],
-            'custom_statuses': [],
-            'custom_tags': [],
-            'scripts': {},
         }
 
 
 def validate_mod(data: dict) -> List[str]:
     errors = []
-    format_version = data.get('format_version')
-    if format_version is not None and format_version != 1:
-        errors.append(f'不支持的模组格式版本: {format_version}，当前仅支持 1')
     info = data.get('info', {})
     if not info.get('name'):
         errors.append('模组缺少名称')
@@ -233,26 +220,6 @@ def validate_mod(data: dict) -> List[str]:
     return errors
 
 
-def _normalize_mod_data(data: dict) -> dict:
-    """
-    Normalize both legacy and format_version=1 payloads to runtime-compatible shape.
-    Runtime currently consumes cards/events/effects; custom_statuses/custom_tags/scripts are editor metadata.
-    """
-    if not isinstance(data, dict):
-        return {}
-    normalized = copy.deepcopy(data)
-    if 'format_version' not in normalized:
-        # Legacy files are treated as v1-compatible data.
-        normalized['format_version'] = 1
-    normalized.setdefault('cards', [])
-    normalized.setdefault('events', [])
-    normalized.setdefault('variables', [])
-    normalized.setdefault('custom_statuses', [])
-    normalized.setdefault('custom_tags', [])
-    normalized.setdefault('scripts', {})
-    return normalized
-
-
 def load_mod(filepath: str) -> Mod:
     mod = Mod(filepath)
     try:
@@ -264,7 +231,6 @@ def load_mod(filepath: str) -> Mod:
     except Exception as e:
         mod.errors.append(f'读取失败: {e}')
         return mod
-    data = _normalize_mod_data(data)
     errors = validate_mod(data)
     mod.errors = errors
     if data.get('info'):

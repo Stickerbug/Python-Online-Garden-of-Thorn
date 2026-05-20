@@ -16,14 +16,17 @@ from cards import (
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE,
 )
 from mod_loader import merge_mod_cards_to_card_defs, load_all_mods, save_mod, Mod
+from card_i18n import apply_card_i18n_defaults, card_text, event_text
 
 BASE_CARD_IDS = set(CARD_DEFS.keys())
 
 try:
     merged = merge_mod_cards_to_card_defs()
-    print(f'[启动] 模组加载完成，合并了 {len(merged)} 张卡牌')
+    apply_card_i18n_defaults(CARD_DEFS)
+    print(f'[startup] mods loaded, merged {len(merged)} cards')
 except Exception as e:
-    print(f'[启动] 模组加载失败: {type(e).__name__}: {e}')
+    apply_card_i18n_defaults(CARD_DEFS)
+    print(f'[startup] mod loading failed: {type(e).__name__}: {e}')
     import traceback
     traceback.print_exc()
 
@@ -161,7 +164,7 @@ def broadcast_lobby():
                 'your_sid': sid,
                 'ongoing_games': ongoing,
             }, room=sid)
-    print(f"[服务器] broadcast_lobby: {len(lobby_list)} lobby玩家, {len([p for p in players.values() if p['status'] == 'lobby'])} 接收者")
+    print("[server] debug")
 
 
 def send_draft_state(room, pidx):
@@ -440,7 +443,11 @@ def index():
 @app.route('/fonts/<path:filename>')
 def serve_font(filename):
     fonts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'fonts')
-    return send_from_directory(fonts_dir, filename)
+    mimetype = 'font/woff2' if filename.endswith('.woff2') else None
+    response = send_from_directory(fonts_dir, filename, mimetype=mimetype)
+    if filename.endswith('.woff2') or filename.endswith('.ttf'):
+        response.headers['Cache-Control'] = 'public, max-age=604800'
+    return response
 
 
 @app.route('/api/cards')
@@ -450,7 +457,7 @@ def api_cards():
     for def_id, card_def in CARD_DEFS.items():
         if def_id not in allowed_card_ids:
             continue
-        result[def_id] = {
+        card_payload = {
             'id': card_def.id,
             'name_en': card_def.name_en,
             'name_cn': card_def.name_cn,
@@ -467,6 +474,8 @@ def api_cards():
             'response_trigger': card_def.response_trigger,
             'effects': card_def.effects,
         }
+        card_payload.update(card_text(def_id, card_payload))
+        result[def_id] = card_payload
     return jsonify(result)
 
 
@@ -474,7 +483,7 @@ def api_cards():
 def api_opening_events():
     events = []
     for event_id in sorted(GameEngine.OPENING_EVENTS.keys()):
-        events.append(dict(GameEngine.OPENING_EVENTS[event_id]))
+        events.append(event_text(event_id, dict(GameEngine.OPENING_EVENTS[event_id])))
     return jsonify({
         'events': events,
         'magic_pool': list(GameEngine.MAGIC_CARD_POOL),
@@ -496,8 +505,8 @@ def api_mods():
 def api_mods_save():
     data = request.get_json(force=True)
     if not data:
-        return jsonify({'success': False, 'error': '无效数据'}), 400
-    mod = Mod(data.get('filepath', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Python联机版', 'mods', 'new_mod.json')))
+        return jsonify({'success': False, 'error': 'invalid data'}), 400
+    mod = Mod(data.get('filepath', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mods', 'new_mod.json')))
     if data.get('info'):
         from mod_loader import ModInfo
         mod.info = ModInfo(data['info'])
@@ -535,7 +544,7 @@ def admin_ls():
                 if psid in players:
                     p_names.append(players[psid]['nickname'])
                 else:
-                    p_names.append('(离线)')
+                    p_names.append('(缁傝崵鍤?')
             room_list.append({
                 'room_id': rid,
                 'players': p_names,
@@ -552,7 +561,7 @@ def admin_kick():
     sid = data.get('sid', '')
     with _lock:
         if sid not in players:
-            return jsonify({'success': False, 'error': '玩家不存在'}), 404
+            return jsonify({'success': False, 'error': 'player not found'}), 404
         nickname = players[sid]['nickname']
         room_id = players[sid].get('room_id')
         if room_id is not None and room_id in rooms:
@@ -569,7 +578,7 @@ def admin_kick():
             if inv_sid == sid or target_sid == sid:
                 del invites[inv_sid]
         del players[sid]
-    socketio.emit('kicked', {'reason': '被管理员踢出'}, room=sid)
+    socketio.emit('kicked', {'reason': 'kicked by admin'}, room=sid)
     broadcast_lobby()
     return jsonify({'success': True, 'nickname': nickname})
 
@@ -579,7 +588,7 @@ def admin_broadcast():
     data = request.get_json(force=True)
     msg = data.get('message', '')
     if not msg.strip():
-        return jsonify({'success': False, 'error': '消息不能为空'}), 400
+        return jsonify({'success': False, 'error': 'empty message'}), 400
     socketio.emit('server_broadcast', {'message': msg})
     return jsonify({'success': True})
 
@@ -588,16 +597,16 @@ def admin_broadcast():
 def admin_skip(room_id):
     with _lock:
         if room_id not in rooms:
-            return jsonify({'success': False, 'error': '房间不存在'}), 404
+            return jsonify({'success': False, 'error': 'room not found'}), 404
         room = rooms[room_id]
         e = room.engine
         if e.game_over:
-            return jsonify({'success': False, 'error': '游戏已结束'}), 400
+            return jsonify({'success': False, 'error': 'game already over'}), 400
         if e.phase in ('action', 'draw'):
             e._end_player_turn(e.current_player)
             broadcast_game_state(room)
             return jsonify({'success': True, 'phase': e.phase, 'current_player': e.current_player})
-        return jsonify({'success': False, 'error': f'当前阶段 {e.phase} 无法跳过'}), 400
+        return jsonify({'success': False, 'error': f'cannot skip during phase {e.phase}'}), 400
 
 
 @app.route('/api/admin/room/<int:room_id>/endgame', methods=['POST'])
@@ -605,10 +614,10 @@ def admin_endgame(room_id):
     data = request.get_json(force=True)
     winner = data.get('winner', 0)
     if winner not in (0, 1):
-        return jsonify({'success': False, 'error': 'winner必须是0或1'}), 400
+        return jsonify({'success': False, 'error': 'winner must be 0 or 1'}), 400
     with _lock:
         if room_id not in rooms:
-            return jsonify({'success': False, 'error': '房间不存在'}), 404
+            return jsonify({'success': False, 'error': 'room not found'}), 404
         room = rooms[room_id]
         e = room.engine
         loser = 1 - winner
@@ -622,11 +631,11 @@ def admin_endgame(room_id):
 def admin_draftfill(room_id):
     with _lock:
         if room_id not in rooms:
-            return jsonify({'success': False, 'error': '房间不存在'}), 404
+            return jsonify({'success': False, 'error': 'room not found'}), 404
         room = rooms[room_id]
         e = room.engine
         if e.phase not in ('draft', 'event_select'):
-            return jsonify({'success': False, 'error': f'当前不是选牌阶段({e.phase})'}), 400
+            return jsonify({'success': False, 'error': f'cannot fill draft during phase {e.phase}'}), 400
         filled = 0
         while e.phase == 'draft':
             made_progress = False
@@ -656,10 +665,10 @@ def admin_set_attr(room_id):
     key = data.get('key', '')
     val = data.get('value', 0)
     if pidx not in (0, 1):
-        return jsonify({'success': False, 'error': 'player必须是0或1'}), 400
+        return jsonify({'success': False, 'error': 'player must be 0 or 1'}), 400
     with _lock:
         if room_id not in rooms:
-            return jsonify({'success': False, 'error': '房间不存在'}), 404
+            return jsonify({'success': False, 'error': 'room not found'}), 404
         room = rooms[room_id]
         e = room.engine
         ps = e.players[pidx]
@@ -670,7 +679,7 @@ def admin_set_attr(room_id):
         }
         attr = attr_map.get(key)
         if not attr or not hasattr(ps, attr):
-            return jsonify({'success': False, 'error': f'未知属性: {key}'}), 400
+            return jsonify({'success': False, 'error': f'unknown attribute {key}'}), 400
         setattr(ps, attr, val)
         if key == 'h':
             ps.base_max_health = max(ps.base_max_health, val)
@@ -688,7 +697,7 @@ def admin_set_attr(room_id):
 def on_connect():
     sid = request.sid
     join_room(sid)
-    print(f"[服务器] Socket连接: sid={sid}")
+    print("[server] debug")
 
 
 @socketio.on('draft_reroll')
@@ -712,9 +721,9 @@ def on_draft_reroll(data=None):
                 for pi in range(len(room.player_sids)):
                     send_draft_state(room, pi)
             else:
-                emit('server_error', {'message': '重选次数已用完'})
+                emit('server_error', {'message': 'Operation failed'})
     except Exception as e:
-        print(f'[REROLL] EXCEPTION: {type(e).__name__}: {e}')
+        print("[server] debug")
         import traceback
         traceback.print_exc()
 
@@ -726,12 +735,12 @@ def on_login(data):
     raw_name = data.get('nickname', '')
     name = sanitize_nickname(raw_name)
     if not validate_nickname(name):
-        emit('login_fail', {'reason': '昵称无效：不能为纯数字、纯符号，且-_不能连续出现'})
+        emit('login_fail', {'reason': 'Invalid nickname. Use 1-16 display-width characters; avoid pure numbers, pure symbols, or repeated -/_.'})
         return
     with _lock:
         for p in players.values():
             if p['nickname'] == name:
-                emit('login_fail', {'reason': '昵称已被使用'})
+                emit('login_fail', {'reason': 'Nickname already exists'})
                 return
         reconnect_room = None
         reconnect_old_sid = None
@@ -776,7 +785,7 @@ def on_login(data):
         })
     join_room(sid)
     emit('login_ok', {'sid': sid, 'nickname': name})
-    print(f"[服务器] 玩家 {name}(sid:{sid}) 已登录 (状态: {initial_status})")
+    print("[server] debug")
     broadcast_lobby()
 
 
@@ -928,43 +937,43 @@ def on_reconnect_decline(data):
 def on_invite(data):
     sid = request.sid
     target_sid = data.get('target_sid')
-    print(f"[服务器] 收到invite: sid={sid}, target_sid={target_sid}")
+    print("[server] debug")
     with _lock:
         if sid not in players or target_sid not in players:
-            print(f"[服务器] invite失败: 玩家不存在 sid={sid in players}, target={target_sid in players if target_sid else False}")
-            emit('server_error', {'message': '邀请失败，请刷新页面重试'})
+            print("[server] debug")
+            emit('server_error', {'message': 'Operation failed'})
             return
         if sid == target_sid:
             return
         if sid in invites:
-            print(f"[服务器] invite失败: 已有pending邀请 sid={sid}")
+            print("[server] debug")
             return
         target = players[target_sid]
         if target['status'] != 'lobby':
-            emit('server_error', {'message': '对方正在对局中'})
+            emit('server_error', {'message': 'Operation failed'})
             return
         inviter = players[sid]
         if inviter.get('mods_hash') != target.get('mods_hash'):
             inviter_mods = inviter.get('mods_list', [])
             target_mods = target.get('mods_list', [])
-            inviter_label = ', '.join(inviter_mods) if inviter_mods else '无模组'
-            target_label = ', '.join(target_mods) if target_mods else '无模组'
-            emit('server_error', {'message': f'模组不一致，无法对局。你的模组: {inviter_label}，对方模组: {target_label}'})
+            inviter_label = ', '.join(inviter_mods) if inviter_mods else 'no mods'
+            target_label = ', '.join(target_mods) if target_mods else 'no mods'
+            emit('server_error', {'message': 'Operation failed'})
             return
         invites[sid] = target_sid
         inviter_name = players[sid]['nickname']
-        print(f"[服务器] invite成功: {inviter_name} -> {target_sid}")
+        print("[server] debug")
         result = socketio.emit('invite_received', {
             'inviter_sid': sid,
             'inviter_name': inviter_name,
         }, room=target_sid)
-        print(f"[服务器] invite_received已发送: room={target_sid}, emit返回={result}")
+        print("[server] debug")
 
         def _invite_timeout(inviter_sid):
             with _lock:
                 if inviter_sid in invites:
                     del invites[inviter_sid]
-                    print(f"[服务器] 邀请超时自动清除: inviter_sid={inviter_sid}")
+                    print("[server] debug")
 
         timer = threading.Timer(30.0, _invite_timeout, args=[sid])
         timer.daemon = True
@@ -976,13 +985,13 @@ def on_accept_invite(data):
     global _next_room_id
     sid = request.sid
     inviter_sid = data.get('inviter_sid')
-    print(f"[服务器] 收到accept_invite: sid={sid}, inviter_sid={inviter_sid}")
+    print("[server] debug")
     with _lock:
         if inviter_sid not in players or sid not in players:
-            print(f"[服务器] accept_invite失败: 玩家不存在 inviter={inviter_sid in players if inviter_sid else False}, accepter={sid in players}")
+            print("[server] debug")
             return
         if inviter_sid not in invites or invites[inviter_sid] != sid:
-            print(f"[服务器] accept_invite失败: 邀请不存在或不匹配 invites={invites}")
+            print("[server] debug")
             return
         del invites[inviter_sid]
         inviter = players[inviter_sid]
@@ -1000,7 +1009,7 @@ def on_accept_invite(data):
         accepter['status'] = 'in_game'
         room.engine.player_names = [inviter['nickname'], accepter['nickname']]
         room.engine.start_draft()
-        print(f"[服务器] 房间{room_id}创建成功: {inviter['nickname']} vs {accepter['nickname']}, 开始选牌")
+        print("[server] debug")
         for pidx in range(len(room.player_sids)):
             psid = room.player_sids[pidx]
             socketio.emit('game_phase', {'phase': 'draft'}, room=psid)
@@ -1086,7 +1095,7 @@ def on_draft_pick(data):
             if engine.phase == 'event_select':
                 start_event_select(room)
         else:
-            emit('server_error', {'message': '选牌失败'})
+            emit('server_error', {'message': 'Operation failed'})
 
 
 @socketio.on('select_opening_event')
@@ -1129,7 +1138,7 @@ def on_solo_start(data):
     sub0 = data.get('sub0') if data else None
     sub1 = data.get('sub1') if data else None
     if len(deck0) != DECK_SIZE or len(deck1) != DECK_SIZE:
-        emit('server_error', {'message': '训练场牌堆必须各为15张'})
+        emit('server_error', {'message': 'Operation failed'})
         return
     allowed_card_ids = get_allowed_card_ids([])
     if sid in players:
@@ -1138,7 +1147,7 @@ def on_solo_start(data):
         def_id = entry.get('def_id') if isinstance(entry, dict) else entry
         return def_id in CARD_DEFS and def_id in allowed_card_ids
     if any(not _valid_entry(entry) for entry in deck0 + deck1):
-        emit('server_error', {'message': '训练场牌堆包含未知卡牌'})
+        emit('server_error', {'message': 'Operation failed'})
         return
     with _lock:
         solo_sessions[sid] = create_solo_engine(deck0, deck1, event0, event1, sub0, sub1)
@@ -1154,7 +1163,7 @@ def on_solo_play_card(data):
     with _lock:
         engine = solo_sessions.get(sid)
         if not engine:
-            emit('server_error', {'message': '训练场未开始'})
+            emit('server_error', {'message': 'Operation failed'})
             return
         pidx = engine.current_player
         result = engine.play_card(pidx, data.get('card_instance_id'), data.get('choice'))
@@ -1170,7 +1179,7 @@ def on_solo_play_card(data):
         elif result.get('success'):
             send_solo_state(sid)
         else:
-            emit('server_error', {'message': result.get('error', '训练场出牌失败')})
+            emit('server_error', {'message': 'Operation failed'})
 
 
 @socketio.on('solo_response')
@@ -1206,7 +1215,7 @@ def on_solo_use_trigger(data):
             return
         result = engine.use_trigger(engine.current_player, data.get('equipment_instance_id'))
         if not result.get('success'):
-            emit('server_error', {'message': result.get('error', '训练场触发失败')})
+            emit('server_error', {'message': 'Operation failed'})
         send_solo_state(sid)
 
 
@@ -1219,7 +1228,7 @@ def on_solo_end_turn(data=None):
             return
         result = engine.end_turn(engine.current_player)
         if not result.get('success'):
-            emit('server_error', {'message': result.get('error', '训练场结束回合失败')})
+            emit('server_error', {'message': 'Operation failed'})
         send_solo_state(sid)
 
 
@@ -1243,21 +1252,21 @@ def on_solo_set_next_draw(data):
             if idx2 >= 0:
                 picked.append(ps.deck.pop(idx2))
         if not picked:
-            emit('server_error', {'message': '当前牌堆中没有这些牌，无法设置下次抽牌'})
+            emit('server_error', {'message': 'Operation failed'})
             return
         for c in reversed(picked):
             ps.deck.insert(0, c)
         names = '、'.join([c.name_cn for c in picked])
-        engine.log_msg(f"训练场：{engine.pn(engine.current_player)} 将下次抽牌设为 {names}")
+        engine.log_msg(f"训练场：{engine.pn(engine.current_player)} 设置下次抽牌：{names}")
         send_solo_state(sid)
         return
         idx = next((i for i, c in enumerate(ps.deck) if c.def_id == def_id), -1)
         if idx < 0:
-            emit('server_error', {'message': '当前牌堆中没有这张牌，无法设置下次抽牌'})
+            emit('server_error', {'message': 'Operation failed'})
             return
         card = ps.deck.pop(idx)
         ps.deck.insert(0, card)
-        engine.log_msg(f"训练场：{engine.pn(engine.current_player)} 将下次抽牌设为 {card.name_cn}")
+        engine.log_msg(f"训练场：{engine.pn(engine.current_player)} 设置下次抽牌：{card.name_cn}")
         send_solo_state(sid)
 
 
@@ -1321,7 +1330,7 @@ def on_play_card(data):
         elif result.get('success'):
             broadcast_game_state(room)
         else:
-            emit('server_error', {'message': result.get('error', '出牌失败')})
+            emit('server_error', {'message': 'Operation failed'})
 
 
 @socketio.on('response')
@@ -1386,43 +1395,43 @@ def on_use_trigger(data):
         if result.get('success'):
             broadcast_game_state(room)
         else:
-            emit('server_error', {'message': result.get('error', '触发失败')})
+            emit('server_error', {'message': 'Operation failed'})
 
 
 @socketio.on('end_turn')
 def on_end_turn(data):
     sid = request.sid
-    print(f'[服务端] 收到end_turn, sid={sid}')
+    print("[server] debug")
     try:
         with _lock:
             if sid not in players:
-                print(f'[服务端] end_turn: 玩家未找到, sid={sid}')
-                emit('server_error', {'message': '玩家未找到'})
+                print("[server] debug")
+                emit('server_error', {'message': 'Operation failed'})
                 return
             player = players[sid]
             room_id = player.get('room_id')
             if room_id is None or room_id not in rooms:
-                print(f'[服务端] end_turn: 未在对局中, room_id={room_id}')
-                emit('server_error', {'message': '未在对局中'})
+                print("[server] debug")
+                emit('server_error', {'message': 'Operation failed'})
                 return
             room = rooms[room_id]
             pidx = room.player_index(sid)
             if pidx < 0:
-                print(f'[服务端] end_turn: 玩家不在对局中, pidx={pidx}')
-                emit('server_error', {'message': '玩家不在对局中'})
+                print("[server] debug")
+                emit('server_error', {'message': 'Operation failed'})
                 return
             engine = room.engine
-            print(f'[服务端] end_turn: pidx={pidx}, phase={engine.phase}, current_player={engine.current_player}, pending_response={engine.pending_response is not None}')
+            print("[server] debug")
             result = engine.end_turn(pidx)
-            print(f'[服务端] end_turn result: {result}')
+            print("[server] debug")
             broadcast_game_state(room)
             if not result.get('success'):
-                emit('server_error', {'message': result.get('error', '结束回合失败')})
+                emit('server_error', {'message': 'Operation failed'})
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f'[服务端] end_turn异常: {e}')
-        emit('server_error', {'message': f'结束回合出错: {str(e)}'})
+        print("[server] debug")
+        emit('server_error', {'message': 'Operation failed'})
 
 
 @socketio.on('surrender')
@@ -1431,17 +1440,17 @@ def on_surrender(data):
     try:
         with _lock:
             if sid not in players:
-                emit('server_error', {'message': '玩家未找到'})
+                emit('server_error', {'message': 'Operation failed'})
                 return
             player = players[sid]
             room_id = player.get('room_id')
             if room_id is None or room_id not in rooms:
-                emit('server_error', {'message': '未在对局中'})
+                emit('server_error', {'message': 'Operation failed'})
                 return
             room = rooms[room_id]
             pidx = room.player_index(sid)
             if pidx < 0:
-                emit('server_error', {'message': '玩家不在对局中'})
+                emit('server_error', {'message': 'Operation failed'})
                 return
             engine = room.engine
             result = engine.surrender(pidx)
@@ -1451,12 +1460,12 @@ def on_surrender(data):
                     if psid in players:
                         socketio.emit('game_phase', {'phase': 'game_over'}, room=psid)
             else:
-                emit('server_error', {'message': result.get('error', '投降失败')})
+                emit('server_error', {'message': 'Operation failed'})
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f'[服务端] surrender异常: {e}')
-        emit('server_error', {'message': f'投降出错: {str(e)}'})
+        print("[server] debug")
+        emit('server_error', {'message': 'Operation failed'})
 
 
 @socketio.on('rematch')
@@ -1465,21 +1474,21 @@ def on_rematch(data=None):
     try:
         with _lock:
             if sid not in players:
-                print(f'[服务端] rematch: sid {sid[:8]} 不在players中')
+                print("[server] debug")
                 return
             player = players[sid]
             room_id = player.get('room_id')
             if room_id is None or room_id not in rooms:
-                print(f'[服务端] rematch: room_id={room_id} 无效, rooms={list(rooms.keys())}')
+                print("[server] debug")
                 return
             room = rooms[room_id]
             room._rematch_votes.add(sid)
-            print(f'[服务端] rematch: {player["nickname"]} 投票重赛, 当前投票: {len(room._rematch_votes)}/{len(room.player_sids)}')
+            print("[server] debug")
             for other_sid in room.player_sids:
                 if other_sid != sid and other_sid in players:
                     socketio.emit('rematch_requested', {'player_name': player['nickname']}, room=other_sid)
             if len(room._rematch_votes) == len(room.player_sids):
-                print(f'[服务端] rematch: 双方同意重赛, 开始新游戏')
+                print("[server] debug")
                 room._rematch_votes = set()
                 room.engine = GameEngine()
                 names = []
@@ -1487,7 +1496,7 @@ def on_rematch(data=None):
                     if psid in players:
                         names.append(players[psid]['nickname'])
                     else:
-                        names.append(f'玩家{pidx + 1}')
+                        names.append(f'Player {pidx + 1}')
                 room.engine.player_names = names
                 room.engine.start_draft()
                 for pidx in range(len(room.player_sids)):
@@ -1495,11 +1504,11 @@ def on_rematch(data=None):
                     if psid in players:
                         socketio.emit('game_phase', {'phase': 'draft'}, room=psid)
                         send_draft_state(room, pidx)
-                print(f'[服务端] rematch: 新游戏已开始, draft_state已发送')
+                print("[server] debug")
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f'[服务端] rematch异常: {e}')
+        print("[server] debug")
 
 
 @socketio.on('return_lobby')
@@ -1537,19 +1546,19 @@ def on_spectate(data):
             return
         player = players[sid]
         if player['status'] != 'lobby':
-            emit('server_error', {'message': '只能在大厅观战'})
+            emit('server_error', {'message': 'Operation failed'})
             return
         room_id = data.get('room_id')
         if room_id is None or room_id not in rooms:
-            emit('server_error', {'message': '对局不存在'})
+            emit('server_error', {'message': 'Operation failed'})
             return
         room = rooms[room_id]
         phase = room.engine.phase
         if phase in ('draft', 'event_select'):
-            emit('server_error', {'message': '此对局仍在选牌阶段，暂时无法观战'})
+            emit('server_error', {'message': 'Operation failed'})
             return
         if phase not in ('action', 'draw', 'playing', 'response', 'choice'):
-            emit('server_error', {'message': '该对局当前无法观战'})
+            emit('server_error', {'message': 'Operation failed'})
             return
         player['status'] = 'spectating'
         player['spectating_room'] = room_id
@@ -1611,7 +1620,7 @@ def _handle_leave_spectate_internal(sid):
 @socketio.on('leave_spectate')
 def on_leave_spectate(data=None):
     sid = request.sid
-    print(f'[服务端] leave_spectate: sid={sid[:8]}')
+    print("[server] debug")
     with _lock:
         _handle_leave_spectate_internal(sid)
     broadcast_lobby()
@@ -1620,19 +1629,19 @@ def on_leave_spectate(data=None):
 @socketio.on('switch_spectate_perspective')
 def on_switch_spectate_perspective(data=None):
     sid = request.sid
-    print(f'[服务端] switch_spectate_perspective: sid={sid[:8]}')
+    print("[server] debug")
     with _lock:
         if sid not in players:
-            print(f'[服务端] switch_spectate_perspective: sid {sid[:8]} 不在players中')
+            print("[server] debug")
             return
         player = players[sid]
         room_id = player.get('spectating_room')
         if room_id is None or room_id not in rooms:
-            print(f'[服务端] switch_spectate_perspective: room_id={room_id} 无效')
+            print("[server] debug")
             return
         current = player.get('spectate_perspective', 0)
         player['spectate_perspective'] = 1 - current
-        print(f'[服务端] switch_spectate_perspective: {player["nickname"]} 切换视角 {current}->{1-current}')
+        print("[server] debug")
         room = rooms[room_id]
         _send_spectate_state_internal(sid, room)
 
