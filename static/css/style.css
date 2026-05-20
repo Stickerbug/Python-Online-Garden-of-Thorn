@@ -640,8 +640,10 @@ body {
 
   .modal-inner {
     padding: 16px;
+    width: calc(100vw - 24px);
     min-width: auto;
     max-width: 95vw;
+    gap: 14px;
   }
 
   .event-container {
@@ -788,8 +790,10 @@ body {
 
   .modal-inner {
     padding: 12px;
+    width: calc(100vw - 20px);
     min-width: auto;
     max-width: 90vw;
+    gap: 12px;
   }
 }
 
@@ -974,6 +978,7 @@ body {
   font-size: 15px;
   font-weight: 700;
   font-family: var(--font-main);
+  border-radius: var(--radius-lg);
 }
 
 .solo-container {
@@ -1002,6 +1007,32 @@ body {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.solo-events {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.solo-event-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.solo-event-panel label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.solo-event-panel select {
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
 }
 
 .solo-builder {
@@ -1058,6 +1089,23 @@ body {
   border-radius: var(--radius-sm);
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+.solo-deck-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.solo-deck-card-main small {
+  color: var(--text-muted);
+}
+
+.solo-deck-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .solo-card-row {
@@ -2531,16 +2579,59 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-xl);
-  min-width: 360px;
+  width: min(92vw, 520px);
+  min-width: 320px;
   max-width: 560px;
   max-height: 80vh;
+  padding: 24px 28px;
   display: flex;
   flex-direction: column;
+  gap: 16px;
   box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.modal-inner > h3,
+.modal-inner .disconnect-modal h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(18px, 2.4vw, 24px);
+  line-height: 1.28;
+  text-align: center;
+}
+
+.modal-inner > p,
+.modal-inner .disconnect-modal p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.disconnect-modal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-width: min(360px, 100%);
+  padding: 4px 2px;
+}
+
+.disconnect-countdown {
+  max-width: 100%;
+  padding: 10px 18px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .modal-inner .modal-header {
-  padding: 20px 24px 14px;
+  padding: 0 0 14px;
   font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
@@ -2548,7 +2639,7 @@ body {
 }
 
 .modal-inner .modal-body {
-  padding: 20px 24px;
+  padding: 0;
   overflow-y: auto;
   flex: 1;
 }
@@ -2557,7 +2648,7 @@ body {
   display: flex;
   justify-content: center;
   gap: 12px;
-  padding: 12px 20px;
+  padding: 14px 0 0;
   border-top: 1px solid var(--border-color);
 }
 
@@ -3350,6 +3441,10 @@ body {
   }
 
   .solo-builder {
+    grid-template-columns: 1fr;
+  }
+
+  .solo-events {
     grid-template-columns: 1fr;
   }
 

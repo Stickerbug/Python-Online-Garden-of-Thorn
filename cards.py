@@ -292,10 +292,12 @@ INITIAL_HAND_SIZE = 5
 FIRST_PLAYER_HAND_SIZE = 4
 
 
-def build_draft_pool() -> List[CardInstance]:
+def build_draft_pool(allowed_def_ids: Optional[Set[str]] = None) -> List[CardInstance]:
     pool = []
     for def_id, card_def in CARD_DEFS.items():
         if def_id == 'Yggdrasil':
+            continue
+        if allowed_def_ids is not None and def_id not in allowed_def_ids:
             continue
         for _ in range(card_def.count):
             pool.append(CardInstance(def_id=def_id))
@@ -323,9 +325,11 @@ def generate_draft_options(pool: List[CardInstance], card_type: str, count: int 
     return random.sample(unique_cards, min(count, len(unique_cards)))
 
 
-def create_deck_from_draft(picked_def_ids: List[str]) -> List[CardInstance]:
+def create_deck_from_draft(picked_def_ids: List[str], allowed_def_ids: Optional[Set[str]] = None) -> List[CardInstance]:
     deck = []
     for def_id in picked_def_ids:
+        if allowed_def_ids is not None and def_id not in allowed_def_ids:
+            continue
         deck.append(CardInstance(def_id=def_id))
     random.shuffle(deck)
     return deck

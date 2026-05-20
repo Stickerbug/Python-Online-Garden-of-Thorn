@@ -375,6 +375,7 @@ class GameEngine:
         self.phase: str = 'waiting'
         self.log: List[str] = []
         self.draft_pool: List[CardInstance] = []
+        self.allowed_card_ids: Optional[Set[str]] = None
         self.draft_options: List[List[CardInstance]] = [[], []]
         self.draft_picks: List[List[str]] = [[], []]
         self.draft_rerolls: List[int] = [DRAFT_REROLLS, DRAFT_REROLLS]
@@ -426,7 +427,7 @@ class GameEngine:
 
     def start_draft(self):
         self.phase = 'draft'
-        self.draft_pool = build_draft_pool()
+        self.draft_pool = build_draft_pool(self.allowed_card_ids)
         self.draft_picks = [[], []]
         self.draft_rerolls = [DRAFT_REROLLS, DRAFT_REROLLS]
         self.draft_round = 0
@@ -518,7 +519,7 @@ class GameEngine:
         for i in range(2):
             ps = self.players[i]
             ps.is_first_player = (i == self.first_player)
-            ps.deck = create_deck_from_draft(self.draft_picks[i])
+            ps.deck = create_deck_from_draft(self.draft_picks[i], self.allowed_card_ids)
             ps.health = INITIAL_HEALTH
             ps.max_health = BASE_MAX_HEALTH
             ps.base_max_health = BASE_MAX_HEALTH

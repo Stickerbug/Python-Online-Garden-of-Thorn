@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
-<link rel="stylesheet" href="/static/css/style.css?v=46">
+<link rel="stylesheet" href="/static/css/style.css?v=49">
 </head>
 <body>
 <div id="app">
@@ -63,6 +63,16 @@
       </div>
       <div id="solo-deck-b" class="solo-deck-list"></div>
     </section>
+  </div>
+  <div class="solo-events">
+    <div class="solo-event-panel">
+      <label for="solo-event-a" id="solo-event-a-label">我方开局事件</label>
+      <select id="solo-event-a"></select>
+    </div>
+    <div class="solo-event-panel">
+      <label for="solo-event-b" id="solo-event-b-label">对方开局事件</label>
+      <select id="solo-event-b"></select>
+    </div>
   </div>
 </div>
 </div>
@@ -284,6 +294,6 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="/static/js/game.js?v=46"></script>
+<script src="/static/js/game.js?v=49"></script>
 </body>
 </html>

@@ -15,7 +15,9 @@ from cards import (
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE,
 )
-from mod_loader import merge_mod_cards_to_card_defs, load_all_mods, save_mod, Mod, get_mods_summary
+from mod_loader import merge_mod_cards_to_card_defs, load_all_mods, save_mod, Mod
+
+BASE_CARD_IDS = set(CARD_DEFS.keys())
 
 try:
     merged = merge_mod_cards_to_card_defs()
@@ -39,10 +41,11 @@ solo_sessions = {}
 
 
 class GameRoom:
-    def __init__(self, room_id, player_sids):
+    def __init__(self, room_id, player_sids, allowed_card_ids=None):
         self.room_id = room_id
         self.player_sids = list(player_sids)
         self.engine = GameEngine()
+        self.engine.allowed_card_ids = set(allowed_card_ids) if allowed_card_ids is not None else None
         self.spectators = []
         self.disconnected_players = {}
         self.reconnect_timers = {}
@@ -83,6 +86,30 @@ def validate_nickname(name):
     if re.search(r'[\-_]{2,}', name):
         return False
     return True
+
+
+def normalize_disabled_mods(value):
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [x.strip() for x in value.split(',') if x.strip()]
+    if isinstance(value, list):
+        return [str(x).strip() for x in value if str(x).strip()]
+    return []
+
+
+def get_allowed_card_ids(disabled_mods=None):
+    disabled = set(normalize_disabled_mods(disabled_mods))
+    allowed = set(BASE_CARD_IDS)
+    for mod in load_all_mods():
+        if mod.errors:
+            continue
+        if mod.filename in disabled:
+            continue
+        for card in mod.cards:
+            if card.id in CARD_DEFS:
+                allowed.add(card.id)
+    return allowed
 
 
 def get_lobby_list():
@@ -226,7 +253,15 @@ def start_game(room):
     broadcast_game_state(room)
 
 
-def _reset_player_for_solo(ps, deck_ids, is_first):
+def _build_solo_card(entry):
+    if isinstance(entry, dict):
+        card = CardInstance(def_id=entry.get('def_id'))
+        card.instance_flags = set(entry.get('instance_flags', []))
+        return card
+    return CardInstance(def_id=entry)
+
+
+def _reset_player_for_solo(ps, deck_entries, is_first):
     ps.health = INITIAL_HEALTH if is_first else SECOND_PLAYER_HEALTH
     ps.max_health = ps.health
     ps.base_max_health = ps.health
@@ -259,7 +294,11 @@ def _reset_player_for_solo(ps, deck_ids, is_first):
     ps.enemy_draw_reduction = 0
     ps.enemy_e_reduction = 0
     ps.hand = []
-    ps.deck = [CardInstance(def_id=did) for did in deck_ids if did in CARD_DEFS]
+    ps.deck = []
+    for entry in deck_entries:
+        def_id = entry.get('def_id') if isinstance(entry, dict) else entry
+        if def_id in CARD_DEFS:
+            ps.deck.append(_build_solo_card(entry))
     ps.discard = []
     ps.exile = []
     ps.equipment = []
@@ -268,25 +307,36 @@ def _reset_player_for_solo(ps, deck_ids, is_first):
     ps.is_first_player = is_first
 
 
-def create_solo_engine(deck0, deck1):
+def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=None):
     engine = GameEngine()
     engine.player_names = ['Player A', 'Player B']
     engine.phase = 'playing'
-    engine.first_player = 0
-    engine.current_player = 0
+    force_first = [idx for idx, event_id in enumerate((event0, event1)) if event_id == 7]
+    engine.first_player = force_first[0] if len(force_first) == 1 else 0
+    engine.current_player = engine.first_player
     engine.round_num = 1
-    engine.opening_event_picks = [None, None]
-    engine.opening_event_sub_choices = [None, None]
+    engine.opening_event_picks = [event0, event1]
+    engine.opening_event_sub_choices = [sub0, sub1]
     engine.log = []
     engine.pending_response = None
     engine.pending_choice = None
-    _reset_player_for_solo(engine.players[0], deck0, True)
-    _reset_player_for_solo(engine.players[1], deck1, False)
-    engine.players[0].draw_cards(FIRST_PLAYER_HAND_SIZE)
-    engine.players[1].draw_cards(INITIAL_HAND_SIZE)
-    engine.log_msg("单人训练场开始！Player A 先手。")
+    _reset_player_for_solo(engine.players[0], deck0, engine.first_player == 0)
+    _reset_player_for_solo(engine.players[1], deck1, engine.first_player == 1)
+    for i in range(2):
+        if engine.opening_event_picks[i] is not None:
+            engine._apply_opening_event(i)
+    for i in range(2):
+        if i == engine.first_player:
+            hand_size = FIRST_PLAYER_HAND_SIZE
+            if engine.opening_event_picks[i] == 7 and len(force_first) == 1:
+                hand_size = 4
+                engine.players[i].elixir += 3
+            engine.players[i].draw_cards(hand_size)
+        else:
+            engine.players[i].draw_cards(INITIAL_HAND_SIZE)
+    engine.log_msg(f"单人训练场开始！{engine.pn(engine.first_player)}先手。")
     engine.log_msg(f"=== 第{engine.round_num}回合 ===")
-    engine._start_player_turn(0)
+    engine._start_player_turn(engine.first_player)
     return engine
 
 
@@ -395,8 +445,11 @@ def serve_font(filename):
 
 @app.route('/api/cards')
 def api_cards():
+    allowed_card_ids = get_allowed_card_ids(request.args.get('disabled_mods', ''))
     result = {}
     for def_id, card_def in CARD_DEFS.items():
+        if def_id not in allowed_card_ids:
+            continue
         result[def_id] = {
             'id': card_def.id,
             'name_en': card_def.name_en,
@@ -415,6 +468,17 @@ def api_cards():
             'effects': card_def.effects,
         }
     return jsonify(result)
+
+
+@app.route('/api/opening-events')
+def api_opening_events():
+    events = []
+    for event_id in sorted(GameEngine.OPENING_EVENTS.keys()):
+        events.append(dict(GameEngine.OPENING_EVENTS[event_id]))
+    return jsonify({
+        'events': events,
+        'magic_pool': list(GameEngine.MAGIC_CARD_POOL),
+    })
 
 
 @app.route('/api/mods')
@@ -680,18 +744,15 @@ def on_login(data):
             if reconnect_room:
                 break
         initial_status = 'reconnecting' if reconnect_room else 'lobby'
-        disabled_mods = data.get('disabled_mods', [])
-        if isinstance(disabled_mods, str):
-            disabled_mods = [x.strip() for x in disabled_mods.split(',') if x.strip()]
-        mods_info = get_mods_summary()
-        active_mods = [m for m in mods_info['mods'] if m not in disabled_mods]
-        from mod_loader import compute_mods_hash
+        disabled_mods = normalize_disabled_mods(data.get('disabled_mods', []))
         import hashlib as _hl
         _h = _hl.sha256()
         all_mods = load_all_mods()
+        active_mods = []
         for mod in sorted(all_mods, key=lambda m: m.filename):
             if mod.filename in disabled_mods or mod.errors:
                 continue
+            active_mods.append(mod.info.name if mod.info else mod.filename)
             try:
                 with open(mod.filepath, 'rb') as f:
                     _h.update(f.read())
@@ -704,6 +765,8 @@ def on_login(data):
             'status': initial_status,
             'mods_hash': mods_hash,
             'mods_list': active_mods,
+            'disabled_mods': disabled_mods,
+            'allowed_card_ids': get_allowed_card_ids(disabled_mods),
         }
     if reconnect_room:
         emit('reconnect_available', {
@@ -928,7 +991,8 @@ def on_accept_invite(data):
             return
         room_id = _next_room_id
         _next_room_id += 1
-        room = GameRoom(room_id, [inviter_sid, sid])
+        allowed_card_ids = inviter.get('allowed_card_ids') or get_allowed_card_ids(inviter.get('disabled_mods', []))
+        room = GameRoom(room_id, [inviter_sid, sid], allowed_card_ids)
         rooms[room_id] = room
         inviter['room_id'] = room_id
         inviter['status'] = 'in_game'
@@ -1060,14 +1124,24 @@ def on_solo_start(data):
     sid = request.sid
     deck0 = data.get('deck0', []) if data else []
     deck1 = data.get('deck1', []) if data else []
+    event0 = data.get('event0') if data else None
+    event1 = data.get('event1') if data else None
+    sub0 = data.get('sub0') if data else None
+    sub1 = data.get('sub1') if data else None
     if len(deck0) != DECK_SIZE or len(deck1) != DECK_SIZE:
         emit('server_error', {'message': '训练场牌堆必须各为15张'})
         return
-    if any(did not in CARD_DEFS for did in deck0 + deck1):
+    allowed_card_ids = get_allowed_card_ids([])
+    if sid in players:
+        allowed_card_ids = players[sid].get('allowed_card_ids') or allowed_card_ids
+    def _valid_entry(entry):
+        def_id = entry.get('def_id') if isinstance(entry, dict) else entry
+        return def_id in CARD_DEFS and def_id in allowed_card_ids
+    if any(not _valid_entry(entry) for entry in deck0 + deck1):
         emit('server_error', {'message': '训练场牌堆包含未知卡牌'})
         return
     with _lock:
-        solo_sessions[sid] = create_solo_engine(deck0, deck1)
+        solo_sessions[sid] = create_solo_engine(deck0, deck1, event0, event1, sub0, sub1)
         if sid in players:
             players[sid]['status'] = 'solo'
         socketio.emit('game_phase', {'phase': 'playing', 'solo': True}, room=sid)

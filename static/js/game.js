@@ -72,6 +72,9 @@ const I18N = {
         solo_training: '单人训练场', load_last: '载入上次', save_decks: '保存牌堆', start_training: '开始训练',
         solo_deck_a: '我方牌堆', solo_deck_b: '对方牌堆', search_cards: '搜索卡牌', pause_edit: '暂停编辑',
         set_next_draw: '设置下次抽牌', solo_saved: '训练场牌堆已保存', solo_need_15: '双方牌堆都必须正好15张',
+        solo_event_a: '我方开局事件', solo_event_b: '对方开局事件', no_event: '无',
+        edit_tags: '编辑标签', tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加',
+        tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无',
     },
     en: {
         round: 'Round', your_turn: 'Your Turn', opponent_turn: "Opponent's Turn", you: 'You', opponent: 'Opponent',
@@ -146,6 +149,9 @@ const I18N = {
         solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training',
         solo_deck_a: 'Your Deck', solo_deck_b: 'Opponent Deck', search_cards: 'Search cards', pause_edit: 'Pause & Edit',
         set_next_draw: 'Set Next Draw', solo_saved: 'Training decks saved', solo_need_15: 'Both decks must have exactly 15 cards',
+        solo_event_a: 'Your opening event', solo_event_b: 'Opponent opening event', no_event: 'None',
+        edit_tags: 'Edit Tags', tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-Stack',
+        tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void',
     },
     fr: {
         round: 'Tour', your_turn: 'Votre Tour', opponent_turn: 'Tour de l\'adversaire', you: 'Vous', opponent: 'Adversaire',
@@ -220,6 +226,9 @@ const I18N = {
         solo_training: 'Entraînement solo', load_last: 'Charger', save_decks: 'Sauver decks', start_training: 'Commencer',
         solo_deck_a: 'Votre deck', solo_deck_b: 'Deck adverse', search_cards: 'Chercher cartes', pause_edit: 'Pause édition',
         set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks doivent avoir exactement 15 cartes',
+        solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
+        edit_tags: 'Modifier tags', tag_precision: 'Précision', tag_exile: 'Exil', tag_non_stackable: 'Non-cumul',
+        tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide',
     },
     pt: {
         round: 'Turno', your_turn: 'Seu Turno', opponent_turn: 'Turno do Oponente', you: 'Você', opponent: 'Oponente',
@@ -294,6 +303,9 @@ const I18N = {
         solo_training: 'Treino Solo', load_last: 'Carregar Último', save_decks: 'Salvar Decks', start_training: 'Iniciar Treino',
         solo_deck_a: 'Seu Deck', solo_deck_b: 'Deck Oponente', search_cards: 'Buscar cartas', pause_edit: 'Pausar e Editar',
         set_next_draw: 'Definir Próxima Compra', solo_saved: 'Decks salvos', solo_need_15: 'Ambos os decks devem ter exatamente 15 cartas',
+        solo_event_a: 'Evento inicial', solo_event_b: 'Evento do oponente', no_event: 'Nenhum',
+        edit_tags: 'Editar tags', tag_precision: 'Precisão', tag_exile: 'Exílio', tag_non_stackable: 'Não acumula',
+        tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio',
     },
     ru: {
         round: 'Раунд', your_turn: 'Ваш Ход', opponent_turn: 'Ход Соперника', you: 'Вы', opponent: 'Соперник',
@@ -368,6 +380,9 @@ const I18N = {
         solo_training: 'Одиночная тренировка', load_last: 'Загрузить', save_decks: 'Сохранить колоды', start_training: 'Начать',
         solo_deck_a: 'Ваша колода', solo_deck_b: 'Колода соперника', search_cards: 'Поиск карт', pause_edit: 'Пауза и правка',
         set_next_draw: 'Задать следующую карту', solo_saved: 'Колоды сохранены', solo_need_15: 'В обеих колодах должно быть ровно 15 карт',
+        solo_event_a: 'Ваше стартовое событие', solo_event_b: 'Событие соперника', no_event: 'Нет',
+        edit_tags: 'Изменить теги', tag_precision: 'Точность', tag_exile: 'Изгнание', tag_non_stackable: 'Не складывается',
+        tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота',
     },
     ja: {
         round: 'ターン', your_turn: 'あなたのターン', opponent_turn: '相手のターン', you: 'あなた', opponent: '相手',
@@ -442,6 +457,9 @@ const I18N = {
         solo_training: 'ソロ練習場', load_last: '前回を読み込む', save_decks: 'デッキ保存', start_training: '開始',
         solo_deck_a: '自分のデッキ', solo_deck_b: '相手デッキ', search_cards: 'カード検索', pause_edit: '中断して編集',
         set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '両方のデッキは15枚ちょうど必要です',
+        solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
+        edit_tags: 'タグ編集', tag_precision: '精密', tag_exile: '追放', tag_non_stackable: '非重複',
+        tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無',
     }
 };
 
@@ -521,6 +539,10 @@ let soloDeckA = [];
 let soloDeckB = [];
 let soloTargetDeck = 'a';
 let pendingSoloStart = false;
+let openingEvents = [];
+let openingEventMagicPool = [];
+let soloEventA = '';
+let soloEventB = '';
 let pendingPlayCard = null;
 
 function gameAlert(title, message, buttons) {
@@ -633,6 +655,7 @@ function updateStaticText() {
     if (nicknameLabel) nicknameLabel.textContent = UI.nickname;
     const nicknameInput = $('input-nickname');
     if (nicknameInput) nicknameInput.placeholder = UI.nickname;
+    if (nicknameInput && !nicknameInput.value) nicknameInput.value = localStorage.getItem('got_nickname') || '';
     const gameChatInput = $('game-chat-input');
     if (gameChatInput) gameChatInput.placeholder = UI.send + '...';
     const lobbyChatInput = $('lobby-chat-input');
@@ -731,7 +754,8 @@ function hideModal() {
 
 async function fetchCardDefs() {
     try {
-        const resp = await fetch('/api/cards');
+        const disabledMods = encodeURIComponent(getDisabledMods().join(','));
+        const resp = await fetch(`/api/cards?disabled_mods=${disabledMods}`);
         CARD_DEFS = await resp.json();
     } catch (e) {
         console.error('Failed to fetch card defs:', e);
@@ -739,8 +763,25 @@ async function fetchCardDefs() {
     }
 }
 
+async function fetchOpeningEvents() {
+    try {
+        const resp = await fetch('/api/opening-events');
+        const data = await resp.json();
+        openingEvents = data.events || [];
+        openingEventMagicPool = data.magic_pool || [];
+    } catch (e) {
+        console.error('Failed to fetch opening events:', e);
+        openingEvents = [];
+        openingEventMagicPool = [];
+    }
+}
+
 function getCardDef(defId) {
     return CARD_DEFS[defId] || null;
+}
+
+function getFlagLabel(flag) {
+    return UI[`tag_${flag}`] || UI[`flag_${flag}`] || flag;
 }
 
 function getCardLayerLabel(cardDict) {
@@ -983,6 +1024,7 @@ function connectSocket(serverUrl) {
     socket.on('game_phase', (data) => {
         console.log('[客户端] 收到game_phase:', data.phase);
         phase = data.phase;
+        if (!data.solo) soloMode = false;
         if (phase === 'draft') {
             console.log('[客户端] 进入选牌阶段, rematchRequestedByOpponent重置');
             rematchRequestedByOpponent = false;
@@ -1016,6 +1058,7 @@ function connectSocket(serverUrl) {
     });
     socket.on('state_update', (data) => {
         console.log('[客户端] 收到state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null, 'spectating=', data.spectating);
+        soloMode = !!data.solo;
         gameState = data;
         phase = data.phase || phase;
         if (data.spectating) {
@@ -1211,6 +1254,7 @@ function showSoloTraining() {
     soloMode = false;
     phase = 'solo_edit';
     loadSoloDecks(false);
+    renderSoloEventSelects();
     renderSoloBuilder();
     showView('view-solo');
     updateStatus(UI.solo_training);
@@ -1219,20 +1263,48 @@ function showSoloTraining() {
 function loadSoloDecks(showNotice = true) {
     const saved = JSON.parse(localStorage.getItem('got_solo_decks') || 'null');
     if (saved && Array.isArray(saved.deck0) && Array.isArray(saved.deck1)) {
-        soloDeckA = saved.deck0.filter(did => CARD_DEFS[did]).slice(0, 15);
-        soloDeckB = saved.deck1.filter(did => CARD_DEFS[did]).slice(0, 15);
+        const normalizeDeck = (deck) => deck
+            .map(entry => typeof entry === 'string' ? { def_id: entry, instance_flags: [] } : { def_id: entry.def_id, instance_flags: [...(entry.instance_flags || [])] })
+            .filter(entry => CARD_DEFS[entry.def_id])
+            .slice(0, 15);
+        soloDeckA = normalizeDeck(saved.deck0);
+        soloDeckB = normalizeDeck(saved.deck1);
+        soloEventA = saved.event0 != null ? String(saved.event0) : '';
+        soloEventB = saved.event1 != null ? String(saved.event1) : '';
         if (showNotice) flashStatus(UI.load_last, 1200);
     }
 }
 
 function saveSoloDecks() {
-    localStorage.setItem('got_solo_decks', JSON.stringify({ deck0: soloDeckA, deck1: soloDeckB }));
+    localStorage.setItem('got_solo_decks', JSON.stringify({ deck0: soloDeckA, deck1: soloDeckB, event0: soloEventA, event1: soloEventB }));
     flashStatus(UI.solo_saved, 1600);
 }
 
 function cardSearchText(defId) {
     const cd = getCardDef(defId);
     return cd ? `${cd.id} ${cd.name_cn} ${cd.name_en} ${cd.effect_text || ''} ${cd.description || ''}`.toLowerCase() : defId.toLowerCase();
+}
+
+function renderSoloEventSelects() {
+    const labelA = $('solo-event-a-label');
+    if (labelA) labelA.textContent = UI.solo_event_a;
+    const labelB = $('solo-event-b-label');
+    if (labelB) labelB.textContent = UI.solo_event_b;
+    const buildOptions = (selectEl, selectedVal) => {
+        if (!selectEl) return;
+        selectEl.innerHTML = `<option value="">${UI.no_event}</option>`;
+        openingEvents.forEach(ev => {
+            const opt = document.createElement('option');
+            opt.value = String(ev.id);
+            opt.textContent = ev.name || String(ev.id);
+            opt.selected = String(selectedVal) === String(ev.id);
+            selectEl.appendChild(opt);
+        });
+    };
+    buildOptions($('solo-event-a'), soloEventA);
+    buildOptions($('solo-event-b'), soloEventB);
+    if ($('solo-event-a')) $('solo-event-a').value = soloEventA;
+    if ($('solo-event-b')) $('solo-event-b').value = soloEventB;
 }
 
 function renderSoloBuilder() {
@@ -1265,11 +1337,25 @@ function renderSoloDeck(which, deck) {
     el.classList.toggle('active', soloTargetDeck === which);
     el.onclick = () => { soloTargetDeck = which; renderSoloBuilder(); };
     deck.forEach((defId, idx) => {
-        const cd = getCardDef(defId);
+        const card = deck[idx];
+        const cd = getCardDef(card.def_id);
+        const flagText = (card.instance_flags || []).map(getFlagLabel).join(', ');
         const row = document.createElement('div');
         row.className = 'solo-deck-card';
-        row.innerHTML = `<span>${idx + 1}. ${cd ? getCardName(cd) : defId}</span><button class="btn btn-small">×</button>`;
-        row.querySelector('button').onclick = (e) => {
+        row.innerHTML = `
+            <div class="solo-deck-card-main">
+                <span>${idx + 1}. ${cd ? getCardName(cd) : card.def_id}</span>
+                ${flagText ? `<small>${flagText}</small>` : ''}
+            </div>
+            <div class="solo-deck-card-actions">
+                <button class="btn btn-small solo-tag-btn">${UI.edit_tags}</button>
+                <button class="btn btn-small">×</button>
+            </div>`;
+        row.querySelector('.solo-tag-btn').onclick = async (e) => {
+            e.stopPropagation();
+            await editSoloCardFlags(which, idx);
+        };
+        row.querySelector('.solo-deck-card-actions button:last-child').onclick = (e) => {
             e.stopPropagation();
             deck.splice(idx, 1);
             renderSoloBuilder();
@@ -1281,29 +1367,109 @@ function renderSoloDeck(which, deck) {
 function addSoloCard(defId) {
     const deck = soloTargetDeck === 'a' ? soloDeckA : soloDeckB;
     if (deck.length >= 15) return;
-    deck.push(defId);
+    deck.push({ def_id: defId, instance_flags: [] });
     renderSoloBuilder();
 }
 
-function startSoloTraining() {
+async function editSoloCardFlags(which, idx) {
+    const deck = which === 'a' ? soloDeckA : soloDeckB;
+    const card = deck[idx];
+    if (!card) return;
+    const allFlags = ['precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis', 'attract', 'void'];
+    const current = new Set(card.instance_flags || []);
+    const options = allFlags.map(flag => `${current.has(flag) ? '[x]' : '[ ]'} ${getFlagLabel(flag)}`);
+    const picked = await gamePrompt(UI.edit_tags, options);
+    if (picked < 0 || picked >= allFlags.length) return;
+    const flag = allFlags[picked];
+    if (current.has(flag)) current.delete(flag);
+    else current.add(flag);
+    card.instance_flags = [...current];
+    renderSoloBuilder();
+    await editSoloCardFlags(which, idx);
+}
+
+async function buildSoloEventSubChoice(eventId, deck, label) {
+    if (eventId === 2) {
+        const conversions = [];
+        const countOptions = ['1', '2', '3'];
+        const countSel = await gamePrompt(UI.choose_convert_count, countOptions);
+        if (countSel < 0) return false;
+        for (let i = 0; i <= countSel; i++) {
+            const magicDisplay = openingEventMagicPool.map(defId => {
+                const cd = getCardDef(defId);
+                return cd ? getCardName(cd) : defId;
+            });
+            const magicSel = await gamePrompt(UI.choose_magic_card_n.replace('{0}', i + 1), magicDisplay);
+            if (magicSel < 0) return false;
+            const sourceOptions = deck.map((entry, idx) => {
+                const cd = getCardDef(entry.def_id);
+                return `${idx + 1}. ${cd ? getCardName(cd) : entry.def_id}`;
+            });
+            const sourceSel = await gamePrompt(`${label} ${UI.choose_source_card_n.replace('{0}', i + 1)}`, sourceOptions);
+            if (sourceSel < 0) return false;
+            conversions.push({
+                magic_def_id: openingEventMagicPool[magicSel],
+                source_def_id: deck[sourceSel].def_id,
+            });
+        }
+        return { conversions };
+    }
+    if (eventId === 3) {
+        const convert_def_ids = [];
+        const countOptions = ['1', '2', '3', '4', '5'];
+        const countSel = await gamePrompt(UI.choose_convert_count, countOptions);
+        if (countSel < 0) return false;
+        for (let i = 0; i <= countSel; i++) {
+            const sourceOptions = deck.map((entry, idx) => {
+                const cd = getCardDef(entry.def_id);
+                return `${idx + 1}. ${cd ? getCardName(cd) : entry.def_id}`;
+            });
+            const sourceSel = await gamePrompt(`${label} ${UI.choose_source_card_n.replace('{0}', i + 1)}`, sourceOptions);
+            if (sourceSel < 0) return false;
+            convert_def_ids.push(deck[sourceSel].def_id);
+        }
+        return { convert_def_ids };
+    }
+    if (eventId === 8) {
+        const sourceOptions = deck.map((entry, idx) => {
+            const cd = getCardDef(entry.def_id);
+            return `${idx + 1}. ${cd ? getCardName(cd) : entry.def_id}`;
+        });
+        const sourceSel = await gamePrompt(`${label} ${UI.choose_yggdrasil_card}`, sourceOptions);
+        if (sourceSel < 0) return false;
+        return { yggdrasil_convert_def_id: deck[sourceSel].def_id };
+    }
+    return null;
+}
+
+async function startSoloTraining() {
     if (soloDeckA.length !== 15 || soloDeckB.length !== 15) {
         gameAlert(UI.notice, UI.solo_need_15);
         return;
     }
+    const event0 = soloEventA ? Number(soloEventA) : null;
+    const event1 = soloEventB ? Number(soloEventB) : null;
+    const sub0 = await buildSoloEventSubChoice(event0, soloDeckA, UI.solo_deck_a);
+    if (sub0 === false) return;
+    const sub1 = await buildSoloEventSubChoice(event1, soloDeckB, UI.solo_deck_b);
+    if (sub1 === false) return;
     saveSoloDecks();
     if (!socket) {
         nickname = ($('input-nickname').value || '').trim() || 'Solo';
         pendingSoloStart = true;
+        window.__pendingSoloPayload = { deck0: soloDeckA, deck1: soloDeckB, event0, event1, sub0, sub1 };
         connectSocket(getServerAddress());
         return;
     }
-    emitSoloStart();
+    emitSoloStart({ deck0: soloDeckA, deck1: soloDeckB, event0, event1, sub0, sub1 });
 }
 
-function emitSoloStart() {
+function emitSoloStart(payload = null) {
     if (!socket) return;
     soloMode = true;
-    socket.emit('solo_start', { deck0: soloDeckA, deck1: soloDeckB });
+    const finalPayload = payload || window.__pendingSoloPayload || { deck0: soloDeckA, deck1: soloDeckB };
+    window.__pendingSoloPayload = null;
+    socket.emit('solo_start', finalPayload);
 }
 
 function renderLobby(data) {
@@ -1798,12 +1964,13 @@ function renderGame(data) {
     if (endTurnBtn) {
         endTurnBtn.disabled = !myTurn || isSpectating || gs.phase === 'game_over';
     }
+    const inSoloGame = !!gs.solo;
     const soloNextDrawBtn = $('btn-solo-next-draw');
-    if (soloNextDrawBtn) soloNextDrawBtn.classList.toggle('hidden', !soloMode || gs.phase === 'game_over');
+    if (soloNextDrawBtn) soloNextDrawBtn.classList.toggle('hidden', !inSoloGame || gs.phase === 'game_over');
     const soloEditBtn = $('btn-solo-edit');
-    if (soloEditBtn) soloEditBtn.classList.toggle('hidden', !soloMode);
+    if (soloEditBtn) soloEditBtn.classList.toggle('hidden', !inSoloGame);
     const surrenderBtn = $('btn-surrender');
-    if (surrenderBtn) surrenderBtn.classList.toggle('hidden', soloMode && gs.phase === 'game_over');
+    if (surrenderBtn) surrenderBtn.classList.toggle('hidden', inSoloGame && gs.phase === 'game_over');
     const playZone = $('play-zone');
     if (playZone) {
         if (myTurn && !isSpectating) {
@@ -1817,7 +1984,7 @@ function renderGame(data) {
     } else if (playZone) {
         playZone.innerHTML = `<div class="play-zone-hint">${UI.drag_to_play}</div>`;
     }
-    if (soloMode && gs.phase === 'game_over' && playZone) {
+    if (inSoloGame && gs.phase === 'game_over' && playZone) {
         playZone.innerHTML = `
             <div class="solo-gameover-actions">
                 <button class="btn btn-primary" onclick="startSoloTraining()">${UI.rematch}</button>
@@ -2444,8 +2611,10 @@ function showOpponentDCWaiting(data) {
     const oppName = data.opponent_nickname || '?';
     let remaining = timeout;
     showModal(`
-        <h3>${UI.opponent_disconnected}</h3>
-        <p id="dc-countdown">${oppName} ${remaining}s</p>
+        <div class="disconnect-modal">
+            <h3>${UI.opponent_disconnected}</h3>
+            <p id="dc-countdown" class="disconnect-countdown">${oppName} ${remaining}s</p>
+        </div>
     `);
     const timer = setInterval(() => {
         remaining--;
@@ -2641,6 +2810,10 @@ function saveDisabledMods() {
     if (serverInput) {
         localStorage.setItem('got_server', serverInput.value.trim());
     }
+    fetchCardDefs().then(() => {
+        loadSoloDecks(false);
+        renderSoloBuilder();
+    });
 }
 
 function initModEditor() {
@@ -2725,6 +2898,7 @@ async function init() {
     applyLang(savedLang);
     console.log('[INIT] 主题/语言已设置');
     await fetchCardDefs();
+    await fetchOpeningEvents();
     console.log('[INIT] 卡牌定义已加载, 数量=', Object.keys(CARD_DEFS).length);
     $('btn-connect').addEventListener('click', onLogin);
     $('btn-solo-training').addEventListener('click', showSoloTraining);
@@ -2757,6 +2931,8 @@ async function init() {
     $('btn-solo-next-draw').addEventListener('click', onSoloNextDraw);
     $('btn-solo-edit').addEventListener('click', () => { if (socket) socket.emit('solo_pause', {}); else showSoloTraining(); });
     $('solo-card-search').addEventListener('input', renderSoloBuilder);
+    $('solo-event-a').addEventListener('change', (e) => { soloEventA = e.target.value; });
+    $('solo-event-b').addEventListener('change', (e) => { soloEventB = e.target.value; });
     $('btn-solo-load').addEventListener('click', () => { loadSoloDecks(true); renderSoloBuilder(); });
     $('btn-solo-save').addEventListener('click', saveSoloDecks);
     $('btn-solo-start').addEventListener('click', startSoloTraining);
