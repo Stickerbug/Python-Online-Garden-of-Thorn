@@ -4,9 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
-<link rel="preload" href="/fonts/Kreadon-Regular.subset.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=53">
+<link rel="stylesheet" href="/static/css/style.css?v=54">
 <script>
 (() => {
   const lang = localStorage.getItem('got_lang') || 'zh';
@@ -101,9 +100,14 @@
 
 <div id="view-lobby" class="view hidden">
 <div class="lobby-container">
-<div class="lobby-header">
+<div class="lobby-header lobby-header-with-tabs">
 <h2>大厅</h2>
+<div class="mode-tabs" id="lobby-mode-tabs">
+<div class="mode-tab active" data-mode="1v1">1v1</div>
+<div class="mode-tab" data-mode="2v2">2v2</div>
 </div>
+</div>
+<div id="lobby-team-section" class="lobby-team-section"></div>
 <div class="lobby-body">
 <div class="lobby-left">
 <div class="lobby-section">
@@ -154,21 +158,46 @@
 <div id="view-game" class="view hidden">
 <div class="game-container">
   <div class="opp-section">
-    <div class="player-info-bar">
-      <span id="opp-label" class="player-label opp-label">对手</span>
-      <div id="opp-bars" class="bars-row"></div>
-      <div id="opp-status" class="status-tags"></div>
-      <span id="opp-info" class="info-extra">手牌:0 牌堆:0</span>
-    </div>
-    <div class="opp-hand-equip">
-      <div id="opp-hand" class="opp-hand-row"></div>
-      <div id="opp-equip" class="equip-row"></div>
+    <div class="opp-top-row">
+      <div class="opp-half opp-left">
+        <div class="player-info-bar">
+          <span id="opp-label" class="player-label opp-label">对手</span>
+          <div id="opp-bars" class="bars-row"></div>
+          <div id="opp-status" class="status-tags"></div>
+          <span id="opp-info" class="info-extra">手牌:0 牌堆:0</span>
+        </div>
+        <div class="opp-hand-equip">
+          <div id="opp-hand" class="opp-hand-row"></div>
+          <div id="opp-equip" class="equip-row"></div>
+        </div>
+      </div>
+      <div class="opp-divider hidden" id="opp-divider"></div>
+      <div class="opp-half opp-right hidden" id="opp2-half">
+        <div class="player-info-bar">
+          <span id="opp2-label" class="player-label opp-label">对手2</span>
+          <div id="opp2-bars" class="bars-row"></div>
+          <div id="opp2-status" class="status-tags"></div>
+          <span id="opp2-info" class="info-extra"></span>
+        </div>
+      </div>
     </div>
   </div>
   <div class="middle-section">
     <div id="battle-log" class="battle-log">
       <div class="log-header">战斗日志</div>
       <div class="log-content"></div>
+    </div>
+    <div id="teammate-sidebar" class="teammate-sidebar hidden">
+      <div class="teammate-sidebar-header">
+        <span id="teammate-label" class="player-label teammate-label">队友</span>
+      </div>
+      <div id="teammate-bars" class="bars-row"></div>
+      <div id="teammate-status" class="status-tags"></div>
+      <span id="teammate-info" class="info-extra"></span>
+      <div class="teammate-sidebar-section">手牌</div>
+      <div id="teammate-hand" class="teammate-hand-row"></div>
+      <div class="teammate-sidebar-section">装备</div>
+      <div id="teammate-equip" class="equip-row"></div>
     </div>
   </div>
   <div class="player-section">
@@ -357,7 +386,27 @@
   const app = document.getElementById('app'); if (app) app.style.visibility = 'visible';
 })();
 </script>
+<script>
+(() => {
+  const loadMainFont = () => {
+    if (!('FontFace' in window)) return;
+    const font = new FontFace('Kreadon', "url('/fonts/Kreadon-Regular.subset.woff2') format('woff2')", {
+      weight: '400',
+      style: 'normal'
+    });
+    font.load().then((loaded) => {
+      document.fonts.add(loaded);
+      document.documentElement.classList.add('fonts-loaded-main');
+    }).catch(() => {});
+  };
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(loadMainFont, { timeout: 2500 });
+  } else {
+    window.addEventListener('load', () => setTimeout(loadMainFont, 800), { once: true });
+  }
+})();
+</script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="/static/js/game.js?v=56"></script>
+<script src="/static/js/game.js?v=57"></script>
 </body>
 </html>

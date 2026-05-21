@@ -78,7 +78,18 @@ const I18N = {
         validate_json: 'Validate JSON',
         rotate_prompt: 'Please play in landscape mode',
         continue_enter: 'Continue',
-        mod_default_name: 'Mod {0}'
+        mod_default_name: 'Mod {0}',
+        mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2',
+        form_team: 'Form Team', leave_team: 'Leave Team', invite_team: 'Invite Team',
+        team_invite_msg: '{0} invites you to form a team', team_formed_msg: 'Team formed with {0}',
+        team_disbanded_msg: 'Team disbanded', team_match_invite_msg: 'Team {0} challenges your team',
+        team_match_declined_msg: 'Team match declined', team_declined_msg: 'Team invite declined',
+        select_target: 'Select Target', enemy_label: 'Enemy', ally_label: 'Ally',
+        teammate: 'Teammate', team_chat: 'Team Chat', team_chat_placeholder: 'Message teammates...',
+        trigger_on_ally_turn: 'Trigger equipment (ally turn)', player_dead: 'Defeated',
+        mode_switch_confirm: 'Switching mode will leave your current team. Continue?',
+        waiting_for_team: 'Waiting for another team...',
+        all_players_draft_status: 'Draft Status'
     }
 };
 I18N.zh = { ...I18N.en,
@@ -145,6 +156,17 @@ I18N.zh = { ...I18N.en,
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
     tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无',
+    mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2',
+    form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
+    team_invite_msg: '{0} 邀请你组队', team_formed_msg: '已与 {0} 组队',
+    team_disbanded_msg: '队伍已解散', team_match_invite_msg: '队伍 {0} 向你们发起挑战',
+    team_match_declined_msg: '队伍挑战被拒绝', team_declined_msg: '组队邀请被拒绝',
+    select_target: '选择目标', enemy_label: '敌方', ally_label: '友方',
+    teammate: '队友', team_chat: '队内聊天', team_chat_placeholder: '发送队内消息...',
+    trigger_on_ally_turn: '触发装备（队友回合）', player_dead: '已阵亡',
+    mode_switch_confirm: '切换模式将离开当前队伍，是否确认？',
+    waiting_for_team: '等待另一支队伍...',
+    all_players_draft_status: '选牌状态',
     fusion_layer: '聚变', fission_layer: '裂变',
     app_subtitle: '局域网联机卡牌对战',
     nickname_placeholder: '输入昵称',
@@ -1209,7 +1231,8 @@ function connectSocket(serverUrl) {
     socket.on('connect', () => {
         console.log('[client] socket connected, login nickname=', nickname);
         const disabledMods = getDisabledMods();
-        socket.emit('login', { nickname, disabled_mods: disabledMods });
+        const preferredMode = localStorage.getItem('preferred_mode') || '1v1';
+        socket.emit('login', { nickname, disabled_mods: disabledMods, mode: preferredMode });
     });
     socket.on('disconnect', () => {
         console.log('[client] socket disconnected');
@@ -1265,6 +1288,57 @@ function connectSocket(serverUrl) {
     socket.on('invite_declined', () => {
         flashStatus(UI.invite_declined, 2000);
     });
+    socket.on('team_invite', (data) => {
+        showModal(`
+            <h3>${UI.form_team}</h3>
+            <p>${tf('team_invite_msg', data.from_name)}</p>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" id="team-accept">${UI.accept}</button>
+                <button class="btn btn-danger" id="team-decline">${UI.decline}</button>
+            </div>
+        `);
+        $('team-accept').onclick = () => {
+            socket.emit('accept_team', { from_sid: data.from_sid });
+            hideModal();
+        };
+        $('team-decline').onclick = () => {
+            socket.emit('decline_team', { from_sid: data.from_sid });
+            hideModal();
+        };
+    });
+    socket.on('team_formed', (data) => {
+        flashStatus(tf('team_formed_msg', data.members.join(', ')), 3000);
+    });
+    socket.on('team_disbanded', () => {
+        flashStatus(UI.team_disbanded_msg, 3000);
+    });
+    socket.on('team_declined', (data) => {
+        flashStatus(UI.team_declined_msg, 2000);
+    });
+    socket.on('team_match_invite', (data) => {
+        showModal(`
+            <h3>${UI.invite_team}</h3>
+            <p>${tf('team_match_invite_msg', data.from_team.join(' & '))}</p>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" id="match-accept">${UI.accept}</button>
+                <button class="btn btn-danger" id="match-decline">${UI.decline}</button>
+            </div>
+        `);
+        $('match-accept').onclick = () => {
+            socket.emit('accept_team_match', { from_leader: data.from_leader });
+            hideModal();
+        };
+        $('match-decline').onclick = () => {
+            socket.emit('decline_team_match', { from_leader: data.from_leader });
+            hideModal();
+        };
+    });
+    socket.on('team_match_declined', () => {
+        flashStatus(UI.team_match_declined_msg, 2000);
+    });
+    socket.on('team_match_accepted', () => {
+        hideModal();
+    });
     socket.on('game_phase', (data) => {
         console.log('[client] game_phase:', data.phase);
         phase = data.phase;
@@ -1314,6 +1388,13 @@ function connectSocket(serverUrl) {
             pendingPlayCard = pendingPlayCard || data.pending_response;
         } else if (!responsePending) {
             pendingPlayCard = null;
+        }
+        if (data.pending_response === null && responsePending) {
+            responsePending = false;
+            responseData = null;
+            const rp = $('response-panel');
+            if (rp) { rp.innerHTML = ''; rp.classList.add('hidden'); }
+            if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
         }
         if (pendingPlayCard && data.you && data.you.hand) {
             const stillInHand = data.you.hand.some(c => c.instance_id === pendingPlayCard.instance_id);
@@ -1738,39 +1819,154 @@ function emitSoloStart(payload = null) {
 
 function renderLobby(data) {
     showView('view-lobby');
-    const players = data.players || [];
+    const lobbyPlayers = data.players || [];
     const games = data.ongoing_games || [];
-    console.log('[client] renderLobby: players=', players.length, 'mySid=', mySid);
-    players.forEach(p => console.log('  player:', p.nickname, 'sid=', p.sid, 'isMe=', p.sid === mySid));
+    const teamList = data.teams || [];
+    const myTeam = data.your_team || null;
+    const myTeamLeader = data.your_team_leader || null;
+    const serverMode = data.your_mode || '1v1';
+    console.log('[client] renderLobby: players=', lobbyPlayers.length, 'mySid=', mySid, 'myTeam=', myTeam, 'mode=', serverMode);
+
+    const modeTabs = $('lobby-mode-tabs');
+    if (modeTabs) {
+        const cachedMode = localStorage.getItem('preferred_mode') || '1v1';
+        const currentMode = serverMode || cachedMode;
+        modeTabs.querySelectorAll('.mode-tab').forEach(tab => {
+            const tabMode = tab.getAttribute('data-mode');
+            if (tabMode === currentMode) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
+            tab.onclick = () => {
+                const newMode = tab.getAttribute('data-mode');
+                if (newMode === currentMode) return;
+                if (myTeam && newMode === '1v1') {
+                    if (!confirm(UI.mode_switch_confirm)) return;
+                }
+                localStorage.setItem('preferred_mode', newMode);
+                socket.emit('set_mode', { mode: newMode });
+            };
+        });
+    }
+
+    const currentMode = (modeTabs && modeTabs.querySelector('.mode-tab.active'))
+        ? modeTabs.querySelector('.mode-tab.active').getAttribute('data-mode')
+        : (localStorage.getItem('preferred_mode') || '1v1');
+
+    const filteredPlayers = lobbyPlayers.filter(p => {
+        const pMode = p.mode || '1v1';
+        if (currentMode === '2v2') {
+            return pMode === '2v2';
+        } else {
+            return pMode === '1v1';
+        }
+    });
+
     const onlineCount = $('lobby-online-count');
-    if (onlineCount) onlineCount.textContent = tf('online_count', players.length);
+    if (onlineCount) onlineCount.textContent = tf('online_count', filteredPlayers.length);
+
+    const teamSection = $('lobby-team-section');
+    if (teamSection) {
+        teamSection.innerHTML = '';
+        if (myTeam && currentMode === '2v2') {
+            const teamMembers = myTeam.map(sid => {
+                const p = lobbyPlayers.find(pl => pl.sid === sid);
+                return p ? p.nickname : '?';
+            });
+            const teamInfoDiv = document.createElement('div');
+            teamInfoDiv.className = 'team-info';
+            teamInfoDiv.innerHTML = `${UI.teammate}: ${teamMembers.join(', ')} `;
+            const leaveBtn = document.createElement('button');
+            leaveBtn.textContent = UI.leave_team;
+            leaveBtn.className = 'btn btn-danger btn-sm';
+            leaveBtn.onclick = () => socket.emit('leave_team');
+            teamInfoDiv.appendChild(leaveBtn);
+            teamSection.appendChild(teamInfoDiv);
+        }
+    }
+
     const list = $('lobby-players');
     if (!list) return;
     list.innerHTML = '';
-    if (players.length === 0) {
-        list.innerHTML = `<div class="empty-hint">${UI.no_other_players}</div>`;
-    } else {
-        players.forEach(p => {
-            const row = document.createElement('div');
-            row.className = 'lobby-player-row';
-            const isMe = p.sid === mySid;
-            if (isMe) {
-                row.innerHTML = `<span class="player-name player-self">${p.nickname}</span>`;
-            } else {
-                row.innerHTML = `<span class="player-name">${p.nickname}</span>`;
-                const btn = document.createElement('button');
-                btn.textContent = UI.invite;
-                btn.className = 'btn btn-primary';
-                btn.onclick = () => {
-                    console.log('[client] invite target_sid=', p.sid);
-                    socket.emit('invite', { target_sid: p.sid });
-                    updateStatus(UI.invite_sent);
-                };
-                row.appendChild(btn);
-            }
-            list.appendChild(row);
+
+    if (currentMode === '2v2') {
+        const teamsInMode = teamList.filter(t => {
+            return t.member_sids.some(sid => {
+                const p = lobbyPlayers.find(pl => pl.sid === sid);
+                return p && (p.mode || '1v1') === '2v2';
+            });
         });
+        const teamedSids = new Set();
+        teamsInMode.forEach(t => t.member_sids.forEach(s => teamedSids.add(s)));
+        const unteamed = filteredPlayers.filter(p => !teamedSids.has(p.sid));
+
+        if (teamsInMode.length === 0 && unteamed.length === 0) {
+            list.innerHTML = `<div class="empty-hint">${UI.no_other_players}</div>`;
+        } else {
+            teamsInMode.forEach(team => {
+                const isMyTeamRow = myTeam && team.member_sids.some(s => myTeam.includes(s));
+                const row = document.createElement('div');
+                row.className = 'lobby-team-row';
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'player-name';
+                nameSpan.textContent = team.members.join(' & ');
+                row.appendChild(nameSpan);
+                if (!isMyTeamRow && myTeam) {
+                    const btn = document.createElement('button');
+                    btn.textContent = UI.invite_team;
+                    btn.className = 'btn btn-primary btn-sm';
+                    btn.onclick = () => socket.emit('invite_team', { target_team_leader: team.leader });
+                    row.appendChild(btn);
+                }
+                list.appendChild(row);
+            });
+            unteamed.forEach(p => {
+                const row = document.createElement('div');
+                row.className = 'lobby-player-row';
+                const isMe = p.sid === mySid;
+                const nameSpan = document.createElement('span');
+                nameSpan.className = isMe ? 'player-name player-self' : 'player-name';
+                nameSpan.textContent = p.nickname;
+                row.appendChild(nameSpan);
+                if (!isMe && !myTeam) {
+                    const btn = document.createElement('button');
+                    btn.textContent = UI.form_team;
+                    btn.className = 'btn btn-primary btn-sm';
+                    btn.onclick = () => socket.emit('form_team', { target_sid: p.sid });
+                    row.appendChild(btn);
+                }
+                list.appendChild(row);
+            });
+        }
+    } else {
+        if (filteredPlayers.length === 0) {
+            list.innerHTML = `<div class="empty-hint">${UI.no_other_players}</div>`;
+        } else {
+            filteredPlayers.forEach(p => {
+                const row = document.createElement('div');
+                row.className = 'lobby-player-row';
+                const isMe = p.sid === mySid;
+                const nameSpan = document.createElement('span');
+                nameSpan.className = isMe ? 'player-name player-self' : 'player-name';
+                nameSpan.textContent = p.nickname;
+                row.appendChild(nameSpan);
+                if (!isMe) {
+                    const btn = document.createElement('button');
+                    btn.textContent = UI.invite;
+                    btn.className = 'btn btn-primary';
+                    btn.onclick = () => {
+                        console.log('[client] invite target_sid=', p.sid);
+                        socket.emit('invite', { target_sid: p.sid });
+                        updateStatus(UI.invite_sent);
+                    };
+                    row.appendChild(btn);
+                }
+                list.appendChild(row);
+            });
+        }
     }
+
     const gamesList = $('lobby-games');
     if (gamesList) {
         gamesList.innerHTML = '';
@@ -1779,7 +1975,13 @@ function renderLobby(data) {
             visibleGames.forEach(g => {
                 const row = document.createElement('div');
                 row.className = 'lobby-game-row';
-                row.innerHTML = `<span>${g.player1} vs ${g.player2} (${UI.round}${g.round})</span>`;
+                let gameLabel;
+                if (g.mode === '2v2') {
+                    gameLabel = `${g.player1} & ${g.player2} vs ${g.player3 || '?'} & ${g.player4 || '?'} (${UI.round}${g.round})`;
+                } else {
+                    gameLabel = `${g.player1} vs ${g.player2} (${UI.round}${g.round})`;
+                }
+                row.innerHTML = `<span>${gameLabel}</span>`;
                 const btn = document.createElement('button');
                 btn.textContent = UI.spectate;
                 btn.className = 'btn btn-secondary';
@@ -1801,16 +2003,32 @@ function renderDraft(data, isReroll) {
     const rerolls = data.rerolls || 0;
     const round = data.round || 0;
     const totalRounds = data.total_rounds || 15;
+    const is2v2 = data.mode === '2v2';
     const oppPicksCount = data.opponent_picks_count || 0;
+    const othersPicksCount = data.others_picks_count || {};
     const prevPicks = draftState ? (draftState.picks || []).length : -1;
     const iJustPicked = picks.length > prevPicks;
     const shouldAnimate = isReroll || iJustPicked;
     const info = $('draft-info');
     if (info) {
-        if (picks.length >= totalRounds) {
-            info.textContent = `${UI.draft_complete} | ${UI.waiting_opponent}: ${oppPicksCount}`;
+        if (is2v2) {
+            const pNames = data.player_names || [];
+            const othersInfo = Object.entries(othersPicksCount).map(([idx, cnt]) => {
+                const pidx = parseInt(idx);
+                const name = pNames[pidx] || `P${pidx + 1}`;
+                return `${name}: ${cnt}/${totalRounds}`;
+            }).join(' | ');
+            if (picks.length >= totalRounds) {
+                info.textContent = `${UI.draft_complete} | ${othersInfo}`;
+            } else {
+                info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${othersInfo}`;
+            }
         } else {
-            info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${UI.waiting_opponent}: ${oppPicksCount}`;
+            if (picks.length >= totalRounds) {
+                info.textContent = `${UI.draft_complete} | ${UI.waiting_opponent}: ${oppPicksCount}`;
+            } else {
+                info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${UI.waiting_opponent}: ${oppPicksCount}`;
+            }
         }
     }
     const optionsEl = $('draft-options');
@@ -1877,6 +2095,8 @@ function renderEventSelect(data) {
     const events = data.events || [];
     const oppSelected = data.opponent_selected;
     const myPick = data.my_pick;
+    const is2v2 = data.mode === '2v2';
+    const othersSelected = data.others_selected || {};
     const container = $('event-options');
     if (!container) return;
     container.innerHTML = '';
@@ -1885,15 +2105,36 @@ function renderEventSelect(data) {
         for (const ev of events) {
             if (ev && ev.id === myPick) { eventName = getLocalizedEventText(ev, 'name') || '?'; break; }
         }
+        let othersStatusHtml = '';
+        if (is2v2) {
+            const pNames = data.player_names || [];
+            othersStatusHtml = Object.entries(othersSelected).map(([idx, sel]) => {
+                const pidx = parseInt(idx);
+                const name = pNames[pidx] || `P${pidx + 1}`;
+                return sel ? `<span style="color:var(--color-health)">${name} ✓</span>` : `<span style="color:var(--text-secondary)">${name} ...</span>`;
+            }).join(' ');
+        } else {
+            othersStatusHtml = !oppSelected ? `<div class="waiting-msg">${UI.waiting_opponent}</div>` : `<div class="waiting-msg">${UI.opponent_selected}</div>`;
+        }
         container.innerHTML = `
             <div class="event-selected">${UI.event_selected.replace('{0}', eventName)}</div>
-            ${!oppSelected ? `<div class="waiting-msg">${UI.waiting_opponent}</div>` : `<div class="waiting-msg">${UI.opponent_selected}</div>`}
+            <div class="waiting-msg">${othersStatusHtml}</div>
         `;
         return;
     }
     const oppStatus = document.createElement('div');
     oppStatus.className = 'waiting-msg';
-    oppStatus.textContent = oppSelected ? UI.opponent_selected : UI.opponent_selecting;
+    if (is2v2) {
+        const pNames = data.player_names || [];
+        const statusParts = Object.entries(othersSelected).map(([idx, sel]) => {
+            const pidx = parseInt(idx);
+            const name = pNames[pidx] || `P${pidx + 1}`;
+            return sel ? `<span style="color:var(--color-health)">${name} ✓</span>` : `<span style="color:var(--text-secondary)">${name} ...</span>`;
+        });
+        oppStatus.innerHTML = statusParts.join(' ');
+    } else {
+        oppStatus.textContent = oppSelected ? UI.opponent_selected : UI.opponent_selecting;
+    }
     oppStatus.style.width = '100%';
     oppStatus.style.textAlign = 'center';
     oppStatus.style.marginBottom = '8px';
@@ -2228,8 +2469,28 @@ function renderGame(data) {
     const gs = data || gameState;
     const you = gs.you || {};
     const opp = gs.opponent || {};
+    const opp2 = gs.opponent2 || {};
+    const teammate = gs.teammate || {};
+    const is2v2 = gs.mode === '2v2';
     const myTurn = isMyTurn();
-    console.log('[RENDER] renderGame: phase=', gs.phase, 'current_player=', gs.current_player, 'playerId=', playerId, 'myTurn=', myTurn);
+    console.log('[RENDER] renderGame: phase=', gs.phase, 'current_player=', gs.current_player, 'playerId=', playerId, 'myTurn=', myTurn, 'is2v2=', is2v2);
+
+    const gameContainer = document.querySelector('.game-container');
+    if (gameContainer) {
+        if (is2v2) {
+            gameContainer.classList.add('mode-2v2');
+        } else {
+            gameContainer.classList.remove('mode-2v2');
+        }
+    }
+
+    const opp2Half = $('opp2-half');
+    const oppDivider = $('opp-divider');
+    const teammateSidebar = $('teammate-sidebar');
+    if (opp2Half) opp2Half.classList.toggle('hidden', !is2v2);
+    if (oppDivider) oppDivider.classList.toggle('hidden', !is2v2);
+    if (teammateSidebar) teammateSidebar.classList.toggle('hidden', !is2v2);
+
     const oppLabel = $('opp-label');
     const youLabel = $('you-label');
     if (isSpectating) {
@@ -2237,6 +2498,14 @@ function renderGame(data) {
         const p2Name = gs.player2_name || 'P2';
         if (oppLabel) oppLabel.textContent = spectatePerspective === 0 ? p2Name : p1Name;
         if (youLabel) youLabel.textContent = spectatePerspective === 0 ? p1Name : p2Name;
+    } else if (is2v2) {
+        const oppNames = gs.opponent_names || [];
+        if (oppLabel) oppLabel.textContent = oppNames[0] || UI.opponent;
+        const opp2Label = $('opp2-label');
+        if (opp2Label) opp2Label.textContent = oppNames[1] || (UI.opponent + '2');
+        const tmLabel = $('teammate-label');
+        if (tmLabel) tmLabel.textContent = gs.teammate_name || UI.teammate;
+        if (youLabel) youLabel.textContent = gs.your_name || UI.you;
     } else {
         if (oppLabel) oppLabel.textContent = gs.opponent_name || UI.opponent;
         if (youLabel) youLabel.textContent = gs.your_name || UI.you;
@@ -2248,6 +2517,7 @@ function renderGame(data) {
         if (youLabel) youLabel.textContent = `${gs.your_name || UI.you} - ${youResult}`;
         if (oppLabel) oppLabel.textContent = `${gs.opponent_name || UI.opponent} - ${oppResult}`;
     }
+
     renderPlayerBars('opp-bars', opp);
     renderPlayerBars('you-bars', you);
     renderStatusTags('opp-status', opp);
@@ -2256,11 +2526,37 @@ function renderGame(data) {
     renderPlayerHand(you);
     renderEquipment('opp-equip', opp, false);
     renderEquipment('you-equip', you, true);
+
+    if (is2v2) {
+        renderPlayerBars('opp2-bars', opp2);
+        renderStatusTags('opp2-status', opp2);
+        renderPlayerBars('teammate-bars', teammate);
+        renderStatusTags('teammate-status', teammate);
+        renderTeammateHand(teammate);
+        renderEquipment('teammate-equip', teammate, false);
+        const opp2Info = $('opp2-info');
+        if (opp2Info) opp2Info.textContent = UI.hand_deck_info_opp.replace('{0}', opp2.hand_count || 0).replace('{1}', opp2.deck_count || 0);
+        const tmInfo = $('teammate-info');
+        if (tmInfo) tmInfo.textContent = UI.hand_deck_discard_info.replace('{0}', teammate.hand_count || 0).replace('{1}', teammate.deck_count || 0).replace('{2}', teammate.discard_count || 0);
+    }
+
     renderLog(gs.log || [], gs.log_start || 0, gs.log_total);
-    const phaseText = gs.phase === 'action' ? (myTurn ? UI.your_turn : UI.opponent_turn)
-        : gs.phase === 'draw' ? UI.draw_phase
-        : gs.phase === 'game_over' ? UI.game_over : '';
+
+    let phaseText;
+    if (is2v2) {
+        const cpName = gs.current_player === playerId ? (gs.your_name || UI.you) :
+            (gs.current_player === gs.teammate_id ? (gs.teammate_name || UI.teammate) :
+            ((gs.opponent_names || [])[gs.enemy_ids ? gs.enemy_ids.indexOf(gs.current_player) : -1] || '...'));
+        phaseText = gs.phase === 'action' ? (myTurn ? UI.your_turn : `${cpName}${UI.opponent_turn}`)
+            : gs.phase === 'draw' ? UI.draw_phase
+            : gs.phase === 'game_over' ? UI.game_over : '';
+    } else {
+        phaseText = gs.phase === 'action' ? (myTurn ? UI.your_turn : UI.opponent_turn)
+            : gs.phase === 'draw' ? UI.draw_phase
+            : gs.phase === 'game_over' ? UI.game_over : '';
+    }
     updateStatus(UI.round_status.replace('{0}', gs.round_num || 0).replace('{1}', phaseText));
+
     const endTurnBtn = $('btn-end-turn');
     if (endTurnBtn) {
         endTurnBtn.disabled = !myTurn || isSpectating || gs.phase === 'game_over';
@@ -2383,6 +2679,18 @@ function renderOppHand(oppData) {
             container.appendChild(card);
         }
     }
+}
+
+function renderTeammateHand(teammateData) {
+    const container = $('teammate-hand');
+    if (!container) return;
+    container.innerHTML = '';
+    const hand = teammateData.hand || [];
+    hand.forEach(card => {
+        const el = createCardElement(card, { small: true });
+        el.style.cursor = 'default';
+        container.appendChild(el);
+    });
 }
 
 function renderPlayerHand(playerData) {

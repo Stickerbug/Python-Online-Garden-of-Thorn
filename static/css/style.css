@@ -1,16 +1,14 @@
 @font-face {
   font-family: 'Kreadon';
-  src: url('/fonts/Kreadon-Regular.subset.woff2') format('woff2'),
-       url('/fonts/Kreadon-Regular.ttf') format('truetype');
+  src: url('/fonts/Kreadon-Regular.subset.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
-  font-display: swap;
+  font-display: optional;
 }
 
 @font-face {
   font-family: 'Kreadon Demi';
-  src: url('/fonts/Kreadon-Demi.subset.woff2') format('woff2'),
-       url('/fonts/Kreadon-Demi.ttf') format('truetype');
+  src: url('/fonts/Kreadon-Demi.subset.woff2') format('woff2');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
@@ -105,8 +103,12 @@
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
   --transition-slow: 0.4s ease;
-  --font-main: 'Kreadon', 'Microsoft YaHei', sans-serif;
+  --font-main: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
   --font-card: 'Kreadon Demi', 'Kreadon', 'Microsoft YaHei', sans-serif;
+}
+
+html.fonts-loaded-main {
+  --font-main: 'Kreadon', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
 }
 
 [data-theme="dark"] {
@@ -4266,6 +4268,103 @@ body {
   line-height: 1.1;
 }
 
+.lobby-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.mode-tabs {
+    display: flex;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+}
+
+.mode-tab {
+    padding: 6px 24px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    user-select: none;
+    -webkit-user-select: none;
+    border-right: 1px solid var(--border-color);
+}
+
+.mode-tab:last-child {
+    border-right: none;
+}
+
+.mode-tab.active {
+    background: var(--magic);
+    color: #fff;
+}
+
+.mode-tab:not(.active):hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+}
+
+.lobby-header-with-tabs {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.lobby-header-with-tabs h2 {
+    text-align: center;
+    width: 100%;
+}
+
+.lobby-header-with-tabs .mode-tabs {
+    width: 100%;
+    max-width: 240px;
+}
+
+.lobby-header-with-tabs .mode-tab {
+    flex: 1;
+}
+
+.lobby-team-section {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 8px 16px;
+}
+
+.team-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(26, 188, 156, 0.1);
+  border: 1px solid rgba(26, 188, 156, 0.3);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.team-waiting {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+}
+
+.lobby-team-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: rgba(52, 152, 219, 0.08);
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
 .lobby-body {
   max-width: 1080px;
   gap: 14px;
@@ -4684,4 +4783,166 @@ body {
     width: min(94vw, 520px);
     padding: 12px;
   }
+}
+
+.opp-top-row {
+    display: flex;
+    width: 100%;
+}
+
+.opp-half {
+    flex: 1;
+    min-width: 0;
+}
+
+.opp-left {
+    padding-right: 8px;
+}
+
+.opp-right {
+    padding-left: 8px;
+}
+
+.opp-divider {
+    width: 1px;
+    background: var(--border-color);
+    opacity: 0.5;
+    align-self: stretch;
+    margin: 4px 0;
+}
+
+.opp-divider.hidden {
+    display: none;
+}
+
+.opp-half.hidden {
+    display: none;
+}
+
+.game-container.mode-2v2 .middle-section {
+    flex-direction: row;
+    gap: 0;
+}
+
+.game-container.mode-2v2 .battle-log {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+    height: 100%;
+}
+
+.teammate-sidebar {
+    width: 140px;
+    min-width: 120px;
+    flex-shrink: 0;
+    padding: 6px 8px;
+    border-left: 1px solid var(--border-color);
+    background: rgba(26, 188, 156, 0.04);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.teammate-sidebar.hidden {
+    display: none;
+}
+
+.teammate-sidebar-header {
+    font-size: 12px;
+    font-weight: 700;
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.teammate-sidebar-section {
+    font-size: 10px;
+    color: var(--text-secondary);
+    padding: 2px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.teammate-label {
+    color: #1abc9c;
+}
+
+.teammate-hand-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    padding: 2px 0;
+}
+
+.teammate-hand-row .card {
+    width: 48px;
+    font-size: 9px;
+    flex-shrink: 0;
+    cursor: default;
+    border-radius: 4px;
+    aspect-ratio: auto;
+}
+
+.card-small {
+    width: 52px;
+    min-height: 72px;
+    font-size: 9px;
+    border-radius: 4px;
+}
+
+.card-small .card-name {
+    font-size: 8px;
+}
+
+.card-small .card-cost {
+    font-size: 8px;
+}
+
+.card-small .card-flags {
+    gap: 2px;
+}
+
+.card-small .card-flag {
+    font-size: 7px;
+    padding: 0 2px;
+}
+
+.teammate-hand-row .card .card-name {
+    font-size: 8px;
+}
+
+.teammate-hand-row .card .card-cost {
+    font-size: 8px;
+}
+
+.teammate-sidebar .bars-row {
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.teammate-sidebar .bar-track {
+    height: 12px;
+    width: clamp(50px, 100%, 100px);
+}
+
+.teammate-sidebar .bar-text {
+    font-size: 9px;
+}
+
+.teammate-sidebar .status-tag {
+    font-size: 9px;
+    padding: 1px 4px;
+}
+
+.teammate-sidebar .info-extra {
+    font-size: 10px;
+}
+
+.teammate-sidebar .equip-row {
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+.teammate-sidebar .equip-row .equip-card {
+    font-size: 9px;
+    padding: 2px 4px;
 }

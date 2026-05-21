@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 import re
 import time
@@ -10,6 +10,7 @@ import copy
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from game_engine import GameEngine
+from game_engine_2v2 import GameEngine2v2
 from cards import (
     CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
@@ -41,18 +42,27 @@ players = {}
 rooms = {}
 invites = {}
 solo_sessions = {}
+teams = {}
+pending_team_matches = {}
 
 
 class GameRoom:
-    def __init__(self, room_id, player_sids, allowed_card_ids=None):
+    def __init__(self, room_id, player_sids, allowed_card_ids=None, mode='1v1'):
         self.room_id = room_id
         self.player_sids = list(player_sids)
-        self.engine = GameEngine()
+        self.mode = mode
+        if mode == '2v2':
+            self.engine = GameEngine2v2()
+        else:
+            self.engine = GameEngine()
         self.engine.allowed_card_ids = set(allowed_card_ids) if allowed_card_ids is not None else None
         self.spectators = []
         self.disconnected_players = {}
         self.reconnect_timers = {}
         self._rematch_votes = set()
+        self.team_assignments = None
+        if mode == '2v2' and len(player_sids) == 4:
+            self.team_assignments = [[0, 1], [2, 3]]
 
     def player_index(self, sid):
         if sid in self.player_sids:
@@ -119,7 +129,7 @@ def get_lobby_list():
     lobby = []
     for sid, p in players.items():
         if p['status'] == 'lobby':
-            lobby.append({'sid': sid, 'nickname': p['nickname']})
+            lobby.append({'sid': sid, 'nickname': p['nickname'], 'mode': p.get('mode', '1v1')})
     return lobby
 
 
@@ -128,41 +138,55 @@ def get_ongoing_games():
     for rid, room in rooms.items():
         phase = room.engine.phase
         if phase in ('action', 'draw', 'response', 'choice', 'playing', 'draft', 'event_select'):
-            p1_name = '?'
-            p2_name = '?'
-            if len(room.player_sids) >= 1:
-                sid0 = room.player_sids[0]
-                if sid0 in players:
-                    p1_name = players[sid0]['nickname']
-                elif sid0 in room.disconnected_players:
-                    p1_name = room.disconnected_players[sid0]['nickname']
-            if len(room.player_sids) >= 2:
-                sid1 = room.player_sids[1]
-                if sid1 in players:
-                    p2_name = players[sid1]['nickname']
-                elif sid1 in room.disconnected_players:
-                    p2_name = room.disconnected_players[sid1]['nickname']
-            both_disconnected = all(s in room.disconnected_players for s in room.player_sids[:2])
-            games.append({
+            player_names = []
+            for s in room.player_sids:
+                if s in players:
+                    player_names.append(players[s]['nickname'])
+                elif s in room.disconnected_players:
+                    player_names.append(room.disconnected_players[s]['nickname'])
+                else:
+                    player_names.append('?')
+            both_disconnected = all(s in room.disconnected_players for s in room.player_sids)
+            game_info = {
                 'room_id': rid,
-                'player1': p1_name,
-                'player2': p2_name,
+                'player1': player_names[0] if len(player_names) > 0 else '?',
+                'player2': player_names[1] if len(player_names) > 1 else '?',
                 'round': room.engine.round_num,
                 'phase': phase,
                 'both_disconnected': both_disconnected,
-            })
+                'mode': room.mode,
+            }
+            if room.mode == '2v2':
+                game_info['player3'] = player_names[2] if len(player_names) > 2 else '?'
+                game_info['player4'] = player_names[3] if len(player_names) > 3 else '?'
+            games.append(game_info)
     return games
 
 
 def broadcast_lobby():
     lobby_list = get_lobby_list()
     ongoing = get_ongoing_games()
+    team_list = []
+    seen_teams = set()
+    for sid, team in teams.items():
+        team_id = id(team)
+        if team_id not in seen_teams:
+            seen_teams.add(team_id)
+            team_list.append({
+                'leader': team['leader'],
+                'members': [players[ms]['nickname'] for ms in team['members'] if ms in players],
+                'member_sids': team['members'],
+            })
     for sid, p in players.items():
         if p['status'] == 'lobby':
             socketio.emit('lobby_update', {
                 'players': lobby_list,
                 'your_sid': sid,
                 'ongoing_games': ongoing,
+                'teams': team_list,
+                'your_team': teams[sid]['members'] if sid in teams else None,
+                'your_team_leader': teams[sid]['leader'] if sid in teams else None,
+                'your_mode': p.get('mode', '1v1'),
             }, room=sid)
     print("[server] debug")
 
@@ -175,14 +199,23 @@ def send_draft_state(room, pidx):
     options = engine.draft_options[pidx]
     picks = engine.draft_picks[pidx]
     rerolls = engine.draft_rerolls[pidx]
-    opp_pidx = 1 - pidx
+    others_picks_count = {}
+    if room.mode == '2v2':
+        for i in range(4):
+            if i != pidx:
+                others_picks_count[i] = len(engine.draft_picks[i])
+    else:
+        opp_pidx = 1 - pidx
+        others_picks_count[opp_pidx] = len(engine.draft_picks[opp_pidx])
     socketio.emit('draft_state', {
         'options': [c.to_dict() for c in options],
         'picks': picks,
         'rerolls': rerolls,
         'round': len(picks) + 1,
         'total_rounds': DECK_SIZE,
-        'opponent_picks_count': len(engine.draft_picks[opp_pidx]),
+        'others_picks_count': others_picks_count,
+        'mode': room.mode,
+        'player_names': engine.player_names,
     }, room=sid)
 
 
@@ -192,14 +225,22 @@ def send_event_state(room, pidx):
         return
     engine = room.engine
     events = engine.opening_event_options[pidx]
-    opp_idx = 1 - pidx
-    opp_selected = engine.opening_event_picks[opp_idx] is not None
+    others_selected = {}
+    if room.mode == '2v2':
+        for i in range(4):
+            if i != pidx:
+                others_selected[i] = engine.opening_event_picks[i] is not None
+    else:
+        opp_idx = 1 - pidx
+        others_selected[opp_idx] = engine.opening_event_picks[opp_idx] is not None
     socketio.emit('event_select', {
         'events': events,
-        'opponent_selected': opp_selected,
+        'others_selected': others_selected,
         'my_pick': engine.opening_event_picks[pidx],
         'magic_options': engine.opening_event_magic_options[pidx],
         'draft_picks': engine.draft_picks[pidx],
+        'mode': room.mode,
+        'player_names': engine.player_names,
     }, room=sid)
 
 
@@ -209,13 +250,28 @@ def broadcast_game_state(room):
             continue
         state = room.engine.get_public_state(pidx)
         state['your_id'] = pidx
-        opp_pidx = 1 - pidx
-        opp_sid = room.player_sids[opp_pidx]
-        if opp_sid in players:
-            state['opponent_name'] = players[opp_sid]['nickname']
+        state['mode'] = room.mode
+        if room.mode == '2v2':
+            engine = room.engine
+            teammate_id = engine.get_teammate(pidx)
+            enemy_ids = engine.get_all_enemies(pidx)
+            state['your_name'] = players[sid]['nickname'] if sid in players else '?'
+            if teammate_id >= 0 and teammate_id < len(room.player_sids):
+                tm_sid = room.player_sids[teammate_id]
+                state['teammate_name'] = players[tm_sid]['nickname'] if tm_sid in players else '?'
+            state['opponent_names'] = []
+            for eid in enemy_ids:
+                if eid < len(room.player_sids):
+                    e_sid = room.player_sids[eid]
+                    state['opponent_names'].append(players[e_sid]['nickname'] if e_sid in players else '?')
         else:
-            state['opponent_name'] = '?'
-        state['your_name'] = players[sid]['nickname'] if sid in players else '?'
+            opp_pidx = 1 - pidx
+            opp_sid = room.player_sids[opp_pidx]
+            if opp_sid in players:
+                state['opponent_name'] = players[opp_sid]['nickname']
+            else:
+                state['opponent_name'] = '?'
+            state['your_name'] = players[sid]['nickname'] if sid in players else '?'
         socketio.emit('state_update', state, room=sid)
     broadcast_spectate_state(room)
 
@@ -233,13 +289,28 @@ def send_game_state_to(room, pidx):
     else:
         state = room.engine.get_public_state(pidx)
         state['your_id'] = pidx
-        opp_pidx = 1 - pidx
-        opp_sid = room.player_sids[opp_pidx]
-        if opp_sid in players:
-            state['opponent_name'] = players[opp_sid]['nickname']
+        state['mode'] = room.mode
+        if room.mode == '2v2':
+            engine = room.engine
+            teammate_id = engine.get_teammate(pidx)
+            enemy_ids = engine.get_all_enemies(pidx)
+            state['your_name'] = players[sid]['nickname'] if sid in players else '?'
+            if teammate_id >= 0 and teammate_id < len(room.player_sids):
+                tm_sid = room.player_sids[teammate_id]
+                state['teammate_name'] = players[tm_sid]['nickname'] if tm_sid in players else '?'
+            state['opponent_names'] = []
+            for eid in enemy_ids:
+                if eid < len(room.player_sids):
+                    e_sid = room.player_sids[eid]
+                    state['opponent_names'].append(players[e_sid]['nickname'] if e_sid in players else '?')
         else:
-            state['opponent_name'] = '?'
-        state['your_name'] = players[sid]['nickname'] if sid in players else '?'
+            opp_pidx = 1 - pidx
+            opp_sid = room.player_sids[opp_pidx]
+            if opp_sid in players:
+                state['opponent_name'] = players[opp_sid]['nickname']
+            else:
+                state['opponent_name'] = '?'
+            state['your_name'] = players[sid]['nickname'] if sid in players else '?'
         socketio.emit('state_update', state, room=sid)
 
 
@@ -755,6 +826,9 @@ def on_login(data):
                 break
         initial_status = 'reconnecting' if reconnect_room else 'lobby'
         disabled_mods = normalize_disabled_mods(data.get('disabled_mods', []))
+        preferred_mode = data.get('mode', '1v1')
+        if preferred_mode not in ('1v1', '2v2'):
+            preferred_mode = '1v1'
         import hashlib as _hl
         _h = _hl.sha256()
         all_mods = load_all_mods()
@@ -777,6 +851,7 @@ def on_login(data):
             'mods_list': active_mods,
             'disabled_mods': disabled_mods,
             'allowed_card_ids': get_allowed_card_ids(disabled_mods),
+            'mode': preferred_mode,
         }
     if reconnect_room:
         emit('reconnect_available', {
@@ -788,6 +863,191 @@ def on_login(data):
     emit('login_ok', {'sid': sid, 'nickname': name})
     print("[server] debug")
     broadcast_lobby()
+
+
+@socketio.on('form_team')
+def on_form_team(data):
+    sid = request.sid
+    target_sid = data.get('target_sid')
+    with _lock:
+        if sid not in players or target_sid not in players:
+            return
+        if players[sid]['status'] != 'lobby' or players[target_sid]['status'] != 'lobby':
+            return
+        if players[sid].get('mode') != '2v2' or players[target_sid].get('mode') != '2v2':
+            return
+        if sid in teams or target_sid in teams:
+            return
+        socketio.emit('team_invite', {'from_sid': sid, 'from_name': players[sid]['nickname']}, room=target_sid)
+
+
+@socketio.on('set_mode')
+def on_set_mode(data):
+    sid = request.sid
+    mode = data.get('mode', '1v1')
+    with _lock:
+        if sid not in players:
+            return
+        if mode not in ('1v1', '2v2'):
+            return
+        players[sid]['mode'] = mode
+        if mode == '1v1' and sid in teams:
+            team = teams[sid]
+            leader = team['leader']
+            members = list(team['members'])
+            keys_to_remove = [k for k in pending_team_matches if k[0] == leader or k[1] == leader]
+            for k in keys_to_remove:
+                del pending_team_matches[k]
+            for member_sid in members:
+                if member_sid in teams:
+                    del teams[member_sid]
+                if member_sid in players:
+                    socketio.emit('team_disbanded', {}, room=member_sid)
+        broadcast_lobby()
+
+
+@socketio.on('accept_team')
+def on_accept_team(data):
+    sid = request.sid
+    leader_sid = data.get('from_sid')
+    with _lock:
+        if sid not in players or leader_sid not in players:
+            return
+        if players[sid]['status'] != 'lobby' or players[leader_sid]['status'] != 'lobby':
+            return
+        if sid in teams or leader_sid in teams:
+            return
+        team_id = f"team_{leader_sid}"
+        teams[leader_sid] = {'members': [leader_sid, sid], 'leader': leader_sid}
+        teams[sid] = teams[leader_sid]
+        for member_sid in [leader_sid, sid]:
+            socketio.emit('team_formed', {
+                'team_id': team_id,
+                'members': [players[ms]['nickname'] for ms in teams[leader_sid]['members']],
+                'member_sids': teams[leader_sid]['members'],
+                'leader': leader_sid,
+            }, room=member_sid)
+        broadcast_lobby()
+
+
+@socketio.on('decline_team')
+def on_decline_team(data):
+    sid = request.sid
+    leader_sid = data.get('from_sid')
+    with _lock:
+        if leader_sid not in players:
+            return
+        socketio.emit('team_declined', {'from_name': players[sid]['nickname'] if sid in players else '?'}, room=leader_sid)
+
+
+@socketio.on('leave_team')
+def on_leave_team(data=None):
+    sid = request.sid
+    with _lock:
+        if sid not in teams:
+            return
+        team = teams[sid]
+        leader = team['leader']
+        members = list(team['members'])
+        keys_to_remove = [k for k in pending_team_matches if k[0] == leader or k[1] == leader]
+        for k in keys_to_remove:
+            del pending_team_matches[k]
+        for member_sid in members:
+            if member_sid in teams:
+                del teams[member_sid]
+            if member_sid in players:
+                socketio.emit('team_disbanded', {}, room=member_sid)
+        broadcast_lobby()
+
+
+@socketio.on('invite_team')
+def on_invite_team(data):
+    sid = request.sid
+    target_team_leader = data.get('target_team_leader')
+    with _lock:
+        if sid not in teams or target_team_leader not in teams:
+            return
+        my_team = teams[sid]
+        target_team = teams[target_team_leader]
+        my_team_all_2v2 = all(players.get(ms, {}).get('mode') == '2v2' for ms in my_team['members'] if ms in players)
+        target_team_all_2v2 = all(players.get(ms, {}).get('mode') == '2v2' for ms in target_team['members'] if ms in players)
+        if not my_team_all_2v2 or not target_team_all_2v2:
+            return
+        match_key = (min(my_team['leader'], target_team['leader']),
+                     max(my_team['leader'], target_team['leader']))
+        if match_key in pending_team_matches:
+            return
+        pending_team_matches[match_key] = True
+        for member_sid in target_team['members']:
+            if member_sid in players:
+                socketio.emit('team_match_invite', {
+                    'from_leader': my_team['leader'],
+                    'from_team': [players[ms]['nickname'] for ms in my_team['members'] if ms in players],
+                    'from_team_sids': my_team['members'],
+                }, room=member_sid)
+
+
+@socketio.on('accept_team_match')
+def on_accept_team_match(data):
+    global _next_room_id
+    sid = request.sid
+    from_leader = data.get('from_leader')
+    with _lock:
+        if sid not in teams or from_leader not in teams:
+            return
+        my_team = teams[sid]
+        other_team = teams[from_leader]
+        if sid not in my_team['members']:
+            return
+        if from_leader not in other_team['members']:
+            return
+        match_key = (min(my_team['leader'], other_team['leader']),
+                     max(my_team['leader'], other_team['leader']))
+        pending_team_matches.pop(match_key, None)
+        for member_sid in my_team['members']:
+            if member_sid != sid and member_sid in players:
+                socketio.emit('team_match_accepted', {}, room=member_sid)
+        all_sids = other_team['members'] + my_team['members']
+        for s in all_sids:
+            if s not in players or players[s]['status'] != 'lobby':
+                return
+        room_id = _next_room_id
+        _next_room_id += 1
+        allowed = None
+        first_sid = all_sids[0]
+        if first_sid in players and players[first_sid].get('allowed_card_ids'):
+            allowed = players[first_sid]['allowed_card_ids']
+        room = GameRoom(room_id, all_sids, allowed, mode='2v2')
+        rooms[room_id] = room
+        for s in all_sids:
+            players[s]['status'] = 'in_game'
+            players[s]['room_id'] = room_id
+            join_room(room_id)
+            if s in teams:
+                del teams[s]
+        room.engine.player_names = [players[s]['nickname'] for s in all_sids]
+        room.engine.start_draft()
+        for i, s in enumerate(all_sids):
+            send_draft_state(room, i)
+        broadcast_lobby()
+
+
+@socketio.on('decline_team_match')
+def on_decline_team_match(data):
+    sid = request.sid
+    from_leader = data.get('from_leader')
+    with _lock:
+        if from_leader not in teams:
+            return
+        other_team = teams[from_leader]
+        my_team = teams.get(sid)
+        if my_team:
+            match_key = (min(my_team['leader'], other_team['leader']),
+                         max(my_team['leader'], other_team['leader']))
+            pending_team_matches.pop(match_key, None)
+        for member_sid in other_team['members']:
+            if member_sid in players:
+                socketio.emit('team_match_declined', {'from_name': players[sid]['nickname'] if sid in players else '?'}, room=member_sid)
 
 
 @socketio.on('disconnect')
@@ -954,6 +1214,9 @@ def on_invite(data):
             emit('server_error', {'message': 'Operation failed'})
             return
         inviter = players[sid]
+        if inviter.get('mode', '1v1') != '1v1' or target.get('mode', '1v1') != '1v1':
+            emit('server_error', {'message': 'Operation failed'})
+            return
         if inviter.get('mods_hash') != target.get('mods_hash'):
             inviter_mods = inviter.get('mods_list', [])
             target_mods = target.get('mods_list', [])
@@ -1297,13 +1560,15 @@ def on_play_card(data):
         engine = room.engine
         card_instance_id = data.get('card_instance_id')
         choice = data.get('choice')
+        target_player_id = data.get('target_player_id', -1)
         if card_instance_id is None:
             return
-        result = engine.play_card(pidx, card_instance_id, choice)
+        if room.mode == '2v2' and target_player_id >= 0:
+            result = engine.play_card(pidx, card_instance_id, target_player_id, choice)
+        else:
+            result = engine.play_card(pidx, card_instance_id, choice)
         if result.get('needs_response'):
             broadcast_game_state(room)
-            opp_pidx = 1 - pidx
-            opp_sid = room.player_sids[opp_pidx]
             played_card = result['card']
             played_def = CARD_DEFS.get(played_card.get('def_id', ''), None)
             trigger_types = []
@@ -1314,14 +1579,32 @@ def on_play_card(data):
                     trigger_types.append('bloom')
                 if played_def.id in ('Sewage', 'MagicSewage'):
                     trigger_types.append('equipment_destroy')
-            counter_cards = []
-            for tt in trigger_types:
-                counter_cards.extend(engine.get_counter_cards(opp_pidx, tt))
-            if opp_sid in players:
-                socketio.emit('response_request', {
-                    'card': played_card,
-                    'counter_cards': [c.to_dict() for c in counter_cards],
-                }, room=opp_sid)
+            if room.mode == '2v2':
+                enemy_ids = engine.get_all_enemies(pidx)
+                for eid in enemy_ids:
+                    opp = engine.players[eid]
+                    if opp.health <= 0:
+                        continue
+                    counter_cards = []
+                    for tt in trigger_types:
+                        counter_cards.extend(engine.get_counter_cards(eid, tt))
+                    e_sid = room.player_sids[eid]
+                    if e_sid in players:
+                        socketio.emit('response_request', {
+                            'card': played_card,
+                            'counter_cards': [c.to_dict() for c in counter_cards],
+                        }, room=e_sid)
+            else:
+                opp_pidx = 1 - pidx
+                counter_cards = []
+                for tt in trigger_types:
+                    counter_cards.extend(engine.get_counter_cards(opp_pidx, tt))
+                opp_sid = room.player_sids[opp_pidx]
+                if opp_sid in players:
+                    socketio.emit('response_request', {
+                        'card': played_card,
+                        'counter_cards': [c.to_dict() for c in counter_cards],
+                    }, room=opp_sid)
         elif result.get('needs_choice'):
             broadcast_game_state(room)
             emit('choice_request', {
