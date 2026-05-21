@@ -277,7 +277,7 @@ class GameEngine:
         2: {'id': 2, 'name': '魔力转化', 'desc': '选择1-3张牌，分别选择魔法牌转化，开局回复5M', 'position': 2},
         3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多五张牌转化为Light（萌芽、共生）', 'position': 2},
         8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为世界树之叶', 'position': 2},
-        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对敌方施加3层灼烧', 'position': 3},
+        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对敌方施加2层灼烧', 'position': 3},
         5: {'id': 5, 'name': '命运抽签', 'desc': '前二回合开始时抽牌至手牌已满', 'position': 3},
         6: {'id': 6, 'name': '能量涌动', 'desc': '前三回合开始时额外回复2E', 'position': 3},
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手多回复3E并抽4张牌', 'position': 3},
@@ -469,6 +469,7 @@ class GameEngine:
                 opp_data['hand'] = [c.to_dict() for c in self.players[opponent].hand]
         if self._antenna_reveal[for_player]:
             opp_data['revealed_hand'] = [c.to_dict() for c in self.players[opponent].hand]
+        log_start = max(0, len(self.log) - 50)
         return {
             'phase': self.phase,
             'current_player': self.current_player,
@@ -477,7 +478,9 @@ class GameEngine:
             'winner': self.winner,
             'you': self.players[for_player].to_dict(include_private=True),
             'opponent': opp_data,
-            'log': self.log[-50:],
+            'log': self.log[log_start:],
+            'log_start': log_start,
+            'log_total': len(self.log),
             'pending_response': self.pending_response,
             'pending_choice': self.pending_choice,
             'opening_event_picks': self.opening_event_picks,
@@ -1193,15 +1196,12 @@ class GameEngine:
         if card.card_type == 'root':
             eq = EquipmentInstance(card, player_id)
             if eq.def_id == 'Disc':
-                has_disc = any(e.def_id == 'Disc' for e in ps.equipment)
-                if has_disc:
-                    self.log_msg("圆盘不可叠加，旧圆盘被替换")
-                    old_disc = [e for e in ps.equipment if e.def_id == 'Disc']
-                    for od in old_disc:
-                        ps.armor = max(0, ps.armor - 2)
-                    ps.equipment = [e for e in ps.equipment if e.def_id != 'Disc']
-                ps.armor += 2
-                self.log_msg(f"{self.pn(player_id)}获得2点护甲")
+                has_active_disc = any(e.def_id == 'Disc' for e in ps.equipment)
+                if not has_active_disc:
+                    ps.armor += 2
+                    self.log_msg(f"{self.pn(player_id)}获得2点护甲")
+                else:
+                    self.log_msg("圆盘不可叠加，护甲效果保持为2点")
             ps.equipment.append(eq)
             self.log_msg(f"{self.pn(player_id)}装备了{card.name_cn}")
         elif 'exile' in card.flags:
@@ -2660,7 +2660,9 @@ class GameEngine:
             self.log_msg(f"{self.pn(owner_id)}的装备保护抵消了摧毁！")
             return False
         if eq.def_id == 'Disc':
-            ps.armor = max(0, ps.armor - 2)
+            remaining_discs = [e for e in ps.equipment if e is not eq and e.def_id == 'Disc']
+            if not remaining_discs:
+                ps.armor = max(0, ps.armor - 2)
         if eq.def_id == 'Sponge' and ps.sponge_active:
             poison_layers = ps.poison
             ps.sponge_active = False

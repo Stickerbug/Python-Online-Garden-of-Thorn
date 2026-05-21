@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import os
 import re
 import time
@@ -260,6 +260,7 @@ def _build_solo_card(entry):
     if isinstance(entry, dict):
         card = CardInstance(def_id=entry.get('def_id'))
         card.instance_flags = set(entry.get('instance_flags', []))
+        card.disabled_flags = set(entry.get('disabled_flags', []))
         return card
     return CardInstance(def_id=entry)
 
@@ -544,7 +545,7 @@ def admin_ls():
                 if psid in players:
                     p_names.append(players[psid]['nickname'])
                 else:
-                    p_names.append('(缁傝崵鍤?')
+                    p_names.append('(离线玩家)')
             room_list.append({
                 'room_id': rid,
                 'players': p_names,
@@ -1650,3 +1651,4 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
+

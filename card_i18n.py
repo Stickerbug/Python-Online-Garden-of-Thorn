@@ -1,232 +1,260 @@
 LANGS = ('zh', 'en', 'fr', 'pt', 'ru', 'ja')
 
 
+def _t(zh, en, fr, pt, ru, ja):
+    return {'zh': zh, 'en': en, 'fr': fr, 'pt': pt, 'ru': ru, 'ja': ja}
+
+
 CARD_I18N = {
     'Basic': {
-        'name': {'zh': '基本', 'en': 'Basic', 'fr': 'Base', 'pt': 'Básico', 'ru': 'База', 'ja': '基本'},
-        'desc': {'zh': '最基础的攻击。', 'en': 'The most basic attack.', 'fr': 'L’attaque la plus simple.', 'pt': 'O ataque mais simples.', 'ru': 'Самая простая атака.', 'ja': '最も基本的な攻撃。'},
-        'effect': {'zh': '造成6D', 'en': 'Deal 6D', 'fr': 'Inflige 6D', 'pt': 'Causa 6D', 'ru': 'Наносит 6D', 'ja': '6Dを与える'},
+        'name': _t('基本', 'Basic', 'Base', 'Básico', 'База', '基本'),
+        'desc': _t('最基本的卡牌。', 'The most basic card.', 'La carte la plus basique.', 'A carta mais básica.', 'Самая базовая карта.', '最も基本的なカード。'),
+        'effect': _t('造成6D', 'Deal 6D', 'Inflige 6D', 'Causa 6D', 'Наносит 6D', '6Dを与える'),
     },
     'Bone': {
-        'name': {'zh': '骨头', 'en': 'Bone', 'fr': 'Os', 'pt': 'Osso', 'ru': 'Кость', 'ja': '骨'},
-        'desc': {'zh': '坚固，好用。', 'en': 'Solid and reliable.', 'fr': 'Solide et fiable.', 'pt': 'Firme e confiável.', 'ru': 'Надежная кость.', 'ja': '堅く扱いやすい。'},
-        'effect': {'zh': '造成12D', 'en': 'Deal 12D', 'fr': 'Inflige 12D', 'pt': 'Causa 12D', 'ru': 'Наносит 12D', 'ja': '12Dを与える'},
+        'name': _t('骨头', 'Bone', 'Os', 'Osso', 'Кость', '骨'),
+        'desc': _t('坚固且好用。', 'Solid and easy to use.', 'Solide et pratique.', 'Firme e fácil de usar.', 'Прочная и удобная.', '丈夫で扱いやすい。'),
+        'effect': _t('造成12D', 'Deal 12D', 'Inflige 12D', 'Causa 12D', 'Наносит 12D', '12Dを与える'),
     },
     'Stinger': {
-        'name': {'zh': '刺', 'en': 'Stinger', 'fr': 'Dard', 'pt': 'Ferrão', 'ru': 'Жало', 'ja': '針'},
-        'desc': {'zh': '一击造成大量伤害。', 'en': 'One heavy strike.', 'fr': 'Une frappe lourde.', 'pt': 'Um golpe pesado.', 'ru': 'Один мощный удар.', 'ja': '重い一撃。'},
-        'effect': {'zh': '造成20D', 'en': 'Deal 20D', 'fr': 'Inflige 20D', 'pt': 'Causa 20D', 'ru': 'Наносит 20D', 'ja': '20Dを与える'},
-    },
-    'Sand': {
-        'name': {'zh': '沙子', 'en': 'Sand', 'fr': 'Sable', 'pt': 'Areia', 'ru': 'Песок', 'ja': '砂'},
-        'desc': {'zh': '一把沙分成多次伤害。', 'en': 'A handful of small hits.', 'fr': 'Plusieurs petits coups.', 'pt': 'Vários golpes leves.', 'ru': 'Несколько малых ударов.', 'ja': '細かな連続攻撃。'},
-        'effect': {'zh': '造成3×4D（精准）', 'en': 'Deal 3×4D (Precision)', 'fr': 'Inflige 3×4D (Précis)', 'pt': 'Causa 3×4D (Precisão)', 'ru': 'Наносит 3×4D (Точно)', 'ja': '3×4D（精密）'},
-    },
-    'Wing': {
-        'name': {'zh': '翅膀', 'en': 'Wing', 'fr': 'Aile', 'pt': 'Asa', 'ru': 'Крыло', 'ja': '翼'},
-        'desc': {'zh': '回旋的翅膀连续打击。', 'en': 'A returning double strike.', 'fr': 'Deux coups en retour.', 'pt': 'Dois golpes de retorno.', 'ru': 'Два возвратных удара.', 'ja': '戻る翼の二連撃。'},
-        'effect': {'zh': '造成8×2D（精准）', 'en': 'Deal 8×2D (Precision)', 'fr': 'Inflige 8×2D (Précis)', 'pt': 'Causa 8×2D (Precisão)', 'ru': 'Наносит 8×2D (Точно)', 'ja': '8×2D（精密）'},
-    },
-    'Light': {
-        'name': {'zh': '轻', 'en': 'Light', 'fr': 'Léger', 'pt': 'Leve', 'ru': 'Лёгкость', 'ja': '軽'},
-        'desc': {'zh': '轻盈，却能连击。', 'en': 'Light, but still sharp.', 'fr': 'Léger mais tranchant.', 'pt': 'Leve, mas cortante.', 'ru': 'Легко, но остро.', 'ja': '軽くても鋭い。'},
-        'effect': {'zh': '造成2×2D（精准）', 'en': 'Deal 2×2D (Precision)', 'fr': 'Inflige 2×2D (Précis)', 'pt': 'Causa 2×2D (Precisão)', 'ru': 'Наносит 2×2D (Точно)', 'ja': '2×2D（精密）'},
-    },
-    'Fang': {
-        'name': {'zh': '尖牙', 'en': 'Fang', 'fr': 'Croc', 'pt': 'Presa', 'ru': 'Клык', 'ja': '牙'},
-        'desc': {'zh': '汲取伤口中的生命。', 'en': 'Draw life from the wound.', 'fr': 'Draine la vie de la plaie.', 'pt': 'Drena vida da ferida.', 'ru': 'Тянет жизнь из раны.', 'ja': '傷から生命を吸う。'},
-        'effect': {'zh': '造成8D；若造成伤害，+4H', 'en': 'Deal 8D; if it hits, +4H', 'fr': 'Inflige 8D; si touche, +4H', 'pt': 'Causa 8D; se acertar, +4H', 'ru': '8D; при попадании +4H', 'ja': '8D。命中時+4H'},
-    },
-    'Triangle': {
-        'name': {'zh': '三角形', 'en': 'Triangle', 'fr': 'Triangle', 'pt': 'Triângulo', 'ru': 'Треугольник', 'ja': '三角形'},
-        'desc': {'zh': '层数越高，伤害越高。', 'en': 'Stacks grow its damage.', 'fr': 'Ses charges augmentent les dégâts.', 'pt': 'Acúmulos aumentam o dano.', 'ru': 'Слои повышают урон.', 'ja': '層でダメージ増加。'},
-        'effect': {'zh': '造成(6+3×层数)D；命中后三角形+1', 'en': 'Deal (6+3×stacks)D; on hit +1 Triangle', 'fr': '(6+3×couches)D; si touche +1 Triangle', 'pt': '(6+3×camadas)D; acerto +1 Triângulo', 'ru': '(6+3×слои)D; при попадании +1', 'ja': '(6+3×層)D。命中時+1'},
-    },
-    'MagicBone': {
-        'name': {'zh': '魔法骨头', 'en': 'Magic Bone', 'fr': 'Os magique', 'pt': 'Osso Mágico', 'ru': 'Маг. кость', 'ja': '魔法の骨'},
-        'desc': {'zh': '魔力凝成的骨头。', 'en': 'A bone shaped by magic.', 'fr': 'Un os formé par magie.', 'pt': 'Um osso feito de magia.', 'ru': 'Кость из магии.', 'ja': '魔力でできた骨。'},
-        'effect': {'zh': '造成15D', 'en': 'Deal 15D', 'fr': 'Inflige 15D', 'pt': 'Causa 15D', 'ru': 'Наносит 15D', 'ja': '15Dを与える'},
-    },
-    'MagicStinger': {
-        'name': {'zh': '魔法刺', 'en': 'Magic Stinger', 'fr': 'Dard magique', 'pt': 'Ferrão Mágico', 'ru': 'Маг. жало', 'ja': '魔法の針'},
-        'desc': {'zh': '魔力强化的尖刺。', 'en': 'A stinger charged with magic.', 'fr': 'Un dard chargé de magie.', 'pt': 'Um ferrão com magia.', 'ru': 'Жало с магией.', 'ja': '魔力を帯びた針。'},
-        'effect': {'zh': '造成30D（精准）', 'en': 'Deal 30D (Precision)', 'fr': 'Inflige 30D (Précis)', 'pt': 'Causa 30D (Precisão)', 'ru': 'Наносит 30D (Точно)', 'ja': '30D（精密）'},
+        'name': _t('刺', 'Stinger', 'Dard', 'Ferrão', 'Жало', '針'),
+        'desc': _t('一击造成大量伤害。它真的很尖锐。', 'A single strike that deals heavy damage. It is very sharp.', 'Un seul coup inflige de lourds dégâts. Il est vraiment acéré.', 'Um golpe único causa muito dano. É muito afiado.', 'Один удар наносит большой урон. Оно очень острое.', '一撃で大ダメージを与える。本当に鋭い。'),
+        'effect': _t('造成20D', 'Deal 20D', 'Inflige 20D', 'Causa 20D', 'Наносит 20D', '20Dを与える'),
     },
     'Fission': {
-        'name': {'zh': '裂变', 'en': 'Fission', 'fr': 'Fission', 'pt': 'Fissão', 'ru': 'Деление', 'ja': '分裂'},
-        'desc': {'zh': '把一次攻击分裂为多次。', 'en': 'Split one attack into many.', 'fr': 'Divise une attaque en plusieurs.', 'pt': 'Divide um ataque em vários.', 'ru': 'Делит атаку на части.', 'ja': '攻撃を複数回に分ける。'},
-        'effect': {'zh': '选择一张手中攻击牌，裂变层数+2', 'en': 'Choose an attack in hand; Fission +2', 'fr': 'Choisissez une attaque en main; Fission +2', 'pt': 'Escolha um ataque na mão; Fissão +2', 'ru': 'Выберите атаку в руке; Деление +2', 'ja': '手札のThornを選び、分裂+2'},
+        'name': _t('裂变', 'Fission', 'Fission', 'Fissão', 'Деление', '分裂'),
+        'desc': _t('将一次攻击分裂为多次。', 'Split one attack into multiple hits.', 'Divise une attaque en plusieurs coups.', 'Divide um ataque em vários golpes.', 'Делит одну атаку на несколько ударов.', '1回の攻撃を複数回に分裂させる。'),
+        'effect': _t('选择一张手中的攻击牌，将其裂变层数增加2', 'Choose one attack card in hand; increase its Fission by 2', 'Choisissez une carte d’attaque en main ; augmentez sa Fission de 2', 'Escolha uma carta de ataque na mão; aumente a Fissão dela em 2', 'Выберите карту атаки в руке; увеличьте её Деление на 2', '手札の攻撃カード1枚を選び、分裂を2増やす'),
     },
     'Fusion': {
-        'name': {'zh': '聚变', 'en': 'Fusion', 'fr': 'Fusion', 'pt': 'Fusão', 'ru': 'Слияние', 'ja': '融合'},
-        'desc': {'zh': '把同名攻击合为一张。', 'en': 'Merge same-name attacks.', 'fr': 'Fusionne des attaques du même nom.', 'pt': 'Funde ataques do mesmo nome.', 'ru': 'Сливает одноимённые атаки.', 'ja': '同名Thornを1枚に融合。'},
-        'effect': {'zh': '选择2-3张同名攻击牌，聚变相加，裂变取最大', 'en': 'Choose 2-3 same-name attacks; add Fusion, keep max Fission', 'fr': '2-3 attaques identiques; Fusion s’additionne, Fission max', 'pt': '2-3 ataques iguais; soma Fusão, Fissão máxima', 'ru': '2-3 одинаковые атаки; сложить Слияние, макс. Деление', 'ja': '同名Thorn2-3枚。融合加算、分裂は最大'},
+        'name': _t('聚变', 'Fusion', 'Fusion', 'Fusão', 'Слияние', '融合'),
+        'desc': _t('将相同的攻击聚合为一击。', 'Fuse identical attacks into one strike.', 'Fusionne des attaques identiques en une frappe.', 'Funde ataques iguais em um golpe.', 'Сливает одинаковые атаки в один удар.', '同じ攻撃を一撃へ融合する。'),
+        'effect': _t('选择手中2-3张同名攻击牌，将它们的聚变层数相加，裂变层数取最大值，变为一张牌', 'Choose 2-3 same-name attack cards in hand; add their Fusion, keep the highest Fission, and turn them into one card', 'Choisissez 2-3 cartes d’attaque du même nom en main ; additionnez leur Fusion, gardez la Fission la plus élevée, et transformez-les en une carte', 'Escolha 2-3 cartas de ataque com o mesmo nome na mão; some a Fusão, mantenha a maior Fissão e transforme-as em uma carta', 'Выберите 2-3 одноимённые карты атаки в руке; сложите их Слияние, оставьте наибольшее Деление и превратите их в одну карту', '手札の同名攻撃カード2-3枚を選び、融合を合計し、分裂は最大値を取り、1枚のカードにする'),
+    },
+    'Sand': {
+        'name': _t('沙子', 'Sand', 'Sable', 'Areia', 'Песок', '砂'),
+        'desc': _t('因为是一把，所以可以造成多次伤害。', 'A handful of sand, so it can deal damage multiple times.', 'Comme c’est une poignée, elle peut infliger plusieurs dégâts.', 'Por ser um punhado, pode causar dano várias vezes.', 'Это горсть песка, поэтому урон наносится несколько раз.', 'ひとつかみなので複数回ダメージを与えられる。'),
+        'effect': _t('造成3×4D（4子瓣）', 'Deal 3×4D (4 petals)', 'Inflige 3×4D (4 pétales)', 'Causa 3×4D (4 pétalas)', 'Наносит 3×4D (4 лепестка)', '3×4D（4子弁）を与える'),
+    },
+    'Wing': {
+        'name': _t('翅膀', 'Wing', 'Aile', 'Asa', 'Крыло', '翼'),
+        'desc': _t('回旋的翅膀连续两次打击对手。', 'A spinning wing strikes the opponent twice in succession.', 'Une aile tournoyante frappe deux fois de suite.', 'Uma asa giratória atinge o oponente duas vezes seguidas.', 'Вращающееся крыло дважды подряд бьёт противника.', '旋回する翼が相手を2回連続で打つ。'),
+        'effect': _t('造成8×2D（2子瓣）', 'Deal 8×2D (2 petals)', 'Inflige 8×2D (2 pétales)', 'Causa 8×2D (2 pétalas)', 'Наносит 8×2D (2 лепестка)', '8×2D（2子弁）を与える'),
+    },
+    'Light': {
+        'name': _t('轻', 'Light', 'Léger', 'Leve', 'Лёгкость', '軽'),
+        'desc': _t('轻如鸿毛，却能伤人两次。太轻了所以不需要消耗能量。', 'As light as a feather, yet it can hurt twice. It is so light that it costs no energy.', 'Léger comme une plume, mais capable de blesser deux fois. Si léger qu’il ne coûte aucune énergie.', 'Leve como uma pluma, mas fere duas vezes. É tão leve que não custa energia.', 'Лёгкая как перо, но ранит дважды. Настолько лёгкая, что не требует энергии.', '羽のように軽いが、2回傷つけられる。軽すぎるのでエネルギーを消費しない。'),
+        'effect': _t('造成2×2D（2子瓣）', 'Deal 2×2D (2 petals)', 'Inflige 2×2D (2 pétales)', 'Causa 2×2D (2 pétalas)', 'Наносит 2×2D (2 лепестка)', '2×2D（2子弁）を与える'),
+    },
+    'Fang': {
+        'name': _t('尖牙', 'Fang', 'Croc', 'Presa', 'Клык', '牙'),
+        'desc': _t('吸取对手的生命来为你回复。', 'Drain the opponent’s life to heal yourself.', 'Draine la vie de l’adversaire pour vous soigner.', 'Drena a vida do oponente para curar você.', 'Высасывает жизнь противника, исцеляя вас.', '相手の生命を吸い取り、自分を回復する。'),
+        'effect': _t('造成8D; 造成伤害时+4H', 'Deal 8D; if damage is dealt, +4H', 'Inflige 8D ; si des dégâts sont infligés, +4H', 'Causa 8D; se causar dano, +4H', 'Наносит 8D; если урон нанесён, +4H', '8Dを与える。ダメージを与えた時+4H'),
     },
     'Iris': {
-        'name': {'zh': '鸢尾', 'en': 'Iris', 'fr': 'Iris', 'pt': 'Íris', 'ru': 'Ирис', 'ja': 'アイリス'},
-        'desc': {'zh': '美丽且致命。', 'en': 'Beautiful and deadly.', 'fr': 'Belle et mortelle.', 'pt': 'Bela e mortal.', 'ru': 'Красива и смертельна.', 'ja': '美しく致命的。'},
-        'effect': {'zh': '施加10层中毒', 'en': 'Apply 10 Poison', 'fr': 'Applique 10 Poison', 'pt': 'Aplica 10 Veneno', 'ru': '+10 Яд', 'ja': '毒10を付与'},
+        'name': _t('鸢尾', 'Iris', 'Iris', 'Íris', 'Ирис', 'アイリス'),
+        'desc': _t('美丽而致命。', 'Beautiful and deadly.', 'Belle et mortelle.', 'Bela e mortal.', 'Красива и смертельна.', '美しく致命的。'),
+        'effect': _t('施加10层P', 'Apply 10 Poison', 'Applique 10 Poison', 'Aplica 10 Veneno', 'Накладывает 10 Яда', '毒10を付与'),
     },
     'Fire': {
-        'name': {'zh': '火', 'en': 'Fire', 'fr': 'Feu', 'pt': 'Fogo', 'ru': 'Огонь', 'ja': '火'},
-        'desc': {'zh': '缓慢但持久地燃烧。', 'en': 'Slow, lasting burn.', 'fr': 'Brûlure lente et durable.', 'pt': 'Queima lenta e duradoura.', 'ru': 'Медленное горение.', 'ja': '遅く長く燃える。'},
-        'effect': {'zh': '造成2层灼烧', 'en': 'Apply 2 Burn', 'fr': 'Applique 2 Brûlure', 'pt': 'Aplica 2 Queima', 'ru': '+2 Горение', 'ja': '火傷2を付与'},
+        'name': _t('火', 'Fire', 'Feu', 'Fogo', 'Огонь', '火'),
+        'desc': _t('缓慢但持久地灼烧对手。', 'Slowly but persistently burns the opponent.', 'Brûle lentement mais durablement l’adversaire.', 'Queima o oponente lenta e persistentemente.', 'Медленно, но долго обжигает противника.', 'ゆっくりだが長く相手を焼く。'),
+        'effect': _t('造成2层F', 'Apply 2 Burn', 'Applique 2 Brûlure', 'Aplica 2 Queima', 'Накладывает 2 Горения', '灼焼2を付与'),
+    },
+    'Triangle': {
+        'name': _t('三角形', 'Triangle', 'Triangle', 'Triângulo', 'Треугольник', '三角形'),
+        'desc': _t('量变引起质变。', 'Quantitative change leads to qualitative change.', 'Le changement quantitatif mène au changement qualitatif.', 'Mudança quantitativa leva a mudança qualitativa.', 'Количество переходит в качество.', '量の変化が質の変化を生む。'),
+        'effect': _t('造成(6+3×三角形层数)D；造成伤害时获得一层三角形', 'Deal (6+3×Triangle stacks)D; when damage is dealt, gain 1 Triangle stack', 'Inflige (6+3×charges de Triangle)D ; si des dégâts sont infligés, gagne 1 charge de Triangle', 'Causa (6+3×camadas de Triângulo)D; ao causar dano, ganha 1 camada de Triângulo', 'Наносит (6+3×слои Треугольника)D; при нанесении урона получает 1 слой Треугольника', '（6+3×三角形層数）Dを与える。ダメージを与えた時、三角形を1層得る'),
     },
     'Fries': {
-        'name': {'zh': '薯条', 'en': 'Fries', 'fr': 'Frites', 'pt': 'Batatas', 'ru': 'Фри', 'ja': 'フライドポテト'},
-        'desc': {'zh': '高热量，补充生命。', 'en': 'High calories, fast healing.', 'fr': 'Calories rapides.', 'pt': 'Calorias rápidas.', 'ru': 'Быстрые калории.', 'ja': '高カロリーで回復。'},
-        'effect': {'zh': '+12H', 'en': '+12H', 'fr': '+12H', 'pt': '+12H', 'ru': '+12H', 'ja': '+12H'},
+        'name': _t('薯条', 'Fries', 'Frites', 'Batatas fritas', 'Картофель фри', 'フライドポテト'),
+        'desc': _t('高热量食品，补充大量生命。隐隐约约地写着“M”？', 'High-calorie food that restores a lot of health. Is there a faint “M” on it?', 'Un aliment très calorique qui restaure beaucoup de vie. Un “M” y est-il vaguement inscrit ?', 'Comida altamente calórica que restaura muita vida. Há um “M” meio apagado?', 'Калорийная еда, восстанавливающая много здоровья. Кажется, там написано «M»?', '高カロリー食品で大量に生命を回復する。うっすら“M”と書いてある？'),
+        'effect': _t('+12H', '+12H', '+12H', '+12H', '+12H', '+12H'),
     },
     'Rose': {
-        'name': {'zh': '玫瑰', 'en': 'Rose', 'fr': 'Rose', 'pt': 'Rosa', 'ru': 'Роза', 'ja': 'バラ'},
-        'desc': {'zh': '花香可以治愈你。', 'en': 'Its scent heals.', 'fr': 'Son parfum soigne.', 'pt': 'Seu aroma cura.', 'ru': 'Аромат лечит.', 'ja': '香りが癒す。'},
-        'effect': {'zh': '+7H', 'en': '+7H', 'fr': '+7H', 'pt': '+7H', 'ru': '+7H', 'ja': '+7H'},
-    },
-    'ManaOrb': {
-        'name': {'zh': '魔法球', 'en': 'Mana Orb', 'fr': 'Orbe de mana', 'pt': 'Orbe de Mana', 'ru': 'Сфера маны', 'ja': 'マナオーブ'},
-        'desc': {'zh': '孕育魔力的小球。', 'en': 'A small orb of mana.', 'fr': 'Un petit orbe de mana.', 'pt': 'Um pequeno orbe de mana.', 'ru': 'Малый шар маны.', 'ja': '魔力を宿す球。'},
-        'effect': {'zh': '+3M', 'en': '+3M', 'fr': '+3M', 'pt': '+3M', 'ru': '+3M', 'ja': '+3M'},
-    },
-    'Coffee': {
-        'name': {'zh': '咖啡', 'en': 'Coffee', 'fr': 'Café', 'pt': 'Café', 'ru': 'Кофе', 'ja': 'コーヒー'},
-        'desc': {'zh': '提神，但小心耐受。', 'en': 'A quick boost. Tolerance builds.', 'fr': 'Coup de fouet, puis tolérance.', 'pt': 'Impulso rápido; cria tolerância.', 'ru': 'Бодрит, но слабеет.', 'ja': '覚醒。耐性に注意。'},
-        'effect': {'zh': '+1E；首次使用额外+1E', 'en': '+1E; first use +1E more', 'fr': '+1E; première fois +1E', 'pt': '+1E; primeiro uso +1E', 'ru': '+1E; впервые ещё +1E', 'ja': '+1E。初回さらに+1E'},
-    },
-    'Chilli': {
-        'name': {'zh': '辣椒', 'en': 'Chilli', 'fr': 'Piment', 'pt': 'Pimenta', 'ru': 'Чили', 'ja': '唐辛子'},
-        'desc': {'zh': '太辣，只能弃牌解辣。', 'en': 'Too hot. Discard to cool down.', 'fr': 'Trop fort. Défaussez.', 'pt': 'Picante demais. Descarte.', 'ru': 'Слишком остро: сбросьте.', 'ja': '辛すぎる。捨ててしのぐ。'},
-        'effect': {'zh': '弃1张牌，然后抽1张', 'en': 'Discard 1, then draw 1', 'fr': 'Défaussez 1, puis piochez 1', 'pt': 'Descarte 1, depois compre 1', 'ru': 'Сбросьте 1, затем доберите 1', 'ja': '1枚捨て、1枚引く'},
-    },
-    'Chromosome': {
-        'name': {'zh': '染色体', 'en': 'Chromosome', 'fr': 'Chromosome', 'pt': 'Cromossomo', 'ru': 'Хромосома', 'ja': '染色体'},
-        'desc': {'zh': '从弃牌记忆中取回所需。', 'en': 'Recover a card from discard.', 'fr': 'Récupère une carte défaussée.', 'pt': 'Recupera uma carta do descarte.', 'ru': 'Возвращает карту из сброса.', 'ja': '捨て札から回収する。'},
-        'effect': {'zh': '从弃牌堆选择1张加入手牌', 'en': 'Choose 1 discard card into hand', 'fr': 'Choisissez 1 carte de défausse en main', 'pt': 'Escolha 1 do descarte para a mão', 'ru': 'Возьмите 1 карту из сброса', 'ja': '捨て札1枚を手札へ'},
-    },
-    'Sewage': {
-        'name': {'zh': '污水', 'en': 'Sewage', 'fr': 'Égout', 'pt': 'Esgoto', 'ru': 'Стоки', 'ja': '汚水'},
-        'desc': {'zh': '腐蚀一件装备。', 'en': 'Corrode one equipment.', 'fr': 'Corrode un équipement.', 'pt': 'Corroe um equipamento.', 'ru': 'Разъедает снаряжение.', 'ja': '装備を腐食させる。'},
-        'effect': {'zh': '摧毁敌方1件装备', 'en': 'Destroy 1 enemy equipment', 'fr': 'Détruit 1 équipement ennemi', 'pt': 'Destrói 1 equipamento inimigo', 'ru': 'Уничтожить 1 снаряжение врага', 'ja': '敵装備を1つ破壊'},
-    },
-    'MagicSewage': {
-        'name': {'zh': '魔法污水', 'en': 'Magic Sewage', 'fr': 'Égout magique', 'pt': 'Esgoto Mágico', 'ru': 'Маг. стоки', 'ja': '魔法汚水'},
-        'desc': {'zh': '全场腐蚀。', 'en': 'Field-wide corrosion.', 'fr': 'Corrosion générale.', 'pt': 'Corrosão no campo.', 'ru': 'Всеобщая коррозия.', 'ja': '全体を腐食。'},
-        'effect': {'zh': '摧毁场上所有可摧毁装备', 'en': 'Destroy all destructible equipment', 'fr': 'Détruit tout équipement destructible', 'pt': 'Destrói todo equipamento destrutível', 'ru': 'Уничтожить всё разрушаемое снаряжение', 'ja': '破壊可能な装備を全破壊'},
-    },
-    'Mimic': {
-        'name': {'zh': '拟态', 'en': 'Mimic', 'fr': 'Mimique', 'pt': 'Mímico', 'ru': 'Мимикрия', 'ja': '擬態'},
-        'desc': {'zh': '完美模仿。', 'en': 'A perfect imitation.', 'fr': 'Une imitation parfaite.', 'pt': 'Uma imitação perfeita.', 'ru': 'Идеальная имитация.', 'ja': '完全な模倣。'},
-        'effect': {'zh': '复制1张手牌加入手牌；下次费用-1', 'en': 'Copy 1 hand card; next cost -1', 'fr': 'Copie 1 carte en main; prochain coût -1', 'pt': 'Copia 1 carta da mão; próximo custo -1', 'ru': 'Скопировать карту руки; след. цена -1', 'ja': '手札1枚をコピー。次回コスト-1'},
-    },
-    'Yggdrasil': {
-        'name': {'zh': '世界树之叶', 'en': 'Yggdrasil', 'fr': 'Yggdrasil', 'pt': 'Yggdrasil', 'ru': 'Yggdrasil', 'ja': 'Yggdrasil'},
-        'desc': {'zh': '死亡边缘的复生。', 'en': 'Rebirth at the brink.', 'fr': 'Renaissance au bord de la mort.', 'pt': 'Renascimento no limite.', 'ru': 'Возрождение на грани.', 'ja': '死の際で再生する。'},
-        'effect': {'zh': '+20H；致命伤害时，若在手牌，清除己方效果，生命设为5，本回合无敌并放逐', 'en': '+20H; in hand on lethal damage: clear effects, set H to 5, invincible this turn, exile', 'fr': '+20H; en main contre dégâts létaux: nettoie effets, H=5, invincible ce tour, exil', 'pt': '+20H; na mão contra dano letal: limpa efeitos, H=5, invencível neste turno, exila', 'ru': '+20H; в руке при смерт. уроне: очистка эффектов, H=5, неуязв. ход, изгнание', 'ja': '+20H。致命傷時、手札なら効果解除、H=5、このターン無敵、追放'},
+        'name': _t('玫瑰', 'Rose', 'Rose', 'Rosa', 'Роза', 'バラ'),
+        'desc': _t('这花香可以为你回复生命。', 'Its fragrance can restore your health.', 'Son parfum peut restaurer votre vie.', 'Seu aroma pode restaurar sua vida.', 'Её аромат восстанавливает здоровье.', 'その香りが生命を回復する。'),
+        'effect': _t('+7H', '+7H', '+7H', '+7H', '+7H', '+7H'),
     },
     'Leaf': {
-        'name': {'zh': '叶子', 'en': 'Leaf', 'fr': 'Feuille', 'pt': 'Folha', 'ru': 'Лист', 'ja': '葉'},
-        'desc': {'zh': '基础装备，可治疗也可触发伤害。', 'en': 'Basic equipment: heal or strike.', 'fr': 'Équipement de base: soigne ou frappe.', 'pt': 'Equipamento básico: cura ou golpeia.', 'ru': 'Базовое снаряжение: лечит или бьёт.', 'ja': '基本装備。回復か攻撃。'},
-        'effect': {'zh': '友方回合开始+2H', 'en': '+2H at friendly turn start', 'fr': '+2H au début du tour allié', 'pt': '+2H no início do turno aliado', 'ru': '+2H в начале хода союзника', 'ja': '味方ターン開始時+2H'},
-        'trigger': {'zh': '装备1回合后可摧毁：造成8D', 'en': 'After 1 turn, destroy: deal 8D', 'fr': 'Après 1 tour, détruire: 8D', 'pt': 'Após 1 turno, destruir: 8D', 'ru': 'После 1 хода уничтожить: 8D', 'ja': '1ターン後に破壊可：8D'},
+        'name': _t('叶子', 'Leaf', 'Feuille', 'Folha', 'Лист', '葉'),
+        'desc': _t('基础的装备之一，可以回复生命亦可造成伤害。', 'One of the basic equipments; it can restore health and also deal damage.', 'Un équipement de base ; il peut restaurer de la vie et infliger des dégâts.', 'Um equipamento básico; pode restaurar vida e também causar dano.', 'Базовое снаряжение: лечит и может наносить урон.', '基本装備のひとつ。生命を回復し、ダメージも与えられる。'),
+        'effect': _t('友方回合开始时+2H 触发：1E，若已装备一回合则摧毁此装备，造成8D', 'At friendly turn start +2H. Trigger: 1E; if equipped for one turn, destroy this equipment and deal 8D', 'Au début du tour allié +2H. Déclenchement : 1E ; si équipé depuis un tour, détruit cet équipement et inflige 8D', 'No início do turno aliado +2H. Acionar: 1E; se equipado por um turno, destrói este equipamento e causa 8D', 'В начале хода союзника +2H. Активация: 1E; если снаряжено один ход, уничтожить это снаряжение и нанести 8D', '味方ターン開始時+2H。発動：1E。1ターン装備済みならこの装備を破壊し、8Dを与える'),
+        'trigger': _t('若已装备一回合则摧毁此装备，造成8D', 'If equipped for one turn, destroy this equipment and deal 8D', 'Si équipé depuis un tour, détruit cet équipement et inflige 8D', 'Se equipado por um turno, destrói este equipamento e causa 8D', 'Если снаряжено один ход, уничтожить это снаряжение и нанести 8D', '1ターン装備済みならこの装備を破壊し、8Dを与える'),
     },
     'Yucca': {
-        'name': {'zh': '丝兰', 'en': 'Yucca', 'fr': 'Yucca', 'pt': 'Yucca', 'ru': 'Юкка', 'ja': 'ユッカ'},
-        'desc': {'zh': '更强的叶子。', 'en': 'A stronger leaf.', 'fr': 'Une feuille plus forte.', 'pt': 'Uma folha mais forte.', 'ru': 'Более сильный лист.', 'ja': 'より強い葉。'},
-        'effect': {'zh': '友方回合开始+5H', 'en': '+5H at friendly turn start', 'fr': '+5H au début du tour allié', 'pt': '+5H no início do turno aliado', 'ru': '+5H в начале хода союзника', 'ja': '味方ターン開始時+5H'},
+        'name': _t('丝兰', 'Yucca', 'Yucca', 'Yucca', 'Юкка', 'ユッカ'),
+        'desc': _t('叶子的加强版。', 'An enhanced version of Leaf.', 'Une version renforcée de Feuille.', 'Uma versão reforçada de Folha.', 'Усиленная версия Листа.', '葉の強化版。'),
+        'effect': _t('友方回合开始时+5H', 'At friendly turn start +5H', 'Au début du tour allié +5H', 'No início do turno aliado +5H', 'В начале хода союзника +5H', '味方ターン開始時+5H'),
     },
     'Disc': {
-        'name': {'zh': '圆盘', 'en': 'Disc', 'fr': 'Disque', 'pt': 'Disco', 'ru': 'Диск', 'ja': '円盤'},
-        'desc': {'zh': '坚实的护盾。', 'en': 'A solid shield.', 'fr': 'Un bouclier solide.', 'pt': 'Um escudo sólido.', 'ru': 'Прочный щит.', 'ja': '堅い盾。'},
-        'effect': {'zh': '+2A', 'en': '+2A', 'fr': '+2A', 'pt': '+2A', 'ru': '+2A', 'ja': '+2A'},
+        'name': _t('圆盘', 'Disc', 'Disque', 'Disco', 'Диск', '円盤'),
+        'desc': _t('坚实的护盾，减免来袭的伤害。', 'A solid shield that reduces incoming damage.', 'Un bouclier solide qui réduit les dégâts reçus.', 'Um escudo sólido que reduz dano recebido.', 'Прочный щит, уменьшающий входящий урон.', '堅固な盾。受けるダメージを軽減する。'),
+        'effect': _t('+2A', '+2A', '+2A', '+2A', '+2A', '+2A'),
     },
     'Battery': {
-        'name': {'zh': '电池', 'en': 'Battery', 'fr': 'Batterie', 'pt': 'Bateria', 'ru': 'Батарея', 'ja': '電池'},
-        'desc': {'zh': '被攻击时会反伤。', 'en': 'Shocks back when hit.', 'fr': 'Riposte quand touchée.', 'pt': 'Revida ao ser atingida.', 'ru': 'Бьёт в ответ.', 'ja': '攻撃されると反撃。'},
-        'effect': {'zh': '受到物理伤害时，对敌方造成3D', 'en': 'When taking physical damage, deal 3D to enemy', 'fr': 'Quand vous subissez des dégâts physiques, 3D à l’ennemi', 'pt': 'Ao sofrer dano físico, causa 3D ao inimigo', 'ru': 'При физ. уроне наносит врагу 3D', 'ja': '物理ダメージ時、敵に3D'},
-    },
-    'MagicLeaf': {
-        'name': {'zh': '魔法叶', 'en': 'Magic Leaf', 'fr': 'Feuille magique', 'pt': 'Folha Mágica', 'ru': 'Маг. лист', 'ja': '魔法の葉'},
-        'desc': {'zh': '用治疗换取魔力。', 'en': 'Turns growth into mana.', 'fr': 'Transforme la croissance en mana.', 'pt': 'Transforma crescimento em mana.', 'ru': 'Даёт ману ростом.', 'ja': '成長を魔力に変える。'},
-        'effect': {'zh': '友方回合开始+1M', 'en': '+1M at friendly turn start', 'fr': '+1M au début du tour allié', 'pt': '+1M no início do turno aliado', 'ru': '+1M в начале хода союзника', 'ja': '味方ターン開始時+1M'},
-    },
-    'MagicYucca': {
-        'name': {'zh': '魔法丝兰', 'en': 'Magic Yucca', 'fr': 'Yucca magique', 'pt': 'Yucca Mágica', 'ru': 'Маг. юкка', 'ja': '魔法ユッカ'},
-        'desc': {'zh': '生成更多魔力。', 'en': 'Generates more mana.', 'fr': 'Génère plus de mana.', 'pt': 'Gera mais mana.', 'ru': 'Даёт больше маны.', 'ja': 'より多くの魔力を生む。'},
-        'effect': {'zh': '友方回合开始+2M', 'en': '+2M at friendly turn start', 'fr': '+2M au début du tour allié', 'pt': '+2M no início do turno aliado', 'ru': '+2M в начале хода союзника', 'ja': '味方ターン開始時+2M'},
-    },
-    'MagicBattery': {
-        'name': {'zh': '魔法电池', 'en': 'Magic Battery', 'fr': 'Batterie magique', 'pt': 'Bateria Mágica', 'ru': 'Маг. батарея', 'ja': '魔法電池'},
-        'desc': {'zh': '受击时激发魔力。', 'en': 'Charges mana when hit.', 'fr': 'Charge du mana quand touchée.', 'pt': 'Carrega mana ao ser atingida.', 'ru': 'Заряжает ману при ударе.', 'ja': '被弾時に魔力を充電。'},
-        'effect': {'zh': '受到物理伤害时+1M（每回合最多3M）', 'en': 'When taking physical damage, +1M (max 3M/turn)', 'fr': 'Dégâts physiques subis: +1M (max 3M/tour)', 'pt': 'Ao sofrer dano físico: +1M (máx. 3M/turno)', 'ru': 'При физ. уроне +1M (макс. 3M/ход)', 'ja': '物理ダメージ時+1M（各ターン最大3M）'},
-    },
-    'Powder': {
-        'name': {'zh': '粉末', 'en': 'Powder', 'fr': 'Poudre', 'pt': 'Pó', 'ru': 'Порошок', 'ja': '粉末'},
-        'desc': {'zh': '加快行动节奏。', 'en': 'Speeds up your tempo.', 'fr': 'Accélère votre rythme.', 'pt': 'Acelera seu ritmo.', 'ru': 'Ускоряет темп.', 'ja': '行動を早める。'},
-        'effect': {'zh': '友方回合开始+2E', 'en': '+2E at friendly turn start', 'fr': '+2E au début du tour allié', 'pt': '+2E no início do turno aliado', 'ru': '+2E в начале хода союзника', 'ja': '味方ターン開始時+2E'},
-    },
-    'GoldenLeaf': {
-        'name': {'zh': '黄金叶', 'en': 'Golden Leaf', 'fr': 'Feuille d’or', 'pt': 'Folha Dourada', 'ru': 'Золотой лист', 'ja': '黄金の葉'},
-        'desc': {'zh': '带来额外抽牌机会。', 'en': 'Brings extra draws.', 'fr': 'Apporte des pioches bonus.', 'pt': 'Traz compras extras.', 'ru': 'Даёт добор карт.', 'ja': '追加ドローをもたらす。'},
-        'effect': {'zh': '回合开始时多抽1张', 'en': 'Draw 1 more at turn start', 'fr': 'Piochez 1 de plus au début du tour', 'pt': 'Compre +1 no início do turno', 'ru': 'В начале хода доберите +1', 'ja': 'ターン開始時さらに1枚引く'},
-    },
-    'Pincer': {
-        'name': {'zh': '螫针', 'en': 'Pincer', 'fr': 'Pince', 'pt': 'Pinça', 'ru': 'Клешня', 'ja': 'ハサミ'},
-        'desc': {'zh': '毒素减缓对手行动。', 'en': 'Toxin slows the enemy.', 'fr': 'La toxine ralentit l’ennemi.', 'pt': 'A toxina atrasa o inimigo.', 'ru': 'Токсин замедляет врага.', 'ja': '毒で敵を鈍らせる。'},
-        'effect': {'zh': '敌方回合开始时，E回复-1', 'en': 'Enemy E recovery -1 at turn start', 'fr': 'Récupération E ennemie -1 au début du tour', 'pt': 'Recuperação E inimiga -1 no início do turno', 'ru': 'В начале хода врага: восстановление E -1', 'ja': '敵ターン開始時、E回復-1'},
-    },
-    'Cancer': {
-        'name': {'zh': '癌细胞', 'en': 'Cancer Cell', 'fr': 'Cellule cancéreuse', 'pt': 'Célula cancerosa', 'ru': 'Раковая клетка', 'ja': 'がん細胞'},
-        'desc': {'zh': '难以根除的恶性细胞。', 'en': 'A malignant cell hard to remove.', 'fr': 'Une cellule maligne tenace.', 'pt': 'Uma célula maligna resistente.', 'ru': 'Злокачественная клетка.', 'ja': '除去困難な悪性細胞。'},
-        'effect': {'zh': '对敌方施加1层淬毒', 'en': 'Apply 1 Toxic to enemy', 'fr': 'Applique 1 Toxique à l’ennemi', 'pt': 'Aplica 1 Tóxico ao inimigo', 'ru': 'Врагу +1 Токсин', 'ja': '敵に猛毒1を付与'},
-    },
-    'Corruption': {
-        'name': {'zh': '腐化', 'en': 'Corruption', 'fr': 'Corruption', 'pt': 'Corrupção', 'ru': 'Порча', 'ja': '腐化'},
-        'desc': {'zh': '伤敌一千，自损八百。', 'en': 'Power at a dangerous price.', 'fr': 'Puissance à prix élevé.', 'pt': 'Poder por preço alto.', 'ru': 'Сила дорогой ценой.', 'ja': '危険な代償の力。'},
-        'effect': {'zh': '自下个敌方回合开始，全场伤害翻倍', 'en': 'From next enemy turn, all damage is doubled', 'fr': 'Dès le prochain tour ennemi, tous les dégâts doublent', 'pt': 'A partir do próximo turno inimigo, todo dano dobra', 'ru': 'Со след. хода врага весь урон ×2', 'ja': '次の敵ターンから全ダメージ2倍'},
-    },
-    'Mark': {
-        'name': {'zh': '标记', 'en': 'Mark', 'fr': 'Marque', 'pt': 'Marca', 'ru': 'Метка', 'ja': 'マーク'},
-        'desc': {'zh': '你被标记了。', 'en': 'You have been marked.', 'fr': 'Vous êtes marqué.', 'pt': 'Você foi marcado.', 'ru': 'Вы отмечены.', 'ja': '印を付けられた。'},
-        'effect': {'zh': '禁止敌方行动1回合', 'en': 'Enemy cannot act for 1 turn', 'fr': 'L’ennemi ne peut pas agir 1 tour', 'pt': 'Inimigo não age por 1 turno', 'ru': 'Враг пропускает действия на 1 ход', 'ja': '敵は1ターン行動不可'},
-        'trigger': {'zh': '装备1回合后可摧毁：敌方下回合不能行动', 'en': 'After 1 turn, destroy: enemy cannot act next turn', 'fr': 'Après 1 tour, détruire: ennemi inactif au prochain tour', 'pt': 'Após 1 turno, destruir: inimigo não age no próximo turno', 'ru': 'После 1 хода уничтожить: враг не действует след. ход', 'ja': '1ターン後に破壊可：次の敵ターン行動不可'},
-    },
-    'Mine': {
-        'name': {'zh': '地雷', 'en': 'Mine', 'fr': 'Mine', 'pt': 'Mina', 'ru': 'Мина', 'ja': '地雷'},
-        'desc': {'zh': '危险，但需要准备。', 'en': 'Dangerous, but needs setup.', 'fr': 'Dangereuse, mais lente.', 'pt': 'Perigosa, mas precisa preparo.', 'ru': 'Опасна, но требует подготовки.', 'ja': '危険だが準備が必要。'},
-        'effect': {'zh': '下回合造成20D', 'en': 'Deal 20D next turn', 'fr': 'Inflige 20D au prochain tour', 'pt': 'Causa 20D no próximo turno', 'ru': '20D на следующем ходу', 'ja': '次ターン20D'},
-        'trigger': {'zh': '装备1回合后可摧毁：造成20D', 'en': 'After 1 turn, destroy: deal 20D', 'fr': 'Après 1 tour, détruire: 20D', 'pt': 'Após 1 turno, destruir: 20D', 'ru': 'После 1 хода уничтожить: 20D', 'ja': '1ターン後に破壊可：20D'},
+        'name': _t('电池', 'Battery', 'Batterie', 'Bateria', 'Батарея', '電池'),
+        'desc': _t('受击时会漏电。', 'Leaks electricity when hit.', 'Fuit de l’électricité lorsqu’elle est touchée.', 'Vaza eletricidade quando atingida.', 'При ударе даёт утечку тока.', '攻撃されると漏電する。'),
+        'effect': _t('受到物理伤害时对敌方造成3D', 'When taking physical damage, deal 3D to the enemy', 'Quand vous subissez des dégâts physiques, inflige 3D à l’ennemi', 'Ao sofrer dano físico, causa 3D ao inimigo', 'При получении физического урона наносит врагу 3D', '物理ダメージを受けた時、敵に3Dを与える'),
     },
     'Bubble': {
-        'name': {'zh': '泡泡', 'en': 'Bubble', 'fr': 'Bulle', 'pt': 'Bolha', 'ru': 'Пузырь', 'ja': '泡'},
-        'desc': {'zh': '闪！', 'en': 'Dodge!', 'fr': 'Esquive !', 'pt': 'Desvie!', 'ru': 'Уклонение!', 'ja': '回避！'},
-        'effect': {'zh': '获得1层闪避（敌方使用Thorn时）', 'en': 'Gain 1 Dodge (when enemy uses Thorn)', 'fr': 'Gagne 1 Esquive (quand l’ennemi joue Thorn)', 'pt': 'Ganha 1 Esquiva (quando inimigo usa Thorn)', 'ru': '+1 Уклонение (когда враг играет Thorn)', 'ja': '回避1を得る（敵がThorn使用時）'},
+        'name': _t('泡泡', 'Bubble', 'Bulle', 'Bolha', 'Пузырь', '泡'),
+        'desc': _t('闪！', 'Dodge!', 'Esquive !', 'Desvie!', 'Уклонение!', '回避！'),
+        'effect': _t('获得一层闪避 响应：敌方使用攻击牌', 'Gain 1 Dodge. Response: enemy uses an attack card', 'Gagne 1 Esquive. Réponse : l’ennemi joue une carte d’attaque', 'Ganha 1 Esquiva. Resposta: inimigo usa uma carta de ataque', 'Получить 1 Уклонение. Ответ: враг использует карту атаки', '回避を1層得る。反応：敵が攻撃カードを使用'),
     },
     'Nazar': {
-        'name': {'zh': '邪眼护符', 'en': 'Nazar', 'fr': 'Nazar', 'pt': 'Nazar', 'ru': 'Назар', 'ja': 'ナザール'},
-        'desc': {'zh': '大幅减免物理伤害。', 'en': 'Greatly reduces physical damage.', 'fr': 'Réduit fortement les dégâts physiques.', 'pt': 'Reduz muito dano físico.', 'ru': 'Сильно снижает физ. урон.', 'ja': '物理ダメージを大きく軽減。'},
-        'effect': {'zh': '物理伤害减免（最低到1）；承受两次10点以上物理伤害后消失（敌方使用Thorn时）', 'en': 'Reduce physical damage (min 1); expires after two 10+ physical hits (when enemy uses Thorn)', 'fr': 'Réduit dégâts physiques (min 1); expire après deux coups physiques 10+ (ennemi joue Thorn)', 'pt': 'Reduz dano físico (mín. 1); expira após dois golpes físicos 10+ (inimigo usa Thorn)', 'ru': 'Снижает физ. урон (мин. 1); исчезает после двух ударов 10+ (враг играет Thorn)', 'ja': '物理ダメージ軽減（最小1）。10以上の物理を2回受けると消滅（敵がThorn使用時）'},
+        'name': _t('邪眼护符', 'Nazar', 'Nazar', 'Nazar', 'Назар', 'ナザール'),
+        'desc': _t('邪眼的力量似乎为你减免了大部分伤害。', 'The power of the evil eye seems to reduce most of the damage for you.', 'Le pouvoir du mauvais œil semble réduire la majeure partie des dégâts.', 'O poder do mau-olhado parece reduzir a maior parte do dano.', 'Сила сглаза, кажется, снижает большую часть урона.', '邪眼の力が大半のダメージを軽減してくれるようだ。'),
+        'effect': _t('所有物理伤害减少9(最少减至1)，受到两次10点及以上物理伤害后效果消失 响应：敌方使用攻击牌', 'Reduce all physical damage by 9 (minimum 1); expires after taking two physical hits of 10 or more. Response: enemy uses an attack card', 'Réduit tous les dégâts physiques de 9 (minimum 1) ; expire après avoir subi deux coups physiques de 10 ou plus. Réponse : l’ennemi joue une carte d’attaque', 'Reduz todo dano físico em 9 (mínimo 1); expira após sofrer dois golpes físicos de 10 ou mais. Resposta: inimigo usa uma carta de ataque', 'Уменьшает весь физический урон на 9 (минимум до 1); исчезает после двух физических ударов по 10 или больше. Ответ: враг использует карту атаки', '全ての物理ダメージを9減らす（最低1）。10以上の物理ダメージを2回受けると効果消失。反応：敵が攻撃カードを使用'),
+    },
+    'MagicLeaf': {
+        'name': _t('魔法叶', 'Magic Leaf', 'Feuille magique', 'Folha Mágica', 'Магический лист', '魔法の葉'),
+        'desc': _t('不再能造成伤害了，但它可以回复魔力。', 'It can no longer deal damage, but it can restore magic.', 'Elle ne peut plus infliger de dégâts, mais elle peut restaurer de la magie.', 'Não causa mais dano, mas pode restaurar magia.', 'Больше не наносит урон, но восстанавливает магию.', 'もうダメージは与えられないが、魔力を回復できる。'),
+        'effect': _t('友方回合开始时+1M', 'At friendly turn start +1M', 'Au début du tour allié +1M', 'No início do turno aliado +1M', 'В начале хода союзника +1M', '味方ターン開始時+1M'),
+    },
+    'ManaOrb': {
+        'name': _t('魔法球', 'Mana Orb', 'Orbe de mana', 'Orbe de Mana', 'Сфера маны', 'マナオーブ'),
+        'desc': _t('孕育魔力的小球。', 'A small orb that nurtures magic.', 'Un petit orbe qui nourrit la magie.', 'Uma pequena esfera que nutre magia.', 'Малый шар, питающий магию.', '魔力を宿す小さな球。'),
+        'effect': _t('+3M', '+3M', '+3M', '+3M', '+3M', '+3M'),
+    },
+    'MagicYucca': {
+        'name': _t('魔法丝兰', 'Magic Yucca', 'Yucca magique', 'Yucca Mágica', 'Магическая юкка', '魔法ユッカ'),
+        'desc': _t('生成更多魔力。', 'Generates more magic.', 'Génère plus de magie.', 'Gera mais magia.', 'Создаёт больше магии.', 'より多くの魔力を生む。'),
+        'effect': _t('友方回合开始时+2M', 'At friendly turn start +2M', 'Au début du tour allié +2M', 'No início do turno aliado +2M', 'В начале хода союзника +2M', '味方ターン開始時+2M'),
+    },
+    'MagicBattery': {
+        'name': _t('魔法电池', 'Magic Battery', 'Batterie magique', 'Bateria Mágica', 'Магическая батарея', '魔法電池'),
+        'desc': _t('每次受击都会激发魔力涌动。', 'Each hit triggers a surge of magic.', 'Chaque coup déclenche un afflux de magie.', 'Cada golpe desperta uma onda de magia.', 'Каждый удар вызывает всплеск магии.', '攻撃を受けるたび魔力の高まりを引き起こす。'),
+        'effect': _t('装备后，受到物理伤害时+1M(每回合上限3M)', 'After equipped, when taking physical damage, +1M (max 3M each turn)', 'Une fois équipée, quand vous subissez des dégâts physiques, +1M (max 3M par tour)', 'Depois de equipada, ao sofrer dano físico, +1M (máx. 3M por turno)', 'После снаряжения при получении физического урона +1M (макс. 3M за ход)', '装備後、物理ダメージを受けた時+1M（各ターン上限3M）'),
     },
     'MagicNazar': {
-        'name': {'zh': '魔法邪眼', 'en': 'Magic Nazar', 'fr': 'Nazar magique', 'pt': 'Nazar Mágico', 'ru': 'Маг. назар', 'ja': '魔法ナザール'},
-        'desc': {'zh': '保护你的装备。', 'en': 'Protects your equipment.', 'fr': 'Protège votre équipement.', 'pt': 'Protege seu equipamento.', 'ru': 'Защищает снаряжение.', 'ja': '装備を守る。'},
-        'effect': {'zh': '获得1层装备保护（敌方摧毁装备时）', 'en': 'Gain 1 Equip Protect (when enemy destroys equipment)', 'fr': 'Gagne 1 Protection d’équipement (destruction ennemie)', 'pt': 'Ganha 1 Proteção de Equip. (destruição inimiga)', 'ru': '+1 Защита снаряжения (при уничтожении врагом)', 'ja': '装備保護1を得る（敵が装備破壊時）'},
+        'name': _t('魔法邪眼', 'Magic Nazar', 'Nazar magique', 'Nazar Mágico', 'Магический назар', '魔法ナザール'),
+        'desc': _t('有魔力的护符，保护你的装备不被摧毁。', 'A magical amulet that protects your equipment from destruction.', 'Une amulette magique qui protège votre équipement de la destruction.', 'Um amuleto mágico que protege seu equipamento da destruição.', 'Магический амулет, защищающий снаряжение от уничтожения.', '魔力を持つ護符。装備が破壊されるのを防ぐ。'),
+        'effect': _t('获得一层装备保护 响应：友方装备即将被摧毁', 'Gain 1 Equip Protect. Response: friendly equipment is about to be destroyed', 'Gagne 1 Protection d’équipement. Réponse : un équipement allié va être détruit', 'Ganha 1 Proteção de Equipamento. Resposta: equipamento aliado prestes a ser destruído', 'Получить 1 Защиту снаряжения. Ответ: союзное снаряжение вот-вот будет уничтожено', '装備保護を1層得る。反応：味方装備が破壊されそうな時'),
+    },
+    'MagicBone': {
+        'name': _t('魔法骨头', 'Magic Bone', 'Os magique', 'Osso Mágico', 'Магическая кость', '魔法の骨'),
+        'desc': _t('魔力凝聚的骨头，穿透力更强。', 'A bone condensed from magic, with stronger penetration.', 'Un os condensé par la magie, plus pénétrant.', 'Um osso condensado por magia, com maior penetração.', 'Кость, сжатая магией, с большей пробивной силой.', '魔力で凝縮された骨。貫通力が高い。'),
+        'effect': _t('造成15D', 'Deal 15D', 'Inflige 15D', 'Causa 15D', 'Наносит 15D', '15Dを与える'),
+    },
+    'MagicStinger': {
+        'name': _t('魔法刺', 'Magic Stinger', 'Dard magique', 'Ferrão Mágico', 'Магическое жало', '魔法の針'),
+        'desc': _t('魔力加持的尖刺，威力巨大。', 'A magic-empowered spike with tremendous force.', 'Une pointe renforcée par la magie, d’une grande puissance.', 'Um espinho fortalecido por magia, de enorme potência.', 'Шип, усиленный магией, с огромной мощью.', '魔力で強化された尖った針。威力は巨大。'),
+        'effect': _t('造成30D', 'Deal 30D', 'Inflige 30D', 'Causa 30D', 'Наносит 30D', '30Dを与える'),
+    },
+    'Mimic': {
+        'name': _t('拟态', 'Mimic', 'Mimique', 'Mímico', 'Мимикрия', '擬態'),
+        'desc': _t('完美模仿。', 'A perfect imitation.', 'Une imitation parfaite.', 'Uma imitação perfeita.', 'Идеальная имитация.', '完全な模倣。'),
+        'effect': _t('将一张手牌的复制加入手中，使其下一次打出时费用-1', 'Add a copy of one hand card to your hand; its next play costs -1', 'Ajoutez à votre main une copie d’une carte en main ; son prochain jeu coûte -1', 'Adicione à sua mão uma cópia de uma carta da mão; da próxima vez que for jogada, custa -1', 'Добавьте в руку копию одной карты из руки; её следующий розыгрыш стоит -1', '手札1枚のコピーを手札に加え、次に出す時のコストを-1する'),
+    },
+    'Coffee': {
+        'name': _t('咖啡', 'Coffee', 'Café', 'Café', 'Кофе', 'コーヒー'),
+        'desc': _t('可以用来提神，当然，小心耐药性。', 'It can wake you up. Of course, beware of tolerance.', 'Peut vous réveiller. Bien sûr, attention à la tolérance.', 'Pode despertar você. Claro, cuidado com a tolerância.', 'Бодрит. Но, конечно, остерегайтесь привыкания.', '眠気覚ましに使える。当然、耐性には注意。'),
+        'effect': _t('+1E，第一次使用额外+1E', '+1E; first use grants an extra +1E', '+1E ; la première utilisation donne +1E supplémentaire', '+1E; o primeiro uso concede +1E extra', '+1E; первое использование даёт ещё +1E', '+1E。初回使用時さらに+1E'),
+    },
+    'Powder': {
+        'name': _t('粉末', 'Powder', 'Poudre', 'Pó', 'Порошок', '粉末'),
+        'desc': _t('使你加快速度的神秘粉末，不要去想它到底是什么。', 'A mysterious powder that speeds you up. Do not think too hard about what it is.', 'Une poudre mystérieuse qui vous accélère. Ne réfléchissez pas trop à ce que c’est.', 'Um pó misterioso que acelera você. Melhor não pensar demais no que ele é.', 'Таинственный порошок, ускоряющий вас. Лучше не думать, что это такое.', '速度を上げる謎の粉末。それが何なのかは考えない方がいい。'),
+        'effect': _t('友方回合开始时+2E', 'At friendly turn start +2E', 'Au début du tour allié +2E', 'No início do turno aliado +2E', 'В начале хода союзника +2E', '味方ターン開始時+2E'),
+    },
+    'GoldenLeaf': {
+        'name': _t('黄金叶', 'Golden Leaf', 'Feuille d’or', 'Folha Dourada', 'Золотой лист', '黄金の葉'),
+        'desc': _t('这闪亮的叶子能为你带来额外的抽牌机会。', 'This shining leaf brings you extra draw opportunities.', 'Cette feuille brillante vous offre des occasions de pioche supplémentaires.', 'Esta folha brilhante traz compras extras.', 'Этот сияющий лист даёт дополнительные возможности добора.', 'この輝く葉は追加のドロー機会をもたらす。'),
+        'effect': _t('回合开始时多抽一张牌', 'Draw one extra card at turn start', 'Piochez une carte supplémentaire au début du tour', 'Compre uma carta extra no início do turno', 'В начале хода доберите одну дополнительную карту', 'ターン開始時に追加で1枚引く'),
+    },
+    'Chromosome': {
+        'name': _t('染色体', 'Chromosome', 'Chromosome', 'Cromossomo', 'Хромосома', '染色体'),
+        'desc': _t('从基因中提取记忆，寻找所需之牌。', 'Extract memory from genes to find the card you need.', 'Extrait des souvenirs des gènes pour trouver la carte voulue.', 'Extrai memórias dos genes para encontrar a carta necessária.', 'Извлекает память из генов, чтобы найти нужную карту.', '遺伝子から記憶を取り出し、必要なカードを探す。'),
+        'effect': _t('从牌堆中选择一张牌将其加入手中', 'Choose one card from the deck and add it to your hand', 'Choisissez une carte du deck et ajoutez-la à votre main', 'Escolha uma carta do deck e adicione-a à mão', 'Выберите карту из колоды и добавьте её в руку', '山札からカード1枚を選び、手札に加える'),
+    },
+    'Sewage': {
+        'name': _t('污水', 'Sewage', 'Eaux usées', 'Esgoto', 'Стоки', '汚水'),
+        'desc': _t('腐蚀一切装备。', 'Corrodes all equipment.', 'Corrode tout équipement.', 'Corrói todo equipamento.', 'Разъедает любое снаряжение.', 'あらゆる装備を腐食させる。'),
+        'effect': _t('摧毁敌方一张装备', 'Destroy one enemy equipment', 'Détruit un équipement ennemi', 'Destrói um equipamento inimigo', 'Уничтожить одно снаряжение врага', '敵の装備1つを破壊する'),
+    },
+    'Pincer': {
+        'name': _t('螫针', 'Pincer', 'Pince', 'Pinça', 'Клешня', '毒針'),
+        'desc': _t('毒素可以减缓对手行动，但小心别划伤自己。', 'Toxin can slow the opponent, but be careful not to scratch yourself.', 'La toxine peut ralentir l’adversaire, mais attention à ne pas vous égratigner.', 'A toxina pode atrasar o oponente, mas cuidado para não se arranhar.', 'Токсин замедляет противника, но не поцарапайтесь сами.', '毒素は相手の行動を遅らせるが、自分を傷つけないよう注意。'),
+        'effect': _t('敌方回合开始时费用回复-1E', 'At enemy turn start, E recovery -1', 'Au début du tour ennemi, récupération de E -1', 'No início do turno inimigo, recuperação de E -1', 'В начале хода врага восстановление E -1', '敵ターン開始時、E回復-1'),
+    },
+    'Cancer': {
+        'name': _t('癌细胞', 'Cancer Cell', 'Cellule cancéreuse', 'Célula cancerosa', 'Раковая клетка', 'がん細胞'),
+        'desc': _t('无法根除的恶性细胞。', 'A malignant cell that cannot be eradicated.', 'Une cellule maligne impossible à éradiquer.', 'Uma célula maligna impossível de erradicar.', 'Злокачественная клетка, которую невозможно искоренить.', '根絶できない悪性細胞。'),
+        'effect': _t('对敌方施加1层淬毒', 'Apply 1 Toxic to the enemy', 'Applique 1 Toxique à l’ennemi', 'Aplica 1 Tóxico ao inimigo', 'Накладывает на врага 1 Токсин', '敵に淬毒1を付与'),
+    },
+    'Yggdrasil': {
+        'name': _t('世界树之叶', 'Yggdrasil', 'Yggdrasil', 'Yggdrasil', 'Yggdrasil', 'Yggdrasil'),
+        'desc': _t('神奇的树叶。可以使人死而复生。', 'A wondrous leaf that can bring the dead back to life.', 'Une feuille merveilleuse qui peut ramener les morts à la vie.', 'Uma folha milagrosa capaz de trazer alguém de volta da morte.', 'Чудесный лист, способный вернуть мёртвого к жизни.', '死者を蘇らせることができる不思議な葉。'),
+        'effect': _t('+20H；受到致命伤害时若在手牌中，则清除己方所有效果，将生命值设为5，此回合无敌并放逐此牌', '+20H; when taking lethal damage, if this is in hand, clear your effects, set health to 5, become invincible this turn, and exile this card', '+20H ; lorsque vous subissez des dégâts mortels, si cette carte est en main, nettoie vos effets, fixe la vie à 5, rend invincible ce tour et exile cette carte', '+20H; ao sofrer dano letal, se estiver na mão, limpa seus efeitos, define a vida como 5, fica invencível neste turno e exila esta carta', '+20H; при смертельном уроне, если карта в руке, очистить ваши эффекты, установить здоровье на 5, стать неуязвимым на этот ход и изгнать эту карту', '+20H。致命ダメージを受ける時、手札にあるなら自分の効果を全て解除し、生命を5にし、このターン無敵になり、このカードを放逐する'),
+    },
+    'Corruption': {
+        'name': _t('腐化', 'Corruption', 'Corruption', 'Corrupção', 'Порча', '腐化'),
+        'desc': _t('伤敌一千，自损八百。', 'Hurt the enemy badly, but hurt yourself too.', 'Blesser lourdement l’ennemi, au prix de vos propres blessures.', 'Fere muito o inimigo, mas também fere você.', 'Сильно ранит врага, но и вам достаётся.', '敵を大きく傷つけるが、自分も傷つく。'),
+        'effect': _t('自下个敌方回合开始，全场所有伤害翻倍', 'Starting from the next enemy turn, all damage on the field is doubled', 'À partir du prochain tour ennemi, tous les dégâts sur le terrain sont doublés', 'A partir do próximo turno inimigo, todo dano no campo é dobrado', 'Со следующего хода врага весь урон на поле удваивается', '次の敵ターンから、場の全てのダメージが2倍になる'),
+    },
+    'Chilli': {
+        'name': _t('辣椒', 'Chilli', 'Piment', 'Pimenta', 'Чили', '唐辛子'),
+        'desc': _t('太过辛辣，让你不得不用一张牌解辣。', 'So spicy that you have to use a card to cool down.', 'Si piquant que vous devez utiliser une carte pour calmer le feu.', 'Tão picante que você precisa usar uma carta para aliviar.', 'Настолько острый, что приходится тратить карту, чтобы остудить жар.', '辛すぎて、カード1枚で辛さをしのぐしかない。'),
+        'effect': _t('丢弃一张牌，然后抽一张牌', 'Discard one card, then draw one card', 'Défaussez une carte, puis piochez une carte', 'Descarte uma carta, depois compre uma carta', 'Сбросьте одну карту, затем доберите одну карту', 'カード1枚を捨て、その後1枚引く'),
+    },
+    'MagicSewage': {
+        'name': _t('魔法污水', 'Magic Sewage', 'Eaux usées magiques', 'Esgoto Mágico', 'Магические стоки', '魔法汚水'),
+        'desc': _t('至死方休！', 'It stops only at death.', 'Cela ne s’arrête qu’à la mort.', 'Só para com a morte.', 'Остановится только со смертью.', '死ぬまで止まらない！'),
+        'effect': _t('摧毁场上所有装备', 'Destroy all equipment on the field', 'Détruit tous les équipements sur le terrain', 'Destrói todo equipamento em campo', 'Уничтожить всё снаряжение на поле', '場の全ての装備を破壊する'),
     },
     'MagicBubble': {
-        'name': {'zh': '魔法泡泡', 'en': 'Magic Bubble', 'fr': 'Bulle magique', 'pt': 'Bolha Mágica', 'ru': 'Маг. пузырь', 'ja': '魔法の泡'},
-        'desc': {'zh': '泡泡的魔法版本。', 'en': 'A magical bubble.', 'fr': 'Une bulle magique.', 'pt': 'Uma bolha mágica.', 'ru': 'Магический пузырь.', 'ja': '魔法の泡。'},
-        'effect': {'zh': '使敌方技能牌失效（敌方使用Bloom时）', 'en': 'Negate enemy Bloom (when enemy uses Bloom)', 'fr': 'Annule le Bloom ennemi (quand l’ennemi joue Bloom)', 'pt': 'Anula Bloom inimigo (quando inimigo usa Bloom)', 'ru': 'Отменяет Bloom врага (когда враг играет Bloom)', 'ja': '敵のBloomを無効化（敵がBloom使用時）'},
+        'name': _t('魔法泡泡', 'Magic Bubble', 'Bulle magique', 'Bolha Mágica', 'Магический пузырь', '魔法の泡'),
+        'desc': _t('泡泡的魔法版本。', 'The magical version of Bubble.', 'La version magique de Bulle.', 'A versão mágica de Bolha.', 'Магическая версия Пузыря.', '泡の魔法版。'),
+        'effect': _t('使敌方下次使用的技能牌失效 响应：敌方使用技能牌', 'Negate the next enemy skill card. Response: enemy uses a skill card', 'Annule la prochaine carte de compétence ennemie. Réponse : l’ennemi joue une carte de compétence', 'Anula a próxima carta de habilidade inimiga. Resposta: inimigo usa uma carta de habilidade', 'Отменяет следующую карту навыка врага. Ответ: враг использует карту навыка', '敵が次に使用する技能カードを無効化する。反応：敵が技能カードを使用'),
+    },
+    'Mark': {
+        'name': _t('标记', 'Mark', 'Marque', 'Marca', 'Метка', '標記'),
+        'desc': _t('你被标记了！', 'You have been marked!', 'Vous avez été marqué !', 'Você foi marcado!', 'Вы отмечены!', 'あなたは標的にされた！'),
+        'effect': _t('装备一回合后可触发，0E，直到敌方下回合结束禁止敌方行动', 'Can be triggered after being equipped for one turn, 0E: until the end of the enemy’s next turn, the enemy cannot act', 'Peut être déclenché après avoir été équipé pendant un tour, 0E : jusqu’à la fin du prochain tour ennemi, l’ennemi ne peut pas agir', 'Pode ser acionado após ficar equipado por um turno, 0E: até o fim do próximo turno inimigo, o inimigo não pode agir', 'Можно активировать после одного хода в снаряжении, 0E: до конца следующего хода врага враг не может действовать', '1ターン装備後に発動可、0E：敵の次のターン終了まで、敵は行動できない'),
+        'trigger': _t('直到敌方下回合结束禁止敌方行动', 'Until the end of the enemy’s next turn, the enemy cannot act', 'Jusqu’à la fin du prochain tour ennemi, l’ennemi ne peut pas agir', 'Até o fim do próximo turno inimigo, o inimigo não pode agir', 'До конца следующего хода врага враг не может действовать', '敵の次のターン終了まで、敵は行動できない'),
+    },
+    'Mine': {
+        'name': _t('地雷', 'Mine', 'Mine', 'Mina', 'Мина', '地雷'),
+        'desc': _t('它很危险，但需要一回合准备。', 'It is dangerous, but needs one turn to prepare.', 'Elle est dangereuse, mais nécessite un tour de préparation.', 'É perigosa, mas precisa de um turno de preparo.', 'Опасна, но требует один ход подготовки.', '危険だが、準備に1ターン必要。'),
+        'effect': _t('装备一回合后可触发，0E，造成20D', 'Can be triggered after being equipped for one turn, 0E: deal 20D', 'Peut être déclenché après avoir été équipé pendant un tour, 0E : inflige 20D', 'Pode ser acionado após ficar equipado por um turno, 0E: causa 20D', 'Можно активировать после одного хода в снаряжении, 0E: нанести 20D', '1ターン装備後に発動可、0E：20Dを与える'),
+        'trigger': _t('造成20D', 'Deal 20D', 'Inflige 20D', 'Causa 20D', 'Наносит 20D', '20Dを与える'),
     },
 }
 
 
 OPENING_EVENT_I18N = {
-    1: {'name': {'zh': '生命强化', 'en': 'Vital Growth', 'fr': 'Croissance vitale', 'pt': 'Crescimento Vital', 'ru': 'Рост жизни', 'ja': '生命強化'}, 'desc': {'zh': '最大生命值+20', 'en': 'Max health +20', 'fr': 'Santé max +20', 'pt': 'Vida máxima +20', 'ru': 'Макс. здоровье +20', 'ja': '最大H+20'}},
-    2: {'name': {'zh': '魔力转化', 'en': 'Mana Conversion', 'fr': 'Conversion de mana', 'pt': 'Conversão de Mana', 'ru': 'Преобразование маны', 'ja': '魔力変換'}, 'desc': {'zh': '选择1-3张牌转化为魔法牌，开局+5M', 'en': 'Convert 1-3 cards into magic cards; start with +5M', 'fr': 'Convertit 1-3 cartes en cartes magiques; départ +5M', 'pt': 'Converte 1-3 cartas em mágicas; início +5M', 'ru': 'Преобразуйте 1-3 карты в магические; старт +5M', 'ja': '1-3枚を魔法カードに変換。開始時+5M'}},
-    3: {'name': {'zh': '光之洗礼', 'en': 'Baptism of Light', 'fr': 'Baptême de lumière', 'pt': 'Batismo de Luz', 'ru': 'Крещение светом', 'ja': '光の洗礼'}, 'desc': {'zh': '最多五张牌变为Light（萌芽、共生）', 'en': 'Up to 5 cards become Light (Sprout, Symbiosis)', 'fr': 'Jusqu’à 5 cartes deviennent Light (Germe, Symbiose)', 'pt': 'Até 5 cartas viram Light (Broto, Simbiose)', 'ru': 'До 5 карт становятся Light (Росток, Симбиоз)', 'ja': '最大5枚をLightに変換（萌芽、共生）'}},
-    4: {'name': {'zh': '烈焰预兆', 'en': 'Flame Omen', 'fr': 'Présage de flammes', 'pt': 'Presságio Flamejante', 'ru': 'Огненное знамение', 'ja': '炎の兆し'}, 'desc': {'zh': '开局对敌方施加3层灼烧', 'en': 'Apply 3 Burn to enemy at start', 'fr': 'Applique 3 Brûlure à l’ennemi au départ', 'pt': 'Aplica 3 Queima ao inimigo no início', 'ru': 'В начале врагу +3 Горение', 'ja': '開始時、敵に火傷3'}},
-    5: {'name': {'zh': '命运抽签', 'en': 'Fated Draw', 'fr': 'Pioche du destin', 'pt': 'Compra do Destino', 'ru': 'Жребий судьбы', 'ja': '運命のドロー'}, 'desc': {'zh': '前二回合开始时抽牌至手牌已满', 'en': 'At the first two turn starts, draw until hand is full', 'fr': 'Aux deux premiers débuts de tour, pioche jusqu’à main pleine', 'pt': 'Nos 2 primeiros turnos, compre até encher a mão', 'ru': 'Первые 2 хода: добор до полной руки', 'ja': '最初の2ターン開始時、手札上限まで引く'}},
-    6: {'name': {'zh': '能量涌动', 'en': 'Energy Surge', 'fr': 'Poussée d’énergie', 'pt': 'Surto de Energia', 'ru': 'Всплеск энергии', 'ja': 'エネルギー奔流'}, 'desc': {'zh': '前三回合开始时额外回复2E', 'en': 'At the first three turn starts, recover +2E', 'fr': 'Aux trois premiers débuts de tour, récupère +2E', 'pt': 'Nos 3 primeiros turnos, recupere +2E', 'ru': 'Первые 3 хода: восстановить +2E', 'ja': '最初の3ターン開始時、追加+2E'}},
-    7: {'name': {'zh': '先手压制', 'en': 'Opening Pressure', 'fr': 'Pression initiale', 'pt': 'Pressão Inicial', 'ru': 'Начальный нажим', 'ja': '先手圧力'}, 'desc': {'zh': '必定先手，先手多回复3E并抽4张牌', 'en': 'You go first; first player recovers +3E and draws 4', 'fr': 'Vous commencez; le premier joueur récupère +3E et pioche 4', 'pt': 'Você começa; primeiro jogador recupera +3E e compra 4', 'ru': 'Вы ходите первым; первый игрок +3E и 4 карты', 'ja': '必ず先手。先手は+3Eし4枚引く'}},
-    8: {'name': {'zh': '绝境求生', 'en': 'Last Stand', 'fr': 'Dernier recours', 'pt': 'Último Recurso', 'ru': 'Последний шанс', 'ja': '背水の生存'}, 'desc': {'zh': '最大生命值-20，将一张牌变为世界树之叶', 'en': 'Max health -20; turn one card into Yggdrasil', 'fr': 'Santé max -20; une carte devient Yggdrasil', 'pt': 'Vida máxima -20; uma carta vira Yggdrasil', 'ru': 'Макс. здоровье -20; 1 карта становится Yggdrasil', 'ja': '最大H-20。1枚をYggdrasilに変換'}},
+    1: {
+        'name': _t('生命强化', 'Life Reinforcement', 'Renforcement vital', 'Reforço Vital', 'Усиление жизни', '生命強化'),
+        'desc': _t('最大生命值+20', 'Max health +20', 'Santé max +20', 'Vida máxima +20', 'Макс. здоровье +20', '最大生命値+20'),
+    },
+    2: {
+        'name': _t('魔力转化', 'Magic Conversion', 'Conversion magique', 'Conversão Mágica', 'Преобразование магии', '魔力変換'),
+        'desc': _t('选择1-3张牌转化为魔法牌，开局回复5M', 'Choose 1-3 cards to transform into magic cards; start by recovering 5M', 'Choisissez 1-3 cartes à transformer en cartes magiques ; au début, récupérez 5M', 'Escolha 1-3 cartas para transformar em cartas mágicas; no início, recupere 5M', 'Выберите 1-3 карты для превращения в магические; в начале восстановите 5M', 'カード1-3枚を魔法カードに変化させる。開始時に5M回復'),
+    },
+    3: {
+        'name': _t('光之洗礼', 'Baptism of Light', 'Baptême de lumière', 'Batismo de Luz', 'Крещение светом', '光の洗礼'),
+        'desc': _t('将最多五张牌转化为Light（萌芽+共生）', 'Convert up to five cards into Light (Sprout + Symbiosis)', 'Transforme jusqu’à cinq cartes en Light (Germe + Symbiose)', 'Transforma até cinco cartas em Light (Broto + Simbiose)', 'Превратите до пяти карт в Light (Росток + Симбиоз)', '最大5枚のカードをLight（萌芽+共生）に変化させる'),
+    },
+    8: {
+        'name': _t('绝境求生', 'Last Stand', 'Dernier recours', 'Último Recurso', 'Последний шанс', '背水の生存'),
+        'desc': _t('最大生命值-20，对局开始将一张牌变化为Yggdrasil', 'Max health -20; at game start, transform one card into Yggdrasil', 'Santé max -20 ; au début de la partie, transforme une carte en Yggdrasil', 'Vida máxima -20; no início da partida, transforma uma carta em Yggdrasil', 'Макс. здоровье -20; в начале игры превратите одну карту в Yggdrasil', '最大生命値-20。対局開始時、カード1枚をYggdrasilに変化させる'),
+    },
+    4: {
+        'name': _t('烈焰预兆', 'Flame Omen', 'Présage de flammes', 'Presságio Flamejante', 'Огненное знамение', '烈炎の兆し'),
+        'desc': _t('开局对敌方施加2层灼烧', 'At game start, apply 2 Burn to the enemy', 'Au début de la partie, applique 2 Brûlure à l’ennemi', 'No início da partida, aplica 2 Queima ao inimigo', 'В начале игры наложите на врага 2 Горения', '開始時、敵に灼焼2を付与'),
+    },
+    5: {
+        'name': _t('命运抽签', 'Fated Draw', 'Pioche du destin', 'Compra do Destino', 'Жребий судьбы', '運命のドロー'),
+        'desc': _t('前二回合开始时抽牌至手牌已满', 'At the start of the first two turns, draw until your hand is full', 'Au début des deux premiers tours, piochez jusqu’à avoir la main pleine', 'No início dos dois primeiros turnos, compre até a mão ficar cheia', 'В начале первых двух ходов добирайте до полной руки', '最初の2ターン開始時、手札上限まで引く'),
+    },
+    6: {
+        'name': _t('能量涌动', 'Energy Surge', 'Poussée d’énergie', 'Surto de Energia', 'Всплеск энергии', 'エネルギー奔流'),
+        'desc': _t('前三回合开始时额外回复2E', 'At the start of the first three turns, recover an extra 2E', 'Au début des trois premiers tours, récupérez 2E supplémentaires', 'No início dos três primeiros turnos, recupere 2E extra', 'В начале первых трёх ходов восстановите дополнительно 2E', '最初の3ターン開始時、追加で2E回復'),
+    },
+    7: {
+        'name': _t('先手压制', 'Opening Pressure', 'Pression initiale', 'Pressão Inicial', 'Стартовое давление', '先手圧制'),
+        'desc': _t('必定先手(对面未选同事件时)，先手多回复3E抽4张牌', 'You go first unless the opponent chose the same event; the first player recovers 3E more and draws 4 cards', 'Vous commencez sauf si l’adversaire a choisi le même événement ; le premier joueur récupère 3E de plus et pioche 4 cartes', 'Você começa, a menos que o oponente tenha escolhido o mesmo evento; o primeiro jogador recupera 3E a mais e compra 4 cartas', 'Вы ходите первым, если противник не выбрал то же событие; первый игрок восстанавливает на 3E больше и берёт 4 карты', '相手が同じイベントを選んでいなければ必ず先手。先手は追加で3E回復し、4枚引く'),
+    },
 }
 
 
@@ -244,7 +272,10 @@ def card_text(card_id, fallback):
         'name_i18n': _fill(data.get('name', {})),
         'description_i18n': _fill(data.get('desc', {})),
         'effect_text_i18n': _fill(data.get('effect', {})),
-        'trigger_effect_text_i18n': _fill(data.get('trigger', {'zh': fallback.get('trigger_effect_text', ''), 'en': fallback.get('trigger_effect_text', '')})),
+        'trigger_effect_text_i18n': _fill(data.get('trigger', {
+            'zh': data.get('effect', {}).get('zh', fallback.get('trigger_effect_text', '')),
+            'en': data.get('effect', {}).get('en', fallback.get('trigger_effect_text', '')),
+        })),
     }
 
 

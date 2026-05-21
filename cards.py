@@ -53,6 +53,7 @@ class CardInstance:
     mimic_discount: int = 0
     fission_hit: int = 0
     instance_flags: Set[str] = field(default_factory=set)
+    disabled_flags: Set[str] = field(default_factory=set)
 
     @property
     def card_def(self) -> CardDef:
@@ -81,7 +82,7 @@ class CardInstance:
 
     @property
     def flags(self) -> Set[str]:
-        return self.card_def.flags | self.instance_flags
+        return (self.card_def.flags | self.instance_flags) - self.disabled_flags
 
     def to_dict(self) -> dict:
         return {
@@ -95,6 +96,7 @@ class CardInstance:
             'fusion_level': self.fusion_level,
             'mimic_discount': self.mimic_discount,
             'instance_flags': list(self.instance_flags) if self.instance_flags else [],
+            'disabled_flags': list(self.disabled_flags) if self.disabled_flags else [],
         }
 
     @staticmethod
@@ -110,6 +112,7 @@ class CardInstance:
             fusion_level=max(1, int(d.get('fusion_level', d.get('fusion_multiplier', 1.0)))),
             mimic_discount=d.get('mimic_discount', 0),
             instance_flags=set(d.get('instance_flags', [])),
+            disabled_flags=set(d.get('disabled_flags', [])),
         )
 
     def copy(self) -> 'CardInstance':
@@ -124,6 +127,7 @@ class CardInstance:
             fusion_level=self.fusion_level,
             mimic_discount=self.mimic_discount,
             instance_flags=set(self.instance_flags),
+            disabled_flags=set(self.disabled_flags),
         )
         return c
 

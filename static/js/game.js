@@ -43,45 +43,124 @@ const I18N = {
         json_valid: 'Valid JSON', json_invalid: 'Invalid JSON: {0}', init_scripts: 'Initializing scripts...', init_theme_lang: 'Applying theme and language...', init_fonts: 'Loading fonts...', init_fonts_done: 'Fonts loaded',
         init_bindings: 'Binding UI events...', init_done: 'Loaded', next_draw_count: 'Set Next Draw (count)', next_draw_pick: 'Set Next Draw ({0}/{1})',
         login_invalid_nickname: 'Invalid nickname. Use 1-16 display-width characters; avoid pure numbers, pure symbols, or repeated -/_.', login_nickname_exists: 'Nickname already exists',
-        training_start: 'Solo training starts. {0} goes first.', training_set_draw: 'Training: {0} sets next draw to {1}'
+        training_start: 'Solo training starts. {0} goes first.', training_set_draw: 'Training: {0} sets next draw to {1}',
+        hand_deck_zero_opp: 'Hand:0 Deck:0',
+        hand_deck_zero_you: 'Hand:0 Deck:0 Discard:0',
+        rotate_hint_sub: 'Rotate to Landscape',
+        error_game_over: 'The game is over',
+        error_waiting_counter: 'Waiting for the opponent to respond',
+        error_card_not_in_hand: 'Card is not in hand',
+        error_remove_from_hand_failed: 'Failed to remove card from hand',
+        error_no_pending_response: 'No pending response',
+        error_no_pending_choice: 'No pending choice',
+        error_choice_cancelled: 'Choice cancelled',
+        error_not_your_turn: 'Not your turn',
+        error_equipment_missing: 'Equipment does not exist',
+        error_equipment_no_trigger: 'This equipment has no trigger effect',
+        error_equipment_turn_needed: 'This equipment must stay equipped for one turn before triggering',
+        error_not_enough_e: 'Not enough E',
+        error_target_invalid: 'Invalid target',
+        error_action_blocked: 'You cannot use cards right now',
+        error_attack_blocked: 'You cannot use Thorn cards this turn',
+        error_attack_only: 'Only Thorn cards can be used this turn',
+        error_waiting_response_ui: 'Waiting for response',
+        app_subtitle: 'LAN card battle',
+        nickname_placeholder: 'Enter nickname',
+        message_placeholder: 'Type a message...',
+        server_placeholder: 'Leave empty for default server',
+        server_hint: 'Default server: {0} (leave empty to use default)',
+        init_cards_mods: 'Loading cards and mods (/api/cards)...',
+        init_opening_events: 'Loading opening events (/api/opening-events)...',
+        mod_editor: 'Mod Editor',
+        mod_editor_placeholder: 'Paste or edit mod JSON here...',
+        load_mod: 'Load Mod',
+        save: 'Save',
+        validate_json: 'Validate JSON',
+        rotate_prompt: 'Please play in landscape mode',
+        continue_enter: 'Continue',
+        mod_default_name: 'Mod {0}'
     }
 };
 I18N.zh = { ...I18N.en,
-    round: '回合', your_turn: '你的回合', opponent_turn: '对手回合', you: '你', opponent: '对手',
+    round: '回合', your_turn: '你的回合', opponent_turn: '对方回合', you: '你', opponent: '对手',
     draw_phase: '抽牌阶段', game_over: '游戏结束', invite: '邀请', accept: '接受', decline: '拒绝', return_lobby: '返回大厅',
-    draft_phase: '选牌阶段', draft_reroll: '重选', draft_selected: '已选', select_event: '选择事件', waiting_opponent: '等待对手',
-    play_card: '出牌', end_turn: '结束回合', surrender: '投降', view_deck: '查看牌堆', counter: '反制', no_counter: '不反制', waiting_response: '等待响应',
+    draft_phase: '选牌阶段', draft_reroll: '重抽', draft_selected: '已选择', select_event: '选择开局事件', waiting_opponent: '等待对方',
+    play_card: '打出', end_turn: '结束回合', surrender: '投降', view_deck: '查看牌堆', counter: '反制', no_counter: '不反制', waiting_response: '等待响应',
     victory: '胜利', defeat: '失败', draw: '平局', rematch: '再来一局', connecting: '连接中...', disconnected: '已断开连接',
     login_failed: '登录失败', nickname: '昵称', enter_lobby: '进入大厅', online_players: '在线玩家', no_other_players: '暂无其他玩家',
-    invite_sent: '邀请已发送', invite_received: '收到邀请', invite_message: '邀请你进行对局', invite_declined: '邀请被拒绝',
-    ongoing_games: '进行中的对局', spectate: '观战', draft_info: '选牌', draft_complete: '选牌完成', draft_waiting: '等待对手完成选牌',
-    draft_cost: '费用', select_this_event: '选择此事件', event_selected: '已选择事件：{0}', event_waiting: '等待对手选择事件',
-    drag_to_play: '拖拽出牌', cannot_play: '无法出牌', enemy_attack: '敌方攻击', enemy_skill: '敌方技能', enemy_destroy_equip: '，摧毁装备',
-    use_card: '使用', insufficient_resources: '资源不足', choose_attack_for: '为 {0} 选择攻击牌', choose_equip_for: '选择装备',
+    invite_sent: '邀请已发送', invite_received: '收到邀请', invite_message: '邀请你进行对战', invite_declined: '邀请被拒绝',
+    ongoing_games: '进行中的对局', spectate: '观战', draft_info: '选牌', draft_complete: '选牌完成', draft_waiting: '等待对方完成选牌',
+    draft_cost: '费用', select_this_event: '选择此事件', event_selected: '已选择事件：{0}', event_waiting: '等待对方选择事件',
+    drag_to_play: '拖动打出', cannot_play: '无法打出', enemy_attack: '敌方攻击', enemy_skill: '敌方技能', enemy_destroy_equip: '，摧毁装备',
+    use_card: '使用', insufficient_resources: '资源不足', choose_attack_for: '为 {0} 选择攻击牌', choose_equip_for: '选择装备牌',
     choose_discard_for: '为 {0} 选择弃牌', choose_from_deck_for: '从牌堆选择', choose_from_discard_for: '为 {0} 从弃牌堆选择', choose_hand_for: '为 {0} 从手牌选择',
-    choose_from_enemy_hand_for: '从敌方手牌选择', choose_attack_group_for: '为 {0} 选择攻击牌组', no_attack_cards: '没有攻击牌', no_enemy_equipment: '没有敌方装备',
-    no_enemy_hand: '没有敌方手牌', deck_empty: '牌堆为空', discard_empty: '弃牌堆为空', no_same_attack: '没有同名攻击牌',
-    confirm_surrender: '确认投降？', request_rematch: '请求重赛', opponent_rematch: '对手请求重赛', rematch_sent: '重赛请求已发送',
-    rematch_waiting: '等待对手确认', rematch_agreed: '双方同意重赛', agree_rematch: '同意重赛', you_win: '胜利！', you_lose: '失败！', you_draw: '平局！',
-    send: '发送', cancel: '取消', ok: '确定', close: '关闭', notice: '提示', opponent_disconnected: '对手已断开连接', opponent_reconnected: '对手已重连',
-    reconnect_title: '重连', reconnect_prompt: '是否重连到之前的对局？', reconnecting: '重连中...', reconnect_timeout: '重连超时',
-    mod_mismatch_title: '模组不匹配', mod_mismatch_msg: '模组不一致，无法开始对局', switch_perspective: '切换视角', leave_spectate: '退出观战', switch_to_perspective: '切换到 {0} 视角',
-    battle_log: '战斗日志', equip_info: '{0}（{1} 回合）', equip_corruption: '[腐化]', equip_trigger_cost: '{0} 触发：{1}E',
-    status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼', status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻', status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可被摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无',
-    choose_convert_count: '选择转换次数', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择光明转换牌', choose_yggdrasil_card: '选择世界树转换牌', convert_label: '转换', convert_per_type: '每种最多 {0} 张', selected_count: '已选 {0}/{1}', max_selection_warning: '选择数量不能超过 {0}',
-    deck_total: '牌堆共 {0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}', round_status: '第 {0} 回合 - {1}', server_broadcast: '服务器广播：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
-    select_event_desc: '选择一个开局事件', opponent_selected: '对手已选择', opponent_selecting: '对手选择中...',
-    settings_title: '设置', settings_appearance: '外观', settings_theme: '主题', settings_lang: '语言', settings_mods: '模组', settings_theme_light: '明亮', settings_theme_dark: '黑暗', no_games: '暂无进行中的对局', back_to_home: '返回主页', settings_btn: '设置', settings_server: '服务器', settings_server_addr: '地址', not_your_turn: '不是你的回合',
-    counter_insufficient: '提示：反制牌所需消耗不足', default_status: 'Garden of Thorn 荆棘花园', game_loading: '游戏加载中...', server_no_response: '服务器未响应，请检查网络连接或刷新页面重试', spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线人数：{0}', chat_title: '聊天',
-    solo_training: '单人训练场', load_last: '载入上次', save_decks: '保存牌堆', start_training: '开始训练', solo_deck_a: '我方牌堆', solo_deck_b: '对方牌堆', search_cards: '搜索卡牌', pause_edit: '暂停编辑', set_next_draw: '设置下次抽牌', solo_saved: '训练场牌堆已保存', solo_need_15: '双方牌堆都必须正好 15 张', solo_event_a: '我方开局事件', solo_event_b: '对方开局事件', no_event: '无', edit_tags: '编辑标签',
-    login_need_nickname: '请输入昵称', login_name_too_long: '昵称过长（最多 8 个汉字或 16 个字母）', login_name_not_numbers: '昵称不能为纯数字', login_name_not_symbols: '昵称不能为纯符号', login_name_no_repeat_symbols: '- 和 _ 不能连续出现',
+    choose_from_enemy_hand_for: '从敌方手牌选择', choose_attack_group_for: '为 {0} 选择攻击组', no_attack_cards: '没有攻击牌', no_enemy_equipment: '对方没有装备',
+    no_enemy_hand: '对方没有手牌', deck_empty: '牌堆为空', discard_empty: '弃牌堆为空', no_same_attack: '没有同名攻击牌',
+    confirm_surrender: '确认投降？', request_rematch: '请求再来一局', opponent_rematch: '对方请求再来一局', rematch_sent: '已发送再来一局请求',
+    rematch_waiting: '等待对方', rematch_agreed: '对方已接受', agree_rematch: '接受再来一局', you_win: '你赢了！', you_lose: '你输了！', you_draw: '平局！',
+    send: '发送', cancel: '取消', ok: '确定', close: '关闭', notice: '提示', opponent_disconnected: '对手已断开连接', opponent_reconnected: '对手已重新连接',
+    reconnect_title: '重连', reconnect_prompt: '是否重连到上一局对战？', reconnecting: '重连中...', reconnect_timeout: '重连超时',
+    mod_mismatch_title: '模组不匹配', mod_mismatch_msg: '模组不一致，无法开始对局', switch_perspective: '切换视角', leave_spectate: '退出观战', switch_to_perspective: '切换到 {0}',
+    battle_log: '战斗日志', equip_info: '{0}（{1}回合）', equip_corruption: '[已腐化]', equip_trigger_cost: '{0} 触发：{1}E',
+    status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼',
+    status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
+    status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无',
+    choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择 Yggdrasil 牌',
+    convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
+    deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
+    round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
+    select_event_desc: '选择一个开局事件', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
+    settings_title: '设置', settings_appearance: '外观', settings_theme: '主题', settings_lang: '语言', settings_mods: '模组', settings_theme_light: '明亮', settings_theme_dark: '黑暗',
+    no_games: '暂无进行中的对局', back_to_home: '返回主页', settings_btn: '设置', settings_server: '服务器', settings_server_addr: '地址', not_your_turn: '还没轮到你',
+    counter_insufficient: '提示：当前没有可支付的反制牌', default_status: 'Garden of Thorn', game_loading: '加载中...', server_no_response: '服务器没有响应，请检查连接或刷新页面。',
+    spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线：{0}', chat_title: '聊天',
+    solo_training: '单人训练场', load_last: '载入上次', save_decks: '保存牌组', start_training: '开始训练', solo_deck_a: '你的牌组', solo_deck_b: '对方牌组',
+    search_cards: '搜索卡牌', pause_edit: '暂停并编辑', set_next_draw: '设置下次抽牌', solo_saved: '训练牌组已保存', solo_need_15: '双方牌组都必须正好为 15 张',
+    solo_event_a: '你的开局事件', solo_event_b: '对方开局事件', no_event: '无', edit_tags: '编辑标签',
+    login_need_nickname: '请输入昵称', login_name_too_long: '昵称过长（最多 8 个中文或 16 个拉丁字符）', login_name_not_numbers: '昵称不能全为数字', login_name_not_symbols: '昵称不能全为符号', login_name_no_repeat_symbols: '- 和 _ 不能连续出现',
     operation_failed: '操作失败', server_not_connected: '未连接到服务器', no_mod_files: '未找到模组文件', load_success: '加载成功', load_failed: '加载失败', save_success: '保存成功', save_failed: '保存失败：{0}',
-    json_valid: 'JSON 有效', json_invalid: 'JSON 无效：{0}', init_scripts: '初始化脚本...', init_theme_lang: '应用主题和语言...', init_fonts: '加载字体...', init_fonts_done: '字体已加载', init_bindings: '绑定 UI 事件...', init_done: '加载完成',
-    next_draw_count: '设置下次抽牌（数量）', next_draw_pick: '设置下次抽牌（{0}/{1}）',
-    login_invalid_nickname: '昵称无效。请使用 1-16 显示宽度的字符；避免纯数字、纯符号或连续的 -/_。', login_nickname_exists: '昵称已存在',
-    training_start: '单人训练开始。{0}先手。', training_set_draw: '训练：{0}设置下次抽牌为{1}', fusion_layer: '聚变', fission_layer: '裂变',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无'
+    json_valid: 'JSON 格式正确', json_invalid: 'JSON 格式错误：{0}', init_scripts: '初始化脚本...', init_theme_lang: '应用主题和语言...', init_fonts: '加载字体文件...', init_fonts_done: '字体加载完成', init_bindings: '绑定界面事件...', init_done: '加载完成',
+    next_draw_count: '设置下次抽牌（张数）', next_draw_pick: '设置下次抽牌（{0}/{1}）',
+    login_invalid_nickname: '昵称无效：长度需在 1-16 显示宽度之间，且不能为纯数字、纯符号或连续 -/_。', login_nickname_exists: '昵称已存在',
+    training_start: '单人训练场开始！{0}先手。', training_set_draw: '训练场：{0} 设置下次抽牌：{1}',
+    hand_deck_zero_opp: '手牌:0 牌堆:0',
+    hand_deck_zero_you: '手牌:0 牌堆:0 弃牌:0',
+    rotate_hint_sub: '请旋转至横屏',
+    error_game_over: '游戏已结束',
+    error_waiting_counter: '等待对手反制响应',
+    error_card_not_in_hand: '卡牌不在手中',
+    error_remove_from_hand_failed: '移出手牌失败',
+    error_no_pending_response: '没有待响应的操作',
+    error_no_pending_choice: '没有待选择操作',
+    error_choice_cancelled: '选择已取消',
+    error_not_your_turn: '不是你的回合',
+    error_equipment_missing: '装备不存在',
+    error_equipment_no_trigger: '该装备没有触发效果',
+    error_equipment_turn_needed: '装备需要装备一回合后才能触发',
+    error_not_enough_e: '能量不足',
+    error_target_invalid: '目标无效',
+    error_action_blocked: '当前无法使用卡牌',
+    error_attack_blocked: '本回合无法使用攻击牌',
+    error_attack_only: '本回合只能使用攻击牌',
+    error_waiting_response_ui: '等待响应',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无',
+    fusion_layer: '聚变', fission_layer: '裂变',
+    app_subtitle: '局域网联机卡牌对战',
+    nickname_placeholder: '输入昵称',
+    message_placeholder: '输入消息...',
+    server_placeholder: '留空使用默认服务器',
+    server_hint: '默认服务器：{0}（留空则使用默认服务器）',
+    init_cards_mods: '加载卡牌与模组（/api/cards）...',
+    init_opening_events: '加载开局事件（/api/opening-events）...',
+    mod_editor: '模组编辑器',
+    mod_editor_placeholder: '在此粘贴或编辑模组 JSON...',
+    load_mod: '加载模组',
+    save: '保存',
+    validate_json: '验证 JSON',
+    rotate_prompt: '请横屏游玩',
+    continue_enter: '继续进入',
+    mod_default_name: '模组 {0}'
 };
 I18N.fr = { ...I18N.en,
     round: 'Tour', your_turn: 'Votre Tour', opponent_turn: "Tour de l'adversaire", you: 'Vous', opponent: 'Adversaire',
@@ -130,7 +209,25 @@ I18N.fr = { ...I18N.en,
     solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
     edit_tags: 'Modifier tags', tag_precision: 'Précision', tag_exile: 'Exil', tag_non_stackable: 'Non-cumul',
     tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide',
-    fusion_layer: 'Fusion', fission_layer: 'Fission'
+    fusion_layer: 'Fusion', fission_layer: 'Fission',
+    app_subtitle: 'Combat de cartes en réseau local',
+    nickname_placeholder: 'Saisir un pseudo',
+    message_placeholder: 'Saisir un message...',
+    hand_deck_zero_opp: 'Main:0 Deck:0',
+    hand_deck_zero_you: 'Main:0 Deck:0 Défausse:0',
+    rotate_hint_sub: 'Passez en mode paysage',
+    server_placeholder: 'Laisser vide pour le serveur par défaut',
+    server_hint: 'Serveur par défaut : {0} (laisser vide pour l’utiliser)',
+    init_cards_mods: 'Chargement des cartes et mods (/api/cards)...',
+    init_opening_events: 'Chargement des événements initiaux (/api/opening-events)...',
+    mod_editor: 'Éditeur de mod',
+    mod_editor_placeholder: 'Collez ou modifiez le JSON du mod ici...',
+    load_mod: 'Charger le mod',
+    save: 'Enregistrer',
+    validate_json: 'Valider le JSON',
+    rotate_prompt: 'Veuillez jouer en mode paysage',
+    continue_enter: 'Continuer',
+    mod_default_name: 'Mod {0}'
 };
 I18N.pt = { ...I18N.en,
     round: 'Turno', your_turn: 'Seu Turno', opponent_turn: 'Turno do Oponente', you: 'Você', opponent: 'Oponente',
@@ -179,7 +276,25 @@ I18N.pt = { ...I18N.en,
     solo_event_a: 'Evento inicial', solo_event_b: 'Evento do oponente', no_event: 'Nenhum',
     edit_tags: 'Editar tags', tag_precision: 'Precisão', tag_exile: 'Exílio', tag_non_stackable: 'Não acumula',
     tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio',
-    fusion_layer: 'Fusão', fission_layer: 'Fissão'
+    fusion_layer: 'Fusão', fission_layer: 'Fissão',
+    app_subtitle: 'Batalha de cartas em rede local',
+    nickname_placeholder: 'Digite um apelido',
+    message_placeholder: 'Digite uma mensagem...',
+    hand_deck_zero_opp: 'Mão:0 Deck:0',
+    hand_deck_zero_you: 'Mão:0 Deck:0 Descarte:0',
+    rotate_hint_sub: 'Gire para o modo paisagem',
+    server_placeholder: 'Deixe vazio para o servidor padrão',
+    server_hint: 'Servidor padrão: {0} (deixe vazio para usar o padrão)',
+    init_cards_mods: 'Carregando cartas e mods (/api/cards)...',
+    init_opening_events: 'Carregando eventos iniciais (/api/opening-events)...',
+    mod_editor: 'Editor de Mod',
+    mod_editor_placeholder: 'Cole ou edite o JSON do mod aqui...',
+    load_mod: 'Carregar Mod',
+    save: 'Salvar',
+    validate_json: 'Validar JSON',
+    rotate_prompt: 'Jogue em modo paisagem',
+    continue_enter: 'Continuar',
+    mod_default_name: 'Mod {0}'
 };
 I18N.ru = { ...I18N.en,
     round: 'Раунд', your_turn: 'Ваш Ход', opponent_turn: 'Ход Соперника', you: 'Вы', opponent: 'Соперник',
@@ -228,7 +343,25 @@ I18N.ru = { ...I18N.en,
     solo_event_a: 'Ваше стартовое событие', solo_event_b: 'Событие соперника', no_event: 'Нет',
     edit_tags: 'Изменить теги', tag_precision: 'Точность', tag_exile: 'Изгнание', tag_non_stackable: 'Не складывается',
     tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота',
-    fusion_layer: 'Слияние', fission_layer: 'Деление'
+    fusion_layer: 'Слияние', fission_layer: 'Деление',
+    app_subtitle: 'Карточная дуэль по локальной сети',
+    nickname_placeholder: 'Введите никнейм',
+    message_placeholder: 'Введите сообщение...',
+    hand_deck_zero_opp: 'Рука:0 Колода:0',
+    hand_deck_zero_you: 'Рука:0 Колода:0 Сброс:0',
+    rotate_hint_sub: 'Поверните экран в альбомный режим',
+    server_placeholder: 'Оставьте пустым для сервера по умолчанию',
+    server_hint: 'Сервер по умолчанию: {0} (оставьте пустым, чтобы использовать его)',
+    init_cards_mods: 'Загрузка карт и модов (/api/cards)...',
+    init_opening_events: 'Загрузка начальных событий (/api/opening-events)...',
+    mod_editor: 'Редактор модов',
+    mod_editor_placeholder: 'Вставьте или измените JSON мода здесь...',
+    load_mod: 'Загрузить мод',
+    save: 'Сохранить',
+    validate_json: 'Проверить JSON',
+    rotate_prompt: 'Играйте в альбомной ориентации',
+    continue_enter: 'Продолжить',
+    mod_default_name: 'Мод {0}'
 };
 I18N.ja = { ...I18N.en,
     round: 'ターン', your_turn: 'あなたのターン', opponent_turn: '相手のターン', you: 'あなた', opponent: '相手',
@@ -277,7 +410,25 @@ I18N.ja = { ...I18N.en,
     solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
     edit_tags: 'タグ編集', tag_precision: '精密', tag_exile: '追放', tag_non_stackable: '非重複',
     tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無',
-    fusion_layer: '融合', fission_layer: '分裂'
+    fusion_layer: '融合', fission_layer: '分裂',
+    app_subtitle: 'LANカード対戦',
+    nickname_placeholder: 'ニックネームを入力',
+    message_placeholder: 'メッセージを入力...',
+    hand_deck_zero_opp: '手札:0 デッキ:0',
+    hand_deck_zero_you: '手札:0 デッキ:0 捨て札:0',
+    rotate_hint_sub: '横向きにしてください',
+    server_placeholder: '空欄なら既定サーバーを使用',
+    server_hint: '既定サーバー：{0}（空欄なら既定を使用）',
+    init_cards_mods: 'カードとModを読み込み中（/api/cards）...',
+    init_opening_events: '開始イベントを読み込み中（/api/opening-events）...',
+    mod_editor: 'Modエディター',
+    mod_editor_placeholder: 'ここにMod JSONを貼り付けるか編集...',
+    load_mod: 'Modを読み込む',
+    save: '保存',
+    validate_json: 'JSONを検証',
+    rotate_prompt: '横向きでプレイしてください',
+    continue_enter: '続ける',
+    mod_default_name: 'Mod {0}'
 };
 let currentLang = localStorage.getItem('got_lang') || 'zh';
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || (I18N.zh[key]) || key; }
@@ -361,6 +512,77 @@ const LOG_TEXT = {
     ru: { game_start: 'Game start. {p} goes first.', round: 'Round {n}', draw_cards: '{p} draws {n} cards', recover_e: '{p} recovers {n}E', take_damage: '{p} takes {n} {source} damage (H={h})', use_deal: '{p} uses {card}: deals {n} damage', use_multi: '{p} uses {card}: deals {n} x {times} damage', use_simple: '{p} uses {card}', equip: '{p} equips {card}', exile: '{card} is exiled', counter: '{p} counters with {card}', win: '{loser} reaches 0H. {winner} wins.', draw: 'Both players reached 0H. Draw.', surrender: '{p} surrenders. {winner} wins.', poison: 'Poison', burn: 'Burn', physical: 'physical' },
     ja: { game_start: 'Game start. {p} goes first.', round: 'Round {n}', draw_cards: '{p} draws {n} cards', recover_e: '{p} recovers {n}E', take_damage: '{p} takes {n} {source} damage (H={h})', use_deal: '{p} uses {card}: deals {n} damage', use_multi: '{p} uses {card}: deals {n} x {times} damage', use_simple: '{p} uses {card}', equip: '{p} equips {card}', exile: '{card} is exiled', counter: '{p} counters with {card}', win: '{loser} reaches 0H. {winner} wins.', draw: 'Both players reached 0H. Draw.', surrender: '{p} surrenders. {winner} wins.', poison: 'Poison', burn: 'Burn', physical: 'physical' },
 };
+LOG_TEXT.ru = {
+    game_start: 'Начало игры. {p} ходит первым.', round: 'Раунд {n}', draw_cards: '{p} берет карт: {n}', recover_e: '{p} восстанавливает {n}E',
+    take_damage: '{p} получает {n} {source} урона (H={h})', use_deal: '{p} использует {card}: наносит {n} урона',
+    use_multi: '{p} использует {card}: наносит {n} x {times} урона', use_simple: '{p} использует {card}', equip: '{p} экипирует {card}',
+    exile: '{card} изгнана', counter: '{p} контратакует картой {card}', win: '{loser} падает до 0H. {winner} побеждает.',
+    draw: 'Оба игрока достигли 0H. Ничья.', surrender: '{p} сдается. {winner} побеждает.', poison: 'яд', burn: 'ожог', physical: 'физический'
+};
+LOG_TEXT.ja = {
+    game_start: 'ゲーム開始。{p}が先攻。', round: 'ラウンド {n}', draw_cards: '{p}が{n}枚ドロー', recover_e: '{p}が{n}E回復',
+    take_damage: '{p}が{n}{source}ダメージを受ける（H={h}）', use_deal: '{p}が{card}を使用：{n}ダメージ',
+    use_multi: '{p}が{card}を使用：{n} x {times}ダメージ', use_simple: '{p}が{card}を使用', equip: '{p}が{card}を装備',
+    exile: '{card}は追放された', counter: '{p}が{card}でカウンター', win: '{loser}のHが0。{winner}の勝利。',
+    draw: '双方のHが0。引き分け。', surrender: '{p}が降参。{winner}の勝利。', poison: '毒', burn: '火傷', physical: '物理'
+};
+
+const LOG_FALLBACK_REPLACE = {
+    en: [
+        ['受到螫针影响，能量回复-1', 'is affected by Stinger: energy recovery -1'],
+        ['中毒减半为', 'Poison halves to '], ['获得邪眼护符效果', 'gains Nazar effect'], ['获得1层装备保护', 'gains 1 Equip Protect'],
+        ['获得1层闪避', 'gains 1 Dodge'], ['获得2点护甲', 'gains 2 armor'], ['获得无敌', 'gains Invincible'],
+        ['无法使用攻击牌', 'cannot use attack cards'], ['仅可使用攻击牌', 'can only use attack cards'], ['无法使用卡牌', 'cannot use cards'],
+        ['每回合少抽', 'draws '], ['每回合能量回复', 'energy recovery per round '], ['每回合魔力回复', 'magic recovery per round '], ['每回合抽牌数', 'draw count per round '],
+        ['被摧毁', 'is destroyed'], ['被放逐', 'is exiled'], ['因虚无被放逐', 'is exiled by Void'], ['装备保护抵消了摧毁', 'Equip Protect blocked destruction'],
+        ['抽牌至手牌满', 'draws until hand is full'], ['前二回合', 'first two rounds'], ['前三回合', 'first three rounds'],
+        ['敌方', 'opponent'], ['己方', 'self'], ['对敌方造成', 'deals to opponent '], ['造成', 'deals '], ['伤害', ' damage'],
+        ['回复', 'recovers '], ['获得', 'gains '], ['装备了', 'equips '], ['使用了', 'uses '], ['使用', 'uses '],
+        ['摧毁了', 'destroys '], ['但', ' but '], ['未找到目标', 'no target found'], ['未选择目标', 'no target selected'], ['目标无效', 'invalid target'],
+        ['目标不可摧毁或不存在', 'target is indestructible or missing'], ['手牌已满', 'hand is full'], ['无中毒层数', 'no poison layers'],
+        ['点物理伤害', ' physical damage'], ['层中毒', ' Poison'], ['层灼烧', ' Burn'], ['层闪避', ' Dodge'], ['层装备保护', ' Equip Protect'],
+        ['回合', ' rounds'], ['张牌', ' cards'], ['牌堆', 'deck'], ['弃牌堆', 'discard pile'], ['场上所有装备', 'all equipment on field']
+    ],
+    fr: [
+        ['受到螫针影响，能量回复-1', 'subit Stinger : récupération E -1'], ['中毒减半为', 'Poison réduit à '],
+        ['获得邪眼护符效果', 'gagne Nazar'], ['获得1层装备保护', 'gagne 1 protection équipement'], ['获得1层闪避', 'gagne 1 esquive'],
+        ['获得2点护甲', 'gagne 2 armure'], ['获得无敌', 'gagne invincible'], ['无法使用攻击牌', 'ne peut pas utiliser de cartes Thorn'],
+        ['仅可使用攻击牌', 'ne peut utiliser que des cartes Thorn'], ['无法使用卡牌', 'ne peut pas utiliser de cartes'],
+        ['被摧毁', 'est détruit'], ['被放逐', 'est exilé'], ['因虚无被放逐', 'est exilé par Void'], ['装备保护抵消了摧毁', 'protection équipement annule la destruction'],
+        ['敌方', 'adversaire'], ['己方', 'soi'], ['造成', 'inflige '], ['伤害', ' dégâts'], ['回复', 'récupère '], ['获得', 'gagne '],
+        ['装备了', 'équipe '], ['使用了', 'joue '], ['使用', 'joue '], ['摧毁了', 'détruit '], ['但', ' mais '],
+        ['层中毒', ' Poison'], ['层灼烧', ' Brûlure'], ['层闪避', ' Esquive'], ['层装备保护', ' Protection équipement'], ['回合', ' tours'], ['张牌', ' cartes']
+    ],
+    pt: [
+        ['受到螫针影响，能量回复-1', 'afetado por Stinger: recuperação E -1'], ['中毒减半为', 'Veneno reduzido para '],
+        ['获得邪眼护符效果', 'ganha Nazar'], ['获得1层装备保护', 'ganha 1 proteção de equipamento'], ['获得1层闪避', 'ganha 1 esquiva'],
+        ['获得2点护甲', 'ganha 2 armadura'], ['获得无敌', 'ganha invencível'], ['无法使用攻击牌', 'não pode usar cartas Thorn'],
+        ['仅可使用攻击牌', 'só pode usar cartas Thorn'], ['无法使用卡牌', 'não pode usar cartas'], ['被摧毁', 'é destruído'], ['被放逐', 'é exilado'],
+        ['因虚无被放逐', 'é exilado por Void'], ['装备保护抵消了摧毁', 'proteção de equipamento bloqueou destruição'],
+        ['敌方', 'oponente'], ['己方', 'si'], ['造成', 'causa '], ['伤害', ' dano'], ['回复', 'recupera '], ['获得', 'ganha '],
+        ['装备了', 'equipa '], ['使用了', 'usa '], ['使用', 'usa '], ['摧毁了', 'destrói '], ['但', ' mas '],
+        ['层中毒', ' Veneno'], ['层灼烧', ' Queima'], ['层闪避', ' Esquiva'], ['层装备保护', ' Proteção de equipamento'], ['回合', ' turnos'], ['张牌', ' cartas']
+    ],
+    ru: [
+        ['受到螫针影响，能量回复-1', 'под действием Stinger: восстановление E -1'], ['中毒减半为', 'яд уменьшается до '],
+        ['获得邪眼护符效果', 'получает Nazar'], ['获得1层装备保护', 'получает 1 защиту экипировки'], ['获得1层闪避', 'получает 1 уклонение'],
+        ['获得2点护甲', 'получает 2 брони'], ['获得无敌', 'получает неуязвимость'], ['无法使用攻击牌', 'не может использовать Thorn'],
+        ['仅可使用攻击牌', 'может использовать только Thorn'], ['无法使用卡牌', 'не может использовать карты'], ['被摧毁', 'уничтожено'], ['被放逐', 'изгнано'],
+        ['因虚无被放逐', 'изгнано Void'], ['装备保护抵消了摧毁', 'защита экипировки блокировала уничтожение'],
+        ['敌方', 'противник'], ['己方', 'свой'], ['造成', 'наносит '], ['伤害', ' урона'], ['回复', 'восстанавливает '], ['获得', 'получает '],
+        ['装备了', 'экипирует '], ['使用了', 'использует '], ['使用', 'использует '], ['摧毁了', 'уничтожает '], ['但', ' но '],
+        ['层中毒', ' яд'], ['层灼烧', ' ожог'], ['层闪避', ' уклонение'], ['层装备保护', ' защита экипировки'], ['回合', ' раундов'], ['张牌', ' карт']
+    ],
+    ja: [
+        ['受到螫针影响，能量回复-1', 'Stingerの影響：E回復-1'], ['中毒减半为', '毒が半減して'], ['获得邪眼护符效果', 'Nazar効果を得る'],
+        ['获得1层装备保护', '装備保護1を得る'], ['获得1层闪避', '回避1を得る'], ['获得2点护甲', '装甲2を得る'], ['获得无敌', '無敵を得る'],
+        ['无法使用攻击牌', 'Thornカードを使用不可'], ['仅可使用攻击牌', 'Thornカードのみ使用可'], ['无法使用卡牌', 'カードを使用不可'],
+        ['被摧毁', 'は破壊された'], ['被放逐', 'は追放された'], ['因虚无被放逐', 'はVoidで追放された'], ['装备保护抵消了摧毁', '装備保護が破壊を防いだ'],
+        ['敌方', '相手'], ['己方', '自分'], ['造成', '与える '], ['伤害', ' ダメージ'], ['回复', '回復 '], ['获得', '得る '],
+        ['装备了', '装備 '], ['使用了', '使用 '], ['使用', '使用 '], ['摧毁了', '破壊 '], ['但', ' しかし '],
+        ['层中毒', ' 毒'], ['层灼烧', ' 火傷'], ['层闪避', ' 回避'], ['层装备保护', ' 装備保護'], ['回合', 'ターン'], ['张牌', '枚']
+    ]
+};
 
 function fmtLog(key, values = {}) {
     if (currentLang === 'zh') return null;
@@ -416,6 +638,23 @@ function translateLogLine(line) {
 function translateServerMessage(message) {
     if (!message) return UI.operation_failed;
     if (message === 'Operation failed') return UI.operation_failed;
+    if (message === '游戏已结束') return UI.error_game_over;
+    if (message === '等待对手反制响应') return UI.error_waiting_counter;
+    if (message === '卡牌不在手中') return UI.error_card_not_in_hand;
+    if (message === '移出手牌失败') return UI.error_remove_from_hand_failed;
+    if (message === '没有待响应的操作') return UI.error_no_pending_response;
+    if (message === '没有待选择操作') return UI.error_no_pending_choice;
+    if (message === '选择已取消') return UI.error_choice_cancelled;
+    if (message === '不是你的回合') return UI.error_not_your_turn;
+    if (message === '装备不存在') return UI.error_equipment_missing;
+    if (message === '该装备没有触发效果') return UI.error_equipment_no_trigger;
+    if (message === '装备需要装备一回合后才能触发') return UI.error_equipment_turn_needed;
+    if (message === '能量不足') return UI.error_not_enough_e;
+    if (message === '目标无效') return UI.error_target_invalid;
+    if (message === '链子效果中，无法使用卡牌') return UI.error_action_blocked;
+    if (message === '本回合无法使用攻击牌') return UI.error_attack_blocked;
+    if (message === '本回合只能使用攻击牌') return UI.error_attack_only;
+    if (message === '反制牌只能通过响应机制使用') return UI.error_waiting_response_ui;
     return message;
 }
 
@@ -459,6 +698,7 @@ let soloEventB = '';
 let pendingPlayCard = null;
 let gameTimelineEntries = [];
 let renderedBattleLogCount = 0;
+let renderedBattleLogTotal = 0;
 const bootLoader = {
     el: null, stepEl: null, fillEl: null, value: 0,
     init() {
@@ -468,7 +708,10 @@ const bootLoader = {
     },
     step(text, pct) {
         if (!this.el) this.init();
-        if (this.stepEl) this.stepEl.textContent = text;
+        if (this.stepEl) {
+            this.stepEl.dataset.dynamic = '1';
+            this.stepEl.textContent = text;
+        }
         if (typeof pct === 'number') {
             this.value = Math.max(this.value, pct);
             if (this.fillEl) this.fillEl.style.width = `${this.value}%`;
@@ -535,6 +778,12 @@ function applyLang(lang) {
 }
 
 function updateStaticText() {
+    const subtitle = document.querySelector('#view-login .subtitle');
+    if (subtitle) subtitle.textContent = UI.app_subtitle;
+    const bootSub = document.querySelector('#boot-loader .boot-sub');
+    if (bootSub) bootSub.textContent = UI.game_loading;
+    const bootStep = $('boot-step');
+    if (bootStep && !bootStep.dataset.dynamic) bootStep.textContent = UI.init_scripts;
     const settingsTitle = $('settings-title');
     if (settingsTitle) settingsTitle.textContent = UI.settings_title;
     const settingsAppearance = $('settings-section-appearance');
@@ -576,7 +825,7 @@ function updateStaticText() {
     const settingsLabelServer = $('settings-label-server');
     if (settingsLabelServer) settingsLabelServer.textContent = UI.settings_server_addr;
     const serverInput = $('settings-server-input');
-    if (serverInput) serverInput.placeholder = 'Leave empty for default';
+    if (serverInput) serverInput.placeholder = UI.server_placeholder;
     const lobbyHeader = document.querySelector('#view-lobby .lobby-header h2');
     if (lobbyHeader) lobbyHeader.textContent = UI.lobby_title;
     const onlinePlayersH3 = document.querySelector('#view-lobby .lobby-left .lobby-section:first-child h3');
@@ -588,14 +837,18 @@ function updateStaticText() {
     const nicknameLabel = document.querySelector('label[for="input-nickname"]');
     if (nicknameLabel) nicknameLabel.textContent = UI.nickname;
     const nicknameInput = $('input-nickname');
-    if (nicknameInput) nicknameInput.placeholder = UI.nickname;
+    if (nicknameInput) nicknameInput.placeholder = UI.nickname_placeholder;
     if (nicknameInput && !nicknameInput.value) nicknameInput.value = localStorage.getItem('got_nickname') || '';
     const gameChatInput = $('game-chat-input');
-    if (gameChatInput) gameChatInput.placeholder = UI.send + '...';
+    if (gameChatInput) gameChatInput.placeholder = UI.message_placeholder;
     const lobbyChatInput = $('lobby-chat-input');
-    if (lobbyChatInput) lobbyChatInput.placeholder = UI.send + '...';
+    if (lobbyChatInput) lobbyChatInput.placeholder = UI.message_placeholder;
     const draftH2 = document.querySelector('#view-draft h2');
     if (draftH2) draftH2.textContent = UI.draft_phase;
+    const eventH2 = document.querySelector('#view-event-select h2');
+    if (eventH2) eventH2.textContent = UI.select_event;
+    const eventDesc = document.querySelector('#view-event-select .event-desc');
+    if (eventDesc) eventDesc.textContent = UI.select_event_desc;
     const btnDraftReroll = $('btn-draft-reroll');
     if (btnDraftReroll) btnDraftReroll.textContent = UI.draft_reroll;
     const btnReturnLobby = $('btn-return-lobby');
@@ -628,6 +881,42 @@ function updateStaticText() {
     if (soloDeckATitle) soloDeckATitle.textContent = UI.solo_deck_a;
     const soloDeckBTitle = $('solo-deck-b-title');
     if (soloDeckBTitle) soloDeckBTitle.textContent = UI.solo_deck_b;
+    const battleLogHeader = document.querySelector('#battle-log .log-header');
+    if (battleLogHeader) battleLogHeader.textContent = UI.battle_log;
+    const oppLabel = $('opp-label');
+    if (oppLabel && (!gameState || !gameState.opponent_name)) oppLabel.textContent = UI.opponent;
+    const youLabel = $('you-label');
+    if (youLabel && (!gameState || !gameState.your_name)) youLabel.textContent = UI.you;
+    const oppInfo = $('opp-info');
+    if (oppInfo && (!gameState || !gameState.opponent)) oppInfo.textContent = UI.hand_deck_zero_opp;
+    const youInfo = $('you-info');
+    if (youInfo && (!gameState || !gameState.you)) youInfo.textContent = UI.hand_deck_zero_you;
+    const onlineCount = $('lobby-online-count');
+    if (onlineCount && phase !== 'lobby') onlineCount.textContent = tf('online_count', 0);
+    const switchBtn = $('btn-switch-perspective');
+    if (switchBtn && !switchBtn.dataset.dynamic) switchBtn.textContent = UI.switch_perspective;
+    const leaveSpectateBtn = $('btn-leave-spectate');
+    if (leaveSpectateBtn) leaveSpectateBtn.textContent = UI.leave_spectate;
+    const promptCancel = $('game-prompt-cancel');
+    if (promptCancel) promptCancel.textContent = UI.cancel;
+    const modEditorTitle = document.querySelector('#view-mod-editor h2');
+    if (modEditorTitle) modEditorTitle.textContent = UI.mod_editor;
+    const modEditorArea = $('mod-editor-area');
+    if (modEditorArea) modEditorArea.placeholder = UI.mod_editor_placeholder;
+    const btnModLoad = $('btn-mod-load');
+    if (btnModLoad) btnModLoad.textContent = UI.load_mod;
+    const btnModSave = $('btn-mod-save');
+    if (btnModSave) btnModSave.textContent = UI.save;
+    const btnModValidate = $('btn-mod-validate');
+    if (btnModValidate) btnModValidate.textContent = UI.validate_json;
+    const btnModBack = $('btn-mod-back');
+    if (btnModBack) btnModBack.textContent = UI.back_to_home;
+    const rotateText = document.querySelector('.rotate-text');
+    if (rotateText) rotateText.textContent = UI.rotate_prompt;
+    const rotateSub = document.querySelector('.rotate-text-en');
+    if (rotateSub) rotateSub.textContent = UI.rotate_hint_sub;
+    const rotateButton = $('btn-dismiss-rotate');
+    if (rotateButton) rotateButton.textContent = UI.continue_enter;
     const btnLobbyChatSend = $('btn-lobby-chat-send');
     if (btnLobbyChatSend) btnLobbyChatSend.textContent = UI.send;
     const btnGameChatSend = $('btn-game-chat-send');
@@ -643,6 +932,7 @@ function showView(viewId) {
     if (viewId !== 'view-game') {
         gameTimelineEntries = [];
         renderedBattleLogCount = 0;
+        renderedBattleLogTotal = 0;
         updateModeSpecificControls({ solo: false, phase: '' });
     }
 }
@@ -693,7 +983,7 @@ function hideModal() {
 
 async function fetchCardDefs() {
     try {
-        bootLoader.step('Loading cards and mods (/api/cards)...', 60);
+        bootLoader.step(UI.init_cards_mods, 60);
         const disabledMods = encodeURIComponent(getDisabledMods().join(','));
         const resp = await fetch(`/api/cards?disabled_mods=${disabledMods}`);
         CARD_DEFS = await resp.json();
@@ -705,7 +995,7 @@ async function fetchCardDefs() {
 
 async function fetchOpeningEvents() {
     try {
-        bootLoader.step('Loading opening events (/api/opening-events)...', 78);
+        bootLoader.step(UI.init_opening_events, 78);
         const resp = await fetch('/api/opening-events');
         const data = await resp.json();
         openingEvents = data.events || [];
@@ -769,14 +1059,6 @@ function createCardElement(cardDict, options = {}) {
     const cardName = getCardName(cardDef);
     const effectText = getCardEffectText(cardDef);
     const descriptionText = getCardDescriptionText(cardDef);
-    const nameLen = displayWidth(cardName);
-    const effectLen = displayWidth(effectText);
-    const descLen = displayWidth(descriptionText);
-    if (nameLen > 14) el.classList.add('card-name-long');
-    if (nameLen > 22) el.classList.add('card-name-xlong');
-    if (effectLen > 42) el.classList.add('card-effect-long');
-    if (effectLen > 68) el.classList.add('card-effect-xlong');
-    if (descLen > 44) el.classList.add('card-desc-long');
     const { totalE, totalM, flags } = getCardDisplayCosts(cardDict, cardDef, gameState && gameState.you);
     el.style.borderColor = typeColor;
     el.dataset.instanceId = cardDict.instance_id;
@@ -1226,7 +1508,9 @@ function loadSoloDecks(showNotice = true) {
     const saved = JSON.parse(localStorage.getItem('got_solo_decks') || 'null');
     if (saved && Array.isArray(saved.deck0) && Array.isArray(saved.deck1)) {
         const normalizeDeck = (deck) => deck
-            .map(entry => typeof entry === 'string' ? { def_id: entry, instance_flags: [] } : { def_id: entry.def_id, instance_flags: [...(entry.instance_flags || [])] })
+            .map(entry => typeof entry === 'string'
+                ? { def_id: entry, instance_flags: [], disabled_flags: [] }
+                : { def_id: entry.def_id, instance_flags: [...(entry.instance_flags || [])], disabled_flags: [...(entry.disabled_flags || [])] })
             .filter(entry => CARD_DEFS[entry.def_id])
             .slice(0, 15);
         soloDeckA = normalizeDeck(saved.deck0);
@@ -1305,7 +1589,11 @@ function renderSoloDeck(which, deck) {
     deck.forEach((defId, idx) => {
         const card = deck[idx];
         const cd = getCardDef(card.def_id);
-        const flagText = (card.instance_flags || []).map(getFlagLabel).join(', ');
+        const baseFlags = new Set((cd && cd.flags) || []);
+        const disabledFlags = new Set(card.disabled_flags || []);
+        const effectiveFlags = new Set([...(card.instance_flags || []), ...baseFlags]);
+        disabledFlags.forEach(flag => effectiveFlags.delete(flag));
+        const flagText = [...effectiveFlags].map(getFlagLabel).join(', ');
         const row = document.createElement('div');
         row.className = 'solo-deck-card';
         row.innerHTML = `
@@ -1333,7 +1621,7 @@ function renderSoloDeck(which, deck) {
 function addSoloCard(defId) {
     const deck = soloTargetDeck === 'a' ? soloDeckA : soloDeckB;
     if (deck.length >= 15) return;
-    deck.push({ def_id: defId, instance_flags: [] });
+    deck.push({ def_id: defId, instance_flags: [], disabled_flags: [] });
     renderSoloBuilder();
 }
 
@@ -1341,15 +1629,25 @@ async function editSoloCardFlags(which, idx) {
     const deck = which === 'a' ? soloDeckA : soloDeckB;
     const card = deck[idx];
     if (!card) return;
+    const cd = getCardDef(card.def_id);
     const allFlags = ['precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis', 'attract', 'void'];
-    const current = new Set(card.instance_flags || []);
-    const options = allFlags.map(flag => `${current.has(flag) ? '[x]' : '[ ]'} ${getFlagLabel(flag)}`);
+    const base = new Set((cd && cd.flags) || []);
+    const added = new Set(card.instance_flags || []);
+    const disabled = new Set(card.disabled_flags || []);
+    const effective = (flag) => (base.has(flag) || added.has(flag)) && !disabled.has(flag);
+    const options = allFlags.map(flag => `${effective(flag) ? '[x]' : '[ ]'} ${getFlagLabel(flag)}`);
     const picked = await gamePrompt(UI.edit_tags, options);
     if (picked < 0 || picked >= allFlags.length) return;
     const flag = allFlags[picked];
-    if (current.has(flag)) current.delete(flag);
-    else current.add(flag);
-    card.instance_flags = [...current];
+    if (effective(flag)) {
+        if (base.has(flag)) disabled.add(flag);
+        added.delete(flag);
+    } else {
+        if (base.has(flag)) disabled.delete(flag);
+        else added.add(flag);
+    }
+    card.instance_flags = [...added];
+    card.disabled_flags = [...disabled];
     renderSoloBuilder();
     await editSoloCardFlags(which, idx);
 }
@@ -1445,7 +1743,7 @@ function renderLobby(data) {
     console.log('[client] renderLobby: players=', players.length, 'mySid=', mySid);
     players.forEach(p => console.log('  player:', p.nickname, 'sid=', p.sid, 'isMe=', p.sid === mySid));
     const onlineCount = $('lobby-online-count');
-    if (onlineCount) onlineCount.textContent = `${UI.online_players}: ${players.length}`;
+    if (onlineCount) onlineCount.textContent = tf('online_count', players.length);
     const list = $('lobby-players');
     if (!list) return;
     list.innerHTML = '';
@@ -1958,7 +2256,7 @@ function renderGame(data) {
     renderPlayerHand(you);
     renderEquipment('opp-equip', opp, false);
     renderEquipment('you-equip', you, true);
-    renderLog(gs.log || []);
+    renderLog(gs.log || [], gs.log_start || 0, gs.log_total);
     const phaseText = gs.phase === 'action' ? (myTurn ? UI.your_turn : UI.opponent_turn)
         : gs.phase === 'draw' ? UI.draw_phase
         : gs.phase === 'game_over' ? UI.game_over : '';
@@ -2158,7 +2456,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
     });
 }
 
-function renderLog(log) {
+function renderLog(log, logStart = 0, logTotal = null) {
     const container = $('battle-log');
     if (!container) return;
     let content = container.querySelector('.log-content');
@@ -2169,14 +2467,20 @@ function renderLog(log) {
     }
     const wasAtBottom = content.scrollTop + content.clientHeight >= content.scrollHeight - 30;
     if (!Array.isArray(log)) log = [];
-    if (log.length < renderedBattleLogCount) {
+    logStart = Number.isFinite(Number(logStart)) ? Number(logStart) : 0;
+    logTotal = Number.isFinite(Number(logTotal)) ? Number(logTotal) : logStart + log.length;
+    if (logTotal < renderedBattleLogTotal || logStart > renderedBattleLogTotal) {
         gameTimelineEntries = gameTimelineEntries.filter(entry => entry.type === 'chat');
         renderedBattleLogCount = 0;
+        renderedBattleLogTotal = logStart;
     }
-    for (let i = renderedBattleLogCount; i < log.length; i++) {
+    let startIndex = Math.max(0, renderedBattleLogTotal - logStart);
+    if (startIndex > log.length) startIndex = 0;
+    for (let i = startIndex; i < log.length; i++) {
         gameTimelineEntries.push({ type: 'battle', text: log[i] });
     }
     renderedBattleLogCount = log.length;
+    renderedBattleLogTotal = logTotal;
     if (gameTimelineEntries.length > 200) {
         gameTimelineEntries = gameTimelineEntries.slice(-200);
     }
@@ -2193,13 +2497,14 @@ function renderLog(log) {
         } else {
             const line = entry.text || '';
             const displayLine = translateLogLine(line);
+            const styleLine = String(displayLine || line).toLowerCase();
             el.className = 'log-entry';
-            if (line.includes('??') || line.includes('??') || line.includes('D')) el.classList.add('log-damage');
-            else if (line.includes('+H') || line.includes('??')) el.classList.add('log-heal');
-            else if (line.includes('??')) el.classList.add('log-poison');
-            else if (line.includes('??')) el.classList.add('log-fire');
-            else if (line.includes('+E') || line.includes('??')) el.classList.add('log-elixir');
-            else if (line.includes('+M') || line.includes('??')) el.classList.add('log-magic');
+            if (styleLine.includes('造成') || styleLine.includes('伤害') || styleLine.includes('damage') || styleLine.includes('degats') || styleLine.includes('dano') || styleLine.includes('урон') || styleLine.includes('ダメージ') || line.includes('D')) el.classList.add('log-damage');
+            else if (styleLine.includes('+h') || styleLine.includes('回复') || styleLine.includes('recover') || styleLine.includes('récup') || styleLine.includes('recupera') || styleLine.includes('восстан') || styleLine.includes('回復')) el.classList.add('log-heal');
+            else if (styleLine.includes('中毒') || styleLine.includes('poison') || styleLine.includes('veneno') || styleLine.includes('яд') || styleLine.includes('毒')) el.classList.add('log-poison');
+            else if (styleLine.includes('灼烧') || styleLine.includes('burn') || styleLine.includes('brûl') || styleLine.includes('queima') || styleLine.includes('ожог') || styleLine.includes('火傷')) el.classList.add('log-fire');
+            else if (styleLine.includes('+e') || styleLine.includes('能量') || styleLine.includes('energy') || styleLine.includes('énergie') || styleLine.includes('energia') || styleLine.includes('энерг') || styleLine.includes('e回復')) el.classList.add('log-elixir');
+            else if (styleLine.includes('+m') || styleLine.includes('魔力') || styleLine.includes('magic') || styleLine.includes('magie') || styleLine.includes('mana') || styleLine.includes('маг') || styleLine.includes('マジック')) el.classList.add('log-magic');
             else if (line.includes('===')) el.classList.add('log-round');
             el.textContent = displayLine;
         }
@@ -2225,7 +2530,7 @@ function appendLobbyChat(nick, text) {
 function appendGameChat(nick, text) {
     gameTimelineEntries.push({ type: 'chat', nick, text });
     if (gameTimelineEntries.length > 200) gameTimelineEntries = gameTimelineEntries.slice(-200);
-    renderLog((gameState && gameState.log) || []);
+    renderLog((gameState && gameState.log) || [], (gameState && gameState.log_start) || 0, gameState && gameState.log_total);
 }
 
 function renderPendingCard() {
@@ -2561,7 +2866,7 @@ function renderGameOver(data) {
         (gs.log || []).forEach(line => {
             const el = document.createElement('div');
             el.className = 'log-entry';
-            el.textContent = line;
+            el.textContent = translateLogLine(line);
             logContainer.appendChild(el);
         });
     }
@@ -2687,7 +2992,7 @@ function onViewDeck() {
     });
     let html = `<h3>${UI.view_deck_title}</h3><p>${UI.deck_total.replace('{0}', deck.length)}</p>`;
     Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).forEach(([name, cnt]) => {
-        html += `<div>${name} ×${cnt}</div>`;
+        html += `<div>${name} x${cnt}</div>`;
     });
     html += `<div class="modal-buttons"><button class="btn btn-danger" onclick="hideModal()">${UI.close}</button></div>`;
     content.innerHTML = html;
@@ -2731,7 +3036,7 @@ function openSettings() {
     }
     const serverHint = $('settings-server-hint');
     if (serverHint) {
-        serverHint.textContent = `Default: ${DEFAULT_SERVER} (leave empty for default)`;
+        serverHint.textContent = tf('server_hint', DEFAULT_SERVER);
     }
 }
 
@@ -2760,7 +3065,7 @@ async function loadSettingsMods() {
     const disabled = getDisabledMods();
     settingsMods.forEach((mod, i) => {
         const info = mod.info || {};
-        const name = info.name || mod.filename || `濠电姷顣藉Σ鍛村垂閻ｅ本顫曢柡鍥╁Т閸?{i + 1}`;
+        const name = info.name || mod.filename || tf('mod_default_name', i + 1);
         const version = info.version || '';
         const filename = mod.filename || '';
         const item = document.createElement('div');
