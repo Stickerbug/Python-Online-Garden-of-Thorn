@@ -2565,7 +2565,7 @@ class GameEngine:
         opp = self.players[1 - player_id]
         if choice and 'target_instance_id' in choice:
             eq = opp.find_equipment(choice['target_instance_id'])
-            if eq and 'indestructible' not in eq.card_def.flags:
+            if eq and 'indestructible' not in eq.card_instance.flags:
                 destroyed = self._destroy_equipment(1 - player_id, eq)
                 if destroyed:
                     self.log_msg(f"{self.pn(player_id)}使用污水！摧毁了敌方的{eq.card_def.name_cn}")
@@ -2574,7 +2574,7 @@ class GameEngine:
             else:
                 self.log_msg(f"{self.pn(player_id)}使用污水，但目标不可摧毁或不存在")
         else:
-            destroyable = [e for e in opp.equipment if 'indestructible' not in e.card_def.flags]
+            destroyable = [e for e in opp.equipment if 'indestructible' not in e.card_instance.flags]
             if destroyable:
                 eq = destroyable[0]
                 destroyed = self._destroy_equipment(1 - player_id, eq)
@@ -2586,7 +2586,7 @@ class GameEngine:
     def _effect_magicsewage(self, player_id: int, card: CardInstance, choice=None):
         for pid in range(2):
             p = self.players[pid]
-            to_destroy = [e for e in p.equipment if 'indestructible' not in e.card_def.flags]
+            to_destroy = [e for e in p.equipment if 'indestructible' not in e.card_instance.flags]
             for eq in to_destroy:
                 destroyed = self._destroy_equipment(pid, eq)
                 if destroyed:
@@ -2682,7 +2682,7 @@ class GameEngine:
             ps.enemy_e_reduction = max(0, ps.enemy_e_reduction - 1)
             self.log_msg("药丸被摧毁！己方抽牌和回E恢复正常")
         ps.equipment.remove(eq)
-        if 'exile' in eq.card_def.flags:
+        if 'exile' in eq.card_instance.flags:
             ps.exile.append(eq.card_instance)
         else:
             ps.discard.append(eq.card_instance)

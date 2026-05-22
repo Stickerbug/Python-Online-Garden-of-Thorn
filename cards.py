@@ -212,7 +212,7 @@ _reg(CardDef('Mimic', 'Mimic', '拟态', 0, 0, 'bloom', 2, 'Common',
              flags={'exile', 'self_only'}))
 
 _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 2, 'Super',
-             '神奇的树叶。可以使人死而复生。', '+20H；受到致命伤害时若在手牌中清除己方所有效果将生命值设为5此回合无敌并放逐此牌'))
+             '神奇的树叶。可以使人死而复生。', '+20H；受到致命伤害时，若在手牌中，则清除己方所有效果，将生命值设为5，此回合无敌并放逐此牌'))
 
 _reg(CardDef('Leaf', 'Leaf', '叶子', 1, 0, 'root', 5, 'Common',
              '基础的装备之一，可以回复生命亦可造成伤害。',

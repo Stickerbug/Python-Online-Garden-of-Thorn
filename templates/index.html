@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=54">
+<link rel="stylesheet" href="/static/css/style.css?v=58">
 <script>
 (() => {
   const lang = localStorage.getItem('got_lang') || 'zh';
@@ -46,8 +46,10 @@
 <div class="form-row">
 <button id="btn-solo-training" class="btn btn-magic">单人训练场</button>
 </div>
-<div class="form-row">
+<div class="form-row login-utility-row">
 <button id="btn-open-settings" class="btn-settings">设置</button>
+<button id="btn-card-gallery" class="btn-settings">图鉴</button>
+<button id="btn-open-about" class="btn-settings">关于</button>
 </div>
 </div>
 <p id="login-error" class="error-text"></p>
@@ -98,6 +100,30 @@
 </div>
 </div>
 
+<div id="view-card-gallery" class="view hidden">
+<div class="gallery-container">
+<div class="gallery-header">
+    <h2 id="gallery-title">图鉴</h2>
+    <div class="gallery-actions">
+      <button id="btn-open-rules" class="btn btn-primary">游戏介绍</button>
+      <button id="btn-gallery-back" class="btn btn-secondary">返回主页</button>
+    </div>
+  </div>
+  <div class="gallery-tabs">
+    <button id="gallery-tab-cards" class="gallery-tab active" type="button">卡牌</button>
+    <button id="gallery-tab-tags" class="gallery-tab" type="button">标签</button>
+    <button id="gallery-tab-events" class="gallery-tab" type="button">开局事件</button>
+  </div>
+  <div class="gallery-body">
+    <aside class="gallery-sidebar">
+      <input id="gallery-search" type="text" placeholder="搜索">
+      <div id="gallery-card-list" class="gallery-card-list"></div>
+    </aside>
+    <section id="gallery-detail" class="gallery-detail"></section>
+  </div>
+</div>
+</div>
+
 <div id="view-lobby" class="view hidden">
 <div class="lobby-container">
 <div class="lobby-header lobby-header-with-tabs">
@@ -134,6 +160,7 @@
 </div>
 <div class="lobby-footer">
 <button id="btn-lobby-back" class="btn btn-secondary">返回主页</button>
+<button id="btn-lobby-settings" class="btn btn-secondary">设置</button>
 </div>
 </div>
 </div>
@@ -223,12 +250,13 @@
       <div id="game-controls" class="controls-group">
         <button id="btn-end-turn" class="btn btn-danger btn-end-turn">结束回合</button>
         <button id="btn-view-deck" class="btn btn-magic btn-view-deck">查看牌堆</button>
+        <button id="btn-urf-replace" class="btn btn-magic hidden">替换手牌</button>
+        <button id="btn-urf-sell" class="btn btn-bloom hidden">售卖装备</button>
         <button id="btn-solo-next-draw" class="btn btn-magic hidden">设置下次抽牌</button>
         <button id="btn-solo-edit" class="btn btn-secondary hidden">暂停编辑</button>
         <button id="btn-surrender" class="btn btn-secondary btn-surrender">投降</button>
       </div>
       <div id="spectate-controls" class="controls-group hidden">
-        <button id="btn-switch-perspective" class="btn btn-magic btn-switch-perspective">切换视角</button>
         <button id="btn-leave-spectate" class="btn btn-danger btn-leave-spectate">退出观战</button>
       </div>
       <div class="controls-group controls-right">
@@ -307,6 +335,53 @@
 </div>
 <div class="settings-footer">
 <button id="btn-settings-close" class="btn btn-primary">确定</button>
+</div>
+</div>
+</div>
+
+<div id="about-panel" class="settings-panel hidden">
+<div class="settings-inner">
+<h3>关于</h3>
+<div class="settings-tabs">
+<button id="about-tab-rules" class="settings-tab active" type="button">游戏玩法</button>
+<button id="about-tab-credits" class="settings-tab" type="button">致谢</button>
+</div>
+<div id="about-page-rules" class="about-rules">
+<div class="rules-body about-rules-body" id="about-rules-body">
+<h4>基本目标</h4>
+<p>Garden of Thorn 荆棘花园 是 1v1 卡牌对战游戏。你的目标是通过攻击、技能、装备和反制，让对方 H 降到 0，同时保护自己的 H。</p>
+<h4>资源</h4>
+<p>H 是生命，E 是能量，M 是魔力。大多数卡牌消耗 E，部分魔法牌消耗 M。回合开始时会抽牌并回复资源。</p>
+<h4>卡牌类型</h4>
+<p><b>Thorn</b> 是攻击牌，例如 <a data-card="Basic">基本</a>、<a data-card="Bone">骨头</a>。<b>Bloom</b> 是技能牌，例如 <a data-card="Fire">火</a>。<b>Root</b> 是装备牌，例如 <a data-card="Leaf">叶子</a>。<b>Guard</b> 是反制牌，会在对方行动时响应。</p>
+<h4>回合流程</h4>
+<p>正常模式先选牌，再选择开局事件，然后进入对局。轮到你时可以打出手牌、触发已装备一回合的装备，最后结束回合。</p>
+<h4>常见关键词</h4>
+<p><b>放逐</b>表示打出或结算后进入放逐区；<b>精准</b>通常能绕过普通闪避；<b>不可摧毁</b>表示不能被摧毁效果破坏；<b>萌芽</b>抽到时额外抽牌；<b>共生</b>不受同名卡费用惩罚。</p>
+<h4>示例</h4>
+<p><a data-card="Stinger">刺</a> 是高伤害精准攻击；<a data-card="Sewage">污水</a> 可以摧毁装备；<a data-card="Bubble">泡泡</a> 可以响应攻击。</p>
+</div>
+</div>
+<div id="about-page-credits" class="settings-credits hidden">
+<section>
+<h4 id="credits-developer-title">开发者</h4>
+<p>Stickerbug</p>
+</section>
+<section>
+<h4>联系方式</h4>
+<p>QQ: 2213167072</p>
+<p>哔哩哔哩：<button id="btn-credit-bilibili" class="btn btn-secondary btn-small" type="button">@Stickerbug</button></p>
+<p>Github：<button id="btn-credit-github" class="btn btn-secondary btn-small" type="button">@Stickerbug</button></p>
+</section>
+<section>
+<h4 id="credits-special-title">特别鸣谢</h4>
+<p>Nether_Dog</p>
+<p>Eric</p>
+<p>CommonGoldIngot</p>
+</section>
+</div>
+<div class="settings-footer">
+<button id="btn-about-close" class="btn btn-primary">确定</button>
 </div>
 </div>
 </div>
@@ -412,6 +487,6 @@
 })();
 </script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="/static/js/game.js?v=57"></script>
+<script src="/static/js/game.js?v=60"></script>
 </body>
 </html>

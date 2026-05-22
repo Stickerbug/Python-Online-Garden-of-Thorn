@@ -25,7 +25,10 @@ const I18N = {
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable',
+        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable',
+        gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
+        gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
@@ -91,7 +94,8 @@ const I18N = {
         ally_accept_countdown: 'Accept ({0})', ally_decline: 'Decline',
         mode_switch_confirm: 'Switching mode will leave your current team. Continue?',
         waiting_for_team: 'Waiting for another team...',
-        all_players_draft_status: 'Draft Status'
+        all_players_draft_status: 'Draft Status',
+        urf_replace: 'Replace Card', urf_sell: 'Sell Equipment'
     }
 };
 I18N.zh = { ...I18N.en,
@@ -118,7 +122,7 @@ I18N.zh = { ...I18N.en,
     status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼',
     status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择 Yggdrasil 牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
@@ -157,7 +161,9 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消',
+    gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '开局事件', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
+    gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
     form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
     team_invite_msg: '{0} 邀请你组队', team_formed_msg: '已与 {0} 组队',
@@ -171,6 +177,7 @@ I18N.zh = { ...I18N.en,
     mode_switch_confirm: '切换模式将离开当前队伍，是否确认？',
     waiting_for_team: '等待另一支队伍...',
     all_players_draft_status: '选牌状态',
+    urf_replace: '替换手牌', urf_sell: '售卖装备',
     fusion_layer: '聚变', fission_layer: '裂变',
     app_subtitle: '局域网联机卡牌对战',
     nickname_placeholder: '输入昵称',
@@ -234,7 +241,7 @@ I18N.fr = { ...I18N.en,
     set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks doivent avoir exactement 15 cartes',
     solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
     edit_tags: 'Modifier tags', tag_precision: 'Précision', tag_exile: 'Exil', tag_non_stackable: 'Non-cumul',
-    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide',
+    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Soi uniquement', tag_uncancellable: 'Non annulable',
     fusion_layer: 'Fusion', fission_layer: 'Fission',
     app_subtitle: 'Combat de cartes en réseau local',
     nickname_placeholder: 'Saisir un pseudo',
@@ -301,7 +308,7 @@ I18N.pt = { ...I18N.en,
     set_next_draw: 'Definir Próxima Compra', solo_saved: 'Decks salvos', solo_need_15: 'Ambos os decks devem ter exatamente 15 cartas',
     solo_event_a: 'Evento inicial', solo_event_b: 'Evento do oponente', no_event: 'Nenhum',
     edit_tags: 'Editar tags', tag_precision: 'Precisão', tag_exile: 'Exílio', tag_non_stackable: 'Não acumula',
-    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio',
+    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Somente si', tag_uncancellable: 'Não cancelável',
     fusion_layer: 'Fusão', fission_layer: 'Fissão',
     app_subtitle: 'Batalha de cartas em rede local',
     nickname_placeholder: 'Digite um apelido',
@@ -368,7 +375,7 @@ I18N.ru = { ...I18N.en,
     set_next_draw: 'Задать следующую карту', solo_saved: 'Колоды сохранены', solo_need_15: 'В обеих колодах должно быть ровно 15 карт',
     solo_event_a: 'Ваше стартовое событие', solo_event_b: 'Событие соперника', no_event: 'Нет',
     edit_tags: 'Изменить теги', tag_precision: 'Точность', tag_exile: 'Изгнание', tag_non_stackable: 'Не складывается',
-    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота',
+    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота', tag_self_only: 'Только на себя', tag_uncancellable: 'Нельзя отменить',
     fusion_layer: 'Слияние', fission_layer: 'Деление',
     app_subtitle: 'Карточная дуэль по локальной сети',
     nickname_placeholder: 'Введите никнейм',
@@ -435,7 +442,7 @@ I18N.ja = { ...I18N.en,
     set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '両方のデッキは15枚ちょうど必要です',
     solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
     edit_tags: 'タグ編集', tag_precision: '精密', tag_exile: '追放', tag_non_stackable: '非重複',
-    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無',
+    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '自分専用', tag_uncancellable: 'キャンセル不可',
     fusion_layer: '融合', fission_layer: '分裂',
     app_subtitle: 'LANカード対戦',
     nickname_placeholder: 'ニックネームを入力',
@@ -495,6 +502,7 @@ const CARD_FLAG_STYLES = {
     attract: { label: '', fg: '#e67e22', bg: 'rgba(230,126,34,0.15)', cls: 'attract' },
     void: { label: '', fg: '#8e44ad', bg: 'rgba(142,68,173,0.15)', cls: 'void' },
     self_only: { label: '', fg: '#2f3542', bg: 'rgba(47,53,66,0.12)', cls: 'self-only' },
+    uncancellable: { label: '', fg: '#7f1d1d', bg: 'rgba(127,29,29,0.12)', cls: 'uncancellable' },
 };
 
 function getCardName(cardDef) {
@@ -839,8 +847,32 @@ function updateStaticText() {
     }
     const btnSettings = $('btn-open-settings');
     if (btnSettings) btnSettings.textContent = UI.settings_btn;
+    const btnCardGallery = $('btn-card-gallery');
+    if (btnCardGallery) btnCardGallery.textContent = UI.gallery_title;
+    const galleryTitle = $('gallery-title');
+    if (galleryTitle) galleryTitle.textContent = UI.gallery_title;
+    const galleryTabCards = $('gallery-tab-cards');
+    if (galleryTabCards) galleryTabCards.textContent = UI.gallery_cards;
+    const galleryTabTags = $('gallery-tab-tags');
+    if (galleryTabTags) galleryTabTags.textContent = UI.gallery_tags;
+    const galleryTabEvents = $('gallery-tab-events');
+    if (galleryTabEvents) galleryTabEvents.textContent = UI.gallery_events;
+    const gallerySearch = $('gallery-search');
+    if (gallerySearch) gallerySearch.placeholder = UI.gallery_search;
+    const btnOpenAbout = $('btn-open-about');
+    if (btnOpenAbout) btnOpenAbout.textContent = '关于';
+    const aboutTabRules = $('about-tab-rules');
+    if (aboutTabRules) aboutTabRules.textContent = '游戏玩法';
+    const aboutTabCredits = $('about-tab-credits');
+    if (aboutTabCredits) aboutTabCredits.textContent = '致谢';
+    const creditsDeveloper = $('credits-developer-title');
+    if (creditsDeveloper) creditsDeveloper.textContent = '开发者';
+    const creditsSpecial = $('credits-special-title');
+    if (creditsSpecial) creditsSpecial.textContent = '特别鸣谢';
     const btnLobbyBack = $('btn-lobby-back');
     if (btnLobbyBack) btnLobbyBack.textContent = UI.back_to_home;
+    const btnLobbySettings = $('btn-lobby-settings');
+    if (btnLobbySettings) btnLobbySettings.textContent = UI.settings_btn;
     const btnConnect = $('btn-connect');
     if (btnConnect) btnConnect.textContent = UI.enter_lobby;
     const btnSoloTraining = $('btn-solo-training');
@@ -966,6 +998,247 @@ function showView(viewId) {
     }
 }
 
+let gallerySelectedId = null;
+let galleryMode = 'cards';
+let rulesScrollTop = 0;
+let galleryReturnToRules = false;
+
+function bindRulesCardLinks(root) {
+    if (!root) return;
+    root.querySelectorAll('[data-card]').forEach(link => {
+        link.onclick = () => {
+            const body = link.closest('#rules-body, #about-rules-body, .rules-body');
+            if (body) rulesScrollTop = body.scrollTop;
+            galleryReturnToRules = true;
+            hideModal();
+            closeAbout();
+            showCardGallery(link.getAttribute('data-card'));
+        };
+    });
+}
+
+function setAboutPage(page) {
+    const isCredits = page === 'credits';
+    const rulesPage = $('about-page-rules');
+    const creditsPage = $('about-page-credits');
+    const rulesTab = $('about-tab-rules');
+    const creditsTab = $('about-tab-credits');
+    if (rulesPage) rulesPage.classList.toggle('hidden', isCredits);
+    if (creditsPage) creditsPage.classList.toggle('hidden', !isCredits);
+    if (rulesTab) rulesTab.classList.toggle('active', !isCredits);
+    if (creditsTab) creditsTab.classList.toggle('active', isCredits);
+}
+
+function openAbout() {
+    const panel = $('about-panel');
+    if (panel) panel.classList.remove('hidden');
+    setAboutPage('rules');
+    const body = $('about-rules-body');
+    bindRulesCardLinks(body);
+    if (body && rulesScrollTop) requestAnimationFrame(() => { body.scrollTop = rulesScrollTop; });
+}
+
+function closeAbout() {
+    const panel = $('about-panel');
+    if (panel) panel.classList.add('hidden');
+}
+
+function setGalleryMode(mode) {
+    galleryMode = mode || 'cards';
+    ['cards', 'tags', 'events'].forEach(name => {
+        const tab = $(`gallery-tab-${name}`);
+        if (tab) tab.classList.toggle('active', galleryMode === name);
+    });
+    const search = $('gallery-search');
+    if (search) search.placeholder = UI.gallery_search;
+}
+
+function showCardGallery(selectedId = null, mode = 'cards') {
+    showView('view-card-gallery');
+    phase = 'gallery';
+    setGalleryMode(mode);
+    const backBtn = $('btn-gallery-back');
+    if (backBtn) backBtn.textContent = galleryReturnToRules ? '返回介绍' : '返回主页';
+    if (selectedId) gallerySelectedId = selectedId;
+    if (!gallerySelectedId || !CARD_DEFS[gallerySelectedId]) {
+        gallerySelectedId = Object.keys(CARD_DEFS).sort((a, b) => getCardName(CARD_DEFS[a]).localeCompare(getCardName(CARD_DEFS[b])))[0] || null;
+    }
+    renderCardGallery();
+}
+
+function makeGalleryFlagHtml(flag) {
+    const style = CARD_FLAG_STYLES[flag];
+    const label = getFlagLabel(flag);
+    if (style) return `<span class="card-flag ${style.cls}">${label}</span>`;
+    return `<span class="card-flag">${label}</span>`;
+}
+
+function getAllGalleryFlags() {
+    const flags = new Set(Object.keys(CARD_FLAG_STYLES));
+    Object.values(CARD_DEFS).forEach(cd => (cd.flags || []).forEach(flag => {
+        if (flag !== 'infinite_exclude') flags.add(flag);
+    }));
+    return [...flags].sort((a, b) => getFlagLabel(a).localeCompare(getFlagLabel(b)));
+}
+
+function renderCardGallery() {
+    const list = $('gallery-card-list');
+    const detail = $('gallery-detail');
+    if (!list || !detail) return;
+    const q = (($('gallery-search') || {}).value || '').trim().toLowerCase();
+    if (galleryMode === 'tags') {
+        renderTagGallery(list, detail, q);
+        return;
+    }
+    if (galleryMode === 'events') {
+        renderOpeningEventGallery(list, detail, q);
+        return;
+    }
+    const ids = Object.keys(CARD_DEFS)
+        .filter(id => {
+            const cd = CARD_DEFS[id];
+            const flagText = (cd.flags || []).map(getFlagLabel).join(' ');
+            const text = `${id} ${cd.name_cn || ''} ${cd.name_en || ''} ${getCardName(cd)} ${getCardEffectText(cd)} ${getCardDescriptionText(cd)} ${flagText}`.toLowerCase();
+            return !q || text.includes(q);
+        })
+        .sort((a, b) => getCardName(CARD_DEFS[a]).localeCompare(getCardName(CARD_DEFS[b])));
+    list.innerHTML = '';
+    ids.forEach(id => {
+        const cd = CARD_DEFS[id];
+        const flags = (cd.flags || []).filter(flag => flag !== 'infinite_exclude').map(getFlagLabel).join(' / ');
+        const row = document.createElement('div');
+        row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
+        row.innerHTML = `<div class="gallery-row-title">${getCardName(cd)}</div>${flags ? `<div class="gallery-row-meta">${flags}</div>` : ''}`;
+        row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
+        list.appendChild(row);
+    });
+    const cd = CARD_DEFS[gallerySelectedId] || CARD_DEFS[ids[0]];
+    if (!cd) {
+        detail.innerHTML = `<p>${UI.gallery_no_items}</p>`;
+        return;
+    }
+    gallerySelectedId = cd.id;
+    const cardEl = createCardElement({ def_id: cd.id, instance_flags: [], disabled_flags: [] }, { small: false, showAllFlags: true });
+    const flags = (cd.flags || []).filter(flag => flag !== 'infinite_exclude');
+    detail.innerHTML = `<div class="gallery-detail-card"><div id="gallery-card-preview"></div><div class="gallery-detail-info">
+        <h3>${getCardName(cd)}</h3>
+        <p><b>${UI.gallery_type}：</b>${getCardTypeLabel(cd.card_type)}</p>
+        <p><b>${UI.gallery_cost}：</b>${cd.cost_e || 0}E / ${cd.cost_m || 0}M</p>
+        ${flags.length ? `<p><b>${UI.gallery_tags_label}：</b>${flags.map(getFlagLabel).join(' / ')}</p>` : ''}
+        <p><b>${UI.gallery_description}：</b>${getCardDescriptionText(cd) || '-'}</p>
+        <p><b>${UI.gallery_effect}：</b>${getCardEffectText(cd) || '-'}</p>
+        ${cd.trigger_effect_text ? `<p><b>${UI.gallery_trigger}：</b>${getCardTriggerText(cd)}</p>` : ''}
+    </div></div>`;
+    const preview = $('gallery-card-preview');
+    if (preview) preview.appendChild(cardEl);
+}
+
+function renderTagGallery(list, detail, q) {
+    const flags = getAllGalleryFlags().filter(flag => {
+        const text = `${flag} ${getFlagLabel(flag)}`.toLowerCase();
+        return !q || text.includes(q);
+    });
+    if (!flags.includes(gallerySelectedId)) gallerySelectedId = flags[0] || null;
+    list.innerHTML = '';
+    flags.forEach(flag => {
+        const usedBy = Object.values(CARD_DEFS).filter(cd => (cd.flags || []).includes(flag));
+        const row = document.createElement('div');
+        row.className = 'gallery-card-row' + (flag === gallerySelectedId ? ' active' : '');
+        row.innerHTML = `<div class="gallery-row-title">${getFlagLabel(flag)}</div><div class="gallery-row-meta">${tf('gallery_card_count', usedBy.length)}</div>`;
+        row.onclick = () => { gallerySelectedId = flag; renderCardGallery(); };
+        list.appendChild(row);
+    });
+    if (!gallerySelectedId) {
+        detail.innerHTML = `<p>${UI.gallery_no_items}</p>`;
+        return;
+    }
+    const usedBy = Object.values(CARD_DEFS)
+        .filter(cd => (cd.flags || []).includes(gallerySelectedId))
+        .sort((a, b) => getCardName(a).localeCompare(getCardName(b)));
+    detail.innerHTML = `<div class="gallery-simple-detail">
+        <h3>${getFlagLabel(gallerySelectedId)}</h3>
+        <div class="gallery-tag-list">${makeGalleryFlagHtml(gallerySelectedId)}</div>
+        <p><b>ID：</b>${gallerySelectedId}</p>
+        <p><b>${UI.gallery_cards_with_tag}：</b>${usedBy.length ? usedBy.map(getCardName).join(' / ') : '-'}</p>
+    </div>`;
+}
+
+function renderOpeningEventGallery(list, detail, q) {
+    const events = (openingEvents || []).filter(ev => {
+        const text = `${ev.id} ${getLocalizedEventText(ev, 'name')} ${getLocalizedEventText(ev, 'desc')}`.toLowerCase();
+        return !q || text.includes(q);
+    });
+    const eventIds = events.map(ev => `event:${ev.id}`);
+    if (!eventIds.includes(gallerySelectedId)) gallerySelectedId = eventIds[0] || null;
+    list.innerHTML = '';
+    events.forEach(ev => {
+        const id = `event:${ev.id}`;
+        const row = document.createElement('div');
+        row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
+        row.innerHTML = `<div class="gallery-row-title">${getLocalizedEventText(ev, 'name') || '?'}</div><div class="gallery-row-meta">${getLocalizedEventText(ev, 'desc') || ''}</div>`;
+        row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
+        list.appendChild(row);
+    });
+    const selectedEventId = gallerySelectedId ? Number(String(gallerySelectedId).replace('event:', '')) : null;
+    const ev = events.find(item => item.id === selectedEventId) || events[0];
+    if (!ev) {
+        detail.innerHTML = `<p>${UI.gallery_no_items}</p>`;
+        return;
+    }
+    gallerySelectedId = `event:${ev.id}`;
+    detail.innerHTML = `<div class="gallery-simple-detail">
+        <h3>${getLocalizedEventText(ev, 'name') || '?'}</h3>
+        <p><b>ID：</b>${ev.id}</p>
+        <p>${getLocalizedEventText(ev, 'desc') || ''}</p>
+    </div>`;
+}
+
+function openRulesModal({ firstVisit = false } = {}) {
+    const modal = $('modal');
+    const content = $('modal-content');
+    if (!modal || !content) return;
+    const skipHtml = firstVisit ? `<div class="game-alert-message">你确认要跳过游戏介绍吗？<br>可以在 关于&gt;游戏玩法 中再次打开此界面。</div>` : '';
+    content.className = 'modal-inner rules-modal';
+    content.innerHTML = `
+        <h3>游戏介绍</h3>
+        ${skipHtml}
+        <div class="rules-body" id="rules-body">
+            <h4>基本目标</h4>
+            <p>Garden of Thorn 荆棘花园 是 1v1 卡牌对战游戏。你的目标是通过攻击、技能、装备和反制，让对方 H 降到 0，同时保护自己的 H。</p>
+            <h4>资源</h4>
+            <p>H 是生命，E 是能量，M 是魔力。大多数卡牌消耗 E，部分魔法牌消耗 M。回合开始时会抽牌并回复资源。</p>
+            <h4>卡牌类型</h4>
+            <p><b>Thorn</b> 是攻击牌，例如 <a data-card="Basic">基本</a>、<a data-card="Bone">骨头</a>。<b>Bloom</b> 是技能牌，例如 <a data-card="Fire">火</a>。<b>Root</b> 是装备牌，例如 <a data-card="Leaf">叶子</a>。<b>Guard</b> 是反制牌，会在对方行动时响应。</p>
+            <h4>回合流程</h4>
+            <p>正常模式先选牌，再选择开局事件，然后进入对局。轮到你时可以打出手牌、触发已装备一回合的装备，最后结束回合。</p>
+            <h4>常见关键词</h4>
+            <p><b>放逐</b>表示打出或结算后进入放逐区；<b>精准</b>通常能绕过普通闪避；<b>不可摧毁</b>表示不能被摧毁效果破坏；<b>萌芽</b>抽到时额外抽牌；<b>共生</b>不受同名卡费用惩罚。</p>
+            <h4>示例</h4>
+            <p><a data-card="Stinger">刺</a> 是高伤害精准攻击；<a data-card="Sewage">污水</a> 可以摧毁装备；<a data-card="Bubble">泡泡</a> 可以响应攻击。</p>
+        </div>
+        <div class="modal-buttons">
+            ${firstVisit ? `<button id="btn-rules-skip" class="btn btn-secondary">跳过</button>` : ''}
+            <button id="btn-rules-close" class="btn btn-primary">关闭</button>
+        </div>`;
+    modal.classList.remove('hidden');
+    modal.classList.add('active');
+    const body = $('rules-body');
+    if (body && rulesScrollTop) body.scrollTop = rulesScrollTop;
+    bindRulesCardLinks(content);
+    const close = $('btn-rules-close');
+    if (close) close.onclick = () => {
+        localStorage.setItem('got_seen_intro', '1');
+        content.className = 'modal-inner';
+        hideModal();
+    };
+    const skip = $('btn-rules-skip');
+    if (skip) skip.onclick = () => {
+        localStorage.setItem('got_seen_intro', '1');
+        content.className = 'modal-inner';
+        hideModal();
+    };
+}
+
 function updateStatus(text) {
     const s = $('status-text');
     if (s) {
@@ -1001,12 +1274,15 @@ function flashStatus(text, duration, type) {
 function showModal(html) {
     const content = $('modal-content');
     const modal = $('modal');
+    if (content) content.className = 'modal-inner';
     if (content) content.innerHTML = html;
     if (modal) { modal.classList.remove('hidden'); modal.classList.add('active'); }
 }
 
 function hideModal() {
     const modal = $('modal');
+    const content = $('modal-content');
+    if (content) content.className = 'modal-inner';
     if (modal) { modal.classList.add('hidden'); modal.classList.remove('active'); }
 }
 
@@ -1067,7 +1343,7 @@ function getCardLayerLabel(cardDict) {
 }
 
 function createCardElement(cardDict, options = {}) {
-    const { faceDown = false, small = false, draggable = false, onClick = null } = options;
+    const { faceDown = false, small = false, draggable = false, onClick = null, showAllFlags = false } = options;
     const el = document.createElement('div');
     el.className = 'card' + (small ? ' card-small' : '') + (faceDown ? ' card-facedown' : '');
     if (faceDown) {
@@ -1094,7 +1370,7 @@ function createCardElement(cardDict, options = {}) {
     el.dataset.defId = defId;
     let flagsHtml = '';
     for (const flag of flags) {
-        if (flag === 'self_only' && (!gameState || gameState.mode !== '2v2')) {
+        if (!showAllFlags && flag === 'self_only' && (!gameState || gameState.mode !== '2v2')) {
             continue;
         }
         const style = CARD_FLAG_STYLES[flag];
@@ -1148,12 +1424,14 @@ function getPointerPos(e) {
 
 function startCardDrag(e, cardEl) {
     if (isSpectating) return;
+    cleanupDragState();
     e.preventDefault();
     const pos = getPointerPos(e);
     const instanceId = cardEl.dataset.instanceId;
     if (!instanceId) return;
     const rect = cardEl.getBoundingClientRect();
     const ghost = cardEl.cloneNode(true);
+    ghost.classList.add('drag-ghost');
     ghost.style.position = 'fixed';
     ghost.style.width = rect.width + 'px';
     ghost.style.pointerEvents = 'none';
@@ -1184,10 +1462,10 @@ function onDocumentPointerMove(e) {
 }
 
 function cleanupDragState() {
-    if (!dragState) return;
-    dragState.originalCard.style.opacity = '';
-    if (dragState.ghost && dragState.ghost.parentNode) {
-        dragState.ghost.remove();
+    document.querySelectorAll('.drag-ghost').forEach(el => el.remove());
+    document.querySelectorAll('.card.dragging').forEach(el => el.classList.remove('dragging'));
+    if (dragState) {
+        if (dragState.originalCard) dragState.originalCard.style.opacity = '';
     }
     const playZone = document.getElementById('play-zone');
     if (playZone) playZone.classList.remove('drag-over');
@@ -1724,7 +2002,7 @@ async function editSoloCardFlags(which, idx) {
     const card = deck[idx];
     if (!card) return;
     const cd = getCardDef(card.def_id);
-    const allFlags = ['precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis', 'attract', 'void'];
+    const allFlags = ['precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis', 'attract', 'void', 'self_only', 'uncancellable'];
     const base = new Set((cd && cd.flags) || []);
     const added = new Set(card.instance_flags || []);
     const disabled = new Set(card.disabled_flags || []);
@@ -2445,6 +2723,8 @@ function updateModeSpecificControls(gs) {
     const soloNextDrawBtn = $('btn-solo-next-draw');
     const soloEditBtn = $('btn-solo-edit');
     const viewDeckBtn = $('btn-view-deck');
+    const urfReplaceBtn = $('btn-urf-replace');
+    const urfSellBtn = $('btn-urf-sell');
     const surrenderBtn = $('btn-surrender');
     const spectateControls = $('spectate-controls');
     const gameControls = $('game-controls');
@@ -2474,15 +2754,35 @@ function updateModeSpecificControls(gs) {
         viewDeckBtn.classList.toggle('hidden', !showViewDeck);
         viewDeckBtn.style.display = showViewDeck ? '' : 'none';
     }
+    if (urfReplaceBtn) {
+        const show = gs?.mode === 'urf' && !isSpectating && !gameOver;
+        urfReplaceBtn.textContent = UI.urf_replace || '替换手牌';
+        urfReplaceBtn.classList.toggle('hidden', !show);
+        urfReplaceBtn.style.display = show ? '' : 'none';
+        urfReplaceBtn.disabled = !isMyTurn() || !gs?.urf_replace_available;
+    }
+    if (urfSellBtn) {
+        const show = gs?.mode === 'urf' && !isSpectating && !gameOver;
+        urfSellBtn.textContent = UI.urf_sell || '售卖装备';
+        urfSellBtn.classList.toggle('hidden', !show);
+        urfSellBtn.style.display = show ? '' : 'none';
+        urfSellBtn.disabled = !isMyTurn() || !gs?.urf_sell_available || !((gs.you || {}).equipment || []).length;
+    }
     if (spectateControls) {
         spectateControls.classList.toggle('hidden', !showSpectateControls);
         spectateControls.style.display = showSpectateControls ? '' : 'none';
+    }
+    const switchBtn = $('btn-switch-perspective');
+    if (switchBtn) {
+        switchBtn.classList.add('hidden');
+        switchBtn.style.display = 'none';
     }
     if (gameControls) gameControls.style.display = showGameControls ? '' : 'none';
     if (playZone) playZone.style.display = showPlayZone ? '' : 'none';
 }
 
 function renderGame(data) {
+    cleanupDragState();
     showView('view-game');
     const gs = data || gameState;
     const you = gs.you || {};
@@ -2500,6 +2800,7 @@ function renderGame(data) {
         } else {
             gameContainer.classList.remove('mode-2v2');
         }
+        gameContainer.classList.toggle('mode-spectate', !!isSpectating);
     }
 
     const opp2Half = $('opp2-half');
@@ -2512,10 +2813,17 @@ function renderGame(data) {
     const oppLabel = $('opp-label');
     const youLabel = $('you-label');
     if (isSpectating) {
-        const p1Name = gs.player1_name || 'P1';
-        const p2Name = gs.player2_name || 'P2';
-        if (oppLabel) oppLabel.textContent = spectatePerspective === 0 ? p2Name : p1Name;
-        if (youLabel) youLabel.textContent = spectatePerspective === 0 ? p1Name : p2Name;
+        if (is2v2) {
+            if (youLabel) youLabel.textContent = gs.your_name || gs.player1_name || 'P1';
+            if (oppLabel) oppLabel.textContent = (gs.opponent_names || [])[0] || gs.player3_name || 'P3';
+            const opp2Label = $('opp2-label');
+            if (opp2Label) opp2Label.textContent = (gs.opponent_names || [])[1] || gs.player4_name || 'P4';
+            const tmLabel = $('teammate-label');
+            if (tmLabel) tmLabel.textContent = gs.teammate_name || gs.player2_name || 'P2';
+        } else {
+            if (oppLabel) oppLabel.textContent = gs.opponent_name || gs.player2_name || 'P2';
+            if (youLabel) youLabel.textContent = gs.your_name || gs.player1_name || 'P1';
+        }
     } else if (is2v2) {
         const oppNames = gs.opponent_names || [];
         if (oppLabel) oppLabel.textContent = oppNames[0] || UI.opponent;
@@ -2604,12 +2912,6 @@ function renderGame(data) {
         `;
     }
     updateModeSpecificControls(gs);
-    if (isSpectating) {
-        const p1Name = gs.player1_name || 'P1';
-        const p2Name = gs.player2_name || 'P2';
-        const switchBtn = $('btn-switch-perspective');
-        if (switchBtn) switchBtn.textContent = UI.switch_to_perspective.replace('{0}', spectatePerspective === 0 ? p2Name : p1Name);
-    }
     const oppInfo = $('opp-info');
     if (oppInfo) oppInfo.textContent = UI.hand_deck_info_opp.replace('{0}', opp.hand_count || 0).replace('{1}', opp.deck_count || 0);
     const youInfo = $('you-info');
@@ -2686,7 +2988,7 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
     const container = $(containerId);
     if (!container) return;
     container.innerHTML = '';
-    const revealedHand = oppData.revealed_hand;
+    const revealedHand = oppData.revealed_hand || oppData.hand;
     if (revealedHand && revealedHand.length > 0) {
         revealedHand.forEach(cd => {
             const card = createCardElement(cd, { small: true });
@@ -2723,7 +3025,7 @@ function renderPlayerHand(playerData) {
         const cardDef = getCardDef(cardDict.def_id);
         const canPlay = myTurn && canPlayCard(cardDict);
         const card = createCardElement(cardDict, {
-            draggable: canPlay && cardDef && cardDef.card_type !== 'guard',
+            draggable: !isSpectating && canPlay && cardDef && cardDef.card_type !== 'guard',
         });
         if (!canPlay) {
             card.classList.add('card-disabled');
@@ -2838,6 +3140,7 @@ function cardNeedsPlayerTarget(cardDef) {
     if (!cardDef) return false;
     if ((cardDef.flags || []).includes('self_only')) return false;
     if (cardDef.card_type === 'guard') return false;
+    if (gs.mode === 'urf' && cardDef.card_type === 'root' && ((you.equipment || []).length >= 3)) return false;
     if (cardDef.card_type === 'root' && Number(cardDef.trigger_cost_e) >= 0) return false;
     if (['thorn', 'bloom', 'root'].includes(cardDef.card_type)) return true;
     return false;
@@ -3076,7 +3379,11 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
         const oppEq = targetData.equipment || [];
         const destroyable = oppEq.filter(e => {
             const cd = getCardDef((e.card_instance || {}).def_id);
-            return cd && !(cd.flags || []).includes('indestructible');
+            if (!cd) return false;
+            const inst = e.card_instance || {};
+            const flags = new Set([...(cd.flags || []), ...(inst.instance_flags || [])]);
+            (inst.disabled_flags || []).forEach(flag => flags.delete(flag));
+            return !flags.has('indestructible');
         });
         if (!destroyable.length) { gameAlert(UI.notice, UI.no_enemy_equipment); return false; }
         const options = destroyable.map(e => getCardDef((e.card_instance || {}).def_id) ? getCardName(getCardDef((e.card_instance || {}).def_id)) : '?');
@@ -3511,6 +3818,30 @@ function onViewDeck() {
     modal.classList.add('active');
 }
 
+async function onUrfReplaceCard() {
+    if (!gameState || gameState.mode !== 'urf' || !isMyTurn()) return;
+    const hand = (gameState.you || {}).hand || [];
+    if (!hand.length) return;
+    const options = hand.map(c => getCardName(getCardDef(c.def_id)) || c.def_id);
+    const sel = await simpleChoice(UI.urf_replace || '替换手牌', options);
+    if (sel < 0) return;
+    socket.emit('urf_replace_card', { card_instance_id: hand[sel].instance_id });
+}
+
+async function onUrfSellEquipment() {
+    if (!gameState || gameState.mode !== 'urf' || !isMyTurn()) return;
+    const equipment = (gameState.you || {}).equipment || [];
+    if (!equipment.length) return;
+    const options = equipment.map(eq => {
+        const inst = eq.card_instance || {};
+        return getCardName(getCardDef(inst.def_id)) || inst.def_id;
+    });
+    const sel = await simpleChoice(UI.urf_sell || '售卖装备', options);
+    if (sel < 0) return;
+    const inst = (equipment[sel].card_instance || {});
+    socket.emit('urf_sell_equipment', { equipment_instance_id: inst.instance_id });
+}
+
 function onLobbyChatSend() {
     const input = $('lobby-chat-input');
     if (!input) return;
@@ -3729,6 +4060,8 @@ async function init() {
     console.log('[INIT] card definitions loaded, count=', Object.keys(CARD_DEFS).length);
     $('btn-connect').addEventListener('click', onLogin);
     $('btn-solo-training').addEventListener('click', showSoloTraining);
+    if ($('btn-card-gallery')) $('btn-card-gallery').addEventListener('click', () => showCardGallery());
+    if ($('btn-open-about')) $('btn-open-about').addEventListener('click', openAbout);
     const savedNick = localStorage.getItem('got_nickname') || '';
     const nickInput = $('input-nickname');
     if (savedNick && displayWidth(savedNick) <= 16) nickInput.value = savedNick;
@@ -3745,6 +4078,12 @@ async function init() {
     });
     $('btn-open-settings').addEventListener('click', openSettings);
     $('btn-settings-close').addEventListener('click', () => { saveDisabledMods(); closeSettings(); });
+    if ($('btn-lobby-settings')) $('btn-lobby-settings').addEventListener('click', openSettings);
+    if ($('about-tab-rules')) $('about-tab-rules').addEventListener('click', () => setAboutPage('rules'));
+    if ($('about-tab-credits')) $('about-tab-credits').addEventListener('click', () => setAboutPage('credits'));
+    if ($('btn-about-close')) $('btn-about-close').addEventListener('click', closeAbout);
+    if ($('btn-credit-bilibili')) $('btn-credit-bilibili').addEventListener('click', () => window.open('https://space.bilibili.com/1490695733', '_blank', 'noopener'));
+    if ($('btn-credit-github')) $('btn-credit-github').addEventListener('click', () => window.open('https://github.com/Stickerbug', '_blank', 'noopener'));
     $('settings-theme-select').addEventListener('change', (e) => { applyTheme(e.target.value); });
     $('settings-lang-select').addEventListener('change', (e) => { applyLang(e.target.value); });
     $('btn-lobby-back').addEventListener('click', () => {
@@ -3755,6 +4094,8 @@ async function init() {
     $('btn-surrender').addEventListener('click', onSurrender);
     $('btn-end-turn').addEventListener('click', onEndTurn);
     $('btn-view-deck').addEventListener('click', onViewDeck);
+    if ($('btn-urf-replace')) $('btn-urf-replace').addEventListener('click', onUrfReplaceCard);
+    if ($('btn-urf-sell')) $('btn-urf-sell').addEventListener('click', onUrfSellEquipment);
     $('btn-solo-next-draw').addEventListener('click', onSoloNextDraw);
     $('btn-solo-edit').addEventListener('click', () => { if (socket) socket.emit('solo_pause', {}); else showSoloTraining(); });
     $('solo-card-search').addEventListener('input', renderSoloBuilder);
@@ -3764,6 +4105,20 @@ async function init() {
     $('btn-solo-save').addEventListener('click', saveSoloDecks);
     $('btn-solo-start').addEventListener('click', startSoloTraining);
     $('btn-solo-back').addEventListener('click', () => showView('view-login'));
+    if ($('gallery-search')) $('gallery-search').addEventListener('input', renderCardGallery);
+    if ($('gallery-tab-cards')) $('gallery-tab-cards').addEventListener('click', () => { setGalleryMode('cards'); gallerySelectedId = null; renderCardGallery(); });
+    if ($('gallery-tab-tags')) $('gallery-tab-tags').addEventListener('click', () => { setGalleryMode('tags'); gallerySelectedId = null; renderCardGallery(); });
+    if ($('gallery-tab-events')) $('gallery-tab-events').addEventListener('click', () => { setGalleryMode('events'); gallerySelectedId = null; renderCardGallery(); });
+    if ($('btn-open-rules')) $('btn-open-rules').addEventListener('click', () => openAbout());
+    if ($('btn-gallery-back')) $('btn-gallery-back').addEventListener('click', () => {
+        if (galleryReturnToRules) {
+            galleryReturnToRules = false;
+            showView('view-login');
+            openAbout();
+        } else {
+            showView('view-login');
+        }
+    });
     $('btn-return-lobby').addEventListener('click', () => {
         if (socket) socket.emit('return_lobby', {});
         showView('view-lobby');
@@ -3771,9 +4126,6 @@ async function init() {
     });
     $('btn-leave-spectate').addEventListener('click', () => {
         if (socket) socket.emit('leave_spectate', {});
-    });
-    $('btn-switch-perspective').addEventListener('click', () => {
-        if (socket) socket.emit('switch_spectate_perspective', {});
     });
     $('btn-lobby-chat-send').addEventListener('click', onLobbyChatSend);
     $('lobby-chat-input').addEventListener('keydown', (e) => {
@@ -3788,6 +4140,10 @@ async function init() {
     showView('view-login');
     setupFullscreenPrompt();
     bootLoader.done();
+    document.getElementById('app').style.visibility = 'visible';
+    if (!localStorage.getItem('got_seen_intro')) {
+        setTimeout(() => openRulesModal({ firstVisit: true }), 250);
+    }
 }
 
 document.addEventListener('DOMContentLoaded', init);

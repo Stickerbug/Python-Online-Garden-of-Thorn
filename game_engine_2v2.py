@@ -379,11 +379,6 @@ class GameEngine2v2(GameEngine):
     def _start_draw_phase(self):
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         self.turn_index = 0
-        for pid in range(4):
-            ps = self.players[pid]
-            if ps.health > 0:
-                ps.elixir = min(ps.elixir + ELIXIR_RECOVERY, ps.max_elixir)
-                ps.magic = min(ps.magic + 1, ps.max_magic)
         first = self.turn_order[0]
         self._start_player_turn(first)
 
@@ -418,7 +413,7 @@ class GameEngine2v2(GameEngine):
         ps = self.players[player_id]
         surviving_equip = []
         for eq in ps.equipment:
-            if 'indestructible' in eq.card_def.flags:
+            if 'indestructible' in eq.card_instance.flags:
                 surviving_equip.append(eq)
             else:
                 self.log_msg(f"{self.pn(player_id)}的{eq.card_def.name_cn}被摧毁")
@@ -1014,7 +1009,7 @@ class GameEngine2v2(GameEngine):
         ps = self.players[player_id]
         surviving_equip = []
         for eq in ps.equipment:
-            if 'indestructible' in eq.card_def.flags:
+            if 'indestructible' in eq.card_instance.flags:
                 surviving_equip.append(eq)
             else:
                 ps.discard.append(eq.card_instance)

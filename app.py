@@ -128,6 +128,15 @@ def get_allowed_card_ids(disabled_mods=None):
     return allowed
 
 
+def same_mod_loadout(sids):
+    hashes = []
+    for sid in sids:
+        if sid not in players:
+            return False
+        hashes.append(players[sid].get('mods_hash'))
+    return len(set(hashes)) <= 1
+
+
 def get_lobby_list():
     lobby = []
     for sid, p in players.items():
@@ -456,13 +465,46 @@ def broadcast_spectate_state(room):
     for spid in room.spectators:
         if spid not in players:
             continue
-        perspective = players[spid].get('spectate_perspective', 0)
-        state = room.engine.get_public_state(for_player=perspective)
+        state = build_spectate_state(room)
+        state['your_id'] = -1
         state['spectating'] = True
-        state['spectate_perspective'] = perspective
         for i, psid in enumerate(room.player_sids):
             state[f'player{i + 1}_name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', '?')
         socketio.emit('state_update', state, room=spid)
+
+
+def build_spectate_state(room):
+    engine = room.engine
+    base = engine.get_public_state(0)
+    full_players = []
+    for i, ps in enumerate(engine.players):
+        if i >= len(room.player_sids):
+            break
+        psid = room.player_sids[i]
+        pdata = ps.to_dict(include_private=True)
+        pdata['player_id'] = i
+        pdata['name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', f'P{i + 1}')
+        full_players.append(pdata)
+    base['spectate_players'] = full_players
+    base['mode'] = room.mode
+    if room.mode == '2v2' and len(full_players) >= 4:
+        base['you'] = full_players[0]
+        base['teammate'] = full_players[1]
+        base['opponent'] = full_players[2]
+        base['opponent2'] = full_players[3]
+        base['your_id'] = 0
+        base['teammate_id'] = 1
+        base['enemy_ids'] = [2, 3]
+        base['your_name'] = full_players[0]['name']
+        base['teammate_name'] = full_players[1]['name']
+        base['opponent_names'] = [full_players[2]['name'], full_players[3]['name']]
+    elif len(full_players) >= 2:
+        base['you'] = full_players[0]
+        base['opponent'] = full_players[1]
+        base['your_id'] = 0
+        base['your_name'] = full_players[0]['name']
+        base['opponent_name'] = full_players[1]['name']
+    return base
 
 
 def reconnect_timeout(room_id, old_sid):
@@ -912,6 +954,9 @@ def on_accept_team(data):
             return
         if players[sid]['status'] != 'lobby' or players[leader_sid]['status'] != 'lobby':
             return
+        if players[sid].get('mods_hash') != players[leader_sid].get('mods_hash'):
+            emit('server_error', {'message': 'Operation failed'})
+            return
         if sid in teams or leader_sid in teams:
             return
         team_id = f"team_{leader_sid}"
@@ -970,6 +1015,10 @@ def on_invite_team(data):
         target_team_all_2v2 = all(players.get(ms, {}).get('mode') == '2v2' for ms in target_team['members'] if ms in players)
         if not my_team_all_2v2 or not target_team_all_2v2:
             return
+        all_match_sids = my_team['members'] + target_team['members']
+        if not same_mod_loadout(all_match_sids):
+            emit('server_error', {'message': 'Operation failed'})
+            return
         match_key = (min(my_team['leader'], target_team['leader']),
                      max(my_team['leader'], target_team['leader']))
         if match_key in pending_team_matches:
@@ -1008,6 +1057,9 @@ def on_accept_team_match(data):
         for s in all_sids:
             if s not in players or players[s]['status'] != 'lobby':
                 return
+        if not same_mod_loadout(all_sids):
+            emit('server_error', {'message': 'Operation failed'})
+            return
         room_id = _next_room_id
         _next_room_id += 1
         allowed = None
@@ -1745,6 +1797,50 @@ def on_use_trigger(data):
             emit('server_error', {'message': 'Operation failed'})
 
 
+@socketio.on('urf_replace_card')
+def on_urf_replace_card(data):
+    sid = request.sid
+    with _lock:
+        if sid not in players:
+            return
+        room_id = players[sid].get('room_id')
+        if room_id is None or room_id not in rooms:
+            return
+        room = rooms[room_id]
+        if room.mode != 'urf':
+            return
+        pidx = room.player_index(sid)
+        if pidx < 0:
+            return
+        result = room.engine.replace_hand_card(pidx, data.get('card_instance_id'))
+        if result.get('success'):
+            broadcast_game_state(room)
+        else:
+            emit('server_error', {'message': result.get('error', 'Operation failed')})
+
+
+@socketio.on('urf_sell_equipment')
+def on_urf_sell_equipment(data):
+    sid = request.sid
+    with _lock:
+        if sid not in players:
+            return
+        room_id = players[sid].get('room_id')
+        if room_id is None or room_id not in rooms:
+            return
+        room = rooms[room_id]
+        if room.mode != 'urf':
+            return
+        pidx = room.player_index(sid)
+        if pidx < 0:
+            return
+        result = room.engine.sell_equipment(pidx, data.get('equipment_instance_id'))
+        if result.get('success'):
+            broadcast_game_state(room)
+        else:
+            emit('server_error', {'message': result.get('error', 'Operation failed')})
+
+
 @socketio.on('end_turn')
 def on_end_turn(data):
     sid = request.sid
@@ -1947,10 +2043,9 @@ def on_spectate(data):
 
 
 def _send_spectate_state_internal(spid, room):
-    perspective = players[spid].get('spectate_perspective', 0)
-    state = room.engine.get_public_state(for_player=perspective)
+    state = build_spectate_state(room)
+    state['your_id'] = -1
     state['spectating'] = True
-    state['spectate_perspective'] = perspective
     for i, psid in enumerate(room.player_sids):
         state[f'player{i + 1}_name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', '?')
     socketio.emit('state_update', state, room=spid)
@@ -1982,22 +2077,7 @@ def on_leave_spectate(data=None):
 
 @socketio.on('switch_spectate_perspective')
 def on_switch_spectate_perspective(data=None):
-    sid = request.sid
-    print("[server] debug")
-    with _lock:
-        if sid not in players:
-            print("[server] debug")
-            return
-        player = players[sid]
-        room_id = player.get('spectating_room')
-        if room_id is None or room_id not in rooms:
-            print("[server] debug")
-            return
-        current = player.get('spectate_perspective', 0)
-        player['spectate_perspective'] = (current + 1) % max(1, len(room.player_sids))
-        print("[server] debug")
-        room = rooms[room_id]
-        _send_spectate_state_internal(sid, room)
+    return
 
 
 if __name__ == '__main__':

@@ -15,10 +15,7 @@ GAME_VERSION = 'v0.3.1-alpha'
 
 VALID_CARD_TYPES = {'thorn', 'bloom', 'root', 'guard'}
 VALID_QUALITIES = {'Common', 'Uncommon', 'Unusual', 'Rare', 'Epic', 'Legendary'}
-VALID_FLAGS = {
-    'exile', 'precision', 'indestructible', 'non_stack', 'non_stackable',
-    'sprout', 'symbiosis', 'uncancellable', 'self_only', 'infinite_exclude'
-}
+VALID_FLAGS = {'exile', 'precision', 'indestructible', 'non_stack', 'non_stackable', 'sprout', 'symbiosis', 'uncancellable'}
 VALID_EFFECTS = {
     'deal_damage', 'deal_damage_multi', 'heal', 'draw', 'gain_e', 'gain_m', 'gain_armor', 'gain_dodge',
     'apply_poison', 'apply_burn', 'apply_toxic', 'apply_vulnerable',
