@@ -79,7 +79,7 @@ const I18N = {
         rotate_prompt: 'Please play in landscape mode',
         continue_enter: 'Continue',
         mod_default_name: 'Mod {0}',
-        mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2',
+    mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Infinite Fire',
         form_team: 'Form Team', leave_team: 'Leave Team', invite_team: 'Invite Team',
         team_invite_msg: '{0} invites you to form a team', team_formed_msg: 'Team formed with {0}',
         team_disbanded_msg: 'Team disbanded', team_match_invite_msg: 'Team {0} challenges your team',
@@ -158,7 +158,7 @@ I18N.zh = { ...I18N.en,
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
     tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无',
-    mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2',
+    mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
     form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
     team_invite_msg: '{0} 邀请你组队', team_formed_msg: '已与 {0} 组队',
     team_disbanded_msg: '队伍已解散', team_match_invite_msg: '队伍 {0} 向你们发起挑战',
@@ -1846,6 +1846,7 @@ function renderLobby(data) {
         const currentMode = serverMode || cachedMode;
         modeTabs.querySelectorAll('.mode-tab').forEach(tab => {
             const tabMode = tab.getAttribute('data-mode');
+            tab.textContent = UI[`mode_${tabMode}`] || tab.textContent;
             if (tabMode === currentMode) {
                 tab.classList.add('active');
             } else {
@@ -1854,7 +1855,7 @@ function renderLobby(data) {
             tab.onclick = () => {
                 const newMode = tab.getAttribute('data-mode');
                 if (newMode === currentMode) return;
-                if (myTeam && newMode === '1v1') {
+                if (myTeam && newMode !== '2v2') {
                     if (!confirm(UI.mode_switch_confirm)) return;
                 }
                 localStorage.setItem('preferred_mode', newMode);
@@ -1869,11 +1870,7 @@ function renderLobby(data) {
 
     const filteredPlayers = lobbyPlayers.filter(p => {
         const pMode = p.mode || '1v1';
-        if (currentMode === '2v2') {
-            return pMode === '2v2';
-        } else {
-            return pMode === '1v1';
-        }
+        return pMode === currentMode;
     });
 
     const onlineCount = $('lobby-online-count');
@@ -1991,6 +1988,8 @@ function renderLobby(data) {
                 let gameLabel;
                 if (g.mode === '2v2') {
                     gameLabel = `${g.player1} & ${g.player2} vs ${g.player3 || '?'} & ${g.player4 || '?'} (${UI.round}${g.round})`;
+                } else if (g.mode === 'urf') {
+                    gameLabel = `${g.player1} vs ${g.player2} [${UI.mode_urf || 'Infinite Fire'}] (${UI.round}${g.round})`;
                 } else {
                     gameLabel = `${g.player1} vs ${g.player2} (${UI.round}${g.round})`;
                 }
@@ -2445,6 +2444,7 @@ function updateModeSpecificControls(gs) {
     const gameOver = gs?.phase === 'game_over';
     const soloNextDrawBtn = $('btn-solo-next-draw');
     const soloEditBtn = $('btn-solo-edit');
+    const viewDeckBtn = $('btn-view-deck');
     const surrenderBtn = $('btn-surrender');
     const spectateControls = $('spectate-controls');
     const gameControls = $('game-controls');
@@ -2468,6 +2468,11 @@ function updateModeSpecificControls(gs) {
         const showSurrender = !(inSoloGame && gameOver);
         surrenderBtn.classList.toggle('hidden', !showSurrender);
         surrenderBtn.style.display = showSurrender ? '' : 'none';
+    }
+    if (viewDeckBtn) {
+        const showViewDeck = gs?.mode !== 'urf';
+        viewDeckBtn.classList.toggle('hidden', !showViewDeck);
+        viewDeckBtn.style.display = showViewDeck ? '' : 'none';
     }
     if (spectateControls) {
         spectateControls.classList.toggle('hidden', !showSpectateControls);
@@ -3483,6 +3488,9 @@ function onSurrender() {
 }
 
 function onViewDeck() {
+    if (gameState && gameState.mode === 'urf') {
+        return;
+    }
     const deck = (gameState.you || {}).deck || [];
     const modal = $('modal');
     const content = $('modal-content');

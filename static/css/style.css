@@ -4281,6 +4281,7 @@ body {
     overflow: hidden;
     border: 1px solid var(--border-color);
     background: var(--bg-card);
+    min-width: 360px;
 }
 
 .mode-tab {
@@ -4294,6 +4295,9 @@ body {
     user-select: none;
     -webkit-user-select: none;
     border-right: 1px solid var(--border-color);
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
 }
 
 .mode-tab:last-child {
@@ -4323,7 +4327,7 @@ body {
 
 .lobby-header-with-tabs .mode-tabs {
     width: 100%;
-    max-width: 240px;
+    max-width: 420px;
 }
 
 .lobby-header-with-tabs .mode-tab {

@@ -126,7 +126,9 @@
       "quality": "Unusual",
       "description": "指引你找到需要的牌。",
       "effect_text": "从抽牌堆选择一张牌将其置入手中",
-      "flags": [],
+      "flags": [
+        "infinite_exclude"
+      ],
       "effects": [
         {
           "type": "choose_from_deck",

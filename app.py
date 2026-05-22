@@ -11,6 +11,7 @@ from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from game_engine import GameEngine
 from game_engine_2v2 import GameEngine2v2
+from game_engine_urf import GameEngineInfiniteFire
 from cards import (
     CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
@@ -53,6 +54,8 @@ class GameRoom:
         self.mode = mode
         if mode == '2v2':
             self.engine = GameEngine2v2()
+        elif mode == 'urf':
+            self.engine = GameEngineInfiniteFire()
         else:
             self.engine = GameEngine()
         self.engine.allowed_card_ids = set(allowed_card_ids) if allowed_card_ids is not None else None
@@ -821,7 +824,7 @@ def on_login(data):
         initial_status = 'reconnecting' if reconnect_room else 'lobby'
         disabled_mods = normalize_disabled_mods(data.get('disabled_mods', []))
         preferred_mode = data.get('mode', '1v1')
-        if preferred_mode not in ('1v1', '2v2'):
+        if preferred_mode not in ('1v1', '2v2', 'urf'):
             preferred_mode = '1v1'
         import hashlib as _hl
         _h = _hl.sha256()
@@ -882,10 +885,10 @@ def on_set_mode(data):
     with _lock:
         if sid not in players:
             return
-        if mode not in ('1v1', '2v2'):
+        if mode not in ('1v1', '2v2', 'urf'):
             return
         players[sid]['mode'] = mode
-        if mode == '1v1' and sid in teams:
+        if mode != '2v2' and sid in teams:
             team = teams[sid]
             leader = team['leader']
             members = list(team['members'])
@@ -1208,7 +1211,9 @@ def on_invite(data):
             emit('server_error', {'message': 'Operation failed'})
             return
         inviter = players[sid]
-        if inviter.get('mode', '1v1') != '1v1' or target.get('mode', '1v1') != '1v1':
+        inviter_mode = inviter.get('mode', '1v1')
+        target_mode = target.get('mode', '1v1')
+        if inviter_mode not in ('1v1', 'urf') or target_mode != inviter_mode:
             emit('server_error', {'message': 'Operation failed'})
             return
         if inviter.get('mods_hash') != target.get('mods_hash'):
@@ -1259,19 +1264,26 @@ def on_accept_invite(data):
         room_id = _next_room_id
         _next_room_id += 1
         allowed_card_ids = inviter.get('allowed_card_ids') or get_allowed_card_ids(inviter.get('disabled_mods', []))
-        room = GameRoom(room_id, [inviter_sid, sid], allowed_card_ids)
+        room = GameRoom(room_id, [inviter_sid, sid], allowed_card_ids, mode=inviter.get('mode', '1v1'))
         rooms[room_id] = room
         inviter['room_id'] = room_id
         inviter['status'] = 'in_game'
         accepter['room_id'] = room_id
         accepter['status'] = 'in_game'
         room.engine.player_names = [inviter['nickname'], accepter['nickname']]
-        room.engine.start_draft()
-        print("[server] debug")
-        for pidx in range(len(room.player_sids)):
-            psid = room.player_sids[pidx]
-            socketio.emit('game_phase', {'phase': 'draft'}, room=psid)
-            send_draft_state(room, pidx)
+        if room.mode == 'urf':
+            room.engine.start_game()
+            print("[server] debug")
+            for psid in room.player_sids:
+                socketio.emit('game_phase', {'phase': 'playing', 'mode': room.mode}, room=psid)
+            broadcast_game_state(room)
+        else:
+            room.engine.start_draft()
+            print("[server] debug")
+            for pidx in range(len(room.player_sids)):
+                psid = room.player_sids[pidx]
+                socketio.emit('game_phase', {'phase': 'draft'}, room=psid)
+                send_draft_state(room, pidx)
     broadcast_lobby()
 
 
@@ -1825,7 +1837,12 @@ def on_rematch(data=None):
             if len(room._rematch_votes) == len(room.player_sids):
                 print("[server] debug")
                 room._rematch_votes = set()
-                room.engine = GameEngine2v2() if room.mode == '2v2' else GameEngine()
+                if room.mode == '2v2':
+                    room.engine = GameEngine2v2()
+                elif room.mode == 'urf':
+                    room.engine = GameEngineInfiniteFire()
+                else:
+                    room.engine = GameEngine()
                 names = []
                 for pidx, psid in enumerate(room.player_sids):
                     if psid in players:
@@ -1833,12 +1850,20 @@ def on_rematch(data=None):
                     else:
                         names.append(f'Player {pidx + 1}')
                 room.engine.player_names = names
-                room.engine.start_draft()
-                for pidx in range(len(room.player_sids)):
-                    psid = room.player_sids[pidx]
-                    if psid in players:
-                        socketio.emit('game_phase', {'phase': 'draft'}, room=psid)
-                        send_draft_state(room, pidx)
+                if room.mode == 'urf':
+                    room.engine.allowed_card_ids = set(players[room.player_sids[0]].get('allowed_card_ids', [])) if room.player_sids and room.player_sids[0] in players else None
+                    room.engine.start_game()
+                    for psid in room.player_sids:
+                        if psid in players:
+                            socketio.emit('game_phase', {'phase': 'playing', 'mode': room.mode}, room=psid)
+                    broadcast_game_state(room)
+                else:
+                    room.engine.start_draft()
+                    for pidx in range(len(room.player_sids)):
+                        psid = room.player_sids[pidx]
+                        if psid in players:
+                            socketio.emit('game_phase', {'phase': 'draft'}, room=psid)
+                            send_draft_state(room, pidx)
                 print("[server] debug")
     except Exception as e:
         import traceback
