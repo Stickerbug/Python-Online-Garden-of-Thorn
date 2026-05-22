@@ -4822,6 +4822,8 @@ body {
 .game-container.mode-2v2 .middle-section {
     flex-direction: row;
     gap: 0;
+    align-items: stretch;
+    min-height: 0;
 }
 
 .game-container.mode-2v2 .battle-log {
@@ -4831,17 +4833,59 @@ body {
     height: 100%;
 }
 
-.teammate-sidebar {
-    width: 140px;
-    min-width: 120px;
-    flex-shrink: 0;
-    padding: 6px 8px;
-    border-left: 1px solid var(--border-color);
-    background: rgba(26, 188, 156, 0.04);
-    overflow-y: auto;
+.game-container.mode-2v2 .opp-section {
+    flex: 0 0 clamp(118px, 19vh, 168px);
+    min-height: 112px;
+}
+
+.game-container.mode-2v2 .opp-top-row,
+.game-container.mode-2v2 .opp-half {
+    height: 100%;
+}
+
+.game-container.mode-2v2 .opp-half {
     display: flex;
     flex-direction: column;
     gap: 4px;
+}
+
+.game-container.mode-2v2 .opp-hand-equip {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.game-container.mode-2v2 .opp-hand-row {
+    display: flex;
+    gap: 3px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 0 4px;
+}
+
+.game-container.mode-2v2 .opp-hand-row .card,
+.game-container.mode-2v2 .opp-hand-row .card-facedown {
+    flex: 0 0 auto;
+    width: 48px;
+    min-height: 66px;
+    border-radius: 4px;
+}
+
+.game-container.mode-2v2 .player-section {
+    flex: 0 0 clamp(210px, 34vh, 300px);
+    min-height: 205px;
+}
+
+.teammate-sidebar {
+    width: clamp(220px, 30vw, 340px);
+    min-width: 210px;
+    flex: 0 0 clamp(220px, 30vw, 340px);
+    padding: 7px 10px;
+    border-left: 1px solid var(--border-color);
+    background: rgba(26, 188, 156, 0.04);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
 }
 
 .teammate-sidebar.hidden {
@@ -4869,12 +4913,15 @@ body {
 .teammate-hand-row {
     display: flex;
     flex-wrap: wrap;
+    align-content: flex-start;
     gap: 3px;
     padding: 2px 0;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .teammate-hand-row .card {
-    width: 48px;
+    width: 46px;
     font-size: 9px;
     flex-shrink: 0;
     cursor: default;
@@ -4907,25 +4954,47 @@ body {
 }
 
 .teammate-hand-row .card .card-name {
-    font-size: 8px;
+    font-size: 7px;
+    line-height: 1.05;
+    padding: 0 2px;
 }
 
 .teammate-hand-row .card .card-cost {
-    font-size: 8px;
+    font-size: 7px;
+    width: 14px;
+    height: 14px;
+    line-height: 14px;
+}
+
+.teammate-hand-row .card .card-flags {
+    gap: 1px;
+    padding: 0 2px;
+}
+
+.teammate-hand-row .card .card-flag {
+    font-size: 6px;
+    line-height: 1;
+    padding: 0 2px;
+    border-radius: 2px;
+    min-height: 8px;
 }
 
 .teammate-sidebar .bars-row {
-    flex-wrap: wrap;
-    gap: 4px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    flex-wrap: nowrap;
+    gap: 5px;
+    width: 100%;
 }
 
 .teammate-sidebar .bar-track {
-    height: 12px;
-    width: clamp(50px, 100%, 100px);
+    height: 14px;
+    width: 100%;
+    min-width: 0;
 }
 
 .teammate-sidebar .bar-text {
-    font-size: 9px;
+    font-size: 10px;
 }
 
 .teammate-sidebar .status-tag {
@@ -4940,6 +5009,8 @@ body {
 .teammate-sidebar .equip-row {
     flex-wrap: wrap;
     gap: 3px;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .teammate-sidebar .equip-row .equip-card {

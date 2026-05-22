@@ -173,6 +173,7 @@ class GameEngine2v2(GameEngine):
             'log_total': len(self.log),
             'pending_response': self.pending_response,
             'pending_choice': self.pending_choice,
+            'pending_ally_request': getattr(self, 'pending_ally_request', None),
             'opening_event_picks': self.opening_event_picks,
             'antenna_reveal': self._antenna_reveal[for_player],
             'mode': '2v2',
@@ -205,8 +206,6 @@ class GameEngine2v2(GameEngine):
         if found is None:
             return {'success': False, 'error': '该牌不在选项中'}
         self.draft_picks[player_id].append(card_def_id)
-        options.remove(found)
-        self.draft_pool.remove(found)
         if len(self.draft_picks[player_id]) >= DECK_SIZE:
             pass
         else:
@@ -699,9 +698,6 @@ class GameEngine2v2(GameEngine):
         if self.draft_rerolls[player_id] <= 0:
             return {'success': False, 'error': '没有重选次数'}
         self.draft_rerolls[player_id] -= 1
-        for c in self.draft_options[player_id]:
-            if c in self.draft_pool:
-                self.draft_pool.remove(c)
         self._generate_draft_options_for_player(player_id)
         return {'success': True, 'rerolls_left': self.draft_rerolls[player_id]}
 
@@ -723,6 +719,595 @@ class GameEngine2v2(GameEngine):
             for j in range(3):
                 self.opening_event_magic_options[i][j] = random.sample(
                     self.MAGIC_CARD_POOL, min(3, len(self.MAGIC_CARD_POOL)))
+
+    def _is_valid_player_id(self, player_id) -> bool:
+        return isinstance(player_id, int) and 0 <= player_id < self.num_players
+
+    def _is_valid_enemy_target(self, player_id: int, target_id) -> bool:
+        return self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0
+
+    def _is_valid_effect_target(self, player_id: int, target_id) -> bool:
+        return self._is_valid_player_id(target_id) and self.players[target_id].health > 0
+
+    def _card_requires_target(self, card: CardInstance) -> bool:
+        if card.card_type == 'guard':
+            return False
+        if 'self_only' in card.flags:
+            return False
+        if card.card_type == 'root' and card.card_def.trigger_cost_e >= 0:
+            return False
+        return card.card_type in ('thorn', 'bloom', 'root')
+
+    def _selected_effect_target(self, player_id: int, choice=None) -> int:
+        target_id = choice.get('target_player', -1) if isinstance(choice, dict) else -1
+        if self._is_valid_effect_target(player_id, target_id):
+            return target_id
+        return player_id
+
+    def _selected_enemy_target(self, player_id: int, choice=None) -> int:
+        target_id = choice.get('target_player', -1) if isinstance(choice, dict) else -1
+        if self._is_valid_effect_target(player_id, target_id):
+            return target_id
+        enemies = self.get_enemies(player_id)
+        return enemies[0] if enemies else -1
+
+    def _resolve_target(self, player_id, target_str):
+        if getattr(self, '_active_choice', None):
+            selected = self._active_choice.get('target_player')
+            if self._is_valid_effect_target(player_id, selected):
+                if target_str in ('self', 'friendly', 'enemy', None, ''):
+                    return selected
+        if target_str is None or target_str == '' or target_str == 'self':
+            return player_id
+        if isinstance(target_str, int):
+            return target_str
+        if target_str == 'enemy':
+            enemies = self.get_enemies(player_id)
+            return enemies[0] if enemies else -1
+        if target_str == 'both':
+            return -1
+        if target_str == 'random':
+            enemies = self.get_enemies(player_id)
+            return random.choice(enemies) if enemies else -1
+        if target_str == 'teammate':
+            return self.get_teammate(player_id)
+        return player_id
+
+    def _start_draw_phase(self):
+        self.log_msg(f"=== 第{self.round_num}回合 ===")
+        self.turn_index = 0
+        self._start_player_turn(self.turn_order[0])
+
+    def _start_player_turn(self, player_id: int):
+        self.current_player = player_id
+        ps = self.players[player_id]
+        if ps.health <= 0:
+            self._advance_turn()
+            return
+        self._skip_current_turn_after_start = False
+        self._apply_turn_start_effects_2v2(player_id)
+        if self.game_over:
+            return
+        if getattr(self, '_skip_current_turn_after_start', False) or ps.health <= 0:
+            self._advance_turn()
+            return
+        if not self.game_over:
+            self.phase = 'action'
+
+    def _apply_turn_start_effects_2v2(self, player_id: int):
+        ps = self.players[player_id]
+        self._antenna_reveal[player_id] = None
+        ps.cards_played_this_turn = {}
+        ps.magic_battery_m_this_turn = 0
+        ps.coffee_first_use = True
+        if ps.shovel_active:
+            ps.shovel_active = False
+            ps.untargetable = False
+            self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
+        if ps.bandage_death_pending:
+            ps.health = 0
+            ps.bandage_death_pending = False
+            ps.invincible = False
+            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，死亡！")
+            self._on_player_death(player_id)
+            return
+        if ps.skip_turn:
+            ps.skip_turn = False
+            self.log_msg(f"{self.pn(player_id)}被跳过本回合！")
+            self._skip_current_turn_after_start = True
+            return
+        if self.round_num > 1:
+            draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction)
+            if ps.enemy_draw_reduction > 0:
+                ps.enemy_draw_reduction -= 1
+            ps.draw_cards(draw_count)
+            self.log_msg(f"{self.pn(player_id)}抽{draw_count}张牌")
+            elixir_recovery = ELIXIR_RECOVERY
+            for eid in self.get_all_enemies(player_id):
+                for eq in self.players[eid].equipment:
+                    if eq.def_id == 'Pincer':
+                        elixir_recovery -= 1
+            elixir_recovery = max(0, elixir_recovery - ps.enemy_e_reduction)
+            ps.gain_elixir(elixir_recovery)
+            ps.gain_magic(1)
+            self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E，+1M")
+        if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
+            draw_needed = HAND_LIMIT - len(ps.hand)
+            if draw_needed > 0:
+                ps.draw_cards(draw_needed)
+                self.log_msg(f"{self.pn(player_id)}【命运抽签】：抽{draw_needed}张至手牌满")
+        if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
+            ps.gain_elixir(2)
+            self.log_msg(f"{self.pn(player_id)}【能量涌动】：额外+2E")
+        for eid in self.get_all_enemies(player_id):
+            for eq in self.players[eid].equipment:
+                if eq.def_id == 'Corruption' and not eq.corruption_active:
+                    eq.corruption_active = True
+                    self.log_msg(f"{self.pn(eid)}的腐化效果激活！")
+        if ps.poison > 0:
+            dmg = ps.poison
+            self._deal_direct_damage(player_id, dmg, '中毒')
+            if self.game_over or ps.health <= 0:
+                return
+            ps.poison = ps.poison // 2
+        if ps.fire > 0:
+            self._deal_direct_damage(player_id, ps.fire, '灼烧')
+            if self.game_over or ps.health <= 0:
+                return
+        for eq in list(ps.equipment):
+            eq.turns_equipped += 1
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in list(owner_state.equipment):
+                if getattr(eq, 'effect_target', owner_id) != player_id:
+                    continue
+            if eq.corruption_active:
+                self._deal_direct_damage(player_id, 1, eq.card_def.name_cn)
+            if eq.def_id == 'Leaf':
+                ps.heal(2)
+                self.log_msg(f"{self.pn(player_id)}的叶子效果：+2H")
+            elif eq.def_id == 'Yucca':
+                ps.heal(5)
+                self.log_msg(f"{self.pn(player_id)}的丝兰效果：+5H")
+            elif eq.def_id == 'MagicLeaf':
+                ps.gain_magic(1)
+                self.log_msg(f"{self.pn(player_id)}的魔法叶效果：+1M")
+            elif eq.def_id == 'MagicYucca':
+                ps.gain_magic(2)
+                self.log_msg(f"{self.pn(player_id)}的魔法丝兰效果：+2M")
+            elif eq.def_id == 'Powder':
+                ps.gain_elixir(2)
+                self.log_msg(f"{self.pn(player_id)}的粉末效果：+2E")
+            elif eq.def_id == 'GoldenLeaf':
+                ps.draw_cards(1)
+                self.log_msg(f"{self.pn(player_id)}的黄金叶效果：多抽1张牌")
+        self._check_game_over()
+
+    def _execute_card_effect(self, player_id: int, card: CardInstance, choice=None) -> dict:
+        self._active_choice = choice if isinstance(choice, dict) else {}
+        try:
+            result = super()._execute_card_effect(player_id, card, choice)
+            if result.get('needs_choice') and isinstance(choice, dict) and 'target_player' in choice:
+                result['player_id'] = player_id
+                result['target_player_id'] = choice.get('target_player')
+                if self.pending_choice is not None:
+                    self.pending_choice['original_choice'] = dict(choice)
+            if card.card_type == 'root':
+                target_id = self._selected_effect_target(player_id, choice)
+                for eq in self.players[player_id].equipment:
+                    if eq.card_instance.instance_id == card.instance_id:
+                        eq.effect_target = target_id
+                        break
+            return result
+        finally:
+            self._active_choice = None
+
+    def resolve_choice(self, player_id: int, choice: dict) -> dict:
+        if self.pending_choice is not None:
+            original = self.pending_choice.get('original_choice')
+            if isinstance(original, dict):
+                merged = dict(original)
+                if isinstance(choice, dict):
+                    merged.update(choice)
+                choice = merged
+        return super().resolve_choice(player_id, choice)
+
+    def play_card(self, player_id: int, card_instance_id: int, target_player_id: int = -1, choice=None) -> dict:
+        ps = self.players[player_id] if self._is_valid_player_id(player_id) else None
+        card = ps.find_hand_card(card_instance_id) if ps else None
+        if card is None:
+            return {'success': False, 'error': '手牌中没有这张牌'}
+        if 'self_only' in card.flags or card.card_type == 'guard':
+            target_player_id = player_id
+        elif self._card_requires_target(card) and not self._is_valid_effect_target(player_id, target_player_id):
+            return {'success': False, 'error': '必须选择一名存活玩家'}
+        if target_player_id >= 0:
+            if choice is None:
+                choice = {}
+            choice['target_player'] = target_player_id
+        if target_player_id != player_id and self.is_ally(player_id, target_player_id):
+            if not (choice and choice.get('_ally_approved')):
+                self.pending_ally_request = {
+                    'player_id': player_id,
+                    'target_player_id': target_player_id,
+                    'card_instance_id': card_instance_id,
+                    'card': card.to_dict(),
+                    'choice': dict(choice or {}),
+                }
+                return {'success': True, 'needs_ally_consent': True, 'card': card.to_dict(), 'target_player_id': target_player_id}
+        if self.game_over:
+            return {'success': False, 'error': '游戏已经结束'}
+        if self.current_player != player_id:
+            return {'success': False, 'error': '不是你的回合'}
+        can, reason = self.can_play_card(player_id, card)
+        if not can:
+            return {'success': False, 'error': reason}
+        ps.elixir -= card.cost_e
+        ps.magic -= card.cost_m
+        ps.remove_hand_card(card_instance_id)
+        if 'exile' in card.flags:
+            ps.exile.append(card)
+        else:
+            ps.discard.append(card)
+        if card.card_type == 'thorn':
+            ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
+        self._active_choice = choice if isinstance(choice, dict) else {}
+        try:
+            needs_response = self._check_response_needed(player_id, card)
+            needs_precision_response = self._check_precision_response_needed(player_id, card)
+            if needs_response or needs_precision_response:
+                target_id = self._selected_effect_target(player_id, choice)
+                counter_cards = []
+                if self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0:
+                    for c in self.players[target_id].hand:
+                        if self._card_can_counter(c, card):
+                            counter_cards.append({
+                                'instance_id': c.instance_id,
+                                'def_id': c.def_id,
+                                'cost_e_override': c.cost_e_override,
+                                'cost_m_override': c.cost_m_override,
+                                'responder_id': target_id,
+                            })
+                self.pending_response = {
+                    'player_id': player_id,
+                    'card': card.to_dict(),
+                    'original_choice': choice,
+                    'counter_cards': counter_cards,
+                    'is_precision': needs_precision_response and not needs_response,
+                }
+                return {'success': True, 'needs_response': True, 'card': card.to_dict()}
+            return self._execute_card_effect(player_id, card, choice)
+        finally:
+            self._active_choice = None
+
+    def handle_ally_consent(self, target_player_id: int, accepted: bool) -> dict:
+        req = getattr(self, 'pending_ally_request', None)
+        if not req or req.get('target_player_id') != target_player_id:
+            return {'success': False, 'error': '没有待同意的队友用牌'}
+        self.pending_ally_request = None
+        player_id = req['player_id']
+        card = CardInstance.from_dict(req['card'])
+        if not accepted:
+            self.log_msg(f"{self.pn(target_player_id)}拒绝{self.pn(player_id)}对其使用{card.name_cn}")
+            return {'success': True, 'declined': True}
+        choice = dict(req.get('choice') or {})
+        choice['_ally_approved'] = True
+        return self.play_card(player_id, req['card_instance_id'], target_player_id=target_player_id, choice=choice)
+
+    def _deal_direct_damage(self, player_id: int, amount: int, source: str = ''):
+        ps = self.players[player_id]
+        if ps.invincible:
+            self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
+            return
+        actual = amount
+        corruption_count = self._get_corruption_count()
+        if corruption_count > 0:
+            actual = actual * (2 ** corruption_count)
+            self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
+        ps.health -= actual
+        self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={ps.health}）")
+        self._check_yggdrasil(player_id)
+        if ps.health <= 0:
+            self._on_player_death(player_id)
+        self._check_game_over()
+
+    def _on_player_death(self, player_id: int):
+        ps = self.players[player_id]
+        surviving_equip = []
+        for eq in ps.equipment:
+            if 'indestructible' in eq.card_def.flags:
+                surviving_equip.append(eq)
+            else:
+                ps.discard.append(eq.card_instance)
+                self.log_msg(f"{self.pn(player_id)}的{eq.card_def.name_cn}因死亡被摧毁")
+        ps.equipment = surviving_equip
+        self._check_game_over()
+
+    def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
+                           is_battery: bool = False, is_precision: bool = False,
+                           attacker_id: int = -1) -> int:
+        if not self._is_valid_player_id(target_id):
+            return 0
+        ps = self.players[target_id]
+        if attacker_id < 0:
+            attacker_id = self._last_attacker.get(target_id, -1)
+        if ps.untargetable and not is_battery:
+            self.log_msg(f"{self.pn(target_id)}无法被攻击选中！")
+            return 0
+        total_dealt = 0
+        for _ in range(hits):
+            if ps.dodge > 0:
+                ps.dodge -= 1
+                if is_precision:
+                    self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗！")
+                else:
+                    self.log_msg(f"{self.pn(target_id)}闪避了攻击！")
+                    continue
+            if ps.invincible:
+                self.log_msg(f"{self.pn(target_id)}无敌，免疫伤害！")
+                continue
+            dmg = amount
+            if self.halve_next_attack:
+                dmg = math.ceil(dmg / 2)
+            corruption_count = self._get_corruption_count()
+            if corruption_count > 0:
+                dmg = dmg * (2 ** corruption_count)
+                self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
+            if ps.nazar_active:
+                original_dmg = dmg
+                dmg = max(1, dmg - 9)
+                self.log_msg(f"邪眼护符效果：伤害{original_dmg}->{dmg}")
+                if original_dmg >= 10:
+                    ps.nazar_big_hits += 1
+                    if ps.nazar_big_hits >= 2:
+                        ps.nazar_active = False
+                        ps.nazar_big_hits = 0
+                        self.log_msg(f"{self.pn(target_id)}的邪眼护符被击破！")
+            dmg = max(0, dmg - ps.armor)
+            if ps.sponge_active and dmg > 0:
+                poison_add = dmg // 2
+                ps.poison += poison_add
+                self.log_msg(f"海绵效果：{self.pn(target_id)}将{dmg}伤害转为{poison_add}层中毒")
+                dmg = 0
+            ps.health -= dmg
+            total_dealt += dmg
+            self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
+            if ps.toxic > 0:
+                ps.poison += ps.toxic
+                self.log_msg(f"淬毒效果：{self.pn(target_id)}+{ps.toxic}层中毒")
+            self._game_over_defer_depth += 1
+            try:
+                self._check_yggdrasil(target_id)
+                if dmg > 0 and not is_battery:
+                    for eq in list(ps.equipment):
+                        if eq.def_id == 'Battery' and attacker_id >= 0:
+                            self._deal_direct_damage(attacker_id, 3, '电池')
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3D")
+                        elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
+                            ps.gain_magic(1)
+                            ps.magic_battery_m_this_turn += 1
+                            self.log_msg(f"{self.pn(target_id)}的魔法电池效果：+1M")
+            finally:
+                self._game_over_defer_depth -= 1
+            if ps.health <= 0:
+                self._on_player_death(target_id)
+            self._check_game_over()
+            if self.game_over or ps.health <= 0:
+                break
+        return total_dealt
+
+    def _attack_target(self, player_id: int, choice=None) -> int:
+        return self._selected_enemy_target(player_id, choice)
+
+    def _effect_basic(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        dmg = self._modified_attack_damage(6, card)
+        self.log_msg(f"{self.pn(player_id)}使用基本攻击！对{self.pn(target)}造成{dmg}伤害")
+        self.deal_attack_damage(target, dmg, attacker_id=player_id)
+
+    def _effect_bone(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        dmg = self._modified_attack_damage(12, card)
+        self.log_msg(f"{self.pn(player_id)}使用骨头！对{self.pn(target)}造成{dmg}伤害")
+        self.deal_attack_damage(target, dmg, attacker_id=player_id)
+
+    def _effect_stinger(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        dmg = self._modified_attack_damage(20, card)
+        self.log_msg(f"{self.pn(player_id)}使用刺！对{self.pn(target)}造成{dmg}伤害")
+        self.deal_attack_damage(target, dmg, is_precision=True, attacker_id=player_id)
+
+    def _effect_sand(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        dmg = self._modified_attack_damage(3, card)
+        self.log_msg(f"{self.pn(player_id)}使用沙子！对{self.pn(target)}造成{dmg}x4伤害")
+        self.deal_attack_damage(target, dmg, 4, attacker_id=player_id)
+
+    def _effect_wing(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        dmg = self._modified_attack_damage(8, card)
+        self.log_msg(f"{self.pn(player_id)}使用翅膀！对{self.pn(target)}造成{dmg}x2伤害")
+        self.deal_attack_damage(target, dmg, 2, attacker_id=player_id)
+
+    def _effect_light(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        dmg = self._modified_attack_damage(2, card)
+        self.log_msg(f"{self.pn(player_id)}使用轻！对{self.pn(target)}造成{dmg}x2伤害")
+        self.deal_attack_damage(target, dmg, 2, attacker_id=player_id)
+
+    def _effect_fang(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        dmg = self._modified_attack_damage(8, card)
+        dealt = self.deal_attack_damage(target, dmg, attacker_id=player_id)
+        if dealt > 0:
+            self.players[player_id].heal(4)
+            self.log_msg(f"{self.pn(player_id)}使用尖牙！回复4H")
+
+    def _effect_triangle(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        ps = self.players[player_id]
+        dmg = self._modified_attack_damage(6 + 3 * ps.triangle_stacks, card)
+        dealt = self.deal_attack_damage(target, dmg, attacker_id=player_id)
+        if dealt > 0 and ps.triangle_stacks < 4:
+            ps.triangle_stacks += 1
+            self.log_msg(f"{self.pn(player_id)}三角形层数+1（{ps.triangle_stacks}）")
+
+    def _effect_magicbone(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        dmg = self._modified_attack_damage(15, card)
+        self.deal_attack_damage(target, dmg, attacker_id=player_id)
+        self.log_msg(f"{self.pn(player_id)}使用魔法骨头！对{self.pn(target)}造成{dmg}伤害")
+
+    def _effect_magicstinger(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        dmg = self._modified_attack_damage(30, card)
+        self.deal_attack_damage(target, dmg, is_precision=True, attacker_id=player_id)
+        self.log_msg(f"{self.pn(player_id)}使用魔法刺！对{self.pn(target)}造成{dmg}伤害")
+
+    def _effect_iris(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        self.players[target].poison += 10
+        self.log_msg(f"{self.pn(player_id)}使用鸢尾！{self.pn(target)}+10中毒")
+
+    def _effect_fire(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        self.players[target].fire += 2
+        self.log_msg(f"{self.pn(player_id)}使用火！{self.pn(target)}+2灼烧")
+
+    def _effect_cancer(self, player_id: int, card: CardInstance, choice=None):
+        target = self._attack_target(player_id, choice)
+        self.players[target].toxic += 1
+        self.log_msg(f"{self.pn(player_id)}装备了癌细胞！{self.pn(target)}+1淬毒")
+
+    def _apply_turn_start_effects_2v2(self, player_id: int):
+        ps = self.players[player_id]
+        self._antenna_reveal[player_id] = None
+        ps.cards_played_this_turn = {}
+        ps.magic_battery_m_this_turn = 0
+        ps.coffee_first_use = True
+        if ps.shovel_active:
+            ps.shovel_active = False
+            ps.untargetable = False
+            self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
+        if ps.bandage_death_pending:
+            ps.health = 0
+            ps.bandage_death_pending = False
+            ps.invincible = False
+            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，死亡！")
+            self._on_player_death(player_id)
+            return
+        if ps.skip_turn:
+            ps.skip_turn = False
+            self.log_msg(f"{self.pn(player_id)}被跳过本回合！")
+            self._skip_current_turn_after_start = True
+            return
+        if self.round_num > 1:
+            draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction)
+            if ps.enemy_draw_reduction > 0:
+                ps.enemy_draw_reduction -= 1
+            ps.draw_cards(draw_count)
+            self.log_msg(f"{self.pn(player_id)}抽{draw_count}张牌")
+            pincer_reduction = sum(
+                1
+                for owner_id, owner_state in enumerate(self.players)
+                for eq in owner_state.equipment
+                if eq.def_id == 'Pincer' and getattr(eq, 'effect_target', owner_id) == player_id
+            )
+            elixir_recovery = max(0, ELIXIR_RECOVERY - ps.enemy_e_reduction - pincer_reduction)
+            ps.gain_elixir(elixir_recovery)
+            ps.gain_magic(1)
+            self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E，+1M")
+        if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
+            draw_needed = HAND_LIMIT - len(ps.hand)
+            if draw_needed > 0:
+                ps.draw_cards(draw_needed)
+                self.log_msg(f"{self.pn(player_id)}【命运抽签】：抽{draw_needed}张至手牌满")
+        if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
+            ps.gain_elixir(2)
+            self.log_msg(f"{self.pn(player_id)}【能量涌动】：额外+2E")
+        for eid in self.get_all_enemies(player_id):
+            for eq in self.players[eid].equipment:
+                if eq.def_id == 'Corruption' and not eq.corruption_active:
+                    eq.corruption_active = True
+                    self.log_msg(f"{self.pn(eid)}的腐化效果激活！")
+        if ps.poison > 0:
+            self._deal_direct_damage(player_id, ps.poison, '中毒')
+            if self.game_over or ps.health <= 0:
+                return
+            ps.poison = ps.poison // 2
+        if ps.fire > 0:
+            self._deal_direct_damage(player_id, ps.fire, '灼烧')
+            if self.game_over or ps.health <= 0:
+                return
+        for eq in list(ps.equipment):
+            eq.turns_equipped += 1
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in list(owner_state.equipment):
+                if getattr(eq, 'effect_target', owner_id) != player_id:
+                    continue
+                if eq.corruption_active:
+                    self._deal_direct_damage(player_id, 1, eq.card_def.name_cn)
+                if eq.def_id == 'Leaf':
+                    ps.heal(2)
+                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2H")
+                elif eq.def_id == 'Yucca':
+                    ps.heal(5)
+                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+5H")
+                elif eq.def_id == 'MagicLeaf':
+                    ps.gain_magic(1)
+                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+1M")
+                elif eq.def_id == 'MagicYucca':
+                    ps.gain_magic(2)
+                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2M")
+                elif eq.def_id == 'Powder':
+                    ps.gain_elixir(2)
+                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2E")
+                elif eq.def_id == 'GoldenLeaf':
+                    ps.draw_cards(1)
+                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}多抽1张牌")
+        self._check_game_over()
+
+    def use_trigger(self, player_id: int, equipment_instance_id: int, target_player_id: int = -1) -> dict:
+        if self.current_player != player_id and not self.is_ally(self.current_player, player_id):
+            return {'success': False, 'error': '只能在己方回合触发装备'}
+        ps = self.players[player_id]
+        eq = ps.find_equipment(equipment_instance_id)
+        if eq is None:
+            return {'success': False, 'error': '装备不存在'}
+        if eq.card_def.trigger_cost_e < 0:
+            return {'success': False, 'error': '该装备没有触发效果'}
+        if eq.turns_equipped < 1:
+            return {'success': False, 'error': '装备需要装备一回合后才能触发'}
+        if eq.card_def.trigger_cost_e > ps.elixir:
+            return {'success': False, 'error': '能量不足'}
+        if not self._is_valid_effect_target(player_id, target_player_id):
+            return {'success': False, 'error': '必须选择一名存活玩家'}
+        ps.elixir -= eq.card_def.trigger_cost_e
+        self._execute_trigger_effect(player_id, eq, target_player_id)
+        self._check_game_over()
+        return {'success': True}
+
+    def _check_response_needed(self, player_id: int, card: CardInstance) -> bool:
+        if 'precision' in card.flags:
+            return False
+        target_id = self._selected_effect_target(player_id, getattr(self, '_active_choice', None))
+        if not self._is_valid_player_id(target_id) or not self.is_enemy(player_id, target_id):
+            return False
+        opp = self.players[target_id]
+        if card.card_type == 'thorn':
+            return any(c.card_def.response_trigger == 'thorn' for c in opp.hand)
+        if card.card_type == 'bloom':
+            return any(c.card_def.response_trigger == 'bloom' for c in opp.hand)
+        if self._would_destroy_equipment(card):
+            return any(c.card_def.response_trigger == 'equipment_destroy' for c in opp.hand)
+        return False
+
+    def _check_precision_response_needed(self, player_id: int, card: CardInstance) -> bool:
+        if 'precision' not in card.flags:
+            return False
+        target_id = self._selected_effect_target(player_id, getattr(self, '_active_choice', None))
+        if not self._is_valid_player_id(target_id) or not self.is_enemy(player_id, target_id):
+            return False
+        return any(c.card_def.response_trigger == 'thorn' for c in self.players[target_id].hand)
 
     def both_events_selected(self) -> bool:
         return all(p is not None for p in self.opening_event_picks)

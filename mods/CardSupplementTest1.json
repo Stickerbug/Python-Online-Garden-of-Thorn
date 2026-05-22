@@ -1,10 +1,10 @@
 {
   "info": {
     "name": "CardSupplementTest1",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "author": "Stickerbug",
     "description": "卡牌补充测试1",
-    "game_version": "无"
+    "game_version": "*"
   },
   "cards": [
     {
@@ -87,7 +87,9 @@
       "quality": "Unusual",
       "description": "拿这个挖坑躲一下。",
       "effect_text": "直到下个友方回合无法行动，但无法被攻击选中（仍然会爆牌和爆费）",
-      "flags": [],
+      "flags": [
+        "self_only"
+      ],
       "effects": [
         {
           "type": "set_untargetable",
@@ -270,7 +272,8 @@
       "description": "有副作用的强效药丸。",
       "effect_text": "将血量设为60，己方每回合少抽一牌少回1E",
       "flags": [
-        "indestructible"
+        "indestructible",
+        "self_only"
       ],
       "effects": [
         {

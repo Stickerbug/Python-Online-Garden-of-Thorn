@@ -25,7 +25,7 @@ const I18N = {
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
@@ -87,6 +87,8 @@ const I18N = {
         select_target: 'Select Target', enemy_label: 'Enemy', ally_label: 'Ally',
         teammate: 'Teammate', team_chat: 'Team Chat', team_chat_placeholder: 'Message teammates...',
         trigger_on_ally_turn: 'Trigger equipment (ally turn)', player_dead: 'Defeated',
+        choose_target: 'Choose Target', ally_consent_title: 'Teammate Card Use', ally_consent_msg: '{0} wants to use {1} on you',
+        ally_accept_countdown: 'Accept ({0})', ally_decline: 'Decline',
         mode_switch_confirm: 'Switching mode will leave your current team. Continue?',
         waiting_for_team: 'Waiting for another team...',
         all_players_draft_status: 'Draft Status'
@@ -116,7 +118,7 @@ I18N.zh = { ...I18N.en,
     status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼',
     status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择 Yggdrasil 牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
@@ -164,6 +166,8 @@ I18N.zh = { ...I18N.en,
     select_target: '选择目标', enemy_label: '敌方', ally_label: '友方',
     teammate: '队友', team_chat: '队内聊天', team_chat_placeholder: '发送队内消息...',
     trigger_on_ally_turn: '触发装备（队友回合）', player_dead: '已阵亡',
+    choose_target: '选择目标', ally_consent_title: '队友用牌确认', ally_consent_msg: '{0} 想对你使用 {1}',
+    ally_accept_countdown: '同意（{0}）', ally_decline: '不同意',
     mode_switch_confirm: '切换模式将离开当前队伍，是否确认？',
     waiting_for_team: '等待另一支队伍...',
     all_players_draft_status: '选牌状态',
@@ -490,6 +494,7 @@ const CARD_FLAG_STYLES = {
     symbiosis: { label: '', fg: '#2471a3', bg: 'rgba(36,113,163,0.15)', cls: 'symbiosis' },
     attract: { label: '', fg: '#e67e22', bg: 'rgba(230,126,34,0.15)', cls: 'attract' },
     void: { label: '', fg: '#8e44ad', bg: 'rgba(142,68,173,0.15)', cls: 'void' },
+    self_only: { label: '', fg: '#2f3542', bg: 'rgba(47,53,66,0.12)', cls: 'self-only' },
 };
 
 function getCardName(cardDef) {
@@ -708,6 +713,8 @@ let isSpectating = false;
 let spectatePerspective = 0;
 let responseTimerId = null;
 let responseCountdown = 0;
+let allyConsentTimerId = null;
+let allyConsentCountdown = 0;
 let soloMode = false;
 let soloDeckA = [];
 let soloDeckB = [];
@@ -1087,6 +1094,9 @@ function createCardElement(cardDict, options = {}) {
     el.dataset.defId = defId;
     let flagsHtml = '';
     for (const flag of flags) {
+        if (flag === 'self_only' && (!gameState || gameState.mode !== '2v2')) {
+            continue;
+        }
         const style = CARD_FLAG_STYLES[flag];
         if (style) {
             const label = UI['flag_' + flag] || UI['tag_' + flag] || flag;
@@ -1425,6 +1435,9 @@ function connectSocket(serverUrl) {
         responsePending = true;
         responseData = data;
         showResponseUI(data);
+    });
+    socket.on('ally_consent_request', (data) => {
+        showAllyConsentUI(data);
     });
     socket.on('choice_request', (data) => {
         choicePending = true;
@@ -2530,6 +2543,8 @@ function renderGame(data) {
     if (is2v2) {
         renderPlayerBars('opp2-bars', opp2);
         renderStatusTags('opp2-status', opp2);
+        renderOppHand(opp2, 'opp2-hand');
+        renderEquipment('opp2-equip', opp2, false);
         renderPlayerBars('teammate-bars', teammate);
         renderStatusTags('teammate-status', teammate);
         renderTeammateHand(teammate);
@@ -2547,7 +2562,7 @@ function renderGame(data) {
         const cpName = gs.current_player === playerId ? (gs.your_name || UI.you) :
             (gs.current_player === gs.teammate_id ? (gs.teammate_name || UI.teammate) :
             ((gs.opponent_names || [])[gs.enemy_ids ? gs.enemy_ids.indexOf(gs.current_player) : -1] || '...'));
-        phaseText = gs.phase === 'action' ? (myTurn ? UI.your_turn : `${cpName}${UI.opponent_turn}`)
+        phaseText = gs.phase === 'action' ? (myTurn ? UI.your_turn : `${UI.opponent_turn}：${cpName}`)
             : gs.phase === 'draw' ? UI.draw_phase
             : gs.phase === 'game_over' ? UI.game_over : '';
     } else {
@@ -2662,8 +2677,8 @@ function renderStatusTags(containerId, playerData) {
     });
 }
 
-function renderOppHand(oppData) {
-    const container = $('opp-hand');
+function renderOppHand(oppData, containerId = 'opp-hand') {
+    const container = $(containerId);
     if (!container) return;
     container.innerHTML = '';
     const revealedHand = oppData.revealed_hand;
@@ -2731,6 +2746,111 @@ function canPlayCard(cardDict) {
     return true;
 }
 
+function isFriendlyTurn() {
+    if (!gameState || gameState.spectating) return false;
+    if (isMyTurn()) return true;
+    return gameState.mode === '2v2' && gameState.current_player === gameState.teammate_id;
+}
+
+function getEnemyTargetOptions() {
+    if (!gameState || gameState.mode !== '2v2') return [];
+    const ids = gameState.enemy_ids || [];
+    const names = gameState.opponent_names || [];
+    const opponents = [gameState.opponent || {}, gameState.opponent2 || {}];
+    return ids.map((id, i) => {
+        const data = opponents[i] || {};
+        return {
+            id,
+            label: `${names[i] || (UI.opponent + (i + 1))} H:${data.health || 0}/${data.max_health || 0}`,
+            alive: (data.health || 0) > 0
+        };
+    }).filter(x => x.alive);
+}
+
+function getPlayerNameById(id) {
+    if (!gameState) return `P${Number(id) + 1}`;
+    if (id === gameState.your_id) return gameState.your_name || UI.you;
+    if (id === gameState.teammate_id) return gameState.teammate_name || UI.teammate;
+    const enemyIndex = (gameState.enemy_ids || []).indexOf(id);
+    if (enemyIndex >= 0) return (gameState.opponent_names || [])[enemyIndex] || `${UI.opponent}${enemyIndex + 1}`;
+    return `P${Number(id) + 1}`;
+}
+
+function getPlayerDataById(id) {
+    if (!gameState) return {};
+    if (id === gameState.your_id) return gameState.you || {};
+    if (id === gameState.teammate_id) return gameState.teammate || {};
+    const enemyIndex = (gameState.enemy_ids || []).indexOf(id);
+    if (enemyIndex === 0) return gameState.opponent || {};
+    if (enemyIndex === 1) return gameState.opponent2 || {};
+    return {};
+}
+
+function getPlayerTargetOptions({ includeSelf = true, aliveOnly = true } = {}) {
+    if (!gameState || gameState.mode !== '2v2') return [];
+    const out = [];
+    const add = (id, data, group) => {
+        if (id == null || (!includeSelf && id === gameState.your_id)) return;
+        const alive = (data && Number(data.health || 0) > 0);
+        if (aliveOnly && !alive) return;
+        out.push({
+            id,
+            group,
+            label: `${group} ${getPlayerNameById(id)} H:${data ? (data.health || 0) : 0}/${data ? (data.max_health || 0) : 0}`,
+            alive
+        });
+    };
+    const enemies = [gameState.opponent || {}, gameState.opponent2 || {}];
+    (gameState.enemy_ids || []).forEach((id, i) => add(id, enemies[i], UI.enemy_label || UI.opponent));
+    if (gameState.teammate_id != null) add(gameState.teammate_id, gameState.teammate || {}, UI.ally_label || UI.teammate);
+    add(gameState.your_id, gameState.you || {}, UI.you);
+    return out;
+}
+
+async function choosePlayerTarget(title, opts = {}) {
+    const targets = getPlayerTargetOptions(opts);
+    if (!targets.length) {
+        gameAlert(UI.notice, UI.no_valid_target || 'No valid target');
+        return -1;
+    }
+    if (targets.length === 1) return targets[0].id;
+    const sel = await simpleChoice(title || UI.choose_target || UI.select_target || 'Choose target', targets.map(t => t.label));
+    return sel >= 0 ? targets[sel].id : -1;
+}
+
+async function chooseEnemyTarget(title) {
+    const targets = getEnemyTargetOptions();
+    if (!targets.length) {
+        gameAlert(UI.notice, UI.no_valid_target || 'No valid target');
+        return -1;
+    }
+    if (targets.length === 1) return targets[0].id;
+    const sel = await simpleChoice(title || UI.choose_target || UI.select_target || 'Choose target', targets.map(t => t.label));
+    return sel >= 0 ? targets[sel].id : -1;
+}
+
+function cardNeedsPlayerTarget(cardDef) {
+    if (!cardDef) return false;
+    if ((cardDef.flags || []).includes('self_only')) return false;
+    if (cardDef.card_type === 'guard') return false;
+    if (cardDef.card_type === 'root' && Number(cardDef.trigger_cost_e) >= 0) return false;
+    if (['thorn', 'bloom', 'root'].includes(cardDef.card_type)) return true;
+    return false;
+}
+
+function cardNeedsEnemyPlayerTarget(cardDef) {
+    if (!cardDef) return false;
+    if (cardDef.card_type === 'thorn') return true;
+    const ids = new Set(['Iris', 'Fire', 'Cancer']);
+    if (ids.has(cardDef.id)) return true;
+    const effects = Array.isArray(cardDef.effects) ? cardDef.effects : [];
+    return effects.some(effect => {
+        const params = effect && effect.params ? effect.params : {};
+        const target = params.target || params.targets || params.target1 || params.target2;
+        return ['enemy', 'all_enemies', 'random_enemy'].includes(target);
+    });
+}
+
 function renderEquipment(containerId, playerData, isMyEquipment) {
     const container = $(containerId);
     if (!container) return;
@@ -2749,13 +2869,25 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             el.style.color = COLORS.indestructible;
             el.style.background = COLORS.indestructible_bg;
         }
-        let text = UI.equip_info.replace('{0}', getCardName(cardDef)).replace('{1}', turns);
+        const targetId = eqDict.effect_target;
+        const targetSuffix = gameState && gameState.mode === '2v2' && targetId != null && targetId !== (playerData.player_id ?? eqDict.owner)
+            ? `→${getPlayerNameById(targetId)}`
+            : '';
+        let text = UI.equip_info.replace('{0}', `${getCardName(cardDef)}${targetSuffix ? `(${targetSuffix})` : ''}`).replace('{1}', turns);
         if (corruption) text += UI.equip_corruption;
-        if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && isMyTurn() && !isSpectating) {
+        if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && isFriendlyTurn() && !isSpectating) {
             const btn = document.createElement('button');
             btn.className = 'btn btn-small btn-equip-trigger';
             btn.textContent = UI.equip_trigger_cost.replace('{0}', text).replace('{1}', cardDef.trigger_cost_e);
-            btn.onclick = () => socket.emit(soloMode ? 'solo_use_trigger' : 'use_trigger', { equipment_instance_id: cardInst.instance_id });
+            btn.onclick = async () => {
+                const payload = { equipment_instance_id: cardInst.instance_id };
+                if (gameState && gameState.mode === '2v2' && ['Leaf', 'Mark', 'Mine'].includes(cardDef.id)) {
+                    const targetId = await choosePlayerTarget(UI.choose_target || UI.select_target || 'Choose target');
+                    if (targetId < 0) return;
+                    payload.target_player_id = targetId;
+                }
+                socket.emit(soloMode ? 'solo_use_trigger' : 'use_trigger', payload);
+            };
             container.appendChild(btn);
         } else {
             el.textContent = text;
@@ -2865,14 +2997,20 @@ async function onPlayCard(cardInstanceId) {
         flashStatus(UI.cannot_play, 2000, 'error');
         return;
     }
-    const choice = await getCardChoice(cardDict);
+    const cardDef = getCardDef(cardDict.def_id);
+    let targetPlayerId = -1;
+    if (!soloMode && gameState.mode === '2v2' && cardNeedsPlayerTarget(cardDef)) {
+        targetPlayerId = await choosePlayerTarget(UI.choose_target || UI.select_target || 'Choose target');
+        if (targetPlayerId < 0) return;
+    }
+    const choice = await getCardChoice(cardDict, targetPlayerId);
     if (choice === false) return;
     pendingPlayCard = cardDict;
     renderPendingCard();
-    socket.emit(soloMode ? 'solo_play_card' : 'play_card', { card_instance_id: cardInstanceId, choice });
+    socket.emit(soloMode ? 'solo_play_card' : 'play_card', { card_instance_id: cardInstanceId, choice, target_player_id: targetPlayerId });
 }
 
-async function getCardChoice(cardDict) {
+async function getCardChoice(cardDict, targetPlayerId = -1) {
     const defId = cardDict.def_id;
     const hand = (gameState.you || {}).hand || [];
     if (defId === 'Fission') {
@@ -2929,7 +3067,8 @@ async function getCardChoice(cardDict) {
         if (sel < 0) return false;
         return { target_def_id: discard[sel].def_id };
     } else if (defId === 'Sewage') {
-        const oppEq = (gameState.opponent || {}).equipment || [];
+        const targetData = targetPlayerId >= 0 ? getPlayerDataById(targetPlayerId) : (gameState.opponent || {});
+        const oppEq = targetData.equipment || [];
         const destroyable = oppEq.filter(e => {
             const cd = getCardDef((e.card_instance || {}).def_id);
             return cd && !(cd.flags || []).includes('indestructible');
@@ -3040,6 +3179,61 @@ function onRespond(cardInstanceId) {
     socket.emit(soloMode ? 'solo_response' : 'response', { card_instance_id: cardInstanceId });
 }
 
+function showAllyConsentUI(data) {
+    if (isSpectating || !socket) return;
+    const container = $('response-panel');
+    if (!container) {
+        socket.emit('ally_consent_response', { accepted: false });
+        return;
+    }
+    if (allyConsentTimerId) clearInterval(allyConsentTimerId);
+    const cardDict = data.card || {};
+    const cardDef = getCardDef(cardDict.def_id);
+    const cardName = cardDef ? getCardName(cardDef) : (cardDict.def_id || '?');
+    container.innerHTML = '';
+    container.classList.remove('hidden');
+    container.classList.add('visible');
+    const label = document.createElement('div');
+    label.className = 'response-label';
+    label.textContent = UI.ally_consent_title || 'Teammate Card Use';
+    container.appendChild(label);
+    const msg = document.createElement('div');
+    msg.className = 'response-label';
+    msg.textContent = (UI.ally_consent_msg || '{0} wants to use {1} on you')
+        .replace('{0}', data.from_name || UI.teammate)
+        .replace('{1}', cardName);
+    container.appendChild(msg);
+    const row = document.createElement('div');
+    row.className = 'response-btn-row';
+    const acceptBtn = document.createElement('button');
+    acceptBtn.className = 'btn btn-primary';
+    const declineBtn = document.createElement('button');
+    declineBtn.className = 'btn btn-danger';
+    declineBtn.textContent = UI.ally_decline || UI.decline || 'Decline';
+    acceptBtn.onclick = () => respondAllyConsent(true);
+    declineBtn.onclick = () => respondAllyConsent(false);
+    row.appendChild(acceptBtn);
+    row.appendChild(declineBtn);
+    container.appendChild(row);
+    allyConsentCountdown = 5;
+    acceptBtn.textContent = (UI.ally_accept_countdown || 'Accept ({0})').replace('{0}', allyConsentCountdown);
+    allyConsentTimerId = setInterval(() => {
+        allyConsentCountdown--;
+        if (allyConsentCountdown <= 0) {
+            respondAllyConsent(false);
+            return;
+        }
+        acceptBtn.textContent = (UI.ally_accept_countdown || 'Accept ({0})').replace('{0}', allyConsentCountdown);
+    }, 1000);
+}
+
+function respondAllyConsent(accepted) {
+    if (allyConsentTimerId) { clearInterval(allyConsentTimerId); allyConsentTimerId = null; }
+    const container = $('response-panel');
+    if (container) { container.innerHTML = ''; container.classList.add('hidden'); container.classList.remove('visible'); }
+    socket.emit('ally_consent_response', { accepted: !!accepted });
+}
+
 async function showChoiceUI(data) {
     if (isSpectating) return;
     const choiceType = data.choice_type || '';
@@ -3133,7 +3327,8 @@ async function showChoiceUI(data) {
             if (sel >= 0 && sel < deck.length) choiceResult = { target_instance_id: deck[sel].instance_id };
         }
     } else if (choiceType === 'choose_from_enemy_hand') {
-        const oppHand = (gameState.opponent || {}).hand || [];
+        const targetId = data.target_player_id != null ? data.target_player_id : -1;
+        const oppHand = (targetId >= 0 ? getPlayerDataById(targetId) : (gameState.opponent || {})).hand || [];
         if (!oppHand.length) { gameAlert(UI.notice, UI.no_enemy_hand); }
         else {
             const options = oppHand.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);

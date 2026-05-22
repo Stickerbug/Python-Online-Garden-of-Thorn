@@ -457,14 +457,8 @@ def broadcast_spectate_state(room):
         state = room.engine.get_public_state(for_player=perspective)
         state['spectating'] = True
         state['spectate_perspective'] = perspective
-        if len(room.player_sids) >= 1 and room.player_sids[0] in players:
-            state['player1_name'] = players[room.player_sids[0]]['nickname']
-        else:
-            state['player1_name'] = '?'
-        if len(room.player_sids) >= 2 and room.player_sids[1] in players:
-            state['player2_name'] = players[room.player_sids[1]]['nickname']
-        else:
-            state['player2_name'] = '?'
+        for i, psid in enumerate(room.player_sids):
+            state[f'player{i + 1}_name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', '?')
         socketio.emit('state_update', state, room=spid)
 
 
@@ -1563,11 +1557,22 @@ def on_play_card(data):
         target_player_id = data.get('target_player_id', -1)
         if card_instance_id is None:
             return
-        if room.mode == '2v2' and target_player_id >= 0:
-            result = engine.play_card(pidx, card_instance_id, target_player_id, choice)
+        if room.mode == '2v2':
+            result = engine.play_card(pidx, card_instance_id, target_player_id=target_player_id, choice=choice)
         else:
             result = engine.play_card(pidx, card_instance_id, choice)
-        if result.get('needs_response'):
+        if result.get('needs_ally_consent'):
+            broadcast_game_state(room)
+            target_pidx = result.get('target_player_id')
+            if isinstance(target_pidx, int) and 0 <= target_pidx < len(room.player_sids):
+                target_sid = room.player_sids[target_pidx]
+                if target_sid in players:
+                    socketio.emit('ally_consent_request', {
+                        'card': result.get('card'),
+                        'from_player': pidx,
+                        'from_name': players[sid]['nickname'],
+                    }, room=target_sid)
+        elif result.get('needs_response'):
             broadcast_game_state(room)
             played_card = result['card']
             played_def = CARD_DEFS.get(played_card.get('def_id', ''), None)
@@ -1580,20 +1585,17 @@ def on_play_card(data):
                 if played_def.id in ('Sewage', 'MagicSewage'):
                     trigger_types.append('equipment_destroy')
             if room.mode == '2v2':
-                enemy_ids = engine.get_all_enemies(pidx)
-                for eid in enemy_ids:
-                    opp = engine.players[eid]
-                    if opp.health <= 0:
-                        continue
-                    counter_cards = []
-                    for tt in trigger_types:
-                        counter_cards.extend(engine.get_counter_cards(eid, tt))
-                    e_sid = room.player_sids[eid]
-                    if e_sid in players:
-                        socketio.emit('response_request', {
-                            'card': played_card,
-                            'counter_cards': [c.to_dict() for c in counter_cards],
-                        }, room=e_sid)
+                by_responder = {}
+                for c in (engine.pending_response or {}).get('counter_cards', []):
+                    by_responder.setdefault(c.get('responder_id'), []).append(c)
+                for responder_id, counter_cards in by_responder.items():
+                    if isinstance(responder_id, int) and 0 <= responder_id < len(room.player_sids):
+                        r_sid = room.player_sids[responder_id]
+                        if r_sid in players:
+                            socketio.emit('response_request', {
+                                'card': played_card,
+                                'counter_cards': counter_cards,
+                            }, room=r_sid)
             else:
                 opp_pidx = 1 - pidx
                 counter_cards = []
@@ -1610,6 +1612,7 @@ def on_play_card(data):
             emit('choice_request', {
                 'choice_type': result['choice_type'],
                 'card': result['card'],
+                'target_player_id': result.get('target_player_id'),
             })
         elif result.get('success'):
             broadcast_game_state(room)
@@ -1635,6 +1638,50 @@ def on_response(data):
         card_instance_id = data.get('card_instance_id')
         engine.handle_response(pidx, card_instance_id)
         broadcast_game_state(room)
+
+
+@socketio.on('ally_consent_response')
+def on_ally_consent_response(data):
+    sid = request.sid
+    with _lock:
+        if sid not in players:
+            return
+        player = players[sid]
+        room_id = player.get('room_id')
+        if room_id is None or room_id not in rooms:
+            return
+        room = rooms[room_id]
+        if room.mode != '2v2':
+            return
+        pidx = room.player_index(sid)
+        if pidx < 0:
+            return
+        accepted = bool(data.get('accepted')) if data else False
+        result = room.engine.handle_ally_consent(pidx, accepted)
+        if result.get('needs_response'):
+            broadcast_game_state(room)
+            played_card = result['card']
+            by_responder = {}
+            for c in (room.engine.pending_response or {}).get('counter_cards', []):
+                by_responder.setdefault(c.get('responder_id'), []).append(c)
+            for responder_id, counter_cards in by_responder.items():
+                if isinstance(responder_id, int) and 0 <= responder_id < len(room.player_sids):
+                    r_sid = room.player_sids[responder_id]
+                    if r_sid in players:
+                        socketio.emit('response_request', {
+                            'card': played_card,
+                            'counter_cards': counter_cards,
+                        }, room=r_sid)
+        elif result.get('needs_choice'):
+            broadcast_game_state(room)
+            requester_sid = room.player_sids[result.get('player_id', room.engine.current_player)] if result.get('player_id') is not None else sid
+            socketio.emit('choice_request', {
+                'choice_type': result['choice_type'],
+                'card': result['card'],
+                'target_player_id': result.get('target_player_id'),
+            }, room=requester_sid)
+        else:
+            broadcast_game_state(room)
 
 
 @socketio.on('resolve_choice')
@@ -1675,7 +1722,11 @@ def on_use_trigger(data):
         equipment_instance_id = data.get('equipment_instance_id')
         if equipment_instance_id is None:
             return
-        result = engine.use_trigger(pidx, equipment_instance_id)
+        target_player_id = data.get('target_player_id', -1)
+        if room.mode == '2v2':
+            result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
+        else:
+            result = engine.use_trigger(pidx, equipment_instance_id)
         if result.get('success'):
             broadcast_game_state(room)
         else:
@@ -1774,7 +1825,7 @@ def on_rematch(data=None):
             if len(room._rematch_votes) == len(room.player_sids):
                 print("[server] debug")
                 room._rematch_votes = set()
-                room.engine = GameEngine()
+                room.engine = GameEngine2v2() if room.mode == '2v2' else GameEngine()
                 names = []
                 for pidx, psid in enumerate(room.player_sids):
                     if psid in players:
@@ -1875,14 +1926,8 @@ def _send_spectate_state_internal(spid, room):
     state = room.engine.get_public_state(for_player=perspective)
     state['spectating'] = True
     state['spectate_perspective'] = perspective
-    if len(room.player_sids) >= 1 and room.player_sids[0] in players:
-        state['player1_name'] = players[room.player_sids[0]]['nickname']
-    else:
-        state['player1_name'] = '?'
-    if len(room.player_sids) >= 2 and room.player_sids[1] in players:
-        state['player2_name'] = players[room.player_sids[1]]['nickname']
-    else:
-        state['player2_name'] = '?'
+    for i, psid in enumerate(room.player_sids):
+        state[f'player{i + 1}_name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', '?')
     socketio.emit('state_update', state, room=spid)
 
 
@@ -1924,7 +1969,7 @@ def on_switch_spectate_perspective(data=None):
             print("[server] debug")
             return
         current = player.get('spectate_perspective', 0)
-        player['spectate_perspective'] = 1 - current
+        player['spectate_perspective'] = (current + 1) % max(1, len(room.player_sids))
         print("[server] debug")
         room = rooms[room_id]
         _send_spectate_state_internal(sid, room)
@@ -1934,4 +1979,3 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
-

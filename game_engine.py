@@ -16,6 +16,7 @@ class EquipmentInstance:
     def __init__(self, card_instance: CardInstance, owner: int):
         self.card_instance = card_instance
         self.owner = owner
+        self.effect_target: int = owner
         self.turns_equipped: int = 0
         self.corruption_active: bool = False
 
@@ -31,6 +32,7 @@ class EquipmentInstance:
         return {
             'card_instance': self.card_instance.to_dict(),
             'owner': self.owner,
+            'effect_target': self.effect_target,
             'turns_equipped': self.turns_equipped,
             'corruption_active': self.corruption_active,
         }
@@ -42,6 +44,7 @@ class EquipmentInstance:
             d['owner']
         )
         ei.turns_equipped = d.get('turns_equipped', 0)
+        ei.effect_target = d.get('effect_target', ei.owner)
         ei.corruption_active = d.get('corruption_active', False)
         return ei
 

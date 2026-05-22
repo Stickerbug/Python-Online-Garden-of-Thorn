@@ -171,11 +171,11 @@ _reg(CardDef('MagicStinger', 'Magic Stinger', '魔法刺', 0, 8, 'thorn', 5, 'Co
 
 _reg(CardDef('Fission', 'Fission', '裂变', 0, 0, 'bloom', 2, 'Common',
              '将一次攻击分裂为多次。', '选择一张手中的攻击牌，将其裂变层数增加2',
-             flags={'exile'}))
+             flags={'exile', 'self_only'}))
 
 _reg(CardDef('Fusion', 'Fusion', '聚变', 0, 0, 'bloom', 2, 'Common',
              '将相同的攻击聚合为一击。', '选择手中2-3张同名攻击牌，将它们的聚变层数相加，裂变层数取最大值，变为一张牌',
-             flags={'exile'}))
+             flags={'exile', 'self_only'}))
 
 _reg(CardDef('Iris', 'Iris', '鸢尾', 3, 0, 'bloom', 3, 'Common',
              '美丽而致命。', '施加10层中毒'))
@@ -209,7 +209,7 @@ _reg(CardDef('MagicSewage', 'Magic Sewage', '魔法污水', 0, 6, 'bloom', 3, 'C
 
 _reg(CardDef('Mimic', 'Mimic', '拟态', 0, 0, 'bloom', 2, 'Common',
              '完美模仿。', '将一张手牌的复制加入手中，使其下一次打出时费用-1',
-             flags={'exile'}))
+             flags={'exile', 'self_only'}))
 
 _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 2, 'Super',
              '神奇的树叶。可以使人死而复生。', '+20H；受到致命伤害时若在手牌中清除己方所有效果将生命值设为5此回合无敌并放逐此牌'))
