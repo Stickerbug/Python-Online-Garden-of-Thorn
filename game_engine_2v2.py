@@ -290,15 +290,6 @@ class GameEngine2v2(GameEngine):
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
         ps.coffee_first_use = True
-        if ps.bandage_death_pending:
-            ps.health = 0
-            ps.bandage_death_pending = False
-            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，生命值归零！")
-            self._on_player_death(player_id)
-            if self.game_over:
-                return
-            self._advance_turn()
-            return
         if ps.skip_turn:
             ps.skip_turn = False
             self.log_msg(f"{self.pn(player_id)}被跳过本回合！")
@@ -349,11 +340,18 @@ class GameEngine2v2(GameEngine):
 
     def _end_player_turn(self, player_id: int):
         ps = self.players[player_id]
-        if ps.bandage_active and ps.invincible:
+        if ps.bandage_death_pending:
+            ps.health = 0
+            ps.bandage_death_pending = False
             ps.invincible = False
+            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，生命值归零！")
+            self._on_player_death(player_id)
+            if self.game_over:
+                return
+        if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
             ps.bandage_death_pending = True
-            self.log_msg(f"{self.pn(player_id)}的绷带无敌结束，将在下回合开始时死亡")
+            self.log_msg(f"{self.pn(player_id)}的绷带无敌将持续到下个友方回合结束")
         void_cards = [c for c in ps.hand if 'void' in c.flags]
         for c in void_cards:
             ps.hand.remove(c)
@@ -799,13 +797,6 @@ class GameEngine2v2(GameEngine):
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
-        if ps.bandage_death_pending:
-            ps.health = 0
-            ps.bandage_death_pending = False
-            ps.invincible = False
-            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，死亡！")
-            self._on_player_death(player_id)
-            return
         if ps.skip_turn:
             ps.skip_turn = False
             self.log_msg(f"{self.pn(player_id)}被跳过本回合！")
@@ -1183,13 +1174,6 @@ class GameEngine2v2(GameEngine):
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
-        if ps.bandage_death_pending:
-            ps.health = 0
-            ps.bandage_death_pending = False
-            ps.invincible = False
-            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，死亡！")
-            self._on_player_death(player_id)
-            return
         if ps.skip_turn:
             ps.skip_turn = False
             self.log_msg(f"{self.pn(player_id)}被跳过本回合！")

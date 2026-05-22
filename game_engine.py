@@ -1,4 +1,4 @@
-﻿import random
+import random
 import math
 from typing import List, Dict, Optional, Tuple, Set
 from engine_runtime_ext import install_runtime_ext
@@ -728,13 +728,6 @@ class GameEngine:
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
-        if ps.bandage_death_pending:
-            ps.health = 0
-            ps.bandage_death_pending = False
-            ps.invincible = False
-            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，死亡！")
-            self._check_game_over()
-            return
         if self.round_num > 1:
             draw_count = DRAW_PER_TURN - ps.enemy_draw_reduction
             draw_count = max(0, draw_count)
@@ -2741,11 +2734,18 @@ class GameEngine:
     def _end_player_turn(self, player_id: int):
         ps = self.players[player_id]
         opp = self.players[1 - player_id]
-        if ps.bandage_active and ps.invincible:
+        if ps.bandage_death_pending:
+            ps.health = 0
+            ps.bandage_death_pending = False
             ps.invincible = False
+            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，死亡！")
+            self._check_game_over()
+            if self.game_over:
+                return
+        if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
             ps.bandage_death_pending = True
-            self.log_msg(f"{self.pn(player_id)}的绷带无敌结束，将在下回合开始时死亡")
+            self.log_msg(f"{self.pn(player_id)}的绷带无敌将持续到下个友方回合结束")
         void_cards = [c for c in ps.hand if 'void' in c.flags]
         for c in void_cards:
             ps.hand.remove(c)
