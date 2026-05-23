@@ -43,6 +43,7 @@ players = {}
 rooms = {}
 invites = {}
 solo_sessions = {}
+tutorial_sessions = set()
 teams = {}
 pending_team_matches = {}
 
@@ -394,9 +395,9 @@ def _reset_player_for_solo(ps, deck_entries, is_first):
     ps.is_first_player = is_first
 
 
-def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=None):
+def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=None, player_names=None, start_label='单人训练场开始'):
     engine = GameEngine()
-    engine.player_names = ['Player A', 'Player B']
+    engine.player_names = list(player_names) if player_names else ['Player A', 'Player B']
     engine.phase = 'playing'
     force_first = [idx for idx, event_id in enumerate((event0, event1)) if event_id == 7]
     engine.first_player = force_first[0] if len(force_first) == 1 else 0
@@ -421,7 +422,7 @@ def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=N
             engine.players[i].draw_cards(hand_size)
         else:
             engine.players[i].draw_cards(INITIAL_HAND_SIZE)
-    engine.log_msg(f"单人训练场开始！{engine.pn(engine.first_player)}先手。")
+    engine.log_msg(f"{start_label}！{engine.pn(engine.first_player)}先手。")
     engine.log_msg(f"=== 第{engine.round_num}回合 ===")
     engine._start_player_turn(engine.first_player)
     return engine
@@ -431,12 +432,18 @@ def send_solo_state(sid, perspective=None):
     engine = solo_sessions.get(sid)
     if not engine:
         return
+    is_tutorial = sid in tutorial_sessions
     if perspective is None:
-        perspective = engine.current_player if not engine.game_over else 0
+        perspective = 0 if is_tutorial else (engine.current_player if not engine.game_over else 0)
     state = engine.get_public_state(perspective)
     state['your_id'] = perspective
-    state['your_name'] = 'Player A' if perspective == 0 else 'Player B'
-    state['opponent_name'] = 'Player B' if perspective == 0 else 'Player A'
+    if is_tutorial:
+        state['your_name'] = '你'
+        state['opponent_name'] = '练习对手'
+        state['tutorial'] = True
+    else:
+        state['your_name'] = 'Player A' if perspective == 0 else 'Player B'
+        state['opponent_name'] = 'Player B' if perspective == 0 else 'Player A'
     state['solo'] = True
     socketio.emit('solo_state', state, room=sid)
 
@@ -832,7 +839,7 @@ def on_draft_reroll(data=None):
                 for pi in range(len(room.player_sids)):
                     send_draft_state(room, pi)
             else:
-                emit('server_error', {'message': 'Operation failed'})
+                emit('server_error', {'message': '无法重抽：当前不是选牌阶段或重抽次数已用完'})
     except Exception as e:
         print("[server] debug")
         import traceback
@@ -955,7 +962,7 @@ def on_accept_team(data):
         if players[sid]['status'] != 'lobby' or players[leader_sid]['status'] != 'lobby':
             return
         if players[sid].get('mods_hash') != players[leader_sid].get('mods_hash'):
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '模组不一致，无法组队'})
             return
         if sid in teams or leader_sid in teams:
             return
@@ -1017,7 +1024,7 @@ def on_invite_team(data):
             return
         all_match_sids = my_team['members'] + target_team['members']
         if not same_mod_loadout(all_match_sids):
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '模组不一致，无法开始2v2'})
             return
         match_key = (min(my_team['leader'], target_team['leader']),
                      max(my_team['leader'], target_team['leader']))
@@ -1058,7 +1065,7 @@ def on_accept_team_match(data):
             if s not in players or players[s]['status'] != 'lobby':
                 return
         if not same_mod_loadout(all_sids):
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '模组不一致，无法开始2v2'})
             return
         room_id = _next_room_id
         _next_room_id += 1
@@ -1108,6 +1115,7 @@ def on_disconnect():
             return
         player = players[sid]
         solo_sessions.pop(sid, None)
+        tutorial_sessions.discard(sid)
         room_id = player.get('room_id')
         nickname = player['nickname']
         if room_id is not None and room_id in rooms:
@@ -1251,7 +1259,7 @@ def on_invite(data):
     with _lock:
         if sid not in players or target_sid not in players:
             print("[server] debug")
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '目标玩家不存在'})
             return
         if sid == target_sid:
             return
@@ -1260,20 +1268,20 @@ def on_invite(data):
             return
         target = players[target_sid]
         if target['status'] != 'lobby':
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '目标玩家不在大厅'})
             return
         inviter = players[sid]
         inviter_mode = inviter.get('mode', '1v1')
         target_mode = target.get('mode', '1v1')
         if inviter_mode not in ('1v1', 'urf') or target_mode != inviter_mode:
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '双方模式不一致，无法邀请'})
             return
         if inviter.get('mods_hash') != target.get('mods_hash'):
             inviter_mods = inviter.get('mods_list', [])
             target_mods = target.get('mods_list', [])
             inviter_label = ', '.join(inviter_mods) if inviter_mods else 'no mods'
             target_label = ', '.join(target_mods) if target_mods else 'no mods'
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': f'模组不一致，无法开始对局。你：{inviter_label}；对方：{target_label}'})
             return
         invites[sid] = target_sid
         inviter_name = players[sid]['nickname']
@@ -1417,7 +1425,7 @@ def on_draft_pick(data):
             if engine.phase == 'event_select':
                 start_event_select(room)
         else:
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '无法选择这张牌'})
 
 
 @socketio.on('select_opening_event')
@@ -1460,7 +1468,7 @@ def on_solo_start(data):
     sub0 = data.get('sub0') if data else None
     sub1 = data.get('sub1') if data else None
     if len(deck0) != DECK_SIZE or len(deck1) != DECK_SIZE:
-        emit('server_error', {'message': 'Operation failed'})
+        emit('server_error', {'message': '训练场牌组必须各为15张'})
         return
     allowed_card_ids = get_allowed_card_ids([])
     if sid in players:
@@ -1469,14 +1477,99 @@ def on_solo_start(data):
         def_id = entry.get('def_id') if isinstance(entry, dict) else entry
         return def_id in CARD_DEFS and def_id in allowed_card_ids
     if any(not _valid_entry(entry) for entry in deck0 + deck1):
-        emit('server_error', {'message': 'Operation failed'})
+        emit('server_error', {'message': '训练场牌组中包含当前未启用的卡牌'})
         return
     with _lock:
+        tutorial_sessions.discard(sid)
         solo_sessions[sid] = create_solo_engine(deck0, deck1, event0, event1, sub0, sub1)
         if sid in players:
             players[sid]['status'] = 'solo'
         socketio.emit('game_phase', {'phase': 'playing', 'solo': True}, room=sid)
         send_solo_state(sid)
+
+
+@socketio.on('tutorial_start')
+def on_tutorial_start(data=None):
+    sid = request.sid
+    deck0 = [
+        'Basic', 'Rose', 'Leaf', 'Coffee', 'Fission',
+        'Triangle', 'Bubble', 'Fusion', 'Basic', 'Basic',
+        'Bone', 'Battery', 'Stinger', 'Leaf', 'Bubble',
+    ]
+    deck1 = [
+        'Basic', 'Rose', 'Coffee', 'Battery', 'Rose',
+        'Basic', 'Bone', 'Leaf', 'Bubble', 'Basic',
+        'Stinger', 'Battery', 'Bubble', 'Triangle', 'Fire',
+    ]
+    with _lock:
+        tutorial_sessions.add(sid)
+        solo_sessions[sid] = create_solo_engine(
+            deck0,
+            deck1,
+            None,
+            None,
+            None,
+            None,
+            player_names=['你', '练习对手'],
+            start_label='新手教程开始',
+        )
+        engine = solo_sessions[sid]
+        if sid in players:
+            players[sid]['status'] = 'tutorial'
+        socketio.emit('game_phase', {'phase': 'playing', 'solo': True, 'tutorial': True}, room=sid)
+        send_solo_state(sid, 0)
+
+
+def _pick_tutorial_bot_card(engine):
+    if engine.current_player != 1 or engine.phase != 'action' or engine.game_over:
+        return None
+    ps = engine.players[1]
+    if sum(ps.cards_played_this_turn.values()) >= 1:
+        return None
+    safe_card_ids = {'Basic', 'Bone', 'Fire', 'Rose', 'Coffee', 'Battery'}
+    order = ('thorn', 'bloom', 'root')
+    for card_type in order:
+        for card in ps.hand:
+            card_def = card.card_def
+            if card.def_id not in safe_card_ids or card_def.card_type != card_type:
+                continue
+            if card_def.card_type == 'guard':
+                continue
+            if card_def.card_type == 'root' and len(ps.equipment) >= 4:
+                continue
+            can_play, _ = engine.can_play_card(1, card)
+            if can_play:
+                return card
+    return None
+
+
+@socketio.on('tutorial_bot_action')
+def on_tutorial_bot_action(data=None):
+    sid = request.sid
+    with _lock:
+        if sid not in tutorial_sessions:
+            return
+        engine = solo_sessions.get(sid)
+        if not engine or engine.game_over:
+            send_solo_state(sid, 0)
+            return
+        if engine.current_player != 1 or engine.pending_response is not None:
+            send_solo_state(sid, 0)
+            return
+        card = _pick_tutorial_bot_card(engine)
+        if card:
+            result = engine.play_card(1, card.instance_id)
+            if result.get('needs_response'):
+                send_solo_state(sid, 0)
+                emit_solo_response_request(sid, engine, 1, result['card'])
+            elif result.get('needs_choice'):
+                engine.end_turn(1)
+                send_solo_state(sid, 0)
+            else:
+                send_solo_state(sid, 0)
+        else:
+            engine.end_turn(1)
+            send_solo_state(sid, 0)
 
 
 @socketio.on('solo_play_card')
@@ -1485,12 +1578,12 @@ def on_solo_play_card(data):
     with _lock:
         engine = solo_sessions.get(sid)
         if not engine:
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '训练场尚未开始'})
             return
         pidx = engine.current_player
         result = engine.play_card(pidx, data.get('card_instance_id'), data.get('choice'))
         if result.get('needs_response'):
-            send_solo_state(sid, 1 - pidx)
+            send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pidx)
             emit_solo_response_request(sid, engine, pidx, result['card'])
         elif result.get('needs_choice'):
             send_solo_state(sid)
@@ -1501,7 +1594,7 @@ def on_solo_play_card(data):
         elif result.get('success'):
             send_solo_state(sid)
         else:
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': result.get('error', 'Operation failed')})
 
 
 @socketio.on('solo_response')
@@ -1537,7 +1630,7 @@ def on_solo_use_trigger(data):
             return
         result = engine.use_trigger(engine.current_player, data.get('equipment_instance_id'))
         if not result.get('success'):
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': result.get('error', 'Operation failed')})
         send_solo_state(sid)
 
 
@@ -1550,7 +1643,7 @@ def on_solo_end_turn(data=None):
             return
         result = engine.end_turn(engine.current_player)
         if not result.get('success'):
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': result.get('error', 'Operation failed')})
         send_solo_state(sid)
 
 
@@ -1574,7 +1667,7 @@ def on_solo_set_next_draw(data):
             if idx2 >= 0:
                 picked.append(ps.deck.pop(idx2))
         if not picked:
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '设置失败：牌堆中没有这些牌'})
             return
         for c in reversed(picked):
             ps.deck.insert(0, c)
@@ -1584,7 +1677,7 @@ def on_solo_set_next_draw(data):
         return
         idx = next((i for i, c in enumerate(ps.deck) if c.def_id == def_id), -1)
         if idx < 0:
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '设置失败：牌堆中没有这张牌'})
             return
         card = ps.deck.pop(idx)
         ps.deck.insert(0, card)
@@ -1596,6 +1689,7 @@ def on_solo_set_next_draw(data):
 def on_solo_pause(data=None):
     sid = request.sid
     solo_sessions.pop(sid, None)
+    tutorial_sessions.discard(sid)
     if sid in players:
         players[sid]['status'] = 'lobby'
     socketio.emit('solo_paused', {}, room=sid)
@@ -1619,6 +1713,10 @@ def on_play_card(data):
         card_instance_id = data.get('card_instance_id')
         choice = data.get('choice')
         target_player_id = data.get('target_player_id', -1)
+        try:
+            target_player_id = int(target_player_id)
+        except (TypeError, ValueError):
+            target_player_id = -1
         if card_instance_id is None:
             return
         if room.mode == '2v2':
@@ -1681,7 +1779,7 @@ def on_play_card(data):
         elif result.get('success'):
             broadcast_game_state(room)
         else:
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': result.get('error', 'Operation failed')})
 
 
 @socketio.on('response')
@@ -1787,6 +1885,10 @@ def on_use_trigger(data):
         if equipment_instance_id is None:
             return
         target_player_id = data.get('target_player_id', -1)
+        try:
+            target_player_id = int(target_player_id)
+        except (TypeError, ValueError):
+            target_player_id = -1
         if room.mode == '2v2':
             result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
         else:
@@ -1794,7 +1896,7 @@ def on_use_trigger(data):
         if result.get('success'):
             broadcast_game_state(room)
         else:
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': result.get('error', 'Operation failed')})
 
 
 @socketio.on('urf_replace_card')
@@ -1849,19 +1951,19 @@ def on_end_turn(data):
         with _lock:
             if sid not in players:
                 print("[server] debug")
-                emit('server_error', {'message': 'Operation failed'})
+                emit('server_error', {'message': '玩家不在对局中'})
                 return
             player = players[sid]
             room_id = player.get('room_id')
             if room_id is None or room_id not in rooms:
                 print("[server] debug")
-                emit('server_error', {'message': 'Operation failed'})
+                emit('server_error', {'message': '对局不存在'})
                 return
             room = rooms[room_id]
             pidx = room.player_index(sid)
             if pidx < 0:
                 print("[server] debug")
-                emit('server_error', {'message': 'Operation failed'})
+                emit('server_error', {'message': '你不是该对局的玩家'})
                 return
             engine = room.engine
             print("[server] debug")
@@ -1869,12 +1971,12 @@ def on_end_turn(data):
             print("[server] debug")
             broadcast_game_state(room)
             if not result.get('success'):
-                emit('server_error', {'message': 'Operation failed'})
+                emit('server_error', {'message': result.get('error', 'Operation failed')})
     except Exception as e:
         import traceback
         traceback.print_exc()
         print("[server] debug")
-        emit('server_error', {'message': 'Operation failed'})
+        emit('server_error', {'message': '结束回合失败，请稍后重试'})
 
 
 @socketio.on('surrender')
@@ -1883,17 +1985,17 @@ def on_surrender(data):
     try:
         with _lock:
             if sid not in players:
-                emit('server_error', {'message': 'Operation failed'})
+                emit('server_error', {'message': '玩家不在对局中'})
                 return
             player = players[sid]
             room_id = player.get('room_id')
             if room_id is None or room_id not in rooms:
-                emit('server_error', {'message': 'Operation failed'})
+                emit('server_error', {'message': '对局不存在'})
                 return
             room = rooms[room_id]
             pidx = room.player_index(sid)
             if pidx < 0:
-                emit('server_error', {'message': 'Operation failed'})
+                emit('server_error', {'message': '你不是该对局的玩家'})
                 return
             engine = room.engine
             result = engine.surrender(pidx)
@@ -1903,12 +2005,12 @@ def on_surrender(data):
                     if psid in players:
                         socketio.emit('game_phase', {'phase': 'game_over'}, room=psid)
             else:
-                emit('server_error', {'message': 'Operation failed'})
+                emit('server_error', {'message': result.get('error', '投降失败')})
     except Exception as e:
         import traceback
         traceback.print_exc()
         print("[server] debug")
-        emit('server_error', {'message': 'Operation failed'})
+        emit('server_error', {'message': '投降失败，请稍后重试'})
 
 
 @socketio.on('rematch')
@@ -2002,19 +2104,19 @@ def on_spectate(data):
             return
         player = players[sid]
         if player['status'] != 'lobby':
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '只有在大厅中才能观战'})
             return
         room_id = data.get('room_id')
         if room_id is None or room_id not in rooms:
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '对局不存在'})
             return
         room = rooms[room_id]
         phase = room.engine.phase
         if phase in ('draft', 'event_select'):
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '选牌或开局事件阶段暂不能观战'})
             return
         if phase not in ('action', 'draw', 'playing', 'response', 'choice'):
-            emit('server_error', {'message': 'Operation failed'})
+            emit('server_error', {'message': '该对局当前不能观战'})
             return
         player['status'] = 'spectating'
         player['spectating_room'] = room_id

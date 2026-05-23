@@ -161,7 +161,7 @@ _reg(CardDef('Fang', 'Fang', '尖牙', 2, 0, 'thorn', 5, 'Common',
              '吸取对手的生命来为你回复。', '造成8D; 造成伤害时+4H'))
 
 _reg(CardDef('Triangle', 'Triangle', '三角形', 2, 0, 'thorn', 8, 'Common',
-             '量变引起质变。', '造成(6+3×三角形层数)D；造成伤害时获得一层三角形'))
+             '量变引起质变。', '造成(6+3×三角形层数)D；造成伤害时获得一层三角形，上限4层'))
 
 _reg(CardDef('MagicBone', 'Magic Bone', '魔法骨头', 0, 4, 'thorn', 5, 'Common',
              '魔力凝聚的骨头，穿透力更强。', '造成15D'))
@@ -202,7 +202,7 @@ _reg(CardDef('Chromosome', 'Chromosome', '染色体', 2, 0, 'bloom', 2, 'Common'
              '从基因中提取记忆，寻找所需之牌。', '从弃牌堆中选择一张牌将其加入手中'))
 
 _reg(CardDef('Sewage', 'Sewage', '污水', 2, 0, 'bloom', 10, 'Common',
-             '腐蚀一切装备。', '摧毁敌方一张装备'))
+             '腐蚀一切装备。', '摧毁目标一张装备'))
 
 _reg(CardDef('MagicSewage', 'Magic Sewage', '魔法污水', 0, 6, 'bloom', 3, 'Common',
              '至死方休！', '摧毁场上所有装备'))
@@ -212,53 +212,53 @@ _reg(CardDef('Mimic', 'Mimic', '拟态', 0, 0, 'bloom', 2, 'Common',
              flags={'exile', 'self_only'}))
 
 _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 2, 'Super',
-             '神奇的树叶。可以使人死而复生。', '+20H；受到致命伤害时，若在手牌中，则清除己方所有效果，将生命值设为5，此回合无敌并放逐此牌'))
+             '神奇的树叶。可以使人死而复生。', '+20H；受到致命伤害时，若在手牌中，则清除自己的所有效果，将生命值设为5，此回合无敌并放逐此牌'))
 
 _reg(CardDef('Leaf', 'Leaf', '叶子', 1, 0, 'root', 5, 'Common',
              '基础的装备之一，可以回复生命亦可造成伤害。',
-             '友方回合开始时+2H',
-             trigger_cost_e=1, trigger_effect_text='若已装备一回合则摧毁此装备，造成8D'))
+             '自己回合开始时+2H',
+             trigger_cost_e=1, trigger_effect_text='若已装备一回合则可摧毁此装备，造成8D'))
 
 _reg(CardDef('Yucca', 'Yucca', '丝兰', 4, 0, 'root', 5, 'Common',
-             '叶子的加强版。', '友方回合开始时+5H'))
+             '叶子的加强版。', '自己回合开始时+5H'))
 
 _reg(CardDef('Disc', 'Disc', '圆盘', 3, 0, 'root', 3, 'Common',
              '坚实的护盾，减免来袭的伤害。', '+2A', flags={'non_stackable'}))
 
 _reg(CardDef('Battery', 'Battery', '电池', 3, 0, 'root', 5, 'Common',
-             '受击时会漏电。', '受到物理伤害时对敌方造成3D'))
+             '受击时会漏电。', '受到物理伤害时对攻击者造成3D'))
 
 _reg(CardDef('MagicLeaf', 'Magic Leaf', '魔法叶', 1, 0, 'root', 5, 'Common',
-             '不再能造成伤害了，但它可以回复魔力。', '友方回合开始时+1M'))
+             '不再能造成伤害了，但它可以回复魔力。', '自己回合开始时+1M'))
 
 _reg(CardDef('MagicYucca', 'Magic Yucca', '魔法丝兰', 3, 0, 'root', 5, 'Common',
-             '生成更多魔力。', '友方回合开始时+2M'))
+             '生成更多魔力。', '自己回合开始时+2M'))
 
 _reg(CardDef('MagicBattery', 'Magic Battery', '魔法电池', 3, 0, 'root', 3, 'Common',
              '每次受击都会激发魔力涌动。', '受到物理伤害时+1M(每回合上限3M)'))
 
 _reg(CardDef('Powder', 'Powder', '粉末', 4, 0, 'root', 5, 'Common',
-             '使你加快速度的神秘粉末。', '友方回合开始时+2E'))
+             '使你加快速度的神秘粉末。', '自己回合开始时+2E'))
 
 _reg(CardDef('GoldenLeaf', 'Golden Leaf', '黄金叶', 3, 0, 'root', 5, 'Common',
-             '这闪亮的叶子能为你带来额外的抽牌机会。', '回合开始时多抽一张牌'))
+             '这闪亮的叶子能为你带来额外的抽牌机会。', '自己回合开始时多抽一张牌'))
 
 _reg(CardDef('Pincer', 'Pincer', '螫针', 4, 0, 'root', 3, 'Common',
-             '毒素可以减缓对手行动。', '敌方回合开始时费用回复-1E'))
+             '毒素可以减缓对手行动。', '目标回合开始时E回复-1'))
 
 _reg(CardDef('Cancer', 'Cancer', '癌细胞', 4, 0, 'root', 2, 'Common',
-             '无法根除的恶性细胞。', '对敌方施加1层淬毒', flags={'indestructible'}))
+             '无法根除的恶性细胞。', '对目标施加1层淬毒', flags={'indestructible'}))
 
 _reg(CardDef('Corruption', 'Corruption', '腐化', 0, 0, 'root', 2, 'Common',
-             '伤敌一千，自损八百。', '自下个敌方回合开始，全场所有伤害翻倍', flags={'indestructible'}))
+             '伤敌一千，自损八百。', '自下个敌方回合开始，全场所有伤害翻倍', flags={'indestructible', 'self_only'}))
 
 _reg(CardDef('Mark', 'Mark', '标记', 4, 0, 'root', 3, 'Common',
-             '你被标记了！', '禁止敌方行动一回合',
-             trigger_cost_e=0, trigger_effect_text='若已装备一回合则摧毁此装备，直到敌方下回合结束敌方禁止行动'))
+             '你被标记了！', '禁止目标行动一回合',
+             trigger_cost_e=0, trigger_effect_text='若已装备一回合则可摧毁此装备，直到目标下回合结束目标禁止行动'))
 
 _reg(CardDef('Mine', 'Mine', '地雷', 3, 0, 'root', 3, 'Common',
              '它很危险，但需要一回合准备。', '下回合造成20D',
-             trigger_cost_e=0, trigger_effect_text='若已装备一回合则摧毁此装备，造成20D'))
+             trigger_cost_e=0, trigger_effect_text='若已装备一回合则可摧毁此装备，造成20D'))
 
 _reg(CardDef('Bubble', 'Bubble', '泡泡', 2, 0, 'guard', 10, 'Common',
              '闪！', '获得一层闪避（敌方使用攻击牌时）',
@@ -269,7 +269,7 @@ _reg(CardDef('Nazar', 'Nazar', '邪眼护符', 5, 0, 'guard', 3, 'Common',
              response_trigger='thorn'))
 
 _reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 0, 3, 'guard', 3, 'Common',
-             '有魔力的护符，保护你的装备不被摧毁。', '获得一层装备保护（敌方摧毁装备牌时）',
+             '有魔力的护符，保护你的装备不被摧毁。', '获得一层装备保护（自己的装备即将被摧毁时）',
              response_trigger='equipment_destroy'))
 
 _reg(CardDef('MagicBubble', 'Magic Bubble', '魔法泡泡', 0, 4, 'guard', 3, 'Common',

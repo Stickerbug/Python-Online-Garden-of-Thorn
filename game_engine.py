@@ -643,6 +643,7 @@ class GameEngine:
                                 self.log_msg(f"{self.pn(player_id)}【魔力转化】：{source_name}变为{magic_name}")
                                 break
         elif event_id == 3:
+            converted = 0
             if sub and 'convert_def_ids' in sub:
                 target_def_ids = list(sub['convert_def_ids'])
                 converted = 0
@@ -654,15 +655,6 @@ class GameEngine:
                             ps.deck[j] = light_card
                             converted += 1
                             break
-                self.log_msg(f"{self.pn(player_id)}【光之洗礼】：{converted}张牌变为Light(萌芽+共生)")
-            else:
-                converted = 0
-                for j in range(len(ps.deck) - 1, -1, -1):
-                    if ps.deck[j].def_id != 'Light' and converted < 5:
-                        light_card = CardInstance(def_id='Light')
-                        light_card.instance_flags = {'sprout', 'symbiosis'}
-                        ps.deck[j] = light_card
-                        converted += 1
                 self.log_msg(f"{self.pn(player_id)}【光之洗礼】：{converted}张牌变为Light(萌芽+共生)")
         elif event_id == 4:
             opp.fire += 2

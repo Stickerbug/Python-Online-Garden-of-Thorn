@@ -64,7 +64,7 @@ CARD_I18N = {
     'Triangle': {
         'name': _t('三角形', 'Triangle', 'Triangle', 'Triângulo', 'Треугольник', '三角形'),
         'desc': _t('量变引起质变。', 'Quantitative change leads to qualitative change.', 'Le changement quantitatif mène au changement qualitatif.', 'Mudança quantitativa leva a mudança qualitativa.', 'Количество переходит в качество.', '量の変化が質の変化を生む。'),
-        'effect': _t('造成(6+3×三角形层数)D；造成伤害时获得一层三角形', 'Deal (6+3×Triangle stacks)D; when damage is dealt, gain 1 Triangle stack', 'Inflige (6+3×charges de Triangle)D ; si des dégâts sont infligés, gagne 1 charge de Triangle', 'Causa (6+3×camadas de Triângulo)D; ao causar dano, ganha 1 camada de Triângulo', 'Наносит (6+3×слои Треугольника)D; при нанесении урона получает 1 слой Треугольника', '（6+3×三角形層数）Dを与える。ダメージを与えた時、三角形を1層得る'),
+        'effect': _t('造成(6+3×三角形层数)D；造成伤害时获得一层三角形，上限4层', 'Deal (6+3×Triangle stacks)D; when damage is dealt, gain 1 Triangle stack, up to 4', 'Inflige (6+3×charges de Triangle)D ; si des dégâts sont infligés, gagne 1 charge de Triangle, max 4', 'Causa (6+3×camadas de Triângulo)D; ao causar dano, ganha 1 camada de Triângulo, máximo 4', 'Наносит (6+3×слои Треугольника)D; при нанесении урона получает 1 слой Треугольника, максимум 4', '(6+3×三角形層数)Dを与える。ダメージを与えた時、三角形を1層得る。上限4層'),
     },
     'Fries': {
         'name': _t('薯条', 'Fries', 'Frites', 'Batatas fritas', 'Картофель фри', 'フライドポテト'),
@@ -79,13 +79,13 @@ CARD_I18N = {
     'Leaf': {
         'name': _t('叶子', 'Leaf', 'Feuille', 'Folha', 'Лист', '葉'),
         'desc': _t('基础的装备之一，可以回复生命亦可造成伤害。', 'One of the basic equipments; it can restore health and also deal damage.', 'Un équipement de base ; il peut restaurer de la vie et infliger des dégâts.', 'Um equipamento básico; pode restaurar vida e também causar dano.', 'Базовое снаряжение: лечит и может наносить урон.', '基本装備のひとつ。生命を回復し、ダメージも与えられる。'),
-        'effect': _t('友方回合开始时+2H 触发：1E，若已装备一回合则摧毁此装备，造成8D', 'At friendly turn start +2H. Trigger: 1E; if equipped for one turn, destroy this equipment and deal 8D', 'Au début du tour allié +2H. Déclenchement : 1E ; si équipé depuis un tour, détruit cet équipement et inflige 8D', 'No início do turno aliado +2H. Acionar: 1E; se equipado por um turno, destrói este equipamento e causa 8D', 'В начале хода союзника +2H. Активация: 1E; если снаряжено один ход, уничтожить это снаряжение и нанести 8D', '味方ターン開始時+2H。発動：1E。1ターン装備済みならこの装備を破壊し、8Dを与える'),
-        'trigger': _t('若已装备一回合则摧毁此装备，造成8D', 'If equipped for one turn, destroy this equipment and deal 8D', 'Si équipé depuis un tour, détruit cet équipement et inflige 8D', 'Se equipado por um turno, destrói este equipamento e causa 8D', 'Если снаряжено один ход, уничтожить это снаряжение и нанести 8D', '1ターン装備済みならこの装備を破壊し、8Dを与える'),
+        'effect': _t('自己回合开始时+2H 触发：1E，若已装备一回合则可摧毁此装备，造成8D', 'At your turn start +2H. Trigger: 1E; if equipped for one turn, you may destroy this equipment to deal 8D', 'Au début de votre tour +2H. Déclenchement : 1E ; si équipé depuis un tour, vous pouvez détruire cet équipement pour infliger 8D', 'No início do seu turno +2H. Acionar: 1E; se equipado por um turno, você pode destruir este equipamento para causar 8D', 'В начале вашего хода +2H. Активация: 1E; если снаряжено один ход, можно уничтожить это снаряжение и нанести 8D', '自分のターン開始時+2H。発動：1E。1ターン装備済みならこの装備を破壊して8Dを与えられる'),
+        'trigger': _t('若已装备一回合则可摧毁此装备，造成8D', 'If equipped for one turn, you may destroy this equipment to deal 8D', 'Si équipé depuis un tour, vous pouvez détruire cet équipement pour infliger 8D', 'Se equipado por um turno, você pode destruir este equipamento para causar 8D', 'Если снаряжено один ход, можно уничтожить это снаряжение и нанести 8D', '1ターン装備済みならこの装備を破壊して8Dを与えられる'),
     },
     'Yucca': {
         'name': _t('丝兰', 'Yucca', 'Yucca', 'Yucca', 'Юкка', 'ユッカ'),
         'desc': _t('叶子的加强版。', 'An enhanced version of Leaf.', 'Une version renforcée de Feuille.', 'Uma versão reforçada de Folha.', 'Усиленная версия Листа.', '葉の強化版。'),
-        'effect': _t('友方回合开始时+5H', 'At friendly turn start +5H', 'Au début du tour allié +5H', 'No início do turno aliado +5H', 'В начале хода союзника +5H', '味方ターン開始時+5H'),
+        'effect': _t('自己回合开始时+5H', 'At your turn start +5H', 'Au début de votre tour +5H', 'No início do seu turno +5H', 'В начале вашего хода +5H', '自分のターン開始時+5H'),
     },
     'Disc': {
         'name': _t('圆盘', 'Disc', 'Disque', 'Disco', 'Диск', '円盤'),
@@ -95,7 +95,7 @@ CARD_I18N = {
     'Battery': {
         'name': _t('电池', 'Battery', 'Batterie', 'Bateria', 'Батарея', '電池'),
         'desc': _t('受击时会漏电。', 'Leaks electricity when hit.', 'Fuit de l’électricité lorsqu’elle est touchée.', 'Vaza eletricidade quando atingida.', 'При ударе даёт утечку тока.', '攻撃されると漏電する。'),
-        'effect': _t('受到物理伤害时对敌方造成3D', 'When taking physical damage, deal 3D to the enemy', 'Quand vous subissez des dégâts physiques, inflige 3D à l’ennemi', 'Ao sofrer dano físico, causa 3D ao inimigo', 'При получении физического урона наносит врагу 3D', '物理ダメージを受けた時、敵に3Dを与える'),
+        'effect': _t('受到物理伤害时对攻击者造成3D', 'When taking physical damage, deal 3D to the attacker', 'Quand vous subissez des dégâts physiques, inflige 3D à l’attaquant', 'Ao sofrer dano físico, causa 3D ao atacante', 'При получении физического урона наносит атакующему 3D', '物理ダメージを受けた時、攻撃者に3Dを与える'),
     },
     'Bubble': {
         'name': _t('泡泡', 'Bubble', 'Bulle', 'Bolha', 'Пузырь', '泡'),
@@ -110,7 +110,7 @@ CARD_I18N = {
     'MagicLeaf': {
         'name': _t('魔法叶', 'Magic Leaf', 'Feuille magique', 'Folha Mágica', 'Магический лист', '魔法の葉'),
         'desc': _t('不再能造成伤害了，但它可以回复魔力。', 'It can no longer deal damage, but it can restore magic.', 'Elle ne peut plus infliger de dégâts, mais elle peut restaurer de la magie.', 'Não causa mais dano, mas pode restaurar magia.', 'Больше не наносит урон, но восстанавливает магию.', 'もうダメージは与えられないが、魔力を回復できる。'),
-        'effect': _t('友方回合开始时+1M', 'At friendly turn start +1M', 'Au début du tour allié +1M', 'No início do turno aliado +1M', 'В начале хода союзника +1M', '味方ターン開始時+1M'),
+        'effect': _t('自己回合开始时+1M', 'At your turn start +1M', 'Au début de votre tour +1M', 'No início do seu turno +1M', 'В начале вашего хода +1M', '自分のターン開始時+1M'),
     },
     'ManaOrb': {
         'name': _t('魔法球', 'Mana Orb', 'Orbe de mana', 'Orbe de Mana', 'Сфера маны', 'マナオーブ'),
@@ -120,7 +120,7 @@ CARD_I18N = {
     'MagicYucca': {
         'name': _t('魔法丝兰', 'Magic Yucca', 'Yucca magique', 'Yucca Mágica', 'Магическая юкка', '魔法ユッカ'),
         'desc': _t('生成更多魔力。', 'Generates more magic.', 'Génère plus de magie.', 'Gera mais magia.', 'Создаёт больше магии.', 'より多くの魔力を生む。'),
-        'effect': _t('友方回合开始时+2M', 'At friendly turn start +2M', 'Au début du tour allié +2M', 'No início do turno aliado +2M', 'В начале хода союзника +2M', '味方ターン開始時+2M'),
+        'effect': _t('自己回合开始时+2M', 'At your turn start +2M', 'Au début de votre tour +2M', 'No início do seu turno +2M', 'В начале вашего хода +2M', '自分のターン開始時+2M'),
     },
     'MagicBattery': {
         'name': _t('魔法电池', 'Magic Battery', 'Batterie magique', 'Bateria Mágica', 'Магическая батарея', '魔法電池'),
@@ -130,7 +130,7 @@ CARD_I18N = {
     'MagicNazar': {
         'name': _t('魔法邪眼', 'Magic Nazar', 'Nazar magique', 'Nazar Mágico', 'Магический назар', '魔法ナザール'),
         'desc': _t('有魔力的护符，保护你的装备不被摧毁。', 'A magical amulet that protects your equipment from destruction.', 'Une amulette magique qui protège votre équipement de la destruction.', 'Um amuleto mágico que protege seu equipamento da destruição.', 'Магический амулет, защищающий снаряжение от уничтожения.', '魔力を持つ護符。装備が破壊されるのを防ぐ。'),
-        'effect': _t('获得一层装备保护 响应：友方装备即将被摧毁', 'Gain 1 Equip Protect. Response: friendly equipment is about to be destroyed', 'Gagne 1 Protection d’équipement. Réponse : un équipement allié va être détruit', 'Ganha 1 Proteção de Equipamento. Resposta: equipamento aliado prestes a ser destruído', 'Получить 1 Защиту снаряжения. Ответ: союзное снаряжение вот-вот будет уничтожено', '装備保護を1層得る。反応：味方装備が破壊されそうな時'),
+        'effect': _t('获得一层装备保护 响应：自己的装备即将被摧毁', 'Gain 1 Equip Protect. Response: your equipment is about to be destroyed', 'Gagne 1 Protection d’équipement. Réponse : votre équipement va être détruit', 'Ganha 1 Proteção de Equipamento. Resposta: seu equipamento está prestes a ser destruído', 'Получить 1 Защиту снаряжения. Ответ: ваше снаряжение вот-вот будет уничтожено', '装備保護を1層得る。反応：自分の装備が破壊されそうな時'),
     },
     'MagicBone': {
         'name': _t('魔法骨头', 'Magic Bone', 'Os magique', 'Osso Mágico', 'Магическая кость', '魔法の骨'),
@@ -155,12 +155,12 @@ CARD_I18N = {
     'Powder': {
         'name': _t('粉末', 'Powder', 'Poudre', 'Pó', 'Порошок', '粉末'),
         'desc': _t('使你加快速度的神秘粉末，不要去想它到底是什么。', 'A mysterious powder that speeds you up. Do not think too hard about what it is.', 'Une poudre mystérieuse qui vous accélère. Ne réfléchissez pas trop à ce que c’est.', 'Um pó misterioso que acelera você. Melhor não pensar demais no que ele é.', 'Таинственный порошок, ускоряющий вас. Лучше не думать, что это такое.', '速度を上げる謎の粉末。それが何なのかは考えない方がいい。'),
-        'effect': _t('友方回合开始时+2E', 'At friendly turn start +2E', 'Au début du tour allié +2E', 'No início do turno aliado +2E', 'В начале хода союзника +2E', '味方ターン開始時+2E'),
+        'effect': _t('自己回合开始时+2E', 'At your turn start +2E', 'Au début de votre tour +2E', 'No início do seu turno +2E', 'В начале вашего хода +2E', '自分のターン開始時+2E'),
     },
     'GoldenLeaf': {
         'name': _t('黄金叶', 'Golden Leaf', 'Feuille d’or', 'Folha Dourada', 'Золотой лист', '黄金の葉'),
         'desc': _t('这闪亮的叶子能为你带来额外的抽牌机会。', 'This shining leaf brings you extra draw opportunities.', 'Cette feuille brillante vous offre des occasions de pioche supplémentaires.', 'Esta folha brilhante traz compras extras.', 'Этот сияющий лист даёт дополнительные возможности добора.', 'この輝く葉は追加のドロー機会をもたらす。'),
-        'effect': _t('回合开始时多抽一张牌', 'Draw one extra card at turn start', 'Piochez une carte supplémentaire au début du tour', 'Compre uma carta extra no início do turno', 'В начале хода доберите одну дополнительную карту', 'ターン開始時に追加で1枚引く'),
+        'effect': _t('自己回合开始时多抽一张牌', 'Draw one extra card at your turn start', 'Piochez une carte supplémentaire au début de votre tour', 'Compre uma carta extra no início do seu turno', 'В начале вашего хода доберите одну дополнительную карту', '自分のターン開始時に追加で1枚引く'),
     },
     'Chromosome': {
         'name': _t('染色体', 'Chromosome', 'Chromosome', 'Cromossomo', 'Хромосома', '染色体'),
@@ -170,22 +170,22 @@ CARD_I18N = {
     'Sewage': {
         'name': _t('污水', 'Sewage', 'Eaux usées', 'Esgoto', 'Стоки', '汚水'),
         'desc': _t('腐蚀一切装备。', 'Corrodes all equipment.', 'Corrode tout équipement.', 'Corrói todo equipamento.', 'Разъедает любое снаряжение.', 'あらゆる装備を腐食させる。'),
-        'effect': _t('摧毁敌方一张装备', 'Destroy one enemy equipment', 'Détruit un équipement ennemi', 'Destrói um equipamento inimigo', 'Уничтожить одно снаряжение врага', '敵の装備1つを破壊する'),
+        'effect': _t('摧毁目标一张装备', 'Destroy one target equipment', 'Détruit un équipement de la cible', 'Destrói um equipamento do alvo', 'Уничтожить одно снаряжение цели', '対象の装備1つを破壊する'),
     },
     'Pincer': {
         'name': _t('螫针', 'Pincer', 'Pince', 'Pinça', 'Клешня', '毒針'),
         'desc': _t('毒素可以减缓对手行动，但小心别划伤自己。', 'Toxin can slow the opponent, but be careful not to scratch yourself.', 'La toxine peut ralentir l’adversaire, mais attention à ne pas vous égratigner.', 'A toxina pode atrasar o oponente, mas cuidado para não se arranhar.', 'Токсин замедляет противника, но не поцарапайтесь сами.', '毒素は相手の行動を遅らせるが、自分を傷つけないよう注意。'),
-        'effect': _t('敌方回合开始时费用回复-1E', 'At enemy turn start, E recovery -1', 'Au début du tour ennemi, récupération de E -1', 'No início do turno inimigo, recuperação de E -1', 'В начале хода врага восстановление E -1', '敵ターン開始時、E回復-1'),
+        'effect': _t('目标回合开始时E回复-1', 'At the target’s turn start, E recovery -1', 'Au début du tour de la cible, récupération de E -1', 'No início do turno do alvo, recuperação de E -1', 'В начале хода цели восстановление E -1', '対象のターン開始時、E回復-1'),
     },
     'Cancer': {
         'name': _t('癌细胞', 'Cancer Cell', 'Cellule cancéreuse', 'Célula cancerosa', 'Раковая клетка', 'がん細胞'),
         'desc': _t('无法根除的恶性细胞。', 'A malignant cell that cannot be eradicated.', 'Une cellule maligne impossible à éradiquer.', 'Uma célula maligna impossível de erradicar.', 'Злокачественная клетка, которую невозможно искоренить.', '根絶できない悪性細胞。'),
-        'effect': _t('对敌方施加1层淬毒', 'Apply 1 Toxic to the enemy', 'Applique 1 Toxique à l’ennemi', 'Aplica 1 Tóxico ao inimigo', 'Накладывает на врага 1 Токсин', '敵に淬毒1を付与'),
+        'effect': _t('对目标施加1层淬毒', 'Apply 1 Toxic to the target', 'Applique 1 Toxique à la cible', 'Aplica 1 Tóxico ao alvo', 'Накладывает на цель 1 Токсин', '対象に淬毒1を付与'),
     },
     'Yggdrasil': {
-        'name': _t('世界树之叶', 'Yggdrasil', 'Yggdrasil', 'Yggdrasil', 'Yggdrasil', 'Yggdrasil'),
+        'name': _t('世界树之叶', 'World Tree Leaf', 'Arbre-Monde', 'Árvore-Mundo', 'Мировое древо', '世界樹'),
         'desc': _t('神奇的树叶。可以使人死而复生。', 'A wondrous leaf that can bring the dead back to life.', 'Une feuille merveilleuse qui peut ramener les morts à la vie.', 'Uma folha milagrosa capaz de trazer alguém de volta da morte.', 'Чудесный лист, способный вернуть мёртвого к жизни.', '死者を蘇らせることができる不思議な葉。'),
-        'effect': _t('+20H；受到致命伤害时若在手牌中，则清除己方所有效果，将生命值设为5，此回合无敌并放逐此牌', '+20H; when taking lethal damage, if this is in hand, clear your effects, set health to 5, become invincible this turn, and exile this card', '+20H ; lorsque vous subissez des dégâts mortels, si cette carte est en main, nettoie vos effets, fixe la vie à 5, rend invincible ce tour et exile cette carte', '+20H; ao sofrer dano letal, se estiver na mão, limpa seus efeitos, define a vida como 5, fica invencível neste turno e exila esta carta', '+20H; при смертельном уроне, если карта в руке, очистить ваши эффекты, установить здоровье на 5, стать неуязвимым на этот ход и изгнать эту карту', '+20H。致命ダメージを受ける時、手札にあるなら自分の効果を全て解除し、生命を5にし、このターン無敵になり、このカードを放逐する'),
+        'effect': _t('+20H；受到致命伤害时若在手牌中，则清除自己的所有效果，将生命值设为5，此回合无敌并放逐此牌', '+20H; when taking lethal damage, if this is in hand, clear your effects, set health to 5, become invincible this turn, and exile this card', '+20H ; lorsque vous subissez des dégâts mortels, si cette carte est en main, nettoie vos effets, fixe la vie à 5, rend invincible ce tour et exile cette carte', '+20H; ao sofrer dano letal, se estiver na mão, limpa seus efeitos, define a vida como 5, fica invencível neste turno e exila esta carta', '+20H; при смертельном уроне, если карта в руке, очистить ваши эффекты, установить здоровье на 5, стать неуязвимым на этот ход и изгнать эту карту', '+20H。致命ダメージを受ける時、手札にあるなら自分の効果を全て解除し、生命を5にし、このターン無敵になり、このカードを放逐する'),
     },
     'Corruption': {
         'name': _t('腐化', 'Corruption', 'Corruption', 'Corrupção', 'Порча', '腐化'),
@@ -210,8 +210,8 @@ CARD_I18N = {
     'Mark': {
         'name': _t('标记', 'Mark', 'Marque', 'Marca', 'Метка', '標記'),
         'desc': _t('你被标记了！', 'You have been marked!', 'Vous avez été marqué !', 'Você foi marcado!', 'Вы отмечены!', 'あなたは標的にされた！'),
-        'effect': _t('装备一回合后可触发，0E，直到敌方下回合结束禁止敌方行动', 'Can be triggered after being equipped for one turn, 0E: until the end of the enemy’s next turn, the enemy cannot act', 'Peut être déclenché après avoir été équipé pendant un tour, 0E : jusqu’à la fin du prochain tour ennemi, l’ennemi ne peut pas agir', 'Pode ser acionado após ficar equipado por um turno, 0E: até o fim do próximo turno inimigo, o inimigo não pode agir', 'Можно активировать после одного хода в снаряжении, 0E: до конца следующего хода врага враг не может действовать', '1ターン装備後に発動可、0E：敵の次のターン終了まで、敵は行動できない'),
-        'trigger': _t('直到敌方下回合结束禁止敌方行动', 'Until the end of the enemy’s next turn, the enemy cannot act', 'Jusqu’à la fin du prochain tour ennemi, l’ennemi ne peut pas agir', 'Até o fim do próximo turno inimigo, o inimigo não pode agir', 'До конца следующего хода врага враг не может действовать', '敵の次のターン終了まで、敵は行動できない'),
+        'effect': _t('装备一回合后可触发，0E，直到目标下回合结束禁止目标行动', 'Can be triggered after being equipped for one turn, 0E: the target cannot act until its next turn ends', 'Peut être déclenché après avoir été équipé pendant un tour, 0E : jusqu’à la fin du prochain tour de la cible, la cible ne peut pas agir', 'Pode ser acionado após ficar equipado por um turno, 0E: até o fim do próximo turno do alvo, o alvo não pode agir', 'Можно активировать после одного хода в снаряжении, 0E: до конца следующего хода цели цель не может действовать', '1ターン装備後に発動可、0E：対象の次のターン終了まで、対象は行動できない'),
+        'trigger': _t('直到目标下回合结束禁止目标行动', 'The target cannot act until its next turn ends', 'Jusqu’à la fin du prochain tour de la cible, la cible ne peut pas agir', 'Até o fim do próximo turno do alvo, o alvo não pode agir', 'До конца следующего хода цели цель не может действовать', '対象の次のターン終了まで、対象は行動できない'),
     },
     'Mine': {
         'name': _t('地雷', 'Mine', 'Mine', 'Mina', 'Мина', '地雷'),
@@ -237,7 +237,7 @@ OPENING_EVENT_I18N = {
     },
     8: {
         'name': _t('绝境求生', 'Last Stand', 'Dernier recours', 'Último Recurso', 'Последний шанс', '背水の生存'),
-        'desc': _t('最大生命值-20，对局开始将一张牌变化为Yggdrasil', 'Max health -20; at game start, transform one card into Yggdrasil', 'Santé max -20 ; au début de la partie, transforme une carte en Yggdrasil', 'Vida máxima -20; no início da partida, transforma uma carta em Yggdrasil', 'Макс. здоровье -20; в начале игры превратите одну карту в Yggdrasil', '最大生命値-20。対局開始時、カード1枚をYggdrasilに変化させる'),
+        'desc': _t('最大生命值-20，对局开始将一张牌变化为世界树之叶', 'Max health -20; at game start, transform one card into World Tree Leaf', 'Santé max -20 ; au début de la partie, transforme une carte en Arbre-Monde', 'Vida máxima -20; no início da partida, transforma uma carta em Árvore-Mundo', 'Макс. здоровье -20; в начале игры превратите одну карту в Мировое древо', '最大生命値-20。対局開始時、カード1枚を世界樹に変化させる'),
     },
     4: {
         'name': _t('烈焰预兆', 'Flame Omen', 'Présage de flammes', 'Presságio Flamejante', 'Огненное знамение', '烈炎の兆し'),

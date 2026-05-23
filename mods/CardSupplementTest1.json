@@ -17,12 +17,12 @@
       "count": 3,
       "quality": "Unusual",
       "description": "用绷带缠住自己了，短时间还下不了场。",
-      "effect_text": "受到致命伤害后无敌直到下个友方回合结束，然后死亡",
+      "effect_text": "受到致命伤害后无敌直到自己下个回合结束，然后死亡",
       "flags": [],
       "effects": [
         {
           "type": "counter_set_invincible_then_die",
-          "log": "玩家{p}的绷带：受到致命伤害时无敌至下个友方回合结束"
+          "log": "玩家{p}的绷带：受到致命伤害时无敌至自己下个回合结束"
         }
       ],
       "damage": 0,
@@ -86,7 +86,7 @@
       "count": 3,
       "quality": "Unusual",
       "description": "拿这个挖坑躲一下。",
-      "effect_text": "直到下个友方回合无法行动，但无法被攻击选中（仍然会爆牌和爆费）",
+      "effect_text": "直到自己下个回合无法行动，但无法被攻击选中（仍然会爆牌和爆费）",
       "flags": [
         "self_only"
       ],
@@ -272,7 +272,7 @@
       "count": 2,
       "quality": "Epic",
       "description": "有副作用的强效药丸。",
-      "effect_text": "将血量设为60，己方每回合少抽一牌少回1E",
+      "effect_text": "将血量设为60，自己每回合少抽一牌少回1E",
       "flags": [
         "indestructible",
         "self_only"
@@ -290,14 +290,14 @@
           "params": {
             "amount": 1
           },
-          "log": "药丸：己方每回合少抽1牌"
+          "log": "药丸：自己每回合少抽1牌"
         },
         {
           "type": "equip_reduce_own_e",
           "params": {
             "amount": 1
           },
-          "log": "药丸：己方每回合少回1E"
+          "log": "药丸：自己每回合少回1E"
         }
       ],
       "damage": 0,
@@ -325,18 +325,18 @@
       "count": 2,
       "quality": "Epic",
       "description": "我们在牌里安装了铁片，所以你可以用磁铁吸引它们。",
-      "effect_text": "展示敌方所有手牌，从敌方手牌中选一张加入己方手牌（不可取消）",
+      "effect_text": "展示目标所有手牌，从目标手牌中选一张加入自己手牌（不可取消）",
       "flags": [
         "uncancellable"
       ],
       "effects": [
         {
           "type": "reveal_enemy_hand",
-          "log": "磁铁：窥探敌方手牌"
+          "log": "磁铁：窥探目标手牌"
         },
         {
           "type": "steal_enemy_card",
-          "log": "磁铁：从敌方手中夺取一张牌"
+          "log": "磁铁：从目标手中夺取一张牌"
         }
       ],
       "damage": 0,
@@ -364,14 +364,14 @@
       "count": 3,
       "quality": "Unusual",
       "description": "感知敌人的一切。",
-      "effect_text": "展示敌方所有手牌",
+      "effect_text": "展示目标所有手牌",
       "flags": [
         "uncancellable"
       ],
       "effects": [
         {
           "type": "reveal_enemy_hand",
-          "log": "触角：窥探敌方手牌"
+          "log": "触角：窥探目标手牌"
         }
       ],
       "damage": 0,

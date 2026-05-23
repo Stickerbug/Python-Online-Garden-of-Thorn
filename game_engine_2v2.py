@@ -561,6 +561,7 @@ class GameEngine2v2(GameEngine):
         return self._execute_card_effect(player_id, card, choice)
 
     def use_trigger(self, player_id: int, equipment_instance_id: int, target_player_id: int = -1) -> dict:
+        target_player_id = self._normalize_player_id(target_player_id)
         if self.current_player != player_id and not self.is_ally(self.current_player, player_id):
             return {'success': False, 'error': '只能在己方回合触发装备'}
         ps = self.players[player_id]
@@ -715,6 +716,12 @@ class GameEngine2v2(GameEngine):
 
     def _is_valid_player_id(self, player_id) -> bool:
         return isinstance(player_id, int) and 0 <= player_id < self.num_players
+
+    def _normalize_player_id(self, player_id, default: int = -1) -> int:
+        try:
+            return int(player_id)
+        except (TypeError, ValueError):
+            return default
 
     def _is_valid_enemy_target(self, player_id: int, target_id) -> bool:
         return self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0
@@ -898,12 +905,15 @@ class GameEngine2v2(GameEngine):
         return super().resolve_choice(player_id, choice)
 
     def play_card(self, player_id: int, card_instance_id: int, target_player_id: int = -1, choice=None) -> dict:
+        target_player_id = self._normalize_player_id(target_player_id)
         ps = self.players[player_id] if self._is_valid_player_id(player_id) else None
         card = ps.find_hand_card(card_instance_id) if ps else None
         if card is None:
             return {'success': False, 'error': '手牌中没有这张牌'}
         if 'self_only' in card.flags or card.card_type == 'guard':
             target_player_id = player_id
+        elif self._card_requires_target(card) and target_player_id == player_id:
+            return {'success': False, 'error': '不能选择自己作为目标'}
         elif self._card_requires_target(card) and not self._is_valid_effect_target(player_id, target_player_id):
             return {'success': False, 'error': '必须选择一名存活玩家'}
         if target_player_id >= 0:
@@ -1246,6 +1256,7 @@ class GameEngine2v2(GameEngine):
         self._check_game_over()
 
     def use_trigger(self, player_id: int, equipment_instance_id: int, target_player_id: int = -1) -> dict:
+        target_player_id = self._normalize_player_id(target_player_id)
         if self.current_player != player_id and not self.is_ally(self.current_player, player_id):
             return {'success': False, 'error': '只能在己方回合触发装备'}
         ps = self.players[player_id]
@@ -1258,6 +1269,8 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '装备需要装备一回合后才能触发'}
         if eq.card_def.trigger_cost_e > ps.elixir:
             return {'success': False, 'error': '能量不足'}
+        if target_player_id == player_id:
+            return {'success': False, 'error': '不能选择自己作为目标'}
         if not self._is_valid_effect_target(player_id, target_player_id):
             return {'success': False, 'error': '必须选择一名存活玩家'}
         ps.elixir -= eq.card_def.trigger_cost_e

@@ -11,6 +11,7 @@ const I18N = {
         invite_declined: 'Invite declined', ongoing_games: 'Ongoing Games', spectate: 'Spectate', draft_info: 'Draft', draft_complete: 'Draft Complete',
         draft_waiting: 'Waiting for opponent to finish drafting', draft_cost: 'Cost', select_this_event: 'Select This Event',
         event_selected: 'Event selected: {0}', event_waiting: 'Waiting for opponent to select an event', drag_to_play: 'Drag to Play',
+        drag_to_play_full: 'Drag here to play', tap_play_hint: 'Tap a card, then confirm to play', confirm_play: 'Play {0}', cancel_play: 'Cancel',
         cannot_play: 'Cannot Play', enemy_attack: 'Enemy Attack', enemy_skill: 'Enemy Skill', enemy_destroy_equip: ', destroys equipment',
         use_card: 'Use', insufficient_resources: 'Insufficient resources', choose_attack_for: 'Choose an attack for {0}', choose_equip_for: 'Choose equipment',
         choose_discard_for: 'Choose a discard for {0}', choose_from_deck_for: 'Choose from deck', choose_from_discard_for: 'Choose from discard for {0}',
@@ -29,7 +30,7 @@ const I18N = {
         tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
-        choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
+        choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose World Tree Leaf card',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
         lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
@@ -109,6 +110,7 @@ I18N.zh = { ...I18N.en,
     ongoing_games: '进行中的对局', spectate: '观战', draft_info: '选牌', draft_complete: '选牌完成', draft_waiting: '等待对方完成选牌',
     draft_cost: '费用', select_this_event: '选择此事件', event_selected: '已选择事件：{0}', event_waiting: '等待对方选择事件',
     drag_to_play: '拖动打出', cannot_play: '无法打出', enemy_attack: '敌方攻击', enemy_skill: '敌方技能', enemy_destroy_equip: '，摧毁装备',
+    drag_to_play_full: '拖动到此处以出牌', tap_play_hint: '点击手牌后确认出牌', confirm_play: '打出 {0}', cancel_play: '取消出牌',
     use_card: '使用', insufficient_resources: '资源不足', choose_attack_for: '为 {0} 选择攻击牌', choose_equip_for: '选择装备牌',
     choose_discard_for: '为 {0} 选择弃牌', choose_from_deck_for: '从牌堆选择', choose_from_discard_for: '为 {0} 从弃牌堆选择', choose_hand_for: '为 {0} 从手牌选择',
     choose_from_enemy_hand_for: '从敌方手牌选择', choose_attack_group_for: '为 {0} 选择攻击组', no_attack_cards: '没有攻击牌', no_enemy_equipment: '对方没有装备',
@@ -123,7 +125,7 @@ I18N.zh = { ...I18N.en,
     status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消',
-    choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择 Yggdrasil 牌',
+    choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
     round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
@@ -225,7 +227,7 @@ I18N.fr = { ...I18N.en,
     status_untargetable: 'Non ciblable', status_bandage: 'Bandage', status_sponge: 'Éponge', status_shovel: 'Pelle',
     flag_precision: 'Précision', flag_exile: 'Exil', flag_non_stackable: 'Non-cumul', flag_indestructible: 'Indestructible', flag_sprout: 'Pousse', flag_symbiosis: 'Symbiose',
     choose_convert_count: 'Nombre de conversions', choose_magic_card_n: 'Carte magie n°{0}', choose_source_card_n: 'Carte source n°{0}',
-    choose_light_cards: 'Cartes de conversion Lumière', choose_yggdrasil_card: 'Carte de conversion Yggdrasil', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
+    choose_light_cards: 'Cartes de conversion Lumière', choose_yggdrasil_card: 'Carte Arbre-Monde', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
     selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
     hand_deck_info_opp: 'Main:{0} Deck:{1}', hand_deck_discard_info: 'Main:{0} Deck:{1} Défausse:{2}', round_status: 'Tour {0} - {1}',
     server_broadcast: 'Serveur : {0}', error_msg: 'Erreur : {0}', lobby_status: 'Salon - {0}', no_counter_countdown: 'Pas de contre({0})',
@@ -292,7 +294,7 @@ I18N.pt = { ...I18N.en,
     status_untargetable: 'Inalvejável', status_bandage: 'Bandagem', status_sponge: 'Esponja', status_shovel: 'Pá',
     flag_precision: 'Precisão', flag_exile: 'Exílio', flag_non_stackable: 'Não-acumulável', flag_indestructible: 'Indestrutível', flag_sprout: 'Brotar', flag_symbiosis: 'Simbiose',
     choose_convert_count: 'Escolher quantidade de conversão', choose_magic_card_n: 'Carta mágica n°{0}', choose_source_card_n: 'Carta fonte n°{0}',
-    choose_light_cards: 'Cartas de conversão Luz', choose_yggdrasil_card: 'Carta de conversão Yggdrasil', convert_label: 'Converter', convert_per_type: 'Máx {0} por tipo',
+    choose_light_cards: 'Cartas de conversão Luz', choose_yggdrasil_card: 'Carta Árvore-Mundo', convert_label: 'Converter', convert_per_type: 'Máx {0} por tipo',
     selected_count: 'Selecionado {0}/{1}', max_selection_warning: 'Não pode exceder {0}', deck_total: 'Deck: {0} cartas', view_deck_title: 'Ver Deck',
     hand_deck_info_opp: 'Mão:{0} Deck:{1}', hand_deck_discard_info: 'Mão:{0} Deck:{1} Descarte:{2}', round_status: 'Turno {0} - {1}',
     server_broadcast: 'Servidor: {0}', error_msg: 'Erro: {0}', lobby_status: 'Lobby - {0}', no_counter_countdown: 'Sem Contra({0})',
@@ -359,7 +361,7 @@ I18N.ru = { ...I18N.en,
     status_untargetable: 'Недоступен', status_bandage: 'Бинт', status_sponge: 'Губка', status_shovel: 'Лопата',
     flag_precision: 'Точность', flag_exile: 'Изгнание', flag_non_stackable: 'Нескладываемый', flag_indestructible: 'Неразрушимый', flag_sprout: 'Росток', flag_symbiosis: 'Симбиоз',
     choose_convert_count: 'Количество конвертации', choose_magic_card_n: 'Магическая карта №{0}', choose_source_card_n: 'Исходная карта №{0}',
-    choose_light_cards: 'Карты конвертации Света', choose_yggdrasil_card: 'Карта конвертации Иггдрасиль', convert_label: 'Конвертировать', convert_per_type: 'Макс {0} на тип',
+    choose_light_cards: 'Карты конвертации Света', choose_yggdrasil_card: 'Карта Мирового древа', convert_label: 'Конвертировать', convert_per_type: 'Макс {0} на тип',
     selected_count: 'Выбрано {0}/{1}', max_selection_warning: 'Нельзя превышать {0}', deck_total: 'Колода: {0} карт', view_deck_title: 'Посмотреть Колоду',
     hand_deck_info_opp: 'Рука:{0} Колода:{1}', hand_deck_discard_info: 'Рука:{0} Колода:{1} Сброс:{2}', round_status: 'Раунд {0} - {1}',
     server_broadcast: 'Сервер: {0}', error_msg: 'Ошибка: {0}', lobby_status: 'Лобби - {0}', no_counter_countdown: 'Без контр-атаки({0})',
@@ -426,7 +428,7 @@ I18N.ja = { ...I18N.en,
     status_untargetable: '対象不可', status_bandage: '包帯', status_sponge: 'スポンジ', status_shovel: 'シャベル',
     flag_precision: '精密', flag_exile: '追放', flag_non_stackable: '非スタック', flag_indestructible: '破壊不可', flag_sprout: '発芽', flag_symbiosis: '共生',
     choose_convert_count: '変換回数を選択', choose_magic_card_n: 'マジックカード第{0}枚', choose_source_card_n: 'ソースカード第{0}枚',
-    choose_light_cards: '光変換カードを選択', choose_yggdrasil_card: 'ユグドラシル変換カードを選択', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
+    choose_light_cards: '光変換カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
     selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
     hand_deck_info_opp: '手札:{0} デッキ:{1}', hand_deck_discard_info: '手札:{0} デッキ:{1} 捨て札:{2}', round_status: '第{0}ターン - {1}',
     server_broadcast: 'サーバー: {0}', error_msg: 'エラー: {0}', lobby_status: 'ロビー - {0}', no_counter_countdown: 'カウンターなし({0})',
@@ -463,6 +465,383 @@ I18N.ja = { ...I18N.en,
     continue_enter: '続ける',
     mod_default_name: 'Mod {0}'
 };
+const GAME_TITLE = 'Garden of Thorn 荆棘花园';
+Object.values(I18N).forEach(dict => {
+    dict.default_status = GAME_TITLE;
+    dict.tutorial_hint_play_fusioned = dict.tutorial_hint_play_fusioned || '聚变后的攻击牌已经准备好了。当前能量足够，把它打出看看强化后的伤害。';
+    dict.tutorial_victory_message = dict.tutorial_victory_message || '恭喜你，成功完成了新手教程！\n希望你能在 Garden of Thorn 中玩得开心！';
+    dict.tutorial_defeat_message = dict.tutorial_defeat_message || '哎呀，对局失败了。没关系，祝你在接下来的游戏中越打越顺！';
+    dict.tutorial_retry = dict.tutorial_retry || '重试教程';
+    dict.tutorial_start = dict.tutorial_start || '新手引导';
+    dict.tutorial_skip = dict.tutorial_skip || '跳过引导';
+    dict.tutorial_intro = dict.tutorial_intro || '现在，让我们开始新手教程吧！';
+    dict.tutorial_hint_play = dict.tutorial_hint_play || '先打出一张 Thorn 攻击牌，观察对手 H 的变化。';
+    dict.tutorial_hint_end = dict.tutorial_hint_end || '行动完成后，点击“结束回合”，把节奏交给对手。';
+    dict.tutorial_hint_enemy = dict.tutorial_hint_enemy || '现在观察对手行动。注意战斗日志和 H/E/M 的变化。';
+    dict.tutorial_hint_deck = dict.tutorial_hint_deck || '先看看抽牌堆：点击“查看牌堆”，了解接下来可能抽到什么。';
+    dict.tutorial_hint_continue = dict.tutorial_hint_continue || '继续出牌并结束回合。稍后你会抽到反制牌；等对手攻击时，使用反制响应。';
+    dict.tutorial_hint_counter = dict.tutorial_hint_counter || '这是反制窗口。对手打出攻击牌时，可以选择可支付的反制牌，或等待倒计时选择不反制。';
+    dict.tutorial_hint_bloom = dict.tutorial_hint_bloom || 'Bloom 技能牌用于回复、施加状态或改变资源。试着打出一张技能牌，观察效果和资源变化。';
+    dict.tutorial_hint_root = dict.tutorial_hint_root || 'Root 装备牌会留在装备栏中，之后持续生效或可触发。先装备一张牌，下一回合再观察它的作用。';
+    dict.tutorial_hint_fission = dict.tutorial_hint_fission || '现在，让我们来看看不同类型的牌。裂变是一张 Bloom 技能牌。普通攻击被裂变后总伤害可能接近不变，但三角形会在每段伤害后成长。把裂变用于三角形。';
+    dict.tutorial_hint_play_fissioned = dict.tutorial_hint_play_fissioned || '三角形已经带有裂变层数。现在把它打出，观察每段伤害和三角形层数如何连续结算。';
+    dict.tutorial_hint_fusion = dict.tutorial_hint_fusion || '聚变也是 Bloom 技能牌。它会选择2-3张同名攻击牌，合成为一张更强的牌。选择同名攻击牌完成聚变。';
+});
+I18N.en.tutorial_start = 'Tutorial';
+I18N.en.tutorial_hint_play_fusioned = 'The fused attack is ready. You have enough E now; play it to see the boosted damage.';
+I18N.en.tutorial_victory_message = 'Congratulations, you completed the tutorial!\nHave fun in Garden of Thorn!';
+I18N.en.tutorial_defeat_message = 'The tutorial match was lost. That is fine; the next match will be smoother.';
+I18N.en.tutorial_retry = 'Retry Tutorial';
+I18N.en.tutorial_skip = 'Skip Tutorial';
+I18N.fr.tutorial_hint_play_fusioned = "L'attaque fusionnée est prête. Vous avez assez d'E : jouez-la pour voir les dégâts renforcés.";
+I18N.fr.tutorial_victory_message = 'Félicitations, vous avez terminé le tutoriel !\nAmusez-vous bien dans Garden of Thorn !';
+I18N.fr.tutorial_defeat_message = 'La partie du tutoriel est perdue. Ce n’est pas grave : la prochaine sera plus fluide.';
+I18N.fr.tutorial_retry = 'Réessayer le tutoriel';
+I18N.pt.tutorial_hint_play_fusioned = 'O ataque fundido está pronto. Você tem E suficiente; jogue-o para ver o dano aumentado.';
+I18N.pt.tutorial_victory_message = 'Parabéns, você concluiu o tutorial!\nDivirta-se em Garden of Thorn!';
+I18N.pt.tutorial_defeat_message = 'A partida do tutorial foi perdida. Tudo bem; a próxima será mais tranquila.';
+I18N.pt.tutorial_retry = 'Tentar tutorial de novo';
+I18N.ru.tutorial_hint_play_fusioned = 'Слитая атака готова. У вас хватает E; сыграйте ее и посмотрите усиленный урон.';
+I18N.ru.tutorial_victory_message = 'Поздравляем, вы прошли обучение!\nУдачной игры в Garden of Thorn!';
+I18N.ru.tutorial_defeat_message = 'Обучающий матч проигран. Ничего страшного: следующий пройдет увереннее.';
+I18N.ru.tutorial_retry = 'Повторить обучение';
+I18N.ja.tutorial_hint_play_fusioned = '融合した攻撃カードの準備ができました。Eは足りています。打ち出して強化後のダメージを見てみましょう。';
+I18N.ja.tutorial_victory_message = 'おめでとうございます。チュートリアルを完了しました！\nGarden of Thorn を楽しんでください！';
+I18N.ja.tutorial_defeat_message = 'チュートリアルの対局に敗北しました。大丈夫です。次の対局ではもっと動きが見えてきます。';
+I18N.ja.tutorial_retry = 'チュートリアルをやり直す';
+I18N.en.tutorial_intro = 'Now, let’s begin the tutorial.';
+I18N.en.tutorial_hint_play = 'Play a Thorn attack first, then watch the opponent’s H change.';
+I18N.en.tutorial_hint_end = 'After acting, press End Turn to pass the pace to the opponent.';
+I18N.en.tutorial_hint_enemy = 'Now watch the opponent act. Track the battle log and H/E/M bars.';
+I18N.en.tutorial_hint_deck = 'Check your draw deck: press View Deck to see what may come next.';
+I18N.en.tutorial_hint_continue = 'Keep playing cards and end your turn. Later you will draw a Guard card; use it to respond when the opponent attacks.';
+I18N.en.tutorial_hint_counter = 'This is the counter window. When the opponent plays an attack, choose an affordable Guard card or let the countdown pass.';
+I18N.en.tutorial_hint_bloom = 'Bloom skill cards heal, apply states, or change resources. Play one and watch the effect and resource changes.';
+I18N.en.tutorial_hint_root = 'Root equipment cards stay in your equipment row. They can provide ongoing or triggered effects. Equip one now and observe it next turn.';
+I18N.en.tutorial_hint_fission = 'Now let’s look at different card types. Fission is a Bloom skill card. Splitting a basic attack may keep total damage close, but Triangle grows after each hit. Use Fission on Triangle.';
+I18N.en.tutorial_hint_play_fissioned = 'Triangle now has Fission. Play it and watch each hit resolve while Triangle stacks grow.';
+I18N.en.tutorial_hint_fusion = 'Fusion is also a Bloom skill card. It chooses 2-3 same-name attacks and combines them into one stronger card.';
+I18N.zh.tutorial_start = '新手引导';
+I18N.zh.tutorial_skip = '跳过引导';
+I18N.zh.tutorial_intro = '现在，让我们开始新手教程吧！';
+I18N.zh.tutorial_hint_play = '先打出一张 Thorn 攻击牌，观察对手 H 的变化。';
+I18N.zh.tutorial_hint_end = '行动完成后，点击“结束回合”，把节奏交给对手。';
+I18N.zh.tutorial_hint_enemy = '现在观察对手行动。注意战斗日志和 H/E/M 的变化。';
+I18N.zh.tutorial_hint_deck = '先看看抽牌堆：点击“查看牌堆”，了解接下来可能抽到什么。';
+I18N.zh.tutorial_hint_continue = '继续出牌并结束回合。稍后你会抽到反制牌；等对手攻击时，使用反制响应。';
+I18N.zh.tutorial_hint_counter = '这是反制窗口。对手打出攻击牌时，可以选择可支付的反制牌，或等待倒计时选择不反制。';
+I18N.zh.tutorial_hint_bloom = 'Bloom 技能牌用于回复、施加状态或改变资源。试着打出一张技能牌，观察效果和资源变化。';
+I18N.zh.tutorial_hint_root = 'Root 装备牌会留在装备栏中，之后持续生效或可触发。先装备一张牌，下一回合再观察它的作用。';
+I18N.zh.tutorial_hint_fission = '现在，让我们来看看不同类型的牌。裂变是一张 Bloom 技能牌。普通攻击被裂变后总伤害可能接近不变，但三角形会在每段伤害后成长。把裂变用于三角形。';
+I18N.zh.tutorial_hint_play_fissioned = '三角形已经带有裂变层数。现在把它打出，观察每段伤害和三角形层数如何连续结算。';
+I18N.zh.tutorial_hint_fusion = '聚变也是 Bloom 技能牌。它会选择2-3张同名攻击牌，合成为一张更强的牌。选择同名攻击牌完成聚变。';
+
+Object.assign(I18N.zh, {
+    about_title: '关于', about_gameplay: '游戏玩法', about_credits: '致谢', about_contact: '联系方式',
+    credits_developer: '开发者', credits_special: '特别鸣谢',
+    rules_intro_title: '游戏介绍', rules_type_thorn: '攻击(Thorn)', rules_type_bloom: '技能(Bloom)', rules_type_root: '装备(Root)', rules_type_guard: '反制(Guard)',
+    rules_goal_title: '基本目标',
+    rules_goal_text: 'Garden of Thorn 荆棘花园 是多人卡牌对战游戏。一般情况下，你的目标是通过使用四类牌：{thorn}、{bloom}、{root}和{guard}，让对方阵营的 H 降到 0，同时保护自己和队友的 H。',
+    rules_resources_title: '资源',
+    rules_resources_text: 'H(Health) 是生命。H 降到 0 时，玩家通常会失去继续行动的能力；在 2v2 中，一方全部玩家阵亡才会判负。E(Elixir) 是能量，大多数卡牌消耗 E。M(Magic) 是魔力，部分魔法牌消耗 M。通常只有在自己的回合开始时，玩家才会抽牌并回复资源。',
+    rules_types_title: '卡牌类型',
+    rules_types_text: '{thornRaw} 是攻击牌，用于造成直接伤害，例如 {basic}、{bone}。{bloomRaw} 是技能牌，用于回复、施加状态、调整资源或改变局面，例如 {fire}。{rootRaw} 是装备牌，打出后会留在装备栏中，提供持续效果或可触发效果，例如 {leaf}。{guardRaw} 是反制牌，不能像普通手牌一样主动打出，需要在对方行动满足条件时响应。',
+    rules_flow_title: '回合流程',
+    rules_flow_text: '正常模式通常先进行选牌，再选择开局事件，然后进入对局。轮到你时，系统会处理回合开始效果、抽牌和资源回复。之后你可以打出手牌，或触发已经装备至少一回合且满足条件的装备。完成行动后，点击结束回合，将行动权交给下一位玩家。2v2 中回合顺序会在两队之间交替；玩家阵亡不会改变既定顺序，但阵亡玩家的回合会被跳过。',
+    rules_keywords_title: '常见关键词',
+    rules_keywords_text: '<b>放逐</b>表示卡牌打出或结算后进入放逐区，通常不会再回到牌堆或弃牌堆。<b>精准</b>表示攻击被闪避响应时改为造成一半伤害。<b>不可摧毁</b>表示装备不能被摧毁效果破坏。<b>萌芽</b>表示抽到该牌时会额外抽牌。<b>共生</b>表示该牌不受同名卡连续使用费用惩罚。部分模式或模组可能加入额外关键词，以实际卡牌显示为准。',
+    rules_examples_title: '示例',
+    rules_examples_text: '{stinger} 是高伤害精准攻击；{sewage} 可以摧毁装备；{bubble} 可以响应攻击并提供闪避。点击示例卡牌名可在图鉴中查看对应卡牌。',
+    rules_skip_confirm_title: '提示',
+    rules_skip_confirm_msg: '你确认要跳过游戏介绍吗？\n可以在 关于>游戏玩法 中再次打开此界面。',
+    gallery_back_rules: '返回介绍', gallery_explanation: '说明',
+    tag_desc_precision: '攻击类关键词。精准攻击被闪避响应时不会完全失效，而是改为造成一半伤害。',
+    tag_desc_exile: '结算去向关键词。带有此标签的卡牌在打出或结算后进入放逐区，而不是进入弃牌堆。',
+    tag_desc_non_stackable: '装备类关键词。该效果可以多次装备，但同类效果不会重复叠加；多个副本主要用于在部分装备被摧毁后保留后续副本。',
+    tag_desc_indestructible: '装备类关键词。该牌作为装备时不能被摧毁效果破坏；玩家死亡时也会保留不可摧毁装备。',
+    tag_desc_sprout: '抽牌类关键词。抽到带有萌芽的牌时，会额外抽牌；若手牌已满，仍遵循正常爆牌/弃牌规则。',
+    tag_desc_symbiosis: '费用类关键词。该牌不受同名卡连续使用费用惩罚，适合在同一回合多次使用。',
+    tag_desc_attract: '手牌上限关键词。手牌满时，带有吸引的牌会优先挤掉没有吸引的牌，减少关键牌爆掉的风险。',
+    tag_desc_void: '回合结束关键词。带有虚无的牌如果留在手牌中，会在回合结束时被放逐。',
+    tag_desc_self_only: '目标限制关键词。2v2 中表示该牌只能对自己使用；1v1 中该限制没有额外显示意义。',
+    tag_desc_uncancellable: '选择限制关键词。该牌弹出选择窗口时不显示取消按钮，玩家必须完成选择。用于避免通过0消耗选择牌窗口查看隐藏信息后取消，例如磁铁查看敌方手牌。',
+    tag_desc_infinite_exclude: '模式限制关键词。该牌不会进入无限火力的随机牌库，用于排除与该模式机制冲突的牌。',
+    tag_desc_default: '模组或扩展标签。该标签的具体含义由对应模组或卡牌效果定义。'
+});
+
+Object.assign(I18N.en, {
+    about_title: 'About', about_gameplay: 'How to Play', about_credits: 'Credits', about_contact: 'Contact',
+    credits_developer: 'Developer', credits_special: 'Special Thanks',
+    rules_intro_title: 'Game Introduction', rules_type_thorn: 'Thorn attacks', rules_type_bloom: 'Bloom skills', rules_type_root: 'Root equipment', rules_type_guard: 'Guard counters',
+    rules_goal_title: 'Goal',
+    rules_goal_text: 'Garden of Thorn 荆棘花园 is a multiplayer card battle game. In most modes, your goal is to use four card types: {thorn}, {bloom}, {root}, and {guard}, reduce the opposing side’s H to 0, and protect your own side’s H.',
+    rules_resources_title: 'Resources',
+    rules_resources_text: 'H(Health) is life. When H reaches 0, that player usually loses the ability to act; in 2v2, a side loses only when all of its players are defeated. E(Elixir) is energy and pays for most cards. M(Magic) pays for some magic cards. Usually, a player draws cards and recovers resources only at the start of their own turn.',
+    rules_types_title: 'Card Types',
+    rules_types_text: '{thornRaw} cards deal direct damage, such as {basic} and {bone}. {bloomRaw} cards heal, apply states, adjust resources, or change the board, such as {fire}. {rootRaw} cards stay in the equipment row and provide ongoing or triggered effects, such as {leaf}. {guardRaw} cards are counters; they are not played like normal hand cards and respond only when an opponent’s action meets their condition.',
+    rules_flow_title: 'Turn Flow',
+    rules_flow_text: 'A normal match usually starts with drafting cards, choosing opening events, and then entering battle. On your turn, start-of-turn effects, draws, and resource recovery resolve first. Then you may play hand cards or trigger equipment that has been equipped for at least one turn and meets its condition. End your turn to pass action to the next player. In 2v2, turns alternate between teams; defeated players do not change the order, but their turns are skipped.',
+    rules_keywords_title: 'Common Keywords',
+    rules_keywords_text: '<b>Exile</b> means the card goes to exile after being played or resolved instead of the discard pile. <b>Precision</b> means if the attack is dodged, it deals half damage instead of failing completely. <b>Indestructible</b> means equipment cannot be destroyed by destroy effects. <b>Sprout</b> draws extra cards when drawn. <b>Symbiosis</b> ignores same-name card cost penalties. Some modes or mods may add more keywords; the card text is authoritative.',
+    rules_examples_title: 'Examples',
+    rules_examples_text: '{stinger} is a high-damage Precision attack; {sewage} can destroy equipment; {bubble} can respond to attacks and grant Dodge. Click an example card name to open it in the compendium.',
+    rules_skip_confirm_title: 'Notice',
+    rules_skip_confirm_msg: 'Skip the game introduction?\nYou can open it again from About > How to Play.',
+    gallery_back_rules: 'Back to Introduction', gallery_explanation: 'Explanation',
+    tutorial_start: 'Tutorial', tutorial_skip: 'Skip Tutorial', tutorial_intro: 'Now, let’s begin the tutorial.',
+    tutorial_hint_play: 'Play a Thorn attack first, then watch the opponent’s H change.',
+    tutorial_hint_end: 'After acting, press End Turn to pass the pace to the opponent.',
+    tutorial_hint_enemy: 'Now watch the opponent act. Track the battle log and H/E/M bars.',
+    tutorial_hint_deck: 'Check your draw deck: press View Deck to see what may come next.',
+    tutorial_hint_continue: 'Keep playing cards and end your turn. Later you will draw a Guard card; use it to respond when the opponent attacks.',
+    tutorial_hint_counter: 'This is the counter window. When the opponent plays an attack, choose an affordable Guard card or let the countdown pass.',
+    tutorial_hint_bloom: 'Bloom skill cards heal, apply states, or change resources. Play one and watch the effect and resource changes.',
+    tutorial_hint_root: 'Root equipment cards stay in your equipment row. They can provide ongoing or triggered effects. Equip one now and observe it next turn.',
+    tutorial_hint_fission: 'Now let’s look at different card types. Fission is a Bloom skill card. Splitting a basic attack may keep total damage close, but Triangle grows after each hit. Use Fission on Triangle.',
+    tutorial_hint_play_fissioned: 'Triangle now has Fission. Play it and watch each hit resolve while Triangle stacks grow.',
+    tutorial_hint_fusion: 'Fusion is also a Bloom skill card. It chooses 2-3 same-name attacks and combines them into one stronger card.',
+    tutorial_hint_play_fusioned: 'The fused attack is ready. You have enough E now; play it to see the boosted damage.',
+    tutorial_victory_message: 'Congratulations, you completed the tutorial!\nHave fun in Garden of Thorn!',
+    tutorial_defeat_message: 'The tutorial match was lost. That is fine; the next match will be smoother.',
+    tutorial_retry: 'Retry Tutorial',
+    tag_desc_precision: 'Attack keyword. A Precision attack does not fully fail when dodged; it deals half damage instead.',
+    tag_desc_exile: 'Resolution keyword. This card goes to exile after being played or resolved instead of going to the discard pile.',
+    tag_desc_non_stackable: 'Equipment keyword. Multiple copies may be equipped, but the same effect does not stack; spare copies mainly keep the effect available after one copy is destroyed.',
+    tag_desc_indestructible: 'Equipment keyword. This equipment cannot be destroyed by destroy effects and also remains when its owner is defeated.',
+    tag_desc_sprout: 'Draw keyword. When drawn, this card draws extra cards; hand limit and overflow rules still apply.',
+    tag_desc_symbiosis: 'Cost keyword. This card ignores same-name card cost penalties.',
+    tag_desc_attract: 'Hand-limit keyword. When your hand is full, Attract cards push out non-Attract cards first.',
+    tag_desc_void: 'End-turn keyword. If this card remains in hand at end of turn, it is exiled.',
+    tag_desc_self_only: 'Targeting keyword. In 2v2, this card can only target yourself; in 1v1, it has no extra display meaning.',
+    tag_desc_uncancellable: 'Choice keyword. Selection windows from this card do not show a cancel button; the player must complete the choice. This prevents checking hidden information for 0 cost and canceling, such as with Magnet.',
+    tag_desc_infinite_exclude: 'Mode keyword. This card is excluded from Infinite Fire random pools because it conflicts with that mode.',
+    tag_desc_default: 'Mod or extension tag. Its exact meaning is defined by the relevant mod or card effect.'
+});
+
+Object.assign(I18N.fr, {
+    about_title: 'À propos', about_gameplay: 'Règles', about_credits: 'Crédits', about_contact: 'Contact',
+    credits_developer: 'Développeur', credits_special: 'Remerciements',
+    rules_intro_title: 'Présentation du jeu', rules_type_thorn: 'attaques Thorn', rules_type_bloom: 'compétences Bloom', rules_type_root: 'équipements Root', rules_type_guard: 'contres Guard',
+    rules_goal_title: 'Objectif',
+    rules_goal_text: 'Garden of Thorn 荆棘花园 est un jeu de cartes multijoueur. Dans la plupart des modes, votre objectif est d’utiliser quatre types de cartes : {thorn}, {bloom}, {root} et {guard}, afin de réduire le H du camp adverse à 0 tout en protégeant votre camp.',
+    rules_resources_title: 'Ressources',
+    rules_resources_text: 'H(Health) représente la vie. À 0 H, un joueur perd généralement sa capacité d’agir ; en 2v2, un camp perd seulement lorsque tous ses joueurs sont vaincus. E(Elixir) paie la plupart des cartes. M(Magic) paie certaines cartes magiques. En général, un joueur pioche et récupère des ressources uniquement au début de son propre tour.',
+    rules_types_title: 'Types de cartes',
+    rules_types_text: 'Les cartes {thornRaw} infligent des dégâts directs, comme {basic} et {bone}. Les cartes {bloomRaw} soignent, appliquent des états, modifient les ressources ou changent la situation, comme {fire}. Les cartes {rootRaw} restent dans la zone d’équipement et fournissent des effets continus ou déclenchés, comme {leaf}. Les cartes {guardRaw} sont des contres : elles répondent à une action adverse qui remplit leur condition.',
+    rules_flow_title: 'Déroulement',
+    rules_flow_text: 'Un match normal commence par le draft, le choix des événements de départ, puis le combat. À votre tour, les effets de début de tour, la pioche et la récupération se résolvent d’abord. Vous pouvez ensuite jouer des cartes ou déclencher un équipement équipé depuis au moins un tour. Terminez votre tour pour passer au joueur suivant. En 2v2, les tours alternent entre les équipes ; les joueurs vaincus ne changent pas l’ordre, mais leur tour est sauté.',
+    rules_keywords_title: 'Mots-clés courants',
+    rules_keywords_text: '<b>Exil</b> signifie que la carte va dans l’exil après avoir été jouée ou résolue. <b>Précision</b> signifie qu’une attaque esquivée inflige la moitié des dégâts. <b>Indestructible</b> signifie qu’un équipement ne peut pas être détruit par les effets de destruction. <b>Germination</b> pioche des cartes supplémentaires quand la carte est piochée. <b>Symbiose</b> ignore les pénalités de coût des cartes de même nom. Le texte de la carte fait foi.',
+    rules_examples_title: 'Exemples',
+    rules_examples_text: '{stinger} est une attaque Précision à gros dégâts ; {sewage} peut détruire un équipement ; {bubble} peut répondre aux attaques et donner Esquive. Cliquez sur un nom de carte pour l’ouvrir dans le compendium.',
+    rules_skip_confirm_title: 'Notice',
+    rules_skip_confirm_msg: 'Passer la présentation du jeu ?\nVous pourrez la rouvrir dans À propos > Règles.',
+    gallery_title: 'Encyclopédie', gallery_cards: 'Cartes', gallery_tags: 'Tags', gallery_events: 'Événements de départ',
+    gallery_search: 'Rechercher', gallery_no_items: 'Aucune entrée.', gallery_cards_with_tag: 'Cartes avec ce tag',
+    gallery_card_count: '{0} cartes', gallery_type: 'Type', gallery_cost: 'Coût', gallery_tags_label: 'Tags',
+    gallery_description: 'Description', gallery_effect: 'Effet', gallery_trigger: 'Déclenchement',
+    gallery_back_rules: 'Retour à la présentation', gallery_explanation: 'Explication',
+    tutorial_start: 'Tutoriel', tutorial_skip: 'Passer', tutorial_intro: 'Commençons le tutoriel.',
+    tutorial_hint_play: 'Jouez d’abord une attaque Thorn et observez le H adverse.',
+    tutorial_hint_end: 'Après votre action, appuyez sur Fin du tour.',
+    tutorial_hint_enemy: 'Observez maintenant l’adversaire. Suivez le journal et les barres H/E/M.',
+    tutorial_hint_deck: 'Regardez votre pioche : appuyez sur Voir le deck.',
+    tutorial_hint_continue: 'Continuez à jouer et terminez le tour. Vous piocherez bientôt une carte Guard pour répondre à une attaque.',
+    tutorial_hint_counter: 'Ceci est la fenêtre de contre. Choisissez une carte Guard payable ou laissez le compte à rebours passer.',
+    tutorial_hint_bloom: 'Les cartes Bloom soignent, appliquent des états ou changent les ressources. Jouez-en une pour voir l’effet.',
+    tutorial_hint_root: 'Les cartes Root restent dans votre zone d’équipement. Équipez-en une et observez-la au prochain tour.',
+    tutorial_hint_fission: 'Voyons les types de cartes. Fission est une Bloom : sur une attaque simple, le total peut rester proche, mais Triangle grandit après chaque touche. Utilisez Fission sur Triangle.',
+    tutorial_hint_play_fissioned: 'Triangle possède maintenant Fission. Jouez-le et observez chaque dégât et chaque couche.',
+    tutorial_hint_fusion: 'Fusion est aussi une Bloom. Elle combine 2-3 attaques de même nom en une carte plus forte.',
+    tutorial_hint_play_fusioned: 'L’attaque fusionnée est prête. Vous avez assez de E : jouez-la pour voir les dégâts augmentés.',
+    tutorial_victory_message: 'Félicitations, vous avez terminé le tutoriel !\nAmusez-vous bien dans Garden of Thorn !',
+    tutorial_defeat_message: 'La partie du tutoriel est perdue. Ce n’est pas grave : la prochaine sera plus fluide.',
+    tutorial_retry: 'Réessayer',
+});
+
+Object.assign(I18N.pt, {
+    about_title: 'Sobre', about_gameplay: 'Como jogar', about_credits: 'Créditos', about_contact: 'Contato',
+    credits_developer: 'Desenvolvedor', credits_special: 'Agradecimentos',
+    rules_intro_title: 'Introdução do jogo', rules_type_thorn: 'ataques Thorn', rules_type_bloom: 'habilidades Bloom', rules_type_root: 'equipamentos Root', rules_type_guard: 'respostas Guard',
+    rules_goal_title: 'Objetivo',
+    rules_goal_text: 'Garden of Thorn 荆棘花园 é um jogo de cartas multijogador. Na maioria dos modos, seu objetivo é usar quatro tipos de cartas: {thorn}, {bloom}, {root} e {guard}, reduzir o H do lado inimigo a 0 e proteger seu lado.',
+    rules_resources_title: 'Recursos',
+    rules_resources_text: 'H(Health) é vida. Ao chegar a 0 H, o jogador geralmente perde a capacidade de agir; no 2v2, um lado perde apenas quando todos os seus jogadores são derrotados. E(Elixir) paga a maioria das cartas. M(Magic) paga algumas cartas mágicas. Normalmente, um jogador compra cartas e recupera recursos apenas no começo do próprio turno.',
+    rules_types_title: 'Tipos de carta',
+    rules_types_text: 'Cartas {thornRaw} causam dano direto, como {basic} e {bone}. Cartas {bloomRaw} curam, aplicam estados, ajustam recursos ou mudam o campo, como {fire}. Cartas {rootRaw} ficam na área de equipamento e dão efeitos contínuos ou acionáveis, como {leaf}. Cartas {guardRaw} são respostas usadas quando uma ação inimiga satisfaz sua condição.',
+    rules_flow_title: 'Fluxo do turno',
+    rules_flow_text: 'Uma partida normal geralmente começa com escolha de cartas, eventos iniciais e depois combate. No seu turno, efeitos de início, compra e recuperação são resolvidos primeiro. Depois você pode jogar cartas ou acionar equipamentos equipados há pelo menos um turno. Termine o turno para passar ao próximo jogador. No 2v2, os turnos alternam entre equipes; jogadores derrotados não mudam a ordem, mas têm seus turnos pulados.',
+    rules_keywords_title: 'Palavras-chave',
+    rules_keywords_text: '<b>Exílio</b> envia a carta ao exílio após ser jogada ou resolvida. <b>Precisão</b> faz uma ataque esquivado causar metade do dano. <b>Indestrutível</b> impede que equipamento seja destruído por efeitos de destruição. <b>Broto</b> compra cartas extras quando comprado. <b>Simbiose</b> ignora penalidades de custo por cartas de mesmo nome. O texto da carta é a fonte final.',
+    rules_examples_title: 'Exemplos',
+    rules_examples_text: '{stinger} é um ataque de Precisão com alto dano; {sewage} pode destruir equipamento; {bubble} responde a ataques e concede Esquiva. Clique no nome de uma carta para abri-la no compêndio.',
+    rules_skip_confirm_title: 'Aviso',
+    rules_skip_confirm_msg: 'Pular a introdução do jogo?\nVocê pode reabri-la em Sobre > Como jogar.',
+    gallery_title: 'Compêndio', gallery_cards: 'Cartas', gallery_tags: 'Tags', gallery_events: 'Eventos iniciais',
+    gallery_search: 'Buscar', gallery_no_items: 'Nenhuma entrada.', gallery_cards_with_tag: 'Cartas com esta tag',
+    gallery_card_count: '{0} cartas', gallery_type: 'Tipo', gallery_cost: 'Custo', gallery_tags_label: 'Tags',
+    gallery_description: 'Descrição', gallery_effect: 'Efeito', gallery_trigger: 'Acionamento',
+    gallery_back_rules: 'Voltar à introdução', gallery_explanation: 'Explicação',
+    tutorial_start: 'Tutorial', tutorial_skip: 'Pular', tutorial_intro: 'Agora vamos começar o tutorial.',
+    tutorial_hint_play: 'Jogue primeiro um ataque Thorn e observe o H do oponente.',
+    tutorial_hint_end: 'Depois de agir, pressione Finalizar turno.',
+    tutorial_hint_enemy: 'Observe o oponente. Acompanhe o registro e as barras H/E/M.',
+    tutorial_hint_deck: 'Veja seu deck de compra: pressione Ver Deck.',
+    tutorial_hint_continue: 'Continue jogando e finalize o turno. Mais tarde você comprará uma carta Guard para responder a um ataque.',
+    tutorial_hint_counter: 'Esta é a janela de resposta. Escolha uma carta Guard pagável ou deixe a contagem passar.',
+    tutorial_hint_bloom: 'Cartas Bloom curam, aplicam estados ou mudam recursos. Jogue uma e observe.',
+    tutorial_hint_root: 'Cartas Root ficam na área de equipamentos. Equipe uma e veja seu efeito no próximo turno.',
+    tutorial_hint_fission: 'Vamos ver tipos diferentes. Fission é uma Bloom: em ataques simples o total pode ficar parecido, mas Triangle cresce após cada acerto. Use Fission em Triangle.',
+    tutorial_hint_play_fissioned: 'Triangle agora tem Fission. Jogue-o e observe cada acerto e camada.',
+    tutorial_hint_fusion: 'Fusion também é Bloom. Ela combina 2-3 ataques de mesmo nome em uma carta mais forte.',
+    tutorial_hint_play_fusioned: 'O ataque fundido está pronto. Você tem E suficiente; jogue-o para ver o dano aumentado.',
+    tutorial_victory_message: 'Parabéns, você concluiu o tutorial!\nDivirta-se em Garden of Thorn!',
+    tutorial_defeat_message: 'A partida do tutorial foi perdida. Tudo bem; a próxima será mais tranquila.',
+    tutorial_retry: 'Tentar de novo',
+});
+
+Object.assign(I18N.ru, {
+    about_title: 'О игре', about_gameplay: 'Правила', about_credits: 'Благодарности', about_contact: 'Контакты',
+    credits_developer: 'Разработчик', credits_special: 'Особая благодарность',
+    rules_intro_title: 'Введение в игру', rules_type_thorn: 'атаки Thorn', rules_type_bloom: 'умения Bloom', rules_type_root: 'снаряжение Root', rules_type_guard: 'ответы Guard',
+    rules_goal_title: 'Цель',
+    rules_goal_text: 'Garden of Thorn 荆棘花园 — многопользовательская карточная дуэль. В большинстве режимов ваша цель — использовать четыре типа карт: {thorn}, {bloom}, {root} и {guard}, опустить H вражеской стороны до 0 и защитить свою сторону.',
+    rules_resources_title: 'Ресурсы',
+    rules_resources_text: 'H(Health) — здоровье. При 0 H игрок обычно теряет возможность действовать; в 2v2 сторона проигрывает только когда побеждены все ее игроки. E(Elixir) оплачивает большинство карт. M(Magic) оплачивает некоторые магические карты. Обычно игрок берет карты и восстанавливает ресурсы только в начале своего хода.',
+    rules_types_title: 'Типы карт',
+    rules_types_text: 'Карты {thornRaw} наносят прямой урон, например {basic} и {bone}. Карты {bloomRaw} лечат, накладывают состояния, меняют ресурсы или ситуацию, например {fire}. Карты {rootRaw} остаются в зоне снаряжения и дают постоянные или активируемые эффекты, например {leaf}. Карты {guardRaw} — ответы на действия противника, если выполнено условие.',
+    rules_flow_title: 'Ход игры',
+    rules_flow_text: 'Обычный матч начинается с выбора карт, затем стартовых событий, затем боя. В ваш ход сначала срабатывают эффекты начала хода, добор и восстановление ресурсов. Затем можно играть карты или активировать снаряжение, которое было надето хотя бы один ход. Завершите ход, чтобы передать действие следующему игроку. В 2v2 ходы чередуются между командами; побежденные игроки не меняют порядок, но их ход пропускается.',
+    rules_keywords_title: 'Ключевые слова',
+    rules_keywords_text: '<b>Изгнание</b> отправляет карту в изгнание после розыгрыша или разрешения. <b>Точность</b> означает, что при уклонении атака наносит половину урона. <b>Неразрушимый</b> означает, что снаряжение нельзя уничтожить эффектами уничтожения. <b>Росток</b> добирает дополнительные карты при доборе. <b>Симбиоз</b> игнорирует штраф стоимости за карты с тем же именем. Окончательным считается текст карты.',
+    rules_examples_title: 'Примеры',
+    rules_examples_text: '{stinger} — мощная точная атака; {sewage} может уничтожить снаряжение; {bubble} отвечает на атаки и дает Уклонение. Нажмите имя карты, чтобы открыть ее в справочнике.',
+    rules_skip_confirm_title: 'Подсказка',
+    rules_skip_confirm_msg: 'Пропустить введение?\nЕго можно открыть снова в О игре > Правила.',
+    gallery_title: 'Справочник', gallery_cards: 'Карты', gallery_tags: 'Теги', gallery_events: 'Стартовые события',
+    gallery_search: 'Поиск', gallery_no_items: 'Нет записей.', gallery_cards_with_tag: 'Карты с этим тегом',
+    gallery_card_count: 'Карт: {0}', gallery_type: 'Тип', gallery_cost: 'Стоимость', gallery_tags_label: 'Теги',
+    gallery_description: 'Описание', gallery_effect: 'Эффект', gallery_trigger: 'Активация',
+    gallery_back_rules: 'К введению', gallery_explanation: 'Описание',
+    tutorial_start: 'Обучение', tutorial_skip: 'Пропустить', tutorial_intro: 'Теперь начнем обучение.',
+    tutorial_hint_play: 'Сначала сыграйте атаку Thorn и посмотрите, как меняется H противника.',
+    tutorial_hint_end: 'После действия нажмите Завершить ход.',
+    tutorial_hint_enemy: 'Теперь наблюдайте за противником. Следите за журналом и H/E/M.',
+    tutorial_hint_deck: 'Посмотрите колоду добора: нажмите Посмотреть колоду.',
+    tutorial_hint_continue: 'Продолжайте играть карты и завершайте ход. Позже вы доберете Guard и сможете ответить на атаку.',
+    tutorial_hint_counter: 'Это окно ответа. Выберите доступную карту Guard или дождитесь окончания отсчета.',
+    tutorial_hint_bloom: 'Карты Bloom лечат, накладывают состояния или меняют ресурсы. Сыграйте одну и посмотрите эффект.',
+    tutorial_hint_root: 'Карты Root остаются в зоне снаряжения. Наденьте одну и посмотрите ее эффект на следующем ходу.',
+    tutorial_hint_fission: 'Посмотрим разные типы. Fission — карта Bloom: простая атака может сохранить похожий общий урон, но Triangle растет после каждого удара. Используйте Fission на Triangle.',
+    tutorial_hint_play_fissioned: 'Triangle теперь имеет Fission. Сыграйте его и посмотрите, как разрешаются удары и слои.',
+    tutorial_hint_fusion: 'Fusion тоже карта Bloom. Она объединяет 2-3 атаки с одинаковым именем в одну более сильную карту.',
+    tutorial_hint_play_fusioned: 'Слитая атака готова. У вас хватает E; сыграйте ее и посмотрите усиленный урон.',
+    tutorial_victory_message: 'Поздравляем, вы прошли обучение!\nУдачной игры в Garden of Thorn!',
+    tutorial_defeat_message: 'Обучающий матч проигран. Ничего страшного: следующий пройдет увереннее.',
+    tutorial_retry: 'Повторить',
+});
+
+Object.assign(I18N.ja, {
+    about_title: '概要', about_gameplay: '遊び方', about_credits: 'クレジット', about_contact: '連絡先',
+    credits_developer: '開発者', credits_special: 'Special Thanks',
+    rules_intro_title: 'ゲーム紹介', rules_type_thorn: '攻撃(Thorn)', rules_type_bloom: 'スキル(Bloom)', rules_type_root: '装備(Root)', rules_type_guard: 'カウンター(Guard)',
+    rules_goal_title: '基本目標',
+    rules_goal_text: 'Garden of Thorn 荆棘花园 はマルチプレイヤーカード対戦ゲームです。多くのモードでは、{thorn}、{bloom}、{root}、{guard}の4種類のカードを使い、相手側の H を 0 にしながら自分側の H を守ることが目標です。',
+    rules_resources_title: 'リソース',
+    rules_resources_text: 'H(Health) は生命です。H が 0 になると通常そのプレイヤーは行動できなくなります。2v2 では、片側の全プレイヤーが倒れたときに敗北します。E(Elixir) は多くのカードの支払いに使います。M(Magic) は一部の魔法カードに使います。通常、ドローとリソース回復は自分のターン開始時だけ行われます。',
+    rules_types_title: 'カードタイプ',
+    rules_types_text: '{thornRaw} は直接ダメージを与えるカードで、例は {basic}、{bone} です。{bloomRaw} は回復、状態付与、リソース調整などを行うカードで、例は {fire} です。{rootRaw} は装備欄に残り、継続効果や発動効果を持つカードで、例は {leaf} です。{guardRaw} は相手の行動が条件を満たしたときに反応するカウンターです。',
+    rules_flow_title: 'ターンの流れ',
+    rules_flow_text: '通常モードでは、カード選択、開局イベント選択、その後に対局へ入ります。自分のターンでは、ターン開始効果、ドロー、リソース回復が先に処理されます。その後、手札を使ったり、1ターン以上装備され条件を満たす装備を発動できます。行動後はターン終了を押して次のプレイヤーへ移ります。2v2 ではチーム間で交互に進み、倒れたプレイヤーは順番を変えず、そのターンだけ飛ばされます。',
+    rules_keywords_title: '主なキーワード',
+    rules_keywords_text: '<b>追放</b>は、プレイまたは解決後に捨て札ではなく追放領域へ行くことを示します。<b>精密</b>は、回避されたときに半分のダメージを与えることを示します。<b>破壊不可</b>は破壊効果で装備が破壊されないことを示します。<b>萌芽</b>は引いたときに追加ドローします。<b>共生</b>は同名カードの費用ペナルティを受けません。最終的な効果はカード本文を優先します。',
+    rules_examples_title: '例',
+    rules_examples_text: '{stinger} は高ダメージの精密攻撃です。{sewage} は装備を破壊できます。{bubble} は攻撃に反応して回避を得ます。カード名をクリックすると図鑑で確認できます。',
+    rules_skip_confirm_title: '確認',
+    rules_skip_confirm_msg: 'ゲーム紹介をスキップしますか？\n概要 > 遊び方 から再度開けます。',
+    gallery_title: '図鑑', gallery_cards: 'カード', gallery_tags: 'タグ', gallery_events: '開局イベント',
+    gallery_search: '検索', gallery_no_items: '項目がありません。', gallery_cards_with_tag: 'このタグを持つカード',
+    gallery_card_count: '{0}枚のカード', gallery_type: 'タイプ', gallery_cost: 'コスト', gallery_tags_label: 'タグ',
+    gallery_description: '説明', gallery_effect: '効果', gallery_trigger: '発動',
+    gallery_back_rules: '紹介に戻る', gallery_explanation: '説明',
+    tutorial_start: 'チュートリアル', tutorial_skip: 'スキップ', tutorial_intro: 'それではチュートリアルを始めましょう。',
+    tutorial_hint_play: 'まず Thorn 攻撃カードを使い、相手の H の変化を確認しましょう。',
+    tutorial_hint_end: '行動したら、ターン終了を押します。',
+    tutorial_hint_enemy: '相手の行動を見ましょう。ログと H/E/M を確認してください。',
+    tutorial_hint_deck: '山札を確認します。「デッキ確認」を押しましょう。',
+    tutorial_hint_continue: 'カードを使ってターン終了しましょう。後で Guard を引いたら、相手の攻撃に反応できます。',
+    tutorial_hint_counter: 'これはカウンター画面です。支払える Guard を選ぶか、カウントダウンを待ちます。',
+    tutorial_hint_bloom: 'Bloom は回復、状態付与、リソース変更を行います。1枚使って効果を見ましょう。',
+    tutorial_hint_root: 'Root は装備欄に残ります。1枚装備して、次のターンに効果を確認しましょう。',
+    tutorial_hint_fission: '別のタイプを見てみましょう。裂変は Bloom です。通常攻撃では総ダメージが近いこともありますが、三角形は各ヒット後に成長します。三角形に裂変を使いましょう。',
+    tutorial_hint_play_fissioned: '三角形に裂変が付きました。使って、各ヒットと層の増え方を確認しましょう。',
+    tutorial_hint_fusion: '聚变も Bloom です。同名攻撃カード2-3枚を1枚の強いカードにまとめます。',
+    tutorial_hint_play_fusioned: '融合した攻撃カードの準備ができました。Eは足りています。打ち出して強化後のダメージを見てみましょう。',
+    tutorial_victory_message: 'おめでとうございます。チュートリアルを完了しました！\nGarden of Thorn を楽しんでください！',
+    tutorial_defeat_message: 'チュートリアルの対局に敗北しました。大丈夫です。次の対局ではもっと動きが見えてきます。',
+    tutorial_retry: 'やり直す',
+});
+
+Object.assign(I18N.fr, {
+    tag_desc_precision: 'Mot-clé d’attaque. Une attaque Précision esquivée inflige la moitié des dégâts au lieu d’échouer entièrement.',
+    tag_desc_exile: 'Mot-clé de résolution. Cette carte va dans l’exil après avoir été jouée ou résolue, au lieu de la défausse.',
+    tag_desc_non_stackable: 'Mot-clé d’équipement. Plusieurs copies peuvent être équipées, mais le même effet ne se cumule pas ; les copies restantes servent surtout si une copie est détruite.',
+    tag_desc_indestructible: 'Mot-clé d’équipement. Cet équipement ne peut pas être détruit par les effets de destruction et reste aussi quand son propriétaire est vaincu.',
+    tag_desc_sprout: 'Mot-clé de pioche. Quand cette carte est piochée, elle pioche des cartes supplémentaires ; les limites de main restent applicables.',
+    tag_desc_symbiosis: 'Mot-clé de coût. Cette carte ignore les pénalités de coût des cartes de même nom.',
+    tag_desc_attract: 'Mot-clé de limite de main. Quand la main est pleine, les cartes Attraction repoussent d’abord les cartes sans Attraction.',
+    tag_desc_void: 'Mot-clé de fin de tour. Si cette carte reste en main à la fin du tour, elle est exilée.',
+    tag_desc_self_only: 'Mot-clé de ciblage. En 2v2, cette carte ne peut cibler que vous-même ; en 1v1, il n’a pas d’effet d’affichage supplémentaire.',
+    tag_desc_uncancellable: 'Mot-clé de choix. Les fenêtres de choix de cette carte n’affichent pas de bouton Annuler ; le joueur doit terminer le choix. Cela évite de consulter une information cachée gratuitement puis d’annuler, par exemple avec Aimant.',
+    tag_desc_infinite_exclude: 'Mot-clé de mode. Cette carte est exclue de la réserve aléatoire d’Infinite Fire car elle entre en conflit avec ce mode.',
+    tag_desc_default: 'Tag de mod ou d’extension. Son sens exact est défini par le mod ou l’effet de carte correspondant.'
+});
+
+Object.assign(I18N.pt, {
+    tag_desc_precision: 'Palavra-chave de ataque. Um ataque com Precisão, ao ser esquivado, causa metade do dano em vez de falhar por completo.',
+    tag_desc_exile: 'Palavra-chave de resolução. Esta carta vai para o exílio após ser jogada ou resolvida, em vez de ir para o descarte.',
+    tag_desc_non_stackable: 'Palavra-chave de equipamento. Várias cópias podem ser equipadas, mas o mesmo efeito não acumula; cópias extras servem quando uma é destruída.',
+    tag_desc_indestructible: 'Palavra-chave de equipamento. Este equipamento não pode ser destruído por efeitos de destruição e permanece quando o dono é derrotado.',
+    tag_desc_sprout: 'Palavra-chave de compra. Ao ser comprada, esta carta compra cartas extras; limites de mão ainda se aplicam.',
+    tag_desc_symbiosis: 'Palavra-chave de custo. Esta carta ignora penalidades de custo por cartas de mesmo nome.',
+    tag_desc_attract: 'Palavra-chave de limite de mão. Quando a mão está cheia, cartas com Atração empurram primeiro cartas sem Atração.',
+    tag_desc_void: 'Palavra-chave de fim de turno. Se esta carta ficar na mão no fim do turno, ela é exilada.',
+    tag_desc_self_only: 'Palavra-chave de alvo. No 2v2, esta carta só pode mirar você mesmo; no 1v1, não tem significado visual extra.',
+    tag_desc_uncancellable: 'Palavra-chave de escolha. Janelas de escolha desta carta não mostram botão de cancelar; o jogador deve concluir a escolha. Isso evita ver informação oculta de graça e cancelar, como com Magnet.',
+    tag_desc_infinite_exclude: 'Palavra-chave de modo. Esta carta não entra no conjunto aleatório de Infinite Fire por conflitar com esse modo.',
+    tag_desc_default: 'Tag de mod ou extensão. O significado exato é definido pelo mod ou pelo efeito da carta.'
+});
+
+Object.assign(I18N.ru, {
+    tag_desc_precision: 'Ключевое слово атаки. При уклонении точная атака наносит половину урона, а не проваливается полностью.',
+    tag_desc_exile: 'Ключевое слово разрешения. После розыгрыша или разрешения эта карта отправляется в изгнание, а не в сброс.',
+    tag_desc_non_stackable: 'Ключевое слово снаряжения. Несколько копий можно надеть, но одинаковый эффект не складывается; запасные копии полезны, если одна будет уничтожена.',
+    tag_desc_indestructible: 'Ключевое слово снаряжения. Это снаряжение нельзя уничтожить эффектами уничтожения, и оно остается при поражении владельца.',
+    tag_desc_sprout: 'Ключевое слово добора. Когда эта карта берется, она добирает дополнительные карты; лимит руки продолжает действовать.',
+    tag_desc_symbiosis: 'Ключевое слово стоимости. Эта карта игнорирует штраф стоимости за карты с тем же именем.',
+    tag_desc_attract: 'Ключевое слово лимита руки. Когда рука полна, карты с Притяжением сначала вытесняют карты без Притяжения.',
+    tag_desc_void: 'Ключевое слово конца хода. Если эта карта остается в руке в конце хода, она изгоняется.',
+    tag_desc_self_only: 'Ключевое слово цели. В 2v2 эту карту можно применять только к себе; в 1v1 оно не имеет дополнительного значения.',
+    tag_desc_uncancellable: 'Ключевое слово выбора. Окна выбора этой карты не показывают кнопку отмены; игрок обязан завершить выбор. Это не дает бесплатно посмотреть скрытую информацию и отменить, например с Magnet.',
+    tag_desc_infinite_exclude: 'Ключевое слово режима. Эта карта исключена из случайного пула Infinite Fire, потому что конфликтует с режимом.',
+    tag_desc_default: 'Тег мода или расширения. Точное значение задается соответствующим модом или эффектом карты.'
+});
+
+Object.assign(I18N.ja, {
+    tag_desc_precision: '攻撃キーワード。精密攻撃が回避された場合、完全に失敗せず半分のダメージを与えます。',
+    tag_desc_exile: '解決先キーワード。このカードはプレイまたは解決後、捨て札ではなく追放領域へ行きます。',
+    tag_desc_non_stackable: '装備キーワード。複数装備できますが、同じ効果は重複しません。主に一つが破壊された後も効果を残すための予備です。',
+    tag_desc_indestructible: '装備キーワード。この装備は破壊効果で破壊されず、持ち主が倒れても残ります。',
+    tag_desc_sprout: 'ドローキーワード。引いたとき追加でカードを引きます。手札上限やあふれ処理は通常通りです。',
+    tag_desc_symbiosis: 'コストキーワード。同名カード連続使用による費用ペナルティを受けません。',
+    tag_desc_attract: '手札上限キーワード。手札が満杯のとき、吸引カードは吸引を持たないカードを優先して押し出します。',
+    tag_desc_void: 'ターン終了キーワード。このカードがターン終了時に手札に残っている場合、追放されます。',
+    tag_desc_self_only: '対象制限キーワード。2v2 では自分だけを対象にできます。1v1 では追加の表示上の意味はありません。',
+    tag_desc_uncancellable: '選択制限キーワード。このカードの選択画面にはキャンセルボタンが表示されず、必ず選択を完了します。Magnet のように0コストで非公開情報を見てからキャンセルすることを防ぎます。',
+    tag_desc_infinite_exclude: 'モード制限キーワード。このカードは Infinite Fire のランダムカードプールに入りません。',
+    tag_desc_default: 'Mod または拡張タグです。具体的な意味は対応する Mod またはカード効果で定義されます。'
+});
+
 let currentLang = localStorage.getItem('got_lang') || 'zh';
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || (I18N.zh[key]) || key; }
 function tf(key, ...values) { return t(key).replace(/\{(\d+)\}/g, (_, i) => values[Number(i)] ?? ''); }
@@ -531,6 +910,51 @@ function getCardDescriptionText(cardDef) {
 
 function getCardTriggerText(cardDef) {
     return getLocalizedCardText(cardDef, 'trigger_effect_text_i18n', 'trigger_effect_text');
+}
+
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+const CARD_TEXT_TOKEN_RULES = [
+    { cls: 'toxic', re: /^(?:\d+层淬毒|\d+\s*(?:Toxic|Toxique|Tóxico|Токсин)|淬毒\d+)/i },
+    { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/i },
+    { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/i },
+    { cls: 'damage', re: /^(?:\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D/i },
+    { cls: 'armor', re: /^[+-]?\d+A/i },
+    { cls: 'heal', re: /^\+\d+H/i },
+    { cls: 'elixir', re: /^[+-]?\d+E/i },
+    { cls: 'magic', re: /^[+-]?\d+M/i },
+];
+
+function colorizeCardText(value) {
+    const text = String(value || '');
+    let html = '';
+    let i = 0;
+    while (i < text.length) {
+        const rest = text.slice(i);
+        let matched = null;
+        for (const rule of CARD_TEXT_TOKEN_RULES) {
+            const m = rest.match(rule.re);
+            if (m && m[0]) {
+                matched = { cls: rule.cls, text: m[0] };
+                break;
+            }
+        }
+        if (matched) {
+            html += `<span class="card-token ${matched.cls}">${escapeHtml(matched.text)}</span>`;
+            i += matched.text.length;
+        } else {
+            html += escapeHtml(text[i]);
+            i += 1;
+        }
+    }
+    return html;
 }
 
 function getLocalizedEventText(ev, field) {
@@ -686,7 +1110,7 @@ function translateServerMessage(message) {
     if (message === '装备需要装备一回合后才能触发') return UI.error_equipment_turn_needed;
     if (message === '能量不足') return UI.error_not_enough_e;
     if (message === '目标无效') return UI.error_target_invalid;
-    if (message === '链子效果中，无法使用卡牌') return UI.error_action_blocked;
+    if (message === '眩晕效果中，无法使用卡牌') return UI.error_action_blocked;
     if (message === '本回合无法使用攻击牌') return UI.error_attack_blocked;
     if (message === '本回合只能使用攻击牌') return UI.error_attack_only;
     if (message === '反制牌只能通过响应机制使用') return UI.error_waiting_response_ui;
@@ -705,6 +1129,7 @@ let playerId = -1;
 let mySid = '';
 let nickname = '';
 let socket = null;
+let manualDisconnect = false;
 let CARD_DEFS = {};
 let gameState = {};
 let draftState = {};
@@ -732,7 +1157,27 @@ let openingEvents = [];
 let openingEventMagicPool = [];
 let soloEventA = '';
 let soloEventB = '';
+let tutorialMode = false;
+let pendingTutorialStart = false;
+let tutorialReturnTarget = 'home';
+let tutorialBotTimer = null;
+let tutorialLastLogTotal = 0;
+let tutorialDeckViewed = false;
+let tutorialCounterSeen = false;
+let tutorialIntroActive = false;
+let tutorialIntroShown = false;
+let tutorialOverlayStartTimer = null;
+let tutorialIntroTimer = null;
+let tutorialStrictFocus = false;
+let tutorialEndHintCount = 0;
+let tutorialEndHintKey = '';
+let tutorialOverlayRefreshTimer = null;
+let suppressSoloPausedHandler = false;
+let cardAnimationLockUntil = 0;
+let cardAnimationUnlockTimer = null;
+let hasPlayerHandSnapshot = false;
 let pendingPlayCard = null;
+let selectedPlayCardId = null;
 let gameTimelineEntries = [];
 let renderedBattleLogCount = 0;
 let renderedBattleLogTotal = 0;
@@ -777,10 +1222,16 @@ function gameAlert(title, message, buttons) {
     el.classList.add('active');
 }
 
-function gamePrompt(title, options) {
+function hideGameAlert() {
+    const el = $('game-alert');
+    if (el) el.classList.remove('active');
+}
+
+function gamePrompt(title, options, config = {}) {
     return new Promise((resolve) => {
         const el = $('game-prompt');
         if (!el) { resolve(-1); return; }
+        const cancellable = config.cancellable !== false;
         $('game-prompt-title').textContent = title || '';
         const optsEl = $('game-prompt-options');
         optsEl.innerHTML = '';
@@ -793,6 +1244,8 @@ function gamePrompt(title, options) {
         });
         const cancelBtn = $('game-prompt-cancel');
         cancelBtn.textContent = UI.cancel;
+        cancelBtn.classList.toggle('hidden', !cancellable);
+        cancelBtn.style.display = cancellable ? '' : 'none';
         cancelBtn.onclick = () => { el.classList.remove('active'); resolve(-1); };
         el.classList.add('active');
     });
@@ -812,9 +1265,17 @@ function applyLang(lang) {
     const sel = $('settings-lang-select');
     if (sel) sel.value = lang;
     updateStaticText();
+    refreshBaseStatus();
 }
 
 function updateStaticText() {
+    document.title = GAME_TITLE;
+    const bootTitle = document.querySelector('.boot-title');
+    if (bootTitle) bootTitle.textContent = GAME_TITLE;
+    const titleMain = document.querySelector('.title-main');
+    if (titleMain) titleMain.textContent = 'Garden of Thorn';
+    const titleSub = document.querySelector('.title-sub');
+    if (titleSub) titleSub.textContent = '荆棘花园';
     const subtitle = document.querySelector('#view-login .subtitle');
     if (subtitle) subtitle.textContent = UI.app_subtitle;
     const bootSub = document.querySelector('#boot-loader .boot-sub');
@@ -859,16 +1320,25 @@ function updateStaticText() {
     if (galleryTabEvents) galleryTabEvents.textContent = UI.gallery_events;
     const gallerySearch = $('gallery-search');
     if (gallerySearch) gallerySearch.placeholder = UI.gallery_search;
+    const btnOpenRules = $('btn-open-rules');
+    if (btnOpenRules) btnOpenRules.textContent = UI.rules_intro_title;
+    const btnGalleryBack = $('btn-gallery-back');
+    if (btnGalleryBack) btnGalleryBack.textContent = galleryReturnToRules ? UI.gallery_back_rules : UI.back_to_home;
     const btnOpenAbout = $('btn-open-about');
-    if (btnOpenAbout) btnOpenAbout.textContent = '关于';
+    if (btnOpenAbout) btnOpenAbout.textContent = UI.about_title;
+    const aboutTitle = document.querySelector('#about-panel .settings-inner > h3');
+    if (aboutTitle) aboutTitle.textContent = UI.about_title;
     const aboutTabRules = $('about-tab-rules');
-    if (aboutTabRules) aboutTabRules.textContent = '游戏玩法';
+    if (aboutTabRules) aboutTabRules.textContent = UI.about_gameplay;
     const aboutTabCredits = $('about-tab-credits');
-    if (aboutTabCredits) aboutTabCredits.textContent = '致谢';
+    if (aboutTabCredits) aboutTabCredits.textContent = UI.about_credits;
     const creditsDeveloper = $('credits-developer-title');
-    if (creditsDeveloper) creditsDeveloper.textContent = '开发者';
+    if (creditsDeveloper) creditsDeveloper.textContent = UI.credits_developer;
+    const creditsContact = document.querySelector('#about-page-credits section:nth-child(2) h4');
+    if (creditsContact) creditsContact.textContent = UI.about_contact;
     const creditsSpecial = $('credits-special-title');
-    if (creditsSpecial) creditsSpecial.textContent = '特别鸣谢';
+    if (creditsSpecial) creditsSpecial.textContent = UI.credits_special;
+    renderAboutRulesBody();
     const btnLobbyBack = $('btn-lobby-back');
     if (btnLobbyBack) btnLobbyBack.textContent = UI.back_to_home;
     const btnLobbySettings = $('btn-lobby-settings');
@@ -995,6 +1465,7 @@ function showView(viewId) {
         renderedBattleLogCount = 0;
         renderedBattleLogTotal = 0;
         updateModeSpecificControls({ solo: false, phase: '' });
+        refreshBaseStatus(viewId);
     }
 }
 
@@ -1029,10 +1500,91 @@ function setAboutPage(page) {
     if (creditsTab) creditsTab.classList.toggle('active', isCredits);
 }
 
+function formatNamedTemplate(template, values) {
+    return String(template || '').replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => values[key] ?? '');
+}
+
+function rulesTypeSpan(type, label) {
+    return `<span class="rules-type ${type}">${escapeHtml(label)}</span>`;
+}
+
+function rulesCardLink(id, type) {
+    const cd = CARD_DEFS[id];
+    const label = cd ? getCardName(cd) : id;
+    return `<a class="rules-card-link ${type}" data-card="${escapeHtml(id)}">${escapeHtml(label)}</a>`;
+}
+
+function getRulesTemplateValues() {
+    const thorn = rulesTypeSpan('thorn', UI.rules_type_thorn || 'Thorn');
+    const bloom = rulesTypeSpan('bloom', UI.rules_type_bloom || 'Bloom');
+    const root = rulesTypeSpan('root', UI.rules_type_root || 'Root');
+    const guard = rulesTypeSpan('guard', UI.rules_type_guard || 'Guard');
+    return {
+        thorn,
+        bloom,
+        root,
+        guard,
+        thornRaw: rulesTypeSpan('thorn', 'Thorn'),
+        bloomRaw: rulesTypeSpan('bloom', 'Bloom'),
+        rootRaw: rulesTypeSpan('root', 'Root'),
+        guardRaw: rulesTypeSpan('guard', 'Guard'),
+        basic: rulesCardLink('Basic', 'thorn'),
+        bone: rulesCardLink('Bone', 'thorn'),
+        fire: rulesCardLink('Fire', 'bloom'),
+        leaf: rulesCardLink('Leaf', 'root'),
+        stinger: rulesCardLink('Stinger', 'thorn'),
+        sewage: rulesCardLink('Sewage', 'bloom'),
+        bubble: rulesCardLink('Bubble', 'guard'),
+    };
+}
+
+function renderRulesBodyHtml() {
+    const values = getRulesTemplateValues();
+    const paragraph = key => formatNamedTemplate(UI[key], values);
+    return `
+        <h4>${escapeHtml(UI.rules_goal_title)}</h4>
+        <p>${paragraph('rules_goal_text')}</p>
+        <h4>${escapeHtml(UI.rules_resources_title)}</h4>
+        <p>${paragraph('rules_resources_text')}</p>
+        <h4>${escapeHtml(UI.rules_types_title)}</h4>
+        <p>${paragraph('rules_types_text')}</p>
+        <h4>${escapeHtml(UI.rules_flow_title)}</h4>
+        <p>${paragraph('rules_flow_text')}</p>
+        <h4>${escapeHtml(UI.rules_keywords_title)}</h4>
+        <p>${paragraph('rules_keywords_text')}</p>
+        <h4>${escapeHtml(UI.rules_examples_title)}</h4>
+        <p>${paragraph('rules_examples_text')}</p>
+    `;
+}
+
+function renderAboutRulesBody() {
+    const aboutBody = $('about-rules-body');
+    if (!aboutBody) return;
+    aboutBody.innerHTML = renderRulesBodyHtml();
+    ensureTutorialButtons();
+    bindRulesCardLinks(aboutBody);
+}
+
+function ensureTutorialButtons() {
+    const aboutBody = $('about-rules-body');
+    if (aboutBody && !$('btn-about-tutorial')) {
+        const row = document.createElement('div');
+        row.className = 'rules-tutorial-entry';
+        row.innerHTML = `<button id="btn-about-tutorial" class="btn btn-primary" type="button">${UI.tutorial_start}</button>`;
+        aboutBody.insertBefore(row, aboutBody.firstChild);
+    }
+    const aboutBtn = $('btn-about-tutorial');
+    if (aboutBtn) {
+        aboutBtn.textContent = UI.tutorial_start;
+        aboutBtn.onclick = () => startTutorial('about');
+    }
+}
+
 function openAbout() {
     const panel = $('about-panel');
     if (panel) panel.classList.remove('hidden');
     setAboutPage('rules');
+    ensureTutorialButtons();
     const body = $('about-rules-body');
     bindRulesCardLinks(body);
     if (body && rulesScrollTop) requestAnimationFrame(() => { body.scrollTop = rulesScrollTop; });
@@ -1058,7 +1610,7 @@ function showCardGallery(selectedId = null, mode = 'cards') {
     phase = 'gallery';
     setGalleryMode(mode);
     const backBtn = $('btn-gallery-back');
-    if (backBtn) backBtn.textContent = galleryReturnToRules ? '返回介绍' : '返回主页';
+    if (backBtn) backBtn.textContent = galleryReturnToRules ? UI.gallery_back_rules : UI.back_to_home;
     if (selectedId) gallerySelectedId = selectedId;
     if (!gallerySelectedId || !CARD_DEFS[gallerySelectedId]) {
         gallerySelectedId = Object.keys(CARD_DEFS).sort((a, b) => getCardName(CARD_DEFS[a]).localeCompare(getCardName(CARD_DEFS[b])))[0] || null;
@@ -1071,6 +1623,10 @@ function makeGalleryFlagHtml(flag) {
     const label = getFlagLabel(flag);
     if (style) return `<span class="card-flag ${style.cls}">${label}</span>`;
     return `<span class="card-flag">${label}</span>`;
+}
+
+function getGalleryFlagDescription(flag) {
+    return UI[`tag_desc_${flag}`] || UI.tag_desc_default;
 }
 
 function getAllGalleryFlags() {
@@ -1097,9 +1653,7 @@ function renderCardGallery() {
     const ids = Object.keys(CARD_DEFS)
         .filter(id => {
             const cd = CARD_DEFS[id];
-            const flagText = (cd.flags || []).map(getFlagLabel).join(' ');
-            const text = `${id} ${cd.name_cn || ''} ${cd.name_en || ''} ${getCardName(cd)} ${getCardEffectText(cd)} ${getCardDescriptionText(cd)} ${flagText}`.toLowerCase();
-            return !q || text.includes(q);
+            return !q || cardSearchText(id).includes(q);
         })
         .sort((a, b) => getCardName(CARD_DEFS[a]).localeCompare(getCardName(CARD_DEFS[b])));
     list.innerHTML = '';
@@ -1112,7 +1666,8 @@ function renderCardGallery() {
         row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
         list.appendChild(row);
     });
-    const cd = CARD_DEFS[gallerySelectedId] || CARD_DEFS[ids[0]];
+    if (!ids.includes(gallerySelectedId)) gallerySelectedId = ids[0] || null;
+    const cd = CARD_DEFS[gallerySelectedId];
     if (!cd) {
         detail.innerHTML = `<p>${UI.gallery_no_items}</p>`;
         return;
@@ -1121,13 +1676,13 @@ function renderCardGallery() {
     const cardEl = createCardElement({ def_id: cd.id, instance_flags: [], disabled_flags: [] }, { small: false, showAllFlags: true });
     const flags = (cd.flags || []).filter(flag => flag !== 'infinite_exclude');
     detail.innerHTML = `<div class="gallery-detail-card"><div id="gallery-card-preview"></div><div class="gallery-detail-info">
-        <h3>${getCardName(cd)}</h3>
-        <p><b>${UI.gallery_type}：</b>${getCardTypeLabel(cd.card_type)}</p>
-        <p><b>${UI.gallery_cost}：</b>${cd.cost_e || 0}E / ${cd.cost_m || 0}M</p>
-        ${flags.length ? `<p><b>${UI.gallery_tags_label}：</b>${flags.map(getFlagLabel).join(' / ')}</p>` : ''}
-        <p><b>${UI.gallery_description}：</b>${getCardDescriptionText(cd) || '-'}</p>
-        <p><b>${UI.gallery_effect}：</b>${getCardEffectText(cd) || '-'}</p>
-        ${cd.trigger_effect_text ? `<p><b>${UI.gallery_trigger}：</b>${getCardTriggerText(cd)}</p>` : ''}
+        <h3>${escapeHtml(getCardName(cd))}</h3>
+        <p><b>${UI.gallery_type}：</b>${escapeHtml(getCardTypeLabel(cd.card_type))}</p>
+        <p><b>${UI.gallery_cost}：</b>${colorizeCardText(`${cd.cost_e || 0}E / ${cd.cost_m || 0}M`)}</p>
+        ${flags.length ? `<p><b>${UI.gallery_tags_label}：</b>${escapeHtml(flags.map(getFlagLabel).join(' / '))}</p>` : ''}
+        <p><b>${UI.gallery_description}：</b>${colorizeCardText(getCardDescriptionText(cd) || '-')}</p>
+        <p><b>${UI.gallery_effect}：</b>${colorizeCardText(getCardEffectText(cd) || '-')}</p>
+        ${cd.trigger_effect_text ? `<p><b>${UI.gallery_trigger}：</b>${colorizeCardText(getCardTriggerText(cd))}</p>` : ''}
     </div></div>`;
     const preview = $('gallery-card-preview');
     if (preview) preview.appendChild(cardEl);
@@ -1135,7 +1690,8 @@ function renderCardGallery() {
 
 function renderTagGallery(list, detail, q) {
     const flags = getAllGalleryFlags().filter(flag => {
-        const text = `${flag} ${getFlagLabel(flag)}`.toLowerCase();
+        const en = I18N.en[`tag_${flag}`] || I18N.en[`flag_${flag}`] || flag;
+        const text = `${flag} ${getFlagLabel(flag)} ${en}`.toLowerCase();
         return !q || text.includes(q);
     });
     if (!flags.includes(gallerySelectedId)) gallerySelectedId = flags[0] || null;
@@ -1159,13 +1715,20 @@ function renderTagGallery(list, detail, q) {
         <h3>${getFlagLabel(gallerySelectedId)}</h3>
         <div class="gallery-tag-list">${makeGalleryFlagHtml(gallerySelectedId)}</div>
         <p><b>ID：</b>${gallerySelectedId}</p>
+        <p><b>${UI.gallery_explanation}：</b>${getGalleryFlagDescription(gallerySelectedId)}</p>
         <p><b>${UI.gallery_cards_with_tag}：</b>${usedBy.length ? usedBy.map(getCardName).join(' / ') : '-'}</p>
     </div>`;
 }
 
 function renderOpeningEventGallery(list, detail, q) {
     const events = (openingEvents || []).filter(ev => {
-        const text = `${ev.id} ${getLocalizedEventText(ev, 'name')} ${getLocalizedEventText(ev, 'desc')}`.toLowerCase();
+        const text = [
+            ev.id,
+            getLocalizedEventText(ev, 'name'),
+            getLocalizedEventText(ev, 'desc'),
+            (ev.name_i18n || {}).en || '',
+            (ev.desc_i18n || {}).en || '',
+        ].join(' ').toLowerCase();
         return !q || text.includes(q);
     });
     const eventIds = events.map(ev => `event:${ev.id}`);
@@ -1197,28 +1760,17 @@ function openRulesModal({ firstVisit = false } = {}) {
     const modal = $('modal');
     const content = $('modal-content');
     if (!modal || !content) return;
-    const skipHtml = firstVisit ? `<div class="game-alert-message">你确认要跳过游戏介绍吗？<br>可以在 关于&gt;游戏玩法 中再次打开此界面。</div>` : '';
+    const skipHtml = firstVisit ? `<button id="btn-rules-skip" class="rules-skip-btn btn btn-secondary">${UI.tutorial_skip}</button>` : '';
     content.className = 'modal-inner rules-modal';
     content.innerHTML = `
-        <h3>游戏介绍</h3>
         ${skipHtml}
+        <h3>${UI.rules_intro_title}</h3>
         <div class="rules-body" id="rules-body">
-            <h4>基本目标</h4>
-            <p>Garden of Thorn 荆棘花园 是 1v1 卡牌对战游戏。你的目标是通过攻击、技能、装备和反制，让对方 H 降到 0，同时保护自己的 H。</p>
-            <h4>资源</h4>
-            <p>H 是生命，E 是能量，M 是魔力。大多数卡牌消耗 E，部分魔法牌消耗 M。回合开始时会抽牌并回复资源。</p>
-            <h4>卡牌类型</h4>
-            <p><b>Thorn</b> 是攻击牌，例如 <a data-card="Basic">基本</a>、<a data-card="Bone">骨头</a>。<b>Bloom</b> 是技能牌，例如 <a data-card="Fire">火</a>。<b>Root</b> 是装备牌，例如 <a data-card="Leaf">叶子</a>。<b>Guard</b> 是反制牌，会在对方行动时响应。</p>
-            <h4>回合流程</h4>
-            <p>正常模式先选牌，再选择开局事件，然后进入对局。轮到你时可以打出手牌、触发已装备一回合的装备，最后结束回合。</p>
-            <h4>常见关键词</h4>
-            <p><b>放逐</b>表示打出或结算后进入放逐区；<b>精准</b>通常能绕过普通闪避；<b>不可摧毁</b>表示不能被摧毁效果破坏；<b>萌芽</b>抽到时额外抽牌；<b>共生</b>不受同名卡费用惩罚。</p>
-            <h4>示例</h4>
-            <p><a data-card="Stinger">刺</a> 是高伤害精准攻击；<a data-card="Sewage">污水</a> 可以摧毁装备；<a data-card="Bubble">泡泡</a> 可以响应攻击。</p>
+            ${renderRulesBodyHtml()}
         </div>
         <div class="modal-buttons">
-            ${firstVisit ? `<button id="btn-rules-skip" class="btn btn-secondary">跳过</button>` : ''}
-            <button id="btn-rules-close" class="btn btn-primary">关闭</button>
+            <button id="btn-rules-tutorial" class="btn btn-bloom">${UI.tutorial_start}</button>
+            <button id="btn-rules-close" class="btn btn-primary">${firstVisit ? UI.ok : UI.close}</button>
         </div>`;
     modal.classList.remove('hidden');
     modal.classList.add('active');
@@ -1231,11 +1783,18 @@ function openRulesModal({ firstVisit = false } = {}) {
         content.className = 'modal-inner';
         hideModal();
     };
+    const tutorialBtn = $('btn-rules-tutorial');
+    if (tutorialBtn) tutorialBtn.onclick = () => startTutorial(firstVisit ? 'home' : 'about');
     const skip = $('btn-rules-skip');
     if (skip) skip.onclick = () => {
-        localStorage.setItem('got_seen_intro', '1');
-        content.className = 'modal-inner';
-        hideModal();
+        gameAlert(UI.rules_skip_confirm_title, UI.rules_skip_confirm_msg, [
+            { text: UI.cancel || '取消', cls: 'btn-secondary', action: () => {} },
+            { text: UI.tutorial_skip, cls: 'btn-danger', action: () => {
+                localStorage.setItem('got_seen_intro', '1');
+                content.className = 'modal-inner';
+                hideModal();
+            } }
+        ]);
     };
 }
 
@@ -1250,11 +1809,35 @@ function updateStatus(text) {
 
 let _statusTimeout = null;
 let _prevStatusText = '';
+function getVisibleViewId() {
+    const visible = document.querySelector('.view:not(.hidden)');
+    return visible ? visible.id : 'view-login';
+}
+
+function getViewStatusText(viewId = getVisibleViewId()) {
+    if (viewId === 'view-login') return UI.default_status;
+    if (viewId === 'view-lobby') return UI.lobby_status.replace('{0}', nickname || '');
+    if (viewId === 'view-solo') return UI.solo_training;
+    if (viewId === 'view-draft') return UI.draft_phase;
+    if (viewId === 'view-event-select') return UI.select_event;
+    if (viewId === 'view-card-gallery') return UI.gallery_title;
+    if (viewId === 'view-mod-editor') return UI.mod_editor;
+    return UI.default_status;
+}
+
+function refreshBaseStatus(viewId = getVisibleViewId()) {
+    if (viewId === 'view-game' && gameState) {
+        renderGame(gameState);
+        return;
+    }
+    updateStatus(getViewStatusText(viewId));
+}
+
 function flashStatus(text, duration, type) {
     const s = $('status-text');
     if (!s) return;
     if (_statusTimeout) { clearTimeout(_statusTimeout); _statusTimeout = null; }
-    else { _prevStatusText = s.textContent || ''; }
+    else { _prevStatusText = getViewStatusText(); }
     s.textContent = text;
     if (type === 'error') {
         s.style.color = '#C0392B';
@@ -1265,10 +1848,115 @@ function flashStatus(text, duration, type) {
     _statusTimeout = setTimeout(() => {
         s.style.color = '';
         s.style.fontWeight = '';
-        s.textContent = _prevStatusText || UI.default_status;
+        s.textContent = _prevStatusText || getViewStatusText();
         _prevStatusText = '';
         _statusTimeout = null;
     }, duration || 2000);
+}
+
+function isTouchPlayMode() {
+    return !!(window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse)').matches);
+}
+
+function ensureDropOverlay() {
+    let overlay = $('card-drop-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'card-drop-overlay';
+        overlay.className = 'card-drop-overlay hidden';
+        overlay.innerHTML = `<div class="card-drop-overlay-text">${UI.drag_to_play_full || UI.drag_to_play || 'Drag here to play'}</div>`;
+        document.body.appendChild(overlay);
+    }
+    return overlay;
+}
+
+function showDropOverlay() {
+    const overlay = ensureDropOverlay();
+    const text = overlay.querySelector('.card-drop-overlay-text');
+    if (text) text.textContent = UI.drag_to_play_full || UI.drag_to_play || 'Drag here to play';
+    const bounds = getDropAreaBounds();
+    overlay.style.setProperty('--drop-top', `${Math.max(0, bounds.top)}px`);
+    overlay.style.setProperty('--drop-bottom', `${Math.max(0, window.innerHeight - bounds.bottom)}px`);
+    overlay.classList.remove('hidden');
+}
+
+function hideDropOverlay() {
+    const overlay = $('card-drop-overlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+function pointInDropArea(pos) {
+    const bounds = getDropAreaBounds();
+    return pos.y >= bounds.top && pos.y <= bounds.bottom && pos.x >= bounds.left && pos.x <= bounds.right;
+}
+
+function getDropAreaBounds() {
+    const gameView = $('view-game');
+    const playerSection = document.querySelector('.player-section');
+    const controls = document.querySelector('.controls-bar');
+    const top = gameView ? gameView.getBoundingClientRect().top : 0;
+    const bottom = playerSection ? playerSection.getBoundingClientRect().top : window.innerHeight;
+    const controlsTop = controls ? controls.getBoundingClientRect().top : window.innerHeight;
+    const effectiveBottom = Math.min(bottom, controlsTop);
+    return { top, bottom: effectiveBottom, left: 0, right: window.innerWidth };
+}
+
+function ensureMobilePlayConfirm() {
+    let bar = $('mobile-play-confirm');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'mobile-play-confirm';
+        bar.className = 'mobile-play-confirm hidden';
+        bar.innerHTML = `
+            <div class="mobile-play-info"></div>
+            <div class="mobile-play-actions">
+                <button type="button" class="btn btn-secondary" id="mobile-play-cancel"></button>
+                <button type="button" class="btn btn-primary" id="mobile-play-ok"></button>
+            </div>
+        `;
+        document.body.appendChild(bar);
+    }
+    return bar;
+}
+
+function clearSelectedPlayCard() {
+    selectedPlayCardId = null;
+    document.querySelectorAll('.card.tap-selected').forEach(el => el.classList.remove('tap-selected'));
+    const bar = $('mobile-play-confirm');
+    if (bar) bar.classList.add('hidden');
+}
+
+function selectPlayCardForConfirm(cardInstanceId) {
+    if (!isTouchPlayMode()) return false;
+    if (isCardAnimationLocked()) return false;
+    const hand = (gameState.you || {}).hand || [];
+    const cardDict = hand.find(c => c.instance_id === cardInstanceId);
+    const cardDef = cardDict ? getCardDef(cardDict.def_id) : null;
+    if (!cardDict || !cardDef || !canPlayCard(cardDict)) return false;
+    selectedPlayCardId = cardInstanceId;
+    document.querySelectorAll('.card.tap-selected').forEach(el => el.classList.remove('tap-selected'));
+    const cardEl = document.querySelector(`.card[data-instance-id="${cardInstanceId}"]`);
+    if (cardEl) cardEl.classList.add('tap-selected');
+    const bar = ensureMobilePlayConfirm();
+    const info = bar.querySelector('.mobile-play-info');
+    const ok = bar.querySelector('#mobile-play-ok');
+    const cancel = bar.querySelector('#mobile-play-cancel');
+    const name = getCardName(cardDef);
+    if (info) info.textContent = `${UI.tap_play_hint || 'Tap a card, then confirm to play'}：${name}`;
+    if (ok) {
+        ok.textContent = (UI.confirm_play || 'Play {0}').replace('{0}', name);
+        ok.onclick = () => {
+            const id = selectedPlayCardId;
+            clearSelectedPlayCard();
+            if (id != null) onPlayCard(id, { confirmed: true });
+        };
+    }
+    if (cancel) {
+        cancel.textContent = UI.cancel_play || UI.cancel || 'Cancel';
+        cancel.onclick = clearSelectedPlayCard;
+    }
+    bar.classList.remove('hidden');
+    return true;
 }
 
 function showModal(html) {
@@ -1284,6 +1972,10 @@ function hideModal() {
     const content = $('modal-content');
     if (content) content.className = 'modal-inner';
     if (modal) { modal.classList.add('hidden'); modal.classList.remove('active'); }
+    if (tutorialMode) {
+        showTutorialOverlay();
+        setTimeout(updateTutorialOverlay, 60);
+    }
 }
 
 async function fetchCardDefs() {
@@ -1376,26 +2068,26 @@ function createCardElement(cardDict, options = {}) {
         const style = CARD_FLAG_STYLES[flag];
         if (style) {
             const label = UI['flag_' + flag] || UI['tag_' + flag] || flag;
-            flagsHtml += `<span class="card-flag ${style.cls}">${label}</span>`;
+            flagsHtml += `<span class="card-flag ${style.cls}">${escapeHtml(label)}</span>`;
         }
     }
     const fusionLevel = Number(cardDict.fusion_level || 1);
     const fissionLevel = Number(cardDict.fission_level || 1);
     if (fusionLevel > 1) {
-        flagsHtml += `<span class="card-flag fusion-layer">${UI.fusion_layer || 'Fusion'}: ${fusionLevel}</span>`;
+        flagsHtml += `<span class="card-flag fusion-layer">${escapeHtml(UI.fusion_layer || 'Fusion')}: ${fusionLevel}</span>`;
     }
     if (fissionLevel > 1) {
-        flagsHtml += `<span class="card-flag fission-layer">${UI.fission_layer || 'Fission'}: ${fissionLevel}</span>`;
+        flagsHtml += `<span class="card-flag fission-layer">${escapeHtml(UI.fission_layer || 'Fission')}: ${fissionLevel}</span>`;
     }
     el.innerHTML = `
         <div class="card-costs">
             <span class="cost-e">${totalE}</span>
-            <span class="card-name" style="color:${typeColor}">${cardName}</span>
+            <span class="card-name" style="color:${typeColor}">${escapeHtml(cardName)}</span>
             <span class="cost-m">${totalM}</span>
         </div>
-        <div class="card-type-label-wrap"><span class="card-type-label" style="color:${typeColor}">${typeLabel}</span></div>
-        <div class="card-effect">${effectText || ''}</div>
-        ${descriptionText ? `<div class="card-description">${descriptionText}</div>` : ''}
+        <div class="card-type-label-wrap"><span class="card-type-label" style="color:${typeColor}">${escapeHtml(typeLabel)}</span></div>
+        <div class="card-effect">${colorizeCardText(effectText || '')}</div>
+        ${descriptionText ? `<div class="card-description">${colorizeCardText(descriptionText)}</div>` : ''}
         ${flagsHtml ? `<div class="card-flags">${flagsHtml}</div>` : ''}
     `;
     if (draggable) {
@@ -1424,6 +2116,7 @@ function getPointerPos(e) {
 
 function startCardDrag(e, cardEl) {
     if (isSpectating) return;
+    if (isCardAnimationLocked()) return;
     cleanupDragState();
     e.preventDefault();
     const pos = getPointerPos(e);
@@ -1441,24 +2134,31 @@ function startCardDrag(e, cardEl) {
     ghost.style.top = (pos.y - rect.height / 2) + 'px';
     document.body.appendChild(ghost);
     cardEl.style.opacity = '0.3';
-    dragState = { instanceId, ghost, originalCard: cardEl, offsetX: rect.width / 2, offsetY: rect.height / 2 };
+    dragState = {
+        instanceId,
+        ghost,
+        originalCard: cardEl,
+        offsetX: rect.width / 2,
+        offsetY: rect.height / 2,
+        startX: pos.x,
+        startY: pos.y,
+        moved: false,
+        touch: !!(e.touches && e.touches.length)
+    };
+    showDropOverlay();
 }
 
 function onDocumentPointerMove(e) {
     if (!dragState) return;
     e.preventDefault();
     const pos = getPointerPos(e);
+    const dx = Math.abs(pos.x - dragState.startX);
+    const dy = Math.abs(pos.y - dragState.startY);
+    if (dx > 8 || dy > 8) dragState.moved = true;
     dragState.ghost.style.left = (pos.x - dragState.offsetX) + 'px';
     dragState.ghost.style.top = (pos.y - dragState.offsetY) + 'px';
-    const playZone = document.getElementById('play-zone');
-    if (playZone) {
-        const r = playZone.getBoundingClientRect();
-        if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.top && pos.y <= r.bottom) {
-            playZone.classList.add('drag-over');
-        } else {
-            playZone.classList.remove('drag-over');
-        }
-    }
+    const overlay = $('card-drop-overlay');
+    if (overlay) overlay.classList.toggle('drag-over', pointInDropArea(pos));
 }
 
 function cleanupDragState() {
@@ -1469,24 +2169,21 @@ function cleanupDragState() {
     }
     const playZone = document.getElementById('play-zone');
     if (playZone) playZone.classList.remove('drag-over');
+    hideDropOverlay();
     dragState = null;
 }
 
 function onDocumentPointerUp(e) {
     if (!dragState) return;
     const pos = getPointerPos(e);
-    const playZone = document.getElementById('play-zone');
-    let shouldPlay = false;
-    if (playZone) {
-        const r = playZone.getBoundingClientRect();
-        if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.top && pos.y <= r.bottom) {
-            shouldPlay = true;
-        }
-    }
+    const wasTap = dragState.touch && !dragState.moved;
+    const shouldPlay = pointInDropArea(pos);
     const instanceId = dragState.instanceId;
     cleanupDragState();
-    if (shouldPlay) {
-        onPlayCard(parseInt(instanceId));
+    if (wasTap) {
+        selectPlayCardForConfirm(parseInt(instanceId));
+    } else if (shouldPlay) {
+        onPlayCard(parseInt(instanceId), { dragDrop: true, confirmed: true });
     }
 }
 
@@ -1502,9 +2199,11 @@ document.addEventListener('touchcancel', onDocumentTouchCancel);
 
 function connectSocket(serverUrl) {
     if (socket) {
+        manualDisconnect = true;
         socket.disconnect();
         socket = null;
     }
+    manualDisconnect = false;
     let url = serverUrl;
     let opts = { transports: ['websocket', 'polling'] };
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -1524,6 +2223,10 @@ function connectSocket(serverUrl) {
     });
     socket.on('disconnect', () => {
         console.log('[client] socket disconnected');
+        if (manualDisconnect || phase === 'login') {
+            manualDisconnect = false;
+            return;
+        }
         flashStatus(UI.disconnected, 3000, 'error');
         phase = 'connecting';
     });
@@ -1531,6 +2234,11 @@ function connectSocket(serverUrl) {
         console.log('[client] login ok: sid=', data.sid, 'nickname=', data.nickname);
         mySid = data.sid || '';
         nickname = data.nickname || nickname;
+        if (pendingTutorialStart) {
+            pendingTutorialStart = false;
+            emitTutorialStart();
+            return;
+        }
         if (pendingSoloStart) {
             pendingSoloStart = false;
             emitSoloStart();
@@ -1698,15 +2406,37 @@ function connectSocket(serverUrl) {
     });
     socket.on('solo_state', (data) => {
         soloMode = true;
+        tutorialMode = !!data.tutorial || tutorialMode;
         isSpectating = false;
         gameState = data;
         phase = data.phase || phase;
         playerId = data.your_id;
+        if (data.pending_response == null && !responsePending) {
+            pendingPlayCard = null;
+        }
+        if (data.pending_response === null && responsePending) {
+            responsePending = false;
+            responseData = null;
+            const rp = $('response-panel');
+            if (rp) { rp.innerHTML = ''; rp.classList.add('hidden'); }
+            if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
+        }
         if (phase === 'game_over') {
-            renderGame(data);
+            if (data.tutorial || tutorialMode) {
+                stopTutorialUiForGameOver();
+                renderGameOver(data);
+            } else {
+                renderGame(data);
+            }
         } else {
             renderGame(data);
         }
+    if (tutorialMode) {
+        scheduleTutorialOverlayStart();
+        updateTutorialOverlay();
+        scheduleTutorialBotAction();
+        setTimeout(updateTutorialOverlay, 80);
+    }
     });
     socket.on('response_request', (data) => {
         console.log('[RESPONSE] response_request, counter_cards:', (data.counter_cards || []).length);
@@ -1734,8 +2464,9 @@ function connectSocket(serverUrl) {
     });
     socket.on('server_error', (data) => {
         console.log('[client] server_error:', data.message);
-        gameAlert(UI.notice, translateServerMessage(data.message));
+        flashStatus(translateServerMessage(data.message), 3600, 'error');
         pendingPlayCard = null;
+        clearSelectedPlayCard();
     });
     socket.on('opponent_disconnected', (data) => {
         if (data && data.timeout) {
@@ -1810,6 +2541,14 @@ function connectSocket(serverUrl) {
         flashStatus(UI.server_broadcast.replace('{0}', data.message || ''), 4000);
     });
     socket.on('solo_paused', () => {
+        if (suppressSoloPausedHandler) {
+            suppressSoloPausedHandler = false;
+            return;
+        }
+        if (tutorialMode) {
+            finishTutorialReturn();
+            return;
+        }
         soloMode = false;
         showSoloTraining();
     });
@@ -1898,13 +2637,390 @@ function saveSoloDecks() {
     flashStatus(UI.solo_saved, 1600);
 }
 
+function startTutorial(returnTarget = 'home') {
+    tutorialReturnTarget = returnTarget;
+    if (returnTarget === 'home') localStorage.setItem('got_seen_intro', '1');
+    tutorialLastLogTotal = 0;
+    tutorialDeckViewed = false;
+    tutorialCounterSeen = false;
+    tutorialIntroActive = false;
+    tutorialIntroShown = false;
+    if (tutorialOverlayStartTimer) { clearTimeout(tutorialOverlayStartTimer); tutorialOverlayStartTimer = null; }
+    if (tutorialIntroTimer) { clearTimeout(tutorialIntroTimer); tutorialIntroTimer = null; }
+    tutorialEndHintCount = 0;
+    tutorialEndHintKey = '';
+    pendingTutorialStart = false;
+    closeAbout();
+    hideModal();
+    hideGameAlert();
+    tutorialMode = true;
+    hideTutorialOverlay();
+    const nickInput = $('input-nickname');
+    const stored = localStorage.getItem('got_nickname') || '';
+    nickname = (nickInput && nickInput.value.trim()) || stored || `新手${Math.floor(1000 + Math.random() * 9000)}`;
+    if (nickInput && !nickInput.value.trim()) nickInput.value = nickname;
+    localStorage.setItem('got_nickname', nickname);
+    updateStatus(UI.tutorial_start);
+    if (!socket || !socket.connected) {
+        pendingTutorialStart = true;
+        connectSocket(getServerAddress());
+        return;
+    }
+    emitTutorialStart();
+}
+
+function emitTutorialStart() {
+    if (!socket) return;
+    tutorialMode = true;
+    socket.emit('tutorial_start', {});
+}
+
+function showTutorialOverlay() {
+    let overlay = $('tutorial-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'tutorial-overlay';
+        overlay.className = 'tutorial-overlay';
+        overlay.innerHTML = `
+            <div class="tutorial-click-shield hidden" aria-hidden="true"></div>
+            <button id="btn-tutorial-skip" class="btn btn-secondary tutorial-skip" type="button"></button>
+            <div class="tutorial-card">
+                <div class="tutorial-kicker"></div>
+                <div class="tutorial-text"></div>
+            </div>
+            <div class="tutorial-arrow" aria-hidden="true"></div>
+        `;
+        document.body.appendChild(overlay);
+    }
+    overlay.classList.remove('hidden');
+    const skip = $('btn-tutorial-skip');
+    if (skip) {
+        skip.textContent = UI.tutorial_skip;
+        skip.onclick = skipTutorial;
+    }
+    updateTutorialOverlay();
+}
+
+function scheduleTutorialOverlayStart() {
+    if (!tutorialMode || tutorialIntroShown || tutorialOverlayStartTimer) return;
+    if (!gameState || !gameState.tutorial) return;
+    tutorialOverlayStartTimer = setTimeout(() => {
+        tutorialOverlayStartTimer = null;
+        if (!tutorialMode || !gameState || !gameState.tutorial) return;
+        tutorialIntroActive = true;
+        showTutorialOverlay();
+        if (tutorialIntroTimer) clearTimeout(tutorialIntroTimer);
+        tutorialIntroTimer = setTimeout(() => {
+            tutorialIntroTimer = null;
+            tutorialIntroActive = false;
+            tutorialIntroShown = true;
+            updateTutorialOverlay();
+        }, 1500);
+    }, 500);
+}
+
+function hideTutorialOverlay() {
+    const overlay = $('tutorial-overlay');
+    if (overlay) overlay.classList.add('hidden');
+    tutorialStrictFocus = false;
+    tutorialEndHintCount = 0;
+    tutorialEndHintKey = '';
+}
+
+function onTutorialGuardClick(e) {
+    if (!tutorialMode || !tutorialStrictFocus) return;
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest('.tutorial-highlight, #btn-tutorial-skip')) return;
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+document.addEventListener('click', onTutorialGuardClick, true);
+
+function updateTutorialOverlay() {
+    if (!tutorialMode) return;
+    const overlay = $('tutorial-overlay');
+    if (!overlay) return;
+    document.querySelectorAll('.tutorial-highlight').forEach(el => el.classList.remove('tutorial-highlight'));
+    document.querySelectorAll('.tutorial-card-target').forEach(el => el.classList.remove('tutorial-card-target'));
+    const kicker = overlay.querySelector('.tutorial-kicker');
+    const text = overlay.querySelector('.tutorial-text');
+    const arrow = overlay.querySelector('.tutorial-arrow');
+    const shield = overlay.querySelector('.tutorial-click-shield');
+    if (tutorialIntroActive) {
+        if (shield) shield.classList.add('hidden');
+        if (kicker) kicker.textContent = UI.tutorial_start;
+        if (text) text.textContent = UI.tutorial_intro || '现在，让我们开始新手教程吧！';
+        if (arrow) positionTutorialArrow(arrow, '');
+        return;
+    }
+    const myTurn = gameState && gameState.current_player === 0 && gameState.phase === 'action';
+    const enemyTurn = gameState && gameState.current_player === 1 && gameState.phase === 'action';
+    const playedThisTurn = Object.values((gameState && gameState.you && gameState.you.cards_played_this_turn) || {})
+        .reduce((sum, n) => sum + Number(n || 0), 0);
+    const hand = (gameState && gameState.you && gameState.you.hand) || [];
+    const hasPlayableType = (type) => hand.some(c => {
+        const cd = getCardDef(c.def_id);
+        return cd && cd.card_type === type && canPlayCard(c);
+    });
+    const hasFissionTarget = hand.some(c => {
+        const cd = getCardDef(c.def_id);
+        return cd && cd.card_type === 'thorn';
+    });
+    const attackCounts = {};
+    hand.forEach(c => {
+        const cd = getCardDef(c.def_id);
+        if (cd && cd.card_type === 'thorn') attackCounts[c.def_id] = (attackCounts[c.def_id] || 0) + 1;
+    });
+    const hasFusionTargets = Object.values(attackCounts).some(n => n >= 2);
+    const hasFission = hasFissionTarget && hand.some(c => c.def_id === 'Fission' && canPlayCard(c));
+    const hasFusion = hasFusionTargets && hand.some(c => c.def_id === 'Fusion' && canPlayCard(c));
+    const hasCounter = hand.some(c => {
+        const cd = getCardDef(c.def_id);
+        return cd && cd.card_type === 'guard';
+    });
+    const hasFissionedAttack = hand.some(c => {
+        const cd = getCardDef(c.def_id);
+        return cd && cd.card_type === 'thorn' && Number(c.fission_level || 1) > 1 && canPlayCard(c);
+    });
+    const hasFusionedAttack = hand.some(c => {
+        const cd = getCardDef(c.def_id);
+        return cd && cd.card_type === 'thorn' && Number(c.fusion_level || 1) > 1 && canPlayCard(c);
+    });
+    const hasEnhancedAttack = hasFissionedAttack || hasFusionedAttack;
+    const shouldShowDeckHint = !!(gameState && (gameState.round_num || 0) >= 2 && myTurn && !tutorialDeckViewed);
+    const shouldShowCounterHint = !!responsePending;
+    const endHintCandidate = !!(!enemyTurn && myTurn && playedThisTurn > 0 && !hasEnhancedAttack);
+    if (endHintCandidate) {
+        const key = `${gameState.round_num || 0}:${gameState.current_player || 0}`;
+        if (tutorialEndHintKey !== key) {
+            tutorialEndHintKey = key;
+            tutorialEndHintCount += 1;
+        }
+    }
+    const shouldShowEndHint = endHintCandidate && tutorialEndHintCount <= 2;
+    const shouldFocusEndHint = shouldShowEndHint && tutorialEndHintCount <= 1;
+    const strictFocus = shouldShowCounterHint || shouldShowDeckHint || shouldFocusEndHint;
+    tutorialStrictFocus = strictFocus;
+    if (shield) shield.classList.toggle('hidden', !strictFocus);
+    if (shouldShowCounterHint) tutorialCounterSeen = true;
+    if (kicker) kicker.textContent = UI.tutorial_start;
+    if (text) {
+        text.textContent = shouldShowCounterHint
+            ? UI.tutorial_hint_counter
+            : enemyTurn
+            ? UI.tutorial_hint_enemy
+            : shouldShowDeckHint
+                ? UI.tutorial_hint_deck
+                : (myTurn && hasFissionedAttack)
+                    ? UI.tutorial_hint_play_fissioned
+                    : (myTurn && hasFusionedAttack)
+                    ? UI.tutorial_hint_play_fusioned
+                : shouldShowEndHint
+                    ? UI.tutorial_hint_end
+                    : (myTurn && (gameState.round_num || 0) <= 1)
+                    ? UI.tutorial_hint_play
+                    : (myTurn && hasFission)
+                    ? UI.tutorial_hint_fission
+                    : (myTurn && hasFusion)
+                        ? UI.tutorial_hint_fusion
+                        : (myTurn && hasPlayableType('root'))
+                            ? UI.tutorial_hint_root
+                            : (myTurn && hasPlayableType('bloom'))
+                                ? UI.tutorial_hint_bloom
+                    : (tutorialDeckViewed && !tutorialCounterSeen && hasCounter)
+                        ? UI.tutorial_hint_continue
+                        : UI.tutorial_hint_play;
+    }
+    if (arrow) {
+        let arrowMode = '';
+        if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && myTurn && hasFissionedAttack) {
+            arrowMode = 'fissioned';
+        } else if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && myTurn && hasFusionedAttack) {
+            arrowMode = 'fusioned';
+        } else if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && myTurn && playedThisTurn === 0) {
+            if ((gameState.round_num || 0) <= 1) arrowMode = 'play';
+            else if (hasFission) arrowMode = 'fission';
+            else if (hasFusion) arrowMode = 'fusion';
+            else if (hasPlayableType('root')) arrowMode = 'root';
+            else if (hasPlayableType('bloom')) arrowMode = 'bloom';
+            else arrowMode = 'play';
+        }
+        positionTutorialArrow(arrow, arrowMode);
+    }
+    if (shouldShowCounterHint) {
+        const panel = $('response-panel');
+        if (panel) panel.classList.add('tutorial-highlight');
+    } else if (!enemyTurn && shouldShowDeckHint) {
+        const btn = $('btn-view-deck');
+        if (btn) btn.classList.add('tutorial-highlight');
+    } else if (shouldFocusEndHint) {
+        const btn = $('btn-end-turn');
+        if (btn) btn.classList.add('tutorial-highlight');
+    }
+}
+
+function scheduleTutorialOverlayRefresh(delay = 320) {
+    if (!tutorialMode) return;
+    if (tutorialOverlayRefreshTimer) clearTimeout(tutorialOverlayRefreshTimer);
+    tutorialOverlayRefreshTimer = setTimeout(() => {
+        tutorialOverlayRefreshTimer = null;
+        updateTutorialOverlay();
+    }, delay);
+}
+
+function positionTutorialArrow(arrow, mode) {
+    if (arrow) arrow.classList.remove('active');
+    if (arrow) {
+        arrow.style.removeProperty('--tutorial-arrow-x');
+        arrow.style.removeProperty('--tutorial-arrow-top');
+        arrow.style.removeProperty('--tutorial-arrow-h');
+    }
+    if (!mode) {
+        return;
+    }
+    if (mode) {
+        const cards = [...document.querySelectorAll('#you-hand .card.card-draggable:not(.card-disabled)')];
+        const playable = cards.find(el => {
+            const id = Number(el.dataset.instanceId);
+            const hand = (gameState && gameState.you && gameState.you.hand) || [];
+            const card = hand.find(c => c.instance_id === id);
+            const cd = card ? getCardDef(card.def_id) : null;
+            if (!card || !cd) return false;
+            if (mode === 'fission') return card.def_id === 'Fission';
+            if (mode === 'fissioned') return cd.card_type === 'thorn' && Number(card.fission_level || 1) > 1;
+            if (mode === 'fusion') return card.def_id === 'Fusion';
+            if (mode === 'fusioned') return cd.card_type === 'thorn' && Number(card.fusion_level || 1) > 1;
+            if (mode === 'root') return cd.card_type === 'root';
+            if (mode === 'bloom') return cd.card_type === 'bloom';
+            return cd.card_type === 'thorn';
+        }) || cards[0] || document.querySelector('#you-hand .card:not(.card-disabled)');
+        if (playable) {
+            playable.classList.add('tutorial-card-target');
+            const rect = playable.getBoundingClientRect();
+            const arrowHeight = Math.min(74, Math.max(52, rect.height * 0.86));
+            const overlap = Math.min(10, rect.height * 0.16);
+            const top = Math.max(8, rect.top - arrowHeight + overlap);
+            arrow.style.setProperty('--tutorial-arrow-x', `${rect.left + rect.width / 2}px`);
+            arrow.style.setProperty('--tutorial-arrow-top', `${top}px`);
+            arrow.style.setProperty('--tutorial-arrow-h', `${arrowHeight}px`);
+            arrow.classList.add('active');
+        }
+        return;
+    }
+}
+
+function stopTutorialUiForGameOver() {
+    if (tutorialBotTimer) {
+        clearTimeout(tutorialBotTimer);
+        tutorialBotTimer = null;
+    }
+    if (tutorialOverlayStartTimer) {
+        clearTimeout(tutorialOverlayStartTimer);
+        tutorialOverlayStartTimer = null;
+    }
+    if (tutorialIntroTimer) {
+        clearTimeout(tutorialIntroTimer);
+        tutorialIntroTimer = null;
+    }
+    if (tutorialOverlayRefreshTimer) {
+        clearTimeout(tutorialOverlayRefreshTimer);
+        tutorialOverlayRefreshTimer = null;
+    }
+    tutorialMode = false;
+    pendingTutorialStart = false;
+    tutorialDeckViewed = false;
+    tutorialCounterSeen = false;
+    tutorialIntroActive = false;
+    tutorialIntroShown = false;
+    tutorialStrictFocus = false;
+    tutorialEndHintCount = 0;
+    tutorialEndHintKey = '';
+    hideTutorialOverlay();
+    document.querySelectorAll('.tutorial-highlight').forEach(el => el.classList.remove('tutorial-highlight'));
+    document.querySelectorAll('.tutorial-card-target').forEach(el => el.classList.remove('tutorial-card-target'));
+    clearSelectedPlayCard();
+    pendingPlayCard = null;
+}
+
+function skipTutorial() {
+    if (tutorialBotTimer) {
+        clearTimeout(tutorialBotTimer);
+        tutorialBotTimer = null;
+    }
+    if (socket && socket.connected && tutorialMode) {
+        socket.emit('solo_pause', {});
+    } else {
+        finishTutorialReturn();
+    }
+}
+
+function finishTutorialReturn() {
+    tutorialMode = false;
+    pendingTutorialStart = false;
+    tutorialDeckViewed = false;
+    tutorialCounterSeen = false;
+    tutorialIntroActive = false;
+    tutorialIntroShown = false;
+    tutorialStrictFocus = false;
+    if (tutorialOverlayStartTimer) { clearTimeout(tutorialOverlayStartTimer); tutorialOverlayStartTimer = null; }
+    if (tutorialIntroTimer) { clearTimeout(tutorialIntroTimer); tutorialIntroTimer = null; }
+    if (tutorialOverlayRefreshTimer) { clearTimeout(tutorialOverlayRefreshTimer); tutorialOverlayRefreshTimer = null; }
+    soloMode = false;
+    hideTutorialOverlay();
+    document.querySelectorAll('.tutorial-highlight').forEach(el => el.classList.remove('tutorial-highlight'));
+    document.querySelectorAll('.tutorial-card-target').forEach(el => el.classList.remove('tutorial-card-target'));
+    clearSelectedPlayCard();
+    pendingPlayCard = null;
+    if (tutorialReturnTarget === 'about') {
+        showView('view-login');
+        openAbout();
+    } else {
+        showView('view-login');
+    }
+}
+
+function scheduleTutorialBotAction() {
+    if (!tutorialMode || !socket || !gameState || gameState.phase === 'game_over') return;
+    if (tutorialBotTimer) clearTimeout(tutorialBotTimer);
+    if (gameState.current_player !== 1 || gameState.pending_response || choicePending || responsePending) return;
+    tutorialBotTimer = setTimeout(() => {
+        if (!tutorialMode || !socket || !gameState || gameState.current_player !== 1) return;
+        socket.emit('tutorial_bot_action', {});
+    }, 2100);
+}
+
+function getSearchLocalizedText(source, i18nKey, fallbackKey) {
+    if (!source) return '';
+    const dict = source[i18nKey] || {};
+    const parts = [
+        dict[currentLang],
+        dict.en,
+        fallbackKey ? source[fallbackKey] : '',
+    ];
+    return [...new Set(parts.filter(Boolean))].join(' ');
+}
+
 function cardSearchText(defId) {
     const cd = getCardDef(defId);
     if (!cd) return defId.toLowerCase();
-    const names = cd.name_i18n ? Object.values(cd.name_i18n).join(' ') : '';
-    const effects = cd.effect_text_i18n ? Object.values(cd.effect_text_i18n).join(' ') : '';
-    const descriptions = cd.description_i18n ? Object.values(cd.description_i18n).join(' ') : '';
-    return `${cd.id} ${cd.name_cn || ''} ${cd.name_en || ''} ${names} ${effects} ${descriptions}`.toLowerCase();
+    const flagText = (cd.flags || []).map(flag => {
+        const current = getFlagLabel(flag);
+        const en = I18N.en[`tag_${flag}`] || I18N.en[`flag_${flag}`] || flag;
+        return `${current} ${en}`;
+    }).join(' ');
+    return [
+        cd.id,
+        getCardName(cd),
+        getSearchLocalizedText(cd, 'name_i18n', currentLang === 'zh' ? 'name_cn' : 'name_en'),
+        cd.name_en || '',
+        getCardEffectText(cd),
+        getSearchLocalizedText(cd, 'effect_text_i18n', 'effect_text'),
+        getCardDescriptionText(cd),
+        getSearchLocalizedText(cd, 'description_i18n', 'description'),
+        flagText,
+    ].join(' ').toLowerCase();
 }
 
 function renderSoloEventSelects() {
@@ -2401,14 +3517,16 @@ function renderEventSelect(data) {
             othersStatusHtml = Object.entries(othersSelected).map(([idx, sel]) => {
                 const pidx = parseInt(idx);
                 const name = pNames[pidx] || `P${pidx + 1}`;
-                return sel ? `<span style="color:var(--color-health)">${name} ✓</span>` : `<span style="color:var(--text-secondary)">${name} ...</span>`;
-            }).join(' ');
+                return `<div class="event-player-status${sel ? ' selected' : ''}">${name} ${sel ? '&#10003;' : '...'}</div>`;
+            }).join('');
         } else {
-            othersStatusHtml = !oppSelected ? `<div class="waiting-msg">${UI.waiting_opponent}</div>` : `<div class="waiting-msg">${UI.opponent_selected}</div>`;
+            othersStatusHtml = `<div class="event-player-status${oppSelected ? ' selected' : ''}">${oppSelected ? UI.opponent_selected : UI.waiting_opponent}</div>`;
         }
         container.innerHTML = `
-            <div class="event-selected">${UI.event_selected.replace('{0}', eventName)}</div>
-            <div class="waiting-msg">${othersStatusHtml}</div>
+            <div class="event-selected-state">
+                <div class="event-player-status-list">${othersStatusHtml}</div>
+                <div class="event-selected">${UI.event_selected.replace('{0}', eventName)}</div>
+            </div>
         `;
         return;
     }
@@ -2419,9 +3537,10 @@ function renderEventSelect(data) {
         const statusParts = Object.entries(othersSelected).map(([idx, sel]) => {
             const pidx = parseInt(idx);
             const name = pNames[pidx] || `P${pidx + 1}`;
-            return sel ? `<span style="color:var(--color-health)">${name} ✓</span>` : `<span style="color:var(--text-secondary)">${name} ...</span>`;
+            return `<div class="event-player-status${sel ? ' selected' : ''}">${name} ${sel ? '&#10003;' : '...'}</div>`;
         });
-        oppStatus.innerHTML = statusParts.join(' ');
+        oppStatus.className = 'event-player-status-list';
+        oppStatus.innerHTML = statusParts.join('');
     } else {
         oppStatus.textContent = oppSelected ? UI.opponent_selected : UI.opponent_selecting;
     }
@@ -2573,7 +3692,7 @@ async function showLightConversionChoice() {
         cancelBtn.textContent = UI.cancel;
         cancelBtn.onclick = () => {
             el.classList.remove('active');
-            resolve(null);
+            resolve(false);
         };
         const confirmBtn = document.createElement('button');
         confirmBtn.className = 'btn btn-primary';
@@ -2589,7 +3708,7 @@ async function showLightConversionChoice() {
                 for (let i = 0; i < val; i++) convertDefIds.push(did);
                 total += val;
             });
-            resolve(convertDefIds.length ? { convert_def_ids: convertDefIds } : null);
+            resolve({ convert_def_ids: convertDefIds });
         });
         cancelBtn.parentNode.appendChild(confirmBtn);
         const cleanup = () => {
@@ -2719,6 +3838,7 @@ function isMyTurn() {
 
 function updateModeSpecificControls(gs) {
     const inSoloGame = !!gs?.solo;
+    const inTutorial = !!gs?.tutorial || tutorialMode;
     const gameOver = gs?.phase === 'game_over';
     const soloNextDrawBtn = $('btn-solo-next-draw');
     const soloEditBtn = $('btn-solo-edit');
@@ -2730,8 +3850,8 @@ function updateModeSpecificControls(gs) {
     const gameControls = $('game-controls');
     const playZone = $('play-zone');
 
-    const showSoloNextDraw = inSoloGame && !gameOver && !isSpectating;
-    const showSoloEdit = inSoloGame && !isSpectating;
+    const showSoloNextDraw = inSoloGame && !inTutorial && !gameOver && !isSpectating;
+    const showSoloEdit = inSoloGame && !inTutorial && !isSpectating;
     const showSpectateControls = !!isSpectating;
     const showGameControls = !isSpectating;
     const showPlayZone = !isSpectating;
@@ -2745,7 +3865,7 @@ function updateModeSpecificControls(gs) {
         soloEditBtn.style.display = showSoloEdit ? '' : 'none';
     }
     if (surrenderBtn) {
-        const showSurrender = !(inSoloGame && gameOver);
+        const showSurrender = !inSoloGame && !gameOver;
         surrenderBtn.classList.toggle('hidden', !showSurrender);
         surrenderBtn.style.display = showSurrender ? '' : 'none';
     }
@@ -2801,6 +3921,8 @@ function renderGame(data) {
             gameContainer.classList.remove('mode-2v2');
         }
         gameContainer.classList.toggle('mode-spectate', !!isSpectating);
+        gameContainer.classList.toggle('mode-tutorial', !!gs.tutorial || tutorialMode);
+        gameContainer.classList.toggle('mode-solo', !!gs.solo);
     }
 
     const opp2Half = $('opp2-half');
@@ -3018,20 +4140,33 @@ function renderTeammateHand(teammateData) {
 function renderPlayerHand(playerData) {
     const container = $('you-hand');
     if (!container) return;
+    const oldRects = new Map();
+    container.querySelectorAll('.card[data-instance-id]').forEach(el => {
+        oldRects.set(String(el.dataset.instanceId), el.getBoundingClientRect());
+    });
     container.innerHTML = '';
     const hand = playerData.hand || [];
+    if (selectedPlayCardId != null && !hand.some(c => c.instance_id === selectedPlayCardId)) {
+        clearSelectedPlayCard();
+    }
     const myTurn = isMyTurn();
     hand.forEach(cardDict => {
         const cardDef = getCardDef(cardDict.def_id);
         const canPlay = myTurn && canPlayCard(cardDict);
         const card = createCardElement(cardDict, {
             draggable: !isSpectating && canPlay && cardDef && cardDef.card_type !== 'guard',
+            onClick: canPlay ? () => selectPlayCardForConfirm(cardDict.instance_id) : null,
         });
+        if (selectedPlayCardId === cardDict.instance_id) {
+            card.classList.add('tap-selected');
+        }
         if (!canPlay) {
             card.classList.add('card-disabled');
         }
         container.appendChild(card);
     });
+    animateHandLayoutChanges(container, oldRects, hand);
+    hasPlayerHandSnapshot = true;
 }
 
 function canPlayCard(cardDict) {
@@ -3051,6 +4186,24 @@ function canPlayCard(cardDict) {
     if (totalE > elixir) return false;
     if (totalM > magic) return false;
     return true;
+}
+
+function getCannotPlayReason(cardDict) {
+    const gs = gameState || {};
+    const you = gs.you || {};
+    const cardDef = cardDict ? getCardDef(cardDict.def_id) : null;
+    if (!cardDict || !cardDef) return UI.cannot_play;
+    if (gs.phase !== 'action') return UI.error_waiting_response_ui || UI.cannot_play;
+    if (!isMyTurn()) return UI.error_not_your_turn || UI.not_your_turn || UI.cannot_play;
+    if (you.shovel_active) return UI.error_action_blocked || UI.cannot_play;
+    if (cardDef.card_type === 'guard') return UI.error_waiting_response_ui || UI.cannot_play;
+    if ((you.attack_blocked || 0) > 0 && cardDef.card_type === 'thorn') return UI.error_attack_blocked || UI.cannot_play;
+    if ((you.attack_only || 0) > 0 && cardDef.card_type !== 'thorn') return UI.error_attack_only || UI.cannot_play;
+    const { totalE, totalM } = getCardDisplayCosts(cardDict, cardDef, you);
+    const reasons = [];
+    if (totalE > (you.elixir || 0)) reasons.push(UI.error_not_enough_e || UI.insufficient_resources || UI.cannot_play);
+    if (totalM > (you.magic || 0)) reasons.push(UI.insufficient_resources || UI.cannot_play);
+    return reasons.length ? [...new Set(reasons)].join(' / ') : UI.cannot_play;
 }
 
 function isFriendlyTurn() {
@@ -3074,36 +4227,45 @@ function getEnemyTargetOptions() {
     }).filter(x => x.alive);
 }
 
+function normalizePlayerId(id) {
+    if (id === null || id === undefined || id === '') return null;
+    const value = Number(id);
+    return Number.isInteger(value) ? value : null;
+}
+
 function getPlayerNameById(id) {
+    id = normalizePlayerId(id);
     if (!gameState) return `P${Number(id) + 1}`;
-    if (id === gameState.your_id) return gameState.your_name || UI.you;
-    if (id === gameState.teammate_id) return gameState.teammate_name || UI.teammate;
-    const enemyIndex = (gameState.enemy_ids || []).indexOf(id);
+    if (id === normalizePlayerId(gameState.your_id)) return gameState.your_name || UI.you;
+    if (id === normalizePlayerId(gameState.teammate_id)) return gameState.teammate_name || UI.teammate;
+    const enemyIndex = (gameState.enemy_ids || []).map(normalizePlayerId).indexOf(id);
     if (enemyIndex >= 0) return (gameState.opponent_names || [])[enemyIndex] || `${UI.opponent}${enemyIndex + 1}`;
     return `P${Number(id) + 1}`;
 }
 
 function getPlayerDataById(id) {
+    id = normalizePlayerId(id);
     if (!gameState) return {};
-    if (id === gameState.your_id) return gameState.you || {};
-    if (id === gameState.teammate_id) return gameState.teammate || {};
-    const enemyIndex = (gameState.enemy_ids || []).indexOf(id);
+    if (id === normalizePlayerId(gameState.your_id)) return gameState.you || {};
+    if (id === normalizePlayerId(gameState.teammate_id)) return gameState.teammate || {};
+    const enemyIndex = (gameState.enemy_ids || []).map(normalizePlayerId).indexOf(id);
     if (enemyIndex === 0) return gameState.opponent || {};
     if (enemyIndex === 1) return gameState.opponent2 || {};
     return {};
 }
 
-function getPlayerTargetOptions({ includeSelf = true, aliveOnly = true } = {}) {
+function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true } = {}) {
     if (!gameState || gameState.mode !== '2v2') return [];
     const out = [];
     const add = (id, data, group) => {
-        if (id == null || (!includeSelf && id === gameState.your_id)) return;
+        const targetId = normalizePlayerId(id);
+        if (targetId == null || (!includeSelf && targetId === normalizePlayerId(gameState.your_id))) return;
         const alive = (data && Number(data.health || 0) > 0);
         if (aliveOnly && !alive) return;
         out.push({
-            id,
+            id: targetId,
             group,
-            label: `${group} ${getPlayerNameById(id)} H:${data ? (data.health || 0) : 0}/${data ? (data.max_health || 0) : 0}`,
+            label: `${group} ${getPlayerNameById(targetId)} H:${data ? (data.health || 0) : 0}/${data ? (data.max_health || 0) : 0}`,
             alive
         });
     };
@@ -3137,7 +4299,9 @@ async function chooseEnemyTarget(title) {
 }
 
 function cardNeedsPlayerTarget(cardDef) {
-    if (!cardDef) return false;
+    const gs = gameState || {};
+    const you = gs.you || {};
+    if (!cardDef || gs.mode !== '2v2') return false;
     if ((cardDef.flags || []).includes('self_only')) return false;
     if (cardDef.card_type === 'guard') return false;
     if (gs.mode === 'urf' && cardDef.card_type === 'root' && ((you.equipment || []).length >= 3)) return false;
@@ -3296,13 +4460,169 @@ function renderPendingCard() {
     `;
 }
 
-async function onPlayCard(cardInstanceId) {
+function isCardAnimationLocked() {
+    return Date.now() < cardAnimationLockUntil;
+}
+
+function scheduleCardAnimationUnlock() {
+    if (cardAnimationUnlockTimer) clearTimeout(cardAnimationUnlockTimer);
+    const delay = Math.max(30, cardAnimationLockUntil - Date.now() + 30);
+    cardAnimationUnlockTimer = setTimeout(() => {
+        if (isCardAnimationLocked()) {
+            scheduleCardAnimationUnlock();
+            return;
+        }
+        document.body.classList.remove('card-animation-lock');
+        cardAnimationUnlockTimer = null;
+    }, delay);
+}
+
+function lockCardAnimation(duration = 320) {
+    cardAnimationLockUntil = Math.max(cardAnimationLockUntil, Date.now() + duration);
+    document.body.classList.add('card-animation-lock');
+    scheduleCardAnimationUnlock();
+}
+
+function getDrawSourcePoint(finalRect) {
+    if (!finalRect) return { x: -80, y: window.innerHeight * 0.82 };
+    const hand = $('you-hand');
+    const rect = hand ? hand.getBoundingClientRect() : null;
+    const offset = Math.max(48, finalRect.width * 0.9);
+    return {
+        x: (rect ? rect.right : window.innerWidth) + offset,
+        y: finalRect.top + finalRect.height / 2,
+    };
+}
+
+function animateDrawnCard(cardEl, index = 0) {
+    if (!cardEl) return 0;
+    const finalRect = cardEl.getBoundingClientRect();
+    const source = getDrawSourcePoint(finalRect);
+    const finalX = finalRect.left + finalRect.width / 2;
+    const finalY = finalRect.top + finalRect.height / 2;
+    const dx = source.x - finalX;
+    const dy = source.y - finalY;
+    const delay = Math.min(index * 42, 126);
+    const duration = 230;
+    cardEl.classList.add('hand-card-animating');
+    cardEl.style.transition = 'none';
+    cardEl.style.opacity = '0';
+    cardEl.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(0.78)`;
+    lockCardAnimation(delay + duration + 90);
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            cardEl.style.transition = `transform ${duration}ms cubic-bezier(.2,.8,.2,1) ${delay}ms, opacity ${Math.max(160, duration - 50)}ms ease ${delay}ms`;
+            cardEl.style.opacity = '';
+            cardEl.style.transform = '';
+        });
+    });
+    setTimeout(() => {
+        cardEl.classList.remove('hand-card-animating');
+        cardEl.style.transition = '';
+        cardEl.style.opacity = '';
+        cardEl.style.transform = '';
+        scheduleTutorialOverlayRefresh(30);
+    }, delay + duration + 80);
+    return delay + duration;
+}
+
+function animateShiftedCard(cardEl, oldRect, delayed) {
+    if (!cardEl || !oldRect) return 0;
+    const newRect = cardEl.getBoundingClientRect();
+    const dx = oldRect.left - newRect.left;
+    const dy = oldRect.top - newRect.top;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return 0;
+    const delay = delayed ? 70 : 0;
+    const duration = 210;
+    cardEl.classList.add('hand-card-animating');
+    cardEl.style.transition = 'none';
+    cardEl.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+    lockCardAnimation(delay + duration + 80);
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            cardEl.style.transition = `transform ${duration}ms cubic-bezier(.22,.82,.28,1) ${delay}ms`;
+            cardEl.style.transform = '';
+        });
+    });
+    setTimeout(() => {
+        cardEl.classList.remove('hand-card-animating');
+        cardEl.style.transition = '';
+        cardEl.style.transform = '';
+        scheduleTutorialOverlayRefresh(30);
+    }, delay + duration + 70);
+    return delay + duration;
+}
+
+function animateHandLayoutChanges(container, oldRects, hand) {
+    if (!hasPlayerHandSnapshot || isSpectating || !container || !oldRects || oldRects.size === 0) return;
+    const nextIds = new Set(hand.map(c => String(c.instance_id)));
+    const removedCount = [...oldRects.keys()].filter(id => !nextIds.has(id)).length;
+    let drawIndex = 0;
+    hand.forEach(cardDict => {
+        const id = String(cardDict.instance_id);
+        const cardEl = container.querySelector(`.card[data-instance-id="${id}"]`);
+        if (!cardEl) return;
+        if (oldRects.has(id)) {
+            animateShiftedCard(cardEl, oldRects.get(id), removedCount > 0);
+        } else {
+            animateDrawnCard(cardEl, drawIndex);
+            drawIndex += 1;
+        }
+    });
+}
+
+function animatePlayedCard(cardInstanceId) {
+    const cardEl = document.querySelector(`.card[data-instance-id="${cardInstanceId}"]`);
+    if (!cardEl) return;
+    const rect = cardEl.getBoundingClientRect();
+    const flash = cardEl.cloneNode(true);
+    flash.classList.add('card-play-flash');
+    flash.style.left = `${rect.left}px`;
+    flash.style.top = `${rect.top}px`;
+    flash.style.width = `${rect.width}px`;
+    document.body.appendChild(flash);
+    lockCardAnimation(360);
+    setTimeout(() => flash.remove(), 420);
+}
+
+function cardChoiceIdentity(card) {
+    if (!card) return '';
+    const sortList = (list) => (Array.isArray(list) ? [...list].sort() : []).join(',');
+    return [
+        card.def_id || '',
+        Number(card.fusion_level || 1),
+        Number(card.fission_level || 1),
+        card.cost_e_override == null ? '' : card.cost_e_override,
+        card.cost_m_override == null ? '' : card.cost_m_override,
+        sortList(card.instance_flags),
+        sortList(card.disabled_flags),
+    ].join('|');
+}
+
+function dedupeCardCombos(combos) {
+    const seen = new Set();
+    const result = [];
+    combos.forEach(combo => {
+        const key = combo.map(cardChoiceIdentity).sort().join(' + ');
+        if (seen.has(key)) return;
+        seen.add(key);
+        result.push(combo);
+    });
+    return result;
+}
+
+async function onPlayCard(cardInstanceId, options = {}) {
     if (isSpectating) return;
+    if (isCardAnimationLocked() || pendingPlayCard) return;
     const hand = (gameState.you || {}).hand || [];
     const cardDict = hand.find(c => c.instance_id === cardInstanceId);
     if (!cardDict) return;
     if (!canPlayCard(cardDict)) {
-        flashStatus(UI.cannot_play, 2000, 'error');
+        flashStatus(getCannotPlayReason(cardDict), 2600, 'error');
+        return;
+    }
+    if (isTouchPlayMode() && !options.confirmed && !options.dragDrop) {
+        selectPlayCardForConfirm(cardInstanceId);
         return;
     }
     const cardDef = getCardDef(cardDict.def_id);
@@ -3313,6 +4633,8 @@ async function onPlayCard(cardInstanceId) {
     }
     const choice = await getCardChoice(cardDict, targetPlayerId);
     if (choice === false) return;
+    clearSelectedPlayCard();
+    animatePlayedCard(cardInstanceId);
     pendingPlayCard = cardDict;
     renderPendingCard();
     socket.emit(soloMode ? 'solo_play_card' : 'play_card', { card_instance_id: cardInstanceId, choice, target_player_id: targetPlayerId });
@@ -3356,10 +4678,11 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
                 }
             }
         }
-        const comboOptions = combos.map(combo => combo.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`).join(' + '));
+        const uniqueCombos = dedupeCardCombos(combos);
+        const comboOptions = uniqueCombos.map(combo => combo.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`).join(' + '));
         const comboSel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), comboOptions);
         if (comboSel < 0) return false;
-        return { target_instance_ids: combos[comboSel].map(c => c.instance_id) };
+        return { target_instance_ids: uniqueCombos[comboSel].map(c => c.instance_id) };
     } else if (defId === 'Mimic') {
         const others = hand.filter(c => c.instance_id !== cardDict.instance_id);
         if (!others.length) { gameAlert(UI.notice, UI.no_attack_cards); return false; }
@@ -3403,10 +4726,10 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
     return null;
 }
 
-async function simpleChoice(title, options) {
+async function simpleChoice(title, options, config = {}) {
     if (!options.length) return -1;
     const display = options.map((o, i) => `${i + 1}. ${o}`);
-    return await gamePrompt(title, display);
+    return await gamePrompt(title, display, config);
 }
 
 function showResponseUI(data) {
@@ -3464,7 +4787,7 @@ function showResponseUI(data) {
         btnRow.appendChild(btn);
     });
     container.appendChild(btnRow);
-    responseCountdown = hasAffordable ? 5 : 2;
+    responseCountdown = tutorialMode ? 10 : (hasAffordable ? 5 : 2);
     const passBtn = document.createElement('button');
     passBtn.className = 'btn btn-danger';
     passBtn.id = 'pass-btn';
@@ -3486,6 +4809,8 @@ function showResponseUI(data) {
 function onRespond(cardInstanceId) {
     if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
     responsePending = false;
+    if (tutorialMode) tutorialCounterSeen = true;
+    if (cardInstanceId != null) animatePlayedCard(cardInstanceId);
     const container = $('response-panel');
     if (container) { container.innerHTML = ''; container.classList.add('hidden'); container.classList.remove('visible'); }
     socket.emit(soloMode ? 'solo_response' : 'response', { card_instance_id: cardInstanceId });
@@ -3552,6 +4877,7 @@ async function showChoiceUI(data) {
     const cardDict = data.card || {};
     const cardDef = getCardDef(cardDict.def_id);
     const cardName = cardDef ? getCardName(cardDef) : '?';
+    const choicePromptConfig = { cancellable: !(cardDef && (cardDef.flags || []).includes('uncancellable')) };
     let choiceResult = null;
     if (choiceType === 'choose_attack_from_hand') {
         const attacks = ((gameState.you || {}).hand || []).filter(c => {
@@ -3561,7 +4887,7 @@ async function showChoiceUI(data) {
         if (!attacks.length) { gameAlert(UI.notice, UI.no_attack_cards); }
         else {
             const options = attacks.map(a => `${getCardDef(a.def_id) ? getCardName(getCardDef(a.def_id)) : a.def_id}${getCardLayerLabel(a)}`);
-            const sel = await simpleChoice(UI.choose_attack_for.replace('{0}', cardName), options);
+            const sel = await simpleChoice(UI.choose_attack_for.replace('{0}', cardName), options, choicePromptConfig);
             if (sel >= 0 && sel < attacks.length) choiceResult = { target_instance_id: attacks[sel].instance_id };
         }
     } else if (choiceType === 'choose_enemy_equipment') {
@@ -3569,14 +4895,14 @@ async function showChoiceUI(data) {
         if (!oppEq.length) { gameAlert(UI.notice, UI.no_enemy_equipment); }
         else {
             const options = oppEq.map(e => getCardDef((e.card_instance || {}).def_id) ? getCardName(getCardDef((e.card_instance || {}).def_id)) : '?');
-            const sel = await simpleChoice(UI.choose_equip_for.replace('{0}', cardName), options);
+            const sel = await simpleChoice(UI.choose_equip_for.replace('{0}', cardName), options, choicePromptConfig);
             if (sel >= 0 && sel < oppEq.length) choiceResult = { target_instance_id: oppEq[sel].card_instance.instance_id };
         }
     } else if (choiceType === 'choose_card_to_discard') {
         const otherCards = (gameState.you || {}).hand || [];
         if (otherCards.length) {
             const options = otherCards.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
-            const sel = await simpleChoice(UI.choose_discard_for.replace('{0}', cardName), options);
+            const sel = await simpleChoice(UI.choose_discard_for.replace('{0}', cardName), options, choicePromptConfig);
             if (sel >= 0 && sel < otherCards.length) choiceResult = { target_instance_id: otherCards[sel].instance_id };
         }
     } else if (choiceType === 'choose_card_from_deck') {
@@ -3584,7 +4910,7 @@ async function showChoiceUI(data) {
         if (!deck.length) { gameAlert(UI.notice, UI.deck_empty); }
         else {
             const options = deck.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
-            const sel = await simpleChoice(UI.choose_from_deck_for.replace('{0}', cardName), options);
+            const sel = await simpleChoice(UI.choose_from_deck_for.replace('{0}', cardName), options, choicePromptConfig);
             if (sel >= 0 && sel < deck.length) choiceResult = { target_def_id: deck[sel].def_id };
         }
     } else if (choiceType === 'choose_card_from_discard') {
@@ -3592,7 +4918,7 @@ async function showChoiceUI(data) {
         if (!discard.length) { gameAlert(UI.notice, UI.discard_empty); }
         else {
             const options = discard.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
-            const sel = await simpleChoice(UI.choose_from_discard_for.replace('{0}', cardName), options);
+            const sel = await simpleChoice(UI.choose_from_discard_for.replace('{0}', cardName), options, choicePromptConfig);
             if (sel >= 0 && sel < discard.length) choiceResult = { target_def_id: discard[sel].def_id };
         }
     } else if (choiceType === 'choose_same_attacks_from_hand') {
@@ -3606,7 +4932,7 @@ async function showChoiceUI(data) {
         if (!validGroups.length) { gameAlert(UI.notice, UI.no_same_attack); }
         else {
             const groupOptions = validGroups.map(([k, v]) => `${getCardDef(k) ? getCardName(getCardDef(k)) : k} x${v.length}`);
-            const sel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', cardName), groupOptions);
+            const sel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', cardName), groupOptions, choicePromptConfig);
             if (sel >= 0) {
                 const group = validGroups[sel][1];
                 const combos = [];
@@ -3618,16 +4944,17 @@ async function showChoiceUI(data) {
                         }
                     }
                 }
-                const comboOptions = combos.map(combo => combo.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`).join(' + '));
-                const comboSel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', cardName), comboOptions);
-                if (comboSel >= 0) choiceResult = { target_instance_ids: combos[comboSel].map(c => c.instance_id) };
+                const uniqueCombos = dedupeCardCombos(combos);
+                const comboOptions = uniqueCombos.map(combo => combo.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`).join(' + '));
+                const comboSel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', cardName), comboOptions, choicePromptConfig);
+                if (comboSel >= 0) choiceResult = { target_instance_ids: uniqueCombos[comboSel].map(c => c.instance_id) };
             }
         }
     } else if (choiceType === 'choose_card_from_hand') {
         const otherCards = (gameState.you || {}).hand || [];
         if (otherCards.length) {
             const options = otherCards.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
-            const sel = await simpleChoice(UI.choose_hand_for.replace('{0}', cardName), options);
+            const sel = await simpleChoice(UI.choose_hand_for.replace('{0}', cardName), options, choicePromptConfig);
             if (sel >= 0 && sel < otherCards.length) choiceResult = { target_instance_id: otherCards[sel].instance_id };
         }
     } else if (choiceType === 'choose_from_deck') {
@@ -3635,7 +4962,7 @@ async function showChoiceUI(data) {
         if (!deck.length) { gameAlert(UI.notice, UI.deck_empty); }
         else {
             const options = deck.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
-            const sel = await simpleChoice(UI.choose_from_deck_for.replace('{0}', cardName), options);
+            const sel = await simpleChoice(UI.choose_from_deck_for.replace('{0}', cardName), options, choicePromptConfig);
             if (sel >= 0 && sel < deck.length) choiceResult = { target_instance_id: deck[sel].instance_id };
         }
     } else if (choiceType === 'choose_from_enemy_hand') {
@@ -3644,9 +4971,8 @@ async function showChoiceUI(data) {
         if (!oppHand.length) { gameAlert(UI.notice, UI.no_enemy_hand); }
         else {
             const options = oppHand.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
-            const sel = await simpleChoice(UI.choose_from_enemy_hand_for.replace('{0}', cardName), options);
+            const sel = await simpleChoice(UI.choose_from_enemy_hand_for.replace('{0}', cardName), options, choicePromptConfig);
             if (sel >= 0 && sel < oppHand.length) choiceResult = { target_instance_id: oppHand[sel].instance_id };
-            else if (oppHand.length) choiceResult = { target_instance_id: oppHand[0].instance_id };
         }
     }
     socket.emit(soloMode ? 'solo_resolve_choice' : 'resolve_choice', { choice: choiceResult });
@@ -3658,12 +4984,14 @@ let rematchRequestedByOpponent = false;
 function renderGameOver(data) {
     showView('view-gameover');
     const gs = data || gameState;
+    const isTutorialGameOver = !!gs.tutorial;
     const winner = gs.winner;
     const isDraw = winner === -1 || winner === null || winner === undefined;
     const isWin = winner === playerId;
     const title = $('gameover-title');
     if (title) {
         title.textContent = isDraw ? UI.draw : (isWin ? UI.victory : UI.defeat);
+        title.style.whiteSpace = '';
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         if (isDraw) {
             title.style.color = isDark ? '#E5E7EB' : '#374151';
@@ -3674,6 +5002,14 @@ function renderGameOver(data) {
                 ? (isDark ? 'rgba(46, 204, 113, 0.15)' : COLORS.health_bg)
                 : (isDark ? 'rgba(192, 57, 43, 0.15)' : COLORS.damage_bg);
         }
+    }
+    const message = $('gameover-message');
+    if (message) {
+        const tutorialMessage = isTutorialGameOver && !isDraw
+            ? (isWin ? UI.tutorial_victory_message : UI.tutorial_defeat_message)
+            : '';
+        message.textContent = tutorialMessage;
+        message.classList.toggle('hidden', !tutorialMessage);
     }
     const logContainer = $('gameover-log');
     if (logContainer) {
@@ -3687,7 +5023,18 @@ function renderGameOver(data) {
     }
     const rematchBtn = $('btn-rematch');
     if (rematchBtn) {
-        if (rematchRequestedByOpponent) {
+        rematchBtn.classList.remove('hidden');
+        rematchBtn.style.display = '';
+        if (isTutorialGameOver && isWin) {
+            rematchBtn.classList.add('hidden');
+            rematchBtn.style.display = 'none';
+            rematchBtn.disabled = true;
+            rematchBtn.onclick = null;
+        } else if (isTutorialGameOver) {
+            rematchBtn.textContent = UI.tutorial_retry || UI.rematch;
+            rematchBtn.disabled = false;
+            rematchBtn.onclick = () => startTutorial('home');
+        } else if (rematchRequestedByOpponent) {
             rematchBtn.textContent = UI.agree_rematch;
             rematchBtn.disabled = false;
             rematchBtn.onclick = () => {
@@ -3711,12 +5058,28 @@ function renderGameOver(data) {
     }
     const returnLobbyBtn = $('btn-return-lobby');
     if (returnLobbyBtn) {
-        returnLobbyBtn.onclick = () => {
-            if (!socket) return;
-            socket.emit('return_lobby');
-            showView('view-lobby');
-            phase = 'lobby';
-        };
+        if (isTutorialGameOver) {
+            returnLobbyBtn.textContent = UI.back_to_home || UI.return_lobby;
+            returnLobbyBtn.onclick = () => {
+                if (socket) {
+                    suppressSoloPausedHandler = true;
+                    socket.emit('solo_pause', {});
+                }
+                soloMode = false;
+                stopTutorialUiForGameOver();
+                showView('view-login');
+                phase = 'login';
+                updateStatus(UI.default_status);
+            };
+        } else {
+            returnLobbyBtn.textContent = UI.return_lobby;
+            returnLobbyBtn.onclick = () => {
+                if (!socket) return;
+                socket.emit('return_lobby');
+                showView('view-lobby');
+                phase = 'lobby';
+            };
+        }
     }
 }
 
@@ -3798,6 +5161,11 @@ function onViewDeck() {
     if (gameState && gameState.mode === 'urf') {
         return;
     }
+    if (tutorialMode) {
+        tutorialDeckViewed = true;
+        hideTutorialOverlay();
+        setTimeout(updateTutorialOverlay, 80);
+    }
     const deck = (gameState.you || {}).deck || [];
     const modal = $('modal');
     const content = $('modal-content');
@@ -3866,18 +5234,25 @@ function setupPlayZoneDrop() {
 }
 
 let settingsMods = [];
+let settingsAllowServerEdit = true;
 
-function openSettings() {
+function openSettings(options = {}) {
+    settingsAllowServerEdit = !options.hideServer;
     const panel = $('settings-panel');
     if (panel) panel.classList.remove('hidden');
+    const serverSection = $('settings-server-section');
+    if (serverSection) {
+        serverSection.classList.toggle('hidden', !settingsAllowServerEdit);
+        serverSection.style.display = settingsAllowServerEdit ? '' : 'none';
+    }
     loadSettingsMods();
     const serverInput = $('settings-server-input');
-    if (serverInput) {
+    if (serverInput && settingsAllowServerEdit) {
         const custom = localStorage.getItem('got_server') || '';
         serverInput.value = custom;
     }
     const serverHint = $('settings-server-hint');
-    if (serverHint) {
+    if (serverHint && settingsAllowServerEdit) {
         serverHint.textContent = tf('server_hint', DEFAULT_SERVER);
     }
 }
@@ -3956,7 +5331,7 @@ function saveDisabledMods() {
     });
     localStorage.setItem('got_disabled_mods', JSON.stringify(disabled));
     const serverInput = $('settings-server-input');
-    if (serverInput) {
+    if (serverInput && settingsAllowServerEdit) {
         localStorage.setItem('got_server', serverInput.value.trim());
     }
     fetchCardDefs().then(() => {
@@ -4078,7 +5453,7 @@ async function init() {
     });
     $('btn-open-settings').addEventListener('click', openSettings);
     $('btn-settings-close').addEventListener('click', () => { saveDisabledMods(); closeSettings(); });
-    if ($('btn-lobby-settings')) $('btn-lobby-settings').addEventListener('click', openSettings);
+    if ($('btn-lobby-settings')) $('btn-lobby-settings').addEventListener('click', () => openSettings({ hideServer: true }));
     if ($('about-tab-rules')) $('about-tab-rules').addEventListener('click', () => setAboutPage('rules'));
     if ($('about-tab-credits')) $('about-tab-credits').addEventListener('click', () => setAboutPage('credits'));
     if ($('btn-about-close')) $('btn-about-close').addEventListener('click', closeAbout);
@@ -4087,9 +5462,11 @@ async function init() {
     $('settings-theme-select').addEventListener('change', (e) => { applyTheme(e.target.value); });
     $('settings-lang-select').addEventListener('change', (e) => { applyLang(e.target.value); });
     $('btn-lobby-back').addEventListener('click', () => {
+        phase = 'login';
+        manualDisconnect = true;
         if (socket) { socket.disconnect(); socket = null; }
         showView('view-login');
-        phase = 'login';
+        updateStatus(UI.default_status);
     });
     $('btn-surrender').addEventListener('click', onSurrender);
     $('btn-end-turn').addEventListener('click', onEndTurn);
@@ -4151,5 +5528,6 @@ window.addEventListener('resize', () => {
     const gc = document.querySelector('.game-container');
     if (gc) gc.style.removeProperty('--card-w');
     scheduleAdjust();
+    if (tutorialMode) setTimeout(updateTutorialOverlay, 80);
 });
 console.log('[LOAD] game.js loaded, onEndTurn=', typeof onEndTurn);
