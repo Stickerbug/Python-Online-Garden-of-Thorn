@@ -1,4 +1,15 @@
+import re
+
+
 LANGS = ('zh', 'en', 'fr', 'pt', 'ru', 'ja')
+
+
+def card_id_to_english(card_id):
+    text = str(card_id or '').replace('_', ' ').replace('-', ' ')
+    text = re.sub(r'(?<=[a-z0-9])(?=[A-Z])', ' ', text)
+    text = re.sub(r'(?<=[A-Z])(?=[A-Z][a-z])', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
 
 def _t(zh, en, fr, pt, ru, ja):
@@ -178,12 +189,12 @@ CARD_I18N = {
         'effect': _t('目标回合开始时E回复-1', 'At the target’s turn start, E recovery -1', 'Au début du tour de la cible, récupération de E -1', 'No início do turno do alvo, recuperação de E -1', 'В начале хода цели восстановление E -1', '対象のターン開始時、E回復-1'),
     },
     'Cancer': {
-        'name': _t('癌细胞', 'Cancer Cell', 'Cellule cancéreuse', 'Célula cancerosa', 'Раковая клетка', 'がん細胞'),
+        'name': _t('癌细胞', 'Cancer', 'Cellule cancéreuse', 'Célula cancerosa', 'Раковая клетка', 'がん細胞'),
         'desc': _t('无法根除的恶性细胞。', 'A malignant cell that cannot be eradicated.', 'Une cellule maligne impossible à éradiquer.', 'Uma célula maligna impossível de erradicar.', 'Злокачественная клетка, которую невозможно искоренить.', '根絶できない悪性細胞。'),
         'effect': _t('对目标施加1层淬毒', 'Apply 1 Toxic to the target', 'Applique 1 Toxique à la cible', 'Aplica 1 Tóxico ao alvo', 'Накладывает на цель 1 Токсин', '対象に淬毒1を付与'),
     },
     'Yggdrasil': {
-        'name': _t('世界树之叶', 'World Tree Leaf', 'Arbre-Monde', 'Árvore-Mundo', 'Мировое древо', '世界樹'),
+        'name': _t('世界树之叶', 'Yggdrasil', 'Arbre-Monde', 'Árvore-Mundo', 'Мировое древо', '世界樹'),
         'desc': _t('神奇的树叶。可以使人死而复生。', 'A wondrous leaf that can bring the dead back to life.', 'Une feuille merveilleuse qui peut ramener les morts à la vie.', 'Uma folha milagrosa capaz de trazer alguém de volta da morte.', 'Чудесный лист, способный вернуть мёртвого к жизни.', '死者を蘇らせることができる不思議な葉。'),
         'effect': _t('+20H；受到致命伤害时若在手牌中，则清除自己的所有效果，将生命值设为5，此回合无敌并放逐此牌', '+20H; when taking lethal damage, if this is in hand, clear your effects, set health to 5, become invincible this turn, and exile this card', '+20H ; lorsque vous subissez des dégâts mortels, si cette carte est en main, nettoie vos effets, fixe la vie à 5, rend invincible ce tour et exile cette carte', '+20H; ao sofrer dano letal, se estiver na mão, limpa seus efeitos, define a vida como 5, fica invencível neste turno e exila esta carta', '+20H; при смертельном уроне, если карта в руке, очистить ваши эффекты, установить здоровье на 5, стать неуязвимым на этот ход и изгнать эту карту', '+20H。致命ダメージを受ける時、手札にあるなら自分の効果を全て解除し、生命を5にし、このターン無敵になり、このカードを放逐する'),
     },
@@ -237,7 +248,7 @@ OPENING_EVENT_I18N = {
     },
     8: {
         'name': _t('绝境求生', 'Last Stand', 'Dernier recours', 'Último Recurso', 'Последний шанс', '背水の生存'),
-        'desc': _t('最大生命值-20，对局开始将一张牌变化为世界树之叶', 'Max health -20; at game start, transform one card into World Tree Leaf', 'Santé max -20 ; au début de la partie, transforme une carte en Arbre-Monde', 'Vida máxima -20; no início da partida, transforma uma carta em Árvore-Mundo', 'Макс. здоровье -20; в начале игры превратите одну карту в Мировое древо', '最大生命値-20。対局開始時、カード1枚を世界樹に変化させる'),
+        'desc': _t('最大生命值-20，对局开始将一张牌变化为世界树之叶', 'Max health -20; at game start, transform one card into Yggdrasil', 'Santé max -20 ; au début de la partie, transforme une carte en Arbre-Monde', 'Vida máxima -20; no início da partida, transforma uma carta em Árvore-Mundo', 'Макс. здоровье -20; в начале игры превратите одну карту в Мировое древо', '最大生命値-20。対局開始時、カード1枚を世界樹に変化させる'),
     },
     4: {
         'name': _t('烈焰预兆', 'Flame Omen', 'Présage de flammes', 'Presságio Flamejante', 'Огненное знамение', '烈炎の兆し'),
@@ -267,9 +278,18 @@ def _fill(field):
 def card_text(card_id, fallback):
     data = CARD_I18N.get(card_id)
     if not data:
-        return fallback
+        out = dict(fallback)
+        name = _fill({
+            'zh': fallback.get('name_cn') or fallback.get('name_en') or card_id_to_english(card_id),
+            'en': card_id_to_english(card_id),
+        })
+        out['name_en'] = name['en']
+        out['name_i18n'] = name
+        return out
+    name = _fill(data.get('name', {}))
+    name['en'] = card_id_to_english(card_id)
     return {
-        'name_i18n': _fill(data.get('name', {})),
+        'name_i18n': name,
         'description_i18n': _fill(data.get('desc', {})),
         'effect_text_i18n': _fill(data.get('effect', {})),
         'trigger_effect_text_i18n': _fill(data.get('trigger', {
@@ -306,3 +326,5 @@ def apply_card_i18n_defaults(card_defs):
         card.effect_text = effect['zh']
         if trigger.get('zh'):
             card.trigger_effect_text = trigger['zh']
+    for card_id, card in card_defs.items():
+        card.name_en = card_id_to_english(card_id)

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=111">
+<link rel="stylesheet" href="/static/css/style.css?v=121">
 <script>
 (() => {
   const lang = localStorage.getItem('got_lang') || 'zh';
@@ -321,6 +321,10 @@
 <option value="ja">日本語</option>
 </select>
 </div>
+<div id="settings-english-name-row" class="settings-check-row">
+<input type="checkbox" id="settings-show-english-names" checked>
+<label id="settings-label-show-english-names" for="settings-show-english-names">显示卡牌英文名称</label>
+</div>
 </div>
 <div id="settings-server-section" class="settings-section">
 <h4 id="settings-section-server">服务器</h4>
@@ -489,6 +493,6 @@
 })();
 </script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="/static/js/game.js?v=111"></script>
+<script src="/static/js/game.js?v=121"></script>
 </body>
 </html>

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Login</title>
+<link rel="stylesheet" href="/static/css/admin.css">
+</head>
+<body class="admin-body fake-admin">
+<main class="fake-login-card">
+  <div class="admin-brand">Garden of Thorn Admin</div>
+  <h1>管理员登录</h1>
+  <p>请输入管理员密码以继续。</p>
+  <form id="fake-admin-form">
+    <input id="fake-admin-password" type="password" autocomplete="current-password" placeholder="Password" autofocus>
+    <button type="submit">登录</button>
+  </form>
+  <div id="fake-admin-error" class="fake-error" aria-live="polite">{{ fake_error }}</div>
+</main>
+<script>
+document.getElementById('fake-admin-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const error = document.getElementById('fake-admin-error');
+  error.textContent = '密码错误。';
+  document.getElementById('fake-admin-password').value = '';
+});
+</script>
+</body>
+</html>

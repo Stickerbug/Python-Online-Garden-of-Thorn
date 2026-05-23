@@ -30,7 +30,7 @@ const I18N = {
         tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
-        choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose World Tree Leaf card',
+        choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
         lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
@@ -842,10 +842,65 @@ Object.assign(I18N.ja, {
     tag_desc_default: 'Mod または拡張タグです。具体的な意味は対応する Mod またはカード効果で定義されます。'
 });
 
+Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card names' });
+Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称' });
+Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes' });
+Object.assign(I18N.pt, { settings_show_english_card_names: 'Mostrar nomes ingleses das cartas' });
+Object.assign(I18N.ru, { settings_show_english_card_names: 'Показывать английские названия карт' });
+Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示' });
+Object.assign(I18N.en, { admin_prefix: 'Admin', login_admin_reserved: 'This nickname is occupied by the administrator' });
+Object.assign(I18N.zh, { admin_prefix: '管理员', login_admin_reserved: '此昵称被管理员占用' });
+Object.assign(I18N.fr, { admin_prefix: 'Admin', login_admin_reserved: 'Ce pseudo est occupé par l’administrateur' });
+Object.assign(I18N.pt, { admin_prefix: 'Administrador', login_admin_reserved: 'Este apelido está ocupado pelo administrador' });
+Object.assign(I18N.ru, { admin_prefix: 'Администратор', login_admin_reserved: 'Этот псевдоним занят администратором' });
+Object.assign(I18N.ja, { admin_prefix: '管理者', login_admin_reserved: 'このニックネームは管理者が使用しています' });
+
 let currentLang = localStorage.getItem('got_lang') || 'zh';
+let showEnglishCardNames = localStorage.getItem('got_show_english_card_names') !== '0';
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || (I18N.zh[key]) || key; }
 function tf(key, ...values) { return t(key).replace(/\{(\d+)\}/g, (_, i) => values[Number(i)] ?? ''); }
 const UI = new Proxy({}, { get: (_, key) => t(key) });
+
+function isAdminPlayer(player) {
+    return !!(player && (player.is_admin_player || player.isAdminPlayer || player.admin));
+}
+
+function getPlayerDisplayName(player, options = {}) {
+    const { adminPrefix = true } = options;
+    const name = (player && (player.nickname || player.name)) || '?';
+    if (isAdminPlayer(player) && adminPrefix) return `[${UI.admin_prefix}]${name}`;
+    return name;
+}
+
+function setPlayerNameContent(el, player, options = {}) {
+    if (!el) return;
+    const { adminPrefix = true } = options;
+    el.textContent = getPlayerDisplayName(player, { adminPrefix });
+    el.classList.toggle('admin-name', isAdminPlayer(player));
+}
+
+function appendPlayerNameNode(parent, player, options = {}) {
+    const span = document.createElement('span');
+    span.className = 'player-name-inline';
+    setPlayerNameContent(span, player, options);
+    parent.appendChild(span);
+    return span;
+}
+
+function appendPlayerNameList(parent, players, options = {}) {
+    parent.textContent = '';
+    (players || []).forEach((player, index) => {
+        if (index > 0) parent.appendChild(document.createTextNode(' & '));
+        appendPlayerNameNode(parent, player, options);
+    });
+}
+
+function getChatDisplayName(data) {
+    const base = (data && data.nickname) || '?';
+    const spectator = data && data.is_spectator ? `[${UI.spectator_prefix}]` : '';
+    const name = isAdminPlayer(data) ? `[${UI.admin_prefix}]${base}` : base;
+    return `${spectator}${name}`;
+}
 
 const COLORS = {
     elixir: '#F1C40F', elixir_text: '#9A7D0A', elixir_bg: '#FEF9E7',
@@ -887,6 +942,26 @@ const CARD_FLAG_STYLES = {
 function getCardName(cardDef) {
     if (!cardDef) return '?';
     return getLocalizedCardText(cardDef, 'name_i18n', currentLang === 'zh' ? 'name_cn' : 'name_en');
+}
+
+function formatCardIdForDisplay(cardId) {
+    return String(cardId || '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/([a-z0-9])(?=[A-Z])/g, '$1 ')
+        .replace(/([A-Z])(?=[A-Z][a-z])/g, '$1 ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function getEnglishCardName(cardDef) {
+    if (!cardDef) return '';
+    return formatCardIdForDisplay(cardDef.id || cardDef.def_id || '');
+}
+
+function shouldShowEnglishCardName(cardDef, localizedName = '') {
+    if (currentLang === 'en' || !showEnglishCardNames) return false;
+    const englishName = getEnglishCardName(cardDef);
+    return !!englishName && englishName !== localizedName;
 }
 
 function getCardTypeLabel(cardType) {
@@ -1123,11 +1198,14 @@ function translateLoginReason(reason) {
         return UI.login_invalid_nickname;
     }
     if (reason === 'Nickname already exists') return UI.login_nickname_exists;
+    if (reason === 'Admin nickname reserved') return UI.login_admin_reserved;
+    if (reason === '此昵称被管理员占用') return UI.login_admin_reserved;
     return reason;
 }
 let playerId = -1;
 let mySid = '';
 let nickname = '';
+let loginCredential = '';
 let socket = null;
 let manualDisconnect = false;
 let CARD_DEFS = {};
@@ -1266,6 +1344,36 @@ function applyLang(lang) {
     if (sel) sel.value = lang;
     updateStaticText();
     refreshBaseStatus();
+    refreshVisibleCardDisplays();
+}
+
+function updateEnglishNameSettingVisibility() {
+    const row = $('settings-english-name-row');
+    if (row) {
+        const hidden = currentLang === 'en';
+        row.classList.toggle('hidden', hidden);
+        row.style.display = hidden ? 'none' : '';
+    }
+    const input = $('settings-show-english-names');
+    if (input) input.checked = showEnglishCardNames;
+}
+
+function applyShowEnglishCardNames(value) {
+    showEnglishCardNames = !!value;
+    localStorage.setItem('got_show_english_card_names', showEnglishCardNames ? '1' : '0');
+    updateEnglishNameSettingVisibility();
+    refreshVisibleCardDisplays();
+}
+
+function refreshVisibleCardDisplays() {
+    const isVisible = (id) => {
+        const el = $(id);
+        return !!el && !el.classList.contains('hidden');
+    };
+    if (isVisible('view-game') && gameState) renderGame(gameState);
+    if (isVisible('view-draft') && draftState) renderDraft(draftState, false);
+    if (isVisible('view-solo')) renderSoloBuilder();
+    if (isVisible('view-card-gallery')) renderCardGallery();
 }
 
 function updateStaticText() {
@@ -1292,6 +1400,9 @@ function updateStaticText() {
     if (settingsLabelTheme) settingsLabelTheme.textContent = UI.settings_theme;
     const settingsLabelLang = $('settings-label-lang');
     if (settingsLabelLang) settingsLabelLang.textContent = UI.settings_lang;
+    const settingsEnglishNameLabel = $('settings-label-show-english-names');
+    if (settingsEnglishNameLabel) settingsEnglishNameLabel.textContent = UI.settings_show_english_card_names;
+    updateEnglishNameSettingVisibility();
     const themeSelect = $('settings-theme-select');
     if (themeSelect) {
         themeSelect.options[0].textContent = UI.settings_theme_light;
@@ -2054,6 +2165,7 @@ function createCardElement(cardDict, options = {}) {
     const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
     const typeLabel = getCardTypeLabel(cardDef.card_type) || cardDef.card_type;
     const cardName = getCardName(cardDef);
+    const englishName = shouldShowEnglishCardName(cardDef, cardName) ? getEnglishCardName(cardDef) : '';
     const effectText = getCardEffectText(cardDef);
     const descriptionText = getCardDescriptionText(cardDef);
     const { totalE, totalM, flags } = getCardDisplayCosts(cardDict, cardDef, gameState && gameState.you);
@@ -2085,6 +2197,7 @@ function createCardElement(cardDict, options = {}) {
             <span class="card-name" style="color:${typeColor}">${escapeHtml(cardName)}</span>
             <span class="cost-m">${totalM}</span>
         </div>
+        ${englishName ? `<div class="card-english-name" style="color:${typeColor}">${escapeHtml(englishName)}</div>` : ''}
         <div class="card-type-label-wrap"><span class="card-type-label" style="color:${typeColor}">${escapeHtml(typeLabel)}</span></div>
         <div class="card-effect">${colorizeCardText(effectText || '')}</div>
         ${descriptionText ? `<div class="card-description">${colorizeCardText(descriptionText)}</div>` : ''}
@@ -2219,7 +2332,7 @@ function connectSocket(serverUrl) {
         console.log('[client] socket connected, login nickname=', nickname);
         const disabledMods = getDisabledMods();
         const preferredMode = localStorage.getItem('preferred_mode') || '1v1';
-        socket.emit('login', { nickname, disabled_mods: disabledMods, mode: preferredMode });
+        socket.emit('login', { nickname: loginCredential || nickname, disabled_mods: disabledMods, mode: preferredMode });
     });
     socket.on('disconnect', () => {
         console.log('[client] socket disconnected');
@@ -2234,6 +2347,10 @@ function connectSocket(serverUrl) {
         console.log('[client] login ok: sid=', data.sid, 'nickname=', data.nickname);
         mySid = data.sid || '';
         nickname = data.nickname || nickname;
+        if (!data.is_admin_player) loginCredential = nickname;
+        const nickInput = $('input-nickname');
+        if (nickInput) nickInput.value = nickname;
+        localStorage.setItem('got_nickname', nickname);
         if (pendingTutorialStart) {
             pendingTutorialStart = false;
             emitTutorialStart();
@@ -2455,11 +2572,11 @@ function connectSocket(serverUrl) {
     });
     socket.on('chat', (data) => {
         console.log('[client] chat:', data.nickname, data.text, 'spectator=', data.is_spectator);
-        const nick = data.is_spectator ? `[${UI.spectator_prefix}]${data.nickname}` : data.nickname;
+        const nick = getChatDisplayName(data);
         if (phase === 'lobby') {
-            appendLobbyChat(nick, data.text);
+            appendLobbyChat(nick, data.text, isAdminPlayer(data));
         } else {
-            appendGameChat(nick, data.text);
+            appendGameChat(nick, data.text, isAdminPlayer(data));
         }
     });
     socket.on('server_error', (data) => {
@@ -2592,9 +2709,14 @@ function onLogin() {
         if (err) err.textContent = UI.login_name_no_repeat_symbols;
         return;
     }
+    const lowerNick = nick.toLowerCase();
+    if (lowerNick.includes('sticker') && lowerNick.includes('bug')) {
+        if (err) err.textContent = UI.login_admin_reserved;
+        return;
+    }
     const server = getServerAddress();
     nickname = nick;
-    localStorage.setItem('got_nickname', nick);
+    loginCredential = nick;
     if (err) err.textContent = '';
     updateStatus(UI.connecting);
     connectSocket(server);
@@ -3262,10 +3384,19 @@ function renderLobby(data) {
         ? modeTabs.querySelector('.mode-tab.active').getAttribute('data-mode')
         : (localStorage.getItem('preferred_mode') || '1v1');
 
+    const playerBySid = new Map(lobbyPlayers.map(p => [p.sid, p]));
+    const adminSort = (a, b) => {
+        const adminDelta = Number(isAdminPlayer(b)) - Number(isAdminPlayer(a));
+        if (adminDelta) return adminDelta;
+        return String(a.nickname || '').localeCompare(String(b.nickname || ''));
+    };
+    const teamHasAdmin = (team) => (team.member_infos || [])
+        .some(member => isAdminPlayer(member))
+        || (team.member_sids || []).some(sid => isAdminPlayer(playerBySid.get(sid)));
     const filteredPlayers = lobbyPlayers.filter(p => {
         const pMode = p.mode || '1v1';
         return pMode === currentMode;
-    });
+    }).sort(adminSort);
 
     const onlineCount = $('lobby-online-count');
     if (onlineCount) onlineCount.textContent = tf('online_count', filteredPlayers.length);
@@ -3274,13 +3405,12 @@ function renderLobby(data) {
     if (teamSection) {
         teamSection.innerHTML = '';
         if (myTeam && currentMode === '2v2') {
-            const teamMembers = myTeam.map(sid => {
-                const p = lobbyPlayers.find(pl => pl.sid === sid);
-                return p ? p.nickname : '?';
-            });
+            const teamMembers = myTeam.map(sid => playerBySid.get(sid) || { nickname: '?' });
             const teamInfoDiv = document.createElement('div');
             teamInfoDiv.className = 'team-info';
-            teamInfoDiv.innerHTML = `${UI.teammate}: ${teamMembers.join(', ')} `;
+            teamInfoDiv.appendChild(document.createTextNode(`${UI.teammate}: `));
+            appendPlayerNameList(teamInfoDiv, teamMembers, { adminPrefix: false });
+            teamInfoDiv.appendChild(document.createTextNode(' '));
             const leaveBtn = document.createElement('button');
             leaveBtn.textContent = UI.leave_team;
             leaveBtn.className = 'btn btn-danger btn-sm';
@@ -3293,13 +3423,64 @@ function renderLobby(data) {
     const list = $('lobby-players');
     if (!list) return;
     list.innerHTML = '';
+    const renderPlayerRow = (p, buttonMode) => {
+        const row = document.createElement('div');
+        row.className = 'lobby-player-row';
+        const isMe = p.sid === mySid;
+        const nameSpan = document.createElement('span');
+        nameSpan.className = isMe ? 'player-name player-self' : 'player-name';
+        setPlayerNameContent(nameSpan, p, { adminPrefix: true });
+        row.appendChild(nameSpan);
+        if (!isMe && buttonMode === 'team' && !myTeam) {
+            const btn = document.createElement('button');
+            btn.textContent = UI.form_team;
+            btn.className = 'btn btn-primary btn-sm';
+            btn.onclick = () => socket.emit('form_team', { target_sid: p.sid });
+            row.appendChild(btn);
+        } else if (!isMe && buttonMode === 'invite') {
+            const btn = document.createElement('button');
+            btn.textContent = UI.invite;
+            btn.className = 'btn btn-primary';
+            btn.onclick = () => {
+                console.log('[client] invite target_sid=', p.sid);
+                socket.emit('invite', { target_sid: p.sid });
+                updateStatus(UI.invite_sent);
+            };
+            row.appendChild(btn);
+        }
+        list.appendChild(row);
+    };
+    const renderTeamRow = (team) => {
+        const isMyTeamRow = myTeam && team.member_sids.some(s => myTeam.includes(s));
+        const row = document.createElement('div');
+        row.className = 'lobby-team-row';
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'player-name';
+        const memberInfos = (team.member_infos && team.member_infos.length)
+            ? team.member_infos
+            : (team.member_sids || []).map(sid => playerBySid.get(sid) || { nickname: '?' });
+        appendPlayerNameList(nameSpan, memberInfos, { adminPrefix: false });
+        row.appendChild(nameSpan);
+        if (!isMyTeamRow && myTeam) {
+            const btn = document.createElement('button');
+            btn.textContent = UI.invite_team;
+            btn.className = 'btn btn-primary btn-sm';
+            btn.onclick = () => socket.emit('invite_team', { target_team_leader: team.leader });
+            row.appendChild(btn);
+        }
+        list.appendChild(row);
+    };
 
     if (currentMode === '2v2') {
         const teamsInMode = teamList.filter(t => {
             return t.member_sids.some(sid => {
-                const p = lobbyPlayers.find(pl => pl.sid === sid);
+                const p = playerBySid.get(sid);
                 return p && (p.mode || '1v1') === '2v2';
             });
+        }).sort((a, b) => {
+            const adminDelta = Number(teamHasAdmin(b)) - Number(teamHasAdmin(a));
+            if (adminDelta) return adminDelta;
+            return String((a.members || [])[0] || '').localeCompare(String((b.members || [])[0] || ''));
         });
         const teamedSids = new Set();
         teamsInMode.forEach(t => t.member_sids.forEach(s => teamedSids.add(s)));
@@ -3308,66 +3489,16 @@ function renderLobby(data) {
         if (teamsInMode.length === 0 && unteamed.length === 0) {
             list.innerHTML = `<div class="empty-hint">${UI.no_other_players}</div>`;
         } else {
-            teamsInMode.forEach(team => {
-                const isMyTeamRow = myTeam && team.member_sids.some(s => myTeam.includes(s));
-                const row = document.createElement('div');
-                row.className = 'lobby-team-row';
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'player-name';
-                nameSpan.textContent = team.members.join(' & ');
-                row.appendChild(nameSpan);
-                if (!isMyTeamRow && myTeam) {
-                    const btn = document.createElement('button');
-                    btn.textContent = UI.invite_team;
-                    btn.className = 'btn btn-primary btn-sm';
-                    btn.onclick = () => socket.emit('invite_team', { target_team_leader: team.leader });
-                    row.appendChild(btn);
-                }
-                list.appendChild(row);
-            });
-            unteamed.forEach(p => {
-                const row = document.createElement('div');
-                row.className = 'lobby-player-row';
-                const isMe = p.sid === mySid;
-                const nameSpan = document.createElement('span');
-                nameSpan.className = isMe ? 'player-name player-self' : 'player-name';
-                nameSpan.textContent = p.nickname;
-                row.appendChild(nameSpan);
-                if (!isMe && !myTeam) {
-                    const btn = document.createElement('button');
-                    btn.textContent = UI.form_team;
-                    btn.className = 'btn btn-primary btn-sm';
-                    btn.onclick = () => socket.emit('form_team', { target_sid: p.sid });
-                    row.appendChild(btn);
-                }
-                list.appendChild(row);
-            });
+            teamsInMode.filter(teamHasAdmin).forEach(renderTeamRow);
+            unteamed.filter(isAdminPlayer).forEach(p => renderPlayerRow(p, 'team'));
+            teamsInMode.filter(team => !teamHasAdmin(team)).forEach(renderTeamRow);
+            unteamed.filter(p => !isAdminPlayer(p)).forEach(p => renderPlayerRow(p, 'team'));
         }
     } else {
         if (filteredPlayers.length === 0) {
             list.innerHTML = `<div class="empty-hint">${UI.no_other_players}</div>`;
         } else {
-            filteredPlayers.forEach(p => {
-                const row = document.createElement('div');
-                row.className = 'lobby-player-row';
-                const isMe = p.sid === mySid;
-                const nameSpan = document.createElement('span');
-                nameSpan.className = isMe ? 'player-name player-self' : 'player-name';
-                nameSpan.textContent = p.nickname;
-                row.appendChild(nameSpan);
-                if (!isMe) {
-                    const btn = document.createElement('button');
-                    btn.textContent = UI.invite;
-                    btn.className = 'btn btn-primary';
-                    btn.onclick = () => {
-                        console.log('[client] invite target_sid=', p.sid);
-                        socket.emit('invite', { target_sid: p.sid });
-                        updateStatus(UI.invite_sent);
-                    };
-                    row.appendChild(btn);
-                }
-                list.appendChild(row);
-            });
+            filteredPlayers.forEach(p => renderPlayerRow(p, 'invite'));
         }
     }
 
@@ -3934,29 +4065,32 @@ function renderGame(data) {
 
     const oppLabel = $('opp-label');
     const youLabel = $('you-label');
+    const setGameNameLabel = (el, name, isAdmin) => {
+        setPlayerNameContent(el, { nickname: name, is_admin_player: isAdmin }, { adminPrefix: false });
+    };
     if (isSpectating) {
         if (is2v2) {
-            if (youLabel) youLabel.textContent = gs.your_name || gs.player1_name || 'P1';
-            if (oppLabel) oppLabel.textContent = (gs.opponent_names || [])[0] || gs.player3_name || 'P3';
+            if (youLabel) setGameNameLabel(youLabel, gs.your_name || gs.player1_name || 'P1', gs.your_is_admin_player || gs.player1_is_admin_player);
+            if (oppLabel) setGameNameLabel(oppLabel, (gs.opponent_names || [])[0] || gs.player3_name || 'P3', (gs.opponent_admin_flags || [])[0] || gs.player3_is_admin_player);
             const opp2Label = $('opp2-label');
-            if (opp2Label) opp2Label.textContent = (gs.opponent_names || [])[1] || gs.player4_name || 'P4';
+            if (opp2Label) setGameNameLabel(opp2Label, (gs.opponent_names || [])[1] || gs.player4_name || 'P4', (gs.opponent_admin_flags || [])[1] || gs.player4_is_admin_player);
             const tmLabel = $('teammate-label');
-            if (tmLabel) tmLabel.textContent = gs.teammate_name || gs.player2_name || 'P2';
+            if (tmLabel) setGameNameLabel(tmLabel, gs.teammate_name || gs.player2_name || 'P2', gs.teammate_is_admin_player || gs.player2_is_admin_player);
         } else {
-            if (oppLabel) oppLabel.textContent = gs.opponent_name || gs.player2_name || 'P2';
-            if (youLabel) youLabel.textContent = gs.your_name || gs.player1_name || 'P1';
+            if (oppLabel) setGameNameLabel(oppLabel, gs.opponent_name || gs.player2_name || 'P2', gs.opponent_is_admin_player || gs.player2_is_admin_player);
+            if (youLabel) setGameNameLabel(youLabel, gs.your_name || gs.player1_name || 'P1', gs.your_is_admin_player || gs.player1_is_admin_player);
         }
     } else if (is2v2) {
         const oppNames = gs.opponent_names || [];
-        if (oppLabel) oppLabel.textContent = oppNames[0] || UI.opponent;
+        if (oppLabel) setGameNameLabel(oppLabel, oppNames[0] || UI.opponent, (gs.opponent_admin_flags || [])[0]);
         const opp2Label = $('opp2-label');
-        if (opp2Label) opp2Label.textContent = oppNames[1] || (UI.opponent + '2');
+        if (opp2Label) setGameNameLabel(opp2Label, oppNames[1] || (UI.opponent + '2'), (gs.opponent_admin_flags || [])[1]);
         const tmLabel = $('teammate-label');
-        if (tmLabel) tmLabel.textContent = gs.teammate_name || UI.teammate;
-        if (youLabel) youLabel.textContent = gs.your_name || UI.you;
+        if (tmLabel) setGameNameLabel(tmLabel, gs.teammate_name || UI.teammate, gs.teammate_is_admin_player);
+        if (youLabel) setGameNameLabel(youLabel, gs.your_name || UI.you, gs.your_is_admin_player);
     } else {
-        if (oppLabel) oppLabel.textContent = gs.opponent_name || UI.opponent;
-        if (youLabel) youLabel.textContent = gs.your_name || UI.you;
+        if (oppLabel) setGameNameLabel(oppLabel, gs.opponent_name || UI.opponent, gs.opponent_is_admin_player);
+        if (youLabel) setGameNameLabel(youLabel, gs.your_name || UI.you, gs.your_is_admin_player);
     }
     if (!!gs.solo && gs.phase === 'game_over') {
         const winner = gs.winner;
@@ -4131,10 +4265,22 @@ function renderTeammateHand(teammateData) {
     container.innerHTML = '';
     const hand = teammateData.hand || [];
     hand.forEach(card => {
-        const el = createCardElement(card, { small: true });
-        el.style.cursor = 'default';
-        container.appendChild(el);
+        container.appendChild(createTeammateHandChip(card));
     });
+}
+
+function createTeammateHandChip(cardDict) {
+    const cardDef = getCardDef(cardDict.def_id);
+    const typeColor = cardDef ? (CARD_TYPE_COLORS[cardDef.card_type] || COLORS.border_color) : COLORS.border_color;
+    const name = cardDef ? getCardName(cardDef) : (cardDict.def_id || '?');
+    const el = document.createElement('span');
+    el.className = 'teammate-hand-chip';
+    el.dataset.instanceId = cardDict.instance_id || '';
+    el.dataset.defId = cardDict.def_id || '';
+    el.textContent = name;
+    el.title = name;
+    el.style.borderColor = typeColor;
+    return el;
 }
 
 function renderPlayerHand(playerData) {
@@ -4403,6 +4549,7 @@ function renderLog(log, logStart = 0, logTotal = null) {
             el.className = 'log-entry log-chat';
             const nameSpan = document.createElement('span');
             nameSpan.className = 'chat-nick';
+            if (entry.isAdmin) nameSpan.classList.add('admin-name');
             nameSpan.textContent = `${entry.nick}: `;
             el.appendChild(nameSpan);
             el.appendChild(document.createTextNode(entry.text));
@@ -4425,13 +4572,14 @@ function renderLog(log, logStart = 0, logTotal = null) {
     if (wasAtBottom) content.scrollTop = content.scrollHeight;
 }
 
-function appendLobbyChat(nick, text) {
+function appendLobbyChat(nick, text, isAdmin = false) {
     const container = $('lobby-chat-log');
     if (!container) return;
     const el = document.createElement('div');
     el.className = 'chat-msg';
     const nameSpan = document.createElement('span');
     nameSpan.className = 'chat-nick';
+    if (isAdmin) nameSpan.classList.add('admin-name');
     nameSpan.textContent = `${nick}: `;
     el.appendChild(nameSpan);
     el.appendChild(document.createTextNode(text));
@@ -4439,8 +4587,8 @@ function appendLobbyChat(nick, text) {
     container.scrollTop = container.scrollHeight;
 }
 
-function appendGameChat(nick, text) {
-    gameTimelineEntries.push({ type: 'chat', nick, text });
+function appendGameChat(nick, text, isAdmin = false) {
+    gameTimelineEntries.push({ type: 'chat', nick, text, isAdmin });
     if (gameTimelineEntries.length > 200) gameTimelineEntries = gameTimelineEntries.slice(-200);
     renderLog((gameState && gameState.log) || [], (gameState && gameState.log_start) || 0, gameState && gameState.log_total);
 }
@@ -5461,6 +5609,11 @@ async function init() {
     if ($('btn-credit-github')) $('btn-credit-github').addEventListener('click', () => window.open('https://github.com/Stickerbug', '_blank', 'noopener'));
     $('settings-theme-select').addEventListener('change', (e) => { applyTheme(e.target.value); });
     $('settings-lang-select').addEventListener('change', (e) => { applyLang(e.target.value); });
+    const englishNameToggle = $('settings-show-english-names');
+    if (englishNameToggle) {
+        englishNameToggle.checked = showEnglishCardNames;
+        englishNameToggle.addEventListener('change', (e) => applyShowEnglishCardNames(e.target.checked));
+    }
     $('btn-lobby-back').addEventListener('click', () => {
         phase = 'login';
         manualDisconnect = true;

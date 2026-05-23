@@ -1705,6 +1705,15 @@ body {
   color: var(--text-primary);
 }
 
+.admin-name,
+.player-name-inline.admin-name,
+.lobby-player-row .player-name.admin-name,
+.lobby-team-row .player-name .admin-name,
+.team-info .admin-name {
+  color: #C0392B !important;
+  font-weight: 800;
+}
+
 .lobby-player-row .player-self {
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1778,6 +1787,11 @@ body {
 .chat-nick {
   color: var(--text-muted);
   font-weight: 600;
+}
+
+.chat-nick.admin-name {
+  color: #C0392B !important;
+  font-weight: 800;
 }
 
 .chat-msg {
@@ -2384,6 +2398,7 @@ body {
 }
 
 .card-disabled .card-name,
+.card-disabled .card-english-name,
 .card-disabled .card-effect,
 .card-disabled .card-type-label {
   color: var(--text-muted);
@@ -2549,6 +2564,20 @@ body {
 
 .card.guard .card-name {
   color: var(--guard);
+}
+
+.card-english-name {
+  margin-top: -1cqi;
+  margin-bottom: 1cqi;
+  padding: 0 2cqi 1cqi;
+  font-family: var(--font-main);
+  font-size: 9.2px;
+  font-weight: 600;
+  line-height: 1.05;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-type-label-wrap {
@@ -3218,6 +3247,11 @@ body {
 .log-entry.chat .chat-nick {
   color: #7a2f1f;
   font-weight: 700;
+}
+
+.log-entry.chat .chat-nick.admin-name {
+  color: #C0392B !important;
+  font-weight: 800;
 }
 
 .log-entry.info {
@@ -5015,6 +5049,30 @@ body {
   flex: 1;
 }
 
+.settings-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 8px;
+}
+
+.settings-check-row.hidden {
+  display: none;
+}
+
+.settings-check-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--magic);
+}
+
+.settings-check-row label {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
 .settings-lang-row select,
 .settings-theme-row select {
   padding: 6px 10px;
@@ -5819,10 +5877,38 @@ body {
     display: flex;
     flex-wrap: wrap;
     align-content: flex-start;
-    gap: 3px;
+    gap: 4px;
     padding: 2px 0;
     min-height: 0;
     overflow: hidden;
+}
+
+.teammate-hand-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    max-width: 96px;
+    min-height: 22px;
+    padding: 2px 7px;
+    border: 1px solid var(--border-light);
+    border-radius: 2px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-family: var(--font-card);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.12;
+    text-align: center;
+    cursor: default;
+    user-select: none;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+[data-theme="dark"] .teammate-hand-chip {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .teammate-hand-row .card {
@@ -5871,6 +5957,13 @@ body {
     padding: 0.3cqi 2cqi;
 }
 
+.card-small .card-english-name {
+    font-size: 7.2px;
+    margin-top: -2cqi;
+    margin-bottom: 0cqi;
+    padding: 0 1cqi 0.2cqi;
+}
+
 .card-small .card-effect {
     font-size: 7.2cqi;
     line-height: 1.18;
@@ -5907,6 +6000,13 @@ body {
     padding: 2cqi 1.8cqi;
 }
 
+.teammate-hand-row .card .card-english-name {
+    font-size: 6.6px;
+    margin-top: -2cqi;
+    margin-bottom: 0cqi;
+    padding: 0 1cqi 0.2cqi;
+}
+
 .teammate-hand-row .card .card-flags {
     gap: 1px;
     padding: 0.5cqi 1.5cqi 1.5cqi;
@@ -5918,6 +6018,16 @@ body {
     padding: 0.2cqi 0.8cqi;
     border-radius: 2px;
     min-height: 0;
+}
+
+@media (max-width: 768px) {
+    .teammate-hand-chip {
+        min-width: 36px;
+        max-width: 78px;
+        min-height: 20px;
+        padding: 1px 6px;
+        font-size: 10px;
+    }
 }
 
 .teammate-sidebar .bars-row {
