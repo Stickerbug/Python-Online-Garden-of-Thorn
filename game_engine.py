@@ -2115,7 +2115,25 @@ class GameEngine:
             tid = self._resolve_target(player_id, expr.get('target', 'self'))
             ps = self.players[tid]
             status = str(expr.get('status', ''))
-            return int({'poison': ps.poison, 'burn': ps.fire, 'vulnus': ps.vulnerable, 'toxic': ps.toxic, 'dodge': ps.dodge}.get(status, 0))
+            counts = {
+                'poison': ps.poison,
+                '中毒': ps.poison,
+                'burn': ps.fire,
+                'fire': ps.fire,
+                '灼烧': ps.fire,
+                'vulnus': ps.vulnerable,
+                'vulnerable': ps.vulnerable,
+                '易伤': ps.vulnerable,
+                'toxic': ps.toxic,
+                '淬毒': ps.toxic,
+                'dodge': ps.dodge,
+                '闪避': ps.dodge,
+                'equip_protection': ps.equipment_protection,
+                'equipment_protection': ps.equipment_protection,
+                '装备摧毁保护': ps.equipment_protection,
+                '装备保护': ps.equipment_protection,
+            }
+            return int(counts.get(status, 0))
         if ref == 'hand_size':
             tid = self._resolve_target(player_id, expr.get('target', 'self'))
             return len(self.players[tid].hand)
@@ -2186,6 +2204,27 @@ class GameEngine:
             status = str(cond.get('status', '')).strip()
             if status == '邪眼':
                 return bool(self.players[tid].nazar_active)
+            ps = self.players[tid]
+            status_map = {
+                'poison': ps.poison > 0,
+                '中毒': ps.poison > 0,
+                'burn': ps.fire > 0,
+                'fire': ps.fire > 0,
+                '灼烧': ps.fire > 0,
+                'vulnus': ps.vulnerable > 0,
+                'vulnerable': ps.vulnerable > 0,
+                '易伤': ps.vulnerable > 0,
+                'toxic': ps.toxic > 0,
+                '淬毒': ps.toxic > 0,
+                'dodge': ps.dodge > 0,
+                '闪避': ps.dodge > 0,
+                'equip_protection': ps.equipment_protection > 0,
+                'equipment_protection': ps.equipment_protection > 0,
+                '装备摧毁保护': ps.equipment_protection > 0,
+                '装备保护': ps.equipment_protection > 0,
+            }
+            if status in status_map:
+                return bool(status_map[status])
             return False
         if op == 'has_status':
             tid = self._resolve_target(player_id, cond.get('target', 'self'))
@@ -2197,6 +2236,10 @@ class GameEngine:
                 'vulnus': ps.vulnerable > 0,
                 'toxic': ps.toxic > 0,
                 'dodge': ps.dodge > 0,
+                'equip_protection': ps.equipment_protection > 0,
+                'equipment_protection': ps.equipment_protection > 0,
+                '装备摧毁保护': ps.equipment_protection > 0,
+                '装备保护': ps.equipment_protection > 0,
                 'invincible': bool(ps.invincible),
                 'untargetable': bool(ps.untargetable),
             }
@@ -2366,6 +2409,18 @@ class GameEngine:
             if status == '邪眼':
                 ps.nazar_active = True
                 ps.nazar_big_hits = max(0, ps.nazar_big_hits + amount)
+            elif status in ('poison', '中毒'):
+                ps.poison += amount
+            elif status in ('burn', 'fire', '灼烧'):
+                ps.fire += amount
+            elif status in ('vulnus', 'vulnerable', '易伤'):
+                ps.vulnerable += amount
+            elif status in ('toxic', '淬毒'):
+                ps.toxic += amount
+            elif status in ('dodge', '闪避'):
+                ps.dodge += amount
+            elif status in ('equip_protection', 'equipment_protection', '装备摧毁保护', '装备保护'):
+                ps.equipment_protection += amount
             self.log_msg(log or f"{self.pn(tid)}获得状态[{status}] {amount}")
 
     def _atomic_status_remove_named(self, player_id, card, params, log, choice, context):
@@ -2375,6 +2430,18 @@ class GameEngine:
             if status == '邪眼':
                 ps.nazar_active = False
                 ps.nazar_big_hits = 0
+            elif status in ('poison', '中毒'):
+                ps.poison = 0
+            elif status in ('burn', 'fire', '灼烧'):
+                ps.fire = 0
+            elif status in ('vulnus', 'vulnerable', '易伤'):
+                ps.vulnerable = 0
+            elif status in ('toxic', '淬毒'):
+                ps.toxic = 0
+            elif status in ('dodge', '闪避'):
+                ps.dodge = 0
+            elif status in ('equip_protection', 'equipment_protection', '装备摧毁保护', '装备保护'):
+                ps.equipment_protection = 0
             self.log_msg(log or f"{self.pn(tid)}移除状态[{status}]")
 
     def _atomic_batch_status_add(self, player_id, card, params, log, choice, context):
@@ -3554,6 +3621,8 @@ class GameEngine:
                 ps.toxic += amount
             elif status in ('dodge', '闪避'):
                 ps.dodge += amount
+            elif status in ('equip_protection', 'equipment_protection', '装备摧毁保护', '装备保护'):
+                ps.equipment_protection += amount
             elif status in ('邪眼', 'Nazar'):
                 ps.nazar_active = True
                 ps.nazar_big_hits = max(0, ps.nazar_big_hits + amount)
@@ -3572,6 +3641,8 @@ class GameEngine:
                 ps.toxic = 0
             elif status in ('dodge', '闪避'):
                 ps.dodge = 0
+            elif status in ('equip_protection', 'equipment_protection', '装备摧毁保护', '装备保护'):
+                ps.equipment_protection = 0
             elif status in ('邪眼', 'Nazar'):
                 ps.nazar_active = False
                 ps.nazar_big_hits = 0
