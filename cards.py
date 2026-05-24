@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Set, Optional, Any
 import random
 import copy
 
@@ -21,6 +21,7 @@ class CardDef:
     trigger_effect_text: str = ''
     response_trigger: str = ''
     effects: List[dict] = field(default_factory=list)
+    scripts: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def display_name(self) -> str:

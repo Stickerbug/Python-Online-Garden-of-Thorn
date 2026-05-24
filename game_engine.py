@@ -89,7 +89,11 @@ class PlayerState:
         self.exile: List[CardInstance] = []
         self.equipment: List[EquipmentInstance] = []
         self.cards_played_this_turn: Dict[str, int] = {}
-        self.custom_vars: Dict[str, int] = {}
+        self.custom_vars: Dict[str, int] = {
+            '\u5496\u5561\u9996\u6b21\u4f7f\u7528': 1,
+            '\u4e09\u89d2\u5f62\u5c42\u6570': 0,
+            '\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54': 0,
+        }
         self.negate_next_skill: bool = False
         self.is_first_player: bool = False
 
@@ -192,6 +196,9 @@ class PlayerState:
             ps.cards_played_this_turn = d['cards_played_this_turn']
         if 'custom_vars' in d:
             ps.custom_vars = d.get('custom_vars', {})
+        ps.custom_vars.setdefault('\u5496\u5561\u9996\u6b21\u4f7f\u7528', 1 if ps.coffee_first_use else 0)
+        ps.custom_vars.setdefault('\u4e09\u89d2\u5f62\u5c42\u6570', int(ps.triangle_stacks))
+        ps.custom_vars.setdefault('\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54', int(ps.magic_battery_m_this_turn))
         return ps
 
     def find_hand_card(self, instance_id: int) -> Optional[CardInstance]:
@@ -394,6 +401,15 @@ class GameEngine:
         if rid == -1:
             return [0, 1]
         return [rid]
+
+    def _find_equipment_for_card(self, owner_id: int, card: Optional[CardInstance]):
+        if card is None or owner_id < 0 or owner_id >= len(self.players):
+            return None
+        instance_id = getattr(card, 'instance_id', None)
+        for eq in self.players[owner_id].equipment:
+            if getattr(eq.card_instance, 'instance_id', None) == instance_id:
+                return eq
+        return None
 
     def _match_card_selector(self, player_id, cards, selector, card=None):
         if not isinstance(selector, dict):
@@ -690,6 +706,8 @@ class GameEngine:
             ps = self.players[i]
             ps.cards_played_this_turn = {}
             ps.magic_battery_m_this_turn = 0
+            ps.coffee_first_use = True
+            ps.custom_vars['\u5496\u5561\u9996\u6b21\u4f7f\u7528'] = 1
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         self._start_player_turn(self.first_player)
 
@@ -965,7 +983,7 @@ class GameEngine:
     def can_play_card(self, player_id: int, card: CardInstance) -> Tuple[bool, str]:
         ps = self.players[player_id]
         card_def = card.card_def
-        if card_def.card_type == 'guard':
+        if card_def.card_type == 'guard' and not self._has_script_entry(card_def, 'play') and not card_def.effects:
             return False, "反制牌只能通过响应机制使用"
         if self.phase != 'action' or self.current_player != player_id:
             return False, "不是你的回合"
@@ -1880,9 +1898,11 @@ class GameEngine:
 
     def _atomic_fission(self, player_id, card, params, log, choice, context):
         card_type = params.get('card_type', 'thorn')
-        times = params.get('times', 1)
+        times = self._eval_int(player_id, params.get('times', 1), card, 1)
         ps = self.players[player_id]
-        targets = [c for c in ps.hand if c.card_def.card_type == card_type and c is not card]
+        target = ps.find_hand_card(choice.get('target_instance_id')) if isinstance(choice, dict) and 'target_instance_id' in choice else None
+        targets = [target] if target is not None else [c for c in ps.hand if c.card_def.card_type == card_type and c is not card]
+        targets = [c for c in targets if c and c.card_def.card_type == card_type]
         if targets:
             t = targets[0]
             t.fission_level = max(1, int(getattr(t, 'fission_level', 1))) + times
@@ -1892,6 +1912,7 @@ class GameEngine:
             self.log_msg(log or f"{self.pn(player_id)}没有可裂变的{card_type}牌")
 
     def _atomic_multiply_next_damage(self, player_id, card, params, log, choice, context):
+        multiplier = self._eval_int(player_id, params.get('multiplier', 1), card, 1)
         ps = self.players[player_id]
         ps.damage_multiplier = getattr(ps, 'damage_multiplier', 1.0) * multiplier
         self.log_msg(log or f"{self.pn(player_id)}下次伤害x{multiplier}")
@@ -1909,12 +1930,20 @@ class GameEngine:
         self.log_msg(log or f"{self.pn(player_id)}下次费用+{amount}")
 
     def _atomic_fusion(self, player_id, card, params, log, choice, context):
-        count = params.get('count', 2)
+        count = self._eval_int(player_id, params.get('count', params.get('min_count', 2)), card, 2)
+        max_count = self._eval_int(player_id, params.get('max_count', count), card, count)
         card_type = params.get('card_type', 'thorn')
         ps = self.players[player_id]
-        same_type = [c for c in ps.hand if c.card_def.card_type == card_type and c is not card]
-        if len(same_type) >= count:
-            selected = same_type[:count]
+        if isinstance(choice, dict) and 'target_instance_ids' in choice:
+            selected = [ps.find_hand_card(i) for i in choice.get('target_instance_ids', [])]
+            selected = [c for c in selected if c is not None]
+        else:
+            selected = [c for c in ps.hand if c.card_def.card_type == card_type and c is not card][:max_count]
+        if len(selected) >= count:
+            selected = selected[:max_count]
+            if any(c.card_def.card_type != card_type for c in selected) or len({c.def_id for c in selected}) != 1:
+                self.log_msg(log or f"{self.pn(player_id)}聚变目标无效")
+                return
             keep = selected[0]
             keep.fusion_level = sum(max(1, int(getattr(c, 'fusion_level', 1))) for c in selected)
             keep.fission_level = max(max(1, int(getattr(c, 'fission_level', 1))) for c in selected)
@@ -2779,6 +2808,865 @@ class GameEngine:
 
     def get_enemy_equipment(self, player_id: int) -> List[EquipmentInstance]:
         return self.players[1 - player_id].equipment
+
+    EVENT_EFFECT_TYPES = {
+        'on_owner_turn_start',
+        'on_enemy_turn_start',
+        'on_any_turn_start',
+        'on_damage_taken',
+        'on_equipment_trigger',
+    }
+
+    _base_eval_expr = _eval_expr
+    _base_eval_condition = _eval_condition
+    _base_resolve_target = _resolve_target
+    _base_resolve_targets = _resolve_targets
+    _base_card_needs_choice = _card_needs_choice
+    _base_get_choice_type = _get_choice_type
+
+    SCRIPT_ENTRY_ALIASES = {
+        'play': ('onPlay', 'play', 'on_play'),
+        'owner_turn_start': ('onOwnerTurnStart', 'owner_turn_start', 'on_owner_turn_start'),
+        'enemy_turn_start': ('onEnemyTurnStart', 'enemy_turn_start', 'on_enemy_turn_start'),
+        'any_turn_start': ('onAnyTurnStart', 'any_turn_start', 'on_any_turn_start'),
+        'damage_taken': ('onDamageTaken', 'damage_taken', 'on_damage_taken'),
+        'equipment_trigger': ('onEquipmentTrigger', 'equipment_trigger', 'on_equipment_trigger'),
+        'response': ('onResponse', 'response', 'on_response'),
+    }
+
+    CHOICE_EFFECT_TYPES = {'request_target', 'request_card', 'request_confirm'}
+
+    def _script_effects_from(self, script):
+        if isinstance(script, dict):
+            effects = script.get('effects', [])
+            return effects if isinstance(effects, list) else []
+        return script if isinstance(script, list) else []
+
+    def _has_script_entry(self, card_def, entry: str) -> bool:
+        scripts = getattr(card_def, 'scripts', None) or {}
+        if not isinstance(scripts, dict):
+            return False
+        for key in self.SCRIPT_ENTRY_ALIASES.get(entry, (entry,)):
+            if key in scripts:
+                return True
+        return False
+
+    def _get_script_effects(self, card_def, entry: str):
+        scripts = getattr(card_def, 'scripts', None) or {}
+        if not isinstance(scripts, dict):
+            return []
+        for key in self.SCRIPT_ENTRY_ALIASES.get(entry, (entry,)):
+            if key in scripts:
+                return self._script_effects_from(scripts.get(key))
+        return []
+
+    def _card_has_script(self, card_def) -> bool:
+        scripts = getattr(card_def, 'scripts', None) or {}
+        return isinstance(scripts, dict) and bool(scripts)
+
+    def _has_card_event(self, card_def, event_name: str) -> bool:
+        if self._has_script_entry(card_def, event_name):
+            return True
+        event_type = f'on_{event_name}'
+        return any(isinstance(effect, dict) and effect.get('type') == event_type for effect in (card_def.effects or []))
+
+    def _play_effects_for_card(self, card: CardInstance):
+        if self._card_has_script(card.card_def):
+            return self._get_script_effects(card.card_def, 'play')
+        return card.card_def.effects or []
+
+    def _walk_choice_effects(self, effects):
+        for effect in effects or []:
+            if not isinstance(effect, dict):
+                continue
+            effect_type = effect.get('type', '')
+            if effect_type in self.EVENT_EFFECT_TYPES:
+                continue
+            yield effect
+            params = effect.get('params', {}) or {}
+            for key in ('then', 'else', 'body', 'effects', 'a', 'b'):
+                nested = params.get(key)
+                if isinstance(nested, list):
+                    yield from self._walk_choice_effects(nested)
+
+    def _get_choice_request(self, card: CardInstance):
+        for effect in self._walk_choice_effects(self._play_effects_for_card(card)):
+            effect_type = effect.get('type', '')
+            if effect_type in self.CHOICE_EFFECT_TYPES:
+                return effect
+            if effect_type in ('discard_choice_then_draw', 'destroy_equipment_choice_or_first',
+                               'choose_from_deck', 'choose_from_discard', 'steal_enemy_card'):
+                return effect
+        return None
+
+    def _selected_choice_target(self, default=-1):
+        choice = getattr(self, '_active_choice', None) or {}
+        if not isinstance(choice, dict):
+            return default
+        for key in ('target_player', 'target_player_id', 'target_id'):
+            if key in choice:
+                try:
+                    return int(choice.get(key))
+                except Exception:
+                    return default
+        return default
+
+    def _resolve_target(self, player_id, target_str):
+        context = getattr(self, '_active_effect_context', {}) or {}
+        if isinstance(target_str, int):
+            return target_str
+        if target_str in ('choice_target', 'selected_target', 'chosen_target'):
+            target_id = self._selected_choice_target(player_id)
+            return target_id if 0 <= target_id < len(self.players) else player_id
+        if target_str in ('event_target', 'target'):
+            return int(context.get('target_id', player_id))
+        if target_str in ('event_source', 'source', 'last_actor'):
+            return int(context.get('source_id', player_id))
+        return self._base_resolve_target(player_id, target_str)
+
+    def _resolve_targets(self, player_id, target_str):
+        if target_str in ('choice_target', 'selected_target', 'chosen_target', 'event_target', 'target', 'event_source', 'source', 'last_actor'):
+            tid = self._resolve_target(player_id, target_str)
+            return [] if tid < 0 else [tid]
+        return self._base_resolve_targets(player_id, target_str)
+
+    def _run_effect_list(self, player_id, card, effects, choice, context):
+        prev_context = getattr(self, '_active_effect_context', None)
+        prev_choice = getattr(self, '_active_choice', None)
+        self._active_effect_context = context or {}
+        if isinstance(choice, dict):
+            self._active_choice = choice
+        try:
+            for eff in effects or []:
+                et = eff if isinstance(eff, str) else eff.get('type', '')
+                pm = {} if isinstance(eff, str) else eff.get('params', {})
+                lg = None if isinstance(eff, str) else eff.get('log')
+                rt = self._EFFECT_ALIASES.get(et, et)
+                fn = getattr(self, f'_atomic_{rt}', None)
+                if callable(fn):
+                    fn(player_id, card, pm, lg, choice, context)
+                elif lg:
+                    self.log_msg(lg)
+                else:
+                    self.log_msg(f"未实现效果: {et}")
+        finally:
+            self._active_effect_context = prev_context
+            self._active_choice = prev_choice
+
+    def _eval_expr(self, player_id, expr, card=None):
+        if isinstance(expr, dict):
+            ref = expr.get('ref')
+            if ref == 'equip_turns':
+                eq = self._find_equipment_for_card(player_id, card)
+                return int(eq.turns_equipped) if eq is not None else int(getattr(card, 'equip_turns', 0) if card is not None else 0)
+            if ref == 'durability':
+                return int(getattr(card, 'durability', 0)) if card is not None else 0
+            if ref == 'equipment_count_named':
+                tid = self._resolve_target(player_id, expr.get('target', 'self'))
+                card_id = str(expr.get('card_id', '') or '')
+                if tid < 0:
+                    ids = range(len(self.players))
+                else:
+                    ids = [tid]
+                return sum(1 for pid in ids for eq in self.players[pid].equipment if eq.def_id == card_id)
+        return self._base_eval_expr(player_id, expr, card)
+
+    def _eval_condition(self, player_id, cond, card=None):
+        if isinstance(cond, dict) and cond.get('op') == 'equip_turns':
+            a = self._eval_expr(player_id, {'ref': 'equip_turns'}, card)
+            b = int(self._eval_expr(player_id, cond.get('value', 0), card))
+            cmp = cond.get('operator', '=')
+            return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
+        return self._base_eval_condition(player_id, cond, card)
+
+    def _eval_int(self, player_id, value, card=None, default=0):
+        try:
+            return int(self._eval_expr(player_id, value, card))
+        except Exception:
+            try:
+                return int(value)
+            except Exception:
+                return default
+
+    def _card_needs_choice(self, card: CardInstance) -> bool:
+        if self._base_card_needs_choice(card):
+            return True
+        return self._get_choice_request(card) is not None
+
+    def _get_choice_type(self, card: CardInstance) -> str:
+        base = self._base_get_choice_type(card)
+        if base:
+            return base
+        effect = self._get_choice_request(card)
+        if not effect:
+            return ''
+        effect_type = effect.get('type', '')
+        params = effect.get('params', {}) or {}
+        if effect_type == 'request_target':
+            return 'choose_target'
+        if effect_type == 'request_card':
+            return params.get('choice_type') or params.get('zone') or 'choose_card_from_hand'
+        if effect_type == 'request_confirm':
+            return 'confirm'
+        if effect_type == 'discard_choice_then_draw':
+            return 'choose_card_to_discard'
+        if effect_type == 'destroy_equipment_choice_or_first':
+            return 'choose_enemy_equipment'
+        if effect_type == 'choose_from_deck':
+            return 'choose_from_deck'
+        if effect_type == 'choose_from_discard':
+            return 'choose_from_discard'
+        if effect_type == 'steal_enemy_card':
+            return 'choose_from_enemy_hand'
+        return ''
+
+    def _process_atomic_effects(self, player_id: int, card: CardInstance, choice: Optional[dict], context: str):
+        effects = self._play_effects_for_card(card) if context == 'play' else card.card_def.effects
+        prev_choice = getattr(self, '_active_choice', None)
+        if isinstance(choice, dict):
+            self._active_choice = choice
+        try:
+            for effect in effects:
+                if isinstance(effect, str):
+                    eff_type = effect
+                    params = {}
+                    log = ''
+                else:
+                    eff_type = effect.get('type', '')
+                    params = effect.get('params', {})
+                    log = effect.get('log', '')
+                if context == 'play' and eff_type in self.EVENT_EFFECT_TYPES:
+                    continue
+                if eff_type in self.PASSIVE_EFFECT_TYPES and context == 'play':
+                    if log:
+                        self.log_msg(log)
+                    continue
+                resolved_type = self._EFFECT_ALIASES.get(eff_type, eff_type)
+                handler = getattr(self, f'_atomic_{resolved_type}', None)
+                if handler:
+                    handler(player_id, card, params, log, choice, context)
+                elif log:
+                    self.log_msg(log)
+                else:
+                    self.log_msg(f"未知效果: {eff_type}")
+        finally:
+            self._active_choice = prev_choice
+
+    def _apply_card_effect(self, player_id: int, card: CardInstance, choice: Optional[dict] = None):
+        if self._card_has_script(card.card_def) or card.card_def.effects:
+            self._process_atomic_effects(player_id, card, choice, 'play')
+            return
+        method_name = f'_effect_{card.def_id.lower()}'
+        if hasattr(self, method_name):
+            getattr(self, method_name)(player_id, card, choice)
+        else:
+            self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
+
+    def _run_card_event(self, owner_id: int, card: CardInstance, event_name: str,
+                        choice: Optional[dict] = None, extra_context: Optional[dict] = None) -> bool:
+        if self._has_script_entry(card.card_def, event_name):
+            effects = self._get_script_effects(card.card_def, event_name)
+            if not effects:
+                return False
+            self._run_effect_list(
+                owner_id,
+                card,
+                effects,
+                choice,
+                {'event': event_name, **(extra_context or {})},
+            )
+            return True
+        event_type = f'on_{event_name}'
+        ran = False
+        for effect in card.card_def.effects or []:
+            if not isinstance(effect, dict) or effect.get('type') != event_type:
+                continue
+            params = effect.get('params', {}) or {}
+            if event_type == 'on_equipment_trigger' and params.get('destroy_self'):
+                eq = self._find_equipment_for_card(owner_id, card)
+                if eq is not None and not self._destroy_equipment(owner_id, eq):
+                    ran = True
+                    continue
+            self._run_effect_list(
+                owner_id,
+                card,
+                params.get('effects', []),
+                choice,
+                {'event': event_name, **(extra_context or {})},
+            )
+            ran = True
+        return ran
+
+    def _apply_turn_start_effects(self, player_id: int):
+        ps = self.players[player_id]
+        opp_id = 1 - player_id
+        opp = self.players[opp_id]
+        self._antenna_reveal[player_id] = None
+        if ps.shovel_active:
+            ps.shovel_active = False
+            ps.untargetable = False
+            self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
+        if self.round_num > 1:
+            draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction)
+            ps.draw_cards(draw_count)
+            self.log_msg(f"{self.pn(player_id)}抽{draw_count}张牌")
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in list(owner_state.equipment):
+                if self._has_card_event(eq.card_def, 'any_turn_start'):
+                    self._run_card_event(owner_id, eq.card_instance, 'any_turn_start', None,
+                                         {'source_id': owner_id, 'target_id': player_id})
+        for eq in list(opp.equipment):
+            if self._has_card_event(eq.card_def, 'enemy_turn_start') and self._run_card_event(
+                    opp_id, eq.card_instance, 'enemy_turn_start', None,
+                    {'source_id': opp_id, 'target_id': player_id}):
+                continue
+            if eq.def_id == 'Corruption' and not eq.corruption_active:
+                eq.corruption_active = True
+                self.log_msg(f"{self.pn(opp_id)}的腐化效果激活")
+        if ps.poison > 0:
+            dmg = ps.poison
+            self._deal_direct_damage(player_id, dmg, '中毒')
+            if self.game_over or ps.health <= 0:
+                return
+            ps.poison = ps.poison // 2
+        if ps.fire > 0:
+            self._deal_direct_damage(player_id, ps.fire, '灼烧')
+            if self.game_over or ps.health <= 0:
+                return
+        if self.round_num > 1:
+            elixir_recovery = ELIXIR_RECOVERY
+            for eq in list(opp.equipment):
+                if eq.card_def.effects:
+                    for effect in eq.card_def.effects:
+                        if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
+                            elixir_recovery += self._eval_int(opp_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
+                    continue
+                if eq.def_id == 'Pincer':
+                    elixir_recovery -= 1
+            elixir_recovery = max(0, elixir_recovery - ps.enemy_e_reduction)
+            ps.gain_elixir(elixir_recovery)
+            self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
+        if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
+            draw_needed = HAND_LIMIT - len(ps.hand)
+            if draw_needed > 0:
+                ps.draw_cards(draw_needed)
+                self.log_msg(f"{self.pn(player_id)}抽{draw_needed}张至手牌满")
+        if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
+            ps.gain_elixir(1)
+            self.log_msg(f"{self.pn(player_id)}额外+1E")
+        for eq in list(ps.equipment):
+            eq.turns_equipped += 1
+            if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
+                    player_id, eq.card_instance, 'owner_turn_start', None,
+                    {'source_id': player_id, 'target_id': player_id}):
+                continue
+            if eq.def_id == 'Leaf':
+                ps.heal(2)
+                self.log_msg(f"{self.pn(player_id)}的叶子效果：+2H")
+            elif eq.def_id == 'Yucca':
+                ps.heal(5)
+                self.log_msg(f"{self.pn(player_id)}的丝兰效果：+5H")
+            elif eq.def_id == 'MagicLeaf':
+                ps.gain_magic(1)
+                self.log_msg(f"{self.pn(player_id)}的魔法叶效果：+1M")
+            elif eq.def_id == 'MagicYucca':
+                ps.gain_magic(2)
+                self.log_msg(f"{self.pn(player_id)}的魔法丝兰效果：+2M")
+            elif eq.def_id == 'Powder':
+                ps.gain_elixir(2)
+                self.log_msg(f"{self.pn(player_id)}的粉末效果：+2E")
+            elif eq.def_id == 'GoldenLeaf':
+                ps.draw_cards(1)
+                self.log_msg(f"{self.pn(player_id)}的黄金叶效果：多抽1张牌")
+
+    def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
+                           is_battery: bool = False, is_precision: bool = False) -> int:
+        ps = self.players[target_id]
+        attacker_id = 1 - target_id
+        if ps.untargetable and not is_battery:
+            self.log_msg(f"{self.pn(target_id)}无法被攻击选中")
+            return 0
+        total_dealt = 0
+        for _ in range(hits):
+            if ps.dodge > 0:
+                ps.dodge -= 1
+                if is_precision:
+                    self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗")
+                else:
+                    self.log_msg(f"{self.pn(target_id)}闪避了攻击")
+                    continue
+            if ps.invincible:
+                self.log_msg(f"{self.pn(target_id)}无敌，免疫伤害")
+                continue
+            if amount <= 0 and hits <= 1:
+                break
+            dmg = amount
+            if self.halve_next_attack:
+                dmg = math.ceil(dmg / 2)
+            corruption_count = self._get_corruption_count()
+            if corruption_count > 0:
+                dmg *= (2 ** corruption_count)
+            if ps.nazar_active:
+                original_dmg = dmg
+                dmg = max(1, dmg - 9)
+                if original_dmg >= 10:
+                    ps.nazar_big_hits += 1
+                    if ps.nazar_big_hits >= 2:
+                        ps.nazar_active = False
+                        ps.nazar_big_hits = 0
+            dmg = max(0, dmg - ps.armor)
+            if ps.sponge_active and dmg > 0:
+                ps.poison += dmg // 2
+                dmg = 0
+            ps.health -= dmg
+            total_dealt += dmg
+            self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
+            if ps.toxic > 0:
+                ps.poison += ps.toxic
+            self._check_yggdrasil(target_id)
+            if self.game_over:
+                break
+            if dmg > 0 and not is_battery:
+                for eq in list(ps.equipment):
+                    if self._has_card_event(eq.card_def, 'damage_taken') and self._run_card_event(
+                            target_id, eq.card_instance, 'damage_taken', None,
+                            {'source_id': attacker_id, 'target_id': target_id, 'damage': dmg}):
+                        continue
+                    if eq.def_id == 'Battery':
+                        self._deal_direct_damage(attacker_id, 3, '电池')
+                        self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3D")
+                    elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
+                        ps.gain_magic(1)
+                        ps.magic_battery_m_this_turn += 1
+                        self.log_msg(f"{self.pn(target_id)}的魔法电池效果：+1M")
+            if self.game_over:
+                break
+            self._check_game_over()
+            if ps.health <= 0:
+                break
+        return total_dealt
+
+    def _execute_card_effect(self, player_id: int, card: CardInstance, choice: Optional[dict] = None) -> dict:
+        ps = self.players[player_id]
+        result = {'success': True, 'card': card.to_dict()}
+        if card.card_type == 'thorn' and (card.fission_level > 1 or card.fusion_level > 1):
+            self.log_msg(f"[特效] {card.name_cn} 聚变={card.fusion_level} 裂变={card.fission_level}")
+        if self.negated_card and card.card_type == 'bloom':
+            self.negated_card = False
+            if 'exile' in card.flags:
+                ps.exile.append(card)
+            else:
+                self._discard_card(ps, card)
+            return result
+        self.negated_card = False
+        needs_choice = self._card_needs_choice(card)
+        if needs_choice and choice is None:
+            choice_request = self._get_choice_request(card)
+            choice_params = (choice_request.get('params', {}) if isinstance(choice_request, dict) else {}) or {}
+            choice_type = self._get_choice_type(card)
+            self.pending_choice = {
+                'card': card.to_dict(),
+                'player_id': player_id,
+                'choice_type': choice_type,
+                'choice_params': choice_params,
+            }
+            ps.hand.insert(0, card)
+            ps.elixir += card.cost_e + ps.cards_played_this_turn.get(card.def_id, 1) - 1
+            ps.magic += card.cost_m
+            ps.cards_played_this_turn[card.def_id] = max(0, ps.cards_played_this_turn.get(card.def_id, 1) - 1)
+            return {
+                'success': True,
+                'needs_choice': True,
+                'choice_type': choice_type,
+                'choice_params': choice_params,
+                'card': card.to_dict(),
+            }
+        if card.card_type == 'thorn':
+            fission_level = max(1, int(getattr(card, 'fission_level', 1)))
+            for hit_idx in range(fission_level):
+                if self.game_over:
+                    break
+                card.fission_hit = hit_idx
+                self._apply_card_effect(player_id, card, choice if hit_idx == 0 else None)
+            card.fission_hit = 0
+        else:
+            self._apply_card_effect(player_id, card, choice)
+        placed_as_equipment = bool(getattr(card, '_placed_as_equipment', False))
+        script_controls_play = self._card_has_script(card.card_def)
+        equip_owner_id = int(getattr(card, '_placed_as_equipment_owner', player_id))
+        if equip_owner_id < 0 or equip_owner_id >= len(self.players):
+            equip_owner_id = player_id
+        equip_owner = self.players[equip_owner_id]
+        if (card.card_type == 'root' and not script_controls_play) or placed_as_equipment:
+            eq = self._find_equipment_for_card(equip_owner_id, card)
+            if eq is None:
+                eq = EquipmentInstance(card, equip_owner_id)
+                if eq.def_id == 'Disc' and not card.card_def.effects:
+                    has_active_disc = any(e.def_id == 'Disc' for e in equip_owner.equipment)
+                    if not has_active_disc:
+                        equip_owner.armor += 2
+                    else:
+                        self.log_msg("圆盘不可叠加，护甲效果保持为2点")
+                equip_owner.equipment.append(eq)
+                self.log_msg(f"{self.pn(equip_owner_id)}装备了{card.name_cn}")
+            if hasattr(card, '_placed_as_equipment'):
+                delattr(card, '_placed_as_equipment')
+            if hasattr(card, '_placed_as_equipment_owner'):
+                delattr(card, '_placed_as_equipment_owner')
+        elif 'exile' in card.flags:
+            ps.exile.append(card)
+        else:
+            card.mimic_discount = 0
+            self._discard_card(ps, card)
+        self._check_game_over()
+        return result
+
+    def _atomic_place_as_equip(self, player_id, card, params, log, choice, context):
+        source = self.players[player_id]
+        owner_expr = params.get('owner', params.get('equip_owner'))
+        owner_id = self._resolve_target(player_id, owner_expr) if owner_expr is not None else player_id
+        if owner_id < 0 or owner_id >= len(self.players):
+            owner_id = player_id
+        owner = self.players[owner_id]
+        if card in source.hand:
+            source.hand.remove(card)
+        if self._find_equipment_for_card(owner_id, card) is None:
+            card.durability = card.card_def.durability if getattr(card.card_def, 'durability', 0) > 0 else 3
+            eq = EquipmentInstance(card, owner_id)
+            if 'effect_target' in params:
+                effect_target = self._resolve_target(player_id, params.get('effect_target'))
+                if 0 <= effect_target < len(self.players):
+                    eq.effect_target = effect_target
+            owner.equipment.append(eq)
+            self.log_msg(log or f"{self.pn(owner_id)}装备了{card.name_cn}")
+        card._placed_as_equipment = True
+        card._placed_as_equipment_owner = owner_id
+
+    def _atomic_request_target(self, player_id, card, params, log, choice, context):
+        return None
+
+    def _atomic_request_card(self, player_id, card, params, log, choice, context):
+        return None
+
+    def _atomic_request_confirm(self, player_id, card, params, log, choice, context):
+        return None
+
+    def _atomic_destroy_self_equipment(self, player_id, card, params, log, choice, context):
+        eq = self._find_equipment_for_card(player_id, card)
+        if eq is not None:
+            self._destroy_equipment(player_id, eq)
+
+    def _atomic_deal_damage(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        amount = self._eval_int(player_id, params.get('amount', 6), card, 6)
+        hits = max(1, self._eval_int(player_id, params.get('hits', 1), card, 1))
+        is_precision = bool(params.get('is_precision', False))
+        amount = self._modified_attack_damage(amount, card)
+        self._incoming_damage_hint[target_id] = int(amount)
+        try:
+            dealt = self.deal_attack_damage(target_id, amount, hits, is_precision=is_precision, attacker_id=player_id)
+        except TypeError:
+            dealt = self.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
+        self._last_damage_value[target_id] = int(dealt)
+        self.log_msg(log or f"{self.pn(player_id)}对{self.pn(target_id)}造成{dealt}伤害")
+
+    def _atomic_direct_damage(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        self._deal_direct_damage(target_id, amount, str(params.get('source', card.name_cn if card else '效果')))
+
+    def _atomic_lifesteal_damage(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        amount = self._eval_int(player_id, params.get('amount', 8), card, 8)
+        heal = self._eval_int(player_id, params.get('heal', 4), card, 4)
+        try:
+            dealt = self.deal_attack_damage(target_id, amount, attacker_id=player_id)
+        except TypeError:
+            dealt = self.deal_attack_damage(target_id, amount)
+        self._last_damage_value[target_id] = int(dealt)
+        if dealt > 0:
+            self.players[player_id].heal(heal)
+            self.log_msg(log or f"{self.pn(player_id)}回复{heal}H")
+
+    def _atomic_triangle_damage(self, player_id, card, params, log, choice, context):
+        base = self._eval_int(player_id, params.get('base', 6), card, 6)
+        per_stack = self._eval_int(player_id, params.get('per_stack', 3), card, 3)
+        stack_name = str(params.get('stack_name', '三角形层数'))
+        current_stack = int(self.players[player_id].custom_vars.get(stack_name, getattr(self.players[player_id], 'triangle_stacks', 0)))
+        amount = base + per_stack * current_stack
+        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        try:
+            dealt = self.deal_attack_damage(target_id, amount, attacker_id=player_id)
+        except TypeError:
+            dealt = self.deal_attack_damage(target_id, amount)
+        self._last_damage_value[target_id] = int(dealt)
+        if dealt > 0:
+            max_stacks = self._eval_int(player_id, params.get('max_stacks', 4), card, 4)
+            new_stack = min(max_stacks, current_stack + 1)
+            self.players[player_id].custom_vars[stack_name] = new_stack
+            if stack_name == '三角形层数':
+                self.players[player_id].triangle_stacks = new_stack
+
+    def _atomic_discard_choice_then_draw(self, player_id, card, params, log, choice, context):
+        ps = self.players[player_id]
+        if choice and 'target_instance_id' in choice:
+            target = ps.find_hand_card(choice['target_instance_id'])
+            if target:
+                ps.hand.remove(target)
+                ps.discard.append(target)
+        ps.draw_cards(1)
+        self.log_msg(log or f"{self.pn(player_id)}抽1张牌")
+
+    def _atomic_coffee_gain_e(self, player_id, card, params, log, choice, context):
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        first_bonus = self._eval_int(player_id, params.get('first_bonus', 1), card, 1)
+        bonus = first_bonus if getattr(self.players[player_id], 'coffee_first_use', False) else 0
+        self.players[player_id].gain_elixir(amount + bonus)
+        self.players[player_id].coffee_first_use = False
+        self.log_msg(log or f"{self.pn(player_id)}获得{amount + bonus}E")
+
+    def _atomic_copy_choice_with_discount(self, player_id, card, params, log, choice, context):
+        ps = self.players[player_id]
+        if not (choice and 'target_instance_id' in choice):
+            return
+        target = ps.find_hand_card(choice['target_instance_id'])
+        if target is None or len(ps.hand) >= HAND_LIMIT:
+            return
+        copy_card = target.copy()
+        copy_card.mimic_discount = self._eval_int(player_id, params.get('discount_e', 1), card, 1)
+        ps.hand.append(copy_card)
+        self.log_msg(log or f"{self.pn(player_id)}复制了{target.name_cn}")
+
+    def _atomic_destroy_equipment_choice_or_first(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        if target_id < 0:
+            return
+        ts = self.players[target_id]
+        eq = None
+        if choice and 'target_instance_id' in choice:
+            eq = ts.find_equipment(choice['target_instance_id'])
+        if eq is None and ts.equipment:
+            eq = ts.equipment[0]
+        if eq is not None:
+            self._destroy_equipment(target_id, eq)
+
+    def _atomic_destroy_random_equip(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        if target_id < 0:
+            return
+        pool = [eq for eq in self.players[target_id].equipment if 'indestructible' not in eq.card_instance.flags]
+        if not pool:
+            return
+        eq = random.choice(pool)
+        self._destroy_equipment(target_id, eq)
+
+    def _atomic_destroy_all_equip(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        if target_id < 0:
+            return
+        for eq in list(self.players[target_id].equipment):
+            if 'indestructible' not in eq.card_instance.flags:
+                self._destroy_equipment(target_id, eq)
+
+    def _atomic_destroy_all_destroyable_equipment(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('target', 'both')):
+            for eq in list(self.players[tid].equipment):
+                if 'indestructible' not in eq.card_instance.flags:
+                    self._destroy_equipment(tid, eq)
+
+    def _atomic_activate_corruption(self, player_id, card, params, log, choice, context):
+        eq = self._find_equipment_for_card(player_id, card)
+        if eq is not None:
+            eq.corruption_active = True
+
+    def _atomic_heal(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        amount = self._eval_int(player_id, params.get('amount', 0), card)
+        self.players[target_id].heal(amount)
+        self.log_msg(log or f"{self.pn(target_id)}回复{amount}H")
+
+    def _atomic_draw(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        self.players[target_id].draw_cards(amount)
+        self.log_msg(log or f"{self.pn(target_id)}抽{amount}张牌")
+
+    def _atomic_gain_e(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        self.players[target_id].gain_elixir(amount)
+        self.log_msg(log or f"{self.pn(target_id)}获得{amount}E")
+
+    def _atomic_gain_m(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        self.players[target_id].gain_magic(amount)
+        self.log_msg(log or f"{self.pn(target_id)}获得{amount}M")
+
+    def _atomic_gain_armor(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        self.players[target_id].armor += amount
+        self.log_msg(log or f"{self.pn(target_id)}获得{amount}护甲")
+
+    def _atomic_gain_dodge(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        self.players[target_id].dodge += amount
+        self.log_msg(log or f"{self.pn(target_id)}获得{amount}闪避")
+
+    def _atomic_apply_poison(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        self.players[target_id].poison += amount
+        self.log_msg(log or f"{self.pn(target_id)}+{amount}中毒")
+
+    def _atomic_apply_burn(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        self.players[target_id].fire += amount
+        self.log_msg(log or f"{self.pn(target_id)}+{amount}灼烧")
+
+    def _atomic_apply_toxic(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        self.players[target_id].toxic += amount
+        self.log_msg(log or f"{self.pn(target_id)}+{amount}淬毒")
+
+    def _atomic_apply_vulnerable(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        self.players[target_id].vulnerable += amount
+        self.log_msg(log or f"{self.pn(target_id)}+{amount}易伤")
+
+    def _atomic_status_add_named(self, player_id, card, params, log, choice, context):
+        status = str(params.get('status', '')).strip()
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            if status in ('poison', '中毒'):
+                ps.poison += amount
+            elif status in ('burn', 'fire', '灼烧'):
+                ps.fire += amount
+            elif status in ('vulnus', 'vulnerable', '易伤'):
+                ps.vulnerable += amount
+            elif status in ('toxic', '淬毒'):
+                ps.toxic += amount
+            elif status in ('dodge', '闪避'):
+                ps.dodge += amount
+            elif status in ('邪眼', 'Nazar'):
+                ps.nazar_active = True
+                ps.nazar_big_hits = max(0, ps.nazar_big_hits + amount)
+
+    def _atomic_status_remove_named(self, player_id, card, params, log, choice, context):
+        status = str(params.get('status', '')).strip()
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            if status in ('poison', '中毒'):
+                ps.poison = 0
+            elif status in ('burn', 'fire', '灼烧'):
+                ps.fire = 0
+            elif status in ('vulnus', 'vulnerable', '易伤'):
+                ps.vulnerable = 0
+            elif status in ('toxic', '淬毒'):
+                ps.toxic = 0
+            elif status in ('dodge', '闪避'):
+                ps.dodge = 0
+            elif status in ('邪眼', 'Nazar'):
+                ps.nazar_active = False
+                ps.nazar_big_hits = 0
+
+    def _sync_custom_var_alias(self, ps, name: str):
+        value = int(ps.custom_vars.get(name, 0))
+        if name == '\u4e09\u89d2\u5f62\u5c42\u6570':
+            ps.triangle_stacks = max(0, value)
+        elif name == '\u5496\u5561\u9996\u6b21\u4f7f\u7528':
+            ps.coffee_first_use = bool(value)
+
+    def _atomic_var_set(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            name = str(params.get('name', 'var'))
+            ps.custom_vars[name] = self._eval_int(player_id, params.get('value', 0), card)
+            self._sync_custom_var_alias(ps, name)
+
+    def _atomic_var_add(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            name = str(params.get('name', 'var'))
+            ps.custom_vars[name] = int(ps.custom_vars.get(name, 0)) + self._eval_int(player_id, params.get('value', 0), card)
+            self._sync_custom_var_alias(ps, name)
+
+    def _atomic_var_sub(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            name = str(params.get('name', 'var'))
+            ps.custom_vars[name] = int(ps.custom_vars.get(name, 0)) - self._eval_int(player_id, params.get('value', 0), card)
+            self._sync_custom_var_alias(ps, name)
+
+    def _atomic_var_mul(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            name = str(params.get('name', 'var'))
+            ps.custom_vars[name] = int(ps.custom_vars.get(name, 0)) * self._eval_int(player_id, params.get('value', 1), card, 1)
+            self._sync_custom_var_alias(ps, name)
+
+    def _atomic_var_div(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            ps = self.players[tid]
+            name = str(params.get('name', 'var'))
+            div = self._eval_int(player_id, params.get('value', 1), card, 1)
+            ps.custom_vars[name] = int(ps.custom_vars.get(name, 0)) if div == 0 else int(ps.custom_vars.get(name, 0)) // div
+            self._sync_custom_var_alias(ps, name)
+
+    def _atomic_batch_var_add(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
+            self._atomic_var_add(player_id, card, {'target': tid, 'name': params.get('name', 'var'), 'value': params.get('value', 0)}, log, choice, context)
+
+    def _atomic_batch_var_sub(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
+            self._atomic_var_sub(player_id, card, {'target': tid, 'name': params.get('name', 'var'), 'value': params.get('value', 0)}, log, choice, context)
+
+    def _atomic_batch_var_mul(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
+            self._atomic_var_mul(player_id, card, {'target': tid, 'name': params.get('name', 'var'), 'value': params.get('value', 1)}, log, choice, context)
+
+    def _atomic_batch_var_div(self, player_id, card, params, log, choice, context):
+        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
+            self._atomic_var_div(player_id, card, {'target': tid, 'name': params.get('name', 'var'), 'value': params.get('value', 1)}, log, choice, context)
+
+    def use_trigger(self, player_id: int, equipment_instance_id: int) -> dict:
+        if self.current_player != player_id:
+            return {'success': False, 'error': '不是你的回合'}
+        ps = self.players[player_id]
+        eq = ps.find_equipment(equipment_instance_id)
+        if eq is None:
+            return {'success': False, 'error': '装备不存在'}
+        has_mod_trigger = self._has_card_event(eq.card_def, 'equipment_trigger')
+        if eq.card_def.trigger_cost_e < 0 and not has_mod_trigger:
+            return {'success': False, 'error': '该装备没有触发效果'}
+        if eq.turns_equipped < 1:
+            return {'success': False, 'error': '装备需要装备一回合后才能触发'}
+        trigger_cost = max(0, eq.card_def.trigger_cost_e)
+        if trigger_cost > ps.elixir:
+            return {'success': False, 'error': '能量不足'}
+        ps.elixir -= trigger_cost
+        if has_mod_trigger and self._run_card_event(player_id, eq.card_instance, 'equipment_trigger', None,
+                                                    {'source_id': player_id, 'target_id': 1 - player_id}):
+            self._check_game_over()
+            return {'success': True}
+        opp_id = 1 - player_id
+        if eq.def_id == 'Leaf':
+            if self._destroy_equipment(player_id, eq):
+                self.deal_attack_damage(opp_id, 8)
+        elif eq.def_id == 'Mark':
+            if self._destroy_equipment(player_id, eq):
+                self.players[opp_id].skip_turn = True
+        elif eq.def_id == 'Mine':
+            if self._destroy_equipment(player_id, eq):
+                self.deal_attack_damage(opp_id, 20)
+        self._check_game_over()
+        return {'success': True}
 
 
 install_runtime_ext(GameEngine)

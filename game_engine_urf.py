@@ -1,14 +1,28 @@
 import random
-from typing import List, Optional, Set
+from typing import List, Optional
 
 from game_engine import GameEngine, PlayerState
 from cards import (
     CardInstance, CARD_DEFS, INITIAL_HEALTH, INITIAL_ELIXIR,
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
-    INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, BASE_MAX_HEALTH,
+    BASE_MAX_HEALTH, DRAW_PER_TURN, ELIXIR_RECOVERY,
 )
 
-URF_HAND_LIMIT = 8
+
+URF_HAND_LIMIT = 10
+URF_EQUIPMENT_LIMIT = 3
+URF_STARTING_HAND_COUNTS = {
+    'thorn': 4,
+    'bloom': 3,
+    'root': 2,
+    'guard': 1,
+}
+CARD_TYPE_CN = {
+    'thorn': '攻击',
+    'bloom': '技能',
+    'root': '装备',
+    'guard': '反制',
+}
 
 
 INFINITE_EXCLUDED_IDS = {
@@ -51,8 +65,8 @@ class InfinitePlayerState(PlayerState):
         super().__init__(player_id)
         self._infinite_engine = engine
 
-    def _draw_one_infinite(self) -> Optional[CardInstance]:
-        return self._infinite_engine.create_infinite_card()
+    def _draw_one_infinite(self, card_type: Optional[str] = None) -> Optional[CardInstance]:
+        return self._infinite_engine.create_infinite_card(card_type)
 
     def draw_cards(self, count: int) -> List[CardInstance]:
         drawn = []
@@ -61,22 +75,10 @@ class InfinitePlayerState(PlayerState):
             card = self._draw_one_infinite()
             if card is None:
                 break
-            if len(self.hand) >= URF_HAND_LIMIT:
-                attract_cards = [c for c in self.hand if 'attract' in c.flags]
-                non_attract_cards = [c for c in self.hand if 'attract' not in c.flags]
-                if 'attract' in card.flags and non_attract_cards:
-                    discard_card = non_attract_cards[0]
-                    self.hand.remove(discard_card)
-                    self.discard.append(discard_card)
-                    self.hand.append(card)
-                    drawn.append(card)
-                else:
-                    self.discard.append(card)
-            else:
-                self.hand.append(card)
+            if self._infinite_engine.add_card_to_urf_hand(self.player_id, card, log=False):
                 drawn.append(card)
-            if 'sprout' in card.flags and card in self.hand:
-                sprout_queue.append(card)
+                if 'sprout' in card.flags:
+                    sprout_queue.append(card)
         while sprout_queue:
             trigger = sprout_queue.pop(0)
             if trigger not in self.hand:
@@ -84,13 +86,10 @@ class InfinitePlayerState(PlayerState):
             extra = self._draw_one_infinite()
             if extra is None:
                 break
-            if len(self.hand) < URF_HAND_LIMIT:
-                self.hand.append(extra)
+            if self._infinite_engine.add_card_to_urf_hand(self.player_id, extra, log=False):
                 drawn.append(extra)
                 if 'sprout' in extra.flags:
                     sprout_queue.append(extra)
-            else:
-                self.discard.append(extra)
         return drawn
 
 
@@ -121,10 +120,11 @@ class GameEngineInfiniteFire(GameEngine):
         self.infinite_card_weights = weights
         by_type = {}
         for def_id in ids:
-            ctype = CARD_DEFS[def_id].card_type
-            by_type.setdefault(ctype, {'ids': [], 'weights': []})
-            by_type[ctype]['ids'].append(def_id)
-            by_type[ctype]['weights'].append(max(1, int(getattr(CARD_DEFS[def_id], 'count', 1) or 1)))
+            card_def = CARD_DEFS[def_id]
+            card_type = card_def.card_type
+            by_type.setdefault(card_type, {'ids': [], 'weights': []})
+            by_type[card_type]['ids'].append(def_id)
+            by_type[card_type]['weights'].append(max(1, int(getattr(card_def, 'count', 1) or 1)))
         self.infinite_by_type = by_type
 
     def create_infinite_card(self, card_type: Optional[str] = None) -> Optional[CardInstance]:
@@ -134,28 +134,37 @@ class GameEngineInfiniteFire(GameEngine):
             pool = self.infinite_by_type.get(card_type) or {}
             ids = pool.get('ids') or []
             weights = pool.get('weights') or []
-            if ids:
-                return CardInstance(def_id=random.choices(ids, weights=weights, k=1)[0])
+            if not ids:
+                return None
+            return CardInstance(def_id=random.choices(ids, weights=weights, k=1)[0])
         if not self.infinite_card_pool:
             return None
         def_id = random.choices(self.infinite_card_pool, weights=self.infinite_card_weights, k=1)[0]
         return CardInstance(def_id=def_id)
 
+    def add_card_to_urf_hand(self, player_id: int, card: CardInstance, log: bool = True) -> bool:
+        ps = self.players[player_id]
+        if len(ps.hand) >= URF_HAND_LIMIT:
+            ps.discard.append(card)
+            if log:
+                self.log_msg(f"{self.pn(player_id)}手牌已满，{card.name_cn}进入弃牌堆")
+            return False
+        ps.hand.append(card)
+        return True
+
     def _draw_to_hand_by_type(self, player_id: int, card_type: str):
         card = self.create_infinite_card(card_type)
         if not card:
             return
-        ps = self.players[player_id]
-        if len(ps.hand) >= URF_HAND_LIMIT:
-            ps.discard.append(card)
-        else:
-            ps.hand.append(card)
-            self.log_msg(f"{self.pn(player_id)}补充1张{card_type}牌：{card.name_cn}")
+        added = self.add_card_to_urf_hand(player_id, card, log=True)
+        if added:
+            type_name = CARD_TYPE_CN.get(card_type, card_type)
+            self.log_msg(f"{self.pn(player_id)}补充1张{type_name}牌：{card.name_cn}")
 
-    def _deal_starting_hand(self, ps):
+    def _deal_starting_hand(self, ps: InfinitePlayerState):
         ps.hand = []
-        for card_type in ('thorn', 'bloom', 'root', 'guard'):
-            for _ in range(2):
+        for card_type, count in URF_STARTING_HAND_COUNTS.items():
+            for _ in range(count):
                 card = self.create_infinite_card(card_type)
                 if card:
                     ps.hand.append(card)
@@ -204,6 +213,8 @@ class GameEngineInfiniteFire(GameEngine):
             ps = self.players[i]
             ps.cards_played_this_turn = {}
             ps.magic_battery_m_this_turn = 0
+            ps.coffee_first_use = True
+            ps.custom_vars['咖啡首次使用'] = 1
             ps.urf_replace_available = True
             ps.urf_sell_available = True
         self.log_msg(f"=== 第{self.round_num}回合 ===")
@@ -215,12 +226,81 @@ class GameEngineInfiniteFire(GameEngine):
         ps.urf_sell_available = True
         super()._start_player_turn(player_id)
 
+    def _apply_turn_start_effects(self, player_id: int):
+        ps = self.players[player_id]
+        opp_id = 1 - player_id
+        opp = self.players[opp_id]
+        self._antenna_reveal[player_id] = None
+        if ps.shovel_active:
+            ps.shovel_active = False
+            ps.untargetable = False
+            self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in list(owner_state.equipment):
+                if self._has_card_event(eq.card_def, 'any_turn_start'):
+                    self._run_card_event(owner_id, eq.card_instance, 'any_turn_start', None,
+                                         {'source_id': owner_id, 'target_id': player_id})
+        for eq in list(opp.equipment):
+            if self._has_card_event(eq.card_def, 'enemy_turn_start') and self._run_card_event(
+                    opp_id, eq.card_instance, 'enemy_turn_start', None,
+                    {'source_id': opp_id, 'target_id': player_id}):
+                continue
+            if eq.def_id == 'Corruption' and not eq.corruption_active:
+                eq.corruption_active = True
+                self.log_msg(f"{self.pn(opp_id)}的腐化效果激活")
+        if ps.poison > 0:
+            self._deal_direct_damage(player_id, ps.poison, '中毒')
+            if self.game_over or ps.health <= 0:
+                return
+            ps.poison = ps.poison // 2
+        if ps.fire > 0:
+            self._deal_direct_damage(player_id, ps.fire, '灼烧')
+            if self.game_over or ps.health <= 0:
+                return
+        if self.round_num > 1:
+            elixir_recovery = ELIXIR_RECOVERY
+            for eq in list(opp.equipment):
+                if eq.card_def.effects:
+                    for effect in eq.card_def.effects:
+                        if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
+                            elixir_recovery += self._eval_int(opp_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
+                    continue
+                if eq.def_id == 'Pincer':
+                    elixir_recovery -= 1
+            elixir_recovery = max(0, elixir_recovery - ps.enemy_e_reduction)
+            ps.gain_elixir(elixir_recovery)
+            self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
+        for eq in list(ps.equipment):
+            eq.turns_equipped += 1
+            if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
+                    player_id, eq.card_instance, 'owner_turn_start', None,
+                    {'source_id': player_id, 'target_id': player_id}):
+                continue
+            if eq.def_id == 'Leaf':
+                ps.heal(2)
+                self.log_msg(f"{self.pn(player_id)}的叶子效果：+2H")
+            elif eq.def_id == 'Yucca':
+                ps.heal(5)
+                self.log_msg(f"{self.pn(player_id)}的丝兰效果：+5H")
+            elif eq.def_id == 'MagicLeaf':
+                ps.gain_magic(1)
+                self.log_msg(f"{self.pn(player_id)}的魔法叶效果：+1M")
+            elif eq.def_id == 'MagicYucca':
+                ps.gain_magic(2)
+                self.log_msg(f"{self.pn(player_id)}的魔法丝兰效果：+2M")
+            elif eq.def_id == 'Powder':
+                ps.gain_elixir(2)
+                self.log_msg(f"{self.pn(player_id)}的粉末效果：+2E")
+            elif eq.def_id == 'GoldenLeaf':
+                ps.draw_cards(DRAW_PER_TURN)
+                self.log_msg(f"{self.pn(player_id)}的黄金叶效果：补充手牌")
+
     def can_play_card(self, player_id: int, card: CardInstance):
         ok, reason = super().can_play_card(player_id, card)
         if not ok:
             return ok, reason
-        if card.card_type == 'root' and len(self.players[player_id].equipment) >= 3:
-            return False, '无限火力装备上限为3，请先售卖装备'
+        if card.card_type == 'root' and len(self.players[player_id].equipment) >= URF_EQUIPMENT_LIMIT:
+            return False, f'无限火力装备上限为{URF_EQUIPMENT_LIMIT}，请先售卖装备'
         return True, ''
 
     def play_card(self, player_id: int, card_instance_id: int, choice=None) -> dict:
@@ -228,34 +308,64 @@ class GameEngineInfiniteFire(GameEngine):
         card = ps.find_hand_card(card_instance_id)
         card_type = card.card_type if card else None
         result = super().play_card(player_id, card_instance_id, choice)
-        if result.get('success') and not result.get('needs_response') and not result.get('needs_choice') and card_type:
+        if result.get('success') and not result.get('needs_choice') and card_type:
+            self._draw_to_hand_by_type(player_id, card_type)
+        return result
+
+    def resolve_choice(self, player_id: int, choice: dict) -> dict:
+        pending = self.pending_choice or {}
+        card_type = None
+        if pending.get('card'):
+            try:
+                card_type = CardInstance.from_dict(pending['card']).card_type
+            except Exception:
+                card_type = None
+        result = super().resolve_choice(player_id, choice)
+        if result.get('success') and card_type:
             self._draw_to_hand_by_type(player_id, card_type)
         return result
 
     def handle_response(self, responder_id: int, card_instance_id: Optional[int]) -> dict:
         pending = self.pending_response or {}
         player_id = pending.get('player_id')
-        card_type = None
-        if pending.get('card'):
-            card_type = CardInstance.from_dict(pending['card']).card_type
+        counter_type = None
+        counter_instance_id = None
+        if card_instance_id is not None and 0 <= responder_id < len(self.players):
+            counter = self.players[responder_id].find_hand_card(card_instance_id)
+            if counter:
+                counter_type = counter.card_type
+                counter_instance_id = counter.instance_id
         result = super().handle_response(responder_id, card_instance_id)
-        if result.get('success') and player_id is not None and card_type:
-            self._draw_to_hand_by_type(player_id, card_type)
+        if result.get('success') and counter_type and counter_instance_id is not None:
+            if self.players[responder_id].find_hand_card(counter_instance_id) is None:
+                self._draw_to_hand_by_type(responder_id, counter_type)
         return result
+
+    def _effect_mimic(self, player_id: int, card: CardInstance, choice=None):
+        ps = self.players[player_id]
+        if choice and 'target_instance_id' in choice:
+            target = ps.find_hand_card(choice['target_instance_id'])
+            if target:
+                copy_card = target.copy()
+                copy_card.mimic_discount = 1
+                if self.add_card_to_urf_hand(player_id, copy_card, log=False):
+                    self.log_msg(f"{self.pn(player_id)}使用拟态！复制了{target.name_cn}（费用-1）")
+                else:
+                    self.log_msg(f"{self.pn(player_id)}使用拟态，但手牌已满")
 
     def replace_hand_card(self, player_id: int, card_instance_id: int) -> dict:
         if self.phase != 'action' or self.current_player != player_id:
             return {'success': False, 'error': '不是你的回合'}
         ps = self.players[player_id]
         if not getattr(ps, 'urf_replace_available', True):
-            return {'success': False, 'error': '本回合已替换过手牌'}
+            return {'success': False, 'error': '本回合已经替换过手牌'}
         card = ps.remove_hand_card(card_instance_id)
         if not card:
             return {'success': False, 'error': '卡牌不在手中'}
         ps.discard.append(card)
         new_card = self.create_infinite_card(card.card_type)
         if new_card:
-            ps.hand.append(new_card)
+            self.add_card_to_urf_hand(player_id, new_card, log=True)
             self.log_msg(f"{self.pn(player_id)}替换了{card.name_cn}，获得{new_card.name_cn}")
         ps.urf_replace_available = False
         return {'success': True}
@@ -265,7 +375,12 @@ class GameEngineInfiniteFire(GameEngine):
             return {'success': False, 'error': '不是你的回合'}
         ps = self.players[player_id]
         if not getattr(ps, 'urf_sell_available', True):
-            return {'success': False, 'error': '本回合已售卖过装备'}
+            return {'success': False, 'error': '本回合已经售卖过装备'}
+        eq = ps.find_equipment(equipment_instance_id)
+        if not eq:
+            return {'success': False, 'error': '装备不存在'}
+        if 'indestructible' in eq.card_instance.flags:
+            return {'success': False, 'error': '不可摧毁装备不能被售卖'}
         eq = ps.remove_equipment(equipment_instance_id)
         if not eq:
             return {'success': False, 'error': '装备不存在'}
@@ -286,4 +401,5 @@ class GameEngineInfiniteFire(GameEngine):
         state['opponent']['deck_count'] = '∞'
         state['urf_replace_available'] = getattr(self.players[for_player], 'urf_replace_available', True)
         state['urf_sell_available'] = getattr(self.players[for_player], 'urf_sell_available', True)
+        state['urf_hand_limit'] = URF_HAND_LIMIT
         return state

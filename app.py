@@ -1245,6 +1245,7 @@ def api_cards():
             'trigger_effect_text': card_def.trigger_effect_text,
             'response_trigger': card_def.response_trigger,
             'effects': card_def.effects,
+            'scripts': getattr(card_def, 'scripts', {}) or {},
         }
         card_payload.update(card_text(def_id, card_payload))
         result[def_id] = card_payload
@@ -2229,6 +2230,10 @@ def on_solo_play_card(data):
         pidx = engine.current_player
         result = engine.play_card(pidx, data.get('card_instance_id'), data.get('choice'))
         if result.get('needs_response'):
+            if sid in tutorial_sessions and pidx == 0:
+                engine.handle_response(1, None)
+                send_solo_state(sid, 0)
+                return
             send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pidx)
             emit_solo_response_request(sid, engine, pidx, result['card'])
         elif result.get('needs_choice'):
@@ -2251,7 +2256,10 @@ def on_solo_response(data):
         if not engine:
             return
         responder = 1 - engine.pending_response['player_id'] if engine.pending_response else engine.current_player
-        engine.handle_response(responder, data.get('card_instance_id') if data else None)
+        card_instance_id = data.get('card_instance_id') if data else None
+        if sid in tutorial_sessions and responder != 0:
+            card_instance_id = None
+        engine.handle_response(responder, card_instance_id)
         send_solo_state(sid)
 
 

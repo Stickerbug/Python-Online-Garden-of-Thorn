@@ -469,6 +469,8 @@ const GAME_TITLE = 'Garden of Thorn 荆棘花园';
 Object.values(I18N).forEach(dict => {
     dict.default_status = GAME_TITLE;
     dict.tutorial_hint_play_fusioned = dict.tutorial_hint_play_fusioned || '聚变后的攻击牌已经准备好了。当前能量足够，把它打出看看强化后的伤害。';
+    dict.target_pick_hint = dict.target_pick_hint || 'Click a highlighted player area.';
+    dict.waiting_opponent_counter = dict.waiting_opponent_counter || dict.waiting_response || 'Waiting for response';
     dict.tutorial_victory_message = dict.tutorial_victory_message || '恭喜你，成功完成了新手教程！\n希望你能在 Garden of Thorn 中玩得开心！';
     dict.tutorial_defeat_message = dict.tutorial_defeat_message || '哎呀，对局失败了。没关系，祝你在接下来的游戏中越打越顺！';
     dict.tutorial_retry = dict.tutorial_retry || '重试教程';
@@ -488,6 +490,8 @@ Object.values(I18N).forEach(dict => {
     dict.tutorial_hint_fusion = dict.tutorial_hint_fusion || '聚变也是 Bloom 技能牌。它会选择2-3张同名攻击牌，合成为一张更强的牌。选择同名攻击牌完成聚变。';
 });
 I18N.en.tutorial_start = 'Tutorial';
+I18N.en.target_pick_hint = 'Click a highlighted player area.';
+I18N.en.waiting_opponent_counter = 'Waiting for opponent counter';
 I18N.en.tutorial_hint_play_fusioned = 'The fused attack is ready. You have enough E now; play it to see the boosted damage.';
 I18N.en.tutorial_victory_message = 'Congratulations, you completed the tutorial!\nHave fun in Garden of Thorn!';
 I18N.en.tutorial_defeat_message = 'The tutorial match was lost. That is fine; the next match will be smoother.';
@@ -497,18 +501,22 @@ I18N.fr.tutorial_hint_play_fusioned = "L'attaque fusionnée est prête. Vous ave
 I18N.fr.tutorial_victory_message = 'Félicitations, vous avez terminé le tutoriel !\nAmusez-vous bien dans Garden of Thorn !';
 I18N.fr.tutorial_defeat_message = 'La partie du tutoriel est perdue. Ce n’est pas grave : la prochaine sera plus fluide.';
 I18N.fr.tutorial_retry = 'Réessayer le tutoriel';
+I18N.fr.target_pick_hint = 'Cliquez sur une zone de joueur surlignée.';
 I18N.pt.tutorial_hint_play_fusioned = 'O ataque fundido está pronto. Você tem E suficiente; jogue-o para ver o dano aumentado.';
 I18N.pt.tutorial_victory_message = 'Parabéns, você concluiu o tutorial!\nDivirta-se em Garden of Thorn!';
 I18N.pt.tutorial_defeat_message = 'A partida do tutorial foi perdida. Tudo bem; a próxima será mais tranquila.';
 I18N.pt.tutorial_retry = 'Tentar tutorial de novo';
+I18N.pt.target_pick_hint = 'Clique na área de jogador destacada.';
 I18N.ru.tutorial_hint_play_fusioned = 'Слитая атака готова. У вас хватает E; сыграйте ее и посмотрите усиленный урон.';
 I18N.ru.tutorial_victory_message = 'Поздравляем, вы прошли обучение!\nУдачной игры в Garden of Thorn!';
 I18N.ru.tutorial_defeat_message = 'Обучающий матч проигран. Ничего страшного: следующий пройдет увереннее.';
 I18N.ru.tutorial_retry = 'Повторить обучение';
+I18N.ru.target_pick_hint = 'Нажмите подсвеченную область игрока.';
 I18N.ja.tutorial_hint_play_fusioned = '融合した攻撃カードの準備ができました。Eは足りています。打ち出して強化後のダメージを見てみましょう。';
 I18N.ja.tutorial_victory_message = 'おめでとうございます。チュートリアルを完了しました！\nGarden of Thorn を楽しんでください！';
 I18N.ja.tutorial_defeat_message = 'チュートリアルの対局に敗北しました。大丈夫です。次の対局ではもっと動きが見えてきます。';
 I18N.ja.tutorial_retry = 'チュートリアルをやり直す';
+I18N.ja.target_pick_hint = '強調表示されたプレイヤー欄を押してください。';
 I18N.en.tutorial_intro = 'Now, let’s begin the tutorial.';
 I18N.en.tutorial_hint_play = 'Play a Thorn attack first, then watch the opponent’s H change.';
 I18N.en.tutorial_hint_end = 'After acting, press End Turn to pass the pace to the opponent.';
@@ -522,6 +530,7 @@ I18N.en.tutorial_hint_fission = 'Now let’s look at different card types. Fissi
 I18N.en.tutorial_hint_play_fissioned = 'Triangle now has Fission. Play it and watch each hit resolve while Triangle stacks grow.';
 I18N.en.tutorial_hint_fusion = 'Fusion is also a Bloom skill card. It chooses 2-3 same-name attacks and combines them into one stronger card.';
 I18N.zh.tutorial_start = '新手引导';
+I18N.zh.target_pick_hint = '点击高亮的玩家区域。';
 I18N.zh.tutorial_skip = '跳过引导';
 I18N.zh.tutorial_intro = '现在，让我们开始新手教程吧！';
 I18N.zh.tutorial_hint_play = '先打出一张 Thorn 攻击牌，观察对手 H 的变化。';
@@ -535,6 +544,17 @@ I18N.zh.tutorial_hint_root = 'Root 装备牌会留在装备栏中，之后持续
 I18N.zh.tutorial_hint_fission = '现在，让我们来看看不同类型的牌。裂变是一张 Bloom 技能牌。普通攻击被裂变后总伤害可能接近不变，但三角形会在每段伤害后成长。把裂变用于三角形。';
 I18N.zh.tutorial_hint_play_fissioned = '三角形已经带有裂变层数。现在把它打出，观察每段伤害和三角形层数如何连续结算。';
 I18N.zh.tutorial_hint_fusion = '聚变也是 Bloom 技能牌。它会选择2-3张同名攻击牌，合成为一张更强的牌。选择同名攻击牌完成聚变。';
+Object.assign(I18N.en, { tutorial_hint_free: 'You have seen the core actions. Now try your own line: play useful cards, watch H/E/M, then end your turn.' });
+Object.assign(I18N.zh, { tutorial_hint_free: '核心操作已经看过了。现在可以自己判断：打出合适的牌，观察 H/E/M，然后结束回合。' });
+Object.assign(I18N.fr, { tutorial_hint_free: 'Vous avez vu les actions principales. Essayez maintenant votre propre ligne : jouez les bonnes cartes, observez H/E/M, puis terminez le tour.' });
+Object.assign(I18N.pt, { tutorial_hint_free: 'Você já viu as ações principais. Agora jogue por conta própria: use cartas úteis, observe H/E/M e termine o turno.' });
+Object.assign(I18N.ru, { tutorial_hint_free: 'Основные действия показаны. Теперь выберите ход сами: сыграйте полезные карты, следите за H/E/M и завершите ход.' });
+Object.assign(I18N.ja, { tutorial_hint_free: '基本操作は確認できました。ここからは自分で判断して、有効なカードを使い、H/E/Mを見てターンを終了しましょう。' });
+Object.assign(I18N.zh, { waiting_opponent_counter: '等待对方反制' });
+Object.assign(I18N.fr, { waiting_opponent_counter: 'En attente du contre adverse' });
+Object.assign(I18N.pt, { waiting_opponent_counter: 'Aguardando resposta do oponente' });
+Object.assign(I18N.ru, { waiting_opponent_counter: 'Waiting for opponent counter' });
+Object.assign(I18N.ja, { waiting_opponent_counter: 'Waiting for opponent counter' });
 
 Object.assign(I18N.zh, {
     about_title: '关于', about_gameplay: '游戏玩法', about_credits: '致谢', about_contact: '联系方式',
@@ -854,9 +874,16 @@ Object.assign(I18N.fr, { admin_prefix: 'Admin', login_admin_reserved: 'Ce pseudo
 Object.assign(I18N.pt, { admin_prefix: 'Administrador', login_admin_reserved: 'Este apelido está ocupado pelo administrador' });
 Object.assign(I18N.ru, { admin_prefix: 'Администратор', login_admin_reserved: 'Этот псевдоним занят администратором' });
 Object.assign(I18N.ja, { admin_prefix: '管理者', login_admin_reserved: 'このニックネームは管理者が使用しています' });
+Object.assign(I18N.en, { settings_ui_style: 'UI Style', ui_style_minimal: 'Minimal', ui_style_classic: 'Classic' });
+Object.assign(I18N.zh, { settings_ui_style: '界面风格', ui_style_minimal: '简约', ui_style_classic: '经典' });
+Object.assign(I18N.fr, { settings_ui_style: 'Style UI', ui_style_minimal: 'Minimal', ui_style_classic: 'Classique' });
+Object.assign(I18N.pt, { settings_ui_style: 'Estilo da UI', ui_style_minimal: 'Minimalista', ui_style_classic: 'Clássico' });
+Object.assign(I18N.ru, { settings_ui_style: 'Стиль интерфейса', ui_style_minimal: 'Минимализм', ui_style_classic: 'Классика' });
+Object.assign(I18N.ja, { settings_ui_style: 'UIスタイル', ui_style_minimal: 'ミニマル', ui_style_classic: 'クラシック' });
 
 let currentLang = localStorage.getItem('got_lang') || 'zh';
 let showEnglishCardNames = localStorage.getItem('got_show_english_card_names') !== '0';
+let currentUiStyle = localStorage.getItem('got_ui_style') || 'classic';
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || (I18N.zh[key]) || key; }
 function tf(key, ...values) { return t(key).replace(/\{(\d+)\}/g, (_, i) => values[Number(i)] ?? ''); }
 const UI = new Proxy({}, { get: (_, key) => t(key) });
@@ -903,7 +930,7 @@ function getChatDisplayName(data) {
 }
 
 const COLORS = {
-    elixir: '#F1C40F', elixir_text: '#9A7D0A', elixir_bg: '#FEF9E7',
+    elixir: '#F1C40F', elixir_text: '#D9A600', elixir_bg: '#FEF9E7',
     magic: '#3498DB', magic_text: '#1A5276', magic_bg: '#EBF5FB',
     health: '#2ECC71', health_text: '#1E8449', health_bg: '#E8F8F5',
     damage: '#C0392B', damage_bg: '#FDEDEC',
@@ -1254,8 +1281,13 @@ let suppressSoloPausedHandler = false;
 let cardAnimationLockUntil = 0;
 let cardAnimationUnlockTimer = null;
 let hasPlayerHandSnapshot = false;
+let recentlyPlayedExileCards = new Map();
+let pendingLocalResourceCosts = [];
 let pendingPlayCard = null;
 let selectedPlayCardId = null;
+let actionToastTimer = null;
+let combatFloatSeq = 0;
+let targetPickCleanup = null;
 let gameTimelineEntries = [];
 let renderedBattleLogCount = 0;
 let renderedBattleLogTotal = 0;
@@ -1283,6 +1315,10 @@ const bootLoader = {
 };
 
 function gameAlert(title, message, buttons) {
+    if ((!buttons || buttons.length === 0) && (title === UI.notice || title === t('notice'))) {
+        flashStatus(message || title || UI.notice, 2400, 'error');
+        return;
+    }
     const el = $('game-alert');
     if (!el) return;
     $('game-alert-icon').textContent = '!';
@@ -1334,6 +1370,14 @@ function applyTheme(theme) {
     localStorage.setItem('got_theme', theme);
     const sel = $('settings-theme-select');
     if (sel) sel.value = theme;
+}
+
+function applyUiStyle(style) {
+    currentUiStyle = style === 'minimal' ? 'minimal' : 'classic';
+    document.documentElement.setAttribute('data-ui-style', currentUiStyle);
+    localStorage.setItem('got_ui_style', currentUiStyle);
+    const sel = $('settings-ui-style-select');
+    if (sel) sel.value = currentUiStyle;
 }
 
 function applyLang(lang) {
@@ -1398,6 +1442,8 @@ function updateStaticText() {
     if (settingsMods) settingsMods.textContent = UI.settings_mods;
     const settingsLabelTheme = $('settings-label-theme');
     if (settingsLabelTheme) settingsLabelTheme.textContent = UI.settings_theme;
+    const settingsLabelUiStyle = $('settings-label-ui-style');
+    if (settingsLabelUiStyle) settingsLabelUiStyle.textContent = UI.settings_ui_style;
     const settingsLabelLang = $('settings-label-lang');
     if (settingsLabelLang) settingsLabelLang.textContent = UI.settings_lang;
     const settingsEnglishNameLabel = $('settings-label-show-english-names');
@@ -1407,6 +1453,14 @@ function updateStaticText() {
     if (themeSelect) {
         themeSelect.options[0].textContent = UI.settings_theme_light;
         themeSelect.options[1].textContent = UI.settings_theme_dark;
+    }
+    const uiStyleSelect = $('settings-ui-style-select');
+    if (uiStyleSelect) {
+        const minimalOpt = uiStyleSelect.querySelector('option[value="minimal"]');
+        const classicOpt = uiStyleSelect.querySelector('option[value="classic"]');
+        if (minimalOpt) minimalOpt.textContent = UI.ui_style_minimal;
+        if (classicOpt) classicOpt.textContent = UI.ui_style_classic;
+        uiStyleSelect.value = currentUiStyle;
     }
     const langSelect = $('settings-lang-select');
     if (langSelect) {
@@ -1946,6 +2000,7 @@ function refreshBaseStatus(viewId = getVisibleViewId()) {
 
 function flashStatus(text, duration, type) {
     const s = $('status-text');
+    showActionToast(text, duration, type);
     if (!s) return;
     if (_statusTimeout) { clearTimeout(_statusTimeout); _statusTimeout = null; }
     else { _prevStatusText = getViewStatusText(); }
@@ -1965,6 +2020,31 @@ function flashStatus(text, duration, type) {
     }, duration || 2000);
 }
 
+function showActionToast(text, duration, type) {
+    if (!text) return;
+    let toast = $('action-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'action-toast';
+        toast.className = 'action-toast hidden';
+        document.body.appendChild(toast);
+    }
+    if (actionToastTimer) {
+        clearTimeout(actionToastTimer);
+        actionToastTimer = null;
+    }
+    toast.textContent = text;
+    toast.className = `action-toast ${type === 'error' ? 'toast-error' : 'toast-info'}`;
+    requestAnimationFrame(() => toast.classList.add('active'));
+    actionToastTimer = setTimeout(() => {
+        toast.classList.remove('active');
+        actionToastTimer = setTimeout(() => {
+            toast.classList.add('hidden');
+            actionToastTimer = null;
+        }, 180);
+    }, Math.max(900, duration || 1800));
+}
+
 function isTouchPlayMode() {
     return !!(window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse)').matches);
 }
@@ -1981,10 +2061,25 @@ function ensureDropOverlay() {
     return overlay;
 }
 
+function isWaitingForOpponentCounter() {
+    return !!(pendingPlayCard && gameState && gameState.mode !== '2v2' && gameState.phase !== 'game_over');
+}
+
+function updateDropOverlayContent(overlay = $('card-drop-overlay')) {
+    if (!overlay) return;
+    const waiting = isWaitingForOpponentCounter();
+    overlay.classList.toggle('waiting-response', waiting);
+    const text = overlay.querySelector('.card-drop-overlay-text');
+    if (text) {
+        text.textContent = waiting
+            ? (UI.waiting_opponent_counter || UI.waiting_response || 'Waiting for response')
+            : (UI.drag_to_play_full || UI.drag_to_play || 'Drag here to play');
+    }
+}
+
 function showDropOverlay() {
     const overlay = ensureDropOverlay();
-    const text = overlay.querySelector('.card-drop-overlay-text');
-    if (text) text.textContent = UI.drag_to_play_full || UI.drag_to_play || 'Drag here to play';
+    updateDropOverlayContent(overlay);
     const bounds = getDropAreaBounds();
     overlay.style.setProperty('--drop-top', `${Math.max(0, bounds.top)}px`);
     overlay.style.setProperty('--drop-bottom', `${Math.max(0, window.innerHeight - bounds.bottom)}px`);
@@ -2216,6 +2311,8 @@ function createCardElement(cardDict, options = {}) {
 }
 
 let dragState = null;
+const CARD_HOLD_PREVIEW_DELAY = 430;
+const CARD_HOLD_PREVIEW_HIDE_DISTANCE = 28;
 
 function getPointerPos(e) {
     if (e.touches && e.touches.length > 0) {
@@ -2225,6 +2322,64 @@ function getPointerPos(e) {
         return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
     }
     return { x: e.clientX, y: e.clientY };
+}
+
+function isClassicUiStyle() {
+    return document.documentElement.getAttribute('data-ui-style') === 'classic';
+}
+
+function removeCardHoldPreview() {
+    if (!dragState) return;
+    if (dragState.previewTimer) {
+        clearTimeout(dragState.previewTimer);
+        dragState.previewTimer = null;
+    }
+    if (dragState.previewEl) {
+        dragState.previewEl.remove();
+        dragState.previewEl = null;
+    }
+}
+
+function updateCardHoldPreview(pos) {
+    if (!dragState || !dragState.previewEl || !pos) return;
+    const el = dragState.previewEl;
+    const anchor = dragState.ghost || dragState.originalCard;
+    const rect = anchor ? anchor.getBoundingClientRect() : null;
+    const gap = Math.max(28, rect ? rect.width * 0.28 : 28);
+    const width = el.offsetWidth || 240;
+    const height = el.offsetHeight || 120;
+    let left = rect ? rect.right + gap : pos.x + gap;
+    if (left + width > window.innerWidth - 8) {
+        left = rect ? rect.left - width - gap : pos.x - width - gap;
+    }
+    let top = rect ? (rect.top + rect.height * 0.5 - height * 0.5) : pos.y - height * 0.5;
+    left = Math.max(8, Math.min(window.innerWidth - width - 8, left));
+    top = Math.max(8, Math.min(window.innerHeight - height - 8, top));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+}
+
+function showCardHoldPreview(cardEl, pos) {
+    if (!dragState || dragState.previewEl || !isClassicUiStyle() || dragState.moved) return;
+    const cardDef = getCardDef(cardEl.dataset.defId || '');
+    if (!cardDef) return;
+    const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
+    const effectText = getCardEffectText(cardDef) || '';
+    const descriptionText = getCardDescriptionText(cardDef) || '';
+    const preview = document.createElement('div');
+    preview.className = 'card-hold-preview';
+    preview.style.setProperty('--preview-color', typeColor);
+    preview.innerHTML = `
+        <div class="card-hold-preview-title">${escapeHtml(getCardName(cardDef))}</div>
+        ${effectText ? `<div class="card-hold-preview-effect">${colorizeCardText(effectText)}</div>` : ''}
+        ${descriptionText ? `<div class="card-hold-preview-desc">${colorizeCardText(descriptionText)}</div>` : ''}
+    `;
+    document.body.appendChild(preview);
+    dragState.previewEl = preview;
+    dragState.previewShown = true;
+    hideDropOverlay();
+    updateCardHoldPreview(pos);
+    requestAnimationFrame(() => preview.classList.add('active'));
 }
 
 function startCardDrag(e, cardEl) {
@@ -2255,9 +2410,21 @@ function startCardDrag(e, cardEl) {
         offsetY: rect.height / 2,
         startX: pos.x,
         startY: pos.y,
+        lastX: pos.x,
+        lastY: pos.y,
         moved: false,
+        previewTimer: null,
+        previewEl: null,
+        previewShown: false,
         touch: !!(e.touches && e.touches.length)
     };
+    if (isClassicUiStyle()) {
+        dragState.previewTimer = setTimeout(() => {
+            if (dragState && !dragState.moved) {
+                showCardHoldPreview(cardEl, { x: dragState.lastX, y: dragState.lastY });
+            }
+        }, CARD_HOLD_PREVIEW_DELAY);
+    }
     showDropOverlay();
 }
 
@@ -2267,16 +2434,36 @@ function onDocumentPointerMove(e) {
     const pos = getPointerPos(e);
     const dx = Math.abs(pos.x - dragState.startX);
     const dy = Math.abs(pos.y - dragState.startY);
-    if (dx > 8 || dy > 8) dragState.moved = true;
+    dragState.lastX = pos.x;
+    dragState.lastY = pos.y;
+    const distance = Math.hypot(dx, dy);
+    if (dx > 8 || dy > 8) {
+        dragState.moved = true;
+        if (dragState.previewTimer) {
+            clearTimeout(dragState.previewTimer);
+            dragState.previewTimer = null;
+        }
+    }
+    if (dragState.previewEl) {
+        updateCardHoldPreview(pos);
+        if (distance > CARD_HOLD_PREVIEW_HIDE_DISTANCE) {
+            removeCardHoldPreview();
+            showDropOverlay();
+        }
+    }
     dragState.ghost.style.left = (pos.x - dragState.offsetX) + 'px';
     dragState.ghost.style.top = (pos.y - dragState.offsetY) + 'px';
     const overlay = $('card-drop-overlay');
-    if (overlay) overlay.classList.toggle('drag-over', pointInDropArea(pos));
+    if (overlay) {
+        updateDropOverlayContent(overlay);
+        overlay.classList.toggle('drag-over', pointInDropArea(pos));
+    }
 }
 
 function cleanupDragState() {
     document.querySelectorAll('.drag-ghost').forEach(el => el.remove());
     document.querySelectorAll('.card.dragging').forEach(el => el.classList.remove('dragging'));
+    removeCardHoldPreview();
     if (dragState) {
         if (dragState.originalCard) dragState.originalCard.style.opacity = '';
     }
@@ -2290,10 +2477,11 @@ function onDocumentPointerUp(e) {
     if (!dragState) return;
     const pos = getPointerPos(e);
     const wasTap = dragState.touch && !dragState.moved;
+    const previewWasShown = !!dragState.previewShown;
     const shouldPlay = pointInDropArea(pos);
     const instanceId = dragState.instanceId;
     cleanupDragState();
-    if (wasTap) {
+    if (wasTap && !previewWasShown) {
         selectPlayCardForConfirm(parseInt(instanceId));
     } else if (shouldPlay) {
         onPlayCard(parseInt(instanceId), { dragDrop: true, confirmed: true });
@@ -2489,6 +2677,7 @@ function connectSocket(serverUrl) {
     });
     socket.on('state_update', (data) => {
         console.log('[client] state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null, 'spectating=', data.spectating);
+        const previousGameState = gameState;
         soloMode = !!data.solo;
         gameState = data;
         phase = data.phase || phase;
@@ -2518,10 +2707,14 @@ function connectSocket(serverUrl) {
         if (phase === 'game_over') {
             renderGameOver(data);
         } else {
+            if (!areSequentialGameStates(previousGameState, data)) pendingLocalResourceCosts = [];
+            queueVisibleHandExileAnimations(previousGameState, data);
             renderGame(data);
+            showStateDeltas(previousGameState, data);
         }
     });
     socket.on('solo_state', (data) => {
+        const previousGameState = gameState;
         soloMode = true;
         tutorialMode = !!data.tutorial || tutorialMode;
         isSpectating = false;
@@ -2546,7 +2739,10 @@ function connectSocket(serverUrl) {
                 renderGame(data);
             }
         } else {
+            if (!areSequentialGameStates(previousGameState, data)) pendingLocalResourceCosts = [];
+            queueVisibleHandExileAnimations(previousGameState, data);
             renderGame(data);
+            showStateDeltas(previousGameState, data);
         }
     if (tutorialMode) {
         scheduleTutorialOverlayStart();
@@ -2953,7 +3149,7 @@ function updateTutorialOverlay() {
                                 ? UI.tutorial_hint_bloom
                     : (tutorialDeckViewed && !tutorialCounterSeen && hasCounter)
                         ? UI.tutorial_hint_continue
-                        : UI.tutorial_hint_play;
+                        : UI.tutorial_hint_free;
     }
     if (arrow) {
         let arrowMode = '';
@@ -3967,6 +4163,16 @@ function isMyTurn() {
     return gameState.phase === 'action' && gameState.current_player === playerId;
 }
 
+function isUrfEquipmentSellable(eq) {
+    const inst = (eq && eq.card_instance) || {};
+    const cardDef = getCardDef(inst.def_id);
+    const flags = new Set([
+        ...((cardDef && cardDef.flags) || []),
+        ...((inst && inst.instance_flags) || []),
+    ]);
+    return !flags.has('indestructible');
+}
+
 function updateModeSpecificControls(gs) {
     const inSoloGame = !!gs?.solo;
     const inTutorial = !!gs?.tutorial || tutorialMode;
@@ -4014,10 +4220,11 @@ function updateModeSpecificControls(gs) {
     }
     if (urfSellBtn) {
         const show = gs?.mode === 'urf' && !isSpectating && !gameOver;
+        const sellableEquipment = ((gs.you || {}).equipment || []).filter(isUrfEquipmentSellable);
         urfSellBtn.textContent = UI.urf_sell || '售卖装备';
         urfSellBtn.classList.toggle('hidden', !show);
         urfSellBtn.style.display = show ? '' : 'none';
-        urfSellBtn.disabled = !isMyTurn() || !gs?.urf_sell_available || !((gs.you || {}).equipment || []).length;
+        urfSellBtn.disabled = !isMyTurn() || !gs?.urf_sell_available || !sellableEquipment.length;
     }
     if (spectateControls) {
         spectateControls.classList.toggle('hidden', !showSpectateControls);
@@ -4054,6 +4261,7 @@ function renderGame(data) {
         gameContainer.classList.toggle('mode-spectate', !!isSpectating);
         gameContainer.classList.toggle('mode-tutorial', !!gs.tutorial || tutorialMode);
         gameContainer.classList.toggle('mode-solo', !!gs.solo);
+        gameContainer.classList.toggle('mode-urf', gs.mode === 'urf');
     }
 
     const opp2Half = $('opp2-half');
@@ -4062,6 +4270,7 @@ function renderGame(data) {
     if (opp2Half) opp2Half.classList.toggle('hidden', !is2v2);
     if (oppDivider) oppDivider.classList.toggle('hidden', !is2v2);
     if (teammateSidebar) teammateSidebar.classList.toggle('hidden', !is2v2);
+    syncPlayerRegionTargets(gs);
 
     const oppLabel = $('opp-label');
     const youLabel = $('you-label');
@@ -4159,6 +4368,7 @@ function renderGame(data) {
     } else if (playZone) {
         playZone.innerHTML = `<div class="play-zone-hint">${UI.drag_to_play}</div>`;
     }
+    updateDropOverlayContent();
     if (inSoloGame && gs.phase === 'game_over' && playZone) {
         playZone.innerHTML = `
             <div class="solo-gameover-actions">
@@ -4169,15 +4379,22 @@ function renderGame(data) {
     }
     updateModeSpecificControls(gs);
     const oppInfo = $('opp-info');
-    if (oppInfo) oppInfo.textContent = UI.hand_deck_info_opp.replace('{0}', opp.hand_count || 0).replace('{1}', opp.deck_count || 0);
+    if (oppInfo) {
+        oppInfo.style.display = gs.mode === 'urf' ? 'none' : '';
+        oppInfo.textContent = gs.mode === 'urf' ? '' : UI.hand_deck_info_opp.replace('{0}', opp.hand_count || 0).replace('{1}', opp.deck_count || 0);
+    }
     const youInfo = $('you-info');
-    if (youInfo) youInfo.textContent = UI.hand_deck_discard_info.replace('{0}', you.hand_count || 0).replace('{1}', you.deck_count || 0).replace('{2}', you.discard_count || 0);
+    if (youInfo) {
+        youInfo.style.display = gs.mode === 'urf' ? 'none' : '';
+        youInfo.textContent = gs.mode === 'urf' ? '' : UI.hand_deck_discard_info.replace('{0}', you.hand_count || 0).replace('{1}', you.deck_count || 0).replace('{2}', you.discard_count || 0);
+    }
     scheduleAdjust();
 }
 
 function renderPlayerBars(containerId, playerData) {
     const container = $(containerId);
     if (!container) return;
+    container.dataset.playerBars = '1';
     const bars = [
         { key: 'health', cur: playerData.health || 0, max: playerData.max_health || 100, color: COLORS.health, bg: COLORS.health_bg, label: 'H' },
         { key: 'elixir', cur: playerData.elixir || 0, max: playerData.max_elixir || 10, color: COLORS.elixir, bg: COLORS.elixir_bg, label: 'E' },
@@ -4188,6 +4405,7 @@ function renderPlayerBars(containerId, playerData) {
         bars.forEach(bar => {
             const wrapper = document.createElement('div');
             wrapper.className = 'bar-wrapper';
+            wrapper.dataset.barKey = bar.key;
             wrapper.innerHTML = `
                 <span class="bar-label" style="color:${bar.color}">${bar.label}</span>
                 <div class="bar-track" style="background:${bar.bg}">
@@ -4201,6 +4419,7 @@ function renderPlayerBars(containerId, playerData) {
     const wrappers = container.querySelectorAll('.bar-wrapper');
     bars.forEach((bar, i) => {
         if (!wrappers[i]) return;
+        wrappers[i].dataset.barKey = bar.key;
         const fill = wrappers[i].querySelector('.bar-fill');
         const text = wrappers[i].querySelector('.bar-text');
         const pct = bar.max > 0 ? Math.max(0, Math.min(100, (bar.cur / bar.max) * 100)) : 0;
@@ -4323,7 +4542,7 @@ function canPlayCard(cardDict) {
     if (you.shovel_active) return false;
     const cardDef = getCardDef(cardDict.def_id);
     if (!cardDef) return false;
-    if (cardDef.card_type === 'guard') return false;
+    if (cardDef.card_type === 'guard' && !cardHasPlayableScript(cardDef) && !(cardDef.effects || []).length) return false;
     if ((you.attack_blocked || 0) > 0 && cardDef.card_type === 'thorn') return false;
     if ((you.attack_only || 0) > 0 && cardDef.card_type !== 'thorn') return false;
     const elixir = you.elixir || 0;
@@ -4342,7 +4561,9 @@ function getCannotPlayReason(cardDict) {
     if (gs.phase !== 'action') return UI.error_waiting_response_ui || UI.cannot_play;
     if (!isMyTurn()) return UI.error_not_your_turn || UI.not_your_turn || UI.cannot_play;
     if (you.shovel_active) return UI.error_action_blocked || UI.cannot_play;
-    if (cardDef.card_type === 'guard') return UI.error_waiting_response_ui || UI.cannot_play;
+    if (cardDef.card_type === 'guard' && !cardHasPlayableScript(cardDef) && !(cardDef.effects || []).length) {
+        return UI.error_waiting_response_ui || UI.cannot_play;
+    }
     if ((you.attack_blocked || 0) > 0 && cardDef.card_type === 'thorn') return UI.error_attack_blocked || UI.cannot_play;
     if ((you.attack_only || 0) > 0 && cardDef.card_type !== 'thorn') return UI.error_attack_only || UI.cannot_play;
     const { totalE, totalM } = getCardDisplayCosts(cardDict, cardDef, you);
@@ -4373,6 +4594,12 @@ function getEnemyTargetOptions() {
     }).filter(x => x.alive);
 }
 
+function cardHasPlayableScript(cardDef) {
+    const scripts = cardDef && cardDef.scripts;
+    if (!scripts || typeof scripts !== 'object') return false;
+    return ['onPlay', 'play', 'on_play'].some(key => Object.prototype.hasOwnProperty.call(scripts, key));
+}
+
 function normalizePlayerId(id) {
     if (id === null || id === undefined || id === '') return null;
     const value = Number(id);
@@ -4400,12 +4627,328 @@ function getPlayerDataById(id) {
     return {};
 }
 
-function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true } = {}) {
-    if (!gameState || gameState.mode !== '2v2') return [];
+function syncPlayerRegionTargets(gs) {
+    const clear = () => document.querySelectorAll('[data-player-target-region]')
+        .forEach(el => {
+            el.removeAttribute('data-player-id');
+            el.classList.remove('target-pickable', 'target-picked');
+        });
+    clear();
+    if (!gs) return;
+    const assign = (selector, id) => {
+        const el = document.querySelector(selector);
+        const pid = normalizePlayerId(id);
+        if (!el || pid == null) return;
+        el.dataset.playerTargetRegion = '1';
+        el.dataset.playerId = String(pid);
+    };
+    assign('.player-section', gs.your_id);
+    assign('.opp-half.opp-left', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
+    assign('#opp2-half', (gs.enemy_ids || [])[1]);
+    assign('#teammate-sidebar', gs.teammate_id);
+}
+
+function getPlayerRegionById(id) {
+    const pid = normalizePlayerId(id);
+    if (pid == null) return null;
+    return document.querySelector(`[data-player-target-region][data-player-id="${pid}"]`);
+}
+
+function choosePlayerTargetOnBoard(title, targets) {
+    if (!Array.isArray(targets) || !targets.length) return Promise.resolve(null);
+    const regions = targets.map(target => ({ target, el: getPlayerRegionById(target.id) })).filter(item => item.el);
+    if (!regions.length) return Promise.resolve(null);
+    return new Promise(resolve => {
+        if (targetPickCleanup) targetPickCleanup();
+        const overlay = document.createElement('div');
+        overlay.className = 'target-picker-overlay';
+        overlay.innerHTML = `
+            <div class="target-picker-panel">
+                <div class="target-picker-title">${escapeHtml(title || UI.choose_target || UI.select_target || 'Choose target')}</div>
+                <div class="target-picker-subtitle">${escapeHtml(UI.target_pick_hint || '')}</div>
+                <button type="button" class="target-picker-cancel">${escapeHtml(UI.cancel || 'Cancel')}</button>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        const finish = (value) => {
+            regions.forEach(({ el }) => {
+                el.classList.remove('target-pickable', 'target-picked');
+                el.removeEventListener('click', handlers.get(el), true);
+            });
+            handlers.clear();
+            overlay.remove();
+            if (targetPickCleanup === finishCancel) targetPickCleanup = null;
+            resolve(value);
+        };
+        const finishCancel = () => finish(-1);
+        const handlers = new Map();
+        regions.forEach(({ target, el }) => {
+            const handler = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                el.classList.add('target-picked');
+                setTimeout(() => finish(target.id), 90);
+            };
+            handlers.set(el, handler);
+            el.classList.add('target-pickable');
+            el.addEventListener('click', handler, true);
+        });
+        const cancel = overlay.querySelector('.target-picker-cancel');
+        if (cancel) cancel.addEventListener('click', finishCancel);
+        targetPickCleanup = finishCancel;
+    });
+}
+
+function getStatePlayerRefs(gs) {
+    if (!gs) return [];
+    const refs = [];
+    const add = (id, data, selector) => {
+        const pid = normalizePlayerId(id);
+        if (pid == null || !data) return;
+        refs.push({ id: pid, data, selector });
+    };
+    const yourId = normalizePlayerId(gs.your_id);
+    add(yourId, gs.you, '.player-section');
+    if (gs.mode === '2v2') {
+        const enemyIds = gs.enemy_ids || [];
+        add(enemyIds[0], gs.opponent, '.opp-half.opp-left');
+        add(enemyIds[1], gs.opponent2, '#opp2-half');
+        add(gs.teammate_id, gs.teammate, '#teammate-sidebar');
+    } else {
+        add(yourId === 1 ? 0 : 1, gs.opponent, '.opp-half.opp-left');
+    }
+    return refs;
+}
+
+function areSequentialGameStates(previous, next) {
+    if (!previous || !next || previous === next) return false;
+    if (!previous.phase || !next.phase) return false;
+    if ((previous.mode || '') !== (next.mode || '')) return false;
+    if (!!previous.solo !== !!next.solo) return false;
+    if (normalizePlayerId(previous.your_id) !== normalizePlayerId(next.your_id)) return false;
+    const prevTotal = Number(previous.log_total);
+    const nextTotal = Number(next.log_total);
+    if (Number.isFinite(prevTotal) && Number.isFinite(nextTotal) && nextTotal < prevTotal) return false;
+    const prevRound = Number(previous.round_num);
+    const nextRound = Number(next.round_num);
+    if (Number.isFinite(prevRound) && Number.isFinite(nextRound) && nextRound < prevRound) return false;
+    if (previous.phase === 'game_over' && next.phase !== 'game_over') return false;
+    return true;
+}
+
+function getCombatFloatAnchor(region, kind) {
+    if (!region) return null;
+    const barKey = kind === 'elixir' ? 'elixir'
+        : kind === 'magic' ? 'magic'
+        : (kind === 'damage' || kind === 'heal') ? 'health'
+        : '';
+    if (barKey) {
+        const bar = region.querySelector(`[data-bar-key="${barKey}"] .bar-track`) || region.querySelector(`[data-bar-key="${barKey}"]`);
+        if (bar) return bar;
+    }
+    return region.querySelector('.status-tags') || region.querySelector('.player-info-bar') || region;
+}
+
+function showCombatFloat(selector, text, kind, index = 0) {
+    if (!text || !selector) return;
+    const region = document.querySelector(selector);
+    const anchor = getCombatFloatAnchor(region, kind);
+    if (!region || !anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const el = document.createElement('div');
+    el.className = `combat-float combat-${kind || 'info'}`;
+    el.textContent = text;
+    const x = rect.left + rect.width - 8;
+    const y = rect.top + rect.height * 0.5 + index * 13;
+    el.style.left = `${Math.min(window.innerWidth - 10, Math.max(10, x))}px`;
+    el.style.top = `${Math.min(window.innerHeight - 10, Math.max(10, y))}px`;
+    el.style.setProperty('--float-x', `${(index % 2 === 0 ? -1 : 1) * Math.min(18, 6 + index * 4)}px`);
+    el.dataset.floatId = String(++combatFloatSeq);
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1850);
+}
+
+function showCombatFloatSequence(selector, events, interval = 200) {
+    let immediateStack = 0;
+    (events || []).slice(0, 12).forEach((event, index) => {
+        const hasDelay = event.delay !== undefined && event.delay !== null;
+        const delay = hasDelay && Number.isFinite(Number(event.delay)) ? Number(event.delay) : 0;
+        const stackIndex = Number.isFinite(Number(event.stackIndex)) ? Number(event.stackIndex) : immediateStack++;
+        setTimeout(() => showCombatFloat(selector, event.text, event.kind, stackIndex), Math.max(0, delay));
+    });
+}
+
+function queueLocalResourceCost(cardDict, ownerState = null) {
+    if (!cardDict) return;
+    const cardDef = getCardDef(cardDict.def_id);
+    if (!cardDef) return;
+    const { totalE, totalM } = getCardDisplayCosts(cardDict, cardDef, ownerState || (gameState && gameState.you));
+    if (!totalE && !totalM) return;
+    pendingLocalResourceCosts.push({
+        playerId: normalizePlayerId(gameState && gameState.your_id),
+        instanceId: cardInstanceKey(cardDict),
+        totalE: Math.max(0, Number(totalE) || 0),
+        totalM: Math.max(0, Number(totalM) || 0),
+        createdAt: Date.now(),
+    });
+    pendingLocalResourceCosts = pendingLocalResourceCosts
+        .filter(item => item && Date.now() - Number(item.createdAt || 0) < 6000)
+        .slice(-8);
+}
+
+function takeLocalResourceCostForState(ref, oldData, newData) {
+    const playerId = normalizePlayerId(ref && ref.id);
+    if (playerId == null || !pendingLocalResourceCosts.length) return null;
+    const oldHandIds = new Set(((oldData && oldData.hand) || []).map(cardInstanceKey).filter(Boolean));
+    const newHandIds = new Set(((newData && newData.hand) || []).map(cardInstanceKey).filter(Boolean));
+    const idx = pendingLocalResourceCosts.findIndex(item => {
+        if (!item || normalizePlayerId(item.playerId) !== playerId) return false;
+        if (!item.instanceId) return false;
+        return oldHandIds.has(String(item.instanceId)) && !newHandIds.has(String(item.instanceId));
+    });
+    if (idx < 0) return null;
+    return pendingLocalResourceCosts.splice(idx, 1)[0];
+}
+
+function getNewBattleLogLines(previous, next) {
+    const nextLog = Array.isArray(next && next.log) ? next.log : [];
+    const nextStart = Number(next && next.log_start) || 0;
+    const prevLog = Array.isArray(previous && previous.log) ? previous.log : [];
+    const prevStart = Number(previous && previous.log_start) || 0;
+    const prevTotalRaw = previous && previous.log_total;
+    const prevTotal = Number.isFinite(Number(prevTotalRaw)) ? Number(prevTotalRaw) : prevStart + prevLog.length;
+    let startIndex = Math.max(0, prevTotal - nextStart);
+    if (startIndex > nextLog.length) startIndex = 0;
+    return nextLog.slice(startIndex);
+}
+
+function parseDamageLogLine(line) {
+    const text = String(line || '');
+    const match = text.match(/^(.+?)受到(\d+)点(?:.*?伤害)?（H=(-?\d+)）$/);
+    if (!match) return null;
+    const amount = Number(match[2]);
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+    return { name: match[1], amount };
+}
+
+function getStatePlayerDisplayNames(gs, ref) {
+    const names = new Set();
+    const id = normalizePlayerId(ref && ref.id);
+    const data = (ref && ref.data) || {};
+    if (data.name) names.add(String(data.name));
+    if (id == null || !gs) return names;
+    if (Array.isArray(gs.spectate_players)) {
+        const p = gs.spectate_players.find(item => normalizePlayerId(item && item.player_id) === id);
+        if (p && p.name) names.add(String(p.name));
+    }
+    if (id === normalizePlayerId(gs.your_id) && gs.your_name) names.add(String(gs.your_name));
+    if (id === normalizePlayerId(gs.teammate_id) && gs.teammate_name) names.add(String(gs.teammate_name));
+    if (gs.mode === '2v2') {
+        const enemyIndex = (gs.enemy_ids || []).map(normalizePlayerId).indexOf(id);
+        if (enemyIndex >= 0 && (gs.opponent_names || [])[enemyIndex]) {
+            names.add(String((gs.opponent_names || [])[enemyIndex]));
+        }
+    } else {
+        const yourId = normalizePlayerId(gs.your_id);
+        if (id !== yourId && gs.opponent_name) names.add(String(gs.opponent_name));
+    }
+    if (gs[`player${id + 1}_name`]) names.add(String(gs[`player${id + 1}_name`]));
+    return names;
+}
+
+function getDamageLogEventsByPlayer(previous, next) {
+    const refs = getStatePlayerRefs(next);
+    const nameToId = new Map();
+    refs.forEach(ref => {
+        getStatePlayerDisplayNames(next, ref).forEach(name => {
+            if (name) nameToId.set(name, ref.id);
+        });
+    });
+    const out = new Map();
+    getNewBattleLogLines(previous, next).forEach(line => {
+        const parsed = parseDamageLogLine(line);
+        if (!parsed) return;
+        const id = nameToId.get(parsed.name);
+        if (id == null) return;
+        if (!out.has(id)) out.set(id, []);
+        out.get(id).push(parsed.amount);
+    });
+    return out;
+}
+
+function showStateDeltas(previous, next) {
+    if (!areSequentialGameStates(previous, next)) return;
+    if (!next.phase || next.phase === 'draft' || next.phase === 'event_select') return;
+    const prev = new Map(getStatePlayerRefs(previous).map(ref => [ref.id, ref]));
+    const damageLogEvents = getDamageLogEventsByPlayer(previous, next);
+    getStatePlayerRefs(next).forEach(ref => {
+        const oldRef = prev.get(ref.id);
+        if (!oldRef) return;
+        const oldData = oldRef.data || {};
+        const newData = ref.data || {};
+        const events = [];
+        const healthDelta = Number(newData.health || 0) - Number(oldData.health || 0);
+        let elixirDelta = Number(newData.elixir || 0) - Number(oldData.elixir || 0);
+        let magicDelta = Number(newData.magic || 0) - Number(oldData.magic || 0);
+        const armorDelta = Number(newData.armor || 0) - Number(oldData.armor || 0);
+        const oldEquipCount = Array.isArray(oldData.equipment) ? oldData.equipment.length : 0;
+        const newEquipCount = Array.isArray(newData.equipment) ? newData.equipment.length : 0;
+        const localCost = takeLocalResourceCostForState(ref, oldData, newData);
+        const resourceDelay = localCost ? 220 : 0;
+        const damageHits = damageLogEvents.get(ref.id) || [];
+        if (damageHits.length) {
+            damageHits.forEach((amount, hitIndex) => {
+                events.push({ text: `-${amount}H`, kind: 'damage', delay: hitIndex * 200, stackIndex: 0 });
+            });
+        } else if (healthDelta < 0) {
+            events.push({ text: `${healthDelta}H`, kind: 'damage' });
+        } else if (healthDelta > 0) {
+            events.push({ text: `+${healthDelta}H`, kind: 'heal' });
+        }
+        if (armorDelta > 0) events.push({ text: `+${armorDelta}A`, kind: 'armor' });
+        else if (armorDelta < 0) events.push({ text: `${armorDelta}A`, kind: 'armor' });
+        if (localCost && localCost.totalE > 0) {
+            events.push({ text: `-${localCost.totalE}E`, kind: 'elixir', delay: 0, stackIndex: 0 });
+            elixirDelta += localCost.totalE;
+        }
+        if (localCost && localCost.totalM > 0) {
+            events.push({ text: `-${localCost.totalM}M`, kind: 'magic', delay: localCost.totalE > 0 ? 120 : 0, stackIndex: 1 });
+            magicDelta += localCost.totalM;
+        }
+        if (elixirDelta > 0) events.push({ text: `+${elixirDelta}E`, kind: 'elixir', delay: resourceDelay, stackIndex: localCost ? 1 : undefined });
+        else if (elixirDelta < 0) events.push({ text: `${elixirDelta}E`, kind: 'elixir', delay: resourceDelay, stackIndex: localCost ? 1 : undefined });
+        if (magicDelta > 0) events.push({ text: `+${magicDelta}M`, kind: 'magic', delay: resourceDelay, stackIndex: localCost ? 2 : undefined });
+        else if (magicDelta < 0) events.push({ text: `${magicDelta}M`, kind: 'magic', delay: resourceDelay, stackIndex: localCost ? 2 : undefined });
+        showCombatFloatSequence(ref.selector, events);
+        if (newEquipCount > oldEquipCount) {
+            setTimeout(() => animateEquipmentForRegion(ref.selector), 30);
+        }
+    });
+}
+
+function normalizeTargetCandidates(candidates) {
+    if (Array.isArray(candidates)) return candidates.map(String);
+    if (candidates == null || candidates === '') return ['enemy'];
+    return String(candidates).split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function targetCandidateAllows(role, candidates) {
+    const set = new Set(normalizeTargetCandidates(candidates));
+    if (set.has('both') || set.has('all') || set.has('random_player') || set.has('random_side')) return true;
+    if (role === 'self') return set.has('self') || set.has('friendly') || set.has('random_friendly');
+    if (role === 'teammate') return set.has('teammate') || set.has('friendly') || set.has('random_friendly');
+    if (role === 'enemy') return set.has('enemy') || set.has('all_enemies') || set.has('random_enemy');
+    return false;
+}
+
+function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true, candidates = 'enemy' } = {}) {
+    if (!gameState) return [];
     const out = [];
-    const add = (id, data, group) => {
+    const add = (id, data, group, role) => {
         const targetId = normalizePlayerId(id);
         if (targetId == null || (!includeSelf && targetId === normalizePlayerId(gameState.your_id))) return;
+        if (!targetCandidateAllows(role, candidates)) return;
         const alive = (data && Number(data.health || 0) > 0);
         if (aliveOnly && !alive) return;
         out.push({
@@ -4415,10 +4958,17 @@ function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true } = {}) 
             alive
         });
     };
+    if (gameState.mode !== '2v2') {
+        const yourId = normalizePlayerId(gameState.your_id);
+        const enemyId = yourId === 1 ? 0 : 1;
+        add(enemyId, gameState.opponent || {}, UI.enemy_label || UI.opponent, 'enemy');
+        add(yourId, gameState.you || {}, UI.you, 'self');
+        return out;
+    }
     const enemies = [gameState.opponent || {}, gameState.opponent2 || {}];
-    (gameState.enemy_ids || []).forEach((id, i) => add(id, enemies[i], UI.enemy_label || UI.opponent));
-    if (gameState.teammate_id != null) add(gameState.teammate_id, gameState.teammate || {}, UI.ally_label || UI.teammate);
-    add(gameState.your_id, gameState.you || {}, UI.you);
+    (gameState.enemy_ids || []).forEach((id, i) => add(id, enemies[i], UI.enemy_label || UI.opponent, 'enemy'));
+    if (gameState.teammate_id != null) add(gameState.teammate_id, gameState.teammate || {}, UI.ally_label || UI.teammate, 'teammate');
+    add(gameState.your_id, gameState.you || {}, UI.you, 'self');
     return out;
 }
 
@@ -4429,6 +4979,8 @@ async function choosePlayerTarget(title, opts = {}) {
         return -1;
     }
     if (targets.length === 1) return targets[0].id;
+    const boardTarget = await choosePlayerTargetOnBoard(title, targets);
+    if (boardTarget !== null) return boardTarget;
     const sel = await simpleChoice(title || UI.choose_target || UI.select_target || 'Choose target', targets.map(t => t.label));
     return sel >= 0 ? targets[sel].id : -1;
 }
@@ -4631,6 +5183,126 @@ function lockCardAnimation(duration = 320) {
     scheduleCardAnimationUnlock();
 }
 
+function cardInstanceKey(card) {
+    if (!card || card.instance_id == null) return '';
+    return String(card.instance_id);
+}
+
+function cardHasExileLikeExit(card) {
+    if (!card) return false;
+    if (card.def_id === 'Yggdrasil') return true;
+    const cardDef = getCardDef(card.def_id);
+    const flags = new Set([
+        ...((cardDef && cardDef.flags) || []),
+        ...((card && card.instance_flags) || []),
+    ]);
+    return flags.has('exile') || flags.has('void');
+}
+
+function markRecentlyPlayedExileCard(card) {
+    const id = cardInstanceKey(card);
+    if (!id) return;
+    const expiresAt = Date.now() + 4200;
+    recentlyPlayedExileCards.set(id, expiresAt);
+    setTimeout(() => {
+        if (recentlyPlayedExileCards.get(id) === expiresAt) {
+            recentlyPlayedExileCards.delete(id);
+        }
+    }, 4300);
+}
+
+function wasRecentlyPlayedExileCard(id) {
+    if (!id) return false;
+    const expiresAt = recentlyPlayedExileCards.get(String(id));
+    if (!expiresAt) return false;
+    if (expiresAt < Date.now()) {
+        recentlyPlayedExileCards.delete(String(id));
+        return false;
+    }
+    return true;
+}
+
+function getNewlyExiledHandCards(previousPlayer, nextPlayer) {
+    const oldHand = (previousPlayer && previousPlayer.hand) || [];
+    const newHand = (nextPlayer && nextPlayer.hand) || [];
+    if (!oldHand.length) return [];
+    const newHandIds = new Set(newHand.map(cardInstanceKey).filter(Boolean));
+    const oldExileIds = new Set(((previousPlayer && previousPlayer.exile) || []).map(cardInstanceKey).filter(Boolean));
+    const nextExileIds = new Set(((nextPlayer && nextPlayer.exile) || []).map(cardInstanceKey).filter(Boolean));
+    const exileCountIncreased = Number((nextPlayer && nextPlayer.exile_count) || 0) > Number((previousPlayer && previousPlayer.exile_count) || 0);
+    return oldHand.filter(card => {
+        const id = cardInstanceKey(card);
+        if (!id || newHandIds.has(id)) return false;
+        if (wasRecentlyPlayedExileCard(id)) {
+            recentlyPlayedExileCards.delete(id);
+            return false;
+        }
+        if (nextExileIds.has(id) && !oldExileIds.has(id)) return true;
+        return exileCountIncreased && cardHasExileLikeExit(card);
+    });
+}
+
+function animateCardShatterFromElement(cardEl, delay = 0) {
+    if (!cardEl) return;
+    const rect = cardEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'card-shatter-wrap';
+    wrap.style.left = `${rect.left}px`;
+    wrap.style.top = `${rect.top}px`;
+    wrap.style.width = `${rect.width}px`;
+    wrap.style.height = `${rect.height}px`;
+    const pieces = [
+        { clip: 'polygon(0 0, 48% 0, 38% 34%, 0 45%)', x: -22, y: -18, r: -13 },
+        { clip: 'polygon(48% 0, 100% 0, 100% 38%, 58% 32%, 38% 34%)', x: 20, y: -20, r: 12 },
+        { clip: 'polygon(0 45%, 38% 34%, 44% 63%, 0 72%)', x: -28, y: 3, r: -18 },
+        { clip: 'polygon(38% 34%, 58% 32%, 64% 66%, 44% 63%)', x: 0, y: -2, r: 7 },
+        { clip: 'polygon(58% 32%, 100% 38%, 100% 70%, 64% 66%)', x: 28, y: 4, r: 18 },
+        { clip: 'polygon(0 72%, 44% 63%, 40% 100%, 0 100%)', x: -18, y: 24, r: 11 },
+        { clip: 'polygon(44% 63%, 64% 66%, 100% 70%, 100% 100%, 40% 100%)', x: 24, y: 26, r: -10 },
+    ];
+    pieces.forEach((piece, index) => {
+        const shard = cardEl.cloneNode(true);
+        shard.classList.remove('card-play-flash', 'fusion-merge-clone', 'fusion-core-pulse', 'hand-card-animating');
+        shard.classList.add('card-shatter-piece');
+        shard.style.left = '';
+        shard.style.top = '';
+        shard.style.right = '';
+        shard.style.bottom = '';
+        shard.style.width = '100%';
+        shard.style.height = '100%';
+        shard.style.clipPath = piece.clip;
+        shard.style.setProperty('--shard-x', `${piece.x}px`);
+        shard.style.setProperty('--shard-y', `${piece.y}px`);
+        shard.style.setProperty('--shard-rot', `${piece.r}deg`);
+        shard.style.animationDelay = `${delay + index * 18}ms`;
+        wrap.appendChild(shard);
+    });
+    const crack = document.createElement('div');
+    crack.className = 'card-shatter-crack';
+    crack.style.animationDelay = `${delay}ms`;
+    wrap.appendChild(crack);
+    document.body.appendChild(wrap);
+    lockCardAnimation(delay + 560);
+    setTimeout(() => {
+        wrap.remove();
+        scheduleTutorialOverlayRefresh(30);
+    }, delay + 680);
+}
+
+function queueVisibleHandExileAnimations(previous, next) {
+    if (!areSequentialGameStates(previous, next) || isSpectating) return;
+    const removed = getNewlyExiledHandCards(previous.you || {}, next.you || {});
+    if (!removed.length) return;
+    const hand = $('you-hand');
+    if (!hand) return;
+    removed.forEach((card, index) => {
+        const id = cardInstanceKey(card);
+        const cardEl = id ? hand.querySelector(`.card[data-instance-id="${id}"]`) : null;
+        if (cardEl) animateCardShatterFromElement(cardEl, index * 70);
+    });
+}
+
 function getDrawSourcePoint(finalRect) {
     if (!finalRect) return { x: -80, y: window.innerHeight * 0.82 };
     const hand = $('you-hand');
@@ -4719,7 +5391,7 @@ function animateHandLayoutChanges(container, oldRects, hand) {
     });
 }
 
-function animatePlayedCard(cardInstanceId) {
+function animatePlayedCard(cardInstanceId, options = {}) {
     const cardEl = document.querySelector(`.card[data-instance-id="${cardInstanceId}"]`);
     if (!cardEl) return;
     const rect = cardEl.getBoundingClientRect();
@@ -4729,8 +5401,69 @@ function animatePlayedCard(cardInstanceId) {
     flash.style.top = `${rect.top}px`;
     flash.style.width = `${rect.width}px`;
     document.body.appendChild(flash);
-    lockCardAnimation(360);
-    setTimeout(() => flash.remove(), 420);
+    if (options.shatterAfter) {
+        lockCardAnimation(900);
+        setTimeout(() => {
+            animateCardShatterFromElement(flash);
+            flash.remove();
+        }, 340);
+        setTimeout(() => flash.remove(), 760);
+    } else {
+        lockCardAnimation(360);
+        setTimeout(() => flash.remove(), 420);
+    }
+}
+
+function animateFusionMerge(fusionCardId, targetIds = [], options = {}) {
+    const startDelay = Number(options.startDelay || 0);
+    const fusionEl = document.querySelector(`.card[data-instance-id="${fusionCardId}"]`);
+    if (!fusionEl || !Array.isArray(targetIds) || !targetIds.length) {
+        animatePlayedCard(fusionCardId);
+        return;
+    }
+    const fusionRect = fusionEl.getBoundingClientRect();
+    const centerX = fusionRect.left + fusionRect.width / 2;
+    const centerY = fusionRect.top + fusionRect.height / 2;
+    const clones = [];
+    targetIds.slice(0, 3).forEach((id, index) => {
+        const source = document.querySelector(`.card[data-instance-id="${id}"]`);
+        if (!source) return;
+        const rect = source.getBoundingClientRect();
+        const clone = source.cloneNode(true);
+        clone.classList.add('fusion-merge-clone');
+        clone.style.left = `${rect.left}px`;
+        clone.style.top = `${rect.top}px`;
+        clone.style.width = `${rect.width}px`;
+        clone.style.setProperty('--fusion-dx', `${centerX - (rect.left + rect.width / 2)}px`);
+        clone.style.setProperty('--fusion-dy', `${centerY - (rect.top + rect.height / 2)}px`);
+        clone.style.animationDelay = `${startDelay + index * 55}ms`;
+        document.body.appendChild(clone);
+        clones.push(clone);
+    });
+    const pulse = fusionEl.cloneNode(true);
+    pulse.classList.add('fusion-core-pulse');
+    pulse.style.left = `${fusionRect.left}px`;
+    pulse.style.top = `${fusionRect.top}px`;
+    pulse.style.width = `${fusionRect.width}px`;
+    pulse.style.animationDelay = `${startDelay + Math.min(180, clones.length * 55 + 40)}ms`;
+    document.body.appendChild(pulse);
+    lockCardAnimation(startDelay + 680);
+    setTimeout(() => {
+        clones.forEach(el => el.remove());
+        pulse.remove();
+    }, startDelay + 780);
+}
+
+function animateEquipmentForRegion(selector) {
+    const region = document.querySelector(selector);
+    if (!region) return;
+    const items = region.querySelectorAll('.equip-item, .equip-card, .btn-equip-trigger');
+    const item = items[items.length - 1];
+    if (!item) return;
+    item.classList.remove('equip-pop-in');
+    void item.offsetWidth;
+    item.classList.add('equip-pop-in');
+    setTimeout(() => item.classList.remove('equip-pop-in'), 520);
 }
 
 function cardChoiceIdentity(card) {
@@ -4782,7 +5515,14 @@ async function onPlayCard(cardInstanceId, options = {}) {
     const choice = await getCardChoice(cardDict, targetPlayerId);
     if (choice === false) return;
     clearSelectedPlayCard();
-    animatePlayedCard(cardInstanceId);
+    const shouldShatterAfterPlay = cardHasExileLikeExit(cardDict);
+    if (shouldShatterAfterPlay) markRecentlyPlayedExileCard(cardDict);
+    queueLocalResourceCost(cardDict, gameState && gameState.you);
+    if (cardDict.def_id === 'Fusion' && choice && Array.isArray(choice.target_instance_ids)) {
+        animateFusionMerge(cardInstanceId, choice.target_instance_ids, { startDelay: 300 });
+    } else {
+        animatePlayedCard(cardInstanceId, { shatterAfter: shouldShatterAfterPlay });
+    }
     pendingPlayCard = cardDict;
     renderPendingCard();
     socket.emit(soloMode ? 'solo_play_card' : 'play_card', { card_instance_id: cardInstanceId, choice, target_player_id: targetPlayerId });
@@ -4958,7 +5698,14 @@ function onRespond(cardInstanceId) {
     if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
     responsePending = false;
     if (tutorialMode) tutorialCounterSeen = true;
-    if (cardInstanceId != null) animatePlayedCard(cardInstanceId);
+    if (cardInstanceId != null) {
+        const hand = (gameState.you || {}).hand || [];
+        const cardDict = hand.find(c => c.instance_id === cardInstanceId);
+        const shouldShatterAfterPlay = cardHasExileLikeExit(cardDict);
+        if (shouldShatterAfterPlay) markRecentlyPlayedExileCard(cardDict);
+        queueLocalResourceCost(cardDict, gameState && gameState.you);
+        animatePlayedCard(cardInstanceId, { shatterAfter: shouldShatterAfterPlay });
+    }
     const container = $('response-panel');
     if (container) { container.innerHTML = ''; container.classList.add('hidden'); container.classList.remove('visible'); }
     socket.emit(soloMode ? 'solo_response' : 'response', { card_instance_id: cardInstanceId });
@@ -5025,7 +5772,10 @@ async function showChoiceUI(data) {
     const cardDict = data.card || {};
     const cardDef = getCardDef(cardDict.def_id);
     const cardName = cardDef ? getCardName(cardDef) : '?';
-    const choicePromptConfig = { cancellable: !(cardDef && (cardDef.flags || []).includes('uncancellable')) };
+    const choiceParams = data.choice_params || {};
+    const choicePromptConfig = {
+        cancellable: choiceParams.cancellable !== false && !(cardDef && (cardDef.flags || []).includes('uncancellable'))
+    };
     let choiceResult = null;
     if (choiceType === 'choose_attack_from_hand') {
         const attacks = ((gameState.you || {}).hand || []).filter(c => {
@@ -5122,6 +5872,23 @@ async function showChoiceUI(data) {
             const sel = await simpleChoice(UI.choose_from_enemy_hand_for.replace('{0}', cardName), options, choicePromptConfig);
             if (sel >= 0 && sel < oppHand.length) choiceResult = { target_instance_id: oppHand[sel].instance_id };
         }
+    } else if (choiceType === 'choose_target') {
+        const candidates = choiceParams.candidates || choiceParams.target || choiceParams.targets || 'enemy';
+        const candidateList = normalizeTargetCandidates(candidates);
+        const includeSelf = choiceParams.include_self === true
+            || candidateList.some(c => ['self', 'friendly', 'both', 'all', 'random_friendly', 'random_player', 'random_side'].includes(c));
+        const targetId = await choosePlayerTarget(UI.choose_target || UI.select_target || 'Choose target', {
+            includeSelf,
+            aliveOnly: choiceParams.alive_only !== false,
+            candidates,
+        });
+        if (targetId >= 0) choiceResult = { target_player: targetId, target_player_id: targetId };
+    } else if (choiceType === 'confirm') {
+        const sel = await simpleChoice(choiceParams.title || UI.notice || 'Confirm', [
+            choiceParams.ok_text || UI.ok || 'OK',
+            choiceParams.cancel_text || UI.cancel || 'Cancel',
+        ], choicePromptConfig);
+        if (sel >= 0) choiceResult = { confirmed: sel === 0, accepted: sel === 0 };
     }
     socket.emit(soloMode ? 'solo_resolve_choice' : 'resolve_choice', { choice: choiceResult });
     choicePending = false;
@@ -5346,7 +6113,7 @@ async function onUrfReplaceCard() {
 
 async function onUrfSellEquipment() {
     if (!gameState || gameState.mode !== 'urf' || !isMyTurn()) return;
-    const equipment = (gameState.you || {}).equipment || [];
+    const equipment = ((gameState.you || {}).equipment || []).filter(isUrfEquipmentSellable);
     if (!equipment.length) return;
     const options = equipment.map(eq => {
         const inst = eq.card_instance || {};
@@ -5568,6 +6335,7 @@ async function init() {
     });
     const savedTheme = localStorage.getItem('got_theme') || 'light';
     applyTheme(savedTheme);
+    applyUiStyle(localStorage.getItem('got_ui_style') || 'classic');
     const savedLang = localStorage.getItem('got_lang') || 'zh';
     applyLang(savedLang);
     bootLoader.step(UI.init_theme_lang, 24);
@@ -5608,6 +6376,8 @@ async function init() {
     if ($('btn-credit-bilibili')) $('btn-credit-bilibili').addEventListener('click', () => window.open('https://space.bilibili.com/1490695733', '_blank', 'noopener'));
     if ($('btn-credit-github')) $('btn-credit-github').addEventListener('click', () => window.open('https://github.com/Stickerbug', '_blank', 'noopener'));
     $('settings-theme-select').addEventListener('change', (e) => { applyTheme(e.target.value); });
+    const uiStyleSelect = $('settings-ui-style-select');
+    if (uiStyleSelect) uiStyleSelect.addEventListener('change', (e) => { applyUiStyle(e.target.value); });
     $('settings-lang-select').addEventListener('change', (e) => { applyLang(e.target.value); });
     const englishNameToggle = $('settings-show-english-names');
     if (englishNameToggle) {

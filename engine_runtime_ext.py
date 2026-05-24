@@ -3,6 +3,11 @@ import random
 
 
 def install_runtime_ext(GameEngine):
+    # The main GameEngine now owns the complete atomic-expression runtime.
+    # Keep this hook as a compatibility no-op so older imports still work
+    # without replacing the richer in-class implementation.
+    return
+
     def _eval_expr(self, player_id, expr, card=None):
         if isinstance(expr, (int, float, bool)):
             return expr
