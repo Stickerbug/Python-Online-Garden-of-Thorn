@@ -152,7 +152,7 @@ class GameEngine2v2(GameEngine):
                     for eid in enemy_ids:
                         opp_data_list[enemy_ids.index(eid)]['hand'] = [c.to_dict() for c in self.players[eid].hand]
 
-        log_start = max(0, len(self.log) - 50)
+        log_start = 0
         return {
             'phase': self.phase,
             'current_player': self.current_player,
@@ -168,7 +168,7 @@ class GameEngine2v2(GameEngine):
             'enemy_ids': enemy_ids,
             'team_id': self.team_of(for_player),
             'teams': self.teams,
-            'log': self.log[log_start:],
+            'log': list(self.log),
             'log_start': log_start,
             'log_total': len(self.log),
             'pending_response': self.pending_response,

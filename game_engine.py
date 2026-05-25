@@ -488,7 +488,7 @@ class GameEngine:
                 opp_data['hand'] = [c.to_dict() for c in self.players[opponent].hand]
         if self._antenna_reveal[for_player]:
             opp_data['revealed_hand'] = [c.to_dict() for c in self.players[opponent].hand]
-        log_start = max(0, len(self.log) - 50)
+        log_start = 0
         return {
             'phase': self.phase,
             'current_player': self.current_player,
@@ -497,7 +497,7 @@ class GameEngine:
             'winner': self.winner,
             'you': self.players[for_player].to_dict(include_private=True),
             'opponent': opp_data,
-            'log': self.log[log_start:],
+            'log': list(self.log),
             'log_start': log_start,
             'log_total': len(self.log),
             'pending_response': self.pending_response,

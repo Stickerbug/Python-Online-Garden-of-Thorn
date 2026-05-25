@@ -862,6 +862,37 @@ Object.assign(I18N.ja, {
     tag_desc_default: 'Mod または拡張タグです。具体的な意味は対応する Mod またはカード効果で定義されます。'
 });
 
+Object.assign(I18N.zh, {
+    gallery_related_cards: '相关卡牌',
+    tag_desc_fusion_layer: '特殊机制，不是普通标签。聚变层数与裂变层数共同决定攻击牌下一次打出时的结算：总伤害先按聚变层数放大，再按裂变层数拆成多次伤害，每次伤害为 ceil(原始伤害×聚变层数/裂变层数)。打出聚变时，选择2-3张同名攻击牌，将聚变层数相加，裂变层数取最大，合并为一张牌。牌进入弃牌堆后会恢复为默认聚变1。',
+    tag_desc_fission_layer: '特殊机制，不是普通标签。裂变层数表示攻击牌打出时会拆成多少次结算，并与聚变层数共同作用：每次伤害为 ceil(原始伤害×聚变层数/裂变层数)。如果卡牌每次命中都会改变后续伤害，例如三角形，每一次裂变命中都会按当时的层数重新计算。牌进入弃牌堆后会恢复为默认裂变1。'
+});
+Object.assign(I18N.en, {
+    gallery_related_cards: 'Related cards',
+    tag_desc_fusion_layer: 'Special mechanic, not a normal tag. Fusion and Fission work together when an attack is next played: total damage is first scaled by Fusion, then split into Fission hits. Each hit deals ceil(base damage × Fusion / Fission). Playing Fusion chooses 2-3 same-name attacks, adds their Fusion levels, keeps the highest Fission level, and merges them into one card. When the card enters the discard pile, Fusion resets to the default 1.',
+    tag_desc_fission_layer: 'Special mechanic, not a normal tag. Fission is the number of hits an attack is split into, and it works together with Fusion: each hit deals ceil(base damage × Fusion / Fission). If a card changes later damage after each hit, such as Triangle, every Fission hit recalculates from the current layer count. When the card enters the discard pile, Fission resets to the default 1.'
+});
+Object.assign(I18N.fr, {
+    gallery_related_cards: 'Cartes liées',
+    tag_desc_fusion_layer: 'Mécanique spéciale, pas un tag normal. Fusion et Fission agissent ensemble quand une attaque est jouée : les dégâts totaux sont d’abord multipliés par Fusion, puis divisés en plusieurs touches de Fission. Chaque touche inflige ceil(dégâts de base × Fusion / Fission). Jouer Fusion choisit 2-3 attaques de même nom, additionne leurs niveaux de Fusion, garde le plus haut niveau de Fission et les fusionne en une carte. Quand la carte va dans la défausse, Fusion revient à 1.',
+    tag_desc_fission_layer: 'Mécanique spéciale, pas un tag normal. Fission indique en combien de touches une attaque est divisée, et agit avec Fusion : chaque touche inflige ceil(dégâts de base × Fusion / Fission). Si une carte modifie les dégâts suivants à chaque touche, comme Triangle, chaque touche de Fission recalcule avec les couches actuelles. Quand la carte va dans la défausse, Fission revient à 1.'
+});
+Object.assign(I18N.pt, {
+    gallery_related_cards: 'Cartas relacionadas',
+    tag_desc_fusion_layer: 'Mecânica especial, não é uma tag normal. Fusão e Fissão funcionam juntas quando um ataque é jogado: o dano total primeiro é multiplicado pela Fusão e depois dividido em golpes de Fissão. Cada golpe causa ceil(dano base × Fusão / Fissão). Jogar Fusão escolhe 2-3 ataques de mesmo nome, soma seus níveis de Fusão, mantém o maior nível de Fissão e une tudo em uma carta. Quando a carta entra no descarte, Fusão volta ao padrão 1.',
+    tag_desc_fission_layer: 'Mecânica especial, não é uma tag normal. Fissão é o número de golpes em que um ataque é dividido, e funciona junto com Fusão: cada golpe causa ceil(dano base × Fusão / Fissão). Se uma carta muda o dano posterior a cada acerto, como Triângulo, cada golpe de Fissão recalcula com as camadas atuais. Quando a carta entra no descarte, Fissão volta ao padrão 1.'
+});
+Object.assign(I18N.ru, {
+    gallery_related_cards: 'Связанные карты',
+    tag_desc_fusion_layer: 'Особая механика, а не обычный тег. Слияние и Деление работают вместе при следующем розыгрыше атаки: общий урон сначала масштабируется Слиянием, затем делится на удары Деления. Каждый удар наносит ceil(базовый урон × Слияние / Деление). Розыгрыш Слияния выбирает 2-3 одноименные атаки, складывает их уровни Слияния, берет максимальный уровень Деления и объединяет их в одну карту. Когда карта попадает в сброс, Слияние сбрасывается к 1.',
+    tag_desc_fission_layer: 'Особая механика, а не обычный тег. Деление показывает, на сколько ударов делится атака, и работает вместе со Слиянием: каждый удар наносит ceil(базовый урон × Слияние / Деление). Если карта меняет последующий урон после каждого попадания, например Triangle, каждый удар Деления пересчитывается по текущим слоям. Когда карта попадает в сброс, Деление сбрасывается к 1.'
+});
+Object.assign(I18N.ja, {
+    gallery_related_cards: '関連カード',
+    tag_desc_fusion_layer: '通常のタグではなく特殊な仕組みです。融合と分裂は攻撃カードを次に打ち出す時に共同で作用します。総ダメージはまず融合層で拡大され、その後分裂層の回数に分けられます。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。融合を使うと同名攻撃カード2-3枚を選び、融合層を合計し、分裂層は最大値を取り、1枚のカードにします。カードが捨て札に入ると融合は既定値1に戻ります。',
+    tag_desc_fission_layer: '通常のタグではなく特殊な仕組みです。分裂層は攻撃カードが何回に分かれて解決されるかを表し、融合層と共同で作用します。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。三角形のようにヒットごとに以後のダメージが変わるカードは、各分裂ヒットでその時点の層数を使って再計算します。カードが捨て札に入ると分裂は既定値1に戻ります。'
+});
+
 Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card names' });
 Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称' });
 Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes' });
@@ -983,6 +1014,115 @@ Object.assign(I18N.ja, {
     error_game_already_over: 'ゲームはすでに終了しています',
 });
 
+Object.assign(I18N.en, {
+    compact_end_turn: 'End',
+    compact_view_deck: 'Deck',
+    compact_urf_replace: 'Swap',
+    compact_urf_sell: 'Sell',
+    compact_set_next_draw: 'Next',
+    compact_pause_edit: 'Edit',
+    compact_surrender: 'Give Up',
+    compact_leave_spectate: 'Leave',
+    compact_send: 'Send',
+    compact_battle_log: 'Log',
+    compact_hand: 'Hand',
+    compact_equipment: 'Equip',
+    compact_corrupted: 'Corrupt',
+    compact_log_start: 'Start',
+    compact_log_first: 'first',
+    compact_log_order: 'Order',
+});
+Object.assign(I18N.zh, {
+    compact_end_turn: '结束',
+    compact_view_deck: '牌堆',
+    compact_urf_replace: '换牌',
+    compact_urf_sell: '售卖',
+    compact_set_next_draw: '设抽',
+    compact_pause_edit: '编辑',
+    compact_surrender: '投降',
+    compact_leave_spectate: '退出',
+    compact_send: '发',
+    compact_battle_log: '日志',
+    compact_hand: '手牌',
+    compact_equipment: '装备',
+    compact_corrupted: '腐化',
+    compact_log_start: '开始',
+    compact_log_first: '先',
+    compact_log_order: '顺序',
+});
+Object.assign(I18N.fr, {
+    compact_end_turn: 'Fin',
+    compact_view_deck: 'Deck',
+    compact_urf_replace: 'Swap',
+    compact_urf_sell: 'Vendre',
+    compact_set_next_draw: 'Suiv.',
+    compact_pause_edit: 'Editer',
+    compact_surrender: 'Abandon',
+    compact_leave_spectate: 'Quitter',
+    compact_send: 'Env.',
+    compact_battle_log: 'Log',
+    compact_hand: 'Main',
+    compact_equipment: 'Equip.',
+    compact_corrupted: 'Corrompu',
+    compact_log_start: 'Debut',
+    compact_log_first: 'prem.',
+    compact_log_order: 'Ordre',
+});
+Object.assign(I18N.pt, {
+    compact_end_turn: 'Fim',
+    compact_view_deck: 'Deck',
+    compact_urf_replace: 'Trocar',
+    compact_urf_sell: 'Vender',
+    compact_set_next_draw: 'Prox.',
+    compact_pause_edit: 'Editar',
+    compact_surrender: 'Render',
+    compact_leave_spectate: 'Sair',
+    compact_send: 'Env.',
+    compact_battle_log: 'Log',
+    compact_hand: 'Mao',
+    compact_equipment: 'Equip.',
+    compact_corrupted: 'Corromp.',
+    compact_log_start: 'Inicio',
+    compact_log_first: '1o',
+    compact_log_order: 'Ordem',
+});
+Object.assign(I18N.ru, {
+    compact_end_turn: 'Ход',
+    compact_view_deck: 'Колода',
+    compact_urf_replace: 'Замена',
+    compact_urf_sell: 'Продать',
+    compact_set_next_draw: 'След.',
+    compact_pause_edit: 'Правка',
+    compact_surrender: 'Сдаться',
+    compact_leave_spectate: 'Выйти',
+    compact_send: 'Отпр.',
+    compact_battle_log: 'Лог',
+    compact_hand: 'Рука',
+    compact_equipment: 'Снар.',
+    compact_corrupted: 'Порча',
+    compact_log_start: 'Старт',
+    compact_log_first: 'перв.',
+    compact_log_order: 'Порядок',
+});
+Object.assign(I18N.ja, {
+    compact_end_turn: '終了',
+    compact_view_deck: '山札',
+    compact_urf_replace: '交換',
+    compact_urf_sell: '売却',
+    compact_set_next_draw: '次',
+    compact_pause_edit: '編集',
+    compact_surrender: '降参',
+    compact_leave_spectate: '退出',
+    compact_send: '送信',
+    compact_battle_log: 'ログ',
+    compact_hand: '手札',
+    compact_equipment: '装備',
+    compact_corrupted: '腐食',
+    compact_log_start: '開始',
+    compact_log_first: '先攻',
+    compact_log_order: '順番',
+});
+
 let currentLang = localStorage.getItem('got_lang') || 'zh';
 let showEnglishCardNames = localStorage.getItem('got_show_english_card_names') !== '0';
 let currentUiStyle = localStorage.getItem('got_ui_style') || 'classic';
@@ -1079,6 +1219,8 @@ const CARD_FLAG_STYLES = {
     void: { label: '', fg: '#8e44ad', bg: 'rgba(142,68,173,0.15)', cls: 'void' },
     self_only: { label: '', fg: '#2f3542', bg: 'rgba(47,53,66,0.12)', cls: 'self-only' },
     uncancellable: { label: '', fg: '#7f1d1d', bg: 'rgba(127,29,29,0.12)', cls: 'uncancellable' },
+    fusion_layer: { label: '', fg: '#8e44ad', bg: 'rgba(142,68,173,0.15)', cls: 'fusion-layer' },
+    fission_layer: { label: '', fg: '#0f766e', bg: 'rgba(15,118,110,0.14)', cls: 'fission-layer' },
 };
 
 function getCardName(cardDef) {
@@ -1512,14 +1654,28 @@ let cardAnimationUnlockTimer = null;
 let hasPlayerHandSnapshot = false;
 let recentlyPlayedExileCards = new Map();
 let pendingLocalResourceCosts = [];
+let pendingOptimisticResourceCosts = [];
 let pendingPlayCard = null;
+let pendingServerAction = null;
+let pendingServerActionTimer = null;
+let optimisticResourceOverride = null;
 let selectedPlayCardId = null;
 let actionToastTimer = null;
 let combatFloatSeq = 0;
+const COMBAT_FLOAT_TOTAL_LIMIT_MS = 5000;
+const COMBAT_FLOAT_BASE_DURATION_MS = 1700;
+const COMBAT_FLOAT_MIN_DURATION_MS = 620;
+const COMBAT_FLOAT_END_PAD_MS = 140;
+const COMBAT_FLOAT_MAX_LAST_DELAY_MS = COMBAT_FLOAT_TOTAL_LIMIT_MS - COMBAT_FLOAT_MIN_DURATION_MS - COMBAT_FLOAT_END_PAD_MS;
 let targetPickCleanup = null;
+let gameOverRenderTimer = null;
+let scheduledGameOverState = null;
 let gameTimelineEntries = [];
 let renderedBattleLogCount = 0;
 let renderedBattleLogTotal = 0;
+let lastRenderedTurnKey = '';
+const lastStatusSignatures = new Map();
+const GALLERY_MECHANIC_FLAGS = new Set(['fusion_layer', 'fission_layer']);
 const bootLoader = {
     el: null, stepEl: null, fillEl: null, value: 0,
     init() {
@@ -1607,6 +1763,43 @@ function applyUiStyle(style) {
     localStorage.setItem('got_ui_style', currentUiStyle);
     const sel = $('settings-ui-style-select');
     if (sel) sel.value = currentUiStyle;
+    updateCompactUiText();
+    if (gameState && gameState.phase) renderGame(gameState);
+}
+
+function compactText(normalKey, compactKey) {
+    if (!isClassicUiStyle() || !compactKey) return t(normalKey);
+    return t(compactKey);
+}
+
+function setCompactButtonText(id, normalKey, compactKey) {
+    const el = $(id);
+    if (!el) return;
+    const full = t(normalKey);
+    el.textContent = full;
+    el.removeAttribute('title');
+    el.removeAttribute('aria-label');
+}
+
+function updateCompactUiText() {
+    setCompactButtonText('btn-end-turn', 'end_turn', 'compact_end_turn');
+    setCompactButtonText('btn-view-deck', 'view_deck', 'compact_view_deck');
+    setCompactButtonText('btn-urf-replace', 'urf_replace', 'compact_urf_replace');
+    setCompactButtonText('btn-urf-sell', 'urf_sell', 'compact_urf_sell');
+    setCompactButtonText('btn-solo-next-draw', 'set_next_draw', 'compact_set_next_draw');
+    setCompactButtonText('btn-solo-edit', 'pause_edit', 'compact_pause_edit');
+    setCompactButtonText('btn-surrender', 'surrender', 'compact_surrender');
+    setCompactButtonText('btn-leave-spectate', 'leave_spectate', 'compact_leave_spectate');
+    setCompactButtonText('btn-game-chat-send', 'send', 'compact_send');
+    const battleLogHeader = document.querySelector('#battle-log .log-header');
+    if (battleLogHeader) {
+        const full = UI.battle_log;
+        battleLogHeader.textContent = full;
+        battleLogHeader.title = '';
+    }
+    const teammateSections = document.querySelectorAll('.teammate-sidebar-section');
+    if (teammateSections[0]) teammateSections[0].textContent = compactText('compact_hand', 'compact_hand');
+    if (teammateSections[1]) teammateSections[1].textContent = compactText('compact_equipment', 'compact_equipment');
 }
 
 function applyLang(lang) {
@@ -1813,9 +2006,13 @@ function updateStaticText() {
     const youLabel = $('you-label');
     if (youLabel && (!gameState || !gameState.your_name)) youLabel.textContent = UI.you;
     const oppInfo = $('opp-info');
-    if (oppInfo && (!gameState || !gameState.opponent)) oppInfo.textContent = UI.hand_deck_zero_opp;
+    if (oppInfo && (!gameState || !gameState.opponent)) {
+        setPileInfoText(oppInfo, isClassicUiStyle() ? { text: '✦0 ▣0', title: UI.hand_deck_zero_opp } : { text: UI.hand_deck_zero_opp, title: '' });
+    }
     const youInfo = $('you-info');
-    if (youInfo && (!gameState || !gameState.you)) youInfo.textContent = UI.hand_deck_zero_you;
+    if (youInfo && (!gameState || !gameState.you)) {
+        setPileInfoText(youInfo, isClassicUiStyle() ? { text: '✦0 ▣0 ⟲0', title: UI.hand_deck_zero_you } : { text: UI.hand_deck_zero_you, title: '' });
+    }
     const onlineCount = $('lobby-online-count');
     if (onlineCount && phase !== 'lobby') onlineCount.textContent = tf('online_count', 0);
     const switchBtn = $('btn-switch-perspective');
@@ -1846,9 +2043,37 @@ function updateStaticText() {
     if (btnLobbyChatSend) btnLobbyChatSend.textContent = UI.send;
     const btnGameChatSend = $('btn-game-chat-send');
     if (btnGameChatSend) btnGameChatSend.textContent = UI.send;
+    updateCompactUiText();
 }
 
 function $(id) { return document.getElementById(id); }
+
+function restartTransientClass(el, className, duration = 650) {
+    if (!el || !className) return;
+    el.classList.remove(className);
+    void el.offsetWidth;
+    el.classList.add(className);
+    setTimeout(() => {
+        if (el && el.classList) el.classList.remove(className);
+    }, duration);
+}
+
+function flashTargetRegion(playerId) {
+    const region = getPlayerRegionById(playerId);
+    restartTransientClass(region, 'target-feedback-pulse', 720);
+}
+
+function maybeAnimateTurnFocus(gs) {
+    if (!gs) return;
+    const key = `${gs.mode || ''}:${gs.phase || ''}:${gs.round_num || 0}:${normalizePlayerId(gs.current_player)}`;
+    const shouldAnimate = lastRenderedTurnKey && lastRenderedTurnKey !== key && gs.phase === 'action';
+    lastRenderedTurnKey = key;
+    if (!shouldAnimate) return;
+    requestAnimationFrame(() => {
+        const region = getPlayerRegionById(gs.current_player);
+        restartTransientClass(region, 'turn-focus-pulse', 900);
+    });
+}
 
 function showView(viewId) {
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
@@ -1858,6 +2083,8 @@ function showView(viewId) {
         gameTimelineEntries = [];
         renderedBattleLogCount = 0;
         renderedBattleLogTotal = 0;
+        lastRenderedTurnKey = '';
+        lastStatusSignatures.clear();
         updateModeSpecificControls({ solo: false, phase: '' });
         refreshBaseStatus(viewId);
     }
@@ -2023,6 +2250,21 @@ function getGalleryFlagDescription(flag) {
     return UI[`tag_desc_${flag}`] || UI.tag_desc_default;
 }
 
+function isGalleryMechanicFlag(flag) {
+    return GALLERY_MECHANIC_FLAGS.has(flag);
+}
+
+function getGalleryFlagEnglishLabel(flag) {
+    return I18N.en[`tag_${flag}`] || I18N.en[`flag_${flag}`] || I18N.en[flag] || flag;
+}
+
+function getGalleryFlagUsers(flag) {
+    const defs = Object.values(CARD_DEFS);
+    if (flag === 'fusion_layer') return defs.filter(cd => cd && cd.id === 'Fusion');
+    if (flag === 'fission_layer') return defs.filter(cd => cd && cd.id === 'Fission');
+    return defs.filter(cd => (cd.flags || []).includes(flag));
+}
+
 function getAllGalleryFlags() {
     const flags = new Set(Object.keys(CARD_FLAG_STYLES));
     Object.values(CARD_DEFS).forEach(cd => (cd.flags || []).forEach(flag => {
@@ -2084,14 +2326,14 @@ function renderCardGallery() {
 
 function renderTagGallery(list, detail, q) {
     const flags = getAllGalleryFlags().filter(flag => {
-        const en = I18N.en[`tag_${flag}`] || I18N.en[`flag_${flag}`] || flag;
+        const en = getGalleryFlagEnglishLabel(flag);
         const text = `${flag} ${getFlagLabel(flag)} ${en}`.toLowerCase();
         return !q || text.includes(q);
     });
     if (!flags.includes(gallerySelectedId)) gallerySelectedId = flags[0] || null;
     list.innerHTML = '';
     flags.forEach(flag => {
-        const usedBy = Object.values(CARD_DEFS).filter(cd => (cd.flags || []).includes(flag));
+        const usedBy = getGalleryFlagUsers(flag);
         const row = document.createElement('div');
         row.className = 'gallery-card-row' + (flag === gallerySelectedId ? ' active' : '');
         row.innerHTML = `<div class="gallery-row-title">${getFlagLabel(flag)}</div><div class="gallery-row-meta">${tf('gallery_card_count', usedBy.length)}</div>`;
@@ -2102,15 +2344,17 @@ function renderTagGallery(list, detail, q) {
         detail.innerHTML = `<p>${UI.gallery_no_items}</p>`;
         return;
     }
-    const usedBy = Object.values(CARD_DEFS)
-        .filter(cd => (cd.flags || []).includes(gallerySelectedId))
+    const usedBy = getGalleryFlagUsers(gallerySelectedId)
         .sort((a, b) => getCardName(a).localeCompare(getCardName(b)));
+    const relatedLabel = isGalleryMechanicFlag(gallerySelectedId)
+        ? (UI.gallery_related_cards || UI.gallery_cards_with_tag)
+        : UI.gallery_cards_with_tag;
     detail.innerHTML = `<div class="gallery-simple-detail">
         <h3>${getFlagLabel(gallerySelectedId)}</h3>
         <div class="gallery-tag-list">${makeGalleryFlagHtml(gallerySelectedId)}</div>
         <p><b>ID：</b>${gallerySelectedId}</p>
         <p><b>${UI.gallery_explanation}：</b>${getGalleryFlagDescription(gallerySelectedId)}</p>
-        <p><b>${UI.gallery_cards_with_tag}：</b>${usedBy.length ? usedBy.map(getCardName).join(' / ') : '-'}</p>
+        <p><b>${relatedLabel}：</b>${usedBy.length ? usedBy.map(getCardName).join(' / ') : '-'}</p>
     </div>`;
 }
 
@@ -2236,6 +2480,7 @@ function flashStatus(text, duration, type) {
     s.textContent = text;
     if (type === 'error') {
         s.style.color = '#C0392B';
+        restartTransientClass(s, 'status-shake', 320);
     } else {
         s.style.color = '#E67E22';
     }
@@ -2292,6 +2537,125 @@ function ensureDropOverlay() {
 
 function isWaitingForOpponentCounter() {
     return !!(pendingPlayCard && gameState && gameState.mode !== '2v2' && gameState.phase !== 'game_over');
+}
+
+function isActionBusy(options = {}) {
+    const includeAnimation = options.includeAnimation !== false;
+    const includePendingPlay = options.includePendingPlay !== false;
+    return !!pendingServerAction
+        || !!choicePending
+        || !!responsePending
+        || (includePendingPlay && !!pendingPlayCard)
+        || (includeAnimation && isCardAnimationLocked());
+}
+
+function clearPendingServerAction(options = {}) {
+    if (pendingServerActionTimer) {
+        clearTimeout(pendingServerActionTimer);
+        pendingServerActionTimer = null;
+    }
+    pendingServerAction = null;
+    if (!options.keepOptimistic) {
+        optimisticResourceOverride = null;
+        pendingOptimisticResourceCosts = [];
+    }
+    document.body.classList.remove('server-action-pending');
+}
+
+function beginPendingServerAction(name, options = {}) {
+    clearPendingServerAction();
+    pendingServerAction = {
+        name: name || 'action',
+        createdAt: Date.now(),
+    };
+    if (options.optimisticResources) {
+        optimisticResourceOverride = options.optimisticResources;
+        applyOptimisticResourceOverride();
+    }
+    document.body.classList.add('server-action-pending');
+    ['btn-end-turn', 'btn-urf-replace', 'btn-urf-sell'].forEach(id => {
+        const btn = $(id);
+        if (btn) btn.disabled = true;
+    });
+    document.querySelectorAll('.btn-equip-trigger').forEach(btn => { btn.disabled = true; });
+    const timeoutMs = Math.max(2500, Number(options.timeoutMs) || 8000);
+    pendingServerActionTimer = setTimeout(() => {
+        const stillPending = !!pendingServerAction;
+        clearPendingServerAction();
+        pendingPlayCard = null;
+        clearSelectedPlayCard();
+        if (gameState && gameState.phase) renderGame(gameState);
+        if (stillPending) flashStatus(UI.server_no_response || UI.operation_failed, 3200, 'error');
+    }, timeoutMs);
+}
+
+function getOptimisticResourceCost(cardDict, ownerState = null) {
+    if (!cardDict) return null;
+    const cardDef = getCardDef(cardDict.def_id);
+    if (!cardDef) return null;
+    const owner = ownerState || (gameState && gameState.you) || {};
+    const { totalE, totalM } = getCardDisplayCosts(cardDict, cardDef, owner);
+    return {
+        totalE: Math.max(0, Number(totalE) || 0),
+        totalM: Math.max(0, Number(totalM) || 0),
+    };
+}
+
+function buildOptimisticResourceOverride(cardDict, ownerState = null, cost = null) {
+    const owner = ownerState || (gameState && gameState.you) || {};
+    const resourceCost = cost || getOptimisticResourceCost(cardDict, owner);
+    if (!resourceCost || (!resourceCost.totalE && !resourceCost.totalM)) return null;
+    return {
+        playerId: normalizePlayerId(gameState && gameState.your_id),
+        elixir: Math.max(0, getBarValueForKey(owner, 'elixir') - resourceCost.totalE),
+        magic: Math.max(0, getBarValueForKey(owner, 'magic') - resourceCost.totalM),
+        maxElixir: getBarMaxForKey(owner, 'elixir'),
+        maxMagic: getBarMaxForKey(owner, 'magic'),
+        totalE: resourceCost.totalE,
+        totalM: resourceCost.totalM,
+    };
+}
+
+function applyOptimisticResourceOverride() {
+    if (!optimisticResourceOverride) return;
+    const events = [];
+    if (optimisticResourceOverride.totalE > 0) {
+        events.push({
+            text: `-${optimisticResourceOverride.totalE}E`,
+            kind: 'elixir',
+            delay: 0,
+            stackIndex: 0,
+            barKey: 'elixir',
+            barValue: optimisticResourceOverride.elixir,
+            barMax: optimisticResourceOverride.maxElixir,
+        });
+    }
+    if (optimisticResourceOverride.totalM > 0) {
+        events.push({
+            text: `-${optimisticResourceOverride.totalM}M`,
+            kind: 'magic',
+            delay: optimisticResourceOverride.totalE > 0 ? 120 : 0,
+            stackIndex: 1,
+            barKey: 'magic',
+            barValue: optimisticResourceOverride.magic,
+            barMax: optimisticResourceOverride.maxMagic,
+        });
+    }
+    const scheduled = showCombatFloatSequence('.player-section', events);
+    animateBarEventSequence('.player-section', scheduled, gameState && gameState.you, {
+        ...(gameState && gameState.you),
+        elixir: optimisticResourceOverride.elixir,
+        magic: optimisticResourceOverride.magic,
+    });
+}
+
+function getOptimisticPlayerBarsData(playerData) {
+    if (!optimisticResourceOverride || !playerData) return playerData;
+    return {
+        ...playerData,
+        elixir: optimisticResourceOverride.elixir,
+        magic: optimisticResourceOverride.magic,
+    };
 }
 
 function updateDropOverlayContent(overlay = $('card-drop-overlay')) {
@@ -2363,7 +2727,7 @@ function clearSelectedPlayCard() {
 
 function selectPlayCardForConfirm(cardInstanceId) {
     if (!isTouchPlayMode()) return false;
-    if (isCardAnimationLocked()) return false;
+    if (isActionBusy()) return false;
     const hand = (gameState.you || {}).hand || [];
     const cardDict = hand.find(c => c.instance_id === cardInstanceId);
     const cardDef = cardDict ? getCardDef(cardDict.def_id) : null;
@@ -2444,6 +2808,7 @@ function getCardDef(defId) {
 }
 
 function getFlagLabel(flag) {
+    if (flag === 'fusion_layer' || flag === 'fission_layer') return UI[flag] || flag;
     return UI[`tag_${flag}`] || UI[`flag_${flag}`] || flag;
 }
 
@@ -2885,7 +3250,6 @@ function connectSocket(serverUrl) {
             showView('view-game');
             updateStatus(UI.game_loading || 'Loading...');
         } else if (phase === 'game_over') {
-            showView('view-gameover');
             updateStatus(UI.game_over);
         } else if (phase === 'action' || phase === 'draw' || phase === 'response' || phase === 'choice') {
             showView('view-game');
@@ -2933,13 +3297,21 @@ function connectSocket(serverUrl) {
                 pendingPlayCard = null;
             }
         }
+        const keepOptimisticForState = !!optimisticResourceOverride;
+        clearPendingServerAction({ keepOptimistic: keepOptimisticForState });
         if (phase === 'game_over') {
-            renderGameOver(data);
+            renderGameOverAfterFinalAnimation(previousGameState, data, { fullScreen: true, tutorial: false });
+            optimisticResourceOverride = null;
         } else {
-            if (!areSequentialGameStates(previousGameState, data)) pendingLocalResourceCosts = [];
+            clearScheduledGameOver();
+            if (!areSequentialGameStates(previousGameState, data)) {
+                pendingLocalResourceCosts = [];
+                pendingOptimisticResourceCosts = [];
+            }
             queueVisibleHandExileAnimations(previousGameState, data);
             renderGame(data);
             showStateDeltas(previousGameState, data);
+            optimisticResourceOverride = null;
         }
     });
     socket.on('solo_state', (data) => {
@@ -2960,18 +3332,25 @@ function connectSocket(serverUrl) {
             if (rp) { rp.innerHTML = ''; rp.classList.add('hidden'); }
             if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
         }
+        const keepOptimisticForState = !!optimisticResourceOverride;
+        clearPendingServerAction({ keepOptimistic: keepOptimisticForState });
         if (phase === 'game_over') {
             if (data.tutorial || tutorialMode) {
-                stopTutorialUiForGameOver();
-                renderGameOver(data);
+                renderGameOverAfterFinalAnimation(previousGameState, data, { fullScreen: true, tutorial: true });
             } else {
-                renderGame(data);
+                renderGameOverAfterFinalAnimation(previousGameState, data, { fullScreen: false, deferResultLabels: true });
             }
+            optimisticResourceOverride = null;
         } else {
-            if (!areSequentialGameStates(previousGameState, data)) pendingLocalResourceCosts = [];
+            clearScheduledGameOver();
+            if (!areSequentialGameStates(previousGameState, data)) {
+                pendingLocalResourceCosts = [];
+                pendingOptimisticResourceCosts = [];
+            }
             queueVisibleHandExileAnimations(previousGameState, data);
             renderGame(data);
             showStateDeltas(previousGameState, data);
+            optimisticResourceOverride = null;
         }
     if (tutorialMode) {
         scheduleTutorialOverlayStart();
@@ -2982,6 +3361,7 @@ function connectSocket(serverUrl) {
     });
     socket.on('response_request', (data) => {
         console.log('[RESPONSE] response_request, counter_cards:', (data.counter_cards || []).length);
+        clearPendingServerAction({ keepOptimistic: true });
         responsePending = true;
         responseData = data;
         showResponseUI(data);
@@ -2990,6 +3370,7 @@ function connectSocket(serverUrl) {
         showAllyConsentUI(data);
     });
     socket.on('choice_request', (data) => {
+        clearPendingServerAction({ keepOptimistic: true });
         choicePending = true;
         choiceData = data;
         pendingPlayCard = null;
@@ -3007,8 +3388,10 @@ function connectSocket(serverUrl) {
     socket.on('server_error', (data) => {
         console.log('[client] server_error:', data.message);
         flashStatus(translateServerMessage(data.message), 3600, 'error');
+        clearPendingServerAction();
         pendingPlayCard = null;
         clearSelectedPlayCard();
+        if (gameState && gameState.phase) renderGame(gameState);
     });
     socket.on('opponent_disconnected', (data) => {
         if (data && data.timeout) {
@@ -4443,17 +4826,19 @@ function updateModeSpecificControls(gs) {
     if (urfReplaceBtn) {
         const show = gs?.mode === 'urf' && !isSpectating && !gameOver;
         urfReplaceBtn.textContent = UI.urf_replace || '替换手牌';
+        urfReplaceBtn.title = '';
         urfReplaceBtn.classList.toggle('hidden', !show);
         urfReplaceBtn.style.display = show ? '' : 'none';
-        urfReplaceBtn.disabled = !isMyTurn() || !gs?.urf_replace_available;
+        urfReplaceBtn.disabled = !isMyTurn() || isActionBusy({ includeAnimation: false }) || !gs?.urf_replace_available;
     }
     if (urfSellBtn) {
         const show = gs?.mode === 'urf' && !isSpectating && !gameOver;
         const sellableEquipment = ((gs.you || {}).equipment || []).filter(isUrfEquipmentSellable);
         urfSellBtn.textContent = UI.urf_sell || '售卖装备';
+        urfSellBtn.title = '';
         urfSellBtn.classList.toggle('hidden', !show);
         urfSellBtn.style.display = show ? '' : 'none';
-        urfSellBtn.disabled = !isMyTurn() || !gs?.urf_sell_available || !sellableEquipment.length;
+        urfSellBtn.disabled = !isMyTurn() || isActionBusy({ includeAnimation: false }) || !gs?.urf_sell_available || !sellableEquipment.length;
     }
     if (spectateControls) {
         spectateControls.classList.toggle('hidden', !showSpectateControls);
@@ -4466,6 +4851,25 @@ function updateModeSpecificControls(gs) {
     }
     if (gameControls) gameControls.style.display = showGameControls ? '' : 'none';
     if (playZone) playZone.style.display = showPlayZone ? '' : 'none';
+}
+
+function formatPlayerPileInfo(playerData, includeDiscard, opponentStyle = false) {
+    const hand = playerData.hand_count || 0;
+    const deck = playerData.deck_count || 0;
+    const discard = playerData.discard_count || 0;
+    const full = includeDiscard
+        ? UI.hand_deck_discard_info.replace('{0}', hand).replace('{1}', deck).replace('{2}', discard)
+        : UI.hand_deck_info_opp.replace('{0}', hand).replace('{1}', deck);
+    if (!isClassicUiStyle()) return { text: full, title: '' };
+    const compact = includeDiscard ? `✦${hand} ▣${deck} ⟲${discard}` : `✦${hand} ▣${deck}`;
+    return { text: compact, title: full, opponentStyle };
+}
+
+function setPileInfoText(el, info) {
+    if (!el || !info) return;
+    el.textContent = info.text;
+    el.title = info.title || '';
+    el.classList.toggle('compact-info', !!info.title);
 }
 
 function renderGame(data) {
@@ -4500,6 +4904,7 @@ function renderGame(data) {
     if (oppDivider) oppDivider.classList.toggle('hidden', !is2v2);
     if (teammateSidebar) teammateSidebar.classList.toggle('hidden', !is2v2);
     syncPlayerRegionTargets(gs);
+    maybeAnimateTurnFocus(gs);
 
     const oppLabel = $('opp-label');
     const youLabel = $('you-label');
@@ -4539,7 +4944,7 @@ function renderGame(data) {
     }
 
     renderPlayerBars('opp-bars', opp);
-    renderPlayerBars('you-bars', you);
+    renderPlayerBars('you-bars', getOptimisticPlayerBarsData(you));
     renderStatusTags('opp-status', opp);
     renderStatusTags('you-status', you);
     renderOppHand(opp);
@@ -4557,9 +4962,9 @@ function renderGame(data) {
         renderTeammateHand(teammate);
         renderEquipment('teammate-equip', teammate, false);
         const opp2Info = $('opp2-info');
-        if (opp2Info) opp2Info.textContent = UI.hand_deck_info_opp.replace('{0}', opp2.hand_count || 0).replace('{1}', opp2.deck_count || 0);
+        if (opp2Info) setPileInfoText(opp2Info, formatPlayerPileInfo(opp2, false, true));
         const tmInfo = $('teammate-info');
-        if (tmInfo) tmInfo.textContent = UI.hand_deck_discard_info.replace('{0}', teammate.hand_count || 0).replace('{1}', teammate.deck_count || 0).replace('{2}', teammate.discard_count || 0);
+        if (tmInfo) setPileInfoText(tmInfo, formatPlayerPileInfo(teammate, true));
     }
 
     renderLog(gs.log || [], gs.log_start || 0, gs.log_total);
@@ -4577,11 +4982,14 @@ function renderGame(data) {
             : gs.phase === 'draw' ? UI.draw_phase
             : gs.phase === 'game_over' ? UI.game_over : '';
     }
-    updateStatus(UI.round_status.replace('{0}', gs.round_num || 0).replace('{1}', phaseText));
+    const fullRoundStatus = UI.round_status.replace('{0}', gs.round_num || 0).replace('{1}', phaseText);
+    updateStatus(isClassicUiStyle() ? `R${gs.round_num || 0} · ${phaseText}` : fullRoundStatus);
+    const statusTextEl = $('status-text');
+    if (statusTextEl) statusTextEl.title = isClassicUiStyle() ? fullRoundStatus : '';
 
     const endTurnBtn = $('btn-end-turn');
     if (endTurnBtn) {
-        endTurnBtn.disabled = !myTurn || isSpectating || gs.phase === 'game_over';
+        endTurnBtn.disabled = !myTurn || isSpectating || gs.phase === 'game_over' || isActionBusy({ includeAnimation: false });
     }
     const inSoloGame = !!gs.solo;
     const playZone = $('play-zone');
@@ -4610,12 +5018,24 @@ function renderGame(data) {
     const oppInfo = $('opp-info');
     if (oppInfo) {
         oppInfo.style.display = gs.mode === 'urf' ? 'none' : '';
-        oppInfo.textContent = gs.mode === 'urf' ? '' : UI.hand_deck_info_opp.replace('{0}', opp.hand_count || 0).replace('{1}', opp.deck_count || 0);
+        if (gs.mode === 'urf') {
+            oppInfo.textContent = '';
+            oppInfo.title = '';
+            oppInfo.classList.remove('compact-info');
+        } else {
+            setPileInfoText(oppInfo, formatPlayerPileInfo(opp, false, true));
+        }
     }
     const youInfo = $('you-info');
     if (youInfo) {
         youInfo.style.display = gs.mode === 'urf' ? 'none' : '';
-        youInfo.textContent = gs.mode === 'urf' ? '' : UI.hand_deck_discard_info.replace('{0}', you.hand_count || 0).replace('{1}', you.deck_count || 0).replace('{2}', you.discard_count || 0);
+        if (gs.mode === 'urf') {
+            youInfo.textContent = '';
+            youInfo.title = '';
+            youInfo.classList.remove('compact-info');
+        } else {
+            setPileInfoText(youInfo, formatPlayerPileInfo(you, true));
+        }
     }
     scheduleAdjust();
 }
@@ -4663,29 +5083,39 @@ function renderStatusTags(containerId, playerData) {
     container.innerHTML = '';
     const tags = [];
     const p = playerData;
-    if (p.poison > 0) tags.push({ name: UI.status_poison, val: p.poison, fg: COLORS.poison, bg: COLORS.poison_bg });
-    if (p.fire > 0) tags.push({ name: UI.status_fire, val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
-    if (p.toxic > 0) tags.push({ name: UI.status_toxic, val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
-    if (p.triangle_stacks > 0) tags.push({ name: UI.status_triangle, val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
-    if (p.dodge > 0) tags.push({ name: UI.status_dodge, val: p.dodge, fg: COLORS.guard, bg: COLORS.guard_bg });
-    if (p.nazar_active) tags.push({ name: UI.status_nazar, val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
-    if (p.equipment_protection > 0) tags.push({ name: UI.status_equip_protect, val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
-    if (p.invincible) tags.push({ name: UI.status_invincible, val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
-    if (p.skip_turn) tags.push({ name: UI.status_stunned, val: '', fg: COLORS.damage, bg: COLORS.damage_bg });
-    if (p.attack_blocked > 0) tags.push({ name: UI.status_attack_blocked, val: p.attack_blocked, fg: '#C0392B', bg: '#FDEDEC' });
-    if (p.attack_only > 0) tags.push({ name: UI.status_attack_only, val: p.attack_only, fg: '#D35400', bg: '#FEF5E7' });
-    if (p.untargetable) tags.push({ name: UI.status_untargetable, val: '', fg: '#1A5276', bg: '#EBF5FB' });
-    if (p.bandage_active) tags.push({ name: UI.status_bandage, val: '', fg: '#1E8449', bg: '#E8F8F5' });
-    if (p.sponge_active) tags.push({ name: UI.status_sponge, val: '', fg: '#6C3483', bg: '#F4ECF7' });
-    if (p.shovel_active) tags.push({ name: UI.status_shovel, val: '', fg: '#5D4037', bg: '#EFEBE9' });
+    if (p.poison > 0) tags.push({ name: UI.status_poison, abbr: 'P', val: p.poison, fg: COLORS.poison, bg: COLORS.poison_bg });
+    if (p.fire > 0) tags.push({ name: UI.status_fire, abbr: 'F', val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
+    if (p.toxic > 0) tags.push({ name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
+    if (p.triangle_stacks > 0) tags.push({ name: UI.status_triangle, abbr: '△', val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
+    if (p.dodge > 0) tags.push({ name: UI.status_dodge, abbr: 'Dg', val: p.dodge, fg: COLORS.guard, bg: COLORS.guard_bg });
+    if (p.nazar_active) tags.push({ name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
+    if (p.equipment_protection > 0) tags.push({ name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
+    if (p.invincible) tags.push({ name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
+    if (p.skip_turn) tags.push({ name: UI.status_stunned, abbr: 'Stn', val: '', fg: COLORS.damage, bg: COLORS.damage_bg });
+    if (p.attack_blocked > 0) tags.push({ name: UI.status_attack_blocked, abbr: 'NoT', val: p.attack_blocked, fg: '#C0392B', bg: '#FDEDEC' });
+    if (p.attack_only > 0) tags.push({ name: UI.status_attack_only, abbr: 'TOnly', val: p.attack_only, fg: '#D35400', bg: '#FEF5E7' });
+    if (p.untargetable) tags.push({ name: UI.status_untargetable, abbr: 'Unt', val: '', fg: '#1A5276', bg: '#EBF5FB' });
+    if (p.bandage_active) tags.push({ name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
+    if (p.sponge_active) tags.push({ name: UI.status_sponge, abbr: 'Spg', val: '', fg: '#6C3483', bg: '#F4ECF7' });
+    if (p.shovel_active) tags.push({ name: UI.status_shovel, abbr: 'Shv', val: '', fg: '#5D4037', bg: '#EFEBE9' });
+    const previousSignature = lastStatusSignatures.get(containerId);
+    const previousItems = new Set(previousSignature ? previousSignature.split('\u0001') : []);
+    const nextItems = [];
     tags.forEach(t => {
         const el = document.createElement('span');
         el.className = 'status-tag';
         el.style.color = t.fg;
         el.style.background = t.bg;
-        el.textContent = t.val ? `${t.name}:${t.val}` : t.name;
+        const fullText = t.val ? `${t.name}:${t.val}` : t.name;
+        nextItems.push(fullText);
+        el.textContent = fullText;
+        el.title = '';
+        if (previousSignature !== undefined && !previousItems.has(fullText)) {
+            el.classList.add('status-tag-changed');
+        }
         container.appendChild(el);
     });
+    lastStatusSignatures.set(containerId, nextItems.join('\u0001'));
 }
 
 function renderOppHand(oppData, containerId = 'opp-hand') {
@@ -4746,7 +5176,7 @@ function renderPlayerHand(playerData) {
     const myTurn = isMyTurn();
     hand.forEach(cardDict => {
         const cardDef = getCardDef(cardDict.def_id);
-        const canPlay = myTurn && canPlayCard(cardDict);
+        const canPlay = myTurn && !isActionBusy({ includeAnimation: false }) && canPlayCard(cardDict);
         const card = createCardElement(cardDict, {
             draggable: !isSpectating && canPlay && cardDef && cardDef.card_type !== 'guard',
             onClick: canPlay ? () => selectPlayCardForConfirm(cardDict.instance_id) : null,
@@ -4916,6 +5346,7 @@ function choosePlayerTargetOnBoard(title, targets) {
                 event.preventDefault();
                 event.stopPropagation();
                 el.classList.add('target-picked');
+                flashTargetRegion(target.id);
                 setTimeout(() => finish(target.id), 90);
             };
             handlers.set(el, handler);
@@ -4978,7 +5409,46 @@ function getCombatFloatAnchor(region, kind) {
     return region.querySelector('.status-tags') || region.querySelector('.player-info-bar') || region;
 }
 
-function showCombatFloat(selector, text, kind, index = 0) {
+function getCombatFloatTimeline(events) {
+    const normalized = (events || [])
+        .filter(event => event && event.text)
+        .map((event, order) => {
+            const rawDelay = Number(event.delay);
+            return {
+                ...event,
+                order,
+                rawDelay: Number.isFinite(rawDelay) ? Math.max(0, rawDelay) : 0,
+            };
+        });
+    if (!normalized.length) return { events: [], duration: COMBAT_FLOAT_BASE_DURATION_MS, totalMs: 0 };
+    const rawMaxDelay = normalized.reduce((max, event) => Math.max(max, event.rawDelay), 0);
+    const targetMaxDelay = Math.min(rawMaxDelay, Math.max(0, COMBAT_FLOAT_MAX_LAST_DELAY_MS));
+    const scale = rawMaxDelay > 0 && rawMaxDelay > targetMaxDelay ? targetMaxDelay / rawMaxDelay : 1;
+    let maxDelay = 0;
+    const slotCounts = new Map();
+    const scheduled = normalized.map(event => {
+        const delay = Math.round(event.rawDelay * scale);
+        maxDelay = Math.max(maxDelay, delay);
+        const slotKey = `${Math.round(delay / 24)}:${event.kind || 'info'}`;
+        const sameSlotIndex = slotCounts.get(slotKey) || 0;
+        slotCounts.set(slotKey, sameSlotIndex + 1);
+        const baseStack = Number.isFinite(Number(event.stackIndex)) ? Number(event.stackIndex) : 0;
+        return {
+            ...event,
+            delay,
+            stackIndex: baseStack + sameSlotIndex,
+        };
+    });
+    const durationRoom = COMBAT_FLOAT_TOTAL_LIMIT_MS - maxDelay - COMBAT_FLOAT_END_PAD_MS;
+    const duration = Math.max(COMBAT_FLOAT_MIN_DURATION_MS, Math.min(COMBAT_FLOAT_BASE_DURATION_MS, durationRoom));
+    return {
+        events: scheduled,
+        duration,
+        totalMs: Math.min(COMBAT_FLOAT_TOTAL_LIMIT_MS, maxDelay + duration + COMBAT_FLOAT_END_PAD_MS),
+    };
+}
+
+function showCombatFloat(selector, text, kind, index = 0, options = {}) {
     if (!text || !selector) return;
     const region = document.querySelector(selector);
     const anchor = getCombatFloatAnchor(region, kind);
@@ -4988,27 +5458,103 @@ function showCombatFloat(selector, text, kind, index = 0) {
     const el = document.createElement('div');
     el.className = `combat-float combat-${kind || 'info'}`;
     el.textContent = text;
-    const x = rect.left + rect.width - 8;
-    const y = rect.top + rect.height * 0.5 + index * 13;
+    const lane = Math.max(0, Math.floor(Number(index) || 0));
+    const row = lane % 5;
+    const band = Math.floor(lane / 5);
+    const side = lane % 2 === 0 ? -1 : 1;
+    const laneX = side * Math.min(42, 6 + band * 12);
+    const laneY = row * 12;
+    const duration = Math.max(320, Number(options.duration) || COMBAT_FLOAT_BASE_DURATION_MS);
+    const x = rect.left + rect.width - 8 + laneX;
+    const y = rect.top + rect.height * 0.5 + laneY;
     el.style.left = `${Math.min(window.innerWidth - 10, Math.max(10, x))}px`;
     el.style.top = `${Math.min(window.innerHeight - 10, Math.max(10, y))}px`;
-    el.style.setProperty('--float-x', `${(index % 2 === 0 ? -1 : 1) * Math.min(18, 6 + index * 4)}px`);
+    el.style.setProperty('--float-x', `${side * Math.min(18, 6 + band * 4)}px`);
+    el.style.setProperty('--float-duration', `${duration}ms`);
     el.dataset.floatId = String(++combatFloatSeq);
     document.body.appendChild(el);
-    setTimeout(() => el.remove(), 1850);
+    setTimeout(() => el.remove(), duration + 180);
 }
 
 function showCombatFloatSequence(selector, events, interval = 200) {
-    let immediateStack = 0;
-    (events || []).slice(0, 12).forEach((event, index) => {
-        const hasDelay = event.delay !== undefined && event.delay !== null;
-        const delay = hasDelay && Number.isFinite(Number(event.delay)) ? Number(event.delay) : 0;
-        const stackIndex = Number.isFinite(Number(event.stackIndex)) ? Number(event.stackIndex) : immediateStack++;
-        setTimeout(() => showCombatFloat(selector, event.text, event.kind, stackIndex), Math.max(0, delay));
+    const timeline = getCombatFloatTimeline(events, interval);
+    timeline.events.forEach(event => {
+        setTimeout(() => {
+            showCombatFloat(selector, event.text, event.kind, event.stackIndex, { duration: timeline.duration });
+        }, Math.max(0, event.delay));
     });
+    return timeline.events;
 }
 
-function queueLocalResourceCost(cardDict, ownerState = null) {
+function getBarMaxForKey(data, key) {
+    const value = key === 'health' ? data && data.max_health
+        : key === 'elixir' ? data && data.max_elixir
+        : key === 'magic' ? data && data.max_magic
+        : 0;
+    const fallback = key === 'health' ? 100 : 10;
+    return Number.isFinite(Number(value)) ? Number(value) : fallback;
+}
+
+function getBarValueForKey(data, key) {
+    const value = key === 'health' ? data && data.health
+        : key === 'elixir' ? data && data.elixir
+        : key === 'magic' ? data && data.magic
+        : 0;
+    return Number.isFinite(Number(value)) ? Number(value) : 0;
+}
+
+function setRenderedBarValue(selector, key, value, max, immediate = false) {
+    const region = document.querySelector(selector);
+    const wrapper = region && region.querySelector(`[data-bar-key="${key}"]`);
+    if (!wrapper) return;
+    const fill = wrapper.querySelector('.bar-fill');
+    const text = wrapper.querySelector('.bar-text');
+    const cur = Number.isFinite(Number(value)) ? Number(value) : 0;
+    const maxValue = Number.isFinite(Number(max)) && Number(max) > 0 ? Number(max) : getBarMaxForKey({}, key);
+    const pct = Math.max(0, Math.min(100, (cur / maxValue) * 100));
+    if (fill) {
+        if (immediate) fill.classList.add('bar-fill-instant');
+        fill.style.width = `${pct}%`;
+        if (immediate) {
+            fill.offsetHeight;
+            requestAnimationFrame(() => fill.classList.remove('bar-fill-instant'));
+        }
+    }
+    if (text) text.textContent = `${cur}/${maxValue}`;
+}
+
+function animateBarEventSequence(selector, scheduledEvents, oldData, newData, options = {}) {
+    const affected = new Set((scheduledEvents || []).map(event => event && event.barKey).filter(Boolean));
+    Object.keys(options.startValues || {}).forEach(key => affected.add(key));
+    if (!affected.size) return;
+    affected.forEach(key => {
+        const startValue = Object.prototype.hasOwnProperty.call(options.startValues || {}, key)
+            ? options.startValues[key]
+            : getBarValueForKey(oldData, key);
+        setRenderedBarValue(selector, key, startValue, getBarMaxForKey(newData, key), true);
+    });
+    let maxDelay = 0;
+    (scheduledEvents || []).forEach(event => {
+        if (!event || !event.barKey || !Number.isFinite(Number(event.barValue))) return;
+        const delay = Math.max(0, Number(event.delay) || 0);
+        maxDelay = Math.max(maxDelay, delay);
+        setTimeout(() => {
+            setRenderedBarValue(
+                selector,
+                event.barKey,
+                Number(event.barValue),
+                Number.isFinite(Number(event.barMax)) ? Number(event.barMax) : getBarMaxForKey(newData, event.barKey)
+            );
+        }, delay);
+    });
+    setTimeout(() => {
+        affected.forEach(key => {
+            setRenderedBarValue(selector, key, getBarValueForKey(newData, key), getBarMaxForKey(newData, key));
+        });
+    }, Math.min(COMBAT_FLOAT_TOTAL_LIMIT_MS, maxDelay + 80));
+}
+
+function queueLocalResourceCost(cardDict, ownerState = null, options = {}) {
     if (!cardDict) return;
     const cardDef = getCardDef(cardDict.def_id);
     if (!cardDef) return;
@@ -5019,6 +5565,7 @@ function queueLocalResourceCost(cardDict, ownerState = null) {
         instanceId: cardInstanceKey(cardDict),
         totalE: Math.max(0, Number(totalE) || 0),
         totalM: Math.max(0, Number(totalM) || 0),
+        shownOptimistically: !!options.shownOptimistically,
         createdAt: Date.now(),
     });
     pendingLocalResourceCosts = pendingLocalResourceCosts
@@ -5040,6 +5587,28 @@ function takeLocalResourceCostForState(ref, oldData, newData) {
     return pendingLocalResourceCosts.splice(idx, 1)[0];
 }
 
+function queueOptimisticResourceCost(cost) {
+    if (!cost || (!cost.totalE && !cost.totalM)) return;
+    pendingOptimisticResourceCosts.push({
+        playerId: normalizePlayerId(gameState && gameState.your_id),
+        totalE: Math.max(0, Number(cost.totalE) || 0),
+        totalM: Math.max(0, Number(cost.totalM) || 0),
+        shownOptimistically: true,
+        createdAt: Date.now(),
+    });
+    pendingOptimisticResourceCosts = pendingOptimisticResourceCosts
+        .filter(item => item && Date.now() - Number(item.createdAt || 0) < 6000)
+        .slice(-8);
+}
+
+function takeOptimisticResourceCostForState(ref) {
+    const playerId = normalizePlayerId(ref && ref.id);
+    if (playerId == null || !pendingOptimisticResourceCosts.length) return null;
+    const idx = pendingOptimisticResourceCosts.findIndex(item => item && normalizePlayerId(item.playerId) === playerId);
+    if (idx < 0) return null;
+    return pendingOptimisticResourceCosts.splice(idx, 1)[0];
+}
+
 function getNewBattleLogLines(previous, next) {
     const nextLog = Array.isArray(next && next.log) ? next.log : [];
     const nextStart = Number(next && next.log_start) || 0;
@@ -5054,11 +5623,16 @@ function getNewBattleLogLines(previous, next) {
 
 function parseDamageLogLine(line) {
     const text = String(line || '');
-    const match = text.match(/^(.+?)受到(\d+)点(?:.*?伤害)?（H=(-?\d+)）$/);
+    const match = text.match(/^(.+?)受到(\d+)(?:点)?(?:.*?伤害)?（H=(-?\d+)）$/);
     if (!match) return null;
     const amount = Number(match[2]);
     if (!Number.isFinite(amount) || amount <= 0) return null;
-    return { name: match[1], amount };
+    const health = Number(match[3]);
+    return {
+        name: match[1],
+        amount,
+        health: Number.isFinite(health) ? health : null,
+    };
 }
 
 function getStatePlayerDisplayNames(gs, ref) {
@@ -5101,7 +5675,7 @@ function getDamageLogEventsByPlayer(previous, next) {
         const id = nameToId.get(parsed.name);
         if (id == null) return;
         if (!out.has(id)) out.set(id, []);
-        out.get(id).push(parsed.amount);
+        out.get(id).push(parsed);
     });
     return out;
 }
@@ -5121,39 +5695,174 @@ function showStateDeltas(previous, next) {
         let elixirDelta = Number(newData.elixir || 0) - Number(oldData.elixir || 0);
         let magicDelta = Number(newData.magic || 0) - Number(oldData.magic || 0);
         const armorDelta = Number(newData.armor || 0) - Number(oldData.armor || 0);
+        const poisonDelta = Number(newData.poison || 0) - Number(oldData.poison || 0);
+        const fireDelta = Number(newData.fire || 0) - Number(oldData.fire || 0);
         const oldEquipCount = Array.isArray(oldData.equipment) ? oldData.equipment.length : 0;
         const newEquipCount = Array.isArray(newData.equipment) ? newData.equipment.length : 0;
         const localCost = takeLocalResourceCostForState(ref, oldData, newData);
-        const resourceDelay = localCost ? 220 : 0;
+        const resourceCost = localCost || takeOptimisticResourceCostForState(ref);
+        const resourceDelay = resourceCost ? 220 : 0;
         const damageHits = damageLogEvents.get(ref.id) || [];
+        const healthMax = getBarMaxForKey(newData, 'health');
+        const elixirMax = getBarMaxForKey(newData, 'elixir');
+        const magicMax = getBarMaxForKey(newData, 'magic');
+        const oldHealth = getBarValueForKey(oldData, 'health');
+        const newHealth = getBarValueForKey(newData, 'health');
+        const oldElixir = getBarValueForKey(oldData, 'elixir');
+        const newElixir = getBarValueForKey(newData, 'elixir');
+        const oldMagic = getBarValueForKey(oldData, 'magic');
+        const newMagic = getBarValueForKey(newData, 'magic');
+        let stagedHealth = oldHealth;
+        let lastHealthDelay = 0;
         if (damageHits.length) {
-            damageHits.forEach((amount, hitIndex) => {
-                events.push({ text: `-${amount}H`, kind: 'damage', delay: hitIndex * 200, stackIndex: 0 });
+            damageHits.forEach((hit, hitIndex) => {
+                const amount = Number(hit && hit.amount);
+                if (!Number.isFinite(amount) || amount <= 0) return;
+                const delay = hitIndex * 200;
+                stagedHealth = Number.isFinite(Number(hit.health)) ? Number(hit.health) : stagedHealth - amount;
+                lastHealthDelay = delay;
+                events.push({
+                    text: `-${amount}H`,
+                    kind: 'damage',
+                    delay,
+                    stackIndex: 0,
+                    barKey: 'health',
+                    barValue: stagedHealth,
+                    barMax: healthMax,
+                });
             });
+            if (stagedHealth !== newHealth) {
+                const delta = newHealth - stagedHealth;
+                events.push({
+                    text: `${delta > 0 ? '+' : ''}${delta}H`,
+                    kind: delta > 0 ? 'heal' : 'damage',
+                    delay: lastHealthDelay + 200,
+                    stackIndex: 0,
+                    barKey: 'health',
+                    barValue: newHealth,
+                    barMax: healthMax,
+                });
+            }
         } else if (healthDelta < 0) {
-            events.push({ text: `${healthDelta}H`, kind: 'damage' });
+            events.push({ text: `${healthDelta}H`, kind: 'damage', barKey: 'health', barValue: newHealth, barMax: healthMax });
         } else if (healthDelta > 0) {
-            events.push({ text: `+${healthDelta}H`, kind: 'heal' });
+            events.push({ text: `+${healthDelta}H`, kind: 'heal', barKey: 'health', barValue: newHealth, barMax: healthMax });
         }
         if (armorDelta > 0) events.push({ text: `+${armorDelta}A`, kind: 'armor' });
         else if (armorDelta < 0) events.push({ text: `${armorDelta}A`, kind: 'armor' });
-        if (localCost && localCost.totalE > 0) {
-            events.push({ text: `-${localCost.totalE}E`, kind: 'elixir', delay: 0, stackIndex: 0 });
-            elixirDelta += localCost.totalE;
+        if (poisonDelta > 0) events.push({ text: `+${poisonDelta}P`, kind: 'poison' });
+        else if (poisonDelta < 0) events.push({ text: `${poisonDelta}P`, kind: 'poison' });
+        if (fireDelta > 0) events.push({ text: `+${fireDelta}F`, kind: 'fire' });
+        else if (fireDelta < 0) events.push({ text: `${fireDelta}F`, kind: 'fire' });
+        let stagedElixir = oldElixir;
+        let stagedMagic = oldMagic;
+        const barStartValues = {};
+        if (resourceCost && resourceCost.totalE > 0) {
+            stagedElixir -= resourceCost.totalE;
+            if (resourceCost.shownOptimistically) {
+                barStartValues.elixir = stagedElixir;
+            } else {
+                events.push({
+                    text: `-${resourceCost.totalE}E`,
+                    kind: 'elixir',
+                    delay: 0,
+                    stackIndex: 0,
+                    barKey: 'elixir',
+                    barValue: stagedElixir,
+                    barMax: elixirMax,
+                });
+            }
+            elixirDelta += resourceCost.totalE;
         }
-        if (localCost && localCost.totalM > 0) {
-            events.push({ text: `-${localCost.totalM}M`, kind: 'magic', delay: localCost.totalE > 0 ? 120 : 0, stackIndex: 1 });
-            magicDelta += localCost.totalM;
+        if (resourceCost && resourceCost.totalM > 0) {
+            stagedMagic -= resourceCost.totalM;
+            if (resourceCost.shownOptimistically) {
+                barStartValues.magic = stagedMagic;
+            } else {
+                events.push({
+                    text: `-${resourceCost.totalM}M`,
+                    kind: 'magic',
+                    delay: resourceCost.totalE > 0 ? 120 : 0,
+                    stackIndex: 1,
+                    barKey: 'magic',
+                    barValue: stagedMagic,
+                    barMax: magicMax,
+                });
+            }
+            magicDelta += resourceCost.totalM;
         }
-        if (elixirDelta > 0) events.push({ text: `+${elixirDelta}E`, kind: 'elixir', delay: resourceDelay, stackIndex: localCost ? 1 : undefined });
-        else if (elixirDelta < 0) events.push({ text: `${elixirDelta}E`, kind: 'elixir', delay: resourceDelay, stackIndex: localCost ? 1 : undefined });
-        if (magicDelta > 0) events.push({ text: `+${magicDelta}M`, kind: 'magic', delay: resourceDelay, stackIndex: localCost ? 2 : undefined });
-        else if (magicDelta < 0) events.push({ text: `${magicDelta}M`, kind: 'magic', delay: resourceDelay, stackIndex: localCost ? 2 : undefined });
-        showCombatFloatSequence(ref.selector, events);
+        if (elixirDelta > 0) {
+            events.push({ text: `+${elixirDelta}E`, kind: 'elixir', delay: resourceDelay, stackIndex: resourceCost ? 1 : undefined, barKey: 'elixir', barValue: newElixir, barMax: elixirMax });
+        } else if (elixirDelta < 0) {
+            events.push({ text: `${elixirDelta}E`, kind: 'elixir', delay: resourceDelay, stackIndex: resourceCost ? 1 : undefined, barKey: 'elixir', barValue: newElixir, barMax: elixirMax });
+        }
+        if (magicDelta > 0) {
+            events.push({ text: `+${magicDelta}M`, kind: 'magic', delay: resourceDelay, stackIndex: resourceCost ? 2 : undefined, barKey: 'magic', barValue: newMagic, barMax: magicMax });
+        } else if (magicDelta < 0) {
+            events.push({ text: `${magicDelta}M`, kind: 'magic', delay: resourceDelay, stackIndex: resourceCost ? 2 : undefined, barKey: 'magic', barValue: newMagic, barMax: magicMax });
+        }
+        const scheduledEvents = showCombatFloatSequence(ref.selector, events);
+        animateBarEventSequence(ref.selector, scheduledEvents, oldData, newData, { startValues: barStartValues });
         if (newEquipCount > oldEquipCount) {
             setTimeout(() => animateEquipmentForRegion(ref.selector), 30);
         }
     });
+}
+
+function clearScheduledGameOver() {
+    if (gameOverRenderTimer) {
+        clearTimeout(gameOverRenderTimer);
+        gameOverRenderTimer = null;
+    }
+    scheduledGameOverState = null;
+}
+
+function estimateGameOverAnimationDelay(previous, next) {
+    if (!previous || !next || !areSequentialGameStates(previous, next)) return 0;
+    const damageCount = getNewBattleLogLines(previous, next)
+        .filter(line => !!parseDamageLogLine(line))
+        .length;
+    if (damageCount <= 0) return 650;
+    const rawLastDelay = Math.max(0, damageCount - 1) * 200;
+    const lastDelay = Math.min(rawLastDelay, Math.max(0, COMBAT_FLOAT_MAX_LAST_DELAY_MS));
+    const durationRoom = COMBAT_FLOAT_TOTAL_LIMIT_MS - lastDelay - COMBAT_FLOAT_END_PAD_MS;
+    const duration = Math.max(COMBAT_FLOAT_MIN_DURATION_MS, Math.min(COMBAT_FLOAT_BASE_DURATION_MS, durationRoom));
+    return Math.min(COMBAT_FLOAT_TOTAL_LIMIT_MS, Math.max(950, lastDelay + duration + COMBAT_FLOAT_END_PAD_MS));
+}
+
+function renderGameOverAfterFinalAnimation(previous, next, options = {}) {
+    clearScheduledGameOver();
+    const shouldAnimate = previous
+        && next
+        && previous.phase !== 'game_over'
+        && next.phase === 'game_over'
+        && areSequentialGameStates(previous, next);
+    if (!shouldAnimate) {
+        if (options.tutorial) stopTutorialUiForGameOver();
+        if (options.fullScreen === false) renderGame(next);
+        else renderGameOver(next);
+        return;
+    }
+    if (options.tutorial) stopTutorialUiForGameOver();
+    showView('view-game');
+    const previewState = options.deferResultLabels
+        ? { ...next, phase: (previous && previous.phase && previous.phase !== 'game_over') ? previous.phase : 'action' }
+        : next;
+    renderGame(previewState);
+    showStateDeltas(previous, next);
+    updateStatus(UI.game_over);
+    const delay = estimateGameOverAnimationDelay(previous, next);
+    scheduledGameOverState = next;
+    gameOverRenderTimer = setTimeout(() => {
+        gameOverRenderTimer = null;
+        const finalState = gameState && gameState.phase === 'game_over'
+            ? gameState
+            : scheduledGameOverState;
+        scheduledGameOverState = null;
+        if (!finalState || finalState.phase !== 'game_over') return;
+        if (options.fullScreen === false) renderGame(finalState);
+        else renderGameOver(finalState);
+    }, delay);
 }
 
 function normalizeTargetCandidates(candidates) {
@@ -5207,11 +5916,18 @@ async function choosePlayerTarget(title, opts = {}) {
         gameAlert(UI.notice, UI.no_valid_target || 'No valid target');
         return -1;
     }
-    if (targets.length === 1) return targets[0].id;
+    if (targets.length === 1) {
+        flashTargetRegion(targets[0].id);
+        return targets[0].id;
+    }
     const boardTarget = await choosePlayerTargetOnBoard(title, targets);
-    if (boardTarget !== null) return boardTarget;
+    if (boardTarget !== null) {
+        return boardTarget;
+    }
     const sel = await simpleChoice(title || UI.choose_target || UI.select_target || 'Choose target', targets.map(t => t.label));
-    return sel >= 0 ? targets[sel].id : -1;
+    const selectedId = sel >= 0 ? targets[sel].id : -1;
+    if (selectedId >= 0) flashTargetRegion(selectedId);
+    return selectedId;
 }
 
 async function chooseEnemyTarget(title) {
@@ -5220,9 +5936,14 @@ async function chooseEnemyTarget(title) {
         gameAlert(UI.notice, UI.no_valid_target || 'No valid target');
         return -1;
     }
-    if (targets.length === 1) return targets[0].id;
+    if (targets.length === 1) {
+        flashTargetRegion(targets[0].id);
+        return targets[0].id;
+    }
     const sel = await simpleChoice(title || UI.choose_target || UI.select_target || 'Choose target', targets.map(t => t.label));
-    return sel >= 0 ? targets[sel].id : -1;
+    const selectedId = sel >= 0 ? targets[sel].id : -1;
+    if (selectedId >= 0) flashTargetRegion(selectedId);
+    return selectedId;
 }
 
 function cardNeedsPlayerTarget(cardDef) {
@@ -5272,24 +5993,48 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
         const targetSuffix = gameState && gameState.mode === '2v2' && targetId != null && targetId !== (playerData.player_id ?? eqDict.owner)
             ? `→${getPlayerNameById(targetId)}`
             : '';
-        let text = UI.equip_info.replace('{0}', `${getCardName(cardDef)}${targetSuffix ? `(${targetSuffix})` : ''}`).replace('{1}', turns);
-        if (corruption) text += UI.equip_corruption;
+        const equipName = `${getCardName(cardDef)}${targetSuffix ? `(${targetSuffix})` : ''}`;
+        const fullText = UI.equip_info.replace('{0}', equipName).replace('{1}', turns) + (corruption ? UI.equip_corruption : '');
+        const compactTextValue = `${equipName}${turns ? ` · ${turns}` : ''}${corruption ? ` · ${UI.compact_corrupted}` : ''}`;
+        const text = isClassicUiStyle() ? compactTextValue : fullText;
         if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && isFriendlyTurn() && !isSpectating) {
             const btn = document.createElement('button');
             btn.className = 'btn btn-small btn-equip-trigger';
-            btn.textContent = UI.equip_trigger_cost.replace('{0}', text).replace('{1}', cardDef.trigger_cost_e);
+            const triggerText = UI.equip_trigger_cost.replace('{0}', fullText).replace('{1}', cardDef.trigger_cost_e);
+            btn.textContent = isClassicUiStyle() ? `⚡ ${equipName} ${cardDef.trigger_cost_e}E` : triggerText;
+            btn.title = isClassicUiStyle() ? triggerText : '';
+            btn.disabled = isActionBusy({ includeAnimation: false });
             btn.onclick = async () => {
+                if (isActionBusy({ includeAnimation: false })) return;
                 const payload = { equipment_instance_id: cardInst.instance_id };
                 if (gameState && gameState.mode === '2v2' && ['Leaf', 'Mark', 'Mine'].includes(cardDef.id)) {
                     const targetId = await choosePlayerTarget(UI.choose_target || UI.select_target || 'Choose target');
                     if (targetId < 0) return;
                     payload.target_player_id = targetId;
                 }
+                const triggerCost = Math.max(0, Number(cardDef.trigger_cost_e) || 0);
+                if (triggerCost > 0) {
+                    const optimisticCost = { totalE: triggerCost, totalM: 0 };
+                    const override = {
+                        playerId: normalizePlayerId(gameState && gameState.your_id),
+                        elixir: Math.max(0, getBarValueForKey(gameState && gameState.you, 'elixir') - triggerCost),
+                        magic: getBarValueForKey(gameState && gameState.you, 'magic'),
+                        maxElixir: getBarMaxForKey(gameState && gameState.you, 'elixir'),
+                        maxMagic: getBarMaxForKey(gameState && gameState.you, 'magic'),
+                        totalE: triggerCost,
+                        totalM: 0,
+                    };
+                    beginPendingServerAction('trigger', { optimisticResources: override, timeoutMs: 8000 });
+                    queueOptimisticResourceCost(optimisticCost);
+                } else {
+                    beginPendingServerAction('trigger', { timeoutMs: 8000 });
+                }
                 socket.emit(soloMode ? 'solo_use_trigger' : 'use_trigger', payload);
             };
             container.appendChild(btn);
         } else {
             el.textContent = text;
+            el.title = isClassicUiStyle() ? fullText : '';
             container.appendChild(el);
         }
     });
@@ -5320,9 +6065,6 @@ function renderLog(log, logStart = 0, logTotal = null) {
     }
     renderedBattleLogCount = log.length;
     renderedBattleLogTotal = logTotal;
-    if (gameTimelineEntries.length > 200) {
-        gameTimelineEntries = gameTimelineEntries.slice(-200);
-    }
     content.innerHTML = '';
     gameTimelineEntries.forEach(entry => {
         const el = document.createElement('div');
@@ -5370,7 +6112,6 @@ function appendLobbyChat(nick, text, isAdmin = false) {
 
 function appendGameChat(nick, text, isAdmin = false) {
     gameTimelineEntries.push({ type: 'chat', nick, text, isAdmin });
-    if (gameTimelineEntries.length > 200) gameTimelineEntries = gameTimelineEntries.slice(-200);
     renderLog((gameState && gameState.log) || [], (gameState && gameState.log_start) || 0, gameState && gameState.log_total);
 }
 
@@ -5723,7 +6464,7 @@ function dedupeCardCombos(combos) {
 
 async function onPlayCard(cardInstanceId, options = {}) {
     if (isSpectating) return;
-    if (isCardAnimationLocked() || pendingPlayCard) return;
+    if (isActionBusy()) return;
     const hand = (gameState.you || {}).hand || [];
     const cardDict = hand.find(c => c.instance_id === cardInstanceId);
     if (!cardDict) return;
@@ -5746,7 +6487,9 @@ async function onPlayCard(cardInstanceId, options = {}) {
     clearSelectedPlayCard();
     const shouldShatterAfterPlay = cardHasExileLikeExit(cardDict);
     if (shouldShatterAfterPlay) markRecentlyPlayedExileCard(cardDict);
-    queueLocalResourceCost(cardDict, gameState && gameState.you);
+    const optimisticCost = getOptimisticResourceCost(cardDict, gameState && gameState.you);
+    const optimisticResources = buildOptimisticResourceOverride(cardDict, gameState && gameState.you, optimisticCost);
+    queueLocalResourceCost(cardDict, gameState && gameState.you, { shownOptimistically: !!optimisticResources });
     if (cardDict.def_id === 'Fusion' && choice && Array.isArray(choice.target_instance_ids)) {
         animateFusionMerge(cardInstanceId, choice.target_instance_ids, { startDelay: 300 });
     } else {
@@ -5754,6 +6497,7 @@ async function onPlayCard(cardInstanceId, options = {}) {
     }
     pendingPlayCard = cardDict;
     renderPendingCard();
+    beginPendingServerAction('play_card', { optimisticResources, timeoutMs: 8000 });
     socket.emit(soloMode ? 'solo_play_card' : 'play_card', { card_instance_id: cardInstanceId, choice, target_player_id: targetPlayerId });
 }
 
@@ -5932,8 +6676,13 @@ function onRespond(cardInstanceId) {
         const cardDict = hand.find(c => c.instance_id === cardInstanceId);
         const shouldShatterAfterPlay = cardHasExileLikeExit(cardDict);
         if (shouldShatterAfterPlay) markRecentlyPlayedExileCard(cardDict);
-        queueLocalResourceCost(cardDict, gameState && gameState.you);
+        const optimisticCost = getOptimisticResourceCost(cardDict, gameState && gameState.you);
+        const optimisticResources = buildOptimisticResourceOverride(cardDict, gameState && gameState.you, optimisticCost);
+        queueLocalResourceCost(cardDict, gameState && gameState.you, { shownOptimistically: !!optimisticResources });
         animatePlayedCard(cardInstanceId, { shatterAfter: shouldShatterAfterPlay });
+        beginPendingServerAction('response', { optimisticResources, timeoutMs: 8000 });
+    } else {
+        beginPendingServerAction('response', { timeoutMs: 8000 });
     }
     const container = $('response-panel');
     if (container) { container.innerHTML = ''; container.classList.add('hidden'); container.classList.remove('visible'); }
@@ -5992,6 +6741,7 @@ function respondAllyConsent(accepted) {
     if (allyConsentTimerId) { clearInterval(allyConsentTimerId); allyConsentTimerId = null; }
     const container = $('response-panel');
     if (container) { container.innerHTML = ''; container.classList.add('hidden'); container.classList.remove('visible'); }
+    beginPendingServerAction('ally_consent', { timeoutMs: 8000 });
     socket.emit('ally_consent_response', { accepted: !!accepted });
 }
 
@@ -6119,8 +6869,9 @@ async function showChoiceUI(data) {
         ], choicePromptConfig);
         if (sel >= 0) choiceResult = { confirmed: sel === 0, accepted: sel === 0 };
     }
-    socket.emit(soloMode ? 'solo_resolve_choice' : 'resolve_choice', { choice: choiceResult });
     choicePending = false;
+    beginPendingServerAction('resolve_choice', { timeoutMs: 8000 });
+    socket.emit(soloMode ? 'solo_resolve_choice' : 'resolve_choice', { choice: choiceResult });
 }
 
 let rematchRequestedByOpponent = false;
@@ -6246,19 +6997,14 @@ function showOpponentDCWaiting(data) {
 }
 
 function onEndTurn() {
+    if (isActionBusy({ includeAnimation: false })) return;
     if (!isMyTurn()) {
         flashStatus(UI.not_your_turn, 2000, 'error');
         return;
     }
     if (socket) {
+        beginPendingServerAction('end_turn', { timeoutMs: 8000 });
         socket.emit(soloMode ? 'solo_end_turn' : 'end_turn', {});
-        const oldPhase = gameState.phase;
-        const oldPlayer = gameState.current_player;
-        setTimeout(() => {
-            if (gameState.phase === oldPhase && gameState.current_player === oldPlayer) {
-                flashStatus(UI.server_no_response, 3000, 'error');
-            }
-        }, 3000);
     } else {
         updateStatus(UI.server_not_connected);
     }
@@ -6332,16 +7078,19 @@ function onViewDeck() {
 
 async function onUrfReplaceCard() {
     if (!gameState || gameState.mode !== 'urf' || !isMyTurn()) return;
+    if (isActionBusy({ includeAnimation: false })) return;
     const hand = (gameState.you || {}).hand || [];
     if (!hand.length) return;
     const options = hand.map(c => getCardName(getCardDef(c.def_id)) || c.def_id);
     const sel = await simpleChoice(UI.urf_replace || '替换手牌', options);
     if (sel < 0) return;
+    beginPendingServerAction('urf_replace', { timeoutMs: 8000 });
     socket.emit('urf_replace_card', { card_instance_id: hand[sel].instance_id });
 }
 
 async function onUrfSellEquipment() {
     if (!gameState || gameState.mode !== 'urf' || !isMyTurn()) return;
+    if (isActionBusy({ includeAnimation: false })) return;
     const equipment = ((gameState.you || {}).equipment || []).filter(isUrfEquipmentSellable);
     if (!equipment.length) return;
     const options = equipment.map(eq => {
@@ -6351,6 +7100,7 @@ async function onUrfSellEquipment() {
     const sel = await simpleChoice(UI.urf_sell || '售卖装备', options);
     if (sel < 0) return;
     const inst = (equipment[sel].card_instance || {});
+    beginPendingServerAction('urf_sell', { timeoutMs: 8000 });
     socket.emit('urf_sell_equipment', { equipment_instance_id: inst.instance_id });
 }
 

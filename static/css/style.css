@@ -2204,6 +2204,10 @@ body {
   position: relative;
 }
 
+.bar-fill.bar-fill-instant {
+  transition: none !important;
+}
+
 .bar-health .bar-fill {
   background: #2ECC71;
 }
@@ -2225,6 +2229,28 @@ body {
   border-radius: var(--radius-sm);
   border: 1px solid;
   white-space: nowrap;
+}
+
+.status-tag.status-tag-changed {
+  animation: statusTagPop 420ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+.status-shake {
+  display: inline-block;
+  animation: statusShake 280ms ease both;
+}
+
+@keyframes statusTagPop {
+  0% { transform: scale(0.86); opacity: 0.35; }
+  65% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes statusShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  50% { transform: translateX(3px); }
+  75% { transform: translateX(-2px); }
 }
 
 .status-tag.poison {
@@ -2318,6 +2344,9 @@ body {
 }
 
 .card {
+  --card-english-font: clamp(5.6px, 5.8cqi, 8.4px);
+  --card-english-margin-top: -1.7cqi;
+  --card-english-padding-x: 1.6cqi;
   position: relative;
   background: var(--bg-card);
   border-radius: 1cqi;
@@ -2665,11 +2694,11 @@ body {
 }
 
 .card-english-name {
-  margin-top: -2cqi;
+  margin-top: var(--card-english-margin-top);
   margin-bottom: 0.2cqi;
-  padding: 0 2cqi 0.4cqi;
+  padding: 0 var(--card-english-padding-x) 0.4cqi;
   font-family: var(--font-main);
-  font-size: 9.2px;
+  font-size: var(--card-english-font);
   font-weight: 600;
   line-height: 1.05;
   text-align: center;
@@ -3240,9 +3269,29 @@ body {
   box-shadow: inset 0 0 0 999px rgba(26, 188, 156, 0.14), 0 0 0 5px rgba(26, 188, 156, 0.2);
 }
 
+[data-player-target-region].target-feedback-pulse {
+  animation: targetFeedbackPulse 720ms cubic-bezier(.18,.82,.22,1) both;
+}
+
+[data-player-target-region].turn-focus-pulse {
+  animation: turnFocusPulse 900ms cubic-bezier(.18,.82,.22,1) both;
+}
+
 @keyframes targetPickPulse {
   0%, 100% { box-shadow: inset 0 0 0 999px rgba(26, 188, 156, 0.05), 0 0 0 3px rgba(26, 188, 156, 0.1); }
   50% { box-shadow: inset 0 0 0 999px rgba(26, 188, 156, 0.1), 0 0 0 6px rgba(26, 188, 156, 0.16); }
+}
+
+@keyframes targetFeedbackPulse {
+  0% { box-shadow: inset 0 0 0 999px rgba(26, 188, 156, 0.02), 0 0 0 0 rgba(26, 188, 156, 0.34); }
+  42% { box-shadow: inset 0 0 0 999px rgba(26, 188, 156, 0.16), 0 0 0 8px rgba(26, 188, 156, 0.18); }
+  100% { box-shadow: inset 0 0 0 999px rgba(26, 188, 156, 0), 0 0 0 12px rgba(26, 188, 156, 0); }
+}
+
+@keyframes turnFocusPulse {
+  0% { filter: brightness(1); box-shadow: 0 0 0 0 rgba(241, 196, 15, 0); }
+  34% { filter: brightness(1.05); box-shadow: 0 0 0 5px rgba(241, 196, 15, 0.22); }
+  100% { filter: brightness(1); box-shadow: 0 0 0 10px rgba(241, 196, 15, 0); }
 }
 
 @keyframes pickerOverlayIn {
@@ -3268,7 +3317,7 @@ body {
   font-size: 16px;
   font-weight: 900;
   line-height: 1.15;
-  animation: combatFloatRise 1700ms cubic-bezier(.19,.9,.24,1) forwards;
+  animation: combatFloatRise var(--float-duration, 1700ms) cubic-bezier(.19,.9,.24,1) forwards;
 }
 
 .combat-damage {
@@ -3289,6 +3338,14 @@ body {
 
 .combat-armor {
   color: #515A5A;
+}
+
+.combat-poison {
+  color: var(--poison);
+}
+
+.combat-fire {
+  color: var(--fire);
 }
 
 @keyframes combatFloatRise {
@@ -6321,6 +6378,9 @@ body {
 }
 
 .card-small {
+    --card-english-font: clamp(4.6px, 5.8cqi, 6.2px);
+    --card-english-margin-top: -1.7cqi;
+    --card-english-padding-x: 1.2cqi;
     width: 52px;
     min-height: 0;
     aspect-ratio: 63/88;
@@ -6357,10 +6417,10 @@ body {
 }
 
 .card-small .card-english-name {
-    font-size: 7.2px;
-    margin-top: -2.5cqi;
+    font-size: var(--card-english-font);
+    margin-top: var(--card-english-margin-top);
     margin-bottom: 0cqi;
-    padding: 0 1cqi 0.2cqi;
+    padding: 0 var(--card-english-padding-x) 0.2cqi;
 }
 
 .card-small .card-effect {
@@ -6393,6 +6453,12 @@ body {
     padding: 0 0.5cqi;
 }
 
+.teammate-hand-row .card {
+    --card-english-font: clamp(4.4px, 5.6cqi, 5.9px);
+    --card-english-margin-top: -1.7cqi;
+    --card-english-padding-x: 1.1cqi;
+}
+
 .teammate-hand-row .card .card-effect {
     font-size: 6.6cqi;
     line-height: 1.12;
@@ -6400,10 +6466,10 @@ body {
 }
 
 .teammate-hand-row .card .card-english-name {
-    font-size: 6.6px;
-    margin-top: -2.5cqi;
+    font-size: var(--card-english-font);
+    margin-top: var(--card-english-margin-top);
     margin-bottom: 0cqi;
-    padding: 0 1cqi 0.2cqi;
+    padding: 0 var(--card-english-padding-x) 0.2cqi;
 }
 
 .teammate-hand-row .card .card-flags {
@@ -6431,8 +6497,10 @@ body {
 
 @media (max-width: 768px), (max-aspect-ratio: 1/1), (hover: none) and (pointer: coarse) {
     .card-english-name {
-        font-size: clamp(5.8px, 4.6cqi, 7px);
-        margin-top: -1.7cqi;
+        --card-english-font: clamp(4.8px, 5.4cqi, 6px);
+        --card-english-margin-top: -1.55cqi;
+        font-size: var(--card-english-font);
+        margin-top: var(--card-english-margin-top);
         margin-bottom: 0;
         padding: 0 1.4cqi 0.2cqi;
         line-height: 1.05;
@@ -6440,9 +6508,28 @@ body {
 
     .card-small .card-english-name,
     .teammate-hand-row .card .card-english-name {
-        font-size: clamp(4.8px, 4.2cqi, 5.8px);
-        margin-top: -1.8cqi;
+        --card-english-font: clamp(4.2px, 5.2cqi, 5.1px);
+        --card-english-margin-top: -1.55cqi;
+        font-size: var(--card-english-font);
+        margin-top: var(--card-english-margin-top);
         padding-bottom: 0;
+    }
+}
+
+@media (max-aspect-ratio: 1/1) {
+    .card-english-name {
+        --card-english-font: clamp(4.4px, 5cqi, 5.6px);
+        --card-english-margin-top: -1.15cqi;
+        font-size: var(--card-english-font);
+        margin-top: var(--card-english-margin-top);
+    }
+
+    .card-small .card-english-name,
+    .teammate-hand-row .card .card-english-name {
+        --card-english-font: clamp(4px, 4.9cqi, 4.9px);
+        --card-english-margin-top: -1.15cqi;
+        font-size: var(--card-english-font);
+        margin-top: var(--card-english-margin-top);
     }
 }
 
@@ -6548,12 +6635,14 @@ body {
 }
 
 .game-container.mode-urf .hand-area .card {
+  --card-english-font: clamp(4.6px, 5.5cqi, 6.1px);
+  --card-english-margin-top: -1.45cqi;
   width: clamp(54px, calc((100vw - 54px) / 10.15), 100px);
 }
 
 .game-container.mode-urf .hand-area .card-english-name {
-  font-size: clamp(5px, 4cqi, 7px);
-  margin-top: -1.6cqi;
+  font-size: var(--card-english-font);
+  margin-top: var(--card-english-margin-top);
   line-height: 1.03;
 }
 
@@ -6563,13 +6652,144 @@ body {
   }
 
   .game-container.mode-urf .hand-area .card {
+    --card-english-font: clamp(4.2px, 5.2cqi, 5.2px);
+    --card-english-margin-top: -1.35cqi;
     width: clamp(58px, calc((100vw - 50px) / 10.05), 86px);
   }
 
   .game-container.mode-urf .hand-area .card-english-name {
-    font-size: clamp(4.6px, 3.2cqi, 5.8px);
-    margin-top: -1.25cqi;
+    font-size: var(--card-english-font);
+    margin-top: var(--card-english-margin-top);
     padding-bottom: 0;
+  }
+}
+
+@media (min-aspect-ratio: 5/3) {
+  .game-container {
+    grid-template-columns: minmax(0, 1fr) clamp(180px, 28vw, 320px);
+    grid-template-rows: minmax(62px, auto) minmax(68px, 1fr) minmax(0, auto);
+    column-gap: 6px;
+  }
+
+  .game-container .opp-section {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+    border-right: 0;
+  }
+
+  .game-container .middle-section {
+    grid-column: 2;
+    grid-row: 1 / 4;
+    min-height: 0 !important;
+    height: 100%;
+    flex-direction: column;
+    border-left: 1px solid var(--border-color);
+  }
+
+  .game-container .battle-log {
+    min-height: 0;
+    height: 100%;
+    border-radius: 8px;
+  }
+
+  .game-container .battle-log .log-header {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .game-container .battle-log .log-content {
+    min-height: 0;
+    padding: 5px 7px;
+    font-size: 10px;
+    line-height: 1.32;
+  }
+
+  .game-container .player-section {
+    grid-column: 1;
+    grid-row: 3;
+    display: flex;
+    flex-direction: column;
+    align-self: end;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .game-container .player-info-bar {
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+
+  .game-container .hand-play-row {
+    flex: 0 1 auto;
+    min-height: 0;
+    align-items: stretch;
+    padding-top: 1px;
+    padding-bottom: 2px;
+  }
+
+  .game-container .hand-area {
+    max-height: none;
+    min-height: 0;
+    align-items: flex-end;
+    align-content: flex-end;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+
+  .game-container:not(.mode-urf) .hand-area .card {
+    width: clamp(64px, calc((100% - 42px) / 7), 148px);
+  }
+
+  .game-container .controls-bar {
+    min-height: 34px;
+  }
+
+  .game-container.mode-urf {
+    grid-template-columns: minmax(0, 1fr) clamp(168px, 24vw, 280px);
+  }
+
+  .game-container.mode-urf .hand-area .card {
+    width: clamp(50px, calc((76vw - 42px) / 10), 78px);
+  }
+
+  .game-container.mode-2v2 {
+    grid-template-columns: minmax(0, 1fr) clamp(220px, 34vw, 380px);
+  }
+
+  .game-container.mode-2v2 .hand-area .card {
+    --card-english-font: clamp(4.3px, 5.4cqi, 5.8px);
+    --card-english-margin-top: -1.45cqi;
+    width: clamp(48px, calc((64vw - 50px) / 7.4), 92px);
+  }
+
+  .game-container.mode-2v2 .middle-section {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .game-container.mode-2v2 .battle-log {
+    flex: 1 1 45%;
+    width: 100%;
+    min-height: 0;
+  }
+
+  .game-container.mode-2v2 .teammate-sidebar {
+    width: auto;
+    min-width: 0;
+    flex: 1 1 55%;
+    border-left: 0;
+    border-top: 1px solid var(--border-color);
+    overflow: hidden;
+  }
+
+  .game-container.mode-2v2 .opp-section {
+    min-height: 92px;
+  }
+
+  .game-container.mode-2v2 .player-section {
+    min-height: 0;
   }
 }
 
@@ -6657,6 +6877,22 @@ html[data-ui-style="classic"] .info-extra {
   opacity: 0.72;
 }
 
+html[data-ui-style="classic"] .info-extra.compact-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid rgba(44, 62, 80, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.34);
+  letter-spacing: 0;
+}
+
+html[data-ui-style="classic"][data-theme="dark"] .info-extra.compact-info {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+}
+
 html[data-ui-style="classic"] .bar-track {
   height: 18px;
   border-radius: 999px;
@@ -6723,9 +6959,54 @@ html[data-ui-style="classic"] .card-type-label {
   font-weight: 700;
 }
 
-html[data-ui-style="classic"] .equip-card,
-html[data-ui-style="classic"] .status-tag {
+html[data-ui-style="classic"] .equip-card {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
+}
+
+html[data-ui-style="classic"] .equip-row {
+  gap: 4px;
+  min-height: 24px;
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+html[data-ui-style="classic"] .equip-item,
+html[data-ui-style="classic"] .btn-equip-trigger {
+  padding: 3px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+html[data-ui-style="classic"] .controls-bar {
+  gap: 6px;
+  padding: 5px 10px;
+}
+
+html[data-ui-style="classic"] .controls-group {
+  gap: 5px;
+}
+
+html[data-ui-style="classic"] .controls-bar .btn,
+html[data-ui-style="classic"] .controls-right .btn {
+  padding-left: 10px;
+  padding-right: 10px;
+  min-width: 0;
+}
+
+html[data-ui-style="classic"] .btn-end-turn {
+  padding: 8px 18px;
+  min-width: 56px;
+}
+
+html[data-ui-style="classic"] .controls-right input {
+  width: clamp(92px, 13vw, 170px);
+}
+
+html[data-ui-style="classic"] .teammate-sidebar-section {
+  font-size: 10px;
+  letter-spacing: 0;
+  opacity: 0.72;
 }
 
 html[data-ui-style="classic"] .btn {
