@@ -47,7 +47,7 @@ const I18N = {
         json_valid: 'Valid JSON', json_invalid: 'Invalid JSON: {0}', init_scripts: 'Initializing scripts...', init_theme_lang: 'Applying theme and language...', init_fonts: 'Loading fonts...', init_fonts_done: 'Fonts loaded',
         init_bindings: 'Binding UI events...', init_done: 'Loaded', next_draw_count: 'Set Next Draw (count)', next_draw_pick: 'Set Next Draw ({0}/{1})',
         login_invalid_nickname: 'Invalid nickname. Use 1-16 display-width characters; avoid pure numbers, pure symbols, or repeated -/_.', login_nickname_exists: 'Nickname already exists',
-        training_start: 'Solo training starts. {0} goes first.', training_set_draw: 'Training: {0} sets next draw to {1}',
+        training_start: 'Solo training starts. First player: {0}.', training_set_draw: 'Training: {0} sets next draw to {1}',
         hand_deck_zero_opp: 'Hand:0 Deck:0',
         hand_deck_zero_you: 'Hand:0 Deck:0 Discard:0',
         rotate_hint_sub: 'Rotate to Landscape',
@@ -880,6 +880,108 @@ Object.assign(I18N.fr, { settings_ui_style: 'Style UI', ui_style_minimal: 'Minim
 Object.assign(I18N.pt, { settings_ui_style: 'Estilo da UI', ui_style_minimal: 'Minimalista', ui_style_classic: 'Clássico' });
 Object.assign(I18N.ru, { settings_ui_style: 'Стиль интерфейса', ui_style_minimal: 'Минимализм', ui_style_classic: 'Классика' });
 Object.assign(I18N.ja, { settings_ui_style: 'UIスタイル', ui_style_minimal: 'ミニマル', ui_style_classic: 'クラシック' });
+Object.assign(I18N.en, {
+    tutorial_player_you: 'You', tutorial_player_opponent: 'Practice Opponent',
+    error_urf_equip_limit: 'Infinite Fire equipment limit is {0}. Sell equipment first.',
+    error_urf_replace_used: 'You already replaced a card this turn',
+    error_urf_sell_used: 'You already sold equipment this turn',
+    error_indestructible_sell: 'Indestructible equipment cannot be sold',
+    error_invalid_player: 'Invalid player',
+    error_not_draft_phase: 'Not in draft phase',
+    error_no_reroll: 'No rerolls remaining',
+    error_no_pending_ally_consent: 'No pending teammate card-use request',
+    error_card_not_in_options: 'That card is not in the options',
+    error_card_not_in_hand_alt: 'That card is not in hand',
+    error_target_self_forbidden: 'You cannot choose yourself as the target',
+    error_target_alive_required: 'Choose a living player',
+    error_equipment_friendly_turn_only: 'Equipment can only be triggered on an allied turn',
+    error_game_already_over: 'The game is already over',
+});
+Object.assign(I18N.zh, {
+    tutorial_player_you: '你', tutorial_player_opponent: '练习对手',
+    error_urf_equip_limit: '无限火力装备上限为 {0}，请先售卖装备',
+    error_urf_replace_used: '本回合已经替换过手牌',
+    error_urf_sell_used: '本回合已经售卖过装备',
+    error_indestructible_sell: '不可摧毁装备不能被售卖',
+    error_invalid_player: '无效玩家',
+    error_not_draft_phase: '不在选牌阶段',
+    error_no_reroll: '没有重选次数',
+    error_no_pending_ally_consent: '没有待同意的队友用牌',
+    error_card_not_in_options: '该牌不在选项中',
+    error_card_not_in_hand_alt: '手牌中没有这张牌',
+    error_target_self_forbidden: '不能选择自己作为目标',
+    error_target_alive_required: '必须选择一名存活玩家',
+    error_equipment_friendly_turn_only: '只能在友方回合触发装备',
+    error_game_already_over: '游戏已经结束',
+});
+Object.assign(I18N.fr, {
+    tutorial_player_you: 'Vous', tutorial_player_opponent: 'Adversaire d’entraînement',
+    error_urf_equip_limit: 'Limite d’équipement Infinite Fire : {0}. Vendez d’abord un équipement.',
+    error_urf_replace_used: 'Vous avez déjà remplacé une carte ce tour-ci',
+    error_urf_sell_used: 'Vous avez déjà vendu un équipement ce tour-ci',
+    error_indestructible_sell: 'Un équipement indestructible ne peut pas être vendu',
+    error_invalid_player: 'Joueur invalide',
+    error_not_draft_phase: 'Pas en phase de sélection',
+    error_no_reroll: 'Aucune relance restante',
+    error_no_pending_ally_consent: 'Aucune demande alliée en attente',
+    error_card_not_in_options: 'Cette carte n’est pas dans les options',
+    error_card_not_in_hand_alt: 'Cette carte n’est pas en main',
+    error_target_self_forbidden: 'Vous ne pouvez pas vous choisir comme cible',
+    error_target_alive_required: 'Choisissez un joueur vivant',
+    error_equipment_friendly_turn_only: 'L’équipement ne peut être déclenché que pendant un tour allié',
+    error_game_already_over: 'La partie est déjà terminée',
+});
+Object.assign(I18N.pt, {
+    tutorial_player_you: 'Você', tutorial_player_opponent: 'Oponente de treino',
+    error_urf_equip_limit: 'Limite de equipamentos do Infinite Fire: {0}. Venda um equipamento primeiro.',
+    error_urf_replace_used: 'Você já substituiu uma carta neste turno',
+    error_urf_sell_used: 'Você já vendeu um equipamento neste turno',
+    error_indestructible_sell: 'Equipamento indestrutível não pode ser vendido',
+    error_invalid_player: 'Jogador inválido',
+    error_not_draft_phase: 'Não está na fase de escolha',
+    error_no_reroll: 'Sem rerrolagens restantes',
+    error_no_pending_ally_consent: 'Nenhuma solicitação de aliado pendente',
+    error_card_not_in_options: 'Esta carta não está nas opções',
+    error_card_not_in_hand_alt: 'Esta carta não está na mão',
+    error_target_self_forbidden: 'Você não pode escolher a si mesmo como alvo',
+    error_target_alive_required: 'Escolha um jogador vivo',
+    error_equipment_friendly_turn_only: 'Equipamentos só podem ser acionados em turno aliado',
+    error_game_already_over: 'A partida já terminou',
+});
+Object.assign(I18N.ru, {
+    tutorial_player_you: 'Вы', tutorial_player_opponent: 'Тренировочный соперник',
+    error_urf_equip_limit: 'Лимит снаряжения Infinite Fire: {0}. Сначала продайте снаряжение.',
+    error_urf_replace_used: 'Вы уже заменяли карту в этом ходу',
+    error_urf_sell_used: 'Вы уже продавали снаряжение в этом ходу',
+    error_indestructible_sell: 'Неразрушимое снаряжение нельзя продать',
+    error_invalid_player: 'Недопустимый игрок',
+    error_not_draft_phase: 'Сейчас не фаза выбора',
+    error_no_reroll: 'Перебросов не осталось',
+    error_no_pending_ally_consent: 'Нет ожидающего запроса союзника',
+    error_card_not_in_options: 'Этой карты нет среди вариантов',
+    error_card_not_in_hand_alt: 'Этой карты нет в руке',
+    error_target_self_forbidden: 'Нельзя выбрать себя целью',
+    error_target_alive_required: 'Выберите живого игрока',
+    error_equipment_friendly_turn_only: 'Снаряжение можно активировать только в ход союзника',
+    error_game_already_over: 'Игра уже закончена',
+});
+Object.assign(I18N.ja, {
+    tutorial_player_you: 'あなた', tutorial_player_opponent: '練習相手',
+    error_urf_equip_limit: 'Infinite Fire の装備上限は {0} です。先に装備を売却してください。',
+    error_urf_replace_used: 'このターンはすでに手札を入れ替えました',
+    error_urf_sell_used: 'このターンはすでに装備を売却しました',
+    error_indestructible_sell: '破壊不可の装備は売却できません',
+    error_invalid_player: '無効なプレイヤーです',
+    error_not_draft_phase: '選択フェーズではありません',
+    error_no_reroll: 'リロール回数がありません',
+    error_no_pending_ally_consent: '保留中の味方カード使用確認はありません',
+    error_card_not_in_options: 'そのカードは選択肢にありません',
+    error_card_not_in_hand_alt: 'そのカードは手札にありません',
+    error_target_self_forbidden: '自分を対象に選べません',
+    error_target_alive_required: '生存しているプレイヤーを選んでください',
+    error_equipment_friendly_turn_only: '装備は味方ターン中のみ発動できます',
+    error_game_already_over: 'ゲームはすでに終了しています',
+});
 
 let currentLang = localStorage.getItem('got_lang') || 'zh';
 let showEnglishCardNames = localStorage.getItem('got_show_english_card_names') !== '0';
@@ -894,9 +996,22 @@ function isAdminPlayer(player) {
 
 function getPlayerDisplayName(player, options = {}) {
     const { adminPrefix = true } = options;
-    const name = (player && (player.nickname || player.name)) || '?';
+    const name = localizeCanonicalPlayerName((player && (player.nickname || player.name)) || '?');
     if (isAdminPlayer(player) && adminPrefix) return `[${UI.admin_prefix}]${name}`;
     return name;
+}
+
+function localizeCanonicalPlayerName(name) {
+    const text = String(name || '');
+    if (text === '你') return UI.tutorial_player_you || UI.you || text;
+    if (text === '练习对手') return UI.tutorial_player_opponent || UI.opponent || text;
+    return text;
+}
+
+function localizePlayerNameInText(text) {
+    return String(text || '')
+        .replaceAll('练习对手', UI.tutorial_player_opponent || UI.opponent || '练习对手')
+        .replaceAll('你', UI.tutorial_player_you || UI.you || '你');
 }
 
 function setPlayerNameContent(el, player, options = {}) {
@@ -1087,6 +1202,71 @@ LOG_TEXT.ja = {
     exile: '{card}は追放された', counter: '{p}が{card}でカウンター', win: '{loser}のHが0。{winner}の勝利。',
     draw: '双方のHが0。引き分け。', surrender: '{p}が降参。{winner}の勝利。', poison: '毒', burn: '火傷', physical: '物理'
 };
+Object.assign(LOG_TEXT.en, {
+    solo_start: 'Solo training starts. First player: {p}.',
+    tutorial_start: 'Tutorial starts. First player: {p}.',
+    urf_start: 'Infinite Fire starts. First player: {p}.',
+    team_start: '2v2 starts. First player: {p}.',
+    turn_order: 'Turn order: {order}',
+    replenish_card: '{p} replenishes 1 {type} card: {card}',
+    hand_full_discard: "{p}'s hand is full. {card} goes to discard.",
+    replace_card: '{p} replaces {old} and gets {card}',
+    sell_equipment: '{p} sells {card} and recovers {e}E/{m}M',
+    team_draw: 'Both teams are defeated. Draw.',
+    team_win: 'Team {team} wins.',
+});
+Object.assign(LOG_TEXT.fr, {
+    solo_start: 'Entraînement solo. {p} commence.',
+    tutorial_start: 'Tutoriel. {p} commence.',
+    urf_start: 'Infinite Fire commence. {p} joue en premier.',
+    team_start: '2v2 commence. {p} joue en premier.',
+    turn_order: 'Ordre des tours : {order}',
+    replenish_card: '{p} récupère 1 carte {type} : {card}',
+    hand_full_discard: 'La main de {p} est pleine. {card} va dans la défausse.',
+    replace_card: '{p} remplace {old} et obtient {card}',
+    sell_equipment: '{p} vend {card} et récupère {e}E/{m}M',
+    team_draw: 'Les deux équipes sont vaincues. Égalité.',
+    team_win: 'Équipe {team} gagne.',
+});
+Object.assign(LOG_TEXT.pt, {
+    solo_start: 'Treino solo começa. {p} começa.',
+    tutorial_start: 'Tutorial começa. {p} começa.',
+    urf_start: 'Infinite Fire começa. {p} joga primeiro.',
+    team_start: '2v2 começa. {p} joga primeiro.',
+    turn_order: 'Ordem dos turnos: {order}',
+    replenish_card: '{p} repõe 1 carta {type}: {card}',
+    hand_full_discard: 'A mão de {p} está cheia. {card} vai para o descarte.',
+    replace_card: '{p} substitui {old} e recebe {card}',
+    sell_equipment: '{p} vende {card} e recupera {e}E/{m}M',
+    team_draw: 'As duas equipes foram derrotadas. Empate.',
+    team_win: 'Equipe {team} vence.',
+});
+Object.assign(LOG_TEXT.ru, {
+    solo_start: 'Начинается одиночная тренировка. {p} ходит первым.',
+    tutorial_start: 'Начинается обучение. {p} ходит первым.',
+    urf_start: 'Infinite Fire начинается. {p} ходит первым.',
+    team_start: '2v2 начинается. {p} ходит первым.',
+    turn_order: 'Порядок ходов: {order}',
+    replenish_card: '{p} добирает 1 карту {type}: {card}',
+    hand_full_discard: 'Рука {p} заполнена. {card} уходит в сброс.',
+    replace_card: '{p} заменяет {old} и получает {card}',
+    sell_equipment: '{p} продает {card} и восстанавливает {e}E/{m}M',
+    team_draw: 'Обе команды побеждены. Ничья.',
+    team_win: 'Команда {team} побеждает.',
+});
+Object.assign(LOG_TEXT.ja, {
+    solo_start: '単人訓練開始。{p}が先攻。',
+    tutorial_start: 'チュートリアル開始。{p}が先攻。',
+    urf_start: 'Infinite Fire開始。{p}が先攻。',
+    team_start: '2v2開始。{p}が先攻。',
+    turn_order: 'ターン順：{order}',
+    replenish_card: '{p}が{type}カードを1枚補充：{card}',
+    hand_full_discard: '{p}の手札が満杯。{card}は捨て札へ。',
+    replace_card: '{p}が{old}を入れ替え、{card}を得る',
+    sell_equipment: '{p}が{card}を売却し、{e}E/{m}M回復',
+    team_draw: '両チームが全滅。引き分け。',
+    team_win: 'チーム{team}の勝利。',
+});
 
 const LOG_FALLBACK_REPLACE = {
     en: [
@@ -1161,6 +1341,30 @@ function localizedCardNameFromAny(name) {
     return name;
 }
 
+function localizedCardTypeFromCn(typeName) {
+    const text = String(typeName || '');
+    if (text === '攻击') return UI.card_type_thorn || 'Thorn';
+    if (text === '技能') return UI.card_type_bloom || 'Bloom';
+    if (text === '装备') return UI.card_type_root || 'Root';
+    if (text === '反制') return UI.card_type_guard || 'Guard';
+    return text;
+}
+
+function localizeKnownLogText(line) {
+    let out = localizePlayerNameInText(line);
+    const cardNames = Object.values(CARD_DEFS)
+        .filter(cd => cd && cd.name_cn)
+        .sort((a, b) => String(b.name_cn).length - String(a.name_cn).length);
+    for (const cd of cardNames) {
+        out = out.replaceAll(cd.name_cn, getCardName(cd));
+    }
+    const pairs = LOG_FALLBACK_REPLACE[currentLang] || [];
+    for (const [from, to] of pairs) {
+        out = out.replaceAll(from, to);
+    }
+    return localizeDamageSource(out);
+}
+
 function localizeDamageSource(source) {
     const table = LOG_TEXT[currentLang] || LOG_TEXT.en;
     return String(source || '')
@@ -1172,50 +1376,75 @@ function localizeDamageSource(source) {
 function translateLogLine(line) {
     if (currentLang === 'zh') return line;
     let m;
-    if ((m = line.match(/^\u6e38\u620f\u5f00\u59cb\uff01(.+)\u5148\u624b\u3002?$/))) return fmtLog('game_start', { p: m[1] });
+    const lp = localizeCanonicalPlayerName;
+    if ((m = line.match(/^\u6e38\u620f\u5f00\u59cb\uff01(.+)\u5148\u624b\u3002?$/))) return fmtLog('game_start', { p: lp(m[1]) });
+    if ((m = line.match(/^\u5355\u4eba\u8bad\u7ec3\u573a\u5f00\u59cb\uff01(.+)\u5148\u624b\u3002?$/))) return fmtLog('solo_start', { p: lp(m[1]) }) || tf('training_start', lp(m[1]));
+    if ((m = line.match(/^\u65b0\u624b\u6559\u7a0b\u5f00\u59cb\uff01(.+)\u5148\u624b\u3002?$/))) return fmtLog('tutorial_start', { p: lp(m[1]) });
+    if ((m = line.match(/^\u65e0\u9650\u706b\u529b\u5f00\u59cb\uff01(.+)\u5148\u624b\u3002?$/))) return fmtLog('urf_start', { p: lp(m[1]) });
+    if ((m = line.match(/^2v2\u6e38\u620f\u5f00\u59cb\uff01(.+)\u5148\u624b\u3002?$/))) return fmtLog('team_start', { p: lp(m[1]) });
+    if ((m = line.match(/^\u56de\u5408\u987a\u5e8f\uff1a(.+)$/))) {
+        const order = m[1].split(/\s*[\u2192]\s*/).map(lp).join(' \u2192 ');
+        return fmtLog('turn_order', { order });
+    }
     if ((m = line.match(/^=== \u7b2c(\d+)\u56de\u5408 ===$/))) return fmtLog('round', { n: m[1] });
     if (line === '\u53cc\u65b9\u751f\u547d\u503c\u540c\u65f6\u5f52\u96f6\uff01\u5e73\u5c40\uff01') return fmtLog('draw');
-    if ((m = line.match(/^(.+)\u751f\u547d\u503c\u5f52\u96f6\uff01(.+)\u83b7\u80dc\uff01$/))) return fmtLog('win', { loser: m[1], winner: m[2] });
-    if ((m = line.match(/^(.+)\u6295\u964d\uff0c(.+)\u83b7\u80dc\uff01$/))) return fmtLog('surrender', { p: m[1], winner: m[2] });
-    if ((m = line.match(/^(.+)\u62bd(\d+)\u5f20\u724c$/))) return fmtLog('draw_cards', { p: m[1], n: m[2] });
-    if ((m = line.match(/^(.+)\u56de\u590d(\d+)E$/))) return fmtLog('recover_e', { p: m[1], n: m[2] });
-    if ((m = line.match(/^(.+)\u53d7\u5230(\d+)\u70b9(.+)\u4f24\u5bb3\uff08H=(-?\d+)\uff09$/))) return fmtLog('take_damage', { p: m[1], n: m[2], source: localizeDamageSource(m[3]), h: m[4] });
-    if ((m = line.match(/^(.+)\u53d7\u5230(\d+)\u70b9\u4f24\u5bb3\uff08H=(-?\d+)\uff09$/))) return fmtLog('take_damage', { p: m[1], n: m[2], source: '', h: m[3] });
-    if ((m = line.match(/^(.+)\u4f7f\u7528(.+)\uff01\u9020\u6210(\d+)\u4f24\u5bb3$/))) return fmtLog('use_deal', { p: m[1], card: localizedCardNameFromAny(m[2]), n: m[3] });
-    if ((m = line.match(/^(.+)\u4f7f\u7528(.+)\uff01\u9020\u6210(\d+)x(\d+)\u4f24\u5bb3$/))) return fmtLog('use_multi', { p: m[1], card: localizedCardNameFromAny(m[2]), n: m[3], times: m[4] });
-    if ((m = line.match(/^(.+)\u4f7f\u7528\u4e86(.+)$/))) return fmtLog('use_simple', { p: m[1], card: localizedCardNameFromAny(m[2]) });
-    if ((m = line.match(/^(.+)\u88c5\u5907\u4e86(.+)$/))) return fmtLog('equip', { p: m[1], card: localizedCardNameFromAny(m[2]) });
-    if ((m = line.match(/^(.+)\u4f7f\u7528(.+)\u8fdb\u884c\u53cd\u5236\uff01$/))) return fmtLog('counter', { p: m[1], card: localizedCardNameFromAny(m[2]) });
+    if (line === '\u53cc\u65b9\u961f\u4f0d\u5168\u90e8\u9635\u4ea1\uff01\u5e73\u5c40\uff01') return fmtLog('team_draw');
+    if ((m = line.match(/^(.+)\u751f\u547d\u503c\u5f52\u96f6\uff01(.+)\u83b7\u80dc\uff01$/))) return fmtLog('win', { loser: lp(m[1]), winner: lp(m[2]) });
+    if ((m = line.match(/^(.+)\u6295\u964d\uff0c(.+)\u83b7\u80dc\uff01$/))) return fmtLog('surrender', { p: lp(m[1]), winner: lp(m[2]) });
+    if ((m = line.match(/^\u961f\u4f0d(.+)\u83b7\u80dc\uff01$/))) return fmtLog('team_win', { team: localizePlayerNameInText(m[1]) });
+    if ((m = line.match(/^(.+)\u62bd(\d+)\u5f20\u724c$/))) return fmtLog('draw_cards', { p: lp(m[1]), n: m[2] });
+    if ((m = line.match(/^(.+)\u56de\u590d(\d+)E$/))) return fmtLog('recover_e', { p: lp(m[1]), n: m[2] });
+    if ((m = line.match(/^(.+)\u53d7\u5230(\d+)\u70b9(.+)\u4f24\u5bb3\uff08H=(-?\d+)\uff09$/))) return fmtLog('take_damage', { p: lp(m[1]), n: m[2], source: localizeDamageSource(m[3]), h: m[4] });
+    if ((m = line.match(/^(.+)\u53d7\u5230(\d+)\u70b9\u4f24\u5bb3\uff08H=(-?\d+)\uff09$/))) return fmtLog('take_damage', { p: lp(m[1]), n: m[2], source: '', h: m[3] });
+    if ((m = line.match(/^(.+)\u4f7f\u7528(.+)\uff01\u9020\u6210(\d+)\u4f24\u5bb3$/))) return fmtLog('use_deal', { p: lp(m[1]), card: localizedCardNameFromAny(m[2]), n: m[3] });
+    if ((m = line.match(/^(.+)\u4f7f\u7528(.+)\uff01\u9020\u6210(\d+)x(\d+)\u4f24\u5bb3$/))) return fmtLog('use_multi', { p: lp(m[1]), card: localizedCardNameFromAny(m[2]), n: m[3], times: m[4] });
+    if ((m = line.match(/^(.+)\u4f7f\u7528\u4e86(.+)$/))) return fmtLog('use_simple', { p: lp(m[1]), card: localizedCardNameFromAny(m[2]) });
+    if ((m = line.match(/^(.+)\u88c5\u5907\u4e86(.+)$/))) return fmtLog('equip', { p: lp(m[1]), card: localizedCardNameFromAny(m[2]) });
+    if ((m = line.match(/^(.+)\u4f7f\u7528(.+)\u8fdb\u884c\u53cd\u5236\uff01$/))) return fmtLog('counter', { p: lp(m[1]), card: localizedCardNameFromAny(m[2]) });
     if ((m = line.match(/^(.+)\u88ab\u653e\u9010$/))) return fmtLog('exile', { card: localizedCardNameFromAny(m[1]) });
-    if ((m = line.match(/^\u5355\u4eba\u8bad\u7ec3\u573a\u5f00\u59cb\uff01(.+)\u5148\u624b\u3002$/))) return tf('training_start', m[1]);
-    if ((m = line.match(/^\u8bad\u7ec3\u573a\uff1a(.+) \u8bbe\u7f6e\u4e0b\u6b21\u62bd\u724c\uff1a(.+)$/))) return tf('training_set_draw', m[1], m[2].split('\u3001').map(localizedCardNameFromAny).join(', '));
-    const table = LOG_TEXT[currentLang] || LOG_TEXT.en;
-    return line
-        .replaceAll('\u4e2d\u6bd2', table.poison)
-        .replaceAll('\u707c\u70e7', table.burn)
-        .replaceAll('\u7269\u7406', table.physical);
+    if ((m = line.match(/^(.+)\u8865\u51451\u5f20(.+)\u724c\uff1a(.+)$/))) return fmtLog('replenish_card', { p: lp(m[1]), type: localizedCardTypeFromCn(m[2]), card: localizedCardNameFromAny(m[3]) });
+    if ((m = line.match(/^(.+)\u624b\u724c\u5df2\u6ee1\uff0c(.+)\u8fdb\u5165\u5f03\u724c\u5806$/))) return fmtLog('hand_full_discard', { p: lp(m[1]), card: localizedCardNameFromAny(m[2]) });
+    if ((m = line.match(/^(.+)\u66ff\u6362\u4e86(.+)\uff0c\u83b7\u5f97(.+)$/))) return fmtLog('replace_card', { p: lp(m[1]), old: localizedCardNameFromAny(m[2]), card: localizedCardNameFromAny(m[3]) });
+    if ((m = line.match(/^(.+)\u552e\u5356(.+)\uff0c\u56de\u590d(\d+)E\/(\d+)M$/))) return fmtLog('sell_equipment', { p: lp(m[1]), card: localizedCardNameFromAny(m[2]), e: m[3], m: m[4] });
+    if ((m = line.match(/^\u8bad\u7ec3\u573a\uff1a(.+) \u8bbe\u7f6e\u4e0b\u6b21\u62bd\u724c\uff1a(.+)$/))) return tf('training_set_draw', lp(m[1]), m[2].split('\u3001').map(localizedCardNameFromAny).join(', '));
+    return localizeKnownLogText(line);
 }
 
 function translateServerMessage(message) {
     if (!message) return UI.operation_failed;
     if (message === 'Operation failed') return UI.operation_failed;
     if (message === '游戏已结束') return UI.error_game_over;
+    if (message === '游戏已经结束') return UI.error_game_already_over || UI.error_game_over;
     if (message === '等待对手反制响应') return UI.error_waiting_counter;
     if (message === '卡牌不在手中') return UI.error_card_not_in_hand;
+    if (message === '手牌中没有这张牌') return UI.error_card_not_in_hand_alt || UI.error_card_not_in_hand;
+    if (message === '该牌不在选项中') return UI.error_card_not_in_options || UI.operation_failed;
     if (message === '移出手牌失败') return UI.error_remove_from_hand_failed;
     if (message === '没有待响应的操作') return UI.error_no_pending_response;
     if (message === '没有待选择操作') return UI.error_no_pending_choice;
     if (message === '选择已取消') return UI.error_choice_cancelled;
     if (message === '不是你的回合') return UI.error_not_your_turn;
+    if (message === '无效玩家') return UI.error_invalid_player || UI.operation_failed;
+    if (message === '不在选牌阶段') return UI.error_not_draft_phase || UI.operation_failed;
+    if (message === '没有重选次数') return UI.error_no_reroll || UI.operation_failed;
+    if (message === '没有待同意的队友用牌') return UI.error_no_pending_ally_consent || UI.operation_failed;
     if (message === '装备不存在') return UI.error_equipment_missing;
     if (message === '该装备没有触发效果') return UI.error_equipment_no_trigger;
     if (message === '装备需要装备一回合后才能触发') return UI.error_equipment_turn_needed;
+    if (message === '只能在己方回合触发装备') return UI.error_equipment_friendly_turn_only || UI.error_not_your_turn;
     if (message === '能量不足') return UI.error_not_enough_e;
     if (message === '目标无效') return UI.error_target_invalid;
+    if (message === '不能选择自己作为目标') return UI.error_target_self_forbidden || UI.error_target_invalid;
+    if (message === '必须选择一名存活玩家') return UI.error_target_alive_required || UI.error_target_invalid;
     if (message === '眩晕效果中，无法使用卡牌') return UI.error_action_blocked;
     if (message === '本回合无法使用攻击牌') return UI.error_attack_blocked;
     if (message === '本回合只能使用攻击牌') return UI.error_attack_only;
     if (message === '反制牌只能通过响应机制使用') return UI.error_waiting_response_ui;
+    if (message === '本回合已经替换过手牌') return UI.error_urf_replace_used || message;
+    if (message === '本回合已经售卖过装备') return UI.error_urf_sell_used || message;
+    if (message === '不可摧毁装备不能被售卖') return UI.error_indestructible_sell || message;
+    const urfLimit = String(message).match(/^无限火力装备上限为(\d+)，请先售卖装备$/);
+    if (urfLimit) return tf('error_urf_equip_limit', urfLimit[1]);
     return message;
 }
 
@@ -4305,8 +4534,8 @@ function renderGame(data) {
         const winner = gs.winner;
         const youResult = winner === -1 ? UI.draw : (winner === playerId ? UI.victory : UI.defeat);
         const oppResult = winner === -1 ? UI.draw : (winner === playerId ? UI.defeat : UI.victory);
-        if (youLabel) youLabel.textContent = `${gs.your_name || UI.you} - ${youResult}`;
-        if (oppLabel) oppLabel.textContent = `${gs.opponent_name || UI.opponent} - ${oppResult}`;
+        if (youLabel) youLabel.textContent = `${localizeCanonicalPlayerName(gs.your_name || UI.you)} - ${youResult}`;
+        if (oppLabel) oppLabel.textContent = `${localizeCanonicalPlayerName(gs.opponent_name || UI.opponent)} - ${oppResult}`;
     }
 
     renderPlayerBars('opp-bars', opp);
@@ -4337,9 +4566,9 @@ function renderGame(data) {
 
     let phaseText;
     if (is2v2) {
-        const cpName = gs.current_player === playerId ? (gs.your_name || UI.you) :
-            (gs.current_player === gs.teammate_id ? (gs.teammate_name || UI.teammate) :
-            ((gs.opponent_names || [])[gs.enemy_ids ? gs.enemy_ids.indexOf(gs.current_player) : -1] || '...'));
+        const cpName = gs.current_player === playerId ? localizeCanonicalPlayerName(gs.your_name || UI.you) :
+            (gs.current_player === gs.teammate_id ? localizeCanonicalPlayerName(gs.teammate_name || UI.teammate) :
+            localizeCanonicalPlayerName((gs.opponent_names || [])[gs.enemy_ids ? gs.enemy_ids.indexOf(gs.current_player) : -1] || '...'));
         phaseText = gs.phase === 'action' ? (myTurn ? UI.your_turn : `${UI.opponent_turn}：${cpName}`)
             : gs.phase === 'draw' ? UI.draw_phase
             : gs.phase === 'game_over' ? UI.game_over : '';
@@ -4588,7 +4817,7 @@ function getEnemyTargetOptions() {
         const data = opponents[i] || {};
         return {
             id,
-            label: `${names[i] || (UI.opponent + (i + 1))} H:${data.health || 0}/${data.max_health || 0}`,
+            label: `${localizeCanonicalPlayerName(names[i] || (UI.opponent + (i + 1)))} H:${data.health || 0}/${data.max_health || 0}`,
             alive: (data.health || 0) > 0
         };
     }).filter(x => x.alive);
@@ -4609,10 +4838,10 @@ function normalizePlayerId(id) {
 function getPlayerNameById(id) {
     id = normalizePlayerId(id);
     if (!gameState) return `P${Number(id) + 1}`;
-    if (id === normalizePlayerId(gameState.your_id)) return gameState.your_name || UI.you;
-    if (id === normalizePlayerId(gameState.teammate_id)) return gameState.teammate_name || UI.teammate;
+    if (id === normalizePlayerId(gameState.your_id)) return localizeCanonicalPlayerName(gameState.your_name || UI.you);
+    if (id === normalizePlayerId(gameState.teammate_id)) return localizeCanonicalPlayerName(gameState.teammate_name || UI.teammate);
     const enemyIndex = (gameState.enemy_ids || []).map(normalizePlayerId).indexOf(id);
-    if (enemyIndex >= 0) return (gameState.opponent_names || [])[enemyIndex] || `${UI.opponent}${enemyIndex + 1}`;
+    if (enemyIndex >= 0) return localizeCanonicalPlayerName((gameState.opponent_names || [])[enemyIndex] || `${UI.opponent}${enemyIndex + 1}`);
     return `P${Number(id) + 1}`;
 }
 
@@ -5732,7 +5961,7 @@ function showAllyConsentUI(data) {
     const msg = document.createElement('div');
     msg.className = 'response-label';
     msg.textContent = (UI.ally_consent_msg || '{0} wants to use {1} on you')
-        .replace('{0}', data.from_name || UI.teammate)
+        .replace('{0}', localizeCanonicalPlayerName(data.from_name || UI.teammate))
         .replace('{1}', cardName);
     container.appendChild(msg);
     const row = document.createElement('div');

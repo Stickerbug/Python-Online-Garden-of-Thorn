@@ -161,6 +161,25 @@ class GameEngineInfiniteFire(GameEngine):
             type_name = CARD_TYPE_CN.get(card_type, card_type)
             self.log_msg(f"{self.pn(player_id)}补充1张{type_name}牌：{card.name_cn}")
 
+    def _fusion_extra_replenish_types(self, player_id: int, card: Optional[CardInstance], choice) -> List[str]:
+        if not card or card.def_id != 'Fusion' or not isinstance(choice, dict):
+            return []
+        ids = choice.get('target_instance_ids') or []
+        if not isinstance(ids, list) or len(ids) < 2:
+            return []
+        selected = []
+        for instance_id in ids[:3]:
+            target = self.players[player_id].find_hand_card(instance_id)
+            if target is not None and target.instance_id != card.instance_id:
+                selected.append(target)
+        if len(selected) < 2:
+            return []
+        if any(c.card_type != 'thorn' for c in selected):
+            return []
+        if len({c.def_id for c in selected}) != 1:
+            return []
+        return [selected[0].card_type] * (len(selected) - 1)
+
     def _deal_starting_hand(self, ps: InfinitePlayerState):
         ps.hand = []
         for card_type, count in URF_STARTING_HAND_COUNTS.items():
@@ -307,22 +326,30 @@ class GameEngineInfiniteFire(GameEngine):
         ps = self.players[player_id]
         card = ps.find_hand_card(card_instance_id)
         card_type = card.card_type if card else None
+        extra_replenish_types = self._fusion_extra_replenish_types(player_id, card, choice)
         result = super().play_card(player_id, card_instance_id, choice)
         if result.get('success') and not result.get('needs_choice') and card_type:
             self._draw_to_hand_by_type(player_id, card_type)
+            for extra_type in extra_replenish_types:
+                self._draw_to_hand_by_type(player_id, extra_type)
         return result
 
     def resolve_choice(self, player_id: int, choice: dict) -> dict:
         pending = self.pending_choice or {}
+        pending_card = None
         card_type = None
         if pending.get('card'):
             try:
-                card_type = CardInstance.from_dict(pending['card']).card_type
+                pending_card = CardInstance.from_dict(pending['card'])
+                card_type = pending_card.card_type
             except Exception:
                 card_type = None
+        extra_replenish_types = self._fusion_extra_replenish_types(player_id, pending_card, choice)
         result = super().resolve_choice(player_id, choice)
         if result.get('success') and card_type:
             self._draw_to_hand_by_type(player_id, card_type)
+            for extra_type in extra_replenish_types:
+                self._draw_to_hand_by_type(player_id, extra_type)
         return result
 
     def handle_response(self, responder_id: int, card_instance_id: Optional[int]) -> dict:
