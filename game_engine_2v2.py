@@ -50,6 +50,10 @@ class GameEngine2v2(GameEngine):
         self._last_damage_value: List[int] = [0] * 4
         self._incoming_damage_hint: List[int] = [0] * 4
         self._last_attacker: Dict[int, int] = {}
+        self.custom_vars: Dict[str, int] = {}
+        self.team_custom_vars: Dict[str, Dict[str, int]] = {}
+        self._last_created_card_instance_id: Optional[int] = None
+        self._init_mod_variables()
 
     def team_of(self, player_id: int) -> int:
         for ti, team in enumerate(self.teams):
@@ -151,6 +155,19 @@ class GameEngine2v2(GameEngine):
                 if ct in ('choose_from_enemy_hand',):
                     for eid in enemy_ids:
                         opp_data_list[enemy_ids.index(eid)]['hand'] = [c.to_dict() for c in self.players[eid].hand]
+                target_id = self.pending_choice.get('target_player_id')
+                params = self.pending_choice.get('choice_params', {}) or {}
+                if target_id in enemy_ids and ct in ('choose_card_from_hand', 'choose_from_deck', 'choose_from_discard', 'choose_from_exile', 'choose_equipment'):
+                    ed = opp_data_list[enemy_ids.index(target_id)]
+                    zone = params.get('zone', '')
+                    if ct == 'choose_card_from_hand' or zone == 'hand':
+                        ed['hand'] = [c.to_dict() for c in self.players[target_id].hand]
+                    if ct == 'choose_from_deck' or zone == 'deck':
+                        ed['deck'] = [c.to_dict() for c in self.players[target_id].deck]
+                    if ct == 'choose_from_discard' or zone == 'discard':
+                        ed['discard'] = [c.to_dict() for c in self.players[target_id].discard]
+                    if ct == 'choose_from_exile' or zone == 'exile':
+                        ed['exile'] = [c.to_dict() for c in self.players[target_id].exile]
 
         log_start = 0
         return {
@@ -236,7 +253,7 @@ class GameEngine2v2(GameEngine):
         for i in range(4):
             ps = self.players[i]
             ps.is_first_player = (i == self.first_player)
-            ps.deck = create_deck_from_draft(self.draft_picks[i])
+            ps.deck = create_deck_from_draft(self.draft_picks[i], self.allowed_card_ids)
             ps.health = INITIAL_HEALTH
             ps.max_health = BASE_MAX_HEALTH
             ps.base_max_health = BASE_MAX_HEALTH
@@ -512,9 +529,13 @@ class GameEngine2v2(GameEngine):
 
     def _card_can_counter(self, counter_card: CardInstance, played_card: CardInstance) -> bool:
         played_def = played_card.card_def
+        if counter_card.card_def.response_trigger == 'any':
+            return True
         if played_def.card_type == 'thorn' and counter_card.card_def.response_trigger == 'thorn':
             return True
         if played_def.card_type == 'bloom' and counter_card.card_def.response_trigger == 'bloom':
+            return True
+        if played_def.card_type == 'root' and counter_card.card_def.response_trigger == 'root':
             return True
         if self._would_destroy_equipment(played_card) and counter_card.card_def.response_trigger == 'equipment_destroy':
             return True
@@ -543,7 +564,7 @@ class GameEngine2v2(GameEngine):
             if counter_removed is None:
                 return self._execute_card_effect(player_id, card, choice)
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}进行反制！")
-            self._execute_counter_effect(responder_id, counter_removed, card)
+            self._execute_counter_effect(responder_id, counter_removed, card, player_id)
             is_precision = pending.get('is_precision', False)
             if counter_removed.def_id == 'Bubble':
                 if is_precision:
@@ -701,6 +722,7 @@ class GameEngine2v2(GameEngine):
         pos1 = [e for e in self.OPENING_EVENTS.values() if e['position'] == 1]
         pos2 = [e for e in self.OPENING_EVENTS.values() if e['position'] == 2]
         pos3 = [e for e in self.OPENING_EVENTS.values() if e['position'] == 3]
+        magic_pool = [def_id for def_id in self.MAGIC_CARD_POOL if self._card_allowed(def_id)]
         for i in range(4):
             slot1 = pos1[0] if pos1 else None
             slot2 = random.choice(pos2) if pos2 else None
@@ -708,7 +730,7 @@ class GameEngine2v2(GameEngine):
             self.opening_event_options[i] = [slot1, slot2, slot3]
             for j in range(3):
                 self.opening_event_magic_options[i][j] = random.sample(
-                    self.MAGIC_CARD_POOL, min(3, len(self.MAGIC_CARD_POOL)))
+                    magic_pool, min(3, len(magic_pool)))
 
     def _is_valid_player_id(self, player_id) -> bool:
         return isinstance(player_id, int) and 0 <= player_id < self.num_players
@@ -1277,10 +1299,14 @@ class GameEngine2v2(GameEngine):
         if not self._is_valid_player_id(target_id) or not self.is_enemy(player_id, target_id):
             return False
         opp = self.players[target_id]
+        if any(c.card_def.response_trigger == 'any' for c in opp.hand):
+            return True
         if card.card_type == 'thorn':
             return any(c.card_def.response_trigger == 'thorn' for c in opp.hand)
         if card.card_type == 'bloom':
             return any(c.card_def.response_trigger == 'bloom' for c in opp.hand)
+        if card.card_type == 'root':
+            return any(c.card_def.response_trigger == 'root' for c in opp.hand)
         if self._would_destroy_equipment(card):
             return any(c.card_def.response_trigger == 'equipment_destroy' for c in opp.hand)
         return False
@@ -1303,6 +1329,7 @@ class GameEngine2v2(GameEngine):
         ps.magic_battery_m_this_turn = 0
         ps.coffee_first_use = True
         ps.custom_vars['\u5496\u5561\u9996\u6b21\u4f7f\u7528'] = 1
+        self._run_zone_owner_turn_start_events(player_id)
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False
@@ -1500,12 +1527,16 @@ class GameEngine2v2(GameEngine):
 
     def _resolve_target(self, player_id, target_str):
         context = getattr(self, '_active_effect_context', {}) or {}
+        if isinstance(target_str, dict) and target_str.get('ref') == 'card_owner':
+            target_card = self._resolve_card_ref(player_id, target_str.get('card'), None)
+            owner_id, _, _ = self._find_card_location(target_card)
+            return player_id if owner_id is None else owner_id
         if target_str in ('choice_target', 'selected_target', 'chosen_target'):
             target_id = self._selected_choice_target(player_id)
             return target_id if self._is_valid_effect_target(player_id, target_id) else player_id
         if target_str in ('event_target', 'target'):
             return int(context.get('target_id', player_id))
-        if target_str in ('event_source', 'source', 'last_actor'):
+        if target_str in ('event_source', 'source', 'last_actor', 'damage_source'):
             return int(context.get('source_id', player_id))
         if getattr(self, '_active_choice', None):
             selected = self._active_choice.get('target_player')
@@ -1529,7 +1560,10 @@ class GameEngine2v2(GameEngine):
         return player_id
 
     def _resolve_targets(self, player_id, target_str):
-        if target_str in ('choice_target', 'selected_target', 'chosen_target', 'event_target', 'target', 'event_source', 'source', 'last_actor'):
+        if isinstance(target_str, dict) and target_str.get('ref') == 'card_owner':
+            tid = self._resolve_target(player_id, target_str)
+            return [] if tid < 0 else [tid]
+        if target_str in ('choice_target', 'selected_target', 'chosen_target', 'event_target', 'target', 'event_source', 'source', 'last_actor', 'damage_source'):
             tid = self._resolve_target(player_id, target_str)
             return [] if tid < 0 else [tid]
         if target_str in ('both', 'random_side'):

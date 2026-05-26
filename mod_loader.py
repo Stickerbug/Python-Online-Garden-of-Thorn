@@ -53,19 +53,24 @@ VALID_EFFECTS = {
     'batch_var_add', 'batch_var_sub', 'batch_var_mul', 'batch_var_div',
     'status_add_named', 'status_remove_named', 'tag_add_named', 'tag_remove_named',
     'batch_status_add', 'batch_status_remove', 'batch_tag_add', 'batch_tag_remove',
-    'exile_this', 'move_to_discard', 'move_to_deck',
+    'exile_this', 'move_to_discard', 'move_to_hand', 'move_to_deck',
     'global_damage_mult', 'global_heal_mult', 'global_cost_mult',
     'swap_health', 'swap_hands', 'broadcast_event', 'modify_damage',
     'trigger_on_enemy_use_type', 'trigger_on_friendly_use_type',
     'trigger_on_self_magic_heal_cumulative', 'trigger_manual', 'response_declare',
     'trigger_on_event',
     'on_owner_turn_start', 'on_enemy_turn_start', 'on_any_turn_start',
-    'on_damage_taken', 'on_equipment_trigger', 'aura_enemy_elixir_recovery',
+    'on_damage_taken', 'on_equipment_trigger', 'on_equipment_destroy',
+    'on_hand_owner_turn_start', 'on_discard_owner_turn_start', 'on_deck_owner_turn_start',
+    'aura_enemy_elixir_recovery',
     'direct_damage', 'lifesteal_damage', 'triangle_damage',
     'discard_choice_then_draw', 'coffee_gain_e',
     'destroy_equipment_choice_or_first', 'destroy_all_destroyable_equipment',
     'destroy_self_equipment', 'activate_corruption',
     'request_target', 'request_card', 'request_confirm',
+    'for_each_selected_card', 'card_prop_add', 'card_prop_set',
+    'equipment_prop_add', 'equipment_prop_set',
+    'player_prop_add', 'player_prop_set',
 }
 VALID_EQUIP_EFFECTS = {
     'per_card_played', 'per_e_spent', 'per_m_spent',
@@ -87,7 +92,10 @@ class ModCard:
         self.cost_e = data.get('cost_e', 0)
         self.cost_m = data.get('cost_m', 0)
         self.card_type = data.get('card_type', 'thorn')
-        self.count = data.get('count', 1)
+        try:
+            self.count = max(0, int(data.get('count', data.get('weight', 3))))
+        except (TypeError, ValueError):
+            self.count = 3
         self.quality = data.get('quality', 'Common')
         self.description = data.get('description', '')
         self.effect_text = data.get('effect_text', '')
@@ -108,6 +116,8 @@ class ModCard:
         self.poison = data.get('poison', 0)
         self.burn = data.get('burn', 0)
         self.response_trigger = data.get('response_trigger', '')
+        self.response_title = data.get('response_title', '')
+        self.response_content = data.get('response_content', '')
 
     def to_dict(self) -> dict:
         return {
@@ -125,6 +135,8 @@ class ModCard:
             'trigger_effect_text': self.trigger_effect_text,
             'trigger_effects': self.trigger_effects,
             'response_trigger': self.response_trigger,
+            'response_title': self.response_title,
+            'response_content': self.response_content,
         }
 
     def to_card_def(self):
@@ -146,6 +158,8 @@ class ModCard:
             response_trigger=self.response_trigger,
             effects=self.effects,
             scripts=self.scripts,
+            response_title=self.response_title,
+            response_content=self.response_content,
         )
 
 
@@ -164,6 +178,24 @@ class ModEvent:
             'id': self.id, 'name_cn': self.name_cn, 'name_en': self.name_en,
             'desc': self.desc, 'position': self.position,
             'effects': self.effects, 'params': self.params,
+        }
+
+
+class ModVariable:
+    def __init__(self, data: dict):
+        self.id = data.get('id', '')
+        self.name = data.get('name', self.id)
+        self.scope = data.get('scope', 'player')
+        self.initial = data.get('initial', 0)
+        self.desc = data.get('desc', '')
+
+    def to_dict(self) -> dict:
+        return {
+            'id': self.id,
+            'name': self.name,
+            'scope': self.scope,
+            'initial': self.initial,
+            'desc': self.desc,
         }
 
 
@@ -190,6 +222,7 @@ class Mod:
         self.info: Optional[ModInfo] = None
         self.cards: List[ModCard] = []
         self.events: List[ModEvent] = []
+        self.variables: List[ModVariable] = []
         self.errors: List[str] = []
         self.enabled = True
 
@@ -198,6 +231,7 @@ class Mod:
             'info': self.info.to_dict() if self.info else {},
             'cards': [c.to_dict() for c in self.cards],
             'events': [e.to_dict() for e in self.events],
+            'variables': [v.to_dict() for v in self.variables],
         }
 
 
@@ -247,6 +281,11 @@ def validate_mod(data: dict) -> List[str]:
             elif isinstance(eff, dict):
                 if eff.get('type') not in VALID_EVENT_EFFECTS:
                     errors.append(f'事件#{i + 1}效果类型无效: {eff.get("type")}')
+    for i, variable in enumerate(data.get('variables', [])):
+        if not variable.get('name') and not variable.get('id'):
+            errors.append(f'variable#{i + 1} missing name')
+        if variable.get('scope', 'player') not in ('player', 'team', 'global'):
+            errors.append(f'variable#{i + 1} invalid scope: {variable.get("scope")}')
     return errors
 
 
@@ -269,6 +308,8 @@ def load_mod(filepath: str) -> Mod:
         mod.cards.append(ModCard(cd))
     for ed in data.get('events', []):
         mod.events.append(ModEvent(ed))
+    for vd in data.get('variables', []):
+        mod.variables.append(ModVariable(vd))
     return mod
 
 
@@ -354,6 +395,16 @@ def get_mods_summary() -> dict:
         'mods': [m.info.name if m.info else m.filename for m in active],
         'count': len(active),
     }
+
+
+def get_active_mod_variables() -> List[dict]:
+    variables = []
+    for mod in get_enabled_mods():
+        if not mod.enabled or mod.errors:
+            continue
+        for variable in mod.variables:
+            variables.append(variable.to_dict())
+    return variables
 
 
 def merge_mod_cards_to_card_defs() -> List[str]:

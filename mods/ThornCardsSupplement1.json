@@ -1,0 +1,695 @@
+{
+  "format_version": 1,
+  "info": {
+    "name": "Thorn Cards Supplement 1",
+    "version": "1.0.0",
+    "author": "Stickerbug",
+    "description": "攻击牌补充1",
+    "game_version": "*"
+  },
+  "variables": [],
+  "cards": [
+    {
+      "id": "Claw",
+      "name_cn": "爪子",
+      "name_en": "Claw",
+      "cost_e": 1,
+      "cost_m": 0,
+      "card_type": "thorn",
+      "count": 3,
+      "quality": "Common",
+      "description": "敌强我强。",
+      "effect_text": "造成5D；若敌方H高于上限的一半，改为造成10D",
+      "flags": [],
+      "effects": [
+        {
+          "type": "if",
+          "params": {
+            "condition": {
+              "op": "compare",
+              "a": {
+                "ref": "player_property",
+                "target": "enemy",
+                "property": "health"
+              },
+              "operator": ">",
+              "b": {
+                "ref": "math_op",
+                "a": {
+                  "ref": "player_property",
+                  "target": "enemy",
+                  "property": "max_health"
+                },
+                "op": "/",
+                "b": 2
+              }
+            },
+            "then": [
+              {
+                "type": "damage",
+                "params": {
+                  "target": "enemy",
+                  "amount": 10
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "if",
+          "params": {
+            "condition": {
+              "op": "compare",
+              "a": {
+                "ref": "player_property",
+                "target": "enemy",
+                "property": "health"
+              },
+              "operator": "<=",
+              "b": {
+                "ref": "math_op",
+                "a": {
+                  "ref": "player_property",
+                  "target": "enemy",
+                  "property": "max_health"
+                },
+                "op": "/",
+                "b": 2
+              }
+            },
+            "then": [
+              {
+                "type": "damage",
+                "params": {
+                  "target": "enemy",
+                  "amount": 5
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "damage": 5,
+      "hits": 1,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "if",
+              "params": {
+                "condition": {
+                  "op": "compare",
+                  "a": {
+                    "ref": "player_property",
+                    "target": "enemy",
+                    "property": "health"
+                  },
+                  "operator": ">",
+                  "b": {
+                    "ref": "math_op",
+                    "a": {
+                      "ref": "player_property",
+                      "target": "enemy",
+                      "property": "max_health"
+                    },
+                    "op": "/",
+                    "b": 2
+                  }
+                },
+                "then": [
+                  {
+                    "type": "damage",
+                    "params": {
+                      "target": "enemy",
+                      "amount": 10
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "if",
+              "params": {
+                "condition": {
+                  "op": "compare",
+                  "a": {
+                    "ref": "player_property",
+                    "target": "enemy",
+                    "property": "health"
+                  },
+                  "operator": "<=",
+                  "b": {
+                    "ref": "math_op",
+                    "a": {
+                      "ref": "player_property",
+                      "target": "enemy",
+                      "property": "max_health"
+                    },
+                    "op": "/",
+                    "b": 2
+                  }
+                },
+                "then": [
+                  {
+                    "type": "damage",
+                    "params": {
+                      "target": "enemy",
+                      "amount": 5
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "Rice",
+      "name_cn": "米",
+      "name_en": "Rice",
+      "cost_e": 0,
+      "cost_m": 0,
+      "card_type": "thorn",
+      "count": 3,
+      "quality": "Common",
+      "description": "它不是很强，不过下一次你还会抽到它。",
+      "effect_text": "造成4D，使用后回到抽牌堆顶",
+      "flags": [],
+      "effects": [
+        {
+          "type": "damage",
+          "params": {
+            "target": "enemy",
+            "amount": 4
+          }
+        },
+        {
+          "type": "move_to_deck",
+          "params": {
+            "card": {
+              "ref": "current_card"
+            },
+            "position": "top"
+          }
+        }
+      ],
+      "damage": 4,
+      "hits": 1,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "damage",
+              "params": {
+                "target": "enemy",
+                "amount": 4
+              }
+            },
+            {
+              "type": "move_to_deck",
+              "params": {
+                "card": {
+                  "ref": "current_card"
+                },
+                "position": "top"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "Glass",
+      "name_cn": "玻璃",
+      "name_en": "Glass",
+      "cost_e": 1,
+      "cost_m": 0,
+      "card_type": "thorn",
+      "count": 3,
+      "quality": "Unusual",
+      "description": "它穿透对手又回来了？",
+      "effect_text": "造成5D，下回合回到手中",
+      "flags": [],
+      "effects": [
+        {
+          "type": "damage",
+          "params": {
+            "target": "enemy",
+            "amount": 5
+          }
+        },
+        {
+          "type": "card_prop_set",
+          "params": {
+            "card": {
+              "ref": "current_card"
+            },
+            "property": "return_to_hand_turns",
+            "value": 1
+          }
+        }
+      ],
+      "damage": 5,
+      "hits": 1,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "damage",
+              "params": {
+                "target": "enemy",
+                "amount": 5
+              }
+            },
+            {
+              "type": "card_prop_set",
+              "params": {
+                "card": {
+                  "ref": "current_card"
+                },
+                "property": "return_to_hand_turns",
+                "value": 1
+              }
+            }
+          ]
+        },
+        "onDiscardOwnerTurnStart": {
+          "effects": [
+            {
+              "type": "if",
+              "params": {
+                "condition": {
+                  "op": "compare",
+                  "a": {
+                    "ref": "card_property",
+                    "card": {
+                      "ref": "current_card"
+                    },
+                    "property": "return_to_hand_turns"
+                  },
+                  "operator": ">",
+                  "b": 0
+                },
+                "then": [
+                  {
+                    "type": "if",
+                    "params": {
+                      "condition": {
+                        "op": "compare",
+                        "a": {
+                          "ref": "card_property",
+                          "card": {
+                            "ref": "current_card"
+                          },
+                          "property": "return_to_hand_turns"
+                        },
+                        "operator": "<=",
+                        "b": 1
+                      },
+                      "then": [
+                        {
+                          "type": "card_prop_set",
+                          "params": {
+                            "card": {
+                              "ref": "current_card"
+                            },
+                            "property": "return_to_hand_turns",
+                            "value": 0
+                          }
+                        },
+                        {
+                          "type": "move_to_hand",
+                          "params": {
+                            "card": {
+                              "ref": "current_card"
+                            },
+                            "target": "self"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "type": "if",
+                    "params": {
+                      "condition": {
+                        "op": "compare",
+                        "a": {
+                          "ref": "card_property",
+                          "card": {
+                            "ref": "current_card"
+                          },
+                          "property": "return_to_hand_turns"
+                        },
+                        "operator": ">",
+                        "b": 1
+                      },
+                      "then": [
+                        {
+                          "type": "card_prop_add",
+                          "params": {
+                            "card": {
+                              "ref": "current_card"
+                            },
+                            "property": "return_to_hand_turns",
+                            "amount": -1
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "MagicGlass",
+      "name_cn": "魔法玻璃",
+      "name_en": "Magic Glass",
+      "cost_e": 2,
+      "cost_m": 0,
+      "card_type": "thorn",
+      "count": 2,
+      "quality": "Unusual",
+      "description": "伤害变低了，不过可以为你回复魔力。",
+      "effect_text": "造成4D，回复2M，下回合回到手中",
+      "flags": [],
+      "effects": [
+        {
+          "type": "damage",
+          "params": {
+            "target": "enemy",
+            "amount": 4
+          }
+        },
+        {
+          "type": "gain_m",
+          "params": {
+            "target": "self",
+            "amount": 2
+          }
+        },
+        {
+          "type": "card_prop_set",
+          "params": {
+            "card": {
+              "ref": "current_card"
+            },
+            "property": "return_to_hand_turns",
+            "value": 1
+          }
+        }
+      ],
+      "damage": 4,
+      "hits": 1,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 2,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "damage",
+              "params": {
+                "target": "enemy",
+                "amount": 4
+              }
+            },
+            {
+              "type": "gain_m",
+              "params": {
+                "target": "self",
+                "amount": 2
+              }
+            },
+            {
+              "type": "card_prop_set",
+              "params": {
+                "card": {
+                  "ref": "current_card"
+                },
+                "property": "return_to_hand_turns",
+                "value": 1
+              }
+            }
+          ]
+        },
+        "onDiscardOwnerTurnStart": {
+          "effects": [
+            {
+              "type": "if",
+              "params": {
+                "condition": {
+                  "op": "compare",
+                  "a": {
+                    "ref": "card_property",
+                    "card": {
+                      "ref": "current_card"
+                    },
+                    "property": "return_to_hand_turns"
+                  },
+                  "operator": ">",
+                  "b": 0
+                },
+                "then": [
+                  {
+                    "type": "if",
+                    "params": {
+                      "condition": {
+                        "op": "compare",
+                        "a": {
+                          "ref": "card_property",
+                          "card": {
+                            "ref": "current_card"
+                          },
+                          "property": "return_to_hand_turns"
+                        },
+                        "operator": "<=",
+                        "b": 1
+                      },
+                      "then": [
+                        {
+                          "type": "card_prop_set",
+                          "params": {
+                            "card": {
+                              "ref": "current_card"
+                            },
+                            "property": "return_to_hand_turns",
+                            "value": 0
+                          }
+                        },
+                        {
+                          "type": "move_to_hand",
+                          "params": {
+                            "card": {
+                              "ref": "current_card"
+                            },
+                            "target": "self"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "type": "if",
+                    "params": {
+                      "condition": {
+                        "op": "compare",
+                        "a": {
+                          "ref": "card_property",
+                          "card": {
+                            "ref": "current_card"
+                          },
+                          "property": "return_to_hand_turns"
+                        },
+                        "operator": ">",
+                        "b": 1
+                      },
+                      "then": [
+                        {
+                          "type": "card_prop_add",
+                          "params": {
+                            "card": {
+                              "ref": "current_card"
+                            },
+                            "property": "return_to_hand_turns",
+                            "amount": -1
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "Tomato",
+      "name_cn": "番茄",
+      "name_en": "Tomato",
+      "cost_e": 2,
+      "cost_m": 0,
+      "card_type": "thorn",
+      "count": 2,
+      "quality": "Epic",
+      "description": "一直吸收营养的番茄。",
+      "effect_text": "造成8D；在手中每保留一回合就+3D，打出后重置",
+      "flags": [],
+      "effects": [
+        {
+          "type": "damage",
+          "params": {
+            "target": "enemy",
+            "amount": 8
+          }
+        },
+        {
+          "type": "card_prop_set",
+          "params": {
+            "card": {
+              "ref": "current_card"
+            },
+            "property": "bonus_damage",
+            "value": 0
+          }
+        },
+        {
+          "type": "card_prop_set",
+          "params": {
+            "card": {
+              "ref": "current_card"
+            },
+            "property": "held_turns",
+            "value": 0
+          }
+        }
+      ],
+      "damage": 8,
+      "hits": 1,
+      "heal": 0,
+      "draw": 0,
+      "gain_e": 0,
+      "gain_m": 0,
+      "armor": 0,
+      "dodge": 0,
+      "poison": 0,
+      "burn": 0,
+      "trigger_cost_e": -1,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "damage",
+              "params": {
+                "target": "enemy",
+                "amount": 8
+              }
+            },
+            {
+              "type": "card_prop_set",
+              "params": {
+                "card": {
+                  "ref": "current_card"
+                },
+                "property": "bonus_damage",
+                "value": 0
+              }
+            },
+            {
+              "type": "card_prop_set",
+              "params": {
+                "card": {
+                  "ref": "current_card"
+                },
+                "property": "held_turns",
+                "value": 0
+              }
+            }
+          ]
+        },
+        "onHandOwnerTurnStart": {
+          "effects": [
+            {
+              "type": "card_prop_add",
+              "params": {
+                "card": {
+                  "ref": "current_card"
+                },
+                "property": "bonus_damage",
+                "amount": 3
+              }
+            },
+            {
+              "type": "card_prop_add",
+              "params": {
+                "card": {
+                  "ref": "current_card"
+                },
+                "property": "held_turns",
+                "amount": 1
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "events": [],
+  "custom_statuses": [],
+  "custom_tags": []
+}

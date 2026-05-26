@@ -22,6 +22,8 @@ class CardDef:
     response_trigger: str = ''
     effects: List[dict] = field(default_factory=list)
     scripts: Dict[str, Any] = field(default_factory=dict)
+    response_title: str = ''
+    response_content: str = ''
 
     @property
     def display_name(self) -> str:
@@ -212,7 +214,7 @@ _reg(CardDef('Mimic', 'Mimic', '拟态', 0, 0, 'bloom', 2, 'Common',
              '完美模仿。', '将一张手牌的复制加入手中，使其下一次打出时费用-1',
              flags={'exile', 'self_only'}))
 
-_reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 2, 'Super',
+_reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 0, 'Super',
              '神奇的树叶。可以使人死而复生。', '+20H；受到致命伤害时，若在手牌中，则清除自己的所有效果，将生命值设为5，此回合无敌并放逐此牌'))
 
 _reg(CardDef('Leaf', 'Leaf', '叶子', 1, 0, 'root', 5, 'Common',
@@ -311,23 +313,34 @@ def build_draft_pool(allowed_def_ids: Optional[Set[str]] = None) -> List[CardIns
 
 def generate_draft_options(pool: List[CardInstance], card_type: str, count: int = 3, exclude_def_ids: List[str] = None) -> List[CardInstance]:
     type_cards = [c for c in pool if c.card_def.card_type == card_type]
-    seen_def_ids = set()
-    unique_cards = []
-    for c in type_cards:
-        if c.def_id not in seen_def_ids:
-            seen_def_ids.add(c.def_id)
-            unique_cards.append(c)
+    def weighted_unique_sample(cards: List[CardInstance], sample_count: int) -> List[CardInstance]:
+        first_by_id = {}
+        weights = {}
+        for card in cards:
+            if card.def_id not in first_by_id:
+                first_by_id[card.def_id] = card
+                weights[card.def_id] = 0
+            weights[card.def_id] += 1
+        ids = list(first_by_id.keys())
+        picked = []
+        while ids and len(picked) < sample_count:
+            choice = random.choices(ids, weights=[weights[i] for i in ids], k=1)[0]
+            picked.append(first_by_id[choice])
+            ids.remove(choice)
+        return picked
+
+    unique_cards = weighted_unique_sample(type_cards, len(type_cards))
     exclude = set(exclude_def_ids) if exclude_def_ids else set()
     available = [c for c in unique_cards if c.def_id not in exclude]
     if len(available) >= count:
-        return random.sample(available, count)
+        return weighted_unique_sample([c for c in type_cards if c.def_id not in exclude], count)
     if len(available) > 0:
         needed = count - len(available)
         fallback = [c for c in unique_cards if c.def_id in exclude]
         if fallback:
-            return available + random.sample(fallback, min(needed, len(fallback)))
+            return available + weighted_unique_sample([c for c in type_cards if c.def_id in exclude], min(needed, len(fallback)))
         return available
-    return random.sample(unique_cards, min(count, len(unique_cards)))
+    return weighted_unique_sample(type_cards, min(count, len(unique_cards)))
 
 
 def create_deck_from_draft(picked_def_ids: List[str], allowed_def_ids: Optional[Set[str]] = None) -> List[CardInstance]:

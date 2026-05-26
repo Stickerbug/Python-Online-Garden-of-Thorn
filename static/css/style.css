@@ -3724,6 +3724,13 @@ body {
   margin-right: 8px;
 }
 
+.response-content {
+  color: var(--text-secondary);
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
 .response-btn-row {
   display: flex;
   flex-wrap: wrap;
@@ -5428,6 +5435,14 @@ body {
   color: var(--text-primary);
 }
 
+.game-prompt-message {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: -4px 0 4px;
+  white-space: pre-line;
+}
+
 .game-prompt-options {
   display: flex;
   flex-direction: column;
@@ -5453,6 +5468,22 @@ body {
 .game-prompt-option:hover {
   background: rgba(0, 0, 0, 0.08);
   border-color: var(--bloom);
+}
+
+.game-prompt-option.selected {
+  background: rgba(46, 204, 113, 0.14);
+  border-color: rgba(46, 204, 113, 0.7);
+}
+
+.game-prompt-option.game-prompt-confirm {
+  justify-content: center;
+  font-weight: 800;
+  color: var(--bloom);
+}
+
+.game-prompt-option.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .game-prompt-buttons {

@@ -250,6 +250,7 @@ class GameEngineInfiniteFire(GameEngine):
         opp_id = 1 - player_id
         opp = self.players[opp_id]
         self._antenna_reveal[player_id] = None
+        self._run_zone_owner_turn_start_events(player_id)
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False

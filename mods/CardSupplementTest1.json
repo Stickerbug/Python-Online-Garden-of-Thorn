@@ -1,9 +1,9 @@
 {
   "info": {
-    "name": "CardSupplementTest1",
+    "name": "Troll Cards",
     "version": "1.2.0",
     "author": "Stickerbug",
-    "description": "卡牌补充测试1",
+    "description": "????????????",
     "game_version": "*"
   },
   "cards": [
@@ -19,12 +19,7 @@
       "description": "用绷带缠住自己了，短时间还下不了场。",
       "effect_text": "受到致命伤害后无敌直到自己下个回合结束，然后死亡",
       "flags": [],
-      "effects": [
-        {
-          "type": "counter_set_invincible_then_die",
-          "log": "玩家{p}的绷带：受到致命伤害时无敌至自己下个回合结束"
-        }
-      ],
+      "effects": [],
       "damage": 0,
       "hits": 0,
       "heal": 0,
@@ -38,7 +33,21 @@
       "trigger_cost_e": -1,
       "trigger_effect_text": "",
       "trigger_effects": [],
-      "response_trigger": "thorn"
+      "response_trigger": "thorn",
+      "scripts": {
+        "onResponse": {
+          "effects": [
+            {
+              "type": "player_prop_set",
+              "params": {
+                "target": "self",
+                "property": "bandage_active",
+                "value": 1
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "id": "Jelly",
@@ -52,15 +61,7 @@
       "description": "有弹性的果冻会吸收攻击。",
       "effect_text": "敌方这回合不能再攻击（响应：敌方使用攻击牌时）",
       "flags": [],
-      "effects": [
-        {
-          "type": "counter_block_enemy_attacks",
-          "params": {
-            "duration": 1
-          },
-          "log": "果冻效果：敌方本回合无法使用攻击牌"
-        }
-      ],
+      "effects": [],
       "damage": 0,
       "hits": 0,
       "heal": 0,
@@ -74,7 +75,38 @@
       "trigger_cost_e": -1,
       "trigger_effect_text": "",
       "trigger_effects": [],
-      "response_trigger": "thorn"
+      "response_trigger": "thorn",
+      "scripts": {
+        "onResponse": {
+          "effects": [
+            {
+              "type": "if",
+              "params": {
+                "condition": {
+                  "op": "compare",
+                  "a": {
+                    "ref": "player_property",
+                    "target": "event_target",
+                    "property": "attack_blocked"
+                  },
+                  "operator": "<",
+                  "b": 1
+                },
+                "then": [
+                  {
+                    "type": "player_prop_set",
+                    "params": {
+                      "target": "event_target",
+                      "property": "attack_blocked",
+                      "value": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "id": "Shovel",
@@ -92,12 +124,20 @@
       ],
       "effects": [
         {
-          "type": "set_untargetable",
-          "log": "铲子：无法被攻击选中"
+          "type": "player_prop_set",
+          "params": {
+            "target": "self",
+            "property": "untargetable",
+            "value": 1
+          }
         },
         {
-          "type": "block_own_actions",
-          "log": "铲子：无法使用卡牌"
+          "type": "player_prop_set",
+          "params": {
+            "target": "self",
+            "property": "shovel_active",
+            "value": 1
+          }
         }
       ],
       "damage": 0,
@@ -113,7 +153,29 @@
       "trigger_cost_e": -1,
       "trigger_effect_text": "",
       "trigger_effects": [],
-      "response_trigger": ""
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "player_prop_set",
+              "params": {
+                "target": "self",
+                "property": "untargetable",
+                "value": 1
+              }
+            },
+            {
+              "type": "player_prop_set",
+              "params": {
+                "target": "self",
+                "property": "shovel_active",
+                "value": 1
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "id": "Compass",
@@ -131,8 +193,22 @@
       ],
       "effects": [
         {
-          "type": "choose_from_deck",
-          "log": "指南针：从牌堆选择一张牌"
+          "type": "request_card",
+          "params": {
+            "target": "self",
+            "zone": "deck",
+            "choice_type": "choose_from_deck",
+            "cancellable": true
+          }
+        },
+        {
+          "type": "move_to_hand",
+          "params": {
+            "card": {
+              "ref": "selected_card"
+            },
+            "target": "self"
+          }
         }
       ],
       "damage": 0,
@@ -148,7 +224,31 @@
       "trigger_cost_e": -1,
       "trigger_effect_text": "",
       "trigger_effects": [],
-      "response_trigger": ""
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "request_card",
+              "params": {
+                "target": "self",
+                "zone": "deck",
+                "choice_type": "choose_from_deck",
+                "cancellable": true
+              }
+            },
+            {
+              "type": "move_to_hand",
+              "params": {
+                "card": {
+                  "ref": "selected_card"
+                },
+                "target": "self"
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "id": "Sponge",
@@ -164,15 +264,83 @@
       "flags": [],
       "effects": [
         {
-          "type": "equip_sponge",
-          "log": "海绵：伤害转为毒伤"
+          "type": "place_as_equip"
         },
         {
-          "type": "equip_on_destroy_remove_poison_damage",
+          "type": "player_prop_set",
           "params": {
-            "multiplier": 2
-          },
-          "log": "海绵被摧毁！去除中毒并受到物理伤害"
+            "target": "self",
+            "property": "sponge_active",
+            "value": 1
+          }
+        },
+        {
+          "type": "on_equipment_destroy",
+          "params": {
+            "effects": [
+              {
+                "type": "var_set",
+                "params": {
+                  "target": "self",
+                  "name": "__sponge_poison",
+                  "value": {
+                    "ref": "player_property",
+                    "target": "self",
+                    "property": "poison"
+                  }
+                }
+              },
+              {
+                "type": "player_prop_set",
+                "params": {
+                  "target": "self",
+                  "property": "sponge_active",
+                  "value": 0
+                }
+              },
+              {
+                "type": "status_remove_named",
+                "params": {
+                  "target": "self",
+                  "status": "poison"
+                }
+              },
+              {
+                "type": "if",
+                "params": {
+                  "condition": {
+                    "op": "compare",
+                    "a": {
+                      "ref": "var",
+                      "target": "self",
+                      "name": "__sponge_poison"
+                    },
+                    "operator": ">",
+                    "b": 0
+                  },
+                  "then": [
+                    {
+                      "type": "direct_damage",
+                      "params": {
+                        "target": "self",
+                        "amount": {
+                          "ref": "math_op",
+                          "a": {
+                            "ref": "var",
+                            "target": "self",
+                            "name": "__sponge_poison"
+                          },
+                          "op": "*",
+                          "b": 2
+                        },
+                        "source": "Sponge"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       ],
       "damage": 0,
@@ -188,7 +356,89 @@
       "trigger_cost_e": -1,
       "trigger_effect_text": "",
       "trigger_effects": [],
-      "response_trigger": ""
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "place_as_equip"
+            },
+            {
+              "type": "player_prop_set",
+              "params": {
+                "target": "self",
+                "property": "sponge_active",
+                "value": 1
+              }
+            }
+          ]
+        },
+        "onEquipmentDestroy": {
+          "effects": [
+            {
+              "type": "var_set",
+              "params": {
+                "target": "self",
+                "name": "__sponge_poison",
+                "value": {
+                  "ref": "player_property",
+                  "target": "self",
+                  "property": "poison"
+                }
+              }
+            },
+            {
+              "type": "player_prop_set",
+              "params": {
+                "target": "self",
+                "property": "sponge_active",
+                "value": 0
+              }
+            },
+            {
+              "type": "status_remove_named",
+              "params": {
+                "target": "self",
+                "status": "poison"
+              }
+            },
+            {
+              "type": "if",
+              "params": {
+                "condition": {
+                  "op": "compare",
+                  "a": {
+                    "ref": "var",
+                    "target": "self",
+                    "name": "__sponge_poison"
+                  },
+                  "operator": ">",
+                  "b": 0
+                },
+                "then": [
+                  {
+                    "type": "direct_damage",
+                    "params": {
+                      "target": "self",
+                      "amount": {
+                        "ref": "math_op",
+                        "a": {
+                          "ref": "var",
+                          "target": "self",
+                          "name": "__sponge_poison"
+                        },
+                        "op": "*",
+                        "b": 2
+                      },
+                      "source": "Sponge"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "id": "Poo",
@@ -204,11 +454,29 @@
       "flags": [],
       "effects": [
         {
-          "type": "block_enemy_attacks",
+          "type": "if",
           "params": {
-            "duration": 1
-          },
-          "log": "便便：敌方下回合无法使用攻击牌"
+            "condition": {
+              "op": "compare",
+              "a": {
+                "ref": "player_property",
+                "target": "enemy",
+                "property": "attack_blocked"
+              },
+              "operator": "<",
+              "b": 1
+            },
+            "then": [
+              {
+                "type": "player_prop_set",
+                "params": {
+                  "target": "enemy",
+                  "property": "attack_blocked",
+                  "value": 1
+                }
+              }
+            ]
+          }
         }
       ],
       "damage": 0,
@@ -224,7 +492,38 @@
       "trigger_cost_e": -1,
       "trigger_effect_text": "",
       "trigger_effects": [],
-      "response_trigger": ""
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "if",
+              "params": {
+                "condition": {
+                  "op": "compare",
+                  "a": {
+                    "ref": "player_property",
+                    "target": "enemy",
+                    "property": "attack_blocked"
+                  },
+                  "operator": "<",
+                  "b": 1
+                },
+                "then": [
+                  {
+                    "type": "player_prop_set",
+                    "params": {
+                      "target": "enemy",
+                      "property": "attack_blocked",
+                      "value": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "id": "Honey",
@@ -240,11 +539,29 @@
       "flags": [],
       "effects": [
         {
-          "type": "force_enemy_attacks_only",
+          "type": "if",
           "params": {
-            "duration": 1
-          },
-          "log": "蜂蜜：敌方下回合仅可使用攻击牌"
+            "condition": {
+              "op": "compare",
+              "a": {
+                "ref": "player_property",
+                "target": "enemy",
+                "property": "attack_only"
+              },
+              "operator": "<",
+              "b": 1
+            },
+            "then": [
+              {
+                "type": "player_prop_set",
+                "params": {
+                  "target": "enemy",
+                  "property": "attack_only",
+                  "value": 1
+                }
+              }
+            ]
+          }
         }
       ],
       "damage": 0,
@@ -260,7 +577,38 @@
       "trigger_cost_e": -1,
       "trigger_effect_text": "",
       "trigger_effects": [],
-      "response_trigger": ""
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "if",
+              "params": {
+                "condition": {
+                  "op": "compare",
+                  "a": {
+                    "ref": "player_property",
+                    "target": "enemy",
+                    "property": "attack_only"
+                  },
+                  "operator": "<",
+                  "b": 1
+                },
+                "then": [
+                  {
+                    "type": "player_prop_set",
+                    "params": {
+                      "target": "enemy",
+                      "property": "attack_only",
+                      "value": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "id": "Pill",
@@ -279,25 +627,54 @@
       ],
       "effects": [
         {
-          "type": "equip_set_health",
-          "params": {
-            "amount": 60
-          },
-          "log": "药丸：血量设为60"
+          "type": "place_as_equip"
         },
         {
-          "type": "equip_reduce_own_draw",
+          "type": "player_prop_set",
           "params": {
-            "amount": 1
-          },
-          "log": "药丸：自己每回合少抽1牌"
+            "target": "self",
+            "property": "health",
+            "value": 60
+          }
         },
         {
-          "type": "equip_reduce_own_e",
+          "type": "player_prop_add",
           "params": {
+            "target": "self",
+            "property": "enemy_draw_reduction",
             "amount": 1
-          },
-          "log": "药丸：自己每回合少回1E"
+          }
+        },
+        {
+          "type": "player_prop_add",
+          "params": {
+            "target": "self",
+            "property": "enemy_e_reduction",
+            "amount": 1
+          }
+        },
+        {
+          "type": "on_equipment_destroy",
+          "params": {
+            "effects": [
+              {
+                "type": "player_prop_add",
+                "params": {
+                  "target": "self",
+                  "property": "enemy_draw_reduction",
+                  "amount": -1
+                }
+              },
+              {
+                "type": "player_prop_add",
+                "params": {
+                  "target": "self",
+                  "property": "enemy_e_reduction",
+                  "amount": -1
+                }
+              }
+            ]
+          }
         }
       ],
       "damage": 0,
@@ -313,7 +690,60 @@
       "trigger_cost_e": -1,
       "trigger_effect_text": "",
       "trigger_effects": [],
-      "response_trigger": ""
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "place_as_equip"
+            },
+            {
+              "type": "player_prop_set",
+              "params": {
+                "target": "self",
+                "property": "health",
+                "value": 60
+              }
+            },
+            {
+              "type": "player_prop_add",
+              "params": {
+                "target": "self",
+                "property": "enemy_draw_reduction",
+                "amount": 1
+              }
+            },
+            {
+              "type": "player_prop_add",
+              "params": {
+                "target": "self",
+                "property": "enemy_e_reduction",
+                "amount": 1
+              }
+            }
+          ]
+        },
+        "onEquipmentDestroy": {
+          "effects": [
+            {
+              "type": "player_prop_add",
+              "params": {
+                "target": "self",
+                "property": "enemy_draw_reduction",
+                "amount": -1
+              }
+            },
+            {
+              "type": "player_prop_add",
+              "params": {
+                "target": "self",
+                "property": "enemy_e_reduction",
+                "amount": -1
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "id": "Magnet",
@@ -332,11 +762,27 @@
       "effects": [
         {
           "type": "reveal_enemy_hand",
-          "log": "磁铁：窥探目标手牌"
+          "params": {
+            "target": "enemy"
+          }
         },
         {
-          "type": "steal_enemy_card",
-          "log": "磁铁：从目标手中夺取一张牌"
+          "type": "request_card",
+          "params": {
+            "target": "enemy",
+            "zone": "hand",
+            "choice_type": "choose_card_from_hand",
+            "cancellable": false
+          }
+        },
+        {
+          "type": "move_to_hand",
+          "params": {
+            "card": {
+              "ref": "selected_card"
+            },
+            "target": "self"
+          }
         }
       ],
       "damage": 0,
@@ -352,7 +798,37 @@
       "trigger_cost_e": -1,
       "trigger_effect_text": "",
       "trigger_effects": [],
-      "response_trigger": ""
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "reveal_enemy_hand",
+              "params": {
+                "target": "enemy"
+              }
+            },
+            {
+              "type": "request_card",
+              "params": {
+                "target": "enemy",
+                "zone": "hand",
+                "choice_type": "choose_card_from_hand",
+                "cancellable": false
+              }
+            },
+            {
+              "type": "move_to_hand",
+              "params": {
+                "card": {
+                  "ref": "selected_card"
+                },
+                "target": "self"
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "id": "Antenna",
@@ -371,7 +847,9 @@
       "effects": [
         {
           "type": "reveal_enemy_hand",
-          "log": "触角：窥探目标手牌"
+          "params": {
+            "target": "enemy"
+          }
         }
       ],
       "damage": 0,
@@ -387,7 +865,19 @@
       "trigger_cost_e": -1,
       "trigger_effect_text": "",
       "trigger_effects": [],
-      "response_trigger": ""
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "reveal_enemy_hand",
+              "params": {
+                "target": "enemy"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "events": []

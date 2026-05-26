@@ -702,10 +702,29 @@
       ],
       "effects": [
         {
-          "type": "fission",
+          "type": "request_card",
           "params": {
+            "title": "选择攻击牌",
+            "content": "选择一张手中的攻击牌，使其裂变层数增加2。",
+            "target": "self",
+            "zone": "hand",
+            "choice_type": "choose_cards_from_hand",
+            "multi": true,
+            "min_count": 1,
+            "max_count": 1,
             "card_type": "thorn",
-            "times": 2
+            "same_name": false,
+            "cancellable": true
+          }
+        },
+        {
+          "type": "card_prop_add",
+          "params": {
+            "card": {
+              "ref": "selected_card"
+            },
+            "property": "fission_level",
+            "amount": 2
           }
         }
       ],
@@ -727,10 +746,29 @@
         "onPlay": {
           "effects": [
             {
-              "type": "fission",
+              "type": "request_card",
               "params": {
+                "title": "选择攻击牌",
+                "content": "选择一张手中的攻击牌，使其裂变层数增加2。",
+                "target": "self",
+                "zone": "hand",
+                "choice_type": "choose_cards_from_hand",
+                "multi": true,
+                "min_count": 1,
+                "max_count": 1,
                 "card_type": "thorn",
-                "times": 2
+                "same_name": false,
+                "cancellable": true
+              }
+            },
+            {
+              "type": "card_prop_add",
+              "params": {
+                "card": {
+                  "ref": "selected_card"
+                },
+                "property": "fission_level",
+                "amount": 2
               }
             }
           ]
@@ -754,11 +792,132 @@
       ],
       "effects": [
         {
-          "type": "fusion",
+          "type": "request_card",
           "params": {
-            "card_type": "thorn",
+            "title": "选择同名攻击牌",
+            "content": "选择2-3张同名攻击牌，将聚变层数相加，裂变层数取最大值。",
+            "target": "self",
+            "zone": "hand",
+            "choice_type": "choose_cards_from_hand",
+            "multi": true,
             "min_count": 2,
-            "max_count": 3
+            "max_count": 3,
+            "card_type": "thorn",
+            "same_name": true,
+            "cancellable": true
+          }
+        },
+        {
+          "type": "var_set",
+          "params": {
+            "target": "self",
+            "name": "__聚变层数合计",
+            "value": 0
+          }
+        },
+        {
+          "type": "var_set",
+          "params": {
+            "target": "self",
+            "name": "__裂变层数最大值",
+            "value": 1
+          }
+        },
+        {
+          "type": "for_each_selected_card",
+          "params": {
+            "body": [
+              {
+                "type": "var_add",
+                "params": {
+                  "target": "self",
+                  "name": "__聚变层数合计",
+                  "value": {
+                    "ref": "card_property",
+                    "card": {
+                      "ref": "selected_card"
+                    },
+                    "property": "fusion_level"
+                  }
+                }
+              },
+              {
+                "type": "var_set",
+                "params": {
+                  "target": "self",
+                  "name": "__裂变层数最大值",
+                  "value": {
+                    "ref": "min_max",
+                    "mode": "max",
+                    "a": {
+                      "ref": "var",
+                      "target": "self",
+                      "name": "__裂变层数最大值"
+                    },
+                    "b": {
+                      "ref": "card_property",
+                      "card": {
+                        "ref": "selected_card"
+                      },
+                      "property": "fission_level"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "if",
+                "params": {
+                  "condition": {
+                    "op": "compare",
+                    "a": {
+                      "ref": "selected_card_index"
+                    },
+                    "operator": ">",
+                    "b": 1
+                  },
+                  "then": [
+                    {
+                      "type": "move_to_discard",
+                      "params": {
+                        "card": {
+                          "ref": "selected_card"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "card_prop_set",
+          "params": {
+            "card": {
+              "ref": "selected_card_at",
+              "index": 1
+            },
+            "property": "fusion_level",
+            "value": {
+              "ref": "var",
+              "target": "self",
+              "name": "__聚变层数合计"
+            }
+          }
+        },
+        {
+          "type": "card_prop_set",
+          "params": {
+            "card": {
+              "ref": "selected_card_at",
+              "index": 1
+            },
+            "property": "fission_level",
+            "value": {
+              "ref": "var",
+              "target": "self",
+              "name": "__裂变层数最大值"
+            }
           }
         }
       ],
@@ -780,11 +939,132 @@
         "onPlay": {
           "effects": [
             {
-              "type": "fusion",
+              "type": "request_card",
               "params": {
-                "card_type": "thorn",
+                "title": "选择同名攻击牌",
+                "content": "选择2-3张同名攻击牌，将聚变层数相加，裂变层数取最大值。",
+                "target": "self",
+                "zone": "hand",
+                "choice_type": "choose_cards_from_hand",
+                "multi": true,
                 "min_count": 2,
-                "max_count": 3
+                "max_count": 3,
+                "card_type": "thorn",
+                "same_name": true,
+                "cancellable": true
+              }
+            },
+            {
+              "type": "var_set",
+              "params": {
+                "target": "self",
+                "name": "__聚变层数合计",
+                "value": 0
+              }
+            },
+            {
+              "type": "var_set",
+              "params": {
+                "target": "self",
+                "name": "__裂变层数最大值",
+                "value": 1
+              }
+            },
+            {
+              "type": "for_each_selected_card",
+              "params": {
+                "body": [
+                  {
+                    "type": "var_add",
+                    "params": {
+                      "target": "self",
+                      "name": "__聚变层数合计",
+                      "value": {
+                        "ref": "card_property",
+                        "card": {
+                          "ref": "selected_card"
+                        },
+                        "property": "fusion_level"
+                      }
+                    }
+                  },
+                  {
+                    "type": "var_set",
+                    "params": {
+                      "target": "self",
+                      "name": "__裂变层数最大值",
+                      "value": {
+                        "ref": "min_max",
+                        "mode": "max",
+                        "a": {
+                          "ref": "var",
+                          "target": "self",
+                          "name": "__裂变层数最大值"
+                        },
+                        "b": {
+                          "ref": "card_property",
+                          "card": {
+                            "ref": "selected_card"
+                          },
+                          "property": "fission_level"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "if",
+                    "params": {
+                      "condition": {
+                        "op": "compare",
+                        "a": {
+                          "ref": "selected_card_index"
+                        },
+                        "operator": ">",
+                        "b": 1
+                      },
+                      "then": [
+                        {
+                          "type": "move_to_discard",
+                          "params": {
+                            "card": {
+                              "ref": "selected_card"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "card_prop_set",
+              "params": {
+                "card": {
+                  "ref": "selected_card_at",
+                  "index": 1
+                },
+                "property": "fusion_level",
+                "value": {
+                  "ref": "var",
+                  "target": "self",
+                  "name": "__聚变层数合计"
+                }
+              }
+            },
+            {
+              "type": "card_prop_set",
+              "params": {
+                "card": {
+                  "ref": "selected_card_at",
+                  "index": 1
+                },
+                "property": "fission_level",
+                "value": {
+                  "ref": "var",
+                  "target": "self",
+                  "name": "__裂变层数最大值"
+                }
               }
             }
           ]
@@ -1133,7 +1413,46 @@
       "flags": [],
       "effects": [
         {
-          "type": "discard_choice_then_draw"
+          "type": "request_card",
+          "params": {
+            "title": "选择要丢弃的牌",
+            "content": "可以取消；无论是否丢弃，都会抽1张牌。",
+            "target": "self",
+            "zone": "hand",
+            "choice_type": "choose_card_from_hand",
+            "cancellable": true,
+            "continue_on_cancel": true
+          }
+        },
+        {
+          "type": "if",
+          "params": {
+            "condition": {
+              "op": "compare",
+              "a": {
+                "ref": "selected_cards_count"
+              },
+              "operator": ">",
+              "b": 0
+            },
+            "then": [
+              {
+                "type": "move_to_discard",
+                "params": {
+                  "card": {
+                    "ref": "selected_card"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "draw",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
         }
       ],
       "damage": 0,
@@ -1154,7 +1473,46 @@
         "onPlay": {
           "effects": [
             {
-              "type": "discard_choice_then_draw"
+              "type": "request_card",
+              "params": {
+                "title": "选择要丢弃的牌",
+                "content": "可以取消；无论是否丢弃，都会抽1张牌。",
+                "target": "self",
+                "zone": "hand",
+                "choice_type": "choose_card_from_hand",
+                "cancellable": true,
+                "continue_on_cancel": true
+              }
+            },
+            {
+              "type": "if",
+              "params": {
+                "condition": {
+                  "op": "compare",
+                  "a": {
+                    "ref": "selected_cards_count"
+                  },
+                  "operator": ">",
+                  "b": 0
+                },
+                "then": [
+                  {
+                    "type": "move_to_discard",
+                    "params": {
+                      "card": {
+                        "ref": "selected_card"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "draw",
+              "params": {
+                "target": "self",
+                "amount": 1
+              }
             }
           ]
         }
@@ -1215,9 +1573,24 @@
       "flags": [],
       "effects": [
         {
-          "type": "destroy_equipment_choice_or_first",
+          "type": "request_card",
           "params": {
-            "target": "enemy"
+            "title": "选择装备",
+            "content": "选择目标的一张装备并摧毁。",
+            "target": "enemy",
+            "zone": "equipment",
+            "choice_type": "choose_equipment",
+            "cancellable": true
+          }
+        },
+        {
+          "type": "remove_specific_card",
+          "params": {
+            "target": "enemy",
+            "zone": "equipment",
+            "card": {
+              "ref": "selected_card"
+            }
           }
         }
       ],
@@ -1239,9 +1612,24 @@
         "onPlay": {
           "effects": [
             {
-              "type": "destroy_equipment_choice_or_first",
+              "type": "request_card",
               "params": {
-                "target": "enemy"
+                "title": "选择装备",
+                "content": "选择目标的一张装备并摧毁。",
+                "target": "enemy",
+                "zone": "equipment",
+                "choice_type": "choose_equipment",
+                "cancellable": true
+              }
+            },
+            {
+              "type": "remove_specific_card",
+              "params": {
+                "target": "enemy",
+                "zone": "equipment",
+                "card": {
+                  "ref": "selected_card"
+                }
               }
             }
           ]
@@ -1312,9 +1700,32 @@
       ],
       "effects": [
         {
-          "type": "copy_choice_with_discount",
+          "type": "request_card",
           "params": {
-            "discount_e": 1
+            "title": "选择要复制的手牌",
+            "content": "复制一张手牌，使复制牌下次打出时 E 费用减少1。",
+            "target": "self",
+            "zone": "hand",
+            "choice_type": "choose_card_from_hand",
+            "cancellable": true
+          }
+        },
+        {
+          "type": "copy_card",
+          "params": {
+            "card": {
+              "ref": "selected_card"
+            }
+          }
+        },
+        {
+          "type": "card_prop_set",
+          "params": {
+            "card": {
+              "ref": "last_created_card"
+            },
+            "property": "mimic_discount",
+            "value": 1
           }
         }
       ],
@@ -1336,9 +1747,32 @@
         "onPlay": {
           "effects": [
             {
-              "type": "copy_choice_with_discount",
+              "type": "request_card",
               "params": {
-                "discount_e": 1
+                "title": "选择要复制的手牌",
+                "content": "复制一张手牌，使复制牌下次打出时 E 费用减少1。",
+                "target": "self",
+                "zone": "hand",
+                "choice_type": "choose_card_from_hand",
+                "cancellable": true
+              }
+            },
+            {
+              "type": "copy_card",
+              "params": {
+                "card": {
+                  "ref": "selected_card"
+                }
+              }
+            },
+            {
+              "type": "card_prop_set",
+              "params": {
+                "card": {
+                  "ref": "last_created_card"
+                },
+                "property": "mimic_discount",
+                "value": 1
               }
             }
           ]
@@ -1352,7 +1786,7 @@
       "cost_e": 2,
       "cost_m": 0,
       "card_type": "bloom",
-      "count": 2,
+      "count": 0,
       "quality": "Super",
       "description": "神奇的树叶。可以使人死而复生。",
       "effect_text": "+20H；受到致命伤害时，若在手牌中，则清除自己的所有效果，将生命值设为5，此回合无敌并放逐此牌",
@@ -2256,7 +2690,14 @@
           "params": {
             "effects": [
               {
-                "type": "activate_corruption"
+                "type": "equipment_prop_set",
+                "params": {
+                  "equipment": {
+                    "ref": "current_equipment"
+                  },
+                  "property": "corruption_active",
+                  "value": 1
+                }
               }
             ]
           }
@@ -2280,7 +2721,14 @@
         "onEnemyTurnStart": {
           "effects": [
             {
-              "type": "activate_corruption"
+              "type": "equipment_prop_set",
+              "params": {
+                "equipment": {
+                  "ref": "current_equipment"
+                },
+                "property": "corruption_active",
+                "value": 1
+              }
             }
           ]
         },
@@ -2443,14 +2891,7 @@
       "description": "闪！",
       "effect_text": "获得一层闪避（敌方使用攻击牌时）",
       "flags": [],
-      "effects": [
-        {
-          "type": "counter_dodge",
-          "params": {
-            "amount": 1
-          }
-        }
-      ],
+      "effects": [],
       "damage": 0,
       "hits": 1,
       "heal": 0,
@@ -2466,11 +2907,13 @@
       "trigger_effects": [],
       "response_trigger": "thorn",
       "scripts": {
-        "onPlay": {
+        "onResponse": {
           "effects": [
             {
-              "type": "counter_dodge",
+              "type": "player_prop_add",
               "params": {
+                "target": "self",
+                "property": "dodge",
                 "amount": 1
               }
             }
@@ -2490,11 +2933,7 @@
       "description": "邪眼的力量似乎为你减免了大部分伤害。",
       "effect_text": "所有物理伤害减少9(最少减至1)，受到两次10点及以上物理伤害后效果消失（敌方使用攻击牌时）",
       "flags": [],
-      "effects": [
-        {
-          "type": "counter_nazar"
-        }
-      ],
+      "effects": [],
       "damage": 0,
       "hits": 1,
       "heal": 0,
@@ -2510,10 +2949,23 @@
       "trigger_effects": [],
       "response_trigger": "thorn",
       "scripts": {
-        "onPlay": {
+        "onResponse": {
           "effects": [
             {
-              "type": "counter_nazar"
+              "type": "player_prop_set",
+              "params": {
+                "target": "self",
+                "property": "nazar_active",
+                "value": 1
+              }
+            },
+            {
+              "type": "player_prop_set",
+              "params": {
+                "target": "self",
+                "property": "nazar_big_hits",
+                "value": 0
+              }
             }
           ]
         }
@@ -2531,14 +2983,7 @@
       "description": "有魔力的护符，保护你的装备不被摧毁。",
       "effect_text": "获得一层装备保护（自己的装备即将被摧毁时）",
       "flags": [],
-      "effects": [
-        {
-          "type": "counter_equip_protect",
-          "params": {
-            "amount": 1
-          }
-        }
-      ],
+      "effects": [],
       "damage": 0,
       "hits": 1,
       "heal": 0,
@@ -2554,11 +2999,13 @@
       "trigger_effects": [],
       "response_trigger": "equipment_destroy",
       "scripts": {
-        "onPlay": {
+        "onResponse": {
           "effects": [
             {
-              "type": "counter_equip_protect",
+              "type": "player_prop_add",
               "params": {
+                "target": "self",
+                "property": "equipment_protection",
                 "amount": 1
               }
             }
@@ -2578,11 +3025,7 @@
       "description": "泡泡的魔法版本。",
       "effect_text": "使敌方使用的技能牌失效（敌方使用技能牌时）",
       "flags": [],
-      "effects": [
-        {
-          "type": "counter_negate_skill"
-        }
-      ],
+      "effects": [],
       "damage": 0,
       "hits": 1,
       "heal": 0,
@@ -2598,10 +3041,15 @@
       "trigger_effects": [],
       "response_trigger": "bloom",
       "scripts": {
-        "onPlay": {
+        "onResponse": {
           "effects": [
             {
-              "type": "counter_negate_skill"
+              "type": "player_prop_set",
+              "params": {
+                "target": "self",
+                "property": "negate_next_skill",
+                "value": 1
+              }
             }
           ]
         }

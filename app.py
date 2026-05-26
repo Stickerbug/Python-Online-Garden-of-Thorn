@@ -25,6 +25,8 @@ from mod_loader import merge_mod_cards_to_card_defs, load_all_mods, save_mod, Mo
 from card_i18n import apply_card_i18n_defaults, card_text, event_text
 
 BASE_CARD_IDS = set(CARD_DEFS.keys())
+VANILLA_MOD_FILENAME = 'VanillaCardsFormatV1.json'
+REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
 
 try:
     merged = merge_mod_cards_to_card_defs()
@@ -250,14 +252,40 @@ def normalize_disabled_mods(value):
         return []
     if isinstance(value, str):
         return [x.strip() for x in value.split(',') if x.strip()]
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple, set)):
         return [str(x).strip() for x in value if str(x).strip()]
     return []
 
 
-def get_allowed_card_ids(disabled_mods=None):
+def get_enabled_mod_card_type_counts(disabled_mods=None):
     disabled = set(normalize_disabled_mods(disabled_mods))
-    allowed = set(BASE_CARD_IDS)
+    counts = {card_type: 0 for card_type in REQUIRED_CARD_TYPES}
+    for mod in load_all_mods():
+        if mod.errors:
+            continue
+        if mod.filename in disabled:
+            continue
+        for card in mod.cards:
+            if card.id in CARD_DEFS and card.count > 0 and card.card_type in counts:
+                counts[card.card_type] += 1
+    return counts
+
+
+def has_required_mod_card_types(disabled_mods=None):
+    counts = get_enabled_mod_card_type_counts(disabled_mods)
+    return all(counts.get(card_type, 0) > 0 for card_type in REQUIRED_CARD_TYPES)
+
+
+def ensure_valid_disabled_mods(disabled_mods=None):
+    disabled = set(normalize_disabled_mods(disabled_mods))
+    if not has_required_mod_card_types(disabled):
+        disabled.discard(VANILLA_MOD_FILENAME)
+    return sorted(disabled)
+
+
+def get_allowed_card_ids(disabled_mods=None):
+    disabled = set(ensure_valid_disabled_mods(disabled_mods))
+    allowed = set()
     for mod in load_all_mods():
         if mod.errors:
             continue
@@ -267,6 +295,26 @@ def get_allowed_card_ids(disabled_mods=None):
             if card.id in CARD_DEFS:
                 allowed.add(card.id)
     return allowed
+
+
+def get_card_mod_sources(disabled_mods=None):
+    disabled = set(ensure_valid_disabled_mods(disabled_mods))
+    sources = {}
+    for mod in load_all_mods():
+        if mod.errors or mod.filename in disabled:
+            continue
+        info = mod.info
+        mod_name = info.name if info and info.name else mod.filename
+        mod_sort_name = mod_name or mod.filename
+        for card in mod.cards:
+            if card.id in CARD_DEFS:
+                sources[card.id] = {
+                    'filename': mod.filename,
+                    'name': mod_name,
+                    'sort_name': mod_sort_name,
+                    'is_vanilla': mod.filename == VANILLA_MOD_FILENAME,
+                }
+    return sources
 
 
 def same_mod_loadout(sids):
@@ -1039,8 +1087,11 @@ def emit_solo_response_request(sid, engine, pidx, played_card):
             trigger_types.append('thorn')
         elif played_def.card_type == 'bloom':
             trigger_types.append('bloom')
+        elif played_def.card_type == 'root':
+            trigger_types.append('root')
         if played_def.id in ('Sewage', 'MagicSewage'):
             trigger_types.append('equipment_destroy')
+        trigger_types.append('any')
     counter_cards = []
     for tt in trigger_types:
         counter_cards.extend(engine.get_counter_cards(opp_pidx, tt))
@@ -1224,15 +1275,22 @@ def admin_complete():
 
 @app.route('/api/cards')
 def api_cards():
-    allowed_card_ids = get_allowed_card_ids(request.args.get('disabled_mods', ''))
+    disabled_mods = request.args.get('disabled_mods', '')
+    allowed_card_ids = get_allowed_card_ids(disabled_mods)
+    card_mod_sources = get_card_mod_sources(disabled_mods)
     result = {}
     for def_id, card_def in CARD_DEFS.items():
         if def_id not in allowed_card_ids:
             continue
+        source = card_mod_sources.get(def_id, {})
         card_payload = {
             'id': card_def.id,
             'name_en': card_def.name_en,
             'name_cn': card_def.name_cn,
+            'source_mod_filename': source.get('filename', ''),
+            'source_mod_name': source.get('name', ''),
+            'source_mod_sort_name': source.get('sort_name', ''),
+            'source_mod_is_vanilla': bool(source.get('is_vanilla', False)),
             'cost_e': card_def.cost_e,
             'cost_m': card_def.cost_m,
             'card_type': card_def.card_type,
@@ -1244,6 +1302,8 @@ def api_cards():
             'trigger_cost_e': card_def.trigger_cost_e,
             'trigger_effect_text': card_def.trigger_effect_text,
             'response_trigger': card_def.response_trigger,
+            'response_title': getattr(card_def, 'response_title', ''),
+            'response_content': getattr(card_def, 'response_content', ''),
             'effects': card_def.effects,
             'scripts': getattr(card_def, 'scripts', {}) or {},
         }
@@ -1254,12 +1314,13 @@ def api_cards():
 
 @app.route('/api/opening-events')
 def api_opening_events():
+    allowed_card_ids = get_allowed_card_ids(request.args.get('disabled_mods', ''))
     events = []
     for event_id in sorted(GameEngine.OPENING_EVENTS.keys()):
         events.append(event_text(event_id, dict(GameEngine.OPENING_EVENTS[event_id])))
     return jsonify({
         'events': events,
-        'magic_pool': list(GameEngine.MAGIC_CARD_POOL),
+        'magic_pool': [def_id for def_id in GameEngine.MAGIC_CARD_POOL if def_id in allowed_card_ids],
     })
 
 
@@ -1270,6 +1331,11 @@ def api_mods():
     for mod in mods:
         d = mod.to_dict()
         d['filename'] = mod.filename
+        d['is_vanilla'] = mod.filename == VANILLA_MOD_FILENAME
+        d['card_type_counts'] = {
+            card_type: sum(1 for card in mod.cards if card.card_type == card_type and card.count > 0)
+            for card_type in REQUIRED_CARD_TYPES
+        }
         result.append(d)
     return jsonify(result)
 
@@ -1504,7 +1570,7 @@ def on_login(data):
             if reconnect_room:
                 break
         initial_status = 'reconnecting' if reconnect_room else 'lobby'
-        disabled_mods = normalize_disabled_mods(data.get('disabled_mods', []))
+        disabled_mods = ensure_valid_disabled_mods(data.get('disabled_mods', []))
         preferred_mode = data.get('mode', '1v1')
         if preferred_mode not in ('1v1', '2v2', 'urf'):
             preferred_mode = '1v1'
@@ -2241,6 +2307,8 @@ def on_solo_play_card(data):
             socketio.emit('choice_request', {
                 'choice_type': result['choice_type'],
                 'card': result['card'],
+                'choice_params': result.get('choice_params', {}),
+                'target_player_id': result.get('target_player_id'),
             }, room=sid)
         elif result.get('success'):
             send_solo_state(sid)
@@ -2398,8 +2466,11 @@ def on_play_card(data):
                     trigger_types.append('thorn')
                 elif played_def.card_type == 'bloom':
                     trigger_types.append('bloom')
+                elif played_def.card_type == 'root':
+                    trigger_types.append('root')
                 if played_def.id in ('Sewage', 'MagicSewage'):
                     trigger_types.append('equipment_destroy')
+                trigger_types.append('any')
             if room.mode == '2v2':
                 by_responder = {}
                 for c in (engine.pending_response or {}).get('counter_cards', []):
@@ -2428,6 +2499,7 @@ def on_play_card(data):
             emit('choice_request', {
                 'choice_type': result['choice_type'],
                 'card': result['card'],
+                'choice_params': result.get('choice_params', {}),
                 'target_player_id': result.get('target_player_id'),
             })
         elif result.get('success'):
@@ -2494,6 +2566,7 @@ def on_ally_consent_response(data):
             socketio.emit('choice_request', {
                 'choice_type': result['choice_type'],
                 'card': result['card'],
+                'choice_params': result.get('choice_params', {}),
                 'target_player_id': result.get('target_player_id'),
             }, room=requester_sid)
         else:

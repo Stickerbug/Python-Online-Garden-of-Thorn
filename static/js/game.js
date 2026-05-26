@@ -83,6 +83,7 @@ const I18N = {
         rotate_prompt: 'Please play in landscape mode',
         continue_enter: 'Continue',
         mod_default_name: 'Mod {0}',
+        mod_selection_force_vanilla: 'Enabled the vanilla card mod because the selected mods must contain at least one Thorn, Bloom, Root, and Guard card.',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Infinite Fire',
         form_team: 'Form Team', leave_team: 'Leave Team', invite_team: 'Invite Team',
         team_invite_msg: '{0} invites you to form a team', team_formed_msg: 'Team formed with {0}',
@@ -195,7 +196,8 @@ I18N.zh = { ...I18N.en,
     validate_json: '验证 JSON',
     rotate_prompt: '请横屏游玩',
     continue_enter: '继续进入',
-    mod_default_name: '模组 {0}'
+    mod_default_name: '模组 {0}',
+    mod_selection_force_vanilla: '已强制启用原版卡牌模组：已选模组必须至少包含攻击、技能、装备、反制各1张。'
 };
 I18N.fr = { ...I18N.en,
     round: 'Tour', your_turn: 'Votre Tour', opponent_turn: "Tour de l'adversaire", you: 'Vous', opponent: 'Adversaire',
@@ -1733,6 +1735,16 @@ function gamePrompt(title, options, config = {}) {
         const cancellable = config.cancellable !== false;
         $('game-prompt-title').textContent = title || '';
         const optsEl = $('game-prompt-options');
+        let msgEl = $('game-prompt-message');
+        if (!msgEl) {
+            msgEl = document.createElement('div');
+            msgEl.id = 'game-prompt-message';
+            msgEl.className = 'game-prompt-message';
+            optsEl.parentNode.insertBefore(msgEl, optsEl);
+        }
+        const message = config.message || config.content || '';
+        msgEl.textContent = message;
+        msgEl.classList.toggle('hidden', !message);
         optsEl.innerHTML = '';
         options.forEach((opt, i) => {
             const div = document.createElement('div');
@@ -2234,7 +2246,7 @@ function showCardGallery(selectedId = null, mode = 'cards') {
     if (backBtn) backBtn.textContent = galleryReturnToRules ? UI.gallery_back_rules : UI.back_to_home;
     if (selectedId) gallerySelectedId = selectedId;
     if (!gallerySelectedId || !CARD_DEFS[gallerySelectedId]) {
-        gallerySelectedId = Object.keys(CARD_DEFS).sort((a, b) => getCardName(CARD_DEFS[a]).localeCompare(getCardName(CARD_DEFS[b])))[0] || null;
+        gallerySelectedId = Object.keys(CARD_DEFS).sort(compareGalleryCards)[0] || null;
     }
     renderCardGallery();
 }
@@ -2265,6 +2277,29 @@ function getGalleryFlagUsers(flag) {
     return defs.filter(cd => (cd.flags || []).includes(flag));
 }
 
+const GALLERY_CARD_TYPE_ORDER = { thorn: 0, bloom: 1, guard: 2, root: 3 };
+
+function compareGalleryCards(a, b) {
+    const ca = typeof a === 'string' ? CARD_DEFS[a] : a;
+    const cb = typeof b === 'string' ? CARD_DEFS[b] : b;
+    if (!ca && !cb) return String(a || '').localeCompare(String(b || ''), 'en');
+    if (!ca) return 1;
+    if (!cb) return -1;
+    const va = ca.source_mod_is_vanilla ? 0 : 1;
+    const vb = cb.source_mod_is_vanilla ? 0 : 1;
+    if (va !== vb) return va - vb;
+    if (va !== 0) {
+        const ma = String(ca.source_mod_sort_name || ca.source_mod_name || ca.source_mod_filename || '').toLowerCase();
+        const mb = String(cb.source_mod_sort_name || cb.source_mod_name || cb.source_mod_filename || '').toLowerCase();
+        const modCmp = ma.localeCompare(mb, 'en');
+        if (modCmp) return modCmp;
+    }
+    const ta = GALLERY_CARD_TYPE_ORDER[ca.card_type] ?? 99;
+    const tb = GALLERY_CARD_TYPE_ORDER[cb.card_type] ?? 99;
+    if (ta !== tb) return ta - tb;
+    return String(ca.id || '').localeCompare(String(cb.id || ''), 'en');
+}
+
 function getAllGalleryFlags() {
     const flags = new Set(Object.keys(CARD_FLAG_STYLES));
     Object.values(CARD_DEFS).forEach(cd => (cd.flags || []).forEach(flag => {
@@ -2291,7 +2326,7 @@ function renderCardGallery() {
             const cd = CARD_DEFS[id];
             return !q || cardSearchText(id).includes(q);
         })
-        .sort((a, b) => getCardName(CARD_DEFS[a]).localeCompare(getCardName(CARD_DEFS[b])));
+        .sort(compareGalleryCards);
     list.innerHTML = '';
     ids.forEach(id => {
         const cd = CARD_DEFS[id];
@@ -2345,7 +2380,7 @@ function renderTagGallery(list, detail, q) {
         return;
     }
     const usedBy = getGalleryFlagUsers(gallerySelectedId)
-        .sort((a, b) => getCardName(a).localeCompare(getCardName(b)));
+        .sort(compareGalleryCards);
     const relatedLabel = isGalleryMechanicFlag(gallerySelectedId)
         ? (UI.gallery_related_cards || UI.gallery_cards_with_tag)
         : UI.gallery_cards_with_tag;
@@ -2792,7 +2827,8 @@ async function fetchCardDefs() {
 async function fetchOpeningEvents() {
     try {
         bootLoader.step(UI.init_opening_events, 78);
-        const resp = await fetch('/api/opening-events');
+        const disabledMods = encodeURIComponent(getDisabledMods().join(','));
+        const resp = await fetch(`/api/opening-events?disabled_mods=${disabledMods}`);
         const data = await resp.json();
         openingEvents = data.events || [];
         openingEventMagicPool = data.magic_pool || [];
@@ -6593,6 +6629,68 @@ async function simpleChoice(title, options, config = {}) {
     return await gamePrompt(title, display, config);
 }
 
+function multiChoice(title, options, config = {}) {
+    return new Promise((resolve) => {
+        const el = $('game-prompt');
+        if (!el) { resolve([]); return; }
+        if (!options.length) { resolve([]); return; }
+        const min = Number(config.min || config.min_count || 1);
+        const max = Number(config.max || config.max_count || options.length);
+        const cancellable = config.cancellable !== false;
+        $('game-prompt-title').textContent = title || '';
+        const optsEl = $('game-prompt-options');
+        let msgEl = $('game-prompt-message');
+        if (!msgEl) {
+            msgEl = document.createElement('div');
+            msgEl.id = 'game-prompt-message';
+            msgEl.className = 'game-prompt-message';
+            optsEl.parentNode.insertBefore(msgEl, optsEl);
+        }
+        const message = config.message || config.content || '';
+        msgEl.textContent = message;
+        msgEl.classList.toggle('hidden', !message);
+        optsEl.innerHTML = '';
+        const selected = new Set();
+        const confirm = document.createElement('div');
+        confirm.className = 'game-prompt-option game-prompt-confirm disabled';
+        const updateConfirm = () => {
+            const count = selected.size;
+            const ok = count >= min && count <= max;
+            confirm.classList.toggle('disabled', !ok);
+            confirm.textContent = `${UI.ok || '确定'} (${count}/${min}-${max})`;
+        };
+        options.forEach((opt, i) => {
+            const div = document.createElement('div');
+            div.className = 'game-prompt-option';
+            div.textContent = `${i + 1}. ${opt}`;
+            div.onclick = () => {
+                if (selected.has(i)) {
+                    selected.delete(i);
+                } else {
+                    if (selected.size >= max) return;
+                    selected.add(i);
+                }
+                div.classList.toggle('selected', selected.has(i));
+                updateConfirm();
+            };
+            optsEl.appendChild(div);
+        });
+        confirm.onclick = () => {
+            if (confirm.classList.contains('disabled')) return;
+            el.classList.remove('active');
+            resolve(Array.from(selected).sort((a, b) => a - b));
+        };
+        optsEl.appendChild(confirm);
+        const cancelBtn = $('game-prompt-cancel');
+        cancelBtn.textContent = UI.cancel;
+        cancelBtn.classList.toggle('hidden', !cancellable);
+        cancelBtn.style.display = cancellable ? '' : 'none';
+        cancelBtn.onclick = () => { el.classList.remove('active'); resolve([]); };
+        updateConfirm();
+        el.classList.add('active');
+    });
+}
+
 function showResponseUI(data) {
     if (isSpectating) return;
     const counterCards = data.counter_cards || [];
@@ -6631,10 +6729,19 @@ function showResponseUI(data) {
         else if (cardDef.card_type === 'bloom') triggerDesc = UI.enemy_skill;
         if (cardDef.id === 'Sewage' || cardDef.id === 'MagicSewage') triggerDesc += UI.enemy_destroy_equip;
     }
+    const responseWindowDef = cardCosts.map(item => item.ccDef).find(cd => cd && (cd.response_title || cd.response_content));
     const label = document.createElement('div');
     label.className = 'response-label';
-    label.textContent = `${triggerDesc}: ${cardName}`;
+    label.textContent = responseWindowDef && responseWindowDef.response_title
+        ? responseWindowDef.response_title
+        : `${triggerDesc}: ${cardName}`;
     container.appendChild(label);
+    if (responseWindowDef && responseWindowDef.response_content) {
+        const content = document.createElement('div');
+        content.className = 'response-label response-content';
+        content.textContent = responseWindowDef.response_content;
+        container.appendChild(content);
+    }
     const btnRow = document.createElement('div');
     btnRow.className = 'response-btn-row';
     cardCosts.forEach(({ cc, ccDef, costE, costM, canAfford }) => {
@@ -6753,8 +6860,12 @@ async function showChoiceUI(data) {
     const cardName = cardDef ? getCardName(cardDef) : '?';
     const choiceParams = data.choice_params || {};
     const choicePromptConfig = {
-        cancellable: choiceParams.cancellable !== false && !(cardDef && (cardDef.flags || []).includes('uncancellable'))
+        cancellable: choiceParams.cancellable !== false && !(cardDef && (cardDef.flags || []).includes('uncancellable')),
+        message: choiceParams.content || choiceParams.message || ''
     };
+    const choiceTitle = fallback => choiceParams.title || fallback;
+    const choiceTargetId = data.target_player_id != null ? normalizePlayerId(data.target_player_id) : null;
+    const choiceTargetData = () => (choiceTargetId != null ? (getPlayerDataById(choiceTargetId) || {}) : (gameState.you || {}));
     let choiceResult = null;
     if (choiceType === 'choose_attack_from_hand') {
         const attacks = ((gameState.you || {}).hand || []).filter(c => {
@@ -6764,7 +6875,7 @@ async function showChoiceUI(data) {
         if (!attacks.length) { gameAlert(UI.notice, UI.no_attack_cards); }
         else {
             const options = attacks.map(a => `${getCardDef(a.def_id) ? getCardName(getCardDef(a.def_id)) : a.def_id}${getCardLayerLabel(a)}`);
-            const sel = await simpleChoice(UI.choose_attack_for.replace('{0}', cardName), options, choicePromptConfig);
+            const sel = await simpleChoice(choiceTitle(UI.choose_attack_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < attacks.length) choiceResult = { target_instance_id: attacks[sel].instance_id };
         }
     } else if (choiceType === 'choose_enemy_equipment') {
@@ -6772,14 +6883,14 @@ async function showChoiceUI(data) {
         if (!oppEq.length) { gameAlert(UI.notice, UI.no_enemy_equipment); }
         else {
             const options = oppEq.map(e => getCardDef((e.card_instance || {}).def_id) ? getCardName(getCardDef((e.card_instance || {}).def_id)) : '?');
-            const sel = await simpleChoice(UI.choose_equip_for.replace('{0}', cardName), options, choicePromptConfig);
+            const sel = await simpleChoice(choiceTitle(UI.choose_equip_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < oppEq.length) choiceResult = { target_instance_id: oppEq[sel].card_instance.instance_id };
         }
     } else if (choiceType === 'choose_card_to_discard') {
         const otherCards = (gameState.you || {}).hand || [];
         if (otherCards.length) {
             const options = otherCards.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
-            const sel = await simpleChoice(UI.choose_discard_for.replace('{0}', cardName), options, choicePromptConfig);
+            const sel = await simpleChoice(choiceTitle(UI.choose_discard_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < otherCards.length) choiceResult = { target_instance_id: otherCards[sel].instance_id };
         }
     } else if (choiceType === 'choose_card_from_deck') {
@@ -6787,7 +6898,7 @@ async function showChoiceUI(data) {
         if (!deck.length) { gameAlert(UI.notice, UI.deck_empty); }
         else {
             const options = deck.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
-            const sel = await simpleChoice(UI.choose_from_deck_for.replace('{0}', cardName), options, choicePromptConfig);
+            const sel = await simpleChoice(choiceTitle(UI.choose_from_deck_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < deck.length) choiceResult = { target_def_id: deck[sel].def_id };
         }
     } else if (choiceType === 'choose_card_from_discard') {
@@ -6795,7 +6906,7 @@ async function showChoiceUI(data) {
         if (!discard.length) { gameAlert(UI.notice, UI.discard_empty); }
         else {
             const options = discard.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
-            const sel = await simpleChoice(UI.choose_from_discard_for.replace('{0}', cardName), options, choicePromptConfig);
+            const sel = await simpleChoice(choiceTitle(UI.choose_from_discard_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < discard.length) choiceResult = { target_def_id: discard[sel].def_id };
         }
     } else if (choiceType === 'choose_same_attacks_from_hand') {
@@ -6823,24 +6934,90 @@ async function showChoiceUI(data) {
                 }
                 const uniqueCombos = dedupeCardCombos(combos);
                 const comboOptions = uniqueCombos.map(combo => combo.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`).join(' + '));
-                const comboSel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', cardName), comboOptions, choicePromptConfig);
+            const comboSel = await simpleChoice(choiceTitle(UI.choose_attack_group_for.replace('{0}', cardName)), comboOptions, choicePromptConfig);
                 if (comboSel >= 0) choiceResult = { target_instance_ids: uniqueCombos[comboSel].map(c => c.instance_id) };
             }
         }
+    } else if (choiceType === 'choose_cards_from_hand') {
+        const allCards = choiceTargetData().hand || [];
+        const wantedType = choiceParams.card_type || 'any';
+        const minCount = Number(choiceParams.min_count || 1);
+        const maxCount = Math.max(minCount, Number(choiceParams.max_count || minCount));
+        const cards = allCards.filter(c => {
+            const cd = getCardDef(c.def_id);
+            return wantedType === 'any' || (cd && cd.card_type === wantedType);
+        });
+        if (!cards.length) { gameAlert(UI.notice, UI.no_valid_target || '没有可选择的卡牌'); }
+        else if (choiceParams.same_name) {
+            const groups = {};
+            cards.forEach(c => { const g = groups[c.def_id] || (groups[c.def_id] = []); g.push(c); });
+            const combos = [];
+            const collect = (group, start, picked) => {
+                if (picked.length >= minCount) combos.push([...picked]);
+                if (picked.length >= maxCount) return;
+                for (let i = start; i < group.length; i++) {
+                    picked.push(group[i]);
+                    collect(group, i + 1, picked);
+                    picked.pop();
+                }
+            };
+            Object.values(groups).forEach(group => {
+                if (group.length >= minCount) collect(group, 0, []);
+            });
+            const uniqueCombos = dedupeCardCombos(combos);
+            if (!uniqueCombos.length) { gameAlert(UI.notice, UI.no_valid_target || '没有可选择的组合'); }
+            else {
+                const options = uniqueCombos.map(combo => combo.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`).join(' + '));
+                const sel = await simpleChoice(choiceTitle(UI.choose_hand_for.replace('{0}', cardName)), options, choicePromptConfig);
+                if (sel >= 0 && sel < uniqueCombos.length) choiceResult = { target_instance_ids: uniqueCombos[sel].map(c => c.instance_id) };
+            }
+        } else {
+            const options = cards.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`);
+            const selected = await multiChoice(choiceTitle(UI.choose_hand_for.replace('{0}', cardName)), options, {
+                ...choicePromptConfig,
+                min: minCount,
+                max: maxCount,
+            });
+            if (selected.length >= minCount) choiceResult = { target_instance_ids: selected.map(i => cards[i].instance_id) };
+        }
     } else if (choiceType === 'choose_card_from_hand') {
-        const otherCards = (gameState.you || {}).hand || [];
+        const otherCards = choiceTargetData().hand || [];
         if (otherCards.length) {
             const options = otherCards.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
-            const sel = await simpleChoice(UI.choose_hand_for.replace('{0}', cardName), options, choicePromptConfig);
+            const sel = await simpleChoice(choiceTitle(UI.choose_hand_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < otherCards.length) choiceResult = { target_instance_id: otherCards[sel].instance_id };
         }
     } else if (choiceType === 'choose_from_deck') {
-        const deck = (gameState.you || {}).deck || [];
+        const deck = choiceTargetData().deck || [];
         if (!deck.length) { gameAlert(UI.notice, UI.deck_empty); }
         else {
             const options = deck.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
-            const sel = await simpleChoice(UI.choose_from_deck_for.replace('{0}', cardName), options, choicePromptConfig);
+            const sel = await simpleChoice(choiceTitle(UI.choose_from_deck_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < deck.length) choiceResult = { target_instance_id: deck[sel].instance_id };
+        }
+    } else if (choiceType === 'choose_from_discard') {
+        const discard = choiceTargetData().discard || [];
+        if (!discard.length) { gameAlert(UI.notice, UI.discard_empty); }
+        else {
+            const options = discard.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+            const sel = await simpleChoice(choiceTitle(UI.choose_from_discard_for.replace('{0}', cardName)), options, choicePromptConfig);
+            if (sel >= 0 && sel < discard.length) choiceResult = { target_instance_id: discard[sel].instance_id, target_def_id: discard[sel].def_id };
+        }
+    } else if (choiceType === 'choose_from_exile') {
+        const exile = choiceTargetData().exile || [];
+        if (!exile.length) { gameAlert(UI.notice, UI.no_valid_target || '无可选卡牌'); }
+        else {
+            const options = exile.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+            const sel = await simpleChoice(choiceTitle('从放逐区选择'), options, choicePromptConfig);
+            if (sel >= 0 && sel < exile.length) choiceResult = { target_instance_id: exile[sel].instance_id, target_def_id: exile[sel].def_id };
+        }
+    } else if (choiceType === 'choose_equipment') {
+        const equipment = choiceTargetData().equipment || [];
+        if (!equipment.length) { gameAlert(UI.notice, UI.no_valid_target || '无可选装备'); }
+        else {
+            const options = equipment.map(e => getCardDef((e.card_instance || {}).def_id) ? getCardName(getCardDef((e.card_instance || {}).def_id)) : '?');
+            const sel = await simpleChoice(choiceTitle('选择装备'), options, choicePromptConfig);
+            if (sel >= 0 && sel < equipment.length) choiceResult = { target_instance_id: equipment[sel].card_instance.instance_id };
         }
     } else if (choiceType === 'choose_from_enemy_hand') {
         const targetId = data.target_player_id != null ? data.target_player_id : -1;
@@ -6848,7 +7025,7 @@ async function showChoiceUI(data) {
         if (!oppHand.length) { gameAlert(UI.notice, UI.no_enemy_hand); }
         else {
             const options = oppHand.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
-            const sel = await simpleChoice(UI.choose_from_enemy_hand_for.replace('{0}', cardName), options, choicePromptConfig);
+            const sel = await simpleChoice(choiceTitle(UI.choose_from_enemy_hand_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < oppHand.length) choiceResult = { target_instance_id: oppHand[sel].instance_id };
         }
     } else if (choiceType === 'choose_target') {
@@ -6856,18 +7033,21 @@ async function showChoiceUI(data) {
         const candidateList = normalizeTargetCandidates(candidates);
         const includeSelf = choiceParams.include_self === true
             || candidateList.some(c => ['self', 'friendly', 'both', 'all', 'random_friendly', 'random_player', 'random_side'].includes(c));
-        const targetId = await choosePlayerTarget(UI.choose_target || UI.select_target || 'Choose target', {
+        const targetId = await choosePlayerTarget(choiceTitle(UI.choose_target || UI.select_target || 'Choose target'), {
             includeSelf,
             aliveOnly: choiceParams.alive_only !== false,
             candidates,
         });
         if (targetId >= 0) choiceResult = { target_player: targetId, target_player_id: targetId };
     } else if (choiceType === 'confirm') {
-        const sel = await simpleChoice(choiceParams.title || UI.notice || 'Confirm', [
+        const sel = await simpleChoice(choiceTitle(UI.notice || 'Confirm'), [
             choiceParams.ok_text || UI.ok || 'OK',
             choiceParams.cancel_text || UI.cancel || 'Cancel',
         ], choicePromptConfig);
         if (sel >= 0) choiceResult = { confirmed: sel === 0, accepted: sel === 0 };
+    }
+    if (!choiceResult && choiceParams.continue_on_cancel) {
+        choiceResult = { cancelled: true };
     }
     choicePending = false;
     beginPendingServerAction('resolve_choice', { timeoutMs: 8000 });
@@ -7129,6 +7309,8 @@ function setupPlayZoneDrop() {
 
 let settingsMods = [];
 let settingsAllowServerEdit = true;
+const VANILLA_MOD_FILENAME = 'VanillaCardsFormatV1.json';
+const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 
 function openSettings(options = {}) {
     settingsAllowServerEdit = !options.hideServer;
@@ -7207,28 +7389,90 @@ async function loadSettingsMods() {
 function getDisabledMods() {
     try {
         const raw = localStorage.getItem('got_disabled_mods');
-        return raw ? JSON.parse(raw) : [];
+        const disabled = raw ? JSON.parse(raw) : getDefaultDisabledMods();
+        return coerceValidDisabledMods(disabled).disabled;
     } catch (e) {
-        return [];
+        return coerceValidDisabledMods(getDefaultDisabledMods()).disabled;
     }
+}
+
+function getDefaultDisabledMods() {
+    if (!Array.isArray(settingsMods) || settingsMods.length === 0) return [];
+    return settingsMods
+        .map(mod => mod.filename || '')
+        .filter(filename => filename && filename !== VANILLA_MOD_FILENAME);
+}
+
+function getModCardTypeCounts(mod) {
+    const counts = { thorn: 0, bloom: 0, root: 0, guard: 0 };
+    const provided = mod && mod.card_type_counts;
+    if (provided && typeof provided === 'object') {
+        REQUIRED_MOD_CARD_TYPES.forEach(type => {
+            counts[type] = Number(provided[type] || 0);
+        });
+        return counts;
+    }
+    (mod && mod.cards ? mod.cards : []).forEach(card => {
+        const type = card.card_type;
+        if (Object.prototype.hasOwnProperty.call(counts, type) && Number(card.count || 0) > 0) {
+            counts[type] += 1;
+        }
+    });
+    return counts;
+}
+
+function modSelectionHasRequiredTypes(disabled) {
+    if (!Array.isArray(settingsMods) || settingsMods.length === 0) return true;
+    const disabledSet = new Set(disabled || []);
+    const counts = { thorn: 0, bloom: 0, root: 0, guard: 0 };
+    settingsMods.forEach(mod => {
+        const filename = mod.filename || '';
+        if (!filename || disabledSet.has(filename) || (mod.errors && mod.errors.length)) return;
+        const modCounts = getModCardTypeCounts(mod);
+        REQUIRED_MOD_CARD_TYPES.forEach(type => {
+            counts[type] += Number(modCounts[type] || 0);
+        });
+    });
+    return REQUIRED_MOD_CARD_TYPES.every(type => counts[type] > 0);
+}
+
+function coerceValidDisabledMods(disabled) {
+    const next = Array.isArray(disabled) ? disabled.filter(Boolean).map(String) : [];
+    let forcedVanilla = false;
+    if (!modSelectionHasRequiredTypes(next)) {
+        const idx = next.indexOf(VANILLA_MOD_FILENAME);
+        if (idx >= 0) {
+            next.splice(idx, 1);
+            forcedVanilla = true;
+        }
+    }
+    return { disabled: Array.from(new Set(next)), forcedVanilla };
 }
 
 function saveDisabledMods() {
     const listEl = $('settings-mods-list');
     if (!listEl) return;
     const checkboxes = listEl.querySelectorAll('input[type="checkbox"]');
-    const disabled = [];
+    let disabled = [];
     checkboxes.forEach(cb => {
         if (!cb.checked && cb.dataset.filename) {
             disabled.push(cb.dataset.filename);
         }
     });
+    const coerced = coerceValidDisabledMods(disabled);
+    disabled = coerced.disabled;
+    if (coerced.forcedVanilla) {
+        checkboxes.forEach(cb => {
+            if (cb.dataset.filename === VANILLA_MOD_FILENAME) cb.checked = true;
+        });
+        showActionToast(tf('mod_selection_force_vanilla'), 2800, 'error');
+    }
     localStorage.setItem('got_disabled_mods', JSON.stringify(disabled));
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
         localStorage.setItem('got_server', serverInput.value.trim());
     }
-    fetchCardDefs().then(() => {
+    fetchCardDefs().then(() => fetchOpeningEvents()).then(() => {
         loadSoloDecks(false);
         renderSoloBuilder();
     });
@@ -7324,6 +7568,7 @@ async function init() {
     }
     bootLoader.step(UI.init_fonts_done, 48);
     console.log('[INIT] theme/language applied');
+    await loadSettingsMods();
     await fetchCardDefs();
     await fetchOpeningEvents();
     bootLoader.step(UI.init_bindings, 90);
