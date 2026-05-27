@@ -17,6 +17,9 @@ URF_STARTING_HAND_COUNTS = {
     'root': 2,
     'guard': 1,
 }
+URF_WEIGHT_OVERRIDES = {
+    'Sewage': 6,
+}
 CARD_TYPE_CN = {
     'thorn': '攻击',
     'bloom': '技能',
@@ -29,7 +32,7 @@ INFINITE_EXCLUDED_IDS = {
     'Triangle',
     'MagicBone', 'MagicStinger', 'MagicSewage', 'MagicLeaf', 'MagicYucca',
     'MagicBattery', 'MagicNazar', 'MagicBubble',
-    'ManaOrb', 'Chromosome', 'Chilli', 'GoldenLeaf', 'Compass',
+    'ManaOrb', 'Chromosome', 'Chilli', 'GoldenLeaf', 'Compass', 'Magnet', 'Mimic',
 }
 
 INFINITE_EXCLUDED_EFFECTS = {
@@ -58,6 +61,14 @@ def is_infinite_excluded(card_def) -> bool:
         if effect_type in INFINITE_EXCLUDED_EFFECTS:
             return True
     return False
+
+
+def get_infinite_weight(card_def) -> int:
+    if not card_def:
+        return 1
+    if card_def.id in URF_WEIGHT_OVERRIDES:
+        return max(1, int(URF_WEIGHT_OVERRIDES[card_def.id]))
+    return max(1, int(getattr(card_def, 'count', 1) or 1))
 
 
 class InfinitePlayerState(PlayerState):
@@ -113,7 +124,7 @@ class GameEngineInfiniteFire(GameEngine):
                 continue
             if is_infinite_excluded(card_def):
                 continue
-            weight = max(1, int(getattr(card_def, 'count', 1) or 1))
+            weight = get_infinite_weight(card_def)
             ids.append(def_id)
             weights.append(weight)
         self.infinite_card_pool = ids
@@ -124,7 +135,7 @@ class GameEngineInfiniteFire(GameEngine):
             card_type = card_def.card_type
             by_type.setdefault(card_type, {'ids': [], 'weights': []})
             by_type[card_type]['ids'].append(def_id)
-            by_type[card_type]['weights'].append(max(1, int(getattr(card_def, 'count', 1) or 1)))
+            by_type[card_type]['weights'].append(get_infinite_weight(card_def))
         self.infinite_by_type = by_type
 
     def create_infinite_card(self, card_type: Optional[str] = None) -> Optional[CardInstance]:
@@ -147,7 +158,7 @@ class GameEngineInfiniteFire(GameEngine):
         if len(ps.hand) >= URF_HAND_LIMIT:
             ps.discard.append(card)
             if log:
-                self.log_msg(f"{self.pn(player_id)}手牌已满，{card.name_cn}进入弃牌堆")
+                self.log_msg(f"{self.pn(player_id)}手牌已满，补充的牌进入弃牌堆")
             return False
         ps.hand.append(card)
         return True
@@ -159,7 +170,7 @@ class GameEngineInfiniteFire(GameEngine):
         added = self.add_card_to_urf_hand(player_id, card, log=True)
         if added:
             type_name = CARD_TYPE_CN.get(card_type, card_type)
-            self.log_msg(f"{self.pn(player_id)}补充1张{type_name}牌：{card.name_cn}")
+            self.log_msg(f"{self.pn(player_id)}补充1张{type_name}牌")
 
     def _fusion_extra_replenish_types(self, player_id: int, card: Optional[CardInstance], choice) -> List[str]:
         if not card or card.def_id != 'Fusion' or not isinstance(choice, dict):
@@ -377,9 +388,9 @@ class GameEngineInfiniteFire(GameEngine):
                 copy_card = target.copy()
                 copy_card.mimic_discount = 1
                 if self.add_card_to_urf_hand(player_id, copy_card, log=False):
-                    self.log_msg(f"{self.pn(player_id)}使用拟态！复制了{target.name_cn}（费用-1）")
+                    self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
                 else:
-                    self.log_msg(f"{self.pn(player_id)}使用拟态，但手牌已满")
+                    self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}，但手牌已满")
 
     def replace_hand_card(self, player_id: int, card_instance_id: int) -> dict:
         if self.phase != 'action' or self.current_player != player_id:
@@ -394,7 +405,8 @@ class GameEngineInfiniteFire(GameEngine):
         new_card = self.create_infinite_card(card.card_type)
         if new_card:
             self.add_card_to_urf_hand(player_id, new_card, log=True)
-            self.log_msg(f"{self.pn(player_id)}替换了{card.name_cn}，获得{new_card.name_cn}")
+            type_name = CARD_TYPE_CN.get(card.card_type, card.card_type)
+            self.log_msg(f"{self.pn(player_id)}替换1张{type_name}牌，获得1张{type_name}牌")
         ps.urf_replace_available = False
         return {'success': True}
 

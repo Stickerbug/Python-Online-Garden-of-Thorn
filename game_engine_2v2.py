@@ -4,7 +4,7 @@ from typing import List, Dict, Optional, Tuple, Set
 from game_engine import GameEngine, PlayerState, EquipmentInstance
 from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DRAFT_REROLLS,
-    HAND_LIMIT, DRAW_PER_TURN, ELIXIR_RECOVERY, BASE_MAX_HEALTH,
+    DRAW_PER_TURN, ELIXIR_RECOVERY, BASE_MAX_HEALTH,
     BASE_MAX_ELIXIR, BASE_MAX_MAGIC, INITIAL_HEALTH, INITIAL_ELIXIR,
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     DECK_SIZE, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, build_draft_pool, generate_draft_options,
@@ -92,6 +92,17 @@ class GameEngine2v2(GameEngine):
     def is_enemy(self, player_id: int, other_id: int) -> bool:
         return self.team_of(player_id) != self.team_of(other_id)
 
+    def _refresh_hand_limit_bonuses(self):
+        for ps in self.players:
+            ps.extra_hand_limit_bonus = 0
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in owner_state.equipment:
+                if eq.def_id != 'GoldenLeaf':
+                    continue
+                target_id = getattr(eq, 'effect_target', owner_id)
+                if target_id != owner_id and 0 <= target_id < len(self.players):
+                    self.players[target_id].extra_hand_limit_bonus += 1
+
     def _resolve_target(self, player_id, target_str):
         if target_str is None or target_str == '' or target_str == 'self':
             return player_id
@@ -137,6 +148,7 @@ class GameEngine2v2(GameEngine):
         return [rid]
 
     def get_public_state(self, for_player: int) -> dict:
+        self._refresh_hand_limit_bonuses()
         teammate_id = self.get_teammate(for_player)
         enemy_ids = self.get_all_enemies(for_player)
 
@@ -297,6 +309,7 @@ class GameEngine2v2(GameEngine):
         return order
 
     def _start_player_turn(self, player_id: int):
+        self._refresh_hand_limit_bonuses()
         ps = self.players[player_id]
         if ps.health <= 0:
             self._advance_turn()
@@ -383,7 +396,7 @@ class GameEngine2v2(GameEngine):
     def _end_round(self):
         for pid in range(4):
             ps = self.players[pid]
-            if ps.invincible and not ps.bandage_active:
+            if ps.invincible and not ps.bandage_active and not ps.bandage_death_pending:
                 ps.invincible = False
                 self.log_msg(f"{self.pn(pid)}的无敌效果结束")
         self.round_num += 1
@@ -798,6 +811,7 @@ class GameEngine2v2(GameEngine):
 
     def _start_player_turn(self, player_id: int):
         self.current_player = player_id
+        self._refresh_hand_limit_bonuses()
         ps = self.players[player_id]
         if ps.health <= 0:
             self._advance_turn()
@@ -843,7 +857,7 @@ class GameEngine2v2(GameEngine):
             ps.gain_magic(1)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E，+1M")
         if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
-            draw_needed = HAND_LIMIT - len(ps.hand)
+            draw_needed = ps.hand_space()
             if draw_needed > 0:
                 ps.draw_cards(draw_needed)
                 self.log_msg(f"{self.pn(player_id)}【命运抽签】：抽{draw_needed}张至手牌满")
@@ -930,14 +944,21 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '手牌中没有这张牌'}
         if 'self_only' in card.flags or card.card_type == 'guard':
             target_player_id = player_id
-        elif self._card_requires_target(card) and target_player_id == player_id:
-            return {'success': False, 'error': '不能选择自己作为目标'}
+        elif self._card_requires_target(card) and card.card_type == 'thorn' and target_player_id == player_id:
+            return {'success': False, 'error': '攻击牌不能选择自己作为目标'}
         elif self._card_requires_target(card) and not self._is_valid_effect_target(player_id, target_player_id):
             return {'success': False, 'error': '必须选择一名存活玩家'}
         if target_player_id >= 0:
             if choice is None:
                 choice = {}
             choice['target_player'] = target_player_id
+        if self.game_over:
+            return {'success': False, 'error': '娓告垙宸茬粡缁撴潫'}
+        if self.current_player != player_id:
+            return {'success': False, 'error': '涓嶆槸浣犵殑鍥炲悎'}
+        can, reason = self.can_play_card(player_id, card)
+        if not can:
+            return {'success': False, 'error': reason}
         if target_player_id != player_id and self.is_ally(player_id, target_player_id):
             if not (choice and choice.get('_ally_approved')):
                 self.pending_ally_request = {
@@ -948,13 +969,6 @@ class GameEngine2v2(GameEngine):
                     'choice': dict(choice or {}),
                 }
                 return {'success': True, 'needs_ally_consent': True, 'card': card.to_dict(), 'target_player_id': target_player_id}
-        if self.game_over:
-            return {'success': False, 'error': '游戏已经结束'}
-        if self.current_player != player_id:
-            return {'success': False, 'error': '不是你的回合'}
-        can, reason = self.can_play_card(player_id, card)
-        if not can:
-            return {'success': False, 'error': reason}
         ps.elixir -= card.cost_e
         ps.magic -= card.cost_m
         ps.remove_hand_card(card_instance_id)
@@ -999,6 +1013,13 @@ class GameEngine2v2(GameEngine):
         if not accepted:
             self.log_msg(f"{self.pn(target_player_id)}拒绝{self.pn(player_id)}对其使用{card.name_cn}")
             return {'success': True, 'declined': True}
+        if req.get('action') == 'trigger':
+            return self.use_trigger(
+                player_id,
+                req['equipment_instance_id'],
+                target_player_id=target_player_id,
+                ally_approved=True,
+            )
         choice = dict(req.get('choice') or {})
         choice['_ally_approved'] = True
         return self.play_card(player_id, req['card_instance_id'], target_player_id=target_player_id, choice=choice)
@@ -1220,7 +1241,7 @@ class GameEngine2v2(GameEngine):
             ps.gain_magic(1)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E，+1M")
         if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
-            draw_needed = HAND_LIMIT - len(ps.hand)
+            draw_needed = ps.hand_space()
             if draw_needed > 0:
                 ps.draw_cards(draw_needed)
                 self.log_msg(f"{self.pn(player_id)}【命运抽签】：抽{draw_needed}张至手牌满")
@@ -1283,8 +1304,6 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '装备需要装备一回合后才能触发'}
         if eq.card_def.trigger_cost_e > ps.elixir:
             return {'success': False, 'error': '能量不足'}
-        if target_player_id == player_id:
-            return {'success': False, 'error': '不能选择自己作为目标'}
         if not self._is_valid_effect_target(player_id, target_player_id):
             return {'success': False, 'error': '必须选择一名存活玩家'}
         ps.elixir -= eq.card_def.trigger_cost_e
@@ -1363,7 +1382,7 @@ class GameEngine2v2(GameEngine):
             ps.gain_magic(1)
             self.log_msg(f"{self.pn(player_id)}抽{draw_count}张牌，回复{elixir_recovery}E，+1M")
         if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
-            draw_needed = HAND_LIMIT - len(ps.hand)
+            draw_needed = ps.hand_space()
             if draw_needed > 0:
                 ps.draw_cards(draw_needed)
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
@@ -1496,7 +1515,7 @@ class GameEngine2v2(GameEngine):
                 break
         return total_dealt
 
-    def use_trigger(self, player_id: int, equipment_instance_id: int, target_player_id: int = -1) -> dict:
+    def use_trigger(self, player_id: int, equipment_instance_id: int, target_player_id: int = -1, ally_approved: bool = False) -> dict:
         target_player_id = self._normalize_player_id(target_player_id)
         if self.current_player != player_id and not self.is_ally(self.current_player, player_id):
             return {'success': False, 'error': '只能在己方回合触发装备'}
@@ -1512,10 +1531,17 @@ class GameEngine2v2(GameEngine):
         trigger_cost = max(0, eq.card_def.trigger_cost_e)
         if trigger_cost > ps.elixir:
             return {'success': False, 'error': '能量不足'}
-        if target_player_id == player_id:
-            return {'success': False, 'error': '不能选择自己作为目标'}
         if not self._is_valid_effect_target(player_id, target_player_id):
             return {'success': False, 'error': '必须选择一名存活玩家'}
+        if target_player_id != player_id and self.is_ally(player_id, target_player_id) and not ally_approved:
+            self.pending_ally_request = {
+                'action': 'trigger',
+                'player_id': player_id,
+                'target_player_id': target_player_id,
+                'equipment_instance_id': equipment_instance_id,
+                'card': eq.card_instance.to_dict(),
+            }
+            return {'success': True, 'needs_ally_consent': True, 'card': eq.card_instance.to_dict(), 'target_player_id': target_player_id}
         ps.elixir -= trigger_cost
         if has_mod_trigger and self._run_card_event(player_id, eq.card_instance, 'equipment_trigger', None,
                                                     {'source_id': player_id, 'target_id': target_player_id}):

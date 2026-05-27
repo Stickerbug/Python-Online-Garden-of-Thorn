@@ -1696,7 +1696,8 @@
       "effect_text": "将一张手牌的复制加入手中，使其下一次打出时费用-1",
       "flags": [
         "exile",
-        "self_only"
+        "self_only",
+        "infinite_exclude"
       ],
       "effects": [
         {
@@ -2505,7 +2506,7 @@
       "count": 5,
       "quality": "Common",
       "description": "这闪亮的叶子能为你带来额外的抽牌机会。",
-      "effect_text": "自己回合开始时多抽一张牌",
+      "effect_text": "手牌爆牌上限+1；自己回合开始时多抽一张牌",
       "flags": [],
       "effects": [
         {

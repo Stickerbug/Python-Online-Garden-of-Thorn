@@ -88,6 +88,7 @@ class PlayerState:
         self.discard: List[CardInstance] = []
         self.exile: List[CardInstance] = []
         self.equipment: List[EquipmentInstance] = []
+        self.extra_hand_limit_bonus: int = 0
         self.cards_played_this_turn: Dict[str, int] = {}
         self.custom_vars: Dict[str, int] = {
             '\u5496\u5561\u9996\u6b21\u4f7f\u7528': 1,
@@ -129,6 +130,7 @@ class PlayerState:
             'attack_only': self.attack_only,
             'enemy_draw_reduction': self.enemy_draw_reduction,
             'enemy_e_reduction': self.enemy_e_reduction,
+            'extra_hand_limit_bonus': self.extra_hand_limit_bonus,
             'negate_next_skill': self.negate_next_skill,
             'is_first_player': self.is_first_player,
             'coffee_first_use': self.coffee_first_use,
@@ -137,6 +139,7 @@ class PlayerState:
             'discard_count': len(self.discard),
             'exile_count': len(self.exile),
             'hand_count': len(self.hand),
+            'hand_limit': self.hand_limit(),
         }
         if include_private:
             d['hand'] = [c.to_dict() for c in self.hand]
@@ -179,6 +182,7 @@ class PlayerState:
         ps.attack_only = d.get('attack_only', 0)
         ps.enemy_draw_reduction = d.get('enemy_draw_reduction', 0)
         ps.enemy_e_reduction = d.get('enemy_e_reduction', 0)
+        ps.extra_hand_limit_bonus = d.get('extra_hand_limit_bonus', 0)
         ps.negate_next_skill = d.get('negate_next_skill', False)
         ps.is_first_player = d.get('is_first_player', False)
         ps.coffee_first_use = d.get('coffee_first_use', True)
@@ -225,6 +229,20 @@ class PlayerState:
                 return self.equipment.pop(i)
         return None
 
+    def hand_limit(self) -> int:
+        own_golden_leaf = sum(
+            1
+            for e in self.equipment
+            if e.def_id == 'GoldenLeaf' and getattr(e, 'effect_target', self.player_id) == self.player_id
+        )
+        return HAND_LIMIT + own_golden_leaf + max(0, int(getattr(self, 'extra_hand_limit_bonus', 0)))
+
+    def can_add_to_hand(self) -> bool:
+        return len(self.hand) < self.hand_limit()
+
+    def hand_space(self) -> int:
+        return max(0, self.hand_limit() - len(self.hand))
+
     def draw_cards(self, count: int) -> List[CardInstance]:
         drawn = []
         sprout_queue = []
@@ -236,7 +254,7 @@ class PlayerState:
                 self.discard = []
                 random.shuffle(self.deck)
             card = self.deck.pop(0)
-            if len(self.hand) >= HAND_LIMIT:
+            if not self.can_add_to_hand():
                 attract_cards = [c for c in self.hand if 'attract' in c.flags]
                 non_attract_cards = [c for c in self.hand if 'attract' not in c.flags]
                 if 'attract' in card.flags and non_attract_cards:
@@ -262,7 +280,7 @@ class PlayerState:
                 random.shuffle(self.deck)
             if self.deck:
                 extra = self.deck.pop(0)
-                if len(self.hand) < HAND_LIMIT:
+                if self.can_add_to_hand():
                     self.hand.append(extra)
                     drawn.append(extra)
                     if 'sprout' in extra.flags:
@@ -958,13 +976,13 @@ class GameEngine:
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
         if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
-            draw_needed = HAND_LIMIT - len(ps.hand)
+            draw_needed = ps.hand_space()
             if draw_needed > 0:
                 ps.draw_cards(draw_needed)
                 self.log_msg(f"{self.pn(player_id)}【命运抽签】：抽{draw_needed}张至手牌满")
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
-            ps.gain_elixir(1)
-            self.log_msg(f"{self.pn(player_id)}【能量涌动】：额外+1E")
+            ps.gain_elixir(2)
+            self.log_msg(f"{self.pn(player_id)}【能量涌动】：额外+2E")
         for eq in ps.equipment:
             eq.turns_equipped += 1
             if eq.def_id == 'Leaf':
@@ -1362,6 +1380,9 @@ class GameEngine:
         card.fission_count = 0
         card.fusion_multiplier = 1.0
         card.fission_hit = 0
+        if card.def_id == 'Tomato':
+            card.bonus_damage = 0
+            card.held_turns = 0
 
     def _discard_card(self, ps, card: CardInstance):
         if card.card_type == 'thorn':
@@ -1487,12 +1508,8 @@ class GameEngine:
         card = CardInstance.from_dict(pending['card'])
         ps = self.players[player_id]
         if choice is None:
-            ps.hand.insert(0, card)
-            dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
-            ps.elixir += card.cost_e + max(0, dup_count - 1)
-            ps.magic += card.cost_m
-            if dup_count > 0:
-                ps.cards_played_this_turn[card.def_id] = dup_count - 1
+            if ps.find_hand_card(card.instance_id) is None:
+                ps.hand.insert(0, card)
             return {'success': False, 'error': '选择已取消'}
         dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
         extra_e = dup_count
@@ -1634,10 +1651,11 @@ class GameEngine:
         opp = self.players[target_id]
         if choice and 'target_instance_id' in choice:
             target = opp.find_hand_card(choice['target_instance_id'])
-            if target and len(ps.hand) < HAND_LIMIT:
+            if target and ps.can_add_to_hand():
                 opp.hand.remove(target)
                 ps.hand.append(target)
-                self.log_msg(log or f"{self.pn(player_id)}从敌方手中夺取{target.name_cn}")
+                if log:
+                    self.log_msg(log)
             else:
                 self.log_msg(log or f"{self.pn(player_id)}夺取失败")
         else:
@@ -1655,10 +1673,11 @@ class GameEngine:
             if target is None and isinstance(selector, dict):
                 matched = self._match_card_selector(player_id, ps.deck, selector, card)
                 target = matched[0] if matched else None
-            if target and len(ps.hand) < HAND_LIMIT:
+            if target and ps.can_add_to_hand():
                 ps.deck.remove(target)
                 ps.hand.append(target)
-                self.log_msg(log or f"{self.pn(player_id)}从牌堆取出{target.name_cn}")
+                if log:
+                    self.log_msg(log)
             else:
                 self.log_msg(log or f"{self.pn(player_id)}从牌堆取牌失败")
         else:
@@ -1678,10 +1697,11 @@ class GameEngine:
             if target is None and isinstance(selector, dict):
                 matched2 = self._match_card_selector(player_id, ps.discard, selector, card)
                 target = matched2[0] if matched2 else None
-            if target and len(ps.hand) < HAND_LIMIT:
+            if target and ps.can_add_to_hand():
                 ps.discard.remove(target)
                 ps.hand.append(target)
-                self.log_msg(log or f"{self.pn(player_id)}从弃牌堆取出{target.name_cn}")
+                if log:
+                    self.log_msg(log)
             else:
                 self.log_msg(log or f"{self.pn(player_id)}从弃牌堆取牌失败")
         else:
@@ -1907,10 +1927,11 @@ class GameEngine:
             sel = {'selector': 'by_id', 'id': choice['target_def_id']}
             matched = self._match_card_selector(player_id, ps.exile, sel, card)
             target = matched[0] if matched else None
-        if target and len(ps.hand) < HAND_LIMIT:
+        if target and ps.can_add_to_hand():
             ps.exile.remove(target)
             ps.hand.append(target)
-            self.log_msg(log or f"{self.pn(player_id)}从放逐区取出{target.name_cn}")
+            if log:
+                self.log_msg(log)
         else:
             self.log_msg(log or f"{self.pn(player_id)}未选择牌")
 
@@ -1927,11 +1948,12 @@ class GameEngine:
         target = self._resolve_card_ref(player_id, params.get('card'), card)
         if choice and 'target_instance_id' in choice:
             target = ps.find_hand_card(choice['target_instance_id'])
-        if target and len(ps.hand) < HAND_LIMIT:
+        if target and ps.can_add_to_hand():
             new_card = target.copy()
             ps.hand.append(new_card)
             self._remember_created_card(new_card, context)
-            self.log_msg(log or f"{self.pn(player_id)}复制了{target.name_cn}")
+            if log:
+                self.log_msg(log)
         elif not target:
             self.log_msg(log or f"{self.pn(player_id)}未选择要复制的牌")
 
@@ -1971,13 +1993,14 @@ class GameEngine:
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         card_ref = self._resolve_card_id_ref(player_id, params.get('card', ''), card)
         ts = self.players[target_id]
-        if card_ref and len(ts.hand) < HAND_LIMIT:
+        if card_ref and ts.can_add_to_hand():
             card_def = CARD_DEFS.get(card_ref)
             if card_def:
                 new_card = CardInstance(def_id=card_def.id)
                 ts.hand.append(new_card)
                 self._remember_created_card(new_card, context)
-                self.log_msg(log or f"{self.pn(target_id)}获得{card_def.name_cn}")
+                if log:
+                    self.log_msg(log)
             else:
                 self.log_msg(log or f"未知卡牌: {card_ref}")
 
@@ -1995,7 +2018,8 @@ class GameEngine:
                 else:
                     ts.deck.insert(0, new_card)
                 self._remember_created_card(new_card, context)
-                self.log_msg(log or f"{self.pn(target_id)}牌堆获得{card_def.name_cn}")
+                if log:
+                    self.log_msg(log)
 
     def _atomic_give_card_to_discard(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -2007,7 +2031,8 @@ class GameEngine:
                 new_card = CardInstance(def_id=card_def.id)
                 ts.discard.append(new_card)
                 self._remember_created_card(new_card, context)
-                self.log_msg(log or f"{self.pn(target_id)}弃牌堆获得{card_def.name_cn}")
+                if log:
+                    self.log_msg(log)
 
     def _atomic_remove_specific_card(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -2271,7 +2296,7 @@ class GameEngine:
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         if not (0 <= target_id < len(self.players)):
             return
-        if len(self.players[target_id].hand) >= HAND_LIMIT:
+        if not self.players[target_id].can_add_to_hand():
             return
         self._remove_card_from_current_zone(target_card)
         self.players[target_id].hand.append(target_card)
@@ -2511,7 +2536,7 @@ class GameEngine:
             return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
         if op == 'hand_full':
             tid = self._resolve_target(player_id, cond.get('target', 'self'))
-            return len(self.players[tid].hand) >= HAND_LIMIT
+            return not self.players[tid].can_add_to_hand()
         if op == 'hand_has_type':
             tid = self._resolve_target(player_id, cond.get('target', 'self'))
             ctype = cond.get('card_type', 'thorn')
@@ -2910,13 +2935,13 @@ class GameEngine:
             for i, c in enumerate(ps.discard):
                 if c.def_id == target_def:
                     found = ps.discard.pop(i)
-                    if len(ps.hand) < HAND_LIMIT:
+                    if ps.can_add_to_hand():
                         ps.hand.append(found)
                     else:
                         ps.discard.append(found)
-                    self.log_msg(f"{self.pn(player_id)}使用染色体！从弃牌堆找到{found.name_cn}")
+                    self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
                     return
-        self.log_msg(f"{self.pn(player_id)}使用染色体，但未找到目标")
+        self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}，但未找到目标")
 
     def _effect_sewage(self, player_id: int, card: CardInstance, choice=None):
         opp = self.players[1 - player_id]
@@ -2958,11 +2983,11 @@ class GameEngine:
             if target:
                 copy_card = target.copy()
                 copy_card.mimic_discount = 1
-                if len(ps.hand) < HAND_LIMIT:
+                if ps.can_add_to_hand():
                     ps.hand.append(copy_card)
-                    self.log_msg(f"{self.pn(player_id)}使用拟态！复制了{target.name_cn}（费用-1）")
+                    self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
                 else:
-                    self.log_msg(f"{self.pn(player_id)}使用拟态，但手牌已满")
+                    self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}，但手牌已满")
 
     def _effect_yggdrasil(self, player_id: int, card: CardInstance, choice=None):
         ps = self.players[player_id]
@@ -3132,7 +3157,7 @@ class GameEngine:
     def _end_round(self):
         for pid in range(2):
             ps = self.players[pid]
-            if ps.invincible and not ps.bandage_active:
+            if ps.invincible and not ps.bandage_active and not ps.bandage_death_pending:
                 ps.invincible = False
                 self.log_msg(f"{self.pn(pid)}的无敌效果结束")
         self.round_num += 1
@@ -3610,6 +3635,12 @@ class GameEngine:
         else:
             self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
 
+    def _uses_atomic_play_effects(self, card: CardInstance) -> bool:
+        return bool(self._card_has_script(card.card_def) or card.card_def.effects)
+
+    def _log_card_play(self, player_id: int, card: CardInstance):
+        self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
+
     def _run_card_event(self, owner_id: int, card: CardInstance, event_name: str,
                         choice: Optional[dict] = None, extra_context: Optional[dict] = None) -> bool:
         if self._has_script_entry(card.card_def, event_name):
@@ -3711,13 +3742,13 @@ class GameEngine:
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
         if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
-            draw_needed = HAND_LIMIT - len(ps.hand)
+            draw_needed = ps.hand_space()
             if draw_needed > 0:
                 ps.draw_cards(draw_needed)
                 self.log_msg(f"{self.pn(player_id)}抽{draw_needed}张至手牌满")
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
-            ps.gain_elixir(1)
-            self.log_msg(f"{self.pn(player_id)}额外+1E")
+            ps.gain_elixir(2)
+            self.log_msg(f"{self.pn(player_id)}额外+2E")
         for eq in list(ps.equipment):
             eq.turns_equipped += 1
             if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
@@ -3817,6 +3848,7 @@ class GameEngine:
             self.log_msg(f"[特效] {card.name_cn} 聚变={card.fusion_level} 裂变={card.fission_level}")
         if self.negated_card and card.card_type == 'bloom':
             self.negated_card = False
+            self._log_card_play(player_id, card)
             if 'exile' in card.flags:
                 ps.exile.append(card)
             else:
@@ -3851,6 +3883,8 @@ class GameEngine:
                 'target_player_id': choice_target_id,
                 'card': card.to_dict(),
             }
+        if self._uses_atomic_play_effects(card):
+            self._log_card_play(player_id, card)
         if card.card_type == 'thorn':
             fission_level = max(1, int(getattr(card, 'fission_level', 1)))
             for hit_idx in range(fission_level):
@@ -4013,12 +4047,13 @@ class GameEngine:
         if not (choice and 'target_instance_id' in choice):
             return
         target = ps.find_hand_card(choice['target_instance_id'])
-        if target is None or len(ps.hand) >= HAND_LIMIT:
+        if target is None or not ps.can_add_to_hand():
             return
         copy_card = target.copy()
         copy_card.mimic_discount = self._eval_int(player_id, params.get('discount_e', 1), card, 1)
         ps.hand.append(copy_card)
-        self.log_msg(log or f"{self.pn(player_id)}复制了{target.name_cn}")
+        if log:
+            self.log_msg(log)
 
     def _set_card_property_value(self, player_id, current_card, params, value):
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), current_card)

@@ -1556,6 +1556,16 @@ body {
   color: var(--text-muted);
 }
 
+.solo-deck-card.invalid {
+  border-color: rgba(192, 57, 43, 0.45);
+  background: rgba(192, 57, 43, 0.06);
+}
+
+.solo-deck-card-main .solo-invalid-card {
+  color: #C0392B;
+  font-weight: 700;
+}
+
 .solo-deck-card-actions {
   display: flex;
   align-items: center;
@@ -1714,6 +1724,15 @@ body {
   font-weight: 800;
 }
 
+.bloom-name,
+.player-name-inline.bloom-name,
+.lobby-player-row .player-name.bloom-name,
+.lobby-team-row .player-name .bloom-name,
+.team-info .bloom-name {
+  color: var(--bloom) !important;
+  font-weight: 800;
+}
+
 .lobby-player-row .player-self {
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1791,6 +1810,11 @@ body {
 
 .chat-nick.admin-name {
   color: #C0392B !important;
+  font-weight: 800;
+}
+
+.chat-nick.bloom-name {
+  color: var(--bloom) !important;
   font-weight: 800;
 }
 
@@ -2150,6 +2174,23 @@ body {
 
 .controls-right input::placeholder {
   color: var(--text-muted);
+}
+
+.game-chat-channel {
+  width: clamp(74px, 10vw, 132px);
+  min-width: 70px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: var(--font-main);
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  outline: none;
+}
+
+.game-chat-channel:focus {
+  border-color: var(--magic);
 }
 
 .bar-wrapper {
@@ -2945,6 +2986,12 @@ body {
   border-color: rgba(15, 118, 110, 0.32);
 }
 
+.card-flag.tomato-layer {
+  color: #b42318;
+  background: rgba(244, 143, 177, 0.16);
+  border-color: rgba(180, 35, 24, 0.28);
+}
+
 .equip-item {
   display: inline-flex;
   align-items: center;
@@ -3555,6 +3602,7 @@ body {
 
 .hand-area .card {
   flex: none;
+  width: clamp(52px, min(calc((100% - 42px) / var(--hand-card-slots, 7.35)), calc((100vh - 280px) * 63 / 88)), 140px);
 }
 
 .opp-hand-row {
@@ -3637,7 +3685,7 @@ body {
 }
 
 .log-chat {
-  color: #88ccff;
+  color: var(--text-primary);
   font-size: 11px;
 }
 
@@ -3680,8 +3728,36 @@ body {
   font-weight: 700;
 }
 
+.log-chat .chat-channel,
+.log-entry.chat .chat-channel {
+  color: var(--magic);
+  font-weight: 800;
+  margin-right: 2px;
+}
+
+.log-chat .chat-channel-team,
+.log-entry.chat .chat-channel-team {
+  color: var(--bloom);
+}
+
+.log-chat .chat-channel-enemy,
+.log-entry.chat .chat-channel-enemy {
+  color: var(--damage);
+}
+
+.log-chat .chat-channel-private,
+.log-entry.chat .chat-channel-private {
+  color: var(--elixir);
+}
+
 .log-entry.chat .chat-nick.admin-name {
   color: #C0392B !important;
+  font-weight: 800;
+}
+
+.log-entry.chat .chat-nick.bloom-name,
+.log-chat .chat-nick.bloom-name {
+  color: var(--bloom) !important;
   font-weight: 800;
 }
 
@@ -5817,6 +5893,11 @@ body {
   max-width: 220px;
 }
 
+.game-chat-channel {
+  flex: 0 0 auto;
+  max-width: 132px;
+}
+
 .btn-end-turn,
 .btn-view-deck,
 .btn-surrender,
@@ -6770,7 +6851,7 @@ body {
   }
 
   .game-container:not(.mode-urf) .hand-area .card {
-    width: clamp(64px, calc((100% - 42px) / 7), 148px);
+    width: clamp(60px, calc((100% - 42px) / var(--hand-card-slots, 7.35)), 148px);
   }
 
   .game-container .controls-bar {
@@ -6792,7 +6873,7 @@ body {
   .game-container.mode-2v2 .hand-area .card {
     --card-english-font: clamp(4.3px, 5.4cqi, 5.8px);
     --card-english-margin-top: -1.45cqi;
-    width: clamp(48px, calc((64vw - 50px) / 7.4), 92px);
+    width: clamp(48px, calc((64vw - 50px) / var(--hand-card-slots, 7.4)), 92px);
   }
 
   .game-container.mode-2v2 .middle-section {
@@ -6967,12 +7048,11 @@ html[data-ui-style="classic"] .card.bloom::before { background: var(--bloom); }
 html[data-ui-style="classic"] .card.root::before { background: var(--root); }
 html[data-ui-style="classic"] .card.guard::before { background: var(--guard); }
 
-html[data-ui-style="classic"] .hand-area .card-description,
+html[data-ui-style="classic"] .card .card-description,
 html[data-ui-style="classic"] .drag-ghost .card-description,
 html[data-ui-style="classic"] .card-play-flash .card-description,
 html[data-ui-style="classic"] .fusion-merge-clone .card-description,
-html[data-ui-style="classic"] .card-shatter-piece .card-description,
-html[data-ui-style="classic"] #gallery-card-preview .card-description {
+html[data-ui-style="classic"] .card-shatter-piece .card-description {
   display: none;
 }
 
@@ -7034,6 +7114,10 @@ html[data-ui-style="classic"] .controls-right input {
   width: clamp(92px, 13vw, 170px);
 }
 
+html[data-ui-style="classic"] .game-chat-channel {
+  width: clamp(74px, 9vw, 120px);
+}
+
 html[data-ui-style="classic"] .teammate-sidebar-section {
   font-size: 10px;
   letter-spacing: 0;
@@ -7069,4 +7153,137 @@ button:not(:disabled):active,
 .equip-item:active,
 .mobile-play-confirm button:active {
   transform: scale(0.97);
+}
+
+/* Card internals are locked to the card's own width via cqi.
+   This keeps hand, spectator, gallery, animation, and small cards visually proportional. */
+.card {
+  --card-cost-size: 16cqi;
+  --card-cost-border: 1cqi;
+  --card-cost-font: 9cqi;
+  --card-name-font-scale: 9.5cqi;
+  --card-name-height: 18cqi;
+  --card-type-font-scale: 6.5cqi;
+  --card-effect-font-scale: 9cqi;
+  --card-effect-padding-y: 6cqi;
+  --card-effect-padding-x: 2.5cqi;
+  --card-description-font-scale: 7cqi;
+  --card-flag-font-scale: 6cqi;
+  --card-flag-radius: 2cqi;
+}
+
+[lang="en"] .card,
+[lang="fr"] .card,
+[lang="pt"] .card,
+[lang="ru"] .card,
+[lang="ja"] .card {
+  --card-name-font-scale: 8.5cqi;
+}
+
+[lang="zh"] .card {
+  --card-name-font-scale: 10.5cqi;
+}
+
+html[data-ui-style="classic"] .card {
+  --card-effect-font-scale: 9.45cqi;
+  --card-effect-padding-y: 3.5cqi;
+}
+
+.card.card-small,
+.teammate-hand-row .card,
+.game-container.mode-spectate .card,
+.game-container.mode-spectate .card-small {
+  font-size: inherit;
+  aspect-ratio: 63 / 88;
+}
+
+.card .card-costs,
+.card.card-small .card-costs,
+.teammate-hand-row .card .card-costs {
+  padding: 2cqi 2cqi 0.5cqi;
+  min-height: 20cqi;
+}
+
+.card .card-costs .cost-e,
+.card .card-costs .cost-m,
+.card.card-small .card-costs .cost-e,
+.card.card-small .card-costs .cost-m,
+.teammate-hand-row .card .card-costs .cost-e,
+.teammate-hand-row .card .card-costs .cost-m {
+  width: var(--card-cost-size);
+  height: var(--card-cost-size);
+  border-width: var(--card-cost-border);
+  font-size: var(--card-cost-font);
+}
+
+.card .card-costs .card-name,
+.card.card-small .card-costs .card-name,
+.teammate-hand-row .card .card-costs .card-name {
+  font-size: var(--card-name-font-scale);
+  height: var(--card-name-height);
+  min-height: var(--card-name-height);
+  line-height: 1.08;
+  padding: 0 0.5cqi;
+}
+
+.card .card-name,
+.card.card-small .card-name,
+.teammate-hand-row .card .card-name {
+  font-size: var(--card-name-font-scale);
+}
+
+.card .card-type-label,
+.card.card-small .card-type-label,
+.teammate-hand-row .card .card-type-label {
+  font-size: var(--card-type-font-scale);
+  padding: 0.5cqi 3cqi;
+  border-radius: 2cqi;
+}
+
+.card .card-english-name,
+.card.card-small .card-english-name,
+.teammate-hand-row .card .card-english-name {
+  font-size: var(--card-english-font);
+  margin-top: var(--card-english-margin-top);
+  margin-bottom: 0.2cqi;
+  padding: 0 var(--card-english-padding-x) 0.4cqi;
+}
+
+.card .card-effect,
+.card.card-small .card-effect,
+.teammate-hand-row .card .card-effect {
+  font-size: var(--card-effect-font-scale);
+  line-height: 1.3;
+  padding: var(--card-effect-padding-y) var(--card-effect-padding-x);
+}
+
+html[data-ui-style="classic"] .card .card-effect,
+html[data-ui-style="classic"] .card.card-small .card-effect,
+html[data-ui-style="classic"] .teammate-hand-row .card .card-effect {
+  line-height: 1.24;
+}
+
+.card .card-description,
+.card.card-small .card-description,
+.teammate-hand-row .card .card-description {
+  font-size: var(--card-description-font-scale);
+  line-height: 1.3;
+  padding: 2cqi 2.5cqi 1cqi;
+}
+
+.card .card-flags,
+.card.card-small .card-flags,
+.teammate-hand-row .card .card-flags {
+  gap: 1.5cqi;
+  padding: 1.5cqi 3cqi 3cqi;
+}
+
+.card .card-flag,
+.card.card-small .card-flag,
+.teammate-hand-row .card .card-flag {
+  font-size: var(--card-flag-font-scale);
+  line-height: 1;
+  padding: 0.6cqi 2.2cqi;
+  border-radius: var(--card-flag-radius);
+  min-height: 0;
 }

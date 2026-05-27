@@ -46,14 +46,51 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 _lock = threading.Lock()
 _next_room_id = 0
 SERVER_STARTED_AT = time.time()
+RECONNECT_TIMEOUT_SECONDS = int(os.environ.get('RECONNECT_TIMEOUT_SECONDS', '120'))
+BOTH_DISCONNECTED_CLEANUP_SECONDS = int(os.environ.get('BOTH_DISCONNECTED_CLEANUP_SECONDS', '60'))
 DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2:sha256:260000$82e7gAIa0D6034Qq$a0c9a5ad6028ce6c8798abc1314bc74b099b2441c3f39c3b3e6255ea2156f06b'
 ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', DEFAULT_ADMIN_PASSWORD_HASH)
 ADMIN_PLAYER_DISPLAY_NAME = 'Stickerbug'
 ADMIN_PLAYER_NICKNAME_HASH = os.environ.get(
     'ADMIN_PLAYER_NICKNAME_HASH',
-    'pbkdf2:sha256:1000000$StCJPrBEJTCHCgmh$51b167ab5d8c20797654b530d3326cd989de1c69cc33f4fb4896d08ba856509f'
+    'pbkdf2:sha256:1000000$lrqsFfCaEKOE9gpQ$b69b0865913bb226c9e8e93b1433080242d0e3854d7a40231600f7b947be6a1c'
 )
 ADMIN_NICKNAME_RESERVED_REASON = 'Admin nickname reserved'
+SPECIAL_PLAYER_PROFILES = [
+    {
+        'key': 'admin',
+        'display_name': ADMIN_PLAYER_DISPLAY_NAME,
+        'nickname_hash': ADMIN_PLAYER_NICKNAME_HASH,
+        'special_role': 'admin',
+        'special_role_color': 'admin',
+        'special_role_sort': 0,
+        'is_admin_player': True,
+    },
+    {
+        'key': 'chief_designer_netherdog',
+        'display_name': 'NetherDog',
+        'nickname_hash': os.environ.get(
+            'NETHERDOG_PLAYER_NICKNAME_HASH',
+            'pbkdf2:sha256:1000000$PYFsQvjuEmKEVZTD$41350516e3ef5082e678fddcf743663b5f35b993d3599eac34d2a3a65ceaf48c',
+        ),
+        'special_role': 'chief_designer',
+        'special_role_color': 'bloom',
+        'special_role_sort': 1,
+        'is_admin_player': False,
+    },
+    {
+        'key': 'chief_designer_eric',
+        'display_name': 'Eric',
+        'nickname_hash': os.environ.get(
+            'ERIC_PLAYER_NICKNAME_HASH',
+            'pbkdf2:sha256:1000000$DPOu8dFJCq2iU5JL$5b68e131a849ecc121c614009528d1cb32cc675ad2f9d400deb876b967db6bd8',
+        ),
+        'special_role': 'chief_designer',
+        'special_role_color': 'bloom',
+        'special_role_sort': 1,
+        'is_admin_player': False,
+    },
+]
 ADMIN_EVENTS = deque(maxlen=300)
 MATCH_HISTORY = deque(maxlen=120)
 ADMIN_LOGIN_FAILURES = {}
@@ -173,6 +210,7 @@ class GameRoom:
         self.disconnected_players = {}
         self.reconnect_timers = {}
         self._rematch_votes = set()
+        self.pending_surrender_request = None
         self.team_assignments = None
         self._history_recorded = False
         self.created_at = time.time()
@@ -205,34 +243,71 @@ def sanitize_nickname(raw):
     return name.strip()
 
 
+def get_special_player_profile(raw):
+    text = str(raw or '')
+    for profile in SPECIAL_PLAYER_PROFILES:
+        try:
+            if check_password_hash(profile['nickname_hash'], text):
+                return profile
+        except Exception:
+            continue
+    return None
+
+def special_public_fields(player_or_profile):
+    source = player_or_profile or {}
+    role = source.get('special_role')
+    return {
+        'is_admin_player': bool(source.get('is_admin_player')),
+        'is_special_player': bool(role),
+        'special_role': role or None,
+        'special_role_color': source.get('special_role_color') or ('admin' if source.get('is_admin_player') else None),
+        'special_role_sort': int(source.get('special_role_sort', 99)),
+    }
+
+
+def player_special_fields(sid, room=None):
+    if sid in players:
+        return special_public_fields(players[sid])
+    if room is not None and sid in getattr(room, 'disconnected_players', {}):
+        return special_public_fields(room.disconnected_players[sid])
+    return special_public_fields({})
+
+
+def room_player_nickname(room, sid, fallback='?'):
+    if sid in players:
+        return players[sid].get('nickname', fallback)
+    if room is not None and sid in getattr(room, 'disconnected_players', {}):
+        return room.disconnected_players[sid].get('nickname', fallback)
+    return fallback
+
+
 def is_admin_player_secret(raw):
     try:
-        return check_password_hash(ADMIN_PLAYER_NICKNAME_HASH, str(raw or ''))
+        profile = get_special_player_profile(raw)
+        return bool(profile and profile.get('is_admin_player'))
     except Exception:
         return False
 
 
-def is_reserved_admin_nickname(name):
+def is_reserved_special_nickname(name):
     lower = str(name or '').lower()
-    return 'sticker' in lower and 'bug' in lower
+    special_names = {profile['display_name'].lower() for profile in SPECIAL_PLAYER_PROFILES}
+    return ('sticker' in lower and 'bug' in lower) or lower in special_names
 
 
 def public_player_info(sid, player=None):
     p = player if player is not None else players.get(sid, {})
-    return {
+    info = {
         'sid': sid,
         'nickname': p.get('nickname', '?'),
         'mode': p.get('mode', '1v1'),
-        'is_admin_player': bool(p.get('is_admin_player')),
     }
+    info.update(special_public_fields(p))
+    return info
 
 
 def player_is_admin(sid, room=None):
-    if sid in players:
-        return bool(players[sid].get('is_admin_player'))
-    if room is not None and sid in getattr(room, 'disconnected_players', {}):
-        return bool(room.disconnected_players[sid].get('is_admin_player'))
-    return False
+    return bool(player_special_fields(sid, room).get('is_admin_player'))
 
 
 def validate_nickname(name):
@@ -331,7 +406,7 @@ def get_lobby_list():
     for sid, p in players.items():
         if p['status'] == 'lobby':
             lobby.append(public_player_info(sid, p))
-    lobby.sort(key=lambda item: (0 if item.get('is_admin_player') else 1, item.get('nickname', '').lower()))
+    lobby.sort(key=lambda item: (item.get('special_role_sort', 99), item.get('nickname', '').lower()))
     return lobby
 
 
@@ -797,9 +872,10 @@ def broadcast_lobby():
                 'member_infos': member_infos,
                 'member_sids': team['members'],
                 'has_admin_player': any(info.get('is_admin_player') for info in member_infos),
+                'special_role_sort': min([info.get('special_role_sort', 99) for info in member_infos] or [99]),
             })
     team_list.sort(key=lambda item: (
-        0 if item.get('has_admin_player') else 1,
+        item.get('special_role_sort', 99),
         ' '.join(item.get('members') or []).lower()
     ))
     for sid, p in players.items():
@@ -880,29 +956,32 @@ def broadcast_game_state(room):
             engine = room.engine
             teammate_id = engine.get_teammate(pidx)
             enemy_ids = engine.get_all_enemies(pidx)
-            state['your_name'] = players[sid]['nickname'] if sid in players else '?'
+            state['your_name'] = room_player_nickname(room, sid)
             state['your_is_admin_player'] = player_is_admin(sid, room)
+            state['your_special'] = player_special_fields(sid, room)
             if teammate_id >= 0 and teammate_id < len(room.player_sids):
                 tm_sid = room.player_sids[teammate_id]
-                state['teammate_name'] = players[tm_sid]['nickname'] if tm_sid in players else '?'
+                state['teammate_name'] = room_player_nickname(room, tm_sid)
                 state['teammate_is_admin_player'] = player_is_admin(tm_sid, room)
+                state['teammate_special'] = player_special_fields(tm_sid, room)
             state['opponent_names'] = []
             state['opponent_admin_flags'] = []
+            state['opponent_specials'] = []
             for eid in enemy_ids:
                 if eid < len(room.player_sids):
                     e_sid = room.player_sids[eid]
-                    state['opponent_names'].append(players[e_sid]['nickname'] if e_sid in players else '?')
+                    state['opponent_names'].append(room_player_nickname(room, e_sid))
                     state['opponent_admin_flags'].append(player_is_admin(e_sid, room))
+                    state['opponent_specials'].append(player_special_fields(e_sid, room))
         else:
             opp_pidx = 1 - pidx
             opp_sid = room.player_sids[opp_pidx]
-            if opp_sid in players:
-                state['opponent_name'] = players[opp_sid]['nickname']
-            else:
-                state['opponent_name'] = '?'
+            state['opponent_name'] = room_player_nickname(room, opp_sid)
             state['opponent_is_admin_player'] = player_is_admin(opp_sid, room)
-            state['your_name'] = players[sid]['nickname'] if sid in players else '?'
+            state['opponent_special'] = player_special_fields(opp_sid, room)
+            state['your_name'] = room_player_nickname(room, sid)
             state['your_is_admin_player'] = player_is_admin(sid, room)
+            state['your_special'] = player_special_fields(sid, room)
         socketio.emit('state_update', state, room=sid)
     broadcast_spectate_state(room)
     if room.engine.game_over and not getattr(room, '_history_recorded', False):
@@ -929,29 +1008,32 @@ def send_game_state_to(room, pidx):
             engine = room.engine
             teammate_id = engine.get_teammate(pidx)
             enemy_ids = engine.get_all_enemies(pidx)
-            state['your_name'] = players[sid]['nickname'] if sid in players else '?'
+            state['your_name'] = room_player_nickname(room, sid)
             state['your_is_admin_player'] = player_is_admin(sid, room)
+            state['your_special'] = player_special_fields(sid, room)
             if teammate_id >= 0 and teammate_id < len(room.player_sids):
                 tm_sid = room.player_sids[teammate_id]
-                state['teammate_name'] = players[tm_sid]['nickname'] if tm_sid in players else '?'
+                state['teammate_name'] = room_player_nickname(room, tm_sid)
                 state['teammate_is_admin_player'] = player_is_admin(tm_sid, room)
+                state['teammate_special'] = player_special_fields(tm_sid, room)
             state['opponent_names'] = []
             state['opponent_admin_flags'] = []
+            state['opponent_specials'] = []
             for eid in enemy_ids:
                 if eid < len(room.player_sids):
                     e_sid = room.player_sids[eid]
-                    state['opponent_names'].append(players[e_sid]['nickname'] if e_sid in players else '?')
+                    state['opponent_names'].append(room_player_nickname(room, e_sid))
                     state['opponent_admin_flags'].append(player_is_admin(e_sid, room))
+                    state['opponent_specials'].append(player_special_fields(e_sid, room))
         else:
             opp_pidx = 1 - pidx
             opp_sid = room.player_sids[opp_pidx]
-            if opp_sid in players:
-                state['opponent_name'] = players[opp_sid]['nickname']
-            else:
-                state['opponent_name'] = '?'
+            state['opponent_name'] = room_player_nickname(room, opp_sid)
             state['opponent_is_admin_player'] = player_is_admin(opp_sid, room)
-            state['your_name'] = players[sid]['nickname'] if sid in players else '?'
+            state['opponent_special'] = player_special_fields(opp_sid, room)
+            state['your_name'] = room_player_nickname(room, sid)
             state['your_is_admin_player'] = player_is_admin(sid, room)
+            state['your_special'] = player_special_fields(sid, room)
         socketio.emit('state_update', state, room=sid)
 
 
@@ -1125,6 +1207,7 @@ def build_spectate_state(room):
         pdata['player_id'] = i
         pdata['name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', f'P{i + 1}')
         pdata['is_admin_player'] = player_is_admin(psid, room)
+        pdata.update(player_special_fields(psid, room))
         full_players.append(pdata)
     base['spectate_players'] = full_players
     base['mode'] = room.mode
@@ -1138,19 +1221,55 @@ def build_spectate_state(room):
         base['enemy_ids'] = [2, 3]
         base['your_name'] = full_players[0]['name']
         base['your_is_admin_player'] = full_players[0].get('is_admin_player', False)
+        base['your_special'] = special_public_fields(full_players[0])
         base['teammate_name'] = full_players[1]['name']
         base['teammate_is_admin_player'] = full_players[1].get('is_admin_player', False)
+        base['teammate_special'] = special_public_fields(full_players[1])
         base['opponent_names'] = [full_players[2]['name'], full_players[3]['name']]
         base['opponent_admin_flags'] = [full_players[2].get('is_admin_player', False), full_players[3].get('is_admin_player', False)]
+        base['opponent_specials'] = [special_public_fields(full_players[2]), special_public_fields(full_players[3])]
     elif len(full_players) >= 2:
         base['you'] = full_players[0]
         base['opponent'] = full_players[1]
         base['your_id'] = 0
         base['your_name'] = full_players[0]['name']
         base['your_is_admin_player'] = full_players[0].get('is_admin_player', False)
+        base['your_special'] = special_public_fields(full_players[0])
         base['opponent_name'] = full_players[1]['name']
         base['opponent_is_admin_player'] = full_players[1].get('is_admin_player', False)
+        base['opponent_special'] = special_public_fields(full_players[1])
     return base
+
+
+def _mark_disconnect_timeout_loss(room, player_index, nickname):
+    e = room.engine
+    if getattr(e, 'game_over', False):
+        return False
+    if player_index < 0 or player_index >= len(getattr(e, 'players', [])):
+        return False
+    e.pending_response = None
+    e.pending_choice = None
+    room.pending_surrender_request = None
+    if room.mode == '2v2' and hasattr(e, 'team_of'):
+        losing_team = e.team_of(player_index)
+        if losing_team not in (0, 1):
+            return False
+        winning_team = 1 - losing_team
+        for pidx in e.teams[losing_team]:
+            e.players[pidx].health = 0
+        e.game_over = True
+        e.winning_team = winning_team
+        e.winner = winning_team
+        e.phase = 'game_over'
+        e.log_msg(f"{nickname}断线超时，队伍{e.teams[winning_team]}获胜！")
+        return True
+    winner = 1 - player_index
+    e.players[player_index].health = 0
+    e.game_over = True
+    e.winner = winner
+    e.phase = 'game_over'
+    e.log_msg(f"{nickname}断线超时，{e.pn(winner)}获胜！")
+    return True
 
 
 def reconnect_timeout(room_id, old_sid):
@@ -1161,15 +1280,28 @@ def reconnect_timeout(room_id, old_sid):
         room = rooms[room_id]
         if old_sid not in room.disconnected_players:
             return
-        dc_info = room.disconnected_players.pop(old_sid)
-        for other_sid in room.player_sids:
-            if other_sid in players:
-                socketio.emit('opponent_disconnected', {'timeout': True}, room=other_sid)
-                players[other_sid]['room_id'] = None
-                players[other_sid]['status'] = 'lobby'
+        dc_info = room.disconnected_players[old_sid]
+        timed_out_timer = room.reconnect_timers.pop(old_sid, None)
+        if timed_out_timer:
+            timed_out_timer.cancel()
+        ended = _mark_disconnect_timeout_loss(
+            room,
+            int(dc_info.get('player_index', -1)),
+            dc_info.get('nickname', '?'),
+        )
         for t in room.reconnect_timers.values():
             t.cancel()
-        del rooms[room_id]
+        room.reconnect_timers.clear()
+        if hasattr(room, 'both_dc_timer') and room.both_dc_timer:
+            room.both_dc_timer.cancel()
+            room.both_dc_timer = None
+        if ended:
+            for other_sid in room.player_sids:
+                if other_sid in players:
+                    socketio.emit('opponent_disconnected', {'timeout': True, 'game_over': True}, room=other_sid)
+                    socketio.emit('game_phase', {'phase': 'game_over'}, room=other_sid)
+            admin_event('game', f'room {room_id} disconnect timeout loss: {dc_info.get("nickname", "?")}')
+            broadcast_game_state(room)
         for sid, p in players.items():
             if p['status'] == 'reconnecting' and p['nickname'] == dc_info['nickname']:
                 p['status'] = 'lobby'
@@ -1543,15 +1675,16 @@ def on_login(data):
     global _next_room_id
     sid = request.sid
     raw_name = data.get('nickname', '')
-    is_admin_player = is_admin_player_secret(raw_name)
-    if is_admin_player:
-        name = ADMIN_PLAYER_DISPLAY_NAME
+    special_profile = get_special_player_profile(raw_name)
+    is_admin_player = bool(special_profile and special_profile.get('is_admin_player'))
+    if special_profile:
+        name = special_profile['display_name']
     else:
         name = sanitize_nickname(raw_name)
-    if not is_admin_player and is_reserved_admin_nickname(name):
+    if not special_profile and is_reserved_special_nickname(name):
         emit('login_fail', {'reason': ADMIN_NICKNAME_RESERVED_REASON})
         return
-    if not is_admin_player and not validate_nickname(name):
+    if not special_profile and not validate_nickname(name):
         emit('login_fail', {'reason': 'Invalid nickname. Use 1-16 display-width characters; avoid pure numbers, pure symbols, or repeated -/_.'})
         return
     with _lock:
@@ -1562,6 +1695,8 @@ def on_login(data):
         reconnect_room = None
         reconnect_old_sid = None
         for room in rooms.values():
+            if getattr(room.engine, 'game_over', False):
+                continue
             for dc_sid, dc_info in room.disconnected_players.items():
                 if dc_info['nickname'] == name:
                     reconnect_room = room
@@ -1599,6 +1734,8 @@ def on_login(data):
             'mode': preferred_mode,
             'is_admin_player': is_admin_player,
         }
+        if special_profile:
+            players[sid].update(special_public_fields(special_profile))
         admin_event('player', f'{name} joined as {initial_status}', sid=sid, mode=preferred_mode)
     if reconnect_room:
         emit('reconnect_available', {
@@ -1607,7 +1744,9 @@ def on_login(data):
             'opponent_nickname': reconnect_room.engine.player_names[1 - reconnect_room.disconnected_players[reconnect_old_sid]['player_index']] if reconnect_old_sid in reconnect_room.disconnected_players else '?',
         })
     join_room(sid)
-    emit('login_ok', {'sid': sid, 'nickname': name, 'is_admin_player': is_admin_player})
+    login_payload = {'sid': sid, 'nickname': name}
+    login_payload.update(special_public_fields(players.get(sid, {})))
+    emit('login_ok', login_payload)
     print("[server] debug")
     broadcast_lobby()
 
@@ -1829,24 +1968,24 @@ def on_disconnect():
                     'nickname': nickname,
                     'player_index': pidx,
                     'disconnect_time': time.time(),
-                    'is_admin_player': bool(player.get('is_admin_player')),
                 }
+                room.disconnected_players[sid].update(special_public_fields(player))
                 for other_sid in room.player_sids:
                     if other_sid != sid and other_sid in players:
                         socketio.emit('opponent_disconnected', {
-                            'reconnect_timeout': 120,
+                            'reconnect_timeout': RECONNECT_TIMEOUT_SECONDS,
                             'opponent_nickname': nickname,
                         }, room=other_sid)
-                timer = threading.Timer(120.0, reconnect_timeout, args=[room_id, sid])
+                timer = threading.Timer(float(RECONNECT_TIMEOUT_SECONDS), reconnect_timeout, args=[room_id, sid])
                 room.reconnect_timers[sid] = timer
                 timer.daemon = True
                 timer.start()
-                both_dc = all(s in room.disconnected_players for s in room.player_sids[:2])
+                both_dc = all(s in room.disconnected_players for s in room.player_sids)
                 if both_dc:
                     for t in room.reconnect_timers.values():
                         t.cancel()
                     room.reconnect_timers.clear()
-                    room.both_dc_timer = threading.Timer(60.0, both_disconnected_cleanup, args=[room_id])
+                    room.both_dc_timer = threading.Timer(float(BOTH_DISCONNECTED_CLEANUP_SECONDS), both_disconnected_cleanup, args=[room_id])
                     room.both_dc_timer.daemon = True
                     room.both_dc_timer.start()
                 del players[sid]
@@ -1916,7 +2055,7 @@ def on_reconnect_accept(data):
         del room.disconnected_players[old_sid]
         player['room_id'] = room_id
         player['status'] = 'in_game'
-        player['is_admin_player'] = bool(dc_info.get('is_admin_player'))
+        player.update(special_public_fields(dc_info))
         join_room(sid)
         for other_sid in room.player_sids:
             if other_sid != sid and other_sid in players:
@@ -2069,13 +2208,14 @@ def on_decline_invite(data):
 @socketio.on('chat')
 def on_chat(data):
     sid = request.sid
+    data = data or {}
     with _lock:
         if sid not in players:
             return
         player = players[sid]
         room_id = player.get('room_id')
         spectating_room = player.get('spectating_room')
-        text = data.get('text', '')[:200]
+        text = str(data.get('text', ''))[:200]
         if not text.strip():
             return
         nickname = player['nickname']
@@ -2084,24 +2224,60 @@ def on_chat(data):
             'nickname': nickname,
             'text': text,
             'is_spectator': is_spectator,
-            'is_admin_player': bool(player.get('is_admin_player')),
         }
+        chat_data.update(special_public_fields(player))
+
+        def emit_chat_to(recipients, payload):
+            seen = set()
+            for target_sid in recipients:
+                if target_sid in seen:
+                    continue
+                seen.add(target_sid)
+                if target_sid in players:
+                    socketio.emit('chat', payload, room=target_sid)
+
+        def player_name_at(room, pidx):
+            if not isinstance(pidx, int) or pidx < 0 or pidx >= len(room.player_sids):
+                return '?'
+            psid = room.player_sids[pidx]
+            if psid in players:
+                return players[psid]['nickname']
+            return room.disconnected_players.get(psid, {}).get('nickname', '?')
+
         if room_id is not None and room_id in rooms:
             room = rooms[room_id]
-            for other_sid in room.player_sids:
-                if other_sid in players:
-                    socketio.emit('chat', chat_data, room=other_sid)
-            for spid in room.spectators:
-                if spid in players:
-                    socketio.emit('chat', chat_data, room=spid)
+            pidx = room.player_index(sid)
+            recipients = list(room.player_sids) + list(room.spectators)
+            if room.mode == '2v2' and pidx >= 0:
+                channel = str(data.get('channel') or 'public')
+                if channel not in ('public', 'team', 'enemy', 'private'):
+                    channel = 'public'
+                chat_data['chat_channel'] = channel
+                teammate_id = room.engine.get_teammate(pidx) if hasattr(room.engine, 'get_teammate') else -1
+                enemy_ids = room.engine.get_all_enemies(pidx) if hasattr(room.engine, 'get_all_enemies') else []
+                if channel == 'team':
+                    recipients = [sid]
+                    if 0 <= teammate_id < len(room.player_sids):
+                        recipients.append(room.player_sids[teammate_id])
+                elif channel == 'enemy':
+                    recipients = [sid] + [room.player_sids[eid] for eid in enemy_ids if 0 <= eid < len(room.player_sids)]
+                elif channel == 'private':
+                    try:
+                        target_pidx = int(data.get('target_player_id'))
+                    except (TypeError, ValueError):
+                        target_pidx = -1
+                    if target_pidx not in enemy_ids or target_pidx < 0 or target_pidx >= len(room.player_sids):
+                        emit('server_error', {'message': 'Invalid chat target'})
+                        return
+                    chat_data['chat_target_player_id'] = target_pidx
+                    chat_data['chat_target_name'] = player_name_at(room, target_pidx)
+                    recipients = [sid, room.player_sids[target_pidx]]
+            emit_chat_to(recipients, chat_data)
         elif spectating_room is not None and spectating_room in rooms:
             room = rooms[spectating_room]
-            for other_sid in room.player_sids:
-                if other_sid in players:
-                    socketio.emit('chat', chat_data, room=other_sid)
-            for spid in room.spectators:
-                if spid in players:
-                    socketio.emit('chat', chat_data, room=spid)
+            if room.mode == '2v2':
+                chat_data['chat_channel'] = 'public'
+            emit_chat_to(list(room.player_sids) + list(room.spectators), chat_data)
         else:
             for other_sid, other_p in players.items():
                 if other_p['status'] == 'lobby':
@@ -2456,6 +2632,9 @@ def on_play_card(data):
                         'from_player': pidx,
                         'from_name': players[sid]['nickname'],
                     }, room=target_sid)
+                else:
+                    room.engine.pending_ally_request = None
+                    emit('server_error', {'message': 'Teammate is not online'})
         elif result.get('needs_response'):
             broadcast_game_state(room)
             played_card = result['card']
@@ -2569,6 +2748,8 @@ def on_ally_consent_response(data):
                 'choice_params': result.get('choice_params', {}),
                 'target_player_id': result.get('target_player_id'),
             }, room=requester_sid)
+        elif not result.get('success'):
+            emit('server_error', {'message': result.get('error', 'Operation failed')})
         else:
             broadcast_game_state(room)
 
@@ -2620,7 +2801,21 @@ def on_use_trigger(data):
             result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
         else:
             result = engine.use_trigger(pidx, equipment_instance_id)
-        if result.get('success'):
+        if result.get('needs_ally_consent'):
+            broadcast_game_state(room)
+            target_pidx = result.get('target_player_id')
+            if isinstance(target_pidx, int) and 0 <= target_pidx < len(room.player_sids):
+                target_sid = room.player_sids[target_pidx]
+                if target_sid in players:
+                    socketio.emit('ally_consent_request', {
+                        'card': result.get('card'),
+                        'from_player': pidx,
+                        'from_name': players[sid]['nickname'],
+                    }, room=target_sid)
+                else:
+                    room.engine.pending_ally_request = None
+                    emit('server_error', {'message': 'Teammate is not online'})
+        elif result.get('success'):
             broadcast_game_state(room)
         else:
             emit('server_error', {'message': result.get('error', 'Operation failed')})
@@ -2725,6 +2920,33 @@ def on_surrender(data):
                 emit('server_error', {'message': '你不是该对局的玩家'})
                 return
             engine = room.engine
+            if room.mode == '2v2':
+                teammate_id = engine.get_teammate(pidx) if hasattr(engine, 'get_teammate') else -1
+                if teammate_id < 0 or teammate_id >= len(room.player_sids):
+                    emit('server_error', {'message': 'Surrender requires a teammate'})
+                    return
+                teammate_sid = room.player_sids[teammate_id]
+                if teammate_sid not in players or teammate_sid in room.disconnected_players:
+                    emit('server_error', {'message': 'Teammate is not online'})
+                    return
+                now = time.time()
+                pending = getattr(room, 'pending_surrender_request', None)
+                if pending:
+                    if now - float(pending.get('time', 0)) < 15:
+                        emit('server_error', {'message': 'A surrender request is already pending'})
+                        return
+                    room.pending_surrender_request = None
+                room.pending_surrender_request = {
+                    'player_id': pidx,
+                    'target_player_id': teammate_id,
+                    'time': now,
+                }
+                socketio.emit('surrender_consent_waiting', {}, room=sid)
+                socketio.emit('surrender_consent_request', {
+                    'from_player': pidx,
+                    'from_name': player.get('nickname', f'Player {pidx + 1}'),
+                }, room=teammate_sid)
+                return
             result = engine.surrender(pidx)
             if result.get('success'):
                 broadcast_game_state(room)
@@ -2738,6 +2960,65 @@ def on_surrender(data):
         traceback.print_exc()
         print("[server] debug")
         emit('server_error', {'message': '投降失败，请稍后重试'})
+
+
+@socketio.on('surrender_consent_response')
+def on_surrender_consent_response(data):
+    sid = request.sid
+    try:
+        with _lock:
+            if sid not in players:
+                emit('server_error', {'message': 'Player is not in a match'})
+                return
+            player = players[sid]
+            room_id = player.get('room_id')
+            if room_id is None or room_id not in rooms:
+                emit('server_error', {'message': 'Match does not exist'})
+                return
+            room = rooms[room_id]
+            if room.mode != '2v2':
+                emit('server_error', {'message': 'Surrender consent is only used in 2v2'})
+                return
+            pidx = room.player_index(sid)
+            if pidx < 0:
+                emit('server_error', {'message': 'You are not a player in this match'})
+                return
+            pending = getattr(room, 'pending_surrender_request', None)
+            if not pending or pending.get('target_player_id') != pidx:
+                emit('server_error', {'message': 'No pending surrender request'})
+                return
+            if time.time() - float(pending.get('time', 0)) > 15:
+                room.pending_surrender_request = None
+                emit('server_error', {'message': 'No pending surrender request'})
+                return
+            room.pending_surrender_request = None
+            requester_id = int(pending.get('player_id', -1))
+            requester_sid = room.player_sids[requester_id] if 0 <= requester_id < len(room.player_sids) else None
+            accepted = bool((data or {}).get('accepted'))
+            if not accepted:
+                if requester_sid and requester_sid in players:
+                    socketio.emit('surrender_consent_result', {'accepted': False}, room=requester_sid)
+                emit('surrender_consent_result', {'accepted': False})
+                return
+            result = room.engine.surrender(requester_id)
+            if result.get('success'):
+                if requester_sid and requester_sid in players:
+                    socketio.emit('surrender_consent_result', {'accepted': True}, room=requester_sid)
+                emit('surrender_consent_result', {'accepted': True})
+                broadcast_game_state(room)
+                for psid in room.player_sids:
+                    if psid in players:
+                        socketio.emit('game_phase', {'phase': 'game_over'}, room=psid)
+            else:
+                message = result.get('error', 'Surrender failed')
+                if requester_sid and requester_sid in players:
+                    socketio.emit('server_error', {'message': message}, room=requester_sid)
+                emit('server_error', {'message': message})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print("[server] debug")
+        emit('server_error', {'message': 'Surrender failed'})
 
 
 @socketio.on('rematch')
@@ -2762,6 +3043,7 @@ def on_rematch(data=None):
             if len(room._rematch_votes) == len(room.player_sids):
                 print("[server] debug")
                 room._rematch_votes = set()
+                room.pending_surrender_request = None
                 if room.mode == '2v2':
                     room.engine = GameEngine2v2()
                 elif room.mode == 'urf':
@@ -2878,6 +3160,7 @@ def _send_spectate_state_internal(spid, room):
     for i, psid in enumerate(room.player_sids):
         state[f'player{i + 1}_name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', '?')
         state[f'player{i + 1}_is_admin_player'] = player_is_admin(psid, room)
+        state[f'player{i + 1}_special'] = player_special_fields(psid, room)
     socketio.emit('state_update', state, room=spid)
 
 

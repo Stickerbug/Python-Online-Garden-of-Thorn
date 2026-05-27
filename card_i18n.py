@@ -171,7 +171,7 @@ CARD_I18N = {
     'GoldenLeaf': {
         'name': _t('黄金叶', 'Golden Leaf', 'Feuille d’or', 'Folha Dourada', 'Золотой лист', '黄金の葉'),
         'desc': _t('这闪亮的叶子能为你带来额外的抽牌机会。', 'This shining leaf brings you extra draw opportunities.', 'Cette feuille brillante vous offre des occasions de pioche supplémentaires.', 'Esta folha brilhante traz compras extras.', 'Этот сияющий лист даёт дополнительные возможности добора.', 'この輝く葉は追加のドロー機会をもたらす。'),
-        'effect': _t('自己回合开始时多抽一张牌', 'Draw one extra card at your turn start', 'Piochez une carte supplémentaire au début de votre tour', 'Compre uma carta extra no início do seu turno', 'В начале вашего хода доберите одну дополнительную карту', '自分のターン開始時に追加で1枚引く'),
+        'effect': _t('手牌爆牌上限+1；自己回合开始时多抽一张牌', 'Hand overflow limit +1; draw one extra card at your turn start', 'Limite de main +1 ; piochez une carte supplémentaire au début de votre tour', 'Limite de mão +1; compre uma carta extra no início do seu turno', 'Лимит переполнения руки +1; в начале вашего хода доберите одну карту', '手札上限+1。自分のターン開始時に追加で1枚引く'),
     },
     'Chromosome': {
         'name': _t('染色体', 'Chromosome', 'Chromosome', 'Cromossomo', 'Хромосома', '染色体'),

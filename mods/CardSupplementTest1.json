@@ -757,7 +757,8 @@
       "description": "我们在牌里安装了铁片，所以你可以用磁铁吸引它们。",
       "effect_text": "展示目标所有手牌，从目标手牌中选一张加入自己手牌（不可取消）",
       "flags": [
-        "uncancellable"
+        "uncancellable",
+        "infinite_exclude"
       ],
       "effects": [
         {

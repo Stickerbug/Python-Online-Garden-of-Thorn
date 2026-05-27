@@ -1,0 +1,2181 @@
+/* Local single-player runtime for solo training and tutorial.
+ * This worker intentionally mirrors the server event shape so the existing UI
+ * can render local games without branching through the whole frontend.
+ */
+
+const HAND_LIMIT = 7;
+const DRAW_PER_TURN = 3;
+const ELIXIR_RECOVERY = 5;
+const BASE_MAX_HEALTH = 100;
+const BASE_MAX_ELIXIR = 10;
+const BASE_MAX_MAGIC = 10;
+const INITIAL_HEALTH = 100;
+const INITIAL_ELIXIR = 5;
+const INITIAL_MAGIC = 0;
+const INITIAL_HAND_SIZE = 5;
+const FIRST_PLAYER_HAND_SIZE = 4;
+const DECK_SIZE = 15;
+
+const TUTORIAL_DECKS = [
+    [
+        'Basic', 'Rose', 'Leaf', 'Coffee', 'Fission',
+        'Triangle', 'Bubble', 'Fusion', 'Basic', 'Basic',
+        'Bone', 'Battery', 'Stinger', 'Leaf', 'Bubble',
+    ],
+    [
+        'Basic', 'Rose', 'Coffee', 'Battery', 'Rose',
+        'Basic', 'Bone', 'Leaf', 'Bubble', 'Basic',
+        'Stinger', 'Battery', 'Bubble', 'Triangle', 'Fire',
+    ],
+];
+
+const EVENT_EFFECT_TYPES = new Set([
+    'on_owner_turn_start',
+    'on_enemy_turn_start',
+    'on_any_turn_start',
+    'on_damage_taken',
+    'on_equipment_trigger',
+    'on_equipment_destroy',
+    'on_hand_owner_turn_start',
+    'on_discard_owner_turn_start',
+    'on_deck_owner_turn_start',
+    'on_fatal_set_health_exile',
+    'aura_enemy_elixir_recovery',
+]);
+
+const SCRIPT_ENTRY_ALIASES = {
+    play: ['onPlay', 'play', 'on_play'],
+    response: ['onResponse', 'response', 'on_response'],
+    owner_turn_start: ['onOwnerTurnStart', 'owner_turn_start', 'on_owner_turn_start'],
+    enemy_turn_start: ['onEnemyTurnStart', 'enemy_turn_start', 'on_enemy_turn_start'],
+    any_turn_start: ['onAnyTurnStart', 'any_turn_start', 'on_any_turn_start'],
+    damage_taken: ['onDamageTaken', 'damage_taken', 'on_damage_taken'],
+    equipment_trigger: ['onEquipmentTrigger', 'equipment_trigger', 'on_equipment_trigger'],
+    equipment_destroy: ['onEquipmentDestroy', 'equipment_destroy', 'on_equipment_destroy', 'onDestroy'],
+    hand_owner_turn_start: ['onHandOwnerTurnStart', 'hand_owner_turn_start', 'on_hand_owner_turn_start'],
+    discard_owner_turn_start: ['onDiscardOwnerTurnStart', 'discard_owner_turn_start', 'on_discard_owner_turn_start'],
+    deck_owner_turn_start: ['onDeckOwnerTurnStart', 'deck_owner_turn_start', 'on_deck_owner_turn_start'],
+};
+
+let cardDefs = {};
+let openingEventMagicPool = [];
+let engine = null;
+let nextInstanceId = 900000;
+
+function emit(type, data = {}) {
+    postMessage({ type, data });
+}
+
+function fallback(reason) {
+    emit('fallback_required', { reason: String(reason || 'local runtime unsupported') });
+}
+
+function randintId() {
+    nextInstanceId += 1;
+    return nextInstanceId;
+}
+
+function deepClone(value) {
+    return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function shuffle(list) {
+    for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+    }
+}
+
+function toInt(value, fallbackValue = 0) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallbackValue;
+    return Math.trunc(n);
+}
+
+function cardDef(defId) {
+    return cardDefs[defId] || null;
+}
+
+function cardName(defId) {
+    const def = cardDef(defId);
+    return def ? (def.name_cn || def.name_en || def.id) : defId;
+}
+
+function scriptEffectsFrom(script) {
+    if (Array.isArray(script)) return script;
+    if (script && Array.isArray(script.effects)) return script.effects;
+    return [];
+}
+
+function getScriptEffects(def, entry) {
+    const scripts = (def && def.scripts) || {};
+    const aliases = SCRIPT_ENTRY_ALIASES[entry] || [entry];
+    for (const key of aliases) {
+        if (Object.prototype.hasOwnProperty.call(scripts, key)) {
+            return scriptEffectsFrom(scripts[key]);
+        }
+    }
+    return [];
+}
+
+function hasScriptEntry(def, entry) {
+    return getScriptEffects(def, entry).length > 0;
+}
+
+function playEffectsFor(card) {
+    const def = card.def();
+    const scriptEffects = getScriptEffects(def, 'play');
+    return scriptEffects.length ? scriptEffects : ((def && def.effects) || []);
+}
+
+class LocalCard {
+    constructor(entry) {
+        const source = typeof entry === 'string' ? { def_id: entry } : (entry || {});
+        this.def_id = source.def_id || source.id || '';
+        this.instance_id = source.instance_id || randintId();
+        this.cost_e_override = source.cost_e_override ?? null;
+        this.cost_m_override = source.cost_m_override ?? null;
+        this.fission_count = toInt(source.fission_count, 0);
+        this.fusion_multiplier = Number(source.fusion_multiplier ?? 1) || 1;
+        this.fission_level = Math.max(1, toInt(source.fission_level ?? (this.fission_count + 1), 1));
+        this.fusion_level = Math.max(1, toInt(source.fusion_level ?? this.fusion_multiplier, 1));
+        this.mimic_discount = toInt(source.mimic_discount, 0);
+        this.fission_hit = toInt(source.fission_hit, 0);
+        this.instance_flags = new Set(source.instance_flags || []);
+        this.disabled_flags = new Set(source.disabled_flags || []);
+        this.bonus_damage = toInt(source.bonus_damage, 0);
+        this.return_to_hand_turns = toInt(source.return_to_hand_turns, 0);
+        this.held_turns = toInt(source.held_turns, 0);
+        this.durability = toInt(source.durability, 0);
+        this._placed_as_equipment = false;
+        this._placed_as_equipment_owner = null;
+    }
+
+    def() {
+        return cardDef(this.def_id) || {};
+    }
+
+    get card_type() {
+        return this.def().card_type || '';
+    }
+
+    get cost_e() {
+        const base = this.cost_e_override != null ? this.cost_e_override : toInt(this.def().cost_e, 0);
+        return Math.max(0, base - this.mimic_discount);
+    }
+
+    get cost_m() {
+        return this.cost_m_override != null ? this.cost_m_override : toInt(this.def().cost_m, 0);
+    }
+
+    get flags() {
+        const flags = new Set(this.def().flags || []);
+        this.instance_flags.forEach(flag => flags.add(flag));
+        this.disabled_flags.forEach(flag => flags.delete(flag));
+        return flags;
+    }
+
+    copy() {
+        return new LocalCard(this.toDict());
+    }
+
+    toDict() {
+        return {
+            def_id: this.def_id,
+            instance_id: this.instance_id,
+            cost_e_override: this.cost_e_override,
+            cost_m_override: this.cost_m_override,
+            fission_count: this.fission_count,
+            fusion_multiplier: this.fusion_multiplier,
+            fission_level: this.fission_level,
+            fusion_level: this.fusion_level,
+            mimic_discount: this.mimic_discount,
+            instance_flags: Array.from(this.instance_flags),
+            disabled_flags: Array.from(this.disabled_flags),
+            bonus_damage: this.bonus_damage,
+            return_to_hand_turns: this.return_to_hand_turns,
+            held_turns: this.held_turns,
+            durability: this.durability,
+        };
+    }
+}
+
+class LocalEquipment {
+    constructor(card, owner) {
+        this.card_instance = card;
+        this.owner = owner;
+        this.effect_target = owner;
+        this.turns_equipped = 0;
+        this.corruption_active = false;
+    }
+
+    get def_id() {
+        return this.card_instance.def_id;
+    }
+
+    get card_def() {
+        return this.card_instance.def();
+    }
+
+    toDict() {
+        return {
+            card_instance: this.card_instance.toDict(),
+            owner: this.owner,
+            effect_target: this.effect_target,
+            turns_equipped: this.turns_equipped,
+            corruption_active: this.corruption_active,
+        };
+    }
+}
+
+class LocalPlayer {
+    constructor(playerId) {
+        this.player_id = playerId;
+        this.health = INITIAL_HEALTH;
+        this.max_health = BASE_MAX_HEALTH;
+        this.base_max_health = BASE_MAX_HEALTH;
+        this.elixir = INITIAL_ELIXIR;
+        this.max_elixir = BASE_MAX_ELIXIR;
+        this.magic = INITIAL_MAGIC;
+        this.max_magic = BASE_MAX_MAGIC;
+        this.armor = 0;
+        this.poison = 0;
+        this.fire = 0;
+        this.vulnerable = 0;
+        this.toxic = 0;
+        this.triangle_stacks = 0;
+        this.dodge = 0;
+        this.nazar_active = false;
+        this.nazar_big_hits = 0;
+        this.equipment_protection = 0;
+        this.magic_battery_m_this_turn = 0;
+        this.coffee_first_use = true;
+        this.invincible = false;
+        this.skip_turn = false;
+        this.damage_multiplier = 1.0;
+        this.bandage_active = false;
+        this.bandage_death_pending = false;
+        this.attack_blocked = 0;
+        this.untargetable = false;
+        this.sponge_active = false;
+        this.shovel_active = false;
+        this.attack_only = 0;
+        this.enemy_draw_reduction = 0;
+        this.enemy_e_reduction = 0;
+        this.extra_hand_limit_bonus = 0;
+        this.negate_next_skill = false;
+        this.is_first_player = false;
+        this.hand = [];
+        this.deck = [];
+        this.discard = [];
+        this.exile = [];
+        this.equipment = [];
+        this.cards_played_this_turn = {};
+        this.custom_vars = {
+            '咖啡首次使用': 1,
+            '三角形层数': 0,
+            '魔法电池本回合回魔': 0,
+        };
+    }
+
+    findHandCard(instanceId) {
+        return this.hand.find(card => card.instance_id === Number(instanceId)) || null;
+    }
+
+    removeHandCard(instanceId) {
+        const idx = this.hand.findIndex(card => card.instance_id === Number(instanceId));
+        return idx >= 0 ? this.hand.splice(idx, 1)[0] : null;
+    }
+
+    findEquipment(instanceId) {
+        return this.equipment.find(eq => eq.card_instance.instance_id === Number(instanceId)) || null;
+    }
+
+    handLimit() {
+        const ownGoldenLeaf = this.equipment.filter(eq =>
+            eq && eq.def_id === 'GoldenLeaf' && (eq.effect_target ?? this.player_id) === this.player_id
+        ).length;
+        return HAND_LIMIT + ownGoldenLeaf + Math.max(0, Number(this.extra_hand_limit_bonus || 0));
+    }
+
+    canAddToHand() {
+        return this.hand.length < this.handLimit();
+    }
+
+    handSpace() {
+        return Math.max(0, this.handLimit() - this.hand.length);
+    }
+
+    drawCards(count) {
+        const drawn = [];
+        const sproutQueue = [];
+        for (let i = 0; i < count; i++) {
+            if (!this.deck.length) {
+                if (!this.discard.length) break;
+                this.deck = this.discard.splice(0);
+                shuffle(this.deck);
+            }
+            const card = this.deck.shift();
+            if (!card) break;
+            if (!this.canAddToHand()) {
+                const flags = card.flags;
+                const nonAttract = this.hand.filter(c => !c.flags.has('attract'));
+                if (flags.has('attract') && nonAttract.length) {
+                    const discardCard = nonAttract[0];
+                    this.hand.splice(this.hand.indexOf(discardCard), 1);
+                    this.discard.push(discardCard);
+                    this.hand.push(card);
+                    drawn.push(card);
+                } else {
+                    this.discard.push(card);
+                }
+            } else {
+                this.hand.push(card);
+                drawn.push(card);
+            }
+            if (card.flags.has('sprout') && this.hand.includes(card)) {
+                sproutQueue.push(card);
+            }
+        }
+        while (sproutQueue.length) {
+            sproutQueue.shift();
+            if (!this.deck.length) {
+                if (!this.discard.length) break;
+                this.deck = this.discard.splice(0);
+                shuffle(this.deck);
+            }
+            const extra = this.deck.shift();
+            if (!extra) break;
+            if (this.canAddToHand()) {
+                this.hand.push(extra);
+                drawn.push(extra);
+                if (extra.flags.has('sprout')) sproutQueue.push(extra);
+            } else {
+                this.discard.push(extra);
+            }
+        }
+        return drawn;
+    }
+
+    heal(amount) {
+        this.health = Math.min(this.health + amount, this.base_max_health);
+    }
+
+    gainElixir(amount) {
+        this.elixir = Math.min(this.elixir + amount, this.max_elixir);
+    }
+
+    gainMagic(amount) {
+        this.magic = Math.min(this.magic + amount, this.max_magic);
+    }
+
+    toDict(includePrivate = true) {
+        const data = {
+            player_id: this.player_id,
+            health: this.health,
+            max_health: this.max_health,
+            base_max_health: this.base_max_health,
+            elixir: this.elixir,
+            max_elixir: this.max_elixir,
+            magic: this.magic,
+            max_magic: this.max_magic,
+            armor: this.armor,
+            poison: this.poison,
+            fire: this.fire,
+            vulnerable: this.vulnerable,
+            toxic: this.toxic,
+            triangle_stacks: this.triangle_stacks,
+            dodge: this.dodge,
+            nazar_active: this.nazar_active,
+            nazar_big_hits: this.nazar_big_hits,
+            equipment_protection: this.equipment_protection,
+            invincible: this.invincible,
+            skip_turn: this.skip_turn,
+            damage_multiplier: this.damage_multiplier,
+            bandage_active: this.bandage_active,
+            bandage_death_pending: this.bandage_death_pending,
+            attack_blocked: this.attack_blocked,
+            untargetable: this.untargetable,
+            sponge_active: this.sponge_active,
+            shovel_active: this.shovel_active,
+            attack_only: this.attack_only,
+            enemy_draw_reduction: this.enemy_draw_reduction,
+            enemy_e_reduction: this.enemy_e_reduction,
+            extra_hand_limit_bonus: this.extra_hand_limit_bonus,
+            negate_next_skill: this.negate_next_skill,
+            is_first_player: this.is_first_player,
+            coffee_first_use: this.coffee_first_use,
+            equipment: this.equipment.map(eq => eq.toDict()),
+            deck_count: this.deck.length,
+            discard_count: this.discard.length,
+            exile_count: this.exile.length,
+            hand_count: this.hand.length,
+            hand_limit: this.handLimit(),
+        };
+        if (includePrivate) {
+            data.hand = this.hand.map(card => card.toDict());
+            data.deck = this.deck.map(card => card.toDict());
+            data.discard = this.discard.map(card => card.toDict());
+            data.exile = this.exile.map(card => card.toDict());
+            data.cards_played_this_turn = { ...this.cards_played_this_turn };
+            data.custom_vars = { ...this.custom_vars };
+        }
+        return data;
+    }
+}
+
+class LocalSoloEngine {
+    constructor(payload, options = {}) {
+        this.players = [new LocalPlayer(0), new LocalPlayer(1)];
+        this.player_names = options.playerNames || payload.playerNames || ['Player A', 'Player B'];
+        this.phase = 'playing';
+        this.first_player = [payload.event0, payload.event1].filter(id => id === 7).length === 1
+            ? (payload.event0 === 7 ? 0 : 1)
+            : 0;
+        this.current_player = this.first_player;
+        this.round_num = 1;
+        this.game_over = false;
+        this.winner = null;
+        this.log = [];
+        this.pending_response = null;
+        this.pending_choice = null;
+        this.opening_event_picks = [payload.event0 ?? null, payload.event1 ?? null];
+        this.opening_event_sub_choices = [payload.sub0 || null, payload.sub1 || null];
+        this._antenna_reveal = [null, null];
+        this._last_damage_value = [0, 0];
+        this._incoming_damage_hint = [0, 0];
+        this._game_over_defer_depth = 0;
+        this.halve_next_attack = false;
+        this.negated_card = false;
+        this._last_created_card_instance_id = null;
+        this._active_choice = null;
+        this._active_effect_context = {};
+        this.tutorial = !!options.tutorial;
+
+        this.resetPlayer(0, payload.deck0 || [], this.first_player === 0);
+        this.resetPlayer(1, payload.deck1 || [], this.first_player === 1);
+        for (let i = 0; i < 2; i++) {
+            if (this.opening_event_picks[i] != null) this.applyOpeningEvent(i);
+        }
+        for (let i = 0; i < 2; i++) {
+            const handSize = i === this.first_player ? FIRST_PLAYER_HAND_SIZE : INITIAL_HAND_SIZE;
+            if (i === this.first_player && this.opening_event_picks[i] === 7) {
+                this.players[i].elixir += 3;
+            }
+            this.players[i].drawCards(handSize);
+        }
+        this.logMsg(`${options.startLabel || '单人训练场开始'}！${this.pn(this.first_player)}先手。`);
+        this.logMsg(`=== 第${this.round_num}回合 ===`);
+        this.startPlayerTurn(this.first_player);
+    }
+
+    resetPlayer(playerId, deckEntries, isFirst) {
+        const ps = this.players[playerId];
+        ps.health = INITIAL_HEALTH;
+        ps.max_health = BASE_MAX_HEALTH;
+        ps.base_max_health = BASE_MAX_HEALTH;
+        ps.elixir = INITIAL_ELIXIR;
+        ps.magic = INITIAL_MAGIC;
+        ps.is_first_player = isFirst;
+        ps.hand = [];
+        ps.deck = [];
+        ps.discard = [];
+        ps.exile = [];
+        ps.equipment = [];
+        ps.cards_played_this_turn = {};
+        ps.custom_vars = { '咖啡首次使用': 1, '三角形层数': 0, '魔法电池本回合回魔': 0 };
+        deckEntries.forEach(entry => {
+            const defId = typeof entry === 'string' ? entry : entry && entry.def_id;
+            if (defId && cardDef(defId)) ps.deck.push(new LocalCard(entry));
+        });
+    }
+
+    pn(playerId) {
+        return this.player_names[playerId] || `玩家${playerId + 1}`;
+    }
+
+    logMsg(message) {
+        this.log.push(String(message));
+    }
+
+    publicState(perspective = null) {
+        const forPlayer = perspective == null
+            ? (this.tutorial ? 0 : (this.game_over ? 0 : this.current_player))
+            : perspective;
+        const opponent = 1 - forPlayer;
+        const oppData = this.players[opponent].toDict(false);
+        if (this.pending_choice && this.pending_choice.player_id === forPlayer) {
+            const choiceType = this.pending_choice.choice_type || '';
+            const targetId = this.pending_choice.target_player_id;
+            const params = this.pending_choice.choice_params || {};
+            if (choiceType === 'choose_from_enemy_hand') {
+                oppData.hand = this.players[opponent].hand.map(card => card.toDict());
+            }
+            if (targetId === opponent) {
+                if (choiceType === 'choose_card_from_hand' || params.zone === 'hand') {
+                    oppData.hand = this.players[opponent].hand.map(card => card.toDict());
+                }
+                if (choiceType === 'choose_from_deck' || params.zone === 'deck') {
+                    oppData.deck = this.players[opponent].deck.map(card => card.toDict());
+                }
+                if (choiceType === 'choose_from_discard' || params.zone === 'discard') {
+                    oppData.discard = this.players[opponent].discard.map(card => card.toDict());
+                }
+                if (choiceType === 'choose_equipment' || params.zone === 'equipment') {
+                    oppData.equipment = this.players[opponent].equipment.map(eq => eq.toDict());
+                }
+            }
+        }
+        if (this._antenna_reveal[forPlayer]) {
+            oppData.revealed_hand = this.players[opponent].hand.map(card => card.toDict());
+            oppData.hand = this.players[opponent].hand.map(card => card.toDict());
+        }
+        const state = {
+            phase: this.phase,
+            current_player: this.current_player,
+            round_num: this.round_num,
+            game_over: this.game_over,
+            winner: this.winner,
+            you: this.players[forPlayer].toDict(true),
+            opponent: oppData,
+            log: this.log.slice(),
+            log_start: 0,
+            log_total: this.log.length,
+            pending_response: this.pending_response,
+            pending_choice: this.pending_choice,
+            opening_event_picks: this.opening_event_picks,
+            antenna_reveal: this._antenna_reveal[forPlayer],
+            your_id: forPlayer,
+            your_name: this.tutorial ? '你' : (forPlayer === 0 ? 'Player A' : 'Player B'),
+            opponent_name: this.tutorial ? '练习对手' : (forPlayer === 0 ? 'Player B' : 'Player A'),
+            solo: true,
+        };
+        if (this.tutorial) state.tutorial = true;
+        return state;
+    }
+
+    sendState(perspective = null) {
+        emit('solo_state', this.publicState(perspective));
+    }
+
+    applyOpeningEvent(playerId) {
+        const eventId = this.opening_event_picks[playerId];
+        const sub = this.opening_event_sub_choices[playerId] || {};
+        const ps = this.players[playerId];
+        const opp = this.players[1 - playerId];
+        if (eventId === 1) {
+            ps.max_health += 20;
+            ps.base_max_health += 20;
+            ps.health += 20;
+            this.logMsg(`${this.pn(playerId)}【生命强化】：最大生命值+20`);
+        } else if (eventId === 2) {
+            ps.gainMagic(5);
+            (sub.conversions || []).slice(0, 3).forEach(conv => {
+                const sourceDef = conv.source_def_id;
+                const magicDef = conv.magic_def_id;
+                const idx = ps.deck.findIndex(card => card.def_id === sourceDef);
+                if (idx >= 0 && cardDef(magicDef)) {
+                    ps.deck[idx] = new LocalCard(magicDef);
+                    this.logMsg(`${this.pn(playerId)}【魔力转化】：${cardName(sourceDef)}变为${cardName(magicDef)}`);
+                }
+            });
+        } else if (eventId === 3) {
+            let converted = 0;
+            (sub.convert_def_ids || []).slice(0, 5).forEach(sourceDef => {
+                const idx = ps.deck.findIndex(card => card.def_id === sourceDef);
+                if (idx >= 0 && cardDef('Light')) {
+                    const light = new LocalCard('Light');
+                    light.instance_flags.add('sprout');
+                    light.instance_flags.add('symbiosis');
+                    ps.deck[idx] = light;
+                    converted += 1;
+                }
+            });
+            this.logMsg(`${this.pn(playerId)}【光之洗礼】：${converted}张牌变为Light(萌芽+共生)`);
+        } else if (eventId === 4) {
+            opp.fire += 2;
+            this.logMsg(`${this.pn(playerId)}【烈焰预兆】：敌方+2灼烧`);
+        } else if (eventId === 5) {
+            this.logMsg(`${this.pn(playerId)}【命运抽签】：前二回合抽牌至手牌满`);
+        } else if (eventId === 6) {
+            this.logMsg(`${this.pn(playerId)}【能量涌动】：前三回合额外回复2E`);
+        } else if (eventId === 7) {
+            this.logMsg(`${this.pn(playerId)}【先手压制】：先手回复3E并抽4张牌`);
+        } else if (eventId === 8) {
+            ps.max_health -= 20;
+            ps.base_max_health -= 20;
+            ps.health -= 20;
+            const targetDef = sub.yggdrasil_convert_def_id;
+            let idx = targetDef ? ps.deck.findIndex(card => card.def_id === targetDef) : -1;
+            if (idx < 0) idx = ps.deck.findIndex(card => card.def_id !== 'Yggdrasil');
+            if (idx >= 0 && cardDef('Yggdrasil')) {
+                const oldDef = ps.deck[idx].def_id;
+                ps.deck[idx] = new LocalCard('Yggdrasil');
+                this.logMsg(`${this.pn(playerId)}【绝境求生】：最大生命值-20，${cardName(oldDef)}变为Yggdrasil`);
+            }
+        }
+    }
+
+    startDrawPhase() {
+        this.phase = 'draw';
+        this.players.forEach(ps => {
+            ps.cards_played_this_turn = {};
+            ps.magic_battery_m_this_turn = 0;
+            ps.coffee_first_use = true;
+            ps.custom_vars['咖啡首次使用'] = 1;
+            ps.custom_vars['魔法电池本回合回魔'] = 0;
+        });
+        this.logMsg(`=== 第${this.round_num}回合 ===`);
+        this.startPlayerTurn(this.first_player);
+    }
+
+    startPlayerTurn(playerId) {
+        this.current_player = playerId;
+        this.applyTurnStartEffects(playerId);
+        if (this.game_over) return;
+        const ps = this.players[playerId];
+        if (ps.skip_turn) {
+            ps.skip_turn = false;
+            this.logMsg(`${this.pn(playerId)}被眩晕，跳过本回合！`);
+            this.endPlayerTurn(playerId);
+            return;
+        }
+        if (ps.health <= 0) {
+            this.checkYggdrasil(playerId);
+            if (ps.health <= 0) {
+                this.checkGameOver();
+                return;
+            }
+        }
+        this.phase = 'action';
+    }
+
+    runZoneOwnerTurnStartEvents(playerId) {
+        const ps = this.players[playerId];
+        [
+            ['hand', 'hand_owner_turn_start'],
+            ['discard', 'discard_owner_turn_start'],
+            ['deck', 'deck_owner_turn_start'],
+        ].forEach(([zoneName, eventName]) => {
+            [...ps[zoneName]].forEach(card => {
+                if (ps[zoneName].includes(card) && this.hasCardEvent(card.def(), eventName)) {
+                    this.runCardEvent(playerId, card, eventName, null, {
+                        event: eventName,
+                        source_id: playerId,
+                        target_id: playerId,
+                        zone: zoneName,
+                    });
+                }
+            });
+        });
+    }
+
+    applyTurnStartEffects(playerId) {
+        const ps = this.players[playerId];
+        const oppId = 1 - playerId;
+        const opp = this.players[oppId];
+        this._antenna_reveal[playerId] = null;
+        this.runZoneOwnerTurnStartEvents(playerId);
+        if (ps.shovel_active) {
+            ps.shovel_active = false;
+            ps.untargetable = false;
+            this.logMsg(`${this.pn(playerId)}的铲子效果结束`);
+        }
+        if (this.round_num > 1) {
+            const drawCount = Math.max(0, DRAW_PER_TURN - ps.enemy_draw_reduction);
+            ps.drawCards(drawCount);
+            this.logMsg(`${this.pn(playerId)}抽${drawCount}张牌`);
+        }
+        this.players.forEach((owner, ownerId) => {
+            [...owner.equipment].forEach(eq => {
+                if (this.hasCardEvent(eq.card_def, 'any_turn_start')) {
+                    this.runCardEvent(ownerId, eq.card_instance, 'any_turn_start', null, {
+                        event: 'any_turn_start',
+                        source_id: ownerId,
+                        target_id: playerId,
+                    });
+                }
+            });
+        });
+        [...opp.equipment].forEach(eq => {
+            if (this.hasCardEvent(eq.card_def, 'enemy_turn_start')) {
+                this.runCardEvent(oppId, eq.card_instance, 'enemy_turn_start', null, {
+                    event: 'enemy_turn_start',
+                    source_id: oppId,
+                    target_id: playerId,
+                });
+            } else if (eq.def_id === 'Corruption' && !eq.corruption_active) {
+                eq.corruption_active = true;
+                this.logMsg(`${this.pn(oppId)}的腐化效果激活`);
+            }
+        });
+        if (ps.poison > 0) {
+            this.dealDirectDamage(playerId, ps.poison, '中毒');
+            if (this.game_over || ps.health <= 0) return;
+            ps.poison = Math.floor(ps.poison / 2);
+        }
+        if (ps.fire > 0) {
+            this.dealDirectDamage(playerId, ps.fire, '灼烧');
+            if (this.game_over || ps.health <= 0) return;
+        }
+        if (this.round_num > 1) {
+            let recovery = ELIXIR_RECOVERY;
+            [...opp.equipment].forEach(eq => {
+                const aura = (eq.card_def.effects || []).find(e => e && e.type === 'aura_enemy_elixir_recovery');
+                if (aura) recovery += this.evalInt(oppId, (aura.params || {}).amount, eq.card_instance, 0);
+                else if (eq.def_id === 'Pincer') recovery -= 1;
+            });
+            recovery = Math.max(0, recovery - ps.enemy_e_reduction);
+            ps.gainElixir(recovery);
+            this.logMsg(`${this.pn(playerId)}回复${recovery}E`);
+        }
+        if (this.opening_event_picks[playerId] === 5 && this.round_num <= 2) {
+            const drawNeeded = ps.handSpace();
+            if (drawNeeded > 0) {
+                ps.drawCards(drawNeeded);
+                this.logMsg(`${this.pn(playerId)}抽${drawNeeded}张至手牌满`);
+            }
+        }
+        if (this.opening_event_picks[playerId] === 6 && this.round_num <= 3) {
+            ps.gainElixir(2);
+            this.logMsg(`${this.pn(playerId)}额外+2E`);
+        }
+        [...ps.equipment].forEach(eq => {
+            eq.turns_equipped += 1;
+            if (this.hasCardEvent(eq.card_def, 'owner_turn_start')) {
+                this.runCardEvent(playerId, eq.card_instance, 'owner_turn_start', null, {
+                    event: 'owner_turn_start',
+                    source_id: playerId,
+                    target_id: playerId,
+                });
+            }
+        });
+    }
+
+    hasCardEvent(def, eventName) {
+        if (hasScriptEntry(def, eventName)) return true;
+        const eventType = `on_${eventName}`;
+        return ((def && def.effects) || []).some(effect => effect && effect.type === eventType);
+    }
+
+    walkChoiceEffects(effects, out = []) {
+        (effects || []).forEach(effect => {
+            if (!effect || typeof effect !== 'object') return;
+            if (EVENT_EFFECT_TYPES.has(effect.type)) return;
+            out.push(effect);
+            const params = effect.params || {};
+            ['then', 'else', 'body', 'effects', 'a', 'b'].forEach(key => {
+                if (Array.isArray(params[key])) this.walkChoiceEffects(params[key], out);
+            });
+        });
+        return out;
+    }
+
+    getChoiceRequest(card) {
+        for (const effect of this.walkChoiceEffects(playEffectsFor(card))) {
+            const type = effect.type || '';
+            if (['request_target', 'request_card', 'request_confirm'].includes(type)) return effect;
+            if (['discard_choice_then_draw', 'destroy_equipment_choice_or_first', 'choose_from_deck', 'choose_from_discard', 'steal_enemy_card'].includes(type)) {
+                return effect;
+            }
+        }
+        return null;
+    }
+
+    getChoiceType(card) {
+        const effect = this.getChoiceRequest(card);
+        const params = (effect && effect.params) || {};
+        if (params.choice_type) return params.choice_type;
+        if (!effect) return '';
+        if (effect.type === 'request_target') return 'choose_target';
+        if (effect.type === 'request_confirm') return 'confirm';
+        if (effect.type === 'request_card') {
+            const zone = params.zone || 'hand';
+            if (zone === 'equipment') return 'choose_equipment';
+            if (zone === 'deck') return 'choose_from_deck';
+            if (zone === 'discard') return 'choose_from_discard';
+            if (zone === 'exile') return 'choose_from_exile';
+            return params.multi ? 'choose_cards_from_hand' : 'choose_card_from_hand';
+        }
+        if (effect.type === 'choose_from_deck') return 'choose_from_deck';
+        if (effect.type === 'choose_from_discard') return 'choose_from_discard';
+        if (effect.type === 'steal_enemy_card') return 'choose_from_enemy_hand';
+        if (effect.type === 'destroy_equipment_choice_or_first') return 'choose_equipment';
+        return '';
+    }
+
+    cardNeedsChoice(card) {
+        return !!this.getChoiceRequest(card);
+    }
+
+    resolveTarget(playerId, target) {
+        const context = this._active_effect_context || {};
+        if (typeof target === 'number') return target;
+        if (target && typeof target === 'object' && target.ref === 'card_owner') {
+            const card = this.resolveCardRef(playerId, target.card, null);
+            const loc = this.findCardLocation(card);
+            return loc ? loc.ownerId : playerId;
+        }
+        if (!target || target === 'self' || target === 'friendly') return playerId;
+        if (target === 'enemy') return 1 - playerId;
+        if (target === 'both') return -1;
+        if (target === 'random') return Math.random() < 0.5 ? playerId : 1 - playerId;
+        if (['choice_target', 'selected_target', 'chosen_target'].includes(target)) {
+            const choice = this._active_choice || {};
+            return toInt(choice.target_player ?? choice.target_player_id ?? choice.target_id, playerId);
+        }
+        if (target === 'event_source') return toInt(context.source_id, playerId);
+        if (target === 'event_target') return toInt(context.target_id, 1 - playerId);
+        return playerId;
+    }
+
+    resolveTargets(playerId, target) {
+        if (target === 'both' || target === 'all') return [0, 1];
+        const tid = this.resolveTarget(playerId, target);
+        return tid === -1 ? [0, 1] : [tid].filter(id => id >= 0 && id < this.players.length);
+    }
+
+    findCardByInstanceId(instanceId) {
+        const id = Number(instanceId);
+        if (!Number.isFinite(id)) return null;
+        for (const ps of this.players) {
+            for (const zone of ['hand', 'deck', 'discard', 'exile']) {
+                const found = ps[zone].find(card => card.instance_id === id);
+                if (found) return found;
+            }
+            const eq = ps.equipment.find(item => item.card_instance.instance_id === id);
+            if (eq) return eq.card_instance;
+        }
+        return null;
+    }
+
+    findCardLocation(card) {
+        if (!card) return null;
+        for (const [ownerId, ps] of this.players.entries()) {
+            for (const zone of ['hand', 'deck', 'discard', 'exile']) {
+                const idx = ps[zone].indexOf(card);
+                if (idx >= 0) return { ownerId, zone, index: idx, card };
+            }
+            const eqIndex = ps.equipment.findIndex(eq => eq.card_instance === card || eq.card_instance.instance_id === card.instance_id);
+            if (eqIndex >= 0) return { ownerId, zone: 'equipment', index: eqIndex, card };
+        }
+        return null;
+    }
+
+    resolveCardRef(playerId, ref, currentCard = null) {
+        if (ref instanceof LocalCard) return ref;
+        if (ref == null) return currentCard;
+        if (typeof ref === 'string') return ['current_card', 'this', 'this_card'].includes(ref) ? currentCard : null;
+        if (typeof ref !== 'object') return null;
+        if (['current_card', 'this_card'].includes(ref.ref)) return currentCard;
+        if (['last_created_card', 'created_card', 'last_copied_card'].includes(ref.ref)) {
+            return this.findCardByInstanceId(this._active_effect_context.last_created_card_instance_id || this._last_created_card_instance_id);
+        }
+        if (['selected_card', 'choice_card'].includes(ref.ref)) {
+            const choice = this._active_choice || {};
+            const id = choice.target_instance_id ?? (Array.isArray(choice.target_instance_ids) ? choice.target_instance_ids[0] : null);
+            if (id != null) return this.findCardByInstanceId(id);
+            if (choice.target_def_id) {
+                const targetId = this.resolveTarget(playerId, choice.target_player_id ?? 'self');
+                const ps = this.players[targetId] || this.players[playerId];
+                return [...ps.hand, ...ps.deck, ...ps.discard, ...ps.exile].find(card => card.def_id === choice.target_def_id) || null;
+            }
+            return null;
+        }
+        if (ref.ref === 'selected_card_at') {
+            const ids = (this._active_choice && this._active_choice.target_instance_ids) || [];
+            const idx = this.evalInt(playerId, ref.index, currentCard, 1) - 1;
+            return idx >= 0 && idx < ids.length ? this.findCardByInstanceId(ids[idx]) : null;
+        }
+        if (ref.ref === 'zone_card') {
+            const tid = this.resolveTarget(playerId, ref.target || 'self');
+            const ps = this.players[tid];
+            if (!ps) return null;
+            const zoneName = String(ref.zone || 'hand');
+            const zone = zoneName === 'equipment' ? ps.equipment.map(eq => eq.card_instance) : (ps[zoneName] || []);
+            const idx = this.evalInt(playerId, ref.index, currentCard, 1) - 1;
+            return idx >= 0 && idx < zone.length ? zone[idx] : null;
+        }
+        return null;
+    }
+
+    removeCardFromCurrentZone(card) {
+        const loc = this.findCardLocation(card);
+        if (!loc) return null;
+        const ps = this.players[loc.ownerId];
+        if (loc.zone === 'equipment') ps.equipment.splice(loc.index, 1);
+        else ps[loc.zone].splice(loc.index, 1);
+        return loc;
+    }
+
+    varStoreForTarget(playerId, target) {
+        if (target === 'global') {
+            this.custom_vars = this.custom_vars || {};
+            return this.custom_vars;
+        }
+        const tid = this.resolveTarget(playerId, target || 'self');
+        return (this.players[tid] || this.players[playerId]).custom_vars;
+    }
+
+    evalExpr(playerId, expr, currentCard = null, fallbackValue = 0) {
+        if (expr == null) return fallbackValue;
+        if (typeof expr === 'number') return expr;
+        if (typeof expr === 'boolean') return expr ? 1 : 0;
+        if (typeof expr === 'string') {
+            const asNumber = Number(expr);
+            return Number.isFinite(asNumber) ? asNumber : fallbackValue;
+        }
+        if (typeof expr !== 'object') return fallbackValue;
+        const ref = expr.ref;
+        if (ref === 'var') {
+            const store = this.varStoreForTarget(playerId, expr.target || 'self');
+            return toInt(store[String(expr.name || 'var')], 0);
+        }
+        if (ref === 'player_property' || ref === 'target_attribute') {
+            const tid = this.resolveTarget(playerId, expr.target || 'self');
+            const ps = this.players[tid] || this.players[playerId];
+            return toInt(ps[String(expr.property || expr.attribute || 'health')], 0);
+        }
+        if (ref === 'math_op') {
+            const a = this.evalExpr(playerId, expr.a, currentCard, 0);
+            const b = this.evalExpr(playerId, expr.b, currentCard, 0);
+            if (expr.op === '+') return a + b;
+            if (expr.op === '-') return a - b;
+            if (expr.op === '*') return a * b;
+            if (expr.op === '/') return b === 0 ? 0 : Math.trunc(a / b);
+            if (expr.op === '%') return b === 0 ? 0 : a % b;
+            return 0;
+        }
+        if (ref === 'min_max') {
+            const a = this.evalExpr(playerId, expr.a, currentCard, 0);
+            const b = this.evalExpr(playerId, expr.b, currentCard, 0);
+            return expr.mode === 'max' ? Math.max(a, b) : Math.min(a, b);
+        }
+        if (ref === 'card_property') {
+            const card = this.resolveCardRef(playerId, expr.card || { ref: 'current_card' }, currentCard);
+            return card ? toInt(card[String(expr.property || 'fusion_level')], 0) : 0;
+        }
+        if (ref === 'last_damage') {
+            const tid = this.resolveTarget(playerId, expr.target || 'enemy');
+            return toInt(this._last_damage_value[tid], 0);
+        }
+        if (ref === 'incoming_damage') {
+            const tid = this.resolveTarget(playerId, expr.target || 'self');
+            return toInt(this._incoming_damage_hint[tid], 0);
+        }
+        if (ref === 'selected_cards_count') {
+            const choice = this._active_choice || {};
+            if (Array.isArray(choice.target_instance_ids)) return choice.target_instance_ids.length;
+            return choice.target_instance_id != null || choice.target_def_id != null ? 1 : 0;
+        }
+        if (ref === 'selected_card_index') return toInt((this._active_effect_context || {}).selected_card_index, 0);
+        if (ref === 'equipment_count_named') {
+            const tid = this.resolveTarget(playerId, expr.target || 'self');
+            return (this.players[tid] || this.players[playerId]).equipment.filter(eq => eq.def_id === expr.card_id).length;
+        }
+        if (ref === 'hand_size' || ref === 'deck_remaining' || ref === 'discard_size' || ref === 'exile_size') {
+            const tid = this.resolveTarget(playerId, expr.target || 'self');
+            const ps = this.players[tid] || this.players[playerId];
+            const zone = ref === 'deck_remaining' ? 'deck' : ref.replace('_size', '');
+            return (ps[zone] || []).length;
+        }
+        if (ref === 'play_count') {
+            return toInt(this.players[playerId].cards_played_this_turn[expr.card_id || (currentCard && currentCard.def_id)], 0);
+        }
+        if (ref === 'equip_turns') {
+            const eq = this.findEquipmentForCard(playerId, currentCard);
+            return eq ? eq.turns_equipped : 0;
+        }
+        if (ref === 'durability') return currentCard ? toInt(currentCard.durability, 0) : 0;
+        return fallbackValue;
+    }
+
+    evalInt(playerId, expr, currentCard = null, fallbackValue = 0) {
+        return toInt(this.evalExpr(playerId, expr, currentCard, fallbackValue), fallbackValue);
+    }
+
+    evalCondition(playerId, cond, currentCard = null) {
+        if (!cond) return false;
+        if (typeof cond === 'boolean') return cond;
+        const op = cond.op || cond.type || '';
+        if (op === 'compare') {
+            const a = this.evalExpr(playerId, cond.a, currentCard, 0);
+            const b = this.evalExpr(playerId, cond.b, currentCard, 0);
+            const operator = cond.operator || '==';
+            if (operator === '>') return a > b;
+            if (operator === '>=') return a >= b;
+            if (operator === '<') return a < b;
+            if (operator === '<=') return a <= b;
+            if (operator === '!=' || operator === '!==') return a !== b;
+            return a === b;
+        }
+        if (op === 'var_compare') {
+            const store = this.varStoreForTarget(playerId, cond.target || 'self');
+            return this.evalCondition(playerId, {
+                op: 'compare',
+                a: toInt(store[String(cond.name || 'var')], 0),
+                operator: cond.operator || '==',
+                b: cond.value ?? cond.b ?? 0,
+            }, currentCard);
+        }
+        if (op === 'and') return (cond.conditions || []).every(c => this.evalCondition(playerId, c, currentCard));
+        if (op === 'or') return (cond.conditions || []).some(c => this.evalCondition(playerId, c, currentCard));
+        if (op === 'not') return !this.evalCondition(playerId, cond.condition, currentCard);
+        if (op === 'has_status_named' || op === 'has_status') {
+            const tid = this.resolveTarget(playerId, cond.target || 'self');
+            const ps = this.players[tid] || this.players[playerId];
+            const status = cond.status || cond.name;
+            return toInt(ps[status], 0) > 0;
+        }
+        if (op === 'hand_full') {
+            const tid = this.resolveTarget(playerId, cond.target || 'self');
+            return !(this.players[tid] || this.players[playerId]).canAddToHand();
+        }
+        if (op === 'zone_contains') {
+            const tid = this.resolveTarget(playerId, cond.target || 'self');
+            const ps = this.players[tid] || this.players[playerId];
+            const zone = ps[cond.zone || 'hand'] || [];
+            return zone.some(card => card.def_id === cond.card_id);
+        }
+        return !!this.evalExpr(playerId, cond, currentCard, 0);
+    }
+
+    runCardEvent(ownerId, card, eventName, choice = null, extraContext = {}) {
+        const def = card.def();
+        const effects = getScriptEffects(def, eventName);
+        if (effects.length) {
+            this.runEffectList(ownerId, card, effects, choice, { event: eventName, ...extraContext });
+            return true;
+        }
+        const eventType = `on_${eventName}`;
+        let ran = false;
+        ((def && def.effects) || []).forEach(effect => {
+            if (!effect || effect.type !== eventType) return;
+            const params = effect.params || {};
+            this.runEffectList(ownerId, card, params.effects || [], choice, { event: eventName, ...extraContext });
+            ran = true;
+        });
+        return ran;
+    }
+
+    runEffectList(playerId, card, effects, choice = null, context = {}) {
+        const prevChoice = this._active_choice;
+        const prevContext = this._active_effect_context;
+        this._active_choice = choice || {};
+        this._active_effect_context = { ...(prevContext || {}), ...(context || {}) };
+        try {
+            (effects || []).forEach(effect => this.runOneEffect(playerId, card, effect, choice));
+        } finally {
+            this._active_choice = prevChoice;
+            this._active_effect_context = prevContext;
+        }
+    }
+
+    runOneEffect(playerId, card, effect, choice) {
+        if (!effect || typeof effect !== 'object') return;
+        const type = effect.type || '';
+        if (EVENT_EFFECT_TYPES.has(type)) return;
+        const params = effect.params || {};
+        const log = effect.log || '';
+        const aliases = {
+            damage: 'deal_damage',
+            add_armor: 'gain_armor',
+            poison: 'apply_poison',
+            burn: 'apply_burn',
+            toxic: 'apply_toxic',
+            vulnus: 'apply_vulnerable',
+        };
+        const name = aliases[type] || type;
+        const handler = this[`effect_${name}`];
+        if (typeof handler === 'function') handler.call(this, playerId, card, params, log, choice);
+        else if (log) this.logMsg(log);
+    }
+
+    effect_if(playerId, card, params, log, choice) {
+        const branch = this.evalCondition(playerId, params.condition, card) ? params.then : params.else;
+        this.runEffectList(playerId, card, branch || [], choice, this._active_effect_context);
+    }
+
+    effect_if_else(playerId, card, params, log, choice) {
+        this.effect_if(playerId, card, params, log, choice);
+    }
+
+    effect_repeat(playerId, card, params, log, choice) {
+        const times = Math.max(0, this.evalInt(playerId, params.times || params.count, card, 1));
+        for (let i = 0; i < times; i++) {
+            this.runEffectList(playerId, card, params.body || params.effects || [], choice, {
+                ...this._active_effect_context,
+                repeat_index: i + 1,
+            });
+        }
+    }
+
+    effect_for_each_selected_card(playerId, card, params, log, choice) {
+        const ids = Array.isArray((choice || {}).target_instance_ids)
+            ? choice.target_instance_ids
+            : ((choice || {}).target_instance_id != null ? [choice.target_instance_id] : []);
+        ids.forEach((id, idx) => {
+            this.runEffectList(playerId, card, params.body || [], { ...(choice || {}), target_instance_id: id }, {
+                ...this._active_effect_context,
+                selected_card_index: idx + 1,
+            });
+        });
+    }
+
+    effect_deal_damage(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        const amount = this.modifiedAttackDamage(this.evalInt(playerId, params.amount ?? 6, card, 6), card);
+        const hits = Math.max(1, this.evalInt(playerId, params.hits ?? 1, card, 1));
+        this._incoming_damage_hint[targetId] = amount;
+        const dealt = this.dealAttackDamage(targetId, amount, hits, !!params.is_precision, playerId);
+        this._last_damage_value[targetId] = dealt;
+        this.logMsg(`${this.pn(playerId)}对${this.pn(targetId)}造成${dealt}伤害`);
+    }
+
+    effect_direct_damage(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
+        this.dealDirectDamage(targetId, amount, String(params.source || (card ? cardName(card.def_id) : '效果')));
+    }
+
+    effect_lifesteal_damage(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        const amount = this.modifiedAttackDamage(this.evalInt(playerId, params.amount ?? 8, card, 8), card);
+        const dealt = this.dealAttackDamage(targetId, amount, 1, !!params.is_precision, playerId);
+        this._last_damage_value[targetId] = dealt;
+        if (dealt > 0) this.players[playerId].heal(this.evalInt(playerId, params.heal ?? 4, card, 4));
+    }
+
+    effect_heal(playerId, card, params) {
+        this.resolveTargets(playerId, params.target || 'self').forEach(tid => {
+            const amount = this.evalInt(playerId, params.amount ?? 0, card, 0);
+            this.players[tid].heal(amount);
+            this.logMsg(`${this.pn(tid)}回复${amount}H`);
+        });
+    }
+
+    effect_draw(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
+        this.players[targetId].drawCards(amount);
+        this.logMsg(`${this.pn(targetId)}抽${amount}张牌`);
+    }
+
+    effect_gain_e(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
+        this.players[targetId].gainElixir(amount);
+        this.logMsg(`${this.pn(targetId)}获得${amount}E`);
+    }
+
+    effect_gain_m(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
+        this.players[targetId].gainMagic(amount);
+        this.logMsg(`${this.pn(targetId)}获得${amount}M`);
+    }
+
+    effect_gain_armor(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
+        this.players[targetId].armor += amount;
+        this.logMsg(`${this.pn(targetId)}获得${amount}护甲`);
+    }
+
+    effect_gain_dodge(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
+        this.players[targetId].dodge += amount;
+        this.logMsg(`${this.pn(targetId)}获得${amount}层闪避`);
+    }
+
+    effect_apply_poison(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
+        this.players[targetId].poison += amount;
+        this.logMsg(`${this.pn(targetId)}+${amount}层中毒`);
+    }
+
+    effect_apply_burn(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
+        this.players[targetId].fire += amount;
+        this.logMsg(`${this.pn(targetId)}+${amount}层灼烧`);
+    }
+
+    effect_apply_toxic(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
+        this.players[targetId].toxic += amount;
+        this.logMsg(`${this.pn(targetId)}+${amount}层淬毒`);
+    }
+
+    effect_apply_vulnerable(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
+        this.players[targetId].vulnerable += amount;
+    }
+
+    effect_var_set(playerId, card, params) {
+        const store = this.varStoreForTarget(playerId, params.target || 'self');
+        const name = String(params.name || 'var');
+        store[name] = this.evalInt(playerId, params.value ?? 0, card, 0);
+        const tid = this.resolveTarget(playerId, params.target || 'self');
+        if (name === '三角形层数') this.players[tid].triangle_stacks = store[name];
+        if (name === '咖啡首次使用') this.players[tid].coffee_first_use = store[name] > 0;
+        if (name === '魔法电池本回合回魔') this.players[tid].magic_battery_m_this_turn = store[name];
+    }
+
+    effect_var_add(playerId, card, params) {
+        const store = this.varStoreForTarget(playerId, params.target || 'self');
+        const name = String(params.name || 'var');
+        store[name] = toInt(store[name], 0) + this.evalInt(playerId, params.value ?? params.amount ?? 0, card, 0);
+        if (name === '三角形层数') this.players[this.resolveTarget(playerId, params.target || 'self')].triangle_stacks = store[name];
+    }
+
+    effect_var_sub(playerId, card, params) {
+        const store = this.varStoreForTarget(playerId, params.target || 'self');
+        const name = String(params.name || 'var');
+        store[name] = toInt(store[name], 0) - this.evalInt(playerId, params.value ?? params.amount ?? 0, card, 0);
+    }
+
+    effect_var_mul(playerId, card, params) {
+        const store = this.varStoreForTarget(playerId, params.target || 'self');
+        const name = String(params.name || 'var');
+        store[name] = toInt(store[name], 0) * this.evalInt(playerId, params.value ?? params.amount ?? 1, card, 1);
+    }
+
+    effect_var_div(playerId, card, params) {
+        const store = this.varStoreForTarget(playerId, params.target || 'self');
+        const name = String(params.name || 'var');
+        const div = this.evalInt(playerId, params.value ?? params.amount ?? 1, card, 1);
+        store[name] = div === 0 ? 0 : Math.trunc(toInt(store[name], 0) / div);
+    }
+
+    effect_player_prop_set(playerId, card, params) {
+        this.resolveTargets(playerId, params.target || 'self').forEach(tid => {
+            this.players[tid][String(params.property || 'health')] = this.evalInt(playerId, params.value ?? 0, card, 0);
+        });
+    }
+
+    effect_player_prop_add(playerId, card, params) {
+        this.resolveTargets(playerId, params.target || 'self').forEach(tid => {
+            const prop = String(params.property || 'health');
+            this.players[tid][prop] = toInt(this.players[tid][prop], 0) + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+        });
+    }
+
+    effect_card_prop_set(playerId, card, params) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
+        if (!target) return;
+        const prop = String(params.property || 'fusion_level');
+        target[prop] = this.evalInt(playerId, params.value ?? 0, card, 0);
+        if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
+        if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
+    }
+
+    effect_card_prop_add(playerId, card, params) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
+        if (!target) return;
+        const prop = String(params.property || 'fusion_level');
+        target[prop] = toInt(target[prop], 0) + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+        if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
+        if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
+    }
+
+    effect_equipment_prop_set(playerId, card, params) {
+        const eq = this.findEquipmentForCard(this.resolveTarget(playerId, params.target || 'self'), card);
+        if (eq) eq[String(params.property || 'turns_equipped')] = this.evalInt(playerId, params.value ?? 0, card, 0);
+    }
+
+    effect_equipment_prop_add(playerId, card, params) {
+        const eq = this.findEquipmentForCard(this.resolveTarget(playerId, params.target || 'self'), card);
+        if (eq) {
+            const prop = String(params.property || 'turns_equipped');
+            eq[prop] = toInt(eq[prop], 0) + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+        }
+    }
+
+    effect_copy_card(playerId, card, params, log) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
+        if (!target) return;
+        if (!this.players[playerId].canAddToHand()) return;
+        const copy = target.copy();
+        copy.instance_id = randintId();
+        this.players[playerId].hand.push(copy);
+        this._last_created_card_instance_id = copy.instance_id;
+        this._active_effect_context.last_created_card_instance_id = copy.instance_id;
+        if (log) this.logMsg(log);
+    }
+
+    effect_move_to_discard(playerId, card, params) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
+        const loc = this.removeCardFromCurrentZone(target);
+        if (loc) this.discardCard(this.players[loc.ownerId], target);
+    }
+
+    effect_move_to_hand(playerId, card, params) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
+        const loc = this.removeCardFromCurrentZone(target);
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        if (loc && this.players[targetId].canAddToHand()) this.players[targetId].hand.push(target);
+    }
+
+    effect_move_to_deck(playerId, card, params) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
+        const loc = this.removeCardFromCurrentZone(target);
+        const targetId = this.resolveTarget(playerId, params.target || (loc ? loc.ownerId : 'self'));
+        if (!target || !this.players[targetId]) return;
+        if (params.position === 'bottom') this.players[targetId].deck.push(target);
+        else this.players[targetId].deck.unshift(target);
+    }
+
+    effect_remove_specific_card(playerId, card, params) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
+        const loc = this.findCardLocation(target);
+        if (!loc) return;
+        if (loc.zone === 'equipment') this.destroyEquipment(loc.ownerId, this.players[loc.ownerId].equipment[loc.index]);
+        else this.removeCardFromCurrentZone(target);
+    }
+
+    effect_destroy_all_destroyable_equipment(playerId, card, params) {
+        this.resolveTargets(playerId, params.target || 'enemy').forEach(tid => {
+            [...this.players[tid].equipment].forEach(eq => {
+                if (!eq.card_instance.flags.has('indestructible')) this.destroyEquipment(tid, eq);
+            });
+        });
+    }
+
+    effect_destroy_random_equip(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        const list = this.players[targetId].equipment.filter(eq => !eq.card_instance.flags.has('indestructible'));
+        if (list.length) this.destroyEquipment(targetId, list[Math.floor(Math.random() * list.length)]);
+    }
+
+    effect_destroy_all_equip(playerId, card, params) {
+        this.effect_destroy_all_destroyable_equipment(playerId, card, params);
+    }
+
+    effect_destroy_equipment_choice_or_first(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        let eq = null;
+        const choiceCard = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
+        if (choiceCard) eq = this.players[targetId].equipment.find(item => item.card_instance === choiceCard || item.card_instance.instance_id === choiceCard.instance_id);
+        if (!eq) eq = this.players[targetId].equipment.find(item => !item.card_instance.flags.has('indestructible'));
+        if (eq) this.destroyEquipment(targetId, eq);
+    }
+
+    effect_destroy_self_equipment(playerId, card) {
+        const eq = this.findEquipmentForCard(playerId, card);
+        if (eq) this.destroyEquipment(playerId, eq);
+    }
+
+    effect_place_as_equip(playerId, card, params) {
+        const targetCard = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
+        if (!targetCard) return;
+        const ownerId = this.resolveTarget(playerId, params.owner || params.equip_owner || 'self');
+        this.removeCardFromCurrentZone(targetCard);
+        if (!this.findEquipmentForCard(ownerId, targetCard)) {
+            const eq = new LocalEquipment(targetCard, ownerId);
+            if (params.effect_target != null) eq.effect_target = this.resolveTarget(playerId, params.effect_target);
+            this.players[ownerId].equipment.push(eq);
+            this.logMsg(`${this.pn(ownerId)}装备了${cardName(targetCard.def_id)}`);
+        }
+        if (targetCard === card) {
+            card._placed_as_equipment = true;
+            card._placed_as_equipment_owner = ownerId;
+        }
+    }
+
+    effect_skip_turn(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        this.players[targetId].skip_turn = true;
+    }
+
+    effect_reveal_enemy_hand(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        this._antenna_reveal[playerId] = this.players[targetId].hand.map(c => c.toDict());
+    }
+
+    effect_choose_from_discard(playerId, card, params, log, choice) {
+        const targetDef = choice && choice.target_def_id;
+        if (!targetDef) return;
+        const ps = this.players[playerId];
+        const idx = ps.discard.findIndex(c => c.def_id === targetDef);
+        if (idx >= 0 && ps.canAddToHand()) {
+            const found = ps.discard.splice(idx, 1)[0];
+            ps.hand.push(found);
+            if (log) this.logMsg(log);
+        }
+    }
+
+    effect_choose_from_deck(playerId, card, params, log, choice) {
+        const ps = this.players[playerId];
+        let idx = -1;
+        if (choice && choice.target_instance_id != null) idx = ps.deck.findIndex(c => c.instance_id === choice.target_instance_id);
+        if (idx < 0 && choice && choice.target_def_id) idx = ps.deck.findIndex(c => c.def_id === choice.target_def_id);
+        if (idx >= 0 && ps.canAddToHand()) {
+            const found = ps.deck.splice(idx, 1)[0];
+            ps.hand.push(found);
+            if (log) this.logMsg(log);
+        }
+    }
+
+    effect_steal_enemy_card(playerId, card, params, log, choice) {
+        const sourceId = this.resolveTarget(playerId, params.target || 'enemy');
+        const source = this.players[sourceId];
+        const target = this.players[playerId];
+        let stolen = null;
+        if (choice && choice.target_instance_id != null) {
+            const idx = source.hand.findIndex(c => c.instance_id === choice.target_instance_id);
+            if (idx >= 0) stolen = source.hand.splice(idx, 1)[0];
+        }
+        if (!stolen && source.hand.length) stolen = source.hand.splice(0, 1)[0];
+        if (stolen && target.canAddToHand()) {
+            target.hand.push(stolen);
+            if (log) this.logMsg(log);
+        }
+    }
+
+    effect_triangle_damage(playerId, card, params) {
+        const base = this.evalInt(playerId, params.base ?? 6, card, 6);
+        const perStack = this.evalInt(playerId, params.per_stack ?? 3, card, 3);
+        const stackName = String(params.stack_name || '三角形层数');
+        const stack = toInt(this.players[playerId].custom_vars[stackName] ?? this.players[playerId].triangle_stacks, 0);
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        const amount = this.modifiedAttackDamage(base + perStack * stack, card);
+        const dealt = this.dealAttackDamage(targetId, amount, 1, !!params.is_precision, playerId);
+        this._last_damage_value[targetId] = dealt;
+        if (dealt > 0) {
+            const next = Math.min(4, stack + 1);
+            this.players[playerId].custom_vars[stackName] = next;
+            this.players[playerId].triangle_stacks = next;
+        }
+    }
+
+    effect_status_remove_named(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const status = String(params.status || params.name || '');
+        if (status === 'poison') this.players[targetId].poison = 0;
+        else if (status === 'fire') this.players[targetId].fire = 0;
+        else if (status) this.players[targetId][status] = 0;
+    }
+
+    effect_status_add_named(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const status = String(params.status || params.name || '');
+        const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
+        if (status) this.players[targetId][status] = toInt(this.players[targetId][status], 0) + amount;
+    }
+
+    effect_clear_status(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const ps = this.players[targetId];
+        ['poison', 'fire', 'vulnerable', 'toxic', 'dodge'].forEach(prop => { ps[prop] = 0; });
+    }
+
+    effect_nullify_current_card() {
+        this.negated_card = true;
+    }
+
+    effect_request_card() {}
+    effect_request_target() {}
+    effect_request_confirm() {}
+
+    findEquipmentForCard(ownerId, card) {
+        if (!card || !this.players[ownerId]) return null;
+        return this.players[ownerId].equipment.find(eq => eq.card_instance === card || eq.card_instance.instance_id === card.instance_id) || null;
+    }
+
+    modifiedAttackDamage(base, card) {
+        let amount = toInt(base, 0) + Math.max(0, toInt(card && card.bonus_damage, 0));
+        const fusion = Math.max(1, toInt(card && card.fusion_level, 1));
+        const fission = Math.max(1, toInt(card && card.fission_level, 1));
+        return Math.ceil((amount * fusion) / fission);
+    }
+
+    getCorruptionCount() {
+        let count = 0;
+        this.players.forEach(ps => {
+            ps.equipment.forEach(eq => {
+                if (eq.def_id === 'Corruption' && eq.corruption_active) count += 1;
+            });
+        });
+        return count;
+    }
+
+    dealDirectDamage(playerId, amount, source = '') {
+        const ps = this.players[playerId];
+        if (!ps || ps.invincible) {
+            if (ps) this.logMsg(`${this.pn(playerId)}无敌，免疫${source}伤害`);
+            return 0;
+        }
+        let actual = Math.max(0, toInt(amount, 0));
+        const corruption = this.getCorruptionCount();
+        if (corruption > 0) actual *= (2 ** corruption);
+        ps.health -= actual;
+        this.logMsg(`${this.pn(playerId)}受到${actual}点${source}伤害（H=${ps.health}）`);
+        this.checkYggdrasil(playerId);
+        this.checkGameOver();
+        return actual;
+    }
+
+    dealAttackDamage(targetId, amount, hits = 1, isPrecision = false, attackerId = 1 - targetId) {
+        const ps = this.players[targetId];
+        if (!ps || ps.untargetable) {
+            if (ps) this.logMsg(`${this.pn(targetId)}无法被攻击选中`);
+            return 0;
+        }
+        let total = 0;
+        for (let h = 0; h < hits; h++) {
+            if (ps.dodge > 0) {
+                ps.dodge -= 1;
+                if (!isPrecision) {
+                    this.logMsg(`${this.pn(targetId)}闪避了攻击`);
+                    continue;
+                }
+                this.logMsg(`${this.pn(targetId)}的闪避被精准消耗`);
+            }
+            if (ps.invincible) {
+                this.logMsg(`${this.pn(targetId)}无敌，免疫伤害`);
+                continue;
+            }
+            let dmg = Math.max(0, toInt(amount, 0));
+            if (this.halve_next_attack) dmg = Math.ceil(dmg / 2);
+            const corruption = this.getCorruptionCount();
+            if (corruption > 0) dmg *= (2 ** corruption);
+            if (ps.nazar_active) {
+                const original = dmg;
+                dmg = Math.max(1, dmg - 9);
+                if (original >= 10) {
+                    ps.nazar_big_hits += 1;
+                    if (ps.nazar_big_hits >= 2) {
+                        ps.nazar_active = false;
+                        ps.nazar_big_hits = 0;
+                    }
+                }
+            }
+            dmg = Math.max(0, dmg - ps.armor);
+            if (ps.sponge_active && dmg > 0) {
+                ps.poison += Math.floor(dmg / 2);
+                dmg = 0;
+            }
+            ps.health -= dmg;
+            total += dmg;
+            this.logMsg(`${this.pn(targetId)}受到${dmg}点伤害（H=${ps.health}）`);
+            if (ps.toxic > 0) ps.poison += ps.toxic;
+            this._game_over_defer_depth += 1;
+            try {
+                this.checkYggdrasil(targetId);
+                if (dmg > 0) {
+                    [...ps.equipment].forEach(eq => {
+                        if (this.hasCardEvent(eq.card_def, 'damage_taken')) {
+                            this.runCardEvent(targetId, eq.card_instance, 'damage_taken', null, {
+                                event: 'damage_taken',
+                                source_id: attackerId,
+                                target_id: targetId,
+                                damage: dmg,
+                            });
+                        } else if (eq.def_id === 'Battery') {
+                            this.dealDirectDamage(attackerId, 3, '电池');
+                            this.logMsg(`${this.pn(targetId)}的电池效果：对${this.pn(attackerId)}造成3D`);
+                        } else if (eq.def_id === 'MagicBattery' && ps.magic_battery_m_this_turn < 3) {
+                            ps.gainMagic(1);
+                            ps.magic_battery_m_this_turn += 1;
+                            ps.custom_vars['魔法电池本回合回魔'] = ps.magic_battery_m_this_turn;
+                            this.logMsg(`${this.pn(targetId)}的魔法电池效果：+1M`);
+                        }
+                    });
+                }
+            } finally {
+                this._game_over_defer_depth -= 1;
+            }
+            if (ps.health <= 0 || this.players[attackerId].health <= 0) {
+                this.checkGameOver();
+                break;
+            }
+        }
+        return total;
+    }
+
+    checkYggdrasil(playerId) {
+        const ps = this.players[playerId];
+        if (!ps || ps.health > 0) return;
+        if (ps.bandage_active) {
+            ps.health = 1;
+            ps.invincible = true;
+            ps.bandage_active = false;
+            ps.bandage_death_pending = true;
+            this.logMsg(`${this.pn(playerId)}的绷带发动！无敌直到下个友方回合结束，然后死亡`);
+            return;
+        }
+        const idx = ps.hand.findIndex(card => card.def_id === 'Yggdrasil');
+        if (idx >= 0) {
+            const card = ps.hand.splice(idx, 1)[0];
+            ps.exile.push(card);
+            ps.health = 5;
+            ps.invincible = true;
+            ['poison', 'fire', 'vulnerable', 'toxic', 'triangle_stacks', 'dodge', 'armor', 'equipment_protection'].forEach(prop => { ps[prop] = 0; });
+            ps.nazar_active = false;
+            ps.nazar_big_hits = 0;
+            ps.negate_next_skill = false;
+            ps.skip_turn = false;
+            ps.damage_multiplier = 1.0;
+            ps.custom_vars['三角形层数'] = 0;
+            this.logMsg(`${this.pn(playerId)}的世界树之叶发动！清除己方所有效果，生命值设为5，本回合无敌！`);
+        }
+    }
+
+    checkGameOver() {
+        if (this._game_over_defer_depth > 0) return;
+        if (this.players[0].health <= 0 && this.players[1].health <= 0) {
+            this.game_over = true;
+            this.winner = -1;
+            this.phase = 'game_over';
+            this.logMsg('双方生命值同时归零！平局！');
+            return;
+        }
+        for (let i = 0; i < 2; i++) {
+            if (this.players[i].health <= 0) {
+                this.game_over = true;
+                this.winner = 1 - i;
+                this.phase = 'game_over';
+                this.logMsg(`${this.pn(i)}生命值归零！${this.pn(this.winner)}获胜！`);
+                return;
+            }
+        }
+    }
+
+    resetOneShotAttackAttrs(card) {
+        card.fission_level = 1;
+        card.fusion_level = 1;
+        card.fission_count = 0;
+        card.fusion_multiplier = 1.0;
+        card.fission_hit = 0;
+        if (card.def_id === 'Tomato') {
+            card.bonus_damage = 0;
+            card.held_turns = 0;
+        }
+    }
+
+    discardCard(ps, card) {
+        if (card.card_type === 'thorn') this.resetOneShotAttackAttrs(card);
+        card.mimic_discount = 0;
+        ps.discard.push(card);
+    }
+
+    destroyEquipment(ownerId, eq) {
+        const ps = this.players[ownerId];
+        if (!eq || !ps.equipment.includes(eq)) return false;
+        if (ps.equipment_protection > 0) {
+            ps.equipment_protection -= 1;
+            this.logMsg(`${this.pn(ownerId)}的装备保护抵消了摧毁！`);
+            return false;
+        }
+        if (this.hasCardEvent(eq.card_def, 'equipment_destroy')) {
+            this.runCardEvent(ownerId, eq.card_instance, 'equipment_destroy', null, {
+                event: 'equipment_destroy',
+                source_id: ownerId,
+                target_id: ownerId,
+            });
+        }
+        if (eq.def_id === 'Disc') {
+            const remaining = ps.equipment.filter(item => item !== eq && item.def_id === 'Disc');
+            if (!remaining.length) ps.armor = Math.max(0, ps.armor - 2);
+        }
+        ps.equipment.splice(ps.equipment.indexOf(eq), 1);
+        if (eq.card_instance.flags.has('exile')) ps.exile.push(eq.card_instance);
+        else this.discardCard(ps, eq.card_instance);
+        return true;
+    }
+
+    getExtraEForCard(playerId, card) {
+        if (card.flags.has('symbiosis')) return 0;
+        return toInt(this.players[playerId].cards_played_this_turn[card.def_id], 0);
+    }
+
+    canPlayCard(playerId, card) {
+        const ps = this.players[playerId];
+        const def = card.def();
+        if (def.card_type === 'guard' && !hasScriptEntry(def, 'play') && !(def.effects || []).length) {
+            return [false, '反制牌只能通过响应机制使用'];
+        }
+        if (this.phase !== 'action' || this.current_player !== playerId) return [false, '不是你的回合'];
+        if (ps.attack_blocked > 0 && def.card_type === 'thorn') return [false, '本回合无法使用攻击牌'];
+        if (ps.attack_only > 0 && def.card_type !== 'thorn') return [false, '本回合只能使用攻击牌'];
+        if (ps.shovel_active) return [false, '链子效果中，无法使用卡牌'];
+        const totalE = card.cost_e + this.getExtraEForCard(playerId, card);
+        if (totalE > ps.elixir) return [false, `能量不足（需要${totalE}E，当前${ps.elixir}E）`];
+        if (card.cost_m > ps.magic) return [false, `魔力不足（需要${card.cost_m}M，当前${ps.magic}M）`];
+        return [true, ''];
+    }
+
+    wouldDestroyEquipment(card) {
+        if (['Sewage', 'MagicSewage'].includes(card.def_id)) return true;
+        return playEffectsFor(card).some(effect => {
+            const type = effect && effect.type;
+            return ['remove_specific_card', 'destroy_equipment_choice_or_first', 'destroy_random_equip', 'destroy_all_equip', 'destroy_all_destroyable_equipment'].includes(type);
+        });
+    }
+
+    checkResponseNeeded(playerId, card) {
+        if (card.flags.has('precision')) return false;
+        const opp = this.players[1 - playerId];
+        const trigger = card.card_type;
+        if (opp.hand.some(c => c.def().response_trigger === 'any')) return true;
+        if (opp.hand.some(c => c.def().response_trigger === trigger)) return true;
+        if (this.wouldDestroyEquipment(card) && opp.hand.some(c => c.def().response_trigger === 'equipment_destroy')) return true;
+        return false;
+    }
+
+    checkPrecisionResponseNeeded(playerId, card) {
+        if (!card.flags.has('precision')) return false;
+        return this.players[1 - playerId].hand.some(c => c.def().response_trigger === 'thorn');
+    }
+
+    getCounterCards(playerId, playedCard) {
+        const def = playedCard.def();
+        const triggerTypes = ['any'];
+        if (def.card_type) triggerTypes.push(def.card_type);
+        if (this.wouldDestroyEquipment(playedCard)) triggerTypes.push('equipment_destroy');
+        return this.players[playerId].hand.filter(card => triggerTypes.includes(card.def().response_trigger));
+    }
+
+    playCard(playerId, instanceId, choice = null) {
+        if (this.pending_response) return { success: false, error: '等待对手反制响应' };
+        const ps = this.players[playerId];
+        const card = ps.findHandCard(instanceId);
+        if (!card) return { success: false, error: '卡牌不在手中' };
+        const [canPlay, reason] = this.canPlayCard(playerId, card);
+        if (!canPlay) return { success: false, error: reason };
+        const totalE = card.cost_e + this.getExtraEForCard(playerId, card);
+        ps.elixir -= totalE;
+        ps.magic -= card.cost_m;
+        ps.cards_played_this_turn[card.def_id] = toInt(ps.cards_played_this_turn[card.def_id], 0) + 1;
+        const removed = ps.removeHandCard(instanceId);
+        if (!removed) return { success: false, error: '移出手牌失败' };
+        if (this.checkResponseNeeded(playerId, card) || this.checkPrecisionResponseNeeded(playerId, card)) {
+            this.pending_response = {
+                card: card.toDict(),
+                player_id: playerId,
+                original_choice: choice,
+                is_precision: card.flags.has('precision'),
+            };
+            return { success: true, needs_response: true, card: card.toDict() };
+        }
+        return this.executeCardEffect(playerId, card, choice);
+    }
+
+    logCardPlay(playerId, card) {
+        this.logMsg(`${this.pn(playerId)}使用了${cardName(card.def_id)}`);
+    }
+
+    executeCardEffect(playerId, card, choice = null) {
+        const ps = this.players[playerId];
+        const result = { success: true, card: card.toDict() };
+        if (card.card_type === 'thorn' && (card.fission_level > 1 || card.fusion_level > 1)) {
+            this.logMsg(`[特效] ${cardName(card.def_id)} 聚变=${card.fusion_level} 裂变=${card.fission_level}`);
+        }
+        if (this.negated_card && card.card_type === 'bloom') {
+            this.negated_card = false;
+            this.logCardPlay(playerId, card);
+            this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}被魔法泡泡反制，失效！`);
+            if (card.flags.has('exile')) ps.exile.push(card);
+            else this.discardCard(ps, card);
+            return result;
+        }
+        this.negated_card = false;
+        if (this.cardNeedsChoice(card) && choice == null) {
+            const choiceRequest = this.getChoiceRequest(card);
+            const choiceParams = (choiceRequest && choiceRequest.params) || {};
+            const choiceType = this.getChoiceType(card);
+            const targetId = choiceRequest && choiceRequest.type === 'request_card'
+                ? this.resolveTarget(playerId, choiceParams.target || 'self')
+                : null;
+            this.pending_choice = {
+                card: card.toDict(),
+                player_id: playerId,
+                choice_type: choiceType,
+                choice_params: choiceParams,
+            };
+            if (targetId != null) this.pending_choice.target_player_id = targetId;
+            ps.hand.unshift(card);
+            ps.elixir += card.cost_e + Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
+            ps.magic += card.cost_m;
+            ps.cards_played_this_turn[card.def_id] = Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
+            return {
+                success: true,
+                needs_choice: true,
+                choice_type: choiceType,
+                choice_params: choiceParams,
+                target_player_id: targetId,
+                card: card.toDict(),
+            };
+        }
+        if (playEffectsFor(card).length) {
+            this.logCardPlay(playerId, card);
+        }
+        if (card.card_type === 'thorn') {
+            const fission = Math.max(1, toInt(card.fission_level, 1));
+            for (let i = 0; i < fission; i++) {
+                if (this.game_over) break;
+                card.fission_hit = i;
+                this.applyCardEffect(playerId, card, i === 0 ? choice : null);
+            }
+            card.fission_hit = 0;
+        } else {
+            this.applyCardEffect(playerId, card, choice);
+        }
+        const equipOwnerId = card._placed_as_equipment_owner != null ? card._placed_as_equipment_owner : playerId;
+        const scriptControlsPlay = getScriptEffects(card.def(), 'play').length > 0;
+        if ((card.card_type === 'root' && !scriptControlsPlay) || card._placed_as_equipment) {
+            if (!this.findEquipmentForCard(equipOwnerId, card)) {
+                const eq = new LocalEquipment(card, equipOwnerId);
+                this.players[equipOwnerId].equipment.push(eq);
+                this.logMsg(`${this.pn(equipOwnerId)}装备了${cardName(card.def_id)}`);
+            }
+        } else if (card.flags.has('exile')) {
+            const loc = this.findCardLocation(card);
+            if (!loc) ps.exile.push(card);
+            this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}被放逐`);
+        } else {
+            const loc = this.findCardLocation(card);
+            if (!loc) this.discardCard(ps, card);
+        }
+        this.checkGameOver();
+        return result;
+    }
+
+    applyCardEffect(playerId, card, choice = null) {
+        const effects = playEffectsFor(card);
+        if (effects.length) {
+            this.runEffectList(playerId, card, effects, choice, {
+                event: 'play',
+                source_id: playerId,
+                target_id: this.resolveTarget(playerId, choice && choice.target_player_id != null ? choice.target_player_id : 'enemy'),
+            });
+            return;
+        }
+        this.logMsg(`${this.pn(playerId)}使用了${cardName(card.def_id)}`);
+    }
+
+    executeCardEffectHalfDamage(playerId, card, choice = null) {
+        this.halve_next_attack = true;
+        this.logMsg(`${this.pn(playerId)}的精准牌被闪避反制，伤害减半！`);
+        const result = this.executeCardEffect(playerId, card, choice);
+        this.halve_next_attack = false;
+        return result;
+    }
+
+    resolveChoice(playerId, choice) {
+        if (!this.pending_choice) return { success: false, error: '没有待选择操作' };
+        const pending = this.pending_choice;
+        this.pending_choice = null;
+        const card = new LocalCard(pending.card);
+        const ps = this.players[playerId];
+        if (choice == null) {
+            if (!ps.findHandCard(card.instance_id)) ps.hand.unshift(card);
+            return { success: false, error: '选择已取消' };
+        }
+        const dupCount = toInt(ps.cards_played_this_turn[card.def_id], 0);
+        ps.elixir -= card.cost_e + dupCount;
+        ps.magic -= card.cost_m;
+        ps.cards_played_this_turn[card.def_id] = dupCount + 1;
+        const handCard = ps.findHandCard(card.instance_id);
+        if (handCard) ps.removeHandCard(card.instance_id);
+        return this.executeCardEffect(playerId, card, choice);
+    }
+
+    handleResponse(responderId, instanceId) {
+        if (!this.pending_response) return { success: false, error: '没有待响应的操作' };
+        const pending = this.pending_response;
+        this.pending_response = null;
+        const playerId = pending.player_id;
+        const card = new LocalCard(pending.card);
+        const choice = pending.original_choice;
+        if (instanceId != null) {
+            const responder = this.players[responderId];
+            const counter = responder.findHandCard(instanceId);
+            if (!counter || counter.cost_e > responder.elixir || counter.cost_m > responder.magic) {
+                return this.executeCardEffect(playerId, card, choice);
+            }
+            const trigger = counter.def().response_trigger;
+            const playedType = card.card_type;
+            const valid = trigger === 'any'
+                || trigger === playedType
+                || (this.wouldDestroyEquipment(card) && trigger === 'equipment_destroy')
+                || (pending.is_precision && trigger === 'thorn');
+            if (!valid) return this.executeCardEffect(playerId, card, choice);
+            responder.elixir -= counter.cost_e;
+            responder.magic -= counter.cost_m;
+            const removed = responder.removeHandCard(instanceId);
+            this.logMsg(`${this.pn(responderId)}使用${cardName(removed.def_id)}进行反制！`);
+            this.executeCounterEffect(responderId, removed, card, playerId);
+            if (removed.def_id === 'Bubble') {
+                if (pending.is_precision) return this.executeCardEffectHalfDamage(playerId, card, choice);
+                return this.executeCardEffect(playerId, card, choice);
+            }
+            if (removed.def_id === 'MagicBubble') this.negated_card = true;
+            return this.executeCardEffect(playerId, card, choice);
+        }
+        return this.executeCardEffect(playerId, card, choice);
+    }
+
+    executeCounterEffect(responderId, counterCard, originalCard, originalPlayerId) {
+        const effects = getScriptEffects(counterCard.def(), 'response');
+        if (effects.length) {
+            this.runEffectList(responderId, counterCard, effects, null, {
+                event: 'response',
+                source_id: responderId,
+                target_id: originalPlayerId,
+            });
+        } else if (counterCard.def_id === 'Bubble') {
+            this.players[responderId].dodge += 1;
+        } else if (counterCard.def_id === 'Nazar') {
+            this.players[responderId].nazar_active = true;
+            this.players[responderId].nazar_big_hits = 0;
+        } else if (counterCard.def_id === 'MagicNazar') {
+            this.players[responderId].equipment_protection += 1;
+        } else if (counterCard.def_id === 'MagicBubble') {
+            this.players[responderId].negate_next_skill = true;
+        }
+        if (counterCard.flags.has('exile')) this.players[responderId].exile.push(counterCard);
+        else this.discardCard(this.players[responderId], counterCard);
+    }
+
+    useTrigger(playerId, equipmentInstanceId) {
+        if (this.current_player !== playerId) return { success: false, error: '不是你的回合' };
+        const ps = this.players[playerId];
+        const eq = ps.findEquipment(equipmentInstanceId);
+        if (!eq) return { success: false, error: '装备不存在' };
+        const triggerCost = toInt(eq.card_def.trigger_cost_e, -1);
+        if (triggerCost < 0 && !this.hasCardEvent(eq.card_def, 'equipment_trigger')) return { success: false, error: '该装备没有触发效果' };
+        if (eq.turns_equipped < 1) return { success: false, error: '装备需要装备一回合后才能触发' };
+        if (triggerCost > ps.elixir) return { success: false, error: '能量不足' };
+        if (triggerCost > 0) ps.elixir -= triggerCost;
+        if (this.hasCardEvent(eq.card_def, 'equipment_trigger')) {
+            this.runCardEvent(playerId, eq.card_instance, 'equipment_trigger', null, {
+                event: 'equipment_trigger',
+                source_id: playerId,
+                target_id: 1 - playerId,
+            });
+        } else if (eq.def_id === 'Leaf') {
+            if (this.destroyEquipment(playerId, eq)) this.dealAttackDamage(1 - playerId, 8, 1, false, playerId);
+        } else if (eq.def_id === 'Mark') {
+            if (this.destroyEquipment(playerId, eq)) this.players[1 - playerId].skip_turn = true;
+        } else if (eq.def_id === 'Mine') {
+            if (this.destroyEquipment(playerId, eq)) this.dealAttackDamage(1 - playerId, 20, 1, false, playerId);
+        }
+        this.checkGameOver();
+        return { success: true };
+    }
+
+    endTurn(playerId) {
+        if (this.current_player !== playerId) return { success: false, error: '不是你的回合' };
+        if (this.pending_response) return { success: false, error: '等待对手反制响应' };
+        this.endPlayerTurn(playerId);
+        return { success: true };
+    }
+
+    endPlayerTurn(playerId) {
+        const ps = this.players[playerId];
+        if (ps.bandage_death_pending) {
+            ps.health = 0;
+            ps.bandage_death_pending = false;
+            ps.invincible = false;
+            this.logMsg(`${this.pn(playerId)}的绷带效果结束，死亡！`);
+            this.checkGameOver();
+            if (this.game_over) return;
+        }
+        if (ps.bandage_active && ps.invincible) {
+            ps.bandage_active = false;
+            ps.bandage_death_pending = true;
+        }
+        [...ps.hand].forEach(card => {
+            if (card.flags.has('void')) {
+                ps.hand.splice(ps.hand.indexOf(card), 1);
+                ps.exile.push(card);
+                this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}因虚无被放逐`);
+            }
+        });
+        if (ps.attack_blocked > 0) ps.attack_blocked -= 1;
+        if (ps.attack_only > 0) ps.attack_only -= 1;
+        if (playerId === this.first_player) this.startPlayerTurn(1 - this.first_player);
+        else this.endRound();
+    }
+
+    endRound() {
+        this.players.forEach((ps, pid) => {
+            if (ps.invincible && !ps.bandage_active && !ps.bandage_death_pending) {
+                ps.invincible = false;
+                this.logMsg(`${this.pn(pid)}的无敌效果结束`);
+            }
+        });
+        this.round_num += 1;
+        if (!this.game_over) this.startDrawPhase();
+    }
+
+    setNextDraw(defIds) {
+        const ps = this.players[this.current_player];
+        const picked = [];
+        (defIds || []).forEach(defId => {
+            const idx = ps.deck.findIndex(card => card.def_id === defId);
+            if (idx >= 0) picked.push(ps.deck.splice(idx, 1)[0]);
+        });
+        if (!picked.length) return { success: false, error: '设置失败：牌堆中没有这些牌' };
+        [...picked].reverse().forEach(card => ps.deck.unshift(card));
+        this.logMsg(`训练场：${this.pn(this.current_player)} 设置下次抽牌：${picked.map(card => cardName(card.def_id)).join('、')}`);
+        return { success: true };
+    }
+
+    pickTutorialBotCard() {
+        if (this.current_player !== 1 || this.phase !== 'action' || this.game_over) return null;
+        const ps = this.players[1];
+        if (Object.values(ps.cards_played_this_turn).reduce((a, b) => a + b, 0) >= 1) return null;
+        const safe = new Set(['Basic', 'Bone', 'Fire', 'Rose', 'Coffee', 'Battery']);
+        const order = ['thorn', 'bloom', 'root'];
+        for (const type of order) {
+            for (const card of ps.hand) {
+                if (!safe.has(card.def_id) || card.card_type !== type) continue;
+                if (card.card_type === 'root' && ps.equipment.length >= 4) continue;
+                if (this.canPlayCard(1, card)[0]) return card;
+            }
+        }
+        return null;
+    }
+}
+
+function startLocalGame(message) {
+    cardDefs = message.cardDefs || {};
+    openingEventMagicPool = message.openingEventMagicPool || [];
+    const payload = message.payload || {};
+    const tutorial = message.type === 'tutorial_start';
+    const deck0 = tutorial ? TUTORIAL_DECKS[0] : (payload.deck0 || []);
+    const deck1 = tutorial ? TUTORIAL_DECKS[1] : (payload.deck1 || []);
+    if (!tutorial && (deck0.length !== DECK_SIZE || deck1.length !== DECK_SIZE)) {
+        emit('server_error', { message: '训练场牌组必须各为15张' });
+        return;
+    }
+    engine = new LocalSoloEngine(
+        { ...payload, deck0, deck1 },
+        {
+            tutorial,
+            playerNames: tutorial ? ['你', '练习对手'] : payload.playerNames,
+            startLabel: tutorial ? '新手教程开始' : '单人训练场开始',
+        },
+    );
+    emit('game_phase', { phase: 'playing', solo: true, tutorial });
+    engine.sendState(tutorial ? 0 : null);
+}
+
+onmessage = event => {
+    const message = event.data || {};
+    try {
+        if (message.type === 'solo_start' || message.type === 'tutorial_start') {
+            startLocalGame(message);
+            return;
+        }
+        if (!engine) {
+            emit('server_error', { message: '训练场尚未开始' });
+            return;
+        }
+        if (message.type === 'solo_pause') {
+            engine = null;
+            emit('solo_paused', {});
+            return;
+        }
+        if (message.type === 'solo_play_card') {
+            const pidx = engine.current_player;
+            const result = engine.playCard(pidx, message.payload && message.payload.card_instance_id, message.payload && message.payload.choice);
+            if (result.needs_response) {
+                if (engine.tutorial && pidx === 0) {
+                    engine.handleResponse(1, null);
+                    engine.sendState(0);
+                    return;
+                }
+                engine.sendState(engine.tutorial ? 0 : 1 - pidx);
+                emit('response_request', {
+                    card: result.card,
+                    counter_cards: engine.getCounterCards(1 - pidx, new LocalCard(result.card)).map(card => card.toDict()),
+                });
+                return;
+            }
+            if (result.needs_choice) {
+                engine.sendState();
+                emit('choice_request', {
+                    choice_type: result.choice_type,
+                    card: result.card,
+                    choice_params: result.choice_params || {},
+                    target_player_id: result.target_player_id,
+                });
+                return;
+            }
+            if (!result.success) {
+                emit('server_error', { message: result.error || 'Operation failed' });
+                return;
+            }
+            engine.sendState(engine.tutorial ? 0 : null);
+            return;
+        }
+        if (message.type === 'solo_response') {
+            const responder = engine.pending_response ? 1 - engine.pending_response.player_id : engine.current_player;
+            const cardInstanceId = engine.tutorial && responder !== 0 ? null : (message.payload && message.payload.card_instance_id);
+            engine.handleResponse(responder, cardInstanceId);
+            engine.sendState(engine.tutorial ? 0 : null);
+            return;
+        }
+        if (message.type === 'solo_resolve_choice') {
+            const pidx = engine.pending_choice ? engine.pending_choice.player_id : engine.current_player;
+            const result = engine.resolveChoice(pidx, message.payload && message.payload.choice);
+            if (!result.success && result.error) emit('server_error', { message: result.error });
+            engine.sendState(engine.tutorial ? 0 : null);
+            return;
+        }
+        if (message.type === 'solo_use_trigger') {
+            const result = engine.useTrigger(engine.current_player, message.payload && message.payload.equipment_instance_id);
+            if (!result.success) emit('server_error', { message: result.error || 'Operation failed' });
+            engine.sendState(engine.tutorial ? 0 : null);
+            return;
+        }
+        if (message.type === 'solo_end_turn') {
+            const result = engine.endTurn(engine.current_player);
+            if (!result.success) emit('server_error', { message: result.error || 'Operation failed' });
+            engine.sendState(engine.tutorial ? 0 : null);
+            return;
+        }
+        if (message.type === 'solo_set_next_draw') {
+            const result = engine.setNextDraw((message.payload && message.payload.def_ids) || []);
+            if (!result.success) emit('server_error', { message: result.error || 'Operation failed' });
+            engine.sendState(engine.tutorial ? 0 : null);
+            return;
+        }
+        if (message.type === 'tutorial_bot_action') {
+            if (!engine.tutorial) return;
+            if (engine.current_player !== 1 || engine.pending_response || engine.pending_choice || engine.game_over) {
+                engine.sendState(0);
+                return;
+            }
+            const card = engine.pickTutorialBotCard();
+            if (card) {
+                const result = engine.playCard(1, card.instance_id);
+                if (result.needs_response) {
+                    engine.sendState(0);
+                    emit('response_request', {
+                        card: result.card,
+                        counter_cards: engine.getCounterCards(0, new LocalCard(result.card)).map(c => c.toDict()),
+                    });
+                    return;
+                }
+                if (result.needs_choice) engine.endTurn(1);
+                engine.sendState(0);
+            } else {
+                engine.endTurn(1);
+                engine.sendState(0);
+            }
+            return;
+        }
+        fallback(`local action not implemented: ${message.type}`);
+    } catch (err) {
+        fallback(err && err.stack ? err.stack : err);
+    }
+};

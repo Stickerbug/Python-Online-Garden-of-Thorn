@@ -55,6 +55,9 @@ class CardInstance:
     fusion_level: int = 1
     mimic_discount: int = 0
     fission_hit: int = 0
+    bonus_damage: int = 0
+    held_turns: int = 0
+    return_to_hand_turns: int = 0
     instance_flags: Set[str] = field(default_factory=set)
     disabled_flags: Set[str] = field(default_factory=set)
 
@@ -98,6 +101,9 @@ class CardInstance:
             'fission_level': self.fission_level,
             'fusion_level': self.fusion_level,
             'mimic_discount': self.mimic_discount,
+            'bonus_damage': self.bonus_damage,
+            'held_turns': self.held_turns,
+            'return_to_hand_turns': self.return_to_hand_turns,
             'instance_flags': list(self.instance_flags) if self.instance_flags else [],
             'disabled_flags': list(self.disabled_flags) if self.disabled_flags else [],
         }
@@ -114,6 +120,9 @@ class CardInstance:
             fission_level=max(1, int(d.get('fission_level', d.get('fission_count', 0) + 1))),
             fusion_level=max(1, int(d.get('fusion_level', d.get('fusion_multiplier', 1.0)))),
             mimic_discount=d.get('mimic_discount', 0),
+            bonus_damage=max(0, int(d.get('bonus_damage', 0))),
+            held_turns=max(0, int(d.get('held_turns', 0))),
+            return_to_hand_turns=max(0, int(d.get('return_to_hand_turns', 0))),
             instance_flags=set(d.get('instance_flags', [])),
             disabled_flags=set(d.get('disabled_flags', [])),
         )
@@ -129,6 +138,9 @@ class CardInstance:
             fission_level=self.fission_level,
             fusion_level=self.fusion_level,
             mimic_discount=self.mimic_discount,
+            bonus_damage=self.bonus_damage,
+            held_turns=self.held_turns,
+            return_to_hand_turns=self.return_to_hand_turns,
             instance_flags=set(self.instance_flags),
             disabled_flags=set(self.disabled_flags),
         )
@@ -244,7 +256,7 @@ _reg(CardDef('Powder', 'Powder', '粉末', 4, 0, 'root', 5, 'Common',
              '使你加快速度的神秘粉末。', '自己回合开始时+2E'))
 
 _reg(CardDef('GoldenLeaf', 'Golden Leaf', '黄金叶', 3, 0, 'root', 5, 'Common',
-             '这闪亮的叶子能为你带来额外的抽牌机会。', '自己回合开始时多抽一张牌'))
+             '这闪亮的叶子能为你带来额外的抽牌机会。', '手牌爆牌上限+1；自己回合开始时多抽一张牌'))
 
 _reg(CardDef('Pincer', 'Pincer', '螫针', 4, 0, 'root', 3, 'Common',
              '毒素可以减缓对手行动。', '目标回合开始时E回复-1'))
