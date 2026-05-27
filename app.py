@@ -8,7 +8,7 @@ import threading
 import copy
 import shutil
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import Flask, render_template, jsonify, request, send_from_directory, session
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -115,6 +115,20 @@ pending_team_matches = {}
 
 def iso_now():
     return datetime.utcnow().isoformat(timespec='seconds') + 'Z'
+
+
+def admin_display_time(value):
+    try:
+        if isinstance(value, (int, float)):
+            dt = datetime.utcfromtimestamp(value)
+        else:
+            text = str(value or '')
+            if text.endswith('Z'):
+                text = text[:-1]
+            dt = datetime.fromisoformat(text)
+        return (dt + timedelta(hours=8)).strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        return str(value or '-')
 
 
 def admin_event(kind, message, **extra):
@@ -664,12 +678,12 @@ def execute_admin_command(line):
     if cmd == 'logs':
         count = parse_int_token(parts[1], 'count') if len(parts) > 1 else 20
         rows = list(ADMIN_EVENTS)[:max(1, min(count, 120))]
-        return {'success': True, 'output': '\n'.join(f"{e['time']} [{e['kind']}] {e['message']}" for e in rows) or '暂无日志。'}
+        return {'success': True, 'output': '\n'.join(f"{admin_display_time(e.get('time'))} [{e['kind']}] {e['message']}" for e in rows) or '暂无日志。'}
     if cmd == 'history':
         count = parse_int_token(parts[1], 'count') if len(parts) > 1 else 20
         rows = list(MATCH_HISTORY)[:max(1, min(count, 80))]
         return {'success': True, 'output': '\n'.join(
-            f"{h['time']} #{h['room_id']} {h['mode']} 回合={h['round']} 胜者={h['winner']} 玩家={' vs '.join(h['players'])}"
+            f"{admin_display_time(h.get('time'))} #{h['room_id']} {h['mode']} 回合={h['round']} 胜者={h['winner']} 玩家={' vs '.join(h['players'])}"
             for h in rows
         ) or '暂无历史对局。'}
     if cmd == 'broadcast':

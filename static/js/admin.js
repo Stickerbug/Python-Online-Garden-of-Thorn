@@ -84,6 +84,30 @@ function formatUptime(seconds) {
   return `${s}秒`;
 }
 
+function formatAdminTime(value) {
+  if (!value) return '-';
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.getTime())) return String(value);
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(date).reduce((acc, part) => {
+      if (part.type !== 'literal') acc[part.type] = part.value;
+      return acc;
+    }, {});
+    return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+  } catch {
+    return String(value);
+  }
+}
+
 function escapeHtml(value) {
   return String(value == null ? '' : value)
     .replace(/&/g, '&amp;')
@@ -162,7 +186,7 @@ function renderStatus(data) {
     : `${formatBytes(system.memory_used)} / ${formatBytes(system.memory_total)}（${system.memory_percent}%）`;
   $('metric-disk').textContent = disk.percent == null ? '-' : `${disk.percent}%`;
   $('metric-uptime').textContent = formatUptime(metrics.uptime_seconds);
-  $('metric-clock').textContent = metrics.time || '-';
+  $('metric-clock').textContent = formatAdminTime(metrics.time);
   $('metric-online').textContent = summary.online_players || 0;
   $('metric-online-sub').textContent = `大厅 ${summary.lobby_players || 0} / 观战 ${summary.spectators || 0}`;
   $('metric-rooms').textContent = summary.rooms || 0;
@@ -229,7 +253,7 @@ function renderRooms(rooms) {
 function renderEvents(events) {
   $('events-list').innerHTML = events.length ? events.slice(0, 80).map((event) => `
     <div class="log-item">
-      <time>${escapeHtml(event.time)} · ${escapeHtml(labelFrom(EVENT_KIND_LABELS, event.kind))}</time>
+      <time>${escapeHtml(formatAdminTime(event.time))} · ${escapeHtml(labelFrom(EVENT_KIND_LABELS, event.kind))}</time>
       ${escapeHtml(event.message)}
     </div>`).join('') : '<div class="log-item">暂无事件。</div>';
 }
@@ -237,7 +261,7 @@ function renderEvents(events) {
 function renderHistory(history) {
   $('history-list').innerHTML = history.length ? history.slice(0, 80).map((item) => `
     <div class="log-item">
-      <time>${escapeHtml(item.time)} · 房间 #${escapeHtml(item.room_id)} · ${escapeHtml(item.mode)}</time>
+      <time>${escapeHtml(formatAdminTime(item.time))} · 房间 #${escapeHtml(item.room_id)} · ${escapeHtml(item.mode)}</time>
       ${escapeHtml((item.players || []).join(' / '))}<br>
       胜者=${escapeHtml(item.winner)} · 回合=${escapeHtml(item.round)} · 时长=${formatUptime(item.duration_seconds || 0)}
     </div>`).join('') : '<div class="log-item">暂无历史对局。</div>';
