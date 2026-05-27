@@ -1866,7 +1866,7 @@ const LOCAL_SOLO_SUPPORTED_EFFECTS = new Set([
     'player_prop_set', 'player_prop_add', 'var_set', 'var_add', 'var_sub', 'var_mul', 'var_div',
     'copy_card', 'move_to_discard', 'move_to_hand', 'move_to_deck', 'remove_specific_card',
     'destroy_equipment_choice_or_first', 'destroy_random_equip', 'destroy_all_equip',
-    'destroy_all_destroyable_equipment', 'place_as_equip', 'skip_turn',
+    'destroy_all_destroyable_equipment', 'destroy_self_equipment', 'place_as_equip', 'skip_turn',
     'reveal_enemy_hand', 'choose_from_deck', 'choose_from_discard', 'steal_enemy_card',
     'status_remove_named', 'status_add_named', 'clear_status',
     'on_owner_turn_start', 'on_enemy_turn_start', 'on_any_turn_start', 'on_damage_taken',
@@ -4036,7 +4036,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=2');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=3');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;
