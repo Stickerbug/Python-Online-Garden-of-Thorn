@@ -15,6 +15,8 @@ const INITIAL_MAGIC = 0;
 const INITIAL_HAND_SIZE = 5;
 const FIRST_PLAYER_HAND_SIZE = 4;
 const DECK_SIZE = 15;
+const ERROR_CARD_ID = 'Error';
+const MOD_RUNTIME_ERROR_MESSAGE = '模组执行出现了一个意外错误。请联系管理员。';
 
 const TUTORIAL_DECKS = [
     [
@@ -101,6 +103,13 @@ function cardName(defId) {
     return def ? (def.name_cn || def.name_en || def.id) : defId;
 }
 
+function parseJsonish(value) {
+    if (typeof value !== 'string') return value;
+    const text = value.trim();
+    if (!text || !'{["'.includes(text[0])) return value;
+    try { return parseJsonish(JSON.parse(text)); } catch (_) { return value; }
+}
+
 function scriptEffectsFrom(script) {
     if (Array.isArray(script)) return script;
     if (script && Array.isArray(script.effects)) return script.effects;
@@ -132,6 +141,8 @@ class LocalCard {
     constructor(entry) {
         const source = typeof entry === 'string' ? { def_id: entry } : (entry || {});
         this.def_id = source.def_id || source.id || '';
+        if (this.def_id && !cardDef(this.def_id) && cardDef(ERROR_CARD_ID)) this.def_id = ERROR_CARD_ID;
+        if (!this.def_id && cardDef(ERROR_CARD_ID)) this.def_id = ERROR_CARD_ID;
         this.instance_id = source.instance_id || randintId();
         this.cost_e_override = source.cost_e_override ?? null;
         this.cost_m_override = source.cost_m_override ?? null;
@@ -298,12 +309,16 @@ class LocalPlayer {
         return HAND_LIMIT + ownGoldenLeaf + Math.max(0, Number(this.extra_hand_limit_bonus || 0));
     }
 
+    ruleHandSize() {
+        return this.hand.filter(card => card.def_id !== ERROR_CARD_ID).length;
+    }
+
     canAddToHand() {
-        return this.hand.length < this.handLimit();
+        return this.ruleHandSize() < this.handLimit();
     }
 
     handSpace() {
-        return Math.max(0, this.handLimit() - this.hand.length);
+        return Math.max(0, this.handLimit() - this.ruleHandSize());
     }
 
     drawCards(count) {
@@ -317,6 +332,11 @@ class LocalPlayer {
             }
             const card = this.deck.shift();
             if (!card) break;
+            if (card.def_id === ERROR_CARD_ID) {
+                this.hand.push(card);
+                drawn.push(card);
+                continue;
+            }
             if (!this.canAddToHand()) {
                 const flags = card.flags;
                 const nonAttract = this.hand.filter(c => !c.flags.has('attract'));
@@ -346,6 +366,11 @@ class LocalPlayer {
             }
             const extra = this.deck.shift();
             if (!extra) break;
+            if (extra.def_id === ERROR_CARD_ID) {
+                this.hand.push(extra);
+                drawn.push(extra);
+                continue;
+            }
             if (this.canAddToHand()) {
                 this.hand.push(extra);
                 drawn.push(extra);
@@ -450,6 +475,7 @@ class LocalSoloEngine {
         this._last_created_card_instance_id = null;
         this._active_choice = null;
         this._active_effect_context = {};
+        this.timed_effects = [];
         this.tutorial = !!options.tutorial;
 
         this.resetPlayer(0, payload.deck0 || [], this.first_player === 0);
@@ -504,22 +530,26 @@ class LocalSoloEngine {
             : perspective;
         const opponent = 1 - forPlayer;
         const oppData = this.players[opponent].toDict(false);
+        oppData.hand_count = this.players[opponent].hand.filter(card => card.def_id !== ERROR_CARD_ID).length;
+        oppData.deck_count = this.players[opponent].deck.filter(card => card.def_id !== ERROR_CARD_ID).length;
+        oppData.discard_count = this.players[opponent].discard.filter(card => card.def_id !== ERROR_CARD_ID).length;
+        oppData.exile_count = this.players[opponent].exile.filter(card => card.def_id !== ERROR_CARD_ID).length;
         if (this.pending_choice && this.pending_choice.player_id === forPlayer) {
             const choiceType = this.pending_choice.choice_type || '';
             const targetId = this.pending_choice.target_player_id;
             const params = this.pending_choice.choice_params || {};
             if (choiceType === 'choose_from_enemy_hand') {
-                oppData.hand = this.players[opponent].hand.map(card => card.toDict());
+                oppData.hand = this.players[opponent].hand.filter(card => card.def_id !== ERROR_CARD_ID).map(card => card.toDict());
             }
             if (targetId === opponent) {
                 if (choiceType === 'choose_card_from_hand' || params.zone === 'hand') {
-                    oppData.hand = this.players[opponent].hand.map(card => card.toDict());
+                    oppData.hand = this.players[opponent].hand.filter(card => card.def_id !== ERROR_CARD_ID).map(card => card.toDict());
                 }
                 if (choiceType === 'choose_from_deck' || params.zone === 'deck') {
-                    oppData.deck = this.players[opponent].deck.map(card => card.toDict());
+                    oppData.deck = this.players[opponent].deck.filter(card => card.def_id !== ERROR_CARD_ID).map(card => card.toDict());
                 }
                 if (choiceType === 'choose_from_discard' || params.zone === 'discard') {
-                    oppData.discard = this.players[opponent].discard.map(card => card.toDict());
+                    oppData.discard = this.players[opponent].discard.filter(card => card.def_id !== ERROR_CARD_ID).map(card => card.toDict());
                 }
                 if (choiceType === 'choose_equipment' || params.zone === 'equipment') {
                     oppData.equipment = this.players[opponent].equipment.map(eq => eq.toDict());
@@ -527,8 +557,8 @@ class LocalSoloEngine {
             }
         }
         if (this._antenna_reveal[forPlayer]) {
-            oppData.revealed_hand = this.players[opponent].hand.map(card => card.toDict());
-            oppData.hand = this.players[opponent].hand.map(card => card.toDict());
+            oppData.revealed_hand = this.players[opponent].hand.filter(card => card.def_id !== ERROR_CARD_ID).map(card => card.toDict());
+            oppData.hand = this.players[opponent].hand.filter(card => card.def_id !== ERROR_CARD_ID).map(card => card.toDict());
         }
         const state = {
             phase: this.phase,
@@ -548,6 +578,8 @@ class LocalSoloEngine {
             your_id: forPlayer,
             your_name: this.tutorial ? '你' : (forPlayer === 0 ? 'Player A' : 'Player B'),
             opponent_name: this.tutorial ? '练习对手' : (forPlayer === 0 ? 'Player B' : 'Player A'),
+            enemy_ids: [opponent],
+            opponent_names: [this.tutorial ? this.pn(opponent) : (forPlayer === 0 ? 'Player B' : 'Player A')],
             solo: true,
         };
         if (this.tutorial) state.tutorial = true;
@@ -674,6 +706,7 @@ class LocalSoloEngine {
         const opp = this.players[oppId];
         this._antenna_reveal[playerId] = null;
         this.runZoneOwnerTurnStartEvents(playerId);
+        this.runTimedEffectsForTurn(playerId);
         if (ps.shovel_active) {
             ps.shovel_active = false;
             ps.untargetable = false;
@@ -869,6 +902,13 @@ class LocalSoloEngine {
         if (['last_created_card', 'created_card', 'last_copied_card'].includes(ref.ref)) {
             return this.findCardByInstanceId(this._active_effect_context.last_created_card_instance_id || this._last_created_card_instance_id);
         }
+        if (ref.ref === 'card_instance') return this.findCardByInstanceId(ref.instance_id);
+        if (ref.ref === 'var') {
+            let raw = this.varStoreForTarget(playerId, ref.target || 'self')[String(ref.name || 'var')];
+            if (Array.isArray(raw)) raw = raw.length ? raw[0] : null;
+            return this.resolveCardRef(playerId, raw, currentCard);
+        }
+        if (ref.ref === 'list_item') return this.resolveCardRef(playerId, this.listItemRaw(playerId, ref, currentCard), currentCard);
         if (['selected_card', 'choice_card'].includes(ref.ref)) {
             const choice = this._active_choice || {};
             const id = choice.target_instance_id ?? (Array.isArray(choice.target_instance_ids) ? choice.target_instance_ids[0] : null);
@@ -897,6 +937,22 @@ class LocalSoloEngine {
         return null;
     }
 
+    resolveCardIdRef(playerId, ref, currentCard = null) {
+        if (typeof ref === 'string') return ref;
+        if (ref && typeof ref === 'object' && ref.ref === 'card_by_id') return String(ref.id || '');
+        if (ref && typeof ref === 'object' && ['var', 'list_item'].includes(ref.ref)) {
+            let raw = ref.ref === 'var'
+                ? this.varStoreForTarget(playerId, ref.target || 'self')[String(ref.name || 'var')]
+                : this.listItemRaw(playerId, ref, currentCard);
+            if (Array.isArray(raw)) raw = raw.length ? raw[0] : '';
+            if (typeof raw === 'string') return raw;
+            const rawCard = this.resolveCardRef(playerId, raw, currentCard);
+            return rawCard ? rawCard.def_id : '';
+        }
+        const card = this.resolveCardRef(playerId, ref, currentCard);
+        return card ? card.def_id : '';
+    }
+
     removeCardFromCurrentZone(card) {
         const loc = this.findCardLocation(card);
         if (!loc) return null;
@@ -911,11 +967,119 @@ class LocalSoloEngine {
             this.custom_vars = this.custom_vars || {};
             return this.custom_vars;
         }
+        if (target === 'team') {
+            return (this.players[playerId] || this.players[0]).custom_vars;
+        }
         const tid = this.resolveTarget(playerId, target || 'self');
         return (this.players[tid] || this.players[playerId]).custom_vars;
     }
 
+    scalarValue(value, fallbackValue = 0) {
+        if (Array.isArray(value)) return value.length ? this.scalarValue(value[0], fallbackValue) : fallbackValue;
+        if (value && typeof value === 'object') {
+            if (value.ref === 'card_instance') {
+                const card = this.findCardByInstanceId(value.instance_id);
+                return card ? card.def_id : fallbackValue;
+            }
+            return fallbackValue;
+        }
+        return value == null ? fallbackValue : value;
+    }
+
+    serializableListItem(item) {
+        if (item instanceof LocalCard) return { ref: 'card_instance', instance_id: item.instance_id };
+        if (Array.isArray(item)) return item.map(v => this.serializableListItem(v));
+        if (item && typeof item === 'object') {
+            return Object.fromEntries(Object.entries(item).map(([k, v]) => [k, this.serializableListItem(v)]));
+        }
+        return item;
+    }
+
+    zoneList(playerId, target, zoneName) {
+        const tid = this.resolveTarget(playerId, target || 'self');
+        const ps = this.players[tid];
+        if (!ps) return [];
+        const zone = zoneName === 'equipment' ? ps.equipment.map(eq => eq.card_instance) : (ps[zoneName] || []);
+        return zone.filter(Boolean).map(card => ({ ref: 'card_instance', instance_id: card.instance_id }));
+    }
+
+    evalList(playerId, expr, currentCard = null) {
+        expr = parseJsonish(expr);
+        if (Array.isArray(expr)) return expr.map(v => this.serializableListItem(v));
+        if (expr == null) return [];
+        if (typeof expr !== 'object') return [expr];
+        const ref = expr.ref;
+        if (ref === 'list' || ref === 'list_create') return (expr.items || []).map(item => this.serializableListItem(this.evalRawItem(playerId, item, currentCard)));
+        if (ref === 'list_var') {
+            const raw = this.varStoreForTarget(playerId, expr.target || 'self')[String(expr.name || 'var')];
+            return Array.isArray(raw) ? [...raw] : (raw == null ? [] : [raw]);
+        }
+        if (ref === 'var') {
+            const raw = this.varStoreForTarget(playerId, expr.target || 'self')[String(expr.name || 'var')];
+            return Array.isArray(raw) ? [...raw] : (raw == null ? [] : [raw]);
+        }
+        if (ref === 'zone_list') return this.zoneList(playerId, expr.target || 'self', String(expr.zone || 'hand'));
+        if (ref === 'list_item') {
+            const item = this.listItemRaw(playerId, expr, currentCard);
+            return item == null ? [] : [item];
+        }
+        return [this.evalExpr(playerId, expr, currentCard, 0)];
+    }
+
+    listItemRaw(playerId, expr, currentCard = null) {
+        const values = this.evalList(playerId, expr && expr.list, currentCard);
+        const idx = this.evalInt(playerId, expr && expr.index, currentCard, 1) - 1;
+        return idx >= 0 && idx < values.length ? values[idx] : null;
+    }
+
+    evalRawItem(playerId, expr, currentCard = null) {
+        expr = parseJsonish(expr);
+        if (typeof expr === 'string') {
+            const asNumber = Number(expr);
+            return Number.isFinite(asNumber) ? asNumber : expr;
+        }
+        if (typeof expr === 'number' || typeof expr === 'boolean' || expr == null) return expr;
+        if (expr && typeof expr === 'object') {
+            const ref = expr.ref;
+            if (ref === 'list_item') return this.listItemRaw(playerId, expr, currentCard);
+            if (['card_instance', 'zone_card', 'selected_card', 'selected_card_at', 'current_card', 'this_card', 'last_created_card', 'created_card', 'last_copied_card'].includes(ref)) {
+                const card = this.resolveCardRef(playerId, expr, currentCard);
+                return card ? this.serializableListItem(card) : expr;
+            }
+            if (ref === 'var') {
+                const raw = this.varStoreForTarget(playerId, expr.target || 'self')[String(expr.name || 'var')];
+                return Array.isArray(raw) ? (raw.length ? raw[0] : null) : raw;
+            }
+        }
+        return this.evalExpr(playerId, expr, currentCard, 0);
+    }
+
+    evalVarAssignmentValue(playerId, expr, currentCard = null) {
+        expr = parseJsonish(expr);
+        if (Array.isArray(expr)) return expr.length ? this.serializableListItem(expr[0]) : 0;
+        if (expr && typeof expr === 'object' && ['list', 'list_create', 'list_var', 'zone_list'].includes(expr.ref)) {
+            const values = this.evalList(playerId, expr, currentCard);
+            return values.length ? this.serializableListItem(values[0]) : 0;
+        }
+        return this.serializableListItem(this.evalRawItem(playerId, expr, currentCard));
+    }
+
+    sameListItem(a, b) {
+        a = this.serializableListItem(a);
+        b = this.serializableListItem(b);
+        if (a && typeof a === 'object' && a.ref === 'card_instance' && typeof b === 'string') {
+            const card = this.findCardByInstanceId(a.instance_id);
+            return !!card && card.def_id === b;
+        }
+        if (b && typeof b === 'object' && b.ref === 'card_instance' && typeof a === 'string') {
+            const card = this.findCardByInstanceId(b.instance_id);
+            return !!card && card.def_id === a;
+        }
+        return JSON.stringify(a) === JSON.stringify(b);
+    }
+
     evalExpr(playerId, expr, currentCard = null, fallbackValue = 0) {
+        expr = parseJsonish(expr);
         if (expr == null) return fallbackValue;
         if (typeof expr === 'number') return expr;
         if (typeof expr === 'boolean') return expr ? 1 : 0;
@@ -927,12 +1091,21 @@ class LocalSoloEngine {
         const ref = expr.ref;
         if (ref === 'var') {
             const store = this.varStoreForTarget(playerId, expr.target || 'self');
-            return toInt(store[String(expr.name || 'var')], 0);
+            return this.scalarValue(store[String(expr.name || 'var')], 0);
         }
+        if (ref === 'timer_remaining') {
+            return toInt((this._active_effect_context || {}).timer_remaining, 0);
+        }
+        if (ref === 'list_var' || ref === 'list' || ref === 'zone_list') return this.scalarValue(this.evalList(playerId, expr, currentCard), 0);
+        if (ref === 'list_length') return this.evalList(playerId, expr.list || [], currentCard).length;
+        if (ref === 'list_item') return this.scalarValue(this.listItemRaw(playerId, expr, currentCard), 0);
         if (ref === 'player_property' || ref === 'target_attribute') {
             const tid = this.resolveTarget(playerId, expr.target || 'self');
             const ps = this.players[tid] || this.players[playerId];
-            return toInt(ps[String(expr.property || expr.attribute || 'health')], 0);
+            const prop = String(expr.property || expr.attribute || expr.attr || 'health');
+            if (prop === 'hand_size') return ps.hand.length;
+            if (prop === 'hand_limit') return ps.handLimit();
+            return toInt(ps[prop], 0);
         }
         if (ref === 'math_op') {
             const a = this.evalExpr(playerId, expr.a, currentCard, 0);
@@ -980,6 +1153,11 @@ class LocalSoloEngine {
             });
             return total;
         }
+        if (ref === 'hand_limit') {
+            const tid = this.resolveTarget(playerId, expr.target || 'self');
+            const ps = this.players[tid] || this.players[playerId];
+            return ps.handLimit();
+        }
         if (ref === 'hand_size' || ref === 'deck_remaining' || ref === 'discard_size' || ref === 'exile_size') {
             const tid = this.resolveTarget(playerId, expr.target || 'self');
             const ps = this.players[tid] || this.players[playerId];
@@ -998,12 +1176,14 @@ class LocalSoloEngine {
     }
 
     evalInt(playerId, expr, currentCard = null, fallbackValue = 0) {
-        return toInt(this.evalExpr(playerId, expr, currentCard, fallbackValue), fallbackValue);
+        return toInt(this.scalarValue(this.evalExpr(playerId, expr, currentCard, fallbackValue), fallbackValue), fallbackValue);
     }
 
     evalCondition(playerId, cond, currentCard = null) {
+        cond = parseJsonish(cond);
         if (!cond) return false;
         if (typeof cond === 'boolean') return cond;
+        if (typeof cond === 'string') return cond === 'true' || cond === 'True';
         const op = cond.op || cond.type || '';
         if (op === 'compare') {
             const a = this.evalExpr(playerId, cond.a, currentCard, 0);
@@ -1020,14 +1200,25 @@ class LocalSoloEngine {
             const store = this.varStoreForTarget(playerId, cond.target || 'self');
             return this.evalCondition(playerId, {
                 op: 'compare',
-                a: toInt(store[String(cond.name || 'var')], 0),
+                a: toInt(this.scalarValue(store[String(cond.name || 'var')], 0), 0),
                 operator: cond.operator || '==',
                 b: cond.value ?? cond.b ?? 0,
             }, currentCard);
         }
-        if (op === 'and') return (cond.conditions || []).every(c => this.evalCondition(playerId, c, currentCard));
-        if (op === 'or') return (cond.conditions || []).some(c => this.evalCondition(playerId, c, currentCard));
-        if (op === 'not') return !this.evalCondition(playerId, cond.condition, currentCard);
+        if (op === 'list_contains') {
+            const values = this.evalList(playerId, cond.list || [], currentCard);
+            const item = this.serializableListItem(this.evalRawItem(playerId, cond.item ?? 0, currentCard));
+            return values.some(value => this.sameListItem(value, item));
+        }
+        if (op === 'and') {
+            const conditions = cond.conditions || [cond.a, cond.b];
+            return conditions.every(c => this.evalCondition(playerId, c, currentCard));
+        }
+        if (op === 'or') {
+            const conditions = cond.conditions || [cond.a, cond.b];
+            return conditions.some(c => this.evalCondition(playerId, c, currentCard));
+        }
+        if (op === 'not') return !this.evalCondition(playerId, cond.condition ?? cond.value, currentCard);
         if (op === 'has_status_named' || op === 'has_status') {
             const tid = this.resolveTarget(playerId, cond.target || 'self');
             const ps = this.players[tid] || this.players[playerId];
@@ -1078,6 +1269,68 @@ class LocalSoloEngine {
         }
     }
 
+    timerTriggerMatches(entry, currentPlayer) {
+        const trigger = String(entry.trigger || 'target_turn_start');
+        const ownerId = toInt(entry.owner_id, currentPlayer);
+        const targetId = toInt(entry.target_id, ownerId);
+        if (trigger === 'target_turn_start' || trigger === 'turn_start') return currentPlayer === targetId;
+        if (trigger === 'owner_turn_start') return currentPlayer === ownerId;
+        if (trigger === 'friendly_turn_start') return currentPlayer === ownerId;
+        if (trigger === 'enemy_turn_start') return currentPlayer !== ownerId;
+        if (trigger === 'any_turn_start') return true;
+        return false;
+    }
+
+    timerTargets(playerId, target) {
+        if (target === 'global' || target === 'team') return [playerId];
+        const ids = this.resolveTargets(playerId, target || 'self').filter(id => id >= 0 && id < this.players.length);
+        return ids.length ? ids : [playerId];
+    }
+
+    registerTimedEffect(ownerId, targetId, trigger, duration, effects, card = null) {
+        duration = Math.max(1, Math.min(toInt(duration, 1), 999));
+        if (!Array.isArray(effects) || !effects.length) return;
+        this.timed_effects = Array.isArray(this.timed_effects) ? this.timed_effects : [];
+        const entry = {
+            owner_id: ownerId,
+            target_id: targetId,
+            trigger: trigger || 'target_turn_start',
+            remaining: duration,
+            effects: deepClone(effects),
+        };
+        if (card && card.instance_id != null) entry.card_instance_id = card.instance_id;
+        this.timed_effects.push(entry);
+        if (this.timed_effects.length > 200) {
+            this.timed_effects = this.timed_effects.slice(-200);
+        }
+    }
+
+    runTimedEffectsForTurn(currentPlayer) {
+        if (!Array.isArray(this.timed_effects) || !this.timed_effects.length) return;
+        const kept = [];
+        [...this.timed_effects].forEach(entry => {
+            if (!entry || typeof entry !== 'object') return;
+            if (!this.timerTriggerMatches(entry, currentPlayer)) {
+                kept.push(entry);
+                return;
+            }
+            const ownerId = toInt(entry.owner_id, currentPlayer);
+            const targetId = toInt(entry.target_id, ownerId);
+            const remaining = toInt(entry.remaining, 0);
+            const timerCard = entry.card_instance_id != null ? this.findCardByInstanceId(entry.card_instance_id) : null;
+            this.runEffectList(ownerId, timerCard, entry.effects || [], null, {
+                event: 'timed_effect',
+                source_id: ownerId,
+                target_id: targetId,
+                timer_current_player: currentPlayer,
+                timer_remaining: remaining,
+            });
+            entry.remaining = remaining - 1;
+            if (entry.remaining > 0) kept.push(entry);
+        });
+        this.timed_effects = kept;
+    }
+
     runOneEffect(playerId, card, effect, choice) {
         if (!effect || typeof effect !== 'object') return;
         const type = effect.type || '';
@@ -1094,8 +1347,14 @@ class LocalSoloEngine {
         };
         const name = aliases[type] || type;
         const handler = this[`effect_${name}`];
-        if (typeof handler === 'function') handler.call(this, playerId, card, params, log, choice);
-        else if (log) this.logMsg(log);
+        try {
+            if (typeof handler === 'function') handler.call(this, playerId, card, params, log, choice);
+            else if (log) this.logMsg(log);
+            else throw new Error(`Unknown effect: ${type}`);
+        } catch (err) {
+            this.logMsg(MOD_RUNTIME_ERROR_MESSAGE);
+            console.error('[mod-runtime-error]', type, err);
+        }
     }
 
     effect_if(playerId, card, params, log, choice) {
@@ -1117,6 +1376,18 @@ class LocalSoloEngine {
         }
     }
 
+    effect_repeat_until(playerId, card, params, log, choice) {
+        const body = params.body || params.effects || [];
+        let loops = 0;
+        while (loops < 64 && !this.evalCondition(playerId, params.condition, card)) {
+            this.runEffectList(playerId, card, body, choice, {
+                ...this._active_effect_context,
+                repeat_index: loops + 1,
+            });
+            loops += 1;
+        }
+    }
+
     effect_for_each_selected_card(playerId, card, params, log, choice) {
         const ids = Array.isArray((choice || {}).target_instance_ids)
             ? choice.target_instance_ids
@@ -1126,6 +1397,45 @@ class LocalSoloEngine {
                 ...this._active_effect_context,
                 selected_card_index: idx + 1,
             });
+        });
+    }
+
+    effect_for_each_list(playerId, card, params, log, choice) {
+        const name = String(params.name || 'item');
+        const store = this.varStoreForTarget(playerId, params.target || 'self');
+        const hadOld = Object.prototype.hasOwnProperty.call(store, name);
+        const oldValue = store[name];
+        try {
+            this.evalList(playerId, params.list || [], card).forEach((item, idx) => {
+                store[name] = this.serializableListItem(item);
+                this.runEffectList(playerId, card, params.body || [], choice, {
+                    ...this._active_effect_context,
+                    list_index: idx + 1,
+                });
+            });
+        } finally {
+            if (hadOld) store[name] = oldValue;
+            else delete store[name];
+        }
+    }
+
+    effect_timed_effect(playerId, card, params) {
+        const duration = this.evalInt(playerId, params.duration ?? params.turns ?? 1, card, 1);
+        const effects = params.effects || params.body || [];
+        this.timerTargets(playerId, params.target || 'self').forEach(targetId => {
+            this.registerTimedEffect(playerId, targetId, params.trigger || 'target_turn_start', duration, effects, card);
+        });
+    }
+
+    effect_countdown_var(playerId, card, params, log, choice) {
+        const target = params.target || 'self';
+        const name = String(params.name || 'timer');
+        const duration = this.evalInt(playerId, params.duration ?? params.turns ?? 1, card, 1);
+        this.effect_var_set(playerId, card, { target, name, value: duration }, log, choice);
+        this.timerTargets(playerId, target).forEach(targetId => {
+            const effectTarget = (target === 'global' || target === 'team') ? target : targetId;
+            const effects = [{ type: 'var_sub', params: { target: effectTarget, name, value: 1 } }];
+            this.registerTimedEffect(playerId, targetId, params.trigger || 'target_turn_start', duration, effects);
         });
     }
 
@@ -1226,7 +1536,7 @@ class LocalSoloEngine {
     effect_var_set(playerId, card, params) {
         const store = this.varStoreForTarget(playerId, params.target || 'self');
         const name = String(params.name || 'var');
-        store[name] = this.evalInt(playerId, params.value ?? 0, card, 0);
+        store[name] = this.evalVarAssignmentValue(playerId, params.value ?? 0, card);
         const tid = this.resolveTarget(playerId, params.target || 'self');
         if (name === '三角形层数') this.players[tid].triangle_stacks = store[name];
         if (name === '咖啡首次使用') this.players[tid].coffee_first_use = store[name] > 0;
@@ -1236,27 +1546,77 @@ class LocalSoloEngine {
     effect_var_add(playerId, card, params) {
         const store = this.varStoreForTarget(playerId, params.target || 'self');
         const name = String(params.name || 'var');
-        store[name] = toInt(store[name], 0) + this.evalInt(playerId, params.value ?? params.amount ?? 0, card, 0);
+        store[name] = toInt(this.scalarValue(store[name], 0), 0) + this.evalInt(playerId, params.value ?? params.amount ?? 0, card, 0);
         if (name === '三角形层数') this.players[this.resolveTarget(playerId, params.target || 'self')].triangle_stacks = store[name];
     }
 
     effect_var_sub(playerId, card, params) {
         const store = this.varStoreForTarget(playerId, params.target || 'self');
         const name = String(params.name || 'var');
-        store[name] = toInt(store[name], 0) - this.evalInt(playerId, params.value ?? params.amount ?? 0, card, 0);
+        store[name] = toInt(this.scalarValue(store[name], 0), 0) - this.evalInt(playerId, params.value ?? params.amount ?? 0, card, 0);
     }
 
     effect_var_mul(playerId, card, params) {
         const store = this.varStoreForTarget(playerId, params.target || 'self');
         const name = String(params.name || 'var');
-        store[name] = toInt(store[name], 0) * this.evalInt(playerId, params.value ?? params.amount ?? 1, card, 1);
+        store[name] = toInt(this.scalarValue(store[name], 0), 0) * this.evalInt(playerId, params.value ?? params.amount ?? 1, card, 1);
     }
 
     effect_var_div(playerId, card, params) {
         const store = this.varStoreForTarget(playerId, params.target || 'self');
         const name = String(params.name || 'var');
         const div = this.evalInt(playerId, params.value ?? params.amount ?? 1, card, 1);
-        store[name] = div === 0 ? 0 : Math.trunc(toInt(store[name], 0) / div);
+        const current = toInt(this.scalarValue(store[name], 0), 0);
+        store[name] = div === 0 ? current : Math.trunc(current / div);
+    }
+
+    effect_list_set(playerId, card, params) {
+        const targets = ['global', 'team'].includes(params.target) ? [params.target] : this.resolveTargets(playerId, params.target || 'self');
+        targets.forEach(tid => {
+            this.varStoreForTarget(playerId, tid)[String(params.name || 'list')] = this.evalList(playerId, params.list || [], card).map(v => this.serializableListItem(v));
+        });
+    }
+
+    effect_list_append(playerId, card, params) {
+        const targets = ['global', 'team'].includes(params.target) ? [params.target] : this.resolveTargets(playerId, params.target || 'self');
+        targets.forEach(tid => {
+            const store = this.varStoreForTarget(playerId, tid);
+            const name = String(params.name || 'list');
+            const current = Array.isArray(store[name]) ? store[name] : (store[name] == null ? [] : [store[name]]);
+            current.push(this.serializableListItem(this.evalRawItem(playerId, params.item ?? 0, card)));
+            store[name] = current;
+        });
+    }
+
+    effect_list_insert(playerId, card, params) {
+        const targets = ['global', 'team'].includes(params.target) ? [params.target] : this.resolveTargets(playerId, params.target || 'self');
+        targets.forEach(tid => {
+            const store = this.varStoreForTarget(playerId, tid);
+            const name = String(params.name || 'list');
+            const current = Array.isArray(store[name]) ? store[name] : (store[name] == null ? [] : [store[name]]);
+            const idx = Math.max(0, Math.min(current.length, this.evalInt(playerId, params.index ?? 1, card, 1) - 1));
+            current.splice(idx, 0, this.serializableListItem(this.evalRawItem(playerId, params.item ?? 0, card)));
+            store[name] = current;
+        });
+    }
+
+    effect_list_delete(playerId, card, params) {
+        const targets = ['global', 'team'].includes(params.target) ? [params.target] : this.resolveTargets(playerId, params.target || 'self');
+        targets.forEach(tid => {
+            const store = this.varStoreForTarget(playerId, tid);
+            const name = String(params.name || 'list');
+            const current = Array.isArray(store[name]) ? store[name] : (store[name] == null ? [] : [store[name]]);
+            const idx = this.evalInt(playerId, params.index ?? 1, card, 1) - 1;
+            if (idx >= 0 && idx < current.length) current.splice(idx, 1);
+            store[name] = current;
+        });
+    }
+
+    effect_list_clear(playerId, card, params) {
+        const targets = ['global', 'team'].includes(params.target) ? [params.target] : this.resolveTargets(playerId, params.target || 'self');
+        targets.forEach(tid => {
+            this.varStoreForTarget(playerId, tid)[String(params.name || 'list')] = [];
+        });
     }
 
     effect_player_prop_set(playerId, card, params) {
@@ -1313,6 +1673,49 @@ class LocalSoloEngine {
         this._last_created_card_instance_id = copy.instance_id;
         this._active_effect_context.last_created_card_instance_id = copy.instance_id;
         if (log) this.logMsg(log);
+    }
+
+    effect_give_card_to_hand(playerId, card, params, log) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const target = this.players[targetId] || this.players[playerId];
+        const cardId = this.resolveCardIdRef(playerId, params.card || '', card);
+        const def = cardDef(cardId) || cardDef(ERROR_CARD_ID);
+        if (!def) return;
+        if ((def.id || cardId) !== ERROR_CARD_ID && !target.canAddToHand()) return;
+        const newCard = new LocalCard(def.id || cardId);
+        target.hand.push(newCard);
+        this._last_created_card_instance_id = newCard.instance_id;
+        this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
+        if (log && newCard.def_id !== ERROR_CARD_ID) this.logMsg(log);
+    }
+
+    effect_give_card_to_deck(playerId, card, params, log) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const target = this.players[targetId] || this.players[playerId];
+        const cardId = this.resolveCardIdRef(playerId, params.card || '', card);
+        const def = cardDef(cardId) || cardDef(ERROR_CARD_ID);
+        if (!def) return;
+        const newCard = new LocalCard(def.id || cardId);
+        const position = params.position || 'top';
+        if (position === 'bottom') target.deck.push(newCard);
+        else if (position === 'random') target.deck.splice(Math.floor(Math.random() * (target.deck.length + 1)), 0, newCard);
+        else target.deck.unshift(newCard);
+        this._last_created_card_instance_id = newCard.instance_id;
+        this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
+        if (log && newCard.def_id !== ERROR_CARD_ID) this.logMsg(log);
+    }
+
+    effect_give_card_to_discard(playerId, card, params, log) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const target = this.players[targetId] || this.players[playerId];
+        const cardId = this.resolveCardIdRef(playerId, params.card || '', card);
+        const def = cardDef(cardId) || cardDef(ERROR_CARD_ID);
+        if (!def) return;
+        const newCard = new LocalCard(def.id || cardId);
+        this.discardCard(target, newCard);
+        this._last_created_card_instance_id = newCard.instance_id;
+        this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
+        if (log && newCard.def_id !== ERROR_CARD_ID) this.logMsg(log);
     }
 
     effect_move_to_discard(playerId, card, params) {
@@ -1399,6 +1802,43 @@ class LocalSoloEngine {
         }
     }
 
+    effect_add_equipment_to_zone(playerId, card, params, log) {
+        const cardId = this.resolveCardIdRef(playerId, params.card || 'Leaf', card);
+        const def = cardDef(cardId);
+        let ownerIds = this.resolveTargets(playerId, params.target || params.owner || 'self');
+        if (!ownerIds.length) ownerIds = [playerId];
+        if (!def) {
+            const errorDef = cardDef(ERROR_CARD_ID);
+            if (!errorDef) return;
+            ownerIds.forEach(ownerId => {
+                const owner = this.players[ownerId];
+                if (!owner) return;
+                const newCard = new LocalCard(ERROR_CARD_ID);
+                owner.hand.push(newCard);
+                this._last_created_card_instance_id = newCard.instance_id;
+                this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
+            });
+            return;
+        }
+        ownerIds.forEach(ownerId => {
+            const owner = this.players[ownerId];
+            if (!owner) return;
+            const newCard = new LocalCard(def.id || cardId);
+            newCard.durability = toInt(def.durability, 0) > 0 ? toInt(def.durability, 0) : 3;
+            const eq = new LocalEquipment(newCard, ownerId);
+            if (params.effect_target != null) {
+                const effectTarget = this.resolveTarget(playerId, params.effect_target);
+                if (effectTarget >= 0 && effectTarget < this.players.length) eq.effect_target = effectTarget;
+            } else {
+                eq.effect_target = ownerId;
+            }
+            owner.equipment.push(eq);
+            this._last_created_card_instance_id = newCard.instance_id;
+            this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
+            this.logMsg(log || `${this.pn(ownerId)}获得装备${cardName(newCard.def_id)}`);
+        });
+    }
+
     effect_skip_turn(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         this.players[targetId].skip_turn = true;
@@ -1478,6 +1918,30 @@ class LocalSoloEngine {
         const status = String(params.status || params.name || '');
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
         if (status) this.players[targetId][status] = toInt(this.players[targetId][status], 0) + amount;
+    }
+
+    effect_add_tag(playerId, card, params, log) {
+        this.effect_tag_add_named(playerId, card, params, log);
+    }
+
+    effect_remove_tag(playerId, card, params, log) {
+        this.effect_tag_remove_named(playerId, card, params, log);
+    }
+
+    effect_tag_add_named(playerId, card, params, log) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
+        const tag = String(params.tag || '').trim();
+        if (!target || !tag) return;
+        target.instance_flags.add(tag);
+        if (log) this.logMsg(log);
+    }
+
+    effect_tag_remove_named(playerId, card, params, log) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
+        const tag = String(params.tag || '').trim();
+        if (!target || !tag) return;
+        target.instance_flags.delete(tag);
+        if (log) this.logMsg(log);
     }
 
     effect_clear_status(playerId, card, params) {
@@ -1756,10 +2220,14 @@ class LocalSoloEngine {
     }
 
     playCard(playerId, instanceId, choice = null) {
-        if (this.pending_response) return { success: false, error: '等待对手反制响应' };
         const ps = this.players[playerId];
         const card = ps.findHandCard(instanceId);
         if (!card) return { success: false, error: '卡牌不在手中' };
+        if (card.def_id === ERROR_CARD_ID) {
+            ps.removeHandCard(instanceId);
+            return { success: true, card: card.toDict(), ignored: true };
+        }
+        if (this.pending_response) return { success: false, error: '等待对手反制响应' };
         const [canPlay, reason] = this.canPlayCard(playerId, card);
         if (!canPlay) return { success: false, error: reason };
         const totalE = card.cost_e + this.getExtraEForCard(playerId, card);
@@ -2061,6 +2529,19 @@ class LocalSoloEngine {
 
 function startLocalGame(message) {
     cardDefs = message.cardDefs || {};
+    if (!cardDefs[ERROR_CARD_ID]) {
+        cardDefs[ERROR_CARD_ID] = {
+            id: ERROR_CARD_ID,
+            name_en: 'Error',
+            name_cn: '错误',
+            cost_e: 0,
+            cost_m: 0,
+            card_type: 'bloom',
+            flags: ['infinite_exclude'],
+            effect_text: '这是一个错误，请联系服务器管理员',
+            description: '哎呀，你怎么会看到这张牌？',
+        };
+    }
     openingEventMagicPool = message.openingEventMagicPool || [];
     const payload = message.payload || {};
     const tutorial = message.type === 'tutorial_start';

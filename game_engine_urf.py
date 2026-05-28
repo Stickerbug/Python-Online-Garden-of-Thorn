@@ -260,6 +260,7 @@ class GameEngineInfiniteFire(GameEngine):
         opp = self.players[opp_id]
         self._antenna_reveal[player_id] = None
         self._run_zone_owner_turn_start_events(player_id)
+        self._run_timed_effects_for_turn(player_id)
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False
@@ -338,7 +339,7 @@ class GameEngineInfiniteFire(GameEngine):
         card_type = card.card_type if card else None
         extra_replenish_types = self._fusion_extra_replenish_types(player_id, card, choice)
         result = super().play_card(player_id, card_instance_id, choice)
-        if result.get('success') and not result.get('needs_choice') and card_type:
+        if result.get('success') and not result.get('ignored') and not result.get('needs_choice') and card_type:
             self._draw_to_hand_by_type(player_id, card_type)
             for extra_type in extra_replenish_types:
                 self._draw_to_hand_by_type(player_id, extra_type)

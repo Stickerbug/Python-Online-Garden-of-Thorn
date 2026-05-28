@@ -1,5 +1,6 @@
 import random
 import math
+import json
 from typing import List, Dict, Optional, Tuple, Set
 from engine_runtime_ext import install_runtime_ext
 from cards import (
@@ -8,8 +9,9 @@ from cards import (
     BASE_MAX_ELIXIR, BASE_MAX_MAGIC, INITIAL_HEALTH, INITIAL_ELIXIR,
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     DECK_SIZE, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, build_draft_pool, generate_draft_options,
-    create_deck_from_draft,
+    create_deck_from_draft, ERROR_CARD_ID,
 )
+from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 
 
 class EquipmentInstance:
@@ -250,11 +252,14 @@ class PlayerState:
         )
         return HAND_LIMIT + own_golden_leaf + max(0, int(getattr(self, 'extra_hand_limit_bonus', 0)))
 
+    def rule_hand_size(self) -> int:
+        return sum(1 for c in self.hand if c.def_id != ERROR_CARD_ID)
+
     def can_add_to_hand(self) -> bool:
-        return len(self.hand) < self.hand_limit()
+        return self.rule_hand_size() < self.hand_limit()
 
     def hand_space(self) -> int:
-        return max(0, self.hand_limit() - len(self.hand))
+        return max(0, self.hand_limit() - self.rule_hand_size())
 
     def draw_cards(self, count: int) -> List[CardInstance]:
         drawn = []
@@ -267,6 +272,10 @@ class PlayerState:
                 self.discard = []
                 random.shuffle(self.deck)
             card = self.deck.pop(0)
+            if card.def_id == ERROR_CARD_ID:
+                self.hand.append(card)
+                drawn.append(card)
+                continue
             if not self.can_add_to_hand():
                 attract_cards = [c for c in self.hand if 'attract' in c.flags]
                 non_attract_cards = [c for c in self.hand if 'attract' not in c.flags]
@@ -295,6 +304,10 @@ class PlayerState:
                 random.shuffle(self.deck)
             if self.deck:
                 extra = self.deck.pop(0)
+                if extra.def_id == ERROR_CARD_ID:
+                    self.hand.append(extra)
+                    drawn.append(extra)
+                    continue
                 if self.can_add_to_hand():
                     self.hand.append(extra)
                     drawn.append(extra)
@@ -538,6 +551,8 @@ class GameEngine:
             return 1 if bool(getattr(ps, prop, False)) else 0
         if prop == 'hand_size':
             return len(ps.hand)
+        if prop == 'hand_limit':
+            return ps.hand_limit()
         if prop == 'deck_remaining':
             return len(ps.deck)
         if prop == 'discard_size':
@@ -638,6 +653,7 @@ class GameEngine:
         self.custom_vars: Dict[str, int] = {}
         self.team_custom_vars: Dict[str, Dict[str, int]] = {}
         self._last_created_card_instance_id: Optional[int] = None
+        self.timed_effects: List[dict] = []
         self._init_mod_variables()
 
     def pn(self, pid: int) -> str:
@@ -682,27 +698,50 @@ class GameEngine:
                 for player in self.players:
                     player.custom_vars.setdefault(name, initial)
 
+    def _visible_card_dicts(self, cards, viewer_id: int, owner_id: int):
+        return [
+            c.to_dict() for c in cards
+            if owner_id == viewer_id or c.def_id != ERROR_CARD_ID
+        ]
+
+    def _redact_error_cards_from_payload(self, payload: dict) -> dict:
+        if not isinstance(payload, dict):
+            return payload
+        for zone in ('hand', 'deck', 'discard', 'exile'):
+            cards = payload.get(zone)
+            if isinstance(cards, list):
+                payload[zone] = [
+                    c for c in cards
+                    if not (isinstance(c, dict) and c.get('def_id') == ERROR_CARD_ID)
+                ]
+                payload[f'{zone}_count'] = len(payload[zone])
+        return payload
+
     def get_public_state(self, for_player: int) -> dict:
         opponent = 1 - for_player
         opp_data = self.players[opponent].to_dict(include_private=False)
+        opp_data['hand_count'] = len([c for c in self.players[opponent].hand if c.def_id != ERROR_CARD_ID])
+        opp_data['deck_count'] = len([c for c in self.players[opponent].deck if c.def_id != ERROR_CARD_ID])
+        opp_data['discard_count'] = len([c for c in self.players[opponent].discard if c.def_id != ERROR_CARD_ID])
+        opp_data['exile_count'] = len([c for c in self.players[opponent].exile if c.def_id != ERROR_CARD_ID])
         if self.pending_choice and self.pending_choice.get('player_id') == for_player:
             ct = self.pending_choice.get('choice_type', '')
             if ct in ('choose_from_enemy_hand',):
-                opp_data['hand'] = [c.to_dict() for c in self.players[opponent].hand]
+                opp_data['hand'] = self._visible_card_dicts(self.players[opponent].hand, for_player, opponent)
             target_id = self.pending_choice.get('target_player_id')
             params = self.pending_choice.get('choice_params', {}) or {}
             if target_id == opponent and ct in ('choose_card_from_hand', 'choose_from_deck', 'choose_from_discard', 'choose_from_exile', 'choose_equipment'):
                 zone = params.get('zone', '')
                 if ct == 'choose_card_from_hand' or zone == 'hand':
-                    opp_data['hand'] = [c.to_dict() for c in self.players[opponent].hand]
+                    opp_data['hand'] = self._visible_card_dicts(self.players[opponent].hand, for_player, opponent)
                 if ct == 'choose_from_deck' or zone == 'deck':
-                    opp_data['deck'] = [c.to_dict() for c in self.players[opponent].deck]
+                    opp_data['deck'] = self._visible_card_dicts(self.players[opponent].deck, for_player, opponent)
                 if ct == 'choose_from_discard' or zone == 'discard':
-                    opp_data['discard'] = [c.to_dict() for c in self.players[opponent].discard]
+                    opp_data['discard'] = self._visible_card_dicts(self.players[opponent].discard, for_player, opponent)
                 if ct == 'choose_from_exile' or zone == 'exile':
-                    opp_data['exile'] = [c.to_dict() for c in self.players[opponent].exile]
+                    opp_data['exile'] = self._visible_card_dicts(self.players[opponent].exile, for_player, opponent)
         if self._antenna_reveal[for_player]:
-            opp_data['revealed_hand'] = [c.to_dict() for c in self.players[opponent].hand]
+            opp_data['revealed_hand'] = self._visible_card_dicts(self.players[opponent].hand, for_player, opponent)
         log_start = 0
         return {
             'phase': self.phase,
@@ -1235,12 +1274,15 @@ class GameEngine:
         return dup_count
 
     def play_card(self, player_id: int, card_instance_id: int, choice: Optional[dict] = None) -> dict:
-        if self.pending_response is not None:
-            return {'success': False, 'error': '等待对手反制响应'}
         ps = self.players[player_id]
         card = ps.find_hand_card(card_instance_id)
         if card is None:
             return {'success': False, 'error': '卡牌不在手中'}
+        if card.def_id == ERROR_CARD_ID:
+            ps.remove_hand_card(card_instance_id)
+            return {'success': True, 'card': card.to_dict(), 'ignored': True}
+        if self.pending_response is not None:
+            return {'success': False, 'error': '等待对手反制响应'}
         can_play, reason = self.can_play_card(player_id, card)
         if not can_play:
             return {'success': False, 'error': reason}
@@ -2002,16 +2044,17 @@ class GameEngine:
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         card_ref = self._resolve_card_id_ref(player_id, params.get('card', ''), card)
         ts = self.players[target_id]
-        if card_ref and ts.can_add_to_hand():
-            card_def = CARD_DEFS.get(card_ref)
-            if card_def:
-                new_card = CardInstance(def_id=card_def.id)
-                ts.hand.append(new_card)
-                self._remember_created_card(new_card, context)
-                if log:
-                    self.log_msg(log)
-            else:
-                self.log_msg(log or f"未知卡牌: {card_ref}")
+        if card_ref:
+            card_def = CARD_DEFS.get(card_ref) or CARD_DEFS.get(ERROR_CARD_ID)
+            if not card_def:
+                return
+            if card_def.id != ERROR_CARD_ID and not ts.can_add_to_hand():
+                return
+            new_card = CardInstance(def_id=card_def.id)
+            ts.hand.append(new_card)
+            self._remember_created_card(new_card, context)
+            if log and card_def.id != ERROR_CARD_ID:
+                self.log_msg(log)
 
     def _atomic_give_card_to_deck(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -2019,29 +2062,33 @@ class GameEngine:
         position = params.get('position', 'top')
         ts = self.players[target_id]
         if card_ref:
-            card_def = CARD_DEFS.get(card_ref)
-            if card_def:
-                new_card = CardInstance(def_id=card_def.id)
-                if position == 'bottom':
-                    ts.deck.append(new_card)
-                else:
-                    ts.deck.insert(0, new_card)
-                self._remember_created_card(new_card, context)
-                if log:
-                    self.log_msg(log)
+            card_def = CARD_DEFS.get(card_ref) or CARD_DEFS.get(ERROR_CARD_ID)
+            if not card_def:
+                return
+            new_card = CardInstance(def_id=card_def.id)
+            if position == 'bottom':
+                ts.deck.append(new_card)
+            elif position == 'random':
+                ts.deck.insert(random.randint(0, len(ts.deck)), new_card)
+            else:
+                ts.deck.insert(0, new_card)
+            self._remember_created_card(new_card, context)
+            if log and card_def.id != ERROR_CARD_ID:
+                self.log_msg(log)
 
     def _atomic_give_card_to_discard(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         card_ref = self._resolve_card_id_ref(player_id, params.get('card', ''), card)
         ts = self.players[target_id]
         if card_ref:
-            card_def = CARD_DEFS.get(card_ref)
-            if card_def:
-                new_card = CardInstance(def_id=card_def.id)
-                self._discard_card(ts, new_card)
-                self._remember_created_card(new_card, context)
-                if log:
-                    self.log_msg(log)
+            card_def = CARD_DEFS.get(card_ref) or CARD_DEFS.get(ERROR_CARD_ID)
+            if not card_def:
+                return
+            new_card = CardInstance(def_id=card_def.id)
+            self._discard_card(ts, new_card)
+            self._remember_created_card(new_card, context)
+            if log and card_def.id != ERROR_CARD_ID:
+                self.log_msg(log)
 
     def _atomic_remove_specific_card(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -2370,6 +2417,12 @@ class GameEngine:
         if isinstance(expr, (int, float, bool)):
             return expr
         if isinstance(expr, str):
+            text = expr.strip()
+            if text and text[0] in '{[':
+                try:
+                    return self._eval_expr(player_id, json.loads(text), card)
+                except Exception:
+                    pass
             try:
                 return int(expr)
             except Exception:
@@ -2383,7 +2436,7 @@ class GameEngine:
             return int(self.players[tid].custom_vars.get(name, 0))
         if ref == 'target_attribute':
             tid = self._resolve_target(player_id, expr.get('target', 'self'))
-            return int(getattr(self.players[tid], expr.get('attr', 'health'), 0))
+            return int(self._get_player_property_value(tid, expr.get('attr', 'health')))
         if ref == 'math_op':
             a = int(self._eval_expr(player_id, expr.get('a', 0), card))
             b = int(self._eval_expr(player_id, expr.get('b', 0), card))
@@ -2419,6 +2472,9 @@ class GameEngine:
         if ref == 'hand_size':
             tid = self._resolve_target(player_id, expr.get('target', 'self'))
             return len(self.players[tid].hand)
+        if ref == 'hand_limit':
+            tid = self._resolve_target(player_id, expr.get('target', 'self'))
+            return self.players[tid].hand_limit()
         if ref == 'discard_size':
             tid = self._resolve_target(player_id, expr.get('target', 'self'))
             return len(self.players[tid].discard)
@@ -2463,8 +2519,14 @@ class GameEngine:
         if isinstance(cond, bool):
             return cond
         if isinstance(cond, str):
-            if cond in ('true', 'True'): return True
-            if cond in ('false', 'False'): return False
+            text = cond.strip()
+            if text and text[0] in '{[':
+                try:
+                    return self._eval_condition(player_id, json.loads(text), card)
+                except Exception:
+                    pass
+            if text in ('true', 'True'): return True
+            if text in ('false', 'False'): return False
             return False
         if not isinstance(cond, dict):
             return False
@@ -2528,7 +2590,7 @@ class GameEngine:
             return bool(status_map.get(status, False))
         if op == 'target_attribute':
             tid = self._resolve_target(player_id, cond.get('target', 'self'))
-            a = int(getattr(self.players[tid], cond.get('attr', 'health'), 0))
+            a = int(self._get_player_property_value(tid, cond.get('attr', 'health')))
             b = int(self._eval_expr(player_id, cond.get('value', 0), card))
             cmp = cond.get('operator', '=')
             return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
@@ -3370,6 +3432,15 @@ class GameEngine:
             if instance_id is None:
                 instance_id = getattr(self, '_last_created_card_instance_id', None)
             return self._find_card_by_instance_id(instance_id)
+        if ref == 'card_instance':
+            return self._find_card_by_instance_id(card_ref.get('instance_id'))
+        if ref == 'var':
+            raw = self._var_store_for_target(player_id, card_ref.get('target', 'self')).get(str(card_ref.get('name', 'var')))
+            if isinstance(raw, list):
+                raw = raw[0] if raw else None
+            return self._resolve_card_ref(player_id, raw, current_card)
+        if ref == 'list_item':
+            return self._resolve_card_ref(player_id, self._list_item_raw(player_id, card_ref, current_card), current_card)
         if ref in ('selected_card', 'choice_card'):
             choice = getattr(self, '_active_choice', None) or {}
             if isinstance(choice, dict):
@@ -3406,6 +3477,14 @@ class GameEngine:
             return card_ref
         if isinstance(card_ref, dict) and card_ref.get('ref') == 'card_by_id':
             return str(card_ref.get('id', ''))
+        if isinstance(card_ref, dict) and card_ref.get('ref') in ('var', 'list_item'):
+            raw = self._var_store_for_target(player_id, card_ref.get('target', 'self')).get(str(card_ref.get('name', 'var'))) if card_ref.get('ref') == 'var' else self._list_item_raw(player_id, card_ref, current_card)
+            if isinstance(raw, list):
+                raw = raw[0] if raw else ''
+            if isinstance(raw, str):
+                return raw
+            card_obj = self._resolve_card_ref(player_id, raw, current_card)
+            return getattr(card_obj, 'def_id', '') if card_obj is not None else ''
         card_obj = self._resolve_card_ref(player_id, card_ref, current_card)
         return getattr(card_obj, 'def_id', '') if card_obj is not None else ''
 
@@ -3448,6 +3527,101 @@ class GameEngine:
             return [target]
         return self._resolve_targets(player_id, target)
 
+    def _scalar_value(self, value, default=0):
+        if isinstance(value, list):
+            return self._scalar_value(value[0], default) if value else default
+        if isinstance(value, dict):
+            if value.get('ref') == 'card_instance':
+                card = self._find_card_by_instance_id(value.get('instance_id'))
+                return getattr(card, 'def_id', default) if card is not None else default
+            return default
+        return default if value is None else value
+
+    def _serializable_list_item(self, item):
+        if isinstance(item, CardInstance):
+            return {'ref': 'card_instance', 'instance_id': item.instance_id}
+        if isinstance(item, list):
+            return [self._serializable_list_item(v) for v in item]
+        if isinstance(item, dict):
+            return {k: self._serializable_list_item(v) for k, v in item.items()}
+        return item
+
+    def _zone_list(self, player_id, target, zone_name):
+        tid = self._resolve_target(player_id, target)
+        if not (0 <= tid < len(self.players)):
+            return []
+        ps = self.players[tid]
+        zone = [eq.card_instance for eq in ps.equipment] if zone_name == 'equipment' else getattr(ps, zone_name, [])
+        return [{'ref': 'card_instance', 'instance_id': c.instance_id} for c in zone or [] if c is not None]
+
+    def _eval_list(self, player_id, expr, card=None):
+        if isinstance(expr, str):
+            text = expr.strip()
+            if (text.startswith('[') and text.endswith(']')) or (text.startswith('{') and text.endswith('}')):
+                try:
+                    return self._eval_list(player_id, json.loads(text), card)
+                except Exception:
+                    pass
+            value = self._eval_expr(player_id, expr, card)
+            return value if isinstance(value, list) else [value]
+        if isinstance(expr, list):
+            return [self._serializable_list_item(v) for v in expr]
+        if not isinstance(expr, dict):
+            return [] if expr is None else [expr]
+        ref = expr.get('ref')
+        if ref in ('list', 'list_create'):
+            return [self._serializable_list_item(self._eval_raw_item(player_id, item, card)) for item in expr.get('items', [])]
+        if ref == 'list_var':
+            raw = self._var_store_for_target(player_id, expr.get('target', 'self')).get(str(expr.get('name', 'var')), [])
+            return list(raw) if isinstance(raw, list) else ([] if raw is None else [raw])
+        if ref == 'var':
+            raw = self._var_store_for_target(player_id, expr.get('target', 'self')).get(str(expr.get('name', 'var')), 0)
+            return list(raw) if isinstance(raw, list) else ([] if raw is None else [raw])
+        if ref == 'zone_list':
+            return self._zone_list(player_id, expr.get('target', 'self'), str(expr.get('zone', 'hand')))
+        if ref == 'list_item':
+            item = self._list_item_raw(player_id, expr, card)
+            return [] if item is None else [item]
+        value = self._eval_expr(player_id, expr, card)
+        return value if isinstance(value, list) else [value]
+
+    def _list_item_raw(self, player_id, expr, card=None):
+        values = self._eval_list(player_id, expr.get('list', []), card) if isinstance(expr, dict) else []
+        index = self._eval_int(player_id, expr.get('index', 1), card, 1) - 1 if isinstance(expr, dict) else 0
+        return values[index] if 0 <= index < len(values) else None
+
+    def _eval_raw_item(self, player_id, expr, card=None):
+        if isinstance(expr, dict):
+            ref = expr.get('ref')
+            if ref == 'list_item':
+                return self._list_item_raw(player_id, expr, card)
+            if ref in ('card_instance', 'zone_card', 'selected_card', 'selected_card_at', 'current_card', 'this_card', 'last_created_card', 'created_card', 'last_copied_card'):
+                resolved = self._resolve_card_ref(player_id, expr, card)
+                return self._serializable_list_item(resolved) if resolved is not None else expr
+            if ref == 'var':
+                raw = self._var_store_for_target(player_id, expr.get('target', 'self')).get(str(expr.get('name', 'var')))
+                return raw[0] if isinstance(raw, list) and raw else raw
+        return self._eval_expr(player_id, expr, card)
+
+    def _eval_var_assignment_value(self, player_id, expr, card=None):
+        if isinstance(expr, list):
+            return self._serializable_list_item(expr[0]) if expr else 0
+        if isinstance(expr, dict) and expr.get('ref') in ('list', 'list_create', 'list_var', 'zone_list'):
+            values = self._eval_list(player_id, expr, card)
+            return self._serializable_list_item(values[0]) if values else 0
+        return self._serializable_list_item(self._eval_raw_item(player_id, expr, card))
+
+    def _same_list_item(self, a, b):
+        a = self._serializable_list_item(a)
+        b = self._serializable_list_item(b)
+        if isinstance(a, dict) and a.get('ref') == 'card_instance' and isinstance(b, str):
+            card = self._find_card_by_instance_id(a.get('instance_id'))
+            return card is not None and card.def_id == b
+        if isinstance(b, dict) and b.get('ref') == 'card_instance' and isinstance(a, str):
+            card = self._find_card_by_instance_id(b.get('instance_id'))
+            return card is not None and card.def_id == a
+        return a == b
+
     def _resolve_target(self, player_id, target_str):
         context = getattr(self, '_active_effect_context', {}) or {}
         if isinstance(target_str, dict) and target_str.get('ref') == 'card_owner':
@@ -3474,6 +3648,16 @@ class GameEngine:
             return [] if tid < 0 else [tid]
         return self._base_resolve_targets(player_id, target_str)
 
+    def _log_mod_runtime_error(self, effect_type, exc, player_id=None, card=None):
+        self.log_msg(MOD_RUNTIME_ERROR_MESSAGE)
+        record_mod_runtime_error(
+            f'{type(exc).__name__}: {exc}',
+            effect_type=effect_type,
+            player_id=player_id,
+            card_id=getattr(card, 'def_id', None),
+            room_phase=getattr(self, 'phase', ''),
+        )
+
     def _run_effect_list(self, player_id, card, effects, choice, context):
         prev_context = getattr(self, '_active_effect_context', None)
         prev_choice = getattr(self, '_active_choice', None)
@@ -3487,15 +3671,142 @@ class GameEngine:
                 lg = None if isinstance(eff, str) else eff.get('log')
                 rt = self._EFFECT_ALIASES.get(et, et)
                 fn = getattr(self, f'_atomic_{rt}', None)
-                if callable(fn):
-                    fn(player_id, card, pm, lg, choice, context)
-                elif lg:
-                    self.log_msg(lg)
-                else:
-                    self.log_msg(f"未实现效果: {et}")
+                try:
+                    if callable(fn):
+                        fn(player_id, card, pm, lg, choice, context)
+                    elif lg:
+                        self.log_msg(lg)
+                    else:
+                        self._log_mod_runtime_error(et, RuntimeError(f'Unknown effect: {et}'), player_id, card)
+                except Exception as exc:
+                    self._log_mod_runtime_error(et, exc, player_id, card)
         finally:
             self._active_effect_context = prev_context
             self._active_choice = prev_choice
+
+    def _same_timer_side(self, player_a: int, player_b: int) -> bool:
+        if not (0 <= player_a < len(self.players) and 0 <= player_b < len(self.players)):
+            return False
+        team_of = getattr(self, 'team_of', None)
+        if callable(team_of):
+            try:
+                return team_of(player_a) == team_of(player_b)
+            except Exception:
+                return player_a == player_b
+        return player_a == player_b
+
+    def _opposite_timer_side(self, player_a: int, player_b: int) -> bool:
+        if not (0 <= player_a < len(self.players) and 0 <= player_b < len(self.players)):
+            return False
+        team_of = getattr(self, 'team_of', None)
+        if callable(team_of):
+            try:
+                return team_of(player_a) != team_of(player_b)
+            except Exception:
+                return player_a != player_b
+        return player_a != player_b
+
+    def _timer_trigger_matches(self, entry: dict, current_player: int) -> bool:
+        trigger = str(entry.get('trigger') or 'target_turn_start')
+        owner_id = int(entry.get('owner_id', current_player))
+        target_id = int(entry.get('target_id', owner_id))
+        if trigger in ('target_turn_start', 'turn_start'):
+            return current_player == target_id
+        if trigger == 'owner_turn_start':
+            return current_player == owner_id
+        if trigger == 'friendly_turn_start':
+            return self._same_timer_side(owner_id, current_player)
+        if trigger == 'enemy_turn_start':
+            return self._opposite_timer_side(owner_id, current_player)
+        if trigger == 'any_turn_start':
+            return True
+        return False
+
+    def _timer_targets(self, player_id: int, target) -> List[int]:
+        if target in ('global', 'team'):
+            return [player_id]
+        try:
+            ids = self._resolve_targets(player_id, target)
+        except Exception:
+            ids = [player_id]
+        ids = [int(pid) for pid in ids if isinstance(pid, int) and 0 <= pid < len(self.players)]
+        return ids or [player_id]
+
+    def _clone_timer_effects(self, effects):
+        try:
+            return json.loads(json.dumps(effects or [], ensure_ascii=False))
+        except Exception:
+            return list(effects or [])
+
+    def _register_timed_effect(self, owner_id: int, target_id: int, trigger: str, duration: int, effects, card=None):
+        if duration <= 0 or not effects:
+            return
+        if not hasattr(self, 'timed_effects') or not isinstance(self.timed_effects, list):
+            self.timed_effects = []
+        entry = {
+            'owner_id': owner_id,
+            'target_id': target_id,
+            'trigger': trigger or 'target_turn_start',
+            'remaining': max(1, min(int(duration), 999)),
+            'effects': self._clone_timer_effects(effects),
+        }
+        if card is not None and getattr(card, 'instance_id', None) is not None:
+            entry['card_instance_id'] = card.instance_id
+        self.timed_effects.append(entry)
+        if len(self.timed_effects) > 200:
+            self.timed_effects = self.timed_effects[-200:]
+
+    def _run_timed_effects_for_turn(self, current_player: int):
+        if not getattr(self, 'timed_effects', None):
+            return
+        kept = []
+        for entry in list(self.timed_effects):
+            if not isinstance(entry, dict):
+                continue
+            if not self._timer_trigger_matches(entry, current_player):
+                kept.append(entry)
+                continue
+            owner_id = int(entry.get('owner_id', current_player))
+            target_id = int(entry.get('target_id', owner_id))
+            remaining = int(entry.get('remaining', 0))
+            timer_card = None
+            if entry.get('card_instance_id') is not None:
+                timer_card = self._find_card_by_instance_id(entry.get('card_instance_id'))
+            self._run_effect_list(
+                owner_id,
+                timer_card,
+                entry.get('effects', []),
+                None,
+                {
+                    'event': 'timed_effect',
+                    'source_id': owner_id,
+                    'target_id': target_id,
+                    'timer_current_player': current_player,
+                    'timer_remaining': remaining,
+                },
+            )
+            entry['remaining'] = remaining - 1
+            if entry['remaining'] > 0:
+                kept.append(entry)
+        self.timed_effects = kept
+
+    def _atomic_timed_effect(self, player_id, card, params, log, choice, context):
+        trigger = str(params.get('trigger') or 'target_turn_start')
+        duration = self._eval_int(player_id, params.get('duration', params.get('turns', 1)), card, 1)
+        effects = params.get('effects', params.get('body', [])) or []
+        for target_id in self._timer_targets(player_id, params.get('target', 'self')):
+            self._register_timed_effect(player_id, target_id, trigger, duration, effects, card)
+
+    def _atomic_countdown_var(self, player_id, card, params, log, choice, context):
+        target = params.get('target', 'self')
+        name = str(params.get('name', 'timer'))
+        duration = self._eval_int(player_id, params.get('duration', params.get('turns', 1)), card, 1)
+        trigger = str(params.get('trigger') or 'target_turn_start')
+        self._atomic_var_set(player_id, card, {'target': target, 'name': name, 'value': duration}, log, choice, context)
+        for target_id in self._timer_targets(player_id, target):
+            effect_target = target if target in ('global', 'team') else target_id
+            effects = [{'type': 'var_sub', 'params': {'target': effect_target, 'name': name, 'value': 1}}]
+            self._register_timed_effect(player_id, target_id, trigger, duration, effects)
 
     def _eval_expr(self, player_id, expr, card=None):
         if isinstance(expr, dict):
@@ -3523,6 +3834,9 @@ class GameEngine:
             if ref == 'damage_source':
                 context = getattr(self, '_active_effect_context', {}) or {}
                 return int(context.get('source_id', player_id))
+            if ref == 'timer_remaining':
+                context = getattr(self, '_active_effect_context', {}) or {}
+                return int(context.get('timer_remaining', 0))
             if ref == 'choice_target':
                 return int(self._selected_choice_target(-1))
             if ref == 'choice_confirmed':
@@ -3562,7 +3876,17 @@ class GameEngine:
             if ref == 'var':
                 target = expr.get('target', 'self')
                 name = str(expr.get('name', 'var'))
-                return int(self._var_store_for_target(player_id, target).get(name, 0))
+                return self._scalar_value(self._var_store_for_target(player_id, target).get(name, 0), 0)
+            if ref == 'list_var':
+                return self._scalar_value(self._eval_list(player_id, expr, card), 0)
+            if ref == 'list':
+                return self._scalar_value(self._eval_list(player_id, expr, card), 0)
+            if ref == 'zone_list':
+                return self._scalar_value(self._eval_list(player_id, expr, card), 0)
+            if ref == 'list_length':
+                return len(self._eval_list(player_id, expr.get('list', []), card))
+            if ref == 'list_item':
+                return self._scalar_value(self._list_item_raw(player_id, expr, card), 0)
         return self._base_eval_expr(player_id, expr, card)
 
     def _eval_condition(self, player_id, cond, card=None):
@@ -3573,15 +3897,19 @@ class GameEngine:
             return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
         if isinstance(cond, dict) and cond.get('op') == 'var_compare':
             name = str(cond.get('name', 'var'))
-            a = int(self._var_store_for_target(player_id, cond.get('target', 'self')).get(name, 0))
+            a = int(self._scalar_value(self._var_store_for_target(player_id, cond.get('target', 'self')).get(name, 0), 0))
             b = int(self._eval_expr(player_id, cond.get('value', 0), card))
             cmp = cond.get('operator', '=')
             return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
+        if isinstance(cond, dict) and cond.get('op') == 'list_contains':
+            values = self._eval_list(player_id, cond.get('list', []), card)
+            item = self._serializable_list_item(self._eval_raw_item(player_id, cond.get('item', 0), card))
+            return any(self._same_list_item(value, item) for value in values)
         return self._base_eval_condition(player_id, cond, card)
 
     def _eval_int(self, player_id, value, card=None, default=0):
         try:
-            return int(self._eval_expr(player_id, value, card))
+            return int(self._scalar_value(self._eval_expr(player_id, value, card), default))
         except Exception:
             try:
                 return int(value)
@@ -3673,12 +4001,15 @@ class GameEngine:
                     continue
                 resolved_type = self._EFFECT_ALIASES.get(eff_type, eff_type)
                 handler = getattr(self, f'_atomic_{resolved_type}', None)
-                if handler:
-                    handler(player_id, card, params, log, choice, context)
-                elif log:
-                    self.log_msg(log)
-                else:
-                    self.log_msg(f"未知效果: {eff_type}")
+                try:
+                    if handler:
+                        handler(player_id, card, params, log, choice, context)
+                    elif log:
+                        self.log_msg(log)
+                    else:
+                        self._log_mod_runtime_error(eff_type, RuntimeError(f'Unknown effect: {eff_type}'), player_id, card)
+                except Exception as exc:
+                    self._log_mod_runtime_error(eff_type, exc, player_id, card)
         finally:
             self._active_choice = prev_choice
 
@@ -3754,6 +4085,7 @@ class GameEngine:
         opp = self.players[opp_id]
         self._antenna_reveal[player_id] = None
         self._run_zone_owner_turn_start_events(player_id)
+        self._run_timed_effects_for_turn(player_id)
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False
@@ -4015,6 +4347,39 @@ class GameEngine:
         if target_card is card:
             card._placed_as_equipment = True
             card._placed_as_equipment_owner = owner_id
+
+    def _atomic_add_equipment_to_zone(self, player_id, card, params, log, choice, context):
+        card_id = self._resolve_card_id_ref(player_id, params.get('card', 'Leaf'), card)
+        card_def = CARD_DEFS.get(card_id)
+        owner_ids = self._resolve_targets(player_id, params.get('target', params.get('owner', 'self')))
+        if not owner_ids:
+            owner_ids = [player_id]
+        if card_def is None:
+            error_def = CARD_DEFS.get(ERROR_CARD_ID)
+            if not error_def:
+                return
+            for owner_id in owner_ids:
+                if owner_id < 0 or owner_id >= len(self.players):
+                    continue
+                new_card = CardInstance(def_id=ERROR_CARD_ID)
+                self.players[owner_id].hand.append(new_card)
+                self._remember_created_card(new_card, context if isinstance(context, dict) else None)
+            return
+        for owner_id in owner_ids:
+            if owner_id < 0 or owner_id >= len(self.players):
+                continue
+            new_card = CardInstance(def_id=card_def.id)
+            new_card.durability = card_def.durability if getattr(card_def, 'durability', 0) > 0 else 3
+            eq = EquipmentInstance(new_card, owner_id)
+            if 'effect_target' in params:
+                effect_target = self._resolve_target(player_id, params.get('effect_target'))
+                if 0 <= effect_target < len(self.players):
+                    eq.effect_target = effect_target
+            else:
+                eq.effect_target = owner_id
+            self.players[owner_id].equipment.append(eq)
+            self._remember_created_card(new_card, context if isinstance(context, dict) else None)
+            self.log_msg(log or f"{self.pn(owner_id)}获得装备{card_def.name_cn}")
 
     def _atomic_request_target(self, player_id, card, params, log, choice, context):
         return None
@@ -4331,7 +4696,10 @@ class GameEngine:
                 ps.nazar_big_hits = 0
 
     def _sync_custom_var_alias(self, ps, name: str):
-        value = int(ps.custom_vars.get(name, 0))
+        try:
+            value = int(self._scalar_value(ps.custom_vars.get(name, 0), 0))
+        except Exception:
+            value = 0
         if name == '\u4e09\u89d2\u5f62\u5c42\u6570':
             ps.triangle_stacks = max(0, value)
         elif name == '\u5496\u5561\u9996\u6b21\u4f7f\u7528':
@@ -4341,7 +4709,7 @@ class GameEngine:
         for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
             store = self._var_store_for_target(player_id, target_ref)
             name = str(params.get('name', 'var'))
-            store[name] = self._eval_int(player_id, params.get('value', 0), card)
+            store[name] = self._eval_var_assignment_value(player_id, params.get('value', 0), card)
             if isinstance(target_ref, int):
                 self._sync_custom_var_alias(self.players[target_ref], name)
 
@@ -4349,7 +4717,7 @@ class GameEngine:
         for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
             store = self._var_store_for_target(player_id, target_ref)
             name = str(params.get('name', 'var'))
-            store[name] = int(store.get(name, 0)) + self._eval_int(player_id, params.get('value', 0), card)
+            store[name] = int(self._scalar_value(store.get(name, 0), 0)) + self._eval_int(player_id, params.get('value', 0), card)
             if isinstance(target_ref, int):
                 self._sync_custom_var_alias(self.players[target_ref], name)
 
@@ -4357,7 +4725,7 @@ class GameEngine:
         for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
             store = self._var_store_for_target(player_id, target_ref)
             name = str(params.get('name', 'var'))
-            store[name] = int(store.get(name, 0)) - self._eval_int(player_id, params.get('value', 0), card)
+            store[name] = int(self._scalar_value(store.get(name, 0), 0)) - self._eval_int(player_id, params.get('value', 0), card)
             if isinstance(target_ref, int):
                 self._sync_custom_var_alias(self.players[target_ref], name)
 
@@ -4365,7 +4733,7 @@ class GameEngine:
         for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
             store = self._var_store_for_target(player_id, target_ref)
             name = str(params.get('name', 'var'))
-            store[name] = int(store.get(name, 0)) * self._eval_int(player_id, params.get('value', 1), card, 1)
+            store[name] = int(self._scalar_value(store.get(name, 0), 0)) * self._eval_int(player_id, params.get('value', 1), card, 1)
             if isinstance(target_ref, int):
                 self._sync_custom_var_alias(self.players[target_ref], name)
 
@@ -4374,9 +4742,68 @@ class GameEngine:
             store = self._var_store_for_target(player_id, target_ref)
             name = str(params.get('name', 'var'))
             div = self._eval_int(player_id, params.get('value', 1), card, 1)
-            store[name] = int(store.get(name, 0)) if div == 0 else int(store.get(name, 0)) // div
+            current = int(self._scalar_value(store.get(name, 0), 0))
+            store[name] = current if div == 0 else current // div
             if isinstance(target_ref, int):
                 self._sync_custom_var_alias(self.players[target_ref], name)
+
+    def _atomic_list_set(self, player_id, card, params, log, choice, context):
+        for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
+            store = self._var_store_for_target(player_id, target_ref)
+            store[str(params.get('name', 'list'))] = [self._serializable_list_item(v) for v in self._eval_list(player_id, params.get('list', []), card)]
+
+    def _atomic_list_append(self, player_id, card, params, log, choice, context):
+        for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
+            store = self._var_store_for_target(player_id, target_ref)
+            name = str(params.get('name', 'list'))
+            current = store.get(name, [])
+            if not isinstance(current, list):
+                current = [] if current is None else [current]
+            current.append(self._serializable_list_item(self._eval_raw_item(player_id, params.get('item', 0), card)))
+            store[name] = current
+
+    def _atomic_list_insert(self, player_id, card, params, log, choice, context):
+        for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
+            store = self._var_store_for_target(player_id, target_ref)
+            name = str(params.get('name', 'list'))
+            current = store.get(name, [])
+            if not isinstance(current, list):
+                current = [] if current is None else [current]
+            index = max(0, min(len(current), self._eval_int(player_id, params.get('index', 1), card, 1) - 1))
+            current.insert(index, self._serializable_list_item(self._eval_raw_item(player_id, params.get('item', 0), card)))
+            store[name] = current
+
+    def _atomic_list_delete(self, player_id, card, params, log, choice, context):
+        for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
+            store = self._var_store_for_target(player_id, target_ref)
+            name = str(params.get('name', 'list'))
+            current = store.get(name, [])
+            if not isinstance(current, list):
+                current = [] if current is None else [current]
+            index = self._eval_int(player_id, params.get('index', 1), card, 1) - 1
+            if 0 <= index < len(current):
+                current.pop(index)
+            store[name] = current
+
+    def _atomic_list_clear(self, player_id, card, params, log, choice, context):
+        for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
+            self._var_store_for_target(player_id, target_ref)[str(params.get('name', 'list'))] = []
+
+    def _atomic_for_each_list(self, player_id, card, params, log, choice, context):
+        name = str(params.get('name', 'item'))
+        body = params.get('body', [])
+        store = self._var_store_for_target(player_id, params.get('target', 'self'))
+        had_old = name in store
+        old_value = store.get(name)
+        try:
+            for index, item in enumerate(self._eval_list(player_id, params.get('list', []), card), start=1):
+                store[name] = self._serializable_list_item(item)
+                self._run_effect_list(player_id, card, body, choice, {**(context or {}), 'list_index': index})
+        finally:
+            if had_old:
+                store[name] = old_value
+            else:
+                store.pop(name, None)
 
     def _atomic_batch_var_add(self, player_id, card, params, log, choice, context):
         for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):

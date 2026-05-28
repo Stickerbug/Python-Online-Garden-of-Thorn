@@ -2458,8 +2458,8 @@ function showCardGallery(selectedId = null, mode = 'cards') {
     const backBtn = $('btn-gallery-back');
     if (backBtn) backBtn.textContent = galleryReturnToRules ? UI.gallery_back_rules : UI.back_to_home;
     if (selectedId) gallerySelectedId = selectedId;
-    if (!gallerySelectedId || !CARD_DEFS[gallerySelectedId]) {
-        gallerySelectedId = Object.keys(CARD_DEFS).sort(compareGalleryCards)[0] || null;
+    if (!gallerySelectedId || !CARD_DEFS[gallerySelectedId] || gallerySelectedId === 'Error') {
+        gallerySelectedId = Object.keys(CARD_DEFS).filter(id => id !== 'Error').sort(compareGalleryCards)[0] || null;
     }
     renderCardGallery();
 }
@@ -2484,7 +2484,7 @@ function getGalleryFlagEnglishLabel(flag) {
 }
 
 function getGalleryFlagUsers(flag) {
-    const defs = Object.values(CARD_DEFS);
+    const defs = Object.values(CARD_DEFS).filter(cd => cd && cd.id !== 'Error');
     if (flag === 'fusion_layer') return defs.filter(cd => cd && cd.id === 'Fusion');
     if (flag === 'fission_layer') return defs.filter(cd => cd && cd.id === 'Fission');
     return defs.filter(cd => (cd.flags || []).includes(flag));
@@ -2515,7 +2515,7 @@ function compareGalleryCards(a, b) {
 
 function getAllGalleryFlags() {
     const flags = new Set(Object.keys(CARD_FLAG_STYLES));
-    Object.values(CARD_DEFS).forEach(cd => (cd.flags || []).forEach(flag => {
+    Object.values(CARD_DEFS).filter(cd => cd && cd.id !== 'Error').forEach(cd => (cd.flags || []).forEach(flag => {
         if (flag !== 'infinite_exclude') flags.add(flag);
     }));
     return [...flags].sort((a, b) => getFlagLabel(a).localeCompare(getFlagLabel(b)));
@@ -2535,6 +2535,7 @@ function renderCardGallery() {
         return;
     }
     const ids = Object.keys(CARD_DEFS)
+        .filter(id => id !== 'Error')
         .filter(id => {
             const cd = CARD_DEFS[id];
             return !q || cardSearchText(id).includes(q);
@@ -3728,6 +3729,13 @@ function connectSocket(serverUrl) {
             appendGameChat(nick, data.text, data, data);
         }
     });
+    socket.on('mod_settings_updated', (data) => {
+        if (data && data.ok) {
+            showActionToast(UI.save_success, 1600, 'success');
+            return;
+        }
+        flashStatus(UI.save_failed.replace('{0}', (data && data.reason) || UI.operation_failed), 3200, 'error');
+    });
     socket.on('server_error', (data) => {
         debugLog('[client] server_error:', data.message);
         flashStatus(translateServerMessage(data.message), 3600, 'error');
@@ -4041,7 +4049,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=4');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=6');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;
@@ -4535,6 +4543,7 @@ function renderSoloBuilder() {
     if (list) {
         list.innerHTML = '';
         Object.keys(CARD_DEFS)
+            .filter(defId => defId !== 'Error')
             .filter(defId => !q || cardSearchText(defId).includes(q))
             .sort(compareGalleryCards)
             .forEach(defId => {
@@ -4687,6 +4696,7 @@ async function startSoloTraining() {
         gameAlert(UI.notice, UI.solo_need_15);
         return;
     }
+    await refreshCardDefsFromServer({ silent: true });
     if (soloDeckA.concat(soloDeckB).some(card => !card || !getCardDef(card.def_id))) {
         gameAlert(UI.notice, UI.solo_invalid_deck_cards);
         return;
@@ -4698,7 +4708,7 @@ async function startSoloTraining() {
     const sub1 = await buildSoloEventSubChoice(event1, soloDeckB, UI.solo_deck_b);
     if (sub1 === false) return;
     saveSoloDecks();
-    const payload = { deck0: soloDeckA, deck1: soloDeckB, event0, event1, sub0, sub1 };
+    const payload = { deck0: soloDeckA, deck1: soloDeckB, event0, event1, sub0, sub1, disabled_mods: getDisabledMods() };
     if (startLocalSoloRuntime('solo', payload)) {
         return;
     }
@@ -5911,6 +5921,10 @@ function getPlayerDataById(id) {
     if (!gameState) return {};
     if (id === normalizePlayerId(gameState.your_id)) return gameState.you || {};
     if (id === normalizePlayerId(gameState.teammate_id)) return gameState.teammate || {};
+    const oneVsOneOpponentId = gameState.your_id != null ? 1 - normalizePlayerId(gameState.your_id) : null;
+    if ((!Array.isArray(gameState.enemy_ids) || !gameState.enemy_ids.length) && id === oneVsOneOpponentId) {
+        return gameState.opponent || {};
+    }
     const enemyIndex = (gameState.enemy_ids || []).map(normalizePlayerId).indexOf(id);
     if (enemyIndex === 0) return gameState.opponent || {};
     if (enemyIndex === 1) return gameState.opponent2 || {};
@@ -7727,7 +7741,9 @@ async function showChoiceUI(data) {
         }
     } else if (choiceType === 'choose_from_enemy_hand') {
         const targetId = data.target_player_id != null ? data.target_player_id : -1;
-        const oppHand = (targetId >= 0 ? getPlayerDataById(targetId) : (gameState.opponent || {})).hand || [];
+        const targetData = targetId >= 0 ? getPlayerDataById(targetId) : (gameState.opponent || {});
+        const fallbackOpponent = gameState.opponent || {};
+        const oppHand = targetData.hand || targetData.revealed_hand || fallbackOpponent.hand || fallbackOpponent.revealed_hand || [];
         if (!oppHand.length) { gameAlert(UI.notice, UI.no_enemy_hand); }
         else {
             const options = oppHand.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
@@ -8190,6 +8206,9 @@ function saveDisabledMods() {
     if (serverInput && settingsAllowServerEdit) {
         localStorage.setItem('got_server', serverInput.value.trim());
     }
+    if (socket && socket.connected && phase === 'lobby') {
+        socket.emit('update_mod_settings', { disabled_mods: disabled });
+    }
     fetchCardDefs({ useCache: false }).then(() => fetchOpeningEvents({ useCache: false })).then(() => {
         loadSoloDecks(false);
         renderSoloBuilder();
@@ -8220,7 +8239,7 @@ function initModEditor() {
         saveBtn.onclick = async () => {
             try {
                 const data = JSON.parse(editorArea ? editorArea.value : '');
-                const resp = await fetch('/api/mods', {
+                const resp = await fetch('/api/mods/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data),

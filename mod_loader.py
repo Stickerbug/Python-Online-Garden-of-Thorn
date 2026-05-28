@@ -321,7 +321,7 @@ def get_active_mod_variables() -> List[dict]:
 
 
 def merge_mod_cards_to_card_defs() -> List[str]:
-    from cards import CARD_DEFS
+    from cards import CARD_DEFS, ERROR_CARD_ID
     mods = get_enabled_mods()
     active = [m for m in mods if m.enabled and not m.errors]
     for mod in mods:
@@ -332,6 +332,8 @@ def merge_mod_cards_to_card_defs() -> List[str]:
     merged = []
     for mod in active:
         for mc in mod.cards:
+            if mc.id == ERROR_CARD_ID:
+                continue
             card_def = mc.to_card_def()
             CARD_DEFS[mc.id] = card_def
             merged.append(mc.id)

@@ -1,0 +1,1249 @@
+{
+  "format_version": 1,
+  "info": {
+    "name": "Kards “纷争” 扩展包",
+    "version": "1.0.2",
+    "author": "zbj",
+    "description": "Kards × GoT 联动震撼来袭",
+    "game_version": "*"
+  },
+  "variables": [],
+  "cards": [
+    {
+      "id": "ArmyGroup",
+      "name_cn": "方面军",
+      "name_en": "Army group",
+      "cost_e": 6,
+      "cost_m": 0,
+      "card_type": "root",
+      "count": 1,
+      "quality": "Ultra",
+      "description": "全世界无产者，联合起来！",
+      "effect_text": "友方回合开始时，对友方造成1点伤害，将一张”T-34“加入手牌",
+      "flags": [
+        "indestructible"
+      ],
+      "effects": [
+        {
+          "type": "place_as_equip",
+          "params": {
+            "card": {
+              "ref": "current_card"
+            }
+          }
+        },
+        {
+          "type": "on_owner_turn_start",
+          "params": {
+            "effects": [
+              {
+                "type": "direct_damage",
+                "params": {
+                  "target": "self",
+                  "amount": 1,
+                  "source": "效果"
+                }
+              },
+              {
+                "type": "give_card_to_hand",
+                "params": {
+                  "card": "T34",
+                  "target": "self"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "trigger_cost_e": 0,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "place_as_equip",
+              "params": {
+                "card": {
+                  "ref": "current_card"
+                }
+              }
+            },
+            {
+              "type": "on_owner_turn_start",
+              "params": {
+                "effects": [
+                  {
+                    "type": "direct_damage",
+                    "params": {
+                      "target": "self",
+                      "amount": 1,
+                      "source": "效果"
+                    }
+                  },
+                  {
+                    "type": "give_card_to_hand",
+                    "params": {
+                      "card": "T34",
+                      "target": "self"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "T34",
+      "name_cn": "T-34",
+      "name_en": "T-34",
+      "cost_e": 0,
+      "cost_m": 0,
+      "card_type": "thorn",
+      "count": 0,
+      "quality": "Common",
+      "description": "Ура！",
+      "effect_text": "对敌方造成8点伤害",
+      "flags": [
+        "exile"
+      ],
+      "effects": [
+        {
+          "type": "damage",
+          "params": {
+            "target": "enemy",
+            "amount": 8
+          }
+        }
+      ],
+      "trigger_cost_e": 0,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "damage",
+              "params": {
+                "target": "enemy",
+                "amount": 8
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "CommonwealthOfNations",
+      "name_cn": "英联邦",
+      "name_en": "Commonwealth of Nations",
+      "cost_e": 10,
+      "cost_m": 0,
+      "card_type": "thorn",
+      "count": 1,
+      "quality": "Ultra",
+      "description": "",
+      "effect_text": "若友方生命值不少于95，对敌方造成90点伤害。友方回复15点生命，抽1张牌。",
+      "flags": [
+        "precision"
+      ],
+      "effects": [
+        {
+          "type": "if",
+          "params": {
+            "condition": {
+              "op": "compare",
+              "a": "{\"ref\":\"player_property\",\"target\":\"self\",\"property\":\"health\"}",
+              "operator": ">=",
+              "b": "95"
+            },
+            "then": [
+              {
+                "type": "damage",
+                "params": {
+                  "target": "enemy",
+                  "amount": 90,
+                  "is_precision": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "heal",
+          "params": {
+            "target": "self",
+            "amount": 15
+          }
+        },
+        {
+          "type": "draw",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
+        }
+      ],
+      "trigger_cost_e": 0,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "if",
+              "params": {
+                "condition": {
+                  "op": "compare",
+                  "a": "{\"ref\":\"player_property\",\"target\":\"self\",\"property\":\"health\"}",
+                  "operator": ">=",
+                  "b": "95"
+                },
+                "then": [
+                  {
+                    "type": "damage",
+                    "params": {
+                      "target": "enemy",
+                      "amount": 90,
+                      "is_precision": true
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "heal",
+              "params": {
+                "target": "self",
+                "amount": 15
+              }
+            },
+            {
+              "type": "draw",
+              "params": {
+                "target": "self",
+                "amount": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "AlpsFortress",
+      "name_cn": "阿尔卑斯要塞",
+      "name_en": "Alps Fortress",
+      "cost_e": 8,
+      "cost_m": 0,
+      "card_type": "root",
+      "count": 1,
+      "quality": "Ultra",
+      "description": "",
+      "effect_text": "将友方生命值设为95点，友方回合开始时，费用-2。",
+      "flags": [
+        "indestructible"
+      ],
+      "effects": [
+        {
+          "type": "place_as_equip",
+          "params": {
+            "card": {
+              "ref": "current_card"
+            }
+          }
+        },
+        {
+          "type": "set_health",
+          "params": {
+            "target": "self",
+            "amount": 95
+          }
+        },
+        {
+          "type": "mod_e_regen",
+          "params": {
+            "target": "self",
+            "amount": -2
+          }
+        }
+      ],
+      "trigger_cost_e": 0,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "place_as_equip",
+              "params": {
+                "card": {
+                  "ref": "current_card"
+                }
+              }
+            },
+            {
+              "type": "set_health",
+              "params": {
+                "target": "self",
+                "amount": 95
+              }
+            },
+            {
+              "type": "mod_e_regen",
+              "params": {
+                "target": "self",
+                "amount": -2
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "BasicUSResearchAndDevelopment",
+      "name_cn": "基础美国研发",
+      "name_en": "Basic U.S. Research and Development",
+      "cost_e": 3,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 1,
+      "quality": "Ultra",
+      "description": "",
+      "effect_text": "将一张“深水炸弹”和一张“扩展美国研发”加入手牌。",
+      "flags": [
+        "exile"
+      ],
+      "effects": [
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "DepthCharge",
+            "target": "self"
+          }
+        },
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "ExpandUSResearchAndDevelopment",
+            "target": "self"
+          }
+        }
+      ],
+      "trigger_cost_e": 0,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "give_card_to_hand",
+              "params": {
+                "card": "DepthCharge",
+                "target": "self"
+              }
+            },
+            {
+              "type": "give_card_to_hand",
+              "params": {
+                "card": "ExpandUSResearchAndDevelopment",
+                "target": "self"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "DepthCharge",
+      "name_cn": "深水炸弹",
+      "name_en": "Depth charge",
+      "cost_e": 0,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 0,
+      "quality": "Ultra",
+      "description": "",
+      "effect_text": "直到下个友方回合开始，使友方获得无敌，回复1点费用、1点魔力，抽一张牌。",
+      "flags": [
+        "exile"
+      ],
+      "effects": [
+        {
+          "type": "invincible",
+          "params": {
+            "target": "self"
+          }
+        },
+        {
+          "type": "gain_e",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
+        },
+        {
+          "type": "gain_m",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
+        },
+        {
+          "type": "draw",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
+        }
+      ],
+      "trigger_cost_e": 0,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "invincible",
+              "params": {
+                "target": "self"
+              }
+            },
+            {
+              "type": "gain_e",
+              "params": {
+                "target": "self",
+                "amount": 1
+              }
+            },
+            {
+              "type": "gain_m",
+              "params": {
+                "target": "self",
+                "amount": 1
+              }
+            },
+            {
+              "type": "draw",
+              "params": {
+                "target": "self",
+                "amount": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ExpandUSResearchAndDevelopment",
+      "name_cn": "扩展美国研发",
+      "name_en": "Expand U.S. research and development",
+      "cost_e": 6,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 0,
+      "quality": "Ultra",
+      "description": "",
+      "effect_text": "将一张“B-29”和一张“高级美国研发”加入手牌。",
+      "flags": [
+        "exile"
+      ],
+      "effects": [
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "PressureChamber",
+            "target": "self"
+          }
+        },
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "AdvancedUSResearchAndDevelopment",
+            "target": "self"
+          }
+        }
+      ],
+      "trigger_cost_e": 0,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "give_card_to_hand",
+              "params": {
+                "card": "PressureChamber",
+                "target": "self"
+              }
+            },
+            {
+              "type": "give_card_to_hand",
+              "params": {
+                "card": "AdvancedUSResearchAndDevelopment",
+                "target": "self"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "B29",
+      "name_cn": "B-29",
+      "name_en": "B-29",
+      "cost_e": 10,
+      "cost_m": 0,
+      "card_type": "root",
+      "count": 0,
+      "quality": "Ultra",
+      "description": "美国空军的骇人轰炸。",
+      "effect_text": "",
+      "flags": [],
+      "effects": [
+        {
+          "type": "place_as_equip",
+          "params": {
+            "card": {
+              "ref": "current_card"
+            }
+          }
+        },
+        {
+          "type": "equip_protection",
+          "params": {
+            "equipment": {
+              "ref": "current_equipment"
+            }
+          }
+        },
+        {
+          "type": "trigger_manual",
+          "params": {
+            "timing": "once_per_turn",
+            "cost_e": 3,
+            "cost_m": 0,
+            "condition": {
+              "op": "compare",
+              "a": "{\"ref\":\"player_property\",\"target\":\"self\",\"property\":\"elixir\"}",
+              "operator": ">=",
+              "b": "3"
+            },
+            "destroy": false
+          }
+        },
+        {
+          "type": "on_equipment_trigger",
+          "params": {
+            "destroy_self": false,
+            "effects": [
+              {
+                "type": "damage",
+                "params": {
+                  "target": "enemy",
+                  "amount": 27,
+                  "is_precision": true
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "trigger_cost_e": 3,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "place_as_equip",
+              "params": {
+                "card": {
+                  "ref": "current_card"
+                }
+              }
+            },
+            {
+              "type": "equip_protection",
+              "params": {
+                "equipment": {
+                  "ref": "current_equipment"
+                }
+              }
+            },
+            {
+              "type": "trigger_manual",
+              "params": {
+                "timing": "once_per_turn",
+                "cost_e": 3,
+                "cost_m": 0,
+                "condition": {
+                  "op": "compare",
+                  "a": "{\"ref\":\"player_property\",\"target\":\"self\",\"property\":\"elixir\"}",
+                  "operator": ">=",
+                  "b": "3"
+                },
+                "destroy": false
+              }
+            },
+            {
+              "type": "on_equipment_trigger",
+              "params": {
+                "destroy_self": false,
+                "effects": [
+                  {
+                    "type": "damage",
+                    "params": {
+                      "target": "enemy",
+                      "amount": 27,
+                      "is_precision": true
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "PressureChamber",
+      "name_cn": "加压舱",
+      "name_en": "Pressure chamber",
+      "cost_e": 0,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 0,
+      "quality": "Ultra",
+      "description": "用以保证飞行员在高空较低的大气压下正常行动。",
+      "effect_text": "随机销毁敌方的2个装备，将一张“B-29”加入手牌。",
+      "flags": [
+        "exile"
+      ],
+      "effects": [
+        {
+          "type": "destroy_random_equip",
+          "params": {
+            "target": "enemy"
+          }
+        },
+        {
+          "type": "destroy_random_equip",
+          "params": {
+            "target": "enemy"
+          }
+        },
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "B29",
+            "target": "self"
+          }
+        }
+      ],
+      "trigger_cost_e": 0,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "destroy_random_equip",
+              "params": {
+                "target": "enemy"
+              }
+            },
+            {
+              "type": "destroy_random_equip",
+              "params": {
+                "target": "enemy"
+              }
+            },
+            {
+              "type": "give_card_to_hand",
+              "params": {
+                "card": "B29",
+                "target": "self"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "AdvancedUSResearchAndDevelopment",
+      "name_cn": "高级美国研发",
+      "name_en": "Advanced U.S. Research and Development",
+      "cost_e": 9,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 0,
+      "quality": "Ultra",
+      "description": "",
+      "effect_text": "将一张“青霉素”和两张“曼哈顿计划”加入手牌。",
+      "flags": [
+        "exile"
+      ],
+      "effects": [
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "Penicillin",
+            "target": "self"
+          }
+        },
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "ManhattanProject",
+            "target": "self"
+          }
+        },
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "ManhattanProject",
+            "target": "self"
+          }
+        }
+      ],
+      "trigger_cost_e": 0,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "give_card_to_hand",
+              "params": {
+                "card": "Penicillin",
+                "target": "self"
+              }
+            },
+            {
+              "type": "give_card_to_hand",
+              "params": {
+                "card": "ManhattanProject",
+                "target": "self"
+              }
+            },
+            {
+              "type": "give_card_to_hand",
+              "params": {
+                "card": "ManhattanProject",
+                "target": "self"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "Penicillin",
+      "name_cn": "青霉素",
+      "name_en": "Penicillin",
+      "cost_e": 0,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 0,
+      "quality": "Ultra",
+      "description": "",
+      "effect_text": "",
+      "flags": [
+        "exile"
+      ],
+      "effects": [
+        {
+          "type": "heal",
+          "params": {
+            "target": "self",
+            "amount": 30
+          }
+        },
+        {
+          "type": "mod_m_regen",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
+        },
+        {
+          "type": "add_armor",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
+        },
+        {
+          "type": "draw",
+          "params": {
+            "target": "self",
+            "amount": 3
+          }
+        }
+      ],
+      "trigger_cost_e": 0,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "heal",
+              "params": {
+                "target": "self",
+                "amount": 30
+              }
+            },
+            {
+              "type": "mod_m_regen",
+              "params": {
+                "target": "self",
+                "amount": 1
+              }
+            },
+            {
+              "type": "add_armor",
+              "params": {
+                "target": "self",
+                "amount": 1
+              }
+            },
+            {
+              "type": "draw",
+              "params": {
+                "target": "self",
+                "amount": 3
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ManhattanProject",
+      "name_cn": "曼哈顿计划",
+      "name_en": "Manhattan Project",
+      "cost_e": 6,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 0,
+      "quality": "Ultra",
+      "description": "",
+      "effect_text": "",
+      "flags": [
+        "exile"
+      ],
+      "effects": [
+        {
+          "type": "damage",
+          "params": {
+            "target": "enemy",
+            "amount": 20,
+            "is_precision": true
+          }
+        },
+        {
+          "type": "destroy_all_equip",
+          "params": {
+            "target": "enemy"
+          }
+        }
+      ],
+      "trigger_cost_e": 0,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {
+        "onPlay": {
+          "effects": [
+            {
+              "type": "damage",
+              "params": {
+                "target": "enemy",
+                "amount": 20,
+                "is_precision": true
+              }
+            },
+            {
+              "type": "destroy_all_equip",
+              "params": {
+                "target": "enemy"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "RoadToBerlin",
+      "name_cn": "柏林之路",
+      "name_en": "The Road to Berlin",
+      "cost_e": 0,
+      "cost_m": 0,
+      "card_type": "bloom",
+      "count": 1,
+      "quality": "Ultra",
+      "description": "",
+      "effect_text": "",
+      "flags": [],
+      "effects": [],
+      "trigger_cost_e": 0,
+      "trigger_effect_text": "",
+      "trigger_effects": [],
+      "response_trigger": "",
+      "scripts": {}
+    }
+  ],
+  "events": [],
+  "custom_statuses": [],
+  "custom_tags": [],
+  "scripts": {
+    "card:ArmyGroup": {
+      "effects": [
+        {
+          "type": "place_as_equip",
+          "params": {
+            "card": {
+              "ref": "current_card"
+            }
+          }
+        },
+        {
+          "type": "on_owner_turn_start",
+          "params": {
+            "effects": [
+              {
+                "type": "direct_damage",
+                "params": {
+                  "target": "self",
+                  "amount": 1,
+                  "source": "效果"
+                }
+              },
+              {
+                "type": "give_card_to_hand",
+                "params": {
+                  "card": "T34",
+                  "target": "self"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "card:T34": {
+      "effects": [
+        {
+          "type": "damage",
+          "params": {
+            "target": "enemy",
+            "amount": 8
+          }
+        }
+      ]
+    },
+    "card:CommonwealthOfNations": {
+      "effects": [
+        {
+          "type": "if",
+          "params": {
+            "condition": {
+              "op": "compare",
+              "a": "{\"ref\":\"player_property\",\"target\":\"self\",\"property\":\"health\"}",
+              "operator": ">=",
+              "b": "95"
+            },
+            "then": [
+              {
+                "type": "damage",
+                "params": {
+                  "target": "enemy",
+                  "amount": 90,
+                  "is_precision": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "heal",
+          "params": {
+            "target": "self",
+            "amount": 15
+          }
+        },
+        {
+          "type": "draw",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "card:AlpsFortress": {
+      "effects": [
+        {
+          "type": "place_as_equip",
+          "params": {
+            "card": {
+              "ref": "current_card"
+            }
+          }
+        },
+        {
+          "type": "set_health",
+          "params": {
+            "target": "self",
+            "amount": 95
+          }
+        },
+        {
+          "type": "mod_e_regen",
+          "params": {
+            "target": "self",
+            "amount": -2
+          }
+        }
+      ]
+    },
+    "card:BasicUSResearchAndDevelopment": {
+      "effects": [
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "DepthCharge",
+            "target": "self"
+          }
+        },
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "ExpandUSResearchAndDevelopment",
+            "target": "self"
+          }
+        }
+      ]
+    },
+    "card:DepthCharge": {
+      "effects": [
+        {
+          "type": "invincible",
+          "params": {
+            "target": "self"
+          }
+        },
+        {
+          "type": "gain_e",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
+        },
+        {
+          "type": "gain_m",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
+        },
+        {
+          "type": "draw",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "card:ExpandUSResearchAndDevelopment": {
+      "effects": [
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "PressureChamber",
+            "target": "self"
+          }
+        },
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "AdvancedUSResearchAndDevelopment",
+            "target": "self"
+          }
+        }
+      ]
+    },
+    "card:B29": {
+      "effects": [
+        {
+          "type": "place_as_equip",
+          "params": {
+            "card": {
+              "ref": "current_card"
+            }
+          }
+        },
+        {
+          "type": "equip_protection",
+          "params": {
+            "equipment": {
+              "ref": "current_equipment"
+            }
+          }
+        },
+        {
+          "type": "trigger_manual",
+          "params": {
+            "timing": "once_per_turn",
+            "cost_e": 3,
+            "cost_m": 0,
+            "condition": {
+              "op": "compare",
+              "a": "{\"ref\":\"player_property\",\"target\":\"self\",\"property\":\"elixir\"}",
+              "operator": ">=",
+              "b": "3"
+            },
+            "destroy": false
+          }
+        },
+        {
+          "type": "on_equipment_trigger",
+          "params": {
+            "destroy_self": false,
+            "effects": [
+              {
+                "type": "damage",
+                "params": {
+                  "target": "enemy",
+                  "amount": 27,
+                  "is_precision": true
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "card:PressureChamber": {
+      "effects": [
+        {
+          "type": "destroy_random_equip",
+          "params": {
+            "target": "enemy"
+          }
+        },
+        {
+          "type": "destroy_random_equip",
+          "params": {
+            "target": "enemy"
+          }
+        },
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "B29",
+            "target": "self"
+          }
+        }
+      ]
+    },
+    "card:AdvancedUSResearchAndDevelopment": {
+      "effects": [
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "Penicillin",
+            "target": "self"
+          }
+        },
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "ManhattanProject",
+            "target": "self"
+          }
+        },
+        {
+          "type": "give_card_to_hand",
+          "params": {
+            "card": "ManhattanProject",
+            "target": "self"
+          }
+        }
+      ]
+    },
+    "card:Penicillin": {
+      "effects": [
+        {
+          "type": "heal",
+          "params": {
+            "target": "self",
+            "amount": 30
+          }
+        },
+        {
+          "type": "mod_m_regen",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
+        },
+        {
+          "type": "add_armor",
+          "params": {
+            "target": "self",
+            "amount": 1
+          }
+        },
+        {
+          "type": "draw",
+          "params": {
+            "target": "self",
+            "amount": 3
+          }
+        }
+      ]
+    },
+    "card:ManhattanProject": {
+      "effects": [
+        {
+          "type": "damage",
+          "params": {
+            "target": "enemy",
+            "amount": 20,
+            "is_precision": true
+          }
+        },
+        {
+          "type": "destroy_all_equip",
+          "params": {
+            "target": "enemy"
+          }
+        }
+      ]
+    },
+    "card:RoadToBerlin": {
+      "effects": []
+    }
+  },
+  "editor": {
+    "tool": "Garden of Thorn Mod Editor",
+    "schema": "got_mod_format_v1",
+    "schema_version": 1
+  }
+}

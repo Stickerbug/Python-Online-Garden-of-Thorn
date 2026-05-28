@@ -8,7 +8,7 @@ from cards import (
     BASE_MAX_ELIXIR, BASE_MAX_MAGIC, INITIAL_HEALTH, INITIAL_ELIXIR,
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     DECK_SIZE, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, build_draft_pool, generate_draft_options,
-    create_deck_from_draft,
+    create_deck_from_draft, ERROR_CARD_ID,
 )
 
 
@@ -53,6 +53,7 @@ class GameEngine2v2(GameEngine):
         self.custom_vars: Dict[str, int] = {}
         self.team_custom_vars: Dict[str, Dict[str, int]] = {}
         self._last_created_card_instance_id: Optional[int] = None
+        self.timed_effects: List[dict] = []
         self._init_mod_variables()
 
     def team_of(self, player_id: int) -> int:
@@ -158,31 +159,36 @@ class GameEngine2v2(GameEngine):
         opp_data_list = []
         for eid in enemy_ids:
             ed = self.players[eid].to_dict(include_private=False)
+            ed['hand_count'] = len([c for c in self.players[eid].hand if c.def_id != ERROR_CARD_ID])
+            ed['deck_count'] = len([c for c in self.players[eid].deck if c.def_id != ERROR_CARD_ID])
+            ed['discard_count'] = len([c for c in self.players[eid].discard if c.def_id != ERROR_CARD_ID])
+            ed['exile_count'] = len([c for c in self.players[eid].exile if c.def_id != ERROR_CARD_ID])
             if self._antenna_reveal[for_player]:
-                ed['revealed_hand'] = [c.to_dict() for c in self.players[eid].hand]
+                ed['revealed_hand'] = self._visible_card_dicts(self.players[eid].hand, for_player, eid)
             opp_data_list.append(ed)
 
         teammate_data = None
         if teammate_id >= 0:
             teammate_data = self.players[teammate_id].to_dict(include_private=True)
+            self._redact_error_cards_from_payload(teammate_data)
             if self.pending_choice and self.pending_choice.get('player_id') == for_player:
                 ct = self.pending_choice.get('choice_type', '')
                 if ct in ('choose_from_enemy_hand',):
                     for eid in enemy_ids:
-                        opp_data_list[enemy_ids.index(eid)]['hand'] = [c.to_dict() for c in self.players[eid].hand]
+                        opp_data_list[enemy_ids.index(eid)]['hand'] = self._visible_card_dicts(self.players[eid].hand, for_player, eid)
                 target_id = self.pending_choice.get('target_player_id')
                 params = self.pending_choice.get('choice_params', {}) or {}
                 if target_id in enemy_ids and ct in ('choose_card_from_hand', 'choose_from_deck', 'choose_from_discard', 'choose_from_exile', 'choose_equipment'):
                     ed = opp_data_list[enemy_ids.index(target_id)]
                     zone = params.get('zone', '')
                     if ct == 'choose_card_from_hand' or zone == 'hand':
-                        ed['hand'] = [c.to_dict() for c in self.players[target_id].hand]
+                        ed['hand'] = self._visible_card_dicts(self.players[target_id].hand, for_player, target_id)
                     if ct == 'choose_from_deck' or zone == 'deck':
-                        ed['deck'] = [c.to_dict() for c in self.players[target_id].deck]
+                        ed['deck'] = self._visible_card_dicts(self.players[target_id].deck, for_player, target_id)
                     if ct == 'choose_from_discard' or zone == 'discard':
-                        ed['discard'] = [c.to_dict() for c in self.players[target_id].discard]
+                        ed['discard'] = self._visible_card_dicts(self.players[target_id].discard, for_player, target_id)
                     if ct == 'choose_from_exile' or zone == 'exile':
-                        ed['exile'] = [c.to_dict() for c in self.players[target_id].exile]
+                        ed['exile'] = self._visible_card_dicts(self.players[target_id].exile, for_player, target_id)
 
         log_start = 0
         return {
@@ -943,6 +949,9 @@ class GameEngine2v2(GameEngine):
         card = ps.find_hand_card(card_instance_id) if ps else None
         if card is None:
             return {'success': False, 'error': '手牌中没有这张牌'}
+        if card.def_id == ERROR_CARD_ID:
+            ps.remove_hand_card(card_instance_id)
+            return {'success': True, 'card': card.to_dict(), 'ignored': True}
         if 'self_only' in card.flags or card.card_type == 'guard':
             target_player_id = player_id
         elif self._card_requires_target(card) and card.card_type == 'thorn' and target_player_id == player_id:
@@ -1348,6 +1357,7 @@ class GameEngine2v2(GameEngine):
         ps.magic_battery_m_this_turn = 0
         ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0
         self._run_zone_owner_turn_start_events(player_id)
+        self._run_timed_effects_for_turn(player_id)
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False

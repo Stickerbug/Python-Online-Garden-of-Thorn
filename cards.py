@@ -3,6 +3,8 @@ from typing import Dict, List, Set, Optional, Any
 import random
 import copy
 
+ERROR_CARD_ID = 'Error'
+
 
 @dataclass
 class CardDef:
@@ -61,9 +63,17 @@ class CardInstance:
     instance_flags: Set[str] = field(default_factory=set)
     disabled_flags: Set[str] = field(default_factory=set)
 
+    def __post_init__(self):
+        if not self.def_id:
+            self.def_id = ERROR_CARD_ID
+            return
+        defs = globals().get('CARD_DEFS')
+        if isinstance(defs, dict) and defs and self.def_id not in defs:
+            self.def_id = ERROR_CARD_ID
+
     @property
     def card_def(self) -> CardDef:
-        return CARD_DEFS[self.def_id]
+        return CARD_DEFS.get(self.def_id) or CARD_DEFS[ERROR_CARD_ID]
 
     @property
     def name_cn(self) -> str:
@@ -152,6 +162,11 @@ CARD_DEFS: Dict[str, CardDef] = {}
 
 def _reg(card_def: CardDef):
     CARD_DEFS[card_def.id] = card_def
+
+
+_reg(CardDef(ERROR_CARD_ID, 'Error', '错误', 0, 0, 'bloom', 0, 'Common',
+             '哎呀，你怎么会看到这张牌？', '这是一个错误，请联系服务器管理员',
+             flags={'infinite_exclude'}))
 
 
 _reg(CardDef('Basic', 'Basic', '基本', 1, 0, 'thorn', 10, 'Common',

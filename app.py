@@ -19,12 +19,14 @@ from game_engine_urf import GameEngineInfiniteFire
 from cards import (
     CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
-    SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE,
+    SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
 )
 from mod_loader import merge_mod_cards_to_card_defs, load_all_mods, save_mod, Mod
 from card_i18n import apply_card_i18n_defaults, card_text, event_text
+from runtime_errors import set_mod_runtime_error_logger
 
 BASE_CARD_IDS = set(CARD_DEFS.keys())
+BASE_CARD_DEFS = copy.deepcopy(CARD_DEFS)
 VANILLA_MOD_FILENAME = 'VanillaCardsFormatV1.json'
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
 
@@ -37,6 +39,41 @@ except Exception as e:
     print(f'[startup] mod loading failed: {type(e).__name__}: {e}')
     import traceback
     traceback.print_exc()
+
+_MODS_SIGNATURE = None
+
+
+def current_mods_signature():
+    mods_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mods')
+    if not os.path.isdir(mods_dir):
+        return ()
+    items = []
+    for filename in sorted(os.listdir(mods_dir)):
+        if not filename.endswith('.json'):
+            continue
+        path = os.path.join(mods_dir, filename)
+        try:
+            stat = os.stat(path)
+            items.append((filename, stat.st_mtime_ns, stat.st_size))
+        except OSError:
+            items.append((filename, 0, 0))
+    return tuple(items)
+
+
+def reload_mod_card_defs(force=False):
+    global _MODS_SIGNATURE
+    signature = current_mods_signature()
+    if not force and signature == _MODS_SIGNATURE:
+        return []
+    CARD_DEFS.clear()
+    CARD_DEFS.update(copy.deepcopy(BASE_CARD_DEFS))
+    merged = merge_mod_cards_to_card_defs()
+    apply_card_i18n_defaults(CARD_DEFS)
+    _MODS_SIGNATURE = signature
+    return merged
+
+
+_MODS_SIGNATURE = current_mods_signature()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'garden_of_thorn_secret')
@@ -140,6 +177,11 @@ def admin_event(kind, message, **extra):
     if extra:
         entry.update(extra)
     ADMIN_EVENTS.appendleft(entry)
+
+
+set_mod_runtime_error_logger(
+    lambda message, **extra: admin_event('mod_error', message, **extra)
+)
 
 
 def admin_match_record(room, result='finished'):
@@ -439,7 +481,7 @@ def ensure_valid_disabled_mods(disabled_mods=None):
 
 def get_allowed_card_ids(disabled_mods=None):
     disabled = set(ensure_valid_disabled_mods(disabled_mods))
-    allowed = set()
+    allowed = {ERROR_CARD_ID}
     for mod in load_all_mods():
         if mod.errors:
             continue
@@ -469,6 +511,28 @@ def get_card_mod_sources(disabled_mods=None):
                     'is_vanilla': mod.filename == VANILLA_MOD_FILENAME,
                 }
     return sources
+
+
+def build_mod_loadout(disabled_mods=None):
+    disabled = ensure_valid_disabled_mods(disabled_mods)
+    import hashlib as _hl
+    _h = _hl.sha256()
+    active_mods = []
+    for mod in sorted(load_all_mods(), key=lambda m: m.filename):
+        if mod.filename in disabled or mod.errors:
+            continue
+        active_mods.append(mod.info.name if mod.info else mod.filename)
+        try:
+            with open(mod.filepath, 'rb') as f:
+                _h.update(f.read())
+        except Exception:
+            _h.update(mod.filename.encode('utf-8'))
+    return {
+        'disabled_mods': disabled,
+        'mods_hash': _h.hexdigest(),
+        'mods_list': active_mods,
+        'allowed_card_ids': get_allowed_card_ids(disabled),
+    }
 
 
 def same_mod_loadout(sids):
@@ -1055,9 +1119,13 @@ def broadcast_game_state(room):
         else:
             opp_pidx = 1 - pidx
             opp_sid = room.player_sids[opp_pidx]
+            state['enemy_ids'] = [opp_pidx]
             state['opponent_name'] = room_player_nickname(room, opp_sid)
             state['opponent_is_admin_player'] = player_is_admin(opp_sid, room)
             state['opponent_special'] = player_special_fields(opp_sid, room)
+            state['opponent_names'] = [state['opponent_name']]
+            state['opponent_admin_flags'] = [state['opponent_is_admin_player']]
+            state['opponent_specials'] = [state['opponent_special']]
             state['your_name'] = room_player_nickname(room, sid)
             state['your_is_admin_player'] = player_is_admin(sid, room)
             state['your_special'] = player_special_fields(sid, room)
@@ -1279,6 +1347,20 @@ def broadcast_spectate_state(room):
         socketio.emit('state_update', state, room=spid)
 
 
+def redact_error_cards_from_player_payload(payload):
+    if not isinstance(payload, dict):
+        return payload
+    for zone in ('hand', 'deck', 'discard', 'exile'):
+        cards = payload.get(zone)
+        if isinstance(cards, list):
+            payload[zone] = [
+                card for card in cards
+                if not (isinstance(card, dict) and card.get('def_id') == ERROR_CARD_ID)
+            ]
+            payload[f'{zone}_count'] = len(payload[zone])
+    return payload
+
+
 def build_spectate_state(room):
     engine = room.engine
     base = engine.get_public_state(0)
@@ -1288,6 +1370,7 @@ def build_spectate_state(room):
             break
         psid = room.player_sids[i]
         pdata = ps.to_dict(include_private=True)
+        redact_error_cards_from_player_payload(pdata)
         pdata['player_id'] = i
         pdata['name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', f'P{i + 1}')
         pdata['is_admin_player'] = player_is_admin(psid, room)
@@ -1510,6 +1593,10 @@ def admin_complete():
 
 @app.route('/api/cards')
 def api_cards():
+    try:
+        reload_mod_card_defs()
+    except Exception as exc:
+        admin_event('error', f'failed to reload mod card defs: {exc}')
     disabled_mods = request.args.get('disabled_mods', '')
     allowed_card_ids = get_allowed_card_ids(disabled_mods)
     card_mod_sources = get_card_mod_sources(disabled_mods)
@@ -1549,6 +1636,10 @@ def api_cards():
 
 @app.route('/api/opening-events')
 def api_opening_events():
+    try:
+        reload_mod_card_defs()
+    except Exception as exc:
+        admin_event('error', f'failed to reload mod card defs: {exc}')
     allowed_card_ids = get_allowed_card_ids(request.args.get('disabled_mods', ''))
     events = []
     for event_id in sorted(GameEngine.OPENING_EVENTS.keys()):
@@ -1613,6 +1704,7 @@ def api_mods_save():
     mod.scripts = data.get('scripts', {})
     try:
         save_mod(mod)
+        reload_mod_card_defs(force=True)
         return jsonify({'success': True, 'warnings': validation.warnings})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1829,28 +1921,15 @@ def on_login(data):
         preferred_mode = data.get('mode', '1v1')
         if preferred_mode not in ('1v1', '2v2', 'urf'):
             preferred_mode = '1v1'
-        import hashlib as _hl
-        _h = _hl.sha256()
-        all_mods = load_all_mods()
-        active_mods = []
-        for mod in sorted(all_mods, key=lambda m: m.filename):
-            if mod.filename in disabled_mods or mod.errors:
-                continue
-            active_mods.append(mod.info.name if mod.info else mod.filename)
-            try:
-                with open(mod.filepath, 'rb') as f:
-                    _h.update(f.read())
-            except Exception:
-                _h.update(mod.filename.encode('utf-8'))
-        mods_hash = _h.hexdigest()
+        loadout = build_mod_loadout(disabled_mods)
         players[sid] = {
             'nickname': name,
             'room_id': None,
             'status': initial_status,
-            'mods_hash': mods_hash,
-            'mods_list': active_mods,
-            'disabled_mods': disabled_mods,
-            'allowed_card_ids': get_allowed_card_ids(disabled_mods),
+            'mods_hash': loadout['mods_hash'],
+            'mods_list': loadout['mods_list'],
+            'disabled_mods': loadout['disabled_mods'],
+            'allowed_card_ids': loadout['allowed_card_ids'],
             'mode': preferred_mode,
             'is_admin_player': is_admin_player,
         }
@@ -1921,6 +2000,50 @@ def on_set_mode(data):
                     del teams[member_sid]
                 if member_sid in players:
                     socketio.emit('team_disbanded', {}, room=member_sid)
+        broadcast_lobby()
+
+
+@socketio.on('update_mod_settings')
+def on_update_mod_settings(data):
+    sid = request.sid
+    with _lock:
+        if sid not in players:
+            return
+        player = players[sid]
+        if player.get('status') not in ('lobby', 'reconnecting'):
+            emit('mod_settings_updated', {
+                'ok': False,
+                'reason': 'mod_settings_only_lobby',
+                'disabled_mods': player.get('disabled_mods', []),
+            })
+            return
+        old_hash = player.get('mods_hash')
+        loadout = build_mod_loadout((data or {}).get('disabled_mods', []))
+        player['disabled_mods'] = loadout['disabled_mods']
+        player['mods_hash'] = loadout['mods_hash']
+        player['mods_list'] = loadout['mods_list']
+        player['allowed_card_ids'] = loadout['allowed_card_ids']
+        invites.pop(sid, None)
+        for inviter_sid, target_sid in list(invites.items()):
+            if target_sid == sid:
+                del invites[inviter_sid]
+        if sid in teams and old_hash != loadout['mods_hash']:
+            team = teams[sid]
+            leader = team['leader']
+            members = list(team['members'])
+            for key in list(pending_team_matches):
+                if key[0] == leader or key[1] == leader:
+                    del pending_team_matches[key]
+            for member_sid in members:
+                if member_sid in teams:
+                    del teams[member_sid]
+                if member_sid in players:
+                    socketio.emit('team_disbanded', {}, room=member_sid)
+        emit('mod_settings_updated', {
+            'ok': True,
+            'disabled_mods': loadout['disabled_mods'],
+            'mods_list': loadout['mods_list'],
+        })
         broadcast_lobby()
 
 
@@ -2311,6 +2434,9 @@ def on_accept_invite(data):
         accepter = players[sid]
         if inviter['status'] != 'lobby' or accepter['status'] != 'lobby':
             return
+        if inviter.get('mods_hash') != accepter.get('mods_hash'):
+            emit('server_error', {'message': '妯＄粍涓嶄竴鑷达紝鏃犳硶寮€濮嬪灞?'})
+            return
         room_id = _next_room_id
         _next_room_id += 1
         allowed_card_ids = inviter.get('allowed_card_ids') or get_allowed_card_ids(inviter.get('disabled_mods', []))
@@ -2505,9 +2631,11 @@ def on_solo_start(data):
     if len(deck0) != DECK_SIZE or len(deck1) != DECK_SIZE:
         emit('server_error', {'message': '训练场牌组必须各为15张'})
         return
-    allowed_card_ids = get_allowed_card_ids([])
+    disabled_mods = ensure_valid_disabled_mods(data.get('disabled_mods', [])) if data else []
+    allowed_card_ids = get_allowed_card_ids(disabled_mods)
     if sid in players:
-        allowed_card_ids = players[sid].get('allowed_card_ids') or allowed_card_ids
+        players[sid]['disabled_mods'] = disabled_mods
+        players[sid]['allowed_card_ids'] = allowed_card_ids
     def _valid_entry(entry):
         def_id = entry.get('def_id') if isinstance(entry, dict) else entry
         return def_id in CARD_DEFS and def_id in allowed_card_ids
