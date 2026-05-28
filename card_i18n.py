@@ -252,7 +252,7 @@ OPENING_EVENT_I18N = {
     },
     4: {
         'name': _t('烈焰预兆', 'Flame Omen', 'Présage de flammes', 'Presságio Flamejante', 'Огненное знамение', '烈炎の兆し'),
-        'desc': _t('开局对敌方施加2层灼烧', 'At game start, apply 2 Burn to the enemy', 'Au début de la partie, applique 2 Brûlure à l’ennemi', 'No início da partida, aplica 2 Queima ao inimigo', 'В начале игры наложите на врага 2 Горения', '開始時、敵に灼焼2を付与'),
+        'desc': _t('开局对所有敌方玩家施加2层灼烧', 'At game start, apply 2 Burn to all enemy players', 'Au début de la partie, applique 2 Brûlure à tous les joueurs ennemis', 'No início da partida, aplica 2 Queima a todos os jogadores inimigos', 'В начале игры наложите 2 Горения на всех вражеских игроков', '開始時、敵プレイヤー全員に灼焼2を付与'),
     },
     5: {
         'name': _t('命运抽签', 'Fated Draw', 'Pioche du destin', 'Compra do Destino', 'Жребий судьбы', '運命のドロー'),

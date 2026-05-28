@@ -4,6 +4,14 @@ import sys
 import copy
 import hashlib
 from typing import Dict, List, Optional, Any
+from mod_validator import (
+    VALID_CARD_TYPES,
+    VALID_QUALITIES,
+    VALID_FLAGS,
+    VALID_EFFECTS,
+    VALID_EVENT_EFFECTS,
+    validate_mod_data,
+)
 
 def _get_base_dir():
     if getattr(sys, 'frozen', False):
@@ -12,76 +20,6 @@ def _get_base_dir():
 
 MODS_DIR = os.path.join(_get_base_dir(), 'mods')
 GAME_VERSION = 'v0.3.1-alpha'
-
-VALID_CARD_TYPES = {'thorn', 'bloom', 'root', 'guard'}
-VALID_QUALITIES = {'Common', 'Uncommon', 'Unusual', 'Rare', 'Epic', 'Legendary', 'Ultra', 'Super'}
-VALID_FLAGS = {'exile', 'precision', 'indestructible', 'non_stack', 'non_stackable', 'sprout', 'symbiosis', 'uncancellable', 'self_only', 'infinite_exclude'}
-VALID_EFFECTS = {
-    'deal_damage', 'deal_damage_multi', 'heal', 'draw', 'gain_e', 'gain_m', 'gain_armor', 'gain_dodge',
-    'apply_poison', 'apply_burn', 'apply_toxic', 'apply_vulnerable',
-    'reveal_enemy_hand', 'steal_enemy_card',
-    'choose_from_deck', 'choose_from_discard', 'choose_from_exile',
-    'set_health', 'set_invincible', 'set_untargetable',
-    'block_enemy_attacks', 'force_enemy_attacks_only', 'block_own_actions',
-    'counter_dodge', 'counter_nazar', 'counter_negate_skill',
-    'counter_equip_protect', 'counter_block_enemy_attacks',
-    'counter_set_invincible_then_die',
-    'equip_sponge', 'equip_reduce_enemy_draw', 'equip_reduce_enemy_e',
-    'equip_reduce_own_draw', 'equip_reduce_own_e',
-    'equip_add_toxic', 'equip_set_health',
-    'equip_on_destroy_remove_poison_damage',
-    'on_fatal_invincible_then_die', 'on_fatal_set_health_exile',
-    'log', 'if', 'if_else', 'repeat', 'repeat_until', 'for_each', 'after_all', 'random',
-    'damage', 'damage_multi', 'poison', 'burn', 'vulnus', 'toxic',
-    'add_armor', 'remove_armor', 'set_armor', 'dodge_this', 'dodge_permanent',
-    'clear_buffs', 'clear_debuffs', 'clear_all_effects', 'clear_status',
-    'cost_e', 'cost_m', 'mod_e_regen', 'mod_m_regen', 'mod_draw',
-    'discard', 'reveal_deck_top', 'steal_card', 'copy_card', 'copy_choice_with_discount',
-    'random_discard_from_hand', 'put_card_to_deck', 'shuffle_discard_into_deck',
-    'give_card_to_hand', 'give_card_to_deck', 'give_card_to_discard',
-    'remove_specific_card',
-    'destroy_random_equip', 'destroy_all_equip', 'destroy_all_field_equip',
-    'equip_protection', 'remove_equip_protection', 'place_as_equip',
-    'block_action', 'block_card_type', 'force_card_type', 'nullify_current_card',
-    'invincible', 'untargetable', 'skip_turn', 'extra_turn', 'force_end_turn',
-    'mark_self_damage_source',
-    'fission', 'multiply_next_damage', 'reduce_next_cost', 'increase_next_cost',
-    'fusion', 'add_tag', 'remove_tag', 'transform_card',
-    'gain_durability', 'lose_durability', 'set_durability',
-    'record_play_count', 'record_equip_turns', 'reset_counter', 'create_counter',
-    'var_set', 'var_add', 'var_sub', 'var_mul', 'var_div',
-    'batch_var_add', 'batch_var_sub', 'batch_var_mul', 'batch_var_div',
-    'status_add_named', 'status_remove_named', 'tag_add_named', 'tag_remove_named',
-    'batch_status_add', 'batch_status_remove', 'batch_tag_add', 'batch_tag_remove',
-    'exile_this', 'move_to_discard', 'move_to_hand', 'move_to_deck',
-    'global_damage_mult', 'global_heal_mult', 'global_cost_mult',
-    'swap_health', 'swap_hands', 'broadcast_event', 'modify_damage',
-    'trigger_on_enemy_use_type', 'trigger_on_friendly_use_type',
-    'trigger_on_self_magic_heal_cumulative', 'trigger_manual', 'response_declare',
-    'trigger_on_event',
-    'on_owner_turn_start', 'on_enemy_turn_start', 'on_any_turn_start',
-    'on_damage_taken', 'on_equipment_trigger', 'on_equipment_destroy',
-    'on_hand_owner_turn_start', 'on_discard_owner_turn_start', 'on_deck_owner_turn_start',
-    'aura_enemy_elixir_recovery',
-    'direct_damage', 'lifesteal_damage', 'triangle_damage',
-    'discard_choice_then_draw', 'coffee_gain_e',
-    'destroy_equipment_choice_or_first', 'destroy_all_destroyable_equipment',
-    'destroy_self_equipment', 'activate_corruption',
-    'request_target', 'request_card', 'request_confirm',
-    'for_each_selected_card', 'card_prop_add', 'card_prop_set',
-    'equipment_prop_add', 'equipment_prop_set',
-    'player_prop_add', 'player_prop_set',
-}
-VALID_EQUIP_EFFECTS = {
-    'per_card_played', 'per_e_spent', 'per_m_spent',
-    'per_health_recover', 'per_health_consume',
-    'on_damage_dealt', 'on_damage_taken',
-}
-VALID_EVENT_EFFECTS = {
-    'max_health_mod', 'convert_to_magic', 'convert_to_light',
-    'apply_burn', 'draw_to_full', 'gain_e_per_turn', 'first_strike',
-    'convert_to_yggdrasil',
-}
 
 
 class ModCard:
@@ -219,74 +157,41 @@ class Mod:
     def __init__(self, filepath: str):
         self.filepath = filepath
         self.filename = os.path.basename(filepath)
+        self.format_version = 1
+        self.editor: Dict[str, Any] = {}
         self.info: Optional[ModInfo] = None
         self.cards: List[ModCard] = []
         self.events: List[ModEvent] = []
         self.variables: List[ModVariable] = []
+        self.custom_statuses: List[dict] = []
+        self.custom_tags: List[dict] = []
+        self.scripts: Dict[str, Any] = {}
         self.errors: List[str] = []
+        self.warnings: List[str] = []
+        self.validation_hash = ''
         self.enabled = True
 
-    def to_dict(self) -> dict:
-        return {
+    def to_dict(self, include_validation: bool = False) -> dict:
+        data = {
+            'format_version': self.format_version,
+            'editor': self.editor,
             'info': self.info.to_dict() if self.info else {},
             'cards': [c.to_dict() for c in self.cards],
             'events': [e.to_dict() for e in self.events],
             'variables': [v.to_dict() for v in self.variables],
+            'custom_statuses': self.custom_statuses,
+            'custom_tags': self.custom_tags,
+            'scripts': self.scripts,
         }
+        if include_validation:
+            data['errors'] = list(self.errors)
+            data['warnings'] = list(self.warnings)
+            data['validation_hash'] = self.validation_hash
+        return data
 
 
 def validate_mod(data: dict) -> List[str]:
-    errors = []
-    def validate_effect_list(effects, label):
-        for eff in effects or []:
-            if isinstance(eff, str) and eff not in VALID_EFFECTS:
-                errors.append(f'{label} invalid effect: {eff}')
-            elif isinstance(eff, dict):
-                if eff.get('type') not in VALID_EFFECTS:
-                    errors.append(f'{label} invalid effect type: {eff.get("type")}')
-                params = eff.get('params') or {}
-                for key in ('then', 'else', 'body', 'effects', 'a', 'b'):
-                    if isinstance(params.get(key), list):
-                        validate_effect_list(params.get(key), label)
-    info = data.get('info', {})
-    if not info.get('name'):
-        errors.append('模组缺少名称')
-    for i, card in enumerate(data.get('cards', [])):
-        if not card.get('id'):
-            errors.append(f'卡牌#{i + 1}缺少ID')
-        if card.get('card_type') not in VALID_CARD_TYPES:
-            errors.append(f'卡牌#{i + 1}类型无效: {card.get("card_type")}')
-        if card.get('quality') not in VALID_QUALITIES:
-            errors.append(f'卡牌#{i + 1}品质无效: {card.get("quality")}')
-        for flag in card.get('flags', []):
-            if flag not in VALID_FLAGS:
-                errors.append(f'卡牌#{i + 1}标签无效: {flag}')
-        validate_effect_list(card.get('effects', []), f'card#{i + 1}')
-        scripts = card.get('scripts', {})
-        if scripts and not isinstance(scripts, dict):
-            errors.append(f'card#{i + 1} scripts must be an object')
-        elif isinstance(scripts, dict):
-            for entry_name, script in scripts.items():
-                script_effects = script.get('effects', []) if isinstance(script, dict) else script
-                if not isinstance(script_effects, list):
-                    errors.append(f'card#{i + 1} scripts.{entry_name} must be an effect list')
-                else:
-                    validate_effect_list(script_effects, f'card#{i + 1} scripts.{entry_name}')
-    for i, event in enumerate(data.get('events', [])):
-        if not event.get('name_cn') and not event.get('name_en'):
-            errors.append(f'事件#{i + 1}缺少名称')
-        for eff in event.get('effects', []):
-            if isinstance(eff, str) and eff not in VALID_EVENT_EFFECTS:
-                errors.append(f'事件#{i + 1}效果无效: {eff}')
-            elif isinstance(eff, dict):
-                if eff.get('type') not in VALID_EVENT_EFFECTS:
-                    errors.append(f'事件#{i + 1}效果类型无效: {eff.get("type")}')
-    for i, variable in enumerate(data.get('variables', [])):
-        if not variable.get('name') and not variable.get('id'):
-            errors.append(f'variable#{i + 1} missing name')
-        if variable.get('scope', 'player') not in ('player', 'team', 'global'):
-            errors.append(f'variable#{i + 1} invalid scope: {variable.get("scope")}')
-    return errors
+    return validate_mod_data(data, strict=False).errors
 
 
 def load_mod(filepath: str) -> Mod:
@@ -300,8 +205,13 @@ def load_mod(filepath: str) -> Mod:
     except Exception as e:
         mod.errors.append(f'读取失败: {e}')
         return mod
-    errors = validate_mod(data)
-    mod.errors = errors
+    validation = validate_mod_data(data, strict=False, source=mod.filename)
+    mod.errors = validation.errors
+    mod.warnings = validation.warnings
+    mod.validation_hash = validation.content_hash
+    data = validation.normalized if validation.normalized else data
+    mod.format_version = data.get('format_version', 1)
+    mod.editor = data.get('editor', {}) if isinstance(data.get('editor', {}), dict) else {}
     if data.get('info'):
         mod.info = ModInfo(data['info'])
     for cd in data.get('cards', []):
@@ -310,6 +220,9 @@ def load_mod(filepath: str) -> Mod:
         mod.events.append(ModEvent(ed))
     for vd in data.get('variables', []):
         mod.variables.append(ModVariable(vd))
+    mod.custom_statuses = data.get('custom_statuses', []) if isinstance(data.get('custom_statuses', []), list) else []
+    mod.custom_tags = data.get('custom_tags', []) if isinstance(data.get('custom_tags', []), list) else []
+    mod.scripts = data.get('scripts', {}) if isinstance(data.get('scripts', {}), dict) else {}
     return mod
 
 

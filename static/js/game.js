@@ -3738,6 +3738,11 @@ function connectSocket(serverUrl) {
     });
     socket.on('opponent_disconnected', (data) => {
         if (data && data.timeout) {
+            if (data.stay) {
+                hideModal();
+                flashStatus(UI.opponent_disconnected, 2400, 'warning');
+                return;
+            }
             if (data.game_over) {
                 hideModal();
                 updateStatus(UI.game_over);
@@ -4036,7 +4041,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=3');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=4');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;

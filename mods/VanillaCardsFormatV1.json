@@ -1,5 +1,10 @@
 {
   "format_version": 1,
+  "editor": {
+    "tool": "Garden of Thorn Mod Editor",
+    "tool_version": "1",
+    "schema": "got_mod_format_v1"
+  },
   "info": {
     "name": "Garden of Thorn Vanilla Cards",
     "version": "1.0.0",
@@ -1185,7 +1190,7 @@
         {
           "type": "heal",
           "params": {
-            "target": "self",
+            "target": "choice_target",
             "amount": 12
           }
         }
@@ -1210,7 +1215,7 @@
             {
               "type": "heal",
               "params": {
-                "target": "self",
+                "target": "choice_target",
                 "amount": 12
               }
             }
@@ -1234,7 +1239,7 @@
         {
           "type": "heal",
           "params": {
-            "target": "self",
+            "target": "choice_target",
             "amount": 7
           }
         }
@@ -1259,7 +1264,7 @@
             {
               "type": "heal",
               "params": {
-                "target": "self",
+                "target": "choice_target",
                 "amount": 7
               }
             }
@@ -1283,7 +1288,7 @@
         {
           "type": "gain_m",
           "params": {
-            "target": "self",
+            "target": "choice_target",
             "amount": 3
           }
         }
@@ -1308,7 +1313,7 @@
             {
               "type": "gain_m",
               "params": {
-                "target": "self",
+                "target": "choice_target",
                 "amount": 3
               }
             }
@@ -1332,14 +1337,14 @@
         {
           "type": "gain_e",
           "params": {
-            "target": "self",
+            "target": "choice_target",
             "amount": {
               "ref": "math_op",
               "a": 1,
               "op": "+",
               "b": {
                 "ref": "var",
-                "target": "self",
+                "target": "choice_target",
                 "name": "咖啡首次使用"
               }
             }
@@ -1348,7 +1353,7 @@
         {
           "type": "var_set",
           "params": {
-            "target": "self",
+            "target": "choice_target",
             "name": "咖啡首次使用",
             "value": 0
           }
@@ -1374,14 +1379,14 @@
             {
               "type": "gain_e",
               "params": {
-                "target": "self",
+                "target": "choice_target",
                 "amount": {
                   "ref": "math_op",
                   "a": 1,
                   "op": "+",
                   "b": {
                     "ref": "var",
-                    "target": "self",
+                    "target": "choice_target",
                     "name": "咖啡首次使用"
                   }
                 }
@@ -1390,7 +1395,7 @@
             {
               "type": "var_set",
               "params": {
-                "target": "self",
+                "target": "choice_target",
                 "name": "咖啡首次使用",
                 "value": 0
               }
@@ -1796,7 +1801,7 @@
         {
           "type": "heal",
           "params": {
-            "target": "self",
+            "target": "choice_target",
             "amount": 20
           }
         },
@@ -1827,7 +1832,7 @@
             {
               "type": "heal",
               "params": {
-                "target": "self",
+                "target": "choice_target",
                 "amount": 20
               }
             }
@@ -2007,35 +2012,16 @@
       "quality": "Common",
       "description": "坚实的护盾，减免来袭的伤害。",
       "effect_text": "+2A",
-      "flags": [
-        "non_stackable"
-      ],
+      "flags": [],
       "effects": [
         {
           "type": "place_as_equip"
         },
         {
-          "type": "if",
+          "type": "add_armor",
           "params": {
-            "condition": {
-              "op": "compare",
-              "a": {
-                "ref": "equipment_count_named",
-                "target": "self",
-                "card_id": "Disc"
-              },
-              "operator": "<=",
-              "b": 1
-            },
-            "then": [
-              {
-                "type": "add_armor",
-                "params": {
-                  "target": "self",
-                  "amount": 2
-                }
-              }
-            ]
+            "target": "choice_target",
+            "amount": 2
           }
         }
       ],
@@ -2060,27 +2046,10 @@
               "type": "place_as_equip"
             },
             {
-              "type": "if",
+              "type": "add_armor",
               "params": {
-                "condition": {
-                  "op": "compare",
-                  "a": {
-                    "ref": "equipment_count_named",
-                    "target": "self",
-                    "card_id": "Disc"
-                  },
-                  "operator": "<=",
-                  "b": 1
-                },
-                "then": [
-                  {
-                    "type": "add_armor",
-                    "params": {
-                      "target": "self",
-                      "amount": 2
-                    }
-                  }
-                ]
+                "target": "choice_target",
+                "amount": 2
               }
             }
           ]

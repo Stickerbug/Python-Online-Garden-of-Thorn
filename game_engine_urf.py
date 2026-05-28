@@ -243,8 +243,6 @@ class GameEngineInfiniteFire(GameEngine):
             ps = self.players[i]
             ps.cards_played_this_turn = {}
             ps.magic_battery_m_this_turn = 0
-            ps.coffee_first_use = True
-            ps.custom_vars['咖啡首次使用'] = 1
             ps.urf_replace_available = True
             ps.urf_sell_available = True
         self.log_msg(f"=== 第{self.round_num}回合 ===")

@@ -49,6 +49,19 @@ class EquipmentInstance:
         return ei
 
 
+def reset_card_for_discard(card: CardInstance):
+    card.mimic_discount = 0
+    if card.card_type == 'thorn':
+        card.fission_level = 1
+        card.fusion_level = 1
+        card.fission_count = 0
+        card.fusion_multiplier = 1.0
+        card.fission_hit = 0
+        if card.def_id == 'Tomato':
+            card.bonus_damage = 0
+            card.held_turns = 0
+
+
 class PlayerState:
     def __init__(self, player_id: int):
         self.player_id = player_id
@@ -260,10 +273,12 @@ class PlayerState:
                 if 'attract' in card.flags and non_attract_cards:
                     discard_card = non_attract_cards[0]
                     self.hand.remove(discard_card)
+                    reset_card_for_discard(discard_card)
                     self.discard.append(discard_card)
                     self.hand.append(card)
                     drawn.append(card)
                 else:
+                    reset_card_for_discard(card)
                     self.discard.append(card)
             else:
                 self.hand.append(card)
@@ -286,6 +301,7 @@ class PlayerState:
                     if 'sprout' in extra.flags:
                         sprout_queue.append(extra)
                 else:
+                    reset_card_for_discard(extra)
                     self.discard.append(extra)
         return drawn
 
@@ -305,7 +321,7 @@ class GameEngine:
         2: {'id': 2, 'name': '魔力转化', 'desc': '选择1-3张牌，分别选择魔法牌转化，开局回复5M', 'position': 2},
         3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多五张牌转化为Light（萌芽、共生）', 'position': 2},
         8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为世界树之叶', 'position': 2},
-        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对敌方施加2层灼烧', 'position': 3},
+        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对所有敌方玩家施加2层灼烧', 'position': 3},
         5: {'id': 5, 'name': '命运抽签', 'desc': '前二回合开始时抽牌至手牌已满', 'position': 3},
         6: {'id': 6, 'name': '能量涌动', 'desc': '前三回合开始时额外回复2E', 'position': 3},
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手多回复3E并抽4张牌', 'position': 3},
@@ -833,9 +849,12 @@ class GameEngine:
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         self._start_player_turn(self.first_player)
 
+    def _opening_event_enemy_targets(self, player_id: int):
+        target_id = 1 - player_id
+        return [target_id] if 0 <= target_id < len(self.players) else []
+
     def _apply_opening_event(self, player_id: int):
         ps = self.players[player_id]
-        opp = self.players[1 - player_id]
         event_id = self.opening_event_picks[player_id]
         sub = self.opening_event_sub_choices[player_id]
         if event_id == 1:
@@ -876,8 +895,11 @@ class GameEngine:
                             break
                 self.log_msg(f"{self.pn(player_id)}【光之洗礼】：{converted}张牌变为Light(萌芽+共生)")
         elif event_id == 4:
-            opp.fire += 2
-            self.log_msg(f"{self.pn(player_id)}【烈焰预兆】：敌方+2灼烧")
+            target_ids = self._opening_event_enemy_targets(player_id)
+            for target_id in target_ids:
+                self.players[target_id].fire += 2
+            target_label = "敌方全体" if len(target_ids) > 1 else "敌方"
+            self.log_msg(f"{self.pn(player_id)}【烈焰预兆】：{target_label}+2灼烧")
         elif event_id == 5:
             self.log_msg(f"{self.pn(player_id)}【命运抽签】：前二回合抽牌至手牌满")
         elif event_id == 6:
@@ -911,8 +933,7 @@ class GameEngine:
             ps = self.players[i]
             ps.cards_played_this_turn = {}
             ps.magic_battery_m_this_turn = 0
-            ps.coffee_first_use = True
-            ps.custom_vars['\u5496\u5561\u9996\u6b21\u4f7f\u7528'] = 1
+            ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         self._start_player_turn(self.first_player)
 
@@ -1372,21 +1393,13 @@ class GameEngine:
         if 'exile' in counter_card.flags:
             ps.exile.append(counter_card)
         else:
-            ps.discard.append(counter_card)
+            self._discard_card(ps, counter_card)
 
     def _reset_one_shot_attack_attrs(self, card: CardInstance):
-        card.fission_level = 1
-        card.fusion_level = 1
-        card.fission_count = 0
-        card.fusion_multiplier = 1.0
-        card.fission_hit = 0
-        if card.def_id == 'Tomato':
-            card.bonus_damage = 0
-            card.held_turns = 0
+        reset_card_for_discard(card)
 
     def _discard_card(self, ps, card: CardInstance):
-        if card.card_type == 'thorn':
-            self._reset_one_shot_attack_attrs(card)
+        reset_card_for_discard(card)
         ps.discard.append(card)
 
     def _execute_card_effect(self, player_id: int, card: CardInstance, choice: Optional[dict] = None) -> dict:
@@ -1422,19 +1435,15 @@ class GameEngine:
                 if self.game_over:
                     break
                 card.fission_hit = hit_idx
-                self._apply_card_effect(player_id, card, choice if hit_idx == 0 else None)
+                self._apply_card_effect(player_id, card, choice)
             card.fission_hit = 0
         else:
             self._apply_card_effect(player_id, card, choice)
         if card.card_type == 'root':
             eq = EquipmentInstance(card, player_id)
             if eq.def_id == 'Disc':
-                has_active_disc = any(e.def_id == 'Disc' for e in ps.equipment)
-                if not has_active_disc:
-                    ps.armor += 2
-                    self.log_msg(f"{self.pn(player_id)}获得2点护甲")
-                else:
-                    self.log_msg("圆盘不可叠加，护甲效果保持为2点")
+                ps.armor += 2
+                self.log_msg(f"{self.pn(player_id)}获得2点护甲")
             ps.equipment.append(eq)
             self.log_msg(f"{self.pn(player_id)}装备了{card.name_cn}")
         elif 'exile' in card.flags:
@@ -1964,7 +1973,7 @@ class GameEngine:
         for _ in range(min(amount, len(ts.hand))):
             c = random.choice(ts.hand)
             ts.hand.remove(c)
-            ts.discard.append(c)
+            self._discard_card(ts, c)
         self.log_msg(log or f"{self.pn(target_id)}随机弃置{amount}张手牌")
 
     def _atomic_put_card_to_deck(self, player_id, card, params, log, choice, context):
@@ -2029,7 +2038,7 @@ class GameEngine:
             card_def = CARD_DEFS.get(card_ref)
             if card_def:
                 new_card = CardInstance(def_id=card_def.id)
-                ts.discard.append(new_card)
+                self._discard_card(ts, new_card)
                 self._remember_created_card(new_card, context)
                 if log:
                     self.log_msg(log)
@@ -2286,7 +2295,7 @@ class GameEngine:
         owner_id, _ = self._remove_card_from_current_zone(target_card)
         if owner_id is None:
             owner_id = player_id
-        self.players[owner_id].discard.append(target_card)
+        self._discard_card(self.players[owner_id], target_card)
         self.log_msg(log or f"{target_card.name_cn}移入弃牌堆")
 
     def _atomic_move_to_hand(self, player_id, card, params, log, choice, context):
@@ -2907,13 +2916,25 @@ class GameEngine:
         self.log_msg(f"{self.pn(player_id)}使用魔法球：+3M")
 
     def _effect_coffee(self, player_id: int, card: CardInstance, choice=None):
-        ps = self.players[player_id]
+        prev_choice = getattr(self, '_active_choice', None)
+        if isinstance(choice, dict):
+            self._active_choice = choice
+        try:
+            target_id = self._resolve_target(player_id, 'choice_target')
+        finally:
+            self._active_choice = prev_choice
+        if not (0 <= target_id < len(self.players)):
+            target_id = player_id
+        ps = self.players[target_id]
         bonus = 1
-        if ps.coffee_first_use:
+        coffee_var = '\u5496\u5561\u9996\u6b21\u4f7f\u7528'
+        first_marker = int(ps.custom_vars.get(coffee_var, 1 if ps.coffee_first_use else 0))
+        if ps.coffee_first_use and first_marker > 0:
             bonus = 2
-            ps.coffee_first_use = False
+        ps.coffee_first_use = False
+        ps.custom_vars[coffee_var] = 0
         ps.gain_elixir(bonus)
-        self.log_msg(f"{self.pn(player_id)}使用咖啡：+{bonus}E")
+        self.log_msg(f"{self.pn(target_id)}使用咖啡：+{bonus}E")
 
     def _effect_chilli(self, player_id: int, card: CardInstance, choice=None):
         ps = self.players[player_id]
@@ -3045,9 +3066,10 @@ class GameEngine:
             self.log_msg(f"{self.pn(owner_id)}的装备保护抵消了摧毁！")
             return False
         if eq.def_id == 'Disc':
-            remaining_discs = [e for e in ps.equipment if e is not eq and e.def_id == 'Disc']
-            if not remaining_discs:
-                ps.armor = max(0, ps.armor - 2)
+            effect_target = int(getattr(eq, 'effect_target', getattr(eq, 'owner', owner_id)))
+            if not (0 <= effect_target < len(self.players)):
+                effect_target = owner_id
+            self.players[effect_target].armor = max(0, self.players[effect_target].armor - 2)
         has_destroy_script = self._has_card_event(eq.card_def, 'equipment_destroy')
         if has_destroy_script:
             self._run_card_event(owner_id, eq.card_instance, 'equipment_destroy', None,
@@ -3071,7 +3093,7 @@ class GameEngine:
         if 'exile' in eq.card_instance.flags:
             ps.exile.append(eq.card_instance)
         else:
-            ps.discard.append(eq.card_instance)
+            self._discard_card(ps, eq.card_instance)
         return True
 
     def check_equipment_destroy_response(self, owner_id: int, eq: EquipmentInstance) -> dict:
@@ -3490,7 +3512,14 @@ class GameEngine:
                     ids = range(len(self.players))
                 else:
                     ids = [tid]
-                return sum(1 for pid in ids for eq in self.players[pid].equipment if eq.def_id == card_id)
+                id_set = set(ids)
+                return sum(
+                    1
+                    for owner_id, ps in enumerate(self.players)
+                    for eq in ps.equipment
+                    if eq.def_id == card_id
+                    and int(getattr(eq, 'effect_target', getattr(eq, 'owner', owner_id))) in id_set
+                )
             if ref == 'damage_source':
                 context = getattr(self, '_active_effect_context', {}) or {}
                 return int(context.get('source_id', player_id))
@@ -3592,6 +3621,34 @@ class GameEngine:
         if effect_type == 'steal_enemy_card':
             return 'choose_from_enemy_hand'
         return ''
+
+    def _choice_satisfies_request(self, card: CardInstance, choice) -> bool:
+        if not self._card_needs_choice(card):
+            return True
+        if not isinstance(choice, dict):
+            return False
+        choice_request = self._get_choice_request(card)
+        choice_type = self._get_choice_type(card)
+        params = choice_request.get('params', {}) if isinstance(choice_request, dict) else {}
+        effect_type = choice_request.get('type', '') if isinstance(choice_request, dict) else ''
+        if choice.get('cancelled') and params.get('continue_on_cancel'):
+            return True
+        if effect_type == 'request_target' or choice_type == 'choose_target':
+            return any(key in choice for key in ('target_player', 'target_player_id', 'target_id'))
+        if effect_type == 'request_confirm' or choice_type == 'confirm':
+            return any(key in choice for key in ('confirmed', 'accepted'))
+        if choice_type in ('choose_cards_from_hand', 'choose_same_attacks_from_hand'):
+            ids = choice.get('target_instance_ids')
+            return isinstance(ids, list) and bool(ids)
+        if choice_type in ('choose_card_from_discard',):
+            return choice.get('target_def_id') is not None or choice.get('target_instance_id') is not None
+        if choice_type in (
+            'choose_attack_from_hand', 'choose_card_from_hand', 'choose_card_to_discard',
+            'choose_from_deck', 'choose_from_discard', 'choose_from_exile',
+            'choose_equipment', 'choose_enemy_equipment', 'choose_from_enemy_hand',
+        ):
+            return choice.get('target_instance_id') is not None or choice.get('target_def_id') is not None
+        return bool(choice)
 
     def _process_atomic_effects(self, player_id: int, card: CardInstance, choice: Optional[dict], context: str):
         effects = self._play_effects_for_card(card) if context == 'play' else card.card_def.effects
@@ -3856,7 +3913,7 @@ class GameEngine:
             return result
         self.negated_card = False
         needs_choice = self._card_needs_choice(card)
-        if needs_choice and choice is None:
+        if needs_choice and not self._choice_satisfies_request(card, choice):
             choice_request = self._get_choice_request(card)
             choice_params = (choice_request.get('params', {}) if isinstance(choice_request, dict) else {}) or {}
             choice_type = self._get_choice_type(card)
@@ -3868,6 +3925,7 @@ class GameEngine:
                 'player_id': player_id,
                 'choice_type': choice_type,
                 'choice_params': choice_params,
+                'original_choice': dict(choice) if isinstance(choice, dict) else None,
             }
             if choice_target_id is not None:
                 self.pending_choice['target_player_id'] = choice_target_id
@@ -3891,7 +3949,7 @@ class GameEngine:
                 if self.game_over:
                     break
                 card.fission_hit = hit_idx
-                self._apply_card_effect(player_id, card, choice if hit_idx == 0 else None)
+                self._apply_card_effect(player_id, card, choice)
             card.fission_hit = 0
         else:
             self._apply_card_effect(player_id, card, choice)
@@ -3906,11 +3964,10 @@ class GameEngine:
             if eq is None:
                 eq = EquipmentInstance(card, equip_owner_id)
                 if eq.def_id == 'Disc' and not card.card_def.effects:
-                    has_active_disc = any(e.def_id == 'Disc' for e in equip_owner.equipment)
-                    if not has_active_disc:
-                        equip_owner.armor += 2
-                    else:
-                        self.log_msg("圆盘不可叠加，护甲效果保持为2点")
+                    effect_target = int(getattr(eq, 'effect_target', getattr(eq, 'owner', equip_owner_id)))
+                    if not (0 <= effect_target < len(self.players)):
+                        effect_target = equip_owner_id
+                    self.players[effect_target].armor += 2
                 equip_owner.equipment.append(eq)
                 self.log_msg(f"{self.pn(equip_owner_id)}装备了{card.name_cn}")
             if hasattr(card, '_placed_as_equipment'):
@@ -3924,7 +3981,6 @@ class GameEngine:
         else:
             owner_id, zone_name, _ = self._find_card_location(card)
             if owner_id is None or zone_name is None:
-                card.mimic_discount = 0
                 self._discard_card(ps, card)
         self._check_game_over()
         return result
@@ -3950,6 +4006,10 @@ class GameEngine:
                 effect_target = self._resolve_target(player_id, params.get('effect_target'))
                 if 0 <= effect_target < len(self.players):
                     eq.effect_target = effect_target
+            else:
+                selected_target = self._selected_choice_target(-1)
+                if 0 <= selected_target < len(self.players):
+                    eq.effect_target = selected_target
             owner.equipment.append(eq)
             self.log_msg(log or f"{self.pn(owner_id)}装备了{target_card.name_cn}")
         if target_card is card:
@@ -3966,6 +4026,9 @@ class GameEngine:
         return None
 
     def _atomic_response_declare(self, player_id, card, params, log, choice, context):
+        return None
+
+    def _atomic_aura_enemy_elixir_recovery(self, player_id, card, params, log, choice, context):
         return None
 
     def _atomic_destroy_self_equipment(self, player_id, card, params, log, choice, context):
@@ -4035,12 +4098,17 @@ class GameEngine:
         self.log_msg(log or f"{self.pn(player_id)}抽1张牌")
 
     def _atomic_coffee_gain_e(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not (0 <= target_id < len(self.players)):
+            target_id = player_id
+        target = self.players[target_id]
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         first_bonus = self._eval_int(player_id, params.get('first_bonus', 1), card, 1)
-        bonus = first_bonus if getattr(self.players[player_id], 'coffee_first_use', False) else 0
-        self.players[player_id].gain_elixir(amount + bonus)
-        self.players[player_id].coffee_first_use = False
-        self.log_msg(log or f"{self.pn(player_id)}获得{amount + bonus}E")
+        bonus = first_bonus if getattr(target, 'coffee_first_use', False) else 0
+        target.gain_elixir(amount + bonus)
+        target.coffee_first_use = False
+        target.custom_vars['咖啡首次使用'] = 0
+        self.log_msg(log or f"{self.pn(target_id)}获得{amount + bonus}E")
 
     def _atomic_copy_choice_with_discount(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]

@@ -1,5 +1,10 @@
 {
   "format_version": 1,
+  "editor": {
+    "tool": "Garden of Thorn Mod Editor",
+    "tool_version": "1",
+    "schema": "got_mod_format_v1"
+  },
   "info": {
     "name": "Thorn Cards Supplement 1",
     "version": "1.0.0",
@@ -19,11 +24,11 @@
       "count": 3,
       "quality": "Common",
       "description": "敌强我强。",
-      "effect_text": "造成5D；若敌方H高于上限的一半，改为造成10D",
+      "effect_text": "造成5D；若敌方H大于等于上限的一半，改为造成10D",
       "flags": [],
       "effects": [
         {
-          "type": "if",
+          "type": "if_else",
           "params": {
             "condition": {
               "op": "compare",
@@ -32,7 +37,7 @@
                 "target": "enemy",
                 "property": "health"
               },
-              "operator": ">",
+              "operator": ">=",
               "b": {
                 "ref": "math_op",
                 "a": {
@@ -52,32 +57,8 @@
                   "amount": 10
                 }
               }
-            ]
-          }
-        },
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "compare",
-              "a": {
-                "ref": "player_property",
-                "target": "enemy",
-                "property": "health"
-              },
-              "operator": "<=",
-              "b": {
-                "ref": "math_op",
-                "a": {
-                  "ref": "player_property",
-                  "target": "enemy",
-                  "property": "max_health"
-                },
-                "op": "/",
-                "b": 2
-              }
-            },
-            "then": [
+            ],
+            "else": [
               {
                 "type": "damage",
                 "params": {
@@ -107,7 +88,7 @@
         "onPlay": {
           "effects": [
             {
-              "type": "if",
+              "type": "if_else",
               "params": {
                 "condition": {
                   "op": "compare",
@@ -116,7 +97,7 @@
                     "target": "enemy",
                     "property": "health"
                   },
-                  "operator": ">",
+                  "operator": ">=",
                   "b": {
                     "ref": "math_op",
                     "a": {
@@ -136,32 +117,8 @@
                       "amount": 10
                     }
                   }
-                ]
-              }
-            },
-            {
-              "type": "if",
-              "params": {
-                "condition": {
-                  "op": "compare",
-                  "a": {
-                    "ref": "player_property",
-                    "target": "enemy",
-                    "property": "health"
-                  },
-                  "operator": "<=",
-                  "b": {
-                    "ref": "math_op",
-                    "a": {
-                      "ref": "player_property",
-                      "target": "enemy",
-                      "property": "max_health"
-                    },
-                    "op": "/",
-                    "b": 2
-                  }
-                },
-                "then": [
+                ],
+                "else": [
                   {
                     "type": "damage",
                     "params": {

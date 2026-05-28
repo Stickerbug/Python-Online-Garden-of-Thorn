@@ -86,6 +86,9 @@ class GameEngine2v2(GameEngine):
                 enemies.extend(team)
         return enemies
 
+    def _opening_event_enemy_targets(self, player_id: int):
+        return self.get_all_enemies(player_id)
+
     def is_ally(self, player_id: int, other_id: int) -> bool:
         return self.team_of(player_id) == self.team_of(other_id)
 
@@ -319,7 +322,6 @@ class GameEngine2v2(GameEngine):
         ps.gain_magic(1)
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
-        ps.coffee_first_use = True
         if ps.skip_turn:
             ps.skip_turn = False
             self.log_msg(f"{self.pn(player_id)}被跳过本回合！")
@@ -786,7 +788,7 @@ class GameEngine2v2(GameEngine):
         if getattr(self, '_active_choice', None):
             selected = self._active_choice.get('target_player')
             if self._is_valid_effect_target(player_id, selected):
-                if target_str in ('self', 'friendly', 'enemy', None, ''):
+                if target_str in ('friendly', 'enemy'):
                     return selected
         if target_str is None or target_str == '' or target_str == 'self':
             return player_id
@@ -831,7 +833,6 @@ class GameEngine2v2(GameEngine):
         self._antenna_reveal[player_id] = None
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
-        ps.coffee_first_use = True
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False
@@ -1214,7 +1215,6 @@ class GameEngine2v2(GameEngine):
         self._antenna_reveal[player_id] = None
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
-        ps.coffee_first_use = True
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False
@@ -1346,8 +1346,7 @@ class GameEngine2v2(GameEngine):
         self._antenna_reveal[player_id] = None
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
-        ps.coffee_first_use = True
-        ps.custom_vars['\u5496\u5561\u9996\u6b21\u4f7f\u7528'] = 1
+        ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0
         self._run_zone_owner_turn_start_events(player_id)
         if ps.shovel_active:
             ps.shovel_active = False
@@ -1379,8 +1378,7 @@ class GameEngine2v2(GameEngine):
                             aura_delta += self._eval_int(owner_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
             elixir_recovery = max(0, ELIXIR_RECOVERY - ps.enemy_e_reduction - pincer_reduction + aura_delta)
             ps.gain_elixir(elixir_recovery)
-            ps.gain_magic(1)
-            self.log_msg(f"{self.pn(player_id)}抽{draw_count}张牌，回复{elixir_recovery}E，+1M")
+            self.log_msg(f"{self.pn(player_id)}抽{draw_count}张牌，回复{elixir_recovery}E")
         if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
             draw_needed = ps.hand_space()
             if draw_needed > 0:
@@ -1412,12 +1410,15 @@ class GameEngine2v2(GameEngine):
                 return
         for eq in list(ps.equipment):
             eq.turns_equipped += 1
-            if self._has_card_event(eq.card_def, 'owner_turn_start'):
-                self._run_card_event(player_id, eq.card_instance, 'owner_turn_start', None,
-                                     {'source_id': player_id, 'target_id': player_id})
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(owner_state.equipment):
-                if eq.card_def.effects or getattr(eq, 'effect_target', owner_id) != player_id:
+                if getattr(eq, 'effect_target', owner_id) != player_id:
+                    continue
+                handled = False
+                if self._has_card_event(eq.card_def, 'owner_turn_start'):
+                    handled = self._run_card_event(player_id, eq.card_instance, 'owner_turn_start', None,
+                                                   {'source_id': owner_id, 'target_id': player_id})
+                if handled or eq.card_def.effects:
                     continue
                 if eq.corruption_active:
                     self._deal_direct_damage(player_id, 1, eq.card_def.name_cn)
@@ -1490,7 +1491,13 @@ class GameEngine2v2(GameEngine):
             try:
                 self._check_yggdrasil(target_id)
                 if dmg > 0 and not is_battery:
-                    for eq in list(ps.equipment):
+                    target_equipment = [
+                        (owner_id, eq)
+                        for owner_id, owner_state in enumerate(self.players)
+                        for eq in list(owner_state.equipment)
+                        if getattr(eq, 'effect_target', owner_id) == target_id
+                    ]
+                    for owner_id, eq in target_equipment:
                         if self._has_card_event(eq.card_def, 'damage_taken') and self._run_card_event(
                             target_id,
                             eq.card_instance,
@@ -1567,7 +1574,7 @@ class GameEngine2v2(GameEngine):
         if getattr(self, '_active_choice', None):
             selected = self._active_choice.get('target_player')
             if self._is_valid_effect_target(player_id, selected):
-                if target_str in ('self', 'friendly', 'enemy', None, ''):
+                if target_str in ('friendly', 'enemy'):
                     return selected
         if target_str is None or target_str == '' or target_str == 'self':
             return player_id
@@ -1592,6 +1599,10 @@ class GameEngine2v2(GameEngine):
         if target_str in ('choice_target', 'selected_target', 'chosen_target', 'event_target', 'target', 'event_source', 'source', 'last_actor', 'damage_source'):
             tid = self._resolve_target(player_id, target_str)
             return [] if tid < 0 else [tid]
+        if getattr(self, '_active_choice', None) and target_str in ('friendly', 'enemy'):
+            selected = self._active_choice.get('target_player')
+            if self._is_valid_effect_target(player_id, selected):
+                return [selected]
         if target_str in ('both', 'random_side'):
             return list(range(self.num_players))
         if target_str in ('friendly', 'self', None, ''):

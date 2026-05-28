@@ -238,6 +238,71 @@ class GameRoom:
         return -1
 
 
+def _room_player_dead(room, player_index):
+    try:
+        if player_index < 0 or player_index >= len(getattr(room.engine, 'players', [])):
+            return False
+        return getattr(room.engine.players[player_index], 'health', 1) <= 0
+    except Exception:
+        return False
+
+
+def _room_blocking_player_sids(room):
+    if getattr(room, 'mode', None) == '2v2':
+        return [
+            psid for idx, psid in enumerate(room.player_sids)
+            if not _room_player_dead(room, idx)
+        ]
+    return list(room.player_sids)
+
+
+def _room_all_blocking_players_disconnected(room):
+    blocking_sids = _room_blocking_player_sids(room)
+    return bool(blocking_sids) and all(s in room.disconnected_players for s in blocking_sids)
+
+
+def _player_matches_room_participant(room, nickname):
+    if not nickname:
+        return False
+    for psid in room.player_sids:
+        if psid in players and players[psid].get('nickname') == nickname:
+            return True
+        if psid in room.disconnected_players and room.disconnected_players[psid].get('nickname') == nickname:
+            return True
+    for name in getattr(room.engine, 'player_names', []) or []:
+        if name == nickname:
+            return True
+    return False
+
+
+def _force_2v2_disconnect_death(room, player_index, nickname):
+    e = room.engine
+    if room.mode != '2v2' or player_index < 0 or player_index >= len(getattr(e, 'players', [])):
+        return False
+    ps = e.players[player_index]
+    was_alive = ps.health > 0
+    ps.health = 0
+    ps.invincible = False
+    ps.bandage_active = False
+    ps.bandage_death_pending = False
+    ps.skip_turn = False
+    if hasattr(e, '_on_player_death'):
+        e._on_player_death(player_index)
+    elif hasattr(e, '_check_game_over'):
+        e._check_game_over()
+    if was_alive:
+        e.log_msg(f"{nickname}\u65ad\u7ebf\u8d85\u65f6\uff0c\u5df2\u5224\u5b9a\u9635\u4ea1\u3002")
+    if not getattr(e, 'game_over', False) and getattr(e, 'current_player', None) == player_index:
+        advance = getattr(e, '_advance_turn', None)
+        if callable(advance):
+            advance()
+        else:
+            e.phase = 'action'
+    elif not getattr(e, 'game_over', False) and getattr(e, 'phase', None) in ('response', 'choice'):
+        e.phase = 'action'
+    return was_alive
+
+
 def _display_width(s):
     w = 0
     for ch in s:
@@ -437,7 +502,7 @@ def get_ongoing_games():
                     player_names.append(room.disconnected_players[s]['nickname'])
                 else:
                     player_names.append('?')
-            both_disconnected = all(s in room.disconnected_players for s in room.player_sids)
+            both_disconnected = _room_all_blocking_players_disconnected(room)
             game_info = {
                 'room_id': rid,
                 'player1': player_names[0] if len(player_names) > 0 else '?',
@@ -1117,6 +1182,11 @@ def _reset_player_for_solo(ps, deck_entries, is_first):
     ps.exile = []
     ps.equipment = []
     ps.cards_played_this_turn = {}
+    ps.custom_vars = {
+        '\u5496\u5561\u9996\u6b21\u4f7f\u7528': 1,
+        '\u4e09\u89d2\u5f62\u5c42\u6570': 0,
+        '\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54': 0,
+    }
     ps.negate_next_skill = False
     ps.is_first_player = is_first
 
@@ -1263,20 +1333,12 @@ def _mark_disconnect_timeout_loss(room, player_index, nickname):
         return False
     e.pending_response = None
     e.pending_choice = None
+    if hasattr(e, 'pending_ally_request'):
+        e.pending_ally_request = None
     room.pending_surrender_request = None
     if room.mode == '2v2' and hasattr(e, 'team_of'):
-        losing_team = e.team_of(player_index)
-        if losing_team not in (0, 1):
-            return False
-        winning_team = 1 - losing_team
-        for pidx in e.teams[losing_team]:
-            e.players[pidx].health = 0
-        e.game_over = True
-        e.winning_team = winning_team
-        e.winner = winning_team
-        e.phase = 'game_over'
-        e.log_msg(f"{nickname}断线超时，队伍{e.teams[winning_team]}获胜！")
-        return True
+        _force_2v2_disconnect_death(room, player_index, nickname)
+        return bool(getattr(e, 'game_over', False))
     winner = 1 - player_index
     e.players[player_index].health = 0
     e.game_over = True
@@ -1303,6 +1365,33 @@ def reconnect_timeout(room_id, old_sid):
             int(dc_info.get('player_index', -1)),
             dc_info.get('nickname', '?'),
         )
+        if room.mode == '2v2':
+            if ended:
+                for t in room.reconnect_timers.values():
+                    t.cancel()
+                room.reconnect_timers.clear()
+                if hasattr(room, 'both_dc_timer') and room.both_dc_timer:
+                    room.both_dc_timer.cancel()
+                    room.both_dc_timer = None
+                for other_sid in room.player_sids:
+                    if other_sid in players:
+                        socketio.emit('opponent_disconnected', {'timeout': True, 'game_over': True}, room=other_sid)
+                        socketio.emit('game_phase', {'phase': 'game_over'}, room=other_sid)
+            else:
+                for other_sid in room.player_sids:
+                    if other_sid in players:
+                        socketio.emit('opponent_disconnected', {
+                            'timeout': True,
+                            'game_over': False,
+                            'stay': True,
+                            'player_defeated': True,
+                            'opponent_nickname': dc_info.get('nickname', '?'),
+                        }, room=other_sid)
+            admin_event('game', f'room {room_id} disconnect timeout death: {dc_info.get("nickname", "?")}')
+            broadcast_game_state(room)
+            broadcast_lobby()
+            return
+
         for t in room.reconnect_timers.values():
             t.cancel()
         room.reconnect_timers.clear()
@@ -1475,7 +1564,7 @@ def api_mods():
     mods = load_all_mods()
     result = []
     for mod in mods:
-        d = mod.to_dict()
+        d = mod.to_dict(include_validation=True)
         d['filename'] = mod.filename
         d['is_vanilla'] = mod.filename == VANILLA_MOD_FILENAME
         d['card_type_counts'] = {
@@ -1491,7 +1580,19 @@ def api_mods_save():
     data = request.get_json(force=True)
     if not data:
         return jsonify({'success': False, 'error': 'invalid data'}), 400
-    mod = Mod(data.get('filepath', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mods', 'new_mod.json')))
+    from mod_validator import validate_mod_data
+    validation = validate_mod_data(data, strict=False, source='api_mods_save')
+    if validation.errors:
+        return jsonify({'success': False, 'errors': validation.errors, 'warnings': validation.warnings}), 400
+    data = validation.normalized
+    mods_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mods')
+    requested_name = data.get('filename') or os.path.basename(str(data.get('filepath') or 'new_mod.json'))
+    safe_name = os.path.basename(requested_name).strip() or 'new_mod.json'
+    if not safe_name.endswith('.json'):
+        safe_name += '.json'
+    mod = Mod(os.path.join(mods_dir, safe_name))
+    mod.format_version = data.get('format_version', 1)
+    mod.editor = data.get('editor', {}) if isinstance(data.get('editor', {}), dict) else {}
     if data.get('info'):
         from mod_loader import ModInfo
         mod.info = ModInfo(data['info'])
@@ -1503,9 +1604,16 @@ def api_mods_save():
         from mod_loader import ModEvent
         for ed in data['events']:
             mod.events.append(ModEvent(ed))
+    if data.get('variables'):
+        from mod_loader import ModVariable
+        for vd in data['variables']:
+            mod.variables.append(ModVariable(vd))
+    mod.custom_statuses = data.get('custom_statuses', [])
+    mod.custom_tags = data.get('custom_tags', [])
+    mod.scripts = data.get('scripts', {})
     try:
         save_mod(mod)
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'warnings': validation.warnings})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1709,8 +1817,6 @@ def on_login(data):
         reconnect_room = None
         reconnect_old_sid = None
         for room in rooms.values():
-            if getattr(room.engine, 'game_over', False):
-                continue
             for dc_sid, dc_info in room.disconnected_players.items():
                 if dc_info['nickname'] == name:
                     reconnect_room = room
@@ -1752,10 +1858,22 @@ def on_login(data):
             players[sid].update(special_public_fields(special_profile))
         admin_event('player', f'{name} joined as {initial_status}', sid=sid, mode=preferred_mode)
     if reconnect_room:
+        reconnect_info = reconnect_room.disconnected_players.get(reconnect_old_sid, {})
+        reconnect_pidx = int(reconnect_info.get('player_index', -1))
+        opponent_nickname = '?'
+        if reconnect_room.mode == '2v2' and hasattr(reconnect_room.engine, 'get_all_enemies'):
+            enemy_ids = reconnect_room.engine.get_all_enemies(reconnect_pidx) if reconnect_pidx >= 0 else []
+            opponent_nickname = ' / '.join(
+                reconnect_room.engine.player_names[eid]
+                for eid in enemy_ids
+                if 0 <= eid < len(reconnect_room.engine.player_names)
+            ) or '?'
+        elif reconnect_pidx in (0, 1) and len(reconnect_room.engine.player_names) >= 2:
+            opponent_nickname = reconnect_room.engine.player_names[1 - reconnect_pidx]
         emit('reconnect_available', {
             'room_id': reconnect_room.room_id,
             'old_sid': reconnect_old_sid,
-            'opponent_nickname': reconnect_room.engine.player_names[1 - reconnect_room.disconnected_players[reconnect_old_sid]['player_index']] if reconnect_old_sid in reconnect_room.disconnected_players else '?',
+            'opponent_nickname': opponent_nickname,
         })
     join_room(sid)
     login_payload = {'sid': sid, 'nickname': name}
@@ -1984,25 +2102,29 @@ def on_disconnect():
                     'disconnect_time': time.time(),
                 }
                 room.disconnected_players[sid].update(special_public_fields(player))
-                for other_sid in room.player_sids:
-                    if other_sid != sid and other_sid in players:
-                        socketio.emit('opponent_disconnected', {
-                            'reconnect_timeout': RECONNECT_TIMEOUT_SECONDS,
-                            'opponent_nickname': nickname,
-                        }, room=other_sid)
-                timer = threading.Timer(float(RECONNECT_TIMEOUT_SECONDS), reconnect_timeout, args=[room_id, sid])
-                room.reconnect_timers[sid] = timer
-                timer.daemon = True
-                timer.start()
-                both_dc = all(s in room.disconnected_players for s in room.player_sids)
-                if both_dc:
-                    for t in room.reconnect_timers.values():
-                        t.cancel()
-                    room.reconnect_timers.clear()
-                    room.both_dc_timer = threading.Timer(float(BOTH_DISCONNECTED_CLEANUP_SECONDS), both_disconnected_cleanup, args=[room_id])
-                    room.both_dc_timer.daemon = True
-                    room.both_dc_timer.start()
+                dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)
+                if not dead_2v2_player:
+                    for other_sid in room.player_sids:
+                        if other_sid != sid and other_sid in players:
+                            socketio.emit('opponent_disconnected', {
+                                'reconnect_timeout': RECONNECT_TIMEOUT_SECONDS,
+                                'opponent_nickname': nickname,
+                            }, room=other_sid)
+                    timer = threading.Timer(float(RECONNECT_TIMEOUT_SECONDS), reconnect_timeout, args=[room_id, sid])
+                    room.reconnect_timers[sid] = timer
+                    timer.daemon = True
+                    timer.start()
+                    both_dc = _room_all_blocking_players_disconnected(room)
+                    if both_dc and room.mode != '2v2':
+                        for t in room.reconnect_timers.values():
+                            t.cancel()
+                        room.reconnect_timers.clear()
+                        room.both_dc_timer = threading.Timer(float(BOTH_DISCONNECTED_CLEANUP_SECONDS), both_disconnected_cleanup, args=[room_id])
+                        room.both_dc_timer.daemon = True
+                        room.both_dc_timer.start()
                 del players[sid]
+                if dead_2v2_player:
+                    broadcast_game_state(room)
                 broadcast_lobby()
                 return
             if pidx >= 0 and room.engine.phase == 'game_over':
@@ -2092,6 +2214,16 @@ def on_reconnect_decline(data):
             player['status'] = 'lobby'
             return
         room = rooms[room_id]
+        if room.mode == '2v2':
+            dc_info = room.disconnected_players.get(old_sid, {})
+            dc_pidx = int(dc_info.get('player_index', -1)) if dc_info else -1
+            if _room_player_dead(room, dc_pidx) and old_sid in room.reconnect_timers:
+                room.reconnect_timers[old_sid].cancel()
+                del room.reconnect_timers[old_sid]
+            player['status'] = 'lobby'
+            player['room_id'] = None
+            broadcast_lobby()
+            return
         if old_sid in room.disconnected_players:
             if old_sid in room.reconnect_timers:
                 room.reconnect_timers[old_sid].cancel()
@@ -3134,6 +3266,9 @@ def on_spectate(data):
             emit('server_error', {'message': '对局不存在'})
             return
         room = rooms[room_id]
+        if _player_matches_room_participant(room, player.get('nickname')):
+            emit('server_error', {'message': '请返回自己的对局，不能观战自己的对局'})
+            return
         phase = room.engine.phase
         if phase in ('draft', 'event_select'):
             emit('server_error', {'message': '选牌或开局事件阶段暂不能观战'})

@@ -621,8 +621,6 @@ class LocalSoloEngine {
         this.players.forEach(ps => {
             ps.cards_played_this_turn = {};
             ps.magic_battery_m_this_turn = 0;
-            ps.coffee_first_use = true;
-            ps.custom_vars['咖啡首次使用'] = 1;
             ps.custom_vars['魔法电池本回合回魔'] = 0;
         });
         this.logMsg(`=== 第${this.round_num}回合 ===`);
@@ -971,7 +969,16 @@ class LocalSoloEngine {
         if (ref === 'selected_card_index') return toInt((this._active_effect_context || {}).selected_card_index, 0);
         if (ref === 'equipment_count_named') {
             const tid = this.resolveTarget(playerId, expr.target || 'self');
-            return (this.players[tid] || this.players[playerId]).equipment.filter(eq => eq.def_id === expr.card_id).length;
+            const ids = tid === -1 ? this.players.map((_, idx) => idx) : [tid];
+            const idSet = new Set(ids);
+            let total = 0;
+            this.players.forEach((ps, ownerId) => {
+                ps.equipment.forEach(eq => {
+                    const effectTarget = toInt(eq.effect_target ?? eq.owner ?? ownerId, ownerId);
+                    if (eq.def_id === expr.card_id && idSet.has(effectTarget)) total += 1;
+                });
+            });
+            return total;
         }
         if (ref === 'hand_size' || ref === 'deck_remaining' || ref === 'discard_size' || ref === 'exile_size') {
             const tid = this.resolveTarget(playerId, expr.target || 'self');
@@ -1377,7 +1384,12 @@ class LocalSoloEngine {
         this.removeCardFromCurrentZone(targetCard);
         if (!this.findEquipmentForCard(ownerId, targetCard)) {
             const eq = new LocalEquipment(targetCard, ownerId);
-            if (params.effect_target != null) eq.effect_target = this.resolveTarget(playerId, params.effect_target);
+            if (params.effect_target != null) {
+                eq.effect_target = this.resolveTarget(playerId, params.effect_target);
+            } else {
+                const selectedTarget = this.resolveTarget(playerId, 'choice_target');
+                if (selectedTarget >= 0 && selectedTarget < this.players.length) eq.effect_target = selectedTarget;
+            }
             this.players[ownerId].equipment.push(eq);
             this.logMsg(`${this.pn(ownerId)}装备了${cardName(targetCard.def_id)}`);
         }
@@ -1481,6 +1493,7 @@ class LocalSoloEngine {
     effect_request_card() {}
     effect_request_target() {}
     effect_request_confirm() {}
+    effect_aura_enemy_elixir_recovery() {}
 
     findEquipmentForCard(ownerId, card) {
         if (!card || !this.players[ownerId]) return null;
@@ -1680,8 +1693,9 @@ class LocalSoloEngine {
             });
         }
         if (eq.def_id === 'Disc') {
-            const remaining = ps.equipment.filter(item => item !== eq && item.def_id === 'Disc');
-            if (!remaining.length) ps.armor = Math.max(0, ps.armor - 2);
+            const effectTarget = toInt(eq.effect_target ?? eq.owner ?? ownerId, ownerId);
+            const targetState = this.players[effectTarget] || ps;
+            targetState.armor = Math.max(0, targetState.armor - 2);
         }
         ps.equipment.splice(ps.equipment.indexOf(eq), 1);
         if (eq.card_instance.flags.has('exile')) ps.exile.push(eq.card_instance);
@@ -1820,7 +1834,7 @@ class LocalSoloEngine {
             for (let i = 0; i < fission; i++) {
                 if (this.game_over) break;
                 card.fission_hit = i;
-                this.applyCardEffect(playerId, card, i === 0 ? choice : null);
+                this.applyCardEffect(playerId, card, choice);
             }
             card.fission_hit = 0;
         } else {
