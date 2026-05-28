@@ -1798,7 +1798,13 @@ let draftState = {};
 let eventSelectData = {};
 let lobbyPlayers = [];
 let lobbyOngoingGames = [];
-const DEFAULT_SERVER = 'python-online-garden-of-thorn.onrender.com';
+const DEFAULT_SERVER = 'http://121.41.93.192:5000';
+const SERVER_ACTION_TIMEOUT_MS = 6000;
+const SOCKET_CONNECT_TIMEOUT_MS = 5000;
+const LEGACY_DEFAULT_SERVER_KEYS = new Set([
+    'python-online-garden-of-thorn.onrender.com',
+    'gtn.stickerbug.top',
+]);
 let phase = 'connecting';
 let responsePending = false;
 let responseData = {};
@@ -2827,7 +2833,7 @@ function beginPendingServerAction(name, options = {}) {
         if (btn) btn.disabled = true;
     });
     document.querySelectorAll('.btn-equip-trigger').forEach(btn => { btn.disabled = true; });
-    const timeoutMs = Math.max(2500, Number(options.timeoutMs) || 8000);
+    const timeoutMs = Math.max(2500, Number(options.timeoutMs) || SERVER_ACTION_TIMEOUT_MS);
     pendingServerActionTimer = setTimeout(() => {
         const stillPending = !!pendingServerAction;
         clearPendingServerAction();
@@ -3425,6 +3431,26 @@ document.addEventListener('touchmove', onDocumentPointerMove, { passive: false }
 document.addEventListener('touchend', onDocumentPointerUp);
 document.addEventListener('touchcancel', onDocumentTouchCancel);
 
+function canonicalServerKey(value) {
+    return String(value || '')
+        .trim()
+        .replace(/\/+$/, '')
+        .replace(/^https?:\/\//i, '')
+        .toLowerCase();
+}
+
+function normalizeServerUrl(value) {
+    let url = String(value || DEFAULT_SERVER).trim() || DEFAULT_SERVER;
+    if (!/^https?:\/\//i.test(url)) {
+        const bare = url.replace(/\/+$/, '');
+        const isLocal = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(bare);
+        const isIpv4 = /^\d{1,3}(?:\.\d{1,3}){3}(:\d+)?$/.test(bare);
+        const hasExplicitPort = /^[^/]+:\d+$/.test(bare);
+        url = `${isLocal || isIpv4 || hasExplicitPort ? 'http' : 'https'}://${url}`;
+    }
+    return url.replace(/\/+$/, '');
+}
+
 function connectSocket(serverUrl) {
     stopLocalSoloRuntime();
     if (socket) {
@@ -3433,15 +3459,14 @@ function connectSocket(serverUrl) {
         socket = null;
     }
     manualDisconnect = false;
-    let url = serverUrl;
-    let opts = { transports: ['websocket', 'polling'] };
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        if (url.includes('localhost') || url.includes('127.0.0.1')) {
-            url = 'http://' + url;
-        } else {
-            url = 'https://' + url;
-        }
-    }
+    let url = normalizeServerUrl(serverUrl);
+    let opts = {
+        transports: ['websocket', 'polling'],
+        timeout: SOCKET_CONNECT_TIMEOUT_MS,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 400,
+        reconnectionDelayMax: 1600,
+    };
     socket = io(url, opts);
 
     socket.on('connect', () => {
@@ -3892,8 +3917,13 @@ function onLogin() {
 }
 
 function getServerAddress() {
-    const custom = localStorage.getItem('got_server') || '';
-    return custom.trim() || DEFAULT_SERVER;
+    const custom = (localStorage.getItem('got_server') || '').trim();
+    if (!custom) return DEFAULT_SERVER;
+    if (LEGACY_DEFAULT_SERVER_KEYS.has(canonicalServerKey(custom))) {
+        localStorage.removeItem('got_server');
+        return DEFAULT_SERVER;
+    }
+    return custom;
 }
 
 function isLocalSoloRuntimeActive() {
@@ -6679,10 +6709,10 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
                         totalE: triggerCost,
                         totalM: 0,
                     };
-                    beginPendingServerAction('trigger', { optimisticResources: override, timeoutMs: 8000 });
+                    beginPendingServerAction('trigger', { optimisticResources: override, timeoutMs: SERVER_ACTION_TIMEOUT_MS });
                     queueOptimisticResourceCost(optimisticCost);
                 } else {
-                    beginPendingServerAction('trigger', { timeoutMs: 8000 });
+                    beginPendingServerAction('trigger', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
                 }
                 emitModeEvent('solo_use_trigger', 'use_trigger', payload);
             };
@@ -7202,7 +7232,7 @@ async function onPlayCard(cardInstanceId, options = {}) {
     }
     pendingPlayCard = cardDict;
     renderPendingCard();
-    beginPendingServerAction('play_card', { optimisticResources, timeoutMs: 8000 });
+    beginPendingServerAction('play_card', { optimisticResources, timeoutMs: SERVER_ACTION_TIMEOUT_MS });
     emitModeEvent('solo_play_card', 'play_card', { card_instance_id: cardInstanceId, choice, target_player_id: targetPlayerId });
 }
 
@@ -7456,9 +7486,9 @@ function onRespond(cardInstanceId) {
         const optimisticResources = buildOptimisticResourceOverride(cardDict, gameState && gameState.you, optimisticCost);
         queueLocalResourceCost(cardDict, gameState && gameState.you, { shownOptimistically: !!optimisticResources });
         animatePlayedCard(cardInstanceId, { shatterAfter: shouldShatterAfterPlay });
-        beginPendingServerAction('response', { optimisticResources, timeoutMs: 8000 });
+        beginPendingServerAction('response', { optimisticResources, timeoutMs: SERVER_ACTION_TIMEOUT_MS });
     } else {
-        beginPendingServerAction('response', { timeoutMs: 8000 });
+        beginPendingServerAction('response', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
     }
     const container = $('response-panel');
     if (container) { container.innerHTML = ''; container.classList.add('hidden'); container.classList.remove('visible'); }
@@ -7517,7 +7547,7 @@ function respondAllyConsent(accepted) {
     if (allyConsentTimerId) { clearInterval(allyConsentTimerId); allyConsentTimerId = null; }
     const container = $('response-panel');
     if (container) { container.innerHTML = ''; container.classList.add('hidden'); container.classList.remove('visible'); }
-    beginPendingServerAction('ally_consent', { timeoutMs: 8000 });
+    beginPendingServerAction('ally_consent', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
     socket.emit('ally_consent_response', { accepted: !!accepted });
 }
 
@@ -7772,7 +7802,7 @@ async function showChoiceUI(data) {
         choiceResult = { cancelled: true };
     }
     choicePending = false;
-    beginPendingServerAction('resolve_choice', { timeoutMs: 8000 });
+    beginPendingServerAction('resolve_choice', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
     emitModeEvent('solo_resolve_choice', 'resolve_choice', { choice: choiceResult });
 }
 
@@ -7905,7 +7935,7 @@ function onEndTurn() {
         return;
     }
     if (socket || isLocalSoloRuntimeActive()) {
-        beginPendingServerAction('end_turn', { timeoutMs: 8000 });
+        beginPendingServerAction('end_turn', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
         emitModeEvent('solo_end_turn', 'end_turn', {});
     } else {
         updateStatus(UI.server_not_connected);
@@ -7987,7 +8017,7 @@ async function onUrfReplaceCard() {
     const options = hand.map(c => getCardName(getCardDef(c.def_id)) || c.def_id);
     const sel = await simpleChoice(UI.urf_replace || '替换手牌', options);
     if (sel < 0) return;
-    beginPendingServerAction('urf_replace', { timeoutMs: 8000 });
+    beginPendingServerAction('urf_replace', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
     socket.emit('urf_replace_card', { card_instance_id: hand[sel].instance_id });
 }
 
@@ -8003,7 +8033,7 @@ async function onUrfSellEquipment() {
     const sel = await simpleChoice(UI.urf_sell || '售卖装备', options);
     if (sel < 0) return;
     const inst = (equipment[sel].card_instance || {});
-    beginPendingServerAction('urf_sell', { timeoutMs: 8000 });
+    beginPendingServerAction('urf_sell', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
     socket.emit('urf_sell_equipment', { equipment_instance_id: inst.instance_id });
 }
 
@@ -8059,7 +8089,7 @@ function openSettings(options = {}) {
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
         const custom = localStorage.getItem('got_server') || '';
-        serverInput.value = custom;
+        serverInput.value = LEGACY_DEFAULT_SERVER_KEYS.has(canonicalServerKey(custom)) ? '' : custom;
     }
     const serverHint = $('settings-server-hint');
     if (serverHint && settingsAllowServerEdit) {
@@ -8204,7 +8234,14 @@ function saveDisabledMods() {
     localStorage.setItem('got_disabled_mods', JSON.stringify(disabled));
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
-        localStorage.setItem('got_server', serverInput.value.trim());
+        const serverValue = serverInput.value.trim();
+        const serverKey = canonicalServerKey(serverValue);
+        const defaultKey = canonicalServerKey(DEFAULT_SERVER);
+        if (!serverValue || serverKey === defaultKey || LEGACY_DEFAULT_SERVER_KEYS.has(serverKey)) {
+            localStorage.removeItem('got_server');
+        } else {
+            localStorage.setItem('got_server', serverValue);
+        }
     }
     if (socket && socket.connected && phase === 'lobby') {
         socket.emit('update_mod_settings', { disabled_mods: disabled });

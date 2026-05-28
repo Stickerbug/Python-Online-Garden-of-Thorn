@@ -18,6 +18,9 @@ const DECK_SIZE = 15;
 const ERROR_CARD_ID = 'Error';
 const MOD_RUNTIME_ERROR_MESSAGE = '模组执行出现了一个意外错误。请联系管理员。';
 
+class ModLoopBreak extends Error {}
+class ModLoopContinue extends Error {}
+
 const TUTORIAL_DECKS = [
     [
         'Basic', 'Rose', 'Leaf', 'Coffee', 'Fission',
@@ -282,6 +285,10 @@ class LocalPlayer {
         this.exile = [];
         this.equipment = [];
         this.cards_played_this_turn = {};
+        this.turn_damage_taken = 0;
+        this.turn_damage_dealt = 0;
+        this.total_damage_taken = 0;
+        this.total_damage_dealt = 0;
         this.custom_vars = {
             '咖啡首次使用': 1,
             '三角形层数': 0,
@@ -436,6 +443,10 @@ class LocalPlayer {
             exile_count: this.exile.length,
             hand_count: this.hand.length,
             hand_limit: this.handLimit(),
+            turn_damage_taken: this.turn_damage_taken,
+            turn_damage_dealt: this.turn_damage_dealt,
+            total_damage_taken: this.total_damage_taken,
+            total_damage_dealt: this.total_damage_dealt,
         };
         if (includePrivate) {
             data.hand = this.hand.map(card => card.toDict());
@@ -661,6 +672,7 @@ class LocalSoloEngine {
 
     startPlayerTurn(playerId) {
         this.current_player = playerId;
+        this.resetTurnDamageCounters();
         this.applyTurnStartEffects(playerId);
         if (this.game_over) return;
         const ps = this.players[playerId];
@@ -855,8 +867,8 @@ class LocalSoloEngine {
             const choice = this._active_choice || {};
             return toInt(choice.target_player ?? choice.target_player_id ?? choice.target_id, playerId);
         }
-        if (target === 'event_source') return toInt(context.source_id, playerId);
-        if (target === 'event_target') return toInt(context.target_id, 1 - playerId);
+        if (['event_source', 'source', 'last_actor', 'damage_source'].includes(target)) return toInt(context.source_id, playerId);
+        if (['event_target', 'target'].includes(target)) return toInt(context.target_id, 1 - playerId);
         return playerId;
     }
 
@@ -1078,6 +1090,68 @@ class LocalSoloEngine {
         return JSON.stringify(a) === JSON.stringify(b);
     }
 
+    statusCount(targetId, status) {
+        if (targetId < 0) return this.players.reduce((sum, _, idx) => sum + this.statusCount(idx, status), 0);
+        const ps = this.players[targetId];
+        if (!ps) return 0;
+        const key = String(status || '');
+        const map = {
+            poison: ps.poison,
+            '中毒': ps.poison,
+            burn: ps.fire,
+            fire: ps.fire,
+            '灼烧': ps.fire,
+            vulnus: ps.vulnerable,
+            vulnerable: ps.vulnerable,
+            '易伤': ps.vulnerable,
+            toxic: ps.toxic,
+            '淬毒': ps.toxic,
+            dodge: ps.dodge,
+            '闪避': ps.dodge,
+            equip_protection: ps.equipment_protection,
+            equipment_protection: ps.equipment_protection,
+            '装备摧毁保护': ps.equipment_protection,
+            invincible: ps.invincible ? 1 : 0,
+            '无敌': ps.invincible ? 1 : 0,
+            untargetable: ps.untargetable ? 1 : 0,
+            '不可选中': ps.untargetable ? 1 : 0,
+            '邪眼': ps.nazar_active ? ps.nazar_big_hits : 0,
+            Nazar: ps.nazar_active ? ps.nazar_big_hits : 0,
+        };
+        return toInt(map[key], 0);
+    }
+
+    zoneSize(targetId, zoneName) {
+        if (targetId < 0) return this.players.reduce((sum, _, idx) => sum + this.zoneSize(idx, zoneName), 0);
+        const ps = this.players[targetId];
+        if (!ps) return 0;
+        const zone = String(zoneName || 'hand');
+        if (zone === 'equipment') return ps.equipment.length;
+        return (ps[zone] || []).length;
+    }
+
+    resetTurnDamageCounters() {
+        this.players.forEach(ps => {
+            ps.turn_damage_taken = 0;
+            ps.turn_damage_dealt = 0;
+        });
+    }
+
+    recordDamage(targetId, amount, sourceId = null) {
+        const value = Math.max(0, toInt(amount, 0));
+        if (value <= 0) return;
+        const target = this.players[targetId];
+        if (target) {
+            target.turn_damage_taken += value;
+            target.total_damage_taken += value;
+        }
+        const source = this.players[sourceId];
+        if (source) {
+            source.turn_damage_dealt += value;
+            source.total_damage_dealt += value;
+        }
+    }
+
     evalExpr(playerId, expr, currentCard = null, fallbackValue = 0) {
         expr = parseJsonish(expr);
         if (expr == null) return fallbackValue;
@@ -1096,15 +1170,33 @@ class LocalSoloEngine {
         if (ref === 'timer_remaining') {
             return toInt((this._active_effect_context || {}).timer_remaining, 0);
         }
+        if (ref === 'loop_index') {
+            const context = this._active_effect_context || {};
+            return toInt(context.loop_index ?? context.list_index ?? context.equipment_index ?? context.repeat_index, 0);
+        }
+        if (ref === 'damage_source') {
+            return toInt((this._active_effect_context || {}).source_id, playerId);
+        }
+        if (ref === 'damage_amount') {
+            const context = this._active_effect_context || {};
+            return toInt(context.damage ?? context.amount, 0);
+        }
         if (ref === 'list_var' || ref === 'list' || ref === 'zone_list') return this.scalarValue(this.evalList(playerId, expr, currentCard), 0);
         if (ref === 'list_length') return this.evalList(playerId, expr.list || [], currentCard).length;
         if (ref === 'list_item') return this.scalarValue(this.listItemRaw(playerId, expr, currentCard), 0);
         if (ref === 'player_property' || ref === 'target_attribute') {
             const tid = this.resolveTarget(playerId, expr.target || 'self');
+            if (tid < 0) {
+                return this.players.reduce((sum, _, idx) => sum + this.evalExpr(idx, { ...expr, target: idx }, currentCard, 0), 0);
+            }
             const ps = this.players[tid] || this.players[playerId];
             const prop = String(expr.property || expr.attribute || expr.attr || 'health');
             if (prop === 'hand_size') return ps.hand.length;
             if (prop === 'hand_limit') return ps.handLimit();
+            if (prop === 'deck_remaining' || prop === 'deck_count') return ps.deck.length;
+            if (prop === 'discard_size' || prop === 'discard_count') return ps.discard.length;
+            if (prop === 'exile_size' || prop === 'exile_count') return ps.exile.length;
+            if (prop === 'equip_count' || prop === 'equipment_count') return ps.equipment.length;
             return toInt(ps[prop], 0);
         }
         if (ref === 'math_op') {
@@ -1125,6 +1217,23 @@ class LocalSoloEngine {
         if (ref === 'card_property') {
             const card = this.resolveCardRef(playerId, expr.card || { ref: 'current_card' }, currentCard);
             return card ? toInt(card[String(expr.property || 'fusion_level')], 0) : 0;
+        }
+        if (ref === 'equipment_property') {
+            const eq = this.resolveEquipmentRef(playerId, expr.equipment || { ref: 'current_equipment' }, currentCard);
+            return this.equipmentProperty(eq, expr.property || 'turns_equipped');
+        }
+        if (ref === 'status_count') {
+            const tid = this.resolveTarget(playerId, expr.target || 'self');
+            return this.statusCount(tid, expr.status || '');
+        }
+        if (ref === 'zone_count') {
+            const tid = this.resolveTarget(playerId, expr.target || 'self');
+            return this.zoneSize(tid, expr.zone || 'hand');
+        }
+        if (['turn_damage_taken', 'turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt'].includes(ref)) {
+            const tid = this.resolveTarget(playerId, expr.target || 'self');
+            const ps = this.players[tid] || this.players[playerId];
+            return toInt(ps[ref], 0);
         }
         if (ref === 'last_damage') {
             const tid = this.resolveTarget(playerId, expr.target || 'enemy');
@@ -1221,9 +1330,27 @@ class LocalSoloEngine {
         if (op === 'not') return !this.evalCondition(playerId, cond.condition ?? cond.value, currentCard);
         if (op === 'has_status_named' || op === 'has_status') {
             const tid = this.resolveTarget(playerId, cond.target || 'self');
-            const ps = this.players[tid] || this.players[playerId];
             const status = cond.status || cond.name;
-            return toInt(ps[status], 0) > 0;
+            return this.statusCount(tid, status) > 0;
+        }
+        if (op === 'has_tag') {
+            const targetCard = this.resolveCardRef(playerId, cond.card || { ref: 'current_card' }, currentCard);
+            if (!targetCard) return false;
+            const tag = String(cond.tag || '');
+            return targetCard.flags.has(tag);
+        }
+        if (op === 'damage_source_relation') {
+            const context = this._active_effect_context || {};
+            const sourceId = toInt(context.source_id, playerId);
+            const targetId = toInt(context.target_id, playerId);
+            const relation = String(cond.relation || 'any');
+            if (relation === 'any') return sourceId >= 0 && sourceId < this.players.length;
+            if (relation === 'self') return sourceId === targetId;
+            const sameSide = sourceId === targetId;
+            if (relation === 'friendly' || relation === 'ally') return sameSide && sourceId !== targetId;
+            if (relation === 'same_side') return sameSide;
+            if (relation === 'enemy') return sourceId !== targetId;
+            return false;
         }
         if (op === 'hand_full') {
             const tid = this.resolveTarget(playerId, cond.target || 'self');
@@ -1262,7 +1389,9 @@ class LocalSoloEngine {
         this._active_choice = choice || {};
         this._active_effect_context = { ...(prevContext || {}), ...(context || {}) };
         try {
-            (effects || []).forEach(effect => this.runOneEffect(playerId, card, effect, choice));
+            for (const effect of (effects || [])) {
+                this.runOneEffect(playerId, card, effect, choice);
+            }
         } finally {
             this._active_choice = prevChoice;
             this._active_effect_context = prevContext;
@@ -1352,6 +1481,7 @@ class LocalSoloEngine {
             else if (log) this.logMsg(log);
             else throw new Error(`Unknown effect: ${type}`);
         } catch (err) {
+            if (err instanceof ModLoopBreak || err instanceof ModLoopContinue) throw err;
             this.logMsg(MOD_RUNTIME_ERROR_MESSAGE);
             console.error('[mod-runtime-error]', type, err);
         }
@@ -1369,10 +1499,16 @@ class LocalSoloEngine {
     effect_repeat(playerId, card, params, log, choice) {
         const times = Math.max(0, this.evalInt(playerId, params.times || params.count, card, 1));
         for (let i = 0; i < times; i++) {
-            this.runEffectList(playerId, card, params.body || params.effects || [], choice, {
-                ...this._active_effect_context,
-                repeat_index: i + 1,
-            });
+            try {
+                this.runEffectList(playerId, card, params.body || params.effects || [], choice, {
+                    ...this._active_effect_context,
+                    repeat_index: i + 1,
+                });
+            } catch (err) {
+                if (err instanceof ModLoopContinue) continue;
+                if (err instanceof ModLoopBreak) break;
+                throw err;
+            }
         }
     }
 
@@ -1380,11 +1516,37 @@ class LocalSoloEngine {
         const body = params.body || params.effects || [];
         let loops = 0;
         while (loops < 64 && !this.evalCondition(playerId, params.condition, card)) {
-            this.runEffectList(playerId, card, body, choice, {
-                ...this._active_effect_context,
-                repeat_index: loops + 1,
-            });
+            try {
+                this.runEffectList(playerId, card, body, choice, {
+                    ...this._active_effect_context,
+                    repeat_index: loops + 1,
+                });
+            } catch (err) {
+                if (err instanceof ModLoopContinue) {
+                    loops += 1;
+                    continue;
+                }
+                if (err instanceof ModLoopBreak) break;
+                throw err;
+            }
             loops += 1;
+        }
+    }
+
+    effect_for_each(playerId, card, params, log, choice) {
+        const targets = this.resolveTargets(playerId, params.targets || 'friendly');
+        for (const [idx, targetId] of targets.entries()) {
+            try {
+                this.runEffectList(targetId, card, params.body || [], choice, {
+                    ...this._active_effect_context,
+                    loop_player_id: targetId,
+                    loop_index: idx + 1,
+                });
+            } catch (err) {
+                if (err instanceof ModLoopContinue) continue;
+                if (err instanceof ModLoopBreak) break;
+                throw err;
+            }
         }
     }
 
@@ -1392,12 +1554,18 @@ class LocalSoloEngine {
         const ids = Array.isArray((choice || {}).target_instance_ids)
             ? choice.target_instance_ids
             : ((choice || {}).target_instance_id != null ? [choice.target_instance_id] : []);
-        ids.forEach((id, idx) => {
-            this.runEffectList(playerId, card, params.body || [], { ...(choice || {}), target_instance_id: id }, {
-                ...this._active_effect_context,
-                selected_card_index: idx + 1,
-            });
-        });
+        for (const [idx, id] of ids.entries()) {
+            try {
+                this.runEffectList(playerId, card, params.body || [], { ...(choice || {}), target_instance_id: id }, {
+                    ...this._active_effect_context,
+                    selected_card_index: idx + 1,
+                });
+            } catch (err) {
+                if (err instanceof ModLoopContinue) continue;
+                if (err instanceof ModLoopBreak) break;
+                throw err;
+            }
+        }
     }
 
     effect_for_each_list(playerId, card, params, log, choice) {
@@ -1406,17 +1574,73 @@ class LocalSoloEngine {
         const hadOld = Object.prototype.hasOwnProperty.call(store, name);
         const oldValue = store[name];
         try {
-            this.evalList(playerId, params.list || [], card).forEach((item, idx) => {
+            const values = this.evalList(playerId, params.list || [], card);
+            for (const [idx, item] of values.entries()) {
                 store[name] = this.serializableListItem(item);
-                this.runEffectList(playerId, card, params.body || [], choice, {
-                    ...this._active_effect_context,
-                    list_index: idx + 1,
-                });
-            });
+                try {
+                    this.runEffectList(playerId, card, params.body || [], choice, {
+                        ...this._active_effect_context,
+                        list_index: idx + 1,
+                    });
+                } catch (err) {
+                    if (err instanceof ModLoopContinue) continue;
+                    if (err instanceof ModLoopBreak) break;
+                    throw err;
+                }
+            }
         } finally {
             if (hadOld) store[name] = oldValue;
             else delete store[name];
         }
+    }
+
+    equipmentMatchesLoopFilter(playerId, eq, params, card) {
+        const filter = String(params.filter || 'all');
+        if (filter === 'all' || filter === 'any') return true;
+        if (filter === 'destroyable') return !eq.card_instance.flags.has('indestructible');
+        if (filter === 'indestructible') return eq.card_instance.flags.has('indestructible');
+        if (filter === 'named' || filter === 'card_id') {
+            const expected = params.card ? this.resolveCardIdRef(playerId, params.card, card) : String(params.card_id || '');
+            return !!expected && eq.def_id === expected;
+        }
+        if (filter === 'current_target' || filter === 'effect_target') {
+            const targetId = this.resolveTarget(playerId, params.effect_target ?? params.target ?? 'self');
+            return toInt(eq.effect_target ?? eq.owner, -1) === targetId;
+        }
+        return true;
+    }
+
+    effect_for_each_equipment(playerId, card, params, log, choice) {
+        const items = [];
+        this.resolveTargets(playerId, params.target || 'self').forEach(targetId => {
+            const ps = this.players[targetId];
+            if (!ps) return;
+            ps.equipment.forEach(eq => {
+                if (this.equipmentMatchesLoopFilter(playerId, eq, params, card)) items.push({ ownerId: targetId, eq });
+            });
+        });
+        for (const [idx, item] of items.entries()) {
+            try {
+                this.runEffectList(playerId, card, params.body || [], choice, {
+                    ...this._active_effect_context,
+                    selected_equipment_instance_id: item.eq.card_instance.instance_id,
+                    selected_equipment_owner_id: item.ownerId,
+                    equipment_index: idx + 1,
+                });
+            } catch (err) {
+                if (err instanceof ModLoopContinue) continue;
+                if (err instanceof ModLoopBreak) break;
+                throw err;
+            }
+        }
+    }
+
+    effect_break() {
+        throw new ModLoopBreak();
+    }
+
+    effect_continue() {
+        throw new ModLoopContinue();
     }
 
     effect_timed_effect(playerId, card, params) {
@@ -1452,7 +1676,7 @@ class LocalSoloEngine {
     effect_direct_damage(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
-        this.dealDirectDamage(targetId, amount, String(params.source || (card ? cardName(card.def_id) : '效果')));
+        this.dealDirectDamage(targetId, amount, String(params.source || (card ? cardName(card.def_id) : '效果')), playerId);
     }
 
     effect_lifesteal_damage(playerId, card, params) {
@@ -1621,14 +1845,30 @@ class LocalSoloEngine {
 
     effect_player_prop_set(playerId, card, params) {
         this.resolveTargets(playerId, params.target || 'self').forEach(tid => {
-            this.players[tid][String(params.property || 'health')] = this.evalInt(playerId, params.value ?? 0, card, 0);
+            const prop = String(params.property || 'health');
+            const value = this.evalInt(playerId, params.value ?? 0, card, 0);
+            if (prop === 'hand_limit') {
+                const golden = this.players[tid].equipment.filter(eq => eq.def_id === 'GoldenLeaf' && (eq.effect_target ?? tid) === tid).length;
+                this.players[tid].extra_hand_limit_bonus = Math.max(0, value - HAND_LIMIT - golden);
+            } else if (prop === 'hand_limit_bonus') {
+                this.players[tid].extra_hand_limit_bonus = Math.max(0, value);
+            } else {
+                this.players[tid][prop] = value;
+            }
         });
     }
 
     effect_player_prop_add(playerId, card, params) {
         this.resolveTargets(playerId, params.target || 'self').forEach(tid => {
             const prop = String(params.property || 'health');
-            this.players[tid][prop] = toInt(this.players[tid][prop], 0) + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+            const amount = this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+            if (prop === 'hand_limit') {
+                this.players[tid].extra_hand_limit_bonus = Math.max(0, this.players[tid].extra_hand_limit_bonus + amount);
+            } else if (prop === 'hand_limit_bonus') {
+                this.players[tid].extra_hand_limit_bonus = Math.max(0, this.players[tid].extra_hand_limit_bonus + amount);
+            } else {
+                this.players[tid][prop] = toInt(this.players[tid][prop], 0) + amount;
+            }
         });
     }
 
@@ -1651,12 +1891,12 @@ class LocalSoloEngine {
     }
 
     effect_equipment_prop_set(playerId, card, params) {
-        const eq = this.findEquipmentForCard(this.resolveTarget(playerId, params.target || 'self'), card);
+        const eq = this.resolveEquipmentRef(playerId, params.equipment || { ref: 'current_equipment' }, card);
         if (eq) eq[String(params.property || 'turns_equipped')] = this.evalInt(playerId, params.value ?? 0, card, 0);
     }
 
     effect_equipment_prop_add(playerId, card, params) {
-        const eq = this.findEquipmentForCard(this.resolveTarget(playerId, params.target || 'self'), card);
+        const eq = this.resolveEquipmentRef(playerId, params.equipment || { ref: 'current_equipment' }, card);
         if (eq) {
             const prop = String(params.property || 'turns_equipped');
             eq[prop] = toInt(eq[prop], 0) + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
@@ -1964,6 +2204,49 @@ class LocalSoloEngine {
         return this.players[ownerId].equipment.find(eq => eq.card_instance === card || eq.card_instance.instance_id === card.instance_id) || null;
     }
 
+    findEquipmentByCardInstanceId(instanceId) {
+        const iid = Number(instanceId);
+        if (!Number.isFinite(iid)) return { ownerId: -1, eq: null };
+        for (const [ownerId, ps] of this.players.entries()) {
+            const eq = ps.equipment.find(item => item.card_instance && item.card_instance.instance_id === iid);
+            if (eq) return { ownerId, eq };
+        }
+        return { ownerId: -1, eq: null };
+    }
+
+    resolveEquipmentRef(playerId, ref, currentCard = null) {
+        ref = parseJsonish(ref);
+        if (ref instanceof LocalEquipment) return ref;
+        if (ref == null) ref = { ref: 'current_equipment' };
+        if (typeof ref === 'string') ref = { ref };
+        if (!ref || typeof ref !== 'object') return null;
+        if (['current_equipment', 'this_equipment'].includes(ref.ref)) {
+            return this.findEquipmentForCard(playerId, currentCard)
+                || this.findEquipmentByCardInstanceId(currentCard && currentCard.instance_id).eq;
+        }
+        if (['selected_equipment', 'choice_equipment'].includes(ref.ref)) {
+            const contextId = (this._active_effect_context || {}).selected_equipment_instance_id;
+            const choice = this._active_choice || {};
+            const id = contextId ?? choice.target_instance_id ?? (Array.isArray(choice.target_instance_ids) ? choice.target_instance_ids[0] : null);
+            return this.findEquipmentByCardInstanceId(id).eq;
+        }
+        if (ref.ref === 'card_equipment') {
+            const targetCard = this.resolveCardRef(playerId, ref.card, currentCard);
+            return this.findEquipmentByCardInstanceId(targetCard && targetCard.instance_id).eq;
+        }
+        return null;
+    }
+
+    equipmentProperty(eq, property) {
+        if (!eq) return 0;
+        const prop = String(property || 'turns_equipped');
+        if (prop === 'turns_equipped' || prop === 'equip_turns' || prop === 'equipped_turns') return toInt(eq.turns_equipped, 0);
+        if (prop === 'effect_target' || prop === 'target_player') return toInt(eq.effect_target ?? eq.owner, 0);
+        if (prop === 'corruption_active' || prop === 'is_corruption_active') return eq.corruption_active ? 1 : 0;
+        if (prop === 'owner') return toInt(eq.owner, 0);
+        return 0;
+    }
+
     modifiedAttackDamage(base, card) {
         let amount = toInt(base, 0) + Math.max(0, toInt(card && card.bonus_damage, 0));
         const fusion = Math.max(1, toInt(card && card.fusion_level, 1));
@@ -1981,7 +2264,7 @@ class LocalSoloEngine {
         return count;
     }
 
-    dealDirectDamage(playerId, amount, source = '') {
+    dealDirectDamage(playerId, amount, source = '', sourceId = null) {
         const ps = this.players[playerId];
         if (!ps || ps.invincible) {
             if (ps) this.logMsg(`${this.pn(playerId)}无敌，免疫${source}伤害`);
@@ -1991,6 +2274,7 @@ class LocalSoloEngine {
         const corruption = this.getCorruptionCount();
         if (corruption > 0) actual *= (2 ** corruption);
         ps.health -= actual;
+        this.recordDamage(playerId, actual, sourceId);
         this.logMsg(`${this.pn(playerId)}受到${actual}点${source}伤害（H=${ps.health}）`);
         this.checkYggdrasil(playerId);
         this.checkGameOver();
@@ -2039,6 +2323,7 @@ class LocalSoloEngine {
             }
             ps.health -= dmg;
             total += dmg;
+            this.recordDamage(targetId, dmg, attackerId);
             this.logMsg(`${this.pn(targetId)}受到${dmg}点伤害（H=${ps.health}）`);
             if (ps.toxic > 0) ps.poison += ps.toxic;
             this._game_over_defer_depth += 1;
@@ -2054,7 +2339,7 @@ class LocalSoloEngine {
                                 damage: dmg,
                             });
                         } else if (eq.def_id === 'Battery') {
-                            this.dealDirectDamage(attackerId, 3, '电池');
+                            this.dealDirectDamage(attackerId, 3, '电池', targetId);
                             this.logMsg(`${this.pn(targetId)}的电池效果：对${this.pn(attackerId)}造成3D`);
                         } else if (eq.def_id === 'MagicBattery' && ps.magic_battery_m_this_turn < 3) {
                             ps.gainMagic(1);

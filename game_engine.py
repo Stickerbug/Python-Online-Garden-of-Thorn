@@ -14,6 +14,14 @@ from cards import (
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 
 
+class ModLoopBreak(Exception):
+    pass
+
+
+class ModLoopContinue(Exception):
+    pass
+
+
 class EquipmentInstance:
     def __init__(self, card_instance: CardInstance, owner: int):
         self.card_instance = card_instance
@@ -105,6 +113,10 @@ class PlayerState:
         self.equipment: List[EquipmentInstance] = []
         self.extra_hand_limit_bonus: int = 0
         self.cards_played_this_turn: Dict[str, int] = {}
+        self.turn_damage_taken: int = 0
+        self.turn_damage_dealt: int = 0
+        self.total_damage_taken: int = 0
+        self.total_damage_dealt: int = 0
         self.custom_vars: Dict[str, int] = {
             '\u5496\u5561\u9996\u6b21\u4f7f\u7528': 1,
             '\u4e09\u89d2\u5f62\u5c42\u6570': 0,
@@ -155,6 +167,10 @@ class PlayerState:
             'exile_count': len(self.exile),
             'hand_count': len(self.hand),
             'hand_limit': self.hand_limit(),
+            'turn_damage_taken': self.turn_damage_taken,
+            'turn_damage_dealt': self.turn_damage_dealt,
+            'total_damage_taken': self.total_damage_taken,
+            'total_damage_dealt': self.total_damage_dealt,
         }
         if include_private:
             d['hand'] = [c.to_dict() for c in self.hand]
@@ -213,6 +229,10 @@ class PlayerState:
             ps.equipment = [EquipmentInstance.from_dict(e) for e in d['equipment']]
         if 'cards_played_this_turn' in d:
             ps.cards_played_this_turn = d['cards_played_this_turn']
+        ps.turn_damage_taken = int(d.get('turn_damage_taken', 0))
+        ps.turn_damage_dealt = int(d.get('turn_damage_dealt', 0))
+        ps.total_damage_taken = int(d.get('total_damage_taken', 0))
+        ps.total_damage_dealt = int(d.get('total_damage_dealt', 0))
         if 'custom_vars' in d:
             ps.custom_vars = d.get('custom_vars', {})
         ps.custom_vars.setdefault('\u5496\u5561\u9996\u6b21\u4f7f\u7528', 1 if ps.coffee_first_use else 0)
@@ -486,8 +506,11 @@ class GameEngine:
             _, eq = self._find_equipment_by_card_instance_id(getattr(current_card, 'instance_id', None))
             return eq
         if ref in ('selected_equipment', 'choice_equipment'):
+            context = getattr(self, '_active_effect_context', {}) or {}
+            instance_id = context.get('selected_equipment_instance_id') if isinstance(context, dict) else None
             choice = getattr(self, '_active_choice', None) or {}
-            instance_id = choice.get('target_instance_id') if isinstance(choice, dict) else None
+            if instance_id is None and isinstance(choice, dict):
+                instance_id = choice.get('target_instance_id')
             if instance_id is None and isinstance(choice, dict) and isinstance(choice.get('target_instance_ids'), list) and choice.get('target_instance_ids'):
                 instance_id = choice.get('target_instance_ids')[0]
             _, eq = self._find_equipment_by_card_instance_id(instance_id)
@@ -512,6 +535,77 @@ class GameEngine:
             return int(getattr(eq, 'owner', 0))
         return 0
 
+    def _get_status_count(self, target_id, status):
+        if target_id < 0:
+            return sum(self._get_status_count(pid, status) for pid in range(len(self.players)))
+        if not (0 <= target_id < len(self.players)):
+            return 0
+        ps = self.players[target_id]
+        status = str(status or '').strip()
+        counts = {
+            'poison': ps.poison,
+            '中毒': ps.poison,
+            'burn': ps.fire,
+            'fire': ps.fire,
+            '灼烧': ps.fire,
+            'vulnus': ps.vulnerable,
+            'vulnerable': ps.vulnerable,
+            '易伤': ps.vulnerable,
+            'toxic': ps.toxic,
+            '淬毒': ps.toxic,
+            'dodge': ps.dodge,
+            '闪避': ps.dodge,
+            'equip_protection': ps.equipment_protection,
+            'equipment_protection': ps.equipment_protection,
+            '装备摧毁保护': ps.equipment_protection,
+            '装备保护': ps.equipment_protection,
+            'invincible': 1 if ps.invincible else 0,
+            '无敌': 1 if ps.invincible else 0,
+            'untargetable': 1 if ps.untargetable else 0,
+            '不可选中': 1 if ps.untargetable else 0,
+            '邪眼': ps.nazar_big_hits if ps.nazar_active else 0,
+            'Nazar': ps.nazar_big_hits if ps.nazar_active else 0,
+        }
+        return int(counts.get(status, 0))
+
+    def _zone_size(self, target_id, zone):
+        if target_id < 0:
+            return sum(self._zone_size(pid, zone) for pid in range(len(self.players)))
+        if not (0 <= target_id < len(self.players)):
+            return 0
+        ps = self.players[target_id]
+        zone = str(zone or 'hand')
+        if zone == 'equipment':
+            return len(ps.equipment)
+        if zone == 'deck':
+            return len(ps.deck)
+        if zone == 'discard':
+            return len(ps.discard)
+        if zone == 'exile':
+            return len(ps.exile)
+        return len(ps.hand)
+
+    def _reset_turn_damage_counters(self):
+        for ps in self.players:
+            ps.turn_damage_taken = 0
+            ps.turn_damage_dealt = 0
+
+    def _record_damage(self, target_id, amount, source_id=None):
+        try:
+            amount = int(amount)
+        except Exception:
+            amount = 0
+        if amount <= 0:
+            return
+        if 0 <= target_id < len(self.players):
+            target = self.players[target_id]
+            target.turn_damage_taken += amount
+            target.total_damage_taken += amount
+        if isinstance(source_id, int) and 0 <= source_id < len(self.players):
+            source = self.players[source_id]
+            source.turn_damage_dealt += amount
+            source.total_damage_dealt += amount
+
     def _set_equipment_property_value(self, player_id, current_card, params, value):
         eq = self._resolve_equipment_ref(player_id, params.get('equipment', {'ref': 'current_equipment'}), current_card)
         if eq is None:
@@ -528,6 +622,8 @@ class GameEngine:
         return eq
 
     def _get_player_property_value(self, target_id, prop):
+        if target_id < 0:
+            return sum(self._get_player_property_value(pid, prop) for pid in range(len(self.players)))
         if not (0 <= target_id < len(self.players)):
             return 0
         ps = self.players[target_id]
@@ -553,14 +649,26 @@ class GameEngine:
             return len(ps.hand)
         if prop == 'hand_limit':
             return ps.hand_limit()
+        if prop in ('extra_hand_limit_bonus', 'hand_limit_bonus'):
+            return int(getattr(ps, 'extra_hand_limit_bonus', 0))
         if prop == 'deck_remaining':
+            return len(ps.deck)
+        if prop == 'deck_count':
             return len(ps.deck)
         if prop == 'discard_size':
             return len(ps.discard)
+        if prop == 'discard_count':
+            return len(ps.discard)
         if prop == 'exile_size':
+            return len(ps.exile)
+        if prop == 'exile_count':
             return len(ps.exile)
         if prop == 'equip_count':
             return len(ps.equipment)
+        if prop == 'equipment_count':
+            return len(ps.equipment)
+        if prop in ('turn_damage_taken', 'turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt'):
+            return int(getattr(ps, prop, 0))
         return 0
 
     def _set_player_property_value(self, target_id, prop, value):
@@ -575,14 +683,23 @@ class GameEngine:
             'health', 'max_health', 'elixir', 'energy', 'magic', 'armor', 'dodge',
             'poison', 'fire', 'vulnerable', 'toxic', 'equipment_protection',
             'attack_blocked', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
-            'nazar_big_hits',
+            'nazar_big_hits', 'extra_hand_limit_bonus', 'hand_limit_bonus',
         }
         bool_props = {
             'invincible', 'untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
             'skip_turn', 'negate_next_skill', 'nazar_active',
         }
         if prop in non_negative:
+            if prop == 'hand_limit_bonus':
+                prop = 'extra_hand_limit_bonus'
             setattr(ps, prop, max(0, value))
+        elif prop == 'hand_limit':
+            golden = sum(
+                1
+                for e in ps.equipment
+                if e.def_id == 'GoldenLeaf' and getattr(e, 'effect_target', target_id) == target_id
+            )
+            ps.extra_hand_limit_bonus = max(0, value - HAND_LIMIT - golden)
         elif prop in bool_props:
             setattr(ps, prop, bool(value))
         else:
@@ -1064,20 +1181,22 @@ class GameEngine:
                 ps.draw_cards(1)
                 self.log_msg(f"{self.pn(player_id)}的黄金叶效果：多抽1张牌")
 
-    def _deal_direct_damage(self, player_id: int, amount: int, source: str = ''):
+    def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None):
         ps = self.players[player_id]
         if ps.invincible:
             self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
-            return
+            return 0
         actual = amount
         corruption_count = self._get_corruption_count()
         if corruption_count > 0:
             actual = actual * (2 ** corruption_count)
             self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
         ps.health -= actual
+        self._record_damage(player_id, actual, source_id)
         self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={ps.health}）")
         self._check_yggdrasil(player_id)
         self._check_game_over()
+        return actual
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1, is_battery: bool = False, is_precision: bool = False) -> int:
         ps = self.players[target_id]
@@ -1137,7 +1256,7 @@ class GameEngine:
                     for eq in list(ps.equipment):
                         if eq.def_id == 'Battery':
                             self.log_msg(f"{self.pn(target_id)}的电池效果：对敌方造成3D")
-                            self._deal_direct_damage(opp_id, 3, '电池')
+                        self._deal_direct_damage(opp_id, 3, '电池', target_id)
                         if eq.def_id == 'MagicBattery':
                             if ps.magic_battery_m_this_turn < 3:
                                 ps.gain_magic(1)
@@ -2670,21 +2789,37 @@ class GameEngine:
     def _atomic_repeat(self, player_id, card, params, log, choice, context):
         times = max(0, int(self._eval_expr(player_id, params.get('times', 1), card)))
         body = params.get('body', [])
-        for _ in range(times):
-            self._run_effect_list(player_id, card, body, choice, context)
+        for index in range(times):
+            try:
+                self._run_effect_list(player_id, card, body, choice, {**(context or {}), 'repeat_index': index + 1})
+            except ModLoopContinue:
+                continue
+            except ModLoopBreak:
+                break
 
     def _atomic_repeat_until(self, player_id, card, params, log, choice, context):
         body = params.get('body', [])
         max_loops = 64
         loops = 0
         while loops < max_loops and not self._eval_condition(player_id, params.get('condition'), card):
-            self._run_effect_list(player_id, card, body, choice, context)
+            try:
+                self._run_effect_list(player_id, card, body, choice, {**(context or {}), 'repeat_index': loops + 1})
+            except ModLoopContinue:
+                loops += 1
+                continue
+            except ModLoopBreak:
+                break
             loops += 1
 
     def _atomic_for_each(self, player_id, card, params, log, choice, context):
         body = params.get('body', [])
-        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
-            self._run_effect_list(tid, card, body, choice, context)
+        for index, tid in enumerate(self._resolve_targets(player_id, params.get('targets', 'friendly')), start=1):
+            try:
+                self._run_effect_list(tid, card, body, choice, {**(context or {}), 'loop_player_id': tid, 'loop_index': index})
+            except ModLoopContinue:
+                continue
+            except ModLoopBreak:
+                break
 
     def _atomic_for_each_selected_card(self, player_id, card, params, log, choice, context):
         active_choice = choice if isinstance(choice, dict) else getattr(self, '_active_choice', None)
@@ -2700,7 +2835,12 @@ class GameEngine:
             for idx, instance_id in enumerate(list(ids), start=1):
                 active_choice['target_instance_id'] = instance_id
                 active_choice['_selected_card_index'] = idx
-                self._run_effect_list(player_id, card, body, active_choice, context)
+                try:
+                    self._run_effect_list(player_id, card, body, active_choice, {**(context or {}), 'selected_card_index': idx})
+                except ModLoopContinue:
+                    continue
+                except ModLoopBreak:
+                    break
         finally:
             if original_id is None:
                 active_choice.pop('target_instance_id', None)
@@ -2710,6 +2850,12 @@ class GameEngine:
                 active_choice.pop('_selected_card_index', None)
             else:
                 active_choice['_selected_card_index'] = original_index
+
+    def _atomic_break(self, player_id, card, params, log, choice, context):
+        raise ModLoopBreak()
+
+    def _atomic_continue(self, player_id, card, params, log, choice, context):
+        raise ModLoopContinue()
 
     def _atomic_after_all(self, player_id, card, params, log, choice, context):
         self._run_effect_list(player_id, card, params.get('body', []), choice, context)
@@ -3678,6 +3824,8 @@ class GameEngine:
                         self.log_msg(lg)
                     else:
                         self._log_mod_runtime_error(et, RuntimeError(f'Unknown effect: {et}'), player_id, card)
+                except (ModLoopBreak, ModLoopContinue):
+                    raise
                 except Exception as exc:
                     self._log_mod_runtime_error(et, exc, player_id, card)
         finally:
@@ -3834,9 +3982,24 @@ class GameEngine:
             if ref == 'damage_source':
                 context = getattr(self, '_active_effect_context', {}) or {}
                 return int(context.get('source_id', player_id))
+            if ref == 'damage_amount':
+                context = getattr(self, '_active_effect_context', {}) or {}
+                return int(context.get('damage', context.get('amount', 0)) or 0)
             if ref == 'timer_remaining':
                 context = getattr(self, '_active_effect_context', {}) or {}
                 return int(context.get('timer_remaining', 0))
+            if ref == 'loop_index':
+                context = getattr(self, '_active_effect_context', {}) or {}
+                return int(context.get('loop_index', context.get('list_index', context.get('equipment_index', context.get('repeat_index', 0)))) or 0)
+            if ref == 'status_count':
+                target_id = self._resolve_target(player_id, expr.get('target', 'self'))
+                return self._get_status_count(target_id, expr.get('status', ''))
+            if ref == 'zone_count':
+                target_id = self._resolve_target(player_id, expr.get('target', 'self'))
+                return self._zone_size(target_id, expr.get('zone', 'hand'))
+            if ref in ('turn_damage_taken', 'turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt'):
+                target_id = self._resolve_target(player_id, expr.get('target', 'self'))
+                return self._get_player_property_value(target_id, ref)
             if ref == 'choice_target':
                 return int(self._selected_choice_target(-1))
             if ref == 'choice_confirmed':
@@ -3905,6 +4068,32 @@ class GameEngine:
             values = self._eval_list(player_id, cond.get('list', []), card)
             item = self._serializable_list_item(self._eval_raw_item(player_id, cond.get('item', 0), card))
             return any(self._same_list_item(value, item) for value in values)
+        if isinstance(cond, dict) and cond.get('op') == 'damage_source_relation':
+            context = getattr(self, '_active_effect_context', {}) or {}
+            source_id = int(context.get('source_id', player_id))
+            target_id = int(context.get('target_id', player_id))
+            relation = str(cond.get('relation', 'any'))
+            if relation == 'any':
+                return 0 <= source_id < len(self.players)
+            if relation == 'self':
+                return source_id == target_id
+            same_side = self._same_timer_side(source_id, target_id)
+            if relation in ('friendly', 'ally'):
+                return same_side and source_id != target_id
+            if relation == 'same_side':
+                return same_side
+            if relation == 'enemy':
+                return self._opposite_timer_side(source_id, target_id)
+            return False
+        if isinstance(cond, dict) and cond.get('op') == 'has_tag':
+            target_card = self._resolve_card_ref(player_id, cond.get('card', {'ref': 'current_card'}), card)
+            if target_card is None:
+                return False
+            tag = str(cond.get('tag', '')).strip()
+            flags = set(getattr(target_card.card_def, 'flags', set()) or set())
+            flags.update(getattr(target_card, 'instance_flags', set()) or set())
+            flags.difference_update(getattr(target_card, 'disabled_flags', set()) or set())
+            return tag in flags
         return self._base_eval_condition(player_id, cond, card)
 
     def _eval_int(self, player_id, value, card=None, default=0):
@@ -4008,6 +4197,8 @@ class GameEngine:
                         self.log_msg(log)
                     else:
                         self._log_mod_runtime_error(eff_type, RuntimeError(f'Unknown effect: {eff_type}'), player_id, card)
+                except (ModLoopBreak, ModLoopContinue) as exc:
+                    self._log_mod_runtime_error(eff_type, RuntimeError(f'{type(exc).__name__} outside loop'), player_id, card)
                 except Exception as exc:
                     self._log_mod_runtime_error(eff_type, exc, player_id, card)
         finally:
@@ -4084,6 +4275,7 @@ class GameEngine:
         opp_id = 1 - player_id
         opp = self.players[opp_id]
         self._antenna_reveal[player_id] = None
+        self._reset_turn_damage_counters()
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
         if ps.shovel_active:
@@ -4164,9 +4356,11 @@ class GameEngine:
                 self.log_msg(f"{self.pn(player_id)}的黄金叶效果：多抽1张牌")
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
-                           is_battery: bool = False, is_precision: bool = False) -> int:
+                           is_battery: bool = False, is_precision: bool = False,
+                           attacker_id: int = -1) -> int:
         ps = self.players[target_id]
-        attacker_id = 1 - target_id
+        if attacker_id < 0:
+            attacker_id = 1 - target_id
         if ps.untargetable and not is_battery:
             self.log_msg(f"{self.pn(target_id)}无法被攻击选中")
             return 0
@@ -4204,6 +4398,7 @@ class GameEngine:
                 dmg = 0
             ps.health -= dmg
             total_dealt += dmg
+            self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
             if ps.toxic > 0:
                 ps.poison += ps.toxic
@@ -4217,7 +4412,7 @@ class GameEngine:
                             {'source_id': attacker_id, 'target_id': target_id, 'damage': dmg}):
                         continue
                     if eq.def_id == 'Battery':
-                        self._deal_direct_damage(attacker_id, 3, '电池')
+                        self._deal_direct_damage(attacker_id, 3, '电池', target_id)
                         self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3D")
                     elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                         ps.gain_magic(1)
@@ -4418,7 +4613,7 @@ class GameEngine:
     def _atomic_direct_damage(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self._deal_direct_damage(target_id, amount, str(params.get('source', card.name_cn if card else '效果')))
+        self._deal_direct_damage(target_id, amount, str(params.get('source', card.name_cn if card else '效果')), player_id)
 
     def _atomic_lifesteal_damage(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -4798,12 +4993,66 @@ class GameEngine:
         try:
             for index, item in enumerate(self._eval_list(player_id, params.get('list', []), card), start=1):
                 store[name] = self._serializable_list_item(item)
-                self._run_effect_list(player_id, card, body, choice, {**(context or {}), 'list_index': index})
+                try:
+                    self._run_effect_list(player_id, card, body, choice, {**(context or {}), 'list_index': index})
+                except ModLoopContinue:
+                    continue
+                except ModLoopBreak:
+                    break
         finally:
             if had_old:
                 store[name] = old_value
             else:
                 store.pop(name, None)
+
+    def _equipment_matches_loop_filter(self, player_id, eq, params, card):
+        loop_filter = str(params.get('filter', 'all') or 'all')
+        if loop_filter in ('all', 'any'):
+            return True
+        if loop_filter in ('destroyable', 'can_destroy'):
+            return 'indestructible' not in eq.card_instance.flags
+        if loop_filter in ('indestructible', 'cannot_destroy'):
+            return 'indestructible' in eq.card_instance.flags
+        if loop_filter in ('named', 'card_id'):
+            expected = ''
+            selector = params.get('card')
+            if selector is not None:
+                expected = self._resolve_card_id_ref(player_id, selector, card)
+            expected = expected or str(params.get('card_id', '') or '')
+            return bool(expected) and eq.def_id == expected
+        if loop_filter in ('current_target', 'effect_target'):
+            target_id = self._resolve_target(player_id, params.get('effect_target', params.get('target', 'self')))
+            return getattr(eq, 'effect_target', getattr(eq, 'owner', -1)) == target_id
+        return True
+
+    def _atomic_for_each_equipment(self, player_id, card, params, log, choice, context):
+        body = params.get('body', []) or []
+        targets = self._resolve_targets(player_id, params.get('target', 'self'))
+        previous_selected = (context or {}).get('selected_equipment_instance_id') if isinstance(context, dict) else None
+        loop_items = []
+        for target_id in targets:
+            if not (0 <= target_id < len(self.players)):
+                continue
+            for eq in list(self.players[target_id].equipment):
+                if self._equipment_matches_loop_filter(player_id, eq, params, card):
+                    loop_items.append((target_id, eq))
+        try:
+            for index, (owner_id, eq) in enumerate(loop_items, start=1):
+                loop_context = {
+                    **(context or {}),
+                    'selected_equipment_instance_id': eq.card_instance.instance_id,
+                    'selected_equipment_owner_id': owner_id,
+                    'equipment_index': index,
+                }
+                try:
+                    self._run_effect_list(player_id, card, body, choice, loop_context)
+                except ModLoopContinue:
+                    continue
+                except ModLoopBreak:
+                    break
+        finally:
+            if isinstance(context, dict) and previous_selected is not None:
+                context['selected_equipment_instance_id'] = previous_selected
 
     def _atomic_batch_var_add(self, player_id, card, params, log, choice, context):
         for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):

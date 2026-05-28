@@ -837,6 +837,7 @@ class GameEngine2v2(GameEngine):
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]
         self._antenna_reveal[player_id] = None
+        self._reset_turn_damage_counters()
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
         if ps.shovel_active:
@@ -1111,6 +1112,7 @@ class GameEngine2v2(GameEngine):
                 dmg = 0
             ps.health -= dmg
             total_dealt += dmg
+            self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
             if ps.toxic > 0:
                 ps.poison += ps.toxic
@@ -1121,7 +1123,7 @@ class GameEngine2v2(GameEngine):
                 if dmg > 0 and not is_battery:
                     for eq in list(ps.equipment):
                         if eq.def_id == 'Battery' and attacker_id >= 0:
-                            self._deal_direct_damage(attacker_id, 3, '电池')
+                            self._deal_direct_damage(attacker_id, 3, '电池', target_id)
                             self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3D")
                         elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
@@ -1222,6 +1224,7 @@ class GameEngine2v2(GameEngine):
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]
         self._antenna_reveal[player_id] = None
+        self._reset_turn_damage_counters()
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
         if ps.shovel_active:
@@ -1494,6 +1497,7 @@ class GameEngine2v2(GameEngine):
                 dmg = 0
             ps.health -= dmg
             total_dealt += dmg
+            self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
             if ps.toxic > 0:
                 ps.poison += ps.toxic
@@ -1517,7 +1521,7 @@ class GameEngine2v2(GameEngine):
                         ):
                             continue
                         if eq.def_id == 'Battery' and attacker_id >= 0:
-                            self._deal_direct_damage(attacker_id, 3, '电池')
+                            self._deal_direct_damage(attacker_id, 3, '电池', target_id)
                             self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3D")
                         elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
