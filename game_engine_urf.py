@@ -110,6 +110,7 @@ class GameEngineInfiniteFire(GameEngine):
     def __init__(self):
         super().__init__()
         self.players = [InfinitePlayerState(0, self), InfinitePlayerState(1, self)]
+        self._bind_player_callbacks()
         self.infinite_card_pool: List[str] = []
         self.infinite_card_weights: List[int] = []
         self.infinite_by_type = {}
@@ -160,7 +161,7 @@ class GameEngineInfiniteFire(GameEngine):
             if log:
                 self.log_msg(f"{self.pn(player_id)}手牌已满，补充的牌进入弃牌堆")
             return False
-        ps.hand.append(card)
+        ps.add_to_hand(card)
         return True
 
     def _draw_to_hand_by_type(self, player_id: int, card_type: str):
@@ -197,7 +198,7 @@ class GameEngineInfiniteFire(GameEngine):
             for _ in range(count):
                 card = self.create_infinite_card(card_type)
                 if card:
-                    ps.hand.append(card)
+                    ps.add_to_hand(card)
 
     def start_draft(self):
         self.start_game()

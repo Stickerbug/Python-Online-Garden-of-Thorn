@@ -42,6 +42,7 @@ const EVENT_EFFECT_TYPES = new Set([
     'on_equipment_trigger',
     'on_equipment_destroy',
     'on_hand_owner_turn_start',
+    'on_enter_hand',
     'on_discard_owner_turn_start',
     'on_deck_owner_turn_start',
     'on_card_used',
@@ -63,6 +64,7 @@ const SCRIPT_ENTRY_ALIASES = {
     equipment_trigger: ['onEquipmentTrigger', 'equipment_trigger', 'on_equipment_trigger'],
     equipment_destroy: ['onEquipmentDestroy', 'equipment_destroy', 'on_equipment_destroy', 'onDestroy'],
     hand_owner_turn_start: ['onHandOwnerTurnStart', 'hand_owner_turn_start', 'on_hand_owner_turn_start'],
+    enter_hand: ['onEnterHand', 'enter_hand', 'on_enter_hand'],
     discard_owner_turn_start: ['onDiscardOwnerTurnStart', 'discard_owner_turn_start', 'on_discard_owner_turn_start'],
     deck_owner_turn_start: ['onDeckOwnerTurnStart', 'deck_owner_turn_start', 'on_deck_owner_turn_start'],
     card_used: ['onCardUsed', 'card_used', 'on_card_used'],
@@ -312,6 +314,7 @@ class LocalPlayer {
             '三角形层数': 0,
             '魔法电池本回合回魔': 0,
         };
+        this.onEnterHand = null;
     }
 
     findHandCard(instanceId) {
@@ -346,6 +349,13 @@ class LocalPlayer {
         return Math.max(0, this.handLimit() - this.ruleHandSize());
     }
 
+    addToHand(card) {
+        this.hand.push(card);
+        if (typeof this.onEnterHand === 'function') {
+            this.onEnterHand(this.player_id, card);
+        }
+    }
+
     drawCards(count) {
         const drawn = [];
         const sproutQueue = [];
@@ -358,7 +368,7 @@ class LocalPlayer {
             const card = this.deck.shift();
             if (!card) break;
             if (card.def_id === ERROR_CARD_ID) {
-                this.hand.push(card);
+                this.addToHand(card);
                 drawn.push(card);
                 continue;
             }
@@ -369,13 +379,13 @@ class LocalPlayer {
                     const discardCard = nonAttract[0];
                     this.hand.splice(this.hand.indexOf(discardCard), 1);
                     this.discard.push(discardCard);
-                    this.hand.push(card);
+                    this.addToHand(card);
                     drawn.push(card);
                 } else {
                     this.discard.push(card);
                 }
             } else {
-                this.hand.push(card);
+                this.addToHand(card);
                 drawn.push(card);
             }
             if (card.flags.has('sprout') && this.hand.includes(card)) {
@@ -392,12 +402,12 @@ class LocalPlayer {
             const extra = this.deck.shift();
             if (!extra) break;
             if (extra.def_id === ERROR_CARD_ID) {
-                this.hand.push(extra);
+                this.addToHand(extra);
                 drawn.push(extra);
                 continue;
             }
             if (this.canAddToHand()) {
-                this.hand.push(extra);
+                this.addToHand(extra);
                 drawn.push(extra);
                 if (extra.flags.has('sprout')) sproutQueue.push(extra);
             } else {
@@ -481,6 +491,7 @@ class LocalPlayer {
 class LocalSoloEngine {
     constructor(payload, options = {}) {
         this.players = [new LocalPlayer(0), new LocalPlayer(1)];
+        this.bindPlayerCallbacks();
         this.player_names = options.playerNames || payload.playerNames || ['Player A', 'Player B'];
         this.phase = 'playing';
         this.first_player = [payload.event0, payload.event1].filter(id => id === 7).length === 1
@@ -522,6 +533,21 @@ class LocalSoloEngine {
         this.logMsg(`${options.startLabel || '单人训练场开始'}！${this.pn(this.first_player)}先手。`);
         this.logMsg(`=== 第${this.round_num}回合 ===`);
         this.startPlayerTurn(this.first_player);
+    }
+
+    bindPlayerCallbacks() {
+        this.players.forEach(player => {
+            player.onEnterHand = (playerId, card) => this.handleCardEnterHand(playerId, card);
+        });
+    }
+
+    handleCardEnterHand(playerId, card) {
+        if (!card || !this.hasCardEvent(card.def(), 'enter_hand')) return;
+        this.runCardEvent(playerId, card, 'enter_hand', null, {
+            source_id: playerId,
+            target_id: playerId,
+            zone: 'hand',
+        });
     }
 
     resetPlayer(playerId, deckEntries, isFirst) {
@@ -989,6 +1015,29 @@ class LocalSoloEngine {
         return card ? card.def_id : '';
     }
 
+    cardDefinitionForRef(playerId, ref, currentCard = null) {
+        const cardId = this.resolveCardIdRef(playerId, ref, currentCard);
+        return cardId ? cardDef(cardId) : null;
+    }
+
+    cardDefPropertyValue(playerId, ref, property, currentCard = null) {
+        const def = this.cardDefinitionForRef(playerId, ref, currentCard);
+        if (!def) return 0;
+        const prop = String(property || 'cost_e');
+        if (prop === 'flags' || prop === 'tags') return [...new Set(def.flags || [])].map(String).sort();
+        if (['cost_e', 'cost_m', 'count', 'trigger_cost_e'].includes(prop)) return toInt(def[prop], 0);
+        if (['effect_text', 'description', 'card_type', 'quality', 'name_cn', 'name_en', 'trigger_effect_text', 'id'].includes(prop)) {
+            return String(def[prop] || '');
+        }
+        return def[prop] ?? 0;
+    }
+
+    cardDefTags(playerId, ref, currentCard = null) {
+        const def = this.cardDefinitionForRef(playerId, ref, currentCard);
+        if (!def) return [];
+        return [...new Set(def.flags || [])].map(String).sort();
+    }
+
     removeCardFromCurrentZone(card) {
         const loc = this.findCardLocation(card);
         if (!loc) return null;
@@ -1055,6 +1104,7 @@ class LocalSoloEngine {
             return Array.isArray(raw) ? [...raw] : (raw == null ? [] : [raw]);
         }
         if (ref === 'zone_list') return this.zoneList(playerId, expr.target || 'self', String(expr.zone || 'hand'));
+        if (ref === 'card_def_tags') return this.cardDefTags(playerId, expr.card || '', currentCard);
         if (ref === 'list_item') {
             const item = this.listItemRaw(playerId, expr, currentCard);
             return item == null ? [] : [item];
@@ -1093,7 +1143,7 @@ class LocalSoloEngine {
     evalVarAssignmentValue(playerId, expr, currentCard = null) {
         expr = parseJsonish(expr);
         if (Array.isArray(expr)) return expr.length ? this.serializableListItem(expr[0]) : 0;
-        if (expr && typeof expr === 'object' && ['list', 'list_create', 'list_var', 'zone_list'].includes(expr.ref)) {
+        if (expr && typeof expr === 'object' && ['list', 'list_create', 'list_var', 'zone_list', 'card_def_tags'].includes(expr.ref)) {
             const values = this.evalList(playerId, expr, currentCard);
             return values.length ? this.serializableListItem(values[0]) : 0;
         }
@@ -1233,11 +1283,23 @@ class LocalSoloEngine {
         }
         if (ref === 'card_property') {
             const card = this.resolveCardRef(playerId, expr.card || { ref: 'current_card' }, currentCard);
-            return card ? toInt(card[String(expr.property || 'fusion_level')], 0) : 0;
+            if (!card) return 0;
+            const prop = String(expr.property || 'fusion_level');
+            if (prop === 'cost_e') return toInt(card.cost_e, 0);
+            if (prop === 'cost_m') return toInt(card.cost_m, 0);
+            if (prop === 'cost_e_override') return card.cost_e_override != null ? toInt(card.cost_e_override, 0) : toInt(card.def().cost_e, 0);
+            if (prop === 'cost_m_override') return card.cost_m_override != null ? toInt(card.cost_m_override, 0) : toInt(card.def().cost_m, 0);
+            return toInt(card[prop], 0);
         }
         if (ref === 'card_tag_count') {
             const card = this.resolveCardRef(playerId, expr.card || { ref: 'current_card' }, currentCard);
             return card ? card.flags.size : 0;
+        }
+        if (ref === 'card_def_property') {
+            return this.cardDefPropertyValue(playerId, expr.card || '', expr.property || 'cost_e', currentCard);
+        }
+        if (ref === 'card_def_tags') {
+            return this.cardDefTags(playerId, expr.card || '', currentCard);
         }
         if (ref === 'equipment_property') {
             const eq = this.resolveEquipmentRef(playerId, expr.equipment || { ref: 'current_equipment' }, currentCard);
@@ -2107,8 +2169,10 @@ class LocalSoloEngine {
     effect_card_prop_set(playerId, card, params) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
         if (!target) return;
-        const prop = String(params.property || 'fusion_level');
-        target[prop] = this.evalInt(playerId, params.value ?? 0, card, 0);
+        let prop = String(params.property || 'fusion_level');
+        if (prop === 'cost_e') prop = 'cost_e_override';
+        if (prop === 'cost_m') prop = 'cost_m_override';
+        target[prop] = Math.max(0, this.evalInt(playerId, params.value ?? 0, card, 0));
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
     }
@@ -2116,8 +2180,15 @@ class LocalSoloEngine {
     effect_card_prop_add(playerId, card, params) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
         if (!target) return;
-        const prop = String(params.property || 'fusion_level');
-        target[prop] = toInt(target[prop], 0) + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+        let prop = String(params.property || 'fusion_level');
+        if (prop === 'cost_e') prop = 'cost_e_override';
+        if (prop === 'cost_m') prop = 'cost_m_override';
+        const current = prop === 'cost_e_override'
+            ? (target.cost_e_override != null ? target.cost_e_override : toInt(target.def().cost_e, 0))
+            : prop === 'cost_m_override'
+                ? (target.cost_m_override != null ? target.cost_m_override : toInt(target.def().cost_m, 0))
+                : toInt(target[prop], 0);
+        target[prop] = Math.max(0, current + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0));
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
     }
@@ -2125,9 +2196,16 @@ class LocalSoloEngine {
     effect_card_prop_mul(playerId, card, params) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
         if (!target) return;
-        const prop = String(params.property || 'fusion_level');
+        let prop = String(params.property || 'fusion_level');
+        if (prop === 'cost_e') prop = 'cost_e_override';
+        if (prop === 'cost_m') prop = 'cost_m_override';
         const multiplier = this.evalInt(playerId, params.multiplier ?? params.amount ?? 1, card, 1);
-        target[prop] = toInt(target[prop], 0) * multiplier;
+        const current = prop === 'cost_e_override'
+            ? (target.cost_e_override != null ? target.cost_e_override : toInt(target.def().cost_e, 0))
+            : prop === 'cost_m_override'
+                ? (target.cost_m_override != null ? target.cost_m_override : toInt(target.def().cost_m, 0))
+                : toInt(target[prop], 0);
+        target[prop] = Math.max(0, current * multiplier);
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
     }
@@ -2166,7 +2244,7 @@ class LocalSoloEngine {
         if (!this.players[playerId].canAddToHand()) return;
         const copy = target.copy();
         copy.instance_id = randintId();
-        this.players[playerId].hand.push(copy);
+        this.players[playerId].addToHand(copy);
         this._last_created_card_instance_id = copy.instance_id;
         this._active_effect_context.last_created_card_instance_id = copy.instance_id;
         if (log) this.logMsg(log);
@@ -2180,7 +2258,7 @@ class LocalSoloEngine {
         if (!def) return;
         if ((def.id || cardId) !== ERROR_CARD_ID && !target.canAddToHand()) return;
         const newCard = new LocalCard(def.id || cardId);
-        target.hand.push(newCard);
+        target.addToHand(newCard);
         this._last_created_card_instance_id = newCard.instance_id;
         this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
         if (log && newCard.def_id !== ERROR_CARD_ID) this.logMsg(log);
@@ -2225,7 +2303,7 @@ class LocalSoloEngine {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
         const loc = this.removeCardFromCurrentZone(target);
         const targetId = this.resolveTarget(playerId, params.target || 'self');
-        if (loc && this.players[targetId].canAddToHand()) this.players[targetId].hand.push(target);
+        if (loc && this.players[targetId].canAddToHand()) this.players[targetId].addToHand(target);
     }
 
     effect_move_to_deck(playerId, card, params) {
@@ -2311,7 +2389,7 @@ class LocalSoloEngine {
                 const owner = this.players[ownerId];
                 if (!owner) return;
                 const newCard = new LocalCard(ERROR_CARD_ID);
-                owner.hand.push(newCard);
+                owner.addToHand(newCard);
                 this._last_created_card_instance_id = newCard.instance_id;
                 this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
             });
@@ -2353,7 +2431,7 @@ class LocalSoloEngine {
         const idx = ps.discard.findIndex(c => c.def_id === targetDef);
         if (idx >= 0 && ps.canAddToHand()) {
             const found = ps.discard.splice(idx, 1)[0];
-            ps.hand.push(found);
+            ps.addToHand(found);
             if (log) this.logMsg(log);
         }
     }
@@ -2365,7 +2443,7 @@ class LocalSoloEngine {
         if (idx < 0 && choice && choice.target_def_id) idx = ps.deck.findIndex(c => c.def_id === choice.target_def_id);
         if (idx >= 0 && ps.canAddToHand()) {
             const found = ps.deck.splice(idx, 1)[0];
-            ps.hand.push(found);
+            ps.addToHand(found);
             if (log) this.logMsg(log);
         }
     }
@@ -2381,7 +2459,7 @@ class LocalSoloEngine {
         }
         if (!stolen && source.hand.length) stolen = source.hand.splice(0, 1)[0];
         if (stolen && target.canAddToHand()) {
-            target.hand.push(stolen);
+            target.addToHand(stolen);
             if (log) this.logMsg(log);
         }
     }

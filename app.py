@@ -514,24 +514,36 @@ def get_card_mod_sources(disabled_mods=None):
 
 
 def build_mod_loadout(disabled_mods=None):
-    disabled = ensure_valid_disabled_mods(disabled_mods)
+    mods = load_all_mods()
+    disabled = set(normalize_disabled_mods(disabled_mods))
+    counts = {card_type: 0 for card_type in REQUIRED_CARD_TYPES}
+    for mod in mods:
+        if mod.errors or mod.filename in disabled:
+            continue
+        for card in mod.cards:
+            if card.id in CARD_DEFS and card.count > 0 and card.card_type in counts:
+                counts[card.card_type] += 1
+    if not all(counts.get(card_type, 0) > 0 for card_type in REQUIRED_CARD_TYPES):
+        disabled.discard(VANILLA_MOD_FILENAME)
+    disabled = sorted(disabled)
+    disabled_set = set(disabled)
     import hashlib as _hl
     _h = _hl.sha256()
     active_mods = []
-    for mod in sorted(load_all_mods(), key=lambda m: m.filename):
-        if mod.filename in disabled or mod.errors:
+    allowed_card_ids = {ERROR_CARD_ID}
+    for mod in sorted(mods, key=lambda m: m.filename):
+        if mod.filename in disabled_set or mod.errors:
             continue
         active_mods.append(mod.info.name if mod.info else mod.filename)
-        try:
-            with open(mod.filepath, 'rb') as f:
-                _h.update(f.read())
-        except Exception:
-            _h.update(mod.filename.encode('utf-8'))
+        _h.update(f'{mod.filename}:{mod.validation_hash or ""}'.encode('utf-8'))
+        for card in mod.cards:
+            if card.id in CARD_DEFS:
+                allowed_card_ids.add(card.id)
     return {
         'disabled_mods': disabled,
         'mods_hash': _h.hexdigest(),
         'mods_list': active_mods,
-        'allowed_card_ids': get_allowed_card_ids(disabled),
+        'allowed_card_ids': allowed_card_ids,
     }
 
 

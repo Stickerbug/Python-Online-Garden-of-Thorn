@@ -1804,6 +1804,7 @@ const SOCKET_CONNECT_TIMEOUT_MS = 5000;
 const LEGACY_DEFAULT_SERVER_KEYS = new Set([
     'python-online-garden-of-thorn.onrender.com',
     'gtn.stickerbug.top',
+    '121.41.93.192:5000',
 ]);
 let phase = 'connecting';
 let responsePending = false;
@@ -3465,7 +3466,7 @@ function connectSocket(serverUrl) {
     manualDisconnect = false;
     let url = normalizeServerUrl(serverUrl);
     let opts = {
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'],
         timeout: SOCKET_CONNECT_TIMEOUT_MS,
         reconnectionAttempts: 5,
         reconnectionDelay: 400,

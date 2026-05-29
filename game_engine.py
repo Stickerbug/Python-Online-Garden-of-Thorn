@@ -127,6 +127,7 @@ class PlayerState:
         }
         self.negate_next_skill: bool = False
         self.is_first_player: bool = False
+        self._enter_hand_callback = None
 
     def to_dict(self, include_private: bool = True) -> dict:
         d = {
@@ -284,6 +285,12 @@ class PlayerState:
     def hand_space(self) -> int:
         return max(0, self.hand_limit() - self.rule_hand_size())
 
+    def add_to_hand(self, card: CardInstance):
+        self.hand.append(card)
+        callback = getattr(self, '_enter_hand_callback', None)
+        if callback:
+            callback(self.player_id, card)
+
     def draw_cards(self, count: int) -> List[CardInstance]:
         drawn = []
         sprout_queue = []
@@ -296,7 +303,7 @@ class PlayerState:
                 random.shuffle(self.deck)
             card = self.deck.pop(0)
             if card.def_id == ERROR_CARD_ID:
-                self.hand.append(card)
+                self.add_to_hand(card)
                 drawn.append(card)
                 continue
             if not self.can_add_to_hand():
@@ -307,13 +314,13 @@ class PlayerState:
                     self.hand.remove(discard_card)
                     reset_card_for_discard(discard_card)
                     self.discard.append(discard_card)
-                    self.hand.append(card)
+                    self.add_to_hand(card)
                     drawn.append(card)
                 else:
                     reset_card_for_discard(card)
                     self.discard.append(card)
             else:
-                self.hand.append(card)
+                self.add_to_hand(card)
                 drawn.append(card)
             if 'sprout' in card.flags and card in self.hand:
                 sprout_queue.append(card)
@@ -328,11 +335,11 @@ class PlayerState:
             if self.deck:
                 extra = self.deck.pop(0)
                 if extra.def_id == ERROR_CARD_ID:
-                    self.hand.append(extra)
+                    self.add_to_hand(extra)
                     drawn.append(extra)
                     continue
                 if self.can_add_to_hand():
-                    self.hand.append(extra)
+                    self.add_to_hand(extra)
                     drawn.append(extra)
                     if 'sprout' in extra.flags:
                         sprout_queue.append(extra)
@@ -793,12 +800,28 @@ class GameEngine:
         self._last_created_card_instance_id: Optional[int] = None
         self.timed_effects: List[dict] = []
         self._init_mod_variables()
+        self._bind_player_callbacks()
 
     def pn(self, pid: int) -> str:
         return self.player_names[pid] if 0 <= pid < len(self.player_names) else f'玩家{pid+1}'
 
     def log_msg(self, msg: str):
         self.log.append(msg)
+
+    def _bind_player_callbacks(self):
+        for ps in getattr(self, 'players', []):
+            ps._enter_hand_callback = self._handle_card_enter_hand
+
+    def _handle_card_enter_hand(self, player_id: int, card: CardInstance):
+        if not (0 <= player_id < len(getattr(self, 'players', []))):
+            return
+        if not self._has_card_event(card.card_def, 'enter_hand'):
+            return
+        self._run_card_event(player_id, card, 'enter_hand', None, {
+            'source_id': player_id,
+            'target_id': player_id,
+            'zone': 'hand',
+        })
 
     def _coerce_mod_var_initial(self, value) -> int:
         try:
@@ -1865,7 +1888,7 @@ class GameEngine:
             target = opp.find_hand_card(choice['target_instance_id'])
             if target and ps.can_add_to_hand():
                 opp.hand.remove(target)
-                ps.hand.append(target)
+                ps.add_to_hand(target)
                 if log:
                     self.log_msg(log)
             else:
@@ -1887,7 +1910,7 @@ class GameEngine:
                 target = matched[0] if matched else None
             if target and ps.can_add_to_hand():
                 ps.deck.remove(target)
-                ps.hand.append(target)
+                ps.add_to_hand(target)
                 if log:
                     self.log_msg(log)
             else:
@@ -1911,7 +1934,7 @@ class GameEngine:
                 target = matched2[0] if matched2 else None
             if target and ps.can_add_to_hand():
                 ps.discard.remove(target)
-                ps.hand.append(target)
+                ps.add_to_hand(target)
                 if log:
                     self.log_msg(log)
             else:
@@ -2141,7 +2164,7 @@ class GameEngine:
             target = matched[0] if matched else None
         if target and ps.can_add_to_hand():
             ps.exile.remove(target)
-            ps.hand.append(target)
+            ps.add_to_hand(target)
             if log:
                 self.log_msg(log)
         else:
@@ -2162,7 +2185,7 @@ class GameEngine:
             target = ps.find_hand_card(choice['target_instance_id'])
         if target and ps.can_add_to_hand():
             new_card = target.copy()
-            ps.hand.append(new_card)
+            ps.add_to_hand(new_card)
             self._remember_created_card(new_card, context)
             if log:
                 self.log_msg(log)
@@ -2212,7 +2235,7 @@ class GameEngine:
             if card_def.id != ERROR_CARD_ID and not ts.can_add_to_hand():
                 return
             new_card = CardInstance(def_id=card_def.id)
-            ts.hand.append(new_card)
+            ts.add_to_hand(new_card)
             self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
                 self.log_msg(log)
@@ -2516,7 +2539,7 @@ class GameEngine:
         if not self.players[target_id].can_add_to_hand():
             return
         self._remove_card_from_current_zone(target_card)
-        self.players[target_id].hand.append(target_card)
+        self.players[target_id].add_to_hand(target_card)
         self.log_msg(log or f"{target_card.name_cn}移入{self.pn(target_id)}手牌")
 
     def _atomic_move_to_deck(self, player_id, card, params, log, choice, context):
@@ -3207,7 +3230,7 @@ class GameEngine:
                 if c.def_id == target_def:
                     found = ps.discard.pop(i)
                     if ps.can_add_to_hand():
-                        ps.hand.append(found)
+                        ps.add_to_hand(found)
                     else:
                         ps.discard.append(found)
                     self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
@@ -3255,7 +3278,7 @@ class GameEngine:
                 copy_card = target.copy()
                 copy_card.mimic_discount = 1
                 if ps.can_add_to_hand():
-                    ps.hand.append(copy_card)
+                    ps.add_to_hand(copy_card)
                     self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
                 else:
                     self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}，但手牌已满")
@@ -3465,6 +3488,7 @@ class GameEngine:
         'on_equipment_trigger',
         'on_equipment_destroy',
         'on_hand_owner_turn_start',
+        'on_enter_hand',
         'on_discard_owner_turn_start',
         'on_deck_owner_turn_start',
         'on_card_used',
@@ -3490,6 +3514,7 @@ class GameEngine:
         'equipment_trigger': ('onEquipmentTrigger', 'equipment_trigger', 'on_equipment_trigger'),
         'equipment_destroy': ('onEquipmentDestroy', 'equipment_destroy', 'on_equipment_destroy', 'onDestroy'),
         'hand_owner_turn_start': ('onHandOwnerTurnStart', 'hand_owner_turn_start', 'on_hand_owner_turn_start'),
+        'enter_hand': ('onEnterHand', 'enter_hand', 'on_enter_hand'),
         'discard_owner_turn_start': ('onDiscardOwnerTurnStart', 'discard_owner_turn_start', 'on_discard_owner_turn_start'),
         'deck_owner_turn_start': ('onDeckOwnerTurnStart', 'deck_owner_turn_start', 'on_deck_owner_turn_start'),
         'card_used': ('onCardUsed', 'card_used', 'on_card_used'),
@@ -3694,6 +3719,31 @@ class GameEngine:
         card_obj = self._resolve_card_ref(player_id, card_ref, current_card)
         return getattr(card_obj, 'def_id', '') if card_obj is not None else ''
 
+    def _get_card_definition(self, player_id, card_ref, current_card=None):
+        card_id = self._resolve_card_id_ref(player_id, card_ref, current_card)
+        if not card_id:
+            return None
+        return CARD_DEFS.get(card_id)
+
+    def _get_card_def_property_value(self, player_id, card_ref, prop, current_card=None):
+        card_def = self._get_card_definition(player_id, card_ref, current_card)
+        if card_def is None:
+            return 0
+        prop = str(prop or 'cost_e')
+        if prop in ('flags', 'tags'):
+            return sorted(str(flag) for flag in getattr(card_def, 'flags', set()) or set())
+        if prop in ('cost_e', 'cost_m', 'count', 'trigger_cost_e'):
+            return int(getattr(card_def, prop, 0) or 0)
+        if prop in ('effect_text', 'description', 'card_type', 'quality', 'name_cn', 'name_en', 'trigger_effect_text', 'id'):
+            return str(getattr(card_def, prop, '') or '')
+        return getattr(card_def, prop, 0)
+
+    def _get_card_def_tags(self, player_id, card_ref, current_card=None):
+        card_def = self._get_card_definition(player_id, card_ref, current_card)
+        if card_def is None:
+            return []
+        return sorted(str(flag) for flag in getattr(card_def, 'flags', set()) or set())
+
     def _remove_card_from_current_zone(self, target_card):
         owner_id, zone_name, card_obj = self._find_card_location(target_card)
         if owner_id is None or card_obj is None:
@@ -3785,6 +3835,8 @@ class GameEngine:
             return list(raw) if isinstance(raw, list) else ([] if raw is None else [raw])
         if ref == 'zone_list':
             return self._zone_list(player_id, expr.get('target', 'self'), str(expr.get('zone', 'hand')))
+        if ref == 'card_def_tags':
+            return self._get_card_def_tags(player_id, expr.get('card', ''), card)
         if ref == 'list_item':
             item = self._list_item_raw(player_id, expr, card)
             return [] if item is None else [item]
@@ -3812,7 +3864,7 @@ class GameEngine:
     def _eval_var_assignment_value(self, player_id, expr, card=None):
         if isinstance(expr, list):
             return self._serializable_list_item(expr[0]) if expr else 0
-        if isinstance(expr, dict) and expr.get('ref') in ('list', 'list_create', 'list_var', 'zone_list'):
+        if isinstance(expr, dict) and expr.get('ref') in ('list', 'list_create', 'list_var', 'zone_list', 'card_def_tags'):
             values = self._eval_list(player_id, expr, card)
             return self._serializable_list_item(values[0]) if values else 0
         return self._serializable_list_item(self._eval_raw_item(player_id, expr, card))
@@ -4094,6 +4146,10 @@ class GameEngine:
                     return int(target_card.cost_e)
                 if prop == 'cost_m':
                     return int(target_card.cost_m)
+                if prop == 'cost_e_override':
+                    return int(target_card.cost_e_override if target_card.cost_e_override is not None else target_card.card_def.cost_e)
+                if prop == 'cost_m_override':
+                    return int(target_card.cost_m_override if target_card.cost_m_override is not None else target_card.card_def.cost_m)
                 return int(getattr(target_card, prop, 0))
             if ref == 'card_tag_count':
                 target_card = self._resolve_card_ref(player_id, expr.get('card', {'ref': 'current_card'}), card)
@@ -4103,6 +4159,10 @@ class GameEngine:
                 flags.update(getattr(target_card, 'instance_flags', set()) or set())
                 flags.difference_update(getattr(target_card, 'disabled_flags', set()) or set())
                 return len(flags)
+            if ref == 'card_def_property':
+                return self._get_card_def_property_value(player_id, expr.get('card', ''), expr.get('property', 'cost_e'), card)
+            if ref == 'card_def_tags':
+                return self._get_card_def_tags(player_id, expr.get('card', ''), card)
             if ref == 'equipment_property':
                 eq = self._resolve_equipment_ref(player_id, expr.get('equipment', {'ref': 'current_equipment'}), card)
                 return self._get_equipment_property_value(eq, expr.get('property', 'turns_equipped'))
@@ -4838,7 +4898,7 @@ class GameEngine:
                 if owner_id < 0 or owner_id >= len(self.players):
                     continue
                 new_card = CardInstance(def_id=ERROR_CARD_ID)
-                self.players[owner_id].hand.append(new_card)
+                self.players[owner_id].add_to_hand(new_card)
                 self._remember_created_card(new_card, context if isinstance(context, dict) else None)
             return
         for owner_id in owner_ids:
@@ -4960,7 +5020,7 @@ class GameEngine:
             return
         copy_card = target.copy()
         copy_card.mimic_discount = self._eval_int(player_id, params.get('discount_e', 1), card, 1)
-        ps.hand.append(copy_card)
+        ps.add_to_hand(copy_card)
         if log:
             self.log_msg(log)
 
@@ -4969,6 +5029,10 @@ class GameEngine:
         if target_card is None:
             return None
         prop = str(params.get('property', 'fusion_level'))
+        if prop == 'cost_e':
+            prop = 'cost_e_override'
+        elif prop == 'cost_m':
+            prop = 'cost_m_override'
         value = int(value)
         if prop in ('fusion_level', 'fission_level'):
             value = max(1, value)
@@ -4978,6 +5042,17 @@ class GameEngine:
                     'bonus_damage', 'return_to_hand_turns', 'held_turns'):
             setattr(target_card, prop, value)
         return target_card
+
+    def _get_card_property_numeric_value(self, target_card, prop):
+        if prop in ('cost_e', 'cost_e_override'):
+            value = target_card.cost_e_override if target_card.cost_e_override is not None else target_card.card_def.cost_e
+        elif prop in ('cost_m', 'cost_m_override'):
+            value = target_card.cost_m_override if target_card.cost_m_override is not None else target_card.card_def.cost_m
+        else:
+            value = getattr(target_card, prop, 0)
+        if value is None:
+            return 0
+        return int(value)
 
     def _atomic_card_prop_set(self, player_id, card, params, log, choice, context):
         value = self._eval_int(player_id, params.get('value', 0), card)
@@ -4990,7 +5065,7 @@ class GameEngine:
         if target_card is None:
             return
         prop = str(params.get('property', 'fusion_level'))
-        current = int(getattr(target_card, prop, 0))
+        current = self._get_card_property_numeric_value(target_card, prop)
         value = current + self._eval_int(player_id, params.get('amount', 0), card)
         self._set_card_property_value(player_id, card, params, value)
         if log:
@@ -5001,7 +5076,7 @@ class GameEngine:
         if target_card is None:
             return
         prop = str(params.get('property', 'fusion_level'))
-        current = int(getattr(target_card, prop, 0))
+        current = self._get_card_property_numeric_value(target_card, prop)
         multiplier = self._eval_int(player_id, params.get('multiplier', params.get('amount', 1)), card, 1)
         self._set_card_property_value(player_id, card, {'card': params.get('card', {'ref': 'current_card'}), 'property': prop}, current * multiplier)
         if log:

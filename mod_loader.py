@@ -20,6 +20,8 @@ def _get_base_dir():
 
 MODS_DIR = os.path.join(_get_base_dir(), 'mods')
 GAME_VERSION = 'v0.3.1-alpha'
+_MODS_CACHE_SIGNATURE = None
+_MODS_CACHE: List['Mod'] = []
 
 
 class ModCard:
@@ -226,7 +228,32 @@ def load_mod(filepath: str) -> Mod:
     return mod
 
 
-def load_all_mods() -> List[Mod]:
+def _mods_signature():
+    if not os.path.isdir(MODS_DIR):
+        return ()
+    items = []
+    for entry in os.scandir(MODS_DIR):
+        if not entry.name.endswith('.json'):
+            continue
+        try:
+            stat = entry.stat()
+            items.append((entry.name, stat.st_mtime_ns, stat.st_size))
+        except OSError:
+            items.append((entry.name, 0, 0))
+    return tuple(sorted(items))
+
+
+def invalidate_mod_cache():
+    global _MODS_CACHE_SIGNATURE, _MODS_CACHE
+    _MODS_CACHE_SIGNATURE = None
+    _MODS_CACHE = []
+
+
+def load_all_mods(force: bool = False) -> List[Mod]:
+    global _MODS_CACHE_SIGNATURE, _MODS_CACHE
+    signature = _mods_signature()
+    if not force and _MODS_CACHE_SIGNATURE == signature:
+        return copy.deepcopy(_MODS_CACHE)
     mods = []
     if not os.path.isdir(MODS_DIR):
         return mods
@@ -234,6 +261,8 @@ def load_all_mods() -> List[Mod]:
         if fname.endswith('.json'):
             mod = load_mod(os.path.join(MODS_DIR, fname))
             mods.append(mod)
+    _MODS_CACHE_SIGNATURE = signature
+    _MODS_CACHE = copy.deepcopy(mods)
     return mods
 
 
@@ -242,11 +271,13 @@ def save_mod(mod: Mod):
     data = mod.to_dict()
     with open(mod.filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    invalidate_mod_cache()
 
 
 def delete_mod(filepath: str):
     if os.path.exists(filepath):
         os.remove(filepath)
+    invalidate_mod_cache()
 
 
 def check_conflicts(mods: List[Mod]) -> List[str]:

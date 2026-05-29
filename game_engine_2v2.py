@@ -55,6 +55,7 @@ class GameEngine2v2(GameEngine):
         self._last_created_card_instance_id: Optional[int] = None
         self.timed_effects: List[dict] = []
         self._init_mod_variables()
+        self._bind_player_callbacks()
 
     def team_of(self, player_id: int) -> int:
         for ti, team in enumerate(self.teams):
@@ -994,15 +995,21 @@ class GameEngine2v2(GameEngine):
             if needs_response or needs_precision_response:
                 target_id = self._selected_effect_target(player_id, choice)
                 counter_cards = []
-                if self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0:
-                    for c in self.players[target_id].hand:
+                if self._would_heal(card):
+                    responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
+                elif self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0:
+                    responder_ids = [target_id]
+                else:
+                    responder_ids = []
+                for responder_id in responder_ids:
+                    for c in self.players[responder_id].hand:
                         if self._card_can_counter(c, card):
                             counter_cards.append({
                                 'instance_id': c.instance_id,
                                 'def_id': c.def_id,
                                 'cost_e_override': c.cost_e_override,
                                 'cost_m_override': c.cost_m_override,
-                                'responder_id': target_id,
+                                'responder_id': responder_id,
                             })
                 self.pending_response = {
                     'player_id': player_id,
@@ -1329,6 +1336,12 @@ class GameEngine2v2(GameEngine):
         if 'precision' in card.flags:
             return False
         target_id = self._selected_effect_target(player_id, getattr(self, '_active_choice', None))
+        if self._would_heal(card):
+            return any(
+                c.card_def.response_trigger in ('any', 'heal')
+                for enemy_id in self.get_all_enemies(player_id)
+                for c in self.players[enemy_id].hand
+            )
         if not self._is_valid_player_id(target_id) or not self.is_enemy(player_id, target_id):
             return False
         opp = self.players[target_id]
