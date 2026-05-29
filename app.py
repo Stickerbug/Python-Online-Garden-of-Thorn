@@ -33,6 +33,15 @@ from r2_mods import (
     register_community_mod,
     validate_community_mod_url,
 )
+from db import (
+    create_user,
+    get_user_by_id,
+    get_user_by_username,
+    increment_user_stats,
+    init_db,
+    save_match_summary,
+    verify_user,
+)
 
 BASE_CARD_IDS = set(CARD_DEFS.keys())
 BASE_CARD_DEFS = copy.deepcopy(CARD_DEFS)
@@ -91,6 +100,15 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'garden_of_thorn_secret'
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
+DB_AVAILABLE = True
+DB_INIT_ERROR = ''
+try:
+    init_db()
+except Exception as exc:
+    DB_AVAILABLE = False
+    DB_INIT_ERROR = str(exc)
+    print(f'[startup] database init failed: {type(exc).__name__}: {exc}')
+
 _lock = threading.Lock()
 _next_room_id = 0
 _COMMUNITY_API_RATE: dict = {}
@@ -143,6 +161,7 @@ SPECIAL_PLAYER_PROFILES = [
 ADMIN_EVENTS = deque(maxlen=300)
 MATCH_HISTORY = deque(maxlen=120)
 ADMIN_LOGIN_FAILURES = {}
+AUTH_LOGIN_FAILURES = {}
 
 try:
     import psutil
@@ -198,25 +217,62 @@ set_mod_runtime_error_logger(
 
 def admin_match_record(room, result='finished'):
     try:
+        if getattr(room, '_history_recorded', False):
+            return
         e = room.engine
         names = []
+        registered_usernames = []
+        participant_meta = []
         for psid in room.player_sids:
             if psid in players:
-                names.append(players[psid]['nickname'])
+                p = players[psid]
+                names.append(p['nickname'])
+                participant_meta.append(p)
             elif psid in room.disconnected_players:
-                names.append(room.disconnected_players[psid]['nickname'])
+                p = room.disconnected_players[psid]
+                names.append(p['nickname'])
+                participant_meta.append(p)
             else:
                 names.append('?')
+                participant_meta.append({})
+        for meta in participant_meta:
+            if meta.get('user_id') and meta.get('nickname'):
+                registered_usernames.append(meta['nickname'])
         winner = getattr(e, 'winner', None)
+        winner_index = None
+        stats_winners = []
+        stats_result = 'draw'
         if getattr(e, 'winning_team', None) is not None:
-            winner_label = f"team {e.winning_team + 1}"
+            winner_index = int(e.winning_team)
+            team_members = []
+            try:
+                team_members = list(e.teams[winner_index])
+            except Exception:
+                team_members = []
+            stats_winners = [names[i] for i in team_members if 0 <= i < len(names)]
+            winner_label = ' / '.join(stats_winners) or f"team {winner_index + 1}"
+            stats_result = 'win'
         elif winner is None or winner == -1:
             winner_label = 'draw'
+            stats_result = 'draw'
         elif isinstance(winner, int) and 0 <= winner < len(names):
+            winner_index = winner
             winner_label = names[winner]
+            stats_winners = [winner_label]
+            stats_result = 'win'
         else:
             winner_label = str(winner)
-        MATCH_HISTORY.appendleft({
+            stats_winners = [winner_label]
+            stats_result = 'win'
+        started_ts = getattr(room, 'started_at', None) or getattr(room, 'created_at', time.time())
+        created_at = datetime.utcfromtimestamp(getattr(room, 'created_at', time.time())).isoformat(timespec='seconds') + 'Z'
+        started_at = datetime.utcfromtimestamp(started_ts).isoformat(timespec='seconds') + 'Z'
+        ended_at = iso_now()
+        duration_seconds = int(time.time() - started_ts)
+        first_meta = participant_meta[0] if participant_meta else {}
+        mod_source = first_meta.get('mod_source', 'official')
+        mod_hash = first_meta.get('community_mod_hash') or first_meta.get('mods_hash') or ''
+        history_entry = {
             'time': iso_now(),
             'room_id': room.room_id,
             'mode': room.mode,
@@ -225,10 +281,35 @@ def admin_match_record(room, result='finished'):
             'round': getattr(e, 'round_num', 0),
             'phase': getattr(e, 'phase', ''),
             'result': result,
-            'created_at': datetime.utcfromtimestamp(getattr(room, 'created_at', time.time())).isoformat(timespec='seconds') + 'Z',
-            'started_at': datetime.utcfromtimestamp(getattr(room, 'started_at', None) or getattr(room, 'created_at', time.time())).isoformat(timespec='seconds') + 'Z',
-            'duration_seconds': int(time.time() - (getattr(room, 'started_at', None) or getattr(room, 'created_at', time.time()))),
-        })
+            'created_at': created_at,
+            'started_at': started_at,
+            'ended_at': ended_at,
+            'duration_seconds': duration_seconds,
+        }
+        MATCH_HISTORY.appendleft(history_entry)
+        summary = {
+            'room_id': room.room_id,
+            'mode': room.mode,
+            'players': names,
+            'winner_name': winner_label,
+            'winner_index': winner_index,
+            'rounds': getattr(e, 'round_num', 0),
+            'phase': getattr(e, 'phase', ''),
+            'result': stats_result if result == 'finished' else result,
+            'started_at': started_at,
+            'ended_at': ended_at,
+            'duration_seconds': duration_seconds,
+            'mod_source': mod_source,
+            'mod_hash': mod_hash,
+        }
+        if DB_AVAILABLE:
+            try:
+                save_match_summary(summary)
+                if result in ('finished', 'admin_endgame') and getattr(e, 'game_over', False):
+                    increment_user_stats(registered_usernames, stats_winners, stats_result)
+            except Exception as db_exc:
+                admin_event('error', f'failed to persist match summary: {db_exc}')
+        room._history_recorded = True
     except Exception as exc:
         admin_event('error', f'failed to record match history: {exc}')
 
@@ -252,6 +333,27 @@ def record_admin_login_failure(ip):
     failures = ADMIN_LOGIN_FAILURES.setdefault(ip, [])
     failures.append(time.time())
     ADMIN_LOGIN_FAILURES[ip] = [ts for ts in failures if time.time() - ts < 300]
+
+
+def should_rate_limit_auth_login(ip):
+    now = time.time()
+    failures = [ts for ts in AUTH_LOGIN_FAILURES.get(ip, []) if now - ts < 300]
+    AUTH_LOGIN_FAILURES[ip] = failures
+    return len(failures) >= 10
+
+
+def record_auth_login_failure(ip):
+    failures = AUTH_LOGIN_FAILURES.setdefault(ip, [])
+    failures.append(time.time())
+    AUTH_LOGIN_FAILURES[ip] = [ts for ts in failures if time.time() - ts < 300]
+
+
+def clear_auth_login_failures(ip):
+    AUTH_LOGIN_FAILURES.pop(ip, None)
+
+
+def db_unavailable_response():
+    return jsonify({'success': False, 'error': f'数据库不可用: {DB_INIT_ERROR or "unknown"}'}), 503
 
 
 @app.before_request
@@ -1872,6 +1974,60 @@ def admin_complete():
     return jsonify({'success': True, 'items': admin_completions(request.args.get('line', ''))})
 
 
+@app.route('/api/auth/register', methods=['POST'])
+def api_auth_register():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    data = request.get_json(silent=True) or {}
+    username = sanitize_nickname(data.get('username', ''))
+    if is_reserved_special_nickname(username):
+        return jsonify({'success': False, 'error': ADMIN_NICKNAME_RESERVED_REASON}), 400
+    user, error = create_user(username, data.get('password', ''))
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    session['user_id'] = user['id']
+    session['username'] = user['username']
+    return jsonify({'success': True, 'user': user})
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def api_auth_login():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    ip = _client_ip()
+    if should_rate_limit_auth_login(ip):
+        return jsonify({'success': False, 'error': '登录失败次数过多，请稍后再试'}), 429
+    data = request.get_json(silent=True) or {}
+    user, error = verify_user(data.get('username', ''), data.get('password', ''))
+    if error:
+        record_auth_login_failure(ip)
+        return jsonify({'success': False, 'error': error}), 401
+    clear_auth_login_failures(ip)
+    session['user_id'] = user['id']
+    session['username'] = user['username']
+    return jsonify({'success': True, 'user': user})
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def api_auth_logout():
+    session.pop('user_id', None)
+    session.pop('username', None)
+    return jsonify({'success': True})
+
+
+@app.route('/api/auth/me')
+def api_auth_me():
+    if not DB_AVAILABLE:
+        return jsonify({'authenticated': False, 'db_available': False, 'error': DB_INIT_ERROR})
+    user = get_user_by_id(session.get('user_id'))
+    if not user:
+        session.pop('user_id', None)
+        session.pop('username', None)
+        return jsonify({'authenticated': False, 'db_available': True})
+    session['username'] = user['username']
+    return jsonify({'authenticated': True, 'db_available': True, 'user': user})
+
+
 @app.route('/api/cards')
 def api_cards():
     try:
@@ -2262,19 +2418,35 @@ def on_login(data):
     global _next_room_id
     data = data or {}
     sid = request.sid
+    account_user = get_user_by_id(session.get('user_id')) if DB_AVAILABLE and session.get('user_id') else None
+    if session.get('user_id') and not account_user:
+        session.pop('user_id', None)
+        session.pop('username', None)
     raw_name = data.get('nickname', '')
-    special_profile = get_special_player_profile(raw_name)
-    is_admin_player = bool(special_profile and special_profile.get('is_admin_player'))
-    if special_profile:
-        name = special_profile['display_name']
+    if account_user:
+        special_profile = None
+        name = account_user['username']
+        is_admin_player = False
+        user_id = account_user['id']
+        is_registered_user = True
     else:
-        name = sanitize_nickname(raw_name)
-    if not special_profile and is_reserved_special_nickname(name):
-        emit('login_fail', {'reason': ADMIN_NICKNAME_RESERVED_REASON})
-        return
-    if not special_profile and not validate_nickname(name):
-        emit('login_fail', {'reason': 'Invalid nickname. Use 1-16 display-width characters; avoid pure numbers, pure symbols, or repeated -/_.'})
-        return
+        special_profile = get_special_player_profile(raw_name)
+        is_admin_player = bool(special_profile and special_profile.get('is_admin_player'))
+        if special_profile:
+            name = special_profile['display_name']
+        else:
+            name = sanitize_nickname(raw_name)
+        if not special_profile and is_reserved_special_nickname(name):
+            emit('login_fail', {'reason': ADMIN_NICKNAME_RESERVED_REASON})
+            return
+        if not special_profile and not validate_nickname(name):
+            emit('login_fail', {'reason': 'Invalid nickname. Use 1-16 display-width characters; avoid pure numbers, pure symbols, or repeated -/_.'})
+            return
+        if not special_profile and DB_AVAILABLE and get_user_by_username(name):
+            emit('login_fail', {'reason': 'Registered nickname reserved'})
+            return
+        user_id = None
+        is_registered_user = False
     disabled_mods = ensure_valid_disabled_mods(data.get('disabled_mods', []))
     preferred_mode = data.get('mode', '1v1')
     if preferred_mode not in ('1v1', '2v2', 'urf'):
@@ -2315,6 +2487,8 @@ def on_login(data):
             'allowed_card_ids': loadout['allowed_card_ids'],
             'mode': preferred_mode,
             'is_admin_player': is_admin_player,
+            'user_id': user_id,
+            'is_registered_user': is_registered_user,
             'mod_source': community_fields.get('mod_source', 'official'),
             'community_mod_url': community_fields.get('community_mod_url', ''),
             'community_mod_hash': community_fields.get('community_mod_hash', ''),
@@ -2342,7 +2516,9 @@ def on_login(data):
             'opponent_nickname': opponent_nickname,
         })
     join_room(sid)
-    login_payload = {'sid': sid, 'nickname': name}
+    login_payload = {'sid': sid, 'nickname': name, 'authenticated': bool(is_registered_user)}
+    if is_registered_user:
+        login_payload['user'] = account_user
     login_payload.update(special_public_fields(players.get(sid, {})))
     emit('login_ok', login_payload)
     print("[server] debug")
@@ -2631,6 +2807,11 @@ def on_disconnect():
                     'nickname': nickname,
                     'player_index': pidx,
                     'disconnect_time': time.time(),
+                    'user_id': player.get('user_id'),
+                    'is_registered_user': bool(player.get('is_registered_user')),
+                    'mod_source': player.get('mod_source', 'official'),
+                    'community_mod_hash': player.get('community_mod_hash', ''),
+                    'mods_hash': player.get('mods_hash', ''),
                 }
                 room.disconnected_players[sid].update(special_public_fields(player))
                 dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)

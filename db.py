@@ -1,0 +1,250 @@
+import json
+import os
+import re
+import sqlite3
+from datetime import datetime, timezone
+
+from werkzeug.security import check_password_hash, generate_password_hash
+
+
+DEFAULT_DB_PATH = '/var/lib/gtn/gtn.sqlite3'
+DB_PATH = os.environ.get('GTN_DB_PATH', DEFAULT_DB_PATH)
+
+
+def utc_now():
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA foreign_keys=ON;')
+    return conn
+
+
+def init_db():
+    parent = os.path.dirname(os.path.abspath(DB_PATH))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with get_db_connection() as conn:
+        conn.execute('PRAGMA journal_mode=WAL;')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                username_lower TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                last_login_at TEXT,
+                games_played INTEGER DEFAULT 0,
+                wins INTEGER DEFAULT 0,
+                losses INTEGER DEFAULT 0,
+                draws INTEGER DEFAULT 0
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS matches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mode TEXT,
+                started_at TEXT,
+                ended_at TEXT,
+                duration_seconds INTEGER,
+                player_names_json TEXT,
+                winner_name TEXT,
+                winner_index INTEGER,
+                rounds INTEGER,
+                mod_source TEXT,
+                mod_hash TEXT,
+                result TEXT,
+                summary_json TEXT
+            )
+            '''
+        )
+        conn.commit()
+
+
+def _display_width(s):
+    width = 0
+    for ch in str(s or ''):
+        code = ord(ch)
+        if (
+            0x4E00 <= code <= 0x9FFF
+            or 0x3040 <= code <= 0x30FF
+            or 0xAC00 <= code <= 0xD7AF
+            or 0xFF00 <= code <= 0xFFEF
+            or 0x2000 <= code <= 0x206F
+        ):
+            width += 2
+        else:
+            width += 1
+    return width
+
+
+def sanitize_username(raw):
+    name = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', str(raw or ''))
+    name = re.sub(r'[\u3000\s]+', '', name)
+    name = re.sub(r'[^\w\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af\-]', '', name)
+    return name.strip()
+
+
+def validate_username(username):
+    name = sanitize_username(username)
+    if not name:
+        return False, '用户名不能为空'
+    if _display_width(name) > 16:
+        return False, '用户名过长'
+    if re.match(r'^[\d]+$', name):
+        return False, '用户名不能全为数字'
+    if not re.search(r'[\w\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]', name):
+        return False, '用户名不能全为符号'
+    if re.match(r'^[\-_]+$', name):
+        return False, '用户名不能全为符号'
+    if re.search(r'[\-_]{2,}', name):
+        return False, '- 和 _ 不能连续出现'
+    return True, ''
+
+
+def validate_password(password):
+    text = str(password or '')
+    if len(text) < 6:
+        return False, '密码至少需要 6 位'
+    if len(text) > 72:
+        return False, '密码最多 72 位'
+    return True, ''
+
+
+def row_to_user(row):
+    if row is None:
+        return None
+    return {
+        'id': row['id'],
+        'username': row['username'],
+        'created_at': row['created_at'],
+        'last_login_at': row['last_login_at'],
+        'games_played': row['games_played'],
+        'wins': row['wins'],
+        'losses': row['losses'],
+        'draws': row['draws'],
+    }
+
+
+def create_user(username, password):
+    name = sanitize_username(username)
+    ok, error = validate_username(name)
+    if not ok:
+        return None, error
+    ok, error = validate_password(password)
+    if not ok:
+        return None, error
+    now = utc_now()
+    password_hash = generate_password_hash(str(password))
+    try:
+        with get_db_connection() as conn:
+            cur = conn.execute(
+                '''
+                INSERT INTO users (username, username_lower, password_hash, created_at)
+                VALUES (?, ?, ?, ?)
+                ''',
+                (name, name.lower(), password_hash, now),
+            )
+            conn.commit()
+            row = conn.execute('SELECT * FROM users WHERE id = ?', (cur.lastrowid,)).fetchone()
+            return row_to_user(row), None
+    except sqlite3.IntegrityError:
+        return None, '用户名已存在'
+
+
+def verify_user(username, password):
+    name = sanitize_username(username)
+    if not name:
+        return None, '用户名或密码错误'
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE username_lower = ?', (name.lower(),)).fetchone()
+        if row is None or not check_password_hash(row['password_hash'], str(password or '')):
+            return None, '用户名或密码错误'
+        now = utc_now()
+        conn.execute('UPDATE users SET last_login_at = ? WHERE id = ?', (now, row['id']))
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (row['id'],)).fetchone()
+        return row_to_user(row), None
+
+
+def get_user_by_id(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    with get_db_connection() as conn:
+        return row_to_user(conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone())
+
+
+def get_user_by_username(username):
+    name = sanitize_username(username)
+    if not name:
+        return None
+    with get_db_connection() as conn:
+        return row_to_user(conn.execute('SELECT * FROM users WHERE username_lower = ?', (name.lower(),)).fetchone())
+
+
+def save_match_summary(summary):
+    data = dict(summary or {})
+    with get_db_connection() as conn:
+        cur = conn.execute(
+            '''
+            INSERT INTO matches (
+                mode, started_at, ended_at, duration_seconds, player_names_json,
+                winner_name, winner_index, rounds, mod_source, mod_hash, result, summary_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                data.get('mode'),
+                data.get('started_at'),
+                data.get('ended_at'),
+                data.get('duration_seconds'),
+                json.dumps(data.get('players') or [], ensure_ascii=False),
+                data.get('winner_name'),
+                data.get('winner_index'),
+                data.get('rounds'),
+                data.get('mod_source'),
+                data.get('mod_hash'),
+                data.get('result'),
+                json.dumps(data, ensure_ascii=False),
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def increment_user_stats(usernames, winner_name=None, result='finished'):
+    names = [sanitize_username(name) for name in (usernames or [])]
+    names = [name for name in names if name]
+    if not names:
+        return
+    winners = winner_name if isinstance(winner_name, (list, tuple, set)) else [winner_name]
+    winner_lowers = {sanitize_username(name).lower() for name in winners if sanitize_username(name)}
+    is_draw = str(result or '').lower() == 'draw'
+    with get_db_connection() as conn:
+        for name in names:
+            row = conn.execute('SELECT id, username_lower FROM users WHERE username_lower = ?', (name.lower(),)).fetchone()
+            if row is None:
+                continue
+            if is_draw:
+                conn.execute(
+                    'UPDATE users SET games_played = games_played + 1, draws = draws + 1 WHERE id = ?',
+                    (row['id'],),
+                )
+            elif row['username_lower'] in winner_lowers:
+                conn.execute(
+                    'UPDATE users SET games_played = games_played + 1, wins = wins + 1 WHERE id = ?',
+                    (row['id'],),
+                )
+            else:
+                conn.execute(
+                    'UPDATE users SET games_played = games_played + 1, losses = losses + 1 WHERE id = ?',
+                    (row['id'],),
+                )
+        conn.commit()

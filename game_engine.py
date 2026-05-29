@@ -125,6 +125,7 @@ class PlayerState:
             '\u4e09\u89d2\u5f62\u5c42\u6570': 0,
             '\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54': 0,
         }
+        self.custom_statuses: Dict[str, int] = {}
         self.negate_next_skill: bool = False
         self.is_first_player: bool = False
         self._enter_hand_callback = None
@@ -175,6 +176,7 @@ class PlayerState:
             'turn_damage_dealt': self.turn_damage_dealt,
             'total_damage_taken': self.total_damage_taken,
             'total_damage_dealt': self.total_damage_dealt,
+            'custom_statuses': dict(self.custom_statuses),
         }
         if include_private:
             d['hand'] = [c.to_dict() for c in self.hand]
@@ -239,6 +241,8 @@ class PlayerState:
         ps.total_damage_dealt = int(d.get('total_damage_dealt', 0))
         if 'custom_vars' in d:
             ps.custom_vars = d.get('custom_vars', {})
+        if 'custom_statuses' in d:
+            ps.custom_statuses = d.get('custom_statuses', {})
         ps.custom_vars.setdefault('\u5496\u5561\u9996\u6b21\u4f7f\u7528', 1 if ps.coffee_first_use else 0)
         ps.custom_vars.setdefault('\u4e09\u89d2\u5f62\u5c42\u6570', int(ps.triangle_stacks))
         ps.custom_vars.setdefault('\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54', int(ps.magic_battery_m_this_turn))
@@ -581,7 +585,58 @@ class GameEngine:
             '邪眼': ps.nazar_big_hits if ps.nazar_active else 0,
             'Nazar': ps.nazar_big_hits if ps.nazar_active else 0,
         }
-        return int(counts.get(status, 0))
+        if status in counts:
+            return int(counts.get(status, 0))
+        return int(getattr(ps, 'custom_statuses', {}).get(status, 0) or 0)
+
+    def _custom_status_definition(self, status):
+        status = str(status or '').strip()
+        if not status:
+            return None
+        try:
+            from mod_loader import load_all_mods
+            for mod in load_all_mods():
+                for item in getattr(mod, 'custom_statuses', []) or []:
+                    if not isinstance(item, dict):
+                        continue
+                    if status in (str(item.get('id', '')).strip(), str(item.get('name', '')).strip(),
+                                  str(item.get('name_cn', '')).strip(), str(item.get('name_en', '')).strip()):
+                        return item
+        except Exception:
+            return None
+        return None
+
+    def _status_keep_when_zero(self, status):
+        definition = self._custom_status_definition(status)
+        if not isinstance(definition, dict):
+            return False
+        return bool(definition.get('keep_when_zero') or definition.get('keep_at_zero') or definition.get('persist_at_zero'))
+
+    def _normalize_status_value(self, ps, status):
+        status = str(status or '').strip()
+        if status in ('poison', '中毒'):
+            ps.poison = max(0, int(ps.poison))
+        elif status in ('burn', 'fire', '灼烧'):
+            ps.fire = max(0, int(ps.fire))
+        elif status in ('vulnus', 'vulnerable', '易伤'):
+            ps.vulnerable = max(0, int(ps.vulnerable))
+        elif status in ('toxic', '淬毒'):
+            ps.toxic = max(0, int(ps.toxic))
+        elif status in ('dodge', '闪避'):
+            ps.dodge = max(0, int(ps.dodge))
+        elif status in ('equip_protection', 'equipment_protection', '装备摧毁保护', '装备保护'):
+            ps.equipment_protection = max(0, int(ps.equipment_protection))
+        elif status in ('邪眼', 'Nazar'):
+            if int(ps.nazar_big_hits) <= 0:
+                ps.nazar_big_hits = 0
+                ps.nazar_active = False
+        elif status:
+            ps.custom_statuses = getattr(ps, 'custom_statuses', {})
+            value = int(ps.custom_statuses.get(status, 0) or 0)
+            if value <= 0 and not self._status_keep_when_zero(status):
+                ps.custom_statuses.pop(status, None)
+            else:
+                ps.custom_statuses[status] = max(0, value)
 
     def _zone_size(self, target_id, zone):
         if target_id < 0:
@@ -4294,9 +4349,18 @@ class GameEngine:
             return any(key in choice for key in ('target_player', 'target_player_id', 'target_id'))
         if effect_type == 'request_confirm' or choice_type == 'confirm':
             return any(key in choice for key in ('confirmed', 'accepted'))
-        if choice_type in ('choose_cards_from_hand', 'choose_same_attacks_from_hand'):
+        if choice_type == 'choose_same_attacks_from_hand':
             ids = choice.get('target_instance_ids')
             return isinstance(ids, list) and bool(ids)
+        if choice_type == 'choose_cards_from_hand':
+            ids = choice.get('target_instance_ids')
+            if isinstance(ids, list) and bool(ids):
+                return True
+            min_count = self._eval_int(0, params.get('min_count', 1), card, 1) if params else 1
+            max_count = self._eval_int(0, params.get('max_count', min_count), card, min_count) if params else 1
+            if min_count <= 1 and max_count <= 1 and choice.get('target_instance_id') is not None:
+                return True
+            return False
         if choice_type in ('choose_card_from_discard',):
             return choice.get('target_def_id') is not None or choice.get('target_instance_id') is not None
         if choice_type in (
@@ -5230,24 +5294,28 @@ class GameEngine:
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].poison += amount
+        self._normalize_status_value(self.players[target_id], 'poison')
         self.log_msg(log or f"{self.pn(target_id)}+{amount}中毒")
 
     def _atomic_apply_burn(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].fire += amount
+        self._normalize_status_value(self.players[target_id], 'fire')
         self.log_msg(log or f"{self.pn(target_id)}+{amount}灼烧")
 
     def _atomic_apply_toxic(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].toxic += amount
+        self._normalize_status_value(self.players[target_id], 'toxic')
         self.log_msg(log or f"{self.pn(target_id)}+{amount}淬毒")
 
     def _atomic_apply_vulnerable(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].vulnerable += amount
+        self._normalize_status_value(self.players[target_id], 'vulnerable')
         self.log_msg(log or f"{self.pn(target_id)}+{amount}易伤")
 
     def _atomic_status_add_named(self, player_id, card, params, log, choice, context):
@@ -5270,6 +5338,10 @@ class GameEngine:
             elif status in ('邪眼', 'Nazar'):
                 ps.nazar_active = True
                 ps.nazar_big_hits = max(0, ps.nazar_big_hits + amount)
+            elif status:
+                ps.custom_statuses = getattr(ps, 'custom_statuses', {})
+                ps.custom_statuses[status] = int(ps.custom_statuses.get(status, 0) or 0) + amount
+            self._normalize_status_value(ps, status)
 
     def _atomic_status_remove_named(self, player_id, card, params, log, choice, context):
         status = str(params.get('status', '')).strip()
@@ -5290,6 +5362,9 @@ class GameEngine:
             elif status in ('邪眼', 'Nazar'):
                 ps.nazar_active = False
                 ps.nazar_big_hits = 0
+            elif status:
+                ps.custom_statuses = getattr(ps, 'custom_statuses', {})
+                ps.custom_statuses.pop(status, None)
 
     def _sync_custom_var_alias(self, ps, name: str):
         try:

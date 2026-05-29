@@ -361,8 +361,116 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: 320px;
+  width: min(420px, calc(100vw - 40px));
   margin-top: 16px;
+}
+
+.account-top-btn {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 2500;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--text-primary);
+  font-weight: 700;
+  font-family: var(--font-main);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.account-popover {
+  position: fixed;
+  top: 52px;
+  left: 14px;
+  z-index: 2501;
+  width: min(320px, calc(100vw - 28px));
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+}
+
+.account-popover.hidden {
+  display: none;
+}
+
+.account-popover-title,
+.account-panel-head {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.account-popover-name,
+.account-current {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.account-popover-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.account-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-card) 88%, var(--bg-primary));
+}
+
+.account-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.account-actions .hidden {
+  display: none;
+}
+
+.account-stats {
+  min-height: 18px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.account-stats.compact {
+  margin-top: 8px;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-light);
 }
 
 .login-utility-row {
@@ -1347,7 +1455,7 @@ body {
   font-family: var(--font-main);
 }
 
-.login-form .form-row input[type="text"] {
+.login-form .form-row input:not([type="checkbox"]) {
   flex: 1;
   padding: 12px 16px;
   font-size: 16px;
@@ -1360,11 +1468,11 @@ body {
   transition: border-color var(--transition-fast);
 }
 
-.login-form .form-row input[type="text"]:focus {
+.login-form .form-row input:not([type="checkbox"]):focus {
   border-color: var(--magic);
 }
 
-.login-form .form-row input[type="text"]::placeholder {
+.login-form .form-row input:not([type="checkbox"])::placeholder {
   color: var(--text-muted);
 }
 
@@ -6056,6 +6164,10 @@ body {
 
   .login-form {
     gap: 10px;
+  }
+
+  .account-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .form-row {

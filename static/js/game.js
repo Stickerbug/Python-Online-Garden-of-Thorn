@@ -918,6 +918,48 @@ Object.assign(I18N.fr, { admin_prefix: 'Admin', login_admin_reserved: 'Ce pseudo
 Object.assign(I18N.pt, { admin_prefix: 'Administrador', login_admin_reserved: 'Este apelido está ocupado pelo administrador' });
 Object.assign(I18N.ru, { admin_prefix: 'Администратор', login_admin_reserved: 'Этот псевдоним занят администратором' });
 Object.assign(I18N.ja, { admin_prefix: '管理者', login_admin_reserved: 'このニックネームは管理者が使用しています' });
+Object.assign(I18N.en, {
+    account: 'Account', account_guest: 'Guest Mode', account_username: 'Username', account_password: 'Password',
+    account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
+    account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
+    account_need_login: 'Log in or register first', account_error: 'Account error', guest_enter: 'Enter as Guest',
+    login_registered_reserved: 'This nickname belongs to a registered account'
+});
+Object.assign(I18N.zh, {
+    account: '账号', account_guest: '游客模式', account_username: '用户名', account_password: '密码',
+    account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
+    account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
+    account_need_login: '请先登录或注册账号', account_error: '账号错误', guest_enter: '游客进入',
+    login_registered_reserved: '此昵称属于已注册账号'
+});
+Object.assign(I18N.fr, {
+    account: 'Compte', account_guest: 'Mode invité', account_username: 'Nom', account_password: 'Mot de passe',
+    account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
+    account_not_logged_in: 'Non connecté', account_logged_in_as: 'Connecté : {0}', account_stats: 'Parties {0} / V {1} / D {2} / N {3}',
+    account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', guest_enter: 'Entrer en invité',
+    login_registered_reserved: 'Ce pseudo appartient à un compte'
+});
+Object.assign(I18N.pt, {
+    account: 'Conta', account_guest: 'Modo convidado', account_username: 'Usuário', account_password: 'Senha',
+    account_login: 'Entrar', account_register: 'Registrar', account_enter: 'Entrar com conta', account_logout: 'Sair',
+    account_not_logged_in: 'Não conectado', account_logged_in_as: 'Conectado: {0}', account_stats: 'Jogos {0} / V {1} / D {2} / E {3}',
+    account_need_login: 'Entre ou registre-se primeiro', account_error: 'Erro da conta', guest_enter: 'Entrar como convidado',
+    login_registered_reserved: 'Este nome pertence a uma conta'
+});
+Object.assign(I18N.ru, {
+    account: 'Аккаунт', account_guest: 'Гость', account_username: 'Имя', account_password: 'Пароль',
+    account_login: 'Войти', account_register: 'Регистрация', account_enter: 'Войти аккаунтом', account_logout: 'Выйти',
+    account_not_logged_in: 'Не выполнен вход', account_logged_in_as: 'Вход: {0}', account_stats: 'Игры {0} / Победы {1} / Поражения {2} / Ничьи {3}',
+    account_need_login: 'Сначала войдите или зарегистрируйтесь', account_error: 'Ошибка аккаунта', guest_enter: 'Войти гостем',
+    login_registered_reserved: 'Это имя принадлежит аккаунту'
+});
+Object.assign(I18N.ja, {
+    account: 'アカウント', account_guest: 'ゲスト', account_username: 'ユーザー名', account_password: 'パスワード',
+    account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
+    account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
+    account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', guest_enter: 'ゲストで入る',
+    login_registered_reserved: 'この名前は登録済みアカウントです'
+});
 Object.assign(I18N.en, { chief_designer_prefix: 'Chief Designer' });
 Object.assign(I18N.zh, { admin_prefix: '\u7ba1\u7406\u5458', login_admin_reserved: '\u6b64\u6635\u79f0\u88ab\u7ba1\u7406\u5458\u5360\u7528' });
 Object.assign(I18N.zh, { chief_designer_prefix: '\u603b\u8bbe\u8ba1\u5e08' });
@@ -1786,12 +1828,14 @@ function translateLoginReason(reason) {
     if (reason === 'Nickname already exists') return UI.login_nickname_exists;
     if (reason === 'Admin nickname reserved') return UI.login_admin_reserved;
     if (reason === '此昵称被管理员占用') return UI.login_admin_reserved;
+    if (reason === 'Registered nickname reserved') return UI.login_registered_reserved;
     return reason;
 }
 let playerId = -1;
 let mySid = '';
 let nickname = '';
 let loginCredential = '';
+let currentAccount = null;
 let socket = null;
 let manualDisconnect = false;
 let CARD_DEFS = {};
@@ -2177,9 +2221,38 @@ function updateStaticText() {
     const btnLobbySettings = $('btn-lobby-settings');
     if (btnLobbySettings) btnLobbySettings.textContent = UI.settings_btn;
     const btnConnect = $('btn-connect');
-    if (btnConnect) btnConnect.textContent = UI.enter_lobby;
+    if (btnConnect) btnConnect.textContent = currentAccount ? UI.enter_lobby : UI.guest_enter;
     const btnSoloTraining = $('btn-solo-training');
     if (btnSoloTraining) btnSoloTraining.textContent = UI.solo_training;
+    const btnAccountTop = $('btn-account-top');
+    if (btnAccountTop) btnAccountTop.textContent = UI.account;
+    const accountTitle = $('account-title');
+    if (accountTitle) accountTitle.textContent = UI.account;
+    const accountPopoverTitle = $('account-popover-title');
+    if (accountPopoverTitle) accountPopoverTitle.textContent = UI.account;
+    const accountUsernameLabel = $('label-account-username');
+    if (accountUsernameLabel) accountUsernameLabel.textContent = UI.account_username;
+    const accountPasswordLabel = $('label-account-password');
+    if (accountPasswordLabel) accountPasswordLabel.textContent = UI.account_password;
+    const accountUsernameInput = $('input-account-username');
+    if (accountUsernameInput) accountUsernameInput.placeholder = UI.account_username;
+    const accountPasswordInput = $('input-account-password');
+    if (accountPasswordInput) accountPasswordInput.placeholder = UI.account_password;
+    const accountLoginBtn = $('btn-account-login');
+    if (accountLoginBtn) accountLoginBtn.textContent = UI.account_login;
+    const accountRegisterBtn = $('btn-account-register');
+    if (accountRegisterBtn) accountRegisterBtn.textContent = UI.account_register;
+    const accountEnterBtn = $('btn-account-enter');
+    if (accountEnterBtn) accountEnterBtn.textContent = UI.account_enter;
+    const accountLogoutBtn = $('btn-account-logout');
+    if (accountLogoutBtn) accountLogoutBtn.textContent = UI.account_logout;
+    const accountPopoverLogout = $('btn-account-popover-logout');
+    if (accountPopoverLogout) accountPopoverLogout.textContent = UI.account_logout;
+    const accountPopoverClose = $('btn-account-popover-close');
+    if (accountPopoverClose) accountPopoverClose.textContent = UI.close;
+    const guestDivider = $('guest-divider-label');
+    if (guestDivider) guestDivider.textContent = UI.account_guest;
+    renderAccountState();
     const noMods = $('settings-no-mods');
     if (noMods) noMods.textContent = UI.no_mod_files;
     const btnSettingsClose = $('btn-settings-close');
@@ -3483,6 +3556,7 @@ function connectSocket(serverUrl) {
         reconnectionAttempts: 5,
         reconnectionDelay: 400,
         reconnectionDelayMax: 1600,
+        withCredentials: true,
     };
     socket = io(url, opts);
 
@@ -3504,7 +3578,13 @@ function connectSocket(serverUrl) {
         debugLog('[client] login ok: sid=', data.sid, 'nickname=', data.nickname);
         mySid = data.sid || '';
         nickname = data.nickname || nickname;
-        if (!data.is_special_player && !data.is_admin_player) loginCredential = nickname;
+        if (data.authenticated) {
+            currentAccount = data.user || currentAccount;
+            loginCredential = '';
+            renderAccountState();
+        } else if (!data.is_special_player && !data.is_admin_player) {
+            loginCredential = nickname;
+        }
         const nickInput = $('input-nickname');
         if (nickInput) nickInput.value = nickname;
         localStorage.setItem('got_nickname', nickname);
@@ -3897,6 +3977,10 @@ function displayWidth(str) {
 }
 
 function onLogin() {
+    if (currentAccount) {
+        onAccountEnter();
+        return;
+    }
     const nick = $('input-nickname').value.trim();
     const err = $('login-error');
     if (!nick) {
@@ -3930,6 +4014,127 @@ function onLogin() {
     if (err) err.textContent = '';
     updateStatus(UI.connecting);
     connectSocket(server);
+}
+
+function setAccountError(message) {
+    const err = $('account-error');
+    if (err) err.textContent = message || '';
+}
+
+function accountStatsText(user) {
+    if (!user) return '';
+    return tf(
+        'account_stats',
+        user.games_played || 0,
+        user.wins || 0,
+        user.losses || 0,
+        user.draws || 0
+    );
+}
+
+function renderAccountState() {
+    const nameText = currentAccount ? tf('account_logged_in_as', currentAccount.username) : UI.account_not_logged_in;
+    const accountCurrent = $('account-current');
+    if (accountCurrent) accountCurrent.textContent = nameText;
+    const popName = $('account-popover-name');
+    if (popName) popName.textContent = nameText;
+    const stats = accountStatsText(currentAccount);
+    const statsEl = $('account-stats');
+    if (statsEl) statsEl.textContent = stats;
+    const popStats = $('account-popover-stats');
+    if (popStats) popStats.textContent = stats;
+    const enterBtn = $('btn-account-enter');
+    if (enterBtn) enterBtn.disabled = !currentAccount;
+    const logoutBtn = $('btn-account-logout');
+    if (logoutBtn) logoutBtn.classList.toggle('hidden', !currentAccount);
+    const popLogout = $('btn-account-popover-logout');
+    if (popLogout) popLogout.disabled = !currentAccount;
+    const btnConnect = $('btn-connect');
+    if (btnConnect) btnConnect.textContent = currentAccount ? UI.enter_lobby : UI.guest_enter;
+}
+
+async function authRequest(path, body) {
+    const res = await fetch(path, {
+        method: body === undefined ? 'GET' : 'POST',
+        headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.success === false) {
+        throw new Error(data.error || UI.account_error);
+    }
+    return data;
+}
+
+async function refreshAuthMe() {
+    try {
+        const data = await authRequest('/api/auth/me');
+        currentAccount = data.authenticated ? data.user : null;
+    } catch (_) {
+        currentAccount = null;
+    }
+    renderAccountState();
+}
+
+async function onAccountLogin() {
+    setAccountError('');
+    const username = ($('input-account-username')?.value || '').trim();
+    const password = $('input-account-password')?.value || '';
+    try {
+        const data = await authRequest('/api/auth/login', { username, password });
+        currentAccount = data.user || null;
+        const passwordInput = $('input-account-password');
+        if (passwordInput) passwordInput.value = '';
+        renderAccountState();
+    } catch (err) {
+        setAccountError(err.message || UI.account_error);
+    }
+}
+
+async function onAccountRegister() {
+    setAccountError('');
+    const username = ($('input-account-username')?.value || '').trim();
+    const password = $('input-account-password')?.value || '';
+    try {
+        const data = await authRequest('/api/auth/register', { username, password });
+        currentAccount = data.user || null;
+        const passwordInput = $('input-account-password');
+        if (passwordInput) passwordInput.value = '';
+        renderAccountState();
+    } catch (err) {
+        setAccountError(err.message || UI.account_error);
+    }
+}
+
+async function onAccountLogout() {
+    try {
+        await authRequest('/api/auth/logout', {});
+    } catch (_) {}
+    currentAccount = null;
+    renderAccountState();
+}
+
+function onAccountEnter() {
+    const err = $('login-error');
+    if (!currentAccount) {
+        setAccountError(UI.account_need_login);
+        return;
+    }
+    nickname = currentAccount.username;
+    loginCredential = '';
+    if (err) err.textContent = '';
+    setAccountError('');
+    updateStatus(UI.connecting);
+    connectSocket(getServerAddress());
+}
+
+function toggleAccountPopover(force) {
+    const pop = $('account-popover');
+    if (!pop) return;
+    const show = typeof force === 'boolean' ? force : pop.classList.contains('hidden');
+    pop.classList.toggle('hidden', !show);
+    if (show) refreshAuthMe();
 }
 
 function getServerAddress() {
@@ -5782,6 +5987,13 @@ function renderStatusTags(containerId, playerData) {
     if (p.bandage_active) tags.push({ name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
     if (p.sponge_active) tags.push({ name: UI.status_sponge, abbr: 'Spg', val: '', fg: '#6C3483', bg: '#F4ECF7' });
     if (p.shovel_active) tags.push({ name: UI.status_shovel, abbr: 'Shv', val: '', fg: '#5D4037', bg: '#EFEBE9' });
+    if (p.custom_statuses && typeof p.custom_statuses === 'object') {
+        Object.entries(p.custom_statuses).forEach(([name, value]) => {
+            const count = Number(value || 0);
+            if (count < 0) return;
+            tags.push({ name, abbr: String(name).slice(0, 3), val: count, fg: '#1F618D', bg: '#EAF2F8' });
+        });
+    }
     const previousSignature = lastStatusSignatures.get(containerId);
     const previousItems = new Set(previousSignature ? previousSignature.split('\u0001') : []);
     const nextItems = [];
@@ -7284,7 +7496,7 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
         const options = attacks.map(a => `${getCardDef(a.def_id) ? getCardName(getCardDef(a.def_id)) : a.def_id}${getCardLayerLabel(a)}`);
         const sel = await simpleChoice(UI.choose_attack_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
         if (sel < 0) return false;
-        return { target_instance_id: attacks[sel].instance_id };
+        return { target_instance_id: attacks[sel].instance_id, target_instance_ids: [attacks[sel].instance_id] };
     } else if (defId === 'Fusion') {
         const attacks = hand.filter(c => {
             const cd = getCardDef(c.def_id);
@@ -8566,9 +8778,29 @@ async function init() {
     await loadSettingsMods();
     await fetchCardDefs({ useCache: true, background: true });
     await fetchOpeningEvents({ useCache: true, background: true });
+    await refreshAuthMe();
     bootLoader.step(UI.init_bindings, 90);
     debugLog('[INIT] card definitions loaded, count=', Object.keys(CARD_DEFS).length);
     $('btn-connect').addEventListener('click', onLogin);
+    if ($('btn-account-login')) $('btn-account-login').addEventListener('click', onAccountLogin);
+    if ($('btn-account-register')) $('btn-account-register').addEventListener('click', onAccountRegister);
+    if ($('btn-account-enter')) $('btn-account-enter').addEventListener('click', onAccountEnter);
+    if ($('btn-account-logout')) $('btn-account-logout').addEventListener('click', onAccountLogout);
+    if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());
+    if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
+    if ($('btn-account-popover-logout')) $('btn-account-popover-logout').addEventListener('click', onAccountLogout);
+    const accountPasswordInput = $('input-account-password');
+    if (accountPasswordInput) {
+        accountPasswordInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') onAccountLogin();
+        });
+    }
+    const accountUsernameInput = $('input-account-username');
+    if (accountUsernameInput) {
+        accountUsernameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') onAccountLogin();
+        });
+    }
     $('btn-solo-training').addEventListener('click', showSoloTraining);
     if ($('btn-card-gallery')) $('btn-card-gallery').addEventListener('click', () => showCardGallery());
     if ($('btn-open-about')) $('btn-open-about').addEventListener('click', openAbout);

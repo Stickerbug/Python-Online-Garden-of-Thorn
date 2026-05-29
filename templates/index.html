@@ -31,6 +31,16 @@
     </div>
   </div>
 </div>
+<button id="btn-account-top" class="account-top-btn">账号</button>
+<div id="account-popover" class="account-popover hidden">
+  <div id="account-popover-title" class="account-popover-title">账号</div>
+  <div id="account-popover-name" class="account-popover-name">未登录</div>
+  <div id="account-popover-stats" class="account-stats compact"></div>
+  <div class="account-popover-actions">
+    <button id="btn-account-popover-logout" class="btn btn-secondary">退出登录</button>
+    <button id="btn-account-popover-close" class="btn btn-primary">关闭</button>
+  </div>
+</div>
 
 <div id="view-login" class="view">
 <div class="login-container">
@@ -38,6 +48,29 @@
 <h2 class="title-sub">荆棘花园</h2>
 <p class="subtitle">局域网联机卡牌对战</p>
 <div class="login-form">
+<div id="account-panel" class="account-panel">
+  <div class="account-panel-head">
+    <span id="account-title">账号</span>
+    <span id="account-current">未登录</span>
+  </div>
+  <div class="form-row">
+    <label id="label-account-username" for="input-account-username">用户名</label>
+    <input type="text" id="input-account-username" maxlength="16" autocomplete="username" placeholder="输入用户名">
+  </div>
+  <div class="form-row">
+    <label id="label-account-password" for="input-account-password">密码</label>
+    <input type="password" id="input-account-password" autocomplete="current-password" placeholder="输入密码">
+  </div>
+  <div class="account-actions">
+    <button id="btn-account-login" class="btn btn-secondary">登录</button>
+    <button id="btn-account-register" class="btn btn-secondary">注册</button>
+    <button id="btn-account-enter" class="btn btn-primary">账号进入</button>
+    <button id="btn-account-logout" class="btn btn-secondary hidden">退出登录</button>
+  </div>
+  <div id="account-stats" class="account-stats"></div>
+  <p id="account-error" class="error-text"></p>
+</div>
+<div class="login-divider"><span id="guest-divider-label">游客模式</span></div>
 <div class="form-row">
 <label for="input-nickname">昵称</label>
 <input type="text" id="input-nickname" maxlength="16" placeholder="输入昵称">
