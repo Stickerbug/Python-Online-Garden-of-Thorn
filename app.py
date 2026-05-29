@@ -40,6 +40,7 @@ from r2_mods import (
     record_r2_failure,
     register_community_mod,
     validate_community_mod_url,
+    fetch_json_from_public_url,
 )
 from db import (
     DB_PATH,
@@ -341,10 +342,25 @@ def admin_match_record(room, result='finished'):
             'community_mod_name': community_mod_name,
             'community_mods': community_mods,
         }
+        if getattr(e, 'game_over', False):
+            replay_actions = getattr(room, '_replay_actions', []) or []
+            if not replay_actions or replay_actions[-1].get('type') != 'game_over':
+                record_room_replay_action(room, 'game_over', None, {
+                    'result': result,
+                    'winner_name': winner_label,
+                    'winner_index': winner_index,
+                })
+        replay_data = room_replay_data(room)
+        community_snapshots = build_community_replay_snapshots(community_mods) if mod_source == 'community' else []
         if DB_AVAILABLE:
             try:
                 match_id = save_match_summary(summary)
-                save_replay_snapshot(match_id, summary, card_defs=CARD_DEFS, game_version=GAME_VERSION)
+                save_replay_snapshot(
+                    match_id,
+                    {**summary, 'replay': replay_data, 'community_mod_snapshots': community_snapshots},
+                    card_defs=CARD_DEFS,
+                    game_version=GAME_VERSION,
+                )
                 if result in ('finished', 'admin_endgame') and getattr(e, 'game_over', False):
                     increment_user_stats(registered_usernames, stats_winners, stats_result)
             except Exception as db_exc:
@@ -409,6 +425,200 @@ def replay_item_visible_to_current_user(item):
     return any(str(name or '').lower() == username for name in (item or {}).get('players', []))
 
 
+REPLAY_MAX_ACTIONS = int(os.environ.get('GTN_REPLAY_MAX_ACTIONS', '1500') or 1500)
+REPLAY_MAX_STATE_BYTES = int(os.environ.get('GTN_REPLAY_MAX_STATE_BYTES', '750000') or 750000)
+
+
+def _replay_strip_private_logs(value):
+    if isinstance(value, dict):
+        result = {}
+        for key, item in value.items():
+            if key in ('log', 'logs', 'battle_log', 'battle_logs'):
+                continue
+            result[key] = _replay_strip_private_logs(item)
+        return result
+    if isinstance(value, list):
+        return [_replay_strip_private_logs(item) for item in value]
+    return value
+
+
+def _replay_json_safe(value):
+    try:
+        return json.loads(json.dumps(value, ensure_ascii=False, default=str))
+    except Exception:
+        return {'unserializable': True, 'repr': repr(value)[:500]}
+
+
+def _replay_round(engine):
+    return int(getattr(engine, 'round_num', 0) or 0)
+
+
+def _replay_elapsed_ms(room):
+    started = getattr(room, '_replay_zero_at', None) or getattr(room, 'created_at', time.time())
+    return max(0, int((time.time() - started) * 1000))
+
+
+def _replay_capture_state(room):
+    engine = getattr(room, 'engine', None)
+    if engine is None:
+        return {}
+    perspectives = []
+    for pidx in range(len(getattr(room, 'player_sids', []) or [])):
+        try:
+            state = engine.get_public_state(pidx)
+            state['your_id'] = pidx
+            state['mode'] = getattr(room, 'mode', '')
+            perspectives.append(_replay_strip_private_logs(state))
+        except Exception as exc:
+            perspectives.append({'error': f'{type(exc).__name__}: {exc}', 'your_id': pidx})
+    snapshot = {
+        'mode': getattr(room, 'mode', ''),
+        'phase': getattr(engine, 'phase', ''),
+        'round_num': _replay_round(engine),
+        'current_player': getattr(engine, 'current_player', None),
+        'game_over': bool(getattr(engine, 'game_over', False)),
+        'winner': getattr(engine, 'winner', None),
+        'winning_team': getattr(engine, 'winning_team', None),
+        'player_names': list(getattr(engine, 'player_names', []) or []),
+        'perspectives': perspectives,
+    }
+    safe = _replay_json_safe(snapshot)
+    try:
+        raw_size = len(json.dumps(safe, ensure_ascii=False, default=str).encode('utf-8'))
+    except Exception:
+        raw_size = 0
+    if raw_size > REPLAY_MAX_STATE_BYTES:
+        return {
+            'truncated': True,
+            'raw_size': raw_size,
+            'mode': snapshot['mode'],
+            'phase': snapshot['phase'],
+            'round_num': snapshot['round_num'],
+            'current_player': snapshot['current_player'],
+            'game_over': snapshot['game_over'],
+            'winner': snapshot['winner'],
+            'winning_team': snapshot['winning_team'],
+            'player_names': snapshot['player_names'],
+        }
+    return safe
+
+
+def reset_room_replay(room):
+    now = time.time()
+    room._replay_zero_at = now
+    room._replay_keyframes = []
+    room._replay_actions = []
+    room._replay_truncated = False
+
+
+def record_room_replay_keyframe(room, label='state'):
+    try:
+        if getattr(room, '_history_recorded', False):
+            return
+        frame = {
+            'i': len(getattr(room, '_replay_keyframes', []) or []),
+            't': _replay_elapsed_ms(room),
+            'label': label,
+            'phase': getattr(room.engine, 'phase', ''),
+            'round': _replay_round(room.engine),
+            'current_player': getattr(room.engine, 'current_player', None),
+            'state': _replay_capture_state(room),
+        }
+        room._replay_keyframes.append(frame)
+    except Exception as exc:
+        admin_event('error', f'replay keyframe failed: {exc}')
+
+
+def ensure_room_replay_keyframe(room):
+    if not getattr(room, '_replay_keyframes', None):
+        record_room_replay_keyframe(room, 'initial')
+
+
+def _replay_payload(payload):
+    if not isinstance(payload, dict):
+        return {}
+    data = {}
+    for key, value in payload.items():
+        if key in ('choice', 'result') and isinstance(value, dict):
+            data[key] = _replay_json_safe(value)
+        else:
+            data[key] = _replay_json_safe(value)
+    return data
+
+
+def record_room_replay_action(room, action_type, actor=None, payload=None):
+    try:
+        if getattr(room, '_history_recorded', False):
+            return
+        ensure_room_replay_keyframe(room)
+        actions = getattr(room, '_replay_actions', None)
+        if actions is None:
+            room._replay_actions = []
+            actions = room._replay_actions
+        if len(actions) >= REPLAY_MAX_ACTIONS:
+            room._replay_truncated = True
+            return
+        action = {
+            'i': len(actions),
+            't': _replay_elapsed_ms(room),
+            'type': action_type,
+            'actor': actor,
+            'phase': getattr(room.engine, 'phase', ''),
+            'round': _replay_round(room.engine),
+            'current_player': getattr(room.engine, 'current_player', None),
+            'payload': _replay_payload(payload or {}),
+            'state': _replay_capture_state(room),
+        }
+        actions.append(action)
+    except Exception as exc:
+        admin_event('error', f'replay action failed: {exc}')
+
+
+def room_replay_data(room):
+    return {
+        'keyframes': getattr(room, '_replay_keyframes', []) or [],
+        'actions': getattr(room, '_replay_actions', []) or [],
+        'truncated': bool(getattr(room, '_replay_truncated', False)),
+        'max_actions': REPLAY_MAX_ACTIONS,
+    }
+
+
+def build_community_replay_snapshots(community_mods):
+    snapshots = []
+    for entry in community_mods or []:
+        if not isinstance(entry, dict):
+            continue
+        sha256 = str(entry.get('sha256') or '').strip()
+        public_url = str(entry.get('public_url') or '').strip()
+        if not sha256 or not public_url:
+            continue
+        try:
+            data = fetch_json_from_public_url(public_url)
+            info = data.get('info') if isinstance(data.get('info'), dict) else {}
+            snapshots.append({
+                'sha256': sha256,
+                'source': 'community',
+                'public_url': public_url,
+                'name': entry.get('name') or info.get('name') or 'Community Mod',
+                'author': info.get('author') or '',
+                'version': info.get('version') or '',
+                'json': data,
+            })
+        except Exception as exc:
+            admin_event('error', f'community mod replay snapshot failed: {exc}', public_url=public_url, sha256=sha256)
+            snapshots.append({
+                'sha256': sha256,
+                'source': 'community',
+                'public_url': public_url,
+                'name': entry.get('name') or 'Community Mod',
+                'author': entry.get('author') or '',
+                'version': entry.get('version') or '',
+                'json': None,
+                'snapshot_error': str(exc),
+            })
+    return snapshots
+
+
 @app.before_request
 def protect_admin_api():
     path = request.path.rstrip('/')
@@ -438,6 +648,7 @@ class GameRoom:
         self._history_recorded = False
         self.created_at = time.time()
         self.started_at = None
+        reset_room_replay(self)
         if mode == '2v2' and len(player_sids) == 4:
             self.team_assignments = [[0, 1], [2, 3]]
 
@@ -1443,6 +1654,7 @@ ADMIN_COMMANDS = {
     'endgame': 'endgame <房间ID> <winner|draw> - 强制结束对局；winner 可用 0/1，2v2 表示队伍',
     'set': 'set <房间ID> <玩家序号> <h|e|m|armor|dodge|poison|burn|toxic|vulnerable> <数值>',
     'givecard': 'givecard <房间ID> <玩家序号> <卡牌ID> [数量] [tags=tag1,tag2] [fusion=层数] [fission=层数] - 向玩家手牌加入卡牌',
+    'delcard': 'delcard <房间ID> <玩家序号> <hand|deck|discard|exile|equipment|all> <卡牌ID|all|#序号|instance=ID> [数量|all] - 删除玩家卡牌',
     'clear': 'clear - 清空终端输出',
 }
 
@@ -1528,6 +1740,95 @@ def make_admin_card_instance(card_id, options):
     card.fusion_multiplier = float(card.fusion_level)
     card.fission_count = max(0, card.fission_level - 1)
     return card
+
+
+ADMIN_CARD_ZONE_ALIASES = {
+    'hand': 'hand', 'h': 'hand', '手牌': 'hand',
+    'deck': 'deck', 'draw': 'deck', 'drawpile': 'deck', 'd': 'deck', '牌堆': 'deck', '抽牌堆': 'deck',
+    'discard': 'discard', 'discardpile': 'discard', 'grave': 'discard', '弃牌': 'discard', '弃牌堆': 'discard',
+    'exile': 'exile', 'banish': 'exile', '放逐': 'exile', '放逐区': 'exile',
+    'equipment': 'equipment', 'equip': 'equipment', 'root': 'equipment', '装备': 'equipment', '装备区': 'equipment',
+    'all': 'all', '*': 'all', '全部': 'all',
+}
+
+
+def normalize_admin_card_zone(token):
+    zone = ADMIN_CARD_ZONE_ALIASES.get(str(token or '').strip().lower())
+    if not zone:
+        raise ValueError('区域必须是 hand/deck/discard/exile/equipment/all')
+    return zone
+
+
+def parse_delcard_selector(token):
+    text = str(token or '').strip()
+    lowered = text.lower()
+    if lowered in ('all', '*', '全部'):
+        return {'type': 'all', 'value': None, 'label': 'all'}
+    if lowered.startswith('#'):
+        return {'type': 'index', 'value': parse_int_token(lowered[1:], 'index'), 'label': text}
+    key, sep, value = text.partition('=')
+    if sep:
+        key = key.lower().strip()
+        value = value.strip()
+        if key in ('instance', 'instance_id', 'id', 'iid', '实例'):
+            return {'type': 'instance', 'value': parse_int_token(value, 'instance_id'), 'label': text}
+        if key in ('index', 'idx', 'i', 'pos', '序号'):
+            return {'type': 'index', 'value': parse_int_token(value, 'index'), 'label': text}
+        if key in ('card', 'card_id', 'def', 'def_id', '卡牌'):
+            card_id = resolve_admin_card_id(value) or value
+            return {'type': 'card', 'value': card_id, 'label': card_id}
+        raise ValueError(f'未知选择器：{key}')
+    if lowered.isdigit():
+        return {'type': 'instance', 'value': parse_int_token(lowered, 'instance_id'), 'label': text}
+    card_id = resolve_admin_card_id(text) or text
+    return {'type': 'card', 'value': card_id, 'label': card_id}
+
+
+def parse_delcard_count(tokens, selector):
+    count = None if selector.get('type') == 'all' else 1
+    for token in tokens:
+        lowered = str(token or '').strip().lower()
+        if lowered in ('all', '*', '全部'):
+            count = None
+            continue
+        key, sep, value = lowered.partition('=')
+        if sep:
+            if key not in ('count', 'n', '数量'):
+                raise ValueError(f'未知参数：{key}')
+            lowered = value
+        count = parse_int_token(lowered, 'count')
+    if count is not None:
+        count = max(1, min(int(count), 500))
+    return count
+
+
+def _admin_zone_items(ps, zone):
+    if zone == 'equipment':
+        return ps.equipment
+    return getattr(ps, zone)
+
+
+def _admin_card_from_item(item):
+    return getattr(item, 'card_instance', item)
+
+
+def _admin_card_label(card):
+    if not card:
+        return '?'
+    cd = CARD_DEFS.get(getattr(card, 'def_id', ''), None)
+    name = cd.name_cn if cd else getattr(card, 'def_id', '?')
+    return f'{name}#{getattr(card, "instance_id", "?")}'
+
+
+def _admin_selector_matches(item, selector):
+    card = _admin_card_from_item(item)
+    if selector['type'] == 'all':
+        return True
+    if selector['type'] == 'instance':
+        return getattr(card, 'instance_id', None) == selector['value']
+    if selector['type'] == 'card':
+        return getattr(card, 'def_id', None) == selector['value']
+    return False
 
 
 def zh_status(value):
@@ -1783,6 +2084,24 @@ def execute_admin_command(line):
                 f"givecard room {room_id} player {pidx} {card_id} x{options['count']} tags={tag_text} fusion={options['fusion']} fission={options['fission']}",
             )
         return {'success': ok, 'output': output}
+    if cmd in ('delcard', 'remcard', 'rmcard', 'deletecard'):
+        if len(parts) < 5:
+            return {'success': False, 'output': command_error(raw, len(raw), '<房间ID> <玩家序号> <区域> <卡牌ID|all|#序号|instance=ID> [数量|all]')}
+        room_id = parse_int_token(parts[1], 'room_id')
+        pidx = parse_int_token(parts[2], 'player_index')
+        try:
+            zone = normalize_admin_card_zone(parts[3])
+            selector = parse_delcard_selector(parts[4])
+            count = parse_delcard_count(parts[5:], selector)
+        except ValueError as exc:
+            return {'success': False, 'output': str(exc)}
+        ok, output = delete_room_player_card(room_id, pidx, zone, selector, count)
+        if ok:
+            admin_event(
+                'admin',
+                f"delcard room {room_id} player {pidx} zone={zone} selector={selector.get('label')} count={count if count is not None else 'all'}",
+            )
+        return {'success': ok, 'output': output}
     return {'success': False, 'output': command_error(raw, 0, '有效指令')}
 
 
@@ -1805,7 +2124,8 @@ def admin_completions(line):
                 values.append(p.get('nickname', ''))
                 values.append(sid)
         return [v for v in values if v and v.lower().startswith(token.lower())][:20]
-    if cmd in ('skip', 'endgame', 'set', 'givecard', 'addcard', 'give', 'roomplayers', 'rplayers', 'rp') and position == 1:
+    card_admin_cmds = ('givecard', 'addcard', 'give', 'delcard', 'remcard', 'rmcard', 'deletecard')
+    if cmd in ('skip', 'endgame', 'set', *card_admin_cmds, 'roomplayers', 'rplayers', 'rp') and position == 1:
         with _lock:
             values = [str(rid) for rid in rooms.keys()]
         return [v for v in values if v.startswith(token)]
@@ -1814,6 +2134,15 @@ def admin_completions(line):
         return [v for v in values if v.lower().startswith(token.lower())][:30]
     if cmd in ('givecard', 'addcard', 'give') and position >= 4:
         values = ['tags=', 'fusion=', 'fission=', 'count=']
+        return [v for v in values if v.lower().startswith(token.lower())]
+    if cmd in ('delcard', 'remcard', 'rmcard', 'deletecard') and position == 3:
+        values = ['hand', 'deck', 'discard', 'exile', 'equipment', 'all']
+        return [v for v in values if v.lower().startswith(token.lower())]
+    if cmd in ('delcard', 'remcard', 'rmcard', 'deletecard') and position == 4:
+        values = ['all', 'instance=', 'index=', '#0'] + sorted(CARD_DEFS.keys())
+        return [v for v in values if v.lower().startswith(token.lower())][:30]
+    if cmd in ('delcard', 'remcard', 'rmcard', 'deletecard') and position >= 5:
+        values = ['all', 'count=']
         return [v for v in values if v.lower().startswith(token.lower())]
     if cmd in ('userpass', 'passwd', 'setpass', 'banuser', 'banaccount', 'unbanuser', 'unbanaccount') and position == 1:
         try:
@@ -1899,6 +2228,62 @@ def give_room_player_card(room_id, pidx, card_id, options):
     detail = f"（{'；'.join(layers)}）" if layers else ''
     card_name = CARD_DEFS[card_id].name_cn if card_id in CARD_DEFS else card_id
     return True, f'已向房间 {room_id} 的玩家 {pidx} 加入 {len(created)} 张 {card_name}{detail}'
+
+
+def delete_room_player_card(room_id, pidx, zone, selector, count):
+    with _lock:
+        if room_id not in rooms:
+            return False, f'不存在房间：{room_id}'
+        room = rooms[room_id]
+        e = room.engine
+        if pidx < 0 or pidx >= len(e.players):
+            return False, f'玩家序号必须在 0-{len(e.players) - 1} 之间'
+        if selector.get('type') == 'index' and zone == 'all':
+            return False, '按序号删除时不能使用 all 区域，请指定 hand/deck/discard/exile/equipment'
+        ps = e.players[pidx]
+        zones = ['hand', 'deck', 'discard', 'exile', 'equipment'] if zone == 'all' else [zone]
+        removed = []
+        remaining_quota = count
+        for zone_name in zones:
+            items = _admin_zone_items(ps, zone_name)
+            if selector.get('type') == 'index':
+                idx = int(selector.get('value'))
+                if idx < 0 or idx >= len(items):
+                    return False, f'{zone_name} 序号必须在 0-{len(items) - 1} 之间'
+                item = items.pop(idx)
+                card = _admin_card_from_item(item)
+                removed.append((zone_name, card))
+                break
+            kept = []
+            for item in items:
+                if _admin_selector_matches(item, selector) and (remaining_quota is None or remaining_quota > 0):
+                    card = _admin_card_from_item(item)
+                    removed.append((zone_name, card))
+                    if remaining_quota is not None:
+                        remaining_quota -= 1
+                    continue
+                kept.append(item)
+            items[:] = kept
+            if remaining_quota == 0:
+                break
+        if not removed:
+            return False, f'未找到要删除的卡：区域={zone} 选择器={selector.get("label")}'
+        record_room_replay_action(room, 'admin_delete_card', None, {
+            'player_id': pidx,
+            'zone': zone,
+            'selector': selector,
+            'count': count if count is not None else 'all',
+            'removed': [
+                {'zone': zone_name, 'def_id': getattr(card, 'def_id', ''), 'instance_id': getattr(card, 'instance_id', None)}
+                for zone_name, card in removed
+            ],
+        })
+        broadcast_game_state(room)
+    grouped = {}
+    for zone_name, card in removed:
+        grouped.setdefault(zone_name, []).append(_admin_card_label(card))
+    detail = '；'.join(f'{zone_name}: {", ".join(labels[:8])}{"" if len(labels) <= 8 else " ..."}' for zone_name, labels in grouped.items())
+    return True, f'已从房间 {room_id} 的玩家 {pidx} 删除 {len(removed)} 张卡。{detail}'
 
 
 def set_room_player_attr(room_id, pidx, key, val):
@@ -2156,6 +2541,7 @@ def start_game(room):
     room.engine.start_game()
     room.started_at = time.time()
     admin_event('game', f'room {room.room_id} started mode={room.mode}')
+    record_room_replay_keyframe(room, 'game_start')
     for sid in room.player_sids:
         if sid in players:
             socketio.emit('game_phase', {'phase': 'playing'}, room=sid)
@@ -2414,6 +2800,10 @@ def reconnect_timeout(room_id, old_sid):
             int(dc_info.get('player_index', -1)),
             dc_info.get('nickname', '?'),
         )
+        record_room_replay_action(room, 'disconnect_timeout', int(dc_info.get('player_index', -1)), {
+            'nickname': dc_info.get('nickname', '?'),
+            'game_over': ended,
+        })
         if room.mode == '2v2':
             if ended:
                 for t in room.reconnect_timers.values():
@@ -3307,6 +3697,7 @@ def on_draft_reroll(data=None):
             engine = room.engine
             success = engine.draft_reroll(pidx)
             if success:
+                record_room_replay_action(room, 'draft_reroll', pidx, {})
                 for pi in range(len(room.player_sids)):
                     send_draft_state(room, pi)
             else:
@@ -3682,6 +4073,7 @@ def on_accept_team_match(data):
                 del teams[s]
         room.engine.player_names = [players[s]['nickname'] for s in all_sids]
         room.engine.start_draft()
+        record_room_replay_keyframe(room, 'draft_start')
         for i, s in enumerate(all_sids):
             send_draft_state(room, i)
         broadcast_lobby()
@@ -3960,6 +4352,7 @@ def on_accept_invite(data):
         if room.mode == 'urf':
             room.engine.start_game()
             room.started_at = time.time()
+            record_room_replay_keyframe(room, 'game_start')
             admin_event('game', f'room {room_id} started mode={room.mode}')
             print("[server] debug")
             for psid in room.player_sids:
@@ -3967,6 +4360,7 @@ def on_accept_invite(data):
             broadcast_game_state(room)
         else:
             room.engine.start_draft()
+            record_room_replay_keyframe(room, 'draft_start')
             print("[server] debug")
             for pidx in range(len(room.player_sids)):
                 psid = room.player_sids[pidx]
@@ -4091,6 +4485,7 @@ def on_draft_pick(data):
                 engine._generate_draft_options_for_player(pidx)
             success = engine.draft_pick(pidx, def_id)
         if success:
+            record_room_replay_action(room, 'draft_pick', pidx, {'def_id': def_id})
             for pi in range(len(room.player_sids)):
                 send_draft_state(room, pi)
             if engine.phase == 'event_select':
@@ -4123,6 +4518,10 @@ def on_select_opening_event(data):
         if success:
             if sub_choice:
                 engine.opening_event_sub_choices[pidx] = sub_choice
+            record_room_replay_action(room, 'select_opening_event', pidx, {
+                'event_id': event_id,
+                'sub_choice': sub_choice,
+            })
             if engine.both_events_selected():
                 start_game(room)
             else:
@@ -4417,6 +4816,13 @@ def on_play_card(data):
             result = engine.play_card(pidx, card_instance_id, target_player_id=target_player_id, choice=choice)
         else:
             result = engine.play_card(pidx, card_instance_id, choice)
+        if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_choice'):
+            record_room_replay_action(room, 'play_card', pidx, {
+                'card_instance_id': card_instance_id,
+                'target_player_id': target_player_id,
+                'choice': choice,
+                'result': result,
+            })
         if result.get('needs_ally_consent'):
             broadcast_game_state(room)
             target_pidx = result.get('target_player_id')
@@ -4501,6 +4907,7 @@ def on_response(data):
         engine = room.engine
         card_instance_id = data.get('card_instance_id')
         engine.handle_response(pidx, card_instance_id)
+        record_room_replay_action(room, 'response', pidx, {'card_instance_id': card_instance_id})
         broadcast_game_state(room)
 
 
@@ -4523,6 +4930,11 @@ def on_ally_consent_response(data):
             return
         accepted = bool(data.get('accepted')) if data else False
         result = room.engine.handle_ally_consent(pidx, accepted)
+        if result.get('success') or result.get('needs_response') or result.get('needs_choice') or not accepted:
+            record_room_replay_action(room, 'ally_consent_response', pidx, {
+                'accepted': accepted,
+                'result': result,
+            })
         if result.get('needs_response'):
             broadcast_game_state(room)
             played_card = result['card']
@@ -4570,6 +4982,7 @@ def on_resolve_choice(data):
         engine = room.engine
         choice = data.get('choice')
         engine.resolve_choice(pidx, choice)
+        record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice})
         broadcast_game_state(room)
 
 
@@ -4601,6 +5014,12 @@ def on_use_trigger(data):
             result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
         else:
             result = engine.use_trigger(pidx, equipment_instance_id)
+        if result.get('success') or result.get('needs_ally_consent') or result.get('needs_choice') or result.get('needs_response'):
+            record_room_replay_action(room, 'use_trigger', pidx, {
+                'equipment_instance_id': equipment_instance_id,
+                'target_player_id': target_player_id,
+                'result': result,
+            })
         if result.get('needs_ally_consent'):
             broadcast_game_state(room)
             target_pidx = result.get('target_player_id')
@@ -4639,6 +5058,7 @@ def on_urf_replace_card(data):
             return
         result = room.engine.replace_hand_card(pidx, data.get('card_instance_id'))
         if result.get('success'):
+            record_room_replay_action(room, 'urf_replace_card', pidx, {'card_instance_id': data.get('card_instance_id')})
             broadcast_game_state(room)
         else:
             emit('server_error', {'message': result.get('error', 'Operation failed')})
@@ -4662,6 +5082,7 @@ def on_urf_sell_equipment(data):
             return
         result = room.engine.sell_equipment(pidx, data.get('equipment_instance_id'))
         if result.get('success'):
+            record_room_replay_action(room, 'urf_sell_equipment', pidx, {'equipment_instance_id': data.get('equipment_instance_id')})
             broadcast_game_state(room)
         else:
             emit('server_error', {'message': result.get('error', 'Operation failed')})
@@ -4694,6 +5115,8 @@ def on_end_turn(data):
             print("[server] debug")
             result = engine.end_turn(pidx)
             print("[server] debug")
+            if result.get('success'):
+                record_room_replay_action(room, 'end_turn', pidx, {})
             broadcast_game_state(room)
             if not result.get('success'):
                 emit('server_error', {'message': result.get('error', 'Operation failed')})
@@ -4753,6 +5176,7 @@ def on_surrender(data):
                 return
             result = engine.surrender(pidx)
             if result.get('success'):
+                record_room_replay_action(room, 'surrender', pidx, {'result': result})
                 broadcast_game_state(room)
                 for psid in room.player_sids:
                     if psid in players:
@@ -4807,6 +5231,10 @@ def on_surrender_consent_response(data):
                 return
             result = room.engine.surrender(requester_id)
             if result.get('success'):
+                record_room_replay_action(room, 'surrender', requester_id, {
+                    'consented_by': pidx,
+                    'result': result,
+                })
                 if requester_sid and requester_sid in players:
                     socketio.emit('surrender_consent_result', {'accepted': True}, room=requester_sid)
                 emit('surrender_consent_result', {'accepted': True})
@@ -4866,6 +5294,10 @@ def on_rematch(data=None):
                     room.engine = GameEngineInfiniteFire()
                 else:
                     room.engine = GameEngine()
+                room._history_recorded = False
+                room.created_at = time.time()
+                room.started_at = None
+                reset_room_replay(room)
                 if room.player_sids and room.player_sids[0] in players:
                     room.engine.allowed_card_ids = set(players[room.player_sids[0]].get('allowed_card_ids', [])) or None
                 names = []
@@ -4877,12 +5309,15 @@ def on_rematch(data=None):
                 room.engine.player_names = names
                 if room.mode == 'urf':
                     room.engine.start_game()
+                    room.started_at = time.time()
+                    record_room_replay_keyframe(room, 'game_start')
                     for psid in room.player_sids:
                         if psid in players:
                             socketio.emit('game_phase', {'phase': 'playing', 'mode': room.mode}, room=psid)
                     broadcast_game_state(room)
                 else:
                     room.engine.start_draft()
+                    record_room_replay_keyframe(room, 'draft_start')
                     for pidx in range(len(room.player_sids)):
                         psid = room.player_sids[pidx]
                         if psid in players:

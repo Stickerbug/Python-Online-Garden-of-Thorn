@@ -1043,6 +1043,48 @@ Object.assign(I18N.ja, {
     account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
     login_registered_reserved: 'この名前は登録済みアカウントです'
 });
+Object.assign(I18N.en, {
+    account_replays: 'Recent Replays', replay_viewer: 'Replay Viewer', replay_view: 'View',
+    replay_empty: 'No replay in the last 90 days.', replay_loading: 'Loading replays...',
+    replay_load_failed: 'Failed to load replay', replay_prev: 'Prev', replay_play: 'Play',
+    replay_pause: 'Pause', replay_next: 'Next', replay_instant: 'Instant',
+    replay_winner: 'Winner: {0}', replay_round: 'Round {0}', replay_frame_empty: 'No timeline data.'
+});
+Object.assign(I18N.zh, {
+    account_replays: '最近回放', replay_viewer: '回放查看器', replay_view: '查看',
+    replay_empty: '最近90天暂无回放。', replay_loading: '正在读取回放...',
+    replay_load_failed: '回放加载失败', replay_prev: '上一步', replay_play: '播放',
+    replay_pause: '暂停', replay_next: '下一步', replay_instant: '立即',
+    replay_winner: '胜者：{0}', replay_round: '第{0}回合', replay_frame_empty: '暂无时间线数据。'
+});
+Object.assign(I18N.fr, {
+    account_replays: 'Replays récents', replay_viewer: 'Lecteur de replay', replay_view: 'Voir',
+    replay_empty: 'Aucun replay sur 90 jours.', replay_loading: 'Chargement...',
+    replay_load_failed: 'Échec du replay', replay_prev: 'Préc.', replay_play: 'Lire',
+    replay_pause: 'Pause', replay_next: 'Suiv.', replay_instant: 'Instant',
+    replay_winner: 'Vainqueur : {0}', replay_round: 'Tour {0}', replay_frame_empty: 'Aucune timeline.'
+});
+Object.assign(I18N.pt, {
+    account_replays: 'Replays recentes', replay_viewer: 'Visualizador', replay_view: 'Ver',
+    replay_empty: 'Nenhum replay em 90 dias.', replay_loading: 'Carregando...',
+    replay_load_failed: 'Falha ao carregar replay', replay_prev: 'Anterior', replay_play: 'Reproduzir',
+    replay_pause: 'Pausar', replay_next: 'Próximo', replay_instant: 'Instantâneo',
+    replay_winner: 'Vencedor: {0}', replay_round: 'Rodada {0}', replay_frame_empty: 'Sem timeline.'
+});
+Object.assign(I18N.ru, {
+    account_replays: 'Последние повторы', replay_viewer: 'Просмотр повтора', replay_view: 'Открыть',
+    replay_empty: 'Нет повторов за 90 дней.', replay_loading: 'Загрузка...',
+    replay_load_failed: 'Не удалось загрузить повтор', replay_prev: 'Назад', replay_play: 'Пуск',
+    replay_pause: 'Пауза', replay_next: 'Далее', replay_instant: 'Сразу',
+    replay_winner: 'Победитель: {0}', replay_round: 'Раунд {0}', replay_frame_empty: 'Нет timeline.'
+});
+Object.assign(I18N.ja, {
+    account_replays: '最近のリプレイ', replay_viewer: 'リプレイビューア', replay_view: '表示',
+    replay_empty: '90日以内のリプレイはありません。', replay_loading: '読み込み中...',
+    replay_load_failed: 'リプレイ読み込み失敗', replay_prev: '前へ', replay_play: '再生',
+    replay_pause: '一時停止', replay_next: '次へ', replay_instant: '即時',
+    replay_winner: '勝者: {0}', replay_round: 'ラウンド {0}', replay_frame_empty: 'タイムラインなし。'
+});
 Object.assign(I18N.en, { chief_designer_prefix: 'Chief Designer' });
 Object.assign(I18N.zh, { admin_prefix: '\u7ba1\u7406\u5458', login_admin_reserved: '\u6b64\u6635\u79f0\u88ab\u7ba1\u7406\u5458\u5360\u7528' });
 Object.assign(I18N.zh, { chief_designer_prefix: '\u603b\u8bbe\u8ba1\u5e08' });
@@ -1929,6 +1971,11 @@ let nickname = '';
 let loginCredential = '';
 let currentAccount = loadCachedAccount();
 let accountMode = 'login';
+let accountReplayItems = [];
+let accountReplayTimeline = [];
+let accountReplayFrameIndex = 0;
+let accountReplaySpeed = 1;
+let accountReplayTimer = null;
 let socket = null;
 let manualDisconnect = false;
 let latencyPingTimer = null;
@@ -2374,6 +2421,17 @@ function updateStaticText() {
     if (accountChangePasswordBtn) accountChangePasswordBtn.textContent = UI.account_change_password;
     const accountPopoverLogout = $('btn-account-popover-logout');
     if (accountPopoverLogout) accountPopoverLogout.textContent = UI.account_logout;
+    const accountReplaysTitle = $('account-replays-title');
+    if (accountReplaysTitle) accountReplaysTitle.textContent = UI.account_replays;
+    const accountReplaysRefresh = $('btn-account-replays-refresh');
+    if (accountReplaysRefresh) accountReplaysRefresh.textContent = UI.refresh;
+    const accountReplayTitle = $('account-replay-title');
+    if (accountReplayTitle) accountReplayTitle.textContent = UI.replay_viewer;
+    document.querySelectorAll('[data-account-replay-control="prev"]').forEach((btn) => { btn.textContent = UI.replay_prev; });
+    document.querySelectorAll('[data-account-replay-control="play"]').forEach((btn) => { btn.textContent = UI.replay_play; });
+    document.querySelectorAll('[data-account-replay-control="pause"]').forEach((btn) => { btn.textContent = UI.replay_pause; });
+    document.querySelectorAll('[data-account-replay-control="next"]').forEach((btn) => { btn.textContent = UI.replay_next; });
+    document.querySelectorAll('[data-account-replay-speed="instant"]').forEach((btn) => { btn.textContent = UI.replay_instant; });
     const guestDivider = $('guest-divider-label');
     if (guestDivider) guestDivider.textContent = UI.account_guest;
     renderAccountState();
@@ -4211,6 +4269,108 @@ function accountStatsText(user) {
     );
 }
 
+function stopAccountReplayPlayback() {
+    if (accountReplayTimer) {
+        clearTimeout(accountReplayTimer);
+        accountReplayTimer = null;
+    }
+}
+
+function renderAccountReplayList() {
+    const list = $('account-replays-list');
+    if (!list) return;
+    if (!currentAccount) {
+        list.innerHTML = '';
+        return;
+    }
+    if (!accountReplayItems.length) {
+        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.replay_empty)}</div>`;
+        return;
+    }
+    list.innerHTML = accountReplayItems.map((item) => {
+        const players = Array.isArray(item.players) ? item.players.join(' / ') : '';
+        const winner = item.winner_name ? tf('replay_winner', item.winner_name) : '';
+        const round = tf('replay_round', item.round_num || 0);
+        const timeText = formatCommunityTime(item.created_at);
+        const subtitle = [timeText, item.mode || '', round, winner].filter(Boolean).join(' · ');
+        return `
+            <div class="account-replay-item">
+                <div>
+                    <div class="account-replay-main">${escapeHtml(players || item.mode || '-')}</div>
+                    <div class="account-replay-sub">${escapeHtml(subtitle)}</div>
+                </div>
+                <button class="mini-btn" type="button" data-account-replay-view="${escapeHtml(item.id)}">${escapeHtml(UI.replay_view)}</button>
+            </div>
+        `;
+    }).join('');
+}
+
+async function loadAccountReplays() {
+    const list = $('account-replays-list');
+    if (!currentAccount || !list) return;
+    list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.replay_loading)}</div>`;
+    try {
+        const data = await authRequest('/api/replays?limit=8');
+        accountReplayItems = Array.isArray(data.items) ? data.items : [];
+        renderAccountReplayList();
+    } catch (err) {
+        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(`${UI.replay_load_failed}: ${err.message || ''}`)}</div>`;
+    }
+}
+
+function renderAccountReplayFrame() {
+    const frame = accountReplayTimeline[accountReplayFrameIndex] || null;
+    const progress = $('account-replay-progress');
+    if (progress) {
+        progress.max = String(Math.max(0, accountReplayTimeline.length - 1));
+        progress.value = String(accountReplayFrameIndex);
+    }
+    const output = $('account-replay-frame');
+    if (output) output.textContent = frame ? JSON.stringify(frame, null, 2) : UI.replay_frame_empty;
+}
+
+function stepAccountReplay(delta) {
+    if (!accountReplayTimeline.length) return;
+    accountReplayFrameIndex = Math.max(0, Math.min(accountReplayTimeline.length - 1, accountReplayFrameIndex + delta));
+    renderAccountReplayFrame();
+}
+
+function playAccountReplay() {
+    stopAccountReplayPlayback();
+    if (!accountReplayTimeline.length || accountReplayFrameIndex >= accountReplayTimeline.length - 1) return;
+    const current = accountReplayTimeline[accountReplayFrameIndex] || {};
+    const next = accountReplayTimeline[accountReplayFrameIndex + 1] || {};
+    const delay = accountReplaySpeed === 'instant'
+        ? 0
+        : Math.max(80, ((Number(next.t) || 0) - (Number(current.t) || 0)) / Number(accountReplaySpeed || 1));
+    accountReplayTimer = setTimeout(() => {
+        stepAccountReplay(1);
+        playAccountReplay();
+    }, delay);
+}
+
+async function openAccountReplay(replayId) {
+    stopAccountReplayPlayback();
+    const modal = $('account-replay-modal');
+    const output = $('account-replay-frame');
+    if (modal) modal.classList.remove('hidden');
+    if (output) output.textContent = UI.replay_loading;
+    try {
+        const data = await authRequest(`/api/replays/${encodeURIComponent(replayId)}/timeline`);
+        accountReplayTimeline = Array.isArray(data.timeline) ? data.timeline : [];
+        accountReplayFrameIndex = 0;
+        renderAccountReplayFrame();
+    } catch (err) {
+        if (output) output.textContent = `${UI.replay_load_failed}: ${err.message || ''}`;
+    }
+}
+
+function closeAccountReplayModal() {
+    stopAccountReplayPlayback();
+    const modal = $('account-replay-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
 function loadCachedAccount() {
     try {
         const raw = localStorage.getItem('gtn_account_user');
@@ -4249,6 +4409,8 @@ function renderAccountState() {
     const stats = accountStatsText(currentAccount);
     const popStats = $('account-popover-stats');
     if (popStats) popStats.textContent = stats;
+    const replaySection = $('account-replays-section');
+    if (replaySection) replaySection.classList.toggle('hidden', !currentAccount);
     const authForm = $('account-auth-form');
     if (authForm) authForm.classList.toggle('hidden', !!currentAccount);
     const passwordChangeForm = $('account-password-change-form');
@@ -4285,7 +4447,16 @@ function renderAccountMode() {
     if (loginTab) loginTab.classList.toggle('active', !isRegister);
     if (registerTab) registerTab.classList.toggle('active', isRegister);
     const confirmRow = $('account-confirm-row');
-    if (confirmRow) confirmRow.classList.toggle('hidden', !isRegister);
+    const confirmInput = $('input-account-password-confirm');
+    if (confirmRow) {
+        confirmRow.classList.toggle('hidden', !isRegister);
+        confirmRow.hidden = !isRegister;
+        confirmRow.setAttribute('aria-hidden', isRegister ? 'false' : 'true');
+    }
+    if (confirmInput) {
+        confirmInput.disabled = !isRegister;
+        if (!isRegister) confirmInput.value = '';
+    }
     const loginBtn = $('btn-account-login');
     if (loginBtn) loginBtn.classList.toggle('hidden', isRegister || !!currentAccount);
     const registerBtn = $('btn-account-register');
@@ -4329,12 +4500,15 @@ async function onAccountLogin() {
     setAccountError('');
     const username = ($('input-account-username')?.value || '').trim();
     const password = $('input-account-password')?.value || '';
+    const confirmInput = $('input-account-password-confirm');
+    if (confirmInput) confirmInput.value = '';
     try {
         const data = await authRequest('/api/auth/login', { username, password });
         currentAccount = data.user || null;
         accountMode = 'login';
         clearAccountPasswordInputs();
         renderAccountState();
+        loadAccountReplays();
     } catch (err) {
         setAccountError(err.message || UI.account_error);
     }
@@ -4355,6 +4529,7 @@ async function onAccountRegister() {
         accountMode = 'login';
         clearAccountPasswordInputs();
         renderAccountState();
+        loadAccountReplays();
     } catch (err) {
         setAccountError(err.message || UI.account_error);
     }
@@ -4389,6 +4564,9 @@ async function onAccountLogout() {
         await authRequest('/api/auth/logout', {});
     } catch (_) {}
     currentAccount = null;
+    accountReplayItems = [];
+    accountReplayTimeline = [];
+    closeAccountReplayModal();
     accountMode = 'login';
     cacheAccount(null);
     clearAccountPasswordInputs();
@@ -4414,7 +4592,11 @@ function toggleAccountPopover(force) {
     if (!pop) return;
     const show = typeof force === 'boolean' ? force : pop.classList.contains('hidden');
     pop.classList.toggle('hidden', !show);
-    if (show) refreshAuthMe();
+    if (show) {
+        refreshAuthMe().then(() => {
+            if (currentAccount) loadAccountReplays();
+        });
+    }
 }
 
 function getServerAddress() {
@@ -9502,6 +9684,37 @@ async function init() {
     if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());
     if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
     if ($('btn-account-popover-logout')) $('btn-account-popover-logout').addEventListener('click', onAccountLogout);
+    if ($('btn-account-replays-refresh')) $('btn-account-replays-refresh').addEventListener('click', loadAccountReplays);
+    if ($('btn-account-replay-close')) $('btn-account-replay-close').addEventListener('click', closeAccountReplayModal);
+    if ($('account-replay-progress')) {
+        $('account-replay-progress').addEventListener('input', (event) => {
+            stopAccountReplayPlayback();
+            accountReplayFrameIndex = Number(event.target.value) || 0;
+            renderAccountReplayFrame();
+        });
+    }
+    document.querySelectorAll('[data-account-replay-control]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.accountReplayControl;
+            if (action === 'prev') stepAccountReplay(-1);
+            if (action === 'next') stepAccountReplay(1);
+            if (action === 'play') playAccountReplay();
+            if (action === 'pause') stopAccountReplayPlayback();
+        });
+    });
+    document.querySelectorAll('[data-account-replay-speed]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            accountReplaySpeed = btn.dataset.accountReplaySpeed === 'instant' ? 'instant' : Number(btn.dataset.accountReplaySpeed || 1);
+            if (accountReplayTimer) playAccountReplay();
+        });
+    });
+    document.addEventListener('click', (event) => {
+        const replayButton = event.target.closest('[data-account-replay-view]');
+        if (replayButton) {
+            event.preventDefault();
+            openAccountReplay(replayButton.dataset.accountReplayView);
+        }
+    });
     const accountPasswordInput = $('input-account-password');
     if (accountPasswordInput) {
         accountPasswordInput.addEventListener('keydown', (e) => {

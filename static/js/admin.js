@@ -745,7 +745,7 @@ async function openReplayViewer(replayId) {
 function renderReplayFrame() {
   const frame = replayTimeline[replayFrameIndex] || null;
   $('replay-progress').value = String(replayFrameIndex);
-  $('replay-frame').textContent = frame ? JSON.stringify(frame, null, 2) : '暂无时间线数据。当前版本只保存摘要型回放，之后接入逐动作录制后会显示完整状态。';
+  $('replay-frame').textContent = frame ? JSON.stringify(frame, null, 2) : '暂无时间线数据。';
 }
 
 function pauseReplay() {

@@ -75,20 +75,21 @@ def _store_card_snapshot(conn, card_defs, game_version='', git_sha=''):
     return digest
 
 
-def _store_community_mod_blob(conn, summary):
-    if (summary or {}).get('mod_source') != 'community':
-        return ''
-    digest = str(summary.get('mod_hash') or '').strip()
+def _insert_community_mod_blob(conn, *, digest, public_url='', name='', author='', version='', json_data=None, error=''):
+    digest = str(digest or '').strip()
     if not digest:
         return ''
-    data = {
-        'sha256': digest,
-        'source': 'community',
-        'public_url': summary.get('community_mod_url') or '',
-        'name': summary.get('community_mod_name') or '',
-        'captured_as': 'metadata_snapshot',
-    }
-    raw = _json_bytes(data)
+    if json_data is None:
+        json_data = {
+            'sha256': digest,
+            'source': 'community',
+            'public_url': public_url or '',
+            'name': name or '',
+            'captured_as': 'metadata_snapshot',
+        }
+        if error:
+            json_data['snapshot_error'] = str(error)
+    raw = _json_bytes(json_data)
     conn.execute(
         '''
         INSERT OR IGNORE INTO replay_mod_blobs (
@@ -99,10 +100,10 @@ def _store_community_mod_blob(conn, summary):
         (
             digest,
             'community',
-            data['public_url'],
-            data['name'],
-            summary.get('community_mod_author') or '',
-            summary.get('community_mod_version') or '',
+            public_url or '',
+            name or '',
+            author or '',
+            version or '',
             utc_now(),
             len(raw),
             raw,
@@ -111,10 +112,76 @@ def _store_community_mod_blob(conn, summary):
     return digest
 
 
+def _store_community_mod_blobs(conn, summary):
+    if (summary or {}).get('mod_source') != 'community':
+        return []
+    hashes = []
+    snapshots = summary.get('community_mod_snapshots')
+    if isinstance(snapshots, list) and snapshots:
+        for item in snapshots:
+            if not isinstance(item, dict):
+                continue
+            digest = _insert_community_mod_blob(
+                conn,
+                digest=item.get('sha256'),
+                public_url=item.get('public_url') or '',
+                name=item.get('name') or '',
+                author=item.get('author') or '',
+                version=item.get('version') or '',
+                json_data=item.get('json') if item.get('json') is not None else None,
+                error=item.get('snapshot_error') or '',
+            )
+            if digest:
+                hashes.append(digest)
+        if hashes:
+            return hashes
+    entries = summary.get('community_mods') if isinstance(summary.get('community_mods'), list) else []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        digest = _insert_community_mod_blob(
+            conn,
+            digest=entry.get('sha256'),
+            public_url=entry.get('public_url') or '',
+            name=entry.get('name') or '',
+            author=entry.get('author') or '',
+            version=entry.get('version') or '',
+        )
+        if digest:
+            hashes.append(digest)
+    if hashes:
+        return hashes
+    digest = str(summary.get('mod_hash') or '').strip()
+    if not digest:
+        return []
+    stored = _insert_community_mod_blob(
+        conn,
+        digest=digest,
+        public_url=summary.get('community_mod_url') or '',
+        name=summary.get('community_mod_name') or '',
+        author=summary.get('community_mod_author') or '',
+        version=summary.get('community_mod_version') or '',
+    )
+    return [stored] if stored else []
+
+
 def save_replay_snapshot(match_id, summary, *, card_defs=None, game_version='', git_sha=''):
     data = dict(summary or {})
     players = data.get('players') or []
     duration_ms = int((data.get('duration_seconds') or 0) * 1000)
+    replay_data = data.get('replay') if isinstance(data.get('replay'), dict) else {}
+    keyframes = replay_data.get('keyframes') if isinstance(replay_data.get('keyframes'), list) else []
+    actions = replay_data.get('actions') if isinstance(replay_data.get('actions'), list) else []
+    if not keyframes:
+        keyframes = [
+            {
+                'i': 0,
+                't': 0,
+                'phase': 'summary',
+                'round': 0,
+                'state': {'players': players, 'mode': data.get('mode')},
+            }
+        ]
     replay = {
         'version': REPLAY_VERSION,
         'meta': {
@@ -130,21 +197,15 @@ def save_replay_snapshot(match_id, summary, *, card_defs=None, game_version='', 
             'mod_source': data.get('mod_source') or 'official',
             'mod_hash': data.get('mod_hash') or '',
             'community_mod_name': data.get('community_mod_name') or '',
+            'truncated': bool(replay_data.get('truncated')),
+            'max_actions': replay_data.get('max_actions'),
         },
         'rules': {
             'game_version': game_version or '',
             'git_sha': git_sha or '',
         },
-        'keyframes': [
-            {
-                'i': 0,
-                't': 0,
-                'phase': 'summary',
-                'round': 0,
-                'state': {'players': players, 'mode': data.get('mode')},
-            }
-        ],
-        'actions': [],
+        'keyframes': keyframes,
+        'actions': actions,
     }
     raw = _json_bytes(replay)
     compressed = zlib.compress(raw, level=6)
@@ -152,7 +213,7 @@ def save_replay_snapshot(match_id, summary, *, card_defs=None, game_version='', 
     created_at = data.get('ended_at') or utc_now()
     with get_db_connection() as conn:
         card_hash = _store_card_snapshot(conn, card_defs, game_version=game_version, git_sha=git_sha)
-        mod_hash = _store_community_mod_blob(conn, data)
+        mod_hashes = _store_community_mod_blobs(conn, data)
         cur = conn.execute(
             '''
             INSERT INTO match_replays (
@@ -184,7 +245,7 @@ def save_replay_snapshot(match_id, summary, *, card_defs=None, game_version='', 
         deps = []
         if card_hash:
             deps.append(('card_defs', card_hash))
-        if mod_hash:
+        for mod_hash in mod_hashes:
             deps.append(('community_mod', mod_hash))
         for dep_type, dep_hash in deps:
             conn.execute(
@@ -512,6 +573,7 @@ def replay_timeline(replay_id):
                 't': int(frame.get('t') or 0),
                 'phase': frame.get('phase') or 'summary',
                 'round': frame.get('round') or 0,
+                'current_player': frame.get('current_player'),
                 'state': frame.get('state') or {},
                 'log': [],
             })
@@ -520,6 +582,9 @@ def replay_timeline(replay_id):
             timeline.append({
                 'i': len(timeline),
                 't': int(action.get('t') or 0),
+                'phase': action.get('phase') or '',
+                'round': action.get('round') or 0,
+                'current_player': action.get('current_player'),
                 'action': action,
                 'state': action.get('state') or {},
                 'log': [],
