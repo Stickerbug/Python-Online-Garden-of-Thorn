@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Set
 
 
 MOD_FORMAT_VERSION = 1
-EDITOR_SCHEMA = 'got_mod_format_v1'
+EDITOR_SCHEMA = 'gtn_mod_format_v1'
 VALID_EDITOR_TOOLS = {'Garden of Thorn Mod Editor'}
 MAX_MOD_JSON_BYTES = 1024 * 1024
 MAX_CARDS = 300

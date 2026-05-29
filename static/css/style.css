@@ -693,8 +693,7 @@ body {
   display: none;
 }
 
-#settings-official-mods.hidden,
-.settings-community-mods.hidden,
+.settings-mod-section-body.hidden,
 .settings-upload-row.hidden {
   display: none;
 }
@@ -1495,6 +1494,38 @@ body {
   gap: 6px;
 }
 
+.settings-mod-section-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 4px;
+  margin: 4px 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-mod-section-toggle .settings-mod-caret {
+  display: inline-block;
+  width: 14px;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  transition: transform 0.14s ease;
+}
+
+.settings-mod-section-toggle.open .settings-mod-caret {
+  transform: rotate(90deg);
+}
+
+.settings-mod-section-body {
+  margin-bottom: 10px;
+}
+
 .settings-upload-row {
   display: flex;
   flex-wrap: wrap;
@@ -1592,8 +1623,9 @@ body {
 
 .settings-community-card {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   gap: 8px 12px;
+  align-items: center;
   padding: 10px 12px;
 }
 
@@ -1604,6 +1636,12 @@ body {
 
 .community-card-main {
   min-width: 0;
+}
+
+.community-card-check {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--bloom);
 }
 
 .community-card-title {
@@ -1701,8 +1739,12 @@ body {
   .community-current-card,
   .community-upload-card,
   .settings-community-card {
-    grid-template-columns: 1fr;
+    grid-template-columns: auto 1fr;
     align-items: stretch;
+  }
+
+  .settings-community-card .community-card-actions {
+    grid-column: 1 / -1;
   }
 
   .community-current-card {

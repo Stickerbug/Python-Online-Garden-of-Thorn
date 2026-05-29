@@ -5,6 +5,7 @@ import os
 import posixpath
 import secrets
 import time
+from collections import deque
 from datetime import datetime
 from typing import Any, Dict, Optional
 from urllib.parse import quote, urlparse
@@ -28,11 +29,64 @@ MAX_COMMUNITY_MOD_BYTES = 300_000
 MAX_COMMUNITY_CARDS = 120
 MAX_COMMUNITY_EVENTS = 30
 COMMUNITY_INDEX_KEY = 'community/index.json'
+COMMUNITY_TRASH_INDEX_KEY = 'community/trash/index.json'
 COMMUNITY_MOD_CACHE: Dict[str, Any] = {}
+R2_HEALTH = {
+    'index_reads': deque(maxlen=100),
+    'failures': {},
+    'last_error': '',
+    'last_success_at': '',
+    'last_mod_count': None,
+}
 
 
 class R2ConfigError(RuntimeError):
     pass
+
+
+def _record_r2_index_read(duration_ms: float, ok: bool, mod_count: Optional[int] = None, error: str = '') -> None:
+    R2_HEALTH['index_reads'].append({
+        'ts': time.time(),
+        'duration_ms': round(float(duration_ms), 2),
+        'ok': bool(ok),
+    })
+    if ok:
+        R2_HEALTH['last_success_at'] = datetime.utcnow().isoformat(timespec='seconds') + 'Z'
+        R2_HEALTH['last_error'] = ''
+        if mod_count is not None:
+            R2_HEALTH['last_mod_count'] = int(mod_count)
+    elif error:
+        R2_HEALTH['last_error'] = str(error)[:300]
+
+
+def record_r2_failure(kind: str, exc: Any = '') -> None:
+    kind = str(kind or 'unknown')[:40]
+    failures = R2_HEALTH.setdefault('failures', {})
+    failures[kind] = int(failures.get(kind, 0)) + 1
+    if exc:
+        R2_HEALTH['last_error'] = str(exc)[:300]
+
+
+def get_r2_health_snapshot() -> Dict[str, Any]:
+    reads = list(R2_HEALTH.get('index_reads') or [])
+    ok_reads = [item for item in reads if item.get('ok')]
+    errors = [item for item in reads if not item.get('ok')]
+    durations = [item.get('duration_ms') for item in ok_reads if item.get('duration_ms') is not None]
+    avg_ms = round(sum(durations) / len(durations), 2) if durations else None
+    latest = reads[-1] if reads else None
+    return {
+        'configured': bool(_env('R2_PUBLIC_BASE_URL') and _env('R2_BUCKET')),
+        'mod_count': R2_HEALTH.get('last_mod_count'),
+        'index_reads': len(reads),
+        'index_errors': len(errors),
+        'index_avg_ms': avg_ms,
+        'index_latest_ms': latest.get('duration_ms') if latest else None,
+        'index_latest_ok': latest.get('ok') if latest else None,
+        'failures': dict(R2_HEALTH.get('failures') or {}),
+        'upload_failures': sum(int(v) for k, v in dict(R2_HEALTH.get('failures') or {}).items() if 'upload' in k or 'register' in k),
+        'last_error': R2_HEALTH.get('last_error') or '',
+        'last_success_at': R2_HEALTH.get('last_success_at') or '',
+    }
 
 
 def _env(name: str) -> str:
@@ -180,8 +234,45 @@ def fetch_json_from_public_url(url: str, max_bytes: int = MAX_COMMUNITY_MOD_BYTE
 
 
 def get_community_index() -> Dict[str, Any]:
+    start = time.perf_counter()
     try:
         obj = _client().get_object(Bucket=_bucket(), Key=COMMUNITY_INDEX_KEY)
+        raw = obj['Body'].read()
+    except Exception as exc:
+        if ClientError is not None and isinstance(exc, ClientError):
+            code = exc.response.get('Error', {}).get('Code')
+            if code in ('NoSuchKey', '404', 'NotFound'):
+                _record_r2_index_read((time.perf_counter() - start) * 1000, True, 0)
+                return {'mods': []}
+        _record_r2_index_read((time.perf_counter() - start) * 1000, False, error=exc)
+        raise
+    try:
+        data = json.loads(raw.decode('utf-8-sig') or '{}')
+        if not isinstance(data, dict):
+            data = {'mods': []}
+        mods = data.get('mods')
+        if not isinstance(mods, list):
+            data['mods'] = []
+        _record_r2_index_read((time.perf_counter() - start) * 1000, True, len(data.get('mods') or []))
+        return data
+    except Exception as exc:
+        _record_r2_index_read((time.perf_counter() - start) * 1000, False, error=exc)
+        raise
+
+
+def put_community_index(index: Dict[str, Any]) -> None:
+    payload = json.dumps(index if isinstance(index, dict) else {'mods': []}, ensure_ascii=False, indent=2)
+    _client().put_object(
+        Bucket=_bucket(),
+        Key=COMMUNITY_INDEX_KEY,
+        Body=payload.encode('utf-8'),
+        ContentType='application/json; charset=utf-8',
+    )
+
+
+def get_community_trash_index() -> Dict[str, Any]:
+    try:
+        obj = _client().get_object(Bucket=_bucket(), Key=COMMUNITY_TRASH_INDEX_KEY)
         raw = obj['Body'].read()
     except Exception as exc:
         if ClientError is not None and isinstance(exc, ClientError):
@@ -192,17 +283,16 @@ def get_community_index() -> Dict[str, Any]:
     data = json.loads(raw.decode('utf-8-sig') or '{}')
     if not isinstance(data, dict):
         return {'mods': []}
-    mods = data.get('mods')
-    if not isinstance(mods, list):
+    if not isinstance(data.get('mods'), list):
         data['mods'] = []
     return data
 
 
-def put_community_index(index: Dict[str, Any]) -> None:
+def put_community_trash_index(index: Dict[str, Any]) -> None:
     payload = json.dumps(index if isinstance(index, dict) else {'mods': []}, ensure_ascii=False, indent=2)
     _client().put_object(
         Bucket=_bucket(),
-        Key=COMMUNITY_INDEX_KEY,
+        Key=COMMUNITY_TRASH_INDEX_KEY,
         Body=payload.encode('utf-8'),
         ContentType='application/json; charset=utf-8',
     )
@@ -273,6 +363,27 @@ def _delete_object_key(key: str) -> bool:
         return False
 
 
+def _move_object_to_trash(key: str, sha256: str = '') -> Optional[str]:
+    key = str(key or '').strip()
+    if not key:
+        return None
+    safe_name = posixpath.basename(key) or f'{sha256 or secrets.token_hex(8)}.json'
+    stamp = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+    trash_key = f'community/trash/{stamp}-{sha256[:12] or secrets.token_hex(6)}-{safe_name}'
+    try:
+        _client().copy_object(
+            Bucket=_bucket(),
+            CopySource={'Bucket': _bucket(), 'Key': key},
+            Key=trash_key,
+            ContentType='application/json',
+            MetadataDirective='COPY',
+        )
+        _client().delete_object(Bucket=_bucket(), Key=key)
+        return trash_key
+    except Exception:
+        return None
+
+
 def validate_community_mod_url(public_url: str) -> Dict[str, Any]:
     data = fetch_json_from_public_url(public_url)
     stripped = _strip_scripts(data)
@@ -340,7 +451,7 @@ def register_community_mod(public_url: str, key: str, uploader_name: Optional[st
             elif replace_item is not None:
                 mods.remove(replace_item)
                 put_community_index(index)
-                _delete_object_key(replace_item.get('key'))
+                _move_object_to_trash(replace_item.get('key'), replace_sha256)
             item.setdefault('warnings', warnings)
             return {'success': True, 'mod': item, 'duplicate': True, 'warnings': warnings}
     if replace_item is not None:
@@ -353,12 +464,13 @@ def register_community_mod(public_url: str, key: str, uploader_name: Optional[st
     mods.sort(key=lambda item: (str(item.get('uploaded_at', '')), str(item.get('sha256', ''))))
     put_community_index(index)
     if replace_item is not None:
-        _delete_object_key(replace_item.get('key'))
+        _move_object_to_trash(replace_item.get('key'), replace_sha256)
     return {'success': True, 'mod': meta, 'duplicate': False, 'warnings': warnings}
 
 
 def delete_community_mod(sha256: str, uploader_user_id: Optional[int] = None,
-                         uploader_name: Optional[str] = None) -> Dict[str, Any]:
+                         uploader_name: Optional[str] = None,
+                         allow_any: bool = False) -> Dict[str, Any]:
     sha256 = str(sha256 or '').strip().lower()
     if not sha256:
         return {'success': False, 'error': '缺少社区模组 hash'}
@@ -371,17 +483,92 @@ def delete_community_mod(sha256: str, uploader_user_id: Optional[int] = None,
             break
     if target is None:
         return {'success': False, 'error': '社区模组不存在'}
-    if not _community_item_owned_by(target, uploader_user_id, uploader_name):
+    if not allow_any and not _community_item_owned_by(target, uploader_user_id, uploader_name):
         return {'success': False, 'error': '只能删除自己上传的社区模组'}
+    key = str(target.get('key') or '').strip()
+    trash_key = _move_object_to_trash(key, sha256)
+    if key and not trash_key:
+        return {'success': False, 'error': '移动到回收站失败，未删除模组'}
     mods.remove(target)
     put_community_index(index)
-    key = str(target.get('key') or '').strip()
-    deleted_object = _delete_object_key(key)
+    trash_indexed = False
+    if trash_key:
+        try:
+            trash = get_community_trash_index()
+            row = dict(target)
+            row['deleted_at'] = datetime.utcnow().isoformat(timespec='seconds') + 'Z'
+            row['deleted_by'] = str(uploader_name or '')
+            row['original_key'] = key
+            row['trash_key'] = trash_key
+            row['trash_public_url'] = _public_url_for_key(trash_key)
+            trash.setdefault('mods', []).append(row)
+            put_community_trash_index(trash)
+            trash_indexed = True
+        except Exception:
+            trash_indexed = False
     COMMUNITY_MOD_CACHE.pop(sha256, None)
     public_url = str(target.get('public_url') or '').strip()
     if public_url:
         COMMUNITY_MOD_CACHE.pop(public_url, None)
-    return {'success': True, 'mod': target, 'deleted_object': deleted_object}
+    return {
+        'success': True,
+        'mod': target,
+        'trash_key': trash_key,
+        'moved_to_trash': bool(trash_key),
+        'trash_indexed': trash_indexed,
+    }
+
+
+def list_repository_objects(prefix: str = 'community/', max_keys: int = 300) -> Dict[str, Any]:
+    prefix = str(prefix or 'community/').strip()
+    if not prefix.startswith('community/'):
+        prefix = 'community/'
+    max_keys = max(1, min(int(max_keys or 300), 1000))
+    response = _client().list_objects_v2(Bucket=_bucket(), Prefix=prefix, MaxKeys=max_keys)
+    objects = []
+    for item in response.get('Contents', []) or []:
+        key = str(item.get('Key') or '')
+        objects.append({
+            'key': key,
+            'size': int(item.get('Size') or 0),
+            'last_modified': item.get('LastModified').isoformat() if item.get('LastModified') else '',
+            'public_url': _public_url_for_key(key),
+            'is_index': key in (COMMUNITY_INDEX_KEY, COMMUNITY_TRASH_INDEX_KEY),
+            'is_trash': key.startswith('community/trash/'),
+        })
+    trash = {'mods': []}
+    try:
+        trash = get_community_trash_index()
+    except Exception:
+        trash = {'mods': []}
+    return {
+        'objects': objects,
+        'is_truncated': bool(response.get('IsTruncated')),
+        'trash': trash.get('mods', []) if isinstance(trash, dict) and isinstance(trash.get('mods'), list) else [],
+    }
+
+
+def permanently_delete_repository_object(key: str) -> Dict[str, Any]:
+    key = str(key or '').strip()
+    if not key.startswith('community/'):
+        return {'success': False, 'error': '只能删除 community/ 下的对象'}
+    if key in (COMMUNITY_INDEX_KEY, COMMUNITY_TRASH_INDEX_KEY):
+        return {'success': False, 'error': '不能删除社区模组索引'}
+    deleted = _delete_object_key(key)
+    if not deleted:
+        return {'success': False, 'error': '删除失败'}
+    if key.startswith('community/trash/'):
+        try:
+            trash = get_community_trash_index()
+            mods = trash.setdefault('mods', [])
+            trash['mods'] = [
+                item for item in mods
+                if not isinstance(item, dict) or str(item.get('trash_key') or '') != key
+            ]
+            put_community_trash_index(trash)
+        except Exception:
+            pass
+    return {'success': True, 'key': key}
 
 
 def _find_community_index_entry(sha256: str = '', public_url: str = '') -> Optional[Dict[str, Any]]:

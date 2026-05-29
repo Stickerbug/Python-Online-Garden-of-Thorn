@@ -3,7 +3,7 @@
   "editor": {
     "tool": "Garden of Thorn Mod Editor",
     "tool_version": "1",
-    "schema": "got_mod_format_v1"
+    "schema": "gtn_mod_format_v1"
   },
   "info": {
     "name": "Garden of Thorn Vanilla Cards",
@@ -197,7 +197,7 @@
       "count": 5,
       "quality": "Common",
       "description": "因为是一把，所以可以造成多次伤害。",
-      "effect_text": "造成3×4D（4子瓣）",
+      "effect_text": "造成3D×4（4子瓣）",
       "flags": [],
       "effects": [
         {
@@ -248,7 +248,7 @@
       "count": 5,
       "quality": "Common",
       "description": "回旋的翅膀连续两次打击对手。",
-      "effect_text": "造成8×2D（2子瓣）",
+      "effect_text": "造成8D×2（2子瓣）",
       "flags": [],
       "effects": [
         {
@@ -299,7 +299,7 @@
       "count": 5,
       "quality": "Common",
       "description": "轻如鸿毛，却能伤人两次。",
-      "effect_text": "造成2×2D（2子瓣）",
+      "effect_text": "造成2D×2（2子瓣）",
       "flags": [],
       "effects": [
         {

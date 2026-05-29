@@ -3,7 +3,7 @@
   "editor": {
     "tool": "Garden of Thorn Mod Editor",
     "tool_version": "1",
-    "schema": "got_mod_format_v1"
+    "schema": "gtn_mod_format_v1"
   },
   "info": {
     "name": "Troll Cards",

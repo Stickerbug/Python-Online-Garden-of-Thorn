@@ -1396,9 +1396,9 @@ Object.assign(I18N.ja, {
     chat_channel_private_to: 'Private -> {0}',
 });
 
-let currentLang = localStorage.getItem('got_lang') || 'zh';
-let showEnglishCardNames = localStorage.getItem('got_show_english_card_names') !== '0';
-let currentUiStyle = localStorage.getItem('got_ui_style') || 'classic';
+let currentLang = localStorage.getItem('gtn_lang') || 'zh';
+let showEnglishCardNames = localStorage.getItem('gtn_show_english_card_names') !== '0';
+let currentUiStyle = localStorage.getItem('gtn_ui_style') || 'classic';
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || (I18N.zh[key]) || key; }
 function tf(key, ...values) { return t(key).replace(/\{(\d+)\}/g, (_, i) => values[Number(i)] ?? ''); }
 const UI = new Proxy({}, { get: (_, key) => t(key) });
@@ -1588,7 +1588,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'toxic', re: /^(?:\d+层淬毒|\d+\s*(?:Toxic|Toxique|Tóxico|Токсин)|淬毒\d+)/i },
     { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/i },
     { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/i },
-    { cls: 'damage', re: /^(?:\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D/i },
+    { cls: 'damage', re: /^(?:\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/i },
     { cls: 'armor', re: /^[+-]?\d+A/i },
     { cls: 'heal', re: /^\+\d+H/i },
     { cls: 'elixir', re: /^[+-]?\d+E/i },
@@ -1931,6 +1931,7 @@ let currentAccount = loadCachedAccount();
 let accountMode = 'login';
 let socket = null;
 let manualDisconnect = false;
+let latencyPingTimer = null;
 let CARD_DEFS = {};
 let gameState = {};
 let draftState = {};
@@ -2125,7 +2126,7 @@ function gamePrompt(title, options, config = {}) {
 
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('got_theme', theme);
+    localStorage.setItem('gtn_theme', theme);
     const sel = $('settings-theme-select');
     if (sel) sel.value = theme;
 }
@@ -2133,7 +2134,7 @@ function applyTheme(theme) {
 function applyUiStyle(style) {
     currentUiStyle = style === 'minimal' ? 'minimal' : 'classic';
     document.documentElement.setAttribute('data-ui-style', currentUiStyle);
-    localStorage.setItem('got_ui_style', currentUiStyle);
+    localStorage.setItem('gtn_ui_style', currentUiStyle);
     const sel = $('settings-ui-style-select');
     if (sel) sel.value = currentUiStyle;
     updateCompactUiText();
@@ -2177,7 +2178,7 @@ function updateCompactUiText() {
 
 function applyLang(lang) {
     currentLang = lang;
-    localStorage.setItem('got_lang', lang);
+    localStorage.setItem('gtn_lang', lang);
     document.documentElement.setAttribute('lang', lang);
     const sel = $('settings-lang-select');
     if (sel) sel.value = lang;
@@ -2199,7 +2200,7 @@ function updateEnglishNameSettingVisibility() {
 
 function applyShowEnglishCardNames(value) {
     showEnglishCardNames = !!value;
-    localStorage.setItem('got_show_english_card_names', showEnglishCardNames ? '1' : '0');
+    localStorage.setItem('gtn_show_english_card_names', showEnglishCardNames ? '1' : '0');
     updateEnglishNameSettingVisibility();
     refreshVisibleCardDisplays();
 }
@@ -2398,7 +2399,7 @@ function updateStaticText() {
     if (nicknameLabel) nicknameLabel.textContent = UI.nickname;
     const nicknameInput = $('input-nickname');
     if (nicknameInput) nicknameInput.placeholder = UI.nickname_placeholder;
-    if (nicknameInput && !nicknameInput.value) nicknameInput.value = localStorage.getItem('got_nickname') || '';
+    if (nicknameInput && !nicknameInput.value) nicknameInput.value = localStorage.getItem('gtn_nickname') || '';
     const gameChatInput = $('game-chat-input');
     if (gameChatInput) gameChatInput.placeholder = UI.message_placeholder;
     const lobbyChatInput = $('lobby-chat-input');
@@ -2888,7 +2889,7 @@ function openRulesModal({ firstVisit = false } = {}) {
     bindRulesCardLinks(content);
     const close = $('btn-rules-close');
     if (close) close.onclick = () => {
-        localStorage.setItem('got_seen_intro', '1');
+        localStorage.setItem('gtn_seen_intro', '1');
         content.className = 'modal-inner';
         hideModal();
     };
@@ -2899,7 +2900,7 @@ function openRulesModal({ firstVisit = false } = {}) {
         gameAlert(UI.rules_skip_confirm_title, UI.rules_skip_confirm_msg, [
             { text: UI.cancel || '取消', cls: 'btn-secondary', action: () => {} },
             { text: UI.tutorial_skip, cls: 'btn-danger', action: () => {
-                localStorage.setItem('got_seen_intro', '1');
+                localStorage.setItem('gtn_seen_intro', '1');
                 content.className = 'modal-inner';
                 hideModal();
             } }
@@ -3254,7 +3255,7 @@ function getDataCacheKey(kind) {
     const disabled = getDisabledMods().slice().sort().join(',') || 'none';
     const community = getCommunityModSelection();
     const communityKey = community.mod_source === 'community' ? community.community_mod_hash : 'official';
-    return `got_${kind}_cache_${DATA_CACHE_VERSION}_${disabled}_${communityKey}`;
+    return `gtn_${kind}_cache_${DATA_CACHE_VERSION}_${disabled}_${communityKey}`;
 }
 
 function readDataCache(kind) {
@@ -3667,8 +3668,34 @@ function normalizeServerUrl(value) {
     return url.replace(/\/+$/, '');
 }
 
+function stopLatencyMonitor() {
+    if (latencyPingTimer) {
+        clearInterval(latencyPingTimer);
+        latencyPingTimer = null;
+    }
+}
+
+function sendLatencyPing() {
+    if (!socket || !socket.connected || typeof performance === 'undefined') return;
+    try {
+        socket.emit('latency_ping', {
+            t: performance.now(),
+            transport: socket.io && socket.io.engine && socket.io.engine.transport ? socket.io.engine.transport.name : '',
+        });
+    } catch (e) {
+        debugLog('[client] latency ping failed', e);
+    }
+}
+
+function startLatencyMonitor() {
+    stopLatencyMonitor();
+    sendLatencyPing();
+    latencyPingTimer = setInterval(sendLatencyPing, 10000);
+}
+
 function connectSocket(serverUrl) {
     stopLocalSoloRuntime();
+    stopLatencyMonitor();
     if (socket) {
         manualDisconnect = true;
         socket.disconnect();
@@ -3688,6 +3715,7 @@ function connectSocket(serverUrl) {
 
     socket.on('connect', () => {
         debugLog('[client] socket connected, login nickname=', nickname);
+        startLatencyMonitor();
         const preferredMode = localStorage.getItem('preferred_mode') || '1v1';
         socket.emit('login', {
             nickname: loginCredential || nickname,
@@ -3698,12 +3726,22 @@ function connectSocket(serverUrl) {
     });
     socket.on('disconnect', () => {
         debugLog('[client] socket disconnected');
+        stopLatencyMonitor();
         if (manualDisconnect || phase === 'login') {
             manualDisconnect = false;
             return;
         }
         flashStatus(UI.disconnected, 3000, 'error');
         phase = 'connecting';
+    });
+    socket.on('latency_pong', (data = {}) => {
+        if (typeof performance === 'undefined' || data.t == null) return;
+        const rtt = Math.max(0, performance.now() - Number(data.t));
+        if (!Number.isFinite(rtt)) return;
+        socket.emit('latency_report', {
+            rtt_ms: Math.round(rtt * 10) / 10,
+            transport: socket.io && socket.io.engine && socket.io.engine.transport ? socket.io.engine.transport.name : '',
+        });
     });
     socket.on('login_ok', (data) => {
         debugLog('[client] login ok: sid=', data.sid, 'nickname=', data.nickname);
@@ -3718,7 +3756,7 @@ function connectSocket(serverUrl) {
         }
         const nickInput = $('input-nickname');
         if (nickInput) nickInput.value = nickname;
-        localStorage.setItem('got_nickname', nickname);
+        localStorage.setItem('gtn_nickname', nickname);
         if (pendingTutorialStart) {
             pendingTutorialStart = false;
             emitTutorialStart();
@@ -4175,7 +4213,7 @@ function accountStatsText(user) {
 
 function loadCachedAccount() {
     try {
-        const raw = localStorage.getItem('got_account_user');
+        const raw = localStorage.getItem('gtn_account_user');
         if (!raw) return null;
         const user = JSON.parse(raw);
         return user && user.username ? user : null;
@@ -4196,9 +4234,9 @@ function cacheAccount(user) {
                 losses: user.losses || 0,
                 draws: user.draws || 0,
             };
-            localStorage.setItem('got_account_user', JSON.stringify(safeUser));
+            localStorage.setItem('gtn_account_user', JSON.stringify(safeUser));
         } else {
-            localStorage.removeItem('got_account_user');
+            localStorage.removeItem('gtn_account_user');
         }
     } catch (_) {}
 }
@@ -4380,10 +4418,10 @@ function toggleAccountPopover(force) {
 }
 
 function getServerAddress() {
-    const custom = (localStorage.getItem('got_server') || '').trim();
+    const custom = (localStorage.getItem('gtn_server') || '').trim();
     if (!custom) return DEFAULT_SERVER;
     if (LEGACY_DEFAULT_SERVER_KEYS.has(canonicalServerKey(custom))) {
-        localStorage.removeItem('got_server');
+        localStorage.removeItem('gtn_server');
         return DEFAULT_SERVER;
     }
     return custom;
@@ -4599,7 +4637,7 @@ function showSoloTraining() {
 }
 
 function loadSoloDecks(showNotice = true) {
-    const saved = JSON.parse(localStorage.getItem('got_solo_decks') || 'null');
+    const saved = JSON.parse(localStorage.getItem('gtn_solo_decks') || 'null');
     if (saved && Array.isArray(saved.deck0) && Array.isArray(saved.deck1)) {
         const normalizeDeck = (deck) => deck
             .map(entry => typeof entry === 'string'
@@ -4615,13 +4653,13 @@ function loadSoloDecks(showNotice = true) {
 }
 
 function saveSoloDecks() {
-    localStorage.setItem('got_solo_decks', JSON.stringify({ deck0: soloDeckA, deck1: soloDeckB, event0: soloEventA, event1: soloEventB }));
+    localStorage.setItem('gtn_solo_decks', JSON.stringify({ deck0: soloDeckA, deck1: soloDeckB, event0: soloEventA, event1: soloEventB }));
     flashStatus(UI.solo_saved, 1600);
 }
 
 function startTutorial(returnTarget = 'home') {
     tutorialReturnTarget = returnTarget;
-    if (returnTarget === 'home') localStorage.setItem('got_seen_intro', '1');
+    if (returnTarget === 'home') localStorage.setItem('gtn_seen_intro', '1');
     tutorialLastLogTotal = 0;
     tutorialDeckViewed = false;
     tutorialCounterSeen = false;
@@ -4638,10 +4676,10 @@ function startTutorial(returnTarget = 'home') {
     tutorialMode = true;
     hideTutorialOverlay();
     const nickInput = $('input-nickname');
-    const stored = localStorage.getItem('got_nickname') || '';
+    const stored = localStorage.getItem('gtn_nickname') || '';
     nickname = (nickInput && nickInput.value.trim()) || stored || `新手${Math.floor(1000 + Math.random() * 9000)}`;
     if (nickInput && !nickInput.value.trim()) nickInput.value = nickname;
-    localStorage.setItem('got_nickname', nickname);
+    localStorage.setItem('gtn_nickname', nickname);
     updateStatus(UI.tutorial_start);
     const tutorialPayload = { playerNames: [UI.tutorial_player_you || '你', UI.tutorial_player_opponent || '练习对手'] };
     if (startLocalSoloRuntime('tutorial', tutorialPayload)) {
@@ -8687,22 +8725,47 @@ let settingsCommunityMods = [];
 let settingsAllowServerEdit = true;
 let settingsActiveTab = 'appearance';
 let pendingCommunityReplaceHash = '';
+let settingsModSectionOpen = {
+    official: localStorage.getItem('gtn_settings_mod_section_official') !== 'closed',
+    community: localStorage.getItem('gtn_settings_mod_section_community') !== 'closed',
+};
 const VANILLA_MOD_FILENAME = 'VanillaCardsFormatV1.json';
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 
 function getCommunityModSelection() {
-    const source = localStorage.getItem('got_mod_source') === 'community' ? 'community' : 'official';
-    const url = localStorage.getItem('got_community_mod_url') || '';
-    const hash = localStorage.getItem('got_community_mod_hash') || '';
-    const name = localStorage.getItem('got_community_mod_name') || '';
-    if (source !== 'community' || !url || !hash) {
-        return { mod_source: 'official', community_mod_url: '', community_mod_hash: '', community_mod_name: '' };
+    let mods = [];
+    try {
+        const raw = localStorage.getItem('gtn_community_mods');
+        mods = raw ? JSON.parse(raw) : [];
+    } catch {
+        mods = [];
     }
-    return { mod_source: 'community', community_mod_url: url, community_mod_hash: hash, community_mod_name: name };
+    if (!Array.isArray(mods)) mods = [];
+    const clean = [];
+    const seen = new Set();
+    mods.forEach(mod => {
+        if (!mod || typeof mod !== 'object') return;
+        const publicUrl = String(mod.public_url || mod.url || '').trim();
+        const sha256 = String(mod.sha256 || mod.hash || '').trim().toLowerCase();
+        if (!publicUrl || !/^[0-9a-f]{64}$/.test(sha256) || seen.has(sha256)) return;
+        seen.add(sha256);
+        clean.push({ public_url: publicUrl, sha256, name: String(mod.name || '').trim() });
+    });
+    if (!clean.length) {
+        return { mod_source: 'official', community_mods: [], community_mod_url: '', community_mod_hash: '', community_mod_name: '' };
+    }
+    const names = clean.map(mod => mod.name || mod.sha256.slice(0, 8)).join(' / ');
+    return {
+        mod_source: 'community',
+        community_mods: clean,
+        community_mod_url: clean.length === 1 ? clean[0].public_url : '',
+        community_mod_hash: clean.map(mod => mod.sha256).sort().join(','),
+        community_mod_name: names,
+    };
 }
 
 function getSettingsModSourceTab() {
-    return localStorage.getItem('got_mod_source') === 'community' ? 'community' : 'official';
+    return getCommunityModSelection().mod_source;
 }
 
 function getModLoginPayload() {
@@ -8715,8 +8778,7 @@ function buildModQueryString() {
     const community = getCommunityModSelection();
     params.set('mod_source', community.mod_source);
     if (community.mod_source === 'community') {
-        params.set('community_mod_url', community.community_mod_url);
-        params.set('community_mod_hash', community.community_mod_hash);
+        params.set('community_mods', JSON.stringify(community.community_mods));
     }
     return params.toString();
 }
@@ -8730,7 +8792,7 @@ function openSettings(options = {}) {
     loadSettingsMods();
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
-        const custom = localStorage.getItem('got_server') || '';
+        const custom = localStorage.getItem('gtn_server') || '';
         serverInput.value = LEGACY_DEFAULT_SERVER_KEYS.has(canonicalServerKey(custom)) ? '' : custom;
     }
     const serverHint = $('settings-server-hint');
@@ -8825,35 +8887,39 @@ async function loadSettingsMods() {
     renderModSourceControls();
 }
 
+function renderModSectionControls() {
+    ['official', 'community'].forEach(kind => {
+        const toggle = $(`settings-${kind}-toggle`);
+        const body = kind === 'official' ? $('settings-official-mods') : $('settings-community-mods');
+        if (toggle) {
+            toggle.classList.toggle('open', !!settingsModSectionOpen[kind]);
+            toggle.setAttribute('aria-expanded', settingsModSectionOpen[kind] ? 'true' : 'false');
+        }
+        if (body) body.classList.toggle('hidden', !settingsModSectionOpen[kind]);
+    });
+}
+
+function toggleModSection(kind) {
+    if (!Object.prototype.hasOwnProperty.call(settingsModSectionOpen, kind)) return;
+    settingsModSectionOpen[kind] = !settingsModSectionOpen[kind];
+    localStorage.setItem(`gtn_settings_mod_section_${kind}`, settingsModSectionOpen[kind] ? 'open' : 'closed');
+    renderModSourceControls();
+}
+
 function renderModSourceControls() {
-    const source = getSettingsModSourceTab();
-    const officialTab = $('settings-mod-source-official');
-    const communityTab = $('settings-mod-source-community');
     const officialBox = $('settings-official-mods');
     const communityBox = $('settings-community-mods');
     const uploadRow = document.querySelector('#settings-community-mods .settings-upload-row');
-    if (officialTab) {
-        officialTab.classList.toggle('active', source !== 'community');
-        officialTab.setAttribute('aria-pressed', source !== 'community' ? 'true' : 'false');
-    }
-    if (communityTab) {
-        communityTab.classList.toggle('active', source === 'community');
-        communityTab.setAttribute('aria-pressed', source === 'community' ? 'true' : 'false');
-    }
-    if (officialBox) officialBox.classList.toggle('hidden', source === 'community');
-    if (communityBox) communityBox.classList.toggle('hidden', source !== 'community');
-    if (uploadRow) uploadRow.classList.toggle('hidden', source !== 'community');
+    renderModSectionControls();
+    if (officialBox) officialBox.classList.toggle('hidden', !settingsModSectionOpen.official);
+    if (communityBox) communityBox.classList.toggle('hidden', !settingsModSectionOpen.community);
+    if (uploadRow) uploadRow.classList.toggle('hidden', !settingsModSectionOpen.community);
     renderCommunityCurrent();
     updateCommunityUploadState();
 }
 
 function setModSource(source) {
-    localStorage.setItem('got_mod_source', source === 'community' ? 'community' : 'official');
-    if (source !== 'community') {
-        localStorage.removeItem('got_community_mod_url');
-        localStorage.removeItem('got_community_mod_hash');
-        localStorage.removeItem('got_community_mod_name');
-    }
+    if (source !== 'community') localStorage.setItem('gtn_community_mods', '[]');
     renderModSourceControls();
     renderCommunityModList();
 }
@@ -8869,10 +8935,7 @@ function refreshCardsAfterCommunityChange() {
 }
 
 function clearCommunityModSelection() {
-    localStorage.setItem('got_mod_source', 'official');
-    localStorage.removeItem('got_community_mod_url');
-    localStorage.removeItem('got_community_mod_hash');
-    localStorage.removeItem('got_community_mod_name');
+    localStorage.setItem('gtn_community_mods', '[]');
     renderModSourceControls();
     renderCommunityModList();
     refreshCardsAfterCommunityChange();
@@ -8890,28 +8953,57 @@ function communityModTitle(mod, index = 0) {
     return mod.name || `Community Mod ${index + 1}`;
 }
 
+function setSelectedCommunityMods(mods) {
+    const clean = [];
+    const seen = new Set();
+    (Array.isArray(mods) ? mods : []).forEach(mod => {
+        if (!mod || typeof mod !== 'object') return;
+        const publicUrl = String(mod.public_url || mod.url || '').trim();
+        const sha256 = String(mod.sha256 || mod.hash || '').trim().toLowerCase();
+        if (!publicUrl || !/^[0-9a-f]{64}$/.test(sha256) || seen.has(sha256)) return;
+        seen.add(sha256);
+        clean.push({ public_url: publicUrl, sha256, name: String(mod.name || '').trim() });
+    });
+    localStorage.setItem('gtn_community_mods', JSON.stringify(clean));
+}
+
+function toggleCommunityModSelection(mod, enabled) {
+    if (!mod || !mod.sha256 || !mod.public_url) return;
+    const selected = getCommunityModSelection().community_mods || [];
+    const filtered = selected.filter(item => item.sha256 !== mod.sha256);
+    if (enabled) {
+        filtered.push({
+            public_url: mod.public_url || '',
+            sha256: mod.sha256 || '',
+            name: mod.name || '',
+        });
+    }
+    setSelectedCommunityMods(filtered);
+    renderCommunityCurrent();
+    renderCommunityModList();
+    refreshCardsAfterCommunityChange();
+}
+
 function renderCommunityCurrent() {
     const nameEl = $('settings-community-current-name');
     const metaEl = $('settings-community-current-meta');
     const disableBtn = $('btn-community-disable');
     if (!nameEl && !metaEl && !disableBtn) return;
     const selected = getCommunityModSelection();
-    const current = selected.community_mod_hash
-        ? settingsCommunityMods.find(mod => mod.sha256 === selected.community_mod_hash)
-        : null;
-    if (!current && selected.mod_source !== 'community') {
+    const selectedHashes = new Set((selected.community_mods || []).map(mod => mod.sha256));
+    const current = settingsCommunityMods.filter(mod => selectedHashes.has(mod.sha256));
+    if (!current.length && selected.mod_source !== 'community') {
         if (nameEl) nameEl.textContent = UI.community_disabled;
         if (metaEl) metaEl.textContent = '';
         if (disableBtn) disableBtn.disabled = true;
         return;
     }
-    const name = current ? communityModTitle(current) : (selected.community_mod_name || selected.community_mod_hash || UI.community_disabled);
-    const metaParts = [];
-    if (current && current.version) metaParts.push(`v${current.version}`);
-    if (current && current.author) metaParts.push(current.author);
-    if (current && current.uploaded_at) metaParts.push(tf('community_uploaded_at', formatCommunityTime(current.uploaded_at)));
-    if (nameEl) nameEl.textContent = name;
-    if (metaEl) metaEl.textContent = metaParts.join(' · ');
+    if (nameEl) nameEl.textContent = current.length
+        ? current.map((mod, i) => communityModTitle(mod, i)).join(' / ')
+        : (selected.community_mod_name || UI.community_disabled);
+    if (metaEl) metaEl.textContent = current.length
+        ? `${current.length} ${UI.community_mods}`
+        : '';
     if (disableBtn) disableBtn.disabled = false;
 }
 
@@ -8931,6 +9023,10 @@ async function loadSettingsCommunityMods() {
         const resp = await fetch('/api/community-mods');
         const data = await resp.json();
         settingsCommunityMods = Array.isArray(data) ? data : (data.mods || []);
+        const available = new Set(settingsCommunityMods.map(mod => mod.sha256).filter(Boolean));
+        const selected = getCommunityModSelection().community_mods || [];
+        const pruned = selected.filter(mod => available.has(mod.sha256));
+        if (selected.length !== pruned.length) setSelectedCommunityMods(pruned);
         if (statusEl) statusEl.textContent = data && data.error ? data.error : '';
     } catch (e) {
         settingsCommunityMods = [];
@@ -8953,13 +9049,20 @@ function renderCommunityModList() {
         return;
     }
     if (noModsEl) noModsEl.style.display = 'none';
+    const selectedHashes = new Set((selected.community_mods || []).map(mod => mod.sha256));
     settingsCommunityMods.forEach((mod, i) => {
         const item = document.createElement('div');
         item.className = 'settings-community-card';
-        if (selected.community_mod_hash && selected.community_mod_hash === mod.sha256) {
+        const isSelected = selectedHashes.has(mod.sha256);
+        if (isSelected) {
             item.classList.add('community-selected');
         }
-        const isSelected = selected.community_mod_hash === mod.sha256;
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'community-card-check';
+        checkbox.checked = isSelected;
+        checkbox.title = isSelected ? UI.community_selected : UI.community_select;
+        checkbox.onchange = () => toggleCommunityModSelection(mod, checkbox.checked);
         const main = document.createElement('div');
         main.className = 'community-card-main';
         const title = document.createElement('div');
@@ -9001,16 +9104,7 @@ function renderCommunityModList() {
         selectBtn.type = 'button';
         selectBtn.className = 'btn ' + (isSelected ? 'btn-primary' : 'btn-secondary');
         selectBtn.textContent = isSelected ? UI.community_selected : UI.community_select;
-        selectBtn.disabled = isSelected;
-        selectBtn.onclick = () => {
-            localStorage.setItem('got_mod_source', 'community');
-            localStorage.setItem('got_community_mod_url', mod.public_url || '');
-            localStorage.setItem('got_community_mod_hash', mod.sha256 || '');
-            localStorage.setItem('got_community_mod_name', mod.name || '');
-            renderModSourceControls();
-            renderCommunityModList();
-            refreshCardsAfterCommunityChange();
-        };
+        selectBtn.onclick = () => toggleCommunityModSelection(mod, !isSelected);
         actions.appendChild(selectBtn);
         if (mod.can_manage) {
             const updateBtn = document.createElement('button');
@@ -9029,7 +9123,7 @@ function renderCommunityModList() {
             deleteBtn.onclick = () => deleteCommunityMod(mod);
             actions.append(updateBtn, deleteBtn);
         }
-        item.append(main, actions);
+        item.append(checkbox, main, actions);
         listEl.appendChild(item);
     });
     renderCommunityCurrent();
@@ -9049,8 +9143,9 @@ async function deleteCommunityMod(mod) {
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.success) throw new Error(data.error || UI.community_delete_failed);
         const selected = getCommunityModSelection();
-        if (selected.community_mod_hash === mod.sha256) {
-            clearCommunityModSelection();
+        if ((selected.community_mods || []).some(item => item.sha256 === mod.sha256)) {
+            setSelectedCommunityMods((selected.community_mods || []).filter(item => item.sha256 !== mod.sha256));
+            refreshCardsAfterCommunityChange();
         }
         setStatus(UI.community_delete_success);
         await loadSettingsCommunityMods();
@@ -9117,10 +9212,15 @@ async function uploadCommunityModFile(file, options = {}) {
             throw new Error(detail);
         }
         const mod = registered.mod || {};
-        localStorage.setItem('got_mod_source', 'community');
-        localStorage.setItem('got_community_mod_url', mod.public_url || upload.public_url);
-        localStorage.setItem('got_community_mod_hash', mod.sha256 || '');
-        localStorage.setItem('got_community_mod_name', mod.name || info.name || '');
+        const selected = getCommunityModSelection().community_mods || [];
+        setSelectedCommunityMods([
+            ...selected.filter(item => item.sha256 !== replaceHash && item.sha256 !== mod.sha256),
+            {
+                public_url: mod.public_url || upload.public_url,
+                sha256: mod.sha256 || '',
+                name: mod.name || info.name || '',
+            },
+        ]);
         setStatus(tf(replaceHash ? 'community_update_success' : 'community_upload_success', mod.name || info.name || file.name));
         await loadSettingsCommunityMods();
         fetchCardDefs({ useCache: false }).then(() => fetchOpeningEvents({ useCache: false }));
@@ -9131,7 +9231,7 @@ async function uploadCommunityModFile(file, options = {}) {
 
 function getDisabledMods() {
     try {
-        const raw = localStorage.getItem('got_disabled_mods');
+        const raw = localStorage.getItem('gtn_disabled_mods');
         const disabled = raw ? JSON.parse(raw) : getDefaultDisabledMods();
         return coerceValidDisabledMods(disabled).disabled;
     } catch (e) {
@@ -9210,16 +9310,16 @@ function saveDisabledMods() {
         });
         showActionToast(tf('mod_selection_force_vanilla'), 2800, 'error');
     }
-    localStorage.setItem('got_disabled_mods', JSON.stringify(disabled));
+    localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
         const serverValue = serverInput.value.trim();
         const serverKey = canonicalServerKey(serverValue);
         const defaultKey = canonicalServerKey(DEFAULT_SERVER);
         if (!serverValue || serverKey === defaultKey || LEGACY_DEFAULT_SERVER_KEYS.has(serverKey)) {
-            localStorage.removeItem('got_server');
+            localStorage.removeItem('gtn_server');
         } else {
-            localStorage.setItem('got_server', serverValue);
+            localStorage.setItem('gtn_server', serverValue);
         }
     }
     if (socket && socket.connected && phase === 'lobby') {
@@ -9309,10 +9409,10 @@ async function init() {
             e.preventDefault();
         }
     });
-    const savedTheme = localStorage.getItem('got_theme') || 'light';
+    const savedTheme = localStorage.getItem('gtn_theme') || 'light';
     applyTheme(savedTheme);
-    applyUiStyle(localStorage.getItem('got_ui_style') || 'classic');
-    const savedLang = localStorage.getItem('got_lang') || 'zh';
+    applyUiStyle(localStorage.getItem('gtn_ui_style') || 'classic');
+    const savedLang = localStorage.getItem('gtn_lang') || 'zh';
     applyLang(savedLang);
     bootLoader.step(UI.init_theme_lang, 24);
     bootLoader.step(UI.init_fonts, 36);
@@ -9365,7 +9465,7 @@ async function init() {
     $('btn-solo-training').addEventListener('click', showSoloTraining);
     if ($('btn-card-gallery')) $('btn-card-gallery').addEventListener('click', () => showCardGallery());
     if ($('btn-open-about')) $('btn-open-about').addEventListener('click', openAbout);
-    const savedNick = localStorage.getItem('got_nickname') || '';
+    const savedNick = localStorage.getItem('gtn_nickname') || '';
     const nickInput = $('input-nickname');
     if (savedNick && displayWidth(savedNick) <= 16) nickInput.value = savedNick;
     nickInput.removeAttribute('maxlength');
@@ -9385,8 +9485,8 @@ async function init() {
     if ($('settings-tab-appearance')) $('settings-tab-appearance').addEventListener('click', () => setSettingsTab('appearance'));
     if ($('settings-tab-server')) $('settings-tab-server').addEventListener('click', () => setSettingsTab('server'));
     if ($('settings-tab-mods')) $('settings-tab-mods').addEventListener('click', () => setSettingsTab('mods'));
-    if ($('settings-mod-source-official')) $('settings-mod-source-official').addEventListener('click', () => setModSource('official'));
-    if ($('settings-mod-source-community')) $('settings-mod-source-community').addEventListener('click', () => setModSource('community'));
+    if ($('settings-official-toggle')) $('settings-official-toggle').addEventListener('click', () => toggleModSection('official'));
+    if ($('settings-community-toggle')) $('settings-community-toggle').addEventListener('click', () => toggleModSection('community'));
     if ($('btn-community-refresh')) $('btn-community-refresh').addEventListener('click', loadSettingsCommunityMods);
     if ($('btn-community-disable')) $('btn-community-disable').addEventListener('click', clearCommunityModSelection);
     if ($('btn-community-upload')) $('btn-community-upload').addEventListener('click', () => {
@@ -9476,7 +9576,7 @@ async function init() {
     setupFullscreenPrompt();
     bootLoader.done();
     document.getElementById('app').style.visibility = 'visible';
-    if (!localStorage.getItem('got_seen_intro')) {
+    if (!localStorage.getItem('gtn_seen_intro')) {
         setTimeout(() => openRulesModal({ firstVisit: true }), 250);
     }
 }

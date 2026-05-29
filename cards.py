@@ -179,13 +179,13 @@ _reg(CardDef('Stinger', 'Stinger', '刺', 4, 0, 'thorn', 5, 'Common',
              '一击造成大量伤害。', '造成20D', flags={'precision'}))
 
 _reg(CardDef('Sand', 'Sand', '沙子', 2, 0, 'thorn', 5, 'Common',
-             '因为是一把，所以可以造成多次伤害。', '造成3×4D（4子瓣）'))
+             '因为是一把，所以可以造成多次伤害。', '造成3D×4（4子瓣）'))
 
 _reg(CardDef('Wing', 'Wing', '翅膀', 3, 0, 'thorn', 5, 'Common',
-             '回旋的翅膀连续两次打击对手。', '造成8×2D（2子瓣）'))
+             '回旋的翅膀连续两次打击对手。', '造成8D×2（2子瓣）'))
 
 _reg(CardDef('Light', 'Light', '轻', 0, 0, 'thorn', 5, 'Common',
-             '轻如鸿毛，却能伤人两次。', '造成2×2D（2子瓣）'))
+             '轻如鸿毛，却能伤人两次。', '造成2D×2（2子瓣）'))
 
 _reg(CardDef('Fang', 'Fang', '尖牙', 2, 0, 'thorn', 5, 'Common',
              '吸取对手的生命来为你回复。', '造成8D; 造成伤害时+4H'))

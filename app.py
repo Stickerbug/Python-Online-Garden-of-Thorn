@@ -8,6 +8,9 @@ import threading
 import copy
 import shutil
 import shlex
+import hashlib
+import platform
+from functools import wraps
 from collections import deque
 from datetime import datetime, timedelta
 
@@ -30,11 +33,16 @@ from r2_mods import (
     create_presigned_mod_upload,
     delete_community_mod,
     get_community_index,
+    get_r2_health_snapshot,
+    list_repository_objects,
     load_community_mod,
+    permanently_delete_repository_object,
+    record_r2_failure,
     register_community_mod,
     validate_community_mod_url,
 )
 from db import (
+    DB_PATH,
     admin_change_user_password,
     admin_set_user_ban,
     change_user_password,
@@ -181,6 +189,12 @@ ADMIN_EVENTS = deque(maxlen=300)
 MATCH_HISTORY = deque(maxlen=120)
 ADMIN_LOGIN_FAILURES = {}
 AUTH_LOGIN_FAILURES = {}
+_RESOURCE_BREAKDOWN_CACHE = {'ts': 0.0, 'data': None}
+RESOURCE_HISTORY = deque(maxlen=720)
+_RESOURCE_HISTORY_LAST_TS = 0.0
+SOCKET_LATENCY_SAMPLES = deque(maxlen=2000)
+SOCKET_ACTION_SAMPLES = deque(maxlen=2000)
+SOCKET_BROADCAST_SAMPLES = deque(maxlen=1000)
 
 try:
     import psutil
@@ -293,6 +307,7 @@ def admin_match_record(room, result='finished'):
         mod_hash = first_meta.get('community_mod_hash') or first_meta.get('mods_hash') or ''
         community_mod_url = first_meta.get('community_mod_url', '')
         community_mod_name = first_meta.get('community_mod_name', '')
+        community_mods = first_meta.get('community_mods', []) if isinstance(first_meta.get('community_mods', []), list) else []
         history_entry = {
             'time': iso_now(),
             'room_id': room.room_id,
@@ -324,6 +339,7 @@ def admin_match_record(room, result='finished'):
             'mod_hash': mod_hash,
             'community_mod_url': community_mod_url,
             'community_mod_name': community_mod_name,
+            'community_mods': community_mods,
         }
         if DB_AVAILABLE:
             try:
@@ -643,6 +659,49 @@ def _normalize_community_hash(value):
     return text if re.fullmatch(r'[0-9a-f]{64}', text) else ''
 
 
+def _normalize_community_mod_entries(value):
+    if value is None or value == '':
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            value = json.loads(text)
+        except Exception:
+            return []
+    if not isinstance(value, list):
+        return []
+    entries = []
+    seen = set()
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        public_url = str(item.get('public_url') or item.get('url') or '').strip()
+        sha256 = _normalize_community_hash(item.get('sha256') or item.get('hash'))
+        if not public_url or not sha256 or sha256 in seen:
+            continue
+        seen.add(sha256)
+        entries.append({
+            'public_url': public_url,
+            'sha256': sha256,
+            'name': str(item.get('name') or '').strip()[:80],
+        })
+    return entries[:12]
+
+
+def _community_combined_hash(entries):
+    hashes = sorted(str(item.get('sha256') or '').strip().lower() for item in entries if item.get('sha256'))
+    if not hashes:
+        return ''
+    return hashlib.sha256(('|'.join(hashes)).encode('utf-8')).hexdigest()
+
+
+def _community_combined_names(entries):
+    names = [str(item.get('name') or item.get('sha256') or '').strip() for item in entries]
+    return ' / '.join([name for name in names if name])[:240]
+
+
 def _client_ip():
     forwarded = request.headers.get('X-Forwarded-For', '')
     if forwarded:
@@ -676,6 +735,10 @@ def _current_account_identity():
     return user_id, str(username)
 
 
+def _current_account_can_manage_all_community_mods():
+    return str(session.get('username') or '').strip().lower() == ADMIN_PLAYER_DISPLAY_NAME.lower()
+
+
 def _require_account_json():
     user_id, username = _current_account_identity()
     if not user_id:
@@ -685,11 +748,26 @@ def _require_account_json():
 
 def _community_request_fields(data):
     data = data or {}
+    community_mods = _normalize_community_mod_entries(data.get('community_mods'))
+    if not community_mods:
+        legacy_url = str(data.get('community_mod_url') or '').strip()
+        legacy_hash = _normalize_community_hash(data.get('community_mod_hash'))
+        if legacy_url and legacy_hash:
+            community_mods = [{
+                'public_url': legacy_url,
+                'sha256': legacy_hash,
+                'name': str(data.get('community_mod_name') or '').strip()[:80],
+            }]
+    source = normalize_mod_source(data.get('mod_source'))
+    if community_mods:
+        source = 'community'
+    combined_hash = _community_combined_hash(community_mods)
     return {
-        'mod_source': normalize_mod_source(data.get('mod_source')),
-        'community_mod_url': str(data.get('community_mod_url') or '').strip(),
-        'community_mod_hash': _normalize_community_hash(data.get('community_mod_hash')),
-        'community_mod_name': str(data.get('community_mod_name') or '').strip()[:80],
+        'mod_source': source,
+        'community_mods': community_mods,
+        'community_mod_url': community_mods[0]['public_url'] if len(community_mods) == 1 else '',
+        'community_mod_hash': combined_hash,
+        'community_mod_name': _community_combined_names(community_mods),
     }
 
 
@@ -764,14 +842,27 @@ def merge_community_mod_to_card_defs(mod):
 def resolve_community_loadout(data):
     fields = _community_request_fields(data)
     if fields['mod_source'] != 'community':
-        return fields, None
-    if not fields['community_mod_url'] or not fields['community_mod_hash']:
+        return fields, []
+    if not fields['community_mods']:
         raise ValueError('缺少社区模组 URL 或 hash')
-    mod = load_community_mod(fields['community_mod_url'], fields['community_mod_hash'])
-    merge_community_mod_to_card_defs(mod)
-    if not fields['community_mod_name']:
-        fields['community_mod_name'] = mod.info.name if mod.info and mod.info.name else 'Community Mod'
-    return fields, mod
+    reload_mod_card_defs()
+    loaded_mods = []
+    normalized_entries = []
+    for entry in fields['community_mods']:
+        mod = load_community_mod(entry['public_url'], entry['sha256'])
+        merge_community_mod_to_card_defs(mod)
+        name = entry.get('name') or (mod.info.name if mod.info and mod.info.name else 'Community Mod')
+        normalized_entries.append({
+            'public_url': entry['public_url'],
+            'sha256': entry['sha256'],
+            'name': name,
+        })
+        loaded_mods.append(mod)
+    fields['community_mods'] = normalized_entries
+    fields['community_mod_hash'] = _community_combined_hash(normalized_entries)
+    fields['community_mod_url'] = normalized_entries[0]['public_url'] if len(normalized_entries) == 1 else ''
+    fields['community_mod_name'] = _community_combined_names(normalized_entries)
+    return fields, loaded_mods
 
 
 def get_enabled_mod_card_type_counts(disabled_mods=None):
@@ -834,7 +925,7 @@ def get_card_mod_sources(disabled_mods=None):
     return sources
 
 
-def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash=''):
+def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='', community_mods=None):
     mods = load_all_mods()
     disabled = set(normalize_disabled_mods(disabled_mods))
     counts = {card_type: 0 for card_type in REQUIRED_CARD_TYPES}
@@ -860,13 +951,24 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='')
         for card in mod.cards:
             if card.id in CARD_DEFS:
                 allowed_card_ids.add(card.id)
-    if community_mod:
-        label = community_mod.info.name if community_mod.info and community_mod.info.name else 'Community Mod'
+    selected_community_mods = []
+    if community_mods is not None:
+        selected_community_mods = list(community_mods or [])
+    elif community_mod:
+        selected_community_mods = list(community_mod) if isinstance(community_mod, (list, tuple)) else [community_mod]
+    selected_community_mods.sort(key=lambda item: getattr(item, 'community_sha256', '') or '')
+    selected_community_hashes = []
+    for community_item in selected_community_mods:
+        label = community_item.info.name if community_item.info and community_item.info.name else 'Community Mod'
+        selected_hash = getattr(community_item, "community_sha256", "") or ''
+        selected_community_hashes.append(selected_hash)
         active_mods.append(label)
-        _h.update(f'community:{community_hash or getattr(community_mod, "community_sha256", "")}'.encode('utf-8'))
-        for card in community_mod.cards:
+        _h.update(f'community:{selected_hash}'.encode('utf-8'))
+        for card in community_item.cards:
             if card.id in CARD_DEFS:
                 allowed_card_ids.add(card.id)
+    if community_hash and not selected_community_hashes:
+        _h.update(f'community:{community_hash}'.encode('utf-8'))
     return {
         'disabled_mods': disabled,
         'mods_hash': _h.hexdigest(),
@@ -881,8 +983,6 @@ def same_mod_loadout(sids):
         if sid not in players:
             return False
         hashes.append((
-            players[sid].get('mod_source', 'official'),
-            players[sid].get('community_mod_hash', ''),
             players[sid].get('mods_hash'),
         ))
     return len(set(hashes)) <= 1
@@ -976,49 +1076,331 @@ def build_admin_rooms():
     return result
 
 
+def _file_size(path):
+    try:
+        return os.path.getsize(path) if path and os.path.exists(path) else 0
+    except OSError:
+        return 0
+
+
+def _dir_size(path, max_files=25000):
+    total = 0
+    files = 0
+    if not path or not os.path.exists(path):
+        return {'path': path, 'bytes': 0, 'files': 0, 'truncated': False}
+    for root, dirs, filenames in os.walk(path):
+        dirs[:] = [d for d in dirs if d not in {'.git', '__pycache__', 'node_modules', '.venv', 'venv'}]
+        for filename in filenames:
+            try:
+                total += os.path.getsize(os.path.join(root, filename))
+            except OSError:
+                pass
+            files += 1
+            if files >= max_files:
+                return {'path': path, 'bytes': total, 'files': files, 'truncated': True}
+    return {'path': path, 'bytes': total, 'files': files, 'truncated': False}
+
+
+def _db_storage_usage():
+    db_path = DB_PATH
+    files = [
+        {'name': 'sqlite', 'path': db_path, 'bytes': _file_size(db_path)},
+        {'name': 'wal', 'path': f'{db_path}-wal', 'bytes': _file_size(f'{db_path}-wal')},
+        {'name': 'shm', 'path': f'{db_path}-shm', 'bytes': _file_size(f'{db_path}-shm')},
+    ]
+    return {
+        'path': db_path,
+        'bytes': sum(item['bytes'] for item in files),
+        'files': files,
+    }
+
+
+def _resource_breakdown():
+    now = time.time()
+    cached = _RESOURCE_BREAKDOWN_CACHE.get('data')
+    if cached is not None and now - float(_RESOURCE_BREAKDOWN_CACHE.get('ts') or 0) < 30:
+        return cached
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    static_dir = os.path.join(base_dir, 'static')
+    mods_dir = os.path.join(base_dir, 'mods')
+    templates_dir = os.path.join(base_dir, 'templates')
+    logs_dir = os.path.join(base_dir, 'logs')
+    data = {
+        'base_dir': base_dir,
+        'database': _db_storage_usage(),
+        'directories': [
+            {'label': '项目代码目录', **_dir_size(base_dir)},
+            {'label': '静态资源 static', **_dir_size(static_dir)},
+            {'label': '官方模组 mods', **_dir_size(mods_dir)},
+            {'label': '页面模板 templates', **_dir_size(templates_dir)},
+            {'label': '日志目录 logs', **_dir_size(logs_dir)},
+        ],
+    }
+    _RESOURCE_BREAKDOWN_CACHE['ts'] = now
+    _RESOURCE_BREAKDOWN_CACHE['data'] = data
+    return data
+
+
+def _avg(values):
+    values = [float(v) for v in values if v is not None]
+    return round(sum(values) / len(values), 2) if values else None
+
+
+def _p95(values):
+    values = sorted(float(v) for v in values if v is not None)
+    if not values:
+        return None
+    index = min(len(values) - 1, int(len(values) * 0.95))
+    return round(values[index], 2)
+
+
+def _record_resource_sample(metrics):
+    global _RESOURCE_HISTORY_LAST_TS
+    now = time.time()
+    if now - _RESOURCE_HISTORY_LAST_TS < 5:
+        return
+    _RESOURCE_HISTORY_LAST_TS = now
+    system = metrics.get('system', {})
+    process = metrics.get('process', {})
+    disk = metrics.get('disk', {})
+    RESOURCE_HISTORY.append({
+        'ts': now,
+        'time': iso_now(),
+        'cpu': system.get('cpu_percent'),
+        'process_cpu': process.get('cpu_percent'),
+        'memory': system.get('memory_percent'),
+        'process_memory': process.get('memory_rss'),
+        'disk': disk.get('percent'),
+        'online': len(players),
+        'rooms': len(rooms),
+    })
+
+
+def _resource_history_payload():
+    now = time.time()
+    windows = {}
+    for minutes in (5, 15, 60):
+        cutoff = now - minutes * 60
+        windows[f'{minutes}m'] = [item for item in RESOURCE_HISTORY if item.get('ts', 0) >= cutoff]
+    return {
+        'sample_interval_seconds': 5,
+        'windows': windows,
+    }
+
+
+def record_socket_latency(sid, rtt_ms, transport=''):
+    try:
+        value = float(rtt_ms)
+    except (TypeError, ValueError):
+        return
+    if value < 0 or value > 60000:
+        return
+    SOCKET_LATENCY_SAMPLES.append({
+        'ts': time.time(),
+        'sid': str(sid or ''),
+        'nickname': players.get(sid, {}).get('nickname', '') if sid in players else '',
+        'rtt_ms': round(value, 2),
+        'transport': str(transport or '')[:24],
+    })
+
+
+def record_socket_action(event_name, duration_ms, sid='', room_id=None, ok=True):
+    try:
+        value = float(duration_ms)
+    except (TypeError, ValueError):
+        return
+    SOCKET_ACTION_SAMPLES.append({
+        'ts': time.time(),
+        'event': str(event_name or '')[:40],
+        'duration_ms': round(value, 2),
+        'sid': str(sid or ''),
+        'room_id': room_id,
+        'ok': bool(ok),
+    })
+
+
+def record_socket_broadcast(room, duration_ms, recipients=0):
+    try:
+        value = float(duration_ms)
+    except (TypeError, ValueError):
+        return
+    SOCKET_BROADCAST_SAMPLES.append({
+        'ts': time.time(),
+        'room_id': getattr(room, 'room_id', None),
+        'mode': getattr(room, 'mode', ''),
+        'duration_ms': round(value, 2),
+        'recipients': int(recipients or 0),
+    })
+
+
+def _recent_samples(samples, seconds=300):
+    cutoff = time.time() - seconds
+    return [item for item in samples if item.get('ts', 0) >= cutoff]
+
+
+def socket_metrics_payload():
+    latency = _recent_samples(SOCKET_LATENCY_SAMPLES, 300)
+    actions = _recent_samples(SOCKET_ACTION_SAMPLES, 300)
+    broadcasts = _recent_samples(SOCKET_BROADCAST_SAMPLES, 300)
+    action_by_name = {}
+    for item in actions:
+        bucket = action_by_name.setdefault(item.get('event') or '?', [])
+        bucket.append(item.get('duration_ms'))
+    return {
+        'latency': {
+            'count': len(latency),
+            'avg_ms': _avg(item.get('rtt_ms') for item in latency),
+            'p95_ms': _p95(item.get('rtt_ms') for item in latency),
+            'latest_ms': latency[-1].get('rtt_ms') if latency else None,
+            'latest_transport': latency[-1].get('transport') if latency else '',
+        },
+        'actions': {
+            'count': len(actions),
+            'avg_ms': _avg(item.get('duration_ms') for item in actions),
+            'p95_ms': _p95(item.get('duration_ms') for item in actions),
+            'slowest': sorted(actions, key=lambda item: item.get('duration_ms') or 0, reverse=True)[:5],
+            'by_event': {
+                name: {
+                    'count': len(values),
+                    'avg_ms': _avg(values),
+                    'p95_ms': _p95(values),
+                }
+                for name, values in sorted(action_by_name.items())
+            },
+        },
+        'broadcasts': {
+            'count': len(broadcasts),
+            'avg_ms': _avg(item.get('duration_ms') for item in broadcasts),
+            'p95_ms': _p95(item.get('duration_ms') for item in broadcasts),
+            'latest_ms': broadcasts[-1].get('duration_ms') if broadcasts else None,
+        },
+    }
+
+
+def measure_socket_action(event_name):
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            start = time.perf_counter()
+            sid = getattr(request, 'sid', '')
+            ok = True
+            try:
+                return fn(*args, **kwargs)
+            except Exception:
+                ok = False
+                raise
+            finally:
+                room_id = None
+                try:
+                    if sid in players:
+                        room_id = players[sid].get('room_id')
+                except Exception:
+                    room_id = None
+                record_socket_action(event_name, (time.perf_counter() - start) * 1000, sid=sid, room_id=room_id, ok=ok)
+        return wrapper
+    return decorator
+
+
 def get_runtime_metrics():
     uptime = max(0, int(time.time() - SERVER_STARTED_AT))
     root_usage = shutil.disk_usage('/')
+    loadavg = None
+    if hasattr(os, 'getloadavg'):
+        try:
+            loadavg = list(os.getloadavg())
+        except OSError:
+            loadavg = None
     metrics = {
         'time': iso_now(),
         'uptime_seconds': uptime,
+        'server_profile': {
+            'provider': os.environ.get('GTN_SERVER_PROVIDER', 'Aliyun'),
+            'os': platform.platform(),
+            'python': platform.python_version(),
+            'machine': platform.machine(),
+            'cpu_target': os.environ.get('GTN_SERVER_CPU', '2 Core'),
+            'memory_target': os.environ.get('GTN_SERVER_MEMORY', '2G'),
+            'disk_target': os.environ.get('GTN_SERVER_DISK', '40G'),
+        },
         'disk': {
             'path': '/',
             'total': root_usage.total,
             'used': root_usage.used,
             'free': root_usage.free,
             'percent': round(root_usage.used / root_usage.total * 100, 1) if root_usage.total else None,
-            'ephemeral': True,
+            'ephemeral': False,
         },
+        'loadavg': loadavg,
         'process': {
             'pid': os.getpid(),
             'cpu_percent': None,
             'memory_rss': None,
+            'memory_vms': None,
+            'threads': None,
+            'fds': None,
         },
         'system': {
             'cpu_percent': None,
+            'cpu_count': os.cpu_count(),
+            'cpu_count_physical': None,
             'memory_total': None,
             'memory_used': None,
+            'memory_available': None,
             'memory_percent': None,
+            'swap_total': None,
+            'swap_used': None,
+            'swap_percent': None,
         },
+        'network': {
+            'bytes_sent': None,
+            'bytes_recv': None,
+        },
+        'storage_breakdown': _resource_breakdown(),
         'psutil_available': psutil is not None,
     }
     if psutil is not None and _PSUTIL_PROCESS is not None:
         try:
             mem = _PSUTIL_PROCESS.memory_info()
             vm = psutil.virtual_memory()
+            swap = psutil.swap_memory()
+            try:
+                fds = _PSUTIL_PROCESS.num_fds()
+            except Exception:
+                fds = None
+            try:
+                net = psutil.net_io_counters()
+            except Exception:
+                net = None
             metrics['process'].update({
                 'cpu_percent': _PSUTIL_PROCESS.cpu_percent(interval=None),
                 'memory_rss': mem.rss,
+                'memory_vms': getattr(mem, 'vms', None),
+                'threads': _PSUTIL_PROCESS.num_threads(),
+                'fds': fds,
             })
             metrics['system'].update({
                 'cpu_percent': psutil.cpu_percent(interval=None),
+                'cpu_count': psutil.cpu_count(logical=True),
+                'cpu_count_physical': psutil.cpu_count(logical=False),
                 'memory_total': vm.total,
                 'memory_used': vm.used,
+                'memory_available': vm.available,
                 'memory_percent': vm.percent,
+                'swap_total': swap.total,
+                'swap_used': swap.used,
+                'swap_percent': swap.percent,
             })
+            if net is not None:
+                metrics['network'].update({
+                    'bytes_sent': net.bytes_sent,
+                    'bytes_recv': net.bytes_recv,
+                })
         except Exception as exc:
             metrics['metrics_error'] = str(exc)
+    _record_resource_sample(metrics)
+    metrics['resource_history'] = _resource_history_payload()
+    metrics['socket'] = socket_metrics_payload()
+    metrics['r2'] = get_r2_health_snapshot()
     return metrics
 
 
@@ -1189,12 +1571,20 @@ def execute_admin_command(line):
         payload = get_admin_status_payload()
         summary = payload['summary']
         metrics = payload['metrics']
+        socket_metrics = metrics.get('socket', {})
+        r2_metrics = metrics.get('r2', {})
         return {'success': True, 'output': (
             f"在线：{summary['online_players']} | 大厅：{summary['lobby_players']} | "
             f"对局：{summary['rooms']} | 观战：{summary['spectators']}\n"
             f"运行时间：{metrics['uptime_seconds']} 秒 | "
             f"CPU：进程 {metrics['process']['cpu_percent']}% / 系统 {metrics['system']['cpu_percent']}% | "
-            f"进程内存：{metrics['process']['memory_rss']} 字节"
+            f"进程内存：{metrics['process']['memory_rss']} 字节\n"
+            f"Socket RTT均值：{socket_metrics.get('latency', {}).get('avg_ms')} ms | "
+            f"操作p95：{socket_metrics.get('actions', {}).get('p95_ms')} ms | "
+            f"广播p95：{socket_metrics.get('broadcasts', {}).get('p95_ms')} ms\n"
+            f"R2社区模组：{r2_metrics.get('mod_count')} | "
+            f"Index均值：{r2_metrics.get('index_avg_ms')} ms | "
+            f"上传失败：{r2_metrics.get('upload_failures')}"
         )}
     if cmd == 'players':
         with _lock:
@@ -1633,6 +2023,8 @@ def send_event_state(room, pidx):
 
 
 def broadcast_game_state(room):
+    _broadcast_started = time.perf_counter()
+    _broadcast_recipients = 0
     for pidx, sid in enumerate(room.player_sids):
         if sid not in players:
             continue
@@ -1679,7 +2071,10 @@ def broadcast_game_state(room):
             state['your_is_admin_player'] = player_is_admin(sid, room)
             state['your_special'] = player_special_fields(sid, room)
         socketio.emit('state_update', state, room=sid)
+        _broadcast_recipients += 1
     broadcast_spectate_state(room)
+    _broadcast_recipients += len(getattr(room, 'spectators', []) or [])
+    record_socket_broadcast(room, (time.perf_counter() - _broadcast_started) * 1000, _broadcast_recipients)
     if room.engine.game_over and not getattr(room, '_history_recorded', False):
         admin_match_record(room)
         room._history_recorded = True
@@ -2265,6 +2660,36 @@ def admin_storage_vacuum():
         _replay_cleanup_lock.release()
 
 
+@app.route('/api/admin/community-mods/storage')
+def admin_community_mod_storage():
+    try:
+        data = list_repository_objects(
+            prefix=request.args.get('prefix', 'community/'),
+            max_keys=request.args.get('limit', 300),
+        )
+        return jsonify({'success': True, **data})
+    except Exception as exc:
+        admin_event('error', f'community mod storage list failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/admin/community-mods/storage/delete', methods=['POST'])
+def admin_community_mod_storage_delete():
+    data = request.get_json(silent=True) or {}
+    key = str(data.get('key') or '').strip()
+    if not key:
+        return jsonify({'success': False, 'error': '缺少 key'}), 400
+    try:
+        result = permanently_delete_repository_object(key)
+        status = 200 if result.get('success') else 400
+        if result.get('success'):
+            admin_event('admin', f'彻底删除 R2 对象: {key}')
+        return jsonify(result), status
+    except Exception as exc:
+        admin_event('error', f'community mod object delete failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
 @app.route('/api/replays')
 def api_replays():
     if not DB_AVAILABLE:
@@ -2447,25 +2872,17 @@ def api_cards():
     allowed_card_ids = loadout['allowed_card_ids']
     card_mod_sources = get_card_mod_sources(disabled_mods)
     if community_mod:
-        community_name = community_mod.info.name if community_mod.info and community_mod.info.name else 'Community Mod'
-        for card in community_mod.cards:
-            if card.id in CARD_DEFS:
-                existing_source = COMMUNITY_CARD_SOURCES.get(card.id)
-                source_hash = _community_source_hash(existing_source)
-                if source_hash and source_hash != community_fields.get('community_mod_hash', ''):
-                    if isinstance(existing_source, dict):
-                        card_mod_sources[card.id] = {
-                            'filename': source_hash,
-                            'name': existing_source.get('name') or 'Community Mod',
-                            'sort_name': existing_source.get('sort_name') or existing_source.get('name') or 'Community Mod',
-                            'is_vanilla': False,
-                            'is_community': True,
-                        }
-                    continue
-                card_mod_sources[card.id] = {
-                    'filename': community_fields.get('community_mod_hash', ''),
-                    'name': community_name,
-                    'sort_name': community_name,
+        selected_hashes = {
+            str(entry.get('sha256') or '').strip().lower()
+            for entry in community_fields.get('community_mods', [])
+        }
+        for card_id, existing_source in COMMUNITY_CARD_SOURCES.items():
+            source_hash = _community_source_hash(existing_source).lower()
+            if source_hash and source_hash in selected_hashes and isinstance(existing_source, dict):
+                card_mod_sources[card_id] = {
+                    'filename': source_hash,
+                    'name': existing_source.get('name') or 'Community Mod',
+                    'sort_name': existing_source.get('sort_name') or existing_source.get('name') or 'Community Mod',
                     'is_vanilla': False,
                     'is_community': True,
                 }
@@ -2563,6 +2980,8 @@ def api_community_mods():
                 can_manage = True
             elif user_id and not owner_user_id and owner_name.lower() == str(username or '').strip().lower():
                 can_manage = True
+            if _current_account_can_manage_all_community_mods():
+                can_manage = True
             row.pop('uploader_user_id', None)
             row['can_manage'] = can_manage
             visible_mods.append(row)
@@ -2588,6 +3007,7 @@ def api_community_mod_upload_url():
         result = create_presigned_mod_upload(filename)
         return jsonify({'success': True, **result})
     except Exception as exc:
+        record_r2_failure('upload_url', exc)
         admin_event('error', f'create community upload url failed: {exc}')
         return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
 
@@ -2615,9 +3035,12 @@ def api_community_mod_register():
             uploader_user_id=user_id,
             replace_sha256=replace_sha256,
         )
+        if not result.get('success'):
+            record_r2_failure('register_validation', result.get('errors') or result.get('error') or '')
         status = 200 if result.get('success') else 400
         return jsonify(result), status
     except Exception as exc:
+        record_r2_failure('register', exc)
         admin_event('error', f'register community mod failed: {exc}')
         return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
 
@@ -2631,10 +3054,18 @@ def api_community_mod_delete(sha256):
     if _rate_limited(ip, 'community_delete'):
         return _json_error('操作过于频繁，请稍后再试', 429)
     try:
-        result = delete_community_mod(sha256, uploader_user_id=user_id, uploader_name=username)
+        result = delete_community_mod(
+            sha256,
+            uploader_user_id=user_id,
+            uploader_name=username,
+            allow_any=_current_account_can_manage_all_community_mods(),
+        )
+        if not result.get('success'):
+            record_r2_failure('delete', result.get('error', ''))
         status = 200 if result.get('success') else 400
         return jsonify(result), status
     except Exception as exc:
+        record_r2_failure('delete', exc)
         admin_event('error', f'delete community mod failed: {exc}')
         return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
 
@@ -2843,7 +3274,22 @@ def on_connect():
     print("[server] debug")
 
 
+@socketio.on('latency_ping')
+def on_latency_ping(data=None):
+    emit('latency_pong', {
+        't': (data or {}).get('t'),
+        'server_time': int(time.time() * 1000),
+    })
+
+
+@socketio.on('latency_report')
+def on_latency_report(data=None):
+    data = data or {}
+    record_socket_latency(request.sid, data.get('rtt_ms'), data.get('transport', ''))
+
+
 @socketio.on('draft_reroll')
+@measure_socket_action('draft_reroll')
 def on_draft_reroll(data=None):
     sid = request.sid
     try:
@@ -2872,6 +3318,7 @@ def on_draft_reroll(data=None):
 
 
 @socketio.on('login')
+@measure_socket_action('login')
 def on_login(data):
     global _next_room_id
     data = data or {}
@@ -2961,6 +3408,7 @@ def on_login(data):
             'community_mod_url': community_fields.get('community_mod_url', ''),
             'community_mod_hash': community_fields.get('community_mod_hash', ''),
             'community_mod_name': community_fields.get('community_mod_name', ''),
+            'community_mods': community_fields.get('community_mods', []),
         }
         if special_profile:
             players[sid].update(special_public_fields(special_profile))
@@ -3035,6 +3483,7 @@ def on_set_mode(data):
 
 
 @socketio.on('update_mod_settings')
+@measure_socket_action('update_mod_settings')
 def on_update_mod_settings(data):
     sid = request.sid
     data = data or {}
@@ -3072,6 +3521,7 @@ def on_update_mod_settings(data):
         player['community_mod_url'] = community_fields.get('community_mod_url', '')
         player['community_mod_hash'] = community_fields.get('community_mod_hash', '')
         player['community_mod_name'] = community_fields.get('community_mod_name', '')
+        player['community_mods'] = community_fields.get('community_mods', [])
         invites.pop(sid, None)
         for inviter_sid, target_sid in list(invites.items()):
             if target_sid == sid:
@@ -3095,6 +3545,7 @@ def on_update_mod_settings(data):
             'mod_source': player['mod_source'],
             'community_mod_hash': player['community_mod_hash'],
             'community_mod_name': player['community_mod_name'],
+            'community_mods': player.get('community_mods', []),
         })
         broadcast_lobby()
 
@@ -3279,6 +3730,7 @@ def on_disconnect():
                     'is_registered_user': bool(player.get('is_registered_user')),
                     'mod_source': player.get('mod_source', 'official'),
                     'community_mod_hash': player.get('community_mod_hash', ''),
+                    'community_mods': player.get('community_mods', []),
                     'mods_hash': player.get('mods_hash', ''),
                 }
                 room.disconnected_players[sid].update(special_public_fields(player))
@@ -3614,6 +4066,7 @@ def on_chat(data):
 
 
 @socketio.on('draft_pick')
+@measure_socket_action('draft_pick')
 def on_draft_pick(data):
     global _next_room_id
     sid = request.sid
@@ -3647,6 +4100,7 @@ def on_draft_pick(data):
 
 
 @socketio.on('select_opening_event')
+@measure_socket_action('select_opening_event')
 def on_select_opening_event(data):
     sid = request.sid
     with _lock:
@@ -3935,6 +4389,7 @@ def on_solo_pause(data=None):
 
 
 @socketio.on('play_card')
+@measure_socket_action('play_card')
 def on_play_card(data):
     sid = request.sid
     with _lock:
@@ -4029,6 +4484,7 @@ def on_play_card(data):
 
 
 @socketio.on('response')
+@measure_socket_action('response')
 def on_response(data):
     sid = request.sid
     with _lock:
@@ -4049,6 +4505,7 @@ def on_response(data):
 
 
 @socketio.on('ally_consent_response')
+@measure_socket_action('ally_consent_response')
 def on_ally_consent_response(data):
     sid = request.sid
     with _lock:
@@ -4096,6 +4553,7 @@ def on_ally_consent_response(data):
 
 
 @socketio.on('resolve_choice')
+@measure_socket_action('resolve_choice')
 def on_resolve_choice(data):
     sid = request.sid
     with _lock:
@@ -4116,6 +4574,7 @@ def on_resolve_choice(data):
 
 
 @socketio.on('use_trigger')
+@measure_socket_action('use_trigger')
 def on_use_trigger(data):
     sid = request.sid
     with _lock:
@@ -4163,6 +4622,7 @@ def on_use_trigger(data):
 
 
 @socketio.on('urf_replace_card')
+@measure_socket_action('urf_replace_card')
 def on_urf_replace_card(data):
     sid = request.sid
     with _lock:
@@ -4185,6 +4645,7 @@ def on_urf_replace_card(data):
 
 
 @socketio.on('urf_sell_equipment')
+@measure_socket_action('urf_sell_equipment')
 def on_urf_sell_equipment(data):
     sid = request.sid
     with _lock:
@@ -4207,6 +4668,7 @@ def on_urf_sell_equipment(data):
 
 
 @socketio.on('end_turn')
+@measure_socket_action('end_turn')
 def on_end_turn(data):
     sid = request.sid
     print("[server] debug")
@@ -4243,6 +4705,7 @@ def on_end_turn(data):
 
 
 @socketio.on('surrender')
+@measure_socket_action('surrender')
 def on_surrender(data):
     sid = request.sid
     try:
@@ -4304,6 +4767,7 @@ def on_surrender(data):
 
 
 @socketio.on('surrender_consent_response')
+@measure_socket_action('surrender_consent_response')
 def on_surrender_consent_response(data):
     sid = request.sid
     try:
@@ -4363,6 +4827,7 @@ def on_surrender_consent_response(data):
 
 
 @socketio.on('rematch')
+@measure_socket_action('rematch')
 def on_rematch(data=None):
     sid = request.sid
     try:

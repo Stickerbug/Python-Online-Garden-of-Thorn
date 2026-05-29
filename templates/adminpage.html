@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 管理台</title>
-<link rel="stylesheet" href="/static/css/admin.css?v=6">
+<link rel="stylesheet" href="/static/css/admin.css?v=8">
 </head>
 <body class="admin-body">
 <div id="admin-login" class="admin-login">
@@ -44,16 +44,17 @@
       <article class="metric-card">
         <span>CPU</span>
         <strong id="metric-cpu">-</strong>
-        <small id="metric-cpu-sub">进程占用 / 系统已用</small>
+        <small id="metric-cpu-sub">系统占用 / 进程占用</small>
       </article>
       <article class="metric-card">
         <span>内存</span>
         <strong id="metric-memory">-</strong>
-        <small id="metric-memory-sub">进程常驻内存 / 系统已用</small>
+        <small id="metric-memory-sub">系统已用 / 进程占用</small>
       </article>
       <article class="metric-card">
-        <span>临时磁盘</span>
+        <span>系统盘</span>
         <strong id="metric-disk">-</strong>
+        <small id="metric-disk-sub">40G 云盘</small>
       </article>
       <article class="metric-card">
         <span>运行时间</span>
@@ -71,6 +72,22 @@
         <small id="metric-history-sub">历史记录</small>
       </article>
     </div>
+
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>服务器资源</h2>
+        <span id="server-profile-label">Aliyun Ubuntu</span>
+      </div>
+      <div id="server-resource-grid" class="server-resource-grid"></div>
+    </section>
+
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>资源曲线</h2>
+        <span>内存环形采样，不写硬盘</span>
+      </div>
+      <div id="resource-history-grid" class="resource-history-grid"></div>
+    </section>
 
     <div class="admin-tools-row">
       <input id="broadcast-input" type="text" maxlength="200" placeholder="服务器广播内容">
@@ -155,6 +172,16 @@
       </div>
       <pre id="storage-result" class="admin-json-result"></pre>
     </section>
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>社区模组仓库</h2>
+        <span id="community-storage-count">0</span>
+      </div>
+      <div class="storage-actions">
+        <button class="ghost-btn" type="button" data-community-storage-action="refresh">刷新仓库</button>
+      </div>
+      <div id="community-storage-table" class="admin-table"></div>
+    </section>
   </section>
 
   <section id="admin-replays" class="admin-panel hidden">
@@ -215,6 +242,6 @@
   </section>
 </main>
 
-<script src="/static/js/admin.js?v=7"></script>
+<script src="/static/js/admin.js?v=10"></script>
 </body>
 </html>

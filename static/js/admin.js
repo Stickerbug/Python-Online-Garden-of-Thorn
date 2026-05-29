@@ -129,6 +129,12 @@ function formatPercent(value) {
   return `${n.toFixed(1).replace(/\.0$/, '')}%`;
 }
 
+function formatNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '-';
+  return n.toLocaleString('zh-CN');
+}
+
 function escapeHtml(value) {
   return String(value == null ? '' : value)
     .replace(/&/g, '&amp;')
@@ -206,27 +212,117 @@ function renderStatus(data) {
   const process = metrics.process || {};
   const system = metrics.system || {};
   const disk = metrics.disk || {};
+  const profile = metrics.server_profile || {};
 
   const pcpu = process.cpu_percent == null ? '-' : `${Number(process.cpu_percent).toFixed(1)}%`;
   const scpu = system.cpu_percent == null ? '-' : `${Number(system.cpu_percent).toFixed(1)}%`;
-  $('metric-cpu').textContent = pcpu;
-  $('metric-cpu-sub').textContent = `进程 ${pcpu} / 系统 ${scpu}`;
-  $('metric-memory').textContent = formatBytes(process.memory_rss);
+  const loadavg = Array.isArray(metrics.loadavg) ? metrics.loadavg.map(v => Number(v).toFixed(2)).join(' / ') : '-';
+  $('metric-cpu').textContent = scpu;
+  $('metric-cpu-sub').textContent = `${system.cpu_count || profile.cpu_target || 2} 核；进程 ${pcpu}；负载 ${loadavg}`;
+  $('metric-memory').textContent = system.memory_total
+    ? `${formatBytes(system.memory_used)} / ${formatBytes(system.memory_total)}`
+    : formatBytes(process.memory_rss);
   $('metric-memory-sub').textContent = system.memory_percent == null
-    ? '系统内存不可用'
-    : `${formatBytes(system.memory_used)} / ${formatBytes(system.memory_total)}（${system.memory_percent}%）`;
-  $('metric-disk').textContent = disk.percent == null ? '-' : `${disk.percent}%`;
+    ? `进程 ${formatBytes(process.memory_rss)}`
+    : `已用 ${system.memory_percent}%；可用 ${formatBytes(system.memory_available)}；进程 ${formatBytes(process.memory_rss)}`;
+  $('metric-disk').textContent = disk.total ? `${formatBytes(disk.used)} / ${formatBytes(disk.total)}` : '-';
+  const diskSub = $('metric-disk-sub');
+  if (diskSub) diskSub.textContent = `已用 ${disk.percent ?? '-'}%；剩余 ${formatBytes(disk.free)}；${profile.disk_target || '40G'} 云盘`;
   $('metric-uptime').textContent = formatUptime(metrics.uptime_seconds);
   $('metric-clock').textContent = formatAdminTime(metrics.time);
   $('metric-online').textContent = summary.online_players || 0;
   $('metric-online-sub').textContent = `大厅 ${summary.lobby_players || 0} / 观战 ${summary.spectators || 0}`;
   $('metric-rooms').textContent = summary.rooms || 0;
   $('metric-history-sub').textContent = `历史 ${summary.history_count || 0}`;
+  renderServerResources(metrics);
+  renderResourceHistory(metrics.resource_history || {});
 
   renderPlayers(data.players || []);
   renderRooms(data.rooms || []);
   renderEvents(data.events || []);
   renderHistory(data.history || []);
+}
+
+function resourceCard(title, main, sub) {
+  return `
+    <article class="server-resource-card">
+      <span>${escapeHtml(title)}</span>
+      <strong>${escapeHtml(main)}</strong>
+      <small>${escapeHtml(sub || '')}</small>
+    </article>`;
+}
+
+function renderServerResources(metrics) {
+  const grid = $('server-resource-grid');
+  if (!grid) return;
+  const profile = metrics.server_profile || {};
+  const system = metrics.system || {};
+  const process = metrics.process || {};
+  const network = metrics.network || {};
+  const storage = metrics.storage_breakdown || {};
+  const database = storage.database || {};
+  const dirs = Array.isArray(storage.directories) ? storage.directories : [];
+  const dirCards = dirs.map((item) => resourceCard(
+    item.label || item.path || '目录',
+    formatBytes(item.bytes),
+    `${item.path || ''}${item.files != null ? ` · ${formatNumber(item.files)} 个文件` : ''}${item.truncated ? ' · 已截断统计' : ''}`,
+  ));
+  const dbFiles = (database.files || []).map(file => `${file.name} ${formatBytes(file.bytes)}`).join(' / ');
+  const cards = [
+    resourceCard('服务器规格', `${profile.cpu_target || system.cpu_count || '-'} / ${profile.memory_target || formatBytes(system.memory_total)} / ${profile.disk_target || '-'}`, `${profile.provider || 'Aliyun'} · ${profile.os || 'Ubuntu 22.04'}`),
+    resourceCard('数据库文件', formatBytes(database.bytes), `${database.path || ''}${dbFiles ? ` · ${dbFiles}` : ''}`),
+    resourceCard('Python 进程', `PID ${process.pid || '-'}`, `RSS ${formatBytes(process.memory_rss)} · VMS ${formatBytes(process.memory_vms)} · 线程 ${process.threads ?? '-'}`),
+    resourceCard('网络累计', `${formatBytes(network.bytes_recv)} 入 / ${formatBytes(network.bytes_sent)} 出`, '服务器启动后系统网络计数器累计值'),
+    resourceCard('Socket.IO', `${metrics.socket?.latency?.avg_ms ?? '-'} ms`, `RTT p95 ${metrics.socket?.latency?.p95_ms ?? '-'} ms · 操作 p95 ${metrics.socket?.actions?.p95_ms ?? '-'} ms · 广播 p95 ${metrics.socket?.broadcasts?.p95_ms ?? '-'} ms`),
+    resourceCard('R2 健康', `${metrics.r2?.mod_count ?? '-'} 个社区模组`, `Index 平均 ${metrics.r2?.index_avg_ms ?? '-'} ms · 错误 ${metrics.r2?.index_errors ?? 0} · 上传失败 ${metrics.r2?.upload_failures ?? 0}`),
+    ...dirCards,
+  ];
+  grid.innerHTML = cards.join('');
+  const label = $('server-profile-label');
+  if (label) label.textContent = `${profile.provider || 'Aliyun'} · ${profile.os || 'Ubuntu 22.04'}`;
+}
+
+function chartPolyline(samples, key, color, width = 320, height = 110) {
+  if (!samples.length) return '';
+  const maxX = Math.max(1, samples.length - 1);
+  const points = samples.map((sample, i) => {
+    const value = Math.max(0, Math.min(100, Number(sample[key]) || 0));
+    const x = (i / maxX) * width;
+    const y = height - (value / 100) * height;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />`;
+}
+
+function renderResourceHistory(history) {
+  const grid = $('resource-history-grid');
+  if (!grid) return;
+  const windows = history.windows || {};
+  const config = [
+    ['5m', '最近 5 分钟'],
+    ['15m', '最近 15 分钟'],
+    ['60m', '最近 60 分钟'],
+  ];
+  grid.innerHTML = config.map(([key, label]) => {
+    const samples = Array.isArray(windows[key]) ? windows[key] : [];
+    const latest = samples[samples.length - 1] || {};
+    return `
+      <article class="resource-chart-card">
+        <h3>${label}</h3>
+        <svg class="resource-chart" viewBox="0 0 320 110" preserveAspectRatio="none" aria-label="${label}">
+          <line x1="0" y1="55" x2="320" y2="55" stroke="rgba(98,112,128,0.18)" />
+          ${chartPolyline(samples, 'cpu', '#2980b9')}
+          ${chartPolyline(samples, 'memory', '#1abc9c')}
+          ${chartPolyline(samples, 'disk', '#c0392b')}
+        </svg>
+        <div class="resource-chart-legend">
+          <span><i class="legend-dot" style="background:#2980b9"></i>CPU ${latest.cpu ?? '-'}%</span>
+          <span><i class="legend-dot" style="background:#1abc9c"></i>内存 ${latest.memory ?? '-'}%</span>
+          <span><i class="legend-dot" style="background:#c0392b"></i>磁盘 ${latest.disk ?? '-'}%</span>
+          <span>${samples.length} 点</span>
+        </div>
+      </article>`;
+  }).join('');
 }
 
 function renderPlayers(players) {
@@ -445,6 +541,7 @@ async function loadStorageSummary() {
   try {
     const data = await api('/api/admin/storage/summary');
     renderStorageSummary(data);
+    loadCommunityStorage();
   } catch (error) {
     grid.innerHTML = `<div class="log-item error">存储统计加载失败：${escapeHtml(error.message)}</div>`;
   }
@@ -508,6 +605,52 @@ async function runStorageAction(action) {
     await loadStorageSummary();
   } catch (error) {
     resultBox.textContent = `失败：${error.message}`;
+  }
+}
+
+async function loadCommunityStorage() {
+  const table = $('community-storage-table');
+  if (!table) return;
+  try {
+    const data = await api('/api/admin/community-mods/storage');
+    const objects = data.objects || [];
+    $('community-storage-count').textContent = `${objects.length} 个对象`;
+    if (!objects.length) {
+      table.innerHTML = '<div class="log-item">暂无 R2 社区模组对象。</div>';
+      return;
+    }
+    table.innerHTML = `
+      <table>
+        <thead><tr><th>Key</th><th>大小</th><th>修改时间</th><th>类型</th><th>操作</th></tr></thead>
+        <tbody>
+          ${objects.map((obj) => `
+            <tr>
+              <td><span class="muted">${escapeHtml(obj.key)}</span></td>
+              <td>${formatBytes(obj.size)}</td>
+              <td>${escapeHtml(formatAdminTime(obj.last_modified))}</td>
+              <td>${obj.is_index ? '索引' : (obj.is_trash ? '回收站' : '文件')}</td>
+              <td>
+                ${obj.is_index ? '<span class="muted">不可删除</span>' : `<button class="row-action danger" data-r2-delete="${escapeHtml(obj.key)}">彻底删除</button>`}
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch (error) {
+    table.innerHTML = `<div class="log-item error">社区模组仓库加载失败：${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function deleteCommunityStorageObject(key) {
+  if (!key) return;
+  if (!window.confirm(`确认彻底删除 R2 对象？\n${key}`)) return;
+  try {
+    await api('/api/admin/community-mods/storage/delete', {
+      method: 'POST',
+      body: JSON.stringify({ key }),
+    });
+    await loadCommunityStorage();
+  } catch (error) {
+    window.alert(`删除失败：${error.message}`);
   }
 }
 
@@ -800,6 +943,9 @@ function bindEvents() {
   document.querySelectorAll('[data-storage-action]').forEach((btn) => {
     btn.addEventListener('click', () => runStorageAction(btn.dataset.storageAction));
   });
+  document.querySelectorAll('[data-community-storage-action]').forEach((btn) => {
+    btn.addEventListener('click', loadCommunityStorage);
+  });
   $('replay-refresh')?.addEventListener('click', resetAndLoadReplays);
   $('replay-load-more')?.addEventListener('click', () => loadReplays(true));
   $('replay-search-player')?.addEventListener('input', () => {
@@ -843,6 +989,7 @@ function bindEvents() {
     const suggestion = event.target.dataset && event.target.dataset.suggestion;
     const suggestionIndex = event.target.dataset && event.target.dataset.suggestionIndex;
     const replayView = event.target.dataset && event.target.dataset.replayView;
+    const r2Delete = event.target.dataset && event.target.dataset.r2Delete;
     if (suggestionIndex != null && completionState) {
       applyCompletionIndex(Number(suggestionIndex));
       return;
@@ -857,6 +1004,10 @@ function bindEvents() {
     }
     if (replayView) {
       await openReplayViewer(replayView);
+      return;
+    }
+    if (r2Delete) {
+      await deleteCommunityStorageObject(r2Delete);
       return;
     }
     if (kickSid) {

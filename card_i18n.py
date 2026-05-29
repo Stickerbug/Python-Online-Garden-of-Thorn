@@ -45,17 +45,17 @@ CARD_I18N = {
     'Sand': {
         'name': _t('沙子', 'Sand', 'Sable', 'Areia', 'Песок', '砂'),
         'desc': _t('因为是一把，所以可以造成多次伤害。', 'A handful of sand, so it can deal damage multiple times.', 'Comme c’est une poignée, elle peut infliger plusieurs dégâts.', 'Por ser um punhado, pode causar dano várias vezes.', 'Это горсть песка, поэтому урон наносится несколько раз.', 'ひとつかみなので複数回ダメージを与えられる。'),
-        'effect': _t('造成3×4D（4子瓣）', 'Deal 3×4D (4 petals)', 'Inflige 3×4D (4 pétales)', 'Causa 3×4D (4 pétalas)', 'Наносит 3×4D (4 лепестка)', '3×4D（4子弁）を与える'),
+        'effect': _t('造成3D×4（4子瓣）', 'Deal 3D×4 (4 petals)', 'Inflige 3D×4 (4 pétales)', 'Causa 3D×4 (4 pétalas)', 'Наносит 3D×4 (4 лепестка)', '3D×4（4子弁）を与える'),
     },
     'Wing': {
         'name': _t('翅膀', 'Wing', 'Aile', 'Asa', 'Крыло', '翼'),
         'desc': _t('回旋的翅膀连续两次打击对手。', 'A spinning wing strikes the opponent twice in succession.', 'Une aile tournoyante frappe deux fois de suite.', 'Uma asa giratória atinge o oponente duas vezes seguidas.', 'Вращающееся крыло дважды подряд бьёт противника.', '旋回する翼が相手を2回連続で打つ。'),
-        'effect': _t('造成8×2D（2子瓣）', 'Deal 8×2D (2 petals)', 'Inflige 8×2D (2 pétales)', 'Causa 8×2D (2 pétalas)', 'Наносит 8×2D (2 лепестка)', '8×2D（2子弁）を与える'),
+        'effect': _t('造成8D×2（2子瓣）', 'Deal 8D×2 (2 petals)', 'Inflige 8D×2 (2 pétales)', 'Causa 8D×2 (2 pétalas)', 'Наносит 8D×2 (2 лепестка)', '8D×2（2子弁）を与える'),
     },
     'Light': {
         'name': _t('轻', 'Light', 'Léger', 'Leve', 'Лёгкость', '軽'),
         'desc': _t('轻如鸿毛，却能伤人两次。太轻了所以不需要消耗能量。', 'As light as a feather, yet it can hurt twice. It is so light that it costs no energy.', 'Léger comme une plume, mais capable de blesser deux fois. Si léger qu’il ne coûte aucune énergie.', 'Leve como uma pluma, mas fere duas vezes. É tão leve que não custa energia.', 'Лёгкая как перо, но ранит дважды. Настолько лёгкая, что не требует энергии.', '羽のように軽いが、2回傷つけられる。軽すぎるのでエネルギーを消費しない。'),
-        'effect': _t('造成2×2D（2子瓣）', 'Deal 2×2D (2 petals)', 'Inflige 2×2D (2 pétales)', 'Causa 2×2D (2 pétalas)', 'Наносит 2×2D (2 лепестка)', '2×2D（2子弁）を与える'),
+        'effect': _t('造成2D×2（2子瓣）', 'Deal 2D×2 (2 petals)', 'Inflige 2D×2 (2 pétales)', 'Causa 2D×2 (2 pétalas)', 'Наносит 2D×2 (2 лепестка)', '2D×2（2子弁）を与える'),
     },
     'Fang': {
         'name': _t('尖牙', 'Fang', 'Croc', 'Presa', 'Клык', '牙'),

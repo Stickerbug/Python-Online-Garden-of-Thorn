@@ -4,7 +4,7 @@
     "name": "Kards “纷争” 扩展包",
     "version": "1.0.2",
     "author": "zbj",
-    "description": "Kards × GoT 联动震撼来袭",
+    "description": "Kards × GTN 联动震撼来袭",
     "game_version": "*"
   },
   "variables": [],
@@ -1243,7 +1243,7 @@
   },
   "editor": {
     "tool": "Garden of Thorn Mod Editor",
-    "schema": "got_mod_format_v1",
+    "schema": "gtn_mod_format_v1",
     "schema_version": 1
   }
 }
