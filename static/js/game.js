@@ -1841,7 +1841,7 @@ let playerId = -1;
 let mySid = '';
 let nickname = '';
 let loginCredential = '';
-let currentAccount = null;
+let currentAccount = loadCachedAccount();
 let accountMode = 'login';
 let socket = null;
 let manualDisconnect = false;
@@ -2228,7 +2228,7 @@ function updateStaticText() {
     const btnLobbySettings = $('btn-lobby-settings');
     if (btnLobbySettings) btnLobbySettings.textContent = UI.settings_btn;
     const btnConnect = $('btn-connect');
-    if (btnConnect) btnConnect.textContent = UI.guest_enter;
+    if (btnConnect) btnConnect.textContent = UI.enter_lobby;
     const btnSoloTraining = $('btn-solo-training');
     if (btnSoloTraining) btnSoloTraining.textContent = UI.solo_training;
     const btnAccountTop = $('btn-account-top');
@@ -2255,8 +2255,6 @@ function updateStaticText() {
     if (accountLoginBtn) accountLoginBtn.textContent = UI.account_login;
     const accountRegisterBtn = $('btn-account-register');
     if (accountRegisterBtn) accountRegisterBtn.textContent = UI.account_register;
-    const accountEnterBtn = $('btn-account-enter');
-    if (accountEnterBtn) accountEnterBtn.textContent = UI.account_enter;
     const accountPopoverLogout = $('btn-account-popover-logout');
     if (accountPopoverLogout) accountPopoverLogout.textContent = UI.account_logout;
     const guestDivider = $('guest-divider-label');
@@ -2408,6 +2406,9 @@ function showView(viewId) {
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     const el = $(viewId);
     if (el) el.classList.remove('hidden');
+    const accountTop = $('btn-account-top');
+    if (accountTop) accountTop.classList.toggle('hidden', viewId !== 'view-login');
+    if (viewId !== 'view-login') toggleAccountPopover(false);
     if (viewId !== 'view-game') {
         gameTimelineEntries = [];
         renderedBattleLogCount = 0;
@@ -4037,6 +4038,36 @@ function accountStatsText(user) {
     );
 }
 
+function loadCachedAccount() {
+    try {
+        const raw = localStorage.getItem('got_account_user');
+        if (!raw) return null;
+        const user = JSON.parse(raw);
+        return user && user.username ? user : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function cacheAccount(user) {
+    try {
+        if (user && user.username) {
+            const safeUser = {
+                id: user.id,
+                username: user.username,
+                display_name: user.display_name || user.username,
+                games_played: user.games_played || 0,
+                wins: user.wins || 0,
+                losses: user.losses || 0,
+                draws: user.draws || 0,
+            };
+            localStorage.setItem('got_account_user', JSON.stringify(safeUser));
+        } else {
+            localStorage.removeItem('got_account_user');
+        }
+    } catch (_) {}
+}
+
 function renderAccountState() {
     const accountDisplay = currentAccount ? (currentAccount.display_name || currentAccount.username) : '';
     const nameText = currentAccount ? tf('account_logged_in_as', accountDisplay) : UI.account_not_logged_in;
@@ -4047,18 +4078,26 @@ function renderAccountState() {
     if (popStats) popStats.textContent = stats;
     const authForm = $('account-auth-form');
     if (authForm) authForm.classList.toggle('hidden', !!currentAccount);
-    const enterBtn = $('btn-account-enter');
-    if (enterBtn) {
-        enterBtn.disabled = !currentAccount;
-        enterBtn.classList.toggle('hidden', !currentAccount);
-    }
     const popLogout = $('btn-account-popover-logout');
     if (popLogout) {
         popLogout.disabled = !currentAccount;
         popLogout.classList.toggle('hidden', !currentAccount);
     }
     const btnConnect = $('btn-connect');
-    if (btnConnect) btnConnect.textContent = UI.guest_enter;
+    if (btnConnect) btnConnect.textContent = UI.enter_lobby;
+    const guestDivider = $('guest-divider-label')?.closest('.login-divider');
+    if (guestDivider) guestDivider.classList.toggle('hidden', !!currentAccount);
+    const nicknameInput = $('input-nickname');
+    const accountNickDisplay = $('account-nickname-display');
+    if (nicknameInput) {
+        nicknameInput.classList.toggle('hidden', !!currentAccount);
+        if (currentAccount) nicknameInput.value = accountDisplay;
+    }
+    if (accountNickDisplay) {
+        accountNickDisplay.textContent = accountDisplay || '';
+        accountNickDisplay.classList.toggle('hidden', !currentAccount);
+    }
+    cacheAccount(currentAccount);
     renderAccountMode();
 }
 
@@ -4101,7 +4140,7 @@ async function refreshAuthMe() {
         const data = await authRequest('/api/auth/me');
         currentAccount = data.authenticated ? data.user : null;
     } catch (_) {
-        currentAccount = null;
+        currentAccount = currentAccount || loadCachedAccount();
     }
     renderAccountState();
 }
@@ -4148,6 +4187,7 @@ async function onAccountLogout() {
         await authRequest('/api/auth/logout', {});
     } catch (_) {}
     currentAccount = null;
+    cacheAccount(null);
     renderAccountState();
 }
 
@@ -8820,7 +8860,6 @@ async function init() {
     $('btn-connect').addEventListener('click', onLogin);
     if ($('btn-account-login')) $('btn-account-login').addEventListener('click', onAccountLogin);
     if ($('btn-account-register')) $('btn-account-register').addEventListener('click', onAccountRegister);
-    if ($('btn-account-enter')) $('btn-account-enter').addEventListener('click', onAccountEnter);
     if ($('btn-account-mode-login')) $('btn-account-mode-login').addEventListener('click', () => setAccountMode('login'));
     if ($('btn-account-mode-register')) $('btn-account-mode-register').addEventListener('click', () => setAccountMode('register'));
     if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());

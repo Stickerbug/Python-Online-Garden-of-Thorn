@@ -61,7 +61,6 @@
   <div class="account-popover-actions">
     <button id="btn-account-login" class="btn btn-primary">登录</button>
     <button id="btn-account-register" class="btn btn-primary hidden">注册</button>
-    <button id="btn-account-enter" class="btn btn-primary hidden">账号进入</button>
     <button id="btn-account-popover-logout" class="btn btn-secondary">退出登录</button>
   </div>
 </div>
@@ -73,9 +72,10 @@
 <p class="subtitle">局域网联机卡牌对战</p>
 <div class="login-form">
 <div class="login-divider"><span id="guest-divider-label">游客模式</span></div>
-<div class="form-row">
+<div id="login-nickname-row" class="form-row">
 <label for="input-nickname">昵称</label>
 <input type="text" id="input-nickname" maxlength="16" placeholder="输入昵称">
+<div id="account-nickname-display" class="account-nickname-display hidden"></div>
 </div>
 <div class="form-row">
 <button id="btn-connect" class="btn btn-primary">进入大厅</button>

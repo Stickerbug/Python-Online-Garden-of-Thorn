@@ -370,15 +370,20 @@ body {
   top: 14px;
   left: 14px;
   z-index: 2500;
-  padding: 8px 14px;
+  padding: 9px 16px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
   background: rgba(255, 255, 255, 0.86);
   color: var(--text-primary);
+  font-size: 14px;
   font-weight: 700;
   font-family: var(--font-main);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
+}
+
+.account-top-btn.hidden {
+  display: none;
 }
 
 .account-popover {
@@ -531,6 +536,32 @@ body {
   flex: 1;
   height: 1px;
   background: var(--border-light);
+}
+
+.login-divider.hidden {
+  display: none;
+}
+
+.account-nickname-display {
+  flex: 1;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-card) 88%, var(--bloom));
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.account-nickname-display.hidden {
+  display: none;
+}
+
+.login-form input.hidden {
+  display: none;
 }
 
 .login-utility-row {

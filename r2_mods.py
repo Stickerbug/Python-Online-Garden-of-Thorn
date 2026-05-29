@@ -24,7 +24,7 @@ from mod_loader import load_mod_from_data
 from mod_validator import validate_mod_data
 
 
-MAX_COMMUNITY_MOD_BYTES = 200_000
+MAX_COMMUNITY_MOD_BYTES = 300_000
 MAX_COMMUNITY_CARDS = 120
 MAX_COMMUNITY_EVENTS = 30
 COMMUNITY_INDEX_KEY = 'community/index.json'
@@ -58,8 +58,15 @@ def _required_env() -> Dict[str, str]:
 
 
 def _client():
+    global boto3, ClientError
     if boto3 is None:
-        raise R2ConfigError('社区模组依赖 boto3 未安装')
+        try:
+            import boto3 as _boto3
+            from botocore.exceptions import ClientError as _ClientError
+            boto3 = _boto3
+            ClientError = _ClientError
+        except Exception as exc:
+            raise R2ConfigError('社区模组依赖 boto3 未安装，请执行 python -m pip install -r requirements.txt') from exc
     values = _required_env()
     endpoint = f"https://{values['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
     return boto3.client(
@@ -122,8 +129,13 @@ def create_presigned_mod_upload(filename: str) -> Dict[str, Any]:
 
 
 def fetch_json_from_public_url(url: str, max_bytes: int = MAX_COMMUNITY_MOD_BYTES) -> Dict[str, Any]:
+    global requests
     if requests is None:
-        raise R2ConfigError('社区模组依赖 requests 未安装')
+        try:
+            import requests as _requests
+            requests = _requests
+        except Exception as exc:
+            raise R2ConfigError('社区模组依赖 requests 未安装，请执行 python -m pip install -r requirements.txt') from exc
     url = str(url or '').strip()
     if not url:
         raise ValueError('缺少 public_url')
