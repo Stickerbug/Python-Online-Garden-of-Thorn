@@ -34,11 +34,14 @@ from r2_mods import (
     validate_community_mod_url,
 )
 from db import (
+    change_user_password,
     create_user,
+    get_admin_user_detail,
     get_user_by_id,
     get_user_by_username,
     increment_user_stats,
     init_db,
+    list_admin_users,
     save_match_summary,
     verify_user,
 )
@@ -1961,6 +1964,57 @@ def admin_status():
     return jsonify(get_admin_status_payload())
 
 
+def _admin_online_user_map():
+    online = {}
+    for sid, player in players.items():
+        nickname = player.get('nickname')
+        if not nickname:
+            continue
+        online[str(nickname).lower()] = {
+            'sid': sid,
+            'status': player.get('status', ''),
+            'mode': player.get('mode', '1v1'),
+            'room_id': player.get('room_id'),
+            'spectating_room': player.get('spectating_room'),
+        }
+    return online
+
+
+@app.route('/api/admin/users')
+def admin_users():
+    try:
+        data = list_admin_users(
+            query=request.args.get('query', ''),
+            sort=request.args.get('sort', 'last_login_at'),
+            order=request.args.get('order', 'desc'),
+            limit=request.args.get('limit', 100),
+            offset=request.args.get('offset', 0),
+        )
+    except Exception as exc:
+        admin_event('error', f'admin users query failed: {exc}')
+        return jsonify({'success': False, 'error': '账号数据库不可用'}), 500
+    with _lock:
+        online = _admin_online_user_map()
+    for user in data.get('users', []):
+        user['online'] = online.get(str(user.get('username', '')).lower())
+    return jsonify({'success': True, **data})
+
+
+@app.route('/api/admin/users/<int:user_id>')
+def admin_user_detail(user_id):
+    try:
+        detail = get_admin_user_detail(user_id, request.args.get('match_limit', 30))
+    except Exception as exc:
+        admin_event('error', f'admin user detail failed: {exc}')
+        return jsonify({'success': False, 'error': '账号数据库不可用'}), 500
+    if not detail:
+        return jsonify({'success': False, 'error': '用户不存在'}), 404
+    with _lock:
+        online = _admin_online_user_map()
+    detail['user']['online'] = online.get(str(detail['user'].get('username', '')).lower())
+    return jsonify({'success': True, **detail})
+
+
 @app.route('/api/admin/command', methods=['POST'])
 def admin_command():
     data = request.get_json(silent=True) or {}
@@ -1986,8 +2040,6 @@ def api_auth_register():
         return db_unavailable_response()
     data = request.get_json(silent=True) or {}
     username = sanitize_nickname(data.get('username', ''))
-    if is_reserved_special_nickname(username) and not is_exact_special_account_name(username):
-        return jsonify({'success': False, 'error': ADMIN_NICKNAME_RESERVED_REASON}), 400
     password = data.get('password', '')
     if 'password_confirm' in data and str(password) != str(data.get('password_confirm', '')):
         return jsonify({'success': False, 'error': '两次输入的密码不一致'}), 400
@@ -2012,6 +2064,26 @@ def api_auth_login():
         record_auth_login_failure(ip)
         return jsonify({'success': False, 'error': error}), 401
     clear_auth_login_failures(ip)
+    session['user_id'] = user['id']
+    session['username'] = user['username']
+    return jsonify({'success': True, 'user': auth_user_payload(user)})
+
+
+@app.route('/api/auth/change-password', methods=['POST'])
+def api_auth_change_password():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True) or {}
+    old_password = data.get('old_password', '')
+    new_password = data.get('new_password', '')
+    if str(new_password) != str(data.get('new_password_confirm', '')):
+        return jsonify({'success': False, 'error': '两次输入的密码不一致'}), 400
+    user, error = change_user_password(user_id, old_password, new_password)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
     session['user_id'] = user['id']
     session['username'] = user['username']
     return jsonify({'success': True, 'user': auth_user_payload(user)})

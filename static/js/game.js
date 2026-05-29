@@ -920,7 +920,8 @@ Object.assign(I18N.ru, { admin_prefix: 'Администратор', login_admin
 Object.assign(I18N.ja, { admin_prefix: '管理者', login_admin_reserved: 'このニックネームは管理者が使用しています' });
 Object.assign(I18N.en, {
     account: 'Account', account_guest: 'Guest Mode', account_username: 'Username', account_password: 'Password',
-    account_password_confirm: 'Confirm Password',
+    account_password_confirm: 'Confirm Password', account_old_password: 'Current Password', account_new_password: 'New Password',
+    account_new_password_confirm: 'Confirm New Password', account_change_password: 'Change Password', account_password_changed: 'Password changed',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
     account_need_login: 'Log in or register first', account_error: 'Account error', account_password_mismatch: 'Passwords do not match', guest_enter: 'Enter as Guest',
@@ -928,7 +929,8 @@ Object.assign(I18N.en, {
 });
 Object.assign(I18N.zh, {
     account: '账号', account_guest: '游客模式', account_username: '用户名', account_password: '密码',
-    account_password_confirm: '确认密码',
+    account_password_confirm: '确认密码', account_old_password: '原密码', account_new_password: '新密码',
+    account_new_password_confirm: '确认新密码', account_change_password: '修改密码', account_password_changed: '密码已修改',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
     account_need_login: '请先登录或注册账号', account_error: '账号错误', account_password_mismatch: '两次输入的密码不一致', guest_enter: '游客进入',
@@ -936,7 +938,8 @@ Object.assign(I18N.zh, {
 });
 Object.assign(I18N.fr, {
     account: 'Compte', account_guest: 'Mode invité', account_username: 'Nom', account_password: 'Mot de passe',
-    account_password_confirm: 'Confirmer',
+    account_password_confirm: 'Confirmer', account_old_password: 'Mot de passe actuel', account_new_password: 'Nouveau mot de passe',
+    account_new_password_confirm: 'Confirmer le nouveau', account_change_password: 'Changer le mot de passe', account_password_changed: 'Mot de passe changé',
     account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
     account_not_logged_in: 'Non connecté', account_logged_in_as: 'Connecté : {0}', account_stats: 'Parties {0} / V {1} / D {2} / N {3}',
     account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', account_password_mismatch: 'Les mots de passe ne correspondent pas', guest_enter: 'Entrer en invité',
@@ -944,7 +947,8 @@ Object.assign(I18N.fr, {
 });
 Object.assign(I18N.pt, {
     account: 'Conta', account_guest: 'Modo convidado', account_username: 'Usuário', account_password: 'Senha',
-    account_password_confirm: 'Confirmar senha',
+    account_password_confirm: 'Confirmar senha', account_old_password: 'Senha atual', account_new_password: 'Nova senha',
+    account_new_password_confirm: 'Confirmar nova senha', account_change_password: 'Alterar senha', account_password_changed: 'Senha alterada',
     account_login: 'Entrar', account_register: 'Registrar', account_enter: 'Entrar com conta', account_logout: 'Sair',
     account_not_logged_in: 'Não conectado', account_logged_in_as: 'Conectado: {0}', account_stats: 'Jogos {0} / V {1} / D {2} / E {3}',
     account_need_login: 'Entre ou registre-se primeiro', account_error: 'Erro da conta', account_password_mismatch: 'As senhas não coincidem', guest_enter: 'Entrar como convidado',
@@ -952,7 +956,8 @@ Object.assign(I18N.pt, {
 });
 Object.assign(I18N.ru, {
     account: 'Аккаунт', account_guest: 'Гость', account_username: 'Имя', account_password: 'Пароль',
-    account_password_confirm: 'Повтор пароля',
+    account_password_confirm: 'Повтор пароля', account_old_password: 'Текущий пароль', account_new_password: 'Новый пароль',
+    account_new_password_confirm: 'Повтор нового', account_change_password: 'Сменить пароль', account_password_changed: 'Пароль изменён',
     account_login: 'Войти', account_register: 'Регистрация', account_enter: 'Войти аккаунтом', account_logout: 'Выйти',
     account_not_logged_in: 'Не выполнен вход', account_logged_in_as: 'Вход: {0}', account_stats: 'Игры {0} / Победы {1} / Поражения {2} / Ничьи {3}',
     account_need_login: 'Сначала войдите или зарегистрируйтесь', account_error: 'Ошибка аккаунта', account_password_mismatch: 'Пароли не совпадают', guest_enter: 'Войти гостем',
@@ -960,7 +965,8 @@ Object.assign(I18N.ru, {
 });
 Object.assign(I18N.ja, {
     account: 'アカウント', account_guest: 'ゲスト', account_username: 'ユーザー名', account_password: 'パスワード',
-    account_password_confirm: '確認',
+    account_password_confirm: '確認', account_old_password: '現在のパスワード', account_new_password: '新しいパスワード',
+    account_new_password_confirm: '新しい確認', account_change_password: 'パスワード変更', account_password_changed: '変更しました',
     account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
     account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
@@ -2245,16 +2251,32 @@ function updateStaticText() {
     if (accountPasswordLabel) accountPasswordLabel.textContent = UI.account_password;
     const accountPasswordConfirmLabel = $('label-account-password-confirm');
     if (accountPasswordConfirmLabel) accountPasswordConfirmLabel.textContent = UI.account_password_confirm;
+    const accountPasswordChangeTitle = $('account-password-change-title');
+    if (accountPasswordChangeTitle) accountPasswordChangeTitle.textContent = UI.account_change_password;
+    const accountOldPasswordLabel = $('label-account-old-password');
+    if (accountOldPasswordLabel) accountOldPasswordLabel.textContent = UI.account_old_password;
+    const accountNewPasswordLabel = $('label-account-new-password');
+    if (accountNewPasswordLabel) accountNewPasswordLabel.textContent = UI.account_new_password;
+    const accountNewPasswordConfirmLabel = $('label-account-new-password-confirm');
+    if (accountNewPasswordConfirmLabel) accountNewPasswordConfirmLabel.textContent = UI.account_new_password_confirm;
     const accountUsernameInput = $('input-account-username');
     if (accountUsernameInput) accountUsernameInput.placeholder = UI.account_username;
     const accountPasswordInput = $('input-account-password');
     if (accountPasswordInput) accountPasswordInput.placeholder = UI.account_password;
     const accountPasswordConfirmInput = $('input-account-password-confirm');
     if (accountPasswordConfirmInput) accountPasswordConfirmInput.placeholder = UI.account_password_confirm;
+    const accountOldPasswordInput = $('input-account-old-password');
+    if (accountOldPasswordInput) accountOldPasswordInput.placeholder = UI.account_old_password;
+    const accountNewPasswordInput = $('input-account-new-password');
+    if (accountNewPasswordInput) accountNewPasswordInput.placeholder = UI.account_new_password;
+    const accountNewPasswordConfirmInput = $('input-account-new-password-confirm');
+    if (accountNewPasswordConfirmInput) accountNewPasswordConfirmInput.placeholder = UI.account_new_password_confirm;
     const accountLoginBtn = $('btn-account-login');
     if (accountLoginBtn) accountLoginBtn.textContent = UI.account_login;
     const accountRegisterBtn = $('btn-account-register');
     if (accountRegisterBtn) accountRegisterBtn.textContent = UI.account_register;
+    const accountChangePasswordBtn = $('btn-account-change-password');
+    if (accountChangePasswordBtn) accountChangePasswordBtn.textContent = UI.account_change_password;
     const accountPopoverLogout = $('btn-account-popover-logout');
     if (accountPopoverLogout) accountPopoverLogout.textContent = UI.account_logout;
     const guestDivider = $('guest-divider-label');
@@ -3987,6 +4009,10 @@ function displayWidth(str) {
 }
 
 function onLogin() {
+    if (currentAccount) {
+        onAccountEnter();
+        return;
+    }
     const nick = $('input-nickname').value.trim();
     const err = $('login-error');
     if (!nick) {
@@ -4025,6 +4051,19 @@ function onLogin() {
 function setAccountError(message) {
     const err = $('account-error');
     if (err) err.textContent = message || '';
+}
+
+function clearAccountPasswordInputs() {
+    [
+        'input-account-password',
+        'input-account-password-confirm',
+        'input-account-old-password',
+        'input-account-new-password',
+        'input-account-new-password-confirm',
+    ].forEach((id) => {
+        const input = $(id);
+        if (input) input.value = '';
+    });
 }
 
 function accountStatsText(user) {
@@ -4078,6 +4117,8 @@ function renderAccountState() {
     if (popStats) popStats.textContent = stats;
     const authForm = $('account-auth-form');
     if (authForm) authForm.classList.toggle('hidden', !!currentAccount);
+    const passwordChangeForm = $('account-password-change-form');
+    if (passwordChangeForm) passwordChangeForm.classList.toggle('hidden', !currentAccount);
     const popLogout = $('btn-account-popover-logout');
     if (popLogout) {
         popLogout.disabled = !currentAccount;
@@ -4113,11 +4154,14 @@ function renderAccountMode() {
     if (loginBtn) loginBtn.classList.toggle('hidden', isRegister || !!currentAccount);
     const registerBtn = $('btn-account-register');
     if (registerBtn) registerBtn.classList.toggle('hidden', !isRegister || !!currentAccount);
+    const changePasswordBtn = $('btn-account-change-password');
+    if (changePasswordBtn) changePasswordBtn.classList.toggle('hidden', !currentAccount);
 }
 
 function setAccountMode(mode) {
     accountMode = mode === 'register' ? 'register' : 'login';
     setAccountError('');
+    clearAccountPasswordInputs();
     renderAccountMode();
 }
 
@@ -4152,8 +4196,8 @@ async function onAccountLogin() {
     try {
         const data = await authRequest('/api/auth/login', { username, password });
         currentAccount = data.user || null;
-        const passwordInput = $('input-account-password');
-        if (passwordInput) passwordInput.value = '';
+        accountMode = 'login';
+        clearAccountPasswordInputs();
         renderAccountState();
     } catch (err) {
         setAccountError(err.message || UI.account_error);
@@ -4172,10 +4216,32 @@ async function onAccountRegister() {
     try {
         const data = await authRequest('/api/auth/register', { username, password, password_confirm: passwordConfirm });
         currentAccount = data.user || null;
-        const passwordInput = $('input-account-password');
-        if (passwordInput) passwordInput.value = '';
-        const confirmInput = $('input-account-password-confirm');
-        if (confirmInput) confirmInput.value = '';
+        accountMode = 'login';
+        clearAccountPasswordInputs();
+        renderAccountState();
+    } catch (err) {
+        setAccountError(err.message || UI.account_error);
+    }
+}
+
+async function onAccountChangePassword() {
+    setAccountError('');
+    const oldPassword = $('input-account-old-password')?.value || '';
+    const newPassword = $('input-account-new-password')?.value || '';
+    const newPasswordConfirm = $('input-account-new-password-confirm')?.value || '';
+    if (newPassword !== newPasswordConfirm) {
+        setAccountError(UI.account_password_mismatch);
+        return;
+    }
+    try {
+        const data = await authRequest('/api/auth/change-password', {
+            old_password: oldPassword,
+            new_password: newPassword,
+            new_password_confirm: newPasswordConfirm,
+        });
+        currentAccount = data.user || currentAccount;
+        clearAccountPasswordInputs();
+        setAccountError(UI.account_password_changed);
         renderAccountState();
     } catch (err) {
         setAccountError(err.message || UI.account_error);
@@ -4187,7 +4253,9 @@ async function onAccountLogout() {
         await authRequest('/api/auth/logout', {});
     } catch (_) {}
     currentAccount = null;
+    accountMode = 'login';
     cacheAccount(null);
+    clearAccountPasswordInputs();
     renderAccountState();
 }
 
@@ -8860,6 +8928,7 @@ async function init() {
     $('btn-connect').addEventListener('click', onLogin);
     if ($('btn-account-login')) $('btn-account-login').addEventListener('click', onAccountLogin);
     if ($('btn-account-register')) $('btn-account-register').addEventListener('click', onAccountRegister);
+    if ($('btn-account-change-password')) $('btn-account-change-password').addEventListener('click', onAccountChangePassword);
     if ($('btn-account-mode-login')) $('btn-account-mode-login').addEventListener('click', () => setAccountMode('login'));
     if ($('btn-account-mode-register')) $('btn-account-mode-register').addEventListener('click', () => setAccountMode('register'));
     if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());
@@ -8877,6 +8946,14 @@ async function init() {
             if (e.key === 'Enter') onAccountRegister();
         });
     }
+    ['input-account-old-password', 'input-account-new-password', 'input-account-new-password-confirm'].forEach((id) => {
+        const input = $(id);
+        if (input) {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') onAccountChangePassword();
+            });
+        }
+    });
     const accountUsernameInput = $('input-account-username');
     if (accountUsernameInput) {
         accountUsernameInput.addEventListener('keydown', (e) => {

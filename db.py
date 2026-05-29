@@ -131,6 +131,16 @@ def row_to_user(row):
     }
 
 
+def row_to_admin_user(row):
+    user = row_to_user(row)
+    if user is None:
+        return None
+    games = int(user.get('games_played') or 0)
+    wins = int(user.get('wins') or 0)
+    user['win_rate'] = round(wins / games * 100, 1) if games else 0.0
+    return user
+
+
 def create_user(username, password):
     name = sanitize_username(username)
     ok, error = validate_username(name)
@@ -172,6 +182,29 @@ def verify_user(username, password):
         return row_to_user(row), None
 
 
+def change_user_password(user_id, old_password, new_password):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    ok, error = validate_password(new_password)
+    if not ok:
+        return None, error
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            return None, '请先登录账号'
+        if not check_password_hash(row['password_hash'], str(old_password or '')):
+            return None, '原密码错误'
+        conn.execute(
+            'UPDATE users SET password_hash = ? WHERE id = ?',
+            (generate_password_hash(str(new_password)), uid),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        return row_to_user(row), None
+
+
 def get_user_by_id(user_id):
     try:
         uid = int(user_id)
@@ -187,6 +220,126 @@ def get_user_by_username(username):
         return None
     with get_db_connection() as conn:
         return row_to_user(conn.execute('SELECT * FROM users WHERE username_lower = ?', (name.lower(),)).fetchone())
+
+
+ADMIN_USER_SORTS = {
+    'id': 'id',
+    'username': 'username_lower',
+    'created_at': 'created_at',
+    'last_login_at': 'last_login_at',
+    'games_played': 'games_played',
+    'wins': 'wins',
+    'losses': 'losses',
+    'draws': 'draws',
+    'win_rate': 'CASE WHEN games_played > 0 THEN CAST(wins AS REAL) / games_played ELSE 0 END',
+}
+
+
+def list_admin_users(query='', sort='last_login_at', order='desc', limit=100, offset=0):
+    sort_key = str(sort or 'last_login_at')
+    sort_expr = ADMIN_USER_SORTS.get(sort_key, ADMIN_USER_SORTS['last_login_at'])
+    direction = 'ASC' if str(order or '').lower() == 'asc' else 'DESC'
+    try:
+        safe_limit = max(1, min(int(limit), 300))
+    except (TypeError, ValueError):
+        safe_limit = 100
+    try:
+        safe_offset = max(0, int(offset))
+    except (TypeError, ValueError):
+        safe_offset = 0
+
+    name = sanitize_username(query)
+    where = ''
+    params = []
+    if name:
+        where = 'WHERE username_lower LIKE ?'
+        params.append(f'%{name.lower()}%')
+
+    null_rank = 'CASE WHEN last_login_at IS NULL THEN 1 ELSE 0 END'
+    if sort_key == 'last_login_at' and direction == 'DESC':
+        order_clause = f'{null_rank} ASC, {sort_expr} {direction}, id DESC'
+    elif sort_key == 'last_login_at':
+        order_clause = f'{null_rank} ASC, {sort_expr} {direction}, id ASC'
+    else:
+        order_clause = f'{sort_expr} {direction}, id DESC'
+
+    with get_db_connection() as conn:
+        total = conn.execute(f'SELECT COUNT(*) FROM users {where}', params).fetchone()[0]
+        rows = conn.execute(
+            f'''
+            SELECT * FROM users
+            {where}
+            ORDER BY {order_clause}
+            LIMIT ? OFFSET ?
+            ''',
+            params + [safe_limit, safe_offset],
+        ).fetchall()
+    return {
+        'users': [row_to_admin_user(row) for row in rows],
+        'total': total,
+        'limit': safe_limit,
+        'offset': safe_offset,
+        'sort': sort_key if sort_key in ADMIN_USER_SORTS else 'last_login_at',
+        'order': 'asc' if direction == 'ASC' else 'desc',
+    }
+
+
+def _row_to_match_summary(row):
+    if row is None:
+        return None
+    try:
+        player_names = json.loads(row['player_names_json'] or '[]')
+    except Exception:
+        player_names = []
+    try:
+        summary = json.loads(row['summary_json'] or '{}')
+    except Exception:
+        summary = {}
+    return {
+        'id': row['id'],
+        'mode': row['mode'],
+        'started_at': row['started_at'],
+        'ended_at': row['ended_at'],
+        'duration_seconds': row['duration_seconds'],
+        'players': player_names,
+        'winner_name': row['winner_name'],
+        'winner_index': row['winner_index'],
+        'rounds': row['rounds'],
+        'mod_source': row['mod_source'],
+        'mod_hash': row['mod_hash'],
+        'result': row['result'],
+        'room_id': summary.get('room_id'),
+    }
+
+
+def get_admin_user_detail(user_id, match_limit=30):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    try:
+        safe_match_limit = max(1, min(int(match_limit), 100))
+    except (TypeError, ValueError):
+        safe_match_limit = 30
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            return None
+        user = row_to_admin_user(row)
+        pattern = f'%"{user["username"]}"%'
+        matches = conn.execute(
+            '''
+            SELECT * FROM matches
+            WHERE player_names_json LIKE ?
+            ORDER BY id DESC
+            LIMIT ?
+            ''',
+            (pattern, safe_match_limit),
+        ).fetchall()
+    return {
+        'user': user,
+        'matches': [_row_to_match_summary(match) for match in matches],
+    }
 
 
 def save_match_summary(summary):

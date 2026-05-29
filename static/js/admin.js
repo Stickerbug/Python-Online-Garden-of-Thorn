@@ -2,9 +2,14 @@ const $ = (id) => document.getElementById(id);
 
 let adminState = null;
 let refreshTimer = null;
+let registeredRefreshTimer = null;
 let commandHistory = [];
 let historyIndex = 0;
 let completionState = null;
+let registeredUsersState = null;
+let registeredUsersSearchTimer = null;
+const expandedRegisteredUsers = new Set();
+const registeredUserDetails = new Map();
 
 const STATUS_LABELS = {
   lobby: '大厅',
@@ -108,6 +113,16 @@ function formatAdminTime(value) {
   }
 }
 
+function valueOrDash(value) {
+  return value == null || value === '' ? '-' : value;
+}
+
+function formatPercent(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0%';
+  return `${n.toFixed(1).replace(/\.0$/, '')}%`;
+}
+
 function escapeHtml(value) {
   return String(value == null ? '' : value)
     .replace(/&/g, '&amp;')
@@ -122,10 +137,18 @@ function showShell(authenticated) {
   $('admin-shell').classList.toggle('hidden', !authenticated);
   if (authenticated) {
     loadStatus();
+    loadRegisteredUsers();
     if (!refreshTimer) refreshTimer = setInterval(loadStatus, 1000);
-  } else if (refreshTimer) {
-    clearInterval(refreshTimer);
-    refreshTimer = null;
+    if (!registeredRefreshTimer) registeredRefreshTimer = setInterval(loadRegisteredUsers, 10000);
+  } else {
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+    if (registeredRefreshTimer) {
+      clearInterval(registeredRefreshTimer);
+      registeredRefreshTimer = null;
+    }
   }
 }
 
@@ -219,6 +242,147 @@ function renderPlayers(players) {
           </tr>`).join('')}
       </tbody>
     </table>`;
+}
+
+function registeredUsersQuery() {
+  const params = new URLSearchParams();
+  params.set('query', $('registered-users-search')?.value || '');
+  params.set('sort', $('registered-users-sort')?.value || 'last_login_at');
+  params.set('order', $('registered-users-order')?.value || 'desc');
+  params.set('limit', '120');
+  return params;
+}
+
+async function loadRegisteredUsers() {
+  const panel = $('registered-users-panel');
+  if (!panel) return;
+  try {
+    if (!registeredUsersState) {
+      panel.innerHTML = '<div class="log-item">正在读取账号列表。</div>';
+    }
+    registeredUsersState = await api(`/api/admin/users?${registeredUsersQuery().toString()}`);
+    renderRegisteredUsers(registeredUsersState);
+  } catch (error) {
+    panel.innerHTML = `<div class="log-item error">账号列表加载失败：${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function queueRegisteredUsersLoad() {
+  clearTimeout(registeredUsersSearchTimer);
+  registeredUsersSearchTimer = setTimeout(loadRegisteredUsers, 180);
+}
+
+function renderRegisteredUsers(data) {
+  const users = data.users || [];
+  $('registered-users-count').textContent = `${users.length}/${data.total || 0}`;
+  if (!users.length) {
+    $('registered-users-panel').innerHTML = '<div class="log-item">暂无注册玩家。</div>';
+    return;
+  }
+  $('registered-users-panel').innerHTML = users.map(renderRegisteredUserCard).join('');
+}
+
+function renderOnlinePill(user) {
+  if (!user.online) return '<span class="user-pill muted-pill">离线</span>';
+  const status = labelFrom(STATUS_LABELS, user.online.status);
+  const room = user.online.room_id ?? user.online.spectating_room;
+  return `<span class="user-pill online-pill">${escapeHtml(status)}${room != null ? ` #${escapeHtml(room)}` : ''}</span>`;
+}
+
+function renderRegisteredUserCard(user) {
+  const key = String(user.id);
+  const expanded = expandedRegisteredUsers.has(key);
+  const detail = registeredUserDetails.get(key);
+  const winRate = formatPercent(user.win_rate);
+  const detailsHtml = expanded ? renderRegisteredUserDetails(user, detail) : '';
+  return `
+    <article class="registered-user-card ${expanded ? 'expanded' : ''}">
+      <button class="registered-user-main" type="button" data-user-toggle="${escapeHtml(key)}">
+        <div class="user-avatar">${escapeHtml(String(user.username || '?').slice(0, 1).toUpperCase())}</div>
+        <div class="user-main-text">
+          <div class="user-title-row">
+            <strong>${escapeHtml(user.username)}</strong>
+            ${renderOnlinePill(user)}
+          </div>
+          <div class="user-meta-row">
+            <span>ID ${escapeHtml(user.id)}</span>
+            <span>上次登录 ${escapeHtml(formatAdminTime(user.last_login_at))}</span>
+            <span>注册 ${escapeHtml(formatAdminTime(user.created_at))}</span>
+          </div>
+        </div>
+        <div class="user-score-row" aria-label="账号战绩">
+          <span><b>${escapeHtml(user.games_played || 0)}</b> 对局</span>
+          <span><b>${escapeHtml(user.wins || 0)}</b> 胜</span>
+          <span><b>${escapeHtml(user.losses || 0)}</b> 败</span>
+          <span><b>${escapeHtml(user.draws || 0)}</b> 平</span>
+          <span><b>${escapeHtml(winRate)}</b> 胜率</span>
+        </div>
+        <span class="expand-mark">${expanded ? '收起' : '详情'}</span>
+      </button>
+      ${detailsHtml}
+    </article>`;
+}
+
+function renderRegisteredUserDetails(user, detail) {
+  if (!detail) {
+    return '<div class="registered-user-details"><div class="log-item">正在读取账号详情。</div></div>';
+  }
+  if (detail.error) {
+    return `<div class="registered-user-details"><div class="log-item error">${escapeHtml(detail.error)}</div></div>`;
+  }
+  const matches = detail.matches || [];
+  const online = (detail.user && detail.user.online) || user.online;
+  return `
+    <div class="registered-user-details">
+      <div class="user-detail-grid">
+        <div class="user-detail-block">
+          <h3>账号数据</h3>
+          <dl>
+            <div><dt>用户名</dt><dd>${escapeHtml(user.username)}</dd></div>
+            <div><dt>账号ID</dt><dd>${escapeHtml(user.id)}</dd></div>
+            <div><dt>注册时间</dt><dd>${escapeHtml(formatAdminTime(user.created_at))}</dd></div>
+            <div><dt>上次登录</dt><dd>${escapeHtml(formatAdminTime(user.last_login_at))}</dd></div>
+            <div><dt>当前状态</dt><dd>${online ? `${escapeHtml(labelFrom(STATUS_LABELS, online.status))} ${online.room_id != null ? `#${escapeHtml(online.room_id)}` : ''}` : '离线'}</dd></div>
+          </dl>
+        </div>
+        <div class="user-detail-block">
+          <h3>最近对局</h3>
+          ${matches.length ? `
+            <div class="user-match-list">
+              ${matches.map(renderUserMatch).join('')}
+            </div>` : '<div class="empty-detail">暂无已保存对局。</div>'}
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderUserMatch(match) {
+  const players = (match.players || []).join(' / ');
+  const result = match.result === 'draw' ? '平局' : valueOrDash(match.winner_name);
+  return `
+    <div class="user-match-row">
+      <time>${escapeHtml(formatAdminTime(match.ended_at || match.started_at))}</time>
+      <div><b>${escapeHtml(match.mode || '-')}</b> · ${escapeHtml(players)}</div>
+      <div class="muted">结果 ${escapeHtml(result)} · 回合 ${escapeHtml(valueOrDash(match.rounds))} · 时长 ${escapeHtml(formatUptime(match.duration_seconds || 0))}</div>
+    </div>`;
+}
+
+async function toggleRegisteredUser(userId) {
+  const key = String(userId);
+  if (expandedRegisteredUsers.has(key)) {
+    expandedRegisteredUsers.delete(key);
+    renderRegisteredUsers(registeredUsersState || { users: [], total: 0 });
+    return;
+  }
+  expandedRegisteredUsers.add(key);
+  renderRegisteredUsers(registeredUsersState || { users: [], total: 0 });
+  if (registeredUserDetails.has(key)) return;
+  try {
+    registeredUserDetails.set(key, await api(`/api/admin/users/${encodeURIComponent(key)}`));
+  } catch (error) {
+    registeredUserDetails.set(key, { error: `账号详情加载失败：${error.message}` });
+  }
+  renderRegisteredUsers(registeredUsersState || { users: [], total: 0 });
 }
 
 function renderRooms(rooms) {
@@ -410,6 +574,10 @@ function bindEvents() {
   });
   $('admin-logout').addEventListener('click', logout);
   $('admin-refresh').addEventListener('click', loadStatus);
+  $('registered-users-refresh')?.addEventListener('click', loadRegisteredUsers);
+  $('registered-users-search')?.addEventListener('input', queueRegisteredUsersLoad);
+  $('registered-users-sort')?.addEventListener('change', loadRegisteredUsers);
+  $('registered-users-order')?.addEventListener('change', loadRegisteredUsers);
 
   document.querySelectorAll('.admin-tab').forEach((tab) => {
     tab.addEventListener('click', () => {
@@ -430,6 +598,7 @@ function bindEvents() {
   });
 
   document.addEventListener('click', async (event) => {
+    const userToggle = event.target.closest && event.target.closest('[data-user-toggle]');
     const kickSid = event.target.dataset && event.target.dataset.kick;
     const skipRoom = event.target.dataset && event.target.dataset.skip;
     const endRoom = event.target.dataset && event.target.dataset.end;
@@ -441,6 +610,10 @@ function bindEvents() {
     }
     if (suggestion) {
       applySuggestion(suggestion);
+      return;
+    }
+    if (userToggle) {
+      await toggleRegisteredUser(userToggle.dataset.userToggle);
       return;
     }
     if (kickSid) {

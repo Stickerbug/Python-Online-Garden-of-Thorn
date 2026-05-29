@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 管理台</title>
-<link rel="stylesheet" href="/static/css/admin.css?v=4">
+<link rel="stylesheet" href="/static/css/admin.css?v=5">
 </head>
 <body class="admin-body">
 <div id="admin-login" class="admin-login">
@@ -77,6 +77,33 @@
 
     <section class="admin-section">
       <div class="section-title">
+        <h2>注册玩家</h2>
+        <span id="registered-users-count">0</span>
+      </div>
+      <div class="registered-users-toolbar">
+        <input id="registered-users-search" type="search" maxlength="32" placeholder="搜索用户名">
+        <select id="registered-users-sort" aria-label="排序字段">
+          <option value="last_login_at">上次登录</option>
+          <option value="created_at">注册时间</option>
+          <option value="games_played">对局数</option>
+          <option value="wins">胜场</option>
+          <option value="losses">败场</option>
+          <option value="draws">平局</option>
+          <option value="win_rate">胜率</option>
+          <option value="username">用户名</option>
+          <option value="id">账号ID</option>
+        </select>
+        <select id="registered-users-order" aria-label="排序方向">
+          <option value="desc">降序</option>
+          <option value="asc">升序</option>
+        </select>
+        <button id="registered-users-refresh" class="ghost-btn" type="button">刷新账号</button>
+      </div>
+      <div id="registered-users-panel" class="registered-users-panel"></div>
+    </section>
+
+    <section class="admin-section">
+      <div class="section-title">
         <h2>在线玩家</h2>
         <span id="players-count">0</span>
       </div>
@@ -121,6 +148,6 @@
   </section>
 </main>
 
-<script src="/static/js/admin.js?v=5"></script>
+<script src="/static/js/admin.js?v=6"></script>
 </body>
 </html>

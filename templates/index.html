@@ -57,10 +57,26 @@
       <input type="password" id="input-account-password-confirm" autocomplete="new-password" placeholder="再次输入密码">
     </div>
   </div>
+  <div id="account-password-change-form" class="account-auth-form account-password-change-form hidden">
+    <div id="account-password-change-title" class="account-form-title">修改密码</div>
+    <div class="form-row">
+      <label id="label-account-old-password" for="input-account-old-password">原密码</label>
+      <input type="password" id="input-account-old-password" autocomplete="current-password" placeholder="输入原密码">
+    </div>
+    <div class="form-row">
+      <label id="label-account-new-password" for="input-account-new-password">新密码</label>
+      <input type="password" id="input-account-new-password" autocomplete="new-password" placeholder="输入新密码">
+    </div>
+    <div class="form-row">
+      <label id="label-account-new-password-confirm" for="input-account-new-password-confirm">确认新密码</label>
+      <input type="password" id="input-account-new-password-confirm" autocomplete="new-password" placeholder="再次输入新密码">
+    </div>
+  </div>
   <p id="account-error" class="error-text"></p>
   <div class="account-popover-actions">
     <button id="btn-account-login" class="btn btn-primary">登录</button>
     <button id="btn-account-register" class="btn btn-primary hidden">注册</button>
+    <button id="btn-account-change-password" class="btn btn-primary hidden">修改密码</button>
     <button id="btn-account-popover-logout" class="btn btn-secondary">退出登录</button>
   </div>
 </div>

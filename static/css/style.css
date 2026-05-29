@@ -449,6 +449,7 @@ body {
 }
 
 .account-auth-form.hidden,
+.account-password-change-form.hidden,
 .account-popover-actions .hidden,
 .account-auth-form .hidden {
   display: none;
@@ -478,6 +479,13 @@ body {
   background: var(--bg-card);
   color: var(--text-primary);
   box-shadow: var(--shadow-sm);
+}
+
+.account-form-title {
+  padding-top: 2px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .account-popover .form-row {
