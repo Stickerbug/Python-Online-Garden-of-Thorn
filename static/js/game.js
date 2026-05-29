@@ -7015,6 +7015,38 @@ function getCardTargetPickOptions(cardDef) {
     return { includeSelf: true, candidates: 'all', aliveOnly: true };
 }
 
+function effectTreeUsesEventTarget(value) {
+    if (value === 'event_target') return true;
+    if (Array.isArray(value)) return value.some(effectTreeUsesEventTarget);
+    if (value && typeof value === 'object') {
+        return Object.values(value).some(effectTreeUsesEventTarget);
+    }
+    return false;
+}
+
+function getEquipmentTriggerPayloads(cardDef) {
+    if (!cardDef || cardDef.card_type !== 'root') return [];
+    const payloads = [];
+    const effects = Array.isArray(cardDef.effects) ? cardDef.effects : [];
+    effects.forEach(effect => {
+        if (effect && effect.type === 'on_equipment_trigger') {
+            payloads.push(effect.params || effect);
+        }
+    });
+    const scripts = cardDef.scripts && typeof cardDef.scripts === 'object' ? cardDef.scripts : {};
+    ['onEquipmentTrigger', 'on_equipment_trigger', 'equipment_trigger'].forEach(key => {
+        if (scripts[key]) payloads.push(scripts[key]);
+    });
+    return payloads;
+}
+
+function equipmentChoosesTargetOnTrigger(cardDef) {
+    if (!cardDef || cardDef.card_type !== 'root') return false;
+    const triggerCost = Number(cardDef.trigger_cost_e);
+    if (!Number.isFinite(triggerCost) || triggerCost < 0) return false;
+    return getEquipmentTriggerPayloads(cardDef).some(effectTreeUsesEventTarget);
+}
+
 async function chooseEnemyTarget(title) {
     const targets = getEnemyTargetOptions();
     if (!targets.length) {
@@ -7036,6 +7068,7 @@ function cardNeedsPlayerTarget(cardDef) {
     if (!cardDef || gs.mode !== '2v2') return false;
     if ((cardDef.flags || []).includes('self_only')) return false;
     if (cardDef.card_type === 'guard') return false;
+    if (equipmentChoosesTargetOnTrigger(cardDef)) return false;
     if (['thorn', 'bloom', 'root'].includes(cardDef.card_type)) return true;
     return false;
 }
@@ -7090,7 +7123,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             btn.onclick = async () => {
                 if (isActionBusy({ includeAnimation: false })) return;
                 const payload = { equipment_instance_id: cardInst.instance_id };
-                if (gameState && gameState.mode === '2v2' && ['Leaf', 'Mark', 'Mine'].includes(cardDef.id)) {
+                if (gameState && gameState.mode === '2v2' && equipmentChoosesTargetOnTrigger(cardDef)) {
                     const targetId = await choosePlayerTarget(
                         UI.choose_target || UI.select_target || 'Choose target',
                         { includeSelf: true, candidates: 'all', aliveOnly: true },
