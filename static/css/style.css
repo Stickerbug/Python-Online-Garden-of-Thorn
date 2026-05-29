@@ -383,30 +383,50 @@ body {
 
 .account-popover {
   position: fixed;
-  top: 52px;
+  top: 56px;
   left: 14px;
   z-index: 2501;
-  width: min(320px, calc(100vw - 28px));
-  padding: 14px;
+  width: min(380px, calc(100vw - 28px));
+  padding: 16px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   background: var(--bg-card);
   box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .account-popover.hidden {
   display: none;
 }
 
-.account-popover-title,
-.account-panel-head {
+.account-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.account-popover-title {
   font-size: 14px;
   font-weight: 800;
   color: var(--text-primary);
 }
 
-.account-popover-name,
-.account-current {
+.account-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.account-popover-name {
   font-size: 13px;
   color: var(--text-secondary);
 }
@@ -415,34 +435,74 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-top: 10px;
 }
 
-.account-panel {
+.account-auth-form {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--bg-card) 88%, var(--bg-primary));
 }
 
-.account-panel-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
+.account-auth-form.hidden,
+.account-popover-actions .hidden,
+.account-auth-form .hidden {
+  display: none;
 }
 
-.account-actions {
+.account-mode-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+}
+
+.account-mode-tab {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-main);
+  font-weight: 800;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.account-mode-tab.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.account-popover .form-row {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.account-actions .hidden {
-  display: none;
+.account-popover .form-row label {
+  min-width: 72px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.account-popover .form-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: var(--font-main);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  outline: none;
+}
+
+.account-popover .form-row input:focus {
+  border-color: var(--magic);
 }
 
 .account-stats {
@@ -6166,7 +6226,7 @@ body {
     gap: 10px;
   }
 
-  .account-actions {
+  .account-popover-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

@@ -118,16 +118,11 @@ BOTH_DISCONNECTED_CLEANUP_SECONDS = int(os.environ.get('BOTH_DISCONNECTED_CLEANU
 DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2:sha256:260000$82e7gAIa0D6034Qq$a0c9a5ad6028ce6c8798abc1314bc74b099b2441c3f39c3b3e6255ea2156f06b'
 ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', DEFAULT_ADMIN_PASSWORD_HASH)
 ADMIN_PLAYER_DISPLAY_NAME = 'Stickerbug'
-ADMIN_PLAYER_NICKNAME_HASH = os.environ.get(
-    'ADMIN_PLAYER_NICKNAME_HASH',
-    'pbkdf2:sha256:1000000$lrqsFfCaEKOE9gpQ$b69b0865913bb226c9e8e93b1433080242d0e3854d7a40231600f7b947be6a1c'
-)
 ADMIN_NICKNAME_RESERVED_REASON = 'Admin nickname reserved'
-SPECIAL_PLAYER_PROFILES = [
+SPECIAL_ACCOUNT_PROFILES = [
     {
         'key': 'admin',
         'display_name': ADMIN_PLAYER_DISPLAY_NAME,
-        'nickname_hash': ADMIN_PLAYER_NICKNAME_HASH,
         'special_role': 'admin',
         'special_role_color': 'admin',
         'special_role_sort': 0,
@@ -136,10 +131,6 @@ SPECIAL_PLAYER_PROFILES = [
     {
         'key': 'chief_designer_netherdog',
         'display_name': 'NetherDog',
-        'nickname_hash': os.environ.get(
-            'NETHERDOG_PLAYER_NICKNAME_HASH',
-            'pbkdf2:sha256:1000000$PYFsQvjuEmKEVZTD$41350516e3ef5082e678fddcf743663b5f35b993d3599eac34d2a3a65ceaf48c',
-        ),
         'special_role': 'chief_designer',
         'special_role_color': 'bloom',
         'special_role_sort': 1,
@@ -148,16 +139,13 @@ SPECIAL_PLAYER_PROFILES = [
     {
         'key': 'chief_designer_eric',
         'display_name': 'Eric',
-        'nickname_hash': os.environ.get(
-            'ERIC_PLAYER_NICKNAME_HASH',
-            'pbkdf2:sha256:1000000$DPOu8dFJCq2iU5JL$5b68e131a849ecc121c614009528d1cb32cc675ad2f9d400deb876b967db6bd8',
-        ),
         'special_role': 'chief_designer',
         'special_role_color': 'bloom',
         'special_role_sort': 1,
         'is_admin_player': False,
     },
 ]
+SPECIAL_PLAYER_PROFILES = SPECIAL_ACCOUNT_PROFILES
 ADMIN_EVENTS = deque(maxlen=300)
 MATCH_HISTORY = deque(maxlen=120)
 ADMIN_LOGIN_FAILURES = {}
@@ -491,13 +479,16 @@ def sanitize_nickname(raw):
 
 
 def get_special_player_profile(raw):
-    text = str(raw or '')
-    for profile in SPECIAL_PLAYER_PROFILES:
-        try:
-            if check_password_hash(profile['nickname_hash'], text):
-                return profile
-        except Exception:
-            continue
+    # Legacy secret-nickname login has been removed. Special display is now tied
+    # to registered account usernames through get_special_account_profile().
+    return None
+
+
+def get_special_account_profile(username):
+    lower = str(username or '').strip().lower()
+    for profile in SPECIAL_ACCOUNT_PROFILES:
+        if lower == profile['display_name'].lower():
+            return profile
     return None
 
 def special_public_fields(player_or_profile):
@@ -529,17 +520,32 @@ def room_player_nickname(room, sid, fallback='?'):
 
 
 def is_admin_player_secret(raw):
-    try:
-        profile = get_special_player_profile(raw)
-        return bool(profile and profile.get('is_admin_player'))
-    except Exception:
-        return False
+    return False
 
 
 def is_reserved_special_nickname(name):
     lower = str(name or '').lower()
-    special_names = {profile['display_name'].lower() for profile in SPECIAL_PLAYER_PROFILES}
+    special_names = {profile['display_name'].lower() for profile in SPECIAL_ACCOUNT_PROFILES}
     return ('sticker' in lower and 'bug' in lower) or lower in special_names
+
+
+def is_exact_special_account_name(name):
+    lower = str(name or '').strip().lower()
+    return lower in {profile['display_name'].lower() for profile in SPECIAL_ACCOUNT_PROFILES}
+
+
+def auth_user_payload(user):
+    if not user:
+        return None
+    payload = dict(user)
+    profile = get_special_account_profile(payload.get('username', ''))
+    if profile:
+        payload['display_name'] = profile['display_name']
+        payload.update(special_public_fields(profile))
+    else:
+        payload['display_name'] = payload.get('username', '')
+        payload.update(special_public_fields({}))
+    return payload
 
 
 def public_player_info(sid, player=None):
@@ -1980,14 +1986,17 @@ def api_auth_register():
         return db_unavailable_response()
     data = request.get_json(silent=True) or {}
     username = sanitize_nickname(data.get('username', ''))
-    if is_reserved_special_nickname(username):
+    if is_reserved_special_nickname(username) and not is_exact_special_account_name(username):
         return jsonify({'success': False, 'error': ADMIN_NICKNAME_RESERVED_REASON}), 400
-    user, error = create_user(username, data.get('password', ''))
+    password = data.get('password', '')
+    if 'password_confirm' in data and str(password) != str(data.get('password_confirm', '')):
+        return jsonify({'success': False, 'error': '两次输入的密码不一致'}), 400
+    user, error = create_user(username, password)
     if error:
         return jsonify({'success': False, 'error': error}), 400
     session['user_id'] = user['id']
     session['username'] = user['username']
-    return jsonify({'success': True, 'user': user})
+    return jsonify({'success': True, 'user': auth_user_payload(user)})
 
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -2005,7 +2014,7 @@ def api_auth_login():
     clear_auth_login_failures(ip)
     session['user_id'] = user['id']
     session['username'] = user['username']
-    return jsonify({'success': True, 'user': user})
+    return jsonify({'success': True, 'user': auth_user_payload(user)})
 
 
 @app.route('/api/auth/logout', methods=['POST'])
@@ -2025,7 +2034,7 @@ def api_auth_me():
         session.pop('username', None)
         return jsonify({'authenticated': False, 'db_available': True})
     session['username'] = user['username']
-    return jsonify({'authenticated': True, 'db_available': True, 'user': user})
+    return jsonify({'authenticated': True, 'db_available': True, 'user': auth_user_payload(user)})
 
 
 @app.route('/api/cards')
@@ -2424,9 +2433,9 @@ def on_login(data):
         session.pop('username', None)
     raw_name = data.get('nickname', '')
     if account_user:
-        special_profile = None
-        name = account_user['username']
-        is_admin_player = False
+        special_profile = get_special_account_profile(account_user['username'])
+        name = special_profile['display_name'] if special_profile else account_user['username']
+        is_admin_player = bool(special_profile and special_profile.get('is_admin_player'))
         user_id = account_user['id']
         is_registered_user = True
     else:
@@ -2518,7 +2527,7 @@ def on_login(data):
     join_room(sid)
     login_payload = {'sid': sid, 'nickname': name, 'authenticated': bool(is_registered_user)}
     if is_registered_user:
-        login_payload['user'] = account_user
+        login_payload['user'] = auth_user_payload(account_user)
     login_payload.update(special_public_fields(players.get(sid, {})))
     emit('login_ok', login_payload)
     print("[server] debug")

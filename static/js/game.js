@@ -920,44 +920,50 @@ Object.assign(I18N.ru, { admin_prefix: 'Администратор', login_admin
 Object.assign(I18N.ja, { admin_prefix: '管理者', login_admin_reserved: 'このニックネームは管理者が使用しています' });
 Object.assign(I18N.en, {
     account: 'Account', account_guest: 'Guest Mode', account_username: 'Username', account_password: 'Password',
+    account_password_confirm: 'Confirm Password',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
-    account_need_login: 'Log in or register first', account_error: 'Account error', guest_enter: 'Enter as Guest',
+    account_need_login: 'Log in or register first', account_error: 'Account error', account_password_mismatch: 'Passwords do not match', guest_enter: 'Enter as Guest',
     login_registered_reserved: 'This nickname belongs to a registered account'
 });
 Object.assign(I18N.zh, {
     account: '账号', account_guest: '游客模式', account_username: '用户名', account_password: '密码',
+    account_password_confirm: '确认密码',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
-    account_need_login: '请先登录或注册账号', account_error: '账号错误', guest_enter: '游客进入',
+    account_need_login: '请先登录或注册账号', account_error: '账号错误', account_password_mismatch: '两次输入的密码不一致', guest_enter: '游客进入',
     login_registered_reserved: '此昵称属于已注册账号'
 });
 Object.assign(I18N.fr, {
     account: 'Compte', account_guest: 'Mode invité', account_username: 'Nom', account_password: 'Mot de passe',
+    account_password_confirm: 'Confirmer',
     account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
     account_not_logged_in: 'Non connecté', account_logged_in_as: 'Connecté : {0}', account_stats: 'Parties {0} / V {1} / D {2} / N {3}',
-    account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', guest_enter: 'Entrer en invité',
+    account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', account_password_mismatch: 'Les mots de passe ne correspondent pas', guest_enter: 'Entrer en invité',
     login_registered_reserved: 'Ce pseudo appartient à un compte'
 });
 Object.assign(I18N.pt, {
     account: 'Conta', account_guest: 'Modo convidado', account_username: 'Usuário', account_password: 'Senha',
+    account_password_confirm: 'Confirmar senha',
     account_login: 'Entrar', account_register: 'Registrar', account_enter: 'Entrar com conta', account_logout: 'Sair',
     account_not_logged_in: 'Não conectado', account_logged_in_as: 'Conectado: {0}', account_stats: 'Jogos {0} / V {1} / D {2} / E {3}',
-    account_need_login: 'Entre ou registre-se primeiro', account_error: 'Erro da conta', guest_enter: 'Entrar como convidado',
+    account_need_login: 'Entre ou registre-se primeiro', account_error: 'Erro da conta', account_password_mismatch: 'As senhas não coincidem', guest_enter: 'Entrar como convidado',
     login_registered_reserved: 'Este nome pertence a uma conta'
 });
 Object.assign(I18N.ru, {
     account: 'Аккаунт', account_guest: 'Гость', account_username: 'Имя', account_password: 'Пароль',
+    account_password_confirm: 'Повтор пароля',
     account_login: 'Войти', account_register: 'Регистрация', account_enter: 'Войти аккаунтом', account_logout: 'Выйти',
     account_not_logged_in: 'Не выполнен вход', account_logged_in_as: 'Вход: {0}', account_stats: 'Игры {0} / Победы {1} / Поражения {2} / Ничьи {3}',
-    account_need_login: 'Сначала войдите или зарегистрируйтесь', account_error: 'Ошибка аккаунта', guest_enter: 'Войти гостем',
+    account_need_login: 'Сначала войдите или зарегистрируйтесь', account_error: 'Ошибка аккаунта', account_password_mismatch: 'Пароли не совпадают', guest_enter: 'Войти гостем',
     login_registered_reserved: 'Это имя принадлежит аккаунту'
 });
 Object.assign(I18N.ja, {
     account: 'アカウント', account_guest: 'ゲスト', account_username: 'ユーザー名', account_password: 'パスワード',
+    account_password_confirm: '確認',
     account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
-    account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', guest_enter: 'ゲストで入る',
+    account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
     login_registered_reserved: 'この名前は登録済みアカウントです'
 });
 Object.assign(I18N.en, { chief_designer_prefix: 'Chief Designer' });
@@ -1836,6 +1842,7 @@ let mySid = '';
 let nickname = '';
 let loginCredential = '';
 let currentAccount = null;
+let accountMode = 'login';
 let socket = null;
 let manualDisconnect = false;
 let CARD_DEFS = {};
@@ -2221,35 +2228,37 @@ function updateStaticText() {
     const btnLobbySettings = $('btn-lobby-settings');
     if (btnLobbySettings) btnLobbySettings.textContent = UI.settings_btn;
     const btnConnect = $('btn-connect');
-    if (btnConnect) btnConnect.textContent = currentAccount ? UI.enter_lobby : UI.guest_enter;
+    if (btnConnect) btnConnect.textContent = UI.guest_enter;
     const btnSoloTraining = $('btn-solo-training');
     if (btnSoloTraining) btnSoloTraining.textContent = UI.solo_training;
     const btnAccountTop = $('btn-account-top');
     if (btnAccountTop) btnAccountTop.textContent = UI.account;
-    const accountTitle = $('account-title');
-    if (accountTitle) accountTitle.textContent = UI.account;
     const accountPopoverTitle = $('account-popover-title');
     if (accountPopoverTitle) accountPopoverTitle.textContent = UI.account;
+    const accountModeLogin = $('btn-account-mode-login');
+    if (accountModeLogin) accountModeLogin.textContent = UI.account_login;
+    const accountModeRegister = $('btn-account-mode-register');
+    if (accountModeRegister) accountModeRegister.textContent = UI.account_register;
     const accountUsernameLabel = $('label-account-username');
     if (accountUsernameLabel) accountUsernameLabel.textContent = UI.account_username;
     const accountPasswordLabel = $('label-account-password');
     if (accountPasswordLabel) accountPasswordLabel.textContent = UI.account_password;
+    const accountPasswordConfirmLabel = $('label-account-password-confirm');
+    if (accountPasswordConfirmLabel) accountPasswordConfirmLabel.textContent = UI.account_password_confirm;
     const accountUsernameInput = $('input-account-username');
     if (accountUsernameInput) accountUsernameInput.placeholder = UI.account_username;
     const accountPasswordInput = $('input-account-password');
     if (accountPasswordInput) accountPasswordInput.placeholder = UI.account_password;
+    const accountPasswordConfirmInput = $('input-account-password-confirm');
+    if (accountPasswordConfirmInput) accountPasswordConfirmInput.placeholder = UI.account_password_confirm;
     const accountLoginBtn = $('btn-account-login');
     if (accountLoginBtn) accountLoginBtn.textContent = UI.account_login;
     const accountRegisterBtn = $('btn-account-register');
     if (accountRegisterBtn) accountRegisterBtn.textContent = UI.account_register;
     const accountEnterBtn = $('btn-account-enter');
     if (accountEnterBtn) accountEnterBtn.textContent = UI.account_enter;
-    const accountLogoutBtn = $('btn-account-logout');
-    if (accountLogoutBtn) accountLogoutBtn.textContent = UI.account_logout;
     const accountPopoverLogout = $('btn-account-popover-logout');
     if (accountPopoverLogout) accountPopoverLogout.textContent = UI.account_logout;
-    const accountPopoverClose = $('btn-account-popover-close');
-    if (accountPopoverClose) accountPopoverClose.textContent = UI.close;
     const guestDivider = $('guest-divider-label');
     if (guestDivider) guestDivider.textContent = UI.account_guest;
     renderAccountState();
@@ -3977,10 +3986,6 @@ function displayWidth(str) {
 }
 
 function onLogin() {
-    if (currentAccount) {
-        onAccountEnter();
-        return;
-    }
     const nick = $('input-nickname').value.trim();
     const err = $('login-error');
     if (!nick) {
@@ -4033,24 +4038,48 @@ function accountStatsText(user) {
 }
 
 function renderAccountState() {
-    const nameText = currentAccount ? tf('account_logged_in_as', currentAccount.username) : UI.account_not_logged_in;
-    const accountCurrent = $('account-current');
-    if (accountCurrent) accountCurrent.textContent = nameText;
+    const accountDisplay = currentAccount ? (currentAccount.display_name || currentAccount.username) : '';
+    const nameText = currentAccount ? tf('account_logged_in_as', accountDisplay) : UI.account_not_logged_in;
     const popName = $('account-popover-name');
     if (popName) popName.textContent = nameText;
     const stats = accountStatsText(currentAccount);
-    const statsEl = $('account-stats');
-    if (statsEl) statsEl.textContent = stats;
     const popStats = $('account-popover-stats');
     if (popStats) popStats.textContent = stats;
+    const authForm = $('account-auth-form');
+    if (authForm) authForm.classList.toggle('hidden', !!currentAccount);
     const enterBtn = $('btn-account-enter');
-    if (enterBtn) enterBtn.disabled = !currentAccount;
-    const logoutBtn = $('btn-account-logout');
-    if (logoutBtn) logoutBtn.classList.toggle('hidden', !currentAccount);
+    if (enterBtn) {
+        enterBtn.disabled = !currentAccount;
+        enterBtn.classList.toggle('hidden', !currentAccount);
+    }
     const popLogout = $('btn-account-popover-logout');
-    if (popLogout) popLogout.disabled = !currentAccount;
+    if (popLogout) {
+        popLogout.disabled = !currentAccount;
+        popLogout.classList.toggle('hidden', !currentAccount);
+    }
     const btnConnect = $('btn-connect');
-    if (btnConnect) btnConnect.textContent = currentAccount ? UI.enter_lobby : UI.guest_enter;
+    if (btnConnect) btnConnect.textContent = UI.guest_enter;
+    renderAccountMode();
+}
+
+function renderAccountMode() {
+    const isRegister = accountMode === 'register';
+    const loginTab = $('btn-account-mode-login');
+    const registerTab = $('btn-account-mode-register');
+    if (loginTab) loginTab.classList.toggle('active', !isRegister);
+    if (registerTab) registerTab.classList.toggle('active', isRegister);
+    const confirmRow = $('account-confirm-row');
+    if (confirmRow) confirmRow.classList.toggle('hidden', !isRegister);
+    const loginBtn = $('btn-account-login');
+    if (loginBtn) loginBtn.classList.toggle('hidden', isRegister || !!currentAccount);
+    const registerBtn = $('btn-account-register');
+    if (registerBtn) registerBtn.classList.toggle('hidden', !isRegister || !!currentAccount);
+}
+
+function setAccountMode(mode) {
+    accountMode = mode === 'register' ? 'register' : 'login';
+    setAccountError('');
+    renderAccountMode();
 }
 
 async function authRequest(path, body) {
@@ -4096,11 +4125,18 @@ async function onAccountRegister() {
     setAccountError('');
     const username = ($('input-account-username')?.value || '').trim();
     const password = $('input-account-password')?.value || '';
+    const passwordConfirm = $('input-account-password-confirm')?.value || '';
+    if (password !== passwordConfirm) {
+        setAccountError(UI.account_password_mismatch);
+        return;
+    }
     try {
-        const data = await authRequest('/api/auth/register', { username, password });
+        const data = await authRequest('/api/auth/register', { username, password, password_confirm: passwordConfirm });
         currentAccount = data.user || null;
         const passwordInput = $('input-account-password');
         if (passwordInput) passwordInput.value = '';
+        const confirmInput = $('input-account-password-confirm');
+        if (confirmInput) confirmInput.value = '';
         renderAccountState();
     } catch (err) {
         setAccountError(err.message || UI.account_error);
@@ -8785,20 +8821,27 @@ async function init() {
     if ($('btn-account-login')) $('btn-account-login').addEventListener('click', onAccountLogin);
     if ($('btn-account-register')) $('btn-account-register').addEventListener('click', onAccountRegister);
     if ($('btn-account-enter')) $('btn-account-enter').addEventListener('click', onAccountEnter);
-    if ($('btn-account-logout')) $('btn-account-logout').addEventListener('click', onAccountLogout);
+    if ($('btn-account-mode-login')) $('btn-account-mode-login').addEventListener('click', () => setAccountMode('login'));
+    if ($('btn-account-mode-register')) $('btn-account-mode-register').addEventListener('click', () => setAccountMode('register'));
     if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());
     if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
     if ($('btn-account-popover-logout')) $('btn-account-popover-logout').addEventListener('click', onAccountLogout);
     const accountPasswordInput = $('input-account-password');
     if (accountPasswordInput) {
         accountPasswordInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') onAccountLogin();
+            if (e.key === 'Enter') (accountMode === 'register' ? onAccountRegister() : onAccountLogin());
+        });
+    }
+    const accountConfirmInput = $('input-account-password-confirm');
+    if (accountConfirmInput) {
+        accountConfirmInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') onAccountRegister();
         });
     }
     const accountUsernameInput = $('input-account-username');
     if (accountUsernameInput) {
         accountUsernameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') onAccountLogin();
+            if (e.key === 'Enter') (accountMode === 'register' ? onAccountRegister() : onAccountLogin());
         });
     }
     $('btn-solo-training').addEventListener('click', showSoloTraining);
