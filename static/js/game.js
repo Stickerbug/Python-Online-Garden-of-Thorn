@@ -4049,11 +4049,6 @@ function onLogin() {
         if (err) err.textContent = UI.login_name_no_repeat_symbols;
         return;
     }
-    const lowerNick = nick.toLowerCase();
-    if ((lowerNick.includes('sticker') && lowerNick.includes('bug')) || lowerNick === 'netherdog' || lowerNick === 'eric') {
-        if (err) err.textContent = UI.login_admin_reserved;
-        return;
-    }
     const server = getServerAddress();
     nickname = nick;
     loginCredential = nick;

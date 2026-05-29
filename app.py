@@ -2599,14 +2599,14 @@ def on_login(data):
             name = special_profile['display_name']
         else:
             name = sanitize_nickname(raw_name)
-        if not special_profile and is_reserved_special_nickname(name):
-            emit('login_fail', {'reason': ADMIN_NICKNAME_RESERVED_REASON})
-            return
         if not special_profile and not validate_nickname(name):
             emit('login_fail', {'reason': 'Invalid nickname. Use 1-16 display-width characters; avoid pure numbers, pure symbols, or repeated -/_.'})
             return
         if not special_profile and DB_AVAILABLE and get_user_by_username(name):
             emit('login_fail', {'reason': 'Registered nickname reserved'})
+            return
+        if not special_profile and is_reserved_special_nickname(name):
+            emit('login_fail', {'reason': ADMIN_NICKNAME_RESERVED_REASON})
             return
         user_id = None
         is_registered_user = False
