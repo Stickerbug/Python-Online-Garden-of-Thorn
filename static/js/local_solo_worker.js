@@ -44,6 +44,11 @@ const EVENT_EFFECT_TYPES = new Set([
     'on_hand_owner_turn_start',
     'on_discard_owner_turn_start',
     'on_deck_owner_turn_start',
+    'on_card_used',
+    'on_equipment_triggered',
+    'on_equipment_destroyed',
+    'on_resource_spent',
+    'on_player_stat_changed',
     'on_fatal_set_health_exile',
     'aura_enemy_elixir_recovery',
 ]);
@@ -60,7 +65,18 @@ const SCRIPT_ENTRY_ALIASES = {
     hand_owner_turn_start: ['onHandOwnerTurnStart', 'hand_owner_turn_start', 'on_hand_owner_turn_start'],
     discard_owner_turn_start: ['onDiscardOwnerTurnStart', 'discard_owner_turn_start', 'on_discard_owner_turn_start'],
     deck_owner_turn_start: ['onDeckOwnerTurnStart', 'deck_owner_turn_start', 'on_deck_owner_turn_start'],
+    card_used: ['onCardUsed', 'card_used', 'on_card_used'],
+    equipment_triggered: ['onEquipmentTriggered', 'equipment_triggered', 'on_equipment_triggered'],
+    equipment_destroyed: ['onEquipmentDestroyed', 'equipment_destroyed', 'on_equipment_destroyed'],
+    resource_spent: ['onResourceSpent', 'resource_spent', 'on_resource_spent'],
+    player_stat_changed: ['onPlayerStatChanged', 'player_stat_changed', 'on_player_stat_changed'],
 };
+
+const TRACKED_PLAYER_STATS = [
+    'health', 'max_health', 'elixir', 'max_elixir', 'magic', 'max_magic',
+    'armor', 'dodge', 'poison', 'fire', 'vulnerable', 'toxic',
+    'equipment_protection', 'hand_limit',
+];
 
 let cardDefs = {};
 let openingEventMagicPool = [];
@@ -220,6 +236,7 @@ class LocalEquipment {
         this.owner = owner;
         this.effect_target = owner;
         this.turns_equipped = 0;
+        this.uses_this_turn = 0;
         this.corruption_active = false;
     }
 
@@ -237,6 +254,7 @@ class LocalEquipment {
             owner: this.owner,
             effect_target: this.effect_target,
             turns_equipped: this.turns_equipped,
+            uses_this_turn: this.uses_this_turn,
             corruption_active: this.corruption_active,
         };
     }
@@ -719,6 +737,9 @@ class LocalSoloEngine {
         this._antenna_reveal[playerId] = null;
         this.runZoneOwnerTurnStartEvents(playerId);
         this.runTimedEffectsForTurn(playerId);
+        this.players.forEach(owner => {
+            owner.equipment.forEach(eq => { eq.uses_this_turn = 0; });
+        });
         if (ps.shovel_active) {
             ps.shovel_active = false;
             ps.untargetable = false;
@@ -911,6 +932,9 @@ class LocalSoloEngine {
         if (typeof ref === 'string') return ['current_card', 'this', 'this_card'].includes(ref) ? currentCard : null;
         if (typeof ref !== 'object') return null;
         if (['current_card', 'this_card'].includes(ref.ref)) return currentCard;
+        if (['event_card', 'used_card', 'trigger_card', 'destroyed_card'].includes(ref.ref)) {
+            return this.findCardByInstanceId((this._active_effect_context || {}).event_card_instance_id);
+        }
         if (['last_created_card', 'created_card', 'last_copied_card'].includes(ref.ref)) {
             return this.findCardByInstanceId(this._active_effect_context.last_created_card_instance_id || this._last_created_card_instance_id);
         }
@@ -1054,7 +1078,7 @@ class LocalSoloEngine {
         if (expr && typeof expr === 'object') {
             const ref = expr.ref;
             if (ref === 'list_item') return this.listItemRaw(playerId, expr, currentCard);
-            if (['card_instance', 'zone_card', 'selected_card', 'selected_card_at', 'current_card', 'this_card', 'last_created_card', 'created_card', 'last_copied_card'].includes(ref)) {
+            if (['card_instance', 'zone_card', 'selected_card', 'selected_card_at', 'current_card', 'this_card', 'event_card', 'used_card', 'trigger_card', 'destroyed_card', 'last_created_card', 'created_card', 'last_copied_card'].includes(ref)) {
                 const card = this.resolveCardRef(playerId, expr, currentCard);
                 return card ? this.serializableListItem(card) : expr;
             }
@@ -1189,15 +1213,8 @@ class LocalSoloEngine {
             if (tid < 0) {
                 return this.players.reduce((sum, _, idx) => sum + this.evalExpr(idx, { ...expr, target: idx }, currentCard, 0), 0);
             }
-            const ps = this.players[tid] || this.players[playerId];
             const prop = String(expr.property || expr.attribute || expr.attr || 'health');
-            if (prop === 'hand_size') return ps.hand.length;
-            if (prop === 'hand_limit') return ps.handLimit();
-            if (prop === 'deck_remaining' || prop === 'deck_count') return ps.deck.length;
-            if (prop === 'discard_size' || prop === 'discard_count') return ps.discard.length;
-            if (prop === 'exile_size' || prop === 'exile_count') return ps.exile.length;
-            if (prop === 'equip_count' || prop === 'equipment_count') return ps.equipment.length;
-            return toInt(ps[prop], 0);
+            return this.playerPropertyValue(tid, prop);
         }
         if (ref === 'math_op') {
             const a = this.evalExpr(playerId, expr.a, currentCard, 0);
@@ -1217,6 +1234,10 @@ class LocalSoloEngine {
         if (ref === 'card_property') {
             const card = this.resolveCardRef(playerId, expr.card || { ref: 'current_card' }, currentCard);
             return card ? toInt(card[String(expr.property || 'fusion_level')], 0) : 0;
+        }
+        if (ref === 'card_tag_count') {
+            const card = this.resolveCardRef(playerId, expr.card || { ref: 'current_card' }, currentCard);
+            return card ? card.flags.size : 0;
         }
         if (ref === 'equipment_property') {
             const eq = this.resolveEquipmentRef(playerId, expr.equipment || { ref: 'current_equipment' }, currentCard);
@@ -1352,6 +1373,11 @@ class LocalSoloEngine {
             if (relation === 'enemy') return sourceId !== targetId;
             return false;
         }
+        if (op === 'event_card_type') {
+            const expected = String(cond.card_type || 'any');
+            const actual = String((this._active_effect_context || {}).event_card_type || '');
+            return expected === 'any' || expected === actual;
+        }
         if (op === 'hand_full') {
             const tid = this.resolveTarget(playerId, cond.target || 'self');
             return !(this.players[tid] || this.players[playerId]).canAddToHand();
@@ -1363,6 +1389,199 @@ class LocalSoloEngine {
             return zone.some(card => card.def_id === cond.card_id);
         }
         return !!this.evalExpr(playerId, cond, currentCard, 0);
+    }
+
+    eventRelationMatches(listenerOwner, actorId, relation) {
+        relation = String(relation || 'any');
+        if (['any', 'all', 'both'].includes(relation)) return actorId >= 0 && actorId < this.players.length;
+        if (['self', 'owner'].includes(relation)) return actorId === listenerOwner;
+        if (['teammate', 'ally'].includes(relation)) return false;
+        if (['friendly', 'same_side'].includes(relation)) return actorId === listenerOwner;
+        if (relation === 'enemy') return actorId !== listenerOwner && actorId >= 0 && actorId < this.players.length;
+        return false;
+    }
+
+    eventWrapperMatches(ownerId, eventName, params = {}, context = {}) {
+        let actorId = toInt(context.source_id, ownerId);
+        if (eventName === 'equipment_destroyed') actorId = toInt(context.target_id, actorId);
+        if (eventName === 'player_stat_changed') actorId = toInt(context.target_id, actorId);
+        if (!this.eventRelationMatches(ownerId, actorId, params.relation || 'any')) return false;
+        if (eventName === 'card_used') {
+            const expected = String(params.card_type || 'any');
+            const actual = String(context.event_card_type || '');
+            if (expected !== 'any' && expected !== actual) return false;
+        }
+        if (eventName === 'resource_spent') {
+            const expectedResource = String(params.resource || 'elixir');
+            const actualResource = String(context.resource || '');
+            if (expectedResource !== actualResource) return false;
+            const threshold = Math.max(1, this.evalInt(ownerId, params.amount ?? 1, null, 1));
+            if (toInt(context.amount, 0) < threshold) return false;
+        }
+        if (eventName === 'player_stat_changed') {
+            const expectedProp = String(params.property || 'health');
+            const actualProp = String(context.property || '');
+            if (expectedProp !== actualProp) return false;
+            const expectedDirection = String(params.direction || 'change');
+            const actualDirection = String(context.direction || 'change');
+            if (expectedDirection !== 'change' && expectedDirection !== actualDirection) return false;
+        }
+        return true;
+    }
+
+    playerPropertyValue(targetId, property) {
+        const prop = String(property || 'health');
+        if (targetId < 0) {
+            return this.players.reduce((sum, _, idx) => sum + this.playerPropertyValue(idx, prop), 0);
+        }
+        const ps = this.players[targetId];
+        if (!ps) return 0;
+        if (prop === 'health') return toInt(ps.health, 0);
+        if (prop === 'max_health') return toInt(ps.max_health, 0);
+        if (prop === 'elixir' || prop === 'energy') return toInt(ps.elixir, 0);
+        if (prop === 'max_elixir' || prop === 'max_energy') return toInt(ps.max_elixir, 0);
+        if (prop === 'magic') return toInt(ps.magic, 0);
+        if (prop === 'max_magic') return toInt(ps.max_magic, 0);
+        if (prop === 'hand_limit') return ps.handLimit();
+        if (prop === 'hand_size') return ps.hand.length;
+        if (prop === 'deck_remaining' || prop === 'deck_count') return ps.deck.length;
+        if (prop === 'discard_size' || prop === 'discard_count') return ps.discard.length;
+        if (prop === 'exile_size' || prop === 'exile_count') return ps.exile.length;
+        if (prop === 'equip_count' || prop === 'equipment_count') return ps.equipment.length;
+        return toInt(ps[prop], 0);
+    }
+
+    setPlayerPropertyValue(targetId, property, value) {
+        const ps = this.players[targetId];
+        if (!ps) return;
+        let prop = String(property || 'health');
+        if (prop === 'energy') prop = 'elixir';
+        if (prop === 'max_energy') prop = 'max_elixir';
+        const next = Math.max(0, toInt(value, 0));
+        if (prop === 'hand_limit') {
+            const golden = ps.equipment.filter(eq => eq.def_id === 'GoldenLeaf' && (eq.effect_target ?? targetId) === targetId).length;
+            ps.extra_hand_limit_bonus = Math.max(0, next - HAND_LIMIT - golden);
+            return;
+        }
+        if (prop === 'hand_limit_bonus') {
+            ps.extra_hand_limit_bonus = next;
+            return;
+        }
+        ps[prop] = next;
+        if (prop === 'max_health') {
+            ps.base_max_health = next;
+            ps.health = Math.min(ps.health, ps.max_health);
+        } else if (prop === 'max_elixir') {
+            ps.elixir = Math.min(ps.elixir, ps.max_elixir);
+        } else if (prop === 'max_magic') {
+            ps.magic = Math.min(ps.magic, ps.max_magic);
+        }
+    }
+
+    snapshotPlayerStats() {
+        return this.players.map((_, playerId) => {
+            const stats = {};
+            TRACKED_PLAYER_STATS.forEach(prop => { stats[prop] = this.playerPropertyValue(playerId, prop); });
+            return stats;
+        });
+    }
+
+    dispatchPlayerStatChanges(before, sourceId, sourceCard = null) {
+        if (!Array.isArray(before)) return;
+        const depth = toInt(this._stat_change_event_depth, 0);
+        if (depth >= 4) return;
+        this._stat_change_event_depth = depth + 1;
+        try {
+            before.slice(0, this.players.length).forEach((stats, playerId) => {
+                Object.entries(stats || {}).forEach(([property, oldValue]) => {
+                    const newValue = this.playerPropertyValue(playerId, property);
+                    if (newValue === oldValue) return;
+                    this.dispatchCardEvent('player_stat_changed', sourceId, sourceCard, playerId, null, null, null, {
+                        property,
+                        old_value: oldValue,
+                        new_value: newValue,
+                        delta: newValue - oldValue,
+                        direction: newValue > oldValue ? 'increase' : 'decrease',
+                    });
+                });
+            });
+        } finally {
+            this._stat_change_event_depth = depth;
+        }
+    }
+
+    resourceEventRepeatCount(ownerId, params = {}, context = {}) {
+        const amount = toInt(context.amount, 0);
+        const threshold = Math.max(1, this.evalInt(ownerId, params.amount ?? 1, null, 1));
+        return Math.max(1, Math.floor(amount / threshold));
+    }
+
+    spendResource(playerId, resource, amount, sourceCard = null) {
+        const ps = this.players[playerId];
+        if (!ps) return 0;
+        const attr = resource === 'magic' ? 'magic' : 'elixir';
+        const requested = Math.max(0, toInt(amount, 0));
+        if (requested <= 0) return 0;
+        const before = this.snapshotPlayerStats();
+        const actual = Math.min(requested, toInt(ps[attr], 0));
+        ps[attr] = Math.max(0, toInt(ps[attr], 0) - requested);
+        if (actual > 0) {
+            this.dispatchCardEvent('resource_spent', playerId, sourceCard, playerId, null, null, null, {
+                resource: attr,
+                amount: actual,
+            });
+        }
+        this.dispatchPlayerStatChanges(before, playerId, sourceCard);
+        return actual;
+    }
+
+    equipmentTriggerMaxUses(eq) {
+        if (!eq || !eq.card_def) return 0;
+        for (const effect of eq.card_def.effects || []) {
+            if (!effect || effect.type !== 'on_equipment_trigger') continue;
+            const params = effect.params || {};
+            return Math.max(0, toInt(params.max_uses_per_turn ?? params.max_uses ?? 0, 0));
+        }
+        return 0;
+    }
+
+    iterEventListenerCards() {
+        const out = [];
+        const seen = new Set();
+        this.players.forEach((ps, ownerId) => {
+            ps.equipment.slice().forEach(eq => {
+                const card = eq && eq.card_instance;
+                if (!card || seen.has(card.instance_id)) return;
+                seen.add(card.instance_id);
+                out.push({ ownerId, card, equipment: eq });
+            });
+            ps.hand.slice().forEach(card => {
+                if (!card || seen.has(card.instance_id)) return;
+                seen.add(card.instance_id);
+                out.push({ ownerId, card, equipment: null });
+            });
+        });
+        return out;
+    }
+
+    dispatchCardEvent(eventName, sourceId, eventCard = null, targetId = null, equipment = null, equipmentOwnerId = null, choice = null, extraContext = null) {
+        const eventCardId = eventCard && eventCard.instance_id;
+        const context = {
+            source_id: sourceId,
+            target_id: targetId == null ? sourceId : targetId,
+            event_card_instance_id: eventCardId,
+            event_card_type: eventCard ? eventCard.card_type : '',
+        };
+        if (equipment) {
+            context.selected_equipment_instance_id = equipment.card_instance && equipment.card_instance.instance_id;
+            context.selected_equipment_owner_id = equipmentOwnerId == null ? sourceId : equipmentOwnerId;
+        }
+        if (extraContext && typeof extraContext === 'object') Object.assign(context, extraContext);
+        this.iterEventListenerCards().forEach(({ ownerId, card }) => {
+            if (card.instance_id === eventCardId) return;
+            if (!this.hasCardEvent(card.def(), eventName)) return;
+            this.runCardEvent(ownerId, card, eventName, choice, context);
+        });
     }
 
     runCardEvent(ownerId, card, eventName, choice = null, extraContext = {}) {
@@ -1377,7 +1596,15 @@ class LocalSoloEngine {
         ((def && def.effects) || []).forEach(effect => {
             if (!effect || effect.type !== eventType) return;
             const params = effect.params || {};
-            this.runEffectList(ownerId, card, params.effects || [], choice, { event: eventName, ...extraContext });
+            if (!this.eventWrapperMatches(ownerId, eventName, params, extraContext)) return;
+            const repeatCount = eventName === 'resource_spent' ? this.resourceEventRepeatCount(ownerId, params, extraContext) : 1;
+            for (let repeatIndex = 0; repeatIndex < repeatCount; repeatIndex++) {
+                this.runEffectList(ownerId, card, params.effects || [], choice, {
+                    event: eventName,
+                    repeat_index: repeatIndex + 1,
+                    ...extraContext,
+                });
+            }
             ran = true;
         });
         return ran;
@@ -1476,10 +1703,16 @@ class LocalSoloEngine {
         };
         const name = aliases[type] || type;
         const handler = this[`effect_${name}`];
+        const statWrapperSkip = new Set([
+            'if', 'if_else', 'repeat', 'repeat_until', 'for_each', 'for_each_selected_card',
+            'for_each_list', 'timed_effect', 'countdown_var', 'cost_e', 'cost_m',
+        ]);
         try {
+            const beforeStats = this.snapshotPlayerStats();
             if (typeof handler === 'function') handler.call(this, playerId, card, params, log, choice);
             else if (log) this.logMsg(log);
             else throw new Error(`Unknown effect: ${type}`);
+            if (!statWrapperSkip.has(name)) this.dispatchPlayerStatChanges(beforeStats, playerId, card);
         } catch (err) {
             if (err instanceof ModLoopBreak || err instanceof ModLoopContinue) throw err;
             this.logMsg(MOD_RUNTIME_ERROR_MESSAGE);
@@ -1847,14 +2080,7 @@ class LocalSoloEngine {
         this.resolveTargets(playerId, params.target || 'self').forEach(tid => {
             const prop = String(params.property || 'health');
             const value = this.evalInt(playerId, params.value ?? 0, card, 0);
-            if (prop === 'hand_limit') {
-                const golden = this.players[tid].equipment.filter(eq => eq.def_id === 'GoldenLeaf' && (eq.effect_target ?? tid) === tid).length;
-                this.players[tid].extra_hand_limit_bonus = Math.max(0, value - HAND_LIMIT - golden);
-            } else if (prop === 'hand_limit_bonus') {
-                this.players[tid].extra_hand_limit_bonus = Math.max(0, value);
-            } else {
-                this.players[tid][prop] = value;
-            }
+            this.setPlayerPropertyValue(tid, prop, value);
         });
     }
 
@@ -1862,14 +2088,20 @@ class LocalSoloEngine {
         this.resolveTargets(playerId, params.target || 'self').forEach(tid => {
             const prop = String(params.property || 'health');
             const amount = this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
-            if (prop === 'hand_limit') {
-                this.players[tid].extra_hand_limit_bonus = Math.max(0, this.players[tid].extra_hand_limit_bonus + amount);
-            } else if (prop === 'hand_limit_bonus') {
-                this.players[tid].extra_hand_limit_bonus = Math.max(0, this.players[tid].extra_hand_limit_bonus + amount);
-            } else {
-                this.players[tid][prop] = toInt(this.players[tid][prop], 0) + amount;
-            }
+            this.setPlayerPropertyValue(tid, prop, this.playerPropertyValue(tid, prop) + amount);
         });
+    }
+
+    effect_cost_e(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const amount = this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+        this.spendResource(targetId, 'elixir', amount, card);
+    }
+
+    effect_cost_m(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const amount = this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+        this.spendResource(targetId, 'magic', amount, card);
     }
 
     effect_card_prop_set(playerId, card, params) {
@@ -1888,6 +2120,31 @@ class LocalSoloEngine {
         target[prop] = toInt(target[prop], 0) + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
+    }
+
+    effect_card_prop_mul(playerId, card, params) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
+        if (!target) return;
+        const prop = String(params.property || 'fusion_level');
+        const multiplier = this.evalInt(playerId, params.multiplier ?? params.amount ?? 1, card, 1);
+        target[prop] = toInt(target[prop], 0) * multiplier;
+        if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
+        if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
+    }
+
+    effect_card_damage_multiply(playerId, card, params) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
+        if (!target) return;
+        const multiplier = this.evalInt(playerId, params.multiplier ?? 2, card, 2);
+        target.fusion_level = Math.max(1, toInt(target.fusion_level, 1)) * multiplier;
+        target.fusion_multiplier = target.fusion_level;
+    }
+
+    effect_clear_tags(playerId, card, params) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
+        if (!target) return;
+        target.flags.forEach(flag => target.disabled_flags.add(flag));
+        target.instance_flags.clear();
     }
 
     effect_equipment_prop_set(playerId, card, params) {
@@ -2220,6 +2477,9 @@ class LocalSoloEngine {
         if (ref == null) ref = { ref: 'current_equipment' };
         if (typeof ref === 'string') ref = { ref };
         if (!ref || typeof ref !== 'object') return null;
+        if (['event_equipment', 'trigger_equipment', 'destroyed_equipment'].includes(ref.ref)) {
+            return this.findEquipmentByCardInstanceId((this._active_effect_context || {}).selected_equipment_instance_id).eq;
+        }
         if (['current_equipment', 'this_equipment'].includes(ref.ref)) {
             return this.findEquipmentForCard(playerId, currentCard)
                 || this.findEquipmentByCardInstanceId(currentCard && currentCard.instance_id).eq;
@@ -2449,6 +2709,7 @@ class LocalSoloEngine {
         ps.equipment.splice(ps.equipment.indexOf(eq), 1);
         if (eq.card_instance.flags.has('exile')) ps.exile.push(eq.card_instance);
         else this.discardCard(ps, eq.card_instance);
+        this.dispatchCardEvent('equipment_destroyed', ownerId, eq.card_instance, ownerId, eq, ownerId);
         return true;
     }
 
@@ -2481,6 +2742,19 @@ class LocalSoloEngine {
         });
     }
 
+    wouldHeal(card) {
+        const def = card.def();
+        if (toInt(def.heal, 0) > 0 || toInt(card.heal, 0) > 0) return true;
+        return playEffectsFor(card).some(effect => {
+            if (!effect || typeof effect !== 'object') return false;
+            const type = String(effect.type || '');
+            const params = effect.params || {};
+            if (type === 'heal' || type === 'drain_damage') return true;
+            if (type === 'player_prop_add' && String(params.property || '') === 'health') return true;
+            return false;
+        });
+    }
+
     checkResponseNeeded(playerId, card) {
         if (card.flags.has('precision')) return false;
         const opp = this.players[1 - playerId];
@@ -2488,6 +2762,7 @@ class LocalSoloEngine {
         if (opp.hand.some(c => c.def().response_trigger === 'any')) return true;
         if (opp.hand.some(c => c.def().response_trigger === trigger)) return true;
         if (this.wouldDestroyEquipment(card) && opp.hand.some(c => c.def().response_trigger === 'equipment_destroy')) return true;
+        if (this.wouldHeal(card) && opp.hand.some(c => c.def().response_trigger === 'heal')) return true;
         return false;
     }
 
@@ -2501,6 +2776,7 @@ class LocalSoloEngine {
         const triggerTypes = ['any'];
         if (def.card_type) triggerTypes.push(def.card_type);
         if (this.wouldDestroyEquipment(playedCard)) triggerTypes.push('equipment_destroy');
+        if (this.wouldHeal(playedCard)) triggerTypes.push('heal');
         return this.players[playerId].hand.filter(card => triggerTypes.includes(card.def().response_trigger));
     }
 
@@ -2516,8 +2792,8 @@ class LocalSoloEngine {
         const [canPlay, reason] = this.canPlayCard(playerId, card);
         if (!canPlay) return { success: false, error: reason };
         const totalE = card.cost_e + this.getExtraEForCard(playerId, card);
-        ps.elixir -= totalE;
-        ps.magic -= card.cost_m;
+        this.spendResource(playerId, 'elixir', totalE, card);
+        this.spendResource(playerId, 'magic', card.cost_m, card);
         ps.cards_played_this_turn[card.def_id] = toInt(ps.cards_played_this_turn[card.def_id], 0) + 1;
         const removed = ps.removeHandCard(instanceId);
         if (!removed) return { success: false, error: '移出手牌失败' };
@@ -2549,6 +2825,7 @@ class LocalSoloEngine {
             this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}被魔法泡泡反制，失效！`);
             if (card.flags.has('exile')) ps.exile.push(card);
             else this.discardCard(ps, card);
+            this.dispatchCardEvent('card_used', playerId, card, playerId, null, null, choice);
             return result;
         }
         this.negated_card = false;
@@ -2609,6 +2886,8 @@ class LocalSoloEngine {
             const loc = this.findCardLocation(card);
             if (!loc) this.discardCard(ps, card);
         }
+        const targetId = choice && (choice.target_player ?? choice.target_player_id ?? choice.target_id);
+        this.dispatchCardEvent('card_used', playerId, card, targetId == null ? playerId : toInt(targetId, playerId), null, null, choice);
         this.checkGameOver();
         return result;
     }
@@ -2645,8 +2924,8 @@ class LocalSoloEngine {
             return { success: false, error: '选择已取消' };
         }
         const dupCount = toInt(ps.cards_played_this_turn[card.def_id], 0);
-        ps.elixir -= card.cost_e + dupCount;
-        ps.magic -= card.cost_m;
+        this.spendResource(playerId, 'elixir', card.cost_e + dupCount, card);
+        this.spendResource(playerId, 'magic', card.cost_m, card);
         ps.cards_played_this_turn[card.def_id] = dupCount + 1;
         const handCard = ps.findHandCard(card.instance_id);
         if (handCard) ps.removeHandCard(card.instance_id);
@@ -2671,10 +2950,11 @@ class LocalSoloEngine {
             const valid = trigger === 'any'
                 || trigger === playedType
                 || (this.wouldDestroyEquipment(card) && trigger === 'equipment_destroy')
+                || (this.wouldHeal(card) && trigger === 'heal')
                 || (pending.is_precision && trigger === 'thorn');
             if (!valid) return this.executeCardEffect(playerId, card, choice);
-            responder.elixir -= counter.cost_e;
-            responder.magic -= counter.cost_m;
+            this.spendResource(responderId, 'elixir', counter.cost_e, counter);
+            this.spendResource(responderId, 'magic', counter.cost_m, counter);
             const removed = responder.removeHandCard(instanceId);
             this.logMsg(`${this.pn(responderId)}使用${cardName(removed.def_id)}进行反制！`);
             this.executeCounterEffect(responderId, removed, card, playerId);
@@ -2708,6 +2988,7 @@ class LocalSoloEngine {
         }
         if (counterCard.flags.has('exile')) this.players[responderId].exile.push(counterCard);
         else this.discardCard(this.players[responderId], counterCard);
+        this.dispatchCardEvent('card_used', responderId, counterCard, originalPlayerId == null ? responderId : originalPlayerId);
     }
 
     useTrigger(playerId, equipmentInstanceId) {
@@ -2719,19 +3000,26 @@ class LocalSoloEngine {
         if (triggerCost < 0 && !this.hasCardEvent(eq.card_def, 'equipment_trigger')) return { success: false, error: '该装备没有触发效果' };
         if (eq.turns_equipped < 1) return { success: false, error: '装备需要装备一回合后才能触发' };
         if (triggerCost > ps.elixir) return { success: false, error: '能量不足' };
-        if (triggerCost > 0) ps.elixir -= triggerCost;
+        const maxUses = this.equipmentTriggerMaxUses(eq);
+        if (maxUses > 0 && toInt(eq.uses_this_turn, 0) >= maxUses) return { success: false, error: `该装备本回合最多触发${maxUses}次` };
+        if (triggerCost > 0) this.spendResource(playerId, 'elixir', triggerCost, eq.card_instance);
+        eq.uses_this_turn = toInt(eq.uses_this_turn, 0) + 1;
         if (this.hasCardEvent(eq.card_def, 'equipment_trigger')) {
             this.runCardEvent(playerId, eq.card_instance, 'equipment_trigger', null, {
                 event: 'equipment_trigger',
                 source_id: playerId,
                 target_id: 1 - playerId,
             });
+            this.dispatchCardEvent('equipment_triggered', playerId, eq.card_instance, 1 - playerId, eq, playerId);
         } else if (eq.def_id === 'Leaf') {
             if (this.destroyEquipment(playerId, eq)) this.dealAttackDamage(1 - playerId, 8, 1, false, playerId);
         } else if (eq.def_id === 'Mark') {
             if (this.destroyEquipment(playerId, eq)) this.players[1 - playerId].skip_turn = true;
         } else if (eq.def_id === 'Mine') {
             if (this.destroyEquipment(playerId, eq)) this.dealAttackDamage(1 - playerId, 20, 1, false, playerId);
+        }
+        if (!this.hasCardEvent(eq.card_def, 'equipment_trigger')) {
+            this.dispatchCardEvent('equipment_triggered', playerId, eq.card_instance, 1 - playerId, eq, playerId);
         }
         this.checkGameOver();
         return { success: true };

@@ -28,6 +28,7 @@ class EquipmentInstance:
         self.owner = owner
         self.effect_target: int = owner
         self.turns_equipped: int = 0
+        self.uses_this_turn: int = 0
         self.corruption_active: bool = False
 
     @property
@@ -44,6 +45,7 @@ class EquipmentInstance:
             'owner': self.owner,
             'effect_target': self.effect_target,
             'turns_equipped': self.turns_equipped,
+            'uses_this_turn': self.uses_this_turn,
             'corruption_active': self.corruption_active,
         }
 
@@ -54,6 +56,7 @@ class EquipmentInstance:
             d['owner']
         )
         ei.turns_equipped = d.get('turns_equipped', 0)
+        ei.uses_this_turn = d.get('uses_this_turn', 0)
         ei.effect_target = d.get('effect_target', ei.owner)
         ei.corruption_active = d.get('corruption_active', False)
         return ei
@@ -499,6 +502,11 @@ class GameEngine:
         if not isinstance(equipment_ref, dict):
             return None
         ref = equipment_ref.get('ref')
+        if ref in ('event_equipment', 'trigger_equipment', 'destroyed_equipment'):
+            context = getattr(self, '_active_effect_context', {}) or {}
+            instance_id = context.get('selected_equipment_instance_id') if isinstance(context, dict) else None
+            _, eq = self._find_equipment_by_card_instance_id(instance_id)
+            return eq
         if ref in ('current_equipment', 'this_equipment'):
             eq = self._find_equipment_for_card(player_id, current_card)
             if eq is not None:
@@ -634,8 +642,12 @@ class GameEngine:
             return int(ps.max_health)
         if prop in ('elixir', 'energy'):
             return int(ps.elixir)
+        if prop in ('max_elixir', 'max_energy'):
+            return int(ps.max_elixir)
         if prop == 'magic':
             return int(ps.magic)
+        if prop == 'max_magic':
+            return int(ps.max_magic)
         if prop == 'armor':
             return int(ps.armor)
         if prop in ('dodge', 'poison', 'fire', 'vulnerable', 'toxic', 'equipment_protection',
@@ -680,7 +692,7 @@ class GameEngine:
         if prop == 'energy':
             prop = 'elixir'
         non_negative = {
-            'health', 'max_health', 'elixir', 'energy', 'magic', 'armor', 'dodge',
+            'health', 'max_health', 'elixir', 'energy', 'max_elixir', 'max_energy', 'magic', 'max_magic', 'armor', 'dodge',
             'poison', 'fire', 'vulnerable', 'toxic', 'equipment_protection',
             'attack_blocked', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
             'nazar_big_hits', 'extra_hand_limit_bonus', 'hand_limit_bonus',
@@ -692,7 +704,16 @@ class GameEngine:
         if prop in non_negative:
             if prop == 'hand_limit_bonus':
                 prop = 'extra_hand_limit_bonus'
+            if prop == 'max_energy':
+                prop = 'max_elixir'
             setattr(ps, prop, max(0, value))
+            if prop == 'max_health':
+                ps.base_max_health = ps.max_health
+                ps.health = min(ps.health, ps.max_health)
+            elif prop == 'max_elixir':
+                ps.elixir = min(ps.elixir, ps.max_elixir)
+            elif prop == 'max_magic':
+                ps.magic = min(ps.magic, ps.max_magic)
         elif prop == 'hand_limit':
             golden = sum(
                 1
@@ -1407,8 +1428,8 @@ class GameEngine:
             return {'success': False, 'error': reason}
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = card.cost_e + extra_e
-        ps.elixir -= total_e
-        ps.magic -= card.cost_m
+        self._spend_resource(player_id, 'elixir', total_e, card)
+        self._spend_resource(player_id, 'magic', card.cost_m, card)
         ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
         card_removed = ps.remove_hand_card(card_instance_id)
         if card_removed is None:
@@ -1448,6 +1469,10 @@ class GameEngine:
             for c in opp.hand:
                 if c.card_def.response_trigger == 'equipment_destroy':
                     return True
+        if self._would_heal(card):
+            for c in opp.hand:
+                if c.card_def.response_trigger == 'heal':
+                    return True
         return False
 
     def _check_precision_response_needed(self, player_id: int, card: CardInstance) -> bool:
@@ -1461,6 +1486,19 @@ class GameEngine:
 
     def _would_destroy_equipment(self, card: CardInstance) -> bool:
         return card.def_id in ('Sewage', 'MagicSewage')
+
+    def _would_heal(self, card: CardInstance) -> bool:
+        if card is None:
+            return False
+        if getattr(card.card_def, 'heal', 0):
+            return True
+        for effect in self._play_effects_for_card(card):
+            if not isinstance(effect, dict):
+                continue
+            effect_type = effect.get('type', '')
+            if effect_type in ('heal', 'lifesteal_damage'):
+                return True
+        return False
 
     def handle_response(self, responder_id: int, card_instance_id: Optional[int]) -> dict:
         if self.pending_response is None:
@@ -1487,12 +1525,14 @@ class GameEngine:
                 can_respond = True
             elif counter_card.card_def.response_trigger == 'any':
                 can_respond = True
+            elif self._would_heal(card) and counter_card.card_def.response_trigger == 'heal':
+                can_respond = True
             elif self._would_destroy_equipment(card) and counter_card.card_def.response_trigger == 'equipment_destroy':
                 can_respond = True
             if not can_respond:
                 return self._execute_card_effect(player_id, card, choice)
-            responder.elixir -= counter_card.cost_e
-            responder.magic -= counter_card.cost_m
+            self._spend_resource(responder_id, 'elixir', counter_card.cost_e, counter_card)
+            self._spend_resource(responder_id, 'magic', counter_card.cost_m, counter_card)
             counter_removed = responder.remove_hand_card(card_instance_id)
             if counter_removed is None:
                 return self._execute_card_effect(player_id, card, choice)
@@ -1555,6 +1595,8 @@ class GameEngine:
             ps.exile.append(counter_card)
         else:
             self._discard_card(ps, counter_card)
+        self._dispatch_card_event('card_used', responder_id, counter_card,
+                                  target_id=original_player_id if original_player_id is not None else responder_id)
 
     def _reset_one_shot_attack_attrs(self, card: CardInstance):
         reset_card_for_discard(card)
@@ -1684,8 +1726,8 @@ class GameEngine:
         dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
         extra_e = dup_count
         total_e = card.cost_e + extra_e
-        ps.elixir -= total_e
-        ps.magic -= card.cost_m
+        self._spend_resource(player_id, 'elixir', total_e, card)
+        self._spend_resource(player_id, 'magic', card.cost_m, card)
         ps.cards_played_this_turn[card.def_id] = dup_count + 1
         hand_card = ps.find_hand_card(card.instance_id)
         if hand_card:
@@ -2054,14 +2096,14 @@ class GameEngine:
 
     def _atomic_cost_e(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        amount = params.get('amount', 1)
-        self.players[target_id].elixir = max(0, self.players[target_id].elixir - amount)
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        self._spend_resource(target_id, 'elixir', amount, card)
         self.log_msg(log or f"{self.pn(target_id)}消耗{amount}E")
 
     def _atomic_cost_m(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        amount = params.get('amount', 1)
-        self.players[target_id].magic = max(0, self.players[target_id].magic - amount)
+        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        self._spend_resource(target_id, 'magic', amount, card)
         self.log_msg(log or f"{self.pn(target_id)}消耗{amount}M")
 
     def _atomic_mod_e_regen(self, player_id, card, params, log, choice, context):
@@ -3267,7 +3309,8 @@ class GameEngine:
     def _effect_mine(self, player_id: int, card: CardInstance, choice=None):
         pass
 
-    def _destroy_equipment(self, owner_id: int, eq: EquipmentInstance, check_protection: bool = True) -> bool:
+    def _destroy_equipment(self, owner_id: int, eq: EquipmentInstance, check_protection: bool = True,
+                           source_id: Optional[int] = None) -> bool:
         ps = self.players[owner_id]
         if check_protection and ps.equipment_protection > 0:
             ps.equipment_protection -= 1
@@ -3302,6 +3345,9 @@ class GameEngine:
             ps.exile.append(eq.card_instance)
         else:
             self._discard_card(ps, eq.card_instance)
+        self._dispatch_card_event('equipment_destroyed', owner_id if source_id is None else source_id,
+                                  eq.card_instance, target_id=owner_id,
+                                  equipment=eq, equipment_owner_id=owner_id)
         return True
 
     def check_equipment_destroy_response(self, owner_id: int, eq: EquipmentInstance) -> dict:
@@ -3421,6 +3467,11 @@ class GameEngine:
         'on_hand_owner_turn_start',
         'on_discard_owner_turn_start',
         'on_deck_owner_turn_start',
+        'on_card_used',
+        'on_equipment_triggered',
+        'on_equipment_destroyed',
+        'on_resource_spent',
+        'on_player_stat_changed',
     }
 
     _base_eval_expr = _eval_expr
@@ -3441,6 +3492,11 @@ class GameEngine:
         'hand_owner_turn_start': ('onHandOwnerTurnStart', 'hand_owner_turn_start', 'on_hand_owner_turn_start'),
         'discard_owner_turn_start': ('onDiscardOwnerTurnStart', 'discard_owner_turn_start', 'on_discard_owner_turn_start'),
         'deck_owner_turn_start': ('onDeckOwnerTurnStart', 'deck_owner_turn_start', 'on_deck_owner_turn_start'),
+        'card_used': ('onCardUsed', 'card_used', 'on_card_used'),
+        'equipment_triggered': ('onEquipmentTriggered', 'equipment_triggered', 'on_equipment_triggered'),
+        'equipment_destroyed': ('onEquipmentDestroyed', 'equipment_destroyed', 'on_equipment_destroyed'),
+        'resource_spent': ('onResourceSpent', 'resource_spent', 'on_resource_spent'),
+        'player_stat_changed': ('onPlayerStatChanged', 'player_stat_changed', 'on_player_stat_changed'),
         'response': ('onResponse', 'response', 'on_response'),
     }
 
@@ -3570,6 +3626,10 @@ class GameEngine:
         if not isinstance(card_ref, dict):
             return None
         ref = card_ref.get('ref')
+        if ref in ('event_card', 'used_card', 'trigger_card', 'destroyed_card'):
+            context = getattr(self, '_active_effect_context', {}) or {}
+            instance_id = context.get('event_card_instance_id') if isinstance(context, dict) else None
+            return self._find_card_by_instance_id(instance_id)
         if ref in ('current_card', 'this_card'):
             return current_card
         if ref in ('last_created_card', 'created_card', 'last_copied_card'):
@@ -3741,7 +3801,7 @@ class GameEngine:
             ref = expr.get('ref')
             if ref == 'list_item':
                 return self._list_item_raw(player_id, expr, card)
-            if ref in ('card_instance', 'zone_card', 'selected_card', 'selected_card_at', 'current_card', 'this_card', 'last_created_card', 'created_card', 'last_copied_card'):
+            if ref in ('card_instance', 'zone_card', 'selected_card', 'selected_card_at', 'current_card', 'this_card', 'event_card', 'used_card', 'trigger_card', 'destroyed_card', 'last_created_card', 'created_card', 'last_copied_card'):
                 resolved = self._resolve_card_ref(player_id, expr, card)
                 return self._serializable_list_item(resolved) if resolved is not None else expr
             if ref == 'var':
@@ -3818,12 +3878,17 @@ class GameEngine:
                 rt = self._EFFECT_ALIASES.get(et, et)
                 fn = getattr(self, f'_atomic_{rt}', None)
                 try:
+                    before_stats = self._snapshot_player_stats()
                     if callable(fn):
                         fn(player_id, card, pm, lg, choice, context)
                     elif lg:
                         self.log_msg(lg)
                     else:
                         self._log_mod_runtime_error(et, RuntimeError(f'Unknown effect: {et}'), player_id, card)
+                    if rt not in ('if', 'if_else', 'repeat', 'repeat_until', 'for_each',
+                                  'for_each_selected_card', 'for_each_list', 'timed_effect',
+                                  'countdown_var', 'cost_e', 'cost_m'):
+                        self._dispatch_player_stat_changes(before_stats, player_id, card)
                 except (ModLoopBreak, ModLoopContinue):
                     raise
                 except Exception as exc:
@@ -4030,6 +4095,14 @@ class GameEngine:
                 if prop == 'cost_m':
                     return int(target_card.cost_m)
                 return int(getattr(target_card, prop, 0))
+            if ref == 'card_tag_count':
+                target_card = self._resolve_card_ref(player_id, expr.get('card', {'ref': 'current_card'}), card)
+                if target_card is None:
+                    return 0
+                flags = set(getattr(target_card.card_def, 'flags', set()) or set())
+                flags.update(getattr(target_card, 'instance_flags', set()) or set())
+                flags.difference_update(getattr(target_card, 'disabled_flags', set()) or set())
+                return len(flags)
             if ref == 'equipment_property':
                 eq = self._resolve_equipment_ref(player_id, expr.get('equipment', {'ref': 'current_equipment'}), card)
                 return self._get_equipment_property_value(eq, expr.get('property', 'turns_equipped'))
@@ -4085,6 +4158,11 @@ class GameEngine:
             if relation == 'enemy':
                 return self._opposite_timer_side(source_id, target_id)
             return False
+        if isinstance(cond, dict) and cond.get('op') == 'event_card_type':
+            context = getattr(self, '_active_effect_context', {}) or {}
+            expected = str(cond.get('card_type', 'any') or 'any')
+            actual = str(context.get('event_card_type', '') or '')
+            return expected == 'any' or expected == actual
         if isinstance(cond, dict) and cond.get('op') == 'has_tag':
             target_card = self._resolve_card_ref(player_id, cond.get('card', {'ref': 'current_card'}), card)
             if target_card is None:
@@ -4191,12 +4269,17 @@ class GameEngine:
                 resolved_type = self._EFFECT_ALIASES.get(eff_type, eff_type)
                 handler = getattr(self, f'_atomic_{resolved_type}', None)
                 try:
+                    before_stats = self._snapshot_player_stats()
                     if handler:
                         handler(player_id, card, params, log, choice, context)
                     elif log:
                         self.log_msg(log)
                     else:
                         self._log_mod_runtime_error(eff_type, RuntimeError(f'Unknown effect: {eff_type}'), player_id, card)
+                    if resolved_type not in ('if', 'if_else', 'repeat', 'repeat_until', 'for_each',
+                                             'for_each_selected_card', 'for_each_list', 'timed_effect',
+                                             'countdown_var', 'cost_e', 'cost_m'):
+                        self._dispatch_player_stat_changes(before_stats, player_id, card)
                 except (ModLoopBreak, ModLoopContinue) as exc:
                     self._log_mod_runtime_error(eff_type, RuntimeError(f'{type(exc).__name__} outside loop'), player_id, card)
                 except Exception as exc:
@@ -4220,6 +4303,186 @@ class GameEngine:
     def _log_card_play(self, player_id: int, card: CardInstance):
         self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
 
+    def _effective_card_flags(self, target_card: Optional[CardInstance]) -> Set[str]:
+        if target_card is None:
+            return set()
+        flags = set(getattr(target_card.card_def, 'flags', set()) or set())
+        flags.update(getattr(target_card, 'instance_flags', set()) or set())
+        flags.difference_update(getattr(target_card, 'disabled_flags', set()) or set())
+        return flags
+
+    def _event_relation_matches(self, listener_owner: int, actor_id: int, relation: str) -> bool:
+        relation = str(relation or 'any')
+        if relation in ('any', 'all', 'both'):
+            return 0 <= actor_id < len(self.players)
+        if relation in ('self', 'owner'):
+            return actor_id == listener_owner
+        if relation in ('teammate', 'ally'):
+            return self._same_timer_side(listener_owner, actor_id) and actor_id != listener_owner
+        if relation in ('friendly', 'same_side'):
+            return self._same_timer_side(listener_owner, actor_id)
+        if relation == 'enemy':
+            return self._opposite_timer_side(listener_owner, actor_id)
+        return False
+
+    def _event_wrapper_matches(self, owner_id: int, event_name: str, params: dict,
+                               extra_context: Optional[dict]) -> bool:
+        context = extra_context or {}
+        relation = str(params.get('relation', 'any') or 'any')
+        actor_id = int(context.get('source_id', owner_id))
+        if event_name == 'equipment_destroyed':
+            actor_id = int(context.get('target_id', actor_id))
+        if event_name == 'player_stat_changed':
+            actor_id = int(context.get('target_id', actor_id))
+        if not self._event_relation_matches(owner_id, actor_id, relation):
+            return False
+        if event_name == 'card_used':
+            expected_type = str(params.get('card_type', 'any') or 'any')
+            actual_type = str(context.get('event_card_type', '') or '')
+            if expected_type != 'any' and actual_type != expected_type:
+                return False
+        if event_name == 'resource_spent':
+            expected_resource = str(params.get('resource', 'elixir') or 'elixir')
+            actual_resource = str(context.get('resource', '') or '')
+            if expected_resource != actual_resource:
+                return False
+            threshold = max(1, self._eval_int(owner_id, params.get('amount', 1), None, 1))
+            if int(context.get('amount', 0) or 0) < threshold:
+                return False
+        if event_name == 'player_stat_changed':
+            expected_prop = str(params.get('property', 'health') or 'health')
+            actual_prop = str(context.get('property', '') or '')
+            if expected_prop != actual_prop:
+                return False
+            expected_dir = str(params.get('direction', 'change') or 'change')
+            actual_dir = str(context.get('direction', 'change') or 'change')
+            if expected_dir != 'change' and expected_dir != actual_dir:
+                return False
+        return True
+
+    def _resource_event_repeat_count(self, owner_id: int, params: dict, extra_context: Optional[dict]) -> int:
+        if not extra_context:
+            return 1
+        amount = int(extra_context.get('amount', 0) or 0)
+        threshold = max(1, self._eval_int(owner_id, params.get('amount', 1), None, 1))
+        return max(1, amount // threshold)
+
+    def _iter_event_listener_cards(self):
+        seen = set()
+        for owner_id, ps in enumerate(self.players):
+            for eq in list(getattr(ps, 'equipment', [])):
+                card_obj = getattr(eq, 'card_instance', None)
+                iid = getattr(card_obj, 'instance_id', None)
+                if card_obj is not None and iid not in seen:
+                    seen.add(iid)
+                    yield owner_id, card_obj, eq
+            for card_obj in list(getattr(ps, 'hand', [])):
+                iid = getattr(card_obj, 'instance_id', None)
+                if card_obj is not None and iid not in seen:
+                    seen.add(iid)
+                    yield owner_id, card_obj, None
+
+    def _dispatch_card_event(self, event_name: str, source_id: int, event_card: Optional[CardInstance] = None,
+                             target_id: Optional[int] = None, equipment: Optional[EquipmentInstance] = None,
+                             equipment_owner_id: Optional[int] = None, choice: Optional[dict] = None,
+                             extra_context: Optional[dict] = None):
+        event_card_id = getattr(event_card, 'instance_id', None)
+        context = {
+            'source_id': source_id,
+            'target_id': source_id if target_id is None else target_id,
+            'event_card_instance_id': event_card_id,
+            'event_card_type': getattr(event_card, 'card_type', getattr(getattr(event_card, 'card_def', None), 'card_type', '')),
+        }
+        if equipment is not None:
+            context['selected_equipment_instance_id'] = getattr(getattr(equipment, 'card_instance', None), 'instance_id', None)
+            context['selected_equipment_owner_id'] = equipment_owner_id if equipment_owner_id is not None else source_id
+        if isinstance(extra_context, dict):
+            context.update(extra_context)
+        for owner_id, listener_card, _ in list(self._iter_event_listener_cards()):
+            if getattr(listener_card, 'instance_id', None) == event_card_id:
+                continue
+            if not self._has_card_event(listener_card.card_def, event_name):
+                continue
+            self._run_card_event(owner_id, listener_card, event_name, choice, context)
+
+    TRACKED_PLAYER_STATS = (
+        'health', 'max_health', 'elixir', 'max_elixir', 'magic', 'max_magic',
+        'armor', 'dodge', 'poison', 'fire', 'vulnerable', 'toxic',
+        'equipment_protection', 'hand_limit',
+    )
+
+    def _snapshot_player_stats(self):
+        return [
+            {prop: self._get_player_property_value(pid, prop) for prop in self.TRACKED_PLAYER_STATS}
+            for pid in range(len(self.players))
+        ]
+
+    def _dispatch_player_stat_changes(self, before, source_id: int, source_card: Optional[CardInstance] = None):
+        if not before:
+            return
+        depth = int(getattr(self, '_stat_change_event_depth', 0))
+        if depth >= 4:
+            return
+        self._stat_change_event_depth = depth + 1
+        try:
+            for pid in range(min(len(before), len(self.players))):
+                for prop, old_value in before[pid].items():
+                    new_value = self._get_player_property_value(pid, prop)
+                    if new_value == old_value:
+                        continue
+                    direction = 'increase' if new_value > old_value else 'decrease'
+                    self._dispatch_card_event(
+                        'player_stat_changed',
+                        source_id,
+                        source_card,
+                        target_id=pid,
+                        extra_context={
+                            'property': prop,
+                            'old_value': old_value,
+                            'new_value': new_value,
+                            'delta': new_value - old_value,
+                            'direction': direction,
+                        },
+                    )
+        finally:
+            self._stat_change_event_depth = depth
+
+    def _spend_resource(self, player_id: int, resource: str, amount: int, source_card: Optional[CardInstance] = None) -> int:
+        if not (0 <= player_id < len(self.players)):
+            return 0
+        amount = max(0, int(amount or 0))
+        if amount <= 0:
+            return 0
+        ps = self.players[player_id]
+        attr = 'magic' if resource == 'magic' else 'elixir'
+        before = self._snapshot_player_stats()
+        actual = min(amount, int(getattr(ps, attr, 0)))
+        setattr(ps, attr, max(0, int(getattr(ps, attr, 0)) - amount))
+        if actual > 0:
+            self._dispatch_card_event(
+                'resource_spent',
+                player_id,
+                source_card,
+                target_id=player_id,
+                extra_context={'resource': attr, 'amount': actual},
+            )
+        self._dispatch_player_stat_changes(before, player_id, source_card)
+        return actual
+
+    def _equipment_trigger_max_uses(self, eq: EquipmentInstance) -> int:
+        if eq is None:
+            return 0
+        for effect in getattr(eq.card_def, 'effects', []) or []:
+            if not isinstance(effect, dict) or effect.get('type') != 'on_equipment_trigger':
+                continue
+            params = effect.get('params', {}) or {}
+            value = params.get('max_uses_per_turn', params.get('max_uses', 0))
+            try:
+                return max(0, int(value or 0))
+            except Exception:
+                return 0
+        return 0
+
     def _run_card_event(self, owner_id: int, card: CardInstance, event_name: str,
                         choice: Optional[dict] = None, extra_context: Optional[dict] = None) -> bool:
         if self._has_script_entry(card.card_def, event_name):
@@ -4240,18 +4503,22 @@ class GameEngine:
             if not isinstance(effect, dict) or effect.get('type') != event_type:
                 continue
             params = effect.get('params', {}) or {}
+            if not self._event_wrapper_matches(owner_id, event_name, params, extra_context):
+                continue
             if event_type == 'on_equipment_trigger' and params.get('destroy_self'):
                 eq = self._find_equipment_for_card(owner_id, card)
                 if eq is not None and not self._destroy_equipment(owner_id, eq):
                     ran = True
                     continue
-            self._run_effect_list(
-                owner_id,
-                card,
-                params.get('effects', []),
-                choice,
-                {'event': event_name, **(extra_context or {})},
-            )
+            repeat_count = self._resource_event_repeat_count(owner_id, params, extra_context) if event_name == 'resource_spent' else 1
+            for repeat_index in range(repeat_count):
+                self._run_effect_list(
+                    owner_id,
+                    card,
+                    params.get('effects', []),
+                    choice,
+                    {'event': event_name, 'repeat_index': repeat_index + 1, **(extra_context or {})},
+                )
             ran = True
         return ran
 
@@ -4330,6 +4597,9 @@ class GameEngine:
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
             ps.gain_elixir(2)
             self.log_msg(f"{self.pn(player_id)}额外+2E")
+        for owner_state in self.players:
+            for eq in getattr(owner_state, 'equipment', []):
+                eq.uses_this_turn = 0
         for eq in list(ps.equipment):
             eq.turns_equipped += 1
             if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
@@ -4437,6 +4707,7 @@ class GameEngine:
                 ps.exile.append(card)
             else:
                 self._discard_card(ps, card)
+            self._dispatch_card_event('card_used', player_id, card, target_id=player_id, choice=choice)
             return result
         self.negated_card = False
         needs_choice = self._card_needs_choice(card)
@@ -4509,6 +4780,16 @@ class GameEngine:
             owner_id, zone_name, _ = self._find_card_location(card)
             if owner_id is None or zone_name is None:
                 self._discard_card(ps, card)
+        target_id = player_id
+        if isinstance(choice, dict):
+            for key in ('target_player', 'target_player_id', 'target_id'):
+                if key in choice:
+                    try:
+                        target_id = int(choice.get(key))
+                        break
+                    except Exception:
+                        target_id = player_id
+        self._dispatch_card_event('card_used', player_id, card, target_id=target_id, choice=choice)
         self._check_game_over()
         return result
 
@@ -4712,6 +4993,38 @@ class GameEngine:
         current = int(getattr(target_card, prop, 0))
         value = current + self._eval_int(player_id, params.get('amount', 0), card)
         self._set_card_property_value(player_id, card, params, value)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_card_prop_mul(self, player_id, card, params, log, choice, context):
+        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
+        if target_card is None:
+            return
+        prop = str(params.get('property', 'fusion_level'))
+        current = int(getattr(target_card, prop, 0))
+        multiplier = self._eval_int(player_id, params.get('multiplier', params.get('amount', 1)), card, 1)
+        self._set_card_property_value(player_id, card, {'card': params.get('card', {'ref': 'current_card'}), 'property': prop}, current * multiplier)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_card_damage_multiply(self, player_id, card, params, log, choice, context):
+        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
+        if target_card is None:
+            return
+        multiplier = self._eval_int(player_id, params.get('multiplier', 2), card, 2)
+        current = max(1, int(getattr(target_card, 'fusion_level', 1)))
+        self._set_card_property_value(player_id, card, {'card': params.get('card', {'ref': 'current_card'}), 'property': 'fusion_level'}, current * multiplier)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_clear_tags(self, player_id, card, params, log, choice, context):
+        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
+        if target_card is None:
+            return
+        all_flags = self._effective_card_flags(target_card)
+        target_card.instance_flags = set()
+        target_card.disabled_flags = set(getattr(target_card, 'disabled_flags', set()) or set())
+        target_card.disabled_flags.update(all_flags)
         if log:
             self.log_msg(log)
 
@@ -5085,9 +5398,15 @@ class GameEngine:
         trigger_cost = max(0, eq.card_def.trigger_cost_e)
         if trigger_cost > ps.elixir:
             return {'success': False, 'error': '能量不足'}
-        ps.elixir -= trigger_cost
+        max_uses = self._equipment_trigger_max_uses(eq)
+        if max_uses > 0 and int(getattr(eq, 'uses_this_turn', 0)) >= max_uses:
+            return {'success': False, 'error': f'该装备本回合最多触发{max_uses}次'}
+        self._spend_resource(player_id, 'elixir', trigger_cost, eq.card_instance)
+        eq.uses_this_turn = int(getattr(eq, 'uses_this_turn', 0)) + 1
         if has_mod_trigger and self._run_card_event(player_id, eq.card_instance, 'equipment_trigger', None,
                                                     {'source_id': player_id, 'target_id': 1 - player_id}):
+            self._dispatch_card_event('equipment_triggered', player_id, eq.card_instance,
+                                      target_id=1 - player_id, equipment=eq, equipment_owner_id=player_id)
             self._check_game_over()
             return {'success': True}
         opp_id = 1 - player_id
@@ -5100,6 +5419,8 @@ class GameEngine:
         elif eq.def_id == 'Mine':
             if self._destroy_equipment(player_id, eq):
                 self.deal_attack_damage(opp_id, 20)
+        self._dispatch_card_event('equipment_triggered', player_id, eq.card_instance,
+                                  target_id=opp_id, equipment=eq, equipment_owner_id=player_id)
         self._check_game_over()
         return {'success': True}
 

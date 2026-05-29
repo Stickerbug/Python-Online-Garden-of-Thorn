@@ -36,6 +36,11 @@ VALID_SCRIPT_KEYS = {
     'onHandOwnerTurnStart', 'hand_owner_turn_start', 'on_hand_owner_turn_start',
     'onDiscardOwnerTurnStart', 'discard_owner_turn_start', 'on_discard_owner_turn_start',
     'onDeckOwnerTurnStart', 'deck_owner_turn_start', 'on_deck_owner_turn_start',
+    'onCardUsed', 'card_used', 'on_card_used',
+    'onEquipmentTriggered', 'equipment_triggered', 'on_equipment_triggered',
+    'onEquipmentDestroyed', 'equipment_destroyed', 'on_equipment_destroyed',
+    'onResourceSpent', 'resource_spent', 'on_resource_spent',
+    'onPlayerStatChanged', 'player_stat_changed', 'on_player_stat_changed',
 }
 
 VALID_EFFECTS = {
@@ -87,13 +92,16 @@ VALID_EFFECTS = {
     'on_owner_turn_start', 'on_enemy_turn_start', 'on_any_turn_start',
     'on_damage_taken', 'on_equipment_trigger', 'on_equipment_destroy',
     'on_hand_owner_turn_start', 'on_discard_owner_turn_start', 'on_deck_owner_turn_start',
+    'on_card_used', 'on_equipment_triggered', 'on_equipment_destroyed',
+    'on_resource_spent', 'on_player_stat_changed',
     'aura_enemy_elixir_recovery',
     'direct_damage', 'lifesteal_damage', 'triangle_damage',
     'discard_choice_then_draw', 'coffee_gain_e',
     'destroy_equipment_choice_or_first', 'destroy_all_destroyable_equipment',
     'destroy_self_equipment', 'activate_corruption',
     'request_target', 'request_card', 'request_confirm',
-    'for_each_selected_card', 'card_prop_add', 'card_prop_set',
+    'for_each_selected_card', 'card_prop_add', 'card_prop_set', 'card_prop_mul',
+    'card_damage_multiply', 'clear_tags',
     'equipment_prop_add', 'equipment_prop_set',
     'player_prop_add', 'player_prop_set',
 }

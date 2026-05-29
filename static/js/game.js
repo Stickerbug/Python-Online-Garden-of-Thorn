@@ -1798,7 +1798,7 @@ let draftState = {};
 let eventSelectData = {};
 let lobbyPlayers = [];
 let lobbyOngoingGames = [];
-const DEFAULT_SERVER = 'http://121.41.93.192:5000';
+const DEFAULT_SERVER = 'http://121.41.93.192';
 const SERVER_ACTION_TIMEOUT_MS = 6000;
 const SOCKET_CONNECT_TIMEOUT_MS = 5000;
 const LEGACY_DEFAULT_SERVER_KEYS = new Set([
@@ -1868,7 +1868,8 @@ const LOCAL_SOLO_SUPPORTED_EFFECTS = new Set([
     'poison', 'apply_poison', 'burn', 'apply_burn', 'toxic', 'apply_toxic',
     'vulnus', 'apply_vulnerable', 'if', 'if_else', 'repeat', 'for_each_selected_card',
     'request_card', 'request_target', 'request_confirm',
-    'card_prop_set', 'card_prop_add', 'equipment_prop_set', 'equipment_prop_add',
+    'card_prop_set', 'card_prop_add', 'card_prop_mul', 'card_damage_multiply', 'clear_tags',
+    'equipment_prop_set', 'equipment_prop_add',
     'player_prop_set', 'player_prop_add', 'var_set', 'var_add', 'var_sub', 'var_mul', 'var_div',
     'copy_card', 'move_to_discard', 'move_to_hand', 'move_to_deck', 'remove_specific_card',
     'destroy_equipment_choice_or_first', 'destroy_random_equip', 'destroy_all_equip',
@@ -1877,7 +1878,10 @@ const LOCAL_SOLO_SUPPORTED_EFFECTS = new Set([
     'status_remove_named', 'status_add_named', 'clear_status',
     'on_owner_turn_start', 'on_enemy_turn_start', 'on_any_turn_start', 'on_damage_taken',
     'on_equipment_trigger', 'on_equipment_destroy', 'on_hand_owner_turn_start',
-    'on_discard_owner_turn_start', 'on_deck_owner_turn_start', 'on_fatal_set_health_exile',
+    'on_discard_owner_turn_start', 'on_deck_owner_turn_start',
+    'on_card_used', 'on_equipment_triggered', 'on_equipment_destroyed',
+    'on_resource_spent', 'on_player_stat_changed',
+    'on_fatal_set_health_exile',
     'aura_enemy_elixir_recovery', 'nullify_current_card',
 ]);
 const COMBAT_FLOAT_TOTAL_LIMIT_MS = 5000;

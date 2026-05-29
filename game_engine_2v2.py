@@ -514,8 +514,8 @@ class GameEngine2v2(GameEngine):
         can, reason = self.can_play_card(player_id, card)
         if not can:
             return {'success': False, 'error': reason}
-        ps.elixir -= card.cost_e
-        ps.magic -= card.cost_m
+        self._spend_resource(player_id, 'elixir', card.cost_e, card)
+        self._spend_resource(player_id, 'magic', card.cost_m, card)
         ps.remove_hand_card(card_instance_id)
         if card.card_type == 'thorn':
             ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
@@ -558,6 +558,8 @@ class GameEngine2v2(GameEngine):
             return True
         if played_def.card_type == 'root' and counter_card.card_def.response_trigger == 'root':
             return True
+        if self._would_heal(played_card) and counter_card.card_def.response_trigger == 'heal':
+            return True
         if self._would_destroy_equipment(played_card) and counter_card.card_def.response_trigger == 'equipment_destroy':
             return True
         return False
@@ -579,8 +581,8 @@ class GameEngine2v2(GameEngine):
                 return self._execute_card_effect(player_id, card, choice)
             if not self._card_can_counter(counter_card, card):
                 return self._execute_card_effect(player_id, card, choice)
-            responder.elixir -= counter_card.cost_e
-            responder.magic -= counter_card.cost_m
+            self._spend_resource(responder_id, 'elixir', counter_card.cost_e, counter_card)
+            self._spend_resource(responder_id, 'magic', counter_card.cost_m, counter_card)
             counter_removed = responder.remove_hand_card(card_instance_id)
             if counter_removed is None:
                 return self._execute_card_effect(player_id, card, choice)
@@ -980,8 +982,8 @@ class GameEngine2v2(GameEngine):
                     'choice': dict(choice or {}),
                 }
                 return {'success': True, 'needs_ally_consent': True, 'card': card.to_dict(), 'target_player_id': target_player_id}
-        ps.elixir -= card.cost_e
-        ps.magic -= card.cost_m
+        self._spend_resource(player_id, 'elixir', card.cost_e, card)
+        self._spend_resource(player_id, 'magic', card.cost_m, card)
         ps.remove_hand_card(card_instance_id)
         if card.card_type == 'thorn':
             ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
@@ -1398,6 +1400,9 @@ class GameEngine2v2(GameEngine):
                 ps.draw_cards(draw_needed)
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
             ps.gain_elixir(2)
+        for owner_state in self.players:
+            for eq in getattr(owner_state, 'equipment', []):
+                eq.uses_this_turn = 0
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(owner_state.equipment):
                 if self._has_card_event(eq.card_def, 'any_turn_start'):
@@ -1563,12 +1568,20 @@ class GameEngine2v2(GameEngine):
                 'card': eq.card_instance.to_dict(),
             }
             return {'success': True, 'needs_ally_consent': True, 'card': eq.card_instance.to_dict(), 'target_player_id': target_player_id}
-        ps.elixir -= trigger_cost
+        max_uses = self._equipment_trigger_max_uses(eq)
+        if max_uses > 0 and int(getattr(eq, 'uses_this_turn', 0)) >= max_uses:
+            return {'success': False, 'error': f'该装备本回合最多触发{max_uses}次'}
+        self._spend_resource(player_id, 'elixir', trigger_cost, eq.card_instance)
+        eq.uses_this_turn = int(getattr(eq, 'uses_this_turn', 0)) + 1
         if has_mod_trigger and self._run_card_event(player_id, eq.card_instance, 'equipment_trigger', None,
                                                     {'source_id': player_id, 'target_id': target_player_id}):
+            self._dispatch_card_event('equipment_triggered', player_id, eq.card_instance,
+                                      target_id=target_player_id, equipment=eq, equipment_owner_id=player_id)
             self._check_game_over()
             return {'success': True}
         self._execute_trigger_effect(player_id, eq, target_player_id)
+        self._dispatch_card_event('equipment_triggered', player_id, eq.card_instance,
+                                  target_id=target_player_id, equipment=eq, equipment_owner_id=player_id)
         self._check_game_over()
         return {'success': True}
 
