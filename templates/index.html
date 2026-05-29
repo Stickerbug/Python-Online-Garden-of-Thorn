@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=145">
+<link rel="stylesheet" href="/static/css/style.css?v=146">
 <script>
 (() => {
   const lang = localStorage.getItem('got_lang') || 'zh';
@@ -411,12 +411,26 @@
 <p id="settings-no-mods" class="info-text">未找到模组文件</p>
 </div>
 <div id="settings-community-mods" class="settings-community-mods hidden">
+<div id="settings-community-current" class="community-current-card">
+<div class="community-current-main">
+<span id="settings-community-current-label" class="community-kicker">当前社区模组</span>
+<strong id="settings-community-current-name">未启用</strong>
+<small id="settings-community-current-meta"></small>
+</div>
+<button id="btn-community-disable" type="button" class="btn btn-secondary">停用社区模组</button>
+</div>
 <div id="settings-community-mods-list" class="settings-mods-list"></div>
 <p id="settings-no-community-mods" class="info-text">未找到社区模组</p>
-<div class="settings-upload-row">
+<div class="settings-upload-row community-upload-card">
 <input type="file" id="settings-community-upload-file" accept=".json,application/json" class="hidden">
-<button id="btn-community-upload" type="button" class="btn btn-secondary">上传模组</button>
+<div class="community-upload-copy">
+<strong id="settings-community-upload-title">上传模组</strong>
+<span id="settings-community-upload-hint">上传需要登录账号，文件会直接上传到社区模组仓库。</span>
+</div>
+<div class="community-upload-actions">
+<button id="btn-community-upload" type="button" class="btn btn-primary">上传模组</button>
 <button id="btn-community-refresh" type="button" class="btn btn-secondary">刷新</button>
+</div>
 </div>
 <p id="settings-community-status" class="info-text"></p>
 </div>
@@ -575,6 +589,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-<script src="/static/js/game.js?v=155"></script>
+<script src="/static/js/game.js?v=156"></script>
 </body>
 </html>

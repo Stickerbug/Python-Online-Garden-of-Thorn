@@ -917,6 +917,66 @@ Object.assign(I18N.ru, { settings_show_english_card_names: 'Показывать
 Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示' });
 Object.assign(I18N.en, { official_mods: 'Official Mods', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found' });
 Object.assign(I18N.zh, { official_mods: '官方模组', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组' });
+Object.assign(I18N.en, {
+    community_current: 'Current community mod', community_disabled: 'Disabled', community_disable: 'Disable community mod',
+    community_upload_hint: 'Sign in to upload. The file is sent directly to the community mod store.',
+    community_login_required: 'Sign in with an account before uploading community mods.',
+    community_select: 'Use', community_selected: 'Selected', community_update: 'Update', community_delete: 'Delete',
+    community_owned_by_you: 'Yours', community_uploaded_at: 'Uploaded {0}', community_delete_confirm: 'Delete this community mod?',
+    community_uploading: 'Uploading...', community_upload_success: 'Uploaded: {0}', community_update_success: 'Updated: {0}',
+    community_delete_success: 'Deleted community mod', community_file_summary: '{0} · v{1} · {2} cards', community_cards_count: '{0} cards'
+});
+Object.assign(I18N.zh, {
+    community_current: '当前社区模组', community_disabled: '未启用', community_disable: '停用社区模组',
+    community_upload_hint: '上传需要登录账号，文件会直接上传到社区模组仓库。',
+    community_login_required: '请先登录账号，再上传社区模组。',
+    community_select: '使用', community_selected: '已选择', community_update: '上传更新', community_delete: '删除',
+    community_owned_by_you: '你上传的', community_uploaded_at: '上传于 {0}', community_delete_confirm: '确定删除这个社区模组吗？',
+    community_uploading: '正在上传...', community_upload_success: '上传成功：{0}', community_update_success: '更新成功：{0}',
+    community_delete_success: '已删除社区模组', community_file_summary: '{0} · v{1} · {2} 张卡牌', community_cards_count: '{0} 张卡牌'
+});
+Object.assign(I18N.fr, {
+    community_current: 'Mod communautaire actuel', community_disabled: 'Désactivé', community_disable: 'Désactiver',
+    community_upload_hint: 'Connectez-vous pour téléverser. Le fichier va directement dans le stockage communautaire.',
+    community_login_required: 'Connectez-vous avant de téléverser un mod communautaire.',
+    community_select: 'Utiliser', community_selected: 'Sélectionné', community_update: 'Mettre à jour', community_delete: 'Supprimer',
+    community_owned_by_you: 'À vous', community_uploaded_at: 'Envoyé {0}', community_delete_confirm: 'Supprimer ce mod ?',
+    community_uploading: 'Téléversement...', community_upload_success: 'Téléversé : {0}', community_update_success: 'Mis à jour : {0}',
+    community_delete_success: 'Mod supprimé', community_file_summary: '{0} · v{1} · {2} cartes', community_cards_count: '{0} cartes'
+});
+Object.assign(I18N.pt, {
+    community_current: 'Mod comunitário atual', community_disabled: 'Desativado', community_disable: 'Desativar',
+    community_upload_hint: 'Entre para enviar. O arquivo vai direto para o armazenamento da comunidade.',
+    community_login_required: 'Entre com uma conta antes de enviar mods comunitários.',
+    community_select: 'Usar', community_selected: 'Selecionado', community_update: 'Atualizar', community_delete: 'Excluir',
+    community_owned_by_you: 'Seu', community_uploaded_at: 'Enviado {0}', community_delete_confirm: 'Excluir este mod?',
+    community_uploading: 'Enviando...', community_upload_success: 'Enviado: {0}', community_update_success: 'Atualizado: {0}',
+    community_delete_success: 'Mod excluído', community_file_summary: '{0} · v{1} · {2} cartas', community_cards_count: '{0} cartas'
+});
+Object.assign(I18N.ru, {
+    community_current: 'Текущий мод сообщества', community_disabled: 'Отключено', community_disable: 'Отключить',
+    community_upload_hint: 'Войдите, чтобы загрузить. Файл отправляется прямо в хранилище модов.',
+    community_login_required: 'Войдите в аккаунт перед загрузкой мода.',
+    community_select: 'Использовать', community_selected: 'Выбрано', community_update: 'Обновить', community_delete: 'Удалить',
+    community_owned_by_you: 'Ваш', community_uploaded_at: 'Загружено {0}', community_delete_confirm: 'Удалить этот мод?',
+    community_uploading: 'Загрузка...', community_upload_success: 'Загружено: {0}', community_update_success: 'Обновлено: {0}',
+    community_delete_success: 'Мод удален', community_file_summary: '{0} · v{1} · {2} карт', community_cards_count: '{0} карт'
+});
+Object.assign(I18N.ja, {
+    community_current: '現在のコミュニティMod', community_disabled: '未使用', community_disable: 'コミュニティModを無効化',
+    community_upload_hint: 'アップロードにはログインが必要です。ファイルは直接コミュニティMod保存先へ送信されます。',
+    community_login_required: 'コミュニティModをアップロードする前にログインしてください。',
+    community_select: '使用', community_selected: '選択中', community_update: '更新', community_delete: '削除',
+    community_owned_by_you: '自分のMod', community_uploaded_at: 'アップロード {0}', community_delete_confirm: 'このModを削除しますか？',
+    community_uploading: 'アップロード中...', community_upload_success: 'アップロード成功：{0}', community_update_success: '更新成功：{0}',
+    community_delete_success: 'コミュニティModを削除しました', community_file_summary: '{0} · v{1} · {2}枚', community_cards_count: '{0}枚'
+});
+Object.assign(I18N.en, { community_json_only: 'Only .json files are allowed', community_file_too_large: 'File is too large. Max 300KB', community_json_parse_failed: 'JSON parse failed: {0}', community_upload_url_failed: 'Could not create upload URL', community_r2_upload_failed: 'R2 upload failed: HTTP {0}', community_register_failed: 'Registration failed', community_delete_failed: 'Delete failed' });
+Object.assign(I18N.zh, { community_json_only: '只允许上传 .json 文件', community_file_too_large: '文件过大，最大 300KB', community_json_parse_failed: 'JSON 解析失败：{0}', community_upload_url_failed: '无法创建上传地址', community_r2_upload_failed: 'R2 上传失败 HTTP {0}', community_register_failed: '登记失败', community_delete_failed: '删除失败' });
+Object.assign(I18N.fr, { community_json_only: 'Seuls les fichiers .json sont autorisés', community_file_too_large: 'Fichier trop volumineux. Maximum 300 Ko', community_json_parse_failed: 'Échec d’analyse JSON : {0}', community_upload_url_failed: 'Impossible de créer l’URL de téléversement', community_r2_upload_failed: 'Échec R2 : HTTP {0}', community_register_failed: 'Échec d’enregistrement', community_delete_failed: 'Échec de suppression' });
+Object.assign(I18N.pt, { community_json_only: 'Somente arquivos .json são permitidos', community_file_too_large: 'Arquivo grande demais. Máximo 300KB', community_json_parse_failed: 'Falha ao ler JSON: {0}', community_upload_url_failed: 'Não foi possível criar URL de envio', community_r2_upload_failed: 'Falha no R2: HTTP {0}', community_register_failed: 'Falha ao registrar', community_delete_failed: 'Falha ao excluir' });
+Object.assign(I18N.ru, { community_json_only: 'Разрешены только файлы .json', community_file_too_large: 'Файл слишком большой. Максимум 300 КБ', community_json_parse_failed: 'Ошибка разбора JSON: {0}', community_upload_url_failed: 'Не удалось создать URL загрузки', community_r2_upload_failed: 'Ошибка R2: HTTP {0}', community_register_failed: 'Ошибка регистрации', community_delete_failed: 'Ошибка удаления' });
+Object.assign(I18N.ja, { community_json_only: '.json ファイルのみアップロードできます', community_file_too_large: 'ファイルが大きすぎます。最大 300KB', community_json_parse_failed: 'JSON 解析失敗：{0}', community_upload_url_failed: 'アップロードURLを作成できません', community_r2_upload_failed: 'R2 アップロード失敗 HTTP {0}', community_register_failed: '登録失敗', community_delete_failed: '削除失敗' });
 Object.assign(I18N.en, { mod_validation_error: 'Format error' });
 Object.assign(I18N.zh, { mod_validation_error: '格式错误' });
 Object.assign(I18N.fr, { mod_validation_error: 'Erreur de format' });
@@ -2187,6 +2247,14 @@ function updateStaticText() {
     if (settingsCommunityMods) settingsCommunityMods.textContent = UI.community_mods;
     const noCommunityMods = $('settings-no-community-mods');
     if (noCommunityMods) noCommunityMods.textContent = UI.no_community_mods;
+    const communityCurrentLabel = $('settings-community-current-label');
+    if (communityCurrentLabel) communityCurrentLabel.textContent = UI.community_current;
+    const communityDisable = $('btn-community-disable');
+    if (communityDisable) communityDisable.textContent = UI.community_disable;
+    const communityUploadTitle = $('settings-community-upload-title');
+    if (communityUploadTitle) communityUploadTitle.textContent = UI.upload_mod;
+    const communityUploadHint = $('settings-community-upload-hint');
+    if (communityUploadHint) communityUploadHint.textContent = UI.community_upload_hint;
     const uploadCommunity = $('btn-community-upload');
     if (uploadCommunity) uploadCommunity.textContent = UI.upload_mod;
     const refreshCommunity = $('btn-community-refresh');
@@ -4168,6 +4236,8 @@ function renderAccountState() {
     }
     cacheAccount(currentAccount);
     renderAccountMode();
+    updateCommunityUploadState();
+    renderCommunityModList();
 }
 
 function renderAccountMode() {
@@ -8616,6 +8686,7 @@ let settingsMods = [];
 let settingsCommunityMods = [];
 let settingsAllowServerEdit = true;
 let settingsActiveTab = 'appearance';
+let pendingCommunityReplaceHash = '';
 const VANILLA_MOD_FILENAME = 'VanillaCardsFormatV1.json';
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 
@@ -8772,11 +8843,83 @@ function renderModSourceControls() {
     if (officialBox) officialBox.classList.toggle('hidden', source === 'community');
     if (communityBox) communityBox.classList.toggle('hidden', source !== 'community');
     if (uploadRow) uploadRow.classList.toggle('hidden', source !== 'community');
+    renderCommunityCurrent();
+    updateCommunityUploadState();
 }
 
 function setModSource(source) {
     localStorage.setItem('got_mod_source', source === 'community' ? 'community' : 'official');
+    if (source !== 'community') {
+        localStorage.removeItem('got_community_mod_url');
+        localStorage.removeItem('got_community_mod_hash');
+        localStorage.removeItem('got_community_mod_name');
+    }
     renderModSourceControls();
+    renderCommunityModList();
+}
+
+function refreshCardsAfterCommunityChange() {
+    fetchCardDefs({ useCache: false }).then(() => fetchOpeningEvents({ useCache: false })).then(() => {
+        loadSoloDecks(false);
+        renderSoloBuilder();
+    });
+    if (socket && socket.connected && phase === 'lobby') {
+        socket.emit('update_mod_settings', { disabled_mods: getDisabledMods(), ...getCommunityModSelection() });
+    }
+}
+
+function clearCommunityModSelection() {
+    localStorage.setItem('got_mod_source', 'official');
+    localStorage.removeItem('got_community_mod_url');
+    localStorage.removeItem('got_community_mod_hash');
+    localStorage.removeItem('got_community_mod_name');
+    renderModSourceControls();
+    renderCommunityModList();
+    refreshCardsAfterCommunityChange();
+}
+
+function formatCommunityTime(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    const parsed = new Date(text);
+    if (Number.isNaN(parsed.getTime())) return text;
+    return parsed.toLocaleString();
+}
+
+function communityModTitle(mod, index = 0) {
+    return mod.name || `Community Mod ${index + 1}`;
+}
+
+function renderCommunityCurrent() {
+    const nameEl = $('settings-community-current-name');
+    const metaEl = $('settings-community-current-meta');
+    const disableBtn = $('btn-community-disable');
+    if (!nameEl && !metaEl && !disableBtn) return;
+    const selected = getCommunityModSelection();
+    const current = selected.community_mod_hash
+        ? settingsCommunityMods.find(mod => mod.sha256 === selected.community_mod_hash)
+        : null;
+    if (!current && selected.mod_source !== 'community') {
+        if (nameEl) nameEl.textContent = UI.community_disabled;
+        if (metaEl) metaEl.textContent = '';
+        if (disableBtn) disableBtn.disabled = true;
+        return;
+    }
+    const name = current ? communityModTitle(current) : (selected.community_mod_name || selected.community_mod_hash || UI.community_disabled);
+    const metaParts = [];
+    if (current && current.version) metaParts.push(`v${current.version}`);
+    if (current && current.author) metaParts.push(current.author);
+    if (current && current.uploaded_at) metaParts.push(tf('community_uploaded_at', formatCommunityTime(current.uploaded_at)));
+    if (nameEl) nameEl.textContent = name;
+    if (metaEl) metaEl.textContent = metaParts.join(' · ');
+    if (disableBtn) disableBtn.disabled = false;
+}
+
+function updateCommunityUploadState() {
+    const uploadBtn = $('btn-community-upload');
+    const hint = $('settings-community-upload-hint');
+    if (uploadBtn) uploadBtn.disabled = false;
+    if (hint) hint.textContent = currentAccount ? UI.community_upload_hint : UI.community_login_required;
 }
 
 async function loadSettingsCommunityMods() {
@@ -8794,6 +8937,7 @@ async function loadSettingsCommunityMods() {
         if (statusEl) statusEl.textContent = e.message || String(e);
     }
     renderCommunityModList();
+    renderCommunityCurrent();
 }
 
 function renderCommunityModList() {
@@ -8804,50 +8948,131 @@ function renderCommunityModList() {
     const selected = getCommunityModSelection();
     if (!settingsCommunityMods.length) {
         if (noModsEl) noModsEl.style.display = '';
+        renderCommunityCurrent();
+        updateCommunityUploadState();
         return;
     }
     if (noModsEl) noModsEl.style.display = 'none';
     settingsCommunityMods.forEach((mod, i) => {
         const item = document.createElement('div');
-        item.className = 'settings-mod-item';
+        item.className = 'settings-community-card';
         if (selected.community_mod_hash && selected.community_mod_hash === mod.sha256) {
             item.classList.add('community-selected');
         }
-        const radio = document.createElement('input');
-        radio.type = 'radio';
-        radio.name = 'community-mod-choice';
-        radio.id = `community-mod-${i}`;
-        radio.checked = selected.community_mod_hash === mod.sha256;
-        radio.onchange = () => {
+        const isSelected = selected.community_mod_hash === mod.sha256;
+        const main = document.createElement('div');
+        main.className = 'community-card-main';
+        const title = document.createElement('div');
+        title.className = 'community-card-title';
+        const titleText = document.createElement('span');
+        titleText.textContent = communityModTitle(mod, i);
+        title.appendChild(titleText);
+        if (isSelected) {
+            const badge = document.createElement('span');
+            badge.className = 'community-badge';
+            badge.textContent = UI.community_selected;
+            title.appendChild(badge);
+        }
+        if (mod.can_manage) {
+            const badge = document.createElement('span');
+            badge.className = 'community-badge';
+            badge.textContent = UI.community_owned_by_you;
+            title.appendChild(badge);
+        }
+        const meta = document.createElement('div');
+        meta.className = 'community-card-meta';
+        const metaParts = [];
+        if (mod.version) metaParts.push(`v${mod.version}`);
+        if (mod.author) metaParts.push(mod.author);
+        if (mod.cards_count != null) metaParts.push(tf('community_cards_count', mod.cards_count));
+        if (mod.uploaded_at) metaParts.push(tf('community_uploaded_at', formatCommunityTime(mod.uploaded_at)));
+        meta.textContent = metaParts.join(' · ');
+        main.appendChild(title);
+        if (meta.textContent) main.appendChild(meta);
+        if (mod.description) {
+            const desc = document.createElement('div');
+            desc.className = 'community-card-desc';
+            desc.textContent = mod.description;
+            main.appendChild(desc);
+        }
+        const actions = document.createElement('div');
+        actions.className = 'community-card-actions';
+        const selectBtn = document.createElement('button');
+        selectBtn.type = 'button';
+        selectBtn.className = 'btn ' + (isSelected ? 'btn-primary' : 'btn-secondary');
+        selectBtn.textContent = isSelected ? UI.community_selected : UI.community_select;
+        selectBtn.disabled = isSelected;
+        selectBtn.onclick = () => {
             localStorage.setItem('got_mod_source', 'community');
             localStorage.setItem('got_community_mod_url', mod.public_url || '');
             localStorage.setItem('got_community_mod_hash', mod.sha256 || '');
             localStorage.setItem('got_community_mod_name', mod.name || '');
             renderModSourceControls();
             renderCommunityModList();
+            refreshCardsAfterCommunityChange();
         };
-        const label = document.createElement('label');
-        label.htmlFor = radio.id;
-        label.textContent = mod.name || `Community Mod ${i + 1}`;
-        const meta = document.createElement('span');
-        meta.className = 'mod-meta';
-        meta.textContent = `${mod.version ? `v${mod.version} ` : ''}${mod.author || ''}`.trim();
-        item.append(radio, label);
-        if (meta.textContent) item.appendChild(meta);
+        actions.appendChild(selectBtn);
+        if (mod.can_manage) {
+            const updateBtn = document.createElement('button');
+            updateBtn.type = 'button';
+            updateBtn.className = 'btn btn-secondary';
+            updateBtn.textContent = UI.community_update;
+            updateBtn.onclick = () => {
+                pendingCommunityReplaceHash = mod.sha256 || '';
+                const input = $('settings-community-upload-file');
+                if (input) input.click();
+            };
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'btn btn-danger';
+            deleteBtn.textContent = UI.community_delete;
+            deleteBtn.onclick = () => deleteCommunityMod(mod);
+            actions.append(updateBtn, deleteBtn);
+        }
+        item.append(main, actions);
         listEl.appendChild(item);
     });
+    renderCommunityCurrent();
+    updateCommunityUploadState();
 }
 
-async function uploadCommunityModFile(file) {
+async function deleteCommunityMod(mod) {
+    const statusEl = $('settings-community-status');
+    const setStatus = text => { if (statusEl) statusEl.textContent = text || ''; };
+    if (!mod || !mod.sha256) return;
+    if (!window.confirm(UI.community_delete_confirm)) return;
+    try {
+        const resp = await fetch(`/api/community-mods/${encodeURIComponent(mod.sha256)}`, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.success) throw new Error(data.error || UI.community_delete_failed);
+        const selected = getCommunityModSelection();
+        if (selected.community_mod_hash === mod.sha256) {
+            clearCommunityModSelection();
+        }
+        setStatus(UI.community_delete_success);
+        await loadSettingsCommunityMods();
+    } catch (e) {
+        setStatus(e.message || String(e));
+    }
+}
+
+async function uploadCommunityModFile(file, options = {}) {
     const statusEl = $('settings-community-status');
     const setStatus = text => { if (statusEl) statusEl.textContent = text || ''; };
     if (!file) return;
+    if (!currentAccount) {
+        setStatus(UI.community_login_required);
+        return;
+    }
     if (!file.name.toLowerCase().endsWith('.json')) {
-        setStatus('只允许上传 .json 文件');
+        setStatus(UI.community_json_only);
         return;
     }
     if (file.size > 300000) {
-        setStatus('文件过大，最大 300KB');
+        setStatus(UI.community_file_too_large);
         return;
     }
     let text = '';
@@ -8856,34 +9081,39 @@ async function uploadCommunityModFile(file) {
         text = await file.text();
         parsed = JSON.parse(text);
     } catch (e) {
-        setStatus(`JSON 解析失败：${e.message}`);
+        setStatus(tf('community_json_parse_failed', e.message));
         return;
     }
     const info = parsed.info || {};
     const cardCount = Array.isArray(parsed.cards) ? parsed.cards.length : 0;
-    setStatus(`准备上传：${info.name || file.name}，作者 ${info.author || '-'}，版本 ${info.version || '-'}，卡牌 ${cardCount} 张`);
+    const modName = info.name || file.name;
+    const replaceHash = String(options.replaceHash || '').trim();
+    setStatus(tf('community_file_summary', modName, info.version || '-', cardCount));
     try {
+        setStatus(UI.community_uploading);
         const uploadResp = await fetch('/api/community-mods/upload-url', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ filename: file.name }),
         });
         const upload = await uploadResp.json();
-        if (!uploadResp.ok || !upload.success) throw new Error(upload.error || '无法创建上传地址');
+        if (!uploadResp.ok || !upload.success) throw new Error(upload.error || UI.community_upload_url_failed);
         const putResp = await fetch(upload.put_url, {
             method: 'PUT',
             headers: { 'Content-Type': upload.content_type || 'application/json' },
             body: text,
         });
-        if (!putResp.ok) throw new Error(`R2 上传失败 HTTP ${putResp.status}`);
+        if (!putResp.ok) throw new Error(tf('community_r2_upload_failed', putResp.status));
         const regResp = await fetch('/api/community-mods/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: upload.key, public_url: upload.public_url, uploader_name: nickname || '' }),
+            credentials: 'same-origin',
+            body: JSON.stringify({ key: upload.key, public_url: upload.public_url, replace_sha256: replaceHash }),
         });
         const registered = await regResp.json();
         if (!regResp.ok || !registered.success) {
-            const detail = registered.error || (registered.errors || []).join('；') || '登记失败';
+            const detail = registered.error || (registered.errors || []).join('；') || UI.community_register_failed;
             throw new Error(detail);
         }
         const mod = registered.mod || {};
@@ -8891,7 +9121,7 @@ async function uploadCommunityModFile(file) {
         localStorage.setItem('got_community_mod_url', mod.public_url || upload.public_url);
         localStorage.setItem('got_community_mod_hash', mod.sha256 || '');
         localStorage.setItem('got_community_mod_name', mod.name || info.name || '');
-        setStatus(`上传成功：${mod.name || info.name || file.name}`);
+        setStatus(tf(replaceHash ? 'community_update_success' : 'community_upload_success', mod.name || info.name || file.name));
         await loadSettingsCommunityMods();
         fetchCardDefs({ useCache: false }).then(() => fetchOpeningEvents({ useCache: false }));
     } catch (e) {
@@ -9158,13 +9388,22 @@ async function init() {
     if ($('settings-mod-source-official')) $('settings-mod-source-official').addEventListener('click', () => setModSource('official'));
     if ($('settings-mod-source-community')) $('settings-mod-source-community').addEventListener('click', () => setModSource('community'));
     if ($('btn-community-refresh')) $('btn-community-refresh').addEventListener('click', loadSettingsCommunityMods);
+    if ($('btn-community-disable')) $('btn-community-disable').addEventListener('click', clearCommunityModSelection);
     if ($('btn-community-upload')) $('btn-community-upload').addEventListener('click', () => {
+        pendingCommunityReplaceHash = '';
+        if (!currentAccount) {
+            const statusEl = $('settings-community-status');
+            if (statusEl) statusEl.textContent = UI.community_login_required;
+            return;
+        }
         const input = $('settings-community-upload-file');
         if (input) input.click();
     });
     if ($('settings-community-upload-file')) $('settings-community-upload-file').addEventListener('change', (e) => {
         const file = e.target.files && e.target.files[0];
-        uploadCommunityModFile(file).finally(() => { e.target.value = ''; });
+        const replaceHash = pendingCommunityReplaceHash;
+        pendingCommunityReplaceHash = '';
+        uploadCommunityModFile(file, { replaceHash }).finally(() => { e.target.value = ''; });
     });
     if ($('about-tab-rules')) $('about-tab-rules').addEventListener('click', () => setAboutPage('rules'));
     if ($('about-tab-credits')) $('about-tab-credits').addEventListener('click', () => setAboutPage('credits'));

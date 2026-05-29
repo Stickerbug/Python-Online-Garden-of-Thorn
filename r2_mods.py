@@ -248,6 +248,31 @@ def _community_metadata(data: Dict[str, Any], public_url: str, key: str, sha256:
     }
 
 
+def _community_item_owned_by(item: Dict[str, Any], uploader_user_id: Optional[int] = None,
+                             uploader_name: Optional[str] = None) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if uploader_user_id is not None and str(item.get('uploader_user_id') or '') == str(uploader_user_id):
+        return True
+    item_user_id = str(item.get('uploader_user_id') or '').strip()
+    if item_user_id:
+        return False
+    expected_name = str(uploader_name or '').strip().lower()
+    item_name = str(item.get('uploader_name') or '').strip().lower()
+    return bool(expected_name and item_name and expected_name == item_name)
+
+
+def _delete_object_key(key: str) -> bool:
+    key = str(key or '').strip()
+    if not key:
+        return False
+    try:
+        _client().delete_object(Bucket=_bucket(), Key=key)
+        return True
+    except Exception:
+        return False
+
+
 def validate_community_mod_url(public_url: str) -> Dict[str, Any]:
     data = fetch_json_from_public_url(public_url)
     stripped = _strip_scripts(data)
@@ -276,7 +301,9 @@ def validate_community_mod_url(public_url: str) -> Dict[str, Any]:
     }
 
 
-def register_community_mod(public_url: str, key: str, uploader_name: Optional[str] = None) -> Dict[str, Any]:
+def register_community_mod(public_url: str, key: str, uploader_name: Optional[str] = None,
+                           uploader_user_id: Optional[int] = None,
+                           replace_sha256: Optional[str] = None) -> Dict[str, Any]:
     data = fetch_json_from_public_url(public_url)
     stripped = _strip_scripts(data)
     validation = _validate_community_mod_data(stripped, source=public_url)
@@ -291,23 +318,102 @@ def register_community_mod(public_url: str, key: str, uploader_name: Optional[st
     ).hexdigest()
     index = get_community_index()
     mods = index.setdefault('mods', [])
+    replace_sha256 = str(replace_sha256 or '').strip().lower()
+    replace_item = None
+    if replace_sha256:
+        for item in mods:
+            if isinstance(item, dict) and str(item.get('sha256') or '').strip().lower() == replace_sha256:
+                replace_item = item
+                break
+        if replace_item is None:
+            return {'success': False, 'errors': ['要更新的社区模组不存在'], 'warnings': warnings}
+        if not _community_item_owned_by(replace_item, uploader_user_id, uploader_name):
+            return {'success': False, 'errors': ['只能更新自己上传的社区模组'], 'warnings': warnings}
     for item in mods:
         if isinstance(item, dict) and item.get('sha256') == sha256:
+            if replace_item is not None and item is replace_item:
+                item.update(_community_metadata(normalized, public_url, key, sha256, uploader_name))
+                if uploader_user_id is not None:
+                    item['uploader_user_id'] = int(uploader_user_id)
+                item['warnings'] = warnings
+                put_community_index(index)
+            elif replace_item is not None:
+                mods.remove(replace_item)
+                put_community_index(index)
+                _delete_object_key(replace_item.get('key'))
             item.setdefault('warnings', warnings)
             return {'success': True, 'mod': item, 'duplicate': True, 'warnings': warnings}
+    if replace_item is not None:
+        mods.remove(replace_item)
     meta = _community_metadata(normalized, public_url, key, sha256, uploader_name)
+    if uploader_user_id is not None:
+        meta['uploader_user_id'] = int(uploader_user_id)
     meta['warnings'] = warnings
     mods.append(meta)
-    mods.sort(key=lambda item: (str(item.get('name', '')).lower(), str(item.get('sha256', ''))))
+    mods.sort(key=lambda item: (str(item.get('uploaded_at', '')), str(item.get('sha256', ''))))
     put_community_index(index)
+    if replace_item is not None:
+        _delete_object_key(replace_item.get('key'))
     return {'success': True, 'mod': meta, 'duplicate': False, 'warnings': warnings}
+
+
+def delete_community_mod(sha256: str, uploader_user_id: Optional[int] = None,
+                         uploader_name: Optional[str] = None) -> Dict[str, Any]:
+    sha256 = str(sha256 or '').strip().lower()
+    if not sha256:
+        return {'success': False, 'error': '缺少社区模组 hash'}
+    index = get_community_index()
+    mods = index.setdefault('mods', [])
+    target = None
+    for item in mods:
+        if isinstance(item, dict) and str(item.get('sha256') or '').strip().lower() == sha256:
+            target = item
+            break
+    if target is None:
+        return {'success': False, 'error': '社区模组不存在'}
+    if not _community_item_owned_by(target, uploader_user_id, uploader_name):
+        return {'success': False, 'error': '只能删除自己上传的社区模组'}
+    mods.remove(target)
+    put_community_index(index)
+    key = str(target.get('key') or '').strip()
+    deleted_object = _delete_object_key(key)
+    COMMUNITY_MOD_CACHE.pop(sha256, None)
+    public_url = str(target.get('public_url') or '').strip()
+    if public_url:
+        COMMUNITY_MOD_CACHE.pop(public_url, None)
+    return {'success': True, 'mod': target, 'deleted_object': deleted_object}
+
+
+def _find_community_index_entry(sha256: str = '', public_url: str = '') -> Optional[Dict[str, Any]]:
+    try:
+        index = get_community_index()
+    except Exception:
+        return None
+    mods = index.get('mods', []) if isinstance(index, dict) else []
+    if not isinstance(mods, list):
+        return None
+    sha256 = str(sha256 or '').strip().lower()
+    public_url = str(public_url or '').strip()
+    for item in mods:
+        if not isinstance(item, dict):
+            continue
+        if sha256 and str(item.get('sha256', '')).strip().lower() == sha256:
+            return item
+        if public_url and str(item.get('public_url', '')).strip() == public_url:
+            return item
+    return None
 
 
 def load_community_mod(public_url: str, expected_hash: Optional[str] = None):
     expected_hash = str(expected_hash or '').strip()
     cache_key = expected_hash or public_url
     if cache_key in COMMUNITY_MOD_CACHE:
-        return COMMUNITY_MOD_CACHE[cache_key]
+        mod = COMMUNITY_MOD_CACHE[cache_key]
+        if not getattr(mod, 'community_uploaded_at', ''):
+            meta = _find_community_index_entry(getattr(mod, 'community_sha256', expected_hash), public_url) or {}
+            mod.community_uploaded_at = str(meta.get('uploaded_at') or '')
+            mod.community_key = str(meta.get('key') or '')
+        return mod
     validation = validate_community_mod_url(public_url)
     if validation['errors']:
         raise ValueError('; '.join(validation['errors']))
@@ -321,6 +427,9 @@ def load_community_mod(public_url: str, expected_hash: Optional[str] = None):
         raise ValueError('; '.join(mod.errors))
     mod.community_sha256 = sha256
     mod.community_url = public_url
+    meta = _find_community_index_entry(sha256, public_url) or {}
+    mod.community_uploaded_at = str(meta.get('uploaded_at') or '')
+    mod.community_key = str(meta.get('key') or '')
     COMMUNITY_MOD_CACHE[sha256] = mod
     COMMUNITY_MOD_CACHE[public_url] = mod
     return mod

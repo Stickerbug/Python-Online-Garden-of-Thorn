@@ -28,6 +28,7 @@ from runtime_errors import set_mod_runtime_error_logger
 from r2_mods import (
     R2ConfigError,
     create_presigned_mod_upload,
+    delete_community_mod,
     get_community_index,
     load_community_mod,
     register_community_mod,
@@ -667,6 +668,21 @@ def _json_error(message, status=400, **extra):
     return jsonify(payload), status
 
 
+def _current_account_identity():
+    user_id = session.get('user_id')
+    username = session.get('username')
+    if not user_id or not username:
+        return None, ''
+    return user_id, str(username)
+
+
+def _require_account_json():
+    user_id, username = _current_account_identity()
+    if not user_id:
+        return None, None, _json_error('请先登录账号', 401)
+    return user_id, username, None
+
+
 def _community_request_fields(data):
     data = data or {}
     return {
@@ -677,25 +693,69 @@ def _community_request_fields(data):
     }
 
 
+def _community_source_hash(source):
+    if isinstance(source, dict):
+        return str(source.get('hash') or '').strip()
+    return str(source or '').strip()
+
+
+def _community_source_uploaded_at(source):
+    if isinstance(source, dict):
+        return str(source.get('uploaded_at') or '').strip()
+    return ''
+
+
+def _community_source_upload_order(source):
+    if isinstance(source, dict):
+        try:
+            return float(source.get('upload_order') or 0)
+        except Exception:
+            return 0.0
+    return 0.0
+
+
+def _community_upload_order(value):
+    text = str(value or '').strip()
+    if not text:
+        return 0.0
+    try:
+        if text.endswith('Z'):
+            text = text[:-1] + '+00:00'
+        return datetime.fromisoformat(text).timestamp()
+    except Exception:
+        return 0.0
+
+
 def merge_community_mod_to_card_defs(mod):
     if not mod:
         return []
     mod_hash = getattr(mod, 'community_sha256', '') or ''
+    uploaded_at = getattr(mod, 'community_uploaded_at', '') or ''
+    upload_order = _community_upload_order(uploaded_at) or time.time()
+    mod_name = mod.info.name if getattr(mod, 'info', None) and mod.info.name else 'Community Mod'
     merged = []
-    conflicts = []
     for mc in mod.cards:
         if not mc.id or mc.id == ERROR_CARD_ID:
             continue
-        existing_community_hash = COMMUNITY_CARD_SOURCES.get(mc.id)
-        if mc.id in CARD_DEFS and existing_community_hash != mod_hash:
-            conflicts.append(mc.id)
-            continue
+        existing_source = COMMUNITY_CARD_SOURCES.get(mc.id)
+        existing_hash = _community_source_hash(existing_source)
+        if existing_hash and existing_hash != mod_hash:
+            existing_order = (
+                _community_source_upload_order(existing_source)
+                or _community_upload_order(_community_source_uploaded_at(existing_source))
+            )
+            if existing_order > upload_order:
+                continue
         CARD_DEFS[mc.id] = mc.to_card_def()
-        if mod_hash:
-            COMMUNITY_CARD_SOURCES[mc.id] = mod_hash
+        COMMUNITY_CARD_SOURCES[mc.id] = {
+            'hash': mod_hash,
+            'url': getattr(mod, 'community_url', '') or '',
+            'uploaded_at': uploaded_at,
+            'upload_order': upload_order,
+            'name': mod_name,
+            'sort_name': mod_name,
+        }
         merged.append(mc.id)
-    if conflicts:
-        raise ValueError('社区模组卡牌ID与官方卡冲突: ' + ', '.join(sorted(conflicts)[:10]))
     if merged:
         apply_card_i18n_defaults(CARD_DEFS)
     return merged
@@ -2390,6 +2450,18 @@ def api_cards():
         community_name = community_mod.info.name if community_mod.info and community_mod.info.name else 'Community Mod'
         for card in community_mod.cards:
             if card.id in CARD_DEFS:
+                existing_source = COMMUNITY_CARD_SOURCES.get(card.id)
+                source_hash = _community_source_hash(existing_source)
+                if source_hash and source_hash != community_fields.get('community_mod_hash', ''):
+                    if isinstance(existing_source, dict):
+                        card_mod_sources[card.id] = {
+                            'filename': source_hash,
+                            'name': existing_source.get('name') or 'Community Mod',
+                            'sort_name': existing_source.get('sort_name') or existing_source.get('name') or 'Community Mod',
+                            'is_vanilla': False,
+                            'is_community': True,
+                        }
+                    continue
                 card_mod_sources[card.id] = {
                     'filename': community_fields.get('community_mod_hash', ''),
                     'name': community_name,
@@ -2478,7 +2550,23 @@ def api_community_mods():
     try:
         index = get_community_index()
         mods = index.get('mods', []) if isinstance(index, dict) else []
-        return jsonify({'success': True, 'mods': mods})
+        user_id, username = _current_account_identity()
+        visible_mods = []
+        for item in mods:
+            if not isinstance(item, dict):
+                continue
+            row = dict(item)
+            owner_user_id = str(row.get('uploader_user_id') or '').strip()
+            owner_name = str(row.get('uploader_name') or '').strip()
+            can_manage = False
+            if user_id and owner_user_id and owner_user_id == str(user_id):
+                can_manage = True
+            elif user_id and not owner_user_id and owner_name.lower() == str(username or '').strip().lower():
+                can_manage = True
+            row.pop('uploader_user_id', None)
+            row['can_manage'] = can_manage
+            visible_mods.append(row)
+        return jsonify({'success': True, 'mods': visible_mods, 'authenticated': bool(user_id)})
     except Exception as exc:
         admin_event('error', f'community mods index failed: {exc}')
         return jsonify({'success': False, 'mods': [], 'error': str(exc)})
@@ -2486,6 +2574,9 @@ def api_community_mods():
 
 @app.route('/api/community-mods/upload-url', methods=['POST'])
 def api_community_mod_upload_url():
+    _, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
     ip = _client_ip()
     if _rate_limited(ip, 'community_upload_url'):
         return _json_error('上传过于频繁，请稍后再试', 429)
@@ -2503,21 +2594,48 @@ def api_community_mod_upload_url():
 
 @app.route('/api/community-mods/register', methods=['POST'])
 def api_community_mod_register():
+    user_id, username, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
     ip = _client_ip()
     if _rate_limited(ip, 'community_register'):
         return _json_error('登记过于频繁，请稍后再试', 429)
     data = request.get_json(silent=True) or {}
     public_url = str(data.get('public_url') or '').strip()
     key = str(data.get('key') or '').strip()
-    uploader_name = str(data.get('uploader_name') or '').strip()
+    replace_sha256 = str(data.get('replace_sha256') or '').strip()
+    uploader_name = username
     if not public_url or not key:
         return _json_error('缺少 key 或 public_url')
     try:
-        result = register_community_mod(public_url, key, uploader_name)
+        result = register_community_mod(
+            public_url,
+            key,
+            uploader_name,
+            uploader_user_id=user_id,
+            replace_sha256=replace_sha256,
+        )
         status = 200 if result.get('success') else 400
         return jsonify(result), status
     except Exception as exc:
         admin_event('error', f'register community mod failed: {exc}')
+        return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
+
+
+@app.route('/api/community-mods/<sha256>', methods=['DELETE'])
+def api_community_mod_delete(sha256):
+    user_id, username, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    ip = _client_ip()
+    if _rate_limited(ip, 'community_delete'):
+        return _json_error('操作过于频繁，请稍后再试', 429)
+    try:
+        result = delete_community_mod(sha256, uploader_user_id=user_id, uploader_name=username)
+        status = 200 if result.get('success') else 400
+        return jsonify(result), status
+    except Exception as exc:
+        admin_event('error', f'delete community mod failed: {exc}')
         return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
 
 
