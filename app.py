@@ -2504,6 +2504,10 @@ def on_login(data):
         session.pop('user_id', None)
         session.pop('username', None)
     raw_name = data.get('nickname', '')
+    wants_account_login = bool(data.get('account_login'))
+    if wants_account_login and not account_user:
+        emit('login_fail', {'reason': 'Account session expired'})
+        return
     if account_user:
         special_profile = get_special_account_profile(account_user['username'])
         name = special_profile['display_name'] if special_profile else account_user['username']

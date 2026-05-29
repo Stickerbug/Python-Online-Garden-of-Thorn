@@ -1840,6 +1840,7 @@ function translateLoginReason(reason) {
     if (reason === 'Nickname already exists') return UI.login_nickname_exists;
     if (reason === 'Admin nickname reserved') return UI.login_admin_reserved;
     if (reason === '此昵称被管理员占用') return UI.login_admin_reserved;
+    if (reason === 'Account session expired') return UI.account_need_login;
     if (reason === 'Registered nickname reserved') return UI.login_registered_reserved;
     return reason;
 }
@@ -3595,7 +3596,12 @@ function connectSocket(serverUrl) {
     socket.on('connect', () => {
         debugLog('[client] socket connected, login nickname=', nickname);
         const preferredMode = localStorage.getItem('preferred_mode') || '1v1';
-        socket.emit('login', { nickname: loginCredential || nickname, mode: preferredMode, ...getModLoginPayload() });
+        socket.emit('login', {
+            nickname: loginCredential || nickname,
+            mode: preferredMode,
+            account_login: !!currentAccount,
+            ...getModLoginPayload(),
+        });
     });
     socket.on('disconnect', () => {
         debugLog('[client] socket disconnected');
