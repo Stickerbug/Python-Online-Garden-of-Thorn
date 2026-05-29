@@ -1545,6 +1545,10 @@ def broadcast_game_state(room):
         state = room.engine.get_public_state(pidx)
         state['your_id'] = pidx
         state['mode'] = room.mode
+        if room.engine.phase == 'game_over':
+            state['rematch_votes'] = len(room._rematch_votes)
+            state['rematch_total'] = len(room.player_sids)
+            state['rematch_has_voted'] = sid in room._rematch_votes
         _mark_player_defeated_state(room, pidx, state)
         if room.mode == '2v2':
             engine = room.engine
@@ -1602,6 +1606,10 @@ def send_game_state_to(room, pidx):
         state = room.engine.get_public_state(pidx)
         state['your_id'] = pidx
         state['mode'] = room.mode
+        if room.engine.phase == 'game_over':
+            state['rematch_votes'] = len(room._rematch_votes)
+            state['rematch_total'] = len(room.player_sids)
+            state['rematch_has_voted'] = sid in room._rematch_votes
         _mark_player_defeated_state(room, pidx, state)
         if room.mode == '2v2':
             engine = room.engine
@@ -1634,6 +1642,20 @@ def send_game_state_to(room, pidx):
             state['your_is_admin_player'] = player_is_admin(sid, room)
             state['your_special'] = player_special_fields(sid, room)
         socketio.emit('state_update', state, room=sid)
+
+
+def emit_rematch_state(room):
+    votes = len(room._rematch_votes)
+    total = len(room.player_sids)
+    for psid in room.player_sids:
+        if psid not in players:
+            continue
+        socketio.emit('rematch_state', {
+            'votes': votes,
+            'total': total,
+            'has_voted': psid in room._rematch_votes,
+            'mode': room.mode,
+        }, room=psid)
 
 
 def start_event_select(room):
@@ -4071,11 +4093,21 @@ def on_rematch(data=None):
                 print("[server] debug")
                 return
             room = rooms[room_id]
+            if room.engine.phase != 'game_over':
+                return
+            already_voted = sid in room._rematch_votes
             room._rematch_votes.add(sid)
             print("[server] debug")
-            for other_sid in room.player_sids:
-                if other_sid != sid and other_sid in players:
-                    socketio.emit('rematch_requested', {'player_name': player['nickname']}, room=other_sid)
+            emit_rematch_state(room)
+            if not already_voted and room.mode != '2v2':
+                for other_sid in room.player_sids:
+                    if other_sid != sid and other_sid in players:
+                        socketio.emit('rematch_requested', {
+                            'player_name': player['nickname'],
+                            'mode': room.mode,
+                            'votes': len(room._rematch_votes),
+                            'total': len(room.player_sids),
+                        }, room=other_sid)
             if len(room._rematch_votes) == len(room.player_sids):
                 print("[server] debug")
                 room._rematch_votes = set()

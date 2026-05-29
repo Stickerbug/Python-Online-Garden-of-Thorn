@@ -678,6 +678,26 @@ body {
 
 .settings-tab:last-child { border-right: 0; }
 .settings-tab.active { background: var(--magic); color: #fff; }
+.settings-tab.hidden { display: none; }
+
+.settings-main-tabs {
+  width: 100%;
+}
+
+.settings-subtabs {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.settings-page.hidden {
+  display: none;
+}
+
+#settings-official-mods.hidden,
+.settings-community-mods.hidden,
+.settings-upload-row.hidden {
+  display: none;
+}
 
 .settings-credits {
   text-align: center;
@@ -1475,7 +1495,6 @@ body {
   gap: 6px;
 }
 
-.settings-mod-source-row,
 .settings-upload-row {
   display: flex;
   flex-wrap: wrap;
@@ -1484,25 +1503,19 @@ body {
   margin-bottom: 8px;
 }
 
-.settings-mod-source-row label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
-}
-
 .settings-mod-item {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 6px 8px;
   background: rgba(0, 0, 0, 0.04);
   border-radius: var(--radius-md);
+}
+
+.settings-mod-item.mod-error {
+  border: 1px solid rgba(192, 57, 43, 0.45);
+  background: rgba(192, 57, 43, 0.08);
 }
 
 .settings-mod-item.community-selected {
@@ -1532,6 +1545,14 @@ body {
 .settings-mod-item .mod-meta {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.settings-mod-item .mod-error-text {
+  flex-basis: 100%;
+  margin-left: 24px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #c0392b;
 }
 
 .settings-footer {

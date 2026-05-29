@@ -24,6 +24,7 @@ const I18N = {
         no_attack_cards: 'No attack cards', no_enemy_equipment: 'No enemy equipment', no_enemy_hand: 'No enemy hand', deck_empty: 'Deck empty',
         discard_empty: 'Discard pile empty', no_same_attack: 'No matching attack cards', confirm_surrender: 'Surrender?', request_rematch: 'Request Rematch',
         opponent_rematch: 'Opponent requests rematch', rematch_sent: 'Rematch request sent', rematch_waiting: 'Waiting for opponent', rematch_agreed: 'Rematch accepted',
+        rematch_progress: 'Rematch ({0}/{1})',
         agree_rematch: 'Accept Rematch', you_win: 'You Win!', you_lose: 'You Lose!', you_draw: 'Draw!', send: 'Send', cancel: 'Cancel', ok: 'OK', close: 'Close', notice: 'Notice',
         opponent_disconnected: 'Opponent disconnected', opponent_reconnected: 'Opponent reconnected', reconnect_title: 'Reconnect', reconnect_prompt: 'Reconnect to the previous match?',
         reconnecting: 'Reconnecting...', reconnect_timeout: 'Reconnect timed out', mod_mismatch_title: 'Mod Mismatch', mod_mismatch_msg: 'Mods do not match, cannot start the match',
@@ -124,7 +125,7 @@ I18N.zh = { ...I18N.en,
     choose_from_enemy_hand_for: '从敌方手牌选择', choose_attack_group_for: '为 {0} 选择攻击组', no_attack_cards: '没有攻击牌', no_enemy_equipment: '对方没有装备',
     no_enemy_hand: '对方没有手牌', deck_empty: '牌堆为空', discard_empty: '弃牌堆为空', no_same_attack: '没有同名攻击牌',
     confirm_surrender: '确认投降？', request_rematch: '请求再来一局', opponent_rematch: '对方请求再来一局', rematch_sent: '已发送再来一局请求',
-    rematch_waiting: '等待对方', rematch_agreed: '对方已接受', agree_rematch: '接受再来一局', you_win: '你赢了！', you_lose: '你输了！', you_draw: '平局！',
+    rematch_waiting: '等待对方', rematch_agreed: '对方已接受', agree_rematch: '接受再来一局', rematch_progress: '再来一局({0}/{1})', you_win: '你赢了！', you_lose: '你输了！', you_draw: '平局！',
     send: '发送', cancel: '取消', ok: '确定', close: '关闭', notice: '提示', opponent_disconnected: '对手已断开连接', opponent_reconnected: '对手已重新连接',
     reconnect_title: '重连', reconnect_prompt: '是否重连到上一局对战？', reconnecting: '重连中...', reconnect_timeout: '重连超时',
     mod_mismatch_title: '模组不匹配', mod_mismatch_msg: '模组不一致，无法开始对局', switch_perspective: '切换视角', leave_spectate: '退出观战', switch_to_perspective: '切换到 {0}',
@@ -226,6 +227,7 @@ I18N.fr = { ...I18N.en,
     no_attack_cards: "Aucune carte d'attaque", no_enemy_equipment: 'Aucun équipement ennemi', no_enemy_hand: 'Aucune main ennemie', deck_empty: 'Deck vide', discard_empty: 'Défausse vide',
     no_same_attack: "Aucune carte d'attaque identique", confirm_surrender: "Confirmer l'abandon ?", request_rematch: 'Demander une revanche',
     opponent_rematch: "L'adversaire demande une revanche", rematch_sent: 'Demande de revanche envoyée', rematch_waiting: "En attente de l'adversaire", rematch_agreed: 'Revanche acceptée',
+    rematch_progress: 'Rejouer ({0}/{1})',
     agree_rematch: 'Accepter la revanche', you_win: 'Victoire !', you_lose: 'Défaite !', you_draw: 'Égalité !',
     send: 'Envoyer', cancel: 'Annuler', ok: 'OK', close: 'Fermer', notice: 'Notice',
     opponent_disconnected: 'Adversaire déconnecté', opponent_reconnected: 'Adversaire reconnecté',
@@ -293,6 +295,7 @@ I18N.pt = { ...I18N.en,
     no_attack_cards: 'Sem cartas de ataque', no_enemy_equipment: 'Sem equipamento inimigo', no_enemy_hand: 'Sem mão inimiga', deck_empty: 'Deck vazio', discard_empty: 'Pilha de descarte vazia',
     no_same_attack: 'Sem cartas de ataque iguais', confirm_surrender: 'Confirmar rendição?', request_rematch: 'Pedir revanche',
     opponent_rematch: 'Oponente pede revanche', rematch_sent: 'Pedido de revanche enviado', rematch_waiting: 'Aguardando oponente', rematch_agreed: 'Revanche aceita',
+    rematch_progress: 'Jogar novamente ({0}/{1})',
     agree_rematch: 'Aceitar revanche', you_win: 'Vitória!', you_lose: 'Derrota!', you_draw: 'Empate!',
     send: 'Enviar', cancel: 'Cancelar', ok: 'OK', close: 'Fechar', notice: 'Aviso',
     opponent_disconnected: 'Oponente desconectou', opponent_reconnected: 'Oponente reconectou',
@@ -360,6 +363,7 @@ I18N.ru = { ...I18N.en,
     no_attack_cards: 'Нет карт атаки', no_enemy_equipment: 'Нет снаряжения врага', no_enemy_hand: 'Нет руки врага', deck_empty: 'Колода пуста', discard_empty: 'Сброс пуст',
     no_same_attack: 'Нет одинаковых карт атаки', confirm_surrender: 'Подтвердить сдачу?', request_rematch: 'Запросить реванш',
     opponent_rematch: 'Соперник запрашивает реванш', rematch_sent: 'Запрос реванша отправлен', rematch_waiting: 'Ожидание соперника', rematch_agreed: 'Реванш принят',
+    rematch_progress: 'Реванш ({0}/{1})',
     agree_rematch: 'Принять реванш', you_win: 'Победа!', you_lose: 'Поражение!', you_draw: 'Ничья!',
     send: 'Отправить', cancel: 'Отмена', ok: 'ОК', close: 'Закрыть', notice: 'Уведомление',
     opponent_disconnected: 'Соперник отключился', opponent_reconnected: 'Соперник переподключился',
@@ -427,6 +431,7 @@ I18N.ja = { ...I18N.en,
     no_attack_cards: '攻撃カードなし', no_enemy_equipment: '敵の装備なし', no_enemy_hand: '敵の手札なし', deck_empty: 'デッキ空', discard_empty: '捨て札空',
     no_same_attack: '同じ攻撃カードなし', confirm_surrender: '降参しますか？', request_rematch: '再戦をリクエスト',
     opponent_rematch: '相手が再戦をリクエストしています', rematch_sent: '再戦リクエスト送信済み', rematch_waiting: '相手の確認待ち', rematch_agreed: '再戦が合意されました',
+    rematch_progress: '再戦({0}/{1})',
     agree_rematch: '再戦に同意', you_win: '勝利！', you_lose: '敗北！', you_draw: '引き分け！',
     send: '送信', cancel: 'キャンセル', ok: 'OK', close: '閉じる', notice: 'お知らせ',
     opponent_disconnected: '相手が切断しました', opponent_reconnected: '相手が再接続しました',
@@ -912,6 +917,12 @@ Object.assign(I18N.ru, { settings_show_english_card_names: 'Показывать
 Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示' });
 Object.assign(I18N.en, { official_mods: 'Official Mods', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found' });
 Object.assign(I18N.zh, { official_mods: '官方模组', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组' });
+Object.assign(I18N.en, { mod_validation_error: 'Format error' });
+Object.assign(I18N.zh, { mod_validation_error: '格式错误' });
+Object.assign(I18N.fr, { mod_validation_error: 'Erreur de format' });
+Object.assign(I18N.pt, { mod_validation_error: 'Erro de formato' });
+Object.assign(I18N.ru, { mod_validation_error: 'Ошибка формата' });
+Object.assign(I18N.ja, { mod_validation_error: '形式エラー' });
 Object.assign(I18N.en, { admin_prefix: 'Admin', login_admin_reserved: 'This nickname is occupied by the administrator' });
 Object.assign(I18N.zh, { admin_prefix: '管理员', login_admin_reserved: '此昵称被管理员占用' });
 Object.assign(I18N.fr, { admin_prefix: 'Admin', login_admin_reserved: 'Ce pseudo est occupé par l’administrateur' });
@@ -2160,6 +2171,12 @@ function updateStaticText() {
     if (bootStep && !bootStep.dataset.dynamic) bootStep.textContent = UI.init_scripts;
     const settingsTitle = $('settings-title');
     if (settingsTitle) settingsTitle.textContent = UI.settings_title;
+    const settingsTabAppearance = $('settings-tab-appearance');
+    if (settingsTabAppearance) settingsTabAppearance.textContent = UI.settings_appearance;
+    const settingsTabServer = $('settings-tab-server');
+    if (settingsTabServer) settingsTabServer.textContent = UI.settings_server;
+    const settingsTabMods = $('settings-tab-mods');
+    if (settingsTabMods) settingsTabMods.textContent = UI.settings_mods;
     const settingsAppearance = $('settings-section-appearance');
     if (settingsAppearance) settingsAppearance.textContent = UI.settings_appearance;
     const settingsMods = $('settings-section-mods');
@@ -3741,13 +3758,15 @@ function connectSocket(serverUrl) {
         if (!data.solo) soloMode = false;
         if (phase === 'draft') {
             debugLog('[client] entering draft phase, reset rematch flag');
-            rematchRequestedByOpponent = false;
+            resetRematchUiState();
             showView('view-draft');
             updateStatus(UI.draft_phase);
         } else if (phase === 'event_select') {
+            resetRematchUiState();
             showView('view-event-select');
             updateStatus(UI.select_event);
         } else if (phase === 'playing') {
+            resetRematchUiState();
             showView('view-game');
             updateStatus(UI.game_loading || 'Loading...');
         } else if (phase === 'game_over') {
@@ -3962,21 +3981,21 @@ function connectSocket(serverUrl) {
         flashStatus(UI.reconnect_timeout, 3000, 'error');
         phase = 'lobby';
     });
-    socket.on('rematch_requested', () => {
+    socket.on('rematch_requested', (data = {}) => {
         debugLog('[client] rematch_requested');
-        rematchRequestedByOpponent = true;
-        const btn = $('btn-rematch');
-        if (btn) {
-            btn.textContent = UI.agree_rematch;
-            btn.disabled = false;
-            btn.onclick = () => {
-                if (!socket) return;
-                socket.emit('rematch');
-                btn.textContent = UI.rematch_sent;
-                btn.disabled = true;
-            };
+        if (data.mode === '2v2' || (gameState && gameState.mode === '2v2')) {
+            if (phase === 'game_over') updateGameOverRematchButton(gameState);
+            return;
         }
+        rematchRequestedByOpponent = true;
+        updateRematchState(data);
+        updateGameOverRematchButton(gameState);
         updateStatus(UI.opponent_rematch);
+    });
+    socket.on('rematch_state', (data = {}) => {
+        updateRematchState(data);
+        if (data.mode === '2v2') rematchRequestedByOpponent = false;
+        if (phase === 'game_over') updateGameOverRematchButton(gameState);
     });
     socket.on('spectate_enter', (data) => {
         isSpectating = true;
@@ -8243,10 +8262,103 @@ async function showChoiceUI(data) {
 }
 
 let rematchRequestedByOpponent = false;
+let rematchState = null;
+
+function resetRematchUiState() {
+    rematchRequestedByOpponent = false;
+    rematchState = null;
+}
+
+function updateRematchState(data = {}) {
+    const votes = Number(data.votes ?? data.rematch_votes ?? 0);
+    const total = Number(data.total ?? data.rematch_total ?? 0);
+    rematchState = {
+        votes: Number.isFinite(votes) ? Math.max(0, votes) : 0,
+        total: Number.isFinite(total) ? Math.max(0, total) : 0,
+        hasVoted: !!(data.has_voted ?? data.rematch_has_voted),
+        mode: data.mode || (gameState && gameState.mode) || '',
+    };
+}
+
+function syncRematchStateFromGameState(gs) {
+    if (!gs || gs.rematch_total === undefined) return;
+    updateRematchState({
+        votes: gs.rematch_votes,
+        total: gs.rematch_total,
+        has_voted: gs.rematch_has_voted,
+        mode: gs.mode,
+    });
+}
+
+function isTeamRematchGame(gs) {
+    const mode = (gs && gs.mode) || (rematchState && rematchState.mode) || '';
+    return mode === '2v2' || !!(gs && Array.isArray(gs.teams));
+}
+
+function getRematchProgress(gs) {
+    const teamMode = isTeamRematchGame(gs);
+    const fallbackTotal = teamMode ? 4 : 2;
+    const votes = Number((rematchState && rematchState.votes) ?? (gs && gs.rematch_votes) ?? 0);
+    const total = Number((rematchState && rematchState.total) ?? (gs && gs.rematch_total) ?? fallbackTotal);
+    const hasVoted = !!((rematchState && rematchState.hasVoted) ?? (gs && gs.rematch_has_voted));
+    return {
+        votes: Number.isFinite(votes) ? Math.max(0, votes) : 0,
+        total: Number.isFinite(total) && total > 0 ? total : fallbackTotal,
+        hasVoted,
+    };
+}
+
+function formatRematchProgress(votes, total) {
+    return tf('rematch_progress', votes, total);
+}
+
+function updateGameOverRematchButton(gs) {
+    const rematchBtn = $('btn-rematch');
+    if (!rematchBtn) return;
+    const progress = getRematchProgress(gs);
+    const teamMode = isTeamRematchGame(gs);
+    if (teamMode) {
+        rematchBtn.textContent = formatRematchProgress(progress.votes, progress.total);
+        rematchBtn.disabled = progress.hasVoted;
+        rematchBtn.onclick = () => {
+            if (!socket || rematchBtn.disabled) return;
+            socket.emit('rematch');
+            const nextVotes = Math.min(progress.total, Math.max(progress.votes + (progress.hasVoted ? 0 : 1), progress.votes));
+            rematchState = { ...progress, votes: nextVotes, hasVoted: true, mode: '2v2' };
+            rematchBtn.textContent = formatRematchProgress(nextVotes, progress.total);
+            rematchBtn.disabled = true;
+        };
+    } else if (progress.hasVoted) {
+        rematchBtn.textContent = UI.rematch_sent;
+        rematchBtn.disabled = true;
+        rematchBtn.onclick = null;
+    } else if (rematchRequestedByOpponent) {
+        rematchBtn.textContent = UI.agree_rematch;
+        rematchBtn.disabled = false;
+        rematchBtn.onclick = () => {
+            if (!socket) { debugLog('[REMATCH] socket missing'); return; }
+            debugLog('[REMATCH] emit rematch accept');
+            socket.emit('rematch');
+            rematchBtn.textContent = UI.rematch_sent;
+            rematchBtn.disabled = true;
+        };
+    } else {
+        rematchBtn.textContent = UI.rematch;
+        rematchBtn.disabled = false;
+        rematchBtn.onclick = () => {
+            if (!socket) { debugLog('[REMATCH] socket missing'); return; }
+            debugLog('[REMATCH] emit rematch request');
+            socket.emit('rematch');
+            rematchBtn.textContent = UI.rematch_sent;
+            rematchBtn.disabled = true;
+        };
+    }
+}
 
 function renderGameOver(data) {
     showView('view-gameover');
     const gs = data || gameState;
+    syncRematchStateFromGameState(gs);
     const isTutorialGameOver = !!gs.tutorial;
     const isSpectatorGameOver = !!(gs.spectating || isSpectating || gs.your_id === -1 || playerId === -1);
     const winner = gs.winner;
@@ -8308,26 +8420,8 @@ function renderGameOver(data) {
             rematchBtn.textContent = UI.tutorial_retry || UI.rematch;
             rematchBtn.disabled = false;
             rematchBtn.onclick = () => startTutorial('home');
-        } else if (rematchRequestedByOpponent) {
-            rematchBtn.textContent = UI.agree_rematch;
-            rematchBtn.disabled = false;
-            rematchBtn.onclick = () => {
-                if (!socket) { debugLog('[REMATCH] socket missing'); return; }
-                debugLog('[REMATCH] emit rematch accept');
-                socket.emit('rematch');
-                rematchBtn.textContent = UI.rematch_sent;
-                rematchBtn.disabled = true;
-            };
         } else {
-            rematchBtn.textContent = UI.rematch;
-            rematchBtn.disabled = false;
-            rematchBtn.onclick = () => {
-                if (!socket) { debugLog('[REMATCH] socket missing'); return; }
-                debugLog('[REMATCH] emit rematch request');
-                socket.emit('rematch');
-                rematchBtn.textContent = UI.rematch_sent;
-                rematchBtn.disabled = true;
-            };
+            updateGameOverRematchButton(gs);
         }
     }
     const returnLobbyBtn = $('btn-return-lobby');
@@ -8521,6 +8615,7 @@ function setupPlayZoneDrop() {
 let settingsMods = [];
 let settingsCommunityMods = [];
 let settingsAllowServerEdit = true;
+let settingsActiveTab = 'appearance';
 const VANILLA_MOD_FILENAME = 'VanillaCardsFormatV1.json';
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 
@@ -8555,11 +8650,8 @@ function openSettings(options = {}) {
     settingsAllowServerEdit = !options.hideServer;
     const panel = $('settings-panel');
     if (panel) panel.classList.remove('hidden');
-    const serverSection = $('settings-server-section');
-    if (serverSection) {
-        serverSection.classList.toggle('hidden', !settingsAllowServerEdit);
-        serverSection.style.display = settingsAllowServerEdit ? '' : 'none';
-    }
+    if (!settingsAllowServerEdit && settingsActiveTab === 'server') settingsActiveTab = 'appearance';
+    renderSettingsTabs();
     loadSettingsMods();
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
@@ -8571,6 +8663,29 @@ function openSettings(options = {}) {
         serverHint.textContent = tf('server_hint', DEFAULT_SERVER);
     }
     renderModSourceControls();
+}
+
+function setSettingsTab(tab) {
+    if (tab === 'server' && !settingsAllowServerEdit) tab = 'appearance';
+    settingsActiveTab = ['appearance', 'server', 'mods'].includes(tab) ? tab : 'appearance';
+    renderSettingsTabs();
+}
+
+function renderSettingsTabs() {
+    const tabs = ['appearance', 'server', 'mods'];
+    tabs.forEach(tab => {
+        const btn = $(`settings-tab-${tab}`);
+        const page = $(`settings-page-${tab}`);
+        const active = settingsActiveTab === tab;
+        if (btn) {
+            btn.classList.toggle('active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            if (tab === 'server') btn.classList.toggle('hidden', !settingsAllowServerEdit);
+        }
+        if (page) {
+            page.classList.toggle('hidden', !active || (tab === 'server' && !settingsAllowServerEdit));
+        }
+    });
 }
 
 function closeSettings() {
@@ -8601,26 +8716,33 @@ async function loadSettingsMods() {
         const name = info.name || mod.filename || tf('mod_default_name', i + 1);
         const version = info.version || '';
         const filename = mod.filename || '';
+        const errors = Array.isArray(mod.errors) ? mod.errors.filter(Boolean) : [];
         const item = document.createElement('div');
         item.className = 'settings-mod-item';
+        if (errors.length) item.classList.add('mod-error');
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.id = `mod-cb-${i}`;
-        cb.checked = !disabled.includes(filename);
+        cb.checked = !errors.length && !disabled.includes(filename);
+        cb.disabled = errors.length > 0;
         cb.dataset.filename = filename;
         const label = document.createElement('label');
         label.htmlFor = cb.id;
         label.textContent = name;
+        item.appendChild(cb);
+        item.appendChild(label);
         if (version) {
             const ver = document.createElement('span');
             ver.className = 'mod-version';
             ver.textContent = `v${version}`;
-            item.appendChild(cb);
-            item.appendChild(label);
             item.appendChild(ver);
-        } else {
-            item.appendChild(cb);
-            item.appendChild(label);
+        }
+        if (errors.length) {
+            const err = document.createElement('span');
+            err.className = 'mod-error-text';
+            err.textContent = `${UI.mod_validation_error || '格式错误'}：${errors.slice(0, 3).join('；')}`;
+            err.title = errors.join('\n');
+            item.appendChild(err);
         }
         listEl.appendChild(item);
     });
@@ -8631,14 +8753,22 @@ async function loadSettingsMods() {
 function renderModSourceControls() {
     const selection = getCommunityModSelection();
     const source = selection.mod_source;
-    const officialRadio = $('settings-mod-source-official');
-    const communityRadio = $('settings-mod-source-community');
+    const officialTab = $('settings-mod-source-official');
+    const communityTab = $('settings-mod-source-community');
     const officialBox = $('settings-official-mods');
     const communityBox = $('settings-community-mods');
-    if (officialRadio) officialRadio.checked = source !== 'community';
-    if (communityRadio) communityRadio.checked = source === 'community';
+    const uploadRow = document.querySelector('#settings-community-mods .settings-upload-row');
+    if (officialTab) {
+        officialTab.classList.toggle('active', source !== 'community');
+        officialTab.setAttribute('aria-pressed', source !== 'community' ? 'true' : 'false');
+    }
+    if (communityTab) {
+        communityTab.classList.toggle('active', source === 'community');
+        communityTab.setAttribute('aria-pressed', source === 'community' ? 'true' : 'false');
+    }
     if (officialBox) officialBox.classList.toggle('hidden', source === 'community');
     if (communityBox) communityBox.classList.toggle('hidden', source !== 'community');
+    if (uploadRow) uploadRow.classList.toggle('hidden', source !== 'community');
 }
 
 function setModSource(source) {
@@ -9024,8 +9154,11 @@ async function init() {
     $('btn-open-settings').addEventListener('click', openSettings);
     $('btn-settings-close').addEventListener('click', () => { saveDisabledMods(); closeSettings(); });
     if ($('btn-lobby-settings')) $('btn-lobby-settings').addEventListener('click', () => openSettings({ hideServer: true }));
-    if ($('settings-mod-source-official')) $('settings-mod-source-official').addEventListener('change', () => setModSource('official'));
-    if ($('settings-mod-source-community')) $('settings-mod-source-community').addEventListener('change', () => setModSource('community'));
+    if ($('settings-tab-appearance')) $('settings-tab-appearance').addEventListener('click', () => setSettingsTab('appearance'));
+    if ($('settings-tab-server')) $('settings-tab-server').addEventListener('click', () => setSettingsTab('server'));
+    if ($('settings-tab-mods')) $('settings-tab-mods').addEventListener('click', () => setSettingsTab('mods'));
+    if ($('settings-mod-source-official')) $('settings-mod-source-official').addEventListener('click', () => setModSource('official'));
+    if ($('settings-mod-source-community')) $('settings-mod-source-community').addEventListener('click', () => setModSource('community'));
     if ($('btn-community-refresh')) $('btn-community-refresh').addEventListener('click', loadSettingsCommunityMods);
     if ($('btn-community-upload')) $('btn-community-upload').addEventListener('click', () => {
         const input = $('settings-community-upload-file');

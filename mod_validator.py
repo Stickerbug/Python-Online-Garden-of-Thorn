@@ -436,7 +436,14 @@ def _validate_nested_effects(value: Any, label: str, valid_effects: Set[str], er
 
 
 def _valid_id(value: str) -> bool:
-    return bool(ID_RE.match(value))
+    if not isinstance(value, str):
+        return False
+    if not value or value.strip() != value or len(value) > 64:
+        return False
+    first = value[0]
+    if first.isdigit() or (first != '_' and not first.isalpha()):
+        return False
+    return all(ch == '_' or ch.isalnum() for ch in value)
 
 
 def _valid_number(value: Any, minimum: float, maximum: float) -> bool:

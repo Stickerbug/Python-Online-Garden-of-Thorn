@@ -355,7 +355,12 @@
 <div id="settings-panel" class="settings-panel hidden">
 <div class="settings-inner">
 <h3 id="settings-title">设置</h3>
-<div class="settings-section">
+<div class="settings-tabs settings-main-tabs">
+<button id="settings-tab-appearance" class="settings-tab active" type="button">外观</button>
+<button id="settings-tab-server" class="settings-tab" type="button">服务器</button>
+<button id="settings-tab-mods" class="settings-tab" type="button">模组</button>
+</div>
+<div id="settings-page-appearance" class="settings-page settings-section">
 <h4 id="settings-section-appearance">外观</h4>
 <div class="settings-theme-row">
 <label id="settings-label-theme">主题</label>
@@ -387,7 +392,7 @@
 <label id="settings-label-show-english-names" for="settings-show-english-names">显示卡牌英文名称</label>
 </div>
 </div>
-<div id="settings-server-section" class="settings-section">
+<div id="settings-page-server" class="settings-page settings-section hidden">
 <h4 id="settings-section-server">服务器</h4>
 <div class="settings-theme-row">
 <label id="settings-label-server">地址</label>
@@ -395,11 +400,11 @@
 </div>
 <p id="settings-server-hint" class="info-text" style="font-size:11px;margin-top:4px;"></p>
 </div>
-<div class="settings-section">
+<div id="settings-page-mods" class="settings-page settings-section hidden">
 <h4 id="settings-section-mods">模组</h4>
-<div class="settings-mod-source-row">
-<label><input type="radio" name="settings-mod-source" id="settings-mod-source-official" value="official" checked> <span id="settings-label-official-mods">官方模组</span></label>
-<label><input type="radio" name="settings-mod-source" id="settings-mod-source-community" value="community"> <span id="settings-label-community-mods">社区模组</span></label>
+<div class="settings-tabs settings-subtabs">
+<button id="settings-mod-source-official" class="settings-tab active" type="button"><span id="settings-label-official-mods">官方模组</span></button>
+<button id="settings-mod-source-community" class="settings-tab" type="button"><span id="settings-label-community-mods">社区模组</span></button>
 </div>
 <div id="settings-official-mods">
 <div id="settings-mods-list" class="settings-mods-list"></div>
@@ -545,7 +550,7 @@
   setText('#view-lobby .lobby-header h2', t.lobby); setText('#view-lobby .lobby-left .lobby-section:first-child h3', t.onlinePlayers); setText('#lobby-online-count', t.onlineCount); setText('#view-lobby .lobby-left .lobby-section:last-child h3', t.ongoingGames); setText('#view-lobby .lobby-right .lobby-section h3', t.chat); setPlaceholder('#lobby-chat-input', t.messagePlaceholder); setText('#btn-lobby-chat-send', t.send); setText('#btn-lobby-back', t.backHome);
   setText('#view-draft h2', t.draft); setText('#btn-draft-reroll', t.reroll); setText('#view-event-select h2', t.selectEvent); setText('#view-event-select .event-desc', t.selectEventDesc); setText('#opp-label', t.opponent); setText('#opp-info', t.oppInfo); setText('#battle-log .log-header', t.battleLog); setText('#you-label', t.you); setText('#you-info', t.youInfo); setText('#play-zone .play-zone-hint', t.dragToPlay); setText('#btn-end-turn', t.endTurn); setText('#btn-view-deck', t.viewDeck); setText('#btn-solo-next-draw', t.setNextDraw); setText('#btn-solo-edit', t.pauseEdit); setText('#btn-surrender', t.surrender); setText('#btn-switch-perspective', t.switchPerspective); setText('#btn-leave-spectate', t.leaveSpectate); setPlaceholder('#game-chat-input', t.messagePlaceholder); setText('#btn-game-chat-send', t.send);
   setText('#btn-rematch', t.rematch); setText('#btn-return-lobby', t.returnLobby); setText('#view-mod-editor h2', t.modEditor); setPlaceholder('#mod-editor-area', t.modPlaceholder); setText('#btn-mod-load', t.loadMod); setText('#btn-mod-save', t.save); setText('#btn-mod-validate', t.validateJson); setText('#btn-mod-back', t.back);
-  setText('#settings-title', t.settings); setText('#settings-section-appearance', t.appearance); setText('#settings-label-theme', t.theme); setText('#settings-theme-select option[value=\"light\"]', t.light); setText('#settings-theme-select option[value=\"dark\"]', t.dark); setText('#settings-label-ui-style', t.uiStyle); setText('#settings-ui-style-select option[value=\"minimal\"]', t.minimal); setText('#settings-ui-style-select option[value=\"classic\"]', t.classic); setText('#settings-label-lang', t.language); setText('#settings-section-server', t.server); setText('#settings-label-server', t.address); setPlaceholder('#settings-server-input', t.serverPlaceholder); setText('#settings-section-mods', t.mods); setText('#settings-no-mods', t.noMods); setText('#btn-settings-close', t.ok); setText('#game-prompt-cancel', t.cancel); setText('.rotate-text', t.rotatePrompt); setText('.rotate-text-en', t.rotateSub); setText('#btn-dismiss-rotate', t.continueEnter);
+  setText('#settings-title', t.settings); setText('#settings-tab-appearance', t.appearance); setText('#settings-tab-server', t.server); setText('#settings-tab-mods', t.mods); setText('#settings-section-appearance', t.appearance); setText('#settings-label-theme', t.theme); setText('#settings-theme-select option[value=\"light\"]', t.light); setText('#settings-theme-select option[value=\"dark\"]', t.dark); setText('#settings-label-ui-style', t.uiStyle); setText('#settings-ui-style-select option[value=\"minimal\"]', t.minimal); setText('#settings-ui-style-select option[value=\"classic\"]', t.classic); setText('#settings-label-lang', t.language); setText('#settings-section-server', t.server); setText('#settings-label-server', t.address); setPlaceholder('#settings-server-input', t.serverPlaceholder); setText('#settings-section-mods', t.mods); setText('#settings-no-mods', t.noMods); setText('#btn-settings-close', t.ok); setText('#game-prompt-cancel', t.cancel); setText('.rotate-text', t.rotatePrompt); setText('.rotate-text-en', t.rotateSub); setText('#btn-dismiss-rotate', t.continueEnter);
   const app = document.getElementById('app'); if (app) app.style.visibility = 'visible';
 })();
 </script>
@@ -570,6 +575,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-<script src="/static/js/game.js?v=151"></script>
+<script src="/static/js/game.js?v=154"></script>
 </body>
 </html>
