@@ -1494,6 +1494,11 @@ body {
   gap: 6px;
 }
 
+.settings-mod-source-tabs {
+  width: 100%;
+  margin: 0 0 12px;
+}
+
 .settings-mod-section-toggle {
   width: 100%;
   display: flex;
@@ -1623,7 +1628,7 @@ body {
 
 .settings-community-card {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto 1fr;
   gap: 8px 12px;
   align-items: center;
   padding: 10px 12px;
@@ -1636,6 +1641,19 @@ body {
 
 .community-card-main {
   min-width: 0;
+}
+
+.settings-mod-card-details {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 2px 30px;
+  border-top: 1px solid var(--border-color);
+}
+
+.settings-mod-card-details.hidden {
+  display: none;
 }
 
 .community-card-check {
@@ -1678,13 +1696,44 @@ body {
 }
 
 .settings-mod-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
   align-items: center;
-  flex-wrap: wrap;
   gap: 8px;
   padding: 6px 8px;
   background: rgba(0, 0, 0, 0.04);
   border-radius: var(--radius-md);
+}
+
+.settings-mod-item-toggle {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+
+.settings-mod-item-toggle:hover {
+  background: rgba(77, 166, 117, 0.12);
+  color: var(--bloom);
+}
+
+.settings-mod-item-toggle[aria-expanded="true"] {
+  transform: rotate(90deg);
+}
+
+.settings-mod-item-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
 }
 
 .settings-mod-item.mod-error {
@@ -1708,7 +1757,7 @@ body {
   font-size: 13px;
   color: var(--text-primary);
   cursor: pointer;
-  flex: 1;
+  min-width: 0;
 }
 
 .settings-mod-item .mod-version {
@@ -1721,9 +1770,13 @@ body {
   color: var(--text-muted);
 }
 
+.settings-mod-item .mod-description {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
 .settings-mod-item .mod-error-text {
-  flex-basis: 100%;
-  margin-left: 24px;
   font-size: 11px;
   line-height: 1.35;
   color: #c0392b;

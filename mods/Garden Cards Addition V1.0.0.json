@@ -287,7 +287,9 @@
       "quality": "Ultra",
       "description": "第三只眼让你更为精准的打击对手",
       "effect_text": "给一张牌附上精准",
-      "flags": [],
+      "flags": [
+        "self_only"
+      ],
       "effects": [
         {
           "type": "request_card",

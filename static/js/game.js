@@ -8725,10 +8725,9 @@ let settingsCommunityMods = [];
 let settingsAllowServerEdit = true;
 let settingsActiveTab = 'appearance';
 let pendingCommunityReplaceHash = '';
-let settingsModSectionOpen = {
-    official: localStorage.getItem('gtn_settings_mod_section_official') !== 'closed',
-    community: localStorage.getItem('gtn_settings_mod_section_community') !== 'closed',
-};
+let settingsActiveModTab = ['official', 'community'].includes(localStorage.getItem('gtn_settings_mod_tab'))
+    ? localStorage.getItem('gtn_settings_mod_tab')
+    : 'official';
 const VANILLA_MOD_FILENAME = 'VanillaCardsFormatV1.json';
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 
@@ -8841,6 +8840,39 @@ async function loadSettingsMods() {
     } catch (e) {
         settingsMods = [];
     }
+    renderOfficialModList();
+    loadSettingsCommunityMods();
+    renderModSourceControls();
+}
+
+function settingsModDetailKey(kind, key) {
+    return `gtn_settings_mod_detail_${kind}_${encodeURIComponent(String(key || 'unknown'))}`;
+}
+
+function isSettingsModDetailOpen(kind, key) {
+    return localStorage.getItem(settingsModDetailKey(kind, key)) === 'open';
+}
+
+function setSettingsModDetailOpen(kind, key, open) {
+    localStorage.setItem(settingsModDetailKey(kind, key), open ? 'open' : 'closed');
+    if (kind === 'community') renderCommunityModList();
+    else renderOfficialModList();
+}
+
+function createSettingsModCaret(kind, key, expanded) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'settings-mod-item-toggle';
+    btn.textContent = '>';
+    btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    btn.onclick = () => setSettingsModDetailOpen(kind, key, !expanded);
+    return btn;
+}
+
+function renderOfficialModList() {
+    const listEl = $('settings-mods-list');
+    const noModsEl = $('settings-no-mods');
+    if (!listEl) return;
     listEl.innerHTML = '';
     if (settingsMods.length === 0) {
         if (noModsEl) noModsEl.style.display = '';
@@ -8854,66 +8886,92 @@ async function loadSettingsMods() {
         const version = info.version || '';
         const filename = mod.filename || '';
         const errors = Array.isArray(mod.errors) ? mod.errors.filter(Boolean) : [];
+        const expanded = isSettingsModDetailOpen('official', filename || name);
         const item = document.createElement('div');
-        item.className = 'settings-mod-item';
+        item.className = 'settings-mod-item settings-mod-card';
         if (errors.length) item.classList.add('mod-error');
+        if (expanded) item.classList.add('mod-expanded');
+        item.appendChild(createSettingsModCaret('official', filename || name, expanded));
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.id = `mod-cb-${i}`;
         cb.checked = !errors.length && !disabled.includes(filename);
         cb.disabled = errors.length > 0;
         cb.dataset.filename = filename;
+        item.appendChild(cb);
+        const main = document.createElement('div');
+        main.className = 'settings-mod-item-main';
         const label = document.createElement('label');
         label.htmlFor = cb.id;
         label.textContent = name;
-        item.appendChild(cb);
-        item.appendChild(label);
+        main.appendChild(label);
         if (version) {
             const ver = document.createElement('span');
             ver.className = 'mod-version';
             ver.textContent = `v${version}`;
-            item.appendChild(ver);
+            main.appendChild(ver);
+        }
+        item.appendChild(main);
+        const details = document.createElement('div');
+        details.className = 'settings-mod-card-details' + (expanded ? '' : ' hidden');
+        const metaParts = [];
+        if (filename) metaParts.push(filename);
+        if (info.author) metaParts.push(info.author);
+        if (mod.cards_count != null) metaParts.push(tf('community_cards_count', mod.cards_count));
+        const counts = getModCardTypeCounts(mod);
+        const countText = REQUIRED_MOD_CARD_TYPES
+            .map(type => `${getCardTypeLabel(type)}:${Number(counts[type] || 0)}`)
+            .join(' / ');
+        if (countText) metaParts.push(countText);
+        if (metaParts.length) {
+            const meta = document.createElement('div');
+            meta.className = 'mod-meta';
+            meta.textContent = metaParts.join(' · ');
+            details.appendChild(meta);
+        }
+        const descText = info.description || mod.description || '';
+        if (descText) {
+            const desc = document.createElement('div');
+            desc.className = 'mod-description';
+            desc.textContent = descText;
+            details.appendChild(desc);
         }
         if (errors.length) {
             const err = document.createElement('span');
             err.className = 'mod-error-text';
             err.textContent = `${UI.mod_validation_error || '格式错误'}：${errors.slice(0, 3).join('；')}`;
             err.title = errors.join('\n');
-            item.appendChild(err);
+            details.appendChild(err);
         }
+        item.appendChild(details);
         listEl.appendChild(item);
     });
-    loadSettingsCommunityMods();
+}
+
+function setSettingsModSourceTab(tab) {
+    settingsActiveModTab = tab === 'community' ? 'community' : 'official';
+    localStorage.setItem('gtn_settings_mod_tab', settingsActiveModTab);
     renderModSourceControls();
 }
 
-function renderModSectionControls() {
+function renderModSourceTabs() {
     ['official', 'community'].forEach(kind => {
-        const toggle = $(`settings-${kind}-toggle`);
-        const body = kind === 'official' ? $('settings-official-mods') : $('settings-community-mods');
-        if (toggle) {
-            toggle.classList.toggle('open', !!settingsModSectionOpen[kind]);
-            toggle.setAttribute('aria-expanded', settingsModSectionOpen[kind] ? 'true' : 'false');
-        }
-        if (body) body.classList.toggle('hidden', !settingsModSectionOpen[kind]);
+        const btn = $(`settings-mod-tab-${kind}`);
+        if (!btn) return;
+        const active = settingsActiveModTab === kind;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
-}
-
-function toggleModSection(kind) {
-    if (!Object.prototype.hasOwnProperty.call(settingsModSectionOpen, kind)) return;
-    settingsModSectionOpen[kind] = !settingsModSectionOpen[kind];
-    localStorage.setItem(`gtn_settings_mod_section_${kind}`, settingsModSectionOpen[kind] ? 'open' : 'closed');
-    renderModSourceControls();
 }
 
 function renderModSourceControls() {
     const officialBox = $('settings-official-mods');
     const communityBox = $('settings-community-mods');
     const uploadRow = document.querySelector('#settings-community-mods .settings-upload-row');
-    renderModSectionControls();
-    if (officialBox) officialBox.classList.toggle('hidden', !settingsModSectionOpen.official);
-    if (communityBox) communityBox.classList.toggle('hidden', !settingsModSectionOpen.community);
-    if (uploadRow) uploadRow.classList.toggle('hidden', !settingsModSectionOpen.community);
+    renderModSourceTabs();
+    if (officialBox) officialBox.classList.toggle('hidden', settingsActiveModTab !== 'official');
+    if (communityBox) communityBox.classList.toggle('hidden', settingsActiveModTab !== 'community');
+    if (uploadRow) uploadRow.classList.toggle('hidden', settingsActiveModTab !== 'community');
     renderCommunityCurrent();
     updateCommunityUploadState();
 }
@@ -9052,11 +9110,15 @@ function renderCommunityModList() {
     const selectedHashes = new Set((selected.community_mods || []).map(mod => mod.sha256));
     settingsCommunityMods.forEach((mod, i) => {
         const item = document.createElement('div');
-        item.className = 'settings-community-card';
+        item.className = 'settings-community-card settings-mod-card';
+        const expandKey = mod.sha256 || mod.public_url || communityModTitle(mod, i);
+        const expanded = isSettingsModDetailOpen('community', expandKey);
+        if (expanded) item.classList.add('mod-expanded');
         const isSelected = selectedHashes.has(mod.sha256);
         if (isSelected) {
             item.classList.add('community-selected');
         }
+        item.appendChild(createSettingsModCaret('community', expandKey, expanded));
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.className = 'community-card-check';
@@ -9082,6 +9144,10 @@ function renderCommunityModList() {
             badge.textContent = UI.community_owned_by_you;
             title.appendChild(badge);
         }
+        main.appendChild(title);
+        item.append(checkbox, main);
+        const details = document.createElement('div');
+        details.className = 'settings-mod-card-details' + (expanded ? '' : ' hidden');
         const meta = document.createElement('div');
         meta.className = 'community-card-meta';
         const metaParts = [];
@@ -9090,13 +9156,12 @@ function renderCommunityModList() {
         if (mod.cards_count != null) metaParts.push(tf('community_cards_count', mod.cards_count));
         if (mod.uploaded_at) metaParts.push(tf('community_uploaded_at', formatCommunityTime(mod.uploaded_at)));
         meta.textContent = metaParts.join(' · ');
-        main.appendChild(title);
-        if (meta.textContent) main.appendChild(meta);
+        if (meta.textContent) details.appendChild(meta);
         if (mod.description) {
             const desc = document.createElement('div');
             desc.className = 'community-card-desc';
             desc.textContent = mod.description;
-            main.appendChild(desc);
+            details.appendChild(desc);
         }
         const actions = document.createElement('div');
         actions.className = 'community-card-actions';
@@ -9123,7 +9188,8 @@ function renderCommunityModList() {
             deleteBtn.onclick = () => deleteCommunityMod(mod);
             actions.append(updateBtn, deleteBtn);
         }
-        item.append(checkbox, main, actions);
+        details.appendChild(actions);
+        item.appendChild(details);
         listEl.appendChild(item);
     });
     renderCommunityCurrent();
@@ -9485,8 +9551,8 @@ async function init() {
     if ($('settings-tab-appearance')) $('settings-tab-appearance').addEventListener('click', () => setSettingsTab('appearance'));
     if ($('settings-tab-server')) $('settings-tab-server').addEventListener('click', () => setSettingsTab('server'));
     if ($('settings-tab-mods')) $('settings-tab-mods').addEventListener('click', () => setSettingsTab('mods'));
-    if ($('settings-official-toggle')) $('settings-official-toggle').addEventListener('click', () => toggleModSection('official'));
-    if ($('settings-community-toggle')) $('settings-community-toggle').addEventListener('click', () => toggleModSection('community'));
+    if ($('settings-mod-tab-official')) $('settings-mod-tab-official').addEventListener('click', () => setSettingsModSourceTab('official'));
+    if ($('settings-mod-tab-community')) $('settings-mod-tab-community').addEventListener('click', () => setSettingsModSourceTab('community'));
     if ($('btn-community-refresh')) $('btn-community-refresh').addEventListener('click', loadSettingsCommunityMods);
     if ($('btn-community-disable')) $('btn-community-disable').addEventListener('click', clearCommunityModSelection);
     if ($('btn-community-upload')) $('btn-community-upload').addEventListener('click', () => {

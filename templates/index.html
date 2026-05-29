@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=147">
+<link rel="stylesheet" href="/static/css/style.css?v=148">
 <script>
 (() => {
   const lang = localStorage.getItem('gtn_lang') || 'zh';
@@ -402,17 +402,15 @@
 </div>
 <div id="settings-page-mods" class="settings-page settings-section hidden">
 <h4 id="settings-section-mods">模组</h4>
-<button id="settings-official-toggle" class="settings-mod-section-toggle" type="button">
-<span class="settings-mod-caret">&gt;</span><span id="settings-label-official-mods">官方模组</span>
-</button>
+<div class="settings-tabs settings-subtabs settings-mod-source-tabs">
+<button id="settings-mod-tab-official" class="settings-tab active" type="button"><span id="settings-label-official-mods">官方模组</span></button>
+<button id="settings-mod-tab-community" class="settings-tab" type="button"><span id="settings-label-community-mods">社区模组</span></button>
+</div>
 <div id="settings-official-mods" class="settings-mod-section-body">
 <div id="settings-mods-list" class="settings-mods-list"></div>
 <p id="settings-no-mods" class="info-text">未找到模组文件</p>
 </div>
-<button id="settings-community-toggle" class="settings-mod-section-toggle" type="button">
-<span class="settings-mod-caret">&gt;</span><span id="settings-label-community-mods">社区模组</span>
-</button>
-<div id="settings-community-mods" class="settings-community-mods settings-mod-section-body">
+<div id="settings-community-mods" class="settings-community-mods settings-mod-section-body hidden">
 <div id="settings-community-current" class="community-current-card">
 <div class="community-current-main">
 <span id="settings-community-current-label" class="community-kicker">当前社区模组</span>
@@ -591,6 +589,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-<script src="/static/js/game.js?v=160"></script>
+<script src="/static/js/game.js?v=161"></script>
 </body>
 </html>

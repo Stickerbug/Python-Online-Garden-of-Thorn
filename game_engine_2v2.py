@@ -938,9 +938,10 @@ class GameEngine2v2(GameEngine):
             result = super()._execute_card_effect(player_id, card, choice)
             if result.get('needs_choice') and isinstance(choice, dict) and 'target_player' in choice:
                 result['player_id'] = player_id
-                result['target_player_id'] = choice.get('target_player')
                 if self.pending_choice is not None:
                     self.pending_choice['original_choice'] = dict(choice)
+                    if self.pending_choice.get('target_player_id') is not None:
+                        result['target_player_id'] = self.pending_choice.get('target_player_id')
             if card.card_type == 'root':
                 target_id = self._selected_effect_target(player_id, choice)
                 for eq in self.players[player_id].equipment:
