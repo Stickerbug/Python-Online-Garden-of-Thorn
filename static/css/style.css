@@ -1971,6 +1971,15 @@ body {
   font-weight: 800;
 }
 
+.guard-name,
+.player-name-inline.guard-name,
+.lobby-player-row .player-name.guard-name,
+.lobby-team-row .player-name .guard-name,
+.team-info .guard-name {
+  color: var(--guard) !important;
+  font-weight: 800;
+}
+
 .lobby-player-row .player-self {
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -2053,6 +2062,11 @@ body {
 
 .chat-nick.bloom-name {
   color: var(--bloom) !important;
+  font-weight: 800;
+}
+
+.chat-nick.guard-name {
+  color: var(--guard) !important;
   font-weight: 800;
 }
 
@@ -3996,6 +4010,12 @@ body {
 .log-entry.chat .chat-nick.bloom-name,
 .log-chat .chat-nick.bloom-name {
   color: var(--bloom) !important;
+  font-weight: 800;
+}
+
+.log-entry.chat .chat-nick.guard-name,
+.log-chat .chat-nick.guard-name {
+  color: var(--guard) !important;
   font-weight: 800;
 }
 

@@ -44,6 +44,13 @@ def init_db():
             )
             '''
         )
+        existing_columns = {row['name'] for row in conn.execute('PRAGMA table_info(users)').fetchall()}
+        if 'banned' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0')
+        if 'ban_reason' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN ban_reason TEXT')
+        if 'banned_at' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN banned_at TEXT')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS matches (
@@ -128,6 +135,9 @@ def row_to_user(row):
         'wins': row['wins'],
         'losses': row['losses'],
         'draws': row['draws'],
+        'banned': bool(row['banned']) if 'banned' in row.keys() else False,
+        'ban_reason': row['ban_reason'] if 'ban_reason' in row.keys() else None,
+        'banned_at': row['banned_at'] if 'banned_at' in row.keys() else None,
     }
 
 
@@ -175,6 +185,10 @@ def verify_user(username, password):
         row = conn.execute('SELECT * FROM users WHERE username_lower = ?', (name.lower(),)).fetchone()
         if row is None or not check_password_hash(row['password_hash'], str(password or '')):
             return None, '用户名或密码错误'
+        is_banned = bool(row['banned']) if 'banned' in row.keys() else False
+        if is_banned:
+            reason = (row['ban_reason'] if 'ban_reason' in row.keys() else '') or ''
+            return None, f'账号已被封禁：{reason}' if reason else '账号已被封禁'
         now = utc_now()
         conn.execute('UPDATE users SET last_login_at = ? WHERE id = ?', (now, row['id']))
         conn.commit()
@@ -202,6 +216,58 @@ def change_user_password(user_id, old_password, new_password):
         )
         conn.commit()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        return row_to_user(row), None
+
+
+def find_user_for_admin(identifier):
+    token = str(identifier or '').strip()
+    if not token:
+        return None
+    with get_db_connection() as conn:
+        row = None
+        if token.isdigit():
+            row = conn.execute('SELECT * FROM users WHERE id = ?', (int(token),)).fetchone()
+        if row is None:
+            name = sanitize_username(token)
+            if name:
+                row = conn.execute('SELECT * FROM users WHERE username_lower = ?', (name.lower(),)).fetchone()
+        return row_to_user(row)
+
+
+def admin_change_user_password(identifier, new_password):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, '账号不存在'
+    ok, error = validate_password(new_password)
+    if not ok:
+        return None, error
+    with get_db_connection() as conn:
+        conn.execute(
+            'UPDATE users SET password_hash = ? WHERE id = ?',
+            (generate_password_hash(str(new_password)), user['id']),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
+        return row_to_user(row), None
+
+
+def admin_set_user_ban(identifier, banned=True, reason=''):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, '账号不存在'
+    reason_text = str(reason or '').strip()[:200]
+    banned_at = utc_now() if banned else None
+    with get_db_connection() as conn:
+        conn.execute(
+            '''
+            UPDATE users
+            SET banned = ?, ban_reason = ?, banned_at = ?
+            WHERE id = ?
+            ''',
+            (1 if banned else 0, reason_text if banned else None, banned_at, user['id']),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
         return row_to_user(row), None
 
 

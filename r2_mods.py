@@ -54,6 +54,17 @@ def _required_env() -> Dict[str, str]:
     missing = [name for name, value in values.items() if not value]
     if missing:
         raise R2ConfigError('社区模组未配置 R2 环境变量: ' + ', '.join(missing))
+    account_id = values['R2_ACCOUNT_ID']
+    if len(account_id) != 32:
+        raise R2ConfigError(
+            f'R2_ACCOUNT_ID 格式错误：应为 Cloudflare Account ID（32 位），当前长度 {len(account_id)}'
+        )
+    access_key = values['R2_ACCESS_KEY_ID']
+    if len(access_key) != 32:
+        raise R2ConfigError(
+            'R2_ACCESS_KEY_ID 格式错误：应填写 Cloudflare R2 的 S3 Access Key ID（32 位），'
+            f'不是 API Token 或 Secret Access Key；当前长度 {len(access_key)}'
+        )
     return values
 
 

@@ -34,8 +34,11 @@ from r2_mods import (
     validate_community_mod_url,
 )
 from db import (
+    admin_change_user_password,
+    admin_set_user_ban,
     change_user_password,
     create_user,
+    find_user_for_admin,
     get_admin_user_detail,
     get_user_by_id,
     get_user_by_username,
@@ -145,6 +148,14 @@ SPECIAL_ACCOUNT_PROFILES = [
         'special_role': 'chief_designer',
         'special_role_color': 'bloom',
         'special_role_sort': 1,
+        'is_admin_player': False,
+    },
+    {
+        'key': 'right_angle_person_winniepooh',
+        'display_name': 'WinniePooh',
+        'special_role': 'right_angle_person',
+        'special_role_color': 'guard',
+        'special_role_sort': 2,
         'is_admin_player': False,
     },
 ]
@@ -949,6 +960,9 @@ ADMIN_COMMANDS = {
     'history': 'history [数量] - 查看最近历史对局',
     'broadcast': 'broadcast <内容> - 发送服务器广播',
     'kick': 'kick <sid|昵称> - 踢出玩家',
+    'userpass': 'userpass <账号ID|用户名> <新密码> - 管理员修改账号密码',
+    'banuser': 'banuser <账号ID|用户名> [原因] - 封禁账号并踢下线',
+    'unbanuser': 'unbanuser <账号ID|用户名> - 解除账号封禁',
     'skip': 'skip <房间ID> - 尝试跳过当前回合',
     'endgame': 'endgame <房间ID> <winner|draw> - 强制结束对局；winner 可用 0/1，2v2 表示队伍',
     'set': 'set <房间ID> <玩家序号> <h|e|m|armor|dodge|poison|burn|toxic|vulnerable> <数值>',
@@ -1155,6 +1169,45 @@ def execute_admin_command(line):
         socketio.emit('server_broadcast', {'message': msg})
         admin_event('admin', f'broadcast: {msg}')
         return {'success': True, 'output': f'已发送广播：{msg}'}
+    if cmd in ('userpass', 'passwd', 'setpass'):
+        if len(parts) < 3:
+            return {'success': False, 'output': command_error(raw, len(raw), '<账号ID|用户名> <新密码>')}
+        user, error = admin_change_user_password(parts[1], parts[2])
+        if error:
+            return {'success': False, 'output': error}
+        admin_event('admin', f"changed password for account {user['username']}#{user['id']}")
+        return {'success': True, 'output': f"已修改账号 {user['username']} (ID {user['id']}) 的密码。"}
+    if cmd in ('banuser', 'banaccount'):
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), '<账号ID|用户名> [原因]')}
+        reason = raw.split(None, 2)[2].strip() if len(raw.split(None, 2)) >= 3 else ''
+        user, error = admin_set_user_ban(parts[1], True, reason)
+        if error:
+            return {'success': False, 'output': error}
+        kicked = []
+        with _lock:
+            for sid, player in list(players.items()):
+                if player.get('user_id') == user['id']:
+                    room_id = player.get('room_id')
+                    if room_id is not None and room_id in rooms:
+                        admin_match_record(rooms[room_id], result='admin_ban')
+                    kicked.append((sid, player.get('nickname', user['username'])))
+                    remove_player_by_admin(sid)
+        for sid, _nickname in kicked:
+            socketio.emit('kicked', {'reason': 'account banned'}, room=sid)
+        if kicked:
+            broadcast_lobby()
+        admin_event('admin', f"banned account {user['username']}#{user['id']}: {reason or '-'}")
+        suffix = f" 原因：{reason}" if reason else ''
+        return {'success': True, 'output': f"已封禁账号 {user['username']} (ID {user['id']})。已踢出在线会话 {len(kicked)} 个。{suffix}"}
+    if cmd in ('unbanuser', 'unbanaccount'):
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), '<账号ID|用户名>')}
+        user, error = admin_set_user_ban(parts[1], False, '')
+        if error:
+            return {'success': False, 'output': error}
+        admin_event('admin', f"unbanned account {user['username']}#{user['id']}")
+        return {'success': True, 'output': f"已解除账号 {user['username']} (ID {user['id']}) 的封禁。"}
     if cmd == 'kick':
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), '<sid|昵称>')}
@@ -1278,6 +1331,16 @@ def admin_completions(line):
     if cmd in ('givecard', 'addcard', 'give') and position >= 4:
         values = ['tags=', 'fusion=', 'fission=', 'count=']
         return [v for v in values if v.lower().startswith(token.lower())]
+    if cmd in ('userpass', 'passwd', 'setpass', 'banuser', 'banaccount', 'unbanuser', 'unbanaccount') and position == 1:
+        try:
+            rows = list_admin_users(query=token, sort='username', order='asc', limit=30).get('users', [])
+            values = []
+            for user in rows:
+                values.append(str(user.get('id')))
+                values.append(user.get('username', ''))
+            return [v for v in values if v and v.lower().startswith(token.lower())][:30]
+        except Exception:
+            return []
     if cmd == 'set' and position == 3:
         values = ['h', 'e', 'm', 'armor', 'dodge', 'poison', 'burn', 'toxic', 'vulnerable']
         return [v for v in values if v.startswith(token.lower())]
@@ -2105,6 +2168,15 @@ def api_auth_me():
         session.pop('user_id', None)
         session.pop('username', None)
         return jsonify({'authenticated': False, 'db_available': True})
+    if user.get('banned'):
+        session.pop('user_id', None)
+        session.pop('username', None)
+        reason = user.get('ban_reason') or ''
+        return jsonify({
+            'authenticated': False,
+            'db_available': True,
+            'error': f'账号已被封禁：{reason}' if reason else '账号已被封禁',
+        })
     session['username'] = user['username']
     return jsonify({'authenticated': True, 'db_available': True, 'user': auth_user_payload(user)})
 
@@ -2505,6 +2577,12 @@ def on_login(data):
         session.pop('username', None)
     raw_name = data.get('nickname', '')
     wants_account_login = bool(data.get('account_login'))
+    if account_user and account_user.get('banned'):
+        session.pop('user_id', None)
+        session.pop('username', None)
+        reason = account_user.get('ban_reason') or ''
+        emit('login_fail', {'reason': f'账号已被封禁：{reason}' if reason else '账号已被封禁'})
+        return
     if wants_account_login and not account_user:
         emit('login_fail', {'reason': 'Account session expired'})
         return

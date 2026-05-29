@@ -979,6 +979,12 @@ Object.assign(I18N.fr, { chief_designer_prefix: 'Concepteur en chef' });
 Object.assign(I18N.pt, { chief_designer_prefix: 'Designer-chefe' });
 Object.assign(I18N.ru, { chief_designer_prefix: 'Chief Designer' });
 Object.assign(I18N.ja, { chief_designer_prefix: 'Chief Designer' });
+Object.assign(I18N.en, { right_angle_person_prefix: 'Right-Angle Person' });
+Object.assign(I18N.zh, { right_angle_person_prefix: '\u76f4\u89d2\u4eba' });
+Object.assign(I18N.fr, { right_angle_person_prefix: 'Personne angle droit' });
+Object.assign(I18N.pt, { right_angle_person_prefix: 'Pessoa de ângulo reto' });
+Object.assign(I18N.ru, { right_angle_person_prefix: 'Right-Angle Person' });
+Object.assign(I18N.ja, { right_angle_person_prefix: '直角人' });
 Object.assign(I18N.en, { settings_ui_style: 'UI Style', ui_style_minimal: 'Minimal', ui_style_classic: 'Classic' });
 Object.assign(I18N.zh, { settings_ui_style: '界面风格', ui_style_minimal: '简约', ui_style_classic: '经典' });
 Object.assign(I18N.fr, { settings_ui_style: 'Style UI', ui_style_minimal: 'Minimal', ui_style_classic: 'Classique' });
@@ -1338,6 +1344,7 @@ function getSpecialRolePrefix(player) {
     if (!player) return '';
     if (isAdminPlayer(player)) return UI.admin_prefix;
     if (player.special_role === 'chief_designer') return UI.chief_designer_prefix;
+    if (player.special_role === 'right_angle_person') return UI.right_angle_person_prefix;
     return player.special_role_label || '';
 }
 
@@ -1383,6 +1390,7 @@ function setPlayerNameContent(el, player, options = {}) {
     el.textContent = getPlayerDisplayName(player, { adminPrefix });
     el.classList.toggle('admin-name', isAdminPlayer(player));
     el.classList.toggle('bloom-name', getSpecialRoleColor(player) === 'bloom');
+    el.classList.toggle('guard-name', getSpecialRoleColor(player) === 'guard');
 }
 
 function appendPlayerNameNode(parent, player, options = {}) {
@@ -7138,6 +7146,7 @@ function createBattleLogElement(entry) {
         nameSpan.className = 'chat-nick';
         if (entry.isAdmin) nameSpan.classList.add('admin-name');
         if (entry.specialRoleColor === 'bloom') nameSpan.classList.add('bloom-name');
+        if (entry.specialRoleColor === 'guard') nameSpan.classList.add('guard-name');
         nameSpan.textContent = `${entry.nick}: `;
         el.appendChild(nameSpan);
         el.appendChild(document.createTextNode(entry.text));
@@ -7225,6 +7234,7 @@ function appendLobbyChat(nick, text, meta = {}) {
     nameSpan.className = 'chat-nick';
     if (isAdminPlayer(meta)) nameSpan.classList.add('admin-name');
     if (getSpecialRoleColor(meta) === 'bloom') nameSpan.classList.add('bloom-name');
+    if (getSpecialRoleColor(meta) === 'guard') nameSpan.classList.add('guard-name');
     nameSpan.textContent = `${nick}: `;
     el.appendChild(nameSpan);
     el.appendChild(document.createTextNode(text));
