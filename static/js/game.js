@@ -910,6 +910,8 @@ Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms an
 Object.assign(I18N.pt, { settings_show_english_card_names: 'Mostrar nomes ingleses das cartas' });
 Object.assign(I18N.ru, { settings_show_english_card_names: 'Показывать английские названия карт' });
 Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示' });
+Object.assign(I18N.en, { official_mods: 'Official Mods', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found' });
+Object.assign(I18N.zh, { official_mods: '官方模组', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组' });
 Object.assign(I18N.en, { admin_prefix: 'Admin', login_admin_reserved: 'This nickname is occupied by the administrator' });
 Object.assign(I18N.zh, { admin_prefix: '管理员', login_admin_reserved: '此昵称被管理员占用' });
 Object.assign(I18N.fr, { admin_prefix: 'Admin', login_admin_reserved: 'Ce pseudo est occupé par l’administrateur' });
@@ -2096,6 +2098,16 @@ function updateStaticText() {
     if (settingsAppearance) settingsAppearance.textContent = UI.settings_appearance;
     const settingsMods = $('settings-section-mods');
     if (settingsMods) settingsMods.textContent = UI.settings_mods;
+    const settingsOfficialMods = $('settings-label-official-mods');
+    if (settingsOfficialMods) settingsOfficialMods.textContent = UI.official_mods;
+    const settingsCommunityMods = $('settings-label-community-mods');
+    if (settingsCommunityMods) settingsCommunityMods.textContent = UI.community_mods;
+    const noCommunityMods = $('settings-no-community-mods');
+    if (noCommunityMods) noCommunityMods.textContent = UI.no_community_mods;
+    const uploadCommunity = $('btn-community-upload');
+    if (uploadCommunity) uploadCommunity.textContent = UI.upload_mod;
+    const refreshCommunity = $('btn-community-refresh');
+    if (refreshCommunity) refreshCommunity.textContent = UI.refresh;
     const settingsLabelTheme = $('settings-label-theme');
     if (settingsLabelTheme) settingsLabelTheme.textContent = UI.settings_theme;
     const settingsLabelUiStyle = $('settings-label-ui-style');
@@ -3041,7 +3053,9 @@ const DATA_CACHE_VERSION = 'v4';
 
 function getDataCacheKey(kind) {
     const disabled = getDisabledMods().slice().sort().join(',') || 'none';
-    return `got_${kind}_cache_${DATA_CACHE_VERSION}_${disabled}`;
+    const community = getCommunityModSelection();
+    const communityKey = community.mod_source === 'community' ? community.community_mod_hash : 'official';
+    return `got_${kind}_cache_${DATA_CACHE_VERSION}_${disabled}_${communityKey}`;
 }
 
 function readDataCache(kind) {
@@ -3092,8 +3106,7 @@ async function fetchCardDefs(options = {}) {
 async function refreshCardDefsFromServer({ silent = false } = {}) {
     try {
         if (!silent) bootLoader.step(UI.init_cards_mods, 60);
-        const disabledMods = encodeURIComponent(getDisabledMods().join(','));
-        const resp = await fetch(`/api/cards?disabled_mods=${disabledMods}`);
+        const resp = await fetch(`/api/cards?${buildModQueryString()}`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const nextDefs = await resp.json();
         CARD_DEFS = nextDefs || {};
@@ -3125,8 +3138,7 @@ async function fetchOpeningEvents(options = {}) {
 async function refreshOpeningEventsFromServer({ silent = false } = {}) {
     try {
         if (!silent) bootLoader.step(UI.init_opening_events, 78);
-        const disabledMods = encodeURIComponent(getDisabledMods().join(','));
-        const resp = await fetch(`/api/opening-events?disabled_mods=${disabledMods}`);
+        const resp = await fetch(`/api/opening-events?${buildModQueryString()}`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
         openingEvents = data.events || [];
@@ -3476,9 +3488,8 @@ function connectSocket(serverUrl) {
 
     socket.on('connect', () => {
         debugLog('[client] socket connected, login nickname=', nickname);
-        const disabledMods = getDisabledMods();
         const preferredMode = localStorage.getItem('preferred_mode') || '1v1';
-        socket.emit('login', { nickname: loginCredential || nickname, disabled_mods: disabledMods, mode: preferredMode });
+        socket.emit('login', { nickname: loginCredential || nickname, mode: preferredMode, ...getModLoginPayload() });
     });
     socket.on('disconnect', () => {
         debugLog('[client] socket disconnected');
@@ -4743,7 +4754,7 @@ async function startSoloTraining() {
     const sub1 = await buildSoloEventSubChoice(event1, soloDeckB, UI.solo_deck_b);
     if (sub1 === false) return;
     saveSoloDecks();
-    const payload = { deck0: soloDeckA, deck1: soloDeckB, event0, event1, sub0, sub1, disabled_mods: getDisabledMods() };
+    const payload = { deck0: soloDeckA, deck1: soloDeckB, event0, event1, sub0, sub1, ...getModLoginPayload() };
     if (startLocalSoloRuntime('solo', payload)) {
         return;
     }
@@ -5943,17 +5954,36 @@ function normalizePlayerId(id) {
 
 function getPlayerNameById(id) {
     id = normalizePlayerId(id);
-    if (!gameState) return `P${Number(id) + 1}`;
+    const fallback = id == null ? '?' : `P${id + 1}`;
+    if (!gameState) return fallback;
+    const spectatePlayer = Array.isArray(gameState.spectate_players)
+        ? gameState.spectate_players.find(p => normalizePlayerId(p && p.player_id) === id)
+        : null;
+    if (spectatePlayer && spectatePlayer.name) {
+        return localizeCanonicalPlayerName(spectatePlayer.name);
+    }
+    const directName = gameState[`player${id + 1}_name`];
+    if (directName) return localizeCanonicalPlayerName(directName);
+    const nameList = Array.isArray(gameState.player_names) ? gameState.player_names : [];
+    if (nameList[id]) return localizeCanonicalPlayerName(nameList[id]);
     if (id === normalizePlayerId(gameState.your_id)) return localizeCanonicalPlayerName(gameState.your_name || UI.you);
     if (id === normalizePlayerId(gameState.teammate_id)) return localizeCanonicalPlayerName(gameState.teammate_name || UI.teammate);
+    const oneVsOneOpponentId = gameState.your_id != null ? 1 - normalizePlayerId(gameState.your_id) : null;
+    if ((!Array.isArray(gameState.enemy_ids) || !gameState.enemy_ids.length) && id === oneVsOneOpponentId) {
+        return localizeCanonicalPlayerName(gameState.opponent_name || UI.opponent);
+    }
     const enemyIndex = (gameState.enemy_ids || []).map(normalizePlayerId).indexOf(id);
     if (enemyIndex >= 0) return localizeCanonicalPlayerName((gameState.opponent_names || [])[enemyIndex] || `${UI.opponent}${enemyIndex + 1}`);
-    return `P${Number(id) + 1}`;
+    return fallback;
 }
 
 function getPlayerDataById(id) {
     id = normalizePlayerId(id);
     if (!gameState) return {};
+    if (Array.isArray(gameState.spectate_players)) {
+        const spectatePlayer = gameState.spectate_players.find(p => normalizePlayerId(p && p.player_id) === id);
+        if (spectatePlayer) return spectatePlayer;
+    }
     if (id === normalizePlayerId(gameState.your_id)) return gameState.you || {};
     if (id === normalizePlayerId(gameState.teammate_id)) return gameState.teammate || {};
     const oneVsOneOpponentId = gameState.your_id != null ? 1 - normalizePlayerId(gameState.your_id) : null;
@@ -6676,8 +6706,9 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             el.style.color = COLORS.indestructible;
             el.style.background = COLORS.indestructible_bg;
         }
-        const targetId = eqDict.effect_target;
-        const targetSuffix = gameState && gameState.mode === '2v2' && targetId != null && targetId !== (playerData.player_id ?? eqDict.owner)
+        const targetId = normalizePlayerId(eqDict.effect_target);
+        const ownerId = normalizePlayerId(playerData.player_id ?? eqDict.owner);
+        const targetSuffix = gameState && gameState.mode === '2v2' && targetId != null && targetId !== ownerId
             ? `→${getPlayerNameById(targetId)}`
             : '';
         const equipName = `${getCardName(cardDef)}${targetSuffix ? `(${targetSuffix})` : ''}`;
@@ -7817,15 +7848,21 @@ function renderGameOver(data) {
     showView('view-gameover');
     const gs = data || gameState;
     const isTutorialGameOver = !!gs.tutorial;
+    const isSpectatorGameOver = !!(gs.spectating || isSpectating || gs.your_id === -1 || playerId === -1);
     const winner = gs.winner;
     const isDraw = winner === -1 || winner === null || winner === undefined;
-    const isWin = winner === playerId;
+    const is2v2GameOver = gs.mode === '2v2' || Array.isArray(gs.teams);
+    const winningTeam = gs.winning_team !== undefined ? gs.winning_team : winner;
+    const myTeam = gs.team_id;
+    const isWin = is2v2GameOver
+        ? (Number(winningTeam) === Number(myTeam))
+        : (winner === playerId);
     const title = $('gameover-title');
     if (title) {
-        title.textContent = isDraw ? UI.draw : (isWin ? UI.victory : UI.defeat);
+        title.textContent = isSpectatorGameOver ? UI.game_over : (isDraw ? UI.draw : (isWin ? UI.victory : UI.defeat));
         title.style.whiteSpace = '';
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        if (isDraw) {
+        if (isSpectatorGameOver || isDraw) {
             title.style.color = isDark ? '#E5E7EB' : '#374151';
             title.style.background = isDark ? 'rgba(229, 231, 235, 0.14)' : 'rgba(55, 65, 81, 0.12)';
         } else {
@@ -7857,7 +7894,12 @@ function renderGameOver(data) {
     if (rematchBtn) {
         rematchBtn.classList.remove('hidden');
         rematchBtn.style.display = '';
-        if (isTutorialGameOver && isWin) {
+        if (isSpectatorGameOver) {
+            rematchBtn.classList.add('hidden');
+            rematchBtn.style.display = 'none';
+            rematchBtn.disabled = true;
+            rematchBtn.onclick = null;
+        } else if (isTutorialGameOver && isWin) {
             rematchBtn.classList.add('hidden');
             rematchBtn.style.display = 'none';
             rematchBtn.disabled = true;
@@ -8077,9 +8119,37 @@ function setupPlayZoneDrop() {
 }
 
 let settingsMods = [];
+let settingsCommunityMods = [];
 let settingsAllowServerEdit = true;
 const VANILLA_MOD_FILENAME = 'VanillaCardsFormatV1.json';
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
+
+function getCommunityModSelection() {
+    const source = localStorage.getItem('got_mod_source') === 'community' ? 'community' : 'official';
+    const url = localStorage.getItem('got_community_mod_url') || '';
+    const hash = localStorage.getItem('got_community_mod_hash') || '';
+    const name = localStorage.getItem('got_community_mod_name') || '';
+    if (source !== 'community' || !url || !hash) {
+        return { mod_source: 'official', community_mod_url: '', community_mod_hash: '', community_mod_name: '' };
+    }
+    return { mod_source: 'community', community_mod_url: url, community_mod_hash: hash, community_mod_name: name };
+}
+
+function getModLoginPayload() {
+    return { disabled_mods: getDisabledMods(), ...getCommunityModSelection() };
+}
+
+function buildModQueryString() {
+    const params = new URLSearchParams();
+    params.set('disabled_mods', getDisabledMods().join(','));
+    const community = getCommunityModSelection();
+    params.set('mod_source', community.mod_source);
+    if (community.mod_source === 'community') {
+        params.set('community_mod_url', community.community_mod_url);
+        params.set('community_mod_hash', community.community_mod_hash);
+    }
+    return params.toString();
+}
 
 function openSettings(options = {}) {
     settingsAllowServerEdit = !options.hideServer;
@@ -8100,6 +8170,7 @@ function openSettings(options = {}) {
     if (serverHint && settingsAllowServerEdit) {
         serverHint.textContent = tf('server_hint', DEFAULT_SERVER);
     }
+    renderModSourceControls();
 }
 
 function closeSettings() {
@@ -8153,6 +8224,146 @@ async function loadSettingsMods() {
         }
         listEl.appendChild(item);
     });
+    loadSettingsCommunityMods();
+    renderModSourceControls();
+}
+
+function renderModSourceControls() {
+    const selection = getCommunityModSelection();
+    const source = selection.mod_source;
+    const officialRadio = $('settings-mod-source-official');
+    const communityRadio = $('settings-mod-source-community');
+    const officialBox = $('settings-official-mods');
+    const communityBox = $('settings-community-mods');
+    if (officialRadio) officialRadio.checked = source !== 'community';
+    if (communityRadio) communityRadio.checked = source === 'community';
+    if (officialBox) officialBox.classList.toggle('hidden', source === 'community');
+    if (communityBox) communityBox.classList.toggle('hidden', source !== 'community');
+}
+
+function setModSource(source) {
+    localStorage.setItem('got_mod_source', source === 'community' ? 'community' : 'official');
+    renderModSourceControls();
+}
+
+async function loadSettingsCommunityMods() {
+    const listEl = $('settings-community-mods-list');
+    const noModsEl = $('settings-no-community-mods');
+    const statusEl = $('settings-community-status');
+    if (!listEl) return;
+    try {
+        const resp = await fetch('/api/community-mods');
+        const data = await resp.json();
+        settingsCommunityMods = Array.isArray(data) ? data : (data.mods || []);
+        if (statusEl) statusEl.textContent = data && data.error ? data.error : '';
+    } catch (e) {
+        settingsCommunityMods = [];
+        if (statusEl) statusEl.textContent = e.message || String(e);
+    }
+    renderCommunityModList();
+}
+
+function renderCommunityModList() {
+    const listEl = $('settings-community-mods-list');
+    const noModsEl = $('settings-no-community-mods');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    const selected = getCommunityModSelection();
+    if (!settingsCommunityMods.length) {
+        if (noModsEl) noModsEl.style.display = '';
+        return;
+    }
+    if (noModsEl) noModsEl.style.display = 'none';
+    settingsCommunityMods.forEach((mod, i) => {
+        const item = document.createElement('div');
+        item.className = 'settings-mod-item';
+        if (selected.community_mod_hash && selected.community_mod_hash === mod.sha256) {
+            item.classList.add('community-selected');
+        }
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'community-mod-choice';
+        radio.id = `community-mod-${i}`;
+        radio.checked = selected.community_mod_hash === mod.sha256;
+        radio.onchange = () => {
+            localStorage.setItem('got_mod_source', 'community');
+            localStorage.setItem('got_community_mod_url', mod.public_url || '');
+            localStorage.setItem('got_community_mod_hash', mod.sha256 || '');
+            localStorage.setItem('got_community_mod_name', mod.name || '');
+            renderModSourceControls();
+            renderCommunityModList();
+        };
+        const label = document.createElement('label');
+        label.htmlFor = radio.id;
+        label.textContent = mod.name || `Community Mod ${i + 1}`;
+        const meta = document.createElement('span');
+        meta.className = 'mod-meta';
+        meta.textContent = `${mod.version ? `v${mod.version} ` : ''}${mod.author || ''}`.trim();
+        item.append(radio, label);
+        if (meta.textContent) item.appendChild(meta);
+        listEl.appendChild(item);
+    });
+}
+
+async function uploadCommunityModFile(file) {
+    const statusEl = $('settings-community-status');
+    const setStatus = text => { if (statusEl) statusEl.textContent = text || ''; };
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.json')) {
+        setStatus('只允许上传 .json 文件');
+        return;
+    }
+    if (file.size > 300000) {
+        setStatus('文件过大，最大 300KB');
+        return;
+    }
+    let text = '';
+    let parsed = null;
+    try {
+        text = await file.text();
+        parsed = JSON.parse(text);
+    } catch (e) {
+        setStatus(`JSON 解析失败：${e.message}`);
+        return;
+    }
+    const info = parsed.info || {};
+    const cardCount = Array.isArray(parsed.cards) ? parsed.cards.length : 0;
+    setStatus(`准备上传：${info.name || file.name}，作者 ${info.author || '-'}，版本 ${info.version || '-'}，卡牌 ${cardCount} 张`);
+    try {
+        const uploadResp = await fetch('/api/community-mods/upload-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: file.name }),
+        });
+        const upload = await uploadResp.json();
+        if (!uploadResp.ok || !upload.success) throw new Error(upload.error || '无法创建上传地址');
+        const putResp = await fetch(upload.put_url, {
+            method: 'PUT',
+            headers: { 'Content-Type': upload.content_type || 'application/json' },
+            body: text,
+        });
+        if (!putResp.ok) throw new Error(`R2 上传失败 HTTP ${putResp.status}`);
+        const regResp = await fetch('/api/community-mods/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: upload.key, public_url: upload.public_url, uploader_name: nickname || '' }),
+        });
+        const registered = await regResp.json();
+        if (!regResp.ok || !registered.success) {
+            const detail = registered.error || (registered.errors || []).join('；') || '登记失败';
+            throw new Error(detail);
+        }
+        const mod = registered.mod || {};
+        localStorage.setItem('got_mod_source', 'community');
+        localStorage.setItem('got_community_mod_url', mod.public_url || upload.public_url);
+        localStorage.setItem('got_community_mod_hash', mod.sha256 || '');
+        localStorage.setItem('got_community_mod_name', mod.name || info.name || '');
+        setStatus(`上传成功：${mod.name || info.name || file.name}`);
+        await loadSettingsCommunityMods();
+        fetchCardDefs({ useCache: false }).then(() => fetchOpeningEvents({ useCache: false }));
+    } catch (e) {
+        setStatus(e.message || String(e));
+    }
 }
 
 function getDisabledMods() {
@@ -8237,6 +8448,11 @@ function saveDisabledMods() {
         showActionToast(tf('mod_selection_force_vanilla'), 2800, 'error');
     }
     localStorage.setItem('got_disabled_mods', JSON.stringify(disabled));
+    const community = getCommunityModSelection();
+    if (localStorage.getItem('got_mod_source') === 'community' && community.mod_source !== 'community') {
+        localStorage.setItem('got_mod_source', 'official');
+        renderModSourceControls();
+    }
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
         const serverValue = serverInput.value.trim();
@@ -8249,7 +8465,7 @@ function saveDisabledMods() {
         }
     }
     if (socket && socket.connected && phase === 'lobby') {
-        socket.emit('update_mod_settings', { disabled_mods: disabled });
+        socket.emit('update_mod_settings', { disabled_mods: disabled, ...getCommunityModSelection() });
     }
     fetchCardDefs({ useCache: false }).then(() => fetchOpeningEvents({ useCache: false })).then(() => {
         loadSoloDecks(false);
@@ -8373,6 +8589,17 @@ async function init() {
     $('btn-open-settings').addEventListener('click', openSettings);
     $('btn-settings-close').addEventListener('click', () => { saveDisabledMods(); closeSettings(); });
     if ($('btn-lobby-settings')) $('btn-lobby-settings').addEventListener('click', () => openSettings({ hideServer: true }));
+    if ($('settings-mod-source-official')) $('settings-mod-source-official').addEventListener('change', () => setModSource('official'));
+    if ($('settings-mod-source-community')) $('settings-mod-source-community').addEventListener('change', () => setModSource('community'));
+    if ($('btn-community-refresh')) $('btn-community-refresh').addEventListener('click', loadSettingsCommunityMods);
+    if ($('btn-community-upload')) $('btn-community-upload').addEventListener('click', () => {
+        const input = $('settings-community-upload-file');
+        if (input) input.click();
+    });
+    if ($('settings-community-upload-file')) $('settings-community-upload-file').addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        uploadCommunityModFile(file).finally(() => { e.target.value = ''; });
+    });
     if ($('about-tab-rules')) $('about-tab-rules').addEventListener('click', () => setAboutPage('rules'));
     if ($('about-tab-credits')) $('about-tab-credits').addEventListener('click', () => setAboutPage('credits'));
     if ($('btn-about-close')) $('btn-about-close').addEventListener('click', closeAbout);

@@ -41,6 +41,7 @@ class GameEngine2v2(GameEngine):
         self.negated_card: bool = False
         self._yggdrasil_check: bool = True
         self._antenna_reveal: List[Optional[list]] = [None] * 4
+        self._antenna_reveal_targets: List[Optional[int]] = [None] * 4
         self.opening_event_options: List[List[dict]] = [[], [], [], []]
         self.opening_event_picks: List[Optional[int]] = [None] * 4
         self.opening_event_sub_choices: List[Optional[dict]] = [None] * 4
@@ -164,7 +165,8 @@ class GameEngine2v2(GameEngine):
             ed['deck_count'] = len([c for c in self.players[eid].deck if c.def_id != ERROR_CARD_ID])
             ed['discard_count'] = len([c for c in self.players[eid].discard if c.def_id != ERROR_CARD_ID])
             ed['exile_count'] = len([c for c in self.players[eid].exile if c.def_id != ERROR_CARD_ID])
-            if self._antenna_reveal[for_player]:
+            reveal_target = getattr(self, '_antenna_reveal_targets', [None] * self.num_players)[for_player]
+            if self._antenna_reveal[for_player] and reveal_target == eid:
                 ed['revealed_hand'] = self._visible_card_dicts(self.players[eid].hand, for_player, eid)
             opp_data_list.append(ed)
 
@@ -174,10 +176,10 @@ class GameEngine2v2(GameEngine):
             self._redact_error_cards_from_payload(teammate_data)
             if self.pending_choice and self.pending_choice.get('player_id') == for_player:
                 ct = self.pending_choice.get('choice_type', '')
-                if ct in ('choose_from_enemy_hand',):
-                    for eid in enemy_ids:
-                        opp_data_list[enemy_ids.index(eid)]['hand'] = self._visible_card_dicts(self.players[eid].hand, for_player, eid)
                 target_id = self.pending_choice.get('target_player_id')
+                if ct in ('choose_from_enemy_hand',):
+                    if target_id in enemy_ids:
+                        opp_data_list[enemy_ids.index(target_id)]['hand'] = self._visible_card_dicts(self.players[target_id].hand, for_player, target_id)
                 params = self.pending_choice.get('choice_params', {}) or {}
                 if target_id in enemy_ids and ct in ('choose_card_from_hand', 'choose_from_deck', 'choose_from_discard', 'choose_from_exile', 'choose_equipment'):
                     ed = opp_data_list[enemy_ids.index(target_id)]
@@ -446,8 +448,20 @@ class GameEngine2v2(GameEngine):
             self.log_msg(f"队伍{self.teams[0]}获胜！")
             return
 
+    def _clear_dead_player_private_zones(self, player_id: int):
+        if not self._is_valid_player_id(player_id):
+            return
+        ps = self.players[player_id]
+        hand_count = len(ps.hand)
+        deck_count = len(ps.deck)
+        if hand_count or deck_count:
+            ps.hand.clear()
+            ps.deck.clear()
+            self.log_msg(f"{self.pn(player_id)}阵亡，清除{hand_count}张手牌和{deck_count}张牌堆牌")
+
     def _on_player_death(self, player_id: int):
         ps = self.players[player_id]
+        self._clear_dead_player_private_zones(player_id)
         surviving_equip = []
         for eq in ps.equipment:
             if 'indestructible' in eq.card_instance.flags:
@@ -937,6 +951,18 @@ class GameEngine2v2(GameEngine):
         finally:
             self._active_choice = None
 
+    def _atomic_reveal_enemy_hand(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        if not self._is_valid_player_id(target_id):
+            return
+        opp = self.players[target_id]
+        card_names = ', '.join(c.name_cn for c in opp.hand)
+        self._antenna_reveal[player_id] = [c.to_dict() for c in opp.hand]
+        if not hasattr(self, '_antenna_reveal_targets'):
+            self._antenna_reveal_targets = [None] * self.num_players
+        self._antenna_reveal_targets[player_id] = target_id
+        self.log_msg(log or f"{self.pn(player_id)}窥探{self.pn(target_id)}手牌：{card_names}")
+
     def resolve_choice(self, player_id: int, choice: dict) -> dict:
         if self.pending_choice is not None:
             original = self.pending_choice.get('original_choice')
@@ -1044,25 +1070,30 @@ class GameEngine2v2(GameEngine):
         choice['_ally_approved'] = True
         return self.play_card(player_id, req['card_instance_id'], target_player_id=target_player_id, choice=choice)
 
-    def _deal_direct_damage(self, player_id: int, amount: int, source: str = ''):
+    def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None):
+        if not self._is_valid_player_id(player_id):
+            return 0
         ps = self.players[player_id]
         if ps.invincible:
             self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
-            return
+            return 0
         actual = amount
         corruption_count = self._get_corruption_count()
         if corruption_count > 0:
             actual = actual * (2 ** corruption_count)
             self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
         ps.health -= actual
+        self._record_damage(player_id, actual, source_id)
         self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={ps.health}）")
         self._check_yggdrasil(player_id)
         if ps.health <= 0:
             self._on_player_death(player_id)
         self._check_game_over()
+        return actual
 
     def _on_player_death(self, player_id: int):
         ps = self.players[player_id]
+        self._clear_dead_player_private_zones(player_id)
         surviving_equip = []
         for eq in ps.equipment:
             if 'indestructible' in eq.card_instance.flags:
@@ -1371,6 +1402,8 @@ class GameEngine2v2(GameEngine):
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]
         self._antenna_reveal[player_id] = None
+        if hasattr(self, '_antenna_reveal_targets'):
+            self._antenna_reveal_targets[player_id] = None
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
         ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0

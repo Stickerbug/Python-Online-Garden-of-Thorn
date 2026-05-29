@@ -3,3 +3,5 @@ flask-socketio
 eventlet
 psutil
 fonttools
+boto3
+requests

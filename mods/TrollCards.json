@@ -195,7 +195,8 @@
       "description": "指引你找到需要的牌。",
       "effect_text": "从抽牌堆选择一张牌将其置入手中",
       "flags": [
-        "infinite_exclude"
+        "infinite_exclude",
+        "self_only"
       ],
       "effects": [
         {

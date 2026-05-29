@@ -2854,9 +2854,10 @@ class GameEngine:
     def _atomic_repeat(self, player_id, card, params, log, choice, context):
         times = max(0, int(self._eval_expr(player_id, params.get('times', 1), card)))
         body = params.get('body', [])
+        base_context = context if isinstance(context, dict) else ({'context': context} if context else {})
         for index in range(times):
             try:
-                self._run_effect_list(player_id, card, body, choice, {**(context or {}), 'repeat_index': index + 1})
+                self._run_effect_list(player_id, card, body, choice, {**base_context, 'repeat_index': index + 1})
             except ModLoopContinue:
                 continue
             except ModLoopBreak:
@@ -2866,9 +2867,10 @@ class GameEngine:
         body = params.get('body', [])
         max_loops = 64
         loops = 0
+        base_context = context if isinstance(context, dict) else ({'context': context} if context else {})
         while loops < max_loops and not self._eval_condition(player_id, params.get('condition'), card):
             try:
-                self._run_effect_list(player_id, card, body, choice, {**(context or {}), 'repeat_index': loops + 1})
+                self._run_effect_list(player_id, card, body, choice, {**base_context, 'repeat_index': loops + 1})
             except ModLoopContinue:
                 loops += 1
                 continue
@@ -2878,9 +2880,10 @@ class GameEngine:
 
     def _atomic_for_each(self, player_id, card, params, log, choice, context):
         body = params.get('body', [])
+        base_context = context if isinstance(context, dict) else ({'context': context} if context else {})
         for index, tid in enumerate(self._resolve_targets(player_id, params.get('targets', 'friendly')), start=1):
             try:
-                self._run_effect_list(tid, card, body, choice, {**(context or {}), 'loop_player_id': tid, 'loop_index': index})
+                self._run_effect_list(tid, card, body, choice, {**base_context, 'loop_player_id': tid, 'loop_index': index})
             except ModLoopContinue:
                 continue
             except ModLoopBreak:
@@ -2896,12 +2899,13 @@ class GameEngine:
         original_id = active_choice.get('target_instance_id')
         original_index = active_choice.get('_selected_card_index')
         body = params.get('body', [])
+        base_context = context if isinstance(context, dict) else ({'context': context} if context else {})
         try:
             for idx, instance_id in enumerate(list(ids), start=1):
                 active_choice['target_instance_id'] = instance_id
                 active_choice['_selected_card_index'] = idx
                 try:
-                    self._run_effect_list(player_id, card, body, active_choice, {**(context or {}), 'selected_card_index': idx})
+                    self._run_effect_list(player_id, card, body, active_choice, {**base_context, 'selected_card_index': idx})
                 except ModLoopContinue:
                     continue
                 except ModLoopBreak:
@@ -3919,7 +3923,8 @@ class GameEngine:
     def _run_effect_list(self, player_id, card, effects, choice, context):
         prev_context = getattr(self, '_active_effect_context', None)
         prev_choice = getattr(self, '_active_choice', None)
-        self._active_effect_context = context or {}
+        context_dict = context if isinstance(context, dict) else ({'context': context} if context else {})
+        self._active_effect_context = context_dict
         if isinstance(choice, dict):
             self._active_choice = choice
         try:
@@ -3932,7 +3937,7 @@ class GameEngine:
                 try:
                     before_stats = self._snapshot_player_stats()
                     if callable(fn):
-                        fn(player_id, card, pm, lg, choice, context)
+                        fn(player_id, card, pm, lg, choice, context_dict)
                     elif lg:
                         self.log_msg(lg)
                     else:
@@ -4249,33 +4254,30 @@ class GameEngine:
         return self._get_choice_request(card) is not None
 
     def _get_choice_type(self, card: CardInstance) -> str:
-        base = self._base_get_choice_type(card)
-        if base:
-            return base
         effect = self._get_choice_request(card)
-        if not effect:
-            return ''
-        effect_type = effect.get('type', '')
-        params = effect.get('params', {}) or {}
-        if effect_type == 'request_target':
-            return 'choose_target'
-        if effect_type == 'request_card':
-            if params.get('multi') or params.get('choice_type') == 'choose_cards_from_hand':
-                return 'choose_cards_from_hand'
-            return params.get('choice_type') or params.get('zone') or 'choose_card_from_hand'
-        if effect_type == 'request_confirm':
-            return 'confirm'
-        if effect_type == 'discard_choice_then_draw':
-            return 'choose_card_to_discard'
-        if effect_type == 'destroy_equipment_choice_or_first':
-            return 'choose_enemy_equipment'
-        if effect_type == 'choose_from_deck':
-            return 'choose_from_deck'
-        if effect_type == 'choose_from_discard':
-            return 'choose_from_discard'
-        if effect_type == 'steal_enemy_card':
-            return 'choose_from_enemy_hand'
-        return ''
+        if effect:
+            effect_type = effect.get('type', '')
+            params = effect.get('params', {}) or {}
+            if effect_type == 'request_target':
+                return 'choose_target'
+            if effect_type == 'request_card':
+                if params.get('multi') or params.get('choice_type') == 'choose_cards_from_hand':
+                    return 'choose_cards_from_hand'
+                return params.get('choice_type') or params.get('zone') or 'choose_card_from_hand'
+            if effect_type == 'request_confirm':
+                return 'confirm'
+            if effect_type == 'discard_choice_then_draw':
+                return 'choose_card_to_discard'
+            if effect_type == 'destroy_equipment_choice_or_first':
+                return 'choose_enemy_equipment'
+            if effect_type == 'choose_from_deck':
+                return 'choose_from_deck'
+            if effect_type == 'choose_from_discard':
+                return 'choose_from_discard'
+            if effect_type == 'steal_enemy_card':
+                return 'choose_from_enemy_hand'
+        base = self._base_get_choice_type(card)
+        return base or ''
 
     def _choice_satisfies_request(self, card: CardInstance, choice) -> bool:
         if not self._card_needs_choice(card):
@@ -4306,7 +4308,9 @@ class GameEngine:
         return bool(choice)
 
     def _process_atomic_effects(self, player_id: int, card: CardInstance, choice: Optional[dict], context: str):
-        effects = self._play_effects_for_card(card) if context == 'play' else card.card_def.effects
+        context_name = context if isinstance(context, str) else str((context or {}).get('context', ''))
+        context_dict = context if isinstance(context, dict) else ({'context': context} if context else {})
+        effects = self._play_effects_for_card(card) if context_name == 'play' else card.card_def.effects
         prev_choice = getattr(self, '_active_choice', None)
         if isinstance(choice, dict):
             self._active_choice = choice
@@ -4320,9 +4324,9 @@ class GameEngine:
                     eff_type = effect.get('type', '')
                     params = effect.get('params', {})
                     log = effect.get('log', '')
-                if context == 'play' and eff_type in self.EVENT_EFFECT_TYPES:
+                if context_name == 'play' and eff_type in self.EVENT_EFFECT_TYPES:
                     continue
-                if eff_type in self.PASSIVE_EFFECT_TYPES and context == 'play':
+                if eff_type in self.PASSIVE_EFFECT_TYPES and context_name == 'play':
                     if log:
                         self.log_msg(log)
                     continue
@@ -4331,7 +4335,7 @@ class GameEngine:
                 try:
                     before_stats = self._snapshot_player_stats()
                     if handler:
-                        handler(player_id, card, params, log, choice, context)
+                        handler(player_id, card, params, log, choice, context_dict)
                     elif log:
                         self.log_msg(log)
                     else:
@@ -4776,8 +4780,17 @@ class GameEngine:
             choice_params = (choice_request.get('params', {}) if isinstance(choice_request, dict) else {}) or {}
             choice_type = self._get_choice_type(card)
             choice_target_id = None
-            if isinstance(choice_request, dict) and choice_request.get('type') == 'request_card':
-                choice_target_id = self._resolve_target(player_id, choice_params.get('target', 'self'))
+            if isinstance(choice_request, dict):
+                request_type = choice_request.get('type')
+                target_defaults = {
+                    'request_card': 'self',
+                    'choose_from_deck': 'self',
+                    'choose_from_discard': 'self',
+                    'destroy_equipment_choice_or_first': 'enemy',
+                    'steal_enemy_card': 'enemy',
+                }
+                if request_type in target_defaults:
+                    choice_target_id = self._resolve_target(player_id, choice_params.get('target', target_defaults[request_type]))
             self.pending_choice = {
                 'card': card.to_dict(),
                 'player_id': player_id,
@@ -5378,11 +5391,12 @@ class GameEngine:
         store = self._var_store_for_target(player_id, params.get('target', 'self'))
         had_old = name in store
         old_value = store.get(name)
+        base_context = context if isinstance(context, dict) else ({'context': context} if context else {})
         try:
             for index, item in enumerate(self._eval_list(player_id, params.get('list', []), card), start=1):
                 store[name] = self._serializable_list_item(item)
                 try:
-                    self._run_effect_list(player_id, card, body, choice, {**(context or {}), 'list_index': index})
+                    self._run_effect_list(player_id, card, body, choice, {**base_context, 'list_index': index})
                 except ModLoopContinue:
                     continue
                 except ModLoopBreak:

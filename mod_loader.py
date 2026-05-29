@@ -196,22 +196,37 @@ def validate_mod(data: dict) -> List[str]:
     return validate_mod_data(data, strict=False).errors
 
 
-def load_mod(filepath: str) -> Mod:
-    mod = Mod(filepath)
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-    except json.JSONDecodeError as e:
-        mod.errors.append(f'JSON解析错误: {e}')
+def _strip_scripts_for_untrusted_mod(data: dict) -> tuple:
+    sanitized = copy.deepcopy(data)
+    changed = False
+    if isinstance(sanitized.get('scripts'), dict) and sanitized.get('scripts'):
+        sanitized['scripts'] = {}
+        changed = True
+    for card in sanitized.get('cards', []) if isinstance(sanitized.get('cards'), list) else []:
+        if isinstance(card, dict) and isinstance(card.get('scripts'), dict) and card.get('scripts'):
+            card['scripts'] = {}
+            changed = True
+    return sanitized, changed
+
+
+def load_mod_from_data(data: dict, source: str = "memory", allow_scripts: bool = True) -> Mod:
+    mod = Mod(source or 'memory')
+    if not isinstance(data, dict):
+        mod.errors.append('模组根节点必须是对象')
         return mod
-    except Exception as e:
-        mod.errors.append(f'读取失败: {e}')
-        return mod
+    if not allow_scripts:
+        data, stripped_scripts = _strip_scripts_for_untrusted_mod(data)
+        if stripped_scripts:
+            mod.warnings.append('社区模组 scripts 已被禁用')
     validation = validate_mod_data(data, strict=False, source=mod.filename)
     mod.errors = validation.errors
-    mod.warnings = validation.warnings
+    mod.warnings.extend(validation.warnings)
     mod.validation_hash = validation.content_hash
     data = validation.normalized if validation.normalized else data
+    if not allow_scripts:
+        data, stripped_scripts_after_validation = _strip_scripts_for_untrusted_mod(data)
+        if stripped_scripts_after_validation and '社区模组 scripts 已被禁用' not in mod.warnings:
+            mod.warnings.append('社区模组 scripts 已被禁用')
     mod.format_version = data.get('format_version', 1)
     mod.editor = data.get('editor', {}) if isinstance(data.get('editor', {}), dict) else {}
     if data.get('info'):
@@ -226,6 +241,20 @@ def load_mod(filepath: str) -> Mod:
     mod.custom_tags = data.get('custom_tags', []) if isinstance(data.get('custom_tags', []), list) else []
     mod.scripts = data.get('scripts', {}) if isinstance(data.get('scripts', {}), dict) else {}
     return mod
+
+
+def load_mod(filepath: str) -> Mod:
+    mod = Mod(filepath)
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        mod.errors.append(f'JSON解析错误: {e}')
+        return mod
+    except Exception as e:
+        mod.errors.append(f'读取失败: {e}')
+        return mod
+    return load_mod_from_data(data, source=filepath, allow_scripts=True)
 
 
 def _mods_signature():

@@ -7,6 +7,7 @@ import random
 import threading
 import copy
 import shutil
+import shlex
 from collections import deque
 from datetime import datetime, timedelta
 
@@ -24,6 +25,14 @@ from cards import (
 from mod_loader import merge_mod_cards_to_card_defs, load_all_mods, save_mod, Mod
 from card_i18n import apply_card_i18n_defaults, card_text, event_text
 from runtime_errors import set_mod_runtime_error_logger
+from r2_mods import (
+    R2ConfigError,
+    create_presigned_mod_upload,
+    get_community_index,
+    load_community_mod,
+    register_community_mod,
+    validate_community_mod_url,
+)
 
 BASE_CARD_IDS = set(CARD_DEFS.keys())
 BASE_CARD_DEFS = copy.deepcopy(CARD_DEFS)
@@ -41,6 +50,7 @@ except Exception as e:
     traceback.print_exc()
 
 _MODS_SIGNATURE = None
+COMMUNITY_CARD_SOURCES = {}
 
 
 def current_mods_signature():
@@ -67,6 +77,7 @@ def reload_mod_card_defs(force=False):
         return []
     CARD_DEFS.clear()
     CARD_DEFS.update(copy.deepcopy(BASE_CARD_DEFS))
+    COMMUNITY_CARD_SOURCES.clear()
     merged = merge_mod_cards_to_card_defs()
     apply_card_i18n_defaults(CARD_DEFS)
     _MODS_SIGNATURE = signature
@@ -82,6 +93,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 _lock = threading.Lock()
 _next_room_id = 0
+_COMMUNITY_API_RATE: dict = {}
 SERVER_STARTED_AT = time.time()
 RECONNECT_TIMEOUT_SECONDS = int(os.environ.get('RECONNECT_TIMEOUT_SECONDS', '120'))
 BOTH_DISCONNECTED_CLEANUP_SECONDS = int(os.environ.get('BOTH_DISCONNECTED_CLEANUP_SECONDS', '60'))
@@ -289,6 +301,18 @@ def _room_player_dead(room, player_index):
         return False
 
 
+def _mark_player_defeated_state(room, player_index, state):
+    if not isinstance(state, dict):
+        return
+    defeated = (
+        getattr(room, 'mode', None) == '2v2'
+        and _room_player_dead(room, player_index)
+        and not getattr(room.engine, 'game_over', False)
+    )
+    state['player_defeated'] = defeated
+    state['you_defeated'] = defeated
+
+
 def _room_blocking_player_sids(room):
     if getattr(room, 'mode', None) == '2v2':
         return [
@@ -453,6 +477,87 @@ def normalize_disabled_mods(value):
     return []
 
 
+def normalize_mod_source(value):
+    return 'community' if str(value or '').strip().lower() == 'community' else 'official'
+
+
+def _normalize_community_hash(value):
+    text = str(value or '').strip().lower()
+    return text if re.fullmatch(r'[0-9a-f]{64}', text) else ''
+
+
+def _client_ip():
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.remote_addr or 'unknown'
+
+
+def _rate_limited(ip, bucket, limit=3, window=60):
+    now = time.time()
+    key = (bucket, ip)
+    hits = [ts for ts in _COMMUNITY_API_RATE.get(key, []) if now - ts < window]
+    if len(hits) >= limit:
+        _COMMUNITY_API_RATE[key] = hits
+        return True
+    hits.append(now)
+    _COMMUNITY_API_RATE[key] = hits
+    return False
+
+
+def _json_error(message, status=400, **extra):
+    payload = {'success': False, 'error': str(message)}
+    payload.update(extra)
+    return jsonify(payload), status
+
+
+def _community_request_fields(data):
+    data = data or {}
+    return {
+        'mod_source': normalize_mod_source(data.get('mod_source')),
+        'community_mod_url': str(data.get('community_mod_url') or '').strip(),
+        'community_mod_hash': _normalize_community_hash(data.get('community_mod_hash')),
+        'community_mod_name': str(data.get('community_mod_name') or '').strip()[:80],
+    }
+
+
+def merge_community_mod_to_card_defs(mod):
+    if not mod:
+        return []
+    mod_hash = getattr(mod, 'community_sha256', '') or ''
+    merged = []
+    conflicts = []
+    for mc in mod.cards:
+        if not mc.id or mc.id == ERROR_CARD_ID:
+            continue
+        existing_community_hash = COMMUNITY_CARD_SOURCES.get(mc.id)
+        if mc.id in CARD_DEFS and existing_community_hash != mod_hash:
+            conflicts.append(mc.id)
+            continue
+        CARD_DEFS[mc.id] = mc.to_card_def()
+        if mod_hash:
+            COMMUNITY_CARD_SOURCES[mc.id] = mod_hash
+        merged.append(mc.id)
+    if conflicts:
+        raise ValueError('社区模组卡牌ID与官方卡冲突: ' + ', '.join(sorted(conflicts)[:10]))
+    if merged:
+        apply_card_i18n_defaults(CARD_DEFS)
+    return merged
+
+
+def resolve_community_loadout(data):
+    fields = _community_request_fields(data)
+    if fields['mod_source'] != 'community':
+        return fields, None
+    if not fields['community_mod_url'] or not fields['community_mod_hash']:
+        raise ValueError('缺少社区模组 URL 或 hash')
+    mod = load_community_mod(fields['community_mod_url'], fields['community_mod_hash'])
+    merge_community_mod_to_card_defs(mod)
+    if not fields['community_mod_name']:
+        fields['community_mod_name'] = mod.info.name if mod.info and mod.info.name else 'Community Mod'
+    return fields, mod
+
+
 def get_enabled_mod_card_type_counts(disabled_mods=None):
     disabled = set(normalize_disabled_mods(disabled_mods))
     counts = {card_type: 0 for card_type in REQUIRED_CARD_TYPES}
@@ -513,7 +618,7 @@ def get_card_mod_sources(disabled_mods=None):
     return sources
 
 
-def build_mod_loadout(disabled_mods=None):
+def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash=''):
     mods = load_all_mods()
     disabled = set(normalize_disabled_mods(disabled_mods))
     counts = {card_type: 0 for card_type in REQUIRED_CARD_TYPES}
@@ -539,6 +644,13 @@ def build_mod_loadout(disabled_mods=None):
         for card in mod.cards:
             if card.id in CARD_DEFS:
                 allowed_card_ids.add(card.id)
+    if community_mod:
+        label = community_mod.info.name if community_mod.info and community_mod.info.name else 'Community Mod'
+        active_mods.append(label)
+        _h.update(f'community:{community_hash or getattr(community_mod, "community_sha256", "")}'.encode('utf-8'))
+        for card in community_mod.cards:
+            if card.id in CARD_DEFS:
+                allowed_card_ids.add(card.id)
     return {
         'disabled_mods': disabled,
         'mods_hash': _h.hexdigest(),
@@ -552,7 +664,11 @@ def same_mod_loadout(sids):
     for sid in sids:
         if sid not in players:
             return False
-        hashes.append(players[sid].get('mods_hash'))
+        hashes.append((
+            players[sid].get('mod_source', 'official'),
+            players[sid].get('community_mod_hash', ''),
+            players[sid].get('mods_hash'),
+        ))
     return len(set(hashes)) <= 1
 
 
@@ -717,6 +833,7 @@ ADMIN_COMMANDS = {
     'status': 'status - 显示服务器摘要',
     'players': 'players - 列出在线玩家',
     'rooms': 'rooms - 列出当前对局',
+    'roomplayers': 'roomplayers <房间ID> - 显示房间内玩家编号、昵称和状态',
     'logs': 'logs [数量] - 查看最近管理事件',
     'history': 'history [数量] - 查看最近历史对局',
     'broadcast': 'broadcast <内容> - 发送服务器广播',
@@ -724,6 +841,7 @@ ADMIN_COMMANDS = {
     'skip': 'skip <房间ID> - 尝试跳过当前回合',
     'endgame': 'endgame <房间ID> <winner|draw> - 强制结束对局；winner 可用 0/1，2v2 表示队伍',
     'set': 'set <房间ID> <玩家序号> <h|e|m|armor|dodge|poison|burn|toxic|vulnerable> <数值>',
+    'givecard': 'givecard <房间ID> <玩家序号> <卡牌ID> [数量] [tags=tag1,tag2] [fusion=层数] [fission=层数] - 向玩家手牌加入卡牌',
     'clear': 'clear - 清空终端输出',
 }
 
@@ -754,6 +872,63 @@ def parse_int_token(value, name):
         raise ValueError(f'需要整数 <{name}>')
 
 
+def resolve_admin_card_id(token):
+    if token in CARD_DEFS:
+        return token
+    lowered = str(token or '').lower()
+    matches = [cid for cid in CARD_DEFS if cid.lower() == lowered]
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
+def parse_givecard_options(tokens):
+    count = 1
+    tags = []
+    fusion = 1
+    fission = 1
+    for token in tokens:
+        if token.isdigit():
+            count = parse_int_token(token, 'count')
+            continue
+        key, sep, value = token.partition('=')
+        if not sep:
+            raise ValueError(f'无法识别参数：{token}')
+        key = key.lower().strip()
+        value = value.strip()
+        if key in ('count', 'n', '数量'):
+            count = parse_int_token(value, 'count')
+        elif key in ('tag', 'tags', 'flag', 'flags', '标签'):
+            tags.extend([t.strip() for t in value.split(',') if t.strip()])
+        elif key in ('fusion', 'fuse', '聚变'):
+            fusion = parse_int_token(value, 'fusion')
+        elif key in ('fission', 'split', '裂变'):
+            fission = parse_int_token(value, 'fission')
+        else:
+            raise ValueError(f'未知参数：{key}')
+    return {
+        'count': max(1, min(count, 50)),
+        'tags': tags,
+        'fusion': max(1, fusion),
+        'fission': max(1, fission),
+    }
+
+
+def make_admin_card_instance(card_id, options):
+    card = CardInstance(def_id=card_id)
+    tags = [t for t in options.get('tags', []) if t]
+    if tags:
+        card.instance_flags = set(getattr(card, 'instance_flags', set()) or set())
+        card.instance_flags.update(tags)
+    fusion = int(options.get('fusion', 1) or 1)
+    fission = int(options.get('fission', 1) or 1)
+    card.fusion_level = max(1, fusion)
+    card.fission_level = max(1, fission)
+    card.fusion_multiplier = float(card.fusion_level)
+    card.fission_count = max(0, card.fission_level - 1)
+    return card
+
+
 def zh_status(value):
     return {
         'lobby': '大厅',
@@ -782,7 +957,10 @@ def execute_admin_command(line):
     raw = (line or '').strip()
     if not raw:
         return {'success': False, 'output': command_error('', 0, '指令')}
-    parts = raw.split()
+    try:
+        parts = shlex.split(raw)
+    except ValueError as exc:
+        return {'success': False, 'output': f'指令解析失败：{exc}'}
     cmd = parts[0].lower()
     if cmd == 'help':
         return {'success': True, 'output': '\n'.join(ADMIN_COMMANDS.values())}
@@ -816,6 +994,38 @@ def execute_admin_command(line):
             f"#{r['room_id']} {r['mode']} 阶段={zh_phase(r['phase'])} 回合={r['round']} 观战={r['spectators']} 玩家={' vs '.join(r['players'])}"
             for r in rows
         )}
+    if cmd in ('roomplayers', 'rplayers', 'rp'):
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), '<房间ID>')}
+        room_id = parse_int_token(parts[1], 'room_id')
+        with _lock:
+            if room_id not in rooms:
+                return {'success': False, 'output': f'不存在房间：{room_id}'}
+            room = rooms[room_id]
+            e = room.engine
+            rows = []
+            for pidx, sid in enumerate(room.player_sids):
+                if sid in players:
+                    nickname = players[sid].get('nickname', '?')
+                    online = '在线'
+                elif sid in room.disconnected_players:
+                    nickname = room.disconnected_players[sid].get('nickname', '?')
+                    online = '断线'
+                else:
+                    nickname = '?'
+                    online = '未知'
+                ps = e.players[pidx] if pidx < len(e.players) else None
+                team = ''
+                if room.mode == '2v2' and hasattr(e, 'team_of'):
+                    team = f" 队伍={e.team_of(pidx)}"
+                if ps is not None:
+                    rows.append(
+                        f"{pidx}: {nickname} [{sid}] {online}{team} "
+                        f"H={ps.health}/{ps.max_health} E={ps.elixir}/{ps.max_elixir} M={ps.magic}/{ps.max_magic} 手牌={len(ps.hand)}"
+                    )
+                else:
+                    rows.append(f"{pidx}: {nickname} [{sid}] {online}{team}")
+        return {'success': True, 'output': '\n'.join(rows) or '房间内没有玩家。'}
     if cmd == 'logs':
         count = parse_int_token(parts[1], 'count') if len(parts) > 1 else 20
         rows = list(ADMIN_EVENTS)[:max(1, min(count, 120))]
@@ -908,12 +1118,32 @@ def execute_admin_command(line):
         if ok:
             admin_event('admin', f'set room {room_id} player {pidx} {key}={val}')
         return {'success': ok, 'output': output}
+    if cmd in ('givecard', 'addcard', 'give'):
+        if len(parts) < 4:
+            return {'success': False, 'output': command_error(raw, len(raw), '<房间ID> <玩家序号> <卡牌ID> [数量] [tags=tag1,tag2] [fusion=层数] [fission=层数]')}
+        room_id = parse_int_token(parts[1], 'room_id')
+        pidx = parse_int_token(parts[2], 'player_index')
+        card_id = resolve_admin_card_id(parts[3])
+        if not card_id:
+            return {'success': False, 'output': f'未知卡牌ID：{parts[3]}'}
+        options = parse_givecard_options(parts[4:])
+        ok, output = give_room_player_card(room_id, pidx, card_id, options)
+        if ok:
+            tag_text = ','.join(options['tags']) if options['tags'] else '-'
+            admin_event(
+                'admin',
+                f"givecard room {room_id} player {pidx} {card_id} x{options['count']} tags={tag_text} fusion={options['fusion']} fission={options['fission']}",
+            )
+        return {'success': ok, 'output': output}
     return {'success': False, 'output': command_error(raw, 0, '有效指令')}
 
 
 def admin_completions(line):
     raw = line or ''
-    parts = raw.split()
+    try:
+        parts = shlex.split(raw)
+    except ValueError:
+        parts = raw.split()
     trailing_space = raw.endswith(' ')
     token = '' if trailing_space else (parts[-1] if parts else '')
     position = len(parts) if trailing_space else max(0, len(parts) - 1)
@@ -927,10 +1157,16 @@ def admin_completions(line):
                 values.append(p.get('nickname', ''))
                 values.append(sid)
         return [v for v in values if v and v.lower().startswith(token.lower())][:20]
-    if cmd in ('skip', 'endgame', 'set') and position == 1:
+    if cmd in ('skip', 'endgame', 'set', 'givecard', 'addcard', 'give', 'roomplayers', 'rplayers', 'rp') and position == 1:
         with _lock:
             values = [str(rid) for rid in rooms.keys()]
         return [v for v in values if v.startswith(token)]
+    if cmd in ('givecard', 'addcard', 'give') and position == 3:
+        values = sorted(CARD_DEFS.keys())
+        return [v for v in values if v.lower().startswith(token.lower())][:30]
+    if cmd in ('givecard', 'addcard', 'give') and position >= 4:
+        values = ['tags=', 'fusion=', 'fission=', 'count=']
+        return [v for v in values if v.lower().startswith(token.lower())]
     if cmd == 'set' and position == 3:
         values = ['h', 'e', 'm', 'armor', 'dodge', 'poison', 'burn', 'toxic', 'vulnerable']
         return [v for v in values if v.startswith(token.lower())]
@@ -977,6 +1213,34 @@ def remove_player_by_admin(sid):
                 socketio.emit('team_disbanded', {}, room=member_sid)
     del players[sid]
     return nickname
+
+
+def give_room_player_card(room_id, pidx, card_id, options):
+    with _lock:
+        if room_id not in rooms:
+            return False, f'不存在房间：{room_id}'
+        room = rooms[room_id]
+        e = room.engine
+        if pidx < 0 or pidx >= len(e.players):
+            return False, f'玩家序号必须在 0-{len(e.players) - 1} 之间'
+        ps = e.players[pidx]
+        count = int(options.get('count', 1))
+        created = []
+        for _ in range(max(1, min(count, 50))):
+            card = make_admin_card_instance(card_id, options)
+            ps.add_to_hand(card)
+            created.append(card)
+        broadcast_game_state(room)
+    layers = []
+    if int(options.get('fusion', 1) or 1) > 1:
+        layers.append(f"聚变{options['fusion']}")
+    if int(options.get('fission', 1) or 1) > 1:
+        layers.append(f"裂变{options['fission']}")
+    if options.get('tags'):
+        layers.append(f"标签={','.join(options['tags'])}")
+    detail = f"（{'；'.join(layers)}）" if layers else ''
+    card_name = CARD_DEFS[card_id].name_cn if card_id in CARD_DEFS else card_id
+    return True, f'已向房间 {room_id} 的玩家 {pidx} 加入 {len(created)} 张 {card_name}{detail}'
 
 
 def set_room_player_attr(room_id, pidx, key, val):
@@ -1107,6 +1371,7 @@ def broadcast_game_state(room):
         state = room.engine.get_public_state(pidx)
         state['your_id'] = pidx
         state['mode'] = room.mode
+        _mark_player_defeated_state(room, pidx, state)
         if room.mode == '2v2':
             engine = room.engine
             teammate_id = engine.get_teammate(pidx)
@@ -1163,6 +1428,7 @@ def send_game_state_to(room, pidx):
         state = room.engine.get_public_state(pidx)
         state['your_id'] = pidx
         state['mode'] = room.mode
+        _mark_player_defeated_state(room, pidx, state)
         if room.mode == '2v2':
             engine = room.engine
             teammate_id = engine.get_teammate(pidx)
@@ -1389,6 +1655,9 @@ def build_spectate_state(room):
         pdata.update(player_special_fields(psid, room))
         full_players.append(pdata)
     base['spectate_players'] = full_players
+    base['player_names'] = [p.get('name', f'P{i + 1}') for i, p in enumerate(full_players)]
+    for i, pdata in enumerate(full_players):
+        base[f'player{i + 1}_name'] = pdata.get('name', f'P{i + 1}')
     base['mode'] = room.mode
     if room.mode == '2v2' and len(full_players) >= 4:
         base['you'] = full_players[0]
@@ -1610,8 +1879,28 @@ def api_cards():
     except Exception as exc:
         admin_event('error', f'failed to reload mod card defs: {exc}')
     disabled_mods = request.args.get('disabled_mods', '')
-    allowed_card_ids = get_allowed_card_ids(disabled_mods)
+    try:
+        community_fields, community_mod = resolve_community_loadout(request.args)
+    except Exception as exc:
+        return _json_error(str(exc), 400)
+    loadout = build_mod_loadout(
+        disabled_mods,
+        community_mod=community_mod,
+        community_hash=community_fields.get('community_mod_hash', ''),
+    )
+    allowed_card_ids = loadout['allowed_card_ids']
     card_mod_sources = get_card_mod_sources(disabled_mods)
+    if community_mod:
+        community_name = community_mod.info.name if community_mod.info and community_mod.info.name else 'Community Mod'
+        for card in community_mod.cards:
+            if card.id in CARD_DEFS:
+                card_mod_sources[card.id] = {
+                    'filename': community_fields.get('community_mod_hash', ''),
+                    'name': community_name,
+                    'sort_name': community_name,
+                    'is_vanilla': False,
+                    'is_community': True,
+                }
     result = {}
     for def_id, card_def in CARD_DEFS.items():
         if def_id not in allowed_card_ids:
@@ -1625,6 +1914,7 @@ def api_cards():
             'source_mod_name': source.get('name', ''),
             'source_mod_sort_name': source.get('sort_name', ''),
             'source_mod_is_vanilla': bool(source.get('is_vanilla', False)),
+            'source_mod_is_community': bool(source.get('is_community', False)),
             'cost_e': card_def.cost_e,
             'cost_m': card_def.cost_m,
             'card_type': card_def.card_type,
@@ -1652,7 +1942,16 @@ def api_opening_events():
         reload_mod_card_defs()
     except Exception as exc:
         admin_event('error', f'failed to reload mod card defs: {exc}')
-    allowed_card_ids = get_allowed_card_ids(request.args.get('disabled_mods', ''))
+    try:
+        community_fields, community_mod = resolve_community_loadout(request.args)
+    except Exception as exc:
+        return _json_error(str(exc), 400)
+    loadout = build_mod_loadout(
+        request.args.get('disabled_mods', ''),
+        community_mod=community_mod,
+        community_hash=community_fields.get('community_mod_hash', ''),
+    )
+    allowed_card_ids = loadout['allowed_card_ids']
     events = []
     for event_id in sorted(GameEngine.OPENING_EVENTS.keys()):
         events.append(event_text(event_id, dict(GameEngine.OPENING_EVENTS[event_id])))
@@ -1676,6 +1975,68 @@ def api_mods():
         }
         result.append(d)
     return jsonify(result)
+
+
+@app.route('/api/community-mods')
+def api_community_mods():
+    try:
+        index = get_community_index()
+        mods = index.get('mods', []) if isinstance(index, dict) else []
+        return jsonify({'success': True, 'mods': mods})
+    except Exception as exc:
+        admin_event('error', f'community mods index failed: {exc}')
+        return jsonify({'success': False, 'mods': [], 'error': str(exc)})
+
+
+@app.route('/api/community-mods/upload-url', methods=['POST'])
+def api_community_mod_upload_url():
+    ip = _client_ip()
+    if _rate_limited(ip, 'community_upload_url'):
+        return _json_error('上传过于频繁，请稍后再试', 429)
+    data = request.get_json(silent=True) or {}
+    filename = str(data.get('filename') or '').strip()
+    if not filename.lower().endswith('.json'):
+        return _json_error('只允许上传 .json 文件')
+    try:
+        result = create_presigned_mod_upload(filename)
+        return jsonify({'success': True, **result})
+    except Exception as exc:
+        admin_event('error', f'create community upload url failed: {exc}')
+        return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
+
+
+@app.route('/api/community-mods/register', methods=['POST'])
+def api_community_mod_register():
+    ip = _client_ip()
+    if _rate_limited(ip, 'community_register'):
+        return _json_error('登记过于频繁，请稍后再试', 429)
+    data = request.get_json(silent=True) or {}
+    public_url = str(data.get('public_url') or '').strip()
+    key = str(data.get('key') or '').strip()
+    uploader_name = str(data.get('uploader_name') or '').strip()
+    if not public_url or not key:
+        return _json_error('缺少 key 或 public_url')
+    try:
+        result = register_community_mod(public_url, key, uploader_name)
+        status = 200 if result.get('success') else 400
+        return jsonify(result), status
+    except Exception as exc:
+        admin_event('error', f'register community mod failed: {exc}')
+        return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
+
+
+@app.route('/api/community-mods/validate-url', methods=['POST'])
+def api_community_mod_validate_url():
+    data = request.get_json(silent=True) or {}
+    public_url = str(data.get('public_url') or '').strip()
+    if not public_url:
+        return _json_error('缺少 public_url')
+    try:
+        result = validate_community_mod_url(public_url)
+        return jsonify({'success': result.get('ok', False), **result})
+    except Exception as exc:
+        admin_event('error', f'validate community mod url failed: {exc}')
+        return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
 
 
 @app.route('/api/mods/save', methods=['POST'])
@@ -1899,6 +2260,7 @@ def on_draft_reroll(data=None):
 @socketio.on('login')
 def on_login(data):
     global _next_room_id
+    data = data or {}
     sid = request.sid
     raw_name = data.get('nickname', '')
     special_profile = get_special_player_profile(raw_name)
@@ -1912,6 +2274,20 @@ def on_login(data):
         return
     if not special_profile and not validate_nickname(name):
         emit('login_fail', {'reason': 'Invalid nickname. Use 1-16 display-width characters; avoid pure numbers, pure symbols, or repeated -/_.'})
+        return
+    disabled_mods = ensure_valid_disabled_mods(data.get('disabled_mods', []))
+    preferred_mode = data.get('mode', '1v1')
+    if preferred_mode not in ('1v1', '2v2', 'urf'):
+        preferred_mode = '1v1'
+    try:
+        community_fields, community_mod = resolve_community_loadout(data)
+        loadout = build_mod_loadout(
+            disabled_mods,
+            community_mod=community_mod,
+            community_hash=community_fields.get('community_mod_hash', ''),
+        )
+    except Exception as exc:
+        emit('login_fail', {'reason': f'社区模组加载失败: {exc}'})
         return
     with _lock:
         for p in players.values():
@@ -1929,11 +2305,6 @@ def on_login(data):
             if reconnect_room:
                 break
         initial_status = 'reconnecting' if reconnect_room else 'lobby'
-        disabled_mods = ensure_valid_disabled_mods(data.get('disabled_mods', []))
-        preferred_mode = data.get('mode', '1v1')
-        if preferred_mode not in ('1v1', '2v2', 'urf'):
-            preferred_mode = '1v1'
-        loadout = build_mod_loadout(disabled_mods)
         players[sid] = {
             'nickname': name,
             'room_id': None,
@@ -1944,6 +2315,10 @@ def on_login(data):
             'allowed_card_ids': loadout['allowed_card_ids'],
             'mode': preferred_mode,
             'is_admin_player': is_admin_player,
+            'mod_source': community_fields.get('mod_source', 'official'),
+            'community_mod_url': community_fields.get('community_mod_url', ''),
+            'community_mod_hash': community_fields.get('community_mod_hash', ''),
+            'community_mod_name': community_fields.get('community_mod_name', ''),
         }
         if special_profile:
             players[sid].update(special_public_fields(special_profile))
@@ -2018,6 +2393,7 @@ def on_set_mode(data):
 @socketio.on('update_mod_settings')
 def on_update_mod_settings(data):
     sid = request.sid
+    data = data or {}
     with _lock:
         if sid not in players:
             return
@@ -2030,11 +2406,28 @@ def on_update_mod_settings(data):
             })
             return
         old_hash = player.get('mods_hash')
-        loadout = build_mod_loadout((data or {}).get('disabled_mods', []))
+        try:
+            community_fields, community_mod = resolve_community_loadout(data)
+            loadout = build_mod_loadout(
+                data.get('disabled_mods', []),
+                community_mod=community_mod,
+                community_hash=community_fields.get('community_mod_hash', ''),
+            )
+        except Exception as exc:
+            emit('mod_settings_updated', {
+                'ok': False,
+                'reason': str(exc),
+                'disabled_mods': player.get('disabled_mods', []),
+            })
+            return
         player['disabled_mods'] = loadout['disabled_mods']
         player['mods_hash'] = loadout['mods_hash']
         player['mods_list'] = loadout['mods_list']
         player['allowed_card_ids'] = loadout['allowed_card_ids']
+        player['mod_source'] = community_fields.get('mod_source', 'official')
+        player['community_mod_url'] = community_fields.get('community_mod_url', '')
+        player['community_mod_hash'] = community_fields.get('community_mod_hash', '')
+        player['community_mod_name'] = community_fields.get('community_mod_name', '')
         invites.pop(sid, None)
         for inviter_sid, target_sid in list(invites.items()):
             if target_sid == sid:
@@ -2055,6 +2448,9 @@ def on_update_mod_settings(data):
             'ok': True,
             'disabled_mods': loadout['disabled_mods'],
             'mods_list': loadout['mods_list'],
+            'mod_source': player['mod_source'],
+            'community_mod_hash': player['community_mod_hash'],
+            'community_mod_name': player['community_mod_name'],
         })
         broadcast_lobby()
 
@@ -2327,7 +2723,7 @@ def on_reconnect_accept(data):
         player['room_id'] = room_id
         player['status'] = 'in_game'
         player.update(special_public_fields(dc_info))
-        join_room(sid)
+        join_room(room_id)
         for other_sid in room.player_sids:
             if other_sid != sid and other_sid in players:
                 socketio.emit('opponent_reconnected', {}, room=other_sid)
@@ -2644,7 +3040,17 @@ def on_solo_start(data):
         emit('server_error', {'message': '训练场牌组必须各为15张'})
         return
     disabled_mods = ensure_valid_disabled_mods(data.get('disabled_mods', [])) if data else []
-    allowed_card_ids = get_allowed_card_ids(disabled_mods)
+    try:
+        community_fields, community_mod = resolve_community_loadout(data or {})
+        loadout = build_mod_loadout(
+            disabled_mods,
+            community_mod=community_mod,
+            community_hash=community_fields.get('community_mod_hash', ''),
+        )
+    except Exception as exc:
+        emit('server_error', {'message': f'社区模组加载失败: {exc}'})
+        return
+    allowed_card_ids = loadout['allowed_card_ids']
     if sid in players:
         players[sid]['disabled_mods'] = disabled_mods
         players[sid]['allowed_card_ids'] = allowed_card_ids
@@ -3336,6 +3742,8 @@ def on_rematch(data=None):
                     room.engine = GameEngineInfiniteFire()
                 else:
                     room.engine = GameEngine()
+                if room.player_sids and room.player_sids[0] in players:
+                    room.engine.allowed_card_ids = set(players[room.player_sids[0]].get('allowed_card_ids', [])) or None
                 names = []
                 for pidx, psid in enumerate(room.player_sids):
                     if psid in players:
@@ -3344,7 +3752,6 @@ def on_rematch(data=None):
                         names.append(f'Player {pidx + 1}')
                 room.engine.player_names = names
                 if room.mode == 'urf':
-                    room.engine.allowed_card_ids = set(players[room.player_sids[0]].get('allowed_card_ids', [])) if room.player_sids and room.player_sids[0] in players else None
                     room.engine.start_game()
                     for psid in room.player_sids:
                         if psid in players:

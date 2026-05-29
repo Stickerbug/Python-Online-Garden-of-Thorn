@@ -346,8 +346,24 @@
 </div>
 <div class="settings-section">
 <h4 id="settings-section-mods">模组</h4>
+<div class="settings-mod-source-row">
+<label><input type="radio" name="settings-mod-source" id="settings-mod-source-official" value="official" checked> <span id="settings-label-official-mods">官方模组</span></label>
+<label><input type="radio" name="settings-mod-source" id="settings-mod-source-community" value="community"> <span id="settings-label-community-mods">社区模组</span></label>
+</div>
+<div id="settings-official-mods">
 <div id="settings-mods-list" class="settings-mods-list"></div>
 <p id="settings-no-mods" class="info-text">未找到模组文件</p>
+</div>
+<div id="settings-community-mods" class="settings-community-mods hidden">
+<div id="settings-community-mods-list" class="settings-mods-list"></div>
+<p id="settings-no-community-mods" class="info-text">未找到社区模组</p>
+<div class="settings-upload-row">
+<input type="file" id="settings-community-upload-file" accept=".json,application/json" class="hidden">
+<button id="btn-community-upload" type="button" class="btn btn-secondary">上传模组</button>
+<button id="btn-community-refresh" type="button" class="btn btn-secondary">刷新</button>
+</div>
+<p id="settings-community-status" class="info-text"></p>
+</div>
 </div>
 <div class="settings-footer">
 <button id="btn-settings-close" class="btn btn-primary">确定</button>

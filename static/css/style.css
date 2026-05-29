@@ -1268,6 +1268,27 @@ body {
   gap: 6px;
 }
 
+.settings-mod-source-row,
+.settings-upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.settings-mod-source-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .settings-mod-item {
   display: flex;
   align-items: center;
@@ -1275,6 +1296,11 @@ body {
   padding: 6px 8px;
   background: rgba(0, 0, 0, 0.04);
   border-radius: var(--radius-md);
+}
+
+.settings-mod-item.community-selected {
+  outline: 2px solid var(--bloom);
+  background: rgba(77, 166, 117, 0.12);
 }
 
 .settings-mod-item input[type="checkbox"] {
@@ -1292,6 +1318,11 @@ body {
 }
 
 .settings-mod-item .mod-version {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.settings-mod-item .mod-meta {
   font-size: 11px;
   color: var(--text-muted);
 }
