@@ -8630,6 +8630,10 @@ function getCommunityModSelection() {
     return { mod_source: 'community', community_mod_url: url, community_mod_hash: hash, community_mod_name: name };
 }
 
+function getSettingsModSourceTab() {
+    return localStorage.getItem('got_mod_source') === 'community' ? 'community' : 'official';
+}
+
 function getModLoginPayload() {
     return { disabled_mods: getDisabledMods(), ...getCommunityModSelection() };
 }
@@ -8751,8 +8755,7 @@ async function loadSettingsMods() {
 }
 
 function renderModSourceControls() {
-    const selection = getCommunityModSelection();
-    const source = selection.mod_source;
+    const source = getSettingsModSourceTab();
     const officialTab = $('settings-mod-source-official');
     const communityTab = $('settings-mod-source-community');
     const officialBox = $('settings-official-mods');
@@ -8978,11 +8981,6 @@ function saveDisabledMods() {
         showActionToast(tf('mod_selection_force_vanilla'), 2800, 'error');
     }
     localStorage.setItem('got_disabled_mods', JSON.stringify(disabled));
-    const community = getCommunityModSelection();
-    if (localStorage.getItem('got_mod_source') === 'community' && community.mod_source !== 'community') {
-        localStorage.setItem('got_mod_source', 'official');
-        renderModSourceControls();
-    }
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
         const serverValue = serverInput.value.trim();

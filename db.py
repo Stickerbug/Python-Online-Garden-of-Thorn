@@ -70,6 +70,77 @@ def init_db():
             )
             '''
         )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS match_replays (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                match_id INTEGER,
+                created_at TEXT NOT NULL,
+                mode TEXT,
+                player_names_json TEXT,
+                winner_name TEXT,
+                winner_index INTEGER,
+                round_num INTEGER,
+                duration_ms INTEGER,
+                replay_version INTEGER NOT NULL,
+                replay_sha256 TEXT NOT NULL,
+                replay_size INTEGER NOT NULL,
+                replay_blob BLOB NOT NULL,
+                mod_source TEXT,
+                mod_hash TEXT,
+                community_mod_name TEXT
+            )
+            '''
+        )
+        replay_columns = {row['name'] for row in conn.execute('PRAGMA table_info(match_replays)').fetchall()}
+        if 'mod_source' not in replay_columns:
+            conn.execute('ALTER TABLE match_replays ADD COLUMN mod_source TEXT')
+        if 'mod_hash' not in replay_columns:
+            conn.execute('ALTER TABLE match_replays ADD COLUMN mod_hash TEXT')
+        if 'community_mod_name' not in replay_columns:
+            conn.execute('ALTER TABLE match_replays ADD COLUMN community_mod_name TEXT')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS replay_mod_blobs (
+                sha256 TEXT PRIMARY KEY,
+                source TEXT,
+                public_url TEXT,
+                name TEXT,
+                author TEXT,
+                version TEXT,
+                created_at TEXT NOT NULL,
+                json_size INTEGER NOT NULL,
+                json_blob BLOB NOT NULL
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS replay_card_def_snapshots (
+                sha256 TEXT PRIMARY KEY,
+                game_version TEXT,
+                git_sha TEXT,
+                created_at TEXT NOT NULL,
+                json_size INTEGER NOT NULL,
+                json_blob BLOB NOT NULL
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS replay_dependencies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                replay_id INTEGER NOT NULL,
+                dep_type TEXT NOT NULL,
+                dep_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_match_replays_created_at ON match_replays(created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_match_replays_mode ON match_replays(mode)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_replay_dependencies_replay_id ON replay_dependencies(replay_id)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_replay_dependencies_hash ON replay_dependencies(dep_type, dep_hash)')
         conn.commit()
 
 

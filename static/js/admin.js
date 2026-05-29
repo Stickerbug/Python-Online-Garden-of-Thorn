@@ -8,8 +8,14 @@ let historyIndex = 0;
 let completionState = null;
 let registeredUsersState = null;
 let registeredUsersSearchTimer = null;
+let replaySearchTimer = null;
 const expandedRegisteredUsers = new Set();
 const registeredUserDetails = new Map();
+let replayState = { items: [], offset: 0, hasMore: false, loading: false };
+let replayTimeline = [];
+let replayFrameIndex = 0;
+let replaySpeed = 1;
+let replayTimer = null;
 
 const STATUS_LABELS = {
   lobby: '大厅',
@@ -138,6 +144,8 @@ function showShell(authenticated) {
   if (authenticated) {
     loadStatus();
     loadRegisteredUsers();
+    loadStorageSummary();
+    resetAndLoadReplays();
     if (!refreshTimer) refreshTimer = setInterval(loadStatus, 1000);
     if (!registeredRefreshTimer) registeredRefreshTimer = setInterval(loadRegisteredUsers, 10000);
   } else {
@@ -431,6 +439,201 @@ function renderHistory(history) {
     </div>`).join('') : '<div class="log-item">暂无历史对局。</div>';
 }
 
+async function loadStorageSummary() {
+  const grid = $('storage-summary-grid');
+  if (!grid) return;
+  try {
+    const data = await api('/api/admin/storage/summary');
+    renderStorageSummary(data);
+  } catch (error) {
+    grid.innerHTML = `<div class="log-item error">存储统计加载失败：${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function storageCard(title, main, sub) {
+  return `
+    <article class="metric-card storage-card">
+      <span>${escapeHtml(title)}</span>
+      <strong>${escapeHtml(main)}</strong>
+      <small>${escapeHtml(sub || '')}</small>
+    </article>`;
+}
+
+function renderStorageSummary(data) {
+  const db = data.db || {};
+  const replays = data.replays || {};
+  const mods = data.mod_blobs || {};
+  const cards = data.card_snapshots || {};
+  $('storage-summary-grid').innerHTML = [
+    storageCard('SQLite 文件', formatBytes(db.total_file_bytes), `DB ${formatBytes(db.db_file_bytes)} / WAL ${formatBytes(db.wal_file_bytes)} / SHM ${formatBytes(db.shm_file_bytes)}`),
+    storageCard('回放数据', formatBytes(replays.bytes), `${replays.count || 0} 条；三个月外 ${replays.old_count || 0} 条 / ${formatBytes(replays.old_bytes)}`),
+    storageCard('社区模组快照', formatBytes(mods.community_bytes), `${mods.community_count || 0} 个；孤儿 ${mods.orphan_count || 0} 个 / ${formatBytes(mods.orphan_bytes)}`),
+    storageCard('官方卡牌快照', formatBytes(cards.bytes), `${cards.count || 0} 个；孤儿 ${cards.orphan_count || 0} 个 / ${formatBytes(cards.orphan_bytes)}`),
+  ].join('');
+  $('storage-last-result').textContent = `保留 ${replays.retention_days || 90} 天`;
+}
+
+async function runStorageAction(action) {
+  const resultBox = $('storage-result');
+  const write = (data) => {
+    resultBox.textContent = JSON.stringify(data, null, 2);
+    $('storage-last-result').textContent = '已完成';
+  };
+  try {
+    let data;
+    if (action === 'refresh') {
+      await loadStorageSummary();
+      return;
+    }
+    if (action === 'clean-old' && !window.confirm('确认删除三个月外回放和不再引用的快照？')) return;
+    if (action === 'clean-orphans' && !window.confirm('确认删除不再被回放引用的孤儿快照？')) return;
+    if (action === 'vacuum' && !window.confirm('确认执行 VACUUM？执行期间数据库会短暂锁定。')) return;
+    if (action === 'dry-clean-old' || action === 'clean-old') {
+      data = await api('/api/admin/storage/cleanup-old', {
+        method: 'POST',
+        body: JSON.stringify({ dry_run: action === 'dry-clean-old' }),
+      });
+    } else if (action === 'dry-clean-orphans' || action === 'clean-orphans') {
+      data = await api('/api/admin/storage/cleanup-orphans', {
+        method: 'POST',
+        body: JSON.stringify({ dry_run: action === 'dry-clean-orphans' }),
+      });
+    } else if (action === 'vacuum') {
+      data = await api('/api/admin/storage/vacuum', {
+        method: 'POST',
+        body: JSON.stringify({ confirm: true }),
+      });
+    }
+    write(data || {});
+    await loadStorageSummary();
+  } catch (error) {
+    resultBox.textContent = `失败：${error.message}`;
+  }
+}
+
+function replayQuery(offset = 0) {
+  const params = new URLSearchParams();
+  params.set('limit', '50');
+  params.set('offset', String(offset));
+  const player = $('replay-search-player')?.value || '';
+  const mode = $('replay-filter-mode')?.value || '';
+  const modSource = $('replay-filter-mod-source')?.value || '';
+  if (player) params.set('player', player);
+  if (mode) params.set('mode', mode);
+  if (modSource) params.set('mod_source', modSource);
+  return params.toString();
+}
+
+async function resetAndLoadReplays() {
+  replayState = { items: [], offset: 0, hasMore: false, loading: false };
+  await loadReplays(false);
+}
+
+async function loadReplays(append = true) {
+  if (replayState.loading) return;
+  replayState.loading = true;
+  const table = $('replay-table');
+  if (table && !append) table.innerHTML = '<div class="log-item">正在读取回放。</div>';
+  try {
+    const data = await api(`/api/replays?${replayQuery(append ? replayState.offset : 0)}`);
+    const items = data.items || [];
+    replayState.items = append ? replayState.items.concat(items) : items;
+    replayState.offset = data.next_offset || replayState.items.length;
+    replayState.hasMore = !!data.has_more;
+    renderReplays();
+  } catch (error) {
+    if (table) table.innerHTML = `<div class="log-item error">回放列表加载失败：${escapeHtml(error.message)}</div>`;
+  } finally {
+    replayState.loading = false;
+  }
+}
+
+function formatDurationMs(ms) {
+  return formatUptime(Math.round((Number(ms) || 0) / 1000));
+}
+
+function renderReplays() {
+  $('replay-count-label').textContent = `${replayState.items.length}${replayState.hasMore ? '+' : ''}`;
+  $('replay-load-more').classList.toggle('hidden', !replayState.hasMore);
+  if (!replayState.items.length) {
+    $('replay-table').innerHTML = '<div class="log-item">暂无三个月内回放。</div>';
+    return;
+  }
+  $('replay-table').innerHTML = `
+    <table>
+      <thead><tr><th>时间</th><th>模式</th><th>玩家</th><th>胜者</th><th>回合</th><th>时长</th><th>模组</th><th>大小</th><th>操作</th></tr></thead>
+      <tbody>
+        ${replayState.items.map((item) => `
+          <tr>
+            <td>${escapeHtml(formatAdminTime(item.created_at))}</td>
+            <td>${escapeHtml(item.mode || '-')}</td>
+            <td>${escapeHtml((item.players || []).join(' / '))}</td>
+            <td>${escapeHtml(item.winner_name || '-')}</td>
+            <td>${escapeHtml(item.round_num ?? '-')}</td>
+            <td>${escapeHtml(formatDurationMs(item.duration_ms))}</td>
+            <td>${escapeHtml(item.mod_source === 'community' ? (item.community_mod_name || '社区模组') : '官方')}</td>
+            <td>${escapeHtml(formatBytes(item.replay_size))}</td>
+            <td><button class="row-action" data-replay-view="${escapeHtml(item.id)}">查看回放</button></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function openReplayViewer(replayId) {
+  pauseReplay();
+  const viewer = $('replay-viewer');
+  viewer.classList.remove('hidden');
+  $('replay-frame').textContent = '正在生成时间线。';
+  try {
+    const data = await api(`/api/replays/${encodeURIComponent(replayId)}/timeline`);
+    replayTimeline = data.timeline || [];
+    replayFrameIndex = 0;
+    const meta = (data.replay && data.replay.meta) || {};
+    $('replay-viewer-title').textContent = `${meta.mode || '-'} · ${(meta.players || []).join(' / ')}`;
+    const progress = $('replay-progress');
+    progress.max = String(Math.max(0, replayTimeline.length - 1));
+    progress.value = '0';
+    renderReplayFrame();
+  } catch (error) {
+    $('replay-frame').textContent = `回放加载失败：${error.message}`;
+  }
+}
+
+function renderReplayFrame() {
+  const frame = replayTimeline[replayFrameIndex] || null;
+  $('replay-progress').value = String(replayFrameIndex);
+  $('replay-frame').textContent = frame ? JSON.stringify(frame, null, 2) : '暂无时间线数据。当前版本只保存摘要型回放，之后接入逐动作录制后会显示完整状态。';
+}
+
+function pauseReplay() {
+  if (replayTimer) {
+    clearTimeout(replayTimer);
+    replayTimer = null;
+  }
+}
+
+function nextReplayFrame() {
+  replayFrameIndex = Math.min(replayTimeline.length - 1, replayFrameIndex + 1);
+  renderReplayFrame();
+}
+
+function prevReplayFrame() {
+  replayFrameIndex = Math.max(0, replayFrameIndex - 1);
+  renderReplayFrame();
+}
+
+function playReplay() {
+  pauseReplay();
+  if (!replayTimeline.length || replayFrameIndex >= replayTimeline.length - 1) return;
+  const current = replayTimeline[replayFrameIndex] || {};
+  const next = replayTimeline[replayFrameIndex + 1] || {};
+  const delay = replaySpeed === 'instant' ? 0 : Math.max(80, ((Number(next.t) || 0) - (Number(current.t) || 0)) / Number(replaySpeed || 1));
+  replayTimer = setTimeout(() => {
+    nextReplayFrame();
+    playReplay();
+  }, delay);
+}
+
 function appendTerminal(command, output, isError = false) {
   const line = document.createElement('div');
   line.className = 'terminal-line';
@@ -584,9 +787,44 @@ function bindEvents() {
       document.querySelectorAll('.admin-tab').forEach((item) => item.classList.remove('active'));
       tab.classList.add('active');
       const target = tab.dataset.tab;
-      $('admin-gui').classList.toggle('hidden', target !== 'gui');
-      $('admin-terminal').classList.toggle('hidden', target !== 'terminal');
+      ['gui', 'storage', 'replays', 'terminal'].forEach((name) => {
+        const panel = $(`admin-${name}`);
+        if (panel) panel.classList.toggle('hidden', target !== name);
+      });
+      if (target === 'storage') loadStorageSummary();
+      if (target === 'replays') resetAndLoadReplays();
       if (target === 'terminal') $('terminal-input').focus();
+    });
+  });
+
+  document.querySelectorAll('[data-storage-action]').forEach((btn) => {
+    btn.addEventListener('click', () => runStorageAction(btn.dataset.storageAction));
+  });
+  $('replay-refresh')?.addEventListener('click', resetAndLoadReplays);
+  $('replay-load-more')?.addEventListener('click', () => loadReplays(true));
+  $('replay-search-player')?.addEventListener('input', () => {
+    clearTimeout(replaySearchTimer);
+    replaySearchTimer = setTimeout(resetAndLoadReplays, 200);
+  });
+  $('replay-filter-mode')?.addEventListener('change', resetAndLoadReplays);
+  $('replay-filter-mod-source')?.addEventListener('change', resetAndLoadReplays);
+  $('replay-progress')?.addEventListener('input', (event) => {
+    pauseReplay();
+    replayFrameIndex = Number(event.target.value) || 0;
+    renderReplayFrame();
+  });
+  document.querySelectorAll('[data-replay-control]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.replayControl;
+      if (action === 'play') playReplay();
+      if (action === 'pause') pauseReplay();
+      if (action === 'next') { pauseReplay(); nextReplayFrame(); }
+      if (action === 'prev') { pauseReplay(); prevReplayFrame(); }
+    });
+  });
+  document.querySelectorAll('[data-replay-speed]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      replaySpeed = btn.dataset.replaySpeed === 'instant' ? 'instant' : Number(btn.dataset.replaySpeed || 1);
     });
   });
 
@@ -604,6 +842,7 @@ function bindEvents() {
     const endRoom = event.target.dataset && event.target.dataset.end;
     const suggestion = event.target.dataset && event.target.dataset.suggestion;
     const suggestionIndex = event.target.dataset && event.target.dataset.suggestionIndex;
+    const replayView = event.target.dataset && event.target.dataset.replayView;
     if (suggestionIndex != null && completionState) {
       applyCompletionIndex(Number(suggestionIndex));
       return;
@@ -614,6 +853,10 @@ function bindEvents() {
     }
     if (userToggle) {
       await toggleRegisteredUser(userToggle.dataset.userToggle);
+      return;
+    }
+    if (replayView) {
+      await openReplayViewer(replayView);
       return;
     }
     if (kickSid) {

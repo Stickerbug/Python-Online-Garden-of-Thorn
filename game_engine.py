@@ -3988,6 +3988,8 @@ class GameEngine:
                 pm = {} if isinstance(eff, str) else eff.get('params', {})
                 lg = None if isinstance(eff, str) else eff.get('log')
                 rt = self._EFFECT_ALIASES.get(et, et)
+                if et in self.EVENT_EFFECT_TYPES or rt in self.EVENT_EFFECT_TYPES:
+                    continue
                 fn = getattr(self, f'_atomic_{rt}', None)
                 try:
                     before_stats = self._snapshot_player_stats()

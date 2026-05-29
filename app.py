@@ -22,7 +22,7 @@ from cards import (
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
 )
-from mod_loader import merge_mod_cards_to_card_defs, load_all_mods, save_mod, Mod
+from mod_loader import GAME_VERSION, merge_mod_cards_to_card_defs, load_all_mods, save_mod, Mod
 from card_i18n import apply_card_i18n_defaults, card_text, event_text
 from runtime_errors import set_mod_runtime_error_logger
 from r2_mods import (
@@ -47,6 +47,20 @@ from db import (
     list_admin_users,
     save_match_summary,
     verify_user,
+)
+from replay_core import (
+    CLEANUP_HOUR,
+    CLEANUP_MINUTE,
+    DEFAULT_RETENTION_DAYS,
+    checkpoint_db,
+    cleanup_old_replays,
+    cleanup_orphan_replay_blobs,
+    get_replay,
+    list_replays,
+    replay_timeline,
+    save_replay_snapshot,
+    storage_summary,
+    vacuum_db,
 )
 
 BASE_CARD_IDS = set(CARD_DEFS.keys())
@@ -116,6 +130,8 @@ except Exception as exc:
     print(f'[startup] database init failed: {type(exc).__name__}: {exc}')
 
 _lock = threading.Lock()
+_replay_cleanup_lock = threading.Lock()
+_replay_cleanup_started = False
 _next_room_id = 0
 _COMMUNITY_API_RATE: dict = {}
 SERVER_STARTED_AT = time.time()
@@ -274,6 +290,8 @@ def admin_match_record(room, result='finished'):
         first_meta = participant_meta[0] if participant_meta else {}
         mod_source = first_meta.get('mod_source', 'official')
         mod_hash = first_meta.get('community_mod_hash') or first_meta.get('mods_hash') or ''
+        community_mod_url = first_meta.get('community_mod_url', '')
+        community_mod_name = first_meta.get('community_mod_name', '')
         history_entry = {
             'time': iso_now(),
             'room_id': room.room_id,
@@ -303,10 +321,13 @@ def admin_match_record(room, result='finished'):
             'duration_seconds': duration_seconds,
             'mod_source': mod_source,
             'mod_hash': mod_hash,
+            'community_mod_url': community_mod_url,
+            'community_mod_name': community_mod_name,
         }
         if DB_AVAILABLE:
             try:
-                save_match_summary(summary)
+                match_id = save_match_summary(summary)
+                save_replay_snapshot(match_id, summary, card_defs=CARD_DEFS, game_version=GAME_VERSION)
                 if result in ('finished', 'admin_endgame') and getattr(e, 'game_over', False):
                     increment_user_stats(registered_usernames, stats_winners, stats_result)
             except Exception as db_exc:
@@ -356,6 +377,19 @@ def clear_auth_login_failures(ip):
 
 def db_unavailable_response():
     return jsonify({'success': False, 'error': f'数据库不可用: {DB_INIT_ERROR or "unknown"}'}), 503
+
+
+def replay_api_allowed():
+    return bool(is_admin_authenticated() or session.get('user_id'))
+
+
+def replay_item_visible_to_current_user(item):
+    if is_admin_authenticated():
+        return True
+    username = str(session.get('username') or '').lower()
+    if not username:
+        return False
+    return any(str(name or '').lower() == username for name in (item or {}).get('players', []))
 
 
 @app.before_request
@@ -2098,6 +2132,137 @@ def admin_user_detail(user_id):
         online = _admin_online_user_map()
     detail['user']['online'] = online.get(str(detail['user'].get('username', '')).lower())
     return jsonify({'success': True, **detail})
+
+
+@app.route('/api/admin/storage/summary')
+def admin_storage_summary():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        return jsonify({'success': True, **storage_summary()})
+    except Exception as exc:
+        admin_event('error', f'storage summary failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/admin/storage/cleanup-old', methods=['POST'])
+def admin_storage_cleanup_old():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    data = request.get_json(silent=True) or {}
+    dry_run = bool(data.get('dry_run', False))
+    retention_days = data.get('retention_days', DEFAULT_RETENTION_DAYS)
+    if not _replay_cleanup_lock.acquire(blocking=False):
+        return jsonify({'success': False, 'error': '已有清理任务正在执行'}), 409
+    try:
+        result = cleanup_old_replays(retention_days=retention_days, dry_run=dry_run)
+        admin_event('admin', f'{"试算" if dry_run else "执行"}清理旧回放: {result}')
+        return jsonify({'success': True, 'dry_run': dry_run, 'result': result})
+    except Exception as exc:
+        admin_event('error', f'cleanup old replays failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        _replay_cleanup_lock.release()
+
+
+@app.route('/api/admin/storage/cleanup-orphans', methods=['POST'])
+def admin_storage_cleanup_orphans():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    data = request.get_json(silent=True) or {}
+    dry_run = bool(data.get('dry_run', False))
+    if not _replay_cleanup_lock.acquire(blocking=False):
+        return jsonify({'success': False, 'error': '已有清理任务正在执行'}), 409
+    try:
+        result = cleanup_orphan_replay_blobs(dry_run=dry_run)
+        admin_event('admin', f'{"试算" if dry_run else "执行"}清理孤儿快照: {result}')
+        return jsonify({'success': True, 'dry_run': dry_run, 'result': result})
+    except Exception as exc:
+        admin_event('error', f'cleanup orphan replay blobs failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        _replay_cleanup_lock.release()
+
+
+@app.route('/api/admin/storage/vacuum', methods=['POST'])
+def admin_storage_vacuum():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    data = request.get_json(silent=True) or {}
+    if data.get('confirm') is not True:
+        return jsonify({'success': False, 'error': 'VACUUM 需要 confirm=true'}), 400
+    if not _replay_cleanup_lock.acquire(blocking=False):
+        return jsonify({'success': False, 'error': '已有清理任务正在执行'}), 409
+    try:
+        checkpoint = checkpoint_db()
+        result = vacuum_db()
+        admin_event('admin', '手动 VACUUM 数据库')
+        return jsonify({'success': True, 'checkpoint': checkpoint, 'result': result})
+    except Exception as exc:
+        admin_event('error', f'vacuum failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        _replay_cleanup_lock.release()
+
+
+@app.route('/api/replays')
+def api_replays():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    if not replay_api_allowed():
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    try:
+        player_filter = request.args.get('player', '')
+        if not is_admin_authenticated():
+            player_filter = session.get('username') or ''
+        data = list_replays(
+            limit=request.args.get('limit', 50),
+            offset=request.args.get('offset', 0),
+            mode=request.args.get('mode', ''),
+            player=player_filter,
+            mod_source=request.args.get('mod_source', ''),
+        )
+        if not is_admin_authenticated():
+            data['items'] = [item for item in data.get('items', []) if replay_item_visible_to_current_user(item)]
+        return jsonify({'success': True, **data})
+    except Exception as exc:
+        admin_event('error', f'replay list failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/replays/<int:replay_id>')
+def api_replay_detail(replay_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    if not replay_api_allowed():
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    item = get_replay(replay_id)
+    if not item:
+        return jsonify({'success': False, 'error': '回放不存在'}), 404
+    if not replay_item_visible_to_current_user(item):
+        return jsonify({'success': False, 'error': 'forbidden'}), 403
+    return jsonify({'success': True, 'replay': item})
+
+
+@app.route('/api/replays/<int:replay_id>/timeline')
+def api_replay_timeline(replay_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    if not replay_api_allowed():
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    item = get_replay(replay_id)
+    if not item:
+        return jsonify({'success': False, 'error': '回放不存在'}), 404
+    if not replay_item_visible_to_current_user(item):
+        return jsonify({'success': False, 'error': 'forbidden'}), 403
+    try:
+        data = replay_timeline(replay_id)
+    except Exception as exc:
+        admin_event('error', f'replay timeline failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    if not data:
+        return jsonify({'success': False, 'error': '回放不存在'}), 404
+    return jsonify({'success': True, **data})
 
 
 @app.route('/api/admin/command', methods=['POST'])
@@ -4263,6 +4428,44 @@ def on_leave_spectate(data=None):
 @socketio.on('switch_spectate_perspective')
 def on_switch_spectate_perspective(data=None):
     return
+
+
+def _seconds_until_cleanup_time():
+    now = datetime.now()
+    target = now.replace(hour=CLEANUP_HOUR, minute=CLEANUP_MINUTE, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return max(60, int((target - now).total_seconds()))
+
+
+def _replay_cleanup_worker():
+    time.sleep(60)
+    while True:
+        try:
+            if DB_AVAILABLE and _replay_cleanup_lock.acquire(blocking=False):
+                try:
+                    result = cleanup_old_replays(retention_days=DEFAULT_RETENTION_DAYS, dry_run=False)
+                    if result.get('deleted_replays') or result.get('deleted_mod_blobs') or result.get('deleted_card_snapshots'):
+                        admin_event('admin', f'自动清理旧回放: {result}')
+                finally:
+                    _replay_cleanup_lock.release()
+        except Exception as exc:
+            admin_event('error', f'auto replay cleanup failed: {exc}')
+        time.sleep(_seconds_until_cleanup_time())
+
+
+def start_replay_cleanup_thread():
+    global _replay_cleanup_started
+    if _replay_cleanup_started:
+        return
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'false':
+        return
+    _replay_cleanup_started = True
+    thread = threading.Thread(target=_replay_cleanup_worker, name='replay-cleanup', daemon=True)
+    thread.start()
+
+
+start_replay_cleanup_thread()
 
 
 if __name__ == '__main__':

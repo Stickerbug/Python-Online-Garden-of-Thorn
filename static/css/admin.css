@@ -95,6 +95,8 @@ button {
 .admin-tools-row input,
 .registered-users-toolbar input,
 .registered-users-toolbar select,
+.replay-toolbar input,
+.replay-toolbar select,
 .terminal-input-row input {
   width: 100%;
   border: 1px solid var(--line);
@@ -115,6 +117,8 @@ button {
 .admin-tools-row input:focus,
 .registered-users-toolbar input:focus,
 .registered-users-toolbar select:focus,
+.replay-toolbar input:focus,
+.replay-toolbar select:focus,
 .terminal-input-row input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(26, 188, 156, 0.14);
@@ -220,6 +224,12 @@ button {
   gap: 10px;
 }
 
+.storage-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .metric-card,
 .admin-section,
 .terminal-wrap {
@@ -232,6 +242,10 @@ button {
 .metric-card {
   min-height: 104px;
   padding: 14px;
+}
+
+.storage-card {
+  min-height: 118px;
 }
 
 .metric-card span,
@@ -271,6 +285,54 @@ button {
   padding: 10px 14px;
   border-bottom: 1px solid rgba(217, 226, 236, 0.72);
   background: rgba(255, 255, 255, 0.62);
+}
+
+.replay-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 140px 140px auto;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(217, 226, 236, 0.72);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.replay-toolbar input,
+.replay-toolbar select {
+  min-height: 38px;
+  padding: 9px 11px;
+}
+
+.storage-actions,
+.replay-controls,
+.replay-more-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.replay-more-row {
+  justify-content: center;
+  border-top: 1px solid rgba(217, 226, 236, 0.72);
+}
+
+.admin-json-result {
+  margin: 0;
+  padding: 12px 14px;
+  max-height: 360px;
+  overflow: auto;
+  border-top: 1px solid rgba(217, 226, 236, 0.72);
+  background: #101820;
+  color: #d8f3dc;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+#replay-progress {
+  width: calc(100% - 28px);
+  margin: 0 14px 12px;
 }
 
 .registered-users-toolbar input,
@@ -626,6 +688,10 @@ button {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .storage-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .registered-user-main {
     grid-template-columns: 42px minmax(0, 1fr) auto;
   }
@@ -658,6 +724,7 @@ button {
   }
 
   .metrics-grid,
+  .storage-summary-grid,
   .admin-two-col {
     grid-template-columns: 1fr;
   }
@@ -667,6 +734,7 @@ button {
   }
 
   .registered-users-toolbar,
+  .replay-toolbar,
   .registered-user-main,
   .user-detail-grid {
     grid-template-columns: 1fr;

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 管理台</title>
-<link rel="stylesheet" href="/static/css/admin.css?v=5">
+<link rel="stylesheet" href="/static/css/admin.css?v=6">
 </head>
 <body class="admin-body">
 <div id="admin-login" class="admin-login">
@@ -34,6 +34,8 @@
 
   <nav class="admin-tabs" aria-label="管理台视图">
     <button class="admin-tab active" data-tab="gui" type="button">概览</button>
+    <button class="admin-tab" data-tab="storage" type="button">存储管理</button>
+    <button class="admin-tab" data-tab="replays" type="button">回放列表</button>
     <button class="admin-tab" data-tab="terminal" type="button">终端</button>
   </nav>
 
@@ -136,6 +138,71 @@
     </div>
   </section>
 
+  <section id="admin-storage" class="admin-panel hidden">
+    <div class="storage-summary-grid" id="storage-summary-grid"></div>
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>存储操作</h2>
+        <span id="storage-last-result">-</span>
+      </div>
+      <div class="storage-actions">
+        <button class="ghost-btn" type="button" data-storage-action="refresh">刷新统计</button>
+        <button class="ghost-btn" type="button" data-storage-action="dry-clean-old">试算清理三个月外回放</button>
+        <button class="ghost-btn danger" type="button" data-storage-action="clean-old">执行清理</button>
+        <button class="ghost-btn" type="button" data-storage-action="dry-clean-orphans">试算孤儿快照</button>
+        <button class="ghost-btn danger" type="button" data-storage-action="clean-orphans">清理孤儿快照</button>
+        <button class="ghost-btn danger" type="button" data-storage-action="vacuum">VACUUM 压缩数据库</button>
+      </div>
+      <pre id="storage-result" class="admin-json-result"></pre>
+    </section>
+  </section>
+
+  <section id="admin-replays" class="admin-panel hidden">
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>三个月内回放</h2>
+        <span id="replay-count-label">0</span>
+      </div>
+      <div class="replay-toolbar">
+        <input id="replay-search-player" type="search" maxlength="32" placeholder="搜索玩家">
+        <select id="replay-filter-mode">
+          <option value="">全部模式</option>
+          <option value="1v1">1v1</option>
+          <option value="2v2">2v2</option>
+          <option value="urf">无限火力</option>
+        </select>
+        <select id="replay-filter-mod-source">
+          <option value="">全部模组</option>
+          <option value="official">官方</option>
+          <option value="community">社区</option>
+        </select>
+        <button id="replay-refresh" class="ghost-btn" type="button">刷新回放</button>
+      </div>
+      <div id="replay-table" class="admin-table"></div>
+      <div class="replay-more-row">
+        <button id="replay-load-more" class="ghost-btn" type="button">加载更多</button>
+      </div>
+    </section>
+    <section id="replay-viewer" class="admin-section hidden">
+      <div class="section-title">
+        <h2>回放查看器</h2>
+        <span id="replay-viewer-title">-</span>
+      </div>
+      <div class="replay-controls">
+        <button class="ghost-btn" type="button" data-replay-control="prev">上一步</button>
+        <button class="ghost-btn" type="button" data-replay-control="play">播放</button>
+        <button class="ghost-btn" type="button" data-replay-control="pause">暂停</button>
+        <button class="ghost-btn" type="button" data-replay-speed="1">1x</button>
+        <button class="ghost-btn" type="button" data-replay-speed="2">2x</button>
+        <button class="ghost-btn" type="button" data-replay-speed="4">4x</button>
+        <button class="ghost-btn" type="button" data-replay-speed="instant">立即</button>
+        <button class="ghost-btn" type="button" data-replay-control="next">下一步</button>
+      </div>
+      <input id="replay-progress" type="range" min="0" max="0" value="0">
+      <pre id="replay-frame" class="admin-json-result"></pre>
+    </section>
+  </section>
+
   <section id="admin-terminal" class="admin-panel hidden">
     <div class="terminal-wrap">
       <div id="terminal-output" class="terminal-output" aria-live="polite"></div>
@@ -148,6 +215,6 @@
   </section>
 </main>
 
-<script src="/static/js/admin.js?v=6"></script>
+<script src="/static/js/admin.js?v=7"></script>
 </body>
 </html>
