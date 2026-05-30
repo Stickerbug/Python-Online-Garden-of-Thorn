@@ -1491,6 +1491,14 @@ class GameEngine:
             return 0
         return dup_count
 
+    def _refund_pending_choice_cost(self, player_id: int, card: CardInstance):
+        ps = self.players[player_id]
+        played_count = ps.cards_played_this_turn.get(card.def_id, 1)
+        extra_e = 0 if 'symbiosis' in card.flags else max(0, played_count - 1)
+        ps.elixir += card.cost_e + extra_e
+        ps.magic += card.cost_m
+        ps.cards_played_this_turn[card.def_id] = max(0, played_count - 1)
+
     def play_card(self, player_id: int, card_instance_id: int, choice: Optional[dict] = None) -> dict:
         ps = self.players[player_id]
         card = ps.find_hand_card(card_instance_id)
@@ -1706,9 +1714,7 @@ class GameEngine:
                 'choice_type': self._get_choice_type(card),
             }
             ps.hand.insert(0, card)
-            ps.elixir += card.cost_e + ps.cards_played_this_turn.get(card.def_id, 1) - 1
-            ps.magic += card.cost_m
-            ps.cards_played_this_turn[card.def_id] = max(0, ps.cards_played_this_turn.get(card.def_id, 1) - 1)
+            self._refund_pending_choice_cost(player_id, card)
             return {'success': True, 'needs_choice': True, 'choice_type': self._get_choice_type(card), 'card': card.to_dict()}
         if card.card_type == 'thorn':
             fission_level = max(1, int(getattr(card, 'fission_level', 1)))
@@ -1802,7 +1808,7 @@ class GameEngine:
                 ps.hand.insert(0, card)
             return {'success': False, 'error': '选择已取消'}
         dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
-        extra_e = dup_count
+        extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = card.cost_e + extra_e
         self._spend_resource(player_id, 'elixir', total_e, card)
         self._spend_resource(player_id, 'magic', card.cost_m, card)
@@ -4867,9 +4873,7 @@ class GameEngine:
             if choice_target_id is not None:
                 self.pending_choice['target_player_id'] = choice_target_id
             ps.hand.insert(0, card)
-            ps.elixir += card.cost_e + ps.cards_played_this_turn.get(card.def_id, 1) - 1
-            ps.magic += card.cost_m
-            ps.cards_played_this_turn[card.def_id] = max(0, ps.cards_played_this_turn.get(card.def_id, 1) - 1)
+            self._refund_pending_choice_cost(player_id, card)
             return {
                 'success': True,
                 'needs_choice': True,

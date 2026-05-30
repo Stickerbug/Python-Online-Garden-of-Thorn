@@ -529,11 +529,11 @@ class GameEngine2v2(GameEngine):
         can, reason = self.can_play_card(player_id, card)
         if not can:
             return {'success': False, 'error': reason}
-        self._spend_resource(player_id, 'elixir', card.cost_e, card)
+        extra_e = self._get_extra_e_for_card(player_id, card)
+        self._spend_resource(player_id, 'elixir', card.cost_e + extra_e, card)
         self._spend_resource(player_id, 'magic', card.cost_m, card)
         ps.remove_hand_card(card_instance_id)
-        if card.card_type == 'thorn':
-            ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
+        ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
         if target_player_id >= 0:
             if choice is None:
                 choice = {}
@@ -1010,11 +1010,11 @@ class GameEngine2v2(GameEngine):
                     'choice': dict(choice or {}),
                 }
                 return {'success': True, 'needs_ally_consent': True, 'card': card.to_dict(), 'target_player_id': target_player_id}
-        self._spend_resource(player_id, 'elixir', card.cost_e, card)
+        extra_e = self._get_extra_e_for_card(player_id, card)
+        self._spend_resource(player_id, 'elixir', card.cost_e + extra_e, card)
         self._spend_resource(player_id, 'magic', card.cost_m, card)
         ps.remove_hand_card(card_instance_id)
-        if card.card_type == 'thorn':
-            ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
+        ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
         self._active_choice = choice if isinstance(choice, dict) else {}
         try:
             needs_response = self._check_response_needed(player_id, card)
