@@ -12,9 +12,11 @@ from urllib.parse import quote, urlparse
 
 try:
     import boto3
+    from botocore.config import Config as BotoConfig
     from botocore.exceptions import ClientError
 except Exception:  # pragma: no cover - dependency may be absent in local dev before pip install
     boto3 = None
+    BotoConfig = None
     ClientError = None
 try:
     import requests
@@ -123,23 +125,34 @@ def _required_env() -> Dict[str, str]:
 
 
 def _client():
-    global boto3, ClientError
+    global boto3, BotoConfig, ClientError
     if boto3 is None:
         try:
             import boto3 as _boto3
+            from botocore.config import Config as _BotoConfig
             from botocore.exceptions import ClientError as _ClientError
             boto3 = _boto3
+            BotoConfig = _BotoConfig
             ClientError = _ClientError
         except Exception as exc:
             raise R2ConfigError('社区模组依赖 boto3 未安装，请执行 python -m pip install -r requirements.txt') from exc
     values = _required_env()
     endpoint = f"https://{values['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
+    connect_timeout = float(os.environ.get('R2_CONNECT_TIMEOUT', '3'))
+    read_timeout = float(os.environ.get('R2_READ_TIMEOUT', '6'))
+    max_attempts = int(os.environ.get('R2_MAX_ATTEMPTS', '2'))
+    config = BotoConfig(
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
+        retries={'max_attempts': max_attempts, 'mode': 'standard'},
+    ) if BotoConfig is not None else None
     return boto3.client(
         's3',
         endpoint_url=endpoint,
         aws_access_key_id=values['R2_ACCESS_KEY_ID'],
         aws_secret_access_key=values['R2_SECRET_ACCESS_KEY'],
         region_name='auto',
+        config=config,
     )
 
 

@@ -526,6 +526,8 @@ class GameEngine2v2(GameEngine):
         card = ps.find_hand_card(card_instance_id)
         if card is None:
             return {'success': False, 'error': '手牌中没有这张牌'}
+        if self.pending_response is not None:
+            return {'success': False, 'error': '等待对手反制响应'}
         can, reason = self.can_play_card(player_id, card)
         if not can:
             return {'success': False, 'error': reason}
@@ -705,7 +707,7 @@ class GameEngine2v2(GameEngine):
             ps.health -= dmg
             total_dealt += dmg
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
-            if ps.toxic > 0:
+            if dmg > 0 and ps.toxic > 0:
                 ps.poison += ps.toxic
                 self.log_msg(f"淬毒效果：{self.pn(target_id)}+{ps.toxic}层中毒")
             self._check_yggdrasil(target_id)
@@ -983,6 +985,8 @@ class GameEngine2v2(GameEngine):
         if card.def_id == ERROR_CARD_ID:
             ps.remove_hand_card(card_instance_id)
             return {'success': True, 'card': card.to_dict(), 'ignored': True}
+        if self.pending_response is not None:
+            return {'success': False, 'error': '等待对手反制响应'}
         if 'self_only' in card.flags or card.card_type == 'guard':
             target_player_id = player_id
         elif self._card_requires_target(card) and card.card_type == 'thorn' and target_player_id == player_id:
@@ -1155,7 +1159,7 @@ class GameEngine2v2(GameEngine):
             total_dealt += dmg
             self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
-            if ps.toxic > 0:
+            if dmg > 0 and ps.toxic > 0:
                 ps.poison += ps.toxic
                 self.log_msg(f"淬毒效果：{self.pn(target_id)}+{ps.toxic}层中毒")
             self._game_over_defer_depth += 1
@@ -1414,11 +1418,9 @@ class GameEngine2v2(GameEngine):
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
-        if ps.skip_turn:
+        turn_will_be_skipped = bool(ps.skip_turn)
+        if turn_will_be_skipped:
             ps.skip_turn = False
-            self.log_msg(f"{self.pn(player_id)}被跳过本回合")
-            self._skip_current_turn_after_start = True
-            return
         if self.round_num > 1:
             draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction)
             if ps.enemy_draw_reduction > 0:
@@ -1505,6 +1507,10 @@ class GameEngine2v2(GameEngine):
                 elif eq.def_id == 'GoldenLeaf':
                     ps.draw_cards(1)
                     self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}多抽1张牌")
+        if turn_will_be_skipped or ps.skip_turn:
+            ps.skip_turn = False
+            self.log_msg(f"{self.pn(player_id)}被跳过本回合")
+            self._skip_current_turn_after_start = True
         self._check_game_over()
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
@@ -1551,7 +1557,7 @@ class GameEngine2v2(GameEngine):
             total_dealt += dmg
             self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
-            if ps.toxic > 0:
+            if dmg > 0 and ps.toxic > 0:
                 ps.poison += ps.toxic
             self._game_over_defer_depth += 1
             try:

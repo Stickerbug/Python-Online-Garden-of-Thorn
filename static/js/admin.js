@@ -16,6 +16,7 @@ let replayTimeline = [];
 let replayFrameIndex = 0;
 let replaySpeed = 1;
 let replayTimer = null;
+let replayData = null;
 
 const STATUS_LABELS = {
   lobby: '大厅',
@@ -775,6 +776,192 @@ function playReplay() {
     nextReplayFrame();
     playReplay();
   }, delay);
+}
+
+function replayFrameState(frame) {
+  return frame && frame.state && typeof frame.state === 'object' ? frame.state : {};
+}
+
+function replayPerspective(frame) {
+  const state = replayFrameState(frame);
+  if (Array.isArray(state.perspectives) && state.perspectives.length) return state.perspectives[0] || {};
+  return state || {};
+}
+
+function replayNames(frame) {
+  const state = replayFrameState(frame);
+  const perspective = replayPerspective(frame);
+  if (Array.isArray(state.player_names)) return state.player_names;
+  if (Array.isArray(perspective.player_names)) return perspective.player_names;
+  return [];
+}
+
+function replayName(frame, playerId, fallback) {
+  const names = replayNames(frame);
+  const id = Number(playerId);
+  return Number.isInteger(id) && names[id] ? names[id] : fallback;
+}
+
+function replayMs(ms) {
+  const total = Math.max(0, Math.round((Number(ms) || 0) / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function replayBar(label, cur, max, color) {
+  const safeMax = Math.max(1, Number(max || 1));
+  const safeCur = Number(cur || 0);
+  const pct = Math.max(0, Math.min(100, (safeCur / safeMax) * 100));
+  return `
+    <div class="admin-replay-bar">
+      <span style="color:${color}">${label}</span>
+      <div class="admin-replay-bar-track"><div class="admin-replay-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <span>${escapeHtml(safeCur)}/${escapeHtml(safeMax)}</span>
+    </div>`;
+}
+
+function replayCardId(card) {
+  if (!card) return '?';
+  return card.def_id || card.id || card.card_id || (card.card_instance && card.card_instance.def_id) || '?';
+}
+
+function replayChipRow(cards, hiddenCount = 0) {
+  const chips = [];
+  (Array.isArray(cards) ? cards : []).slice(0, 18).forEach((card) => {
+    const id = replayCardId(card);
+    chips.push(`<span class="admin-replay-chip" title="${escapeHtml(id)}">${escapeHtml(id)}</span>`);
+  });
+  const count = Math.max(0, Number(hiddenCount || 0));
+  for (let i = 0; i < Math.min(count, 12); i += 1) chips.push('<span class="admin-replay-chip">?</span>');
+  if (count > 12) chips.push(`<span class="admin-replay-chip">+${count - 12}</span>`);
+  return chips.length ? chips.join('') : '<span class="admin-replay-chip">无</span>';
+}
+
+function replayEquipmentRow(equipment) {
+  const items = Array.isArray(equipment) ? equipment : [];
+  if (!items.length) return '<span class="admin-replay-chip">无</span>';
+  return items.slice(0, 18).map((eq) => {
+    const card = eq.card_instance || eq.card || eq;
+    const id = replayCardId(card);
+    return `<span class="admin-replay-chip" title="${escapeHtml(id)}">${escapeHtml(id)}</span>`;
+  }).join('');
+}
+
+function replayStatusRow(player) {
+  const p = player || {};
+  const items = [];
+  [['P', p.poison], ['F', p.fire], ['T', p.toxic], ['A', p.armor], ['Dg', p.dodge], ['Tri', p.triangle_stacks]].forEach(([key, value]) => {
+    if (Number(value || 0) > 0) items.push(`${key}:${value}`);
+  });
+  if (p.invincible) items.push('Invincible');
+  if (p.skip_turn) items.push('Skip');
+  return items.length ? items.map(item => `<span class="admin-replay-chip">${escapeHtml(item)}</span>`).join('') : '<span class="admin-replay-chip">无</span>';
+}
+
+function replayPlayerPanel(frame, role, player, playerId, fallbackName, revealHand) {
+  const p = player || {};
+  const current = Number(replayFrameState(frame).current_player ?? frame.current_player) === Number(playerId);
+  const hand = revealHand ? (p.hand || p.revealed_hand || []) : (p.revealed_hand || []);
+  const hiddenCount = revealHand ? 0 : Math.max(0, Number(p.hand_count || 0) - hand.length);
+  const deck = Number(p.deck_count || (Array.isArray(p.deck) ? p.deck.length : 0) || 0);
+  const discard = Number(p.discard_count || (Array.isArray(p.discard) ? p.discard.length : 0) || 0);
+  return `
+    <section class="admin-replay-player${current ? ' current' : ''}">
+      <div class="admin-replay-player-head">
+        <span>${escapeHtml(replayName(frame, playerId, fallbackName))}</span>
+        <span class="admin-replay-role">${escapeHtml(role)}${current ? ' · 当前回合' : ''}</span>
+      </div>
+      <div class="admin-replay-bars">
+        ${replayBar('H', p.health, p.max_health || 100, '#2ECC71')}
+        ${replayBar('E', p.elixir, p.max_elixir || 10, '#D9A600')}
+        ${replayBar('M', p.magic, p.max_magic || 10, '#3498DB')}
+      </div>
+      <div class="admin-replay-section-label">状态</div>
+      <div class="admin-replay-chip-row">${replayStatusRow(p)}</div>
+      <div class="admin-replay-section-label">装备</div>
+      <div class="admin-replay-chip-row">${replayEquipmentRow(p.equipment)}</div>
+      <div class="admin-replay-section-label">手牌 ${hand.length + hiddenCount} / D${deck} / X${discard}</div>
+      <div class="admin-replay-chip-row">${replayChipRow(hand, hiddenCount)}</div>
+    </section>`;
+}
+
+function replayActionText(frame) {
+  if (!frame) return '-';
+  const names = replayNames(frame);
+  const action = frame.action;
+  if (!action) return `摘要 · ${frame.phase || '-'}`;
+  const actor = action.actor != null ? (names[Number(action.actor)] || `P${Number(action.actor) + 1}`) : '';
+  const payload = action.payload || {};
+  const result = payload.result || {};
+  const cardId = payload.def_id || payload.card_id || (payload.card && payload.card.def_id) || (result.card && result.card.def_id) || '';
+  return [actor, action.type, cardId].filter(Boolean).join(' · ');
+}
+
+async function openReplayViewer(replayId) {
+  pauseReplay();
+  const viewer = $('replay-viewer');
+  viewer.classList.remove('hidden');
+  replayData = null;
+  $('replay-frame').innerHTML = '<div class="admin-replay-empty">正在生成时间线...</div>';
+  try {
+    const data = await api(`/api/replays/${encodeURIComponent(replayId)}/timeline`);
+    replayData = data.replay || null;
+    replayTimeline = data.timeline || [];
+    replayFrameIndex = 0;
+    const meta = (data.replay && data.replay.meta) || {};
+    $('replay-viewer-title').textContent = `${meta.mode || '-'} · ${(meta.players || []).join(' / ')}`;
+    const progress = $('replay-progress');
+    progress.max = String(Math.max(0, replayTimeline.length - 1));
+    progress.value = '0';
+    renderReplayFrame();
+  } catch (error) {
+    $('replay-frame').innerHTML = `<div class="admin-replay-empty">回放加载失败：${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderReplayFrame() {
+  const frame = replayTimeline[replayFrameIndex] || null;
+  const progress = $('replay-progress');
+  if (progress) progress.value = String(replayFrameIndex);
+  const target = $('replay-frame');
+  if (!target) return;
+  if (!frame) {
+    target.innerHTML = '<div class="admin-replay-empty">暂无时间线数据。</div>';
+    return;
+  }
+  const state = replayFrameState(frame);
+  const perspective = replayPerspective(frame);
+  const yourId = perspective.your_id ?? 0;
+  const enemyIds = Array.isArray(perspective.enemy_ids) ? perspective.enemy_ids : [];
+  const top = [];
+  const bottom = [];
+  if (perspective.opponent) top.push(replayPlayerPanel(frame, '敌方', perspective.opponent, enemyIds[0] ?? (yourId === 0 ? 1 : 0), 'Opponent', false));
+  if (perspective.opponent2) top.push(replayPlayerPanel(frame, '敌方2', perspective.opponent2, enemyIds[1] ?? 3, 'Opponent 2', false));
+  if (perspective.teammate) bottom.push(replayPlayerPanel(frame, '队友', perspective.teammate, perspective.teammate_id ?? 1, 'Teammate', true));
+  if (perspective.you) bottom.push(replayPlayerPanel(frame, '自己', perspective.you, yourId, 'You', true));
+  if (!top.length && !bottom.length && Array.isArray(state.player_names)) {
+    state.player_names.forEach((name, index) => bottom.push(replayPlayerPanel(frame, `玩家${index + 1}`, {}, index, name, false)));
+  }
+  const actionLines = replayTimeline.slice(Math.max(0, replayFrameIndex - 13), replayFrameIndex + 1)
+    .map(item => `${replayMs(item.t)} ${replayActionText(item)}`);
+  const duration = replayData && replayData.duration_ms != null ? replayMs(replayData.duration_ms) : '';
+  target.innerHTML = `
+    <div class="admin-replay-meta">
+      <span>帧 ${replayFrameIndex + 1}/${Math.max(1, replayTimeline.length)}</span>
+      <span>时间 ${replayMs(frame.t)}${duration ? ` / ${duration}` : ''}</span>
+      <span>第${escapeHtml(frame.round || 0)}回合</span>
+    </div>
+    <div class="admin-replay-board">
+      <div class="admin-replay-main">
+        <div class="admin-replay-row">${top.join('') || '<div class="admin-replay-empty">无玩家状态</div>'}</div>
+        <div class="admin-replay-row">${bottom.join('')}</div>
+      </div>
+      <aside class="admin-replay-side-card">
+        <div class="admin-replay-section-label">当前操作</div>
+        <div class="admin-replay-log-line">${escapeHtml(replayActionText(frame))}</div>
+        <div class="admin-replay-section-label">操作时间线</div>
+        <div class="admin-replay-log">${actionLines.map(line => `<div class="admin-replay-log-line">${escapeHtml(line)}</div>`).join('')}</div>
+      </aside>
+    </div>`;
 }
 
 function appendTerminal(command, output, isError = false) {

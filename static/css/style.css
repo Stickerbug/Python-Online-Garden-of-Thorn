@@ -633,7 +633,7 @@ body {
 }
 
 .account-replay-dialog {
-  width: min(760px, calc(100vw - 32px));
+  width: min(1080px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 32px));
   display: flex;
   flex-direction: column;
@@ -655,19 +655,263 @@ body {
   width: 100%;
 }
 
+.account-replay-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.account-replay-perspectives {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.account-replay-perspective-btn.active {
+  border-color: var(--magic);
+  background: var(--magic-bg);
+}
+
 .account-replay-frame {
   flex: 1;
-  min-height: 260px;
-  max-height: 520px;
+  min-height: 390px;
+  max-height: 560px;
   overflow: auto;
   margin: 0;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.account-replay-empty {
+  height: 100%;
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  font-weight: 800;
+}
+
+.replay-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.42fr);
+  gap: 10px;
+  min-height: 100%;
+}
+
+.replay-board-main {
+  display: grid;
+  grid-template-rows: auto minmax(120px, 1fr) auto;
+  gap: 10px;
+  min-width: 0;
+}
+
+.replay-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.replay-player {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.replay-player.current {
+  border-color: var(--magic);
+  box-shadow: 0 0 0 2px rgba(142, 68, 173, 0.14);
+}
+
+.replay-player.defeated {
+  opacity: 0.62;
+}
+
+.replay-player-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.replay-player-name {
+  min-width: 0;
+  color: var(--text-primary);
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.replay-player-role {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.replay-bars {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.replay-bar {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 48px;
+  gap: 6px;
+  align-items: center;
+}
+
+.replay-bar-label {
+  font-weight: 900;
+  text-align: center;
+}
+
+.replay-bar-track {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border-light);
+}
+
+.replay-bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+}
+
+.replay-bar-text {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.replay-status-row,
+.replay-card-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 20px;
+}
+
+.replay-section-label {
+  margin: 7px 0 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.replay-status-chip,
+.replay-card-chip {
+  max-width: 118px;
+  padding: 3px 6px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.replay-card-chip.face-down {
+  color: var(--text-secondary);
+  background: repeating-linear-gradient(
+    45deg,
+    var(--bg-primary),
+    var(--bg-primary) 5px,
+    var(--bg-card) 5px,
+    var(--bg-card) 10px
+  );
+}
+
+.replay-side {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.replay-action,
+.replay-log {
+  padding: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+
+.replay-action-title,
+.replay-log-title {
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.replay-action-body {
+  color: var(--text-primary);
+  font-weight: 850;
+}
+
+.replay-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 390px;
+  overflow: auto;
+}
+
+.replay-log-line {
+  padding: 5px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+@media (max-width: 760px) {
+  .account-replay-dialog {
+    width: calc(100vw - 18px);
+    max-height: calc(100vh - 18px);
+    padding: 10px;
+  }
+
+  .account-replay-frame {
+    min-height: 360px;
+    max-height: calc(100vh - 190px);
+  }
+
+  .replay-board {
+    grid-template-columns: 1fr;
+  }
+
+  .replay-row {
+    grid-template-columns: 1fr;
+  }
+
+  .replay-side {
+    grid-template-rows: auto auto;
+  }
 }
 
 .login-divider {
@@ -2781,6 +3025,18 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-wrap: wrap;
+}
+
+.opp-hand-chip.choice-card-token {
+  max-width: min(160px, 34vw);
+}
+
+.opp-hand-chip .choice-card-name {
+  max-width: min(132px, 30vw);
+  padding: 2px 7px;
+  font-size: 12px;
+  line-height: 1.1;
 }
 
 .equip-row {
@@ -4476,6 +4732,34 @@ body {
   margin-right: 8px;
 }
 
+.response-title {
+  margin-right: 0;
+  font-size: 14px;
+}
+
+.response-trigger-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-right: 0;
+  color: var(--text-primary);
+}
+
+.response-trigger-prefix {
+  color: var(--damage);
+}
+
+.response-damage-preview {
+  padding: 3px 8px;
+  border: 1px solid rgba(192, 57, 43, 0.28);
+  border-radius: 999px;
+  background: rgba(192, 57, 43, 0.08);
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .response-content {
   color: var(--text-secondary);
   font-weight: 500;
@@ -4488,6 +4772,24 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   justify-content: center;
+}
+
+.counter-card-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+}
+
+.counter-card-btn .choice-card-name {
+  max-width: 130px;
+  padding: 2px 6px;
+  background: #fff;
+  font-size: 12px;
+}
+
+.counter-card-cost {
+  font-weight: 800;
 }
 
 .btn-counter-disabled {
@@ -5137,9 +5439,22 @@ body {
 }
 
 .draft-picks {
-  font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
   color: var(--text-secondary);
   text-align: center;
+}
+
+.draft-pick-token.choice-card-token {
+  max-width: min(190px, 42vw);
+}
+
+.draft-pick-token .choice-card-name {
+  padding: 2px 7px;
+  font-size: 12px;
 }
 
 .draft-reroll-btn {
@@ -5479,9 +5794,24 @@ body {
 }
 
 .view-deck-modal .deck-entry {
-  padding: 3px 0;
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
   color: var(--text-primary);
+}
+
+.view-deck-modal .deck-entry .choice-card-token {
+  max-width: min(220px, 58vw);
+}
+
+.view-deck-modal .deck-entry .choice-card-name {
+  max-width: min(180px, 48vw);
+}
+
+.view-deck-modal .deck-entry-count {
+  margin-left: 0;
+  flex: 0 0 auto;
 }
 
 #spectate-controls {
@@ -6236,6 +6566,104 @@ body {
 .game-prompt-option.disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.choice-option-index {
+  flex: 0 0 auto;
+  min-width: 18px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.choice-option-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.choice-option-detail {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.choice-card-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  vertical-align: middle;
+}
+
+.choice-card-name {
+  display: inline-flex;
+  align-items: center;
+  max-width: min(230px, 46vw);
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: #fff !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  font-family: var(--font-card);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+[data-theme="dark"] .choice-card-name {
+  background: #fff !important;
+}
+
+.choice-card-flags,
+.choice-card-combo {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.choice-card-flags .card-flag {
+  font-size: 10px;
+  line-height: 1;
+  padding: 1px 4px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.choice-card-separator {
+  color: var(--text-muted);
+  font-weight: 900;
+}
+
+.floating-card-preview {
+  position: fixed;
+  z-index: 4300;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px) scale(0.97);
+  transition: opacity 120ms ease, transform 120ms ease;
+  filter: drop-shadow(0 16px 28px rgba(0, 0, 0, 0.24));
+}
+
+.floating-card-preview.active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.floating-card-preview-card.card {
+  width: min(150px, 34vw);
+  cursor: default;
+}
+
+@media (max-width: 768px) {
+  .floating-card-preview-card.card {
+    width: min(132px, 44vw);
+  }
 }
 
 .game-prompt-buttons {
@@ -7141,7 +7569,7 @@ body {
     padding: 2px 7px;
     border: 1px solid var(--border-light);
     border-radius: 2px;
-    background: var(--bg-card);
+    background: #fff;
     color: var(--text-primary);
     font-family: var(--font-card);
     font-size: 11px;
@@ -7156,7 +7584,7 @@ body {
 }
 
 [data-theme="dark"] .teammate-hand-chip {
-    background: rgba(255, 255, 255, 0.08);
+    background: #fff;
 }
 
 .teammate-hand-row .card {

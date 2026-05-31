@@ -517,6 +517,7 @@ class LocalSoloEngine {
         this._active_effect_context = {};
         this.timed_effects = [];
         this.tutorial = !!options.tutorial;
+        this.match_key = `local:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 
         this.resetPlayer(0, payload.deck0 || [], this.first_player === 0);
         this.resetPlayer(1, payload.deck1 || [], this.first_player === 1);
@@ -626,6 +627,7 @@ class LocalSoloEngine {
             log: this.log.slice(),
             log_start: 0,
             log_total: this.log.length,
+            match_key: this.match_key,
             pending_response: this.pending_response,
             pending_choice: this.pending_choice,
             opening_event_picks: this.opening_event_picks,
@@ -2301,9 +2303,11 @@ class LocalSoloEngine {
 
     effect_move_to_hand(playerId, card, params) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
-        const loc = this.removeCardFromCurrentZone(target);
         const targetId = this.resolveTarget(playerId, params.target || 'self');
-        if (loc && this.players[targetId].canAddToHand()) this.players[targetId].addToHand(target);
+        const targetPlayer = this.players[targetId];
+        if (!target || !targetPlayer || !targetPlayer.canAddToHand()) return;
+        const loc = this.removeCardFromCurrentZone(target);
+        if (loc) targetPlayer.addToHand(target);
     }
 
     effect_move_to_deck(playerId, card, params) {
@@ -2663,7 +2667,7 @@ class LocalSoloEngine {
             total += dmg;
             this.recordDamage(targetId, dmg, attackerId);
             this.logMsg(`${this.pn(targetId)}受到${dmg}点伤害（H=${ps.health}）`);
-            if (ps.toxic > 0) ps.poison += ps.toxic;
+            if (dmg > 0 && ps.toxic > 0) ps.poison += ps.toxic;
             this._game_over_defer_depth += 1;
             try {
                 this.checkYggdrasil(targetId);
@@ -3242,6 +3246,7 @@ onmessage = event => {
                 engine.sendState(engine.tutorial ? 0 : 1 - pidx);
                 emit('response_request', {
                     card: result.card,
+                    player_id: pidx,
                     counter_cards: engine.getCounterCards(1 - pidx, new LocalCard(result.card)).map(card => card.toDict()),
                 });
                 return;
@@ -3308,6 +3313,7 @@ onmessage = event => {
                     engine.sendState(0);
                     emit('response_request', {
                         card: result.card,
+                        player_id: 1,
                         counter_cards: engine.getCounterCards(0, new LocalCard(result.card)).map(c => c.toDict()),
                     });
                     return;

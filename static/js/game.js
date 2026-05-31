@@ -2084,6 +2084,7 @@ let gameTimelineEntries = [];
 let renderedBattleLogCount = 0;
 let renderedBattleLogTotal = 0;
 let renderedTimelineDomCount = 0;
+let renderedBattleLogMatchKey = '';
 let lastRenderedTurnKey = '';
 const lastStatusSignatures = new Map();
 const GALLERY_MECHANIC_FLAGS = new Set(['fusion_layer', 'fission_layer']);
@@ -2158,15 +2159,15 @@ function gamePrompt(title, options, config = {}) {
         options.forEach((opt, i) => {
             const div = document.createElement('div');
             div.className = 'game-prompt-option';
-            div.textContent = opt;
-            div.onclick = () => { el.classList.remove('active'); resolve(i); };
+            renderChoiceOptionContent(div, opt, i, config);
+            div.onclick = () => { removeFloatingCardPreview(); el.classList.remove('active'); resolve(i); };
             optsEl.appendChild(div);
         });
         const cancelBtn = $('game-prompt-cancel');
         cancelBtn.textContent = UI.cancel;
         cancelBtn.classList.toggle('hidden', !cancellable);
         cancelBtn.style.display = cancellable ? '' : 'none';
-        cancelBtn.onclick = () => { el.classList.remove('active'); resolve(-1); };
+        cancelBtn.onclick = () => { removeFloatingCardPreview(); el.classList.remove('active'); resolve(-1); };
         el.classList.add('active');
     });
 }
@@ -2578,6 +2579,7 @@ function maybeAnimateTurnFocus(gs) {
 }
 
 function showView(viewId) {
+    removeFloatingCardPreview();
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     const el = $(viewId);
     if (el) el.classList.remove('hidden');
@@ -2589,6 +2591,7 @@ function showView(viewId) {
         renderedBattleLogCount = 0;
         renderedBattleLogTotal = 0;
         renderedTimelineDomCount = 0;
+        renderedBattleLogMatchKey = '';
         lastRenderedTurnKey = '';
         lastStatusSignatures.clear();
         updateModeSpecificControls({ solo: false, phase: '' });
@@ -3289,6 +3292,7 @@ function selectPlayCardForConfirm(cardInstanceId) {
 }
 
 function showModal(html) {
+    removeFloatingCardPreview();
     const content = $('modal-content');
     const modal = $('modal');
     if (content) content.className = 'modal-inner';
@@ -3297,6 +3301,7 @@ function showModal(html) {
 }
 
 function hideModal() {
+    removeFloatingCardPreview();
     const modal = $('modal');
     const content = $('modal-content');
     if (content) content.className = 'modal-inner';
@@ -3516,6 +3521,360 @@ function createCardElement(cardDict, options = {}) {
         el.style.cursor = 'pointer';
     }
     return el;
+}
+
+function normalizeFlagList(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.map(String).filter(Boolean);
+    if (value instanceof Set) return Array.from(value).map(String).filter(Boolean);
+    if (typeof value === 'string') return value.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+    if (typeof value === 'object') return Object.entries(value)
+        .filter(([_, enabled]) => !!enabled)
+        .map(([flag]) => String(flag))
+        .filter(Boolean);
+    return [];
+}
+
+function collectCardAddedFlags(cardDict) {
+    const fields = ['instance_flags', 'flags', 'tags', 'temporary_flags', 'extra_flags', 'added_flags'];
+    const flags = new Set();
+    fields.forEach(field => normalizeFlagList(cardDict && cardDict[field]).forEach(flag => flags.add(flag)));
+    return flags;
+}
+
+function collectCardDisabledFlags(cardDict) {
+    const fields = ['disabled_flags', 'removed_flags'];
+    const flags = new Set();
+    fields.forEach(field => normalizeFlagList(cardDict && cardDict[field]).forEach(flag => flags.add(flag)));
+    return flags;
+}
+
+function getEffectiveCardFlagSets(cardDict, cardDef) {
+    const base = new Set((cardDef && cardDef.flags) || []);
+    const added = collectCardAddedFlags(cardDict);
+    const disabled = collectCardDisabledFlags(cardDict);
+    const effective = new Set([...base, ...added]);
+    disabled.forEach(flag => effective.delete(flag));
+    return { base, added, disabled, effective };
+}
+
+function cardFlagHtml(flag, text = null) {
+    if (flag === 'fusion_layer') {
+        const label = text || `${UI.fusion_layer || 'Fusion'}`;
+        return `<span class="card-flag fusion-layer">${escapeHtml(label)}</span>`;
+    }
+    if (flag === 'fission_layer') {
+        const label = text || `${UI.fission_layer || 'Fission'}`;
+        return `<span class="card-flag fission-layer">${escapeHtml(label)}</span>`;
+    }
+    const style = CARD_FLAG_STYLES[flag];
+    const label = text || UI['flag_' + flag] || UI['tag_' + flag] || flag;
+    const cls = style ? style.cls : 'custom';
+    return `<span class="card-flag ${cls}">${escapeHtml(label)}</span>`;
+}
+
+function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
+    const { includeLayers = true, includeTomato = true } = options;
+    if (!cardDict || !cardDef) return '';
+    const { base, effective } = getEffectiveCardFlagSets(cardDict, cardDef);
+    const parts = [];
+    effective.forEach(flag => {
+        if (base.has(flag)) return;
+        if (flag === 'self_only' && (!gameState || gameState.mode !== '2v2')) return;
+        parts.push(cardFlagHtml(flag));
+    });
+    if (includeLayers) {
+        const fusionLevel = Math.max(1, Number(cardDict.fusion_level || 1));
+        const fissionLevel = Math.max(1, Number(cardDict.fission_level || 1));
+        if (fusionLevel > 1) parts.push(cardFlagHtml('fusion_layer', `${UI.fusion_layer || 'Fusion'}: ${fusionLevel}`));
+        if (fissionLevel > 1) parts.push(cardFlagHtml('fission_layer', `${UI.fission_layer || 'Fission'}: ${fissionLevel}`));
+    }
+    if (includeTomato && cardDict.def_id === 'Tomato') {
+        const tomatoLayer = Math.max(0, Number(cardDict.held_turns || 0));
+        if (tomatoLayer > 0) {
+            parts.push(`<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || 'Layer')}: ${tomatoLayer}</span>`);
+        }
+    }
+    return parts.join('');
+}
+
+function createCardChoiceChip(cardDict, options = {}) {
+    const chip = document.createElement('span');
+    chip.className = 'choice-card-token';
+    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
+    if (!cardDef) {
+        chip.textContent = (cardDict && cardDict.def_id) || '?';
+        return chip;
+    }
+    const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
+    const name = document.createElement('span');
+    name.className = 'choice-card-name';
+    name.style.borderColor = typeColor;
+    name.style.color = typeColor;
+    name.textContent = getCardName(cardDef);
+    chip.appendChild(name);
+    const flagsHtml = buildInstanceOnlyFlagHtml(cardDict, cardDef, options);
+    if (flagsHtml) {
+        const flags = document.createElement('span');
+        flags.className = 'choice-card-flags';
+        flags.innerHTML = flagsHtml;
+        chip.appendChild(flags);
+    }
+    attachFloatingCardPreview(chip, cardDict);
+    return chip;
+}
+
+function cardChoiceOption(cardDict, extra = {}) {
+    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
+    return {
+        kind: 'card',
+        card: cardDict,
+        text: cardDef ? getCardName(cardDef) : ((cardDict && cardDict.def_id) || '?'),
+        ...extra,
+    };
+}
+
+function cardComboChoiceOption(cards, extra = {}) {
+    const list = Array.isArray(cards) ? cards : [];
+    return {
+        kind: 'card-combo',
+        cards: list,
+        text: list.map(c => {
+            const cd = getCardDef(c.def_id);
+            return cd ? getCardName(cd) : c.def_id;
+        }).join(' + '),
+        ...extra,
+    };
+}
+
+function equipmentChoiceOption(equipment, extra = {}) {
+    const card = equipment && (equipment.card_instance || equipment.card || equipment);
+    return cardChoiceOption(card, extra);
+}
+
+function cardDefChoiceOption(defId, extra = {}) {
+    return cardChoiceOption({ def_id: defId }, extra);
+}
+
+const ATTACK_DAMAGE_FALLBACKS = {
+    Basic: { amount: 6, hits: 1 },
+    Bone: { amount: 12, hits: 1 },
+    Stinger: { amount: 20, hits: 1 },
+    Sand: { amount: 3, hits: 4 },
+    Wing: { amount: 8, hits: 2 },
+    Light: { amount: 2, hits: 2 },
+    Fang: { amount: 8, hits: 1 },
+    Triangle: { amount: 6, hits: 1, triangle: true },
+    MagicBone: { amount: 15, hits: 1 },
+    MagicStinger: { amount: 30, hits: 1 },
+    Claw: { amount: 5, hits: 1 },
+    Rice: { amount: 4, hits: 1 },
+    Glass: { amount: 5, hits: 1 },
+    MagicGlass: { amount: 4, hits: 1 },
+    Tomato: { amount: 8, hits: 1 },
+};
+
+function firstNumericEffectValue(value) {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) return Number(value);
+    if (value && typeof value === 'object') {
+        if (typeof value.value === 'number') return value.value;
+        if (typeof value.amount === 'number') return value.amount;
+    }
+    return null;
+}
+
+function getAttackDamageBaseInfo(cardDict, cardDef) {
+    if (!cardDef || cardDef.card_type !== 'thorn') return null;
+    const fallback = ATTACK_DAMAGE_FALLBACKS[cardDict.def_id || cardDef.id] || null;
+    const effects = Array.isArray(cardDef.effects) ? cardDef.effects : [];
+    const damageEffect = effects.find(effect => {
+        const type = effect && effect.type;
+        return type === 'damage' || type === 'deal_damage' || type === 'lifesteal_damage' || type === 'triangle_damage';
+    });
+    if (damageEffect) {
+        const params = damageEffect.params || {};
+        const amount = firstNumericEffectValue(params.amount);
+        const hits = firstNumericEffectValue(params.hits);
+        if (amount != null) {
+            return {
+                amount,
+                hits: Math.max(1, Number(hits || (cardDef.hits || (fallback && fallback.hits) || 1))),
+                triangle: damageEffect.type === 'triangle_damage' || cardDict.def_id === 'Triangle',
+            };
+        }
+    }
+    const amount = firstNumericEffectValue(cardDef.damage);
+    if (amount != null && amount > 0) {
+        return {
+            amount,
+            hits: Math.max(1, Number(cardDef.hits || (fallback && fallback.hits) || 1)),
+            triangle: cardDict.def_id === 'Triangle',
+        };
+    }
+    return fallback;
+}
+
+function formatDamageHits(values) {
+    const times = '\u00d7';
+    const list = (Array.isArray(values) ? values : []).map(v => Math.max(0, Math.ceil(Number(v || 0))));
+    if (!list.length) return '';
+    if (list.length === 1) return `${list[0]}D`;
+    const first = list[0];
+    if (list.every(v => v === first)) return `${first}D${times}${list.length}`;
+    return list.map(v => `${v}D`).join(' + ');
+}
+
+function getResponseAttackerState(data) {
+    const pending = (gameState && gameState.pending_response) || {};
+    const playerId = normalizePlayerId(
+        (data && data.player_id) != null ? data.player_id
+            : ((data && data.attacker_id) != null ? data.attacker_id : pending.player_id)
+    );
+    return playerId == null ? {} : (getPlayerDataById(playerId) || {});
+}
+
+function getActualAttackDamageText(cardDict, attackerState = {}) {
+    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
+    const info = getAttackDamageBaseInfo(cardDict || {}, cardDef);
+    if (!info) return '';
+    const fusion = Math.max(1, Number(cardDict.fusion_level || 1));
+    const fission = Math.max(1, Number(cardDict.fission_level || 1));
+    let bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
+    if ((cardDict.def_id || '') === 'Tomato' && bonus === 0) {
+        bonus = Math.max(0, Number(cardDict.held_turns || 0)) * 3;
+    }
+    if (info.triangle) {
+        const startStacks = Math.max(0, Number(attackerState.triangle_stacks || 0));
+        const hits = [];
+        for (let i = 0; i < fission; i++) {
+            const stack = Math.min(4, startStacks + i);
+            const amount = Number(info.amount || 0) + 3 * stack + bonus;
+            hits.push(Math.ceil(amount * fusion / fission));
+        }
+        return formatDamageHits(hits);
+    }
+    const amount = Number(info.amount || 0) + bonus;
+    const perHit = Math.ceil(amount * fusion / fission);
+    const totalHits = Math.max(1, Math.round(Number(info.hits || 1))) * fission;
+    return formatDamageHits(Array.from({ length: totalHits }, () => perHit));
+}
+
+let floatingCardPreviewEl = null;
+let floatingCardPreviewTimer = null;
+let floatingCardPreviewTouchStart = null;
+
+function removeFloatingCardPreview() {
+    if (floatingCardPreviewTimer) {
+        clearTimeout(floatingCardPreviewTimer);
+        floatingCardPreviewTimer = null;
+    }
+    floatingCardPreviewTouchStart = null;
+    if (floatingCardPreviewEl) {
+        floatingCardPreviewEl.remove();
+        floatingCardPreviewEl = null;
+    }
+}
+
+function positionFloatingCardPreview(anchor, pos = null) {
+    if (!floatingCardPreviewEl) return;
+    const rect = anchor ? anchor.getBoundingClientRect() : null;
+    const width = floatingCardPreviewEl.offsetWidth || 220;
+    const height = floatingCardPreviewEl.offsetHeight || 310;
+    const gap = 14;
+    let left = rect ? rect.right + gap : ((pos && pos.x) || 0) + gap;
+    let top = rect ? rect.top + rect.height * 0.5 - height * 0.5 : ((pos && pos.y) || 0) - height * 0.5;
+    if (left + width > window.innerWidth - 8) {
+        left = rect ? rect.left - width - gap : ((pos && pos.x) || 0) - width - gap;
+    }
+    if (top + height > window.innerHeight - 8) top = window.innerHeight - height - 8;
+    left = Math.max(8, Math.min(window.innerWidth - width - 8, left));
+    top = Math.max(8, Math.min(window.innerHeight - height - 8, top));
+    floatingCardPreviewEl.style.left = `${left}px`;
+    floatingCardPreviewEl.style.top = `${top}px`;
+}
+
+function showFloatingCardPreview(cardDict, anchor, pos = null) {
+    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
+    if (!cardDef) return;
+    removeFloatingCardPreview();
+    const preview = document.createElement('div');
+    preview.className = 'floating-card-preview';
+    const card = createCardElement(cardDict, { showAllFlags: false });
+    card.classList.add('floating-card-preview-card');
+    preview.appendChild(card);
+    document.body.appendChild(preview);
+    floatingCardPreviewEl = preview;
+    positionFloatingCardPreview(anchor, pos);
+    requestAnimationFrame(() => preview.classList.add('active'));
+}
+
+function attachFloatingCardPreview(anchor, cardDict) {
+    if (!anchor || !cardDict || !cardDict.def_id) return;
+    anchor.addEventListener('mouseenter', (event) => {
+        if (window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse)').matches) return;
+        showFloatingCardPreview(cardDict, anchor, { x: event.clientX, y: event.clientY });
+    });
+    anchor.addEventListener('mousemove', (event) => {
+        if (floatingCardPreviewEl) positionFloatingCardPreview(anchor, { x: event.clientX, y: event.clientY });
+    });
+    anchor.addEventListener('mouseleave', removeFloatingCardPreview);
+    anchor.addEventListener('touchstart', (event) => {
+        if (!event.touches || !event.touches.length) return;
+        const pos = getPointerPos(event);
+        floatingCardPreviewTouchStart = pos;
+        if (floatingCardPreviewTimer) clearTimeout(floatingCardPreviewTimer);
+        floatingCardPreviewTimer = setTimeout(() => {
+            showFloatingCardPreview(cardDict, anchor, pos);
+        }, CARD_HOLD_PREVIEW_DELAY);
+    }, { passive: true });
+    anchor.addEventListener('touchmove', (event) => {
+        const pos = getPointerPos(event);
+        if (floatingCardPreviewEl) positionFloatingCardPreview(anchor, pos);
+        if (floatingCardPreviewTouchStart) {
+            const dist = Math.hypot(pos.x - floatingCardPreviewTouchStart.x, pos.y - floatingCardPreviewTouchStart.y);
+            if (dist > CARD_HOLD_PREVIEW_HIDE_DISTANCE) removeFloatingCardPreview();
+        }
+    }, { passive: true });
+    anchor.addEventListener('touchend', removeFloatingCardPreview, { passive: true });
+    anchor.addEventListener('touchcancel', removeFloatingCardPreview, { passive: true });
+}
+
+function renderChoiceOptionContent(container, option, index, config = {}) {
+    container.innerHTML = '';
+    if (config.numbered) {
+        const idx = document.createElement('span');
+        idx.className = 'choice-option-index';
+        idx.textContent = `${index + 1}.`;
+        container.appendChild(idx);
+    }
+    if (option && typeof option === 'object' && option.kind === 'card') {
+        container.appendChild(createCardChoiceChip(option.card, option));
+    } else if (option && typeof option === 'object' && option.kind === 'card-combo') {
+        const wrap = document.createElement('span');
+        wrap.className = 'choice-card-combo';
+        (option.cards || []).forEach((card, i) => {
+            if (i > 0) {
+                const sep = document.createElement('span');
+                sep.className = 'choice-card-separator';
+                sep.textContent = '+';
+                wrap.appendChild(sep);
+            }
+            wrap.appendChild(createCardChoiceChip(card, option));
+        });
+        container.appendChild(wrap);
+    } else {
+        const text = document.createElement('span');
+        text.className = 'choice-option-text';
+        text.textContent = String(option && typeof option === 'object' && option.text != null ? option.text : (option == null ? '' : option));
+        container.appendChild(text);
+    }
+    if (option && typeof option === 'object' && option.detail) {
+        const detail = document.createElement('span');
+        detail.className = 'choice-option-detail';
+        detail.textContent = option.detail;
+        container.appendChild(detail);
+    }
 }
 
 let dragState = null;
@@ -3971,6 +4330,7 @@ function connectSocket(serverUrl) {
         if (data.pending_response === null && responsePending) {
             responsePending = false;
             responseData = null;
+            removeFloatingCardPreview();
             const rp = $('response-panel');
             if (rp) { rp.innerHTML = ''; rp.classList.add('hidden'); }
             if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
@@ -4012,6 +4372,7 @@ function connectSocket(serverUrl) {
         if (data.pending_response === null && responsePending) {
             responsePending = false;
             responseData = null;
+            removeFloatingCardPreview();
             const rp = $('response-panel');
             if (rp) { rp.innerHTML = ''; rp.classList.add('hidden'); }
             if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
@@ -4683,6 +5044,7 @@ function handleLocalSoloState(data) {
     if (data.pending_response === null && responsePending) {
         responsePending = false;
         responseData = null;
+        removeFloatingCardPreview();
         const rp = $('response-panel');
         if (rp) { rp.innerHTML = ''; rp.classList.add('hidden'); }
         if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
@@ -5359,14 +5721,12 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
         for (let i = 0; i <= countSel; i++) {
             const magicDisplay = openingEventMagicPool.map(defId => {
                 const cd = getCardDef(defId);
-                return cd ? getCardName(cd) : defId;
+                const detail = cd ? `${cd.cost_e || 0}E/${cd.cost_m || 0}M` : '';
+                return cardDefChoiceOption(defId, detail ? { detail } : {});
             });
             const magicSel = await gamePrompt(UI.choose_magic_card_n.replace('{0}', i + 1), magicDisplay);
             if (magicSel < 0) return false;
-            const sourceOptions = deck.map((entry, idx) => {
-                const cd = getCardDef(entry.def_id);
-                return `${idx + 1}. ${cd ? getCardName(cd) : entry.def_id}`;
-            });
+            const sourceOptions = deck.map((entry, idx) => cardChoiceOption(entry, { detail: `#${idx + 1}` }));
             const sourceSel = await gamePrompt(`${label} ${UI.choose_source_card_n.replace('{0}', i + 1)}`, sourceOptions);
             if (sourceSel < 0) return false;
             conversions.push({
@@ -5382,10 +5742,7 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
         const countSel = await gamePrompt(UI.choose_convert_count, countOptions);
         if (countSel < 0) return false;
         for (let i = 0; i <= countSel; i++) {
-            const sourceOptions = deck.map((entry, idx) => {
-                const cd = getCardDef(entry.def_id);
-                return `${idx + 1}. ${cd ? getCardName(cd) : entry.def_id}`;
-            });
+            const sourceOptions = deck.map((entry, idx) => cardChoiceOption(entry, { detail: `#${idx + 1}` }));
             const sourceSel = await gamePrompt(`${label} ${UI.choose_source_card_n.replace('{0}', i + 1)}`, sourceOptions);
             if (sourceSel < 0) return false;
             convert_def_ids.push(deck[sourceSel].def_id);
@@ -5393,10 +5750,7 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
         return { convert_def_ids };
     }
     if (eventId === 8) {
-        const sourceOptions = deck.map((entry, idx) => {
-            const cd = getCardDef(entry.def_id);
-            return `${idx + 1}. ${cd ? getCardName(cd) : entry.def_id}`;
-        });
+        const sourceOptions = deck.map((entry, idx) => cardChoiceOption(entry, { detail: `#${idx + 1}` }));
         const sourceSel = await gamePrompt(`${label} ${UI.choose_yggdrasil_card}`, sourceOptions);
         if (sourceSel < 0) return false;
         return { yggdrasil_convert_def_id: deck[sourceSel].def_id };
@@ -5700,10 +6054,9 @@ function renderDraft(data, isReroll) {
         picksEl.innerHTML = '';
         picks.forEach(defId => {
             const cardDef = getCardDef(defId);
-            const tag = document.createElement('span');
-            tag.className = 'pick-tag';
-            tag.textContent = cardDef ? getCardName(cardDef) : defId;
-            tag.style.borderColor = cardDef ? (CARD_TYPE_COLORS[cardDef.card_type] || COLORS.border_color) : COLORS.border_color;
+            const tag = createCardChoiceChip({ def_id: defId }, { includeLayers: false, includeTomato: false });
+            tag.classList.add('draft-pick-token');
+            if (!cardDef) tag.textContent = defId;
             picksEl.appendChild(tag);
         });
     }
@@ -5843,15 +6196,13 @@ async function showMagicConversionFlow() {
         const magicOptions = magicOptionsAll[i] || magicOptionsAll[magicOptionsAll.length - 1] || [];
         const magicDisplay = magicOptions.map(did => {
             const cd = getCardDef(did);
-            return cd ? `${getCardName(cd)} (${cd.cost_e}E/${cd.cost_m}M) ${getCardEffectText(cd)}` : did;
+            const detail = cd ? `${cd.cost_e || 0}E/${cd.cost_m || 0}M` : '';
+            return cardDefChoiceOption(did, detail ? { detail } : {});
         });
         const magicSel = await gamePrompt(UI.choose_magic_card_n.replace('{0}', i + 1), magicDisplay);
         if (magicSel < 0) return false;
         const availableTypes = cardTypes.filter(d => (remainingCounts[d] || 0) > 0);
-        const availableDisplay = availableTypes.map(did => {
-            const cd = getCardDef(did);
-            return cd ? `${getCardName(cd)} (x${remainingCounts[did]})` : did;
-        });
+        const availableDisplay = availableTypes.map(did => cardDefChoiceOption(did, { detail: `x${remainingCounts[did]}` }));
         const sourceSel = await gamePrompt(UI.choose_source_card_n.replace('{0}', i + 1), availableDisplay);
         if (sourceSel < 0) return false;
         remainingCounts[availableTypes[sourceSel]] = (remainingCounts[availableTypes[sourceSel]] || 0) - 1;
@@ -5888,7 +6239,15 @@ async function showLightConversionChoice() {
             row.style.cursor = 'default';
             const label = document.createElement('span');
             label.style.flex = '1';
-            label.textContent = `${cd ? getCardName(cd) : did} (x${cnt})`;
+            label.style.display = 'flex';
+            label.style.alignItems = 'center';
+            label.style.gap = '6px';
+            label.textContent = '';
+            label.appendChild(createCardChoiceChip({ def_id: did }, { includeLayers: false, includeTomato: false }));
+            const count = document.createElement('span');
+            count.className = 'choice-option-detail';
+            count.textContent = `x${cnt}`;
+            label.appendChild(count);
             const input = document.createElement('input');
             input.type = 'number';
             input.min = '0';
@@ -5956,10 +6315,7 @@ async function showYggdrasilConversionChoice() {
     const counts = {};
     draftPicks.forEach(d => { if (d !== 'Yggdrasil') counts[d] = (counts[d] || 0) + 1; });
     const options = Object.keys(counts).sort((a, b) => (getCardName(getCardDef(a)) || a).localeCompare(getCardName(getCardDef(b)) || b));
-    const display = options.map(did => {
-        const cd = getCardDef(did);
-        return cd ? `${getCardName(cd)} (x${counts[did]})` : did;
-    });
+    const display = options.map(did => cardDefChoiceOption(did, { detail: `x${counts[did]}` }));
     const sel = await gamePrompt(UI.choose_yggdrasil_card, display);
     if (sel < 0 || sel >= options.length) return false;
     return { yggdrasil_convert_def_id: options[sel] };
@@ -5972,10 +6328,7 @@ async function showCardConversionChoice(draftPicks, maxCount, title) {
         counts[d] = (counts[d] || 0) + 1;
     });
     const entries = Object.entries(counts).sort((a, b) => (getCardName(getCardDef(a[0])) || a[0]).localeCompare(getCardName(getCardDef(b[0])) || b[0]));
-    const display = entries.map(([did, cnt]) => {
-        const cd = getCardDef(did);
-        return `${cd ? getCardName(cd) : did} x${cnt}`;
-    });
+    const display = entries.map(([did, cnt]) => cardDefChoiceOption(did, { detail: `x${cnt}` }));
     const sel = await gamePrompt(title + ` (${UI.convert_per_type.replace('{0}', maxCount)})`, display);
     if (sel < 0) return false;
     return null;
@@ -6479,12 +6832,15 @@ function renderStatusTags(containerId, playerData) {
 function renderOppHand(oppData, containerId = 'opp-hand') {
     const container = $(containerId);
     if (!container) return;
+    removeFloatingCardPreview();
     container.innerHTML = '';
     const revealedHand = oppData.revealed_hand || oppData.hand;
     if (revealedHand && revealedHand.length > 0) {
         revealedHand.forEach(cd => {
-            const card = createCardElement(cd, { small: true });
-            container.appendChild(card);
+            const el = isSpectating ? createCardElement(cd, { small: true }) : createCardChoiceChip(cd);
+            el.classList.add(isSpectating ? 'opp-hand-card' : 'opp-hand-chip');
+            if (isSpectating) attachFloatingCardPreview(el, cd);
+            container.appendChild(el);
         });
     } else {
         const count = oppData.hand_count || 0;
@@ -6498,10 +6854,13 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
 function renderTeammateHand(teammateData) {
     const container = $('teammate-hand');
     if (!container) return;
+    removeFloatingCardPreview();
     container.innerHTML = '';
     const hand = teammateData.hand || [];
     hand.forEach(card => {
-        container.appendChild(isSpectating ? createCardElement(card, { small: true }) : createTeammateHandChip(card));
+        const el = isSpectating ? createCardElement(card, { small: true }) : createTeammateHandChip(card);
+        if (isSpectating) attachFloatingCardPreview(el, card);
+        container.appendChild(el);
     });
 }
 
@@ -6516,6 +6875,8 @@ function createTeammateHandChip(cardDict) {
     el.textContent = name;
     el.title = name;
     el.style.borderColor = typeColor;
+    el.style.color = typeColor;
+    attachFloatingCardPreview(el, cardDict);
     return el;
 }
 
@@ -7509,6 +7870,13 @@ function resetBattleLogDom(content) {
     renderedTimelineDomCount = 0;
 }
 
+function resetBattleLogState(content) {
+    gameTimelineEntries = [];
+    renderedBattleLogCount = 0;
+    renderedBattleLogTotal = 0;
+    resetBattleLogDom(content);
+}
+
 function renderLog(log, logStart = 0, logTotal = null) {
     const container = $('battle-log');
     if (!container) return;
@@ -7526,11 +7894,14 @@ function renderLog(log, logStart = 0, logTotal = null) {
     if (!Array.isArray(log)) log = [];
     logStart = Number.isFinite(Number(logStart)) ? Number(logStart) : 0;
     logTotal = Number.isFinite(Number(logTotal)) ? Number(logTotal) : logStart + log.length;
+    const matchKey = gameState && (gameState.match_key || gameState.room_id || '');
+    if (matchKey && renderedBattleLogMatchKey && renderedBattleLogMatchKey !== String(matchKey)) {
+        resetBattleLogState(content);
+    }
+    if (matchKey) renderedBattleLogMatchKey = String(matchKey);
     if (logTotal < renderedBattleLogTotal || logStart > renderedBattleLogTotal) {
-        gameTimelineEntries = gameTimelineEntries.filter(entry => entry.type === 'chat');
-        renderedBattleLogCount = 0;
+        resetBattleLogState(content);
         renderedBattleLogTotal = logStart;
-        resetBattleLogDom(content);
     }
     let startIndex = Math.max(0, renderedBattleLogTotal - logStart);
     if (startIndex > log.length) startIndex = 0;
@@ -7916,14 +8287,24 @@ function animateEquipmentForRegion(selector) {
 function cardChoiceIdentity(card) {
     if (!card) return '';
     const sortList = (list) => (Array.isArray(list) ? [...list].sort() : []).join(',');
+    const cardDef = getCardDef(card.def_id || '');
+    const flagSets = getEffectiveCardFlagSets(card, cardDef);
+    const effectiveFlags = Array.from(flagSets.effective || []);
+    const addedFlags = Array.from(flagSets.added || []);
+    const disabledFlags = Array.from(flagSets.disabled || []);
     return [
         card.def_id || '',
         Number(card.fusion_level || 1),
         Number(card.fission_level || 1),
         card.cost_e_override == null ? '' : card.cost_e_override,
         card.cost_m_override == null ? '' : card.cost_m_override,
-        sortList(card.instance_flags),
-        sortList(card.disabled_flags),
+        sortList(effectiveFlags),
+        sortList(addedFlags),
+        sortList(disabledFlags),
+        Number(card.bonus_damage || 0),
+        Number(card.held_turns || 0),
+        Number(card.return_to_hand_turns || 0),
+        Number(card.mimic_discount || 0),
     ].join('|');
 }
 
@@ -7937,6 +8318,19 @@ function dedupeCardCombos(combos) {
         result.push(combo);
     });
     return result;
+}
+
+function buildFusionCombosForGroup(group) {
+    const combos = [];
+    for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+            combos.push([group[i], group[j]]);
+            for (let k = j + 1; k < group.length; k++) {
+                combos.push([group[i], group[j], group[k]]);
+            }
+        }
+    }
+    return dedupeCardCombos(combos);
 }
 
 async function onPlayCard(cardInstanceId, options = {}) {
@@ -7990,7 +8384,7 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
             return cd && cd.card_type === 'thorn' && c.instance_id !== cardDict.instance_id;
         });
         if (!attacks.length) { gameAlert(UI.notice, UI.no_attack_cards); return false; }
-        const options = attacks.map(a => `${getCardDef(a.def_id) ? getCardName(getCardDef(a.def_id)) : a.def_id}${getCardLayerLabel(a)}`);
+        const options = attacks.map(a => cardChoiceOption(a));
         const sel = await simpleChoice(UI.choose_attack_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
         if (sel < 0) return false;
         return { target_instance_id: attacks[sel].instance_id, target_instance_ids: [attacks[sel].instance_id] };
@@ -8006,35 +8400,29 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
         });
         const validGroups = Object.entries(groups).filter(([_, v]) => v.length >= 2);
         if (!validGroups.length) { gameAlert(UI.notice, UI.no_same_attack); return false; }
-        const groupOptions = validGroups.map(([k, v]) => `${getCardDef(k) ? getCardName(getCardDef(k)) : k} x${v.length}`);
-        const sel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), groupOptions);
-        if (sel < 0) return false;
-        const group = validGroups[sel][1];
-        const combos = [];
-        for (let i = 0; i < group.length; i++) {
-            for (let j = i + 1; j < group.length; j++) {
-                combos.push([group[i], group[j]]);
-                for (let k = j + 1; k < group.length; k++) {
-                    combos.push([group[i], group[j], group[k]]);
-                }
-            }
+        let group = validGroups[0][1];
+        if (validGroups.length > 1) {
+            const groupOptions = validGroups.map(([k, v]) => cardChoiceOption(v[0], { detail: `x${v.length}` }));
+            const sel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), groupOptions);
+            if (sel < 0) return false;
+            group = validGroups[sel][1];
         }
-        const uniqueCombos = dedupeCardCombos(combos);
-        const comboOptions = uniqueCombos.map(combo => combo.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`).join(' + '));
+        const uniqueCombos = buildFusionCombosForGroup(group);
+        const comboOptions = uniqueCombos.map(combo => cardComboChoiceOption(combo));
         const comboSel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), comboOptions);
         if (comboSel < 0) return false;
         return { target_instance_ids: uniqueCombos[comboSel].map(c => c.instance_id) };
     } else if (defId === 'Mimic') {
         const others = hand.filter(c => c.instance_id !== cardDict.instance_id);
         if (!others.length) { gameAlert(UI.notice, UI.no_attack_cards); return false; }
-        const options = others.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+        const options = others.map(c => cardChoiceOption(c));
         const sel = await simpleChoice(UI.choose_hand_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
         if (sel < 0) return false;
         return { target_instance_id: others[sel].instance_id };
     } else if (defId === 'Chromosome') {
         const discard = (gameState.you || {}).discard || [];
         if (!discard.length) { gameAlert(UI.notice, UI.discard_empty); return false; }
-        const options = discard.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+        const options = discard.map(c => cardChoiceOption(c));
         const sel = await simpleChoice(UI.choose_from_discard_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
         if (sel < 0) return false;
         return { target_def_id: discard[sel].def_id };
@@ -8050,14 +8438,14 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
             return !flags.has('indestructible');
         });
         if (!destroyable.length) { gameAlert(UI.notice, UI.no_enemy_equipment); return false; }
-        const options = destroyable.map(e => getCardDef((e.card_instance || {}).def_id) ? getCardName(getCardDef((e.card_instance || {}).def_id)) : '?');
+        const options = destroyable.map(e => equipmentChoiceOption(e));
         const sel = await simpleChoice(UI.choose_equip_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
         if (sel < 0) return false;
         return { target_instance_id: destroyable[sel].card_instance.instance_id };
     } else if (defId === 'Chilli') {
         const others = hand.filter(c => c.instance_id !== cardDict.instance_id);
         if (others.length) {
-            const options = others.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+            const options = others.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(UI.choose_discard_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
             if (sel < 0) return false;
             return { target_instance_id: others[sel].instance_id };
@@ -8069,8 +8457,7 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
 
 async function simpleChoice(title, options, config = {}) {
     if (!options.length) return -1;
-    const display = options.map((o, i) => `${i + 1}. ${o}`);
-    return await gamePrompt(title, display, config);
+    return await gamePrompt(title, options, { ...config, numbered: config.numbered !== false });
 }
 
 function multiChoice(title, options, config = {}) {
@@ -8106,7 +8493,7 @@ function multiChoice(title, options, config = {}) {
         options.forEach((opt, i) => {
             const div = document.createElement('div');
             div.className = 'game-prompt-option';
-            div.textContent = `${i + 1}. ${opt}`;
+            renderChoiceOptionContent(div, opt, i, { ...config, numbered: true });
             div.onclick = () => {
                 if (selected.has(i)) {
                     selected.delete(i);
@@ -8121,6 +8508,7 @@ function multiChoice(title, options, config = {}) {
         });
         confirm.onclick = () => {
             if (confirm.classList.contains('disabled')) return;
+            removeFloatingCardPreview();
             el.classList.remove('active');
             resolve(Array.from(selected).sort((a, b) => a - b));
         };
@@ -8129,7 +8517,7 @@ function multiChoice(title, options, config = {}) {
         cancelBtn.textContent = UI.cancel;
         cancelBtn.classList.toggle('hidden', !cancellable);
         cancelBtn.style.display = cancellable ? '' : 'none';
-        cancelBtn.onclick = () => { el.classList.remove('active'); resolve([]); };
+        cancelBtn.onclick = () => { removeFloatingCardPreview(); el.classList.remove('active'); resolve([]); };
         updateConfirm();
         el.classList.add('active');
     });
@@ -8137,6 +8525,7 @@ function multiChoice(title, options, config = {}) {
 
 function showResponseUI(data) {
     if (isSpectating) return;
+    removeFloatingCardPreview();
     const counterCards = data.counter_cards || [];
     const you = gameState.you || {};
     const myElixir = you.elixir || 0;
@@ -8166,7 +8555,6 @@ function showResponseUI(data) {
     container.classList.add('visible');
     const cardDict = data.card || {};
     const cardDef = getCardDef(cardDict.def_id);
-    const cardName = cardDef ? getCardName(cardDef) : cardDict.def_id || '?';
     let triggerDesc = '';
     if (cardDef) {
         if (cardDef.card_type === 'thorn') triggerDesc = UI.enemy_attack;
@@ -8174,11 +8562,26 @@ function showResponseUI(data) {
         if (cardDef.id === 'Sewage' || cardDef.id === 'MagicSewage') triggerDesc += UI.enemy_destroy_equip;
     }
     const responseWindowDef = cardCosts.map(item => item.ccDef).find(cd => cd && (cd.response_title || cd.response_content));
+    if (responseWindowDef && responseWindowDef.response_title) {
+        const title = document.createElement('div');
+        title.className = 'response-label response-title';
+        title.textContent = responseWindowDef.response_title;
+        container.appendChild(title);
+    }
     const label = document.createElement('div');
-    label.className = 'response-label';
-    label.textContent = responseWindowDef && responseWindowDef.response_title
-        ? responseWindowDef.response_title
-        : `${triggerDesc}: ${cardName}`;
+    label.className = 'response-label response-trigger-label';
+    const prefix = document.createElement('span');
+    prefix.className = 'response-trigger-prefix';
+    prefix.textContent = triggerDesc ? `${triggerDesc}:` : '';
+    if (prefix.textContent) label.appendChild(prefix);
+    label.appendChild(createCardChoiceChip(cardDict));
+    const damageText = getActualAttackDamageText(cardDict, getResponseAttackerState(data));
+    if (damageText) {
+        const damage = document.createElement('span');
+        damage.className = 'response-damage-preview card-token damage';
+        damage.textContent = damageText;
+        label.appendChild(damage);
+    }
     container.appendChild(label);
     if (responseWindowDef && responseWindowDef.response_content) {
         const content = document.createElement('div');
@@ -8192,8 +8595,12 @@ function showResponseUI(data) {
         if (!ccDef) return;
         const costStr = costM === 0 ? `${costE}E` : `${costE}E/${costM}M`;
         const btn = document.createElement('button');
-        btn.className = 'btn ' + (canAfford ? 'btn-primary' : 'btn-counter-disabled');
-        btn.textContent = `${getCardName(ccDef)}[${costStr}]`;
+        btn.className = 'btn counter-card-btn ' + (canAfford ? 'btn-primary' : 'btn-counter-disabled');
+        btn.appendChild(createCardChoiceChip(cc));
+        const cost = document.createElement('span');
+        cost.className = 'counter-card-cost';
+        cost.textContent = `[${costStr}]`;
+        btn.appendChild(cost);
         btn.disabled = !canAfford;
         btn.onclick = () => onRespond(cc.instance_id);
         btnRow.appendChild(btn);
@@ -8219,6 +8626,7 @@ function showResponseUI(data) {
 }
 
 function onRespond(cardInstanceId) {
+    removeFloatingCardPreview();
     if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
     responsePending = false;
     if (tutorialMode) tutorialCounterSeen = true;
@@ -8242,6 +8650,7 @@ function onRespond(cardInstanceId) {
 
 function showAllyConsentUI(data) {
     if (isSpectating || !socket) return;
+    removeFloatingCardPreview();
     const container = $('response-panel');
     if (!container) {
         socket.emit('ally_consent_response', { accepted: false });
@@ -8289,6 +8698,7 @@ function showAllyConsentUI(data) {
 }
 
 function respondAllyConsent(accepted) {
+    removeFloatingCardPreview();
     if (allyConsentTimerId) { clearInterval(allyConsentTimerId); allyConsentTimerId = null; }
     const container = $('response-panel');
     if (container) { container.innerHTML = ''; container.classList.add('hidden'); container.classList.remove('visible'); }
@@ -8298,6 +8708,7 @@ function respondAllyConsent(accepted) {
 
 function showSurrenderConsentUI(data) {
     if (isSpectating || !socket) return;
+    removeFloatingCardPreview();
     const container = $('response-panel');
     if (!container) {
         socket.emit('surrender_consent_response', { accepted: false });
@@ -8341,6 +8752,7 @@ function showSurrenderConsentUI(data) {
 }
 
 function respondSurrenderConsent(accepted) {
+    removeFloatingCardPreview();
     if (surrenderConsentTimerId) { clearInterval(surrenderConsentTimerId); surrenderConsentTimerId = null; }
     const container = $('response-panel');
     if (container) { container.innerHTML = ''; container.classList.add('hidden'); container.classList.remove('visible'); }
@@ -8349,6 +8761,7 @@ function respondSurrenderConsent(accepted) {
 
 async function showChoiceUI(data) {
     if (isSpectating) return;
+    removeFloatingCardPreview();
     const choiceType = data.choice_type || '';
     const cardDict = data.card || {};
     const cardDef = getCardDef(cardDict.def_id);
@@ -8369,7 +8782,7 @@ async function showChoiceUI(data) {
         });
         if (!attacks.length) { gameAlert(UI.notice, UI.no_attack_cards); }
         else {
-            const options = attacks.map(a => `${getCardDef(a.def_id) ? getCardName(getCardDef(a.def_id)) : a.def_id}${getCardLayerLabel(a)}`);
+            const options = attacks.map(a => cardChoiceOption(a));
             const sel = await simpleChoice(choiceTitle(UI.choose_attack_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < attacks.length) choiceResult = { target_instance_id: attacks[sel].instance_id };
         }
@@ -8377,14 +8790,14 @@ async function showChoiceUI(data) {
         const oppEq = (gameState.opponent || {}).equipment || [];
         if (!oppEq.length) { gameAlert(UI.notice, UI.no_enemy_equipment); }
         else {
-            const options = oppEq.map(e => getCardDef((e.card_instance || {}).def_id) ? getCardName(getCardDef((e.card_instance || {}).def_id)) : '?');
+            const options = oppEq.map(e => equipmentChoiceOption(e));
             const sel = await simpleChoice(choiceTitle(UI.choose_equip_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < oppEq.length) choiceResult = { target_instance_id: oppEq[sel].card_instance.instance_id };
         }
     } else if (choiceType === 'choose_card_to_discard') {
         const otherCards = (gameState.you || {}).hand || [];
         if (otherCards.length) {
-            const options = otherCards.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+            const options = otherCards.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_discard_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < otherCards.length) choiceResult = { target_instance_id: otherCards[sel].instance_id };
         }
@@ -8392,7 +8805,7 @@ async function showChoiceUI(data) {
         const deck = (gameState.you || {}).deck || [];
         if (!deck.length) { gameAlert(UI.notice, UI.deck_empty); }
         else {
-            const options = deck.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+            const options = deck.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_deck_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < deck.length) choiceResult = { target_def_id: deck[sel].def_id };
         }
@@ -8400,7 +8813,7 @@ async function showChoiceUI(data) {
         const discard = (gameState.you || {}).discard || [];
         if (!discard.length) { gameAlert(UI.notice, UI.discard_empty); }
         else {
-            const options = discard.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+            const options = discard.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_discard_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < discard.length) choiceResult = { target_def_id: discard[sel].def_id };
         }
@@ -8414,22 +8827,18 @@ async function showChoiceUI(data) {
         const validGroups = Object.entries(groups).filter(([_, v]) => v.length >= 2);
         if (!validGroups.length) { gameAlert(UI.notice, UI.no_same_attack); }
         else {
-            const groupOptions = validGroups.map(([k, v]) => `${getCardDef(k) ? getCardName(getCardDef(k)) : k} x${v.length}`);
-            const sel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', cardName), groupOptions, choicePromptConfig);
-            if (sel >= 0) {
-                const group = validGroups[sel][1];
-                const combos = [];
-                for (let i = 0; i < group.length; i++) {
-                    for (let j = i + 1; j < group.length; j++) {
-                        combos.push([group[i], group[j]]);
-                        for (let k = j + 1; k < group.length; k++) {
-                            combos.push([group[i], group[j], group[k]]);
-                        }
-                    }
-                }
-                const uniqueCombos = dedupeCardCombos(combos);
-                const comboOptions = uniqueCombos.map(combo => combo.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`).join(' + '));
-            const comboSel = await simpleChoice(choiceTitle(UI.choose_attack_group_for.replace('{0}', cardName)), comboOptions, choicePromptConfig);
+            let group = validGroups[0][1];
+            let groupAccepted = true;
+            if (validGroups.length > 1) {
+                const groupOptions = validGroups.map(([k, v]) => cardChoiceOption(v[0], { detail: `x${v.length}` }));
+                const sel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', cardName), groupOptions, choicePromptConfig);
+                groupAccepted = sel >= 0;
+                if (groupAccepted) group = validGroups[sel][1];
+            }
+            if (groupAccepted) {
+                const uniqueCombos = buildFusionCombosForGroup(group);
+                const comboOptions = uniqueCombos.map(combo => cardComboChoiceOption(combo));
+                const comboSel = await simpleChoice(choiceTitle(UI.choose_attack_group_for.replace('{0}', cardName)), comboOptions, choicePromptConfig);
                 if (comboSel >= 0) choiceResult = { target_instance_ids: uniqueCombos[comboSel].map(c => c.instance_id) };
             }
         }
@@ -8462,12 +8871,12 @@ async function showChoiceUI(data) {
             const uniqueCombos = dedupeCardCombos(combos);
             if (!uniqueCombos.length) { gameAlert(UI.notice, UI.no_valid_target || '没有可选择的组合'); }
             else {
-                const options = uniqueCombos.map(combo => combo.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`).join(' + '));
+                const options = uniqueCombos.map(combo => cardComboChoiceOption(combo));
                 const sel = await simpleChoice(choiceTitle(UI.choose_hand_for.replace('{0}', cardName)), options, choicePromptConfig);
                 if (sel >= 0 && sel < uniqueCombos.length) choiceResult = { target_instance_ids: uniqueCombos[sel].map(c => c.instance_id) };
             }
         } else {
-            const options = cards.map(c => `${getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id}${getCardLayerLabel(c)}`);
+            const options = cards.map(c => cardChoiceOption(c));
             const selected = await multiChoice(choiceTitle(UI.choose_hand_for.replace('{0}', cardName)), options, {
                 ...choicePromptConfig,
                 min: minCount,
@@ -8478,7 +8887,7 @@ async function showChoiceUI(data) {
     } else if (choiceType === 'choose_card_from_hand') {
         const otherCards = choiceTargetData().hand || [];
         if (otherCards.length) {
-            const options = otherCards.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+            const options = otherCards.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_hand_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < otherCards.length) choiceResult = { target_instance_id: otherCards[sel].instance_id };
         }
@@ -8486,7 +8895,7 @@ async function showChoiceUI(data) {
         const deck = choiceTargetData().deck || [];
         if (!deck.length) { gameAlert(UI.notice, UI.deck_empty); }
         else {
-            const options = deck.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+            const options = deck.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_deck_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < deck.length) choiceResult = { target_instance_id: deck[sel].instance_id };
         }
@@ -8494,7 +8903,7 @@ async function showChoiceUI(data) {
         const discard = choiceTargetData().discard || [];
         if (!discard.length) { gameAlert(UI.notice, UI.discard_empty); }
         else {
-            const options = discard.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+            const options = discard.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_discard_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < discard.length) choiceResult = { target_instance_id: discard[sel].instance_id, target_def_id: discard[sel].def_id };
         }
@@ -8502,7 +8911,7 @@ async function showChoiceUI(data) {
         const exile = choiceTargetData().exile || [];
         if (!exile.length) { gameAlert(UI.notice, UI.no_valid_target || '无可选卡牌'); }
         else {
-            const options = exile.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+            const options = exile.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle('从放逐区选择'), options, choicePromptConfig);
             if (sel >= 0 && sel < exile.length) choiceResult = { target_instance_id: exile[sel].instance_id, target_def_id: exile[sel].def_id };
         }
@@ -8510,7 +8919,7 @@ async function showChoiceUI(data) {
         const equipment = choiceTargetData().equipment || [];
         if (!equipment.length) { gameAlert(UI.notice, UI.no_valid_target || '无可选装备'); }
         else {
-            const options = equipment.map(e => getCardDef((e.card_instance || {}).def_id) ? getCardName(getCardDef((e.card_instance || {}).def_id)) : '?');
+            const options = equipment.map(e => equipmentChoiceOption(e));
             const sel = await simpleChoice(choiceTitle('选择装备'), options, choicePromptConfig);
             if (sel >= 0 && sel < equipment.length) choiceResult = { target_instance_id: equipment[sel].card_instance.instance_id };
         }
@@ -8521,7 +8930,7 @@ async function showChoiceUI(data) {
         const oppHand = targetData.hand || targetData.revealed_hand || fallbackOpponent.hand || fallbackOpponent.revealed_hand || [];
         if (!oppHand.length) { gameAlert(UI.notice, UI.no_enemy_hand); }
         else {
-            const options = oppHand.map(c => getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id);
+            const options = oppHand.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_enemy_hand_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < oppHand.length) choiceResult = { target_instance_id: oppHand[sel].instance_id };
         }
@@ -8785,11 +9194,11 @@ async function onSoloNextDraw() {
     const countSel = await simpleChoice(UI.next_draw_count, countOptions);
     if (countSel < 0) return;
     const pickCount = countSel + 1;
-    const pool = deck.map(c => ({ def_id: c.def_id, label: getCardDef(c.def_id) ? getCardName(getCardDef(c.def_id)) : c.def_id }));
+    const pool = deck.map(c => ({ ...c }));
     const chosen = [];
     for (let i = 0; i < pickCount; i++) {
         if (!pool.length) break;
-        const options = pool.map((p, idx) => `${idx + 1}. ${p.label}`);
+        const options = pool.map(p => cardChoiceOption(p));
         const sel = await simpleChoice(tf('next_draw_pick', i + 1, pickCount), options);
         if (sel < 0) return;
         chosen.push(pool[sel].def_id);
@@ -8824,18 +9233,49 @@ function onViewDeck() {
     const modal = $('modal');
     const content = $('modal-content');
     if (!modal || !content) return;
-    const counts = {};
+    removeFloatingCardPreview();
+    const groups = new Map();
     deck.forEach(c => {
-        const cd = getCardDef(c.def_id);
-        const name = cd ? getCardName(cd) : c.def_id;
-        counts[name] = (counts[name] || 0) + 1;
+        const key = cardChoiceIdentity(c);
+        const group = groups.get(key) || { card: c, count: 0 };
+        group.count += 1;
+        groups.set(key, group);
     });
-    let html = `<h3>${UI.view_deck_title}</h3><p>${UI.deck_total.replace('{0}', deck.length)}</p>`;
-    Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).forEach(([name, cnt]) => {
-        html += `<div>${name} x${cnt}</div>`;
+    content.className = 'modal-inner view-deck-modal';
+    content.innerHTML = '';
+    const title = document.createElement('h3');
+    title.textContent = UI.view_deck_title;
+    content.appendChild(title);
+    const total = document.createElement('p');
+    total.className = 'deck-total';
+    total.textContent = UI.deck_total.replace('{0}', deck.length);
+    content.appendChild(total);
+    const list = document.createElement('div');
+    list.className = 'deck-list';
+    Array.from(groups.values()).sort((a, b) => {
+        const ad = getCardDef(a.card.def_id);
+        const bd = getCardDef(b.card.def_id);
+        if (ad && bd) return compareGalleryCards(a.card.def_id, b.card.def_id);
+        return (ad ? getCardName(ad) : a.card.def_id || '').localeCompare(bd ? getCardName(bd) : b.card.def_id || '');
+    }).forEach(({ card, count }) => {
+        const row = document.createElement('div');
+        row.className = 'deck-entry';
+        row.appendChild(createCardChoiceChip(card));
+        const countEl = document.createElement('span');
+        countEl.className = 'choice-option-detail deck-entry-count';
+        countEl.textContent = `x${count}`;
+        row.appendChild(countEl);
+        list.appendChild(row);
     });
-    html += `<div class="modal-buttons"><button class="btn btn-danger" onclick="hideModal()">${UI.close}</button></div>`;
-    content.innerHTML = html;
+    content.appendChild(list);
+    const buttons = document.createElement('div');
+    buttons.className = 'modal-buttons';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn btn-danger';
+    closeBtn.textContent = UI.close;
+    closeBtn.onclick = hideModal;
+    buttons.appendChild(closeBtn);
+    content.appendChild(buttons);
     modal.classList.remove('hidden');
     modal.classList.add('active');
 }
@@ -8845,7 +9285,7 @@ async function onUrfReplaceCard() {
     if (isActionBusy({ includeAnimation: false })) return;
     const hand = (gameState.you || {}).hand || [];
     if (!hand.length) return;
-    const options = hand.map(c => getCardName(getCardDef(c.def_id)) || c.def_id);
+    const options = hand.map(c => cardChoiceOption(c));
     const sel = await simpleChoice(UI.urf_replace || '替换手牌', options);
     if (sel < 0) return;
     beginPendingServerAction('urf_replace', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
@@ -8857,10 +9297,7 @@ async function onUrfSellEquipment() {
     if (isActionBusy({ includeAnimation: false })) return;
     const equipment = ((gameState.you || {}).equipment || []).filter(isUrfEquipmentSellable);
     if (!equipment.length) return;
-    const options = equipment.map(eq => {
-        const inst = eq.card_instance || {};
-        return getCardName(getCardDef(inst.def_id)) || inst.def_id;
-    });
+    const options = equipment.map(eq => equipmentChoiceOption(eq));
     const sel = await simpleChoice(UI.urf_sell || '售卖装备', options);
     if (sel < 0) return;
     const inst = (equipment[sel].card_instance || {});

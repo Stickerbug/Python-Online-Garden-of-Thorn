@@ -1345,7 +1345,7 @@ class GameEngine:
             ps.health -= dmg
             total_dealt += dmg
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
-            if ps.toxic > 0:
+            if dmg > 0 and ps.toxic > 0:
                 ps.poison += ps.toxic
                 self.log_msg(f"淬毒效果：{self.pn(target_id)}+{ps.toxic}层中毒")
             self._game_over_defer_depth += 1
@@ -2588,6 +2588,8 @@ class GameEngine:
         if owner_id is None:
             owner_id = player_id
         self._discard_card(self.players[owner_id], target_card)
+        if params.get('silent') or params.get('hide_log'):
+            return
         self.log_msg(log or f"{target_card.name_cn}移入弃牌堆")
 
     def _atomic_move_to_hand(self, player_id, card, params, log, choice, context):
@@ -4806,7 +4808,7 @@ class GameEngine:
             total_dealt += dmg
             self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
-            if ps.toxic > 0:
+            if dmg > 0 and ps.toxic > 0:
                 ps.poison += ps.toxic
             self._check_yggdrasil(target_id)
             if self.game_over:

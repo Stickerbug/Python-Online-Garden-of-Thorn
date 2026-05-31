@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=149">
+<link rel="stylesheet" href="/static/css/style.css?v=150">
 <script>
 (() => {
   const lang = localStorage.getItem('gtn_lang') || 'zh';
@@ -103,8 +103,10 @@
       <button class="mini-btn" type="button" data-account-replay-speed="instant">立即</button>
       <button class="mini-btn" type="button" data-account-replay-control="next">下一步</button>
     </div>
+    <div id="account-replay-meta" class="account-replay-meta"></div>
+    <div id="account-replay-perspectives" class="account-replay-perspectives"></div>
     <input id="account-replay-progress" class="account-replay-progress" type="range" min="0" max="0" value="0">
-    <pre id="account-replay-frame" class="account-replay-frame"></pre>
+    <div id="account-replay-frame" class="account-replay-frame"></div>
   </div>
 </div>
 
@@ -616,6 +618,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-<script src="/static/js/game.js?v=163"></script>
+<script src="/static/js/game.js?v=168"></script>
 </body>
 </html>

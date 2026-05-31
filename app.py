@@ -1,3 +1,9 @@
+try:
+    import eventlet
+    eventlet.monkey_patch()
+except Exception:
+    eventlet = None
+
 import sys
 import os
 import re
@@ -12,7 +18,7 @@ import hashlib
 import platform
 from functools import wraps
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from flask import Flask, render_template, jsonify, request, send_from_directory, session
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -216,19 +222,23 @@ pending_team_matches = {}
 
 
 def iso_now():
-    return datetime.utcnow().isoformat(timespec='seconds') + 'Z'
+    return datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
 
 
 def admin_display_time(value):
     try:
         if isinstance(value, (int, float)):
-            dt = datetime.utcfromtimestamp(value)
+            dt = datetime.fromtimestamp(value, timezone.utc)
         else:
             text = str(value or '')
             if text.endswith('Z'):
-                text = text[:-1]
+                text = text[:-1] + '+00:00'
             dt = datetime.fromisoformat(text)
-        return (dt + timedelta(hours=8)).strftime('%Y-%m-%d %H:%M:%S')
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone(timedelta(hours=8))).replace(tzinfo=None)
+        else:
+            dt = dt + timedelta(hours=8)
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
     except Exception:
         return str(value or '-')
 
@@ -299,8 +309,8 @@ def admin_match_record(room, result='finished'):
             stats_winners = [winner_label]
             stats_result = 'win'
         started_ts = getattr(room, 'started_at', None) or getattr(room, 'created_at', time.time())
-        created_at = datetime.utcfromtimestamp(getattr(room, 'created_at', time.time())).isoformat(timespec='seconds') + 'Z'
-        started_at = datetime.utcfromtimestamp(started_ts).isoformat(timespec='seconds') + 'Z'
+        created_at = datetime.fromtimestamp(getattr(room, 'created_at', time.time()), timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
+        started_at = datetime.fromtimestamp(started_ts, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
         ended_at = iso_now()
         duration_seconds = int(time.time() - started_ts)
         first_meta = participant_meta[0] if participant_meta else {}
@@ -656,6 +666,42 @@ class GameRoom:
         if sid in self.player_sids:
             return self.player_sids.index(sid)
         return -1
+
+
+def room_match_key(room):
+    return f"{room.room_id}:{int(getattr(room, 'created_at', 0) * 1000)}"
+
+
+def room_mod_payload(room):
+    first = None
+    for psid in getattr(room, 'player_sids', []) or []:
+        if psid in players:
+            first = players[psid]
+            break
+    if not first:
+        return {}
+    return {
+        'disabled_mods': list(first.get('disabled_mods', [])),
+        'mods_hash': first.get('mods_hash', ''),
+        'mods_list': list(first.get('mods_list', [])),
+        'mod_source': first.get('mod_source', 'official'),
+        'community_mod_url': first.get('community_mod_url', ''),
+        'community_mod_hash': first.get('community_mod_hash', ''),
+        'community_mod_name': first.get('community_mod_name', ''),
+        'community_mods': list(first.get('community_mods', [])),
+    }
+
+
+def emit_room_game_phase(room, sid, phase, **extra):
+    payload = {
+        'phase': phase,
+        'mode': room.mode,
+        'room_id': room.room_id,
+        'match_key': room_match_key(room),
+    }
+    payload.update(room_mod_payload(room))
+    payload.update(extra)
+    socketio.emit('game_phase', payload, room=sid)
 
 
 def _room_player_dead(room, player_index):
@@ -2370,7 +2416,7 @@ def send_draft_state(room, pidx):
     else:
         opp_pidx = 1 - pidx
         others_picks_count[opp_pidx] = len(engine.draft_picks[opp_pidx])
-    socketio.emit('draft_state', {
+    payload = {
         'options': [c.to_dict() for c in options],
         'picks': picks,
         'rerolls': rerolls,
@@ -2379,7 +2425,9 @@ def send_draft_state(room, pidx):
         'others_picks_count': others_picks_count,
         'mode': room.mode,
         'player_names': engine.player_names,
-    }, room=sid)
+    }
+    payload.update(room_mod_payload(room))
+    socketio.emit('draft_state', payload, room=sid)
 
 
 def send_event_state(room, pidx):
@@ -2396,7 +2444,7 @@ def send_event_state(room, pidx):
     else:
         opp_idx = 1 - pidx
         others_selected[opp_idx] = engine.opening_event_picks[opp_idx] is not None
-    socketio.emit('event_select', {
+    payload = {
         'events': events,
         'others_selected': others_selected,
         'my_pick': engine.opening_event_picks[pidx],
@@ -2404,7 +2452,9 @@ def send_event_state(room, pidx):
         'draft_picks': engine.draft_picks[pidx],
         'mode': room.mode,
         'player_names': engine.player_names,
-    }, room=sid)
+    }
+    payload.update(room_mod_payload(room))
+    socketio.emit('event_select', payload, room=sid)
 
 
 def broadcast_game_state(room):
@@ -2416,6 +2466,9 @@ def broadcast_game_state(room):
         state = room.engine.get_public_state(pidx)
         state['your_id'] = pidx
         state['mode'] = room.mode
+        state['room_id'] = room.room_id
+        state['match_key'] = room_match_key(room)
+        state.update(room_mod_payload(room))
         if room.engine.phase == 'game_over':
             state['rematch_votes'] = len(room._rematch_votes)
             state['rematch_total'] = len(room.player_sids)
@@ -2471,7 +2524,7 @@ def send_game_state_to(room, pidx):
     if sid not in players:
         return
     phase = room.engine.phase
-    socketio.emit('game_phase', {'phase': phase}, room=sid)
+    emit_room_game_phase(room, sid, phase)
     if phase == 'event_select':
         send_event_state(room, pidx)
     elif phase == 'draft':
@@ -2480,6 +2533,9 @@ def send_game_state_to(room, pidx):
         state = room.engine.get_public_state(pidx)
         state['your_id'] = pidx
         state['mode'] = room.mode
+        state['room_id'] = room.room_id
+        state['match_key'] = room_match_key(room)
+        state.update(room_mod_payload(room))
         if room.engine.phase == 'game_over':
             state['rematch_votes'] = len(room._rematch_votes)
             state['rematch_total'] = len(room.player_sids)
@@ -2544,7 +2600,7 @@ def start_game(room):
     record_room_replay_keyframe(room, 'game_start')
     for sid in room.player_sids:
         if sid in players:
-            socketio.emit('game_phase', {'phase': 'playing'}, room=sid)
+            emit_room_game_phase(room, sid, 'playing')
     broadcast_game_state(room)
 
 
@@ -2650,6 +2706,7 @@ def send_solo_state(sid, perspective=None):
         perspective = 0 if is_tutorial else (engine.current_player if not engine.game_over else 0)
     state = engine.get_public_state(perspective)
     state['your_id'] = perspective
+    state['match_key'] = f"solo:{id(engine)}"
     if is_tutorial:
         state['your_name'] = '你'
         state['opponent_name'] = '练习对手'
@@ -2680,6 +2737,7 @@ def emit_solo_response_request(sid, engine, pidx, played_card):
         counter_cards.extend(engine.get_counter_cards(opp_pidx, tt))
     socketio.emit('response_request', {
         'card': played_card,
+        'player_id': pidx,
         'counter_cards': [c.to_dict() for c in counter_cards],
     }, room=sid)
 
@@ -2730,6 +2788,9 @@ def build_spectate_state(room):
     for i, pdata in enumerate(full_players):
         base[f'player{i + 1}_name'] = pdata.get('name', f'P{i + 1}')
     base['mode'] = room.mode
+    base['room_id'] = room.room_id
+    base['match_key'] = room_match_key(room)
+    base.update(room_mod_payload(room))
     if room.mode == '2v2' and len(full_players) >= 4:
         base['you'] = full_players[0]
         base['teammate'] = full_players[1]
@@ -3823,7 +3884,19 @@ def on_login(data):
             'opponent_nickname': opponent_nickname,
         })
     join_room(sid)
-    login_payload = {'sid': sid, 'nickname': name, 'authenticated': bool(is_registered_user)}
+    login_payload = {
+        'sid': sid,
+        'nickname': name,
+        'authenticated': bool(is_registered_user),
+        'disabled_mods': players.get(sid, {}).get('disabled_mods', []),
+        'mods_hash': players.get(sid, {}).get('mods_hash', ''),
+        'mods_list': players.get(sid, {}).get('mods_list', []),
+        'mod_source': players.get(sid, {}).get('mod_source', 'official'),
+        'community_mod_url': players.get(sid, {}).get('community_mod_url', ''),
+        'community_mod_hash': players.get(sid, {}).get('community_mod_hash', ''),
+        'community_mod_name': players.get(sid, {}).get('community_mod_name', ''),
+        'community_mods': players.get(sid, {}).get('community_mods', []),
+    }
     if is_registered_user:
         login_payload['user'] = auth_user_payload(account_user)
     login_payload.update(special_public_fields(players.get(sid, {})))
@@ -3889,21 +3962,33 @@ def on_update_mod_settings(data):
                 'disabled_mods': player.get('disabled_mods', []),
             })
             return
-        old_hash = player.get('mods_hash')
-        try:
-            community_fields, community_mod = resolve_community_loadout(data)
-            loadout = build_mod_loadout(
-                data.get('disabled_mods', []),
-                community_mod=community_mod,
-                community_hash=community_fields.get('community_mod_hash', ''),
-            )
-        except Exception as exc:
+        current_disabled_mods = list(player.get('disabled_mods', []))
+    try:
+        community_fields, community_mod = resolve_community_loadout(data)
+        loadout = build_mod_loadout(
+            data.get('disabled_mods', []),
+            community_mod=community_mod,
+            community_hash=community_fields.get('community_mod_hash', ''),
+        )
+    except Exception as exc:
+        emit('mod_settings_updated', {
+            'ok': False,
+            'reason': str(exc),
+            'disabled_mods': current_disabled_mods,
+        })
+        return
+    with _lock:
+        if sid not in players:
+            return
+        player = players[sid]
+        if player.get('status') not in ('lobby', 'reconnecting'):
             emit('mod_settings_updated', {
                 'ok': False,
-                'reason': str(exc),
+                'reason': 'mod_settings_only_lobby',
                 'disabled_mods': player.get('disabled_mods', []),
             })
             return
+        old_hash = player.get('mods_hash')
         player['disabled_mods'] = loadout['disabled_mods']
         player['mods_hash'] = loadout['mods_hash']
         player['mods_list'] = loadout['mods_list']
@@ -4356,7 +4441,7 @@ def on_accept_invite(data):
             admin_event('game', f'room {room_id} started mode={room.mode}')
             print("[server] debug")
             for psid in room.player_sids:
-                socketio.emit('game_phase', {'phase': 'playing', 'mode': room.mode}, room=psid)
+                emit_room_game_phase(room, psid, 'playing')
             broadcast_game_state(room)
         else:
             room.engine.start_draft()
@@ -4364,7 +4449,7 @@ def on_accept_invite(data):
             print("[server] debug")
             for pidx in range(len(room.player_sids)):
                 psid = room.player_sids[pidx]
-                socketio.emit('game_phase', {'phase': 'draft'}, room=psid)
+                emit_room_game_phase(room, psid, 'draft')
                 send_draft_state(room, pidx)
     broadcast_lobby()
 
@@ -4862,6 +4947,7 @@ def on_play_card(data):
                         if r_sid in players:
                             socketio.emit('response_request', {
                                 'card': played_card,
+                                'player_id': pidx,
                                 'counter_cards': counter_cards,
                             }, room=r_sid)
             else:
@@ -4873,6 +4959,7 @@ def on_play_card(data):
                 if opp_sid in players:
                     socketio.emit('response_request', {
                         'card': played_card,
+                        'player_id': pidx,
                         'counter_cards': [c.to_dict() for c in counter_cards],
                     }, room=opp_sid)
         elif result.get('needs_choice'):
@@ -4887,6 +4974,7 @@ def on_play_card(data):
             broadcast_game_state(room)
         else:
             emit('server_error', {'message': result.get('error', 'Operation failed')})
+            broadcast_game_state(room)
 
 
 @socketio.on('response')
@@ -4947,6 +5035,7 @@ def on_ally_consent_response(data):
                     if r_sid in players:
                         socketio.emit('response_request', {
                             'card': played_card,
+                            'player_id': (room.engine.pending_response or {}).get('player_id'),
                             'counter_cards': counter_cards,
                         }, room=r_sid)
         elif result.get('needs_choice'):
@@ -5038,6 +5127,7 @@ def on_use_trigger(data):
             broadcast_game_state(room)
         else:
             emit('server_error', {'message': result.get('error', 'Operation failed')})
+            broadcast_game_state(room)
 
 
 @socketio.on('urf_replace_card')
@@ -5313,7 +5403,7 @@ def on_rematch(data=None):
                     record_room_replay_keyframe(room, 'game_start')
                     for psid in room.player_sids:
                         if psid in players:
-                            socketio.emit('game_phase', {'phase': 'playing', 'mode': room.mode}, room=psid)
+                            emit_room_game_phase(room, psid, 'playing')
                     broadcast_game_state(room)
                 else:
                     room.engine.start_draft()
@@ -5321,7 +5411,7 @@ def on_rematch(data=None):
                     for pidx in range(len(room.player_sids)):
                         psid = room.player_sids[pidx]
                         if psid in players:
-                            socketio.emit('game_phase', {'phase': 'draft'}, room=psid)
+                            emit_room_game_phase(room, psid, 'draft')
                             send_draft_state(room, pidx)
                 print("[server] debug")
     except Exception as e:

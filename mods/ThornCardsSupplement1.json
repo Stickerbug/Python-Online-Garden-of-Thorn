@@ -229,6 +229,109 @@
             "property": "return_to_hand_turns",
             "value": 1
           }
+        },
+        {
+          "type": "on_discard_owner_turn_start",
+          "params": {
+            "effects": [
+              {
+                "type": "if",
+                "params": {
+                  "condition": {
+                    "op": "compare",
+                    "a": {
+                      "ref": "card_property",
+                      "card": {
+                        "ref": "current_card"
+                      },
+                      "property": "return_to_hand_turns"
+                    },
+                    "operator": ">",
+                    "b": 0
+                  },
+                  "then": [
+                    {
+                      "type": "if",
+                      "params": {
+                        "condition": {
+                          "op": "and",
+                          "a": {
+                            "op": "compare",
+                            "a": {
+                              "ref": "card_property",
+                              "card": {
+                                "ref": "current_card"
+                              },
+                              "property": "return_to_hand_turns"
+                            },
+                            "operator": "<=",
+                            "b": 1
+                          },
+                          "b": {
+                            "op": "not",
+                            "value": {
+                              "op": "hand_full",
+                              "target": "self"
+                            }
+                          }
+                        },
+                        "then": [
+                          {
+                            "type": "move_to_hand",
+                            "params": {
+                              "card": {
+                                "ref": "current_card"
+                              },
+                              "target": "self"
+                            }
+                          },
+                          {
+                            "type": "card_prop_set",
+                            "params": {
+                              "card": {
+                                "ref": "current_card"
+                              },
+                              "property": "return_to_hand_turns",
+                              "value": 0
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "if",
+                      "params": {
+                        "condition": {
+                          "op": "compare",
+                          "a": {
+                            "ref": "card_property",
+                            "card": {
+                              "ref": "current_card"
+                            },
+                            "property": "return_to_hand_turns"
+                          },
+                          "operator": ">",
+                          "b": 1
+                        },
+                        "then": [
+                          {
+                            "type": "card_prop_add",
+                            "params": {
+                              "card": {
+                                "ref": "current_card"
+                              },
+                              "property": "return_to_hand_turns",
+                              "amount": -1
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       ],
       "damage": 5,
@@ -289,18 +392,37 @@
                     "type": "if",
                     "params": {
                       "condition": {
-                        "op": "compare",
+                        "op": "and",
                         "a": {
-                          "ref": "card_property",
-                          "card": {
-                            "ref": "current_card"
+                          "op": "compare",
+                          "a": {
+                            "ref": "card_property",
+                            "card": {
+                              "ref": "current_card"
+                            },
+                            "property": "return_to_hand_turns"
                           },
-                          "property": "return_to_hand_turns"
+                          "operator": "<=",
+                          "b": 1
                         },
-                        "operator": "<=",
-                        "b": 1
+                        "b": {
+                          "op": "not",
+                          "value": {
+                            "op": "hand_full",
+                            "target": "self"
+                          }
+                        }
                       },
                       "then": [
+                        {
+                          "type": "move_to_hand",
+                          "params": {
+                            "card": {
+                              "ref": "current_card"
+                            },
+                            "target": "self"
+                          }
+                        },
                         {
                           "type": "card_prop_set",
                           "params": {
@@ -309,15 +431,6 @@
                             },
                             "property": "return_to_hand_turns",
                             "value": 0
-                          }
-                        },
-                        {
-                          "type": "move_to_hand",
-                          "params": {
-                            "card": {
-                              "ref": "current_card"
-                            },
-                            "target": "self"
                           }
                         }
                       ]
@@ -395,6 +508,109 @@
             "property": "return_to_hand_turns",
             "value": 1
           }
+        },
+        {
+          "type": "on_discard_owner_turn_start",
+          "params": {
+            "effects": [
+              {
+                "type": "if",
+                "params": {
+                  "condition": {
+                    "op": "compare",
+                    "a": {
+                      "ref": "card_property",
+                      "card": {
+                        "ref": "current_card"
+                      },
+                      "property": "return_to_hand_turns"
+                    },
+                    "operator": ">",
+                    "b": 0
+                  },
+                  "then": [
+                    {
+                      "type": "if",
+                      "params": {
+                        "condition": {
+                          "op": "and",
+                          "a": {
+                            "op": "compare",
+                            "a": {
+                              "ref": "card_property",
+                              "card": {
+                                "ref": "current_card"
+                              },
+                              "property": "return_to_hand_turns"
+                            },
+                            "operator": "<=",
+                            "b": 1
+                          },
+                          "b": {
+                            "op": "not",
+                            "value": {
+                              "op": "hand_full",
+                              "target": "self"
+                            }
+                          }
+                        },
+                        "then": [
+                          {
+                            "type": "move_to_hand",
+                            "params": {
+                              "card": {
+                                "ref": "current_card"
+                              },
+                              "target": "self"
+                            }
+                          },
+                          {
+                            "type": "card_prop_set",
+                            "params": {
+                              "card": {
+                                "ref": "current_card"
+                              },
+                              "property": "return_to_hand_turns",
+                              "value": 0
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "if",
+                      "params": {
+                        "condition": {
+                          "op": "compare",
+                          "a": {
+                            "ref": "card_property",
+                            "card": {
+                              "ref": "current_card"
+                            },
+                            "property": "return_to_hand_turns"
+                          },
+                          "operator": ">",
+                          "b": 1
+                        },
+                        "then": [
+                          {
+                            "type": "card_prop_add",
+                            "params": {
+                              "card": {
+                                "ref": "current_card"
+                              },
+                              "property": "return_to_hand_turns",
+                              "amount": -1
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       ],
       "damage": 4,
@@ -462,18 +678,37 @@
                     "type": "if",
                     "params": {
                       "condition": {
-                        "op": "compare",
+                        "op": "and",
                         "a": {
-                          "ref": "card_property",
-                          "card": {
-                            "ref": "current_card"
+                          "op": "compare",
+                          "a": {
+                            "ref": "card_property",
+                            "card": {
+                              "ref": "current_card"
+                            },
+                            "property": "return_to_hand_turns"
                           },
-                          "property": "return_to_hand_turns"
+                          "operator": "<=",
+                          "b": 1
                         },
-                        "operator": "<=",
-                        "b": 1
+                        "b": {
+                          "op": "not",
+                          "value": {
+                            "op": "hand_full",
+                            "target": "self"
+                          }
+                        }
                       },
                       "then": [
+                        {
+                          "type": "move_to_hand",
+                          "params": {
+                            "card": {
+                              "ref": "current_card"
+                            },
+                            "target": "self"
+                          }
+                        },
                         {
                           "type": "card_prop_set",
                           "params": {
@@ -482,15 +717,6 @@
                             },
                             "property": "return_to_hand_turns",
                             "value": 0
-                          }
-                        },
-                        {
-                          "type": "move_to_hand",
-                          "params": {
-                            "card": {
-                              "ref": "current_card"
-                            },
-                            "target": "self"
                           }
                         }
                       ]
