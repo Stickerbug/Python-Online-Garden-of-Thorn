@@ -1,17 +1,24 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="light" data-ui-style="classic">
+<html lang="zh-CN" data-theme="light" data-ui-style="minimal">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=150">
+<link rel="stylesheet" href="/static/css/style.css?v=153">
 <script>
 (() => {
   const lang = localStorage.getItem('gtn_lang') || 'zh';
-  const uiStyle = localStorage.getItem('gtn_ui_style') || 'classic';
+  const migrationKey = 'gtn_ui_style_v2_migrated';
+  let uiStyle = localStorage.getItem('gtn_ui_style') || 'minimal';
+  if (!localStorage.getItem(migrationKey) && uiStyle === 'classic') {
+    uiStyle = 'minimal';
+    localStorage.setItem('gtn_ui_style', 'minimal');
+    localStorage.setItem(migrationKey, '1');
+  }
+  if (uiStyle !== 'classic') uiStyle = 'minimal';
   document.documentElement.setAttribute('lang', lang);
-  document.documentElement.setAttribute('data-ui-style', uiStyle === 'minimal' ? 'minimal' : 'classic');
+  document.documentElement.setAttribute('data-ui-style', uiStyle);
   window.__bootLang = lang;
 })();
 </script>
@@ -32,6 +39,7 @@
   </div>
 </div>
 <button id="btn-account-top" class="account-top-btn">账号</button>
+<button id="btn-friends-top" class="friends-top-btn hidden">好友</button>
 <div id="account-popover" class="account-popover hidden">
   <div class="account-popover-head">
     <div id="account-popover-title" class="account-popover-title">账号</div>
@@ -85,6 +93,29 @@
     <button id="btn-account-register" class="btn btn-primary hidden">注册</button>
     <button id="btn-account-change-password" class="btn btn-primary hidden">修改密码</button>
     <button id="btn-account-popover-logout" class="btn btn-secondary">退出登录</button>
+  </div>
+</div>
+<div id="friends-popover" class="account-popover friends-popover hidden">
+  <div class="account-popover-head">
+    <div id="friends-popover-title" class="account-popover-title">好友</div>
+    <button id="btn-friends-popover-close" class="account-close-btn" type="button">×</button>
+  </div>
+  <div class="friend-add-row">
+    <input type="text" id="input-friend-identifier" maxlength="16" placeholder="输入昵称或ID">
+    <button id="btn-friend-add" class="mini-btn" type="button">添加</button>
+  </div>
+  <p id="friends-error" class="error-text"></p>
+  <div id="friend-incoming-section" class="friend-section">
+    <div id="friend-incoming-title" class="friend-section-title">好友请求</div>
+    <div id="friend-incoming-list" class="friend-list"></div>
+  </div>
+  <div id="friend-outgoing-section" class="friend-section">
+    <div id="friend-outgoing-title" class="friend-section-title">已发送</div>
+    <div id="friend-outgoing-list" class="friend-list"></div>
+  </div>
+  <div class="friend-section">
+    <div id="friend-list-title" class="friend-section-title">我的好友</div>
+    <div id="friends-list" class="friend-list"></div>
   </div>
 </div>
 <div id="account-replay-modal" class="account-replay-modal hidden">
@@ -266,7 +297,59 @@
 </div>
 </div>
 
+<div id="phase-chat-panel" class="phase-chat-panel hidden">
+<div class="phase-chat-title" id="phase-chat-title">聊天</div>
+<div id="phase-chat-log" class="phase-chat-log"></div>
+<div class="phase-chat-input-row">
+<select id="phase-chat-channel" class="game-chat-channel hidden" aria-label="Chat channel"></select>
+<input type="text" id="phase-chat-input" placeholder="聊天..." maxlength="200">
+<button id="btn-phase-chat-send" class="btn btn-small">发送</button>
+</div>
+</div>
+
 <div id="view-game" class="view hidden">
+<div id="battle-classic" class="battle-classic hidden" aria-hidden="true">
+  <div class="classic-bg"></div>
+  <div class="classic-top-hud">
+    <div class="classic-top-title">
+      <span class="classic-mode" id="classic-mode">Garden of Thorn 荆棘花园</span>
+      <span class="classic-round" id="classic-round">R0</span>
+      <span class="classic-phase" id="classic-phase">-</span>
+    </div>
+    <button id="classic-settings" class="classic-icon-btn" type="button" aria-label="设置">⚙</button>
+  </div>
+  <div class="classic-left-rail">
+    <div id="classic-action-hint" class="classic-action-hint">-</div>
+    <div class="classic-resource-block">
+      <div class="classic-resource-label">E</div>
+      <div id="classic-e-orbs" class="classic-orbs classic-e-orbs"></div>
+    </div>
+    <div class="classic-resource-block">
+      <div class="classic-resource-label">M</div>
+      <div id="classic-m-orbs" class="classic-orbs classic-m-orbs"></div>
+    </div>
+    <div class="classic-piles">
+      <span id="classic-deck-count">▣0</span>
+      <span id="classic-discard-count">⟲0</span>
+      <span id="classic-exile-count">◇0</span>
+    </div>
+  </div>
+  <div class="classic-stage">
+    <div id="classic-fighter-self" class="classic-fighter fighter-self"></div>
+    <div class="classic-stage-center">
+      <div id="classic-play-lane" class="classic-play-lane"></div>
+      <div id="classic-stage-response" class="classic-stage-response hidden"></div>
+    </div>
+    <div id="classic-fighter-enemy" class="classic-fighter fighter-enemy"></div>
+  </div>
+  <div id="classic-card-preview" class="classic-card-preview hidden"></div>
+  <div id="classic-log-drawer" class="classic-log-drawer">
+    <button id="classic-log-toggle" class="classic-log-toggle" type="button">战斗日志</button>
+    <div id="classic-log-content" class="classic-log-content"></div>
+  </div>
+  <div id="classic-hand-fan" class="classic-hand-fan"></div>
+  <button id="classic-end-turn" class="classic-end-turn" type="button">结束回合</button>
+</div>
 <div class="game-container">
   <div class="opp-section">
     <div class="opp-top-row">
@@ -388,6 +471,7 @@
 <button id="settings-tab-appearance" class="settings-tab active" type="button">外观</button>
 <button id="settings-tab-server" class="settings-tab" type="button">服务器</button>
 <button id="settings-tab-mods" class="settings-tab" type="button">模组</button>
+<button id="settings-tab-social" class="settings-tab" type="button">社交</button>
 </div>
 <div id="settings-page-appearance" class="settings-page settings-section">
 <h4 id="settings-section-appearance">外观</h4>
@@ -401,8 +485,8 @@
 <div class="settings-theme-row">
 <label id="settings-label-ui-style">界面风格</label>
 <select id="settings-ui-style-select">
-<option value="classic">经典</option>
 <option value="minimal">简约</option>
+<option value="classic">经典</option>
 </select>
 </div>
 <div class="settings-lang-row">
@@ -450,19 +534,28 @@
 </div>
 <div id="settings-community-mods-list" class="settings-mods-list"></div>
 <p id="settings-no-community-mods" class="info-text">未找到社区模组</p>
-<div class="settings-upload-row community-upload-card">
-<input type="file" id="settings-community-upload-file" accept=".json,application/json" class="hidden">
-<div class="community-upload-copy">
-<strong id="settings-community-upload-title">上传模组</strong>
-<span id="settings-community-upload-hint">上传需要登录账号，文件会直接上传到社区模组仓库。</span>
-</div>
-<div class="community-upload-actions">
-<button id="btn-community-upload" type="button" class="btn btn-primary">上传模组</button>
-<button id="btn-community-refresh" type="button" class="btn btn-secondary">刷新</button>
-</div>
+<div class="community-upload-actions community-refresh-row">
+<button id="btn-community-refresh" type="button" class="btn btn-secondary">??</button>
 </div>
 <p id="settings-community-status" class="info-text"></p>
 </div>
+</div>
+<div id="settings-page-social" class="settings-page settings-section hidden">
+<h4 id="settings-section-social">社交</h4>
+<p id="settings-social-login-hint" class="info-text">登录账号后可以使用社交设置。</p>
+<div class="settings-check-row">
+<input type="checkbox" id="settings-accept-friend-requests" checked>
+<label id="settings-label-accept-friend-requests" for="settings-accept-friend-requests">接受好友请求</label>
+</div>
+<div class="settings-check-row">
+<input type="checkbox" id="settings-searchable-by-nickname" checked>
+<label id="settings-label-searchable-by-nickname" for="settings-searchable-by-nickname">允许通过昵称添加我</label>
+</div>
+<div class="settings-check-row">
+<input type="checkbox" id="settings-searchable-by-player-id" checked>
+<label id="settings-label-searchable-by-player-id" for="settings-searchable-by-player-id">允许通过ID添加我</label>
+</div>
+<p id="settings-social-status" class="info-text"></p>
 </div>
 <div class="settings-footer">
 <button id="btn-settings-close" class="btn btn-primary">确定</button>
@@ -618,6 +711,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-<script src="/static/js/game.js?v=168"></script>
+<script src="/static/js/game.js?v=171"></script>
 </body>
 </html>

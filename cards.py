@@ -26,6 +26,9 @@ class CardDef:
     scripts: Dict[str, Any] = field(default_factory=dict)
     response_title: str = ''
     response_content: str = ''
+    v2_events: Dict[str, Any] = field(default_factory=dict)
+    v2_resource: Dict[str, Any] = field(default_factory=dict)
+    v2_mod_id: str = ''
 
     @property
     def display_name(self) -> str:

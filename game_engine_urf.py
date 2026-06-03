@@ -260,6 +260,17 @@ class GameEngineInfiniteFire(GameEngine):
         opp_id = 1 - player_id
         opp = self.players[opp_id]
         self._antenna_reveal[player_id] = None
+        self._run_v2_event_hooks('turn_start', {
+            'source_player': player_id,
+            'target_player': player_id,
+            'vars': {'player_id': player_id},
+            'current_action': {'player_id': player_id},
+        })
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
+        self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
         if ps.shovel_active:
@@ -323,7 +334,7 @@ class GameEngineInfiniteFire(GameEngine):
                 ps.gain_elixir(2)
                 self.log_msg(f"{self.pn(player_id)}的粉末效果：+2E")
             elif eq.def_id == 'GoldenLeaf':
-                ps.draw_cards(DRAW_PER_TURN)
+                self._draw_cards_with_v2_hooks(player_id, DRAW_PER_TURN, 'golden_leaf')
                 self.log_msg(f"{self.pn(player_id)}的黄金叶效果：补充手牌")
 
     def can_play_card(self, player_id: int, card: CardInstance):
@@ -404,9 +415,12 @@ class GameEngineInfiniteFire(GameEngine):
         ps.discard.append(card)
         new_card = self.create_infinite_card(card.card_type)
         if new_card:
-            self.add_card_to_urf_hand(player_id, new_card, log=True)
+            added = self.add_card_to_urf_hand(player_id, new_card, log=False)
             type_name = CARD_TYPE_CN.get(card.card_type, card.card_type)
-            self.log_msg(f"{self.pn(player_id)}替换1张{type_name}牌，获得1张{type_name}牌")
+            if added:
+                self.log_msg(f"{self.pn(player_id)}替换1张{type_name}牌")
+            else:
+                self.log_msg(f"{self.pn(player_id)}替换1张{type_name}牌，手牌已满，新牌进入弃牌堆")
         ps.urf_replace_available = False
         return {'success': True}
 

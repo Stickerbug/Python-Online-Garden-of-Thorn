@@ -27,11 +27,13 @@ from game_engine import GameEngine
 from game_engine_2v2 import GameEngine2v2
 from game_engine_urf import GameEngineInfiniteFire
 from cards import (
-    CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
+    CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
 )
-from mod_loader import GAME_VERSION, merge_mod_cards_to_card_defs, load_all_mods, save_mod, Mod
+from mod_loader import GAME_VERSION, merge_mod_cards_to_card_defs, load_all_mods
+from mod_loadout_v2 import build_v2_loadout
+from mod_spec_v2 import sha256_json
 from card_i18n import apply_card_i18n_defaults, card_text, event_text
 from runtime_errors import set_mod_runtime_error_logger
 from r2_mods import (
@@ -52,16 +54,21 @@ from db import (
     DB_PATH,
     admin_change_user_password,
     admin_set_user_ban,
+    add_friend_request,
     change_user_password,
     create_user,
     find_user_for_admin,
     get_admin_user_detail,
     get_user_by_id,
     get_user_by_username,
+    list_friends,
+    remove_friend,
+    respond_friend_request,
     increment_user_stats,
     init_db,
     list_admin_users,
     save_match_summary,
+    update_user_social_settings,
     verify_user,
 )
 from replay_core import (
@@ -81,7 +88,7 @@ from replay_core import (
 
 BASE_CARD_IDS = set(CARD_DEFS.keys())
 BASE_CARD_DEFS = copy.deepcopy(CARD_DEFS)
-VANILLA_MOD_FILENAME = 'VanillaCardsFormatV1.json'
+VANILLA_MOD_FILENAME = 'VanillaCards.json'
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
 
 try:
@@ -134,7 +141,13 @@ _MODS_SIGNATURE = current_mods_signature()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'garden_of_thorn_secret')
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode='eventlet',
+    ping_interval=int(os.environ.get('GTN_SOCKET_PING_INTERVAL', '25')),
+    ping_timeout=int(os.environ.get('GTN_SOCKET_PING_TIMEOUT', '35')),
+)
 
 DB_AVAILABLE = True
 DB_INIT_ERROR = ''
@@ -196,7 +209,32 @@ ADMIN_EVENTS = deque(maxlen=300)
 MATCH_HISTORY = deque(maxlen=120)
 ADMIN_LOGIN_FAILURES = {}
 AUTH_LOGIN_FAILURES = {}
+
+
+def _env_float(name, default):
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _env_int(name, default):
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return int(default)
+
+
 _RESOURCE_BREAKDOWN_CACHE = {'ts': 0.0, 'data': None}
+_RESOURCE_BREAKDOWN_CACHE_SECONDS = _env_float('GTN_RESOURCE_BREAKDOWN_CACHE_SECONDS', 120)
+_RESOURCE_BREAKDOWN_MAX_FILES = _env_int('GTN_RESOURCE_BREAKDOWN_MAX_FILES', 8000)
+_RUNTIME_METRICS_CACHE = {'ts': 0.0, 'data': None}
+_RUNTIME_METRICS_LOCK = threading.Lock()
+_RUNTIME_METRICS_CACHE_SECONDS = _env_float('GTN_RUNTIME_METRICS_CACHE_SECONDS', 2)
+_LOBBY_BROADCAST_LOCK = threading.Lock()
+_LOBBY_BROADCAST_PENDING = False
+_LOBBY_BROADCAST_DIRTY = False
+_LOBBY_BROADCAST_DELAY_SECONDS = _env_float('GTN_LOBBY_BROADCAST_DELAY_SECONDS', 0.03)
 RESOURCE_HISTORY = deque(maxlen=720)
 _RESOURCE_HISTORY_LAST_TS = 0.0
 SOCKET_LATENCY_SAMPLES = deque(maxlen=2000)
@@ -219,6 +257,7 @@ solo_sessions = {}
 tutorial_sessions = set()
 teams = {}
 pending_team_matches = {}
+v2_ui_timers = {}
 
 
 def iso_now():
@@ -315,7 +354,7 @@ def admin_match_record(room, result='finished'):
         duration_seconds = int(time.time() - started_ts)
         first_meta = participant_meta[0] if participant_meta else {}
         mod_source = first_meta.get('mod_source', 'official')
-        mod_hash = first_meta.get('community_mod_hash') or first_meta.get('mods_hash') or ''
+        mod_hash = first_meta.get('loadout_hash') or first_meta.get('community_mod_hash') or first_meta.get('mods_hash') or ''
         community_mod_url = first_meta.get('community_mod_url', '')
         community_mod_name = first_meta.get('community_mod_name', '')
         community_mods = first_meta.get('community_mods', []) if isinstance(first_meta.get('community_mods', []), list) else []
@@ -603,15 +642,19 @@ def build_community_replay_snapshots(community_mods):
         if not sha256 or not public_url:
             continue
         try:
-            data = fetch_json_from_public_url(public_url)
+            mod = load_community_mod(public_url, sha256)
+            data = getattr(mod, 'community_data', None)
+            if not isinstance(data, dict):
+                data = fetch_json_from_public_url(public_url)
+            manifest = data.get('manifest') if isinstance(data.get('manifest'), dict) else {}
             info = data.get('info') if isinstance(data.get('info'), dict) else {}
             snapshots.append({
                 'sha256': sha256,
                 'source': 'community',
                 'public_url': public_url,
-                'name': entry.get('name') or info.get('name') or 'Community Mod',
-                'author': info.get('author') or '',
-                'version': info.get('version') or '',
+                'name': entry.get('name') or manifest.get('name') or info.get('name') or 'Community Mod',
+                'author': manifest.get('author') or info.get('author') or '',
+                'version': manifest.get('version') or info.get('version') or '',
                 'json': data,
             })
         except Exception as exc:
@@ -683,12 +726,69 @@ def room_mod_payload(room):
     return {
         'disabled_mods': list(first.get('disabled_mods', [])),
         'mods_hash': first.get('mods_hash', ''),
+        'loadout_hash': first.get('loadout_hash', '') or first.get('mods_hash', ''),
+        'v2_loadout_hash': first.get('v2_loadout_hash', ''),
+        'v2_load_order': list(first.get('v2_load_order', [])),
         'mods_list': list(first.get('mods_list', [])),
         'mod_source': first.get('mod_source', 'official'),
         'community_mod_url': first.get('community_mod_url', ''),
         'community_mod_hash': first.get('community_mod_hash', ''),
         'community_mod_name': first.get('community_mod_name', ''),
         'community_mods': list(first.get('community_mods', [])),
+    }
+
+
+def apply_v2_loadout_to_engine(engine, player_meta=None):
+    player_meta = player_meta or {}
+    engine.v2_ui_components = dict(player_meta.get('v2_ui_components') or {})
+    engine.v2_loadout = player_meta.get('v2_loadout')
+    registries = {}
+    v2_loadout = engine.v2_loadout
+    if v2_loadout is not None:
+        registries = getattr(v2_loadout, 'registries', {}) or {}
+    engine.v2_tag_defs = dict(registries.get('tags') or {})
+    engine.v2_status_defs = dict(registries.get('statuses') or {})
+    engine.v2_opening_event_defs = dict(registries.get('opening_events') or {})
+    engine.v2_event_hooks = list(getattr(v2_loadout, 'event_hooks', []) or []) if v2_loadout is not None else []
+
+
+def v2_registry_payload(v2_loadout):
+    registries = getattr(v2_loadout, 'registries', {}) if v2_loadout is not None else {}
+    return {
+        'custom_tags': list((registries.get('tags') or {}).values()),
+        'custom_statuses': list((registries.get('statuses') or {}).values()),
+        'custom_opening_events': list((registries.get('opening_events') or {}).values()),
+    }
+
+
+def v2_opening_event_payload(resource):
+    if not isinstance(resource, dict):
+        return None
+    event_id = str(resource.get('id') or '').strip()
+    if not event_id:
+        return None
+    name_cn = str(resource.get('name_cn') or resource.get('name') or event_id)
+    name_en = str(resource.get('name_en') or resource.get('name') or name_cn)
+    desc_cn = str(resource.get('description_cn') or resource.get('description') or resource.get('desc_cn') or resource.get('desc') or '')
+    desc_en = str(resource.get('description_en') or resource.get('desc_en') or desc_cn)
+    try:
+        position = int(resource.get('position', 2))
+    except Exception:
+        position = 2
+    return {
+        'id': event_id,
+        'name': name_cn,
+        'name_cn': name_cn,
+        'name_en': name_en,
+        'name_i18n': {'zh': name_cn, 'en': name_en},
+        'desc': desc_cn,
+        'description': desc_cn,
+        'desc_cn': desc_cn,
+        'desc_en': desc_en,
+        'desc_i18n': {'zh': desc_cn, 'en': desc_en},
+        'position': position,
+        'weight': resource.get('weight', 1),
+        'v2': True,
     }
 
 
@@ -943,6 +1043,7 @@ def _normalize_community_mod_entries(value):
             'public_url': public_url,
             'sha256': sha256,
             'name': str(item.get('name') or '').strip()[:80],
+            'uploaded_at': str(item.get('uploaded_at') or '').strip()[:40],
         })
     return entries[:12]
 
@@ -1107,12 +1208,15 @@ def resolve_community_loadout(data):
     normalized_entries = []
     for entry in fields['community_mods']:
         mod = load_community_mod(entry['public_url'], entry['sha256'])
+        if entry.get('uploaded_at') and not getattr(mod, 'community_uploaded_at', ''):
+            mod.community_uploaded_at = entry.get('uploaded_at')
         merge_community_mod_to_card_defs(mod)
         name = entry.get('name') or (mod.info.name if mod.info and mod.info.name else 'Community Mod')
         normalized_entries.append({
             'public_url': entry['public_url'],
             'sha256': entry['sha256'],
             'name': name,
+            'uploaded_at': getattr(mod, 'community_uploaded_at', '') or entry.get('uploaded_at', ''),
         })
         loaded_mods.append(mod)
     fields['community_mods'] = normalized_entries
@@ -1130,9 +1234,16 @@ def get_enabled_mod_card_type_counts(disabled_mods=None):
             continue
         if mod.filename in disabled:
             continue
-        for card in mod.cards:
-            if card.id in CARD_DEFS and card.count > 0 and card.card_type in counts:
-                counts[card.card_type] += 1
+        if getattr(mod, 'format_version', 1) == 2:
+            for card in getattr(mod, 'registries', {}).get('cards', []) or []:
+                data = card.to_dict() if hasattr(card, 'to_dict') else dict(card or {})
+                card_type = _v2_card_type(data.get('card_type', data.get('type', 'bloom')))
+                if _v2_int(data.get('count', data.get('weight', 3)), 3) > 0 and card_type in counts:
+                    counts[card_type] += 1
+        else:
+            for card in mod.cards:
+                if card.id in CARD_DEFS and card.count > 0 and card.card_type in counts:
+                    counts[card.card_type] += 1
     return counts
 
 
@@ -1182,6 +1293,79 @@ def get_card_mod_sources(disabled_mods=None):
     return sources
 
 
+def _v2_int(value, default=0):
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _v2_card_type(value):
+    text = str(value or '').strip().lower()
+    return {
+        'attack': 'thorn',
+        'skill': 'bloom',
+        'equipment': 'root',
+        'counter': 'guard',
+        'thorn': 'thorn',
+        'bloom': 'bloom',
+        'root': 'root',
+        'guard': 'guard',
+    }.get(text, 'bloom')
+
+
+def _v2_card_name_from_id(card_id):
+    path = str(card_id or '').split(':')[-1]
+    return ' '.join(part.capitalize() for part in path.replace('/', '_').split('_') if part) or str(card_id or 'Card')
+
+
+def register_v2_loadout_cards(v2_loadout):
+    registered = []
+    if not v2_loadout or not getattr(v2_loadout, 'ok', False):
+        return registered
+    cards = getattr(v2_loadout, 'registries', {}).get('cards', {}) or {}
+    for card_id, resource in cards.items():
+        if not isinstance(resource, dict):
+            continue
+        runtime_id = str(resource.get('legacy_id') or resource.get('runtime_id') or card_id)
+        cost = resource.get('cost') if isinstance(resource.get('cost'), dict) else {}
+        flags = set(resource.get('flags', []) if isinstance(resource.get('flags', []), list) else [])
+        if isinstance(resource.get('tags'), list):
+            for tag in resource.get('tags') or []:
+                tag_text = str(tag)
+                if tag_text.startswith('gtn:'):
+                    tag_text = tag_text.split(':', 1)[1]
+                flags.add(tag_text)
+        card_def = CardDef(
+            id=runtime_id,
+            name_en=str(resource.get('name_en') or resource.get('name') or _v2_card_name_from_id(card_id)),
+            name_cn=str(resource.get('name_cn') or resource.get('name') or resource.get('name_en') or _v2_card_name_from_id(card_id)),
+            cost_e=_v2_int(resource.get('cost_e', cost.get('e', 0)), 0),
+            cost_m=_v2_int(resource.get('cost_m', cost.get('m', 0)), 0),
+            card_type=_v2_card_type(resource.get('card_type', resource.get('type', 'bloom'))),
+            count=max(0, _v2_int(resource.get('count', resource.get('weight', 3)), 3)),
+            quality=str(resource.get('quality') or 'Common'),
+            description=str(resource.get('description') or resource.get('description_cn') or ''),
+            effect_text=str(resource.get('effect_text') or resource.get('effect_text_cn') or ''),
+            flags=flags,
+            trigger_cost_e=_v2_int(resource.get('trigger_cost_e', -1), -1),
+            trigger_effect_text=str(resource.get('trigger_effect_text') or ''),
+            response_trigger=str(resource.get('response_trigger') or ''),
+            effects=[],
+            scripts={},
+            response_title=str(resource.get('response_title') or ''),
+            response_content=str(resource.get('response_content') or ''),
+            v2_events=resource.get('events') if isinstance(resource.get('events'), dict) else {},
+            v2_resource=dict(resource),
+            v2_mod_id=str(resource.get('_mod_id') or ''),
+        )
+        CARD_DEFS[runtime_id] = card_def
+        registered.append(runtime_id)
+    if registered:
+        apply_card_i18n_defaults(CARD_DEFS)
+    return registered
+
+
 def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='', community_mods=None):
     mods = load_all_mods()
     disabled = set(normalize_disabled_mods(disabled_mods))
@@ -1200,11 +1384,14 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
     _h = _hl.sha256()
     active_mods = []
     allowed_card_ids = {ERROR_CARD_ID}
+    v2_mods = []
     for mod in sorted(mods, key=lambda m: m.filename):
         if mod.filename in disabled_set or mod.errors:
             continue
         active_mods.append(mod.info.name if mod.info else mod.filename)
         _h.update(f'{mod.filename}:{mod.validation_hash or ""}'.encode('utf-8'))
+        if getattr(mod, 'format_version', 1) == 2:
+            v2_mods.append(mod)
         for card in mod.cards:
             if card.id in CARD_DEFS:
                 allowed_card_ids.add(card.id)
@@ -1221,17 +1408,48 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
         selected_community_hashes.append(selected_hash)
         active_mods.append(label)
         _h.update(f'community:{selected_hash}'.encode('utf-8'))
+        if getattr(community_item, 'format_version', 1) == 2:
+            v2_mods.append(community_item)
         for card in community_item.cards:
             if card.id in CARD_DEFS:
                 allowed_card_ids.add(card.id)
     if community_hash and not selected_community_hashes:
         _h.update(f'community:{community_hash}'.encode('utf-8'))
+    legacy_hash = _h.hexdigest()
+    v2_loadout = build_v2_loadout(v2_mods)
+    if not v2_loadout.ok:
+        raise ValueError('v2 模组组合错误: ' + '; '.join(v2_loadout.errors))
+    v2_card_ids = register_v2_loadout_cards(v2_loadout)
+    for card_id in v2_card_ids:
+        allowed_card_ids.add(card_id)
+    if v2_loadout.warnings:
+        for warning in v2_loadout.warnings:
+            print(f'[v2 loadout] {warning}')
+    combined_loadout_hash = sha256_json({
+        'legacy_hash': legacy_hash,
+        'v2_loadout_hash': v2_loadout.loadout_hash,
+    })
     return {
         'disabled_mods': disabled,
-        'mods_hash': _h.hexdigest(),
+        'mods_hash': legacy_hash,
+        'loadout_hash': combined_loadout_hash,
+        'v2_loadout_hash': v2_loadout.loadout_hash,
+        'v2_load_order': v2_loadout.load_order,
+        'v2_mod_hashes': v2_loadout.mod_hashes,
+        'v2_ui_components': dict(v2_loadout.registries.get('ui_components') or {}),
+        'v2_loadout': v2_loadout,
+        'v2_tag_defs': dict(v2_loadout.registries.get('tags') or {}),
+        'v2_status_defs': dict(v2_loadout.registries.get('statuses') or {}),
+        'v2_opening_event_defs': dict(v2_loadout.registries.get('opening_events') or {}),
         'mods_list': active_mods,
         'allowed_card_ids': allowed_card_ids,
     }
+
+
+def player_loadout_hash(player):
+    if not player:
+        return ''
+    return player.get('loadout_hash') or player.get('mods_hash') or ''
 
 
 def same_mod_loadout(sids):
@@ -1239,9 +1457,7 @@ def same_mod_loadout(sids):
     for sid in sids:
         if sid not in players:
             return False
-        hashes.append((
-            players[sid].get('mods_hash'),
-        ))
+        hashes.append(player_loadout_hash(players[sid]))
     return len(set(hashes)) <= 1
 
 
@@ -1340,13 +1556,17 @@ def _file_size(path):
         return 0
 
 
-def _dir_size(path, max_files=25000):
+def _dir_size(path, max_files=None):
+    max_files = _RESOURCE_BREAKDOWN_MAX_FILES if max_files is None else max_files
     total = 0
     files = 0
     if not path or not os.path.exists(path):
         return {'path': path, 'bytes': 0, 'files': 0, 'truncated': False}
     for root, dirs, filenames in os.walk(path):
-        dirs[:] = [d for d in dirs if d not in {'.git', '__pycache__', 'node_modules', '.venv', 'venv'}]
+        dirs[:] = [
+            d for d in dirs
+            if d not in {'.git', '__pycache__', 'node_modules', '.venv', 'venv', '.pytest_cache', '.mypy_cache'}
+        ]
         for filename in filenames:
             try:
                 total += os.path.getsize(os.path.join(root, filename))
@@ -1375,7 +1595,7 @@ def _db_storage_usage():
 def _resource_breakdown():
     now = time.time()
     cached = _RESOURCE_BREAKDOWN_CACHE.get('data')
-    if cached is not None and now - float(_RESOURCE_BREAKDOWN_CACHE.get('ts') or 0) < 30:
+    if cached is not None and now - float(_RESOURCE_BREAKDOWN_CACHE.get('ts') or 0) < _RESOURCE_BREAKDOWN_CACHE_SECONDS:
         return cached
     base_dir = os.path.dirname(os.path.abspath(__file__))
     static_dir = os.path.join(base_dir, 'static')
@@ -1558,15 +1778,46 @@ def measure_socket_action(event_name):
     return decorator
 
 
-def get_runtime_metrics():
+def _collect_runtime_metrics():
     uptime = max(0, int(time.time() - SERVER_STARTED_AT))
-    root_usage = shutil.disk_usage('/')
+    metrics_errors = []
+    try:
+        root_usage = shutil.disk_usage('/')
+        disk_payload = {
+            'path': '/',
+            'total': root_usage.total,
+            'used': root_usage.used,
+            'free': root_usage.free,
+            'percent': round(root_usage.used / root_usage.total * 100, 1) if root_usage.total else None,
+            'ephemeral': False,
+        }
+    except Exception as exc:
+        metrics_errors.append(f'disk_usage: {exc}')
+        disk_payload = {
+            'path': '/',
+            'total': None,
+            'used': None,
+            'free': None,
+            'percent': None,
+            'ephemeral': False,
+            'error': str(exc),
+        }
     loadavg = None
     if hasattr(os, 'getloadavg'):
         try:
             loadavg = list(os.getloadavg())
         except OSError:
             loadavg = None
+    try:
+        storage_breakdown = _resource_breakdown()
+    except Exception as exc:
+        metrics_errors.append(f'resource_breakdown: {exc}')
+        storage_breakdown = {
+            'base_dir': os.path.dirname(os.path.abspath(__file__)),
+            'database': {'bytes': 0, 'files': []},
+            'directories': [],
+            'error': str(exc),
+        }
     metrics = {
         'time': iso_now(),
         'uptime_seconds': uptime,
@@ -1579,14 +1830,7 @@ def get_runtime_metrics():
             'memory_target': os.environ.get('GTN_SERVER_MEMORY', '2G'),
             'disk_target': os.environ.get('GTN_SERVER_DISK', '40G'),
         },
-        'disk': {
-            'path': '/',
-            'total': root_usage.total,
-            'used': root_usage.used,
-            'free': root_usage.free,
-            'percent': round(root_usage.used / root_usage.total * 100, 1) if root_usage.total else None,
-            'ephemeral': False,
-        },
+        'disk': disk_payload,
         'loadavg': loadavg,
         'process': {
             'pid': os.getpid(),
@@ -1612,7 +1856,7 @@ def get_runtime_metrics():
             'bytes_sent': None,
             'bytes_recv': None,
         },
-        'storage_breakdown': _resource_breakdown(),
+        'storage_breakdown': storage_breakdown,
         'psutil_available': psutil is not None,
     }
     if psutil is not None and _PSUTIL_PROCESS is not None:
@@ -1653,34 +1897,77 @@ def get_runtime_metrics():
                     'bytes_recv': net.bytes_recv,
                 })
         except Exception as exc:
-            metrics['metrics_error'] = str(exc)
+            metrics_errors.append(f'psutil: {exc}')
     _record_resource_sample(metrics)
     metrics['resource_history'] = _resource_history_payload()
     metrics['socket'] = socket_metrics_payload()
-    metrics['r2'] = get_r2_health_snapshot()
+    try:
+        metrics['r2'] = get_r2_health_snapshot()
+    except Exception as exc:
+        metrics_errors.append(f'r2_health: {exc}')
+        metrics['r2'] = {'last_error': str(exc)}
+    if metrics_errors:
+        metrics['metrics_error'] = '; '.join(metrics_errors)
     return metrics
 
 
+def get_runtime_metrics():
+    now = time.time()
+    cached = _RUNTIME_METRICS_CACHE.get('data')
+    cache_ts = float(_RUNTIME_METRICS_CACHE.get('ts') or 0)
+    if cached is not None and now - cache_ts < _RUNTIME_METRICS_CACHE_SECONDS:
+        payload = copy.deepcopy(cached)
+        payload['cached'] = True
+        return payload
+    acquired = _RUNTIME_METRICS_LOCK.acquire(blocking=False)
+    if not acquired:
+        if cached is not None:
+            payload = copy.deepcopy(cached)
+            payload['cached'] = True
+            payload['stale'] = True
+            return payload
+        _RUNTIME_METRICS_LOCK.acquire()
+        acquired = True
+    try:
+        now = time.time()
+        cached = _RUNTIME_METRICS_CACHE.get('data')
+        cache_ts = float(_RUNTIME_METRICS_CACHE.get('ts') or 0)
+        if cached is not None and now - cache_ts < _RUNTIME_METRICS_CACHE_SECONDS:
+            payload = copy.deepcopy(cached)
+            payload['cached'] = True
+            return payload
+        metrics = _collect_runtime_metrics()
+        _RUNTIME_METRICS_CACHE['ts'] = now
+        _RUNTIME_METRICS_CACHE['data'] = copy.deepcopy(metrics)
+        return metrics
+    finally:
+        if acquired:
+            _RUNTIME_METRICS_LOCK.release()
+
+
 def get_admin_status_payload():
+    metrics = get_runtime_metrics()
     with _lock:
         player_list = build_admin_players()
         room_list = build_admin_rooms()
         spectator_count = sum(1 for p in players.values() if p.get('status') == 'spectating')
-        return {
-            'success': True,
-            'metrics': get_runtime_metrics(),
-            'summary': {
-                'online_players': len(player_list),
-                'lobby_players': sum(1 for p in player_list if p['status'] == 'lobby'),
-                'rooms': len(room_list),
-                'spectators': spectator_count,
-                'history_count': len(MATCH_HISTORY),
-            },
-            'players': player_list,
-            'rooms': room_list,
-            'events': list(ADMIN_EVENTS)[:120],
-            'history': list(MATCH_HISTORY)[:80],
-        }
+        events = list(ADMIN_EVENTS)[:120]
+        history = list(MATCH_HISTORY)[:80]
+    return {
+        'success': True,
+        'metrics': metrics,
+        'summary': {
+            'online_players': len(player_list),
+            'lobby_players': sum(1 for p in player_list if p['status'] == 'lobby'),
+            'rooms': len(room_list),
+            'spectators': spectator_count,
+            'history_count': len(history),
+        },
+        'players': player_list,
+        'rooms': room_list,
+        'events': events,
+        'history': history,
+    }
 
 
 ADMIN_COMMANDS = {
@@ -1901,6 +2188,26 @@ def zh_phase(value):
     }.get(value, value)
 
 
+def send_system_broadcast(message):
+    msg = str(message or '').strip()[:500]
+    if not msg:
+        return 0
+    payload = {
+        'nickname': '系统',
+        'text': msg,
+        'system': True,
+        'is_spectator': False,
+    }
+    with _lock:
+        recipients = list(players.keys())
+    sent = 0
+    for sid in recipients:
+        socketio.emit('chat', payload, room=sid)
+        sent += 1
+    socketio.emit('server_broadcast', {'message': f'[系统]{msg}'})
+    return sent
+
+
 def execute_admin_command(line):
     raw = (line or '').strip()
     if not raw:
@@ -1997,7 +2304,7 @@ def execute_admin_command(line):
         msg = raw[len(parts[0]):].strip()
         if not msg:
             return {'success': False, 'output': command_error(raw, len(raw), '<内容>')}
-        socketio.emit('server_broadcast', {'message': msg})
+        sent = send_system_broadcast(msg)
         admin_event('admin', f'broadcast: {msg}')
         return {'success': True, 'output': f'已发送广播：{msg}'}
     if cmd in ('userpass', 'passwd', 'setpass'):
@@ -2364,7 +2671,7 @@ def set_room_player_attr(room_id, pidx, key, val):
     return True, f'已设置房间 {room_id} 的玩家 {pidx}：{key}={val}'
 
 
-def broadcast_lobby():
+def _build_lobby_update_payloads_locked():
     lobby_list = get_lobby_list()
     ongoing = get_ongoing_games()
     team_list = []
@@ -2386,9 +2693,10 @@ def broadcast_lobby():
         item.get('special_role_sort', 99),
         ' '.join(item.get('members') or []).lower()
     ))
+    payloads = []
     for sid, p in players.items():
         if p['status'] == 'lobby':
-            socketio.emit('lobby_update', {
+            payloads.append((sid, {
                 'players': lobby_list,
                 'your_sid': sid,
                 'ongoing_games': ongoing,
@@ -2396,8 +2704,45 @@ def broadcast_lobby():
                 'your_team': teams[sid]['members'] if sid in teams else None,
                 'your_team_leader': teams[sid]['leader'] if sid in teams else None,
                 'your_mode': p.get('mode', '1v1'),
-            }, room=sid)
-    print("[server] debug")
+            }))
+    return payloads
+
+
+def _broadcast_lobby_worker():
+    global _LOBBY_BROADCAST_PENDING, _LOBBY_BROADCAST_DIRTY
+    while True:
+        if _LOBBY_BROADCAST_DELAY_SECONDS > 0:
+            try:
+                socketio.sleep(_LOBBY_BROADCAST_DELAY_SECONDS)
+            except Exception:
+                time.sleep(_LOBBY_BROADCAST_DELAY_SECONDS)
+        try:
+            with _lock:
+                payloads = _build_lobby_update_payloads_locked()
+            for sid, payload in payloads:
+                socketio.emit('lobby_update', payload, room=sid)
+        except Exception as exc:
+            admin_event('error', f'lobby broadcast failed: {exc}')
+        with _LOBBY_BROADCAST_LOCK:
+            if _LOBBY_BROADCAST_DIRTY:
+                _LOBBY_BROADCAST_DIRTY = False
+                continue
+            _LOBBY_BROADCAST_PENDING = False
+            break
+
+
+def broadcast_lobby():
+    global _LOBBY_BROADCAST_PENDING, _LOBBY_BROADCAST_DIRTY
+    with _LOBBY_BROADCAST_LOCK:
+        if _LOBBY_BROADCAST_PENDING:
+            _LOBBY_BROADCAST_DIRTY = True
+            return
+        _LOBBY_BROADCAST_PENDING = True
+        _LOBBY_BROADCAST_DIRTY = False
+    try:
+        socketio.start_background_task(_broadcast_lobby_worker)
+    except Exception:
+        threading.Thread(target=_broadcast_lobby_worker, name='lobby-broadcast', daemon=True).start()
 
 
 def send_draft_state(room, pidx):
@@ -2423,8 +2768,13 @@ def send_draft_state(room, pidx):
         'round': len(picks) + 1,
         'total_rounds': DECK_SIZE,
         'others_picks_count': others_picks_count,
+        'opponent_picks_count': next(iter(others_picks_count.values()), 0) if room.mode != '2v2' else 0,
         'mode': room.mode,
         'player_names': engine.player_names,
+        'room_id': room.room_id,
+        'match_key': room_match_key(room),
+        'your_id': pidx,
+        'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
     }
     payload.update(room_mod_payload(room))
     socketio.emit('draft_state', payload, room=sid)
@@ -2452,6 +2802,10 @@ def send_event_state(room, pidx):
         'draft_picks': engine.draft_picks[pidx],
         'mode': room.mode,
         'player_names': engine.player_names,
+        'room_id': room.room_id,
+        'match_key': room_match_key(room),
+        'your_id': pidx,
+        'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
     }
     payload.update(room_mod_payload(room))
     socketio.emit('event_select', payload, room=sid)
@@ -2664,8 +3018,10 @@ def _reset_player_for_solo(ps, deck_entries, is_first):
     ps.is_first_player = is_first
 
 
-def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=None, player_names=None, start_label='单人训练场开始'):
+def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=None, player_names=None, start_label='单人训练场开始', loadout=None):
     engine = GameEngine()
+    if loadout is not None:
+        apply_v2_loadout_to_engine(engine, loadout)
     engine.player_names = list(player_names) if player_names else ['Player A', 'Player B']
     engine.phase = 'playing'
     force_first = [idx for idx, event_id in enumerate((event0, event1)) if event_id == 7]
@@ -2740,6 +3096,79 @@ def emit_solo_response_request(sid, engine, pidx, played_card):
         'player_id': pidx,
         'counter_cards': [c.to_dict() for c in counter_cards],
     }, room=sid)
+
+
+def _schedule_v2_ui_timeout(scope, engine, player_id, request_id, timeout_ms):
+    try:
+        timeout_ms = int(timeout_ms or 0)
+    except Exception:
+        timeout_ms = 0
+    if timeout_ms <= 0 or not request_id or not scope:
+        return
+    timer_key = (scope[0], scope[1], request_id)
+    if timer_key in v2_ui_timers:
+        return
+
+    def _timeout():
+        with _lock:
+            v2_ui_timers.pop(timer_key, None)
+            pending = getattr(engine, 'pending_v2_ui', None)
+            if not pending or str(pending.get('request_id')) != str(request_id):
+                return
+            result = engine.handle_v2_ui_response(player_id, request_id, {'button': 'cancel', 'values': {}})
+            if scope[0] == 'solo':
+                sid = scope[1]
+                if sid in solo_sessions and solo_sessions.get(sid) is engine:
+                    send_solo_state(sid)
+                    if result.get('needs_v2_ui'):
+                        emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
+            elif scope[0] == 'room':
+                room = rooms.get(scope[1])
+                if room and room.engine is engine:
+                    broadcast_game_state(room)
+                    if result.get('needs_v2_ui'):
+                        emit_room_v2_ui_request(room)
+
+    timer = threading.Timer(timeout_ms / 1000.0, _timeout)
+    timer.daemon = True
+    v2_ui_timers[timer_key] = timer
+    timer.start()
+
+
+def _cancel_v2_ui_timeout(scope, request_id):
+    if not scope or not request_id:
+        return
+    timer = v2_ui_timers.pop((scope[0], scope[1], request_id), None)
+    if timer:
+        timer.cancel()
+
+
+def emit_v2_ui_request_to_sid(sid, engine, timeout_scope=None):
+    pending = getattr(engine, 'pending_v2_ui', None)
+    if not pending:
+        return False
+    request_id = pending.get('request_id')
+    socketio.emit('v2_ui_request', {
+        'request_id': request_id,
+        'component': pending.get('component') or {},
+        'card': pending.get('card'),
+        'timeout_ms': pending.get('timeout_ms', 0),
+        'player_id': pending.get('player_id'),
+    }, room=sid)
+    _schedule_v2_ui_timeout(timeout_scope, engine, pending.get('player_id'), request_id, pending.get('timeout_ms', 0))
+    return True
+
+
+def emit_room_v2_ui_request(room):
+    pending = getattr(room.engine, 'pending_v2_ui', None)
+    if not pending:
+        return False
+    pidx = pending.get('player_id')
+    if isinstance(pidx, int) and 0 <= pidx < len(room.player_sids):
+        target_sid = room.player_sids[pidx]
+        if target_sid in players:
+            return emit_v2_ui_request_to_sid(target_sid, room.engine, ('room', room.room_id))
+    return False
 
 
 def broadcast_spectate_state(room):
@@ -2986,7 +3415,42 @@ def admin_logout():
 
 @app.route('/api/admin/status')
 def admin_status():
-    return jsonify(get_admin_status_payload())
+    try:
+        return jsonify(get_admin_status_payload())
+    except Exception as exc:
+        admin_event('error', f'admin status failed: {exc}')
+        return jsonify({
+            'success': False,
+            'error': str(exc),
+            'metrics': {
+                'time': iso_now(),
+                'uptime_seconds': max(0, int(time.time() - SERVER_STARTED_AT)),
+                'metrics_error': str(exc),
+            },
+            'summary': {
+                'online_players': 0,
+                'lobby_players': 0,
+                'rooms': 0,
+                'spectators': 0,
+                'history_count': 0,
+            },
+            'players': [],
+            'rooms': [],
+            'events': list(ADMIN_EVENTS)[:120],
+            'history': list(MATCH_HISTORY)[:80],
+        })
+
+
+@app.route('/api/healthz')
+def healthz():
+    return jsonify({
+        'success': True,
+        'time': iso_now(),
+        'uptime_seconds': max(0, int(time.time() - SERVER_STARTED_AT)),
+        'players': len(players),
+        'rooms': len(rooms),
+        'psutil_available': psutil is not None,
+    })
 
 
 def _admin_online_user_map():
@@ -3304,6 +3768,76 @@ def api_auth_me():
     return jsonify({'authenticated': True, 'db_available': True, 'user': auth_user_payload(user)})
 
 
+@app.route('/api/social/friends')
+def api_social_friends():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    data, error = list_friends(user_id)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, **(data or {})})
+
+
+@app.route('/api/social/friends/add', methods=['POST'])
+def api_social_friend_add():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    result, error = add_friend_request(user_id, data.get('identifier', ''))
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, **(result or {})})
+
+
+@app.route('/api/social/friends/respond', methods=['POST'])
+def api_social_friend_respond():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    result, error = respond_friend_request(user_id, data.get('request_id'), data.get('action'))
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, **(result or {})})
+
+
+@app.route('/api/social/friends/remove', methods=['POST'])
+def api_social_friend_remove():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    result, error = remove_friend(user_id, data.get('user_id'))
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, **(result or {})})
+
+
+@app.route('/api/social/settings', methods=['POST'])
+def api_social_settings_update():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    settings, error = update_user_social_settings(user_id, data)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    user = get_user_by_id(user_id)
+    return jsonify({'success': True, 'settings': settings, 'user': auth_user_payload(user)})
+
+
 @app.route('/api/cards')
 def api_cards():
     try:
@@ -3367,6 +3901,9 @@ def api_cards():
             'effects': card_def.effects,
             'scripts': getattr(card_def, 'scripts', {}) or {},
         }
+        if getattr(card_def, 'v2_mod_id', ''):
+            card_payload['v2_mod_id'] = getattr(card_def, 'v2_mod_id', '')
+            card_payload['v2_resource'] = getattr(card_def, 'v2_resource', {}) or {}
         card_payload.update(card_text(def_id, card_payload))
         result[def_id] = card_payload
     return jsonify(result)
@@ -3391,9 +3928,16 @@ def api_opening_events():
     events = []
     for event_id in sorted(GameEngine.OPENING_EVENTS.keys()):
         events.append(event_text(event_id, dict(GameEngine.OPENING_EVENTS[event_id])))
+    registries = getattr(loadout.get('v2_loadout'), 'registries', {}) if loadout.get('v2_loadout') is not None else {}
+    for resource in (registries.get('opening_events') or {}).values():
+        payload = v2_opening_event_payload(resource)
+        if payload:
+            events.append(payload)
+    registry_payload = v2_registry_payload(loadout.get('v2_loadout'))
     return jsonify({
         'events': events,
         'magic_pool': [def_id for def_id in GameEngine.MAGIC_CARD_POOL if def_id in allowed_card_ids],
+        **registry_payload,
     })
 
 
@@ -3405,10 +3949,19 @@ def api_mods():
         d = mod.to_dict(include_validation=True)
         d['filename'] = mod.filename
         d['is_vanilla'] = mod.filename == VANILLA_MOD_FILENAME
-        d['card_type_counts'] = {
-            card_type: sum(1 for card in mod.cards if card.card_type == card_type and card.count > 0)
-            for card_type in REQUIRED_CARD_TYPES
-        }
+        if getattr(mod, 'format_version', 1) == 2:
+            d['content_hash'] = getattr(mod, 'content_hash', '') or getattr(mod, 'validation_hash', '')
+            if hasattr(mod, 'resource_counts'):
+                d['resource_counts'] = mod.resource_counts()
+            d['card_type_counts'] = {
+                card_type: sum(1 for card in mod.cards if card.card_type == card_type and card.count > 0)
+                for card_type in REQUIRED_CARD_TYPES
+            }
+        else:
+            d['card_type_counts'] = {
+                card_type: sum(1 for card in mod.cards if card.card_type == card_type and card.count > 0)
+                for card_type in REQUIRED_CARD_TYPES
+            }
         result.append(d)
     return jsonify(result)
 
@@ -3540,39 +4093,25 @@ def api_mods_save():
     data = request.get_json(force=True)
     if not data:
         return jsonify({'success': False, 'error': 'invalid data'}), 400
-    from mod_validator import validate_mod_data
-    validation = validate_mod_data(data, strict=False, source='api_mods_save')
+    if data.get('format_version') != 2:
+        return jsonify({'success': False, 'errors': ['只接受 GTN Mod Spec v2（format_version 必须为 2）'], 'warnings': []}), 400
+    from mod_validator_v2 import validate_mod_v2
+    validation = validate_mod_v2(data, source='api_mods_save', allow_reserved_namespaces=True)
     if validation.errors:
         return jsonify({'success': False, 'errors': validation.errors, 'warnings': validation.warnings}), 400
     data = validation.normalized
     mods_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mods')
-    requested_name = data.get('filename') or os.path.basename(str(data.get('filepath') or 'new_mod.json'))
+    manifest = data.get('manifest') if isinstance(data.get('manifest'), dict) else {}
+    requested_name = data.get('filename') or os.path.basename(str(data.get('filepath') or f"{manifest.get('id') or 'new_mod'}.json"))
     safe_name = os.path.basename(requested_name).strip() or 'new_mod.json'
     if not safe_name.endswith('.json'):
         safe_name += '.json'
-    mod = Mod(os.path.join(mods_dir, safe_name))
-    mod.format_version = data.get('format_version', 1)
-    mod.editor = data.get('editor', {}) if isinstance(data.get('editor', {}), dict) else {}
-    if data.get('info'):
-        from mod_loader import ModInfo
-        mod.info = ModInfo(data['info'])
-    if data.get('cards'):
-        from mod_loader import ModCard
-        for cd in data['cards']:
-            mod.cards.append(ModCard(cd))
-    if data.get('events'):
-        from mod_loader import ModEvent
-        for ed in data['events']:
-            mod.events.append(ModEvent(ed))
-    if data.get('variables'):
-        from mod_loader import ModVariable
-        for vd in data['variables']:
-            mod.variables.append(ModVariable(vd))
-    mod.custom_statuses = data.get('custom_statuses', [])
-    mod.custom_tags = data.get('custom_tags', [])
-    mod.scripts = data.get('scripts', {})
     try:
-        save_mod(mod)
+        os.makedirs(mods_dir, exist_ok=True)
+        with open(os.path.join(mods_dir, safe_name), 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        from mod_loader import invalidate_mod_cache
+        invalidate_mod_cache()
         reload_mod_card_defs(force=True)
         return jsonify({'success': True, 'warnings': validation.warnings})
     except Exception as e:
@@ -3632,7 +4171,7 @@ def admin_broadcast():
     msg = data.get('message', '')
     if not msg.strip():
         return jsonify({'success': False, 'error': 'empty message'}), 400
-    socketio.emit('server_broadcast', {'message': msg})
+    send_system_broadcast(msg)
     admin_event('admin', f'broadcast: {msg}')
     return jsonify({'success': True})
 
@@ -3849,6 +4388,12 @@ def on_login(data):
             'room_id': None,
             'status': initial_status,
             'mods_hash': loadout['mods_hash'],
+            'loadout_hash': loadout['loadout_hash'],
+            'v2_loadout_hash': loadout.get('v2_loadout_hash', ''),
+            'v2_load_order': loadout.get('v2_load_order', []),
+            'v2_mod_hashes': loadout.get('v2_mod_hashes', {}),
+            'v2_ui_components': loadout.get('v2_ui_components', {}),
+            'v2_loadout': loadout.get('v2_loadout'),
             'mods_list': loadout['mods_list'],
             'disabled_mods': loadout['disabled_mods'],
             'allowed_card_ids': loadout['allowed_card_ids'],
@@ -3890,6 +4435,9 @@ def on_login(data):
         'authenticated': bool(is_registered_user),
         'disabled_mods': players.get(sid, {}).get('disabled_mods', []),
         'mods_hash': players.get(sid, {}).get('mods_hash', ''),
+        'loadout_hash': players.get(sid, {}).get('loadout_hash', '') or players.get(sid, {}).get('mods_hash', ''),
+        'v2_loadout_hash': players.get(sid, {}).get('v2_loadout_hash', ''),
+        'v2_load_order': players.get(sid, {}).get('v2_load_order', []),
         'mods_list': players.get(sid, {}).get('mods_list', []),
         'mod_source': players.get(sid, {}).get('mod_source', 'official'),
         'community_mod_url': players.get(sid, {}).get('community_mod_url', ''),
@@ -3988,9 +4536,15 @@ def on_update_mod_settings(data):
                 'disabled_mods': player.get('disabled_mods', []),
             })
             return
-        old_hash = player.get('mods_hash')
+        old_hash = player_loadout_hash(player)
         player['disabled_mods'] = loadout['disabled_mods']
         player['mods_hash'] = loadout['mods_hash']
+        player['loadout_hash'] = loadout['loadout_hash']
+        player['v2_loadout_hash'] = loadout.get('v2_loadout_hash', '')
+        player['v2_load_order'] = loadout.get('v2_load_order', [])
+        player['v2_mod_hashes'] = loadout.get('v2_mod_hashes', {})
+        player['v2_ui_components'] = loadout.get('v2_ui_components', {})
+        player['v2_loadout'] = loadout.get('v2_loadout')
         player['mods_list'] = loadout['mods_list']
         player['allowed_card_ids'] = loadout['allowed_card_ids']
         player['mod_source'] = community_fields.get('mod_source', 'official')
@@ -4002,7 +4556,7 @@ def on_update_mod_settings(data):
         for inviter_sid, target_sid in list(invites.items()):
             if target_sid == sid:
                 del invites[inviter_sid]
-        if sid in teams and old_hash != loadout['mods_hash']:
+        if sid in teams and old_hash != loadout['loadout_hash']:
             team = teams[sid]
             leader = team['leader']
             members = list(team['members'])
@@ -4017,6 +4571,9 @@ def on_update_mod_settings(data):
         emit('mod_settings_updated', {
             'ok': True,
             'disabled_mods': loadout['disabled_mods'],
+            'loadout_hash': loadout['loadout_hash'],
+            'v2_loadout_hash': loadout.get('v2_loadout_hash', ''),
+            'v2_load_order': loadout.get('v2_load_order', []),
             'mods_list': loadout['mods_list'],
             'mod_source': player['mod_source'],
             'community_mod_hash': player['community_mod_hash'],
@@ -4035,8 +4592,8 @@ def on_accept_team(data):
             return
         if players[sid]['status'] != 'lobby' or players[leader_sid]['status'] != 'lobby':
             return
-        if players[sid].get('mods_hash') != players[leader_sid].get('mods_hash'):
-            emit('server_error', {'message': '模组不一致，无法组队'})
+        if player_loadout_hash(players[sid]) != player_loadout_hash(players[leader_sid]):
+            emit('server_error', {'message': '模组组合不一致，无法开始对局'})
             return
         if sid in teams or leader_sid in teams:
             return
@@ -4098,7 +4655,7 @@ def on_invite_team(data):
             return
         all_match_sids = my_team['members'] + target_team['members']
         if not same_mod_loadout(all_match_sids):
-            emit('server_error', {'message': '模组不一致，无法开始2v2'})
+            emit('server_error', {'message': '模组组合不一致，无法开始对局'})
             return
         match_key = (min(my_team['leader'], target_team['leader']),
                      max(my_team['leader'], target_team['leader']))
@@ -4139,7 +4696,7 @@ def on_accept_team_match(data):
             if s not in players or players[s]['status'] != 'lobby':
                 return
         if not same_mod_loadout(all_sids):
-            emit('server_error', {'message': '模组不一致，无法开始2v2'})
+            emit('server_error', {'message': '模组组合不一致，无法开始对局'})
             return
         room_id = _next_room_id
         _next_room_id += 1
@@ -4148,6 +4705,7 @@ def on_accept_team_match(data):
         if first_sid in players and players[first_sid].get('allowed_card_ids'):
             allowed = players[first_sid]['allowed_card_ids']
         room = GameRoom(room_id, all_sids, allowed, mode='2v2')
+        apply_v2_loadout_to_engine(room.engine, players.get(first_sid, {}))
         rooms[room_id] = room
         admin_event('game', f"room {room_id} created mode=2v2: {' / '.join(players[s]['nickname'] for s in all_sids)}")
         for s in all_sids:
@@ -4209,6 +4767,8 @@ def on_disconnect():
                     'community_mod_hash': player.get('community_mod_hash', ''),
                     'community_mods': player.get('community_mods', []),
                     'mods_hash': player.get('mods_hash', ''),
+                    'loadout_hash': player_loadout_hash(player),
+                    'v2_loadout_hash': player.get('v2_loadout_hash', ''),
                 }
                 room.disconnected_players[sid].update(special_public_fields(player))
                 dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)
@@ -4375,12 +4935,12 @@ def on_invite(data):
         if inviter_mode not in ('1v1', 'urf') or target_mode != inviter_mode:
             emit('server_error', {'message': '双方模式不一致，无法邀请'})
             return
-        if inviter.get('mods_hash') != target.get('mods_hash'):
+        if player_loadout_hash(inviter) != player_loadout_hash(target):
             inviter_mods = inviter.get('mods_list', [])
             target_mods = target.get('mods_list', [])
             inviter_label = ', '.join(inviter_mods) if inviter_mods else 'no mods'
             target_label = ', '.join(target_mods) if target_mods else 'no mods'
-            emit('server_error', {'message': f'模组不一致，无法开始对局。你：{inviter_label}；对方：{target_label}'})
+            emit('server_error', {'message': f'模组组合不一致，无法开始对局。你：{inviter_label}；对方：{target_label}'})
             return
         invites[sid] = target_sid
         inviter_name = players[sid]['nickname']
@@ -4420,13 +4980,14 @@ def on_accept_invite(data):
         accepter = players[sid]
         if inviter['status'] != 'lobby' or accepter['status'] != 'lobby':
             return
-        if inviter.get('mods_hash') != accepter.get('mods_hash'):
-            emit('server_error', {'message': '妯＄粍涓嶄竴鑷达紝鏃犳硶寮€濮嬪灞?'})
+        if player_loadout_hash(inviter) != player_loadout_hash(accepter):
+            emit('server_error', {'message': '模组组合不一致，无法开始对局'})
             return
         room_id = _next_room_id
         _next_room_id += 1
         allowed_card_ids = inviter.get('allowed_card_ids') or get_allowed_card_ids(inviter.get('disabled_mods', []))
         room = GameRoom(room_id, [inviter_sid, sid], allowed_card_ids, mode=inviter.get('mode', '1v1'))
+        apply_v2_loadout_to_engine(room.engine, inviter)
         rooms[room_id] = room
         admin_event('game', f"room {room_id} created mode={room.mode}: {inviter['nickname']} vs {accepter['nickname']}")
         inviter['room_id'] = room_id
@@ -4649,7 +5210,7 @@ def on_solo_start(data):
         return
     with _lock:
         tutorial_sessions.discard(sid)
-        solo_sessions[sid] = create_solo_engine(deck0, deck1, event0, event1, sub0, sub1)
+        solo_sessions[sid] = create_solo_engine(deck0, deck1, event0, event1, sub0, sub1, loadout=loadout)
         if sid in players:
             players[sid]['status'] = 'solo'
         socketio.emit('game_phase', {'phase': 'playing', 'solo': True}, room=sid)
@@ -4765,6 +5326,9 @@ def on_solo_play_card(data):
                 'choice_params': result.get('choice_params', {}),
                 'target_player_id': result.get('target_player_id'),
             }, room=sid)
+        elif result.get('needs_v2_ui'):
+            send_solo_state(sid)
+            emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
         elif result.get('success'):
             send_solo_state(sid)
         else:
@@ -4796,6 +5360,30 @@ def on_solo_resolve_choice(data):
         pidx = engine.pending_choice.get('player_id', engine.current_player) if engine.pending_choice else engine.current_player
         engine.resolve_choice(pidx, data.get('choice') if data else None)
         send_solo_state(sid)
+
+
+@socketio.on('solo_v2_ui_response')
+def on_solo_v2_ui_response(data):
+    sid = request.sid
+    with _lock:
+        engine = solo_sessions.get(sid)
+        if not engine:
+            return
+        pending = getattr(engine, 'pending_v2_ui', None)
+        if not pending:
+            return
+        pidx = int(pending.get('player_id', engine.current_player))
+        request_id = (data or {}).get('request_id')
+        _cancel_v2_ui_timeout(('solo', sid), request_id)
+        result = engine.handle_v2_ui_response(pidx, request_id, data or {})
+        if result.get('needs_v2_ui'):
+            send_solo_state(sid)
+            emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
+        elif result.get('success'):
+            send_solo_state(sid)
+        else:
+            emit('server_error', {'message': result.get('error', 'Operation failed')})
+            send_solo_state(sid)
 
 
 @socketio.on('solo_use_trigger')
@@ -4901,7 +5489,7 @@ def on_play_card(data):
             result = engine.play_card(pidx, card_instance_id, target_player_id=target_player_id, choice=choice)
         else:
             result = engine.play_card(pidx, card_instance_id, choice)
-        if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_choice'):
+        if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui'):
             record_room_replay_action(room, 'play_card', pidx, {
                 'card_instance_id': card_instance_id,
                 'target_player_id': target_player_id,
@@ -4970,6 +5558,9 @@ def on_play_card(data):
                 'choice_params': result.get('choice_params', {}),
                 'target_player_id': result.get('target_player_id'),
             })
+        elif result.get('needs_v2_ui'):
+            broadcast_game_state(room)
+            emit_room_v2_ui_request(room)
         elif result.get('success'):
             broadcast_game_state(room)
         else:
@@ -5018,7 +5609,7 @@ def on_ally_consent_response(data):
             return
         accepted = bool(data.get('accepted')) if data else False
         result = room.engine.handle_ally_consent(pidx, accepted)
-        if result.get('success') or result.get('needs_response') or result.get('needs_choice') or not accepted:
+        if result.get('success') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui') or not accepted:
             record_room_replay_action(room, 'ally_consent_response', pidx, {
                 'accepted': accepted,
                 'result': result,
@@ -5047,6 +5638,9 @@ def on_ally_consent_response(data):
                 'choice_params': result.get('choice_params', {}),
                 'target_player_id': result.get('target_player_id'),
             }, room=requester_sid)
+        elif result.get('needs_v2_ui'):
+            broadcast_game_state(room)
+            emit_room_v2_ui_request(room)
         elif not result.get('success'):
             emit('server_error', {'message': result.get('error', 'Operation failed')})
         else:
@@ -5073,6 +5667,40 @@ def on_resolve_choice(data):
         engine.resolve_choice(pidx, choice)
         record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice})
         broadcast_game_state(room)
+
+
+@socketio.on('v2_ui_response')
+@measure_socket_action('v2_ui_response')
+def on_v2_ui_response(data):
+    sid = request.sid
+    with _lock:
+        if sid not in players:
+            return
+        player = players[sid]
+        room_id = player.get('room_id')
+        if room_id is None or room_id not in rooms:
+            return
+        room = rooms[room_id]
+        pidx = room.player_index(sid)
+        if pidx < 0:
+            return
+        request_id = (data or {}).get('request_id')
+        _cancel_v2_ui_timeout(('room', room.room_id), request_id)
+        result = room.engine.handle_v2_ui_response(pidx, request_id, data or {})
+        record_room_replay_action(room, 'v2_ui_response', pidx, {
+            'request_id': request_id,
+            'button': (data or {}).get('button'),
+            'values': (data or {}).get('values'),
+            'result': result,
+        })
+        if result.get('needs_v2_ui'):
+            broadcast_game_state(room)
+            emit_room_v2_ui_request(room)
+        elif result.get('success'):
+            broadcast_game_state(room)
+        else:
+            emit('server_error', {'message': result.get('error', 'Operation failed')})
+            broadcast_game_state(room)
 
 
 @socketio.on('use_trigger')
@@ -5103,7 +5731,7 @@ def on_use_trigger(data):
             result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
         else:
             result = engine.use_trigger(pidx, equipment_instance_id)
-        if result.get('success') or result.get('needs_ally_consent') or result.get('needs_choice') or result.get('needs_response'):
+        if result.get('success') or result.get('needs_ally_consent') or result.get('needs_choice') or result.get('needs_response') or result.get('needs_v2_ui'):
             record_room_replay_action(room, 'use_trigger', pidx, {
                 'equipment_instance_id': equipment_instance_id,
                 'target_player_id': target_player_id,
@@ -5123,6 +5751,9 @@ def on_use_trigger(data):
                 else:
                     room.engine.pending_ally_request = None
                     emit('server_error', {'message': 'Teammate is not online'})
+        elif result.get('needs_v2_ui'):
+            broadcast_game_state(room)
+            emit_room_v2_ui_request(room)
         elif result.get('success'):
             broadcast_game_state(room)
         else:
@@ -5390,6 +6021,7 @@ def on_rematch(data=None):
                 reset_room_replay(room)
                 if room.player_sids and room.player_sids[0] in players:
                     room.engine.allowed_card_ids = set(players[room.player_sids[0]].get('allowed_card_ids', [])) or None
+                    apply_v2_loadout_to_engine(room.engine, players[room.player_sids[0]])
                 names = []
                 for pidx, psid in enumerate(room.player_sids):
                     if psid in players:

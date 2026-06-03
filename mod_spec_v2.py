@@ -1,0 +1,388 @@
+import hashlib
+import json
+import re
+from typing import Any, Dict, Tuple
+
+
+FORMAT_VERSION = 2
+API_VERSION = "2.0"
+
+VALID_CAPABILITIES = {
+    "cards",
+    "tags",
+    "statuses",
+    "opening_events",
+    "ui_components",
+    "ui.modal",
+    "ui.choice",
+    "ui.visual_limited",
+    "patches",
+    "compatibility",
+    "event_hooks",
+    "logic_dsl",
+    "logic.basic",
+    "logic.advanced",
+    "localization",
+}
+
+VALID_REGISTRY_KEYS = {
+    "cards",
+    "tags",
+    "statuses",
+    "opening_events",
+    "ui_components",
+    "variables",
+    "lists",
+}
+
+VALID_UI_COMPONENT_TYPES = {
+    "modal",
+    "panel",
+    "prompt",
+    "choice",
+    "confirm",
+    "player_picker",
+    "target_picker",
+    "card_picker",
+    "equipment_picker",
+    "zone_picker",
+    "text",
+    "dynamic_text",
+    "divider",
+    "rich_text",
+    "button",
+    "button_group",
+    "input",
+    "number",
+    "number_input",
+    "select",
+    "radio_group",
+    "checkbox",
+    "slider",
+    "multi_select",
+    "tabs",
+    "list",
+    "card_preview",
+    "stat_display",
+    "warning_text",
+    "preview_value",
+}
+
+VALID_LOGIC_OPS = {
+    "sequence",
+    "literal",
+    "const",
+    "var",
+    "ref",
+    "get",
+    "set",
+    "set_var",
+    "add_var",
+    "add",
+    "sub",
+    "mul",
+    "div",
+    "mod",
+    "min",
+    "max",
+    "clamp",
+    "compare",
+    "and",
+    "or",
+    "not",
+    "if",
+    "if_else",
+    "repeat",
+    "repeat_until",
+    "for_each",
+    "break",
+    "continue",
+    "stop",
+    "cancel_event",
+    "random",
+    "choose",
+    "call",
+    "emit",
+    "log",
+    "show_hint",
+    "request_ui",
+    "show_ui",
+    "request_choice",
+    "request_target",
+    "request_card",
+    "request_confirm",
+    "deal_damage",
+    "damage",
+    "heal",
+    "draw_cards",
+    "gain_resource",
+    "gain_e",
+    "gain_m",
+    "spend_resource",
+    "draw",
+    "discard",
+    "move_card",
+    "create_card",
+    "copy_card",
+    "transform_card",
+    "add_tag",
+    "remove_tag",
+    "add_status",
+    "remove_status",
+    "add_equipment",
+    "destroy_equipment",
+    "patch_value",
+    "remove_status",
+    "set_status",
+    "modify_event_value",
+    "cancel_current_card",
+    "player_stat",
+    "player_property",
+    "card_prop",
+    "card_property",
+    "equipment_prop",
+    "equipment_property",
+    "count",
+    "zone_count",
+    "hand_full",
+    "floor",
+    "ceil",
+    "last_damage",
+    "event_value",
+    "damage_amount",
+    "damage_source",
+    "target_player",
+    "status_stack",
+    "card_has_tag",
+    "has_tag",
+    "has_status",
+    "has_status_named",
+    "zone_exists",
+    "var_compare",
+    "damage_multi",
+    "deal_damage_multi",
+    "direct_damage",
+    "lifesteal_damage",
+    "triangle_damage",
+    "add_armor",
+    "remove_armor",
+    "set_armor",
+    "poison",
+    "burn",
+    "toxic",
+    "vulnus",
+    "dodge_this",
+    "dodge_permanent",
+    "clear_buffs",
+    "clear_debuffs",
+    "clear_all_effects",
+    "clear_status",
+    "status_add_named",
+    "status_remove_named",
+    "set_status_named",
+    "cost_e",
+    "cost_m",
+    "mod_e_regen",
+    "mod_m_regen",
+    "mod_draw",
+    "choose_from_deck",
+    "choose_from_discard",
+    "choose_from_exile",
+    "reveal_enemy_hand",
+    "reveal_deck_top",
+    "steal_enemy_card",
+    "copy_choice_with_discount",
+    "random_discard_from_hand",
+    "put_card_to_deck",
+    "shuffle_discard_into_deck",
+    "give_card_to_hand",
+    "give_card_to_deck",
+    "give_card_to_discard",
+    "remove_specific_card",
+    "move_to_hand",
+    "move_to_discard",
+    "move_to_deck",
+    "move_to_exile",
+    "destroy_random_equip",
+    "destroy_all_equip",
+    "destroy_all_field_equip",
+    "destroy_all_destroyable_equipment",
+    "destroy_self_equipment",
+    "destroy_equipment_choice_or_first",
+    "equip_protection",
+    "remove_equip_protection",
+    "place_as_equip",
+    "add_equipment_to_zone",
+    "trigger_manual",
+    "block_action",
+    "block_card_type",
+    "force_card_type",
+    "nullify_current_card",
+    "invincible",
+    "untargetable",
+    "skip_turn",
+    "extra_turn",
+    "force_end_turn",
+    "fission",
+    "fusion",
+    "multiply_next_damage",
+    "reduce_next_cost",
+    "increase_next_cost",
+    "tag_add_named",
+    "tag_remove_named",
+    "clear_tags",
+    "transform_card",
+    "gain_durability",
+    "lose_durability",
+    "set_durability",
+    "global_damage_mult",
+    "global_heal_mult",
+    "global_cost_mult",
+    "swap_health",
+    "swap_hands",
+    "broadcast_event",
+    "modify_damage",
+    "var_set",
+    "var_add",
+    "var_sub",
+    "var_mul",
+    "var_div",
+    "var_remove",
+    "list_set",
+    "list_create",
+    "list_append",
+    "list_insert",
+    "list_delete",
+    "list_extend",
+    "list_pop",
+    "list_clear",
+    "for_each_list",
+    "timed_effect",
+    "countdown_var",
+    "player_prop_set",
+    "player_prop_add",
+    "card_prop_set",
+    "card_prop_add",
+    "card_prop_mul",
+    "card_damage_multiply",
+    "equipment_prop_set",
+    "equipment_prop_add",
+    "discard_choice_then_draw",
+    "coffee_gain_e",
+    "activate_corruption",
+    "response_declare",
+    "aura_enemy_elixir_recovery",
+    "equip_reduce_own_draw",
+    "for_each_selected_card",
+    "on_any_turn_start",
+    "on_damage_taken",
+    "on_discard_owner_turn_start",
+    "on_enemy_turn_start",
+    "on_equipment_destroy",
+    "on_equipment_trigger",
+    "on_fatal_set_health_exile",
+    "on_hand_owner_turn_start",
+    "on_owner_turn_start",
+    "set_health",
+}
+
+VALID_EVENT_HOOKS = {
+    "before_play_card",
+    "after_play_card",
+    "before_damage",
+    "modify_damage",
+    "after_damage",
+    "turn_start",
+    "turn_end",
+    "before_draw",
+    "after_draw",
+    "status_added",
+    "equipment_destroyed",
+    "on_match_start",
+    "on_game_start",
+    "on_draft_start",
+    "on_opening_event",
+    "on_turn_start",
+    "on_turn_end",
+    "on_card_enter_hand",
+    "on_card_play",
+    "on_card_resolve",
+    "on_card_discarded",
+    "on_card_exiled",
+    "on_equipment_equipped",
+    "on_equipment_trigger",
+    "on_equipment_destroy",
+    "on_damage",
+    "on_damage_dealt",
+    "on_damage_taken",
+    "on_heal",
+    "on_resource_spent",
+    "on_resource_changed",
+    "on_player_stat_changed",
+    "on_status_added",
+    "on_status_removed",
+    "on_tag_added",
+    "on_tag_removed",
+    "on_response_window",
+    "on_choice_window",
+}
+
+VALID_PATCH_OPS = {
+    "add_tag",
+    "remove_tag",
+    "append_event_steps",
+    "prepend_event_steps",
+    "add_ui_style_token",
+    "modify_numeric_field",
+    "add_description_line",
+}
+
+RESERVED_NAMESPACES = {"gtn", "core", "system"}
+
+NAMESPACE_RE = re.compile(r"^[a-z0-9_]+$")
+PATH_RE = re.compile(r"^[a-z0-9_]+(?:/[a-z0-9_]+)*$")
+RESOURCE_ID_RE = re.compile(r"^([a-z0-9_]+):([a-z0-9_]+(?:/[a-z0-9_]+)*)$")
+
+
+def is_namespace(value: Any) -> bool:
+    return isinstance(value, str) and bool(NAMESPACE_RE.fullmatch(value))
+
+
+def is_resource_path(value: Any) -> bool:
+    return isinstance(value, str) and bool(PATH_RE.fullmatch(value))
+
+
+def is_namespaced_id(value: Any) -> bool:
+    return isinstance(value, str) and bool(RESOURCE_ID_RE.fullmatch(value))
+
+
+def split_resource_id(value: str) -> Tuple[str, str]:
+    match = RESOURCE_ID_RE.fullmatch(value or "")
+    if not match:
+        raise ValueError(f"非法资源 ID: {value!r}")
+    return match.group(1), match.group(2)
+
+
+def normalize_resource_id(mod_id: str, raw_id: Any) -> str:
+    if not isinstance(raw_id, str):
+        raise ValueError("资源 ID 必须是字符串")
+    raw_id = raw_id.strip()
+    if not raw_id:
+        raise ValueError("资源 ID 不能为空")
+    if is_namespaced_id(raw_id):
+        return raw_id
+    if ":" in raw_id:
+        raise ValueError(f"非法资源 ID: {raw_id}")
+    if not is_namespace(mod_id):
+        raise ValueError(f"非法模组命名空间: {mod_id}")
+    if not is_resource_path(raw_id):
+        raise ValueError(f"非法资源路径: {raw_id}")
+    return f"{mod_id}:{raw_id}"
+
+
+def canonical_json(data: Any) -> str:
+    return json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def sha256_json(data: Any) -> str:
+    return hashlib.sha256(canonical_json(data).encode("utf-8")).hexdigest()

@@ -5,6 +5,7 @@ import os
 import posixpath
 import secrets
 import time
+import copy
 from collections import deque
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -24,7 +25,7 @@ except Exception:  # pragma: no cover
     requests = None
 
 from mod_loader import load_mod_from_data
-from mod_validator import validate_mod_data
+from mod_validator_v2 import validate_mod_v2
 
 
 MAX_COMMUNITY_MOD_BYTES = 300_000
@@ -33,6 +34,8 @@ MAX_COMMUNITY_EVENTS = 30
 COMMUNITY_INDEX_KEY = 'community/index.json'
 COMMUNITY_TRASH_INDEX_KEY = 'community/trash/index.json'
 COMMUNITY_MOD_CACHE: Dict[str, Any] = {}
+COMMUNITY_INDEX_CACHE = {'ts': 0.0, 'data': None}
+COMMUNITY_INDEX_CACHE_SECONDS = int(os.environ.get('R2_INDEX_CACHE_SECONDS', '30'))
 R2_HEALTH = {
     'index_reads': deque(maxlen=100),
     'failures': {},
@@ -222,7 +225,9 @@ def fetch_json_from_public_url(url: str, max_bytes: int = MAX_COMMUNITY_MOD_BYTE
         raise R2ConfigError('社区模组未配置 R2_PUBLIC_BASE_URL')
     if not url.startswith(base + '/'):
         raise ValueError('public_url 不属于当前 R2 公开域名')
-    with requests.get(url, stream=True, timeout=(5, 12)) as resp:
+    connect_timeout = float(os.environ.get('R2_PUBLIC_CONNECT_TIMEOUT', '3'))
+    read_timeout = float(os.environ.get('R2_PUBLIC_READ_TIMEOUT', '8'))
+    with requests.get(url, stream=True, timeout=(connect_timeout, read_timeout)) as resp:
         resp.raise_for_status()
         length = resp.headers.get('Content-Length')
         if length and int(length) > max_bytes:
@@ -246,7 +251,11 @@ def fetch_json_from_public_url(url: str, max_bytes: int = MAX_COMMUNITY_MOD_BYTE
     return data
 
 
-def get_community_index() -> Dict[str, Any]:
+def get_community_index(force: bool = False) -> Dict[str, Any]:
+    now = time.time()
+    cached = COMMUNITY_INDEX_CACHE.get('data')
+    if not force and cached is not None and now - float(COMMUNITY_INDEX_CACHE.get('ts') or 0) < COMMUNITY_INDEX_CACHE_SECONDS:
+        return copy.deepcopy(cached)
     start = time.perf_counter()
     try:
         obj = _client().get_object(Bucket=_bucket(), Key=COMMUNITY_INDEX_KEY)
@@ -256,7 +265,10 @@ def get_community_index() -> Dict[str, Any]:
             code = exc.response.get('Error', {}).get('Code')
             if code in ('NoSuchKey', '404', 'NotFound'):
                 _record_r2_index_read((time.perf_counter() - start) * 1000, True, 0)
-                return {'mods': []}
+                data = {'mods': []}
+                COMMUNITY_INDEX_CACHE['ts'] = now
+                COMMUNITY_INDEX_CACHE['data'] = copy.deepcopy(data)
+                return data
         _record_r2_index_read((time.perf_counter() - start) * 1000, False, error=exc)
         raise
     try:
@@ -267,6 +279,8 @@ def get_community_index() -> Dict[str, Any]:
         if not isinstance(mods, list):
             data['mods'] = []
         _record_r2_index_read((time.perf_counter() - start) * 1000, True, len(data.get('mods') or []))
+        COMMUNITY_INDEX_CACHE['ts'] = now
+        COMMUNITY_INDEX_CACHE['data'] = copy.deepcopy(data)
         return data
     except Exception as exc:
         _record_r2_index_read((time.perf_counter() - start) * 1000, False, error=exc)
@@ -274,13 +288,16 @@ def get_community_index() -> Dict[str, Any]:
 
 
 def put_community_index(index: Dict[str, Any]) -> None:
-    payload = json.dumps(index if isinstance(index, dict) else {'mods': []}, ensure_ascii=False, indent=2)
+    data = index if isinstance(index, dict) else {'mods': []}
+    payload = json.dumps(data, ensure_ascii=False, indent=2)
     _client().put_object(
         Bucket=_bucket(),
         Key=COMMUNITY_INDEX_KEY,
         Body=payload.encode('utf-8'),
         ContentType='application/json; charset=utf-8',
     )
+    COMMUNITY_INDEX_CACHE['ts'] = time.time()
+    COMMUNITY_INDEX_CACHE['data'] = copy.deepcopy(data)
 
 
 def get_community_trash_index() -> Dict[str, Any]:
@@ -311,30 +328,57 @@ def put_community_trash_index(index: Dict[str, Any]) -> None:
     )
 
 
-def _strip_scripts(data: Dict[str, Any]) -> Dict[str, Any]:
-    sanitized = copy.deepcopy(data)
-    if isinstance(sanitized.get('scripts'), dict) and sanitized.get('scripts'):
-        sanitized['scripts'] = {}
-    for card in sanitized.get('cards', []) if isinstance(sanitized.get('cards'), list) else []:
-        if isinstance(card, dict) and isinstance(card.get('scripts'), dict) and card.get('scripts'):
-            card['scripts'] = {}
-    return sanitized
+def _is_v2_mod_data(data: Dict[str, Any]) -> bool:
+    return isinstance(data, dict) and data.get('format_version') == 2
 
 
 def _validate_community_mod_data(data: Dict[str, Any], source: str = ''):
-    if len(data.get('cards', []) if isinstance(data.get('cards'), list) else []) > MAX_COMMUNITY_CARDS:
-        validation = validate_mod_data(data, strict=False, source=source)
+    validation = validate_mod_v2(data if isinstance(data, dict) else {}, source=source, allow_reserved_namespaces=False)
+    if not _is_v2_mod_data(data):
+        validation.errors.append('社区模组只接受 GTN Mod Spec v2（format_version 必须为 2）')
+        return validation
+    registries = data.get('registries') if isinstance(data.get('registries'), dict) else {}
+    cards = registries.get('cards', []) if isinstance(registries.get('cards', []), list) else []
+    events = registries.get('opening_events', []) if isinstance(registries.get('opening_events', []), list) else []
+    if len(cards) > MAX_COMMUNITY_CARDS:
         validation.errors.append(f'社区模组卡牌数量过多，最多 {MAX_COMMUNITY_CARDS} 张')
-        return validation
-    if len(data.get('events', []) if isinstance(data.get('events'), list) else []) > MAX_COMMUNITY_EVENTS:
-        validation = validate_mod_data(data, strict=False, source=source)
+    if len(events) > MAX_COMMUNITY_EVENTS:
         validation.errors.append(f'社区模组开局事件数量过多，最多 {MAX_COMMUNITY_EVENTS} 个')
-        return validation
-    return validate_mod_data(data, strict=False, source=source)
+    return validation
+
+
+def _community_validation_input(data: Dict[str, Any]) -> tuple:
+    return data, []
+
+
+def _community_mod_info(data: Dict[str, Any]) -> Dict[str, Any]:
+    if _is_v2_mod_data(data):
+        manifest = data.get('manifest') if isinstance(data.get('manifest'), dict) else {}
+        registries = data.get('registries') if isinstance(data.get('registries'), dict) else {}
+        return {
+            'name': manifest.get('name') or 'Community Mod',
+            'version': manifest.get('version') or '1.0.0',
+            'author': manifest.get('author') or '',
+            'description': manifest.get('description') or '',
+            'cards_count': len(registries.get('cards', [])) if isinstance(registries.get('cards'), list) else 0,
+            'events_count': len(registries.get('opening_events', [])) if isinstance(registries.get('opening_events'), list) else 0,
+            'format_version': 2,
+            'manifest': manifest,
+        }
+    return {
+        'name': 'Invalid Community Mod',
+        'version': '',
+        'author': '',
+        'description': '',
+        'cards_count': 0,
+        'events_count': 0,
+        'format_version': data.get('format_version', None) if isinstance(data, dict) else None,
+        'manifest': {},
+    }
 
 
 def _community_metadata(data: Dict[str, Any], public_url: str, key: str, sha256: str, uploader_name: Optional[str]):
-    info = data.get('info') if isinstance(data.get('info'), dict) else {}
+    info = _community_mod_info(data)
     return {
         'sha256': sha256,
         'key': key,
@@ -345,8 +389,10 @@ def _community_metadata(data: Dict[str, Any], public_url: str, key: str, sha256:
         'description': info.get('description') or '',
         'uploader_name': str(uploader_name or '')[:40],
         'uploaded_at': datetime.utcnow().isoformat(timespec='seconds') + 'Z',
-        'cards_count': len(data.get('cards', [])) if isinstance(data.get('cards'), list) else 0,
-        'events_count': len(data.get('events', [])) if isinstance(data.get('events'), list) else 0,
+        'cards_count': info.get('cards_count', 0),
+        'events_count': info.get('events_count', 0),
+        'format_version': info.get('format_version', 1),
+        'manifest': info.get('manifest') or {},
         'scripts_disabled': True,
     }
 
@@ -399,16 +445,14 @@ def _move_object_to_trash(key: str, sha256: str = '') -> Optional[str]:
 
 def validate_community_mod_url(public_url: str) -> Dict[str, Any]:
     data = fetch_json_from_public_url(public_url)
-    stripped = _strip_scripts(data)
-    validation = _validate_community_mod_data(stripped, source=public_url)
-    warnings = list(validation.warnings)
-    if data != stripped:
-        warnings.append('社区模组 scripts 已被禁用')
-    normalized = validation.normalized if validation.normalized else stripped
+    candidate, strip_warnings = _community_validation_input(data)
+    validation = _validate_community_mod_data(candidate, source=public_url)
+    warnings = list(validation.warnings) + strip_warnings
+    normalized = validation.normalized if validation.normalized else candidate
     sha256 = hashlib.sha256(
         json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
     ).hexdigest()
-    info = normalized.get('info') if isinstance(normalized.get('info'), dict) else {}
+    info = _community_mod_info(normalized)
     return {
         'ok': not validation.errors,
         'info': {
@@ -420,8 +464,10 @@ def validate_community_mod_url(public_url: str) -> Dict[str, Any]:
         'sha256': sha256,
         'errors': validation.errors,
         'warnings': warnings,
-        'cards_count': len(normalized.get('cards', [])) if isinstance(normalized.get('cards'), list) else 0,
-        'events_count': len(normalized.get('events', [])) if isinstance(normalized.get('events'), list) else 0,
+        'cards_count': info.get('cards_count', 0),
+        'events_count': info.get('events_count', 0),
+        'format_version': info.get('format_version', 1),
+        'manifest': info.get('manifest') or {},
     }
 
 
@@ -429,18 +475,16 @@ def register_community_mod(public_url: str, key: str, uploader_name: Optional[st
                            uploader_user_id: Optional[int] = None,
                            replace_sha256: Optional[str] = None) -> Dict[str, Any]:
     data = fetch_json_from_public_url(public_url)
-    stripped = _strip_scripts(data)
-    validation = _validate_community_mod_data(stripped, source=public_url)
-    warnings = list(validation.warnings)
-    if data != stripped:
-        warnings.append('社区模组 scripts 已被禁用')
+    candidate, strip_warnings = _community_validation_input(data)
+    validation = _validate_community_mod_data(candidate, source=public_url)
+    warnings = list(validation.warnings) + strip_warnings
     if validation.errors:
         return {'success': False, 'errors': validation.errors, 'warnings': warnings}
-    normalized = validation.normalized if validation.normalized else stripped
+    normalized = validation.normalized if validation.normalized else candidate
     sha256 = hashlib.sha256(
         json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
     ).hexdigest()
-    index = get_community_index()
+    index = get_community_index(force=True)
     mods = index.setdefault('mods', [])
     replace_sha256 = str(replace_sha256 or '').strip().lower()
     replace_item = None
@@ -487,7 +531,7 @@ def delete_community_mod(sha256: str, uploader_user_id: Optional[int] = None,
     sha256 = str(sha256 or '').strip().lower()
     if not sha256:
         return {'success': False, 'error': '缺少社区模组 hash'}
-    index = get_community_index()
+    index = get_community_index(force=True)
     mods = index.setdefault('mods', [])
     target = None
     for item in mods:
@@ -608,28 +652,29 @@ def load_community_mod(public_url: str, expected_hash: Optional[str] = None):
     expected_hash = str(expected_hash or '').strip()
     cache_key = expected_hash or public_url
     if cache_key in COMMUNITY_MOD_CACHE:
-        mod = COMMUNITY_MOD_CACHE[cache_key]
-        if not getattr(mod, 'community_uploaded_at', ''):
-            meta = _find_community_index_entry(getattr(mod, 'community_sha256', expected_hash), public_url) or {}
-            mod.community_uploaded_at = str(meta.get('uploaded_at') or '')
-            mod.community_key = str(meta.get('key') or '')
-        return mod
-    validation = validate_community_mod_url(public_url)
-    if validation['errors']:
-        raise ValueError('; '.join(validation['errors']))
-    sha256 = validation['sha256']
+        return COMMUNITY_MOD_CACHE[cache_key]
+    data = fetch_json_from_public_url(public_url)
+    candidate, strip_warnings = _community_validation_input(data)
+    validation = _validate_community_mod_data(candidate, source=public_url)
+    warnings = list(validation.warnings) + strip_warnings
+    if validation.errors:
+        raise ValueError('; '.join(validation.errors))
+    normalized = validation.normalized if validation.normalized else candidate
+    sha256 = hashlib.sha256(
+        json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+    ).hexdigest()
     if expected_hash and sha256 != expected_hash:
         raise ValueError('社区模组 hash 不一致')
-    data = fetch_json_from_public_url(public_url)
-    data = _strip_scripts(data)
-    mod = load_mod_from_data(data, source=public_url, allow_scripts=False)
+    mod = load_mod_from_data(normalized, source=public_url, allow_scripts=False)
     if mod.errors:
         raise ValueError('; '.join(mod.errors))
+    if warnings:
+        mod.warnings.extend(warnings)
     mod.community_sha256 = sha256
     mod.community_url = public_url
-    meta = _find_community_index_entry(sha256, public_url) or {}
-    mod.community_uploaded_at = str(meta.get('uploaded_at') or '')
-    mod.community_key = str(meta.get('key') or '')
+    mod.community_data = normalized
+    mod.community_uploaded_at = ''
+    mod.community_key = ''
     COMMUNITY_MOD_CACHE[sha256] = mod
     COMMUNITY_MOD_CACHE[public_url] = mod
     return mod

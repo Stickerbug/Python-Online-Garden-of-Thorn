@@ -1,332 +1,217 @@
 {
-  "format_version": 1,
-  "editor": {
-    "tool": "Garden of Thorn Mod Editor",
-    "tool_version": "1",
-    "schema": "gtn_mod_format_v1"
-  },
-  "info": {
+  "format_version": 2,
+  "manifest": {
+    "id": "garden_cards_addition",
     "name": "Garden Cards Addition",
     "version": "1.0.0",
+    "api_version": "2.0",
     "author": "NetherDog",
     "description": "Garden Addition Modpack",
-    "game_version": "*"
+    "capabilities": [
+      "cards",
+      "logic.advanced",
+      "logic.basic",
+      "statuses",
+      "tags"
+    ],
+    "dependencies": [],
+    "optional_dependencies": [],
+    "conflicts": [],
+    "load_before": [],
+    "load_after": []
   },
-  "variables": [
-    {
-      "id": "棍母",
-      "name": "棍母",
-      "scope": "player",
-      "initial": 0,
-      "desc": "由脚本引用自动创建"
-    }
-  ],
-  "cards": [
-    {
-      "id": "更快",
-      "name_cn": "更快",
-      "name_en": "Faster",
-      "cost_e": 0,
-      "cost_m": 0,
-      "card_type": "bloom",
-      "count": 4,
-      "quality": "Epic",
-      "description": "快，更快，再快点",
-      "effect_text": "+5E ,下一回合 -5E",
-      "flags": [],
-      "effects": [
-        {
-          "type": "gain_e",
-          "params": {
-            "target": "self",
-            "amount": 5
-          }
-        },
-        {
-          "type": "status_add_named",
-          "params": {
-            "target": "self",
-            "status": "过载",
-            "amount": {
-              "ref": "math_op",
-              "a": "{\"ref\":\"status_count\",\"target\":\"self\",\"status\":\"过载\"}",
-              "op": "+",
-              "b": "5"
-            }
-          }
-        }
-      ],
-      "trigger_cost_e": -1,
-      "trigger_effect_text": "",
-      "trigger_effects": [],
-      "response_trigger": "",
-      "scripts": {
-        "onPlay": {
-          "effects": [
-            {
-              "type": "gain_e",
-              "params": {
+  "registries": {
+    "cards": [
+      {
+        "name_cn": "更快",
+        "name_en": "Faster",
+        "cost_e": 0,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 4,
+        "quality": "Epic",
+        "description": "快，更快，再快点",
+        "effect_text": "+5E ,下一回合 -5E",
+        "flags": [],
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "response_trigger": "",
+        "id": "garden_cards_addition:faster",
+        "legacy_id": "更快",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "gain_e",
                 "target": "self",
                 "amount": 5
-              }
-            },
-            {
-              "type": "status_add_named",
-              "params": {
+              },
+              {
+                "op": "status_add_named",
                 "target": "self",
                 "status": "过载",
                 "amount": {
-                  "ref": "math_op",
-                  "a": "{\"ref\":\"status_count\",\"target\":\"self\",\"status\":\"过载\"}",
-                  "op": "+",
+                  "op": "add",
+                  "a": {
+                    "op": "status_stack",
+                    "target": "self",
+                    "status": "过载"
+                  },
                   "b": "5"
                 }
               }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "重",
-      "name_cn": "重",
-      "name_en": "Heavy",
-      "cost_e": 5,
-      "cost_m": 0,
-      "card_type": "thorn",
-      "count": 2,
-      "quality": "Ultra",
-      "description": "他太重了，你不得不停下来休息",
-      "effect_text": "造成40D，精准，获得一回合眩晕",
-      "flags": [
-        "precision"
-      ],
-      "effects": [
-        {
-          "type": "damage",
-          "params": {
-            "target": "enemy",
-            "amount": 40,
-            "is_precision": true
+            ]
           }
         },
-        {
-          "type": "status_add_named",
-          "params": {
-            "target": "self",
-            "status": "眩晕",
-            "amount": {
-              "ref": "math_op",
-              "a": "{\"ref\":\"status_count\",\"target\":\"self\",\"status\":\"眩晕\"}",
-              "op": "+",
-              "b": "1"
-            }
-          }
-        }
-      ],
-      "trigger_cost_e": -1,
-      "trigger_effect_text": "",
-      "trigger_effects": [],
-      "response_trigger": "",
-      "scripts": {
-        "onPlay": {
-          "effects": [
-            {
-              "type": "damage",
-              "params": {
+        "tags": []
+      },
+      {
+        "name_cn": "重",
+        "name_en": "Heavy",
+        "cost_e": 5,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 2,
+        "quality": "Ultra",
+        "description": "他太重了，你不得不停下来休息",
+        "effect_text": "造成40D，精准，获得一回合眩晕",
+        "flags": [
+          "precision"
+        ],
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "response_trigger": "",
+        "id": "garden_cards_addition:heavy",
+        "legacy_id": "重",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "deal_damage",
                 "target": "enemy",
                 "amount": 40,
                 "is_precision": true
-              }
-            },
-            {
-              "type": "status_add_named",
-              "params": {
+              },
+              {
+                "op": "status_add_named",
                 "target": "self",
                 "status": "眩晕",
                 "amount": {
-                  "ref": "math_op",
-                  "a": "{\"ref\":\"status_count\",\"target\":\"self\",\"status\":\"眩晕\"}",
-                  "op": "+",
+                  "op": "add",
+                  "a": {
+                    "op": "status_stack",
+                    "target": "self",
+                    "status": "眩晕"
+                  },
                   "b": "1"
                 }
               }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "岩石",
-      "name_cn": "岩石",
-      "name_en": "Rock",
-      "cost_e": 2,
-      "cost_m": 0,
-      "card_type": "thorn",
-      "count": 5,
-      "quality": "Unusual",
-      "description": "锋利的岩石刮伤敌人",
-      "effect_text": "造成8D，对敌方施加一层虚弱",
-      "flags": [],
-      "effects": [
-        {
-          "type": "damage",
-          "params": {
-            "target": "enemy",
-            "amount": 8
+            ]
           }
         },
-        {
-          "type": "status_add_named",
-          "params": {
-            "target": "enemy",
-            "status": "虚弱",
-            "amount": 1
-          }
-        }
-      ],
-      "trigger_cost_e": -1,
-      "trigger_effect_text": "",
-      "trigger_effects": [],
-      "response_trigger": "",
-      "scripts": {
-        "onPlay": {
-          "effects": [
-            {
-              "type": "damage",
-              "params": {
+        "tags": []
+      },
+      {
+        "name_cn": "岩石",
+        "name_en": "Rock",
+        "cost_e": 2,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 5,
+        "quality": "Unusual",
+        "description": "锋利的岩石刮伤敌人",
+        "effect_text": "造成8D，对敌方施加一层虚弱",
+        "flags": [],
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "response_trigger": "",
+        "id": "garden_cards_addition:rock",
+        "legacy_id": "岩石",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "deal_damage",
                 "target": "enemy",
                 "amount": 8
-              }
-            },
-            {
-              "type": "status_add_named",
-              "params": {
+              },
+              {
+                "op": "status_add_named",
                 "target": "enemy",
                 "status": "虚弱",
                 "amount": 1
               }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "蒲公英",
-      "name_cn": "蒲公英",
-      "name_en": "Dandelion",
-      "cost_e": 2,
-      "cost_m": 0,
-      "card_type": "thorn",
-      "count": 5,
-      "quality": "Epic",
-      "description": "到处乱飞的蒲公英弄得你浑身发痒",
-      "effect_text": "造成6D，对对面施加一层破损",
-      "flags": [],
-      "effects": [
-        {
-          "type": "damage",
-          "params": {
-            "target": "enemy",
-            "amount": 6
+            ]
           }
         },
-        {
-          "type": "status_add_named",
-          "params": {
-            "target": "enemy",
-            "status": "破损",
-            "amount": {
-              "ref": "math_op",
-              "a": "{\"ref\":\"status_count\",\"target\":\"self\",\"status\":\"破损\"}",
-              "op": "+",
-              "b": "1"
-            }
-          }
-        }
-      ],
-      "trigger_cost_e": -1,
-      "trigger_effect_text": "",
-      "trigger_effects": [],
-      "response_trigger": "",
-      "scripts": {
-        "onPlay": {
-          "effects": [
-            {
-              "type": "damage",
-              "params": {
+        "tags": []
+      },
+      {
+        "name_cn": "蒲公英",
+        "name_en": "Dandelion",
+        "cost_e": 2,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 5,
+        "quality": "Epic",
+        "description": "到处乱飞的蒲公英弄得你浑身发痒",
+        "effect_text": "造成6D，对对面施加一层破损",
+        "flags": [],
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "response_trigger": "",
+        "id": "garden_cards_addition:dandelion",
+        "legacy_id": "蒲公英",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "deal_damage",
                 "target": "enemy",
                 "amount": 6
-              }
-            },
-            {
-              "type": "status_add_named",
-              "params": {
+              },
+              {
+                "op": "status_add_named",
                 "target": "enemy",
                 "status": "破损",
                 "amount": {
-                  "ref": "math_op",
-                  "a": "{\"ref\":\"status_count\",\"target\":\"self\",\"status\":\"破损\"}",
-                  "op": "+",
+                  "op": "add",
+                  "a": {
+                    "op": "status_stack",
+                    "target": "self",
+                    "status": "破损"
+                  },
                   "b": "1"
                 }
               }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "第三只眼",
-      "name_cn": "第三只眼",
-      "name_en": "Third Eye",
-      "cost_e": 0,
-      "cost_m": 0,
-      "card_type": "bloom",
-      "count": 3,
-      "quality": "Ultra",
-      "description": "第三只眼让你更为精准的打击对手",
-      "effect_text": "给一张牌附上精准",
-      "flags": [
-        "self_only"
-      ],
-      "effects": [
-        {
-          "type": "request_card",
-          "params": {
-            "title": "选择卡牌",
-            "content": "",
-            "target": "self",
-            "zone": "hand",
-            "choice_type": "choose_cards_from_hand",
-            "multi": true,
-            "min_count": 1,
-            "max_count": 1,
-            "card_type": "thorn",
-            "same_name": false,
-            "cancellable": true
+            ]
           }
         },
-        {
-          "type": "tag_add_named",
-          "params": {
-            "card": {
-              "ref": "selected_card"
-            },
-            "tag": "precision"
-          }
-        }
-      ],
-      "trigger_cost_e": -1,
-      "trigger_effect_text": "",
-      "trigger_effects": [],
-      "response_trigger": "",
-      "scripts": {
-        "onPlay": {
-          "effects": [
-            {
-              "type": "request_card",
-              "params": {
+        "tags": []
+      },
+      {
+        "name_cn": "第三只眼",
+        "name_en": "Third Eye",
+        "cost_e": 0,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 3,
+        "quality": "Ultra",
+        "description": "第三只眼让你更为精准的打击对手",
+        "effect_text": "给一张牌附上精准",
+        "flags": [
+          "self_only"
+        ],
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "response_trigger": "",
+        "id": "garden_cards_addition:third_eye",
+        "legacy_id": "第三只眼",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_card",
                 "title": "选择卡牌",
                 "content": "",
                 "target": "self",
@@ -338,1232 +223,582 @@
                 "card_type": "thorn",
                 "same_name": false,
                 "cancellable": true
-              }
-            },
-            {
-              "type": "tag_add_named",
-              "params": {
-                "card": {
-                  "ref": "selected_card"
-                },
+              },
+              {
+                "op": "tag_add_named",
+                "card": "chosen_card",
                 "tag": "precision"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "网",
-      "name_cn": "网",
-      "name_en": "Web",
-      "cost_e": 0,
-      "cost_m": 0,
-      "card_type": "root",
-      "count": 3,
-      "quality": "Epic",
-      "description": "粘滞的网减缓了你的速度",
-      "effect_text": "给予敌人一层迟缓",
-      "flags": [],
-      "effects": [
-        {
-          "type": "place_as_equip",
-          "params": {
-            "card": {
-              "ref": "current_card"
-            }
-          }
-        },
-        {
-          "type": "equip_reduce_own_draw",
-          "params": {
-            "amount": 1
-          }
-        },
-        {
-          "type": "status_add_named",
-          "params": {
-            "target": "enemy",
-            "status": "迟缓",
-            "amount": {
-              "ref": "math_op",
-              "a": "{\"ref\":\"status_count\",\"target\":\"enemy\",\"status\":\"迟缓\"}",
-              "op": "+",
-              "b": "1"
-            }
-          }
-        },
-        {
-          "type": "on_equipment_destroy",
-          "params": {
-            "effects": [
-              {
-                "type": "mod_draw",
-                "params": {
-                  "target": "enemy",
-                  "amount": 1
-                }
-              },
-              {
-                "type": "status_add_named",
-                "params": {
-                  "target": "enemy",
-                  "status": "迟缓",
-                  "amount": {
-                    "ref": "math_op",
-                    "a": "{\"ref\":\"status_count\",\"target\":\"enemy\",\"status\":\"迟缓\"}",
-                    "op": "-",
-                    "b": "1"
-                  }
-                }
-              },
-              {
-                "type": "if",
-                "params": {
-                  "condition": {
-                    "op": "compare",
-                    "a": "{\"ref\":\"status_count\",\"target\":\"enemy\",\"status\":\"迟缓\"}",
-                    "operator": "=",
-                    "b": "0"
-                  },
-                  "then": [
-                    {
-                      "type": "status_remove_named",
-                      "params": {
-                        "target": "enemy",
-                        "status": "迟缓"
-                      }
-                    }
-                  ]
-                }
               }
             ]
           }
-        }
-      ],
-      "trigger_cost_e": -1,
-      "trigger_effect_text": "",
-      "trigger_effects": [],
-      "response_trigger": "",
-      "scripts": {
-        "onPlay": {
-          "effects": [
-            {
-              "type": "place_as_equip",
-              "params": {
-                "card": {
-                  "ref": "current_card"
-                }
-              }
-            },
-            {
-              "type": "equip_reduce_own_draw",
-              "params": {
+        },
+        "tags": []
+      },
+      {
+        "name_cn": "网",
+        "name_en": "Web",
+        "cost_e": 0,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 3,
+        "quality": "Epic",
+        "description": "粘滞的网减缓了你的速度",
+        "effect_text": "给予敌人一层迟缓",
+        "flags": [],
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "response_trigger": "",
+        "id": "garden_cards_addition:web",
+        "legacy_id": "网",
+        "events": {
+          "on_equipment_destroy": {
+            "steps": [
+              {
+                "op": "mod_draw",
+                "target": "enemy",
                 "amount": 1
-              }
-            },
-            {
-              "type": "status_add_named",
-              "params": {
+              },
+              {
+                "op": "status_add_named",
                 "target": "enemy",
                 "status": "迟缓",
                 "amount": {
-                  "ref": "math_op",
-                  "a": "{\"ref\":\"status_count\",\"target\":\"enemy\",\"status\":\"迟缓\"}",
-                  "op": "+",
+                  "op": "sub",
+                  "a": {
+                    "op": "status_stack",
+                    "target": "enemy",
+                    "status": "迟缓"
+                  },
                   "b": "1"
                 }
-              }
-            },
-            {
-              "type": "on_equipment_destroy",
-              "params": {
-                "effects": [
-                  {
-                    "type": "mod_draw",
-                    "params": {
-                      "target": "enemy",
-                      "amount": 1
-                    }
-                  },
-                  {
-                    "type": "status_add_named",
-                    "params": {
-                      "target": "enemy",
-                      "status": "迟缓",
-                      "amount": {
-                        "ref": "math_op",
-                        "a": "{\"ref\":\"status_count\",\"target\":\"enemy\",\"status\":\"迟缓\"}",
-                        "op": "-",
-                        "b": "1"
-                      }
-                    }
-                  },
-                  {
-                    "type": "if",
-                    "params": {
-                      "condition": {
-                        "op": "compare",
-                        "a": "{\"ref\":\"status_count\",\"target\":\"enemy\",\"status\":\"迟缓\"}",
-                        "operator": "=",
-                        "b": "0"
-                      },
-                      "then": [
-                        {
-                          "type": "status_remove_named",
-                          "params": {
-                            "target": "enemy",
-                            "status": "迟缓"
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "花粉",
-      "name_cn": "花粉",
-      "name_en": "Pollen",
-      "cost_e": 1,
-      "cost_m": 0,
-      "card_type": "bloom",
-      "count": 4,
-      "quality": "Common",
-      "description": "留在地面的障碍物",
-      "effect_text": "给予敌人三层流血",
-      "flags": [],
-      "effects": [
-        {
-          "type": "status_add_named",
-          "params": {
-            "target": "enemy",
-            "status": "流血",
-            "amount": {
-              "ref": "math_op",
-              "a": "{\"ref\":\"status_count\",\"target\":\"enemy\",\"status\":\"流血\"}",
-              "op": "+",
-              "b": "3"
-            }
-          }
-        }
-      ],
-      "trigger_cost_e": -1,
-      "trigger_effect_text": "",
-      "trigger_effects": [],
-      "response_trigger": "",
-      "scripts": {
-        "onPlay": {
-          "effects": [
-            {
-              "type": "status_add_named",
-              "params": {
-                "target": "enemy",
-                "status": "流血",
-                "amount": {
-                  "ref": "math_op",
-                  "a": "{\"ref\":\"status_count\",\"target\":\"enemy\",\"status\":\"流血\"}",
-                  "op": "+",
-                  "b": "3"
-                }
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "土",
-      "name_cn": "土",
-      "name_en": "Soil",
-      "cost_e": 4,
-      "cost_m": 0,
-      "card_type": "root",
-      "count": 4,
-      "quality": "Ultra",
-      "description": "让你变大，也让你更难行动",
-      "effect_text": "+50H,最大生命+50,获得一层迟缓",
-      "flags": [
-        "indestructible"
-      ],
-      "effects": [
-        {
-          "type": "heal",
-          "params": {
-            "target": "self",
-            "amount": 50
-          }
-        },
-        {
-          "type": "player_prop_add",
-          "params": {
-            "target": "self",
-            "property": "max_health",
-            "amount": 50
-          }
-        },
-        {
-          "type": "place_as_equip",
-          "params": {
-            "card": {
-              "ref": "current_card"
-            }
-          }
-        },
-        {
-          "type": "equip_reduce_own_draw",
-          "params": {
-            "amount": 1
-          }
-        }
-      ],
-      "trigger_cost_e": -1,
-      "trigger_effect_text": "",
-      "trigger_effects": [],
-      "response_trigger": "",
-      "scripts": {
-        "onPlay": {
-          "effects": [
-            {
-              "type": "heal",
-              "params": {
-                "target": "self",
-                "amount": 50
-              }
-            },
-            {
-              "type": "player_prop_add",
-              "params": {
-                "target": "self",
-                "property": "max_health",
-                "amount": 50
-              }
-            },
-            {
-              "type": "place_as_equip",
-              "params": {
-                "card": {
-                  "ref": "current_card"
-                }
-              }
-            },
-            {
-              "type": "equip_reduce_own_draw",
-              "params": {
-                "amount": 1
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "导弹",
-      "name_cn": "导弹",
-      "name_en": "Missile",
-      "cost_e": 2,
-      "cost_m": 0,
-      "card_type": "guard",
-      "count": 5,
-      "quality": "Epic",
-      "description": "远程打击",
-      "effect_text": "造成10D",
-      "flags": [
-        "precision"
-      ],
-      "effects": [
-        {
-          "type": "on_hand_owner_turn_start",
-          "params": {
-            "effects": [
+              },
               {
-                "type": "response_declare",
-                "params": {
-                  "timing": "thorn",
-                  "cost_e": 2,
-                  "cost_m": 0,
-                  "title": "",
-                  "content": ""
+                "op": "if",
+                "condition": {
+                  "op": "compare",
+                  "a": {
+                    "op": "status_stack",
+                    "target": "enemy",
+                    "status": "迟缓"
+                  },
+                  "operator": "=",
+                  "b": "0"
+                },
+                "then": [
+                  {
+                    "op": "status_remove_named",
+                    "target": "enemy",
+                    "status": "迟缓"
+                  }
+                ],
+                "else": []
+              }
+            ]
+          },
+          "on_play": {
+            "steps": [
+              {
+                "op": "place_as_equip",
+                "card": "current_card"
+              },
+              {
+                "op": "equip_reduce_own_draw",
+                "amount": 1
+              },
+              {
+                "op": "status_add_named",
+                "target": "enemy",
+                "status": "迟缓",
+                "amount": {
+                  "op": "add",
+                  "a": {
+                    "op": "status_stack",
+                    "target": "enemy",
+                    "status": "迟缓"
+                  },
+                  "b": "1"
                 }
               }
             ]
           }
         },
-        {
-          "type": "damage",
-          "params": {
-            "target": "enemy",
-            "amount": 10,
-            "is_precision": true
-          }
-        }
-      ],
-      "trigger_cost_e": -1,
-      "trigger_effect_text": "",
-      "trigger_effects": [],
-      "response_trigger": "thorn",
-      "scripts": {
-        "onResponse": {
-          "effects": [
-            {
-              "type": "on_hand_owner_turn_start",
-              "params": {
-                "effects": [
-                  {
-                    "type": "response_declare",
-                    "params": {
-                      "timing": "thorn",
-                      "cost_e": 2,
-                      "cost_m": 0,
-                      "title": "",
-                      "content": ""
-                    }
-                  }
-                ]
+        "tags": []
+      },
+      {
+        "name_cn": "花粉",
+        "name_en": "Pollen",
+        "cost_e": 1,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 4,
+        "quality": "Common",
+        "description": "留在地面的障碍物",
+        "effect_text": "给予敌人三层流血",
+        "flags": [],
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "response_trigger": "",
+        "id": "garden_cards_addition:pollen",
+        "legacy_id": "花粉",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "status_add_named",
+                "target": "enemy",
+                "status": "流血",
+                "amount": {
+                  "op": "add",
+                  "a": {
+                    "op": "status_stack",
+                    "target": "enemy",
+                    "status": "流血"
+                  },
+                  "b": "3"
+                }
               }
-            },
-            {
-              "type": "damage",
-              "params": {
+            ]
+          }
+        },
+        "tags": []
+      },
+      {
+        "name_cn": "土",
+        "name_en": "Soil",
+        "cost_e": 4,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 4,
+        "quality": "Ultra",
+        "description": "让你变大，也让你更难行动",
+        "effect_text": "+50H,最大生命+50,获得一层迟缓",
+        "flags": [
+          "indestructible"
+        ],
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "response_trigger": "",
+        "id": "garden_cards_addition:soil",
+        "legacy_id": "土",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "heal",
+                "target": "self",
+                "amount": 50
+              },
+              {
+                "op": "player_prop_add",
+                "target": "self",
+                "property": "max_health",
+                "amount": 50
+              },
+              {
+                "op": "place_as_equip",
+                "card": "current_card"
+              },
+              {
+                "op": "equip_reduce_own_draw",
+                "amount": 1
+              }
+            ]
+          }
+        },
+        "tags": []
+      },
+      {
+        "name_cn": "导弹",
+        "name_en": "Missile",
+        "cost_e": 2,
+        "cost_m": 0,
+        "card_type": "guard",
+        "count": 5,
+        "quality": "Epic",
+        "description": "远程打击",
+        "effect_text": "造成10D",
+        "flags": [
+          "precision"
+        ],
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "response_trigger": "thorn",
+        "response_title": "",
+        "response_content": "",
+        "id": "garden_cards_addition:missile",
+        "legacy_id": "导弹",
+        "events": {
+          "on_hand_owner_turn_start": {
+            "steps": [
+              {
+                "op": "response_declare",
+                "timing": "thorn",
+                "cost_e": 2,
+                "cost_m": 0,
+                "title": "",
+                "content": ""
+              }
+            ]
+          },
+          "on_play": {
+            "steps": [
+              {
+                "op": "deal_damage",
                 "target": "enemy",
                 "amount": 10,
                 "is_precision": true
               }
-            }
-          ]
+            ]
+          },
+          "on_response": {
+            "steps": [
+              {
+                "op": "deal_damage",
+                "target": "enemy",
+                "amount": 10,
+                "is_precision": true
+              }
+            ]
+          }
+        },
+        "tags": []
+      },
+      {
+        "name_cn": "橙子",
+        "name_en": "Orange",
+        "cost_e": 0,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 1,
+        "quality": "Common",
+        "description": "",
+        "effect_text": "",
+        "flags": [
+          "副本",
+          "symbiosis"
+        ],
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "response_trigger": "",
+        "id": "garden_cards_addition:orange",
+        "legacy_id": "橙子",
+        "events": {
+          "on_hand_owner_turn_start": {
+            "steps": [
+              {
+                "op": "give_card_to_hand",
+                "card": "橙子",
+                "target": "self"
+              },
+              {
+                "op": "tag_add_named",
+                "card": {
+                  "op": "last_created_card"
+                },
+                "tag": "exile"
+              }
+            ]
+          }
+        },
+        "tags": []
+      },
+      {
+        "name_cn": "玉米",
+        "name_en": "Corn",
+        "cost_e": 0,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 1,
+        "quality": "Common",
+        "description": "",
+        "effect_text": "",
+        "flags": [
+          "infinite_exclude",
+          "超频"
+        ],
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "response_trigger": "",
+        "id": "garden_cards_addition:corn",
+        "legacy_id": "玉米",
+        "events": {},
+        "tags": []
+      }
+    ],
+    "tags": [
+      {
+        "visible": true,
+        "stackable": true,
+        "category": "equipment",
+        "id": "garden_cards_addition:overclock",
+        "name_cn": "超频",
+        "name_en": "Overclock",
+        "desc": "耗费-1，最低为1",
+        "abbr": "超频",
+        "color": "7b8f09",
+        "background": "caeb0e",
+        "legacy_id": "超频",
+        "events": {}
+      },
+      {
+        "visible": true,
+        "stackable": true,
+        "category": "equipment",
+        "id": "garden_cards_addition:copy",
+        "name_cn": "副本",
+        "name_en": "Copy",
+        "desc": "当手牌到手中时，将一张其的放逐复制加入手中",
+        "background": "00eb85",
+        "color": "098f55",
+        "abbr": "副本",
+        "legacy_id": "副本",
+        "events": {}
+      }
+    ],
+    "statuses": [
+      {
+        "keep_when_zero": false,
+        "id": "garden_cards_addition:overload",
+        "name_cn": "过载",
+        "name_en": "Overload",
+        "display_text": "",
+        "stackable": true,
+        "max_stacks": 99,
+        "desc": "回合开始减少获得层数能量",
+        "legacy_id": "过载",
+        "events": {
+          "on_turn_start": {
+            "steps": [
+              {
+                "op": "if",
+                "condition": {
+                  "op": "has_status_named",
+                  "target": "self",
+                  "status": "过载"
+                },
+                "then": [],
+                "else": []
+              }
+            ]
+          }
         }
       },
-      "response_title": "",
-      "response_content": ""
-    },
-    {
-      "id": "橙子",
-      "name_cn": "橙子",
-      "name_en": "Orange",
-      "cost_e": 0,
-      "cost_m": 0,
-      "card_type": "bloom",
-      "count": 1,
-      "quality": "Common",
-      "description": "",
-      "effect_text": "",
-      "flags": [
-        "副本",
-        "symbiosis"
-      ],
-      "effects": [
-        {
-          "type": "on_hand_owner_turn_start",
-          "params": {
-            "effects": [
+      {
+        "keep_when_zero": false,
+        "id": "garden_cards_addition:weakness",
+        "name_cn": "虚弱",
+        "name_en": "Weakness",
+        "display_text": "",
+        "stackable": true,
+        "max_stacks": 99,
+        "desc": "伤害*80%",
+        "legacy_id": "虚弱",
+        "events": {
+          "on_turn_start": {
+            "steps": [
               {
-                "type": "give_card_to_hand",
-                "params": {
-                  "card": "橙子",
-                  "target": "self"
-                }
+                "op": "if",
+                "condition": {
+                  "op": "has_status_named",
+                  "target": "self",
+                  "status": "虚弱"
+                },
+                "then": [],
+                "else": []
               },
               {
-                "type": "tag_add_named",
-                "params": {
-                  "card": {
-                    "ref": "last_created_card"
-                  },
-                  "tag": "exile"
-                }
+                "op": "if",
+                "condition": {
+                  "op": "has_status_named",
+                  "target": "damage_source",
+                  "status": "虚弱"
+                },
+                "then": [],
+                "else": []
               }
             ]
           }
         }
-      ],
-      "trigger_cost_e": -1,
-      "trigger_effect_text": "",
-      "trigger_effects": [],
-      "response_trigger": "",
-      "scripts": {
-        "onPlay": {
-          "effects": [
-            {
-              "type": "on_hand_owner_turn_start",
-              "params": {
-                "effects": [
-                  {
-                    "type": "give_card_to_hand",
-                    "params": {
-                      "card": "橙子",
-                      "target": "self"
-                    }
-                  },
-                  {
-                    "type": "tag_add_named",
-                    "params": {
-                      "card": {
-                        "ref": "last_created_card"
-                      },
-                      "tag": "exile"
-                    }
-                  }
-                ]
+      },
+      {
+        "keep_when_zero": false,
+        "id": "garden_cards_addition:dizziness",
+        "name_cn": "眩晕",
+        "name_en": "Dizziness",
+        "display_text": "",
+        "stackable": true,
+        "max_stacks": 99,
+        "desc": "一回合无法行动",
+        "legacy_id": "眩晕",
+        "events": {
+          "on_turn_start": {
+            "steps": [
+              {
+                "op": "if",
+                "condition": {
+                  "op": "has_status_named",
+                  "target": "self",
+                  "status": "眩晕"
+                },
+                "then": [],
+                "else": []
               }
-            }
-          ]
+            ]
+          }
+        }
+      },
+      {
+        "keep_when_zero": false,
+        "id": "garden_cards_addition:dilapidation",
+        "name_cn": "破损",
+        "name_en": "Dilapidation",
+        "display_text": "",
+        "stackable": true,
+        "max_stacks": 99,
+        "desc": "所受伤害+20%",
+        "legacy_id": "破损",
+        "events": {
+          "on_turn_start": {
+            "steps": [
+              {
+                "op": "if",
+                "condition": {
+                  "op": "has_status_named",
+                  "target": "self",
+                  "status": "破损"
+                },
+                "then": [],
+                "else": []
+              },
+              {
+                "op": "if",
+                "condition": {
+                  "op": "has_status_named",
+                  "target": "self",
+                  "status": "破损"
+                },
+                "then": [
+                  {
+                    "op": "direct_damage",
+                    "target": "self",
+                    "amount": {
+                      "op": "ceil",
+                      "value": {
+                        "op": "mul",
+                        "a": {
+                          "op": "last_damage"
+                        },
+                        "b": "0.8"
+                      }
+                    },
+                    "source": "破损"
+                  }
+                ],
+                "else": []
+              }
+            ]
+          }
+        }
+      },
+      {
+        "keep_when_zero": false,
+        "id": "garden_cards_addition:sluggish",
+        "name_cn": "迟缓",
+        "name_en": "Sluggish",
+        "display_text": "",
+        "stackable": true,
+        "max_stacks": 99,
+        "desc": "每回合抽牌-1",
+        "legacy_id": "迟缓",
+        "events": {}
+      },
+      {
+        "keep_when_zero": false,
+        "id": "garden_cards_addition:bloody",
+        "name_cn": "流血",
+        "name_en": "bloody",
+        "display_text": "",
+        "stackable": true,
+        "max_stacks": 99,
+        "desc": "每打一张牌受到流血层数伤害",
+        "legacy_id": "流血",
+        "events": {
+          "on_turn_start": {
+            "steps": [
+              {
+                "op": "if",
+                "condition": {
+                  "op": "has_status_named",
+                  "target": "self",
+                  "status": "流血"
+                },
+                "then": [
+                  {
+                    "op": "direct_damage",
+                    "target": "self",
+                    "amount": {
+                      "op": "status_stack",
+                      "target": "self",
+                      "status": "流血"
+                    },
+                    "source": "流血"
+                  }
+                ],
+                "else": []
+              },
+              {
+                "op": "if",
+                "condition": {
+                  "op": "has_status_named",
+                  "target": "self",
+                  "status": "流血"
+                },
+                "then": [
+                  {
+                    "op": "status_remove_named",
+                    "target": "self",
+                    "status": "流血"
+                  }
+                ],
+                "else": []
+              }
+            ]
+          }
         }
       }
-    },
-    {
-      "id": "玉米",
-      "name_cn": "玉米",
-      "name_en": "Corn",
-      "cost_e": 0,
-      "cost_m": 0,
-      "card_type": "bloom",
-      "count": 1,
-      "quality": "Common",
-      "description": "",
-      "effect_text": "",
-      "flags": [
-        "infinite_exclude",
-        "超频"
-      ],
-      "effects": [],
-      "trigger_cost_e": -1,
-      "trigger_effect_text": "",
-      "trigger_effects": [],
-      "response_trigger": "",
-      "scripts": {}
-    }
-  ],
-  "events": [],
-  "custom_statuses": [
-    {
-      "keep_when_zero": false,
-      "id": "过载",
-      "name_cn": "过载",
-      "name_en": "Overload",
-      "display_text": "",
-      "stackable": true,
-      "max_stacks": 99,
-      "desc": "回合开始减少获得层数能量",
-      "effects": [
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "过载"
-            },
-            "then": []
-          }
-        }
-      ]
-    },
-    {
-      "keep_when_zero": false,
-      "id": "虚弱",
-      "name_cn": "虚弱",
-      "name_en": "Weakness",
-      "display_text": "",
-      "stackable": true,
-      "max_stacks": 99,
-      "desc": "伤害*80%",
-      "effects": [
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "虚弱"
-            },
-            "then": []
-          }
-        },
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"damage_source\"",
-              "status": "虚弱"
-            },
-            "then": []
-          }
-        }
-      ]
-    },
-    {
-      "keep_when_zero": false,
-      "id": "眩晕",
-      "name_cn": "眩晕",
-      "name_en": "Dizziness",
-      "display_text": "",
-      "stackable": true,
-      "max_stacks": 99,
-      "desc": "一回合无法行动",
-      "effects": [
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "眩晕"
-            },
-            "then": []
-          }
-        }
-      ]
-    },
-    {
-      "keep_when_zero": false,
-      "id": "破损",
-      "name_cn": "破损",
-      "name_en": "Dilapidation",
-      "display_text": "",
-      "stackable": true,
-      "max_stacks": 99,
-      "desc": "所受伤害+20%",
-      "effects": [
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "破损"
-            },
-            "then": []
-          }
-        },
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "破损"
-            },
-            "then": [
-              {
-                "type": "direct_damage",
-                "params": {
-                  "target": "self",
-                  "amount": {
-                    "ref": "round",
-                    "mode": "ceil",
-                    "value": {
-                      "ref": "math_op",
-                      "a": "{\"ref\":\"last_damage\",\"target\":\"self\"}",
-                      "op": "*",
-                      "b": "0.8"
-                    }
-                  },
-                  "source": "破损"
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "keep_when_zero": false,
-      "id": "迟缓",
-      "name_cn": "迟缓",
-      "name_en": "Sluggish",
-      "display_text": "",
-      "stackable": true,
-      "max_stacks": 99,
-      "desc": "每回合抽牌-1",
-      "effects": []
-    },
-    {
-      "keep_when_zero": false,
-      "id": "流血",
-      "name_cn": "流血",
-      "name_en": "bloody",
-      "display_text": "",
-      "stackable": true,
-      "max_stacks": 99,
-      "desc": "每打一张牌受到流血层数伤害",
-      "effects": [
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "流血"
-            },
-            "then": [
-              {
-                "type": "direct_damage",
-                "params": {
-                  "target": "self",
-                  "amount": {
-                    "ref": "status_count",
-                    "target": "self",
-                    "status": "流血"
-                  },
-                  "source": "流血"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "流血"
-            },
-            "then": [
-              {
-                "type": "status_remove_named",
-                "params": {
-                  "target": "self",
-                  "status": "流血"
-                }
-              }
-            ]
-          }
-        }
-      ]
-    }
-  ],
-  "custom_tags": [
-    {
-      "visible": true,
-      "stackable": true,
-      "category": "equipment",
-      "id": "超频",
-      "name_cn": "超频",
-      "name_en": "Overclock",
-      "desc": "耗费-1，最低为1",
-      "effects": [
-        {
-          "type": "on_hand_owner_turn_start",
-          "params": {
-            "effects": []
-          }
-        }
-      ],
-      "abbr": "超频",
-      "color": "7b8f09",
-      "background": "caeb0e"
-    },
-    {
-      "visible": true,
-      "stackable": true,
-      "category": "equipment",
-      "id": "副本",
-      "name_cn": "副本",
-      "name_en": "Copy",
-      "desc": "当手牌到手中时，将一张其的放逐复制加入手中",
-      "effects": [],
-      "background": "00eb85",
-      "color": "098f55",
-      "abbr": "副本"
-    }
-  ],
-  "scripts": {
-    "card:更快": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_play\" id=\"hZ80r9:9j~#!-e7sTF[J\" x=\"12\" y=\"12\"><next><block type=\"action_gain_e\" id=\"%$~Ju%as~mIuL5_40}.6\"><value name=\"TARGET\"><block type=\"target_self\" id=\"vzz%9A0]H?f7Uk$L#KZ*\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"D1x]I*TJE:8HDoX_=n`T\"><field name=\"NUM\">5</field></shadow></value><next><block type=\"action_status_add_named\" id=\"LYWQ7=y/1CRFpeQ?EJMk\"><field name=\"STATUS\">过载</field><value name=\"TARGET\"><block type=\"target_self\" id=\"hVgtZ}~[Pj9]Tq$uj?Pe\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"y.n`{$.i{uM0kha=os_8\"><field name=\"NUM\">5</field></shadow><block type=\"value_math_op\" id=\"u)y{txOfuz;6fNghXy|~\"><field name=\"OP\">+</field><value name=\"A\"><shadow type=\"math_number\" id=\"W(IKG/Sx1%b}fICWi)}N\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\"imlPfQ:,1ZdTj^+/{,wq\"><field name=\"STATUS\">过载</field><value name=\"TARGET\"><block type=\"target_self\" id=\"!ojesFPu},Wh^#1HWU?L\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"?aA+:IoC[pm5?{~vVlc5\"><field name=\"NUM\">5</field></shadow></value></block></value></block></next></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "gain_e",
-          "params": {
-            "target": "self",
-            "amount": 5
-          }
-        },
-        {
-          "type": "status_add_named",
-          "params": {
-            "target": "self",
-            "status": "过载",
-            "amount": {
-              "ref": "math_op",
-              "a": "{\"ref\":\"status_count\",\"target\":\"self\",\"status\":\"过载\"}",
-              "op": "+",
-              "b": "5"
-            }
-          }
-        }
-      ]
-    },
-    "card:重": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_play\" id=\"%k=vM!lNP!?|@*7B{un#\" x=\"12\" y=\"12\"><next><block type=\"action_damage\" id=\"reOM8*-!orH/D(5gIA#:\"><field name=\"IS_PRECISION\">TRUE</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"*I){U-n@73zzE[U*FyC$\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"Ydd-o,gGti/_pJ;Bm;~U\"><field name=\"NUM\">40</field></shadow></value><next><block type=\"action_status_add_named\" id=\"+j`h`v563q?kFZ}p%9cr\"><field name=\"STATUS\">眩晕</field><value name=\"TARGET\"><block type=\"target_self\" id=\";V/(gRA/.t;::zhfP:#P\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"Na;=3-o(m#Q9JR:`[Ct9\"><field name=\"NUM\">1</field></shadow><block type=\"value_math_op\" id=\"z9uGOw=6FM05})p@Kbz0\"><field name=\"OP\">+</field><value name=\"A\"><shadow type=\"math_number\" id=\",5mUL+_G!bQt~_%1T.W2\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\"`vB=Qx^AR]|Cy3*Np(R;\"><field name=\"STATUS\">眩晕</field><value name=\"TARGET\"><block type=\"target_self\" id=\"KW^)Pg8k,3]dfGBcF6w|\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"X(OKpy7,@c(c$F,6,$#X\"><field name=\"NUM\">1</field></shadow></value></block></value></block></next></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "damage",
-          "params": {
-            "target": "enemy",
-            "amount": 40,
-            "is_precision": true
-          }
-        },
-        {
-          "type": "status_add_named",
-          "params": {
-            "target": "self",
-            "status": "眩晕",
-            "amount": {
-              "ref": "math_op",
-              "a": "{\"ref\":\"status_count\",\"target\":\"self\",\"status\":\"眩晕\"}",
-              "op": "+",
-              "b": "1"
-            }
-          }
-        }
-      ]
-    },
-    "card:岩石": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_play\" id=\"~t-7H=ny.m.Va_2f9+:5\" x=\"12\" y=\"12\"><next><block type=\"action_damage\" id=\"jtr|~Q@?]MY_nBw]hxx|\"><field name=\"IS_PRECISION\">FALSE</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"9O=(zQ2p(m-h.gX?pg,J\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"H))H/jBK0-sPUHgt4g9h\"><field name=\"NUM\">8</field></shadow></value><next><block type=\"action_status_add_named\" id=\"vW];^2C]bbq?)1moKeMY\"><field name=\"STATUS\">虚弱</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"q$Wam3,#;uS2h}=THUC%\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"0xz:%J/=AK--esHa3a;+\"><field name=\"NUM\">1</field></shadow></value></block></next></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "damage",
-          "params": {
-            "target": "enemy",
-            "amount": 8
-          }
-        },
-        {
-          "type": "status_add_named",
-          "params": {
-            "target": "enemy",
-            "status": "虚弱",
-            "amount": 1
-          }
-        }
-      ]
-    },
-    "card:蒲公英": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_play\" id=\"AHfRs{qf-2s^ebn0gGh)\" x=\"-108\" y=\"-36\"><next><block type=\"action_damage\" id=\"]cnnPBhW;@#W@K1o.-T#\"><field name=\"IS_PRECISION\">FALSE</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"az#oF62EEwkN1uZP?ax!\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"w/s%l*Gb/Gb2M_MT,i(0\"><field name=\"NUM\">6</field></shadow></value><next><block type=\"action_status_add_named\" id=\"+WN+A#N?v|ND3$2^:c}K\"><field name=\"STATUS\">破损</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"8O?ssfVT;GVtZ%]bNl10\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"!ySFXwGb%}kPEo^sT;(4\"><field name=\"NUM\">1</field></shadow><block type=\"value_math_op\" id=\"HbJD/aeq%(?6L]QSmkoo\"><field name=\"OP\">+</field><value name=\"A\"><shadow type=\"math_number\" id=\"q-DfcO3({y4jhxF}tyT@\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\"DO[3Nv9admGvPC(,r?]G\"><field name=\"STATUS\">破损</field></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"@WtFcPl;MU+O0DmnS0Bx\"><field name=\"NUM\">1</field></shadow></value></block></value></block></next></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "damage",
-          "params": {
-            "target": "enemy",
-            "amount": 6
-          }
-        },
-        {
-          "type": "status_add_named",
-          "params": {
-            "target": "enemy",
-            "status": "破损",
-            "amount": {
-              "ref": "math_op",
-              "a": "{\"ref\":\"status_count\",\"target\":\"self\",\"status\":\"破损\"}",
-              "op": "+",
-              "b": "1"
-            }
-          }
-        }
-      ]
-    },
-    "card:第三只眼": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_play\" id=\"2s[/s1ilMGspkX)$x%E?\" x=\"12\" y=\"12\"><next><block type=\"action_request_cards\" id=\"e~h9b%EJis}c0lkyPfLk\"><field name=\"TITLE\">选择卡牌</field><field name=\"CONTENT\"></field><field name=\"CARD_TYPE\">thorn</field><field name=\"SAME_NAME\">FALSE</field><field name=\"CANCELLABLE\">TRUE</field><value name=\"TARGET\"><block type=\"target_self\" id=\"F#J5FkF{?Eoa1oQKj=PF\"></block></value><value name=\"MIN_COUNT\"><shadow type=\"math_number\" id=\"Fm+=TRj=~_po6`hHnJ)]\"><field name=\"NUM\">1</field></shadow></value><value name=\"MAX_COUNT\"><shadow type=\"math_number\" id=\"RWBWZxXU~;7??QE*F7k`\"><field name=\"NUM\">1</field></shadow></value><next><block type=\"action_tag_add_named\" id=\"uK+#(6,#!Y:@CMHlXv/:\"><field name=\"TAG\">precision</field><value name=\"CARD\"><block type=\"card_selected\" id=\"igY:^v6*NVK]@vcS/,27\"></block></value></block></next></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "request_card",
-          "params": {
-            "title": "选择卡牌",
-            "content": "",
-            "target": "self",
-            "zone": "hand",
-            "choice_type": "choose_cards_from_hand",
-            "multi": true,
-            "min_count": 1,
-            "max_count": 1,
-            "card_type": "thorn",
-            "same_name": false,
-            "cancellable": true
-          }
-        },
-        {
-          "type": "tag_add_named",
-          "params": {
-            "card": {
-              "ref": "selected_card"
-            },
-            "tag": "precision"
-          }
-        }
-      ]
-    },
-    "card:网": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_play\" id=\"6e=_z-R?cZiNv~#z5{8!\" x=\"12\" y=\"12\"><next><block type=\"action_equip_this_card\" id=\")R_tzODZc`kys*?kk5)7\"><value name=\"CARD\"><block type=\"card_current\" id=\"U1cg#8M[TFUOIF%7:dxp\"></block></value><next><block type=\"action_equip_reduce_own_draw\" id=\"e.^B|rq8WOHyCJul^[5m\"><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"k(g!{nBn7SVjzbCLzMG7\"><field name=\"NUM\">1</field></shadow></value><next><block type=\"action_status_add_named\" id=\"h8(@f~A1LDT:M=9@Tss-\"><field name=\"STATUS\">迟缓</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"[#w@F_98mSkWt^y7~3Jz\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\";a9V?A__q78Xo;2{V(,o\"><field name=\"NUM\">1</field></shadow><block type=\"value_math_op\" id=\"au9o#vfMbgNS,FX*ROH?\"><field name=\"OP\">+</field><value name=\"A\"><shadow type=\"math_number\" id=\"0=T}Z#X,GZZ8wi[X[@m!\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\".M!5Jl$=bTeB-JaHo4Y?\"><field name=\"STATUS\">迟缓</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"3gm)3U%KjVFx-0H+W?XN\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"]Ra$wlY[,..ZJ;,It))0\"><field name=\"NUM\">1</field></shadow></value></block></value></block></next></block></next></block></next></block><block type=\"trigger_on_destroy\" id=\"O|$P%0xYU{Q-M)BUER}#\" x=\"12\" y=\"300\"><next><block type=\"action_mod_draw\" id=\"~hnFC%FLgLz{R0,qj9yj\"><value name=\"TARGET\"><block type=\"target_enemy\" id=\"N4Jt7mk/FhPU(^.XMuG_\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"S$=HG6E)s;2^|c:L{$oe\"><field name=\"NUM\">1</field></shadow></value><next><block type=\"action_status_add_named\" id=\"GPiVh%Aveh,50|;-:ql)\"><field name=\"STATUS\">迟缓</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"FW_Iw.-_PugarU!uz@H?\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\";a9V?A__q78Xo;2{V(,o\"><field name=\"NUM\">1</field></shadow><block type=\"value_math_op\" id=\"%6dn9{wE@]@b(9iW;n)$\"><field name=\"OP\">-</field><value name=\"A\"><shadow type=\"math_number\" id=\"0=T}Z#X,GZZ8wi[X[@m!\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\"aD1Yd~Y+M|Zc*Qc.,urU\"><field name=\"STATUS\">迟缓</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"|XtG0H)XffJp8[h0)LdL\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"e%u|Ku9g1jVK@MR97ulI\"><field name=\"NUM\">1</field></shadow></value></block></value><next><block type=\"control_if\" id=\"d8K8|$Ty[`va9ENs+$zS\"><value name=\"CONDITION\"><block type=\"condition_compare\" id=\"Wotxw;.K{6duZP29Sw8!\"><field name=\"OP\">=</field><value name=\"A\"><shadow type=\"math_number\" id=\"Ol,eJnQ36yr[rA+`_M-[\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\"bpqQ/htWM.|RPqf.7Yh/\"><field name=\"STATUS\">迟缓</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"lxzh~VrUTiuUU)WBQOEv\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"5=r,][D-dds!]PqQVB?Y\"><field name=\"NUM\">0</field></shadow></value></block></value><statement name=\"DO\"><block type=\"action_status_remove_named\" id=\"i;doQbA@2obWe@O5}Qt$\"><field name=\"STATUS\">迟缓</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"HxX{2b$p0fbHmk;UUcn%\"></block></value></block></statement></block></next></block></next></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "place_as_equip",
-          "params": {
-            "card": {
-              "ref": "current_card"
-            }
-          }
-        },
-        {
-          "type": "equip_reduce_own_draw",
-          "params": {
-            "amount": 1
-          }
-        },
-        {
-          "type": "status_add_named",
-          "params": {
-            "target": "enemy",
-            "status": "迟缓",
-            "amount": {
-              "ref": "math_op",
-              "a": "{\"ref\":\"status_count\",\"target\":\"enemy\",\"status\":\"迟缓\"}",
-              "op": "+",
-              "b": "1"
-            }
-          }
-        },
-        {
-          "type": "on_equipment_destroy",
-          "params": {
-            "effects": [
-              {
-                "type": "mod_draw",
-                "params": {
-                  "target": "enemy",
-                  "amount": 1
-                }
-              },
-              {
-                "type": "status_add_named",
-                "params": {
-                  "target": "enemy",
-                  "status": "迟缓",
-                  "amount": {
-                    "ref": "math_op",
-                    "a": "{\"ref\":\"status_count\",\"target\":\"enemy\",\"status\":\"迟缓\"}",
-                    "op": "-",
-                    "b": "1"
-                  }
-                }
-              },
-              {
-                "type": "if",
-                "params": {
-                  "condition": {
-                    "op": "compare",
-                    "a": "{\"ref\":\"status_count\",\"target\":\"enemy\",\"status\":\"迟缓\"}",
-                    "operator": "=",
-                    "b": "0"
-                  },
-                  "then": [
-                    {
-                      "type": "status_remove_named",
-                      "params": {
-                        "target": "enemy",
-                        "status": "迟缓"
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    "card:花粉": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_play\" id=\"e(Cf*TRK%!}Ex3~GY~oi\" x=\"12\" y=\"12\"><next><block type=\"action_status_add_named\" id=\"aHSJ(/G,|L|U`LSX2gh#\"><field name=\"STATUS\">流血</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"]kRRdFiMyF%#|MC,mn]O\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"n%E9a,IZDpMlhab6~?@=\"><field name=\"NUM\">1</field></shadow><block type=\"value_math_op\" id=\"^x,P$9/#Y+0RQ3~Qy_U|\"><field name=\"OP\">+</field><value name=\"A\"><shadow type=\"math_number\" id=\"8!:6%ZOb2@*%CFBL903;\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\"KQ;$D|Q0O/Wd*4/8TY{k\"><field name=\"STATUS\">流血</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"$+e,OyO)Rp0Tj*m^2[I?\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"b8hRy*4Cj[K[mS/n_Znf\"><field name=\"NUM\">3</field></shadow></value></block></value></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "status_add_named",
-          "params": {
-            "target": "enemy",
-            "status": "流血",
-            "amount": {
-              "ref": "math_op",
-              "a": "{\"ref\":\"status_count\",\"target\":\"enemy\",\"status\":\"流血\"}",
-              "op": "+",
-              "b": "3"
-            }
-          }
-        }
-      ]
-    },
-    "card:土": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_play\" id=\"}bLdY#g$m?StDJ/OZ#5A\" x=\"12\" y=\"12\"><next><block type=\"action_heal\" id=\"tJh!|LPWD-[#E,=4.i1=\"><value name=\"TARGET\"><block type=\"target_self\" id=\"2prB(-n#@M.p$vEhmo2X\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"[M,;@c1yRKa4}0$#Dqrd\"><field name=\"NUM\">50</field></shadow></value><next><block type=\"action_player_prop_add\" id=\"AuROca`z,p,0hLZY8lFE\"><field name=\"PROPERTY\">max_health</field><value name=\"TARGET\"><block type=\"target_self\" id=\"kUP^:L-e=8f-@y9`Y6G)\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"2^L}}(Hq!kHN;Y6gSc|,\"><field name=\"NUM\">50</field></shadow></value><next><block type=\"action_equip_this_card\" id=\"CKhCc|J5D3Ut!NMPD-I1\"><value name=\"CARD\"><block type=\"card_current\" id=\"LbG5M1^VK`JTAw9Zj6VQ\"></block></value><next><block type=\"action_equip_reduce_own_draw\" id=\"9ze3Muy2!:#`_(=nBK,w\"><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"C)F76zw;_ASH]WRa=5$v\"><field name=\"NUM\">1</field></shadow></value></block></next></block></next></block></next></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "heal",
-          "params": {
-            "target": "self",
-            "amount": 50
-          }
-        },
-        {
-          "type": "player_prop_add",
-          "params": {
-            "target": "self",
-            "property": "max_health",
-            "amount": 50
-          }
-        },
-        {
-          "type": "place_as_equip",
-          "params": {
-            "card": {
-              "ref": "current_card"
-            }
-          }
-        },
-        {
-          "type": "equip_reduce_own_draw",
-          "params": {
-            "amount": 1
-          }
-        }
-      ]
-    },
-    "card:导弹": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_hand_owner_turn_start\" id=\"#Te!(RjtGjp#;}G}W1.6\" x=\"12\" y=\"12\"><next><block type=\"response_declare\" id=\"(=3]:GsHl9x:u3v:w^01\"><field name=\"TIMING\">thorn</field><field name=\"COST_E\">2</field><field name=\"COST_M\">0</field><field name=\"TITLE\"></field><field name=\"CONTENT\"></field></block></next></block><block type=\"trigger_on_play\" id=\"OPMt)a%9e|F[Q+K?io9}\" x=\"12\" y=\"156\"><next><block type=\"action_damage\" id=\"054b;{v*In|`jWbKFVHI\"><field name=\"IS_PRECISION\">TRUE</field><value name=\"TARGET\"><block type=\"target_enemy\" id=\"}ktHzLJY?~c$SRcHEDKO\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"y7$#Q:7RHv8R?d1n.nxH\"><field name=\"NUM\">10</field></shadow></value></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "on_hand_owner_turn_start",
-          "params": {
-            "effects": [
-              {
-                "type": "response_declare",
-                "params": {
-                  "timing": "thorn",
-                  "cost_e": 2,
-                  "cost_m": 0,
-                  "title": "",
-                  "content": ""
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "damage",
-          "params": {
-            "target": "enemy",
-            "amount": 10,
-            "is_precision": true
-          }
-        }
-      ]
-    },
-    "card:橙子": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_hand_owner_turn_start\" id=\"mY}@|;9V_!Fc!l6)(Bt+\" x=\"12\" y=\"12\"><next><block type=\"action_give_card_to_hand\" id=\"LPHtN8zWuZ#}u!B~{`3r\"><value name=\"TARGET\"><block type=\"target_self\" id=\"[rrznAkY=z~5wPQT:j[E\"></block></value><value name=\"CARD\"><block type=\"card_by_id\" id=\"Uy{;7*@Z:edON9O`reQh\"><field name=\"CARD_ID\">橙子</field></block></value><next><block type=\"action_tag_add_id\" id=\"rzJkj3?mLO;5`HzC|Z`6\"><field name=\"TAG\">exile</field><value name=\"CARD\"><block type=\"card_last_created\" id=\"`srmL//{GlRD*6FPtFmO\"></block></value></block></next></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "on_hand_owner_turn_start",
-          "params": {
-            "effects": [
-              {
-                "type": "give_card_to_hand",
-                "params": {
-                  "card": "橙子",
-                  "target": "self"
-                }
-              },
-              {
-                "type": "tag_add_named",
-                "params": {
-                  "card": {
-                    "ref": "last_created_card"
-                  },
-                  "tag": "exile"
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    "card:玉米": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"procedures_defnoreturn\" id=\"C+,kL~4|^lnOp]}U/[o{\" x=\"-36\" y=\"12\"><field name=\"NAME\">棍母</field><comment pinned=\"false\" h=\"80\" w=\"160\">描述该功能...</comment></block></xml>",
-      "effects": []
-    },
-    "status:过载": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_friendly_turn_start\" id=\"e^+jSMMO0?8jQx`yse]u\" x=\"12\" y=\"12\"><next><block type=\"control_if\" id=\"1}Hz2PM4)YT-OM$o8yoi\"><value name=\"CONDITION\"><block type=\"condition_has_status_named\" id=\"5;WHcqAP]iUE!:lQ_MB?\"><field name=\"STATUS\">过载</field><value name=\"TARGET\"><block type=\"target_self\" id=\"g^BESkm/j!?tVj,S;Ucb\"></block></value></block></value><statement name=\"DO\"><block type=\"action_cost_e\" id=\"r-JM@3Z6dg=lGygh~5u+\"><value name=\"TARGET\"><block type=\"target_self\" id=\"Ua@L0M.K-]kK,BMDB$xB\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"Za-Ws^A}ikRs?55kmL=J\"><field name=\"NUM\">1</field></shadow><block type=\"value_status_count\" id=\"8uQYAIZ3#$?gs5WOFd4*\"><field name=\"STATUS\">过载</field><value name=\"TARGET\"><block type=\"target_self\" id=\"$el4Pcr`Twm,i@w8wNh9\"></block></value></block></value><next><block type=\"action_clear_status\" id=\"%%Oj5~B3]|_=m,yf#r./\"><field name=\"STATUS\">过载</field><value name=\"TARGET\"><block type=\"target_self\" id=\"UG^Ctqg;O?Pf5XQN#*W5\"></block></value><next><block type=\"control_if\" id=\"7-*1$_tI0wEOuKa*%H4I\"><value name=\"CONDITION\"><block type=\"condition_compare\" id=\"6;wkgB;G8^F%4nW{MUKu\"><field name=\"OP\">&lt;</field><value name=\"A\"><shadow type=\"math_number\" id=\"eFjvZu;H(Mjwu[(P%xM*\"><field name=\"NUM\">0</field></shadow><block type=\"value_target_attribute\" id=\"w*L+8l8YBe{`|#vIPSf-\"><field name=\"ATTR\">energy</field><value name=\"TARGET\"><block type=\"target_self\" id=\"E1]jxZ39-bNw?68]]Ly~\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"r,XUjKq]f%V6n/r@Cz+M\"><field name=\"NUM\">0</field></shadow></value></block></value><statement name=\"DO\"><block type=\"action_gain_e\" id=\"t:w2[~X17%/)D!^}2QYi\"><value name=\"TARGET\"><block type=\"target_self\" id=\"*f7aAhk)GB9*L-vyG,7,\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"tmRh,rOKIT$A!Pk/r#1N\"><field name=\"NUM\">1</field></shadow><block type=\"value_math_op\" id=\"#P)q!.3%?H~(p+$CMoyc\"><field name=\"OP\">-</field><value name=\"A\"><shadow type=\"math_number\" id=\";+G{Shh3rG`W1Z:]]^Bh\"><field name=\"NUM\">0</field></shadow></value><value name=\"B\"><shadow type=\"math_number\" id=\"Hxb@RtAbrCC/q2JV[bWD\"><field name=\"NUM\">0</field></shadow><block type=\"value_target_attribute\" id=\"3K:PoaS8]l/g;7|w{g[1\"><field name=\"ATTR\">energy</field><value name=\"TARGET\"><block type=\"target_self\" id=\"Hc;((Cj`|5oF7#tpLAEx\"></block></value></block></value></block></value></block></statement></block></next></block></next></block></statement></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "过载"
-            },
-            "then": []
-          }
-        }
-      ]
-    },
-    "status:虚弱": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_enemy_turn_start\" id=\"#e}WlwKGhTLSUpv9${q-\" x=\"12\" y=\"12\"><next><block type=\"control_if\" id=\"SJbyY{=Kw@~Xc+Uq##Fc\"><value name=\"CONDITION\"><block type=\"condition_has_status_named\" id=\":%(?`6*VGXGy{@49jL9|\"><field name=\"STATUS\">虚弱</field><value name=\"TARGET\"><block type=\"target_self\" id=\"raRvwN7rR2|^Mk{_8+gT\"></block></value></block></value><statement name=\"DO\"><block type=\"action_status_add_named\" id=\"Y/f^-uGQ{MyTe#/%jecm\"><field name=\"STATUS\">虚弱</field><value name=\"TARGET\"><block type=\"target_self\" id=\"t{rBM5NhfqRn[k*#M%Sh\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"w*0O]GQ]JSvJ#946TmHZ\"><field name=\"NUM\">1</field></shadow><block type=\"value_math_op\" id=\"-yb5sN@EtwI0U$K(N~Gu\"><field name=\"OP\">-</field><value name=\"A\"><shadow type=\"math_number\" id=\"va^Gl!Ukmb,/9=A%|;B@\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\"kt-Z)u49O(tA+S.R:z}P\"><field name=\"STATUS\">虚弱</field><value name=\"TARGET\"><block type=\"target_self\" id=\"oD.5XEO_Gp4@$uKYn3)T\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"G6v`;P])W@I/A8jh8:!T\"><field name=\"NUM\">1</field></shadow></value></block></value><next><block type=\"control_if\" id=\"JRnH8XHnGeXM$r+0iiOw\"><value name=\"CONDITION\"><block type=\"condition_compare\" id=\"sGLA?li5o`l0X990~.K[\"><field name=\"OP\">=</field><value name=\"A\"><shadow type=\"math_number\" id=\"2*JJk(4fZ%hW_^X]a[s0\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\";0h.MfA2Hg_*B(Hx[*RB\"><field name=\"STATUS\">虚弱</field><value name=\"TARGET\"><block type=\"target_self\" id=\"h8C2N=F|0@qH*yZU1p;b\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"wDw@x]$}GX!F-qc[:%W0\"><field name=\"NUM\">0</field></shadow></value></block></value><statement name=\"DO\"><block type=\"action_status_remove_named\" id=\"?,ywGERrr0~$!^O}i1u[\"><field name=\"STATUS\">虚弱</field><value name=\"TARGET\"><block type=\"target_self\" id=\"8JcU_aO@,5))a}tuK{PY\"></block></value></block></statement></block></next></block></statement></block></next></block><block type=\"trigger_on_phys_damage\" id=\"YE%x|07-,s20oSc,MuN1\" x=\"12\" y=\"444\"><field name=\"SOURCE_VAR\"></field><value name=\"TARGET\"><block type=\"target_self\" id=\"vlQzzWcia5CUjP/pKSCb\"></block></value><next><block type=\"control_if\" id=\"]n;wchC/KK0_bfco;ZiC\"><value name=\"CONDITION\"><block type=\"condition_has_status_named\" id=\"-|AXuJ?L/tE1a?DI8{_=\"><field name=\"STATUS\">虚弱</field><value name=\"TARGET\"><block type=\"target_damage_source\" id=\"/S%oBhqwzNoro6dqxg?~\"></block></value></block></value><statement name=\"DO\"><block type=\"action_dodge_this\" id=\"alhAy?PvxV39[wx%MhoK\"><next><block type=\"action_damage\" id=\"G`2Ag{UFT0QA+}@Y18ei\"><field name=\"IS_PRECISION\">FALSE</field><value name=\"TARGET\"><block type=\"target_self\" id=\"vDD2`0BM?kXz~}l/Zosd\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"[+|DE6CNEH.g)ZSt6:`,\"><field name=\"NUM\">6</field></shadow><block type=\"value_round\" id=\"[*j4/Tw(u(|~PvSG5mN|\"><field name=\"MODE\">ceil</field><value name=\"VALUE\"><shadow type=\"math_number\" id=\"K1gE0U-LgX6C2s].GZjR\"><field name=\"NUM\">0</field></shadow><block type=\"value_math_op\" id=\"xWdyowFLVnpi^#Y/SWXi\"><field name=\"OP\">*</field><value name=\"A\"><shadow type=\"math_number\" id=\"ScO`b-lDMzod+BWVxo6o\"><field name=\"NUM\">0</field></shadow><block type=\"value_last_damage\" id=\"#mH!]%9}hM#?$E/(6II^\"><value name=\"TARGET\"><block type=\"target_self\" id=\",qTA*x.lw(CGxN`4;g#g\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"lue*G{RyOYY@WiTMKaF`\"><field name=\"NUM\">0.8</field></shadow></value></block></value></block></value></block></next></block></statement></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "虚弱"
-            },
-            "then": []
-          }
-        },
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"damage_source\"",
-              "status": "虚弱"
-            },
-            "then": []
-          }
-        }
-      ]
-    },
-    "status:眩晕": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_friendly_turn_start\" id=\"QtD[5,Zwe(Vx*/8v!0R:\" x=\"12\" y=\"12\"><next><block type=\"control_if\" id=\";+eCk,eO!=Y2asTB#p$L\"><value name=\"CONDITION\"><block type=\"condition_has_status_named\" id=\"^V-B+~]SS~|qBv_zBgWS\"><field name=\"STATUS\">眩晕</field><value name=\"TARGET\"><block type=\"target_self\" id=\"G@+rG+WwzPct-!}5fvmz\"></block></value></block></value><statement name=\"DO\"><block type=\"action_status_add_named\" id=\"m^`x-%x.-,zIl30Och.A\"><field name=\"STATUS\">眩晕</field><value name=\"TARGET\"><block type=\"target_self\" id=\"2k3_D[e|gQre{K7+}1JI\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"r$.-o`KfA!qb*dM}p[5I\"><field name=\"NUM\">1</field></shadow><block type=\"value_math_op\" id=\"=~jN!7BpP_jK+-w|/Jxp\"><field name=\"OP\">-</field><value name=\"A\"><shadow type=\"math_number\" id=\"k8MvDS%^:wHECG@JQQk1\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\"Dl4VNm(8l%!+Gga!Aqmo\"><field name=\"STATUS\">眩晕</field><value name=\"TARGET\"><block type=\"target_self\" id=\"=%6-8yky1#!K?UDgs[@L\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"YlL1v0@jg,3dZ47D7?#c\"><field name=\"NUM\">1</field></shadow></value></block></value><next><block type=\"control_if\" id=\"-5hQ#21_[Y8SPh}g@%v[\"><value name=\"CONDITION\"><block type=\"condition_compare\" id=\"3^T`kp|,@8B)CiY9t[W]\"><field name=\"OP\">=</field><value name=\"A\"><shadow type=\"math_number\" id=\";Z*`}m27o_soFP-$C^lO\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\"a(F6xhbfiZ}:2P$OcU%D\"><field name=\"STATUS\">眩晕</field><value name=\"TARGET\"><block type=\"target_self\" id=\"wH,$!dB^hYL;Qrz(8{-y\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"Y-GHsGZF;9;$(}mP:a3H\"><field name=\"NUM\">0</field></shadow></value></block></value><statement name=\"DO\"><block type=\"action_status_remove_named\" id=\"7_PW2rJ}{v/t^PS?3/J;\"><field name=\"STATUS\">眩晕</field><value name=\"TARGET\"><block type=\"target_self\" id=\"ToG~%^Wx{2_Q[l5+kR-,\"></block></value></block></statement><next><block type=\"action_force_end_turn\" id=\"Pq!v$$_muNoEYwZkzE61\"></block></next></block></next></block></statement></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "眩晕"
-            },
-            "then": []
-          }
-        }
-      ]
-    },
-    "status:破损": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_enemy_turn_start\" id=\"`-9):g=GBq$xiQ[JObAf\" x=\"12\" y=\"12\"><next><block type=\"control_if\" id=\"P;Z5~]8Y)]_+}W3Gp,X}\"><value name=\"CONDITION\"><block type=\"condition_has_status_named\" id=\"QoKYmyK6kDfae.NZpANj\"><field name=\"STATUS\">破损</field><value name=\"TARGET\"><block type=\"target_self\" id=\"-]~(pyQ6saRG9OabjN]D\"></block></value></block></value><statement name=\"DO\"><block type=\"action_status_add_named\" id=\"UD9F)Je9-Gbj@FpCyd)j\"><field name=\"STATUS\">破损</field><value name=\"TARGET\"><block type=\"target_self\" id=\"(w9KA[C$NjDxrNtaKt|P\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\")k[z9Ml4Kl4}xu7Vl,{l\"><field name=\"NUM\">1</field></shadow><block type=\"value_math_op\" id=\"MgqKuyx!vQwfWVgQzD3B\"><field name=\"OP\">-</field><value name=\"A\"><shadow type=\"math_number\" id=\"o3T+3Bp_BW6n{]_W~Cez\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\"#o!ry=%d[V:Lm,nhX+a#\"><field name=\"STATUS\">破损</field><value name=\"TARGET\"><block type=\"target_self\" id=\"VahA8;W:7f@tX}d@JTfp\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"t+{4Xp9B@zRYk_~I]yt~\"><field name=\"NUM\">1</field></shadow></value></block></value><next><block type=\"control_if\" id=\"9Y#zJ*Hn44rPYu23(%-C\"><value name=\"CONDITION\"><block type=\"condition_compare\" id=\"{@x%!df~H:Zkx:~.E9:.\"><field name=\"OP\">=</field><value name=\"A\"><shadow type=\"math_number\" id=\":fn2kHd0~y8%LE5juKaw\"><field name=\"NUM\">0</field></shadow><block type=\"value_status_count\" id=\"f##~xJf2bg=|{A:gfixM\"><field name=\"STATUS\">破损</field><value name=\"TARGET\"><block type=\"target_self\" id=\"x#ue40RPx97a2:wZ|MEQ\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\".sr~#Ds[O_wrBCL7mgR=\"><field name=\"NUM\">0</field></shadow></value></block></value><statement name=\"DO\"><block type=\"action_status_remove_named\" id=\"wb@E`19x3wmZ9kio[HB}\"><field name=\"STATUS\">破损</field><value name=\"TARGET\"><block type=\"target_self\" id=\"j_$pTjpC^?3S%NWfYBK`\"></block></value></block></statement></block></next></block></statement></block></next></block><block type=\"trigger_on_phys_damage\" id=\"E|HbEJc{ZfN5s8g)M`Nh\" x=\"12\" y=\"420\"><field name=\"SOURCE_VAR\"></field><value name=\"TARGET\"><block type=\"target_self\" id=\"z@[RaD[37z:9gEmrp_bf\"></block></value><next><block type=\"control_if\" id=\"588AW/.HG0GzJf@}+`6L\"><value name=\"CONDITION\"><block type=\"condition_has_status_named\" id=\"NP;T1]?4yD^I#dsp`gwa\"><field name=\"STATUS\">破损</field><value name=\"TARGET\"><block type=\"target_self\" id=\"b~aT0u):igb:zKVB4JZ;\"></block></value></block></value><statement name=\"DO\"><block type=\"action_direct_damage\" id=\"Nz!t[%j_8_u=%|z_lpz1\"><field name=\"SOURCE\">破损</field><value name=\"TARGET\"><block type=\"target_self\" id=\"{XemNs$,s#`PkUx-nCkZ\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"i$RzS,]hXKz~lj,*l$V/\"><field name=\"NUM\">1</field></shadow><block type=\"value_round\" id=\"5:AO~M]*{%+3M~~,DYCA\"><field name=\"MODE\">ceil</field><value name=\"VALUE\"><shadow type=\"math_number\" id=\"27_=c_]_CAYju$WaAPV[\"><field name=\"NUM\">0</field></shadow><block type=\"value_math_op\" id=\"Q?lR*4?0IH1fea#ZDsD[\"><field name=\"OP\">*</field><value name=\"A\"><shadow type=\"math_number\" id=\"bBEnU4H7cDS/WmjYvmk,\"><field name=\"NUM\">0</field></shadow><block type=\"value_last_damage\" id=\"hhQaPB{Na8DFZJ3YK#F]\"><value name=\"TARGET\"><block type=\"target_self\" id=\"KQcTN~gK73`CB[1/eFfG\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"wH$!lIg_F8Cv.Q3q!9?K\"><field name=\"NUM\">0.8</field></shadow></value></block></value></block></value></block></statement></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "破损"
-            },
-            "then": []
-          }
-        },
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "破损"
-            },
-            "then": [
-              {
-                "type": "direct_damage",
-                "params": {
-                  "target": "self",
-                  "amount": {
-                    "ref": "round",
-                    "mode": "ceil",
-                    "value": {
-                      "ref": "math_op",
-                      "a": "{\"ref\":\"last_damage\",\"target\":\"self\"}",
-                      "op": "*",
-                      "b": "0.8"
-                    }
-                  },
-                  "source": "破损"
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    "status:迟缓": {
-      "xml": "",
-      "effects": []
-    },
-    "status:流血": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_on_play\" id=\"6JX|[t_Nz7LY_R}$CylU\" x=\"12\" y=\"-84\"><next><block type=\"control_if\" id=\"SOiSv4]0?m7w1N`JQUCJ\"><value name=\"CONDITION\"><block type=\"condition_has_status_named\" id=\"yjJP;1lRJc.`RSPgsUcW\"><field name=\"STATUS\">流血</field><value name=\"TARGET\"><block type=\"target_self\" id=\"`2=.4761OH[/VlssoL.+\"></block></value></block></value><statement name=\"DO\"><block type=\"action_direct_damage\" id=\"8B,N(VNZr?/GX+4#?]?@\"><field name=\"SOURCE\">流血</field><value name=\"TARGET\"><block type=\"target_self\" id=\"eRJ2_U~|WsIBaD,j.=xL\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"0xlM%S`S2{m`vDMkT#79\"><field name=\"NUM\">1</field></shadow><block type=\"value_status_count\" id=\"Ma#w[j#E|^.[=D9Y,K1j\"><field name=\"STATUS\">流血</field><value name=\"TARGET\"><block type=\"target_self\" id=\"g[yM!4nEiPkSZ0Q~XIq)\"></block></value></block></value></block></statement></block></next></block><block type=\"trigger_on_enemy_turn_start\" id=\"c,nHew0oZCB#p(L_Obn+\" x=\"12\" y=\"180\"><next><block type=\"control_if\" id=\"halTg]s@ee.PMi|W$lTk\"><value name=\"CONDITION\"><block type=\"condition_has_status_named\" id=\"#HJy_x^B#40[3hmiCav%\"><field name=\"STATUS\">流血</field><value name=\"TARGET\"><block type=\"target_self\" id=\"?y/y/w/M2Ltw_..K@KEp\"></block></value></block></value><statement name=\"DO\"><block type=\"action_status_remove_named\" id=\"9jQn5XfHMv9`}|d7JJ0T\"><field name=\"STATUS\">流血</field><value name=\"TARGET\"><block type=\"target_self\" id=\"!-_tKSVc#H?mCh{S)3@?\"></block></value></block></statement></block></next></block></xml>",
-      "effects": [
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "流血"
-            },
-            "then": [
-              {
-                "type": "direct_damage",
-                "params": {
-                  "target": "self",
-                  "amount": {
-                    "ref": "status_count",
-                    "target": "self",
-                    "status": "流血"
-                  },
-                  "source": "流血"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "if",
-          "params": {
-            "condition": {
-              "op": "has_status_named",
-              "target": "\"self\"",
-              "status": "流血"
-            },
-            "then": [
-              {
-                "type": "status_remove_named",
-                "params": {
-                  "target": "self",
-                  "status": "流血"
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    "tag:超频": {
-      "xml": "<xml xmlns=\"https://developers.google.com/blockly/xml\"><block type=\"trigger_hand_owner_turn_start\" id=\"f5s?uFZ3ag3,^[*eg$kK\" x=\"12\" y=\"12\"></block><block type=\"procedures_defnoreturn\" id=\"eUX4p$xfjGE*:_D0|.|C\" x=\"12\" y=\"108\"><field name=\"NAME\">棍母</field><comment pinned=\"false\" h=\"80\" w=\"160\">描述该功能...</comment><statement name=\"STACK\"><block type=\"action_copy_choice_with_discount\" id=\"uKjov8[}a?A+CX=F2LIj\"><value name=\"CARD\"><block type=\"card_current\" id=\"zO,cnQKxtBw9qZpxo**r\"></block></value><value name=\"DISCOUNT\"><shadow type=\"math_number\" id=\"SHQVZXC%G-_S!2E$p1x;\"><field name=\"NUM\">1</field></shadow></value><next><block type=\"action_exile_this\" id=\"a6a}%I~8DDSg*Yq19|{V\"><value name=\"CARD\"><block type=\"card_current\" id=\"9]Z_FqWhane;lRH~F;u@\"></block></value><next><block type=\"action_card_prop_add\" id=\"?J+L_q=t`hi?t6ekAK=+\"><field name=\"PROPERTY\">mimic_discount</field><value name=\"CARD\"><block type=\"card_last_created\" id=\"@vlc_oKAnW2t,Yw9d,)-\"></block></value><value name=\"AMOUNT\"><shadow type=\"math_number\" id=\"$:l;{)Yv}]g~=9PGq~BD\"><field name=\"NUM\">1</field></shadow></value><next><block type=\"control_if\" id=\"#y2{XL*u[|*0EWS`$$_!\"><value name=\"CONDITION\"><block type=\"condition_compare\" id=\"NZ:Ac?v?aOu[^e#]VPLy\"><field name=\"OP\">&lt;</field><value name=\"A\"><shadow type=\"math_number\" id=\"afFKl8^Vclx(.s%Kvu^b\"><field name=\"NUM\">0</field></shadow><block type=\"value_card_property\" id=\"pAByD+YPrR@:;j(j3)[[\"><field name=\"PROPERTY\">cost_e</field><value name=\"CARD\"><block type=\"card_last_created\" id=\"bt^;(/Ib%SjQ]{y5kLc1\"></block></value></block></value><value name=\"B\"><shadow type=\"math_number\" id=\"gwpubZT)%Tk[Vs2^QS7x\"><field name=\"NUM\">1</field></shadow></value></block></value></block></next></block></next></block></next></block></statement></block></xml>",
-      "effects": [
-        {
-          "type": "on_hand_owner_turn_start",
-          "params": {
-            "effects": []
-          }
-        }
-      ]
-    },
-    "tag:副本": {
-      "xml": "",
-      "effects": []
+    ],
+    "opening_events": [],
+    "ui_components": [],
+    "variables": [
+      {
+        "id": "garden_cards_addition:var_5dd92ce93b",
+        "name": "棍母",
+        "scope": "player",
+        "initial": 0,
+        "desc": "由脚本引用自动创建",
+        "legacy_id": "棍母"
+      }
+    ],
+    "lists": []
+  },
+  "patches": [],
+  "compatibility": [],
+  "event_hooks": [],
+  "editor": {
+    "tool": "GTN Mod Studio",
+    "tool_version": "2",
+    "schema": "gtn_mod_spec_v2",
+    "workspaces": {},
+    "ui_layouts": {},
+    "version": 1
+  },
+  "metadata": {
+    "legacy_info": {
+      "name": "Garden Cards Addition",
+      "version": "1.0.0",
+      "author": "NetherDog",
+      "description": "Garden Addition Modpack",
+      "game_version": "*"
     }
   }
 }

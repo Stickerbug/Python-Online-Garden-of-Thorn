@@ -4,14 +4,7 @@ import sys
 import copy
 import hashlib
 from typing import Dict, List, Optional, Any
-from mod_validator import (
-    VALID_CARD_TYPES,
-    VALID_QUALITIES,
-    VALID_FLAGS,
-    VALID_EFFECTS,
-    VALID_EVENT_EFFECTS,
-    validate_mod_data,
-)
+from mod_validator_v2 import validate_mod_v2
 
 def _get_base_dir():
     if getattr(sys, 'frozen', False):
@@ -58,6 +51,9 @@ class ModCard:
         self.response_trigger = data.get('response_trigger', '')
         self.response_title = data.get('response_title', '')
         self.response_content = data.get('response_content', '')
+        self.v2_events = data.get('v2_events', {}) if isinstance(data.get('v2_events', {}), dict) else {}
+        self.v2_resource = data.get('v2_resource', {}) if isinstance(data.get('v2_resource', {}), dict) else {}
+        self.v2_mod_id = data.get('v2_mod_id', '')
 
     def to_dict(self) -> dict:
         return {
@@ -77,6 +73,9 @@ class ModCard:
             'response_trigger': self.response_trigger,
             'response_title': self.response_title,
             'response_content': self.response_content,
+            'v2_events': self.v2_events,
+            'v2_resource': self.v2_resource,
+            'v2_mod_id': self.v2_mod_id,
         }
 
     def to_card_def(self):
@@ -100,6 +99,9 @@ class ModCard:
             scripts=self.scripts,
             response_title=self.response_title,
             response_content=self.response_content,
+            v2_events=self.v2_events,
+            v2_resource=self.v2_resource,
+            v2_mod_id=self.v2_mod_id,
         )
 
 
@@ -192,21 +194,111 @@ class Mod:
         return data
 
 
+class V2Manifest:
+    def __init__(self, data: dict):
+        self.data = dict(data or {})
+        self.id = self.data.get('id', '')
+        self.name = self.data.get('name', '')
+        self.version = self.data.get('version', '')
+        self.api_version = self.data.get('api_version', '')
+        self.author = self.data.get('author', '')
+        self.description = self.data.get('description', '')
+
+    def to_dict(self) -> dict:
+        return dict(self.data)
+
+
+class V2Resource:
+    def __init__(self, registry: str, data: dict):
+        self.registry = registry
+        self.data = dict(data or {})
+        self.id = self.data.get('id', '')
+
+    def to_dict(self) -> dict:
+        return dict(self.data)
+
+
+class V2Mod(Mod):
+    def __init__(self, filepath: str):
+        super().__init__(filepath)
+        self.format_version = 2
+        self.manifest: Optional[V2Manifest] = None
+        self.registries: Dict[str, List[V2Resource]] = {}
+        self.patches: List[dict] = []
+        self.compatibility: List[dict] = []
+        self.event_hooks: List[dict] = []
+        self.content_hash = ''
+
+    def resource_counts(self) -> dict:
+        return {key: len(value) for key, value in self.registries.items()}
+
+    def to_dict(self, include_validation: bool = False) -> dict:
+        data = {
+            'format_version': 2,
+            'manifest': self.manifest.to_dict() if self.manifest else {},
+            'registries': {
+                key: [resource.to_dict() for resource in resources]
+                for key, resources in self.registries.items()
+            },
+            'patches': self.patches,
+            'compatibility': self.compatibility,
+            'event_hooks': self.event_hooks,
+            'content_hash': self.content_hash,
+            'resource_counts': self.resource_counts(),
+            'editor': self.editor,
+            'info': self.info.to_dict() if self.info else {},
+            'cards': [c.to_dict() for c in self.cards],
+            'events': [e.to_dict() for e in self.events],
+            'variables': [],
+            'custom_statuses': self.custom_statuses,
+            'custom_tags': self.custom_tags,
+            'scripts': {},
+        }
+        if include_validation:
+            data['errors'] = list(self.errors)
+            data['warnings'] = list(self.warnings)
+            data['validation_hash'] = self.validation_hash
+        return data
+
+
 def validate_mod(data: dict) -> List[str]:
-    return validate_mod_data(data, strict=False).errors
+    if not isinstance(data, dict) or data.get('format_version') != 2:
+        return ['只接受 GTN Mod Spec v2（format_version 必须为 2）']
+    return validate_mod_v2(data).errors
 
 
-def _strip_scripts_for_untrusted_mod(data: dict) -> tuple:
-    sanitized = copy.deepcopy(data)
-    changed = False
-    if isinstance(sanitized.get('scripts'), dict) and sanitized.get('scripts'):
-        sanitized['scripts'] = {}
-        changed = True
-    for card in sanitized.get('cards', []) if isinstance(sanitized.get('cards'), list) else []:
-        if isinstance(card, dict) and isinstance(card.get('scripts'), dict) and card.get('scripts'):
-            card['scripts'] = {}
-            changed = True
-    return sanitized, changed
+def _v2_event_steps(event_def: Any) -> List[dict]:
+    if isinstance(event_def, dict):
+        steps = event_def.get('steps', [])
+    else:
+        steps = event_def
+    return copy.deepcopy(steps) if isinstance(steps, list) else []
+
+
+def _v2_card_to_legacy_data(resource: dict) -> dict:
+    card = copy.deepcopy(resource or {})
+    runtime_id = str(card.get('legacy_id') or card.get('runtime_id') or card.get('id') or '').strip()
+    card['id'] = runtime_id
+    cost = card.get('cost') if isinstance(card.get('cost'), dict) else {}
+    if 'cost_e' not in card:
+        card['cost_e'] = cost.get('e', 0)
+    if 'cost_m' not in card:
+        card['cost_m'] = cost.get('m', 0)
+    flags = set(card.get('flags', []) if isinstance(card.get('flags', []), list) else [])
+    for tag in card.get('tags', []) if isinstance(card.get('tags', []), list) else []:
+        tag_text = str(tag)
+        if tag_text.startswith('gtn:'):
+            tag_text = tag_text.split(':', 1)[1]
+        flags.add(tag_text)
+    card['flags'] = list(flags)
+    events = card.get('events') if isinstance(card.get('events'), dict) else {}
+    card['v2_events'] = copy.deepcopy(events)
+    card['v2_resource'] = copy.deepcopy(resource or {})
+    card['v2_mod_id'] = str(card.get('_mod_id') or '')
+    card['effects'] = []
+    card['trigger_effects'] = []
+    card['scripts'] = {}
+    return card
 
 
 def load_mod_from_data(data: dict, source: str = "memory", allow_scripts: bool = True) -> Mod:
@@ -214,32 +306,73 @@ def load_mod_from_data(data: dict, source: str = "memory", allow_scripts: bool =
     if not isinstance(data, dict):
         mod.errors.append('模组根节点必须是对象')
         return mod
-    if not allow_scripts:
-        data, stripped_scripts = _strip_scripts_for_untrusted_mod(data)
-        if stripped_scripts:
-            mod.warnings.append('社区模组 scripts 已被禁用')
-    validation = validate_mod_data(data, strict=False, source=mod.filename)
+    if data.get('format_version') == 2:
+        return load_v2_mod_from_data(
+            data,
+            source=source,
+            allow_reserved_namespaces=allow_scripts,
+        )
+    mod.format_version = data.get('format_version', None)
+    mod.errors.append('只接受 GTN Mod Spec v2（format_version 必须为 2）')
+    return mod
+
+
+def load_v2_mod_from_data(data: dict, source: str = "memory", allow_reserved_namespaces: bool = False) -> V2Mod:
+    mod = V2Mod(source or 'memory')
+    if not isinstance(data, dict):
+        mod.errors.append('模组根节点必须是对象')
+        return mod
+    validation = validate_mod_v2(
+        data,
+        source=mod.filename,
+        allow_reserved_namespaces=allow_reserved_namespaces,
+    )
     mod.errors = validation.errors
-    mod.warnings.extend(validation.warnings)
+    mod.warnings = validation.warnings
     mod.validation_hash = validation.content_hash
-    data = validation.normalized if validation.normalized else data
-    if not allow_scripts:
-        data, stripped_scripts_after_validation = _strip_scripts_for_untrusted_mod(data)
-        if stripped_scripts_after_validation and '社区模组 scripts 已被禁用' not in mod.warnings:
-            mod.warnings.append('社区模组 scripts 已被禁用')
-    mod.format_version = data.get('format_version', 1)
-    mod.editor = data.get('editor', {}) if isinstance(data.get('editor', {}), dict) else {}
-    if data.get('info'):
-        mod.info = ModInfo(data['info'])
-    for cd in data.get('cards', []):
-        mod.cards.append(ModCard(cd))
-    for ed in data.get('events', []):
-        mod.events.append(ModEvent(ed))
-    for vd in data.get('variables', []):
-        mod.variables.append(ModVariable(vd))
-    mod.custom_statuses = data.get('custom_statuses', []) if isinstance(data.get('custom_statuses', []), list) else []
-    mod.custom_tags = data.get('custom_tags', []) if isinstance(data.get('custom_tags', []), list) else []
-    mod.scripts = data.get('scripts', {}) if isinstance(data.get('scripts', {}), dict) else {}
+    mod.content_hash = validation.content_hash
+    normalized = validation.normalized if validation.normalized else copy.deepcopy(data)
+    mod.editor = normalized.get('editor', {}) if isinstance(normalized.get('editor', {}), dict) else {}
+    manifest_data = normalized.get('manifest') if isinstance(normalized.get('manifest'), dict) else {}
+    mod.manifest = V2Manifest(manifest_data)
+    if manifest_data:
+        mod.info = ModInfo({
+            'name': manifest_data.get('name', ''),
+            'version': manifest_data.get('version', '1.0.0'),
+            'author': manifest_data.get('author', ''),
+            'description': manifest_data.get('description', ''),
+            'game_version': manifest_data.get('api_version', ''),
+        })
+    registries = normalized.get('registries') if isinstance(normalized.get('registries'), dict) else {}
+    for key, resources in registries.items():
+        if not isinstance(resources, list):
+            continue
+        mod.registries[key] = [
+            V2Resource(key, resource)
+            for resource in resources
+            if isinstance(resource, dict)
+        ]
+    for resource in mod.registries.get('cards', []):
+        card_data = _v2_card_to_legacy_data(resource.to_dict())
+        if card_data.get('id'):
+            mod.cards.append(ModCard(card_data))
+    for resource in mod.registries.get('opening_events', []):
+        event_data = resource.to_dict()
+        effects = _v2_event_steps((event_data.get('events') or {}).get('on_apply') if isinstance(event_data.get('events'), dict) else [])
+        mod.events.append(ModEvent({
+            'id': event_data.get('legacy_id', event_data.get('id', '')),
+            'name_cn': event_data.get('name_cn', event_data.get('name', '')),
+            'name_en': event_data.get('name_en', event_data.get('name', '')),
+            'desc': event_data.get('desc', event_data.get('description', '')),
+            'position': event_data.get('position', 3),
+            'effects': effects,
+            'params': event_data.get('params', {}),
+        }))
+    mod.custom_statuses = [resource.to_dict() for resource in mod.registries.get('statuses', [])]
+    mod.custom_tags = [resource.to_dict() for resource in mod.registries.get('tags', [])]
+    mod.patches = normalized.get('patches', []) if isinstance(normalized.get('patches', []), list) else []
+    mod.compatibility = normalized.get('compatibility', []) if isinstance(normalized.get('compatibility', []), list) else []
+    mod.event_hooks = normalized.get('event_hooks', []) if isinstance(normalized.get('event_hooks', []), list) else []
     return mod
 
 

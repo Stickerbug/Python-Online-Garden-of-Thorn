@@ -1,5 +1,6 @@
 import json
 import os
+import secrets
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -9,6 +10,13 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 DEFAULT_DB_PATH = '/var/lib/gtn/gtn.sqlite3'
 DB_PATH = os.environ.get('GTN_DB_PATH', DEFAULT_DB_PATH)
+PLAYER_ID_ALPHABET = '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ'
+PLAYER_ID_RE = re.compile(r'^[0-9A-HJ-NP-Z]{6}$')
+PLAYER_ID_BLACKLIST_PATH = os.environ.get(
+    'GTN_PLAYER_ID_BLACKLIST_PATH',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'playerid_blacklist.txt'),
+)
+_PLAYER_ID_BLACKLIST_CACHE = None
 
 
 def utc_now():
@@ -20,6 +28,89 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys=ON;')
     return conn
+
+
+def _load_player_id_blacklist():
+    global _PLAYER_ID_BLACKLIST_CACHE
+    if _PLAYER_ID_BLACKLIST_CACHE is not None:
+        return _PLAYER_ID_BLACKLIST_CACHE
+    items = set()
+    try:
+        with open(PLAYER_ID_BLACKLIST_PATH, 'r', encoding='utf-8', errors='ignore') as handle:
+            for line in handle:
+                token = str(line or '').strip().upper()
+                if token and len(token) <= 6:
+                    items.add(token)
+    except OSError:
+        items = set()
+    _PLAYER_ID_BLACKLIST_CACHE = tuple(sorted(items, key=lambda value: (-len(value), value)))
+    return _PLAYER_ID_BLACKLIST_CACHE
+
+
+def validate_player_id(player_id):
+    text = str(player_id or '').strip().upper()
+    if not PLAYER_ID_RE.fullmatch(text):
+        return False
+    for idx in range(len(text) - 1):
+        if text[idx] == text[idx + 1]:
+            return False
+
+    digit_run = 0
+    letter_run = 0
+    for ch in text:
+        if ch.isdigit():
+            digit_run += 1
+            letter_run = 0
+        else:
+            letter_run += 1
+            digit_run = 0
+        if digit_run > 3 or letter_run > 2:
+            return False
+
+    for idx in range(len(text) - 2):
+        segment = text[idx:idx + 3]
+        if not segment.isdigit():
+            continue
+        numbers = [int(ch) for ch in segment]
+        if numbers[1] - numbers[0] == 1 and numbers[2] - numbers[1] == 1:
+            return False
+        if numbers[1] - numbers[0] == -1 and numbers[2] - numbers[1] == -1:
+            return False
+
+    for bad in _load_player_id_blacklist():
+        if bad in text:
+            return False
+    return True
+
+
+def _make_player_id_candidate():
+    return ''.join(secrets.choice(PLAYER_ID_ALPHABET) for _ in range(6))
+
+
+def generate_player_id(existing=None):
+    used = {str(item or '').upper() for item in (existing or []) if item}
+    for _ in range(20000):
+        candidate = _make_player_id_candidate()
+        if candidate not in used and validate_player_id(candidate):
+            return candidate
+    raise RuntimeError('unable to generate player id')
+
+
+def _assign_missing_player_ids(conn):
+    rows = conn.execute('SELECT id, player_id FROM users').fetchall()
+    counts = {}
+    for row in rows:
+        current = str(row['player_id'] or '').strip().upper()
+        if current:
+            counts[current] = counts.get(current, 0) + 1
+    existing = set(counts)
+    for row in rows:
+        current = str(row['player_id'] or '').strip().upper()
+        if current and validate_player_id(current) and counts.get(current, 0) == 1:
+            continue
+        player_id = generate_player_id(existing)
+        existing.add(player_id)
+        conn.execute('UPDATE users SET player_id = ? WHERE id = ?', (player_id, row['id']))
 
 
 def init_db():
@@ -51,6 +142,33 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN ban_reason TEXT')
         if 'banned_at' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN banned_at TEXT')
+        if 'player_id' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN player_id TEXT')
+        if 'accept_friend_requests' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN accept_friend_requests INTEGER DEFAULT 1')
+        if 'searchable_by_nickname' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN searchable_by_nickname INTEGER DEFAULT 1')
+        if 'searchable_by_player_id' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN searchable_by_player_id INTEGER DEFAULT 1')
+        _assign_missing_player_ids(conn)
+        conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS friendships (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                requester_id INTEGER NOT NULL,
+                addressee_id INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(requester_id, addressee_id),
+                FOREIGN KEY(requester_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(addressee_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships(requester_id, status)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id, status)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS matches (
@@ -200,12 +318,16 @@ def row_to_user(row):
     return {
         'id': row['id'],
         'username': row['username'],
+        'player_id': row['player_id'] if 'player_id' in row.keys() else None,
         'created_at': row['created_at'],
         'last_login_at': row['last_login_at'],
         'games_played': row['games_played'],
         'wins': row['wins'],
         'losses': row['losses'],
         'draws': row['draws'],
+        'accept_friend_requests': bool(row['accept_friend_requests']) if 'accept_friend_requests' in row.keys() else True,
+        'searchable_by_nickname': bool(row['searchable_by_nickname']) if 'searchable_by_nickname' in row.keys() else True,
+        'searchable_by_player_id': bool(row['searchable_by_player_id']) if 'searchable_by_player_id' in row.keys() else True,
         'banned': bool(row['banned']) if 'banned' in row.keys() else False,
         'ban_reason': row['ban_reason'] if 'ban_reason' in row.keys() else None,
         'banned_at': row['banned_at'] if 'banned_at' in row.keys() else None,
@@ -234,12 +356,14 @@ def create_user(username, password):
     password_hash = generate_password_hash(str(password))
     try:
         with get_db_connection() as conn:
+            existing_ids = [row['player_id'] for row in conn.execute('SELECT player_id FROM users WHERE player_id IS NOT NULL').fetchall()]
+            player_id = generate_player_id(existing_ids)
             cur = conn.execute(
                 '''
-                INSERT INTO users (username, username_lower, password_hash, created_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO users (username, username_lower, password_hash, created_at, player_id)
+                VALUES (?, ?, ?, ?, ?)
                 ''',
-                (name, name.lower(), password_hash, now),
+                (name, name.lower(), password_hash, now, player_id),
             )
             conn.commit()
             row = conn.execute('SELECT * FROM users WHERE id = ?', (cur.lastrowid,)).fetchone()
@@ -298,6 +422,8 @@ def find_user_for_admin(identifier):
         row = None
         if token.isdigit():
             row = conn.execute('SELECT * FROM users WHERE id = ?', (int(token),)).fetchone()
+        if row is None and PLAYER_ID_RE.fullmatch(token.upper()):
+            row = conn.execute('SELECT * FROM users WHERE player_id = ?', (token.upper(),)).fetchone()
         if row is None:
             name = sanitize_username(token)
             if name:
@@ -361,6 +487,7 @@ def get_user_by_username(username):
 
 ADMIN_USER_SORTS = {
     'id': 'id',
+    'player_id': 'player_id',
     'username': 'username_lower',
     'created_at': 'created_at',
     'last_login_at': 'last_login_at',
@@ -389,8 +516,8 @@ def list_admin_users(query='', sort='last_login_at', order='desc', limit=100, of
     where = ''
     params = []
     if name:
-        where = 'WHERE username_lower LIKE ?'
-        params.append(f'%{name.lower()}%')
+        where = 'WHERE username_lower LIKE ? OR player_id LIKE ?'
+        params.extend([f'%{name.lower()}%', f'%{str(query or "").strip().upper()}%'])
 
     null_rank = 'CASE WHEN last_login_at IS NULL THEN 1 ELSE 0 END'
     if sort_key == 'last_login_at' and direction == 'DESC':
@@ -477,6 +604,246 @@ def get_admin_user_detail(user_id, match_limit=30):
         'user': user,
         'matches': [_row_to_match_summary(match) for match in matches],
     }
+
+
+def _public_social_user(row):
+    user = row_to_admin_user(row)
+    if not user:
+        return None
+    return {
+        'id': user['id'],
+        'username': user['username'],
+        'player_id': user.get('player_id'),
+        'created_at': user.get('created_at'),
+        'last_login_at': user.get('last_login_at'),
+        'games_played': user.get('games_played') or 0,
+        'wins': user.get('wins') or 0,
+        'losses': user.get('losses') or 0,
+        'draws': user.get('draws') or 0,
+        'win_rate': user.get('win_rate') or 0.0,
+    }
+
+
+def _recent_matches_for_username(conn, username, limit=5):
+    pattern = f'%"{username}"%'
+    rows = conn.execute(
+        '''
+        SELECT * FROM matches
+        WHERE player_names_json LIKE ?
+        ORDER BY id DESC
+        LIMIT ?
+        ''',
+        (pattern, max(1, min(int(limit or 5), 20))),
+    ).fetchall()
+    return [_row_to_match_summary(row) for row in rows]
+
+
+def get_user_social_settings(user_id):
+    user = get_user_by_id(user_id)
+    if not user:
+        return None
+    return {
+        'accept_friend_requests': bool(user.get('accept_friend_requests')),
+        'searchable_by_nickname': bool(user.get('searchable_by_nickname')),
+        'searchable_by_player_id': bool(user.get('searchable_by_player_id')),
+    }
+
+
+def update_user_social_settings(user_id, settings):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    allowed = {
+        'accept_friend_requests',
+        'searchable_by_nickname',
+        'searchable_by_player_id',
+    }
+    updates = []
+    params = []
+    for key in allowed:
+        if key in (settings or {}):
+            updates.append(f'{key} = ?')
+            params.append(1 if bool(settings.get(key)) else 0)
+    if not updates:
+        return get_user_social_settings(uid), None
+    params.append(uid)
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT id FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            return None, '请先登录账号'
+        conn.execute(f'UPDATE users SET {", ".join(updates)} WHERE id = ?', params)
+        conn.commit()
+    return get_user_social_settings(uid), None
+
+
+def _find_social_target(conn, identifier):
+    token = str(identifier or '').strip()
+    if not token:
+        return None
+    player_id = token.upper()
+    if PLAYER_ID_RE.fullmatch(player_id):
+        row = conn.execute(
+            'SELECT * FROM users WHERE player_id = ? AND searchable_by_player_id = 1',
+            (player_id,),
+        ).fetchone()
+        if row is not None:
+            return row
+    name = sanitize_username(token)
+    if name:
+        return conn.execute(
+            'SELECT * FROM users WHERE username_lower = ? AND searchable_by_nickname = 1',
+            (name.lower(),),
+        ).fetchone()
+    return None
+
+
+def list_friends(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    with get_db_connection() as conn:
+        self_row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if self_row is None:
+            return None, '请先登录账号'
+        rows = conn.execute(
+            '''
+            SELECT f.*, u1.username AS requester_name, u1.player_id AS requester_player_id,
+                   u2.username AS addressee_name, u2.player_id AS addressee_player_id
+            FROM friendships f
+            JOIN users u1 ON u1.id = f.requester_id
+            JOIN users u2 ON u2.id = f.addressee_id
+            WHERE f.requester_id = ? OR f.addressee_id = ?
+            ORDER BY f.updated_at DESC, f.id DESC
+            ''',
+            (uid, uid),
+        ).fetchall()
+        friends = []
+        incoming = []
+        outgoing = []
+        for row in rows:
+            other_id = row['addressee_id'] if row['requester_id'] == uid else row['requester_id']
+            other = conn.execute('SELECT * FROM users WHERE id = ?', (other_id,)).fetchone()
+            if other is None:
+                continue
+            item = {
+                'request_id': row['id'],
+                'status': row['status'],
+                'direction': 'incoming' if row['addressee_id'] == uid else 'outgoing',
+                'user': _public_social_user(other),
+                'matches': _recent_matches_for_username(conn, other['username'], 5) if row['status'] == 'accepted' else [],
+                'created_at': row['created_at'],
+                'updated_at': row['updated_at'],
+            }
+            if row['status'] == 'accepted':
+                friends.append(item)
+            elif row['status'] == 'pending' and row['addressee_id'] == uid:
+                incoming.append(item)
+            elif row['status'] == 'pending':
+                outgoing.append(item)
+        return {
+            'settings': get_user_social_settings(uid),
+            'friends': friends,
+            'incoming': incoming,
+            'outgoing': outgoing,
+        }, None
+
+
+def add_friend_request(user_id, identifier):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    now = utc_now()
+    with get_db_connection() as conn:
+        requester = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if requester is None:
+            return None, '请先登录账号'
+        target = _find_social_target(conn, identifier)
+        if target is None:
+            return None, '账号不存在'
+        if int(target['id']) == uid:
+            return None, '不能添加自己为好友'
+        if not bool(target['accept_friend_requests']):
+            return None, '对方暂不接受好友请求'
+        existing = conn.execute(
+            '''
+            SELECT * FROM friendships
+            WHERE (requester_id = ? AND addressee_id = ?)
+               OR (requester_id = ? AND addressee_id = ?)
+            ORDER BY id DESC
+            LIMIT 1
+            ''',
+            (uid, target['id'], target['id'], uid),
+        ).fetchone()
+        if existing is not None:
+            if existing['status'] == 'accepted':
+                return list_friends(uid)[0], None
+            if existing['status'] == 'pending' and existing['addressee_id'] == uid:
+                conn.execute(
+                    'UPDATE friendships SET status = ?, updated_at = ? WHERE id = ?',
+                    ('accepted', now, existing['id']),
+                )
+                conn.commit()
+                return list_friends(uid)[0], None
+            return list_friends(uid)[0], None
+        conn.execute(
+            '''
+            INSERT INTO friendships (requester_id, addressee_id, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ''',
+            (uid, target['id'], 'pending', now, now),
+        )
+        conn.commit()
+    return list_friends(uid)[0], None
+
+
+def respond_friend_request(user_id, request_id, action):
+    try:
+        uid = int(user_id)
+        rid = int(request_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    normalized = 'accepted' if str(action or '').lower() == 'accept' else 'declined'
+    now = utc_now()
+    with get_db_connection() as conn:
+        row = conn.execute(
+            'SELECT * FROM friendships WHERE id = ? AND addressee_id = ? AND status = ?',
+            (rid, uid, 'pending'),
+        ).fetchone()
+        if row is None:
+            return None, '好友请求不存在'
+        if normalized == 'accepted':
+            conn.execute(
+                'UPDATE friendships SET status = ?, updated_at = ? WHERE id = ?',
+                ('accepted', now, rid),
+            )
+        else:
+            conn.execute('DELETE FROM friendships WHERE id = ?', (rid,))
+        conn.commit()
+    return list_friends(uid)[0], None
+
+
+def remove_friend(user_id, friend_user_id):
+    try:
+        uid = int(user_id)
+        fid = int(friend_user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    with get_db_connection() as conn:
+        conn.execute(
+            '''
+            DELETE FROM friendships
+            WHERE status = ? AND (
+                (requester_id = ? AND addressee_id = ?)
+                OR (requester_id = ? AND addressee_id = ?)
+            )
+            ''',
+            ('accepted', uid, fid, fid, uid),
+        )
+        conn.commit()
+    return list_friends(uid)[0], None
 
 
 def save_match_summary(summary):

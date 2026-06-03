@@ -33,6 +33,13 @@ class GameEngine2v2(GameEngine):
         self.draft_type_order: List[str] = []
         self.pending_response: Optional[dict] = None
         self.pending_choice: Optional[dict] = None
+        self.pending_v2_ui: Optional[dict] = None
+        self.v2_ui_components: Dict[str, dict] = {}
+        self.v2_loadout = None
+        self.v2_tag_defs: Dict[str, dict] = {}
+        self.v2_status_defs: Dict[str, dict] = {}
+        self.v2_opening_event_defs: Dict[str, dict] = {}
+        self.v2_event_hooks: List[dict] = []
         self.halve_next_attack: bool = False
         self.game_over: bool = False
         self.winner: int = -1
@@ -194,6 +201,7 @@ class GameEngine2v2(GameEngine):
                         ed['exile'] = self._visible_card_dicts(self.players[target_id].exile, for_player, target_id)
 
         log_start = 0
+        self._mark_log_visible()
         return {
             'phase': self.phase,
             'current_player': self.current_player,
@@ -214,6 +222,7 @@ class GameEngine2v2(GameEngine):
             'log_total': len(self.log),
             'pending_response': self.pending_response,
             'pending_choice': self.pending_choice,
+            'pending_v2_ui': self._public_v2_ui(for_player),
             'pending_ally_request': getattr(self, 'pending_ally_request', None),
             'opening_event_picks': self.opening_event_picks,
             'antenna_reveal': self._antenna_reveal[for_player],
@@ -381,6 +390,17 @@ class GameEngine2v2(GameEngine):
 
     def _end_player_turn(self, player_id: int):
         ps = self.players[player_id]
+        self._run_v2_event_hooks('turn_end', {
+            'source_player': player_id,
+            'target_player': player_id,
+            'vars': {'player_id': player_id},
+            'current_action': {'player_id': player_id},
+        })
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
+        self._trigger_v2_status_events_for_player(player_id, 'on_turn_end', {'player_id': player_id})
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         if ps.bandage_death_pending:
             ps.health = 0
             ps.bandage_death_pending = False
@@ -520,6 +540,8 @@ class GameEngine2v2(GameEngine):
     def play_card(self, player_id: int, card_instance_id: int, target_player_id: int = -1, choice=None) -> dict:
         if self.game_over:
             return {'success': False, 'error': '游戏已结束'}
+        if getattr(self, 'pending_v2_ui', None) is not None:
+            return {'success': False, 'error': 'Waiting for mod UI response'}
         if self.current_player != player_id:
             return {'success': False, 'error': '不是你的回合'}
         ps = self.players[player_id]
@@ -759,14 +781,14 @@ class GameEngine2v2(GameEngine):
         self.draft_options[player_id] = generate_draft_options(self.draft_pool, card_type, 3)
 
     def _generate_opening_events(self):
-        pos1 = [e for e in self.OPENING_EVENTS.values() if e['position'] == 1]
-        pos2 = [e for e in self.OPENING_EVENTS.values() if e['position'] == 2]
-        pos3 = [e for e in self.OPENING_EVENTS.values() if e['position'] == 3]
+        pos1 = self._opening_events_for_position(1)
+        pos2 = self._opening_events_for_position(2)
+        pos3 = self._opening_events_for_position(3)
         magic_pool = [def_id for def_id in self.MAGIC_CARD_POOL if self._card_allowed(def_id)]
         for i in range(4):
-            slot1 = pos1[0] if pos1 else None
-            slot2 = random.choice(pos2) if pos2 else None
-            slot3 = random.choice(pos3) if pos3 else None
+            slot1 = self._choose_opening_event(pos1)
+            slot2 = self._choose_opening_event(pos2)
+            slot3 = self._choose_opening_event(pos3)
             self.opening_event_options[i] = [slot1, slot2, slot3]
             for j in range(3):
                 self.opening_event_magic_options[i][j] = random.sample(
@@ -857,6 +879,9 @@ class GameEngine2v2(GameEngine):
         ps = self.players[player_id]
         self._antenna_reveal[player_id] = None
         self._reset_turn_damage_counters()
+        self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
         if ps.shovel_active:
@@ -872,7 +897,9 @@ class GameEngine2v2(GameEngine):
             draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction)
             if ps.enemy_draw_reduction > 0:
                 ps.enemy_draw_reduction -= 1
-            ps.draw_cards(draw_count)
+            self._draw_cards_with_v2_hooks(player_id, draw_count, 'turn_start')
+            if self.game_over or getattr(self, 'pending_v2_ui', None):
+                return
             self.log_msg(f"{self.pn(player_id)}抽{draw_count}张牌")
             elixir_recovery = ELIXIR_RECOVERY
             for eid in self.get_all_enemies(player_id):
@@ -987,6 +1014,8 @@ class GameEngine2v2(GameEngine):
             return {'success': True, 'card': card.to_dict(), 'ignored': True}
         if self.pending_response is not None:
             return {'success': False, 'error': '等待对手反制响应'}
+        if getattr(self, 'pending_v2_ui', None) is not None:
+            return {'success': False, 'error': 'Waiting for mod UI response'}
         if 'self_only' in card.flags or card.card_type == 'guard':
             target_player_id = player_id
         elif self._card_requires_target(card) and card.card_type == 'thorn' and target_player_id == player_id:
@@ -1014,6 +1043,10 @@ class GameEngine2v2(GameEngine):
                     'choice': dict(choice or {}),
                 }
                 return {'success': True, 'needs_ally_consent': True, 'card': card.to_dict(), 'target_player_id': target_player_id}
+        if not self._defer_v2_before_play_until_choice(card, choice):
+            self._run_v2_play_hook('before_play_card', player_id, card, choice)
+            if getattr(self, 'pending_v2_ui', None) is not None:
+                return {'success': True, 'needs_v2_ui': True, 'card': card.to_dict()}
         extra_e = self._get_extra_e_for_card(player_id, card)
         self._spend_resource(player_id, 'elixir', card.cost_e + extra_e, card)
         self._spend_resource(player_id, 'magic', card.cost_m, card)
@@ -1087,9 +1120,21 @@ class GameEngine2v2(GameEngine):
         if corruption_count > 0:
             actual = actual * (2 ** corruption_count)
             self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
+        damage_context = self._v2_damage_context(
+            player_id,
+            actual,
+            source_id,
+            damage_kind='direct',
+            damage_tag='gtn:direct',
+            source=source,
+        )
+        actual = self._run_v2_damage_modifiers(damage_context, actual)
+        if getattr(self, 'pending_v2_ui', None):
+            return 0
         ps.health -= actual
         self._record_damage(player_id, actual, source_id)
         self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={ps.health}）")
+        self._run_v2_after_damage_hooks(damage_context, actual)
         self._check_yggdrasil(player_id)
         if ps.health <= 0:
             self._on_player_death(player_id)
@@ -1412,6 +1457,17 @@ class GameEngine2v2(GameEngine):
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
         ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0
+        self._run_v2_event_hooks('turn_start', {
+            'source_player': player_id,
+            'target_player': player_id,
+            'vars': {'player_id': player_id},
+            'current_action': {'player_id': player_id},
+        })
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
+        self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
         if ps.shovel_active:
@@ -1549,6 +1605,18 @@ class GameEngine2v2(GameEngine):
                     if ps.nazar_big_hits >= 2:
                         ps.nazar_active = False
                         ps.nazar_big_hits = 0
+            damage_context = self._v2_damage_context(
+                target_id,
+                dmg,
+                attacker_id,
+                damage_kind='attack',
+                damage_tag='gtn:physical',
+                is_battery=is_battery,
+                is_precision=is_precision,
+            )
+            dmg = self._run_v2_damage_modifiers(damage_context, dmg)
+            if getattr(self, 'pending_v2_ui', None):
+                break
             dmg = max(0, dmg - ps.armor)
             if ps.sponge_active and dmg > 0:
                 ps.poison += dmg // 2
@@ -1557,6 +1625,7 @@ class GameEngine2v2(GameEngine):
             total_dealt += dmg
             self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
+            self._run_v2_after_damage_hooks(damage_context, dmg)
             if dmg > 0 and ps.toxic > 0:
                 ps.poison += ps.toxic
             self._game_over_defer_depth += 1

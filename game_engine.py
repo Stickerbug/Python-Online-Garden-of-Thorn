@@ -1,6 +1,7 @@
 import random
 import math
 import json
+import re
 from typing import List, Dict, Optional, Tuple, Set
 from engine_runtime_ext import install_runtime_ext
 from cards import (
@@ -12,6 +13,7 @@ from cards import (
     create_deck_from_draft, ERROR_CARD_ID,
 )
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
+from mod_runtime_v2 import run_v2_event, run_v2_steps, validate_v2_ui_response
 
 
 class ModLoopBreak(Exception):
@@ -593,6 +595,9 @@ class GameEngine:
         status = str(status or '').strip()
         if not status:
             return None
+        v2_status = (getattr(self, 'v2_status_defs', {}) or {}).get(status)
+        if isinstance(v2_status, dict):
+            return v2_status
         try:
             from mod_loader import load_all_mods
             for mod in load_all_mods():
@@ -675,6 +680,330 @@ class GameEngine:
             source = self.players[source_id]
             source.turn_damage_dealt += amount
             source.total_damage_dealt += amount
+        self._trigger_v2_damage_status_events(target_id, source_id, amount)
+
+    def _get_v2_status_def(self, status_id: str) -> Optional[dict]:
+        defs = getattr(self, 'v2_status_defs', {}) or {}
+        status = defs.get(str(status_id or ''))
+        return status if isinstance(status, dict) else None
+
+    def _get_v2_status_event(self, status_id: str, event_name: str):
+        status = self._get_v2_status_def(status_id)
+        events = status.get('events') if isinstance(status, dict) else None
+        if not isinstance(events, dict):
+            return None
+        return events.get(event_name)
+
+    def _run_v2_status_event(self, player_id: int, status_id: str, event_name: str, extra: Optional[dict] = None):
+        if not (0 <= player_id < len(self.players)):
+            return None
+        event_def = self._get_v2_status_event(status_id, event_name)
+        if not event_def:
+            return None
+        context = {
+            'source_player': player_id,
+            'target_player': player_id,
+            'card': None,
+            'room': getattr(self, 'room', None),
+            'loadout': getattr(self, 'v2_loadout', None),
+            'vars': {
+                'status_id': status_id,
+                'status_stack': self._get_status_count(player_id, status_id),
+            },
+            'last_damage': (extra or {}).get('amount', 0),
+            'current_event': event_name,
+            'current_action': extra or {},
+        }
+        result = run_v2_event(self, context, event_def)
+        if isinstance(result, dict) and result.get('needs_v2_ui'):
+            self._store_v2_ui_pause(result.get('v2_ui_pause') or {})
+        return result
+
+    def _trigger_v2_status_events_for_player(self, player_id: int, event_name: str, extra: Optional[dict] = None):
+        if not (0 <= player_id < len(self.players)):
+            return
+        statuses = list((getattr(self.players[player_id], 'custom_statuses', {}) or {}).items())
+        for status_id, value in statuses:
+            try:
+                if int(value or 0) <= 0:
+                    continue
+            except Exception:
+                continue
+            self._run_v2_status_event(player_id, str(status_id), event_name, extra)
+            if getattr(self, 'game_over', False) or getattr(self, 'pending_v2_ui', None):
+                break
+
+    def _trigger_v2_damage_status_events(self, target_id, source_id, amount):
+        try:
+            amount = int(amount)
+        except Exception:
+            amount = 0
+        if amount <= 0:
+            return
+        extra = {'amount': amount, 'source_player': source_id, 'target_player': target_id}
+        if isinstance(target_id, int) and 0 <= target_id < len(self.players):
+            self._trigger_v2_status_events_for_player(target_id, 'on_damage_taken', extra)
+        if isinstance(source_id, int) and 0 <= source_id < len(self.players):
+            self._trigger_v2_status_events_for_player(source_id, 'on_damage_dealt', extra)
+
+    def _v2_hooks_for(self, hook_name: str) -> List[dict]:
+        hooks = [hook for hook in (getattr(self, 'v2_event_hooks', []) or []) if isinstance(hook, dict) and hook.get('hook') == hook_name]
+        return sorted(hooks, key=lambda hook: (
+            int(hook.get('priority', 0) if isinstance(hook.get('priority', 0), int) else 0),
+            str(hook.get('_mod_id', '')),
+        ))
+
+    def _v2_hook_filter_matches(self, hook: dict, context: dict) -> bool:
+        flt = hook.get('filter')
+        if not isinstance(flt, dict) or not flt:
+            return True
+        action = context.get('current_action') if isinstance(context.get('current_action'), dict) else {}
+        card = context.get('card')
+        for key, expected in flt.items():
+            if key == 'damage_tag':
+                expected_tag = str(expected)
+                damage_tags = action.get('damage_tags')
+                if not isinstance(damage_tags, list):
+                    damage_tags = [action.get('damage_tag')]
+                if expected_tag not in [str(tag) for tag in damage_tags if tag is not None]:
+                    return False
+            elif key in ('damage_kind', 'kind'):
+                if str(action.get('damage_kind') or '') != str(expected):
+                    return False
+            elif key == 'card_type':
+                if not card or str(getattr(card, 'card_type', '')) != str(expected):
+                    return False
+            elif key in ('card_tag', 'tag'):
+                if str(expected) not in self._effective_card_flags(card):
+                    return False
+            elif key == 'card_id':
+                if not card or str(getattr(card, 'def_id', '')) != str(expected):
+                    return False
+            elif key in ('source', 'source_player'):
+                if str(context.get('source_player')) != str(expected):
+                    return False
+            elif key in ('target', 'target_player'):
+                if str(context.get('target_player')) != str(expected):
+                    return False
+        return True
+
+    def _v2_card_hook_context(self, hook_name: str, player_id: int, card: CardInstance,
+                              choice: Optional[dict] = None) -> dict:
+        target_id = player_id
+        if isinstance(choice, dict):
+            for key in ('target_player', 'target_player_id', 'target_id'):
+                if key in choice:
+                    try:
+                        target_id = int(choice.get(key))
+                        break
+                    except Exception:
+                        target_id = player_id
+        if not (0 <= target_id < len(self.players)):
+            target_id = player_id
+        return {
+            'source_player': player_id,
+            'target_player': target_id,
+            'card': card,
+            'room': getattr(self, 'room', None),
+            'loadout': getattr(self, 'v2_loadout', None),
+            'vars': {
+                'card_id': getattr(card, 'def_id', ''),
+                'card_type': getattr(card, 'card_type', ''),
+                'choice': choice or {},
+            },
+            'last_damage': 0,
+            'current_event': hook_name,
+            'current_action': {
+                'card_id': getattr(card, 'def_id', ''),
+                'card_type': getattr(card, 'card_type', ''),
+                'choice': choice or {},
+            },
+        }
+
+    def _run_v2_play_hook(self, hook_name: str, player_id: int, card: CardInstance,
+                          choice: Optional[dict] = None):
+        if not getattr(self, 'v2_event_hooks', None):
+            return None
+        context = self._v2_card_hook_context(hook_name, player_id, card, choice)
+        return self._run_v2_event_hooks(hook_name, context, None)
+
+    def _defer_v2_before_play_until_choice(self, card: CardInstance, choice: Optional[dict] = None) -> bool:
+        try:
+            return bool(self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice))
+        except Exception:
+            return False
+
+    def _v2_active_damage_card(self):
+        card = getattr(self, '_active_v2_card', None)
+        if isinstance(card, CardInstance):
+            return card
+        context = getattr(self, '_active_effect_context', None)
+        if isinstance(context, dict):
+            for key in ('event_card', 'used_card', 'trigger_card', 'card'):
+                value = context.get(key)
+                if isinstance(value, CardInstance):
+                    return value
+        return None
+
+    def _v2_damage_tags(self, damage_kind: str, damage_tag: str, source: str = '') -> List[str]:
+        tags = []
+        for value in (damage_tag, damage_kind):
+            text = str(value or '').strip()
+            if text and text not in tags:
+                tags.append(text)
+        source_text = str(source or '')
+        source_map = {
+            'fire': 'gtn:fire',
+            'burn': 'gtn:fire',
+            'poison': 'gtn:poison',
+            'battery': 'gtn:battery',
+        }
+        if '灼' in source_text:
+            source_map['source'] = 'gtn:fire'
+        elif '毒' in source_text:
+            source_map['source'] = 'gtn:poison'
+        elif '电池' in source_text or '電池' in source_text:
+            source_map['source'] = 'gtn:battery'
+        for tag in source_map.values():
+            if tag not in tags:
+                tags.append(tag)
+        return tags
+
+    def _v2_damage_context(self, target_id: int, amount: int, source_id=None, *,
+                           damage_kind: str = 'attack', damage_tag: str = 'gtn:physical',
+                           source: str = '', is_battery: bool = False, is_precision: bool = False,
+                           card: Optional[CardInstance] = None) -> dict:
+        if card is None:
+            card = self._v2_active_damage_card()
+        source_player = source_id if isinstance(source_id, int) and 0 <= source_id < len(self.players) else target_id
+        tags = self._v2_damage_tags(damage_kind, damage_tag, source)
+        return {
+            'source_player': source_player,
+            'target_player': target_id,
+            'card': card,
+            'room': getattr(self, 'room', None),
+            'loadout': getattr(self, 'v2_loadout', None),
+            'vars': {
+                'amount': amount,
+                'original_amount': amount,
+                'damage_kind': damage_kind,
+                'damage_tag': tags[0] if tags else '',
+                'damage_tags': tags,
+                'source': source,
+                'is_battery': bool(is_battery),
+                'is_precision': bool(is_precision),
+            },
+            'last_damage': 0,
+            'current_event': 'damage',
+            'current_action': {
+                'amount': amount,
+                'original_amount': amount,
+                'damage_kind': damage_kind,
+                'damage_tag': tags[0] if tags else '',
+                'damage_tags': tags,
+                'source': source,
+                'is_battery': bool(is_battery),
+                'is_precision': bool(is_precision),
+            },
+        }
+
+    def _coerce_v2_damage_value(self, value, fallback: int) -> int:
+        try:
+            return max(0, int(math.floor(float(value))))
+        except Exception:
+            try:
+                return max(0, int(fallback))
+            except Exception:
+                return 0
+
+    def _run_v2_damage_modifiers(self, context: dict, amount: int) -> int:
+        if not getattr(self, 'v2_event_hooks', None):
+            return max(0, int(amount or 0))
+        context.setdefault('vars', {})
+        context.setdefault('current_action', {})
+        for hook_name in ('before_damage', 'modify_damage'):
+            context['current_event'] = hook_name
+            context['vars']['amount'] = amount
+            context['vars']['event_value'] = amount
+            context['current_action']['amount'] = amount
+            value = self._run_v2_event_hooks(hook_name, context, amount)
+            amount = self._coerce_v2_damage_value(value, amount)
+            if getattr(self, 'pending_v2_ui', None):
+                break
+        return max(0, int(amount or 0))
+
+    def _run_v2_after_damage_hooks(self, context: dict, dealt: int) -> None:
+        if not getattr(self, 'v2_event_hooks', None):
+            return
+        context.setdefault('vars', {})
+        context.setdefault('current_action', {})
+        context['last_damage'] = dealt
+        context['vars']['dealt'] = dealt
+        context['vars']['actual_damage'] = dealt
+        context['vars']['event_value'] = dealt
+        context['current_action']['dealt'] = dealt
+        context['current_action']['actual_damage'] = dealt
+        context['current_event'] = 'after_damage'
+        self._run_v2_event_hooks('after_damage', context, dealt)
+
+    def _run_v2_event_hooks(self, hook_name: str, context: Optional[dict] = None, event_value=None):
+        hooks = self._v2_hooks_for(hook_name)
+        if not hooks:
+            return event_value
+        ctx = dict(context or {})
+        ctx.setdefault('source_player', 0)
+        ctx.setdefault('target_player', None)
+        ctx.setdefault('card', None)
+        ctx.setdefault('room', getattr(self, 'room', None))
+        ctx.setdefault('loadout', getattr(self, 'v2_loadout', None))
+        ctx.setdefault('vars', {})
+        ctx.setdefault('last_damage', 0)
+        ctx.setdefault('current_event', hook_name)
+        ctx.setdefault('current_action', {})
+        if event_value is not None:
+            ctx['event_value'] = event_value
+            ctx.setdefault('vars', {})['event_value'] = event_value
+        for hook in hooks:
+            if not self._v2_hook_filter_matches(hook, ctx):
+                continue
+            steps = hook.get('steps', [])
+            if not isinstance(steps, list):
+                continue
+            ctx['current_hook'] = hook
+            result = run_v2_event(self, ctx, {'steps': steps})
+            if isinstance(result, dict) and result.get('needs_v2_ui'):
+                self._log_mod_runtime_error(
+                    'v2_event_hook',
+                    RuntimeError('event_hooks cannot request UI; use card/status/opening_event events instead'),
+                    ctx.get('source_player'),
+                    ctx.get('card'),
+                )
+                break
+            if getattr(self, 'game_over', False):
+                break
+        return ctx.get('event_value', event_value)
+
+    def _draw_cards_with_v2_hooks(self, player_id: int, count: int, reason: str = ''):
+        if not (0 <= player_id < len(self.players)):
+            return []
+        context = {
+            'source_player': player_id,
+            'target_player': player_id,
+            'vars': {'count': count, 'reason': reason},
+            'current_action': {'count': count, 'reason': reason},
+        }
+        next_count = self._run_v2_event_hooks('before_draw', context, count)
+        try:
+            next_count = max(0, int(next_count))
+        except Exception:
+            next_count = max(0, int(count or 0))
+        if getattr(self, 'pending_v2_ui', None):
+            return []
+        drawn = self.players[player_id].draw_cards(next_count)
+        context['vars']['drawn'] = len(drawn)
+        context['current_action']['drawn'] = len(drawn)
+        self._run_v2_event_hooks('after_draw', context, len(drawn))
+        return drawn
 
     def _set_equipment_property_value(self, player_id, current_card, params, value):
         eq = self._resolve_equipment_ref(player_id, params.get('equipment', {'ref': 'current_equipment'}), current_card)
@@ -835,6 +1164,13 @@ class GameEngine:
         self.draft_type_order: List[str] = []
         self.pending_response: Optional[dict] = None
         self.pending_choice: Optional[dict] = None
+        self.pending_v2_ui: Optional[dict] = None
+        self.v2_ui_components: Dict[str, dict] = {}
+        self.v2_loadout = None
+        self.v2_tag_defs: Dict[str, dict] = {}
+        self.v2_status_defs: Dict[str, dict] = {}
+        self.v2_opening_event_defs: Dict[str, dict] = {}
+        self.v2_event_hooks: List[dict] = []
         self.halve_next_attack: bool = False
         self.game_over: bool = False
         self.winner: int = -1
@@ -861,7 +1197,139 @@ class GameEngine:
         return self.player_names[pid] if 0 <= pid < len(self.player_names) else f'玩家{pid+1}'
 
     def log_msg(self, msg: str):
-        self.log.append(msg)
+        text = self._normalize_log_text(str(msg))
+        if not text:
+            return
+        if self._merge_log_text(text):
+            return
+        self.log.append(text)
+
+    def _mark_log_visible(self):
+        self._log_compaction_floor = len(self.log)
+
+    def _can_merge_last_log(self) -> bool:
+        return bool(self.log) and len(self.log) > int(getattr(self, '_log_compaction_floor', 0) or 0)
+
+    def _normalize_log_text(self, text: str) -> str:
+        text = text.strip()
+        if not text:
+            return ''
+        m = re.fullmatch(r'(.+)触发(.+)！(.+)', text)
+        if m:
+            return f'{m.group(1)}触发{m.group(2)}，{m.group(3)}'
+        m = re.fullmatch(r'(.+)的([^：]+)效果：\+(\d+)([HME])', text)
+        if m:
+            return f'{m.group(2)}：{m.group(1)} +{m.group(3)}{m.group(4)}'
+        m = re.fullmatch(r'(.+)效果：(.+)\+(\d+)([HME])', text)
+        if m:
+            return f'{m.group(1)}：{m.group(2)} +{m.group(3)}{m.group(4)}'
+        m = re.fullmatch(r'(.+)的([^：]+)效果：多抽(\d+)张牌', text)
+        if m:
+            return f'{m.group(2)}：{m.group(1)} 多抽{m.group(3)}张'
+        m = re.fullmatch(r'(.+)效果：(.+)多抽(\d+)张牌', text)
+        if m:
+            return f'{m.group(1)}：{m.group(2)} 多抽{m.group(3)}张'
+        return text
+
+    def _merge_log_text(self, text: str) -> bool:
+        if not self._can_merge_last_log():
+            return False
+        last = self.log[-1]
+
+        m = re.fullmatch(r'(.+)的电池效果：对(.+)造成(\d+)D', text)
+        if m:
+            owner, target, damage = m.group(1), m.group(2), int(m.group(3))
+            taken = re.fullmatch(rf'{re.escape(target)}受到(\d+)点电池伤害（H=(.+)）', last)
+            if taken:
+                self.log[-1] = f'{owner}的电池反伤{target}：{damage}D（H={taken.group(2)}）'
+                return True
+
+        m = re.fullmatch(r'(.+)装备了(.+)', text)
+        if m:
+            owner, card_name = m.group(1), m.group(2)
+            simple_use = re.fullmatch(r'(.+)使用了(.+)', last)
+            if simple_use and simple_use.group(2) == card_name:
+                actor = simple_use.group(1)
+                self.log[-1] = (
+                    f'{actor}使用并装备了{card_name}'
+                    if actor == owner
+                    else f'{actor}使用并给{owner}装备了{card_name}'
+                )
+                return True
+            combined_use = re.fullmatch(rf'(.+)使用{re.escape(card_name)}，(.+)', last)
+            if combined_use:
+                actor, detail = combined_use.group(1), combined_use.group(2)
+                self.log[-1] = (
+                    f'{actor}使用并装备了{card_name}，{detail}'
+                    if actor == owner
+                    else f'{actor}使用并给{owner}装备了{card_name}，{detail}'
+                )
+                return True
+            combined_equipped = re.fullmatch(rf'(.+)使用并装备了{re.escape(card_name)}，(.+)', last)
+            if combined_equipped and combined_equipped.group(1) == owner:
+                detail = combined_equipped.group(2)
+                self.log[-1] = f'{owner}使用并装备了{card_name}，{detail}'
+                return True
+            marker = f'使用{card_name}，'
+            if last.startswith(f'{owner}{marker}'):
+                detail = last[len(owner + marker):]
+                self.log[-1] = f'{owner}使用并装备了{card_name}，{detail}'
+                return True
+
+        if self._merge_simple_use_detail(text, last):
+            return True
+        return self._merge_counted_log(text, last)
+
+    def _merge_simple_use_detail(self, text: str, last: str) -> bool:
+        m = re.fullmatch(r'(.+)使用了(.+)', last)
+        if not m:
+            return False
+        actor, card_name = m.group(1), m.group(2)
+        detail = ''
+        if text.startswith(actor):
+            detail = text[len(actor):]
+        allowed_starts = (
+            '对', '回复', '获得', '抽', '+', '聚变', '裂变', '血量',
+            '无法', '仅可', '消耗', '每回合', '丢弃', '窥探',
+        )
+        if not detail.startswith(allowed_starts):
+            result_patterns = (
+                r'.+受到\d+点.*（H=.+）',
+                r'.+回复\d+[HE]',
+                r'.+获得\d+(E|M|护甲|闪避)',
+                r'.+\+\d+(中毒|灼烧|淬毒|易伤)',
+                r'.+抽\d+张牌',
+                r'.+消耗\d+[EM]',
+                r'.+每回合.+[+-]\d+',
+            )
+            if not any(re.fullmatch(pattern, text) for pattern in result_patterns):
+                return False
+            detail = text
+        self.log[-1] = f'{actor}使用{card_name}，{detail}'
+        return True
+
+    def _merge_counted_log(self, text: str, last: str) -> bool:
+        counted_patterns = [
+            (r'^(.+)抽(\d+)张牌$', lambda g, total: f'{g[0]}抽{total}张牌'),
+            (r'^(.+)抽(\d+)张至手牌满$', lambda g, total: f'{g[0]}抽{total}张至手牌满'),
+            (r'^(.+)补充(\d+)张(.+)牌$', lambda g, total: f'{g[0]}补充{total}张{g[2]}牌'),
+            (r'^(.+)获得(\d+)(E|M|护甲|闪避)$', lambda g, total: f'{g[0]}获得{total}{g[2]}'),
+            (r'^(.+)回复(\d+)(E|H)$', lambda g, total: f'{g[0]}回复{total}{g[2]}'),
+            (r'^(.+)\+(\d+)(中毒|灼烧|淬毒|易伤)$', lambda g, total: f'{g[0]}+{total}{g[2]}'),
+        ]
+        for pattern, formatter in counted_patterns:
+            current = re.fullmatch(pattern, text)
+            previous = re.fullmatch(pattern, last)
+            if not current or not previous:
+                continue
+            current_groups = current.groups()
+            previous_groups = previous.groups()
+            if current_groups[0] != previous_groups[0] or current_groups[2:] != previous_groups[2:]:
+                continue
+            total = int(previous_groups[1]) + int(current_groups[1])
+            self.log[-1] = formatter(current_groups, total)
+            return True
+        return False
 
     def _bind_player_callbacks(self):
         for ps in getattr(self, 'players', []):
@@ -959,6 +1427,7 @@ class GameEngine:
         if self._antenna_reveal[for_player]:
             opp_data['revealed_hand'] = self._visible_card_dicts(self.players[opponent].hand, for_player, opponent)
         log_start = 0
+        self._mark_log_visible()
         return {
             'phase': self.phase,
             'current_player': self.current_player,
@@ -972,6 +1441,7 @@ class GameEngine:
             'log_total': len(self.log),
             'pending_response': self.pending_response,
             'pending_choice': self.pending_choice,
+            'pending_v2_ui': self._public_v2_ui(for_player),
             'opening_event_picks': self.opening_event_picks,
             'antenna_reveal': self._antenna_reveal[for_player],
         }
@@ -1031,15 +1501,71 @@ class GameEngine:
         self.draft_options[player_id] = options
         return True
 
+    def _v2_opening_event_option(self, resource: dict) -> Optional[dict]:
+        if not isinstance(resource, dict):
+            return None
+        event_id = str(resource.get('id') or '').strip()
+        if not event_id:
+            return None
+        name_cn = str(resource.get('name_cn') or resource.get('name') or event_id)
+        name_en = str(resource.get('name_en') or resource.get('name') or name_cn)
+        desc_cn = str(resource.get('description_cn') or resource.get('description') or resource.get('desc_cn') or resource.get('desc') or '')
+        desc_en = str(resource.get('description_en') or resource.get('desc_en') or desc_cn)
+        try:
+            position = int(resource.get('position', 2))
+        except Exception:
+            position = 2
+        try:
+            weight = max(0.0, float(resource.get('weight', 1)))
+        except Exception:
+            weight = 1.0
+        return {
+            'id': event_id,
+            'name': name_cn,
+            'name_cn': name_cn,
+            'name_en': name_en,
+            'name_i18n': {'zh': name_cn, 'en': name_en},
+            'desc': desc_cn,
+            'description': desc_cn,
+            'desc_cn': desc_cn,
+            'desc_en': desc_en,
+            'desc_i18n': {'zh': desc_cn, 'en': desc_en},
+            'position': position,
+            'weight': weight,
+            'v2': True,
+        }
+
+    def _opening_events_for_position(self, position: int) -> List[dict]:
+        events = [dict(e) for e in self.OPENING_EVENTS.values() if e.get('position') == position]
+        for resource in (getattr(self, 'v2_opening_event_defs', {}) or {}).values():
+            option = self._v2_opening_event_option(resource)
+            if option and option.get('position') == position:
+                events.append(option)
+        return events
+
+    def _choose_opening_event(self, events: List[dict]):
+        events = [event for event in events if event]
+        if not events:
+            return None
+        weights = []
+        for event in events:
+            try:
+                weights.append(max(0.0, float(event.get('weight', 1))))
+            except Exception:
+                weights.append(1.0)
+        if any(weight > 0 for weight in weights):
+            return random.choices(events, weights=weights, k=1)[0]
+        return random.choice(events)
+
     def _generate_opening_events(self):
-        pos1 = [e for e in self.OPENING_EVENTS.values() if e['position'] == 1]
-        pos2 = [e for e in self.OPENING_EVENTS.values() if e['position'] == 2]
-        pos3 = [e for e in self.OPENING_EVENTS.values() if e['position'] == 3]
+        pos1 = self._opening_events_for_position(1)
+        pos2 = self._opening_events_for_position(2)
+        pos3 = self._opening_events_for_position(3)
         magic_pool = [def_id for def_id in self.MAGIC_CARD_POOL if self._card_allowed(def_id)]
         for i in range(2):
-            slot1 = pos1[0] if pos1 else None
-            slot2 = random.choice(pos2) if pos2 else None
-            slot3 = random.choice(pos3) if pos3 else None
+            slot1 = self._choose_opening_event(pos1)
+            slot2 = self._choose_opening_event(pos2)
+            slot3 = self._choose_opening_event(pos3)
             self.opening_event_options[i] = [slot1, slot2, slot3]
             for j in range(3):
                 self.opening_event_magic_options[i][j] = random.sample(
@@ -1048,10 +1574,13 @@ class GameEngine:
     def _card_allowed(self, def_id: str) -> bool:
         return self.allowed_card_ids is None or def_id in self.allowed_card_ids
 
+    def _opening_event_ids_equal(self, left, right) -> bool:
+        return str(left) == str(right)
+
     def select_opening_event(self, player_id: int, event_id: int) -> bool:
         if self.phase != 'event_select':
             return False
-        valid = any(e['id'] == event_id for e in self.opening_event_options[player_id] if e)
+        valid = any(self._opening_event_ids_equal(e.get('id'), event_id) for e in self.opening_event_options[player_id] if e)
         if not valid:
             return False
         self.opening_event_picks[player_id] = event_id
@@ -1112,6 +1641,8 @@ class GameEngine:
         ps = self.players[player_id]
         event_id = self.opening_event_picks[player_id]
         sub = self.opening_event_sub_choices[player_id]
+        if self._apply_v2_opening_event(player_id, event_id):
+            return
         if event_id == 1:
             ps.max_health += 20
             ps.base_max_health += 20
@@ -1182,6 +1713,32 @@ class GameEngine:
                         self.log_msg(f"{self.pn(player_id)}【绝境求生】：最大生命值-20，一张牌变为Yggdrasil")
                         break
 
+    def _apply_v2_opening_event(self, player_id: int, event_id) -> bool:
+        if event_id is None:
+            return False
+        resource = (getattr(self, 'v2_opening_event_defs', {}) or {}).get(str(event_id))
+        if not isinstance(resource, dict):
+            return False
+        events = resource.get('events') if isinstance(resource.get('events'), dict) else {}
+        event_def = events.get('on_apply') if isinstance(events, dict) else None
+        if not event_def:
+            return True
+        context = {
+            'source_player': player_id,
+            'target_player': player_id,
+            'card': None,
+            'room': getattr(self, 'room', None),
+            'loadout': getattr(self, 'v2_loadout', None),
+            'vars': {'opening_event_id': str(event_id)},
+            'last_damage': 0,
+            'current_event': 'opening_event.on_apply',
+            'current_action': {'opening_event': str(event_id)},
+        }
+        result = run_v2_event(self, context, event_def)
+        if isinstance(result, dict) and result.get('needs_v2_ui'):
+            self._store_v2_ui_pause(result.get('v2_ui_pause') or {})
+        return True
+
     def _start_draw_phase(self):
         self.phase = 'draw'
         for i in range(2):
@@ -1215,6 +1772,9 @@ class GameEngine:
         ps = self.players[player_id]
         opp = self.players[1 - player_id]
         self._antenna_reveal[player_id] = None
+        self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False
@@ -1290,9 +1850,21 @@ class GameEngine:
         if corruption_count > 0:
             actual = actual * (2 ** corruption_count)
             self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
+        damage_context = self._v2_damage_context(
+            player_id,
+            actual,
+            source_id,
+            damage_kind='direct',
+            damage_tag='gtn:direct',
+            source=source,
+        )
+        actual = self._run_v2_damage_modifiers(damage_context, actual)
+        if getattr(self, 'pending_v2_ui', None):
+            return 0
         ps.health -= actual
         self._record_damage(player_id, actual, source_id)
         self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={ps.health}）")
+        self._run_v2_after_damage_hooks(damage_context, actual)
         self._check_yggdrasil(player_id)
         self._check_game_over()
         return actual
@@ -1466,7 +2038,7 @@ class GameEngine:
     def can_play_card(self, player_id: int, card: CardInstance) -> Tuple[bool, str]:
         ps = self.players[player_id]
         card_def = card.card_def
-        if card_def.card_type == 'guard' and not self._has_script_entry(card_def, 'play') and not card_def.effects:
+        if card_def.card_type == 'guard' and not self._has_script_entry(card_def, 'play') and not card_def.effects and not self._card_has_v2_event(card_def, 'on_play'):
             return False, "反制牌只能通过响应机制使用"
         if self.phase != 'action' or self.current_player != player_id:
             return False, "不是你的回合"
@@ -1509,9 +2081,15 @@ class GameEngine:
             return {'success': True, 'card': card.to_dict(), 'ignored': True}
         if self.pending_response is not None:
             return {'success': False, 'error': '等待对手反制响应'}
+        if getattr(self, 'pending_v2_ui', None) is not None:
+            return {'success': False, 'error': 'Waiting for mod UI response'}
         can_play, reason = self.can_play_card(player_id, card)
         if not can_play:
             return {'success': False, 'error': reason}
+        if not self._defer_v2_before_play_until_choice(card, choice):
+            self._run_v2_play_hook('before_play_card', player_id, card, choice)
+            if getattr(self, 'pending_v2_ui', None) is not None:
+                return {'success': True, 'needs_v2_ui': True, 'card': card.to_dict()}
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = card.cost_e + extra_e
         self._spend_resource(player_id, 'elixir', total_e, card)
@@ -1807,6 +2385,9 @@ class GameEngine:
             if ps.find_hand_card(card.instance_id) is None:
                 ps.hand.insert(0, card)
             return {'success': False, 'error': '选择已取消'}
+        self._run_v2_play_hook('before_play_card', player_id, card, choice)
+        if getattr(self, 'pending_v2_ui', None) is not None:
+            return {'success': True, 'needs_v2_ui': True, 'card': card.to_dict()}
         dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = card.cost_e + extra_e
@@ -3493,6 +4074,17 @@ class GameEngine:
     def _end_player_turn(self, player_id: int):
         ps = self.players[player_id]
         opp = self.players[1 - player_id]
+        self._run_v2_event_hooks('turn_end', {
+            'source_player': player_id,
+            'target_player': player_id,
+            'vars': {'player_id': player_id},
+            'current_action': {'player_id': player_id},
+        })
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
+        self._trigger_v2_status_events_for_player(player_id, 'on_turn_end', {'player_id': player_id})
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         if ps.bandage_death_pending:
             ps.health = 0
             ps.bandage_death_pending = False
@@ -4426,17 +5018,141 @@ class GameEngine:
             self._active_choice = prev_choice
 
     def _apply_card_effect(self, player_id: int, card: CardInstance, choice: Optional[dict] = None):
-        if self._card_has_script(card.card_def) or card.card_def.effects:
-            self._process_atomic_effects(player_id, card, choice, 'play')
-            return
-        method_name = f'_effect_{card.def_id.lower()}'
-        if hasattr(self, method_name):
-            getattr(self, method_name)(player_id, card, choice)
-        else:
-            self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
+        previous_card = getattr(self, '_active_v2_card', None)
+        self._active_v2_card = card
+        try:
+            if self._card_has_v2_event(card.card_def, 'on_play'):
+                self._run_v2_card_event(player_id, card, 'on_play', choice)
+                return
+            if self._card_has_script(card.card_def) or card.card_def.effects:
+                self._process_atomic_effects(player_id, card, choice, 'play')
+                return
+            method_name = f'_effect_{card.def_id.lower()}'
+            if hasattr(self, method_name):
+                getattr(self, method_name)(player_id, card, choice)
+            else:
+                self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
+        finally:
+            self._active_v2_card = previous_card
 
     def _uses_atomic_play_effects(self, card: CardInstance) -> bool:
-        return bool(self._card_has_script(card.card_def) or card.card_def.effects)
+        return bool(self._card_has_v2_event(card.card_def, 'on_play') or self._card_has_script(card.card_def) or card.card_def.effects)
+
+    def _card_has_v2_event(self, card_def, event_name: str) -> bool:
+        events = getattr(card_def, 'v2_events', None)
+        return isinstance(events, dict) and bool(events.get(event_name))
+
+    def _run_v2_card_event(self, player_id: int, card: CardInstance, event_name: str,
+                           choice: Optional[dict] = None, extra_context: Optional[dict] = None):
+        events = getattr(card.card_def, 'v2_events', None) or {}
+        event_def = events.get(event_name)
+        target_id = player_id
+        if isinstance(choice, dict):
+            for key in ('target_player', 'target_player_id', 'target_id'):
+                if key in choice:
+                    try:
+                        target_id = int(choice.get(key))
+                        break
+                    except Exception:
+                        target_id = player_id
+        if target_id < 0 or target_id >= len(self.players):
+            target_id = 1 - player_id if len(self.players) == 2 else player_id
+        context = {
+            'source_player': player_id,
+            'target_player': target_id,
+            'card': card,
+            'room': getattr(self, 'room', None),
+            'loadout': getattr(self, 'v2_loadout', None),
+            'vars': {},
+            'last_damage': 0,
+            'current_event': event_name,
+            'current_action': {'choice': choice or {}, **(extra_context or {})},
+        }
+        result = run_v2_event(self, context, event_def)
+        if isinstance(result, dict) and result.get('needs_v2_ui'):
+            self._store_v2_ui_pause(result.get('v2_ui_pause') or {}, card)
+        return result
+
+    def _store_v2_ui_pause(self, pause: dict, card: Optional[CardInstance] = None):
+        if not isinstance(pause, dict):
+            return
+        request_id = str(pause.get('request_id') or '')
+        component = pause.get('component') if isinstance(pause.get('component'), dict) else {}
+        context = pause.get('context') if isinstance(pause.get('context'), dict) else {}
+        target_player = pause.get('target_player', context.get('source_player', 0))
+        try:
+            target_player = int(target_player)
+        except Exception:
+            target_player = 0
+        if target_player < 0 or target_player >= len(self.players):
+            target_player = 0
+        self.pending_v2_ui = {
+            'request_id': request_id,
+            'player_id': target_player,
+            'component': component,
+            'save_as': str(pause.get('save_as') or 'ui_result'),
+            'timeout_ms': int(pause.get('timeout_ms') or 0),
+            'on_cancel': pause.get('on_cancel', []) if isinstance(pause.get('on_cancel', []), list) else [],
+            'remaining_steps': pause.get('remaining_steps', []) if isinstance(pause.get('remaining_steps', []), list) else [],
+            'context': context,
+            'card': card.to_dict() if card is not None else (
+                context.get('card').to_dict() if isinstance(context.get('card'), CardInstance) else None
+            ),
+        }
+
+    def _public_v2_ui(self, for_player: int) -> Optional[dict]:
+        pending = getattr(self, 'pending_v2_ui', None)
+        if not pending or pending.get('player_id') != for_player:
+            return None
+        return {
+            'request_id': pending.get('request_id'),
+            'component': pending.get('component'),
+            'card': pending.get('card'),
+            'timeout_ms': pending.get('timeout_ms', 0),
+        }
+
+    def handle_v2_ui_response(self, player_id: int, request_id: str, response: Optional[dict]) -> dict:
+        pending = getattr(self, 'pending_v2_ui', None)
+        if not pending:
+            return {'success': False, 'error': 'No pending v2 UI request'}
+        if pending.get('player_id') != player_id or str(pending.get('request_id')) != str(request_id):
+            return {'success': False, 'error': 'Invalid v2 UI response'}
+        context = pending.get('context') if isinstance(pending.get('context'), dict) else {}
+        component = pending.get('component') if isinstance(pending.get('component'), dict) else {}
+        try:
+            clean = validate_v2_ui_response(self, context, component, response or {})
+            self.pending_v2_ui = None
+            button = clean.get('button')
+            button_role = self._v2_button_role(component, button)
+            if button_role == 'cancel':
+                cancel_steps = pending.get('on_cancel', []) if isinstance(pending.get('on_cancel', []), list) else []
+                if cancel_steps:
+                    result = run_v2_steps(self, context, cancel_steps)
+                    if isinstance(result, dict) and result.get('needs_v2_ui'):
+                        self._store_v2_ui_pause(result.get('v2_ui_pause') or {})
+                        return {'success': True, 'needs_v2_ui': True}
+                return {'success': True, 'cancelled': True}
+            context.setdefault('vars', {})[pending.get('save_as') or 'ui_result'] = clean.get('values', {})
+            context['current_action'] = {
+                **(context.get('current_action') if isinstance(context.get('current_action'), dict) else {}),
+                'v2_ui': clean,
+            }
+            result = run_v2_steps(self, context, pending.get('remaining_steps') or [])
+            if isinstance(result, dict) and result.get('needs_v2_ui'):
+                self._store_v2_ui_pause(result.get('v2_ui_pause') or {})
+                return {'success': True, 'needs_v2_ui': True}
+            self._check_game_over()
+            return {'success': True}
+        except Exception as exc:
+            self.pending_v2_ui = None
+            self._log_mod_runtime_error('request_ui', exc, player_id, None)
+            return {'success': False, 'error': str(exc)}
+
+    def _v2_button_role(self, component: dict, button_id: str) -> str:
+        for button in component.get('buttons', []) if isinstance(component.get('buttons'), list) else []:
+            if isinstance(button, dict) and str(button.get('id')) == str(button_id):
+                return str(button.get('role') or ('cancel' if button_id == 'cancel' else 'confirm'))
+        return 'cancel' if button_id == 'cancel' else 'confirm'
 
     def _log_card_play(self, player_id: int, card: CardInstance):
         self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
@@ -4610,6 +5326,15 @@ class GameEngine:
     def _equipment_trigger_max_uses(self, eq: EquipmentInstance) -> int:
         if eq is None:
             return 0
+        events = getattr(eq.card_def, 'v2_events', None)
+        if isinstance(events, dict):
+            event_def = events.get('on_equipment_trigger')
+            if isinstance(event_def, dict):
+                value = event_def.get('max_uses_per_turn', event_def.get('max_uses', 0))
+                try:
+                    return max(0, int(value or 0))
+                except Exception:
+                    return 0
         for effect in getattr(eq.card_def, 'effects', []) or []:
             if not isinstance(effect, dict) or effect.get('type') != 'on_equipment_trigger':
                 continue
@@ -4623,6 +5348,16 @@ class GameEngine:
 
     def _run_card_event(self, owner_id: int, card: CardInstance, event_name: str,
                         choice: Optional[dict] = None, extra_context: Optional[dict] = None) -> bool:
+        v2_event_name = f'on_{event_name}'
+        events = getattr(card.card_def, 'v2_events', None)
+        if isinstance(events, dict) and events.get(v2_event_name):
+            event_def = events.get(v2_event_name)
+            if v2_event_name == 'on_equipment_trigger' and isinstance(event_def, dict) and event_def.get('destroy_self'):
+                eq = self._find_equipment_for_card(owner_id, card)
+                if eq is not None and not self._destroy_equipment(owner_id, eq):
+                    return True
+            self._run_v2_card_event(owner_id, card, v2_event_name, choice, extra_context)
+            return True
         if self._has_script_entry(card.card_def, event_name):
             effects = self._get_script_effects(card.card_def, event_name)
             if not effects:
@@ -4681,6 +5416,15 @@ class GameEngine:
         opp = self.players[opp_id]
         self._antenna_reveal[player_id] = None
         self._reset_turn_damage_counters()
+        self._run_v2_event_hooks('turn_start', {
+            'source_player': player_id,
+            'target_player': player_id,
+            'vars': {'player_id': player_id},
+            'current_action': {'player_id': player_id},
+        })
+        self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
         if ps.shovel_active:
@@ -4689,7 +5433,7 @@ class GameEngine:
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
         if self.round_num > 1:
             draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction)
-            ps.draw_cards(draw_count)
+            self._draw_cards_with_v2_hooks(player_id, draw_count, 'turn_start')
             self.log_msg(f"{self.pn(player_id)}抽{draw_count}张牌")
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(owner_state.equipment):
@@ -4800,6 +5544,18 @@ class GameEngine:
                     if ps.nazar_big_hits >= 2:
                         ps.nazar_active = False
                         ps.nazar_big_hits = 0
+            damage_context = self._v2_damage_context(
+                target_id,
+                dmg,
+                attacker_id,
+                damage_kind='attack',
+                damage_tag='gtn:physical',
+                is_battery=is_battery,
+                is_precision=is_precision,
+            )
+            dmg = self._run_v2_damage_modifiers(damage_context, dmg)
+            if getattr(self, 'pending_v2_ui', None):
+                break
             dmg = max(0, dmg - ps.armor)
             if ps.sponge_active and dmg > 0:
                 ps.poison += dmg // 2
@@ -4808,6 +5564,7 @@ class GameEngine:
             total_dealt += dmg
             self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
+            self._run_v2_after_damage_hooks(damage_context, dmg)
             if dmg > 0 and ps.toxic > 0:
                 ps.poison += ps.toxic
             self._check_yggdrasil(target_id)
@@ -4846,6 +5603,7 @@ class GameEngine:
             else:
                 self._discard_card(ps, card)
             self._dispatch_card_event('card_used', player_id, card, target_id=player_id, choice=choice)
+            self._run_v2_play_hook('after_play_card', player_id, card, choice)
             return result
         self.negated_card = False
         needs_choice = self._card_needs_choice(card)
@@ -4935,7 +5693,10 @@ class GameEngine:
                     except Exception:
                         target_id = player_id
         self._dispatch_card_event('card_used', player_id, card, target_id=target_id, choice=choice)
+        self._run_v2_play_hook('after_play_card', player_id, card, choice)
         self._check_game_over()
+        if getattr(self, 'pending_v2_ui', None):
+            result['needs_v2_ui'] = True
         return result
 
     def _atomic_place_as_equip(self, player_id, card, params, log, choice, context):
@@ -5012,6 +5773,9 @@ class GameEngine:
         return None
 
     def _atomic_response_declare(self, player_id, card, params, log, choice, context):
+        return None
+
+    def _atomic_trigger_manual(self, player_id, card, params, log, choice, context):
         return None
 
     def _atomic_aura_enemy_elixir_recovery(self, player_id, card, params, log, choice, context):

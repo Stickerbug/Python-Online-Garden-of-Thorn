@@ -1044,6 +1044,72 @@ Object.assign(I18N.ja, {
     login_registered_reserved: 'この名前は登録済みアカウントです'
 });
 Object.assign(I18N.en, {
+    friends: 'Friends', player_id: 'ID', friend_add_placeholder: 'Nickname or ID', friend_add: 'Add',
+    friend_requests: 'Friend Requests', friend_sent: 'Sent', friend_list: 'My Friends',
+    friend_accept: 'Accept', friend_decline: 'Decline', friend_remove: 'Remove',
+    friend_empty: 'No friends yet.', friend_request_empty: 'No pending requests.', friend_sent_empty: 'No sent requests.',
+    friend_added: 'Friend request sent', friend_removed: 'Friend removed', friend_updated: 'Updated',
+    social: 'Social', social_login_hint: 'Sign in to use social settings.',
+    social_accept_requests: 'Accept friend requests', social_search_nickname: 'Allow adding me by nickname',
+    social_search_id: 'Allow adding me by ID', social_settings_saved: 'Social settings saved',
+    last_login: 'Last login: {0}', win_rate: 'Win rate: {0}%', recent_matches: 'Recent matches'
+});
+Object.assign(I18N.zh, {
+    friends: '好友', player_id: 'ID', friend_add_placeholder: '输入昵称或ID', friend_add: '添加',
+    friend_requests: '好友请求', friend_sent: '已发送', friend_list: '我的好友',
+    friend_accept: '同意', friend_decline: '拒绝', friend_remove: '删除',
+    friend_empty: '暂无好友。', friend_request_empty: '暂无好友请求。', friend_sent_empty: '暂无已发送请求。',
+    friend_added: '好友请求已发送', friend_removed: '好友已删除', friend_updated: '已更新',
+    social: '社交', social_login_hint: '登录账号后可以使用社交设置。',
+    social_accept_requests: '接受好友请求', social_search_nickname: '允许通过昵称添加我',
+    social_search_id: '允许通过ID添加我', social_settings_saved: '社交设置已保存',
+    last_login: '上次登录：{0}', win_rate: '胜率：{0}%', recent_matches: '最近对局'
+});
+Object.assign(I18N.fr, {
+    friends: 'Amis', player_id: 'ID', friend_add_placeholder: 'Pseudo ou ID', friend_add: 'Ajouter',
+    friend_requests: 'Demandes', friend_sent: 'Envoyées', friend_list: 'Mes amis',
+    friend_accept: 'Accepter', friend_decline: 'Refuser', friend_remove: 'Retirer',
+    friend_empty: 'Aucun ami.', friend_request_empty: 'Aucune demande.', friend_sent_empty: 'Aucune demande envoyée.',
+    friend_added: 'Demande envoyée', friend_removed: 'Ami retiré', friend_updated: 'Mis à jour',
+    social: 'Social', social_login_hint: 'Connectez-vous pour utiliser les réglages sociaux.',
+    social_accept_requests: 'Accepter les demandes', social_search_nickname: 'Autoriser par pseudo',
+    social_search_id: 'Autoriser par ID', social_settings_saved: 'Réglages enregistrés',
+    last_login: 'Dernière connexion : {0}', win_rate: 'Taux de victoire : {0}%', recent_matches: 'Parties récentes'
+});
+Object.assign(I18N.pt, {
+    friends: 'Amigos', player_id: 'ID', friend_add_placeholder: 'Apelido ou ID', friend_add: 'Adicionar',
+    friend_requests: 'Pedidos', friend_sent: 'Enviados', friend_list: 'Meus amigos',
+    friend_accept: 'Aceitar', friend_decline: 'Recusar', friend_remove: 'Remover',
+    friend_empty: 'Sem amigos.', friend_request_empty: 'Sem pedidos.', friend_sent_empty: 'Sem pedidos enviados.',
+    friend_added: 'Pedido enviado', friend_removed: 'Amigo removido', friend_updated: 'Atualizado',
+    social: 'Social', social_login_hint: 'Entre para usar configurações sociais.',
+    social_accept_requests: 'Aceitar pedidos', social_search_nickname: 'Permitir por apelido',
+    social_search_id: 'Permitir por ID', social_settings_saved: 'Configurações salvas',
+    last_login: 'Último login: {0}', win_rate: 'Vitórias: {0}%', recent_matches: 'Partidas recentes'
+});
+Object.assign(I18N.ru, {
+    friends: 'Друзья', player_id: 'ID', friend_add_placeholder: 'Имя или ID', friend_add: 'Добавить',
+    friend_requests: 'Запросы', friend_sent: 'Отправлено', friend_list: 'Мои друзья',
+    friend_accept: 'Принять', friend_decline: 'Отклонить', friend_remove: 'Удалить',
+    friend_empty: 'Друзей нет.', friend_request_empty: 'Запросов нет.', friend_sent_empty: 'Нет отправленных запросов.',
+    friend_added: 'Запрос отправлен', friend_removed: 'Друг удалён', friend_updated: 'Обновлено',
+    social: 'Соц.', social_login_hint: 'Войдите, чтобы использовать социальные настройки.',
+    social_accept_requests: 'Принимать запросы', social_search_nickname: 'Разрешить по имени',
+    social_search_id: 'Разрешить по ID', social_settings_saved: 'Настройки сохранены',
+    last_login: 'Последний вход: {0}', win_rate: 'Победы: {0}%', recent_matches: 'Последние матчи'
+});
+Object.assign(I18N.ja, {
+    friends: 'フレンド', player_id: 'ID', friend_add_placeholder: '名前またはID', friend_add: '追加',
+    friend_requests: '申請', friend_sent: '送信済み', friend_list: 'フレンド',
+    friend_accept: '承認', friend_decline: '拒否', friend_remove: '削除',
+    friend_empty: 'フレンドはいません。', friend_request_empty: '申請はありません。', friend_sent_empty: '送信済み申請はありません。',
+    friend_added: '申請を送信しました', friend_removed: '削除しました', friend_updated: '更新しました',
+    social: 'ソーシャル', social_login_hint: 'ログインするとソーシャル設定を使えます。',
+    social_accept_requests: 'フレンド申請を受け取る', social_search_nickname: '名前で追加を許可',
+    social_search_id: 'IDで追加を許可', social_settings_saved: '設定を保存しました',
+    last_login: '最終ログイン: {0}', win_rate: '勝率: {0}%', recent_matches: '最近の対戦'
+});
+Object.assign(I18N.en, {
     account_replays: 'Recent Replays', replay_viewer: 'Replay Viewer', replay_view: 'View',
     replay_empty: 'No replay in the last 90 days.', replay_loading: 'Loading replays...',
     replay_load_failed: 'Failed to load replay', replay_prev: 'Prev', replay_play: 'Play',
@@ -1440,7 +1506,18 @@ Object.assign(I18N.ja, {
 
 let currentLang = localStorage.getItem('gtn_lang') || 'zh';
 let showEnglishCardNames = localStorage.getItem('gtn_show_english_card_names') !== '0';
-let currentUiStyle = localStorage.getItem('gtn_ui_style') || 'classic';
+const UI_STYLE_MIGRATION_KEY = 'gtn_ui_style_v2_migrated';
+function migrateStoredUiStyle() {
+    let stored = localStorage.getItem('gtn_ui_style') || 'minimal';
+    if (!localStorage.getItem(UI_STYLE_MIGRATION_KEY) && stored === 'classic') {
+        stored = 'minimal';
+        localStorage.setItem('gtn_ui_style', stored);
+        localStorage.setItem(UI_STYLE_MIGRATION_KEY, '1');
+    }
+    if (stored !== 'classic') stored = 'minimal';
+    return stored;
+}
+let currentUiStyle = migrateStoredUiStyle();
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || (I18N.zh[key]) || key; }
 function tf(key, ...values) { return t(key).replace(/\{(\d+)\}/g, (_, i) => values[Number(i)] ?? ''); }
 const UI = new Proxy({}, { get: (_, key) => t(key) });
@@ -1523,6 +1600,7 @@ function appendPlayerNameList(parent, players, options = {}) {
 }
 
 function getChatDisplayName(data) {
+    if (data && data.system) return '[系统]';
     const base = (data && data.nickname) || '?';
     const spectator = data && data.is_spectator ? `[${UI.spectator_prefix}]` : '';
     const prefix = getSpecialRolePrefix(data);
@@ -1971,6 +2049,7 @@ let nickname = '';
 let loginCredential = '';
 let currentAccount = loadCachedAccount();
 let accountMode = 'login';
+let socialData = { friends: [], incoming: [], outgoing: [], settings: null };
 let accountReplayItems = [];
 let accountReplayTimeline = [];
 let accountReplayFrameIndex = 0;
@@ -1981,8 +2060,13 @@ let manualDisconnect = false;
 let latencyPingTimer = null;
 let CARD_DEFS = {};
 let gameState = {};
+let activeV2UiRequestId = null;
 let draftState = {};
 let eventSelectData = {};
+let phaseChatEntries = [];
+let phaseChatMatchKey = '';
+let pregameChatEntries = [];
+let pregameChatMatchKey = '';
 let lobbyPlayers = [];
 let lobbyOngoingGames = [];
 const DEFAULT_SERVER = 'http://121.41.93.192';
@@ -2013,6 +2097,8 @@ let soloTargetDeck = 'a';
 let pendingSoloStart = false;
 let openingEvents = [];
 let openingEventMagicPool = [];
+let CUSTOM_TAG_DEFS = {};
+let CUSTOM_STATUS_DEFS = {};
 let soloEventA = '';
 let soloEventB = '';
 let tutorialMode = false;
@@ -2180,7 +2266,7 @@ function applyTheme(theme) {
 }
 
 function applyUiStyle(style) {
-    currentUiStyle = style === 'minimal' ? 'minimal' : 'classic';
+    currentUiStyle = style === 'classic' ? 'classic' : 'minimal';
     document.documentElement.setAttribute('data-ui-style', currentUiStyle);
     localStorage.setItem('gtn_ui_style', currentUiStyle);
     const sel = $('settings-ui-style-select');
@@ -2286,10 +2372,22 @@ function updateStaticText() {
     if (settingsTabServer) settingsTabServer.textContent = UI.settings_server;
     const settingsTabMods = $('settings-tab-mods');
     if (settingsTabMods) settingsTabMods.textContent = UI.settings_mods;
+    const settingsTabSocial = $('settings-tab-social');
+    if (settingsTabSocial) settingsTabSocial.textContent = UI.social;
     const settingsAppearance = $('settings-section-appearance');
     if (settingsAppearance) settingsAppearance.textContent = UI.settings_appearance;
     const settingsMods = $('settings-section-mods');
     if (settingsMods) settingsMods.textContent = UI.settings_mods;
+    const settingsSocial = $('settings-section-social');
+    if (settingsSocial) settingsSocial.textContent = UI.social;
+    const socialLoginHint = $('settings-social-login-hint');
+    if (socialLoginHint) socialLoginHint.textContent = UI.social_login_hint;
+    const acceptFriendLabel = $('settings-label-accept-friend-requests');
+    if (acceptFriendLabel) acceptFriendLabel.textContent = UI.social_accept_requests;
+    const searchNickLabel = $('settings-label-searchable-by-nickname');
+    if (searchNickLabel) searchNickLabel.textContent = UI.social_search_nickname;
+    const searchIdLabel = $('settings-label-searchable-by-player-id');
+    if (searchIdLabel) searchIdLabel.textContent = UI.social_search_id;
     const settingsOfficialMods = $('settings-label-official-mods');
     if (settingsOfficialMods) settingsOfficialMods.textContent = UI.official_mods;
     const settingsCommunityMods = $('settings-label-community-mods');
@@ -2300,12 +2398,6 @@ function updateStaticText() {
     if (communityCurrentLabel) communityCurrentLabel.textContent = UI.community_current;
     const communityDisable = $('btn-community-disable');
     if (communityDisable) communityDisable.textContent = UI.community_disable;
-    const communityUploadTitle = $('settings-community-upload-title');
-    if (communityUploadTitle) communityUploadTitle.textContent = UI.upload_mod;
-    const communityUploadHint = $('settings-community-upload-hint');
-    if (communityUploadHint) communityUploadHint.textContent = UI.community_upload_hint;
-    const uploadCommunity = $('btn-community-upload');
-    if (uploadCommunity) uploadCommunity.textContent = UI.upload_mod;
     const refreshCommunity = $('btn-community-refresh');
     if (refreshCommunity) refreshCommunity.textContent = UI.refresh;
     const settingsLabelTheme = $('settings-label-theme');
@@ -2382,6 +2474,20 @@ function updateStaticText() {
     if (btnSoloTraining) btnSoloTraining.textContent = UI.solo_training;
     const btnAccountTop = $('btn-account-top');
     if (btnAccountTop) btnAccountTop.textContent = UI.account;
+    const btnFriendsTop = $('btn-friends-top');
+    if (btnFriendsTop) btnFriendsTop.textContent = UI.friends;
+    const friendsTitle = $('friends-popover-title');
+    if (friendsTitle) friendsTitle.textContent = UI.friends;
+    const friendIdentifier = $('input-friend-identifier');
+    if (friendIdentifier) friendIdentifier.placeholder = UI.friend_add_placeholder;
+    const friendAddBtn = $('btn-friend-add');
+    if (friendAddBtn) friendAddBtn.textContent = UI.friend_add;
+    const incomingTitle = $('friend-incoming-title');
+    if (incomingTitle) incomingTitle.textContent = UI.friend_requests;
+    const outgoingTitle = $('friend-outgoing-title');
+    if (outgoingTitle) outgoingTitle.textContent = UI.friend_sent;
+    const friendListTitle = $('friend-list-title');
+    if (friendListTitle) friendListTitle.textContent = UI.friend_list;
     const accountPopoverTitle = $('account-popover-title');
     if (accountPopoverTitle) accountPopoverTitle.textContent = UI.account;
     const accountModeLogin = $('btn-account-mode-login');
@@ -2463,6 +2569,10 @@ function updateStaticText() {
     if (gameChatInput) gameChatInput.placeholder = UI.message_placeholder;
     const lobbyChatInput = $('lobby-chat-input');
     if (lobbyChatInput) lobbyChatInput.placeholder = UI.message_placeholder;
+    const phaseChatInput = $('phase-chat-input');
+    if (phaseChatInput) phaseChatInput.placeholder = UI.message_placeholder;
+    const phaseChatTitle = $('phase-chat-title');
+    if (phaseChatTitle) phaseChatTitle.textContent = UI.chat_title;
     const draftH2 = document.querySelector('#view-draft h2');
     if (draftH2) draftH2.textContent = UI.draft_phase;
     const eventH2 = document.querySelector('#view-event-select h2');
@@ -2471,6 +2581,8 @@ function updateStaticText() {
     if (eventDesc) eventDesc.textContent = UI.select_event_desc;
     const btnDraftReroll = $('btn-draft-reroll');
     if (btnDraftReroll) btnDraftReroll.textContent = UI.draft_reroll;
+    const btnPhaseChatSend = $('btn-phase-chat-send');
+    if (btnPhaseChatSend) btnPhaseChatSend.textContent = UI.send;
     const btnReturnLobby = $('btn-return-lobby');
     if (btnReturnLobby) btnReturnLobby.textContent = UI.return_lobby;
     const btnRematch = $('btn-rematch');
@@ -2583,9 +2695,15 @@ function showView(viewId) {
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     const el = $(viewId);
     if (el) el.classList.remove('hidden');
+    updatePhaseChatPanelVisibility(viewId);
     const accountTop = $('btn-account-top');
     if (accountTop) accountTop.classList.toggle('hidden', viewId !== 'view-login');
-    if (viewId !== 'view-login') toggleAccountPopover(false);
+    const friendsTop = $('btn-friends-top');
+    if (friendsTop) friendsTop.classList.toggle('hidden', viewId !== 'view-login' || !currentAccount);
+    if (viewId !== 'view-login') {
+        toggleAccountPopover(false);
+        toggleFriendsPopover(false);
+    }
     if (viewId !== 'view-game') {
         gameTimelineEntries = [];
         renderedBattleLogCount = 0;
@@ -2748,7 +2866,41 @@ function showCardGallery(selectedId = null, mode = 'cards') {
     renderCardGallery();
 }
 
+function getCustomTagDef(flag) {
+    return (CUSTOM_TAG_DEFS && CUSTOM_TAG_DEFS[flag]) || null;
+}
+
+function getCustomStatusDef(statusId) {
+    return (CUSTOM_STATUS_DEFS && CUSTOM_STATUS_DEFS[statusId]) || null;
+}
+
+function getRegistryText(def, field, fallback = '') {
+    if (!def) return fallback;
+    const langKey = `${field}_${currentLang}`;
+    const cnKey = `${field}_cn`;
+    const enKey = `${field}_en`;
+    return def[langKey] || def[cnKey] || def[enKey] || def[field] || def.name || fallback;
+}
+
+function safeRegistryColor(value, fallback = '#2C3E50') {
+    const text = String(value || '').trim();
+    if (/^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(text)) return text;
+    if (/^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(\s*,\s*(0|1|0?\.\d+))?\s*\)$/.test(text)) return text;
+    if (/^[a-zA-Z]+$/.test(text)) return text;
+    return fallback;
+}
+
+function customTagHtml(flag, text = null) {
+    const def = getCustomTagDef(flag);
+    const label = text || getRegistryText(def, 'name', flag);
+    const color = safeRegistryColor(def && def.color, '#2C3E50');
+    const icon = def && def.icon ? `${escapeHtml(def.icon)} ` : '';
+    return `<span class="card-flag custom" style="color:${color};border-color:${color};background:#fff">${icon}${escapeHtml(label)}</span>`;
+}
+
 function makeGalleryFlagHtml(flag) {
+    const custom = getCustomTagDef(flag);
+    if (custom) return customTagHtml(flag);
     const style = CARD_FLAG_STYLES[flag];
     const label = getFlagLabel(flag);
     if (style) return `<span class="card-flag ${style.cls}">${label}</span>`;
@@ -2756,6 +2908,8 @@ function makeGalleryFlagHtml(flag) {
 }
 
 function getGalleryFlagDescription(flag) {
+    const custom = getCustomTagDef(flag);
+    if (custom) return getRegistryText(custom, 'description', custom.description || '');
     return UI[`tag_desc_${flag}`] || UI.tag_desc_default;
 }
 
@@ -2764,6 +2918,8 @@ function isGalleryMechanicFlag(flag) {
 }
 
 function getGalleryFlagEnglishLabel(flag) {
+    const custom = getCustomTagDef(flag);
+    if (custom) return custom.name_en || custom.name || flag;
     return I18N.en[`tag_${flag}`] || I18N.en[`flag_${flag}`] || I18N.en[flag] || flag;
 }
 
@@ -2799,6 +2955,7 @@ function compareGalleryCards(a, b) {
 
 function getAllGalleryFlags() {
     const flags = new Set(Object.keys(CARD_FLAG_STYLES));
+    Object.keys(CUSTOM_TAG_DEFS || {}).forEach(flag => flags.add(flag));
     Object.values(CARD_DEFS).filter(cd => cd && cd.id !== 'Error').forEach(cd => (cd.flags || []).forEach(flag => {
         if (flag !== 'infinite_exclude') flags.add(flag);
     }));
@@ -2913,8 +3070,8 @@ function renderOpeningEventGallery(list, detail, q) {
         row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
         list.appendChild(row);
     });
-    const selectedEventId = gallerySelectedId ? Number(String(gallerySelectedId).replace('event:', '')) : null;
-    const ev = events.find(item => item.id === selectedEventId) || events[0];
+    const selectedEventId = gallerySelectedId ? String(gallerySelectedId).replace('event:', '') : null;
+    const ev = events.find(item => String(item.id) === selectedEventId) || events[0];
     if (!ev) {
         detail.innerHTML = `<p>${UI.gallery_no_items}</p>`;
         return;
@@ -3256,6 +3413,7 @@ function clearSelectedPlayCard() {
     document.querySelectorAll('.card.tap-selected').forEach(el => el.classList.remove('tap-selected'));
     const bar = $('mobile-play-confirm');
     if (bar) bar.classList.add('hidden');
+    if (shouldUseClassicBattle(gameState)) renderClassicBattle(gameState);
 }
 
 function selectPlayCardForConfirm(cardInstanceId) {
@@ -3288,6 +3446,7 @@ function selectPlayCardForConfirm(cardInstanceId) {
         cancel.onclick = clearSelectedPlayCard;
     }
     bar.classList.remove('hidden');
+    if (shouldUseClassicBattle(gameState)) renderClassicBattle(gameState);
     return true;
 }
 
@@ -3302,6 +3461,7 @@ function showModal(html) {
 
 function hideModal() {
     removeFloatingCardPreview();
+    activeV2UiRequestId = null;
     const modal = $('modal');
     const content = $('modal-content');
     if (content) content.className = 'modal-inner';
@@ -3310,6 +3470,170 @@ function hideModal() {
         showTutorialOverlay();
         setTimeout(updateTutorialOverlay, 60);
     }
+}
+
+function getV2Text(obj, base, fallback = '') {
+    if (!obj || typeof obj !== 'object') return fallback;
+    const langKey = currentLang === 'zh' ? `${base}_cn` : `${base}_${currentLang}`;
+    return obj[langKey] || obj[`${base}_en`] || obj[`${base}_cn`] || obj[base] || fallback;
+}
+
+function makeV2UiLabel(text) {
+    const label = document.createElement('label');
+    label.className = 'v2-ui-label';
+    label.textContent = text;
+    return label;
+}
+
+function showV2UiRequest(data = {}) {
+    if (isSpectating) return;
+    removeFloatingCardPreview();
+    const modal = $('modal');
+    const content = $('modal-content');
+    if (!modal || !content) return;
+    const requestId = String(data.request_id || '');
+    if (requestId && activeV2UiRequestId === requestId && modal.classList.contains('active') && content.classList.contains('v2-ui-modal')) {
+        return;
+    }
+    activeV2UiRequestId = requestId;
+    const component = data.component || {};
+    const controlState = {};
+    content.className = `modal-inner v2-ui-modal v2-ui-accent-${escapeClassToken((component.style && component.style.accent) || 'default')}`;
+    content.innerHTML = '';
+
+    const title = document.createElement('h3');
+    title.textContent = getV2Text(component, 'title', UI.notice || 'Notice');
+    content.appendChild(title);
+
+    if (data.card) {
+        const cardLine = document.createElement('div');
+        cardLine.className = 'v2-ui-card-line';
+        cardLine.appendChild(createCardChoiceChip(data.card));
+        content.appendChild(cardLine);
+    }
+
+    const bodyText = getV2Text(component, 'text', '');
+    if (bodyText) {
+        const p = document.createElement('p');
+        p.className = 'v2-ui-text';
+        p.textContent = bodyText;
+        content.appendChild(p);
+    }
+
+    const controls = Array.isArray(component.controls) ? component.controls : [];
+    controls.forEach(control => {
+        const row = document.createElement('div');
+        row.className = `v2-ui-control v2-ui-control-${escapeClassToken(control.type || 'text')}`;
+        const labelText = getV2Text(control, 'label', control.id || '');
+        const type = control.type || 'text';
+        if (type === 'text') {
+            const p = document.createElement('p');
+            p.className = 'v2-ui-text';
+            p.textContent = getV2Text(control, 'text', labelText);
+            row.appendChild(p);
+        } else if (type === 'slider') {
+            row.appendChild(makeV2UiLabel(labelText));
+            const wrap = document.createElement('div');
+            wrap.className = 'v2-ui-slider-row';
+            const input = document.createElement('input');
+            input.type = 'range';
+            input.min = Number(control.min ?? 0);
+            input.max = Number(control.max ?? input.min);
+            input.step = Number(control.step ?? 1);
+            input.value = Number(control.default ?? input.min);
+            const value = document.createElement('span');
+            value.className = 'v2-ui-value';
+            const sync = () => { value.textContent = input.value; controlState[control.id] = Number(input.value); };
+            input.addEventListener('input', sync);
+            sync();
+            wrap.appendChild(input);
+            wrap.appendChild(value);
+            row.appendChild(wrap);
+        } else if (type === 'number' || type === 'number_input') {
+            row.appendChild(makeV2UiLabel(labelText));
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = Number(control.min ?? 0);
+            input.max = Number(control.max ?? input.min);
+            input.step = Number(control.step ?? 1);
+            input.value = Number(control.default ?? input.min);
+            input.className = 'v2-ui-number';
+            const sync = () => { controlState[control.id] = Number(input.value); };
+            input.addEventListener('input', sync);
+            sync();
+            row.appendChild(input);
+        } else if (type === 'select') {
+            row.appendChild(makeV2UiLabel(labelText));
+            const select = document.createElement('select');
+            select.className = 'v2-ui-select';
+            (control.options || []).forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = String(option.value);
+                opt.textContent = getV2Text(option, 'label', String(option.label || option.value));
+                select.appendChild(opt);
+            });
+            const sync = () => { controlState[control.id] = select.value; };
+            select.addEventListener('change', sync);
+            sync();
+            row.appendChild(select);
+        } else if (type === 'card_picker' || type === 'equipment_picker' || type === 'player_picker' || type === 'target_picker') {
+            row.appendChild(makeV2UiLabel(labelText));
+            const list = document.createElement('div');
+            list.className = 'v2-ui-picker-list';
+            (control.options || []).forEach(option => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'v2-ui-picker-option';
+                btn.dataset.value = String(option.value);
+                if (option.card) {
+                    btn.appendChild(createCardChoiceChip(option.card));
+                } else {
+                    btn.textContent = getV2Text(option, 'label', String(option.label || option.value));
+                }
+                btn.addEventListener('click', () => {
+                    list.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    controlState[control.id] = option.value;
+                });
+                list.appendChild(btn);
+            });
+            const first = list.querySelector('.v2-ui-picker-option');
+            if (first) {
+                first.classList.add('selected');
+                controlState[control.id] = first.dataset.value;
+            }
+            row.appendChild(list);
+        }
+        content.appendChild(row);
+    });
+
+    const buttons = Array.isArray(component.buttons) && component.buttons.length
+        ? component.buttons
+        : [{ id: 'confirm', text_cn: '确认', text_en: 'Confirm' }, { id: 'cancel', text_cn: '取消', text_en: 'Cancel', role: 'cancel' }];
+    const buttonRow = document.createElement('div');
+    buttonRow.className = 'modal-buttons v2-ui-buttons';
+    buttons.forEach(button => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `btn ${button.role === 'cancel' || button.id === 'cancel' ? 'secondary' : 'primary'}`;
+        btn.textContent = getV2Text(button, 'text', button.id || 'OK');
+        btn.addEventListener('click', () => {
+            hideModal();
+            emitModeEvent('solo_v2_ui_response', 'v2_ui_response', {
+                request_id: data.request_id,
+                button: button.id,
+                values: { ...controlState },
+            });
+        });
+        buttonRow.appendChild(btn);
+    });
+    content.appendChild(buttonRow);
+    modal.classList.remove('hidden');
+    modal.classList.add('active');
+}
+
+function escapeClassToken(value) {
+    return String(value || 'default').replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
 const DATA_CACHE_VERSION = 'v4';
@@ -3390,6 +3714,7 @@ async function fetchOpeningEvents(options = {}) {
     if (cached) {
         openingEvents = cached.events || [];
         openingEventMagicPool = cached.magic_pool || [];
+        setCustomRegistries(cached.custom_tags || [], cached.custom_statuses || []);
         if (background) {
             refreshOpeningEventsFromServer({ silent: true });
             return;
@@ -3406,7 +3731,13 @@ async function refreshOpeningEventsFromServer({ silent = false } = {}) {
         const data = await resp.json();
         openingEvents = data.events || [];
         openingEventMagicPool = data.magic_pool || [];
-        writeDataCache('opening_events', { events: openingEvents, magic_pool: openingEventMagicPool });
+        setCustomRegistries(data.custom_tags || [], data.custom_statuses || []);
+        writeDataCache('opening_events', {
+            events: openingEvents,
+            magic_pool: openingEventMagicPool,
+            custom_tags: data.custom_tags || [],
+            custom_statuses: data.custom_statuses || [],
+        });
         refreshCardDataViews();
     } catch (e) {
         console.error('Failed to fetch opening events:', e);
@@ -3414,8 +3745,20 @@ async function refreshOpeningEventsFromServer({ silent = false } = {}) {
             const cached = readDataCache('opening_events');
             openingEvents = cached ? (cached.events || []) : [];
             openingEventMagicPool = cached ? (cached.magic_pool || []) : [];
+            setCustomRegistries(cached ? (cached.custom_tags || []) : [], cached ? (cached.custom_statuses || []) : []);
         }
     }
+}
+
+function setCustomRegistries(tags, statuses) {
+    CUSTOM_TAG_DEFS = {};
+    (Array.isArray(tags) ? tags : []).forEach(item => {
+        if (item && item.id) CUSTOM_TAG_DEFS[String(item.id)] = item;
+    });
+    CUSTOM_STATUS_DEFS = {};
+    (Array.isArray(statuses) ? statuses : []).forEach(item => {
+        if (item && item.id) CUSTOM_STATUS_DEFS[String(item.id)] = item;
+    });
 }
 
 function getCardDef(defId) {
@@ -3423,6 +3766,8 @@ function getCardDef(defId) {
 }
 
 function getFlagLabel(flag) {
+    const custom = getCustomTagDef(flag);
+    if (custom) return getRegistryText(custom, 'name', flag);
     if (flag === 'fusion_layer' || flag === 'fission_layer') return UI[flag] || flag;
     return UI[`tag_${flag}`] || UI[`flag_${flag}`] || flag;
 }
@@ -3479,6 +3824,11 @@ function createCardElement(cardDict, options = {}) {
     let flagsHtml = '';
     for (const flag of flags) {
         if (!showAllFlags && flag === 'self_only' && (!gameState || gameState.mode !== '2v2')) {
+            continue;
+        }
+        const custom = getCustomTagDef(flag);
+        if (custom) {
+            flagsHtml += customTagHtml(flag);
             continue;
         }
         const style = CARD_FLAG_STYLES[flag];
@@ -3559,6 +3909,7 @@ function getEffectiveCardFlagSets(cardDict, cardDef) {
 }
 
 function cardFlagHtml(flag, text = null) {
+    if (getCustomTagDef(flag)) return customTagHtml(flag, text);
     if (flag === 'fusion_layer') {
         const label = text || `${UI.fusion_layer || 'Fusion'}`;
         return `<span class="card-flag fusion-layer">${escapeHtml(label)}</span>`;
@@ -3826,7 +4177,7 @@ function attachFloatingCardPreview(anchor, cardDict) {
         if (floatingCardPreviewTimer) clearTimeout(floatingCardPreviewTimer);
         floatingCardPreviewTimer = setTimeout(() => {
             showFloatingCardPreview(cardDict, anchor, pos);
-        }, CARD_HOLD_PREVIEW_DELAY);
+        }, CARD_CHIP_PREVIEW_DELAY);
     }, { passive: true });
     anchor.addEventListener('touchmove', (event) => {
         const pos = getPointerPos(event);
@@ -3879,6 +4230,7 @@ function renderChoiceOptionContent(container, option, index, config = {}) {
 
 let dragState = null;
 const CARD_HOLD_PREVIEW_DELAY = 430;
+const CARD_CHIP_PREVIEW_DELAY = 360;
 const CARD_HOLD_PREVIEW_HIDE_DISTANCE = 28;
 
 function getPointerPos(e) {
@@ -3892,6 +4244,10 @@ function getPointerPos(e) {
 }
 
 function isClassicUiStyle() {
+    return document.documentElement.getAttribute('data-ui-style') === 'minimal';
+}
+
+function isNewClassicUiStyle() {
     return document.documentElement.getAttribute('data-ui-style') === 'classic';
 }
 
@@ -4303,12 +4659,14 @@ function connectSocket(serverUrl) {
         const newOptIds = data.options ? data.options.map(o => o.def_id) : [];
         const isReroll = oldOptIds.length > 0 && JSON.stringify(oldOptIds) !== JSON.stringify(newOptIds) && (draftState ? draftState.rerolls : 0) > (data.rerolls || 0);
         draftState = data;
+        if (data.your_id != null) playerId = data.your_id;
         renderDraft(data, isReroll);
     });
     socket.on('event_select', (data) => {
         debugLog('[client] event_select');
         phase = 'event_select';
         eventSelectData = data;
+        if (data.your_id != null) playerId = data.your_id;
         renderEventSelect(data);
     });
     socket.on('state_update', (data) => {
@@ -4355,6 +4713,7 @@ function connectSocket(serverUrl) {
             queueVisibleHandExileAnimations(previousGameState, data);
             renderGame(data);
             showStateDeltas(previousGameState, data);
+            if (data.pending_v2_ui) showV2UiRequest(data.pending_v2_ui);
             optimisticResourceOverride = null;
         }
     });
@@ -4395,6 +4754,7 @@ function connectSocket(serverUrl) {
             queueVisibleHandExileAnimations(previousGameState, data);
             renderGame(data);
             showStateDeltas(previousGameState, data);
+            if (data.pending_v2_ui) showV2UiRequest(data.pending_v2_ui);
             optimisticResourceOverride = null;
         }
     if (tutorialMode) {
@@ -4431,11 +4791,19 @@ function connectSocket(serverUrl) {
         pendingPlayCard = null;
         showChoiceUI(data);
     });
+    socket.on('v2_ui_request', (data) => {
+        clearPendingServerAction({ keepOptimistic: true });
+        pendingPlayCard = null;
+        clearSelectedPlayCard();
+        showV2UiRequest(data);
+    });
     socket.on('chat', (data) => {
         debugLog('[client] chat:', data.nickname, data.text, 'spectator=', data.is_spectator);
         const nick = getChatDisplayName(data);
         if (phase === 'lobby') {
             appendLobbyChat(nick, data.text, data);
+        } else if (phase === 'draft' || phase === 'event_select') {
+            appendPhaseChat(nick, data.text, data, data);
         } else {
             appendGameChat(nick, data.text, data, data);
         }
@@ -4749,11 +5117,15 @@ function cacheAccount(user) {
             const safeUser = {
                 id: user.id,
                 username: user.username,
+                player_id: user.player_id || '',
                 display_name: user.display_name || user.username,
                 games_played: user.games_played || 0,
                 wins: user.wins || 0,
                 losses: user.losses || 0,
                 draws: user.draws || 0,
+                accept_friend_requests: user.accept_friend_requests !== false,
+                searchable_by_nickname: user.searchable_by_nickname !== false,
+                searchable_by_player_id: user.searchable_by_player_id !== false,
             };
             localStorage.setItem('gtn_account_user', JSON.stringify(safeUser));
         } else {
@@ -4764,7 +5136,8 @@ function cacheAccount(user) {
 
 function renderAccountState() {
     const accountDisplay = currentAccount ? (currentAccount.display_name || currentAccount.username) : '';
-    const nameText = currentAccount ? tf('account_logged_in_as', accountDisplay) : UI.account_not_logged_in;
+    const idText = currentAccount?.player_id ? ` · ${UI.player_id}: ${currentAccount.player_id}` : '';
+    const nameText = currentAccount ? `${tf('account_logged_in_as', accountDisplay)}${idText}` : UI.account_not_logged_in;
     const popName = $('account-popover-name');
     if (popName) popName.textContent = nameText;
     const stats = accountStatsText(currentAccount);
@@ -4783,6 +5156,9 @@ function renderAccountState() {
     }
     const btnConnect = $('btn-connect');
     if (btnConnect) btnConnect.textContent = UI.enter_lobby;
+    const friendsTop = $('btn-friends-top');
+    const loginVisible = !$('view-login')?.classList.contains('hidden');
+    if (friendsTop) friendsTop.classList.toggle('hidden', !currentAccount || !loginVisible);
     const guestDivider = $('guest-divider-label')?.closest('.login-divider');
     if (guestDivider) guestDivider.classList.toggle('hidden', !!currentAccount);
     const nicknameInput = $('input-nickname');
@@ -4796,6 +5172,8 @@ function renderAccountState() {
         accountNickDisplay.classList.toggle('hidden', !currentAccount);
     }
     cacheAccount(currentAccount);
+    renderSocialSettings();
+    renderFriendsState();
     renderAccountMode();
     updateCommunityUploadState();
     renderCommunityModList();
@@ -4925,6 +5303,7 @@ async function onAccountLogout() {
         await authRequest('/api/auth/logout', {});
     } catch (_) {}
     currentAccount = null;
+    socialData = { friends: [], incoming: [], outgoing: [], settings: null };
     accountReplayItems = [];
     accountReplayTimeline = [];
     closeAccountReplayModal();
@@ -4957,6 +5336,194 @@ function toggleAccountPopover(force) {
         refreshAuthMe().then(() => {
             if (currentAccount) loadAccountReplays();
         });
+    }
+}
+
+function friendDateText(value) {
+    if (!value) return '-';
+    const parsed = new Date(String(value).replace('Z', '+00:00'));
+    if (Number.isNaN(parsed.getTime())) return String(value);
+    return parsed.toLocaleString();
+}
+
+function friendStatsLine(user) {
+    if (!user) return '';
+    return `${tf('win_rate', Number(user.win_rate || 0).toFixed(1))} · ${accountStatsText(user)}`;
+}
+
+function friendCardHtml(item, type) {
+    const user = item?.user || {};
+    const matches = Array.isArray(item?.matches) ? item.matches : [];
+    const matchText = matches.length
+        ? matches.slice(0, 3).map(match => escapeHtml(`${match.mode || '-'} ${match.result || ''} ${friendDateText(match.ended_at || match.started_at)}`)).join('<br>')
+        : escapeHtml(`${UI.recent_matches}: -`);
+    let actions = '';
+    if (type === 'incoming') {
+        actions = `
+          <button class="mini-btn" type="button" data-friend-respond="${escapeHtml(item.request_id)}" data-friend-action="accept">${escapeHtml(UI.friend_accept)}</button>
+          <button class="mini-btn" type="button" data-friend-respond="${escapeHtml(item.request_id)}" data-friend-action="decline">${escapeHtml(UI.friend_decline)}</button>`;
+    } else if (type === 'friend') {
+        actions = `<button class="mini-btn" type="button" data-friend-remove="${escapeHtml(user.id)}">${escapeHtml(UI.friend_remove)}</button>`;
+    }
+    return `
+      <div class="friend-card">
+        <div class="friend-card-head">
+          <span class="friend-name">${escapeHtml(user.username || '-')}</span>
+          <span class="friend-id">${escapeHtml(user.player_id || '')}</span>
+        </div>
+        <div class="friend-sub">${escapeHtml(friendStatsLine(user))}</div>
+        <div class="friend-sub">${escapeHtml(tf('last_login', friendDateText(user.last_login_at)))}</div>
+        ${type === 'friend' ? `<div class="friend-sub"><b>${escapeHtml(UI.recent_matches)}</b><br>${matchText}</div>` : ''}
+        ${actions ? `<div class="friend-actions">${actions}</div>` : ''}
+      </div>`;
+}
+
+function renderFriendSection(id, items, emptyText, type) {
+    const el = $(id);
+    if (!el) return;
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) {
+        el.innerHTML = `<div class="friend-empty">${escapeHtml(emptyText)}</div>`;
+        return;
+    }
+    el.innerHTML = list.map(item => friendCardHtml(item, type)).join('');
+}
+
+function renderFriendsState() {
+    renderFriendSection('friend-incoming-list', socialData.incoming, UI.friend_request_empty, 'incoming');
+    renderFriendSection('friend-outgoing-list', socialData.outgoing, UI.friend_sent_empty, 'outgoing');
+    renderFriendSection('friends-list', socialData.friends, UI.friend_empty, 'friend');
+}
+
+function setFriendsError(message) {
+    const el = $('friends-error');
+    if (el) el.textContent = message || '';
+}
+
+async function loadFriends() {
+    if (!currentAccount) {
+        socialData = { friends: [], incoming: [], outgoing: [], settings: null };
+        renderFriendsState();
+        return;
+    }
+    try {
+        const data = await authRequest('/api/social/friends');
+        socialData = {
+            friends: Array.isArray(data.friends) ? data.friends : [],
+            incoming: Array.isArray(data.incoming) ? data.incoming : [],
+            outgoing: Array.isArray(data.outgoing) ? data.outgoing : [],
+            settings: data.settings || null,
+        };
+        if (socialData.settings && currentAccount) {
+            currentAccount = { ...currentAccount, ...socialData.settings };
+            cacheAccount(currentAccount);
+            renderSocialSettings();
+        }
+        renderFriendsState();
+    } catch (err) {
+        setFriendsError(err.message || UI.account_error);
+    }
+}
+
+async function addFriendFromInput() {
+    setFriendsError('');
+    const input = $('input-friend-identifier');
+    const identifier = (input?.value || '').trim();
+    if (!identifier) return;
+    try {
+        const data = await authRequest('/api/social/friends/add', { identifier });
+        socialData = {
+            friends: Array.isArray(data.friends) ? data.friends : [],
+            incoming: Array.isArray(data.incoming) ? data.incoming : [],
+            outgoing: Array.isArray(data.outgoing) ? data.outgoing : [],
+            settings: data.settings || socialData.settings,
+        };
+        if (input) input.value = '';
+        setFriendsError(UI.friend_added);
+        renderFriendsState();
+    } catch (err) {
+        setFriendsError(err.message || UI.account_error);
+    }
+}
+
+async function respondFriendRequest(requestId, action) {
+    try {
+        const data = await authRequest('/api/social/friends/respond', { request_id: requestId, action });
+        socialData = {
+            friends: Array.isArray(data.friends) ? data.friends : [],
+            incoming: Array.isArray(data.incoming) ? data.incoming : [],
+            outgoing: Array.isArray(data.outgoing) ? data.outgoing : [],
+            settings: data.settings || socialData.settings,
+        };
+        setFriendsError(UI.friend_updated);
+        renderFriendsState();
+    } catch (err) {
+        setFriendsError(err.message || UI.account_error);
+    }
+}
+
+async function removeFriend(userId) {
+    try {
+        const data = await authRequest('/api/social/friends/remove', { user_id: userId });
+        socialData = {
+            friends: Array.isArray(data.friends) ? data.friends : [],
+            incoming: Array.isArray(data.incoming) ? data.incoming : [],
+            outgoing: Array.isArray(data.outgoing) ? data.outgoing : [],
+            settings: data.settings || socialData.settings,
+        };
+        setFriendsError(UI.friend_removed);
+        renderFriendsState();
+    } catch (err) {
+        setFriendsError(err.message || UI.account_error);
+    }
+}
+
+function toggleFriendsPopover(force) {
+    const pop = $('friends-popover');
+    if (!pop) return;
+    const show = typeof force === 'boolean' ? force : pop.classList.contains('hidden');
+    pop.classList.toggle('hidden', !show);
+    if (show) {
+        toggleAccountPopover(false);
+        loadFriends();
+    }
+}
+
+function renderSocialSettings() {
+    const ids = [
+        ['settings-accept-friend-requests', 'accept_friend_requests'],
+        ['settings-searchable-by-nickname', 'searchable_by_nickname'],
+        ['settings-searchable-by-player-id', 'searchable_by_player_id'],
+    ];
+    ids.forEach(([id, key]) => {
+        const input = $(id);
+        if (!input) return;
+        input.disabled = !currentAccount;
+        input.checked = currentAccount ? currentAccount[key] !== false : true;
+    });
+    const hint = $('settings-social-login-hint');
+    if (hint) hint.classList.toggle('hidden', !!currentAccount);
+}
+
+async function saveSocialSettings() {
+    if (!currentAccount) {
+        renderSocialSettings();
+        return;
+    }
+    const payload = {
+        accept_friend_requests: !!$('settings-accept-friend-requests')?.checked,
+        searchable_by_nickname: !!$('settings-searchable-by-nickname')?.checked,
+        searchable_by_player_id: !!$('settings-searchable-by-player-id')?.checked,
+    };
+    const status = $('settings-social-status');
+    try {
+        const data = await authRequest('/api/social/settings', payload);
+        currentAccount = data.user || { ...currentAccount, ...payload };
+        if (status) status.textContent = UI.social_settings_saved;
+        renderAccountState();
+    } catch (err) {
+        if (status) status.textContent = err.message || UI.account_error;
+        renderSocialSettings();
     }
 }
 
@@ -5988,14 +6555,18 @@ function renderLobby(data) {
 
 function renderDraft(data, isReroll) {
     showView('view-draft');
+    syncPhaseChatMatch(data || {});
+    updatePhaseChatChannelOptions(data || {});
     const picks = data.picks || [];
     const options = data.options || [];
     const rerolls = data.rerolls || 0;
     const round = data.round || 0;
     const totalRounds = data.total_rounds || 15;
     const is2v2 = data.mode === '2v2';
-    const oppPicksCount = data.opponent_picks_count || 0;
     const othersPicksCount = data.others_picks_count || {};
+    const oppPicksCount = Number.isFinite(Number(data.opponent_picks_count))
+        ? Number(data.opponent_picks_count)
+        : Number(Object.values(othersPicksCount)[0] || 0);
     const prevPicks = draftState ? (draftState.picks || []).length : -1;
     const iJustPicked = picks.length > prevPicks;
     const shouldAnimate = isReroll || iJustPicked;
@@ -6081,6 +6652,8 @@ function renderDraft(data, isReroll) {
 
 function renderEventSelect(data) {
     showView('view-event-select');
+    syncPhaseChatMatch(data || {});
+    updatePhaseChatChannelOptions(data || {});
     const events = data.events || [];
     const oppSelected = data.opponent_selected;
     const myPick = data.my_pick;
@@ -6092,7 +6665,7 @@ function renderEventSelect(data) {
     if (myPick != null) {
         let eventName = '?';
         for (const ev of events) {
-            if (ev && ev.id === myPick) { eventName = getLocalizedEventText(ev, 'name') || '?'; break; }
+            if (ev && String(ev.id) === String(myPick)) { eventName = getLocalizedEventText(ev, 'name') || '?'; break; }
         }
         let othersStatusHtml = '';
         if (is2v2) {
@@ -6433,23 +7006,15 @@ function chatChannelOptionLabel(key) {
     return `[${t(key)}]`;
 }
 
-function ensureGameChatChannelSelect() {
-    let select = $('game-chat-channel');
-    if (select) return select;
-    const input = $('game-chat-input');
-    if (!input || !input.parentNode) return null;
-    select = document.createElement('select');
-    select.id = 'game-chat-channel';
-    select.className = 'game-chat-channel hidden';
-    select.setAttribute('aria-label', UI.chat_channel_label);
-    input.parentNode.insertBefore(select, input);
-    return select;
+function chatPlayerNameFromContext(ctx, id) {
+    const names = ctx && Array.isArray(ctx.player_names) ? ctx.player_names : null;
+    if (names && names[id]) return localizeCanonicalPlayerName(names[id]);
+    return getPlayerNameById(id);
 }
 
-function updateGameChatChannelOptions(gs) {
-    const select = ensureGameChatChannelSelect();
+function populateChatChannelSelect(select, ctx) {
     if (!select) return;
-    const show = !!(gs && gs.mode === '2v2' && !gs.spectating && !isSpectating && gs.phase !== 'game_over');
+    const show = !!(ctx && ctx.mode === '2v2' && !ctx.spectating && !isSpectating && ctx.phase !== 'game_over');
     select.classList.toggle('hidden', !show);
     select.disabled = !show;
     select.title = UI.chat_channel_label;
@@ -6465,11 +7030,11 @@ function updateGameChatChannelOptions(gs) {
         { value: 'team', label: chatChannelOptionLabel('chat_channel_team') },
         { value: 'enemy', label: chatChannelOptionLabel('chat_channel_enemy') },
     ];
-    const enemyIds = (gs.enemy_ids || []).map(normalizePlayerId).filter(id => id !== null);
+    const enemyIds = (ctx.enemy_ids || []).map(normalizePlayerId).filter(id => id !== null);
     enemyIds.forEach(id => {
         options.push({
             value: `private:${id}`,
-            label: `[${tf('chat_channel_private_to', getPlayerNameById(id))}]`,
+            label: `[${tf('chat_channel_private_to', chatPlayerNameFromContext(ctx, id))}]`,
         });
     });
 
@@ -6481,6 +7046,122 @@ function updateGameChatChannelOptions(gs) {
         select.appendChild(option);
     });
     select.value = options.some(option => option.value === previous) ? previous : 'public';
+}
+
+function ensureGameChatChannelSelect() {
+    let select = $('game-chat-channel');
+    if (select) return select;
+    const input = $('game-chat-input');
+    if (!input || !input.parentNode) return null;
+    select = document.createElement('select');
+    select.id = 'game-chat-channel';
+    select.className = 'game-chat-channel hidden';
+    select.setAttribute('aria-label', UI.chat_channel_label);
+    input.parentNode.insertBefore(select, input);
+    return select;
+}
+
+function updateGameChatChannelOptions(gs) {
+    const select = ensureGameChatChannelSelect();
+    populateChatChannelSelect(select, gs);
+}
+
+function currentPhaseChatContext() {
+    if (phase === 'draft') return draftState || {};
+    if (phase === 'event_select') return eventSelectData || {};
+    return {};
+}
+
+function phaseContextMatchKey(ctx) {
+    if (!ctx) return '';
+    return String(ctx.match_key || (ctx.room_id != null ? `room:${ctx.room_id}` : ''));
+}
+
+function syncPhaseChatMatch(ctx) {
+    const key = phaseContextMatchKey(ctx);
+    if (key && phaseChatMatchKey && phaseChatMatchKey !== key) {
+        phaseChatEntries = [];
+        pregameChatEntries = [];
+    }
+    if (key) {
+        phaseChatMatchKey = key;
+        pregameChatMatchKey = key;
+    }
+}
+
+function updatePhaseChatChannelOptions(ctx = currentPhaseChatContext()) {
+    populateChatChannelSelect($('phase-chat-channel'), ctx);
+}
+
+function updatePhaseChatPanelVisibility(viewId) {
+    const panel = $('phase-chat-panel');
+    if (!panel) return;
+    const show = viewId === 'view-draft' || viewId === 'view-event-select';
+    panel.classList.toggle('hidden', !show);
+    if (show) {
+        const title = $('phase-chat-title');
+        if (title) title.textContent = UI.chat_title;
+        updatePhaseChatChannelOptions();
+        renderPhaseChat();
+    }
+}
+
+function makeChatTimelineEntry(nick, text, meta = {}, channelMeta = {}) {
+    return {
+        type: 'chat',
+        nick,
+        text,
+        system: !!meta.system,
+        isAdmin: isAdminPlayer(meta),
+        specialRoleColor: getSpecialRoleColor(meta),
+        channel: channelMeta.chat_channel || channelMeta.channel || '',
+        targetName: channelMeta.chat_target_name || channelMeta.targetName || '',
+    };
+}
+
+function renderPhaseChat() {
+    const container = $('phase-chat-log');
+    if (!container) return;
+    container.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    phaseChatEntries.forEach(entry => fragment.appendChild(createBattleLogElement(entry)));
+    container.appendChild(fragment);
+    container.scrollTop = container.scrollHeight;
+}
+
+function appendPhaseChat(nick, text, meta = {}, channelMeta = {}) {
+    const ctx = currentPhaseChatContext();
+    syncPhaseChatMatch(ctx);
+    const entry = makeChatTimelineEntry(nick, text, meta, channelMeta);
+    phaseChatEntries.push(entry);
+    if (phaseChatEntries.length > 120) phaseChatEntries.shift();
+    pregameChatEntries.push(entry);
+    if (pregameChatEntries.length > 120) pregameChatEntries.shift();
+    renderPhaseChat();
+}
+
+function seedPregameChatEntriesForBattleLog() {
+    if (!pregameChatEntries.length) return;
+    const matchKey = gameState && String(gameState.match_key || (gameState.room_id != null ? `room:${gameState.room_id}` : ''));
+    if (pregameChatMatchKey && matchKey && pregameChatMatchKey !== matchKey) return;
+    if (gameTimelineEntries.some(entry => entry && entry.pregameChatSeed)) return;
+    pregameChatEntries.forEach((entry, index) => {
+        gameTimelineEntries.push({ ...entry, pregame: true, pregameChatSeed: index === 0 });
+    });
+}
+
+function applyChatChannelPayload(payload, selectId) {
+    const channelSelect = $(selectId);
+    if (channelSelect && !channelSelect.disabled && !channelSelect.classList.contains('hidden')) {
+        const value = channelSelect.value || 'public';
+        if (value.startsWith('private:')) {
+            payload.channel = 'private';
+            payload.target_player_id = Number(value.slice('private:'.length));
+        } else {
+            payload.channel = value;
+        }
+    }
+    return payload;
 }
 
 function updateModeSpecificControls(gs) {
@@ -6569,6 +7250,354 @@ function setPileInfoText(el, info) {
     el.textContent = info.text;
     el.title = info.title || '';
     el.classList.toggle('compact-info', !!info.title);
+}
+
+function getBattlePlayerId(gs, slot) {
+    if (!gs) return null;
+    if (slot === 'self') return normalizePlayerId(gs.your_id);
+    if (slot === 'enemy') {
+        if (gs.mode === '2v2') return normalizePlayerId((gs.enemy_ids || [])[0]);
+        const yourId = normalizePlayerId(gs.your_id);
+        if (yourId == null) return null;
+        return yourId === 1 ? 0 : 1;
+    }
+    return null;
+}
+
+function normalizeBattlePlayer(gs, raw, slot) {
+    const data = raw || {};
+    const id = getBattlePlayerId(gs, slot);
+    const name = slot === 'self'
+        ? (gs.your_name || data.name || UI.you)
+        : (gs.opponent_name || data.name || UI.opponent);
+    return {
+        id,
+        name: localizeCanonicalPlayerName(name),
+        avatar_url: data.avatar_url || data.avatar || '',
+        avatar_id: data.avatar_id || '',
+        hp: Number(data.health || 0),
+        maxHp: Number(data.max_health || 100),
+        e: Number(data.elixir || 0),
+        maxE: Number(data.max_elixir || 10),
+        m: Number(data.magic || 0),
+        maxM: Number(data.max_magic || 10),
+        armor: Number(data.armor || 0),
+        statuses: data,
+        equipment: Array.isArray(data.equipment) ? data.equipment : [],
+        handCount: Number(data.hand_count || 0),
+        deckCount: Number(data.deck_count || 0),
+        discardCount: Number(data.discard_count || 0),
+        exileCount: Number(data.exile_count || 0),
+        isCurrent: normalizePlayerId(gs.current_player) === id,
+        isDefeated: Number(data.health || 0) <= 0,
+        raw: data,
+    };
+}
+
+function normalizeBattleCard(cardDict, ownerState) {
+    const card = cardDict || {};
+    const cardDef = getCardDef(card.def_id || '');
+    const costs = cardDef ? getCardDisplayCosts(card, cardDef, ownerState) : { totalE: 0, totalM: 0, flags: new Set() };
+    const image = card.image || card.image_url || (cardDef && (cardDef.image || cardDef.image_url)) || '';
+    return {
+        ...card,
+        def_id: card.def_id || '',
+        instance_id: card.instance_id,
+        name: cardDef ? getCardName(cardDef) : (card.def_id || '?'),
+        card_type: cardDef ? cardDef.card_type : '',
+        cost_e: costs.totalE,
+        cost_m: costs.totalM,
+        effect_text: cardDef ? getCardEffectText(cardDef) : '',
+        description: cardDef ? getCardDescriptionText(cardDef) : '',
+        flags: Array.from(costs.flags || []),
+        image,
+        image_url: image,
+        cardDef,
+        raw: card,
+    };
+}
+
+function buildBattleViewModel(state) {
+    const gs = state || {};
+    const you = gs.you || {};
+    const opponent = gs.opponent || {};
+    const self = normalizeBattlePlayer(gs, you, 'self');
+    const enemy = normalizeBattlePlayer(gs, opponent, 'enemy');
+    const hand = (you.hand || []).map(card => normalizeBattleCard(card, you));
+    const selected = hand.find(card => card.instance_id === selectedPlayCardId) || null;
+    const phaseText = gs.phase === 'action'
+        ? (isMyTurn() ? UI.your_turn : UI.opponent_turn)
+        : gs.phase === 'draw' ? UI.draw_phase
+        : gs.phase === 'response' ? UI.waiting_response
+        : gs.phase === 'choice' ? UI.choose_target
+        : gs.phase === 'game_over' ? UI.game_over
+        : (gs.phase || '');
+    return {
+        self,
+        enemy,
+        hand,
+        selectedCard: selected,
+        turn: {
+            round: Number(gs.round_num || 0),
+            phase: gs.phase || '',
+            phaseText,
+            currentPlayer: normalizePlayerId(gs.current_player),
+            isMyTurn: isMyTurn(),
+            mode: gs.mode || '',
+            modeText: gs.mode === 'urf' ? '无限火力' : (gs.mode === '2v2' ? '2v2' : '1v1'),
+        },
+        pendingResponse: gs.pending_response || (responsePending ? responseData : null),
+        playableCards: new Set((you.hand || []).filter(canPlayCard).map(card => card.instance_id)),
+        log: Array.isArray(gs.log) ? gs.log : [],
+        deckCount: Number(you.deck_count || (you.deck || []).length || 0),
+        discardCount: Number(you.discard_count || (you.discard || []).length || 0),
+        exileCount: Number(you.exile_count || (you.exile || []).length || 0),
+        raw: gs,
+    };
+}
+
+function shouldUseClassicBattle(gs) {
+    if (!isNewClassicUiStyle() || !gs) return false;
+    if (isSpectating || gs.mode === '2v2') return false;
+    return ['action', 'draw', 'response', 'choice', 'game_over'].includes(gs.phase);
+}
+
+function hashStringToHue(value) {
+    const text = String(value || '?');
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+        hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash) % 360;
+}
+
+function renderPlayerAvatar(player, options = {}) {
+    const p = player || {};
+    const hue = hashStringToHue(p.name);
+    const initial = String(p.name || '?').trim().slice(0, 1).toUpperCase() || '✿';
+    const active = p.isCurrent ? ' is-current' : '';
+    const defeated = p.isDefeated ? ' is-defeated' : '';
+    const targetable = options.targetable ? ' is-targetable' : '';
+    const style = `--avatar-hue:${hue};--avatar-color:hsl(${hue} 62% 52%);--avatar-color-2:hsl(${(hue + 44) % 360} 70% 58%)`;
+    const image = p.avatar_url ? `<img class="player-avatar-img" src="${escapeHtml(p.avatar_url)}" alt="">` : '';
+    return `
+        <div class="player-avatar${active}${defeated}${targetable}" style="${style}">
+            ${image || `<div class="player-avatar-flower"><span>${escapeHtml(initial)}</span></div>`}
+        </div>
+    `;
+}
+
+function renderClassicStatusList(player) {
+    const tmp = document.createElement('div');
+    renderStatusTagsToElement(tmp, player && player.raw ? player.raw : {});
+    return tmp.innerHTML || '<span class="classic-empty-mark">-</span>';
+}
+
+function renderStatusTagsToElement(container, playerData) {
+    if (!container) return;
+    const tempId = `classic-status-${Math.random().toString(36).slice(2)}`;
+    container.id = tempId;
+    const restore = {
+        parent: container.parentNode,
+        next: container.nextSibling,
+    };
+    if (!container.parentNode) {
+        container.style.position = 'absolute';
+        container.style.left = '-9999px';
+        container.style.top = '-9999px';
+        document.body.appendChild(container);
+    }
+    renderStatusTags(tempId, playerData || {});
+    lastStatusSignatures.delete(tempId);
+    container.removeAttribute('id');
+    if (!restore.parent) {
+        container.remove();
+        container.style.position = '';
+        container.style.left = '';
+        container.style.top = '';
+    } else if (restore.next && container.nextSibling !== restore.next) {
+        restore.parent.insertBefore(container, restore.next);
+    }
+}
+
+function renderClassicEquipmentList(player) {
+    const equipment = (player && player.equipment) || [];
+    if (!equipment.length) return '<span class="classic-empty-mark">-</span>';
+    return equipment.map(eq => {
+        const cardInst = eq.card_instance || {};
+        const cardDef = getCardDef(cardInst.def_id || '');
+        const name = cardDef ? getCardName(cardDef) : (cardInst.def_id || '?');
+        const typeColor = cardDef ? (CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary) : COLORS.text_primary;
+        return `<span class="classic-equip-chip" style="--chip-color:${typeColor}">${escapeHtml(name)}</span>`;
+    }).join('');
+}
+
+function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e') {
+    if (!container) return;
+    const cur = Math.max(0, Number(current) || 0);
+    const total = Math.max(0, Math.min(16, Number(max) || 0));
+    const cost = Math.max(0, Number(spend) || 0);
+    container.innerHTML = '';
+    for (let i = 0; i < total; i++) {
+        const orb = document.createElement('span');
+        orb.className = `classic-orb classic-orb-${kind}`;
+        if (i < cur) orb.classList.add('is-filled');
+        if (cost && i >= Math.max(0, cur - cost) && i < cur) orb.classList.add('will-spend');
+        if (cost && i >= cur && i < cost) orb.classList.add('is-missing');
+        container.appendChild(orb);
+    }
+    if (!total) container.textContent = '0';
+}
+
+function getClassicCardImageUrl(card) {
+    const defId = card && card.def_id ? String(card.def_id) : 'default';
+    return (card && (card.image_url || card.image)) || `/static/cards/${encodeURIComponent(defId)}.webp`;
+}
+
+function renderClassicCardPreview(card) {
+    const preview = $('classic-card-preview');
+    if (!preview) return;
+    if (!card || !card.def_id) {
+        preview.classList.add('hidden');
+        preview.innerHTML = '';
+        return;
+    }
+    const typeColor = CARD_TYPE_COLORS[card.card_type] || COLORS.text_primary;
+    const artUrl = getClassicCardImageUrl(card);
+    preview.style.setProperty('--classic-card-color', typeColor);
+    preview.innerHTML = `
+        <div class="classic-preview-art">
+            <img src="${escapeHtml(artUrl)}" alt="" onerror="this.onerror=null;this.src='/static/cards/default.webp';this.classList.add('classic-art-fallback');">
+        </div>
+        <div class="classic-preview-body"></div>
+    `;
+    const body = preview.querySelector('.classic-preview-body');
+    const cardEl = createCardElement(card.raw || card, { showAllFlags: true });
+    cardEl.classList.add('classic-preview-card');
+    body.appendChild(cardEl);
+    preview.classList.remove('hidden');
+}
+
+function renderClassicFighter(container, player, side) {
+    if (!container) return;
+    const hpPct = player.maxHp > 0 ? Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100)) : 0;
+    container.classList.toggle('is-current', !!player.isCurrent);
+    container.classList.toggle('is-defeated', !!player.isDefeated);
+    container.innerHTML = `
+        <div class="classic-fighter-name">${escapeHtml(player.name || '?')}</div>
+        ${renderPlayerAvatar(player)}
+        <div class="classic-hp-wrap">
+            <div class="classic-hp-track"><div class="classic-hp-fill" style="width:${hpPct}%"></div></div>
+            <div class="classic-hp-text">H ${player.hp}/${player.maxHp}${player.armor ? ` · A ${player.armor}` : ''}</div>
+        </div>
+        <div class="classic-status-ring">${renderClassicStatusList(player)}</div>
+        <div class="classic-equipment-ring">${renderClassicEquipmentList(player)}</div>
+    `;
+}
+
+function renderClassicHand(vm) {
+    const container = $('classic-hand-fan');
+    if (!container) return;
+    const oldRects = new Map();
+    container.querySelectorAll('.classic-hand-card[data-instance-id]').forEach(el => {
+        oldRects.set(String(el.dataset.instanceId), el.getBoundingClientRect());
+    });
+    container.innerHTML = '';
+    const hand = vm.hand || [];
+    const count = hand.length;
+    hand.forEach((card, index) => {
+        const playable = vm.playableCards.has(card.instance_id);
+        const offset = index - (count - 1) / 2;
+        const rotate = Math.max(-13, Math.min(13, offset * 4.2));
+        const lift = Math.max(0, 18 - Math.abs(offset) * 4);
+        const wrap = document.createElement('div');
+        wrap.className = 'classic-hand-card';
+        wrap.dataset.instanceId = card.instance_id == null ? '' : String(card.instance_id);
+        wrap.dataset.defId = card.def_id;
+        wrap.style.setProperty('--fan-rot', `${rotate}deg`);
+        wrap.style.setProperty('--fan-y', `${-lift}px`);
+        wrap.style.setProperty('--fan-z', String(100 + Math.round(20 - Math.abs(offset))));
+        if (!playable) wrap.classList.add('card-disabled');
+        if (selectedPlayCardId === card.instance_id) wrap.classList.add('is-selected');
+        const cardEl = createCardElement(card.raw || card, {
+            draggable: playable && card.card_type !== 'guard',
+            onClick: playable
+                ? () => selectPlayCardForConfirm(card.instance_id)
+                : () => flashStatus(getCannotPlayReason(card.raw || card), 2200, 'error'),
+        });
+        cardEl.classList.add('classic-fan-card-inner');
+        wrap.appendChild(cardEl);
+        wrap.addEventListener('mouseenter', () => renderClassicCardPreview(card));
+        wrap.addEventListener('mouseleave', () => {
+            if (!selectedPlayCardId) renderClassicCardPreview(vm.selectedCard);
+        });
+        container.appendChild(wrap);
+    });
+    if (vm.selectedCard) renderClassicCardPreview(vm.selectedCard);
+    else renderClassicCardPreview(null);
+}
+
+function renderClassicLog(vm) {
+    const content = $('classic-log-content');
+    if (!content) return;
+    const wasAtBottom = content.scrollTop + content.clientHeight >= content.scrollHeight - 30;
+    content.innerHTML = '';
+    const entries = gameTimelineEntries.length
+        ? gameTimelineEntries.slice(-80)
+        : (vm.log || []).slice(-80).map(text => ({ type: 'battle', text }));
+    entries.forEach(entry => content.appendChild(createBattleLogElement(entry)));
+    if (wasAtBottom) content.scrollTop = content.scrollHeight;
+}
+
+function renderClassicBattle(gs) {
+    const root = $('battle-classic');
+    const oldContainer = document.querySelector('.game-container');
+    if (!root || !oldContainer) return false;
+    if (!shouldUseClassicBattle(gs)) {
+        root.classList.add('hidden');
+        root.setAttribute('aria-hidden', 'true');
+        oldContainer.classList.remove('classic-battle-hidden');
+        return false;
+    }
+    try {
+        const vm = buildBattleViewModel(gs);
+        root.classList.remove('hidden');
+        root.setAttribute('aria-hidden', 'false');
+        oldContainer.classList.add('classic-battle-hidden');
+        $('classic-mode').textContent = vm.turn.modeText || '1v1';
+        $('classic-round').textContent = `R${vm.turn.round || 0}`;
+        $('classic-phase').textContent = vm.turn.phaseText || '';
+        $('classic-action-hint').textContent = vm.turn.isMyTurn ? UI.your_turn : UI.opponent_turn;
+        const selected = vm.selectedCard;
+        renderClassicResourceOrbs($('classic-e-orbs'), vm.self.e, vm.self.maxE, selected ? selected.cost_e : 0, 'e');
+        renderClassicResourceOrbs($('classic-m-orbs'), vm.self.m, vm.self.maxM, selected ? selected.cost_m : 0, 'm');
+        $('classic-deck-count').textContent = `▣${vm.deckCount}`;
+        $('classic-discard-count').textContent = `⟲${vm.discardCount}`;
+        $('classic-exile-count').textContent = `◇${vm.exileCount}`;
+        renderClassicFighter($('classic-fighter-self'), vm.self, 'self');
+        renderClassicFighter($('classic-fighter-enemy'), vm.enemy, 'enemy');
+        const responseEl = $('classic-stage-response');
+        if (responseEl) {
+            const waiting = !!vm.pendingResponse || responsePending;
+            responseEl.classList.toggle('hidden', !waiting);
+            responseEl.textContent = waiting ? (UI.waiting_opponent_counter || UI.waiting_response) : '';
+        }
+        renderClassicHand(vm);
+        renderClassicLog(vm);
+        const endBtn = $('classic-end-turn');
+        if (endBtn) {
+            endBtn.textContent = UI.end_turn;
+            endBtn.disabled = !vm.turn.isMyTurn || isActionBusy({ includeAnimation: false }) || gs.phase === 'game_over';
+            endBtn.classList.toggle('is-ready', !endBtn.disabled);
+        }
+        return true;
+    } catch (error) {
+        console.error('[classic-ui] render failed', error);
+        root.classList.add('hidden');
+        root.setAttribute('aria-hidden', 'true');
+        oldContainer.classList.remove('classic-battle-hidden');
+        return false;
+    }
 }
 
 function renderGame(data) {
@@ -6742,6 +7771,7 @@ function renderGame(data) {
         }
     }
     scheduleAdjust();
+    renderClassicBattle(gs);
 }
 
 function renderPlayerBars(containerId, playerData) {
@@ -6806,7 +7836,19 @@ function renderStatusTags(containerId, playerData) {
         Object.entries(p.custom_statuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;
-            tags.push({ name, abbr: String(name).slice(0, 3), val: count, fg: '#1F618D', bg: '#EAF2F8' });
+            const def = getCustomStatusDef(name);
+            if (def && def.visible === false) return;
+            const label = def ? getRegistryText(def, 'name', name) : name;
+            const icon = def && def.icon ? `${def.icon} ` : '';
+            const color = safeRegistryColor(def && def.color, '#1F618D');
+            tags.push({
+                name: `${icon}${label}`,
+                abbr: String(label).slice(0, 3),
+                val: count,
+                fg: color,
+                bg: '#EAF2F8',
+                title: def ? getRegistryText(def, 'description', '') : '',
+            });
         });
     }
     const previousSignature = lastStatusSignatures.get(containerId);
@@ -6820,7 +7862,7 @@ function renderStatusTags(containerId, playerData) {
         const fullText = t.val ? `${t.name}:${t.val}` : t.name;
         nextItems.push(fullText);
         el.textContent = fullText;
-        el.title = '';
+        el.title = t.title || '';
         if (previousSignature !== undefined && !previousItems.has(fullText)) {
             el.classList.add('status-tag-changed');
         }
@@ -7840,9 +8882,10 @@ function createBattleLogElement(entry) {
             channelSpan.textContent = `[${channelLabel}] `;
             el.appendChild(channelSpan);
         }
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'chat-nick';
-        if (entry.isAdmin) nameSpan.classList.add('admin-name');
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'chat-nick';
+    if (entry.system) nameSpan.classList.add('system-name');
+    if (entry.isAdmin) nameSpan.classList.add('admin-name');
         if (entry.specialRoleColor === 'bloom') nameSpan.classList.add('bloom-name');
         if (entry.specialRoleColor === 'guard') nameSpan.classList.add('guard-name');
         nameSpan.textContent = `${entry.nick}: `;
@@ -7903,6 +8946,7 @@ function renderLog(log, logStart = 0, logTotal = null) {
         resetBattleLogState(content);
         renderedBattleLogTotal = logStart;
     }
+    seedPregameChatEntriesForBattleLog();
     let startIndex = Math.max(0, renderedBattleLogTotal - logStart);
     if (startIndex > log.length) startIndex = 0;
     for (let i = startIndex; i < log.length; i++) {
@@ -7940,6 +8984,7 @@ function appendLobbyChat(nick, text, meta = {}) {
     el.className = 'chat-msg';
     const nameSpan = document.createElement('span');
     nameSpan.className = 'chat-nick';
+    if (meta.system) nameSpan.classList.add('system-name');
     if (isAdminPlayer(meta)) nameSpan.classList.add('admin-name');
     if (getSpecialRoleColor(meta) === 'bloom') nameSpan.classList.add('bloom-name');
     if (getSpecialRoleColor(meta) === 'guard') nameSpan.classList.add('guard-name');
@@ -7955,6 +9000,7 @@ function appendGameChat(nick, text, meta = {}, channelMeta = {}) {
         type: 'chat',
         nick,
         text,
+        system: !!meta.system,
         isAdmin: isAdminPlayer(meta),
         specialRoleColor: getSpecialRoleColor(meta),
         channel: channelMeta.chat_channel || channelMeta.channel || '',
@@ -9320,17 +10366,18 @@ function onGameChatSend() {
     if (!input) return;
     const text = input.value.trim();
     if (text && socket) {
-        const payload = { text };
-        const channelSelect = $('game-chat-channel');
-        if (channelSelect && !channelSelect.disabled && !channelSelect.classList.contains('hidden')) {
-            const value = channelSelect.value || 'public';
-            if (value.startsWith('private:')) {
-                payload.channel = 'private';
-                payload.target_player_id = Number(value.slice('private:'.length));
-            } else {
-                payload.channel = value;
-            }
-        }
+        const payload = applyChatChannelPayload({ text }, 'game-chat-channel');
+        socket.emit('chat', payload);
+        input.value = '';
+    }
+}
+
+function onPhaseChatSend() {
+    const input = $('phase-chat-input');
+    if (!input) return;
+    const text = input.value.trim();
+    if (text && socket) {
+        const payload = applyChatChannelPayload({ text }, 'phase-chat-channel');
         socket.emit('chat', payload);
         input.value = '';
     }
@@ -9343,11 +10390,10 @@ let settingsMods = [];
 let settingsCommunityMods = [];
 let settingsAllowServerEdit = true;
 let settingsActiveTab = 'appearance';
-let pendingCommunityReplaceHash = '';
 let settingsActiveModTab = ['official', 'community'].includes(localStorage.getItem('gtn_settings_mod_tab'))
     ? localStorage.getItem('gtn_settings_mod_tab')
     : 'official';
-const VANILLA_MOD_FILENAME = 'VanillaCardsFormatV1.json';
+const VANILLA_MOD_FILENAME = 'VanillaCards.json';
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 
 function getCommunityModSelection() {
@@ -9367,7 +10413,12 @@ function getCommunityModSelection() {
         const sha256 = String(mod.sha256 || mod.hash || '').trim().toLowerCase();
         if (!publicUrl || !/^[0-9a-f]{64}$/.test(sha256) || seen.has(sha256)) return;
         seen.add(sha256);
-        clean.push({ public_url: publicUrl, sha256, name: String(mod.name || '').trim() });
+        clean.push({
+            public_url: publicUrl,
+            sha256,
+            name: String(mod.name || '').trim(),
+            uploaded_at: String(mod.uploaded_at || '').trim(),
+        });
     });
     if (!clean.length) {
         return { mod_source: 'official', community_mods: [], community_mod_url: '', community_mod_hash: '', community_mod_name: '' };
@@ -9418,16 +10469,17 @@ function openSettings(options = {}) {
         serverHint.textContent = tf('server_hint', DEFAULT_SERVER);
     }
     renderModSourceControls();
+    renderSocialSettings();
 }
 
 function setSettingsTab(tab) {
     if (tab === 'server' && !settingsAllowServerEdit) tab = 'appearance';
-    settingsActiveTab = ['appearance', 'server', 'mods'].includes(tab) ? tab : 'appearance';
+    settingsActiveTab = ['appearance', 'server', 'mods', 'social'].includes(tab) ? tab : 'appearance';
     renderSettingsTabs();
 }
 
 function renderSettingsTabs() {
-    const tabs = ['appearance', 'server', 'mods'];
+    const tabs = ['appearance', 'server', 'mods', 'social'];
     tabs.forEach(tab => {
         const btn = $(`settings-tab-${tab}`);
         const page = $(`settings-page-${tab}`);
@@ -9586,13 +10638,10 @@ function renderModSourceTabs() {
 function renderModSourceControls() {
     const officialBox = $('settings-official-mods');
     const communityBox = $('settings-community-mods');
-    const uploadRow = document.querySelector('#settings-community-mods .settings-upload-row');
     renderModSourceTabs();
     if (officialBox) officialBox.classList.toggle('hidden', settingsActiveModTab !== 'official');
     if (communityBox) communityBox.classList.toggle('hidden', settingsActiveModTab !== 'community');
-    if (uploadRow) uploadRow.classList.toggle('hidden', settingsActiveModTab !== 'community');
     renderCommunityCurrent();
-    updateCommunityUploadState();
 }
 
 function setModSource(source) {
@@ -9639,7 +10688,12 @@ function setSelectedCommunityMods(mods) {
         const sha256 = String(mod.sha256 || mod.hash || '').trim().toLowerCase();
         if (!publicUrl || !/^[0-9a-f]{64}$/.test(sha256) || seen.has(sha256)) return;
         seen.add(sha256);
-        clean.push({ public_url: publicUrl, sha256, name: String(mod.name || '').trim() });
+        clean.push({
+            public_url: publicUrl,
+            sha256,
+            name: String(mod.name || '').trim(),
+            uploaded_at: String(mod.uploaded_at || '').trim(),
+        });
     });
     localStorage.setItem('gtn_community_mods', JSON.stringify(clean));
 }
@@ -9685,10 +10739,8 @@ function renderCommunityCurrent() {
 }
 
 function updateCommunityUploadState() {
-    const uploadBtn = $('btn-community-upload');
-    const hint = $('settings-community-upload-hint');
-    if (uploadBtn) uploadBtn.disabled = false;
-    if (hint) hint.textContent = currentAccount ? UI.community_upload_hint : UI.community_login_required;
+    // Community mod uploads are currently disabled in the client. The server APIs
+    // remain available for registered/repository-driven workflows.
 }
 
 async function loadSettingsCommunityMods() {
@@ -9791,21 +10843,12 @@ function renderCommunityModList() {
         selectBtn.onclick = () => toggleCommunityModSelection(mod, !isSelected);
         actions.appendChild(selectBtn);
         if (mod.can_manage) {
-            const updateBtn = document.createElement('button');
-            updateBtn.type = 'button';
-            updateBtn.className = 'btn btn-secondary';
-            updateBtn.textContent = UI.community_update;
-            updateBtn.onclick = () => {
-                pendingCommunityReplaceHash = mod.sha256 || '';
-                const input = $('settings-community-upload-file');
-                if (input) input.click();
-            };
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'btn btn-danger';
             deleteBtn.textContent = UI.community_delete;
             deleteBtn.onclick = () => deleteCommunityMod(mod);
-            actions.append(updateBtn, deleteBtn);
+            actions.append(deleteBtn);
         }
         details.appendChild(actions);
         item.appendChild(details);
@@ -9834,81 +10877,6 @@ async function deleteCommunityMod(mod) {
         }
         setStatus(UI.community_delete_success);
         await loadSettingsCommunityMods();
-    } catch (e) {
-        setStatus(e.message || String(e));
-    }
-}
-
-async function uploadCommunityModFile(file, options = {}) {
-    const statusEl = $('settings-community-status');
-    const setStatus = text => { if (statusEl) statusEl.textContent = text || ''; };
-    if (!file) return;
-    if (!currentAccount) {
-        setStatus(UI.community_login_required);
-        return;
-    }
-    if (!file.name.toLowerCase().endsWith('.json')) {
-        setStatus(UI.community_json_only);
-        return;
-    }
-    if (file.size > 300000) {
-        setStatus(UI.community_file_too_large);
-        return;
-    }
-    let text = '';
-    let parsed = null;
-    try {
-        text = await file.text();
-        parsed = JSON.parse(text);
-    } catch (e) {
-        setStatus(tf('community_json_parse_failed', e.message));
-        return;
-    }
-    const info = parsed.info || {};
-    const cardCount = Array.isArray(parsed.cards) ? parsed.cards.length : 0;
-    const modName = info.name || file.name;
-    const replaceHash = String(options.replaceHash || '').trim();
-    setStatus(tf('community_file_summary', modName, info.version || '-', cardCount));
-    try {
-        setStatus(UI.community_uploading);
-        const uploadResp = await fetch('/api/community-mods/upload-url', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ filename: file.name }),
-        });
-        const upload = await uploadResp.json();
-        if (!uploadResp.ok || !upload.success) throw new Error(upload.error || UI.community_upload_url_failed);
-        const putResp = await fetch(upload.put_url, {
-            method: 'PUT',
-            headers: { 'Content-Type': upload.content_type || 'application/json' },
-            body: text,
-        });
-        if (!putResp.ok) throw new Error(tf('community_r2_upload_failed', putResp.status));
-        const regResp = await fetch('/api/community-mods/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ key: upload.key, public_url: upload.public_url, replace_sha256: replaceHash }),
-        });
-        const registered = await regResp.json();
-        if (!regResp.ok || !registered.success) {
-            const detail = registered.error || (registered.errors || []).join('；') || UI.community_register_failed;
-            throw new Error(detail);
-        }
-        const mod = registered.mod || {};
-        const selected = getCommunityModSelection().community_mods || [];
-        setSelectedCommunityMods([
-            ...selected.filter(item => item.sha256 !== replaceHash && item.sha256 !== mod.sha256),
-            {
-                public_url: mod.public_url || upload.public_url,
-                sha256: mod.sha256 || '',
-                name: mod.name || info.name || '',
-            },
-        ]);
-        setStatus(tf(replaceHash ? 'community_update_success' : 'community_upload_success', mod.name || info.name || file.name));
-        await loadSettingsCommunityMods();
-        fetchCardDefs({ useCache: false }).then(() => fetchOpeningEvents({ useCache: false }));
     } catch (e) {
         setStatus(e.message || String(e));
     }
@@ -10096,7 +11064,7 @@ async function init() {
     });
     const savedTheme = localStorage.getItem('gtn_theme') || 'light';
     applyTheme(savedTheme);
-    applyUiStyle(localStorage.getItem('gtn_ui_style') || 'classic');
+    applyUiStyle(migrateStoredUiStyle());
     const savedLang = localStorage.getItem('gtn_lang') || 'zh';
     applyLang(savedLang);
     bootLoader.step(UI.init_theme_lang, 24);
@@ -10119,8 +11087,30 @@ async function init() {
     if ($('btn-account-mode-login')) $('btn-account-mode-login').addEventListener('click', () => setAccountMode('login'));
     if ($('btn-account-mode-register')) $('btn-account-mode-register').addEventListener('click', () => setAccountMode('register'));
     if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());
+    if ($('btn-friends-top')) $('btn-friends-top').addEventListener('click', () => toggleFriendsPopover());
     if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
+    if ($('btn-friends-popover-close')) $('btn-friends-popover-close').addEventListener('click', () => toggleFriendsPopover(false));
     if ($('btn-account-popover-logout')) $('btn-account-popover-logout').addEventListener('click', onAccountLogout);
+    if ($('btn-friend-add')) $('btn-friend-add').addEventListener('click', addFriendFromInput);
+    const friendIdentifierInput = $('input-friend-identifier');
+    if (friendIdentifierInput) {
+        friendIdentifierInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addFriendFromInput();
+        });
+    }
+    document.addEventListener('click', (event) => {
+        const respondBtn = event.target.closest('[data-friend-respond]');
+        if (respondBtn) {
+            event.preventDefault();
+            respondFriendRequest(respondBtn.dataset.friendRespond, respondBtn.dataset.friendAction);
+            return;
+        }
+        const removeBtn = event.target.closest('[data-friend-remove]');
+        if (removeBtn) {
+            event.preventDefault();
+            removeFriend(removeBtn.dataset.friendRemove);
+        }
+    });
     if ($('btn-account-replays-refresh')) $('btn-account-replays-refresh').addEventListener('click', loadAccountReplays);
     if ($('btn-account-replay-close')) $('btn-account-replay-close').addEventListener('click', closeAccountReplayModal);
     if ($('account-replay-progress')) {
@@ -10201,26 +11191,15 @@ async function init() {
     if ($('settings-tab-appearance')) $('settings-tab-appearance').addEventListener('click', () => setSettingsTab('appearance'));
     if ($('settings-tab-server')) $('settings-tab-server').addEventListener('click', () => setSettingsTab('server'));
     if ($('settings-tab-mods')) $('settings-tab-mods').addEventListener('click', () => setSettingsTab('mods'));
+    if ($('settings-tab-social')) $('settings-tab-social').addEventListener('click', () => setSettingsTab('social'));
+    ['settings-accept-friend-requests', 'settings-searchable-by-nickname', 'settings-searchable-by-player-id'].forEach((id) => {
+        const input = $(id);
+        if (input) input.addEventListener('change', saveSocialSettings);
+    });
     if ($('settings-mod-tab-official')) $('settings-mod-tab-official').addEventListener('click', () => setSettingsModSourceTab('official'));
     if ($('settings-mod-tab-community')) $('settings-mod-tab-community').addEventListener('click', () => setSettingsModSourceTab('community'));
     if ($('btn-community-refresh')) $('btn-community-refresh').addEventListener('click', loadSettingsCommunityMods);
     if ($('btn-community-disable')) $('btn-community-disable').addEventListener('click', clearCommunityModSelection);
-    if ($('btn-community-upload')) $('btn-community-upload').addEventListener('click', () => {
-        pendingCommunityReplaceHash = '';
-        if (!currentAccount) {
-            const statusEl = $('settings-community-status');
-            if (statusEl) statusEl.textContent = UI.community_login_required;
-            return;
-        }
-        const input = $('settings-community-upload-file');
-        if (input) input.click();
-    });
-    if ($('settings-community-upload-file')) $('settings-community-upload-file').addEventListener('change', (e) => {
-        const file = e.target.files && e.target.files[0];
-        const replaceHash = pendingCommunityReplaceHash;
-        pendingCommunityReplaceHash = '';
-        uploadCommunityModFile(file, { replaceHash }).finally(() => { e.target.value = ''; });
-    });
     if ($('about-tab-rules')) $('about-tab-rules').addEventListener('click', () => setAboutPage('rules'));
     if ($('about-tab-credits')) $('about-tab-credits').addEventListener('click', () => setAboutPage('credits'));
     if ($('btn-about-close')) $('btn-about-close').addEventListener('click', closeAbout);
@@ -10244,6 +11223,14 @@ async function init() {
     });
     $('btn-surrender').addEventListener('click', onSurrender);
     $('btn-end-turn').addEventListener('click', onEndTurn);
+    if ($('classic-end-turn')) $('classic-end-turn').addEventListener('click', onEndTurn);
+    if ($('classic-settings')) $('classic-settings').addEventListener('click', () => openSettings({ hideServer: true }));
+    if ($('classic-log-toggle')) {
+        $('classic-log-toggle').addEventListener('click', () => {
+            const drawer = $('classic-log-drawer');
+            if (drawer) drawer.classList.toggle('is-open');
+        });
+    }
     $('btn-view-deck').addEventListener('click', onViewDeck);
     if ($('btn-urf-replace')) $('btn-urf-replace').addEventListener('click', onUrfReplaceCard);
     if ($('btn-urf-sell')) $('btn-urf-sell').addEventListener('click', onUrfSellEquipment);
@@ -10285,6 +11272,12 @@ async function init() {
     $('btn-game-chat-send').addEventListener('click', onGameChatSend);
     $('game-chat-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') onGameChatSend();
+    });
+    const phaseChatSend = $('btn-phase-chat-send');
+    if (phaseChatSend) phaseChatSend.addEventListener('click', onPhaseChatSend);
+    const phaseChatInput = $('phase-chat-input');
+    if (phaseChatInput) phaseChatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') onPhaseChatSend();
     });
     setupPlayZoneDrop();
     initModEditor();
