@@ -62,6 +62,7 @@ from db import (
     get_user_by_id,
     get_user_by_username,
     list_friends,
+    mark_user_last_seen,
     remove_friend,
     respond_friend_request,
     increment_user_stats,
@@ -970,6 +971,17 @@ def auth_user_payload(user):
     return payload
 
 
+def mark_player_session_last_seen(player):
+    if not DB_AVAILABLE or not player:
+        return
+    if not player.get('is_registered_user') or not player.get('user_id'):
+        return
+    try:
+        mark_user_last_seen(player.get('user_id'))
+    except Exception as exc:
+        admin_event('error', f"failed to update last seen for user {player.get('user_id')}: {exc}")
+
+
 def public_player_info(sid, player=None):
     p = player if player is not None else players.get(sid, {})
     info = {
@@ -1506,6 +1518,8 @@ def build_admin_players():
         result.append({
             'sid': sid,
             'nickname': p.get('nickname', '?'),
+            'user_id': p.get('user_id'),
+            'player_id': p.get('account_player_id') or '',
             'status': p.get('status', ''),
             'room_id': p.get('room_id'),
             'spectating_room': p.get('spectating_room'),
@@ -2246,7 +2260,7 @@ def execute_admin_command(line):
         if not rows:
             return {'success': True, 'output': '当前没有在线玩家。'}
         return {'success': True, 'output': '\n'.join(
-            f"{p['nickname']} [{p['sid']}] 状态={zh_status(p['status'])} 房间={p.get('room_id')}" for p in rows
+            f"{p['nickname']} ID={p.get('player_id') or '-'} [{p['sid']}] 状态={zh_status(p['status'])} 房间={p.get('room_id')}" for p in rows
         )}
     if cmd == 'rooms':
         with _lock:
@@ -2270,12 +2284,15 @@ def execute_admin_command(line):
             for pidx, sid in enumerate(room.player_sids):
                 if sid in players:
                     nickname = players[sid].get('nickname', '?')
+                    account_player_id = players[sid].get('account_player_id') or '-'
                     online = '在线'
                 elif sid in room.disconnected_players:
                     nickname = room.disconnected_players[sid].get('nickname', '?')
+                    account_player_id = room.disconnected_players[sid].get('account_player_id') or '-'
                     online = '断线'
                 else:
                     nickname = '?'
+                    account_player_id = '-'
                     online = '未知'
                 ps = e.players[pidx] if pidx < len(e.players) else None
                 team = ''
@@ -2283,11 +2300,11 @@ def execute_admin_command(line):
                     team = f" 队伍={e.team_of(pidx)}"
                 if ps is not None:
                     rows.append(
-                        f"{pidx}: {nickname} [{sid}] {online}{team} "
+                        f"{pidx}: {nickname} ID={account_player_id} [{sid}] {online}{team} "
                         f"H={ps.health}/{ps.max_health} E={ps.elixir}/{ps.max_elixir} M={ps.magic}/{ps.max_magic} 手牌={len(ps.hand)}"
                     )
                 else:
-                    rows.append(f"{pidx}: {nickname} [{sid}] {online}{team}")
+                    rows.append(f"{pidx}: {nickname} ID={account_player_id} [{sid}] {online}{team}")
         return {'success': True, 'output': '\n'.join(rows) or '房间内没有玩家。'}
     if cmd == 'logs':
         count = parse_int_token(parts[1], 'count') if len(parts) > 1 else 20
@@ -2519,6 +2536,7 @@ def admin_completions(line):
 def remove_player_by_admin(sid):
     if sid not in players:
         return None
+    mark_player_session_last_seen(players[sid])
     nickname = players[sid]['nickname']
     room_id = players[sid].get('room_id')
     spectating_room = players[sid].get('spectating_room')
@@ -3741,6 +3759,11 @@ def api_auth_change_password():
 
 @app.route('/api/auth/logout', methods=['POST'])
 def api_auth_logout():
+    if DB_AVAILABLE and session.get('user_id'):
+        try:
+            mark_user_last_seen(session.get('user_id'))
+        except Exception as exc:
+            admin_event('error', f"failed to update last seen on logout: {exc}")
     session.pop('user_id', None)
     session.pop('username', None)
     return jsonify({'success': True})
@@ -3775,7 +3798,8 @@ def api_social_friends():
     user_id, _, auth_error = _require_account_json()
     if auth_error:
         return auth_error
-    data, error = list_friends(user_id)
+    mark_read = str(request.args.get('mark_read') or '').lower() in ('1', 'true', 'yes')
+    data, error = list_friends(user_id, mark_read=mark_read)
     if error:
         return jsonify({'success': False, 'error': error}), 400
     return jsonify({'success': True, **(data or {})})
@@ -4400,6 +4424,7 @@ def on_login(data):
             'mode': preferred_mode,
             'is_admin_player': is_admin_player,
             'user_id': user_id,
+            'account_player_id': account_user.get('player_id') if account_user else '',
             'is_registered_user': is_registered_user,
             'mod_source': community_fields.get('mod_source', 'official'),
             'community_mod_url': community_fields.get('community_mod_url', ''),
@@ -4748,6 +4773,7 @@ def on_disconnect():
         if sid not in players:
             return
         player = players[sid]
+        mark_player_session_last_seen(player)
         solo_sessions.pop(sid, None)
         tutorial_sessions.discard(sid)
         room_id = player.get('room_id')
@@ -4762,6 +4788,7 @@ def on_disconnect():
                     'player_index': pidx,
                     'disconnect_time': time.time(),
                     'user_id': player.get('user_id'),
+                    'account_player_id': player.get('account_player_id') or '',
                     'is_registered_user': bool(player.get('is_registered_user')),
                     'mod_source': player.get('mod_source', 'official'),
                     'community_mod_hash': player.get('community_mod_hash', ''),

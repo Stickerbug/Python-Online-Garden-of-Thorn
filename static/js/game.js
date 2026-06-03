@@ -17,6 +17,11 @@ const I18N = {
         draft_waiting: 'Waiting for opponent to finish drafting', draft_cost: 'Cost', select_this_event: 'Select This Event',
         event_selected: 'Event selected: {0}', event_waiting: 'Waiting for opponent to select an event', drag_to_play: 'Drag to Play',
         drag_to_play_full: 'Drag here to play', tap_play_hint: 'Tap a card, then confirm to play', confirm_play: 'Play {0}', cancel_play: 'Cancel',
+        classic_select_card: 'Choose a card',
+        classic_play_center: 'Click the stage to play',
+        classic_target_enemy: 'Click opponent to play',
+        classic_target_self: 'Click yourself to play',
+        classic_equip_stage: 'Click your side to equip',
         cannot_play: 'Cannot Play', enemy_attack: 'Enemy Attack', enemy_skill: 'Enemy Skill', enemy_destroy_equip: ', destroys equipment',
         use_card: 'Use', insufficient_resources: 'Insufficient resources', choose_attack_for: 'Choose an attack for {0}', choose_equip_for: 'Choose equipment',
         choose_discard_for: 'Choose a discard for {0}', choose_from_deck_for: 'Choose from deck', choose_from_discard_for: 'Choose from discard for {0}',
@@ -120,6 +125,11 @@ I18N.zh = { ...I18N.en,
     draft_cost: '费用', select_this_event: '选择此事件', event_selected: '已选择事件：{0}', event_waiting: '等待对方选择事件',
     drag_to_play: '拖动打出', cannot_play: '无法打出', enemy_attack: '敌方攻击', enemy_skill: '敌方技能', enemy_destroy_equip: '，摧毁装备',
     drag_to_play_full: '拖动到此处以出牌', tap_play_hint: '点击手牌后确认出牌', confirm_play: '打出 {0}', cancel_play: '取消出牌',
+    classic_select_card: '选择一张手牌',
+    classic_play_center: '点击战场打出',
+    classic_target_enemy: '点击对手使用',
+    classic_target_self: '点击自己使用',
+    classic_equip_stage: '点击己方装备',
     use_card: '使用', insufficient_resources: '资源不足', choose_attack_for: '为 {0} 选择攻击牌', choose_equip_for: '选择装备牌',
     choose_discard_for: '为 {0} 选择弃牌', choose_from_deck_for: '从牌堆选择', choose_from_discard_for: '为 {0} 从弃牌堆选择', choose_hand_for: '为 {0} 从手牌选择',
     choose_from_enemy_hand_for: '从敌方手牌选择', choose_attack_group_for: '为 {0} 选择攻击组', no_attack_cards: '没有攻击牌', no_enemy_equipment: '对方没有装备',
@@ -1046,68 +1056,74 @@ Object.assign(I18N.ja, {
 Object.assign(I18N.en, {
     friends: 'Friends', player_id: 'ID', friend_add_placeholder: 'Nickname or ID', friend_add: 'Add',
     friend_requests: 'Friend Requests', friend_sent: 'Sent', friend_list: 'My Friends',
-    friend_accept: 'Accept', friend_decline: 'Decline', friend_remove: 'Remove',
+    friend_accept: 'Accept', friend_decline: 'Decline', friend_ignore: 'Ignore', friend_remove: 'Remove',
     friend_empty: 'No friends yet.', friend_request_empty: 'No pending requests.', friend_sent_empty: 'No sent requests.',
     friend_added: 'Friend request sent', friend_removed: 'Friend removed', friend_updated: 'Updated',
+    friend_auto_added: '{0} added you as a friend',
     social: 'Social', social_login_hint: 'Sign in to use social settings.',
     social_accept_requests: 'Accept friend requests', social_search_nickname: 'Allow adding me by nickname',
     social_search_id: 'Allow adding me by ID', social_settings_saved: 'Social settings saved',
-    last_login: 'Last login: {0}', win_rate: 'Win rate: {0}%', recent_matches: 'Recent matches'
+    last_login: 'Last seen: {0}', win_rate: 'Win rate: {0}%', recent_matches: 'Recent matches'
 });
 Object.assign(I18N.zh, {
     friends: '好友', player_id: 'ID', friend_add_placeholder: '输入昵称或ID', friend_add: '添加',
     friend_requests: '好友请求', friend_sent: '已发送', friend_list: '我的好友',
-    friend_accept: '同意', friend_decline: '拒绝', friend_remove: '删除',
+    friend_accept: '同意', friend_decline: '拒绝', friend_ignore: '忽略', friend_remove: '删除',
     friend_empty: '暂无好友。', friend_request_empty: '暂无好友请求。', friend_sent_empty: '暂无已发送请求。',
     friend_added: '好友请求已发送', friend_removed: '好友已删除', friend_updated: '已更新',
+    friend_auto_added: '{0}已加你为好友',
     social: '社交', social_login_hint: '登录账号后可以使用社交设置。',
     social_accept_requests: '接受好友请求', social_search_nickname: '允许通过昵称添加我',
     social_search_id: '允许通过ID添加我', social_settings_saved: '社交设置已保存',
-    last_login: '上次登录：{0}', win_rate: '胜率：{0}%', recent_matches: '最近对局'
+    last_login: '上次下线：{0}', win_rate: '胜率：{0}%', recent_matches: '最近对局'
 });
 Object.assign(I18N.fr, {
     friends: 'Amis', player_id: 'ID', friend_add_placeholder: 'Pseudo ou ID', friend_add: 'Ajouter',
     friend_requests: 'Demandes', friend_sent: 'Envoyées', friend_list: 'Mes amis',
-    friend_accept: 'Accepter', friend_decline: 'Refuser', friend_remove: 'Retirer',
+    friend_accept: 'Accepter', friend_decline: 'Refuser', friend_ignore: 'Ignorer', friend_remove: 'Retirer',
     friend_empty: 'Aucun ami.', friend_request_empty: 'Aucune demande.', friend_sent_empty: 'Aucune demande envoyée.',
     friend_added: 'Demande envoyée', friend_removed: 'Ami retiré', friend_updated: 'Mis à jour',
+    friend_auto_added: '{0} vous a ajouté en ami',
     social: 'Social', social_login_hint: 'Connectez-vous pour utiliser les réglages sociaux.',
     social_accept_requests: 'Accepter les demandes', social_search_nickname: 'Autoriser par pseudo',
     social_search_id: 'Autoriser par ID', social_settings_saved: 'Réglages enregistrés',
-    last_login: 'Dernière connexion : {0}', win_rate: 'Taux de victoire : {0}%', recent_matches: 'Parties récentes'
+    last_login: 'Dernière activité : {0}', win_rate: 'Taux de victoire : {0}%', recent_matches: 'Parties récentes'
 });
 Object.assign(I18N.pt, {
     friends: 'Amigos', player_id: 'ID', friend_add_placeholder: 'Apelido ou ID', friend_add: 'Adicionar',
     friend_requests: 'Pedidos', friend_sent: 'Enviados', friend_list: 'Meus amigos',
-    friend_accept: 'Aceitar', friend_decline: 'Recusar', friend_remove: 'Remover',
+    friend_accept: 'Aceitar', friend_decline: 'Recusar', friend_ignore: 'Ignorar', friend_remove: 'Remover',
     friend_empty: 'Sem amigos.', friend_request_empty: 'Sem pedidos.', friend_sent_empty: 'Sem pedidos enviados.',
     friend_added: 'Pedido enviado', friend_removed: 'Amigo removido', friend_updated: 'Atualizado',
+    friend_auto_added: '{0} adicionou você como amigo',
     social: 'Social', social_login_hint: 'Entre para usar configurações sociais.',
     social_accept_requests: 'Aceitar pedidos', social_search_nickname: 'Permitir por apelido',
     social_search_id: 'Permitir por ID', social_settings_saved: 'Configurações salvas',
-    last_login: 'Último login: {0}', win_rate: 'Vitórias: {0}%', recent_matches: 'Partidas recentes'
+    last_login: 'Visto por último: {0}', win_rate: 'Vitórias: {0}%', recent_matches: 'Partidas recentes'
 });
 Object.assign(I18N.ru, {
     friends: 'Друзья', player_id: 'ID', friend_add_placeholder: 'Имя или ID', friend_add: 'Добавить',
     friend_requests: 'Запросы', friend_sent: 'Отправлено', friend_list: 'Мои друзья',
-    friend_accept: 'Принять', friend_decline: 'Отклонить', friend_remove: 'Удалить',
+    friend_accept: 'Принять', friend_decline: 'Отклонить', friend_ignore: 'Игнорировать', friend_remove: 'Удалить',
     friend_empty: 'Друзей нет.', friend_request_empty: 'Запросов нет.', friend_sent_empty: 'Нет отправленных запросов.',
     friend_added: 'Запрос отправлен', friend_removed: 'Друг удалён', friend_updated: 'Обновлено',
+    friend_auto_added: '{0} добавил вас в друзья',
     social: 'Соц.', social_login_hint: 'Войдите, чтобы использовать социальные настройки.',
     social_accept_requests: 'Принимать запросы', social_search_nickname: 'Разрешить по имени',
     social_search_id: 'Разрешить по ID', social_settings_saved: 'Настройки сохранены',
-    last_login: 'Последний вход: {0}', win_rate: 'Победы: {0}%', recent_matches: 'Последние матчи'
+    last_login: 'Последний выход: {0}', win_rate: 'Победы: {0}%', recent_matches: 'Последние матчи'
 });
 Object.assign(I18N.ja, {
     friends: 'フレンド', player_id: 'ID', friend_add_placeholder: '名前またはID', friend_add: '追加',
     friend_requests: '申請', friend_sent: '送信済み', friend_list: 'フレンド',
-    friend_accept: '承認', friend_decline: '拒否', friend_remove: '削除',
+    friend_accept: '承認', friend_decline: '拒否', friend_ignore: '無視', friend_remove: '削除',
     friend_empty: 'フレンドはいません。', friend_request_empty: '申請はありません。', friend_sent_empty: '送信済み申請はありません。',
     friend_added: '申請を送信しました', friend_removed: '削除しました', friend_updated: '更新しました',
+    friend_auto_added: '{0}があなたをフレンドに追加しました',
     social: 'ソーシャル', social_login_hint: 'ログインするとソーシャル設定を使えます。',
     social_accept_requests: 'フレンド申請を受け取る', social_search_nickname: '名前で追加を許可',
     social_search_id: 'IDで追加を許可', social_settings_saved: '設定を保存しました',
-    last_login: '最終ログイン: {0}', win_rate: '勝率: {0}%', recent_matches: '最近の対戦'
+    last_login: '最終退出: {0}', win_rate: '勝率: {0}%', recent_matches: '最近の対戦'
 });
 Object.assign(I18N.en, {
     account_replays: 'Recent Replays', replay_viewer: 'Replay Viewer', replay_view: 'View',
@@ -2049,7 +2065,7 @@ let nickname = '';
 let loginCredential = '';
 let currentAccount = loadCachedAccount();
 let accountMode = 'login';
-let socialData = { friends: [], incoming: [], outgoing: [], settings: null };
+let socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
 let accountReplayItems = [];
 let accountReplayTimeline = [];
 let accountReplayFrameIndex = 0;
@@ -3448,6 +3464,46 @@ function selectPlayCardForConfirm(cardInstanceId) {
     bar.classList.remove('hidden');
     if (shouldUseClassicBattle(gameState)) renderClassicBattle(gameState);
     return true;
+}
+
+function selectClassicPlayCard(cardInstanceId) {
+    if (!shouldUseClassicBattle(gameState) || isActionBusy()) return false;
+    const hand = (gameState.you || {}).hand || [];
+    const cardDict = hand.find(c => c.instance_id === cardInstanceId);
+    const cardDef = cardDict ? getCardDef(cardDict.def_id) : null;
+    if (!cardDict || !cardDef || !canPlayCard(cardDict)) {
+        if (cardDict) flashStatus(getCannotPlayReason(cardDict), 2200, 'error');
+        return false;
+    }
+    if (selectedPlayCardId === cardInstanceId) {
+        classicPlaySelectedCard();
+        return true;
+    }
+    selectedPlayCardId = cardInstanceId;
+    document.querySelectorAll('.card.tap-selected').forEach(el => el.classList.remove('tap-selected'));
+    const cardEl = document.querySelector(`.card[data-instance-id="${cardInstanceId}"]`);
+    if (cardEl) cardEl.classList.add('tap-selected');
+    renderClassicBattle(gameState);
+    return true;
+}
+
+async function classicPlaySelectedCard() {
+    if (!shouldUseClassicBattle(gameState) || isActionBusy()) return false;
+    const id = selectedPlayCardId;
+    if (id == null) return false;
+    await onPlayCard(id, { confirmed: true });
+    return true;
+}
+
+function classicCanPlayFromElement(elementId) {
+    if (elementId === 'classic-play-lane') return true;
+    const hand = (gameState && gameState.you && gameState.you.hand) || [];
+    const cardDict = hand.find(c => c.instance_id === selectedPlayCardId);
+    const cardDef = cardDict ? getCardDef(cardDict.def_id) : null;
+    const role = getClassicPlayRole(cardDef ? normalizeBattleCard(cardDict, gameState.you || {}) : null);
+    if (elementId === 'classic-fighter-enemy') return role === 'enemy';
+    if (elementId === 'classic-fighter-self') return role === 'self' || role === 'equip';
+    return false;
 }
 
 function showModal(html) {
@@ -5233,6 +5289,7 @@ async function refreshAuthMe() {
         currentAccount = currentAccount || loadCachedAccount();
     }
     renderAccountState();
+    if (currentAccount) loadFriends(false);
 }
 
 async function onAccountLogin() {
@@ -5247,6 +5304,7 @@ async function onAccountLogin() {
         accountMode = 'login';
         clearAccountPasswordInputs();
         renderAccountState();
+        loadFriends(false);
         loadAccountReplays();
     } catch (err) {
         setAccountError(err.message || UI.account_error);
@@ -5268,6 +5326,7 @@ async function onAccountRegister() {
         accountMode = 'login';
         clearAccountPasswordInputs();
         renderAccountState();
+        loadFriends(false);
         loadAccountReplays();
     } catch (err) {
         setAccountError(err.message || UI.account_error);
@@ -5303,7 +5362,7 @@ async function onAccountLogout() {
         await authRequest('/api/auth/logout', {});
     } catch (_) {}
     currentAccount = null;
-    socialData = { friends: [], incoming: [], outgoing: [], settings: null };
+    socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
     accountReplayItems = [];
     accountReplayTimeline = [];
     closeAccountReplayModal();
@@ -5354,26 +5413,31 @@ function friendStatsLine(user) {
 function friendCardHtml(item, type) {
     const user = item?.user || {};
     const matches = Array.isArray(item?.matches) ? item.matches : [];
+    const isNotice = item?.notice_type === 'auto_add' || item?.status === 'notice';
+    const showPrivateInfo = type === 'friend';
     const matchText = matches.length
         ? matches.slice(0, 3).map(match => escapeHtml(`${match.mode || '-'} ${match.result || ''} ${friendDateText(match.ended_at || match.started_at)}`)).join('<br>')
         : escapeHtml(`${UI.recent_matches}: -`);
     let actions = '';
-    if (type === 'incoming') {
+    if (type === 'incoming' && !isNotice) {
         actions = `
           <button class="mini-btn" type="button" data-friend-respond="${escapeHtml(item.request_id)}" data-friend-action="accept">${escapeHtml(UI.friend_accept)}</button>
-          <button class="mini-btn" type="button" data-friend-respond="${escapeHtml(item.request_id)}" data-friend-action="decline">${escapeHtml(UI.friend_decline)}</button>`;
+          <button class="mini-btn" type="button" data-friend-respond="${escapeHtml(item.request_id)}" data-friend-action="decline">${escapeHtml(UI.friend_decline)}</button>
+          <button class="mini-btn" type="button" data-friend-respond="${escapeHtml(item.request_id)}" data-friend-action="ignore">${escapeHtml(UI.friend_ignore)}</button>`;
     } else if (type === 'friend') {
         actions = `<button class="mini-btn" type="button" data-friend-remove="${escapeHtml(user.id)}">${escapeHtml(UI.friend_remove)}</button>`;
     }
+    const noticeText = isNotice ? `<div class="friend-sub friend-notice">${escapeHtml(tf('friend_auto_added', user.username || '-'))}</div>` : '';
     return `
       <div class="friend-card">
         <div class="friend-card-head">
           <span class="friend-name">${escapeHtml(user.username || '-')}</span>
           <span class="friend-id">${escapeHtml(user.player_id || '')}</span>
         </div>
-        <div class="friend-sub">${escapeHtml(friendStatsLine(user))}</div>
-        <div class="friend-sub">${escapeHtml(tf('last_login', friendDateText(user.last_login_at)))}</div>
-        ${type === 'friend' ? `<div class="friend-sub"><b>${escapeHtml(UI.recent_matches)}</b><br>${matchText}</div>` : ''}
+        ${noticeText}
+        ${showPrivateInfo ? `<div class="friend-sub">${escapeHtml(friendStatsLine(user))}</div>` : ''}
+        ${showPrivateInfo ? `<div class="friend-sub">${escapeHtml(tf('last_login', friendDateText(user.last_login_at)))}</div>` : ''}
+        ${showPrivateInfo ? `<div class="friend-sub"><b>${escapeHtml(UI.recent_matches)}</b><br>${matchText}</div>` : ''}
         ${actions ? `<div class="friend-actions">${actions}</div>` : ''}
       </div>`;
 }
@@ -5393,6 +5457,7 @@ function renderFriendsState() {
     renderFriendSection('friend-incoming-list', socialData.incoming, UI.friend_request_empty, 'incoming');
     renderFriendSection('friend-outgoing-list', socialData.outgoing, UI.friend_sent_empty, 'outgoing');
     renderFriendSection('friends-list', socialData.friends, UI.friend_empty, 'friend');
+    updateFriendsBadge();
 }
 
 function setFriendsError(message) {
@@ -5400,19 +5465,34 @@ function setFriendsError(message) {
     if (el) el.textContent = message || '';
 }
 
-async function loadFriends() {
+function updateFriendsBadge() {
+    const btn = $('btn-friends-top');
+    if (!btn) return;
+    const count = Number(socialData.unread_count || 0);
+    if (count > 0) {
+        btn.dataset.badge = count > 99 ? '99+' : String(count);
+        btn.classList.add('has-badge');
+    } else {
+        delete btn.dataset.badge;
+        btn.classList.remove('has-badge');
+    }
+}
+
+async function loadFriends(markRead = false) {
     if (!currentAccount) {
-        socialData = { friends: [], incoming: [], outgoing: [], settings: null };
+        socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
         renderFriendsState();
         return;
     }
     try {
-        const data = await authRequest('/api/social/friends');
+        const suffix = markRead ? '?mark_read=1' : '';
+        const data = await authRequest(`/api/social/friends${suffix}`);
         socialData = {
             friends: Array.isArray(data.friends) ? data.friends : [],
             incoming: Array.isArray(data.incoming) ? data.incoming : [],
             outgoing: Array.isArray(data.outgoing) ? data.outgoing : [],
             settings: data.settings || null,
+            unread_count: Number(data.unread_count || 0),
         };
         if (socialData.settings && currentAccount) {
             currentAccount = { ...currentAccount, ...socialData.settings };
@@ -5437,6 +5517,7 @@ async function addFriendFromInput() {
             incoming: Array.isArray(data.incoming) ? data.incoming : [],
             outgoing: Array.isArray(data.outgoing) ? data.outgoing : [],
             settings: data.settings || socialData.settings,
+            unread_count: Number(data.unread_count || 0),
         };
         if (input) input.value = '';
         setFriendsError(UI.friend_added);
@@ -5454,6 +5535,7 @@ async function respondFriendRequest(requestId, action) {
             incoming: Array.isArray(data.incoming) ? data.incoming : [],
             outgoing: Array.isArray(data.outgoing) ? data.outgoing : [],
             settings: data.settings || socialData.settings,
+            unread_count: Number(data.unread_count || 0),
         };
         setFriendsError(UI.friend_updated);
         renderFriendsState();
@@ -5470,6 +5552,7 @@ async function removeFriend(userId) {
             incoming: Array.isArray(data.incoming) ? data.incoming : [],
             outgoing: Array.isArray(data.outgoing) ? data.outgoing : [],
             settings: data.settings || socialData.settings,
+            unread_count: Number(data.unread_count || 0),
         };
         setFriendsError(UI.friend_removed);
         renderFriendsState();
@@ -5485,7 +5568,7 @@ function toggleFriendsPopover(force) {
     pop.classList.toggle('hidden', !show);
     if (show) {
         toggleAccountPopover(false);
-        loadFriends();
+        loadFriends(true);
     }
 }
 
@@ -7449,6 +7532,44 @@ function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e
     if (!total) container.textContent = '0';
 }
 
+function getClassicPlayRole(card) {
+    const type = card && card.card_type;
+    if (type === 'thorn') return 'enemy';
+    if (type === 'root') return 'equip';
+    if (type === 'bloom') {
+        const cardDef = card.cardDef || getCardDef(card.def_id || '');
+        const effectText = JSON.stringify((cardDef && cardDef.effects) || []);
+        if (/"target"\s*:\s*"(enemy|target|all_enemies)"/i.test(effectText)) return 'enemy';
+        return 'self';
+    }
+    return 'stage';
+}
+
+function getClassicPlayHint(card) {
+    if (!card) return UI.classic_select_card || UI.your_turn;
+    const role = getClassicPlayRole(card);
+    if (role === 'enemy') return UI.classic_target_enemy || UI.drag_to_play;
+    if (role === 'self') return UI.classic_target_self || UI.drag_to_play;
+    if (role === 'equip') return UI.classic_equip_stage || UI.drag_to_play;
+    return UI.classic_play_center || UI.drag_to_play;
+}
+
+function renderClassicPlayLane(vm) {
+    const lane = $('classic-play-lane');
+    if (!lane) return;
+    const selected = vm && vm.selectedCard;
+    const role = getClassicPlayRole(selected);
+    lane.classList.toggle('is-armed', !!selected);
+    lane.classList.toggle('is-equip-role', role === 'equip');
+    lane.classList.toggle('is-self-role', role === 'self');
+    lane.classList.toggle('is-enemy-role', role === 'enemy');
+    const text = selected ? getClassicPlayHint(selected) : (UI.classic_select_card || UI.drag_to_play);
+    lane.innerHTML = `
+        <div class="classic-lane-mark" aria-hidden="true"></div>
+        <div class="classic-lane-text">${escapeHtml(text)}</div>
+    `;
+}
+
 function getClassicCardImageUrl(card) {
     const defId = card && card.def_id ? String(card.def_id) : 'default';
     return (card && (card.image_url || card.image)) || `/static/cards/${encodeURIComponent(defId)}.webp`;
@@ -7478,13 +7599,20 @@ function renderClassicCardPreview(card) {
     preview.classList.remove('hidden');
 }
 
-function renderClassicFighter(container, player, side) {
+function renderClassicFighter(container, player, side, selectedCard = null) {
     if (!container) return;
     const hpPct = player.maxHp > 0 ? Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100)) : 0;
+    const role = getClassicPlayRole(selectedCard);
     container.classList.toggle('is-current', !!player.isCurrent);
     container.classList.toggle('is-defeated', !!player.isDefeated);
+    container.classList.toggle('is-play-target', !!selectedCard && (role === side || (role === 'enemy' && side === 'enemy') || (role === 'self' && side === 'self')));
+    container.classList.toggle('is-soft-target', !!selectedCard && role === 'equip' && side === 'self');
+    const intentText = side === 'enemy'
+        ? (player.isCurrent ? (UI.opponent_turn || 'Opponent') : (selectedCard && role === 'enemy' ? (UI.classic_target_enemy || '') : ''))
+        : (player.isCurrent ? (UI.your_turn || 'Your turn') : (selectedCard && (role === 'self' || role === 'equip') ? getClassicPlayHint(selectedCard) : ''));
     container.innerHTML = `
         <div class="classic-fighter-name">${escapeHtml(player.name || '?')}</div>
+        ${intentText ? `<div class="classic-intent-badge">${escapeHtml(intentText)}</div>` : '<div class="classic-intent-badge is-empty"></div>'}
         ${renderPlayerAvatar(player)}
         <div class="classic-hp-wrap">
             <div class="classic-hp-track"><div class="classic-hp-fill" style="width:${hpPct}%"></div></div>
@@ -7520,9 +7648,9 @@ function renderClassicHand(vm) {
         if (!playable) wrap.classList.add('card-disabled');
         if (selectedPlayCardId === card.instance_id) wrap.classList.add('is-selected');
         const cardEl = createCardElement(card.raw || card, {
-            draggable: playable && card.card_type !== 'guard',
+            draggable: false,
             onClick: playable
-                ? () => selectPlayCardForConfirm(card.instance_id)
+                ? () => selectClassicPlayCard(card.instance_id)
                 : () => flashStatus(getCannotPlayReason(card.raw || card), 2200, 'error'),
         });
         cardEl.classList.add('classic-fan-card-inner');
@@ -7564,18 +7692,24 @@ function renderClassicBattle(gs) {
         root.classList.remove('hidden');
         root.setAttribute('aria-hidden', 'false');
         oldContainer.classList.add('classic-battle-hidden');
+        const selected = vm.selectedCard;
+        const selectedRole = getClassicPlayRole(selected);
+        const missingResource = !!selected && ((Number(selected.cost_e || 0) > Number(vm.self.e || 0)) || (Number(selected.cost_m || 0) > Number(vm.self.m || 0)));
+        root.classList.toggle('has-selected-card', !!selected);
+        root.classList.toggle('has-missing-resource', missingResource);
+        root.dataset.selectedRole = selected ? selectedRole : '';
         $('classic-mode').textContent = vm.turn.modeText || '1v1';
         $('classic-round').textContent = `R${vm.turn.round || 0}`;
         $('classic-phase').textContent = vm.turn.phaseText || '';
-        $('classic-action-hint').textContent = vm.turn.isMyTurn ? UI.your_turn : UI.opponent_turn;
-        const selected = vm.selectedCard;
+        $('classic-action-hint').textContent = selected ? getClassicPlayHint(selected) : (vm.turn.isMyTurn ? UI.your_turn : UI.opponent_turn);
         renderClassicResourceOrbs($('classic-e-orbs'), vm.self.e, vm.self.maxE, selected ? selected.cost_e : 0, 'e');
         renderClassicResourceOrbs($('classic-m-orbs'), vm.self.m, vm.self.maxM, selected ? selected.cost_m : 0, 'm');
         $('classic-deck-count').textContent = `▣${vm.deckCount}`;
         $('classic-discard-count').textContent = `⟲${vm.discardCount}`;
         $('classic-exile-count').textContent = `◇${vm.exileCount}`;
-        renderClassicFighter($('classic-fighter-self'), vm.self, 'self');
-        renderClassicFighter($('classic-fighter-enemy'), vm.enemy, 'enemy');
+        renderClassicFighter($('classic-fighter-self'), vm.self, 'self', selected);
+        renderClassicFighter($('classic-fighter-enemy'), vm.enemy, 'enemy', selected);
+        renderClassicPlayLane(vm);
         const responseEl = $('classic-stage-response');
         if (responseEl) {
             const waiting = !!vm.pendingResponse || responsePending;
@@ -11225,6 +11359,15 @@ async function init() {
     $('btn-end-turn').addEventListener('click', onEndTurn);
     if ($('classic-end-turn')) $('classic-end-turn').addEventListener('click', onEndTurn);
     if ($('classic-settings')) $('classic-settings').addEventListener('click', () => openSettings({ hideServer: true }));
+    ['classic-play-lane', 'classic-fighter-self', 'classic-fighter-enemy'].forEach(id => {
+        const el = $(id);
+        if (el) el.addEventListener('click', (event) => {
+            if (shouldUseClassicBattle(gameState) && selectedPlayCardId != null && classicCanPlayFromElement(id)) {
+                event.preventDefault();
+                classicPlaySelectedCard();
+            }
+        });
+    });
     if ($('classic-log-toggle')) {
         $('classic-log-toggle').addEventListener('click', () => {
             const drawer = $('classic-log-drawer');

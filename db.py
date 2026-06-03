@@ -3,7 +3,7 @@ import os
 import secrets
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -17,10 +17,20 @@ PLAYER_ID_BLACKLIST_PATH = os.environ.get(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), 'playerid_blacklist.txt'),
 )
 _PLAYER_ID_BLACKLIST_CACHE = None
+FRIEND_REQUEST_TTL_DAYS = 30
+AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
 
 
 def utc_now():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+
+
+def utc_now_dt():
+    return datetime.now(timezone.utc).replace(microsecond=0)
+
+
+def utc_iso(value):
+    return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
 
 
 def get_db_connection():
@@ -161,14 +171,25 @@ def init_db():
                 status TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
+                expires_at TEXT,
+                addressee_read_at TEXT,
+                notice_type TEXT DEFAULT 'request',
                 UNIQUE(requester_id, addressee_id),
                 FOREIGN KEY(requester_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY(addressee_id) REFERENCES users(id) ON DELETE CASCADE
             )
             '''
         )
+        friendship_columns = {row['name'] for row in conn.execute('PRAGMA table_info(friendships)').fetchall()}
+        if 'expires_at' not in friendship_columns:
+            conn.execute('ALTER TABLE friendships ADD COLUMN expires_at TEXT')
+        if 'addressee_read_at' not in friendship_columns:
+            conn.execute('ALTER TABLE friendships ADD COLUMN addressee_read_at TEXT')
+        if 'notice_type' not in friendship_columns:
+            conn.execute("ALTER TABLE friendships ADD COLUMN notice_type TEXT DEFAULT 'request'")
         conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships(requester_id, status)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id, status)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_unread ON friendships(addressee_id, status, addressee_read_at)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS matches (
@@ -384,11 +405,18 @@ def verify_user(username, password):
         if is_banned:
             reason = (row['ban_reason'] if 'ban_reason' in row.keys() else '') or ''
             return None, f'账号已被封禁：{reason}' if reason else '账号已被封禁'
-        now = utc_now()
-        conn.execute('UPDATE users SET last_login_at = ? WHERE id = ?', (now, row['id']))
-        conn.commit()
-        row = conn.execute('SELECT * FROM users WHERE id = ?', (row['id'],)).fetchone()
         return row_to_user(row), None
+
+
+def mark_user_last_seen(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return False
+    with get_db_connection() as conn:
+        conn.execute('UPDATE users SET last_login_at = ? WHERE id = ?', (utc_now(), uid))
+        conn.commit()
+        return True
 
 
 def change_user_password(user_id, old_password, new_password):
@@ -624,6 +652,68 @@ def _public_social_user(row):
     }
 
 
+def _basic_social_user(row):
+    user = row_to_user(row)
+    if not user:
+        return None
+    return {
+        'id': user['id'],
+        'username': user['username'],
+        'player_id': user.get('player_id'),
+    }
+
+
+def _cleanup_expired_friend_requests(conn):
+    cutoff = utc_iso(utc_now_dt() - timedelta(days=FRIEND_REQUEST_TTL_DAYS))
+    conn.execute(
+        '''
+        DELETE FROM friendships
+        WHERE status = ? AND (
+            (expires_at IS NOT NULL AND expires_at < ?)
+            OR (expires_at IS NULL AND created_at < ?)
+        )
+        ''',
+        ('pending', cutoff, cutoff),
+    )
+
+
+def _friend_request_expires_at():
+    return utc_iso(utc_now_dt() + timedelta(days=FRIEND_REQUEST_TTL_DAYS))
+
+
+def _is_auto_friend_requester(row):
+    name = str(row['username'] if row is not None and 'username' in row.keys() else '').strip().lower()
+    return name in AUTO_FRIEND_REQUESTER_NAMES
+
+
+def _mark_friend_notifications_read(conn, user_id):
+    now = utc_now()
+    conn.execute(
+        '''
+        UPDATE friendships
+        SET addressee_read_at = COALESCE(addressee_read_at, ?)
+        WHERE addressee_id = ?
+          AND addressee_read_at IS NULL
+          AND (status = ? OR notice_type = ?)
+        ''',
+        (now, user_id, 'pending', 'auto_add'),
+    )
+
+
+def _friend_unread_count(conn, user_id):
+    row = conn.execute(
+        '''
+        SELECT COUNT(*) AS count
+        FROM friendships
+        WHERE addressee_id = ?
+          AND addressee_read_at IS NULL
+          AND (status = ? OR notice_type = ?)
+        ''',
+        (user_id, 'pending', 'auto_add'),
+    ).fetchone()
+    return int(row['count'] or 0) if row else 0
+
+
 def _recent_matches_for_username(conn, username, limit=5):
     pattern = f'%"{username}"%'
     rows = conn.execute(
@@ -698,7 +788,7 @@ def _find_social_target(conn, identifier):
     return None
 
 
-def list_friends(user_id):
+def list_friends(user_id, mark_read=False):
     try:
         uid = int(user_id)
     except (TypeError, ValueError):
@@ -707,18 +797,20 @@ def list_friends(user_id):
         self_row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         if self_row is None:
             return None, '请先登录账号'
+        _cleanup_expired_friend_requests(conn)
+        if mark_read:
+            _mark_friend_notifications_read(conn, uid)
+        conn.commit()
         rows = conn.execute(
             '''
-            SELECT f.*, u1.username AS requester_name, u1.player_id AS requester_player_id,
-                   u2.username AS addressee_name, u2.player_id AS addressee_player_id
+            SELECT f.*
             FROM friendships f
-            JOIN users u1 ON u1.id = f.requester_id
-            JOIN users u2 ON u2.id = f.addressee_id
             WHERE f.requester_id = ? OR f.addressee_id = ?
             ORDER BY f.updated_at DESC, f.id DESC
             ''',
             (uid, uid),
         ).fetchall()
+        unread_count = _friend_unread_count(conn, uid)
         friends = []
         incoming = []
         outgoing = []
@@ -730,14 +822,19 @@ def list_friends(user_id):
             item = {
                 'request_id': row['id'],
                 'status': row['status'],
+                'notice_type': row['notice_type'] if 'notice_type' in row.keys() else 'request',
+                'is_unread': row['addressee_id'] == uid and not (row['addressee_read_at'] if 'addressee_read_at' in row.keys() else None),
                 'direction': 'incoming' if row['addressee_id'] == uid else 'outgoing',
-                'user': _public_social_user(other),
+                'user': _public_social_user(other) if row['status'] == 'accepted' else _basic_social_user(other),
                 'matches': _recent_matches_for_username(conn, other['username'], 5) if row['status'] == 'accepted' else [],
                 'created_at': row['created_at'],
                 'updated_at': row['updated_at'],
+                'expires_at': row['expires_at'] if 'expires_at' in row.keys() else None,
             }
             if row['status'] == 'accepted':
                 friends.append(item)
+                if item['notice_type'] == 'auto_add' and row['addressee_id'] == uid:
+                    incoming.append({**item, 'status': 'notice'})
             elif row['status'] == 'pending' and row['addressee_id'] == uid:
                 incoming.append(item)
             elif row['status'] == 'pending':
@@ -747,6 +844,7 @@ def list_friends(user_id):
             'friends': friends,
             'incoming': incoming,
             'outgoing': outgoing,
+            'unread_count': unread_count,
         }, None
 
 
@@ -757,6 +855,7 @@ def add_friend_request(user_id, identifier):
         return None, '请先登录账号'
     now = utc_now()
     with get_db_connection() as conn:
+        _cleanup_expired_friend_requests(conn)
         requester = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         if requester is None:
             return None, '请先登录账号'
@@ -765,7 +864,8 @@ def add_friend_request(user_id, identifier):
             return None, '账号不存在'
         if int(target['id']) == uid:
             return None, '不能添加自己为好友'
-        if not bool(target['accept_friend_requests']):
+        auto_add = _is_auto_friend_requester(requester)
+        if not auto_add and not bool(target['accept_friend_requests']):
             return None, '对方暂不接受好友请求'
         existing = conn.execute(
             '''
@@ -782,18 +882,35 @@ def add_friend_request(user_id, identifier):
                 return list_friends(uid)[0], None
             if existing['status'] == 'pending' and existing['addressee_id'] == uid:
                 conn.execute(
-                    'UPDATE friendships SET status = ?, updated_at = ? WHERE id = ?',
-                    ('accepted', now, existing['id']),
+                    'UPDATE friendships SET status = ?, updated_at = ?, addressee_read_at = COALESCE(addressee_read_at, ?) WHERE id = ?',
+                    ('accepted', now, now, existing['id']),
+                )
+                conn.commit()
+                return list_friends(uid)[0], None
+            if auto_add:
+                conn.execute(
+                    '''
+                    UPDATE friendships
+                    SET status = ?, updated_at = ?, notice_type = ?, expires_at = NULL, addressee_read_at = NULL
+                    WHERE id = ?
+                    ''',
+                    ('accepted', now, 'auto_add', existing['id']),
                 )
                 conn.commit()
                 return list_friends(uid)[0], None
             return list_friends(uid)[0], None
+        status = 'accepted' if auto_add else 'pending'
+        notice_type = 'auto_add' if auto_add else 'request'
+        expires_at = None if auto_add else _friend_request_expires_at()
         conn.execute(
             '''
-            INSERT INTO friendships (requester_id, addressee_id, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO friendships (
+                requester_id, addressee_id, status, created_at, updated_at,
+                expires_at, addressee_read_at, notice_type
+            )
+            VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
             ''',
-            (uid, target['id'], 'pending', now, now),
+            (uid, target['id'], status, now, now, expires_at, notice_type),
         )
         conn.commit()
     return list_friends(uid)[0], None
@@ -805,19 +922,25 @@ def respond_friend_request(user_id, request_id, action):
         rid = int(request_id)
     except (TypeError, ValueError):
         return None, '请先登录账号'
-    normalized = 'accepted' if str(action or '').lower() == 'accept' else 'declined'
+    action_text = str(action or '').lower()
     now = utc_now()
     with get_db_connection() as conn:
+        _cleanup_expired_friend_requests(conn)
         row = conn.execute(
             'SELECT * FROM friendships WHERE id = ? AND addressee_id = ? AND status = ?',
             (rid, uid, 'pending'),
         ).fetchone()
         if row is None:
             return None, '好友请求不存在'
-        if normalized == 'accepted':
+        if action_text == 'ignore':
             conn.execute(
-                'UPDATE friendships SET status = ?, updated_at = ? WHERE id = ?',
-                ('accepted', now, rid),
+                'UPDATE friendships SET addressee_read_at = COALESCE(addressee_read_at, ?), updated_at = ? WHERE id = ?',
+                (now, now, rid),
+            )
+        elif action_text == 'accept':
+            conn.execute(
+                'UPDATE friendships SET status = ?, updated_at = ?, addressee_read_at = COALESCE(addressee_read_at, ?) WHERE id = ?',
+                ('accepted', now, now, rid),
             )
         else:
             conn.execute('DELETE FROM friendships WHERE id = ?', (rid,))
