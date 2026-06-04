@@ -1394,6 +1394,7 @@ class GameEngine:
         allowed_starts = (
             '对', '回复', '获得', '抽', '+', '聚变', '裂变', '血量',
             '无法', '仅可', '消耗', '每回合', '丢弃', '窥探',
+            '查看', '摧毁', '从',
         )
         if not detail.startswith(allowed_starts):
             result_patterns = (
@@ -2305,13 +2306,16 @@ class GameEngine:
             if counter_removed is None:
                 return self._execute_card_effect(player_id, card, choice)
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}进行反制！")
+            dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
             self._execute_counter_effect(responder_id, counter_removed, card, player_id)
             is_precision = pending.get('is_precision', False)
             if counter_removed.def_id == 'Bubble':
                 if is_precision:
                     self._execute_card_effect_half_damage(player_id, card, choice)
+                    responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
                     return {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()}
                 self._execute_card_effect(player_id, card, choice)
+                responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
                 return {'success': True, 'countered': True, 'card': card.to_dict()}
             if counter_removed.def_id == 'MagicBubble':
                 self.negated_card = True
@@ -2623,9 +2627,8 @@ class GameEngine:
     def _atomic_reveal_enemy_hand(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         opp = self.players[target_id]
-        card_names = ', '.join(c.name_cn for c in opp.hand)
         self._antenna_reveal[player_id] = [c.to_dict() for c in opp.hand]
-        self.log_msg(log or f"{self.pn(player_id)}窥探{self.pn(target_id)}手牌：{card_names}")
+        self.log_msg(log or f"{self.pn(player_id)}查看了{self.pn(target_id)}的手牌")
 
     def _atomic_steal_enemy_card(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
@@ -2636,8 +2639,7 @@ class GameEngine:
             if target and ps.can_add_to_hand():
                 opp.hand.remove(target)
                 ps.add_to_hand(target)
-                if log:
-                    self.log_msg(log)
+                self.log_msg(log or f"{self.pn(player_id)}从{self.pn(target_id)}手牌中获得1张牌")
             else:
                 self.log_msg(log or f"{self.pn(player_id)}夺取失败")
         else:
@@ -3034,7 +3036,12 @@ class GameEngine:
             target_card = self._resolve_card_ref(player_id, card_ref, card)
             eq = ts.find_equipment(getattr(target_card, 'instance_id', None)) if target_card is not None else None
             if eq is not None:
-                self._destroy_equipment(target_id, eq)
+                eq_name = eq.card_def.name_cn
+                destroyed = self._destroy_equipment(target_id, eq)
+                if destroyed:
+                    self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(target_id)}的{eq_name}")
+                elif log:
+                    self.log_msg(log)
             return
         zone_map = {'hand': ts.hand, 'deck': ts.deck, 'discard': ts.discard, 'exile': ts.exile}
         target_zone = zone_map.get(zone, ts.hand)
@@ -3053,8 +3060,11 @@ class GameEngine:
         ts = self.players[target_id]
         if ts.equipment:
             eq = random.choice(ts.equipment)
-            self._destroy_equipment(target_id, eq)
-            self.log_msg(log or f"{self.pn(target_id)}的{eq.name_cn}被摧毁")
+            eq_name = eq.card_def.name_cn
+            if self._destroy_equipment(target_id, eq):
+                self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(target_id)}的{eq_name}")
+            elif log:
+                self.log_msg(log)
         else:
             self.log_msg(log or f"{self.pn(target_id)}没有装备")
 
@@ -3062,14 +3072,20 @@ class GameEngine:
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         ts = self.players[target_id]
         for eq in ts.equipment[:]:
-            self._destroy_equipment(target_id, eq)
-        self.log_msg(log or f"{self.pn(target_id)}的所有装备被摧毁")
+            eq_name = eq.card_def.name_cn
+            if self._destroy_equipment(target_id, eq):
+                self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(target_id)}的{eq_name}")
+            elif log:
+                self.log_msg(log)
 
     def _atomic_destroy_all_field_equip(self, player_id, card, params, log, choice, context):
         for pid in [0, 1]:
             for eq in self.players[pid].equipment[:]:
-                self._destroy_equipment(pid, eq)
-        self.log_msg(log or "场上所有装备被摧毁")
+                eq_name = eq.card_def.name_cn
+                if self._destroy_equipment(pid, eq):
+                    self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(pid)}的{eq_name}")
+                elif log:
+                    self.log_msg(log)
 
     def _atomic_remove_equip_protection(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -3143,7 +3159,8 @@ class GameEngine:
             t = targets[0]
             t.fission_level = max(1, int(getattr(t, 'fission_level', 1))) + times
             t.fission_count = t.fission_level - 1
-            self.log_msg(log or f"{self.pn(player_id)}的{t.name_cn}裂变+{times}")
+            if log:
+                self.log_msg(log)
         else:
             self.log_msg(log or f"{self.pn(player_id)}没有可裂变的{card_type}牌")
 
@@ -3188,7 +3205,8 @@ class GameEngine:
             for c in selected[1:]:
                 ps.hand.remove(c)
                 self._discard_card(ps, c)
-            self.log_msg(log or f"{self.pn(player_id)}聚变：{keep.name_cn}聚变{keep.fusion_level} 裂变{keep.fission_level}")
+            if log:
+                self.log_msg(log)
         else:
             self.log_msg(log or f"{self.pn(player_id)}没有足够的{card_type}牌聚变")
 
@@ -3890,7 +3908,7 @@ class GameEngine:
             if target and target.card_type == 'thorn':
                 target.fission_level = max(1, int(getattr(target, 'fission_level', 1))) + 2
                 target.fission_count = target.fission_level - 1
-                self.log_msg(f"{self.pn(player_id)}使用裂变：{target.name_cn}裂变层数+2")
+                self.log_msg(f"{self.pn(player_id)}使用裂变")
             else:
                 self.log_msg(f"{self.pn(player_id)}使用裂变，但目标无效")
         else:
@@ -3920,7 +3938,7 @@ class GameEngine:
             for c in cards[1:]:
                 ps.hand.remove(c)
                 self._discard_card(ps, c)
-            self.log_msg(f"{self.pn(player_id)}使用聚变：{first.name_cn}聚变{first.fusion_level} 裂变{first.fission_level}，合并{len(cards)}张")
+            self.log_msg(f"{self.pn(player_id)}使用聚变")
         else:
             self.log_msg(f"{self.pn(player_id)}使用聚变，但未选择目标")
 
@@ -6166,7 +6184,11 @@ class GameEngine:
         if eq is None and ts.equipment:
             eq = ts.equipment[0]
         if eq is not None:
-            self._destroy_equipment(target_id, eq)
+            eq_name = eq.card_def.name_cn
+            if self._destroy_equipment(target_id, eq):
+                self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(target_id)}的{eq_name}")
+            elif log:
+                self.log_msg(log)
 
     def _atomic_destroy_random_equip(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -6176,7 +6198,11 @@ class GameEngine:
         if not pool:
             return
         eq = random.choice(pool)
-        self._destroy_equipment(target_id, eq)
+        eq_name = eq.card_def.name_cn
+        if self._destroy_equipment(target_id, eq):
+            self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(target_id)}的{eq_name}")
+        elif log:
+            self.log_msg(log)
 
     def _atomic_destroy_all_equip(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -6184,13 +6210,21 @@ class GameEngine:
             return
         for eq in list(self.players[target_id].equipment):
             if 'indestructible' not in eq.card_instance.flags:
-                self._destroy_equipment(target_id, eq)
+                eq_name = eq.card_def.name_cn
+                if self._destroy_equipment(target_id, eq):
+                    self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(target_id)}的{eq_name}")
+                elif log:
+                    self.log_msg(log)
 
     def _atomic_destroy_all_destroyable_equipment(self, player_id, card, params, log, choice, context):
         for tid in self._resolve_targets(player_id, params.get('target', 'both')):
             for eq in list(self.players[tid].equipment):
                 if 'indestructible' not in eq.card_instance.flags:
-                    self._destroy_equipment(tid, eq)
+                    eq_name = eq.card_def.name_cn
+                    if self._destroy_equipment(tid, eq):
+                        self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(tid)}的{eq_name}")
+                    elif log:
+                        self.log_msg(log)
 
     def _atomic_activate_corruption(self, player_id, card, params, log, choice, context):
         eq = self._find_equipment_for_card(player_id, card)

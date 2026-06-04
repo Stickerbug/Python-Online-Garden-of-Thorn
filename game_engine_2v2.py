@@ -626,13 +626,16 @@ class GameEngine2v2(GameEngine):
             if counter_removed is None:
                 return self._execute_card_effect(player_id, card, choice)
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}进行反制！")
+            dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
             self._execute_counter_effect(responder_id, counter_removed, card, player_id)
             is_precision = pending.get('is_precision', False)
             if counter_removed.def_id == 'Bubble':
                 if is_precision:
                     self._execute_card_effect_half_damage(player_id, card, choice)
+                    responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
                     return {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()}
                 self._execute_card_effect(player_id, card, choice)
+                responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
                 return {'success': True, 'countered': True, 'card': card.to_dict()}
             if counter_removed.def_id == 'MagicBubble':
                 self.negated_card = True
@@ -986,12 +989,11 @@ class GameEngine2v2(GameEngine):
         if not self._is_valid_player_id(target_id):
             return
         opp = self.players[target_id]
-        card_names = ', '.join(c.name_cn for c in opp.hand)
         self._antenna_reveal[player_id] = [c.to_dict() for c in opp.hand]
         if not hasattr(self, '_antenna_reveal_targets'):
             self._antenna_reveal_targets = [None] * self.num_players
         self._antenna_reveal_targets[player_id] = target_id
-        self.log_msg(log or f"{self.pn(player_id)}窥探{self.pn(target_id)}手牌：{card_names}")
+        self.log_msg(log or f"{self.pn(player_id)}查看了{self.pn(target_id)}的手牌")
 
     def resolve_choice(self, player_id: int, choice: dict) -> dict:
         if self.pending_choice is not None:

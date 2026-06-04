@@ -480,6 +480,22 @@ body {
   color: var(--text-secondary);
 }
 
+.account-player-id,
+.friend-id,
+.player-id,
+[data-player-id-label] {
+  font-family: 'Kreadon', var(--font-card);
+  letter-spacing: 0.04em;
+}
+
+#friends-error.message-neutral {
+  color: var(--text-muted);
+}
+
+#friends-error.message-success {
+  color: var(--text-secondary);
+}
+
 .account-popover-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -658,7 +674,6 @@ body {
 }
 
 .friend-id {
-  font-family: var(--font-mono, monospace);
   font-size: 12px;
   font-weight: 900;
   color: var(--magic);
@@ -8643,6 +8658,60 @@ html[data-ui-style="classic"] .card {
   margin-top: var(--card-english-margin-top);
   margin-bottom: 0.2cqi;
   padding: 0 var(--card-english-padding-x) 0.4cqi;
+}
+
+.card {
+  --card-english-font: 5.75cqi;
+  --card-english-margin-top: -1.55cqi;
+  --card-english-padding-x: 1.45cqi;
+}
+
+.card .card-english-name {
+  --card-english-font: 5.75cqi;
+  --card-english-margin-top: -1.55cqi;
+  --card-english-padding-x: 1.45cqi;
+  font-size: var(--card-english-font);
+}
+
+.card.card-small {
+  --card-english-font: 5.2cqi;
+  --card-english-margin-top: -1.45cqi;
+  --card-english-padding-x: 1.1cqi;
+}
+
+.card.card-small .card-english-name {
+  --card-english-font: 5.2cqi;
+  --card-english-margin-top: -1.45cqi;
+  --card-english-padding-x: 1.1cqi;
+  font-size: var(--card-english-font);
+}
+
+.teammate-hand-row .card,
+.game-container.mode-spectate .card-small,
+.game-container.mode-spectate .card {
+  --card-english-font: 5.05cqi;
+  --card-english-margin-top: -1.35cqi;
+  --card-english-padding-x: 1cqi;
+}
+
+.teammate-hand-row .card .card-english-name,
+.game-container.mode-spectate .card-small .card-english-name,
+.game-container.mode-spectate .card .card-english-name {
+  --card-english-font: 5.05cqi;
+  --card-english-margin-top: -1.35cqi;
+  --card-english-padding-x: 1cqi;
+  font-size: var(--card-english-font);
+}
+
+.game-container.mode-urf .hand-area .card {
+  --card-english-font: 5.15cqi;
+  --card-english-margin-top: -1.35cqi;
+}
+
+.game-container.mode-urf .hand-area .card .card-english-name {
+  --card-english-font: 5.15cqi;
+  --card-english-margin-top: -1.35cqi;
+  font-size: var(--card-english-font);
 }
 
 .card .card-effect,

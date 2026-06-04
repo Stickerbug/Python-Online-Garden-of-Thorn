@@ -56,6 +56,7 @@ from db import (
     admin_set_user_ban,
     add_friend_request,
     change_user_password,
+    create_remember_token,
     create_user,
     find_user_for_admin,
     get_admin_user_detail,
@@ -63,13 +64,16 @@ from db import (
     get_user_by_username,
     list_friends,
     mark_user_last_seen,
+    normalize_username_key,
     remove_friend,
+    revoke_remember_token,
     respond_friend_request,
     increment_user_stats,
     init_db,
     list_admin_users,
     save_match_summary,
     update_user_social_settings,
+    verify_remember_token,
     verify_user,
 )
 from replay_core import (
@@ -142,6 +146,8 @@ _MODS_SIGNATURE = current_mods_signature()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'garden_of_thorn_secret')
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=int(os.environ.get('GTN_SESSION_DAYS', '30')))
+REMEMBER_COOKIE_NAME = 'gtn_remember'
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
@@ -1079,6 +1085,61 @@ def _client_ip():
     return request.remote_addr or 'unknown'
 
 
+def _set_account_session(user):
+    if not user:
+        return
+    session.permanent = True
+    session['user_id'] = user['id']
+    session['username'] = user['username']
+
+
+def _clear_account_session():
+    session.pop('user_id', None)
+    session.pop('username', None)
+
+
+def _attach_remember_cookie(response, user):
+    if not DB_AVAILABLE or not user:
+        return response
+    token = create_remember_token(user.get('id'))
+    if token:
+        response.set_cookie(
+            REMEMBER_COOKIE_NAME,
+            token,
+            max_age=60 * 60 * 24 * 60,
+            httponly=True,
+            samesite='Lax',
+        )
+    return response
+
+
+def _clear_remember_cookie(response):
+    if DB_AVAILABLE:
+        try:
+            revoke_remember_token(request.cookies.get(REMEMBER_COOKIE_NAME, ''))
+        except Exception as exc:
+            admin_event('error', f'failed to revoke remember token: {exc}')
+    response.delete_cookie(REMEMBER_COOKIE_NAME, samesite='Lax')
+    return response
+
+
+def _current_account_user(allow_remember=True):
+    if not DB_AVAILABLE:
+        return None
+    user = get_user_by_id(session.get('user_id'))
+    if user:
+        _set_account_session(user)
+        return user
+    _clear_account_session()
+    if not allow_remember:
+        return None
+    user = verify_remember_token(request.cookies.get(REMEMBER_COOKIE_NAME, ''))
+    if user:
+        _set_account_session(user)
+        return user
+    return None
+
+
 def _rate_limited(ip, bucket, limit=3, window=60):
     now = time.time()
     key = (bucket, ip)
@@ -1098,11 +1159,10 @@ def _json_error(message, status=400, **extra):
 
 
 def _current_account_identity():
-    user_id = session.get('user_id')
-    username = session.get('username')
-    if not user_id or not username:
+    user = _current_account_user()
+    if not user:
         return None, ''
-    return user_id, str(username)
+    return user.get('id'), str(user.get('username') or '')
 
 
 def _current_account_can_manage_all_community_mods():
@@ -3718,9 +3778,8 @@ def api_auth_register():
     user, error = create_user(username, password)
     if error:
         return jsonify({'success': False, 'error': error}), 400
-    session['user_id'] = user['id']
-    session['username'] = user['username']
-    return jsonify({'success': True, 'user': auth_user_payload(user)})
+    _set_account_session(user)
+    return _attach_remember_cookie(jsonify({'success': True, 'user': auth_user_payload(user)}), user)
 
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -3736,9 +3795,8 @@ def api_auth_login():
         record_auth_login_failure(ip)
         return jsonify({'success': False, 'error': error}), 401
     clear_auth_login_failures(ip)
-    session['user_id'] = user['id']
-    session['username'] = user['username']
-    return jsonify({'success': True, 'user': auth_user_payload(user)})
+    _set_account_session(user)
+    return _attach_remember_cookie(jsonify({'success': True, 'user': auth_user_payload(user)}), user)
 
 
 @app.route('/api/auth/change-password', methods=['POST'])
@@ -3756,8 +3814,7 @@ def api_auth_change_password():
     user, error = change_user_password(user_id, old_password, new_password)
     if error:
         return jsonify({'success': False, 'error': error}), 400
-    session['user_id'] = user['id']
-    session['username'] = user['username']
+    _set_account_session(user)
     return jsonify({'success': True, 'user': auth_user_payload(user)})
 
 
@@ -3768,31 +3825,31 @@ def api_auth_logout():
             mark_user_last_seen(session.get('user_id'))
         except Exception as exc:
             admin_event('error', f"failed to update last seen on logout: {exc}")
-    session.pop('user_id', None)
-    session.pop('username', None)
-    return jsonify({'success': True})
+    _clear_account_session()
+    return _clear_remember_cookie(jsonify({'success': True}))
 
 
 @app.route('/api/auth/me')
 def api_auth_me():
     if not DB_AVAILABLE:
         return jsonify({'authenticated': False, 'db_available': False, 'error': DB_INIT_ERROR})
-    user = get_user_by_id(session.get('user_id'))
+    user = _current_account_user()
     if not user:
-        session.pop('user_id', None)
-        session.pop('username', None)
+        _clear_account_session()
         return jsonify({'authenticated': False, 'db_available': True})
     if user.get('banned'):
-        session.pop('user_id', None)
-        session.pop('username', None)
+        _clear_account_session()
         reason = user.get('ban_reason') or ''
-        return jsonify({
+        return _clear_remember_cookie(jsonify({
             'authenticated': False,
             'db_available': True,
             'error': f'账号已被封禁：{reason}' if reason else '账号已被封禁',
-        })
-    session['username'] = user['username']
-    return jsonify({'authenticated': True, 'db_available': True, 'user': auth_user_payload(user)})
+        }))
+    _set_account_session(user)
+    response = jsonify({'authenticated': True, 'db_available': True, 'user': auth_user_payload(user)})
+    if not request.cookies.get(REMEMBER_COOKIE_NAME):
+        return _attach_remember_cookie(response, user)
+    return response
 
 
 @app.route('/api/social/friends')
@@ -4343,10 +4400,7 @@ def on_login(data):
     global _next_room_id
     data = data or {}
     sid = request.sid
-    account_user = get_user_by_id(session.get('user_id')) if DB_AVAILABLE and session.get('user_id') else None
-    if session.get('user_id') and not account_user:
-        session.pop('user_id', None)
-        session.pop('username', None)
+    account_user = _current_account_user() if DB_AVAILABLE else None
     raw_name = data.get('nickname', '')
     wants_account_login = bool(data.get('account_login'))
     if account_user and account_user.get('banned'):
@@ -4397,15 +4451,16 @@ def on_login(data):
         emit('login_fail', {'reason': f'社区模组加载失败: {exc}'})
         return
     with _lock:
+        name_key = normalize_username_key(name)
         for p in players.values():
-            if p['nickname'] == name:
+            if normalize_username_key(p.get('nickname', '')) == name_key:
                 emit('login_fail', {'reason': 'Nickname already exists'})
                 return
         reconnect_room = None
         reconnect_old_sid = None
         for room in rooms.values():
             for dc_sid, dc_info in room.disconnected_players.items():
-                if dc_info['nickname'] == name:
+                if normalize_username_key(dc_info.get('nickname', '')) == name_key:
                     reconnect_room = room
                     reconnect_old_sid = dc_sid
                     break

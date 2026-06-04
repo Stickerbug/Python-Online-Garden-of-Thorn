@@ -1058,7 +1058,7 @@ Object.assign(I18N.en, {
     friend_requests: 'Friend Requests', friend_sent: 'Sent', friend_list: 'My Friends',
     friend_accept: 'Accept', friend_decline: 'Decline', friend_ignore: 'Ignore', friend_remove: 'Remove',
     friend_empty: 'No friends yet.', friend_request_empty: 'No pending requests.', friend_sent_empty: 'No sent requests.',
-    friend_added: 'Friend request sent', friend_removed: 'Friend removed', friend_updated: 'Updated',
+    friend_added: 'Friend request sent', friend_added_direct: 'Friend added', friend_removed: 'Friend removed', friend_updated: 'Updated', friend_remove_confirm: 'Remove this friend?',
     friend_auto_added: '{0} added you as a friend',
     social: 'Social', social_login_hint: 'Sign in to use social settings.',
     social_accept_requests: 'Accept friend requests', social_search_nickname: 'Allow adding me by nickname',
@@ -1070,7 +1070,7 @@ Object.assign(I18N.zh, {
     friend_requests: '好友请求', friend_sent: '已发送', friend_list: '我的好友',
     friend_accept: '同意', friend_decline: '拒绝', friend_ignore: '忽略', friend_remove: '删除',
     friend_empty: '暂无好友。', friend_request_empty: '暂无好友请求。', friend_sent_empty: '暂无已发送请求。',
-    friend_added: '好友请求已发送', friend_removed: '好友已删除', friend_updated: '已更新',
+    friend_added: '好友请求已发送', friend_added_direct: '已添加好友', friend_removed: '好友已删除', friend_updated: '已更新', friend_remove_confirm: '确认删除这个好友吗？',
     friend_auto_added: '{0}已加你为好友',
     social: '社交', social_login_hint: '登录账号后可以使用社交设置。',
     social_accept_requests: '接受好友请求', social_search_nickname: '允许通过昵称添加我',
@@ -1082,7 +1082,7 @@ Object.assign(I18N.fr, {
     friend_requests: 'Demandes', friend_sent: 'Envoyées', friend_list: 'Mes amis',
     friend_accept: 'Accepter', friend_decline: 'Refuser', friend_ignore: 'Ignorer', friend_remove: 'Retirer',
     friend_empty: 'Aucun ami.', friend_request_empty: 'Aucune demande.', friend_sent_empty: 'Aucune demande envoyée.',
-    friend_added: 'Demande envoyée', friend_removed: 'Ami retiré', friend_updated: 'Mis à jour',
+    friend_added: 'Demande envoyée', friend_added_direct: 'Ami ajouté', friend_removed: 'Ami retiré', friend_updated: 'Mis à jour', friend_remove_confirm: 'Retirer cet ami ?',
     friend_auto_added: '{0} vous a ajouté en ami',
     social: 'Social', social_login_hint: 'Connectez-vous pour utiliser les réglages sociaux.',
     social_accept_requests: 'Accepter les demandes', social_search_nickname: 'Autoriser par pseudo',
@@ -1094,7 +1094,7 @@ Object.assign(I18N.pt, {
     friend_requests: 'Pedidos', friend_sent: 'Enviados', friend_list: 'Meus amigos',
     friend_accept: 'Aceitar', friend_decline: 'Recusar', friend_ignore: 'Ignorar', friend_remove: 'Remover',
     friend_empty: 'Sem amigos.', friend_request_empty: 'Sem pedidos.', friend_sent_empty: 'Sem pedidos enviados.',
-    friend_added: 'Pedido enviado', friend_removed: 'Amigo removido', friend_updated: 'Atualizado',
+    friend_added: 'Pedido enviado', friend_added_direct: 'Amigo adicionado', friend_removed: 'Amigo removido', friend_updated: 'Atualizado', friend_remove_confirm: 'Remover este amigo?',
     friend_auto_added: '{0} adicionou você como amigo',
     social: 'Social', social_login_hint: 'Entre para usar configurações sociais.',
     social_accept_requests: 'Aceitar pedidos', social_search_nickname: 'Permitir por apelido',
@@ -1106,7 +1106,7 @@ Object.assign(I18N.ru, {
     friend_requests: 'Запросы', friend_sent: 'Отправлено', friend_list: 'Мои друзья',
     friend_accept: 'Принять', friend_decline: 'Отклонить', friend_ignore: 'Игнорировать', friend_remove: 'Удалить',
     friend_empty: 'Друзей нет.', friend_request_empty: 'Запросов нет.', friend_sent_empty: 'Нет отправленных запросов.',
-    friend_added: 'Запрос отправлен', friend_removed: 'Друг удалён', friend_updated: 'Обновлено',
+    friend_added: 'Запрос отправлен', friend_added_direct: 'Друг добавлен', friend_removed: 'Друг удалён', friend_updated: 'Обновлено', friend_remove_confirm: 'Удалить этого друга?',
     friend_auto_added: '{0} добавил вас в друзья',
     social: 'Соц.', social_login_hint: 'Войдите, чтобы использовать социальные настройки.',
     social_accept_requests: 'Принимать запросы', social_search_nickname: 'Разрешить по имени',
@@ -1118,7 +1118,7 @@ Object.assign(I18N.ja, {
     friend_requests: '申請', friend_sent: '送信済み', friend_list: 'フレンド',
     friend_accept: '承認', friend_decline: '拒否', friend_ignore: '無視', friend_remove: '削除',
     friend_empty: 'フレンドはいません。', friend_request_empty: '申請はありません。', friend_sent_empty: '送信済み申請はありません。',
-    friend_added: '申請を送信しました', friend_removed: '削除しました', friend_updated: '更新しました',
+    friend_added: '申請を送信しました', friend_added_direct: 'フレンドを追加しました', friend_removed: '削除しました', friend_updated: '更新しました', friend_remove_confirm: 'このフレンドを削除しますか？',
     friend_auto_added: '{0}があなたをフレンドに追加しました',
     social: 'ソーシャル', social_login_hint: 'ログインするとソーシャル設定を使えます。',
     social_accept_requests: 'フレンド申請を受け取る', social_search_nickname: '名前で追加を許可',
@@ -2066,6 +2066,7 @@ let loginCredential = '';
 let currentAccount = loadCachedAccount();
 let accountMode = 'login';
 let socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
+let friendsMessageTimer = null;
 let accountReplayItems = [];
 let accountReplayTimeline = [];
 let accountReplayFrameIndex = 0;
@@ -5358,10 +5359,15 @@ function cacheAccount(user) {
 
 function renderAccountState() {
     const accountDisplay = currentAccount ? (currentAccount.display_name || currentAccount.username) : '';
-    const idText = currentAccount?.player_id ? ` · ${UI.player_id}: ${currentAccount.player_id}` : '';
-    const nameText = currentAccount ? `${tf('account_logged_in_as', accountDisplay)}${idText}` : UI.account_not_logged_in;
+    const accountText = currentAccount ? tf('account_logged_in_as', accountDisplay) : UI.account_not_logged_in;
     const popName = $('account-popover-name');
-    if (popName) popName.textContent = nameText;
+    if (popName) {
+        if (currentAccount?.player_id) {
+            popName.innerHTML = `${escapeHtml(accountText)} <span class="account-player-id">${escapeHtml(UI.player_id)}: ${escapeHtml(currentAccount.player_id)}</span>`;
+        } else {
+            popName.textContent = accountText;
+        }
+    }
     const stats = accountStatsText(currentAccount);
     const popStats = $('account-popover-stats');
     if (popStats) popStats.textContent = stats;
@@ -5626,9 +5632,23 @@ function renderFriendsState() {
     updateFriendsBadge();
 }
 
-function setFriendsError(message) {
+function setFriendsError(message, tone = 'error', autoHideMs = 0) {
     const el = $('friends-error');
-    if (el) el.textContent = message || '';
+    if (!el) return;
+    if (friendsMessageTimer) {
+        clearTimeout(friendsMessageTimer);
+        friendsMessageTimer = null;
+    }
+    el.textContent = message || '';
+    el.classList.toggle('message-neutral', tone === 'neutral');
+    el.classList.toggle('message-success', tone === 'success');
+    if (message && autoHideMs > 0) {
+        friendsMessageTimer = setTimeout(() => {
+            el.textContent = '';
+            el.classList.remove('message-neutral', 'message-success');
+            friendsMessageTimer = null;
+        }, autoHideMs);
+    }
 }
 
 function updateFriendsBadge() {
@@ -5677,6 +5697,7 @@ async function addFriendFromInput() {
     const identifier = (input?.value || '').trim();
     if (!identifier) return;
     try {
+        const outgoingBefore = Array.isArray(socialData.outgoing) ? socialData.outgoing.length : 0;
         const data = await authRequest('/api/social/friends/add', { identifier });
         socialData = {
             friends: Array.isArray(data.friends) ? data.friends : [],
@@ -5686,7 +5707,8 @@ async function addFriendFromInput() {
             unread_count: Number(data.unread_count || 0),
         };
         if (input) input.value = '';
-        setFriendsError(UI.friend_added);
+        const outgoingAfter = Array.isArray(socialData.outgoing) ? socialData.outgoing.length : 0;
+        setFriendsError(outgoingAfter > outgoingBefore ? UI.friend_added : (UI.friend_added_direct || UI.friend_updated), 'neutral', 2200);
         renderFriendsState();
     } catch (err) {
         setFriendsError(err.message || UI.account_error);
@@ -5703,7 +5725,7 @@ async function respondFriendRequest(requestId, action) {
             settings: data.settings || socialData.settings,
             unread_count: Number(data.unread_count || 0),
         };
-        setFriendsError(UI.friend_updated);
+        setFriendsError(UI.friend_updated, 'neutral', 1800);
         renderFriendsState();
     } catch (err) {
         setFriendsError(err.message || UI.account_error);
@@ -5711,6 +5733,7 @@ async function respondFriendRequest(requestId, action) {
 }
 
 async function removeFriend(userId) {
+    if (!confirm(UI.friend_remove_confirm || '确认删除这个好友吗？')) return;
     try {
         const data = await authRequest('/api/social/friends/remove', { user_id: userId });
         socialData = {
@@ -5720,7 +5743,7 @@ async function removeFriend(userId) {
             settings: data.settings || socialData.settings,
             unread_count: Number(data.unread_count || 0),
         };
-        setFriendsError(UI.friend_removed);
+        setFriendsError(UI.friend_removed, 'neutral', 1800);
         renderFriendsState();
     } catch (err) {
         setFriendsError(err.message || UI.account_error);

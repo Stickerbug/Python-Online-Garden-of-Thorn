@@ -135,6 +135,10 @@ function toInt(value, fallbackValue = 0) {
     return Math.trunc(n);
 }
 
+function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function cardDef(defId) {
     return cardDefs[defId] || null;
 }
@@ -701,23 +705,50 @@ class LocalSoloEngine {
     }
 
     logMsg(message) {
-        const text = String(message || '').trim();
+        let text = String(message || '').trim();
         if (!text) return;
+        text = this.normalizeDamageLogText(text);
+        if (this.mergeBubbleLog(text)) return;
+        if (this.mergeSimpleUseDetail(text)) return;
         if (this.mergeSimpleUseDamageLog(text)) return;
         if (this.mergeLegacyUseDamageLog(text)) return;
         if (this.mergeDamageTakenLog(text)) return;
         this.log.push(text);
     }
 
+    normalizeDamageLogText(text) {
+        const parsed = this.parseDamageTakenLog(text);
+        if (!parsed) return text;
+        return `${parsed.prefix}${parsed.target}受到${this.formatDamageParts(parsed.parts)}（H=${parsed.startHp}→${parsed.endHp}）`;
+    }
+
     parseDamageTakenLog(text) {
-        const match = String(text || '').match(/^(.+)受到(\d+(?:\+\d+)*)点伤害（H=([^）]+)）$/);
-        if (!match) return null;
-        const before = match[1];
+        const raw = String(text || '');
+        let match = raw.match(/^(.+)受到(\d+(?:\+\d+)*)点伤害（H=([^）]+)）$/);
+        let before;
+        let parts;
+        let hpText;
+        if (match) {
+            before = match[1];
+            parts = match[2].split('+').map(part => toInt(part, 0));
+            hpText = match[3];
+        } else {
+            match = raw.match(/^(.+)受到(\d+)D(?:×(\d+))?（H=([^）]+)）$/);
+            if (match) {
+                before = match[1];
+                parts = Array(Math.max(1, toInt(match[3] || 1, 1))).fill(toInt(match[2], 0));
+                hpText = match[4];
+            } else {
+                match = raw.match(/^(.+)受到\((\d+(?:\+\d+)*)\)D（H=([^）]+)）$/);
+                if (!match) return null;
+                before = match[1];
+                parts = match[2].split('+').map(part => toInt(part, 0));
+                hpText = match[3];
+            }
+        }
         const cut = before.lastIndexOf('，');
         const prefix = cut >= 0 ? before.slice(0, cut + 1) : '';
         const target = cut >= 0 ? before.slice(cut + 1) : before;
-        const parts = match[2];
-        const hpText = match[3];
         let startHp = '';
         let endHp = hpText;
         const arrow = hpText.indexOf('→');
@@ -726,10 +757,18 @@ class LocalSoloEngine {
             endHp = hpText.slice(arrow + 1);
         } else {
             const hp = Number.parseInt(hpText, 10);
-            const total = parts.split('+').reduce((sum, part) => sum + toInt(part, 0), 0);
+            const total = parts.reduce((sum, part) => sum + toInt(part, 0), 0);
             if (Number.isFinite(hp)) startHp = String(hp + total);
         }
         return { prefix, target, parts, startHp, endHp };
+    }
+
+    formatDamageParts(parts) {
+        const values = (parts || []).map(part => toInt(part, 0));
+        if (!values.length) return '0D';
+        if (values.length === 1) return `${values[0]}D`;
+        if (values.every(value => value === values[0])) return `${values[0]}D×${values.length}`;
+        return `(${values.join('+')})D`;
     }
 
     mergeDamageTakenLog(text) {
@@ -739,8 +778,26 @@ class LocalSoloEngine {
         if (!current || !previous || current.target !== previous.target || !previous.startHp) {
             return false;
         }
-        this.log[this.log.length - 1] = `${previous.prefix}${previous.target}受到${previous.parts}+${current.parts}点伤害（H=${previous.startHp}→${current.endHp}）`;
+        this.log[this.log.length - 1] = `${previous.prefix}${previous.target}受到${this.formatDamageParts([...previous.parts, ...current.parts])}（H=${previous.startHp}→${current.endHp}）`;
         return true;
+    }
+
+    mergeBubbleLog(text) {
+        if (!this.log.length) return false;
+        const last = String(this.log[this.log.length - 1] || '');
+        let match = text.match(/^(.+)闪避了攻击！?$/);
+        if (match && new RegExp(`^${escapeRegExp(match[1])}使用泡泡进行反制！?$`).test(last)) {
+            this.log[this.log.length - 1] = `${match[1]}使用泡泡，闪避了攻击`;
+            return true;
+        }
+        if (text === '精准牌被闪避反制，伤害减半！') {
+            match = last.match(/^(.+)使用泡泡进行反制！?$/);
+            if (match) {
+                this.log[this.log.length - 1] = `${match[1]}使用泡泡，精准攻击伤害减半`;
+                return true;
+            }
+        }
+        return false;
     }
 
     mergeSimpleUseDamageLog(text) {
@@ -748,6 +805,23 @@ class LocalSoloEngine {
         const match = String(this.log[this.log.length - 1]).match(/^(.+)使用了(.+)$/);
         if (!match) return false;
         this.log[this.log.length - 1] = `${match[1]}使用${match[2]}，${text}`;
+        return true;
+    }
+
+    mergeSimpleUseDetail(text) {
+        if (!this.log.length) return false;
+        const match = String(this.log[this.log.length - 1]).match(/^(.+)使用了(.+)$/);
+        if (!match) return false;
+        const actor = match[1];
+        const cardNameText = match[2];
+        let detail = '';
+        if (String(text).startsWith(actor)) detail = String(text).slice(actor.length);
+        const allowedStarts = ['对', '回复', '获得', '抽', '+', '血量', '无法', '仅可', '消耗', '每回合', '丢弃', '查看', '摧毁', '从'];
+        if (!allowedStarts.some(prefix => detail.startsWith(prefix))) {
+            if (!this.parseDamageTakenLog(text)) return false;
+            detail = text;
+        }
+        this.log[this.log.length - 1] = `${actor}使用${cardNameText}，${detail}`;
         return true;
     }
 
@@ -2569,39 +2643,56 @@ class LocalSoloEngine {
         if (loc) this.players[loc.ownerId].exile.push(target);
     }
 
-    effect_remove_specific_card(playerId, card, params) {
+    logDestroyedEquipment(actorId, ownerId, eq, customLog) {
+        if (!eq) return;
+        const eqName = cardName(eq.def_id || (eq.card_instance && eq.card_instance.def_id));
+        this.logMsg(customLog || `${this.pn(actorId)}摧毁了${this.pn(ownerId)}的${eqName}`);
+    }
+
+    effect_remove_specific_card(playerId, card, params, log) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
         const loc = this.findCardLocation(target);
         if (!loc) return;
-        if (loc.zone === 'equipment') this.destroyEquipment(loc.ownerId, this.players[loc.ownerId].equipment[loc.index]);
-        else this.removeCardFromCurrentZone(target);
+        if (loc.zone === 'equipment') {
+            const eq = this.players[loc.ownerId].equipment[loc.index];
+            if (this.destroyEquipment(loc.ownerId, eq)) this.logDestroyedEquipment(playerId, loc.ownerId, eq, log);
+            else if (log) this.logMsg(log);
+        } else {
+            this.removeCardFromCurrentZone(target);
+            if (log) this.logMsg(log);
+        }
     }
 
-    effect_destroy_all_destroyable_equipment(playerId, card, params) {
+    effect_destroy_all_destroyable_equipment(playerId, card, params, log) {
         this.resolveTargets(playerId, params.target || 'enemy').forEach(tid => {
             [...this.players[tid].equipment].forEach(eq => {
-                if (!eq.card_instance.flags.has('indestructible')) this.destroyEquipment(tid, eq);
+                if (!eq.card_instance.flags.has('indestructible') && this.destroyEquipment(tid, eq)) {
+                    this.logDestroyedEquipment(playerId, tid, eq, log);
+                }
             });
         });
     }
 
-    effect_destroy_random_equip(playerId, card, params) {
+    effect_destroy_random_equip(playerId, card, params, log) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         const list = this.players[targetId].equipment.filter(eq => !eq.card_instance.flags.has('indestructible'));
-        if (list.length) this.destroyEquipment(targetId, list[Math.floor(Math.random() * list.length)]);
+        if (list.length) {
+            const eq = list[Math.floor(Math.random() * list.length)];
+            if (this.destroyEquipment(targetId, eq)) this.logDestroyedEquipment(playerId, targetId, eq, log);
+        }
     }
 
-    effect_destroy_all_equip(playerId, card, params) {
-        this.effect_destroy_all_destroyable_equipment(playerId, card, params);
+    effect_destroy_all_equip(playerId, card, params, log) {
+        this.effect_destroy_all_destroyable_equipment(playerId, card, params, log);
     }
 
-    effect_destroy_equipment_choice_or_first(playerId, card, params) {
+    effect_destroy_equipment_choice_or_first(playerId, card, params, log) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         let eq = null;
         const choiceCard = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
         if (choiceCard) eq = this.players[targetId].equipment.find(item => item.card_instance === choiceCard || item.card_instance.instance_id === choiceCard.instance_id);
         if (!eq) eq = this.players[targetId].equipment.find(item => !item.card_instance.flags.has('indestructible'));
-        if (eq) this.destroyEquipment(targetId, eq);
+        if (eq && this.destroyEquipment(targetId, eq)) this.logDestroyedEquipment(playerId, targetId, eq, log);
     }
 
     effect_destroy_self_equipment(playerId, card) {
@@ -2673,9 +2764,10 @@ class LocalSoloEngine {
         this.players[targetId].skip_turn = true;
     }
 
-    effect_reveal_enemy_hand(playerId, card, params) {
+    effect_reveal_enemy_hand(playerId, card, params, log) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         this._antenna_reveal[playerId] = this.players[targetId].hand.map(c => c.toDict());
+        this.logMsg(log || `${this.pn(playerId)}查看了${this.pn(targetId)}的手牌`);
     }
 
     effect_choose_from_discard(playerId, card, params, log, choice) {
@@ -2714,7 +2806,7 @@ class LocalSoloEngine {
         if (!stolen && source.hand.length) stolen = source.hand.splice(0, 1)[0];
         if (stolen && target.canAddToHand()) {
             target.addToHand(stolen);
-            if (log) this.logMsg(log);
+            this.logMsg(log || `${this.pn(playerId)}从${this.pn(sourceId)}手牌中获得1张牌`);
         }
     }
 
@@ -3348,10 +3440,14 @@ class LocalSoloEngine {
             this.spendResource(responderId, 'magic', counter.cost_m, counter);
             const removed = responder.removeHandCard(instanceId);
             this.logMsg(`${this.pn(responderId)}使用${cardName(removed.def_id)}进行反制！`);
+            const dodgeBeforeCounter = toInt(responder.dodge, 0);
             this.executeCounterEffect(responderId, removed, card, playerId);
             if (removed.def_id === 'Bubble') {
-                if (pending.is_precision) return this.executeCardEffectHalfDamage(playerId, card, choice);
-                return this.executeCardEffect(playerId, card, choice);
+                const result = pending.is_precision
+                    ? this.executeCardEffectHalfDamage(playerId, card, choice)
+                    : this.executeCardEffect(playerId, card, choice);
+                responder.dodge = Math.min(toInt(responder.dodge, 0), dodgeBeforeCounter);
+                return result;
             }
             if (removed.def_id === 'MagicBubble') this.negated_card = true;
             return this.executeCardEffect(playerId, card, choice);

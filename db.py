@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 import secrets
 import re
@@ -18,6 +19,7 @@ PLAYER_ID_BLACKLIST_PATH = os.environ.get(
 )
 _PLAYER_ID_BLACKLIST_CACHE = None
 FRIEND_REQUEST_TTL_DAYS = 30
+REMEMBER_TOKEN_DAYS = 60
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
 
 
@@ -164,6 +166,21 @@ def init_db():
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS remember_tokens (
+                selector TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                token_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                last_used_at TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_remember_tokens_user ON remember_tokens(user_id)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_remember_tokens_expires ON remember_tokens(expires_at)')
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS friendships (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 requester_id INTEGER NOT NULL,
@@ -307,6 +324,25 @@ def sanitize_username(raw):
     return name.strip()
 
 
+def normalize_username_key(raw):
+    name = sanitize_username(raw)
+    return re.sub(r'[-_]+', '', name).casefold()
+
+
+def _find_user_row_by_username_key(conn, username, searchable_by_nickname=None):
+    key = normalize_username_key(username)
+    if not key:
+        return None
+    rows = conn.execute('SELECT * FROM users').fetchall()
+    for row in rows:
+        if normalize_username_key(row['username']) != key:
+            continue
+        if searchable_by_nickname is not None and bool(row['searchable_by_nickname']) != bool(searchable_by_nickname):
+            continue
+        return row
+    return None
+
+
 def validate_username(username):
     name = sanitize_username(username)
     if not name:
@@ -377,6 +413,8 @@ def create_user(username, password):
     password_hash = generate_password_hash(str(password))
     try:
         with get_db_connection() as conn:
+            if _find_user_row_by_username_key(conn, name) is not None:
+                return None, '用户名已存在'
             existing_ids = [row['player_id'] for row in conn.execute('SELECT player_id FROM users WHERE player_id IS NOT NULL').fetchall()]
             player_id = generate_player_id(existing_ids)
             cur = conn.execute(
@@ -384,7 +422,7 @@ def create_user(username, password):
                 INSERT INTO users (username, username_lower, password_hash, created_at, player_id)
                 VALUES (?, ?, ?, ?, ?)
                 ''',
-                (name, name.lower(), password_hash, now, player_id),
+                (name, normalize_username_key(name), password_hash, now, player_id),
             )
             conn.commit()
             row = conn.execute('SELECT * FROM users WHERE id = ?', (cur.lastrowid,)).fetchone()
@@ -398,7 +436,7 @@ def verify_user(username, password):
     if not name:
         return None, '用户名或密码错误'
     with get_db_connection() as conn:
-        row = conn.execute('SELECT * FROM users WHERE username_lower = ?', (name.lower(),)).fetchone()
+        row = _find_user_row_by_username_key(conn, name)
         if row is None or not check_password_hash(row['password_hash'], str(password or '')):
             return None, '用户名或密码错误'
         is_banned = bool(row['banned']) if 'banned' in row.keys() else False
@@ -455,7 +493,7 @@ def find_user_for_admin(identifier):
         if row is None:
             name = sanitize_username(token)
             if name:
-                row = conn.execute('SELECT * FROM users WHERE username_lower = ?', (name.lower(),)).fetchone()
+                row = _find_user_row_by_username_key(conn, name)
         return row_to_user(row)
 
 
@@ -510,7 +548,82 @@ def get_user_by_username(username):
     if not name:
         return None
     with get_db_connection() as conn:
-        return row_to_user(conn.execute('SELECT * FROM users WHERE username_lower = ?', (name.lower(),)).fetchone())
+        return row_to_user(_find_user_row_by_username_key(conn, name))
+
+
+def _remember_token_hash(token):
+    return hashlib.sha256(str(token or '').encode('utf-8')).hexdigest()
+
+
+def _split_remember_cookie(value):
+    text = str(value or '').strip()
+    if not text or '.' not in text:
+        return '', ''
+    selector, token = text.split('.', 1)
+    return selector.strip(), token.strip()
+
+
+def create_remember_token(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return ''
+    selector = secrets.token_urlsafe(18)
+    token = secrets.token_urlsafe(32)
+    now = utc_now()
+    expires_at = utc_iso(utc_now_dt() + timedelta(days=REMEMBER_TOKEN_DAYS))
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT id FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            return ''
+        conn.execute(
+            '''
+            INSERT INTO remember_tokens (selector, user_id, token_hash, created_at, expires_at, last_used_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ''',
+            (selector, uid, _remember_token_hash(token), now, expires_at, now),
+        )
+        conn.commit()
+    return f'{selector}.{token}'
+
+
+def verify_remember_token(cookie_value):
+    selector, token = _split_remember_cookie(cookie_value)
+    if not selector or not token:
+        return None
+    now = utc_now()
+    with get_db_connection() as conn:
+        conn.execute('DELETE FROM remember_tokens WHERE expires_at < ?', (now,))
+        row = conn.execute(
+            '''
+            SELECT rt.*, u.*
+            FROM remember_tokens rt
+            JOIN users u ON u.id = rt.user_id
+            WHERE rt.selector = ?
+            ''',
+            (selector,),
+        ).fetchone()
+        if row is None or row['token_hash'] != _remember_token_hash(token):
+            conn.commit()
+            return None
+        is_banned = bool(row['banned']) if 'banned' in row.keys() else False
+        if is_banned:
+            conn.execute('DELETE FROM remember_tokens WHERE selector = ?', (selector,))
+            conn.commit()
+            return None
+        conn.execute('UPDATE remember_tokens SET last_used_at = ? WHERE selector = ?', (now, selector))
+        conn.commit()
+        return row_to_user(row)
+
+
+def revoke_remember_token(cookie_value):
+    selector, _ = _split_remember_cookie(cookie_value)
+    if not selector:
+        return False
+    with get_db_connection() as conn:
+        conn.execute('DELETE FROM remember_tokens WHERE selector = ?', (selector,))
+        conn.commit()
+    return True
 
 
 ADMIN_USER_SORTS = {
@@ -682,8 +795,8 @@ def _friend_request_expires_at():
 
 
 def _is_auto_friend_requester(row):
-    name = str(row['username'] if row is not None and 'username' in row.keys() else '').strip().lower()
-    return name in AUTO_FRIEND_REQUESTER_NAMES
+    name = row['username'] if row is not None and 'username' in row.keys() else ''
+    return normalize_username_key(name) in AUTO_FRIEND_REQUESTER_NAMES
 
 
 def _mark_friend_notifications_read(conn, user_id):
@@ -781,10 +894,7 @@ def _find_social_target(conn, identifier):
             return row
     name = sanitize_username(token)
     if name:
-        return conn.execute(
-            'SELECT * FROM users WHERE username_lower = ? AND searchable_by_nickname = 1',
-            (name.lower(),),
-        ).fetchone()
+        return _find_user_row_by_username_key(conn, name, searchable_by_nickname=True)
     return None
 
 
@@ -1005,11 +1115,11 @@ def increment_user_stats(usernames, winner_name=None, result='finished'):
     if not names:
         return
     winners = winner_name if isinstance(winner_name, (list, tuple, set)) else [winner_name]
-    winner_lowers = {sanitize_username(name).lower() for name in winners if sanitize_username(name)}
+    winner_keys = {normalize_username_key(name) for name in winners if sanitize_username(name)}
     is_draw = str(result or '').lower() == 'draw'
     with get_db_connection() as conn:
         for name in names:
-            row = conn.execute('SELECT id, username_lower FROM users WHERE username_lower = ?', (name.lower(),)).fetchone()
+            row = _find_user_row_by_username_key(conn, name)
             if row is None:
                 continue
             if is_draw:
@@ -1017,7 +1127,7 @@ def increment_user_stats(usernames, winner_name=None, result='finished'):
                     'UPDATE users SET games_played = games_played + 1, draws = draws + 1 WHERE id = ?',
                     (row['id'],),
                 )
-            elif row['username_lower'] in winner_lowers:
+            elif normalize_username_key(row['username']) in winner_keys:
                 conn.execute(
                     'UPDATE users SET games_played = games_played + 1, wins = wins + 1 WHERE id = ?',
                     (row['id'],),
