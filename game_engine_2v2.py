@@ -693,9 +693,11 @@ class GameEngine2v2(GameEngine):
             return 0
         total_dealt = 0
         for h in range(hits):
+            precision_dodged = False
             if ps.dodge > 0:
                 ps.dodge -= 1
                 if is_precision:
+                    precision_dodged = True
                     self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗！")
                 else:
                     self.log_msg(f"{self.pn(target_id)}闪避了攻击！")
@@ -707,6 +709,8 @@ class GameEngine2v2(GameEngine):
                 break
             dmg = amount
             if self.halve_next_attack:
+                dmg = math.ceil(dmg / 2)
+            elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
                 self.log_msg(f"精准被反制，伤害减半：{amount}→{dmg}")
             corruption_count = self._get_corruption_count()
@@ -1169,9 +1173,11 @@ class GameEngine2v2(GameEngine):
             return 0
         total_dealt = 0
         for _ in range(hits):
+            precision_dodged = False
             if ps.dodge > 0:
                 ps.dodge -= 1
                 if is_precision:
+                    precision_dodged = True
                     self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗！")
                 else:
                     self.log_msg(f"{self.pn(target_id)}闪避了攻击！")
@@ -1181,6 +1187,8 @@ class GameEngine2v2(GameEngine):
                 continue
             dmg = amount
             if self.halve_next_attack:
+                dmg = math.ceil(dmg / 2)
+            elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
             corruption_count = self._get_corruption_count()
             if corruption_count > 0:
@@ -1585,17 +1593,21 @@ class GameEngine2v2(GameEngine):
             return 0
         total_dealt = 0
         for _ in range(hits):
+            precision_dodged = False
             if ps.dodge > 0:
                 ps.dodge -= 1
                 if not is_precision:
                     self.log_msg(f"{self.pn(target_id)}闪避了攻击")
                     continue
+                precision_dodged = True
                 self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗")
             if ps.invincible:
                 self.log_msg(f"{self.pn(target_id)}无敌，免疫伤害")
                 continue
             dmg = amount
             if self.halve_next_attack:
+                dmg = math.ceil(dmg / 2)
+            elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
             corruption_count = self._get_corruption_count()
             if corruption_count > 0:

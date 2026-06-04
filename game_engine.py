@@ -1293,6 +1293,10 @@ class GameEngine:
                 self.log[-1] = f'{owner}使用并装备了{card_name}，{detail}'
                 return True
 
+        if self._merge_chinese_use_equipment(text, last):
+            return True
+        if self._merge_chinese_use_destination(text, last):
+            return True
         if self._merge_simple_use_detail(text, last):
             return True
         if self._merge_legacy_use_damage_log(text, last):
@@ -1356,6 +1360,52 @@ class GameEngine:
         if all(v == values[0] for v in values):
             return f'{values[0]}D×{len(values)}'
         return f"({'+'.join(str(v) for v in values)})D"
+
+    def _parse_chinese_use_log(self, text: str):
+        m = re.fullmatch(r'(.+)使用(?!并)(?:了)?([^，！!:：]+)(?:，(.+))?', text)
+        if not m:
+            return None
+        return {
+            'actor': m.group(1),
+            'card': m.group(2),
+            'detail': m.group(3) or '',
+        }
+
+    def _merge_chinese_use_equipment(self, text: str, last: str) -> bool:
+        m = re.fullmatch(r'(.+)装备了(.+)', text)
+        if not m:
+            return False
+        owner, card_name = m.group(1), m.group(2)
+        used = self._parse_chinese_use_log(last)
+        if not used or used['card'] != card_name:
+            return False
+        actor = used['actor']
+        detail = f'，{used["detail"]}' if used['detail'] else ''
+        if actor == owner:
+            self.log[-1] = f'{actor}使用并装备了{card_name}{detail}'
+        else:
+            self.log[-1] = f'{actor}使用并给{owner}装备了{card_name}{detail}'
+        return True
+
+    def _merge_chinese_use_destination(self, text: str, last: str) -> bool:
+        used = self._parse_chinese_use_log(last)
+        if not used:
+            return False
+        actor = used['actor']
+        card_name = used['card']
+        escaped_actor = re.escape(actor)
+        escaped_card = re.escape(card_name)
+        destination = None
+        if re.fullmatch(rf'{escaped_actor}的{escaped_card}被放逐', text) or re.fullmatch(rf'{escaped_card}被放逐', text):
+            destination = f'{card_name}被放逐'
+        elif re.fullmatch(rf'{escaped_actor}的{escaped_card}移入弃牌堆', text) or re.fullmatch(rf'{escaped_card}移入弃牌堆', text):
+            destination = f'{card_name}移入弃牌堆'
+        elif re.fullmatch(rf'{escaped_actor}的{escaped_card}被魔法泡泡反制，失效！?', text):
+            destination = f'{card_name}被魔法泡泡反制，失效'
+        if not destination:
+            return False
+        self.log[-1] = f'{last}，{destination}'
+        return True
 
     def _merge_damage_taken_log(self, text: str, last: str) -> bool:
         current = self._parse_damage_taken_log(text)
@@ -1983,9 +2033,11 @@ class GameEngine:
             return 0
         total_dealt = 0
         for h in range(hits):
+            precision_dodged = False
             if ps.dodge > 0:
                 ps.dodge -= 1
                 if is_precision:
+                    precision_dodged = True
                     self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗！")
                 else:
                     self.log_msg(f"{self.pn(target_id)}闪避了攻击！")
@@ -1999,6 +2051,8 @@ class GameEngine:
             if self.halve_next_attack:
                 dmg = math.ceil(dmg / 2)
                 self.log_msg(f"精准被反制，伤害减半：{amount}->{dmg}")
+            elif precision_dodged:
+                dmg = math.ceil(dmg / 2)
             corruption_count = self._get_corruption_count()
             if corruption_count > 0:
                 dmg = dmg * (2 ** corruption_count)
@@ -2325,16 +2379,31 @@ class GameEngine:
     def _execute_counter_effect(self, responder_id: int, counter_card: CardInstance, original_card: CardInstance, original_player_id: Optional[int] = None):
         ps = self.players[responder_id]
         opp = self.players[1 - responder_id]
-        if self._has_script_entry(counter_card.card_def, 'response'):
+        response_target_id = original_player_id if original_player_id is not None else 1 - responder_id
+        if self._card_has_v2_event(counter_card.card_def, 'on_response'):
+            self._run_v2_card_event(
+                responder_id,
+                counter_card,
+                'on_response',
+                {'target_player': response_target_id},
+                {
+                    'event': 'response',
+                    'source_id': responder_id,
+                    'target_id': response_target_id,
+                    'target_player_explicit': True,
+                    'original_card_instance_id': getattr(original_card, 'instance_id', None),
+                    'original_card_def_id': getattr(original_card, 'def_id', ''),
+                },
+            )
+        elif self._has_script_entry(counter_card.card_def, 'response'):
             self._run_effect_list(
                 responder_id,
                 counter_card,
                 self._get_script_effects(counter_card.card_def, 'response'),
                 None,
-                {'event': 'response', 'source_id': responder_id, 'target_id': original_player_id if original_player_id is not None else 1 - responder_id},
+                {'event': 'response', 'source_id': responder_id, 'target_id': response_target_id},
             )
-            return
-        if counter_card.def_id == 'Bubble':
+        elif counter_card.def_id == 'Bubble':
             ps.dodge += 1
             self.log_msg(f"{self.pn(responder_id)}获得1层闪避")
         elif counter_card.def_id == 'Nazar':
@@ -2368,7 +2437,7 @@ class GameEngine:
         else:
             self._discard_card(ps, counter_card)
         self._dispatch_card_event('card_used', responder_id, counter_card,
-                                  target_id=original_player_id if original_player_id is not None else responder_id)
+                                  target_id=response_target_id)
 
     def _reset_one_shot_attack_attrs(self, card: CardInstance):
         reset_card_for_discard(card)
@@ -2692,9 +2761,11 @@ class GameEngine:
             self.log_msg(log or f"{self.pn(player_id)}未选择牌")
 
     def _atomic_set_health(self, player_id, card, params, log, choice, context):
-        amount = params.get('amount', 60)
-        self.players[player_id].health = amount
-        self.log_msg(log or f"{self.pn(player_id)}血量设为{amount}")
+        amount = self._eval_int(player_id, params.get('amount', params.get('value', 60)), card, 60)
+        for target_id in self._resolve_targets(player_id, params.get('target', 'self')):
+            if 0 <= target_id < len(self.players):
+                self.players[target_id].health = max(0, min(amount, self.players[target_id].max_health))
+                self.log_msg(log or f"{self.pn(target_id)}血量设为{amount}")
 
     def _atomic_set_invincible(self, player_id, card, params, log, choice, context):
         self.players[player_id].invincible = True
@@ -5209,6 +5280,7 @@ class GameEngine:
                            choice: Optional[dict] = None, extra_context: Optional[dict] = None):
         events = getattr(card.card_def, 'v2_events', None) or {}
         event_def = events.get(event_name)
+        extra_context = extra_context if isinstance(extra_context, dict) else {}
         target_id = -1
         target_explicit = False
         if isinstance(choice, dict):
@@ -5220,11 +5292,23 @@ class GameEngine:
                         break
                     except Exception:
                         target_id = -1
+        if target_id < 0:
+            for key in ('target_player', 'target_player_id', 'target_id'):
+                if key in extra_context:
+                    try:
+                        target_id = int(extra_context.get(key))
+                        target_explicit = bool(extra_context.get('target_player_explicit', True))
+                        break
+                    except Exception:
+                        target_id = -1
         if target_id < 0 or target_id >= len(self.players):
-            target_id = 1 - player_id if len(self.players) == 2 else player_id
+            target_id = player_id
         context = {
             'source_player': player_id,
             'target_player': target_id,
+            'source_id': extra_context.get('source_id', player_id),
+            'target_id': extra_context.get('target_id', target_id),
+            'damage_source': extra_context.get('damage_source', extra_context.get('source_id', player_id)),
             'target_player_explicit': target_explicit,
             'card': card,
             'room': getattr(self, 'room', None),
@@ -5232,7 +5316,7 @@ class GameEngine:
             'vars': {},
             'last_damage': 0,
             'current_event': event_name,
-            'current_action': {'choice': choice or {}, **(extra_context or {})},
+            'current_action': {'choice': choice or {}, **extra_context},
         }
         if isinstance(choice, dict):
             instance_ids = []
@@ -5706,9 +5790,11 @@ class GameEngine:
             return 0
         total_dealt = 0
         for _ in range(hits):
+            precision_dodged = False
             if ps.dodge > 0:
                 ps.dodge -= 1
                 if is_precision:
+                    precision_dodged = True
                     self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗")
                 else:
                     self.log_msg(f"{self.pn(target_id)}闪避了攻击")
@@ -5720,6 +5806,8 @@ class GameEngine:
                 break
             dmg = amount
             if self.halve_next_attack:
+                dmg = math.ceil(dmg / 2)
+            elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
             corruption_count = self._get_corruption_count()
             if corruption_count > 0:

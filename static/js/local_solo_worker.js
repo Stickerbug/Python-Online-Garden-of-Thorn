@@ -709,6 +709,8 @@ class LocalSoloEngine {
         if (!text) return;
         text = this.normalizeDamageLogText(text);
         if (this.mergeBubbleLog(text)) return;
+        if (this.mergeChineseUseEquipment(text)) return;
+        if (this.mergeChineseUseDestination(text)) return;
         if (this.mergeSimpleUseDetail(text)) return;
         if (this.mergeSimpleUseDamageLog(text)) return;
         if (this.mergeLegacyUseDamageLog(text)) return;
@@ -805,6 +807,50 @@ class LocalSoloEngine {
         const match = String(this.log[this.log.length - 1]).match(/^(.+)使用了(.+)$/);
         if (!match) return false;
         this.log[this.log.length - 1] = `${match[1]}使用${match[2]}，${text}`;
+        return true;
+    }
+
+    parseChineseUseLog(text) {
+        const match = String(text || '').match(/^(.+)使用(?!并)(?:了)?([^，！!:：]+)(?:，(.+))?$/);
+        if (!match) return null;
+        return {
+            actor: match[1],
+            card: match[2],
+            detail: match[3] || '',
+        };
+    }
+
+    mergeChineseUseEquipment(text) {
+        if (!this.log.length) return false;
+        const match = String(text || '').match(/^(.+)装备了(.+)$/);
+        if (!match) return false;
+        const owner = match[1];
+        const cardNameText = match[2];
+        const used = this.parseChineseUseLog(this.log[this.log.length - 1]);
+        if (!used || used.card !== cardNameText) return false;
+        const detail = used.detail ? `，${used.detail}` : '';
+        this.log[this.log.length - 1] = used.actor === owner
+            ? `${used.actor}使用并装备了${cardNameText}${detail}`
+            : `${used.actor}使用并给${owner}装备了${cardNameText}${detail}`;
+        return true;
+    }
+
+    mergeChineseUseDestination(text) {
+        if (!this.log.length) return false;
+        const used = this.parseChineseUseLog(this.log[this.log.length - 1]);
+        if (!used) return false;
+        const actor = escapeRegExp(used.actor);
+        const cardNameText = escapeRegExp(used.card);
+        let destination = '';
+        if (new RegExp(`^(?:${actor}的)?${cardNameText}被放逐$`).test(text)) {
+            destination = `${used.card}被放逐`;
+        } else if (new RegExp(`^(?:${actor}的)?${cardNameText}移入弃牌堆$`).test(text)) {
+            destination = `${used.card}移入弃牌堆`;
+        } else if (new RegExp(`^${actor}的${cardNameText}被魔法泡泡反制，失效！?$`).test(text)) {
+            destination = `${used.card}被魔法泡泡反制，失效`;
+        }
+        if (!destination) return false;
+        this.log[this.log.length - 1] = `${this.log[this.log.length - 1]}，${destination}`;
         return true;
     }
 
@@ -3032,12 +3078,14 @@ class LocalSoloEngine {
         }
         let total = 0;
         for (let h = 0; h < hits; h++) {
+            let precisionDodged = false;
             if (ps.dodge > 0) {
                 ps.dodge -= 1;
                 if (!isPrecision) {
                     this.logMsg(`${this.pn(targetId)}闪避了攻击`);
                     continue;
                 }
+                precisionDodged = true;
                 this.logMsg(`${this.pn(targetId)}的闪避被精准消耗`);
             }
             if (ps.invincible) {
@@ -3046,6 +3094,7 @@ class LocalSoloEngine {
             }
             let dmg = Math.max(0, toInt(amount, 0));
             if (this.halve_next_attack) dmg = Math.ceil(dmg / 2);
+            else if (precisionDodged) dmg = Math.ceil(dmg / 2);
             const corruption = this.getCorruptionCount();
             if (corruption > 0) dmg *= (2 ** corruption);
             if (ps.nazar_active) {

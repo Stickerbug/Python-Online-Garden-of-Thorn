@@ -34,6 +34,7 @@ ADVANCED_ATOMIC_OPS = {
     "place_as_equip", "add_equipment_to_zone", "trigger_manual",
     "block_action", "block_card_type", "force_card_type", "nullify_current_card",
     "cancel_current_card", "invincible", "untargetable", "skip_turn", "extra_turn",
+    "set_health",
     "force_end_turn", "mark_self_damage_source", "fission", "fusion",
     "multiply_next_damage", "reduce_next_cost", "increase_next_cost",
     "add_tag", "remove_tag", "tag_add_named", "tag_remove_named", "clear_tags",
@@ -129,15 +130,18 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         source = _player_id(engine, resolve_v2_target(engine, context, params.get("source", "source")))
         amount = max(0, _to_int(eval_v2_value(engine, context, params.get("amount", 0))))
         hits = max(1, _to_int(eval_v2_value(engine, context, params.get("hits", 1))))
+        card = context.get("card")
+        card_flags = getattr(card, "flags", set()) or set()
+        is_precision = bool(params.get("is_precision", params.get("precision", False))) or "precision" in card_flags
         targets = _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "target")))
         total = 0
         for target_id in targets:
             if not _valid_player(engine, target_id):
                 continue
             try:
-                dealt = engine.deal_attack_damage(target_id, amount, hits, attacker_id=source)
+                dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision, attacker_id=source)
             except TypeError:
-                dealt = engine.deal_attack_damage(target_id, amount, hits)
+                dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
             total += int(dealt or 0)
         context["last_damage"] = total
         return {"success": True, "last_damage": total}
@@ -457,6 +461,8 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
     text = str(selector or "").strip()
     if text in ("source", "self"):
         return int(context.get("source_player", 0))
+    if text in ("event_source", "source_id", "last_actor", "damage_source"):
+        return int(context.get("source_id", context.get("damage_source", context.get("source_player", 0))))
     if text == "target":
         return int(context.get("target_player", _enemy_id(engine, int(context.get("source_player", 0)))))
     if text == "enemy":
@@ -497,8 +503,9 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
         return 0 if not getattr(engine, "players", []) else int(context.get("_rng_index", 0)) % len(engine.players)
     if text in ("hand", "deck", "discard", "exile", "equipment"):
         return _zone(engine, int(context.get("source_player", 0)), text)
-    if text in ("choice_target", "selected_target", "chosen_target", "event_target"):
-        return int(context.get("target_player", _enemy_id(engine, int(context.get("source_player", 0)))))
+    if text in ("choice_target", "selected_target", "chosen_target", "event_target", "target_id"):
+        fallback = context.get("target_id", context.get("source_player", 0))
+        return int(context.get("target_player", fallback))
     if text in ("chosen_card", "selected_card", "choice_card"):
         chosen = context.get("chosen_card")
         if chosen is not None:

@@ -95,7 +95,7 @@ python app.py
 
 ## 许可证
 
-MIT 许可证。
+All rights reserved.
 
 ## 联系方式
 
@@ -103,3 +103,6 @@ MIT 许可证。
 - 邮件：<adult-huang@outlook.com>
 - 也可在 Issue 区参与讨论
 
+© 2026 Stickerbug / Garden of Thorn Dev Team. All rights reserved.
+
+Garden of Thorn / 荆棘花园 的游戏规则实现、卡牌文本、界面设计、美术素材、音乐、服务器代码和相关文档等均受著作权保护。未经明确许可，不得复制、修改、分发或用于其他项目。
