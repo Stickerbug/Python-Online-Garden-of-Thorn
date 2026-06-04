@@ -2174,6 +2174,16 @@ const LOCAL_SOLO_SUPPORTED_EFFECTS = new Set([
     'on_fatal_set_health_exile',
     'aura_enemy_elixir_recovery', 'nullify_current_card',
 ]);
+const LOCAL_SOLO_SUPPORTED_V2_OPS = new Set([
+    ...LOCAL_SOLO_SUPPORTED_EFFECTS,
+    'draw_cards', 'add_status', 'remove_status', 'set_status', 'move_card',
+    'create_card', 'destroy_equipment', 'log', 'set_health',
+    'const', 'var', 'player_stat', 'card_prop', 'status_stack', 'count',
+    'add', 'sub', 'mul', 'div', 'floor', 'ceil', 'min', 'max', 'last_damage',
+    'compare', 'and', 'or', 'not', 'has_status_named', 'has_status',
+    'hand_full', 'selected_cards_count', 'selected_card_index',
+    'selected_card_at', 'selected_card', 'last_created_card',
+]);
 const COMBAT_FLOAT_TOTAL_LIMIT_MS = 5000;
 const COMBAT_FLOAT_BASE_DURATION_MS = 1700;
 const COMBAT_FLOAT_MIN_DURATION_MS = 620;
@@ -5638,9 +5648,30 @@ function effectsAreLocalSoloSupported(effects) {
     return true;
 }
 
+function v2StepsAreLocalSoloSupported(value) {
+    if (Array.isArray(value)) return value.every(v2StepsAreLocalSoloSupported);
+    if (!value || typeof value !== 'object') return true;
+    const op = value.op || value.type || '';
+    if (op && !LOCAL_SOLO_SUPPORTED_V2_OPS.has(op)) return false;
+    return Object.values(value).every(v2StepsAreLocalSoloSupported);
+}
+
+function v2EventsAreLocalSoloSupported(cardDef) {
+    const events = (cardDef.v2_events && typeof cardDef.v2_events === 'object')
+        ? cardDef.v2_events
+        : ((cardDef.v2_resource && cardDef.v2_resource.events && typeof cardDef.v2_resource.events === 'object')
+            ? cardDef.v2_resource.events
+            : {});
+    return Object.values(events).every(eventDef => {
+        const steps = Array.isArray(eventDef) ? eventDef : (eventDef && (eventDef.steps || eventDef.effects));
+        return v2StepsAreLocalSoloSupported(steps || []);
+    });
+}
+
 function cardIsLocalSoloSupported(cardDef) {
     if (!cardDef) return false;
     if (!effectsAreLocalSoloSupported(cardDef.effects || [])) return false;
+    if (!v2EventsAreLocalSoloSupported(cardDef)) return false;
     const scripts = cardDef.scripts || {};
     for (const script of Object.values(scripts)) {
         const effects = Array.isArray(script) ? script : (script && script.effects);
@@ -5774,7 +5805,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=6');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=7');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;
@@ -8862,7 +8893,7 @@ function getCardTargetPickOptions(cardDef) {
 }
 
 function effectTreeUsesEventTarget(value) {
-    if (value === 'event_target') return true;
+    if (['event_target', 'target', 'enemy', 'choice_target', 'selected_target', 'chosen_target'].includes(value)) return true;
     if (Array.isArray(value)) return value.some(effectTreeUsesEventTarget);
     if (value && typeof value === 'object') {
         return Object.values(value).some(effectTreeUsesEventTarget);
@@ -8882,6 +8913,14 @@ function getEquipmentTriggerPayloads(cardDef) {
     const scripts = cardDef.scripts && typeof cardDef.scripts === 'object' ? cardDef.scripts : {};
     ['onEquipmentTrigger', 'on_equipment_trigger', 'equipment_trigger'].forEach(key => {
         if (scripts[key]) payloads.push(scripts[key]);
+    });
+    const v2Events = (cardDef.v2_events && typeof cardDef.v2_events === 'object')
+        ? cardDef.v2_events
+        : ((cardDef.v2_resource && cardDef.v2_resource.events && typeof cardDef.v2_resource.events === 'object')
+            ? cardDef.v2_resource.events
+            : {});
+    ['on_equipment_trigger', 'equipment_trigger'].forEach(key => {
+        if (v2Events[key]) payloads.push(v2Events[key]);
     });
     return payloads;
 }
@@ -8925,11 +8964,17 @@ function cardNeedsEnemyPlayerTarget(cardDef) {
     const ids = new Set(['Iris', 'Fire', 'Cancer']);
     if (ids.has(cardDef.id)) return true;
     const effects = Array.isArray(cardDef.effects) ? cardDef.effects : [];
-    return effects.some(effect => {
+    if (effects.some(effect => {
         const params = effect && effect.params ? effect.params : {};
         const target = params.target || params.targets || params.target1 || params.target2;
         return ['enemy', 'all_enemies', 'random_enemy'].includes(target);
-    });
+    })) return true;
+    const v2Events = (cardDef.v2_events && typeof cardDef.v2_events === 'object')
+        ? cardDef.v2_events
+        : ((cardDef.v2_resource && cardDef.v2_resource.events && typeof cardDef.v2_resource.events === 'object')
+            ? cardDef.v2_resource.events
+            : {});
+    return Object.values(v2Events).some(effectTreeUsesEventTarget);
 }
 
 function renderEquipment(containerId, playerData, isMyEquipment) {

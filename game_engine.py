@@ -789,20 +789,23 @@ class GameEngine:
 
     def _v2_card_hook_context(self, hook_name: str, player_id: int, card: CardInstance,
                               choice: Optional[dict] = None) -> dict:
-        target_id = player_id
+        target_id = -1
+        target_explicit = False
         if isinstance(choice, dict):
             for key in ('target_player', 'target_player_id', 'target_id'):
                 if key in choice:
                     try:
                         target_id = int(choice.get(key))
+                        target_explicit = True
                         break
                     except Exception:
-                        target_id = player_id
+                        target_id = -1
         if not (0 <= target_id < len(self.players)):
-            target_id = player_id
+            target_id = 1 - player_id if len(self.players) == 2 else player_id
         return {
             'source_player': player_id,
             'target_player': target_id,
+            'target_player_explicit': target_explicit,
             'card': card,
             'room': getattr(self, 'room', None),
             'loadout': getattr(self, 'v2_loadout', None),
@@ -5046,20 +5049,23 @@ class GameEngine:
                            choice: Optional[dict] = None, extra_context: Optional[dict] = None):
         events = getattr(card.card_def, 'v2_events', None) or {}
         event_def = events.get(event_name)
-        target_id = player_id
+        target_id = -1
+        target_explicit = False
         if isinstance(choice, dict):
             for key in ('target_player', 'target_player_id', 'target_id'):
                 if key in choice:
                     try:
                         target_id = int(choice.get(key))
+                        target_explicit = True
                         break
                     except Exception:
-                        target_id = player_id
+                        target_id = -1
         if target_id < 0 or target_id >= len(self.players):
             target_id = 1 - player_id if len(self.players) == 2 else player_id
         context = {
             'source_player': player_id,
             'target_player': target_id,
+            'target_player_explicit': target_explicit,
             'card': card,
             'room': getattr(self, 'room', None),
             'loadout': getattr(self, 'v2_loadout', None),

@@ -3924,6 +3924,7 @@ def api_cards():
             'response_content': getattr(card_def, 'response_content', ''),
             'effects': card_def.effects,
             'scripts': getattr(card_def, 'scripts', {}) or {},
+            'v2_events': getattr(card_def, 'v2_events', {}) or {},
         }
         if getattr(card_def, 'v2_mod_id', ''):
             card_payload['v2_mod_id'] = getattr(card_def, 'v2_mod_id', '')

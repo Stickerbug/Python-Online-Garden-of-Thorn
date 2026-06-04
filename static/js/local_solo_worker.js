@@ -74,6 +74,26 @@ const SCRIPT_ENTRY_ALIASES = {
     player_stat_changed: ['onPlayerStatChanged', 'player_stat_changed', 'on_player_stat_changed'],
 };
 
+const V2_EVENT_ALIASES = {
+    play: ['on_play'],
+    response: ['on_response'],
+    owner_turn_start: ['on_owner_turn_start', 'on_turn_start', 'on_turn_start_while_equipped'],
+    enemy_turn_start: ['on_enemy_turn_start'],
+    any_turn_start: ['on_any_turn_start'],
+    damage_taken: ['on_damage_taken'],
+    equipment_trigger: ['on_equipment_trigger'],
+    equipment_destroy: ['on_equipment_destroy', 'on_before_destroyed'],
+    hand_owner_turn_start: ['on_hand_owner_turn_start', 'on_enter_hand'],
+    enter_hand: ['on_enter_hand', 'on_hand_owner_turn_start'],
+    discard_owner_turn_start: ['on_discard_owner_turn_start', 'on_discard'],
+    deck_owner_turn_start: ['on_deck_owner_turn_start'],
+    card_used: ['on_card_used', 'after_play_card'],
+    equipment_triggered: ['on_equipment_triggered'],
+    equipment_destroyed: ['on_equipment_destroyed'],
+    resource_spent: ['on_resource_spent'],
+    player_stat_changed: ['on_player_stat_changed'],
+};
+
 const TRACKED_PLAYER_STATS = [
     'health', 'max_health', 'elixir', 'max_elixir', 'magic', 'max_magic',
     'armor', 'dodge', 'poison', 'fire', 'vulnerable', 'toxic',
@@ -137,6 +157,108 @@ function scriptEffectsFrom(script) {
     return [];
 }
 
+function v2EventsFrom(def) {
+    if (!def || typeof def !== 'object') return {};
+    if (def.v2_events && typeof def.v2_events === 'object') return def.v2_events;
+    const resourceEvents = def.v2_resource && def.v2_resource.events;
+    return resourceEvents && typeof resourceEvents === 'object' ? resourceEvents : {};
+}
+
+function v2EventNames(entry) {
+    const raw = String(entry || '');
+    const names = [...(V2_EVENT_ALIASES[raw] || [])];
+    if (raw) names.push(raw.startsWith('on_') ? raw : `on_${raw}`);
+    return [...new Set(names)];
+}
+
+function v2EventSteps(def, entry) {
+    const events = v2EventsFrom(def);
+    for (const name of v2EventNames(entry)) {
+        const eventDef = events[name];
+        if (Array.isArray(eventDef)) return eventDef;
+        if (eventDef && Array.isArray(eventDef.steps)) return eventDef.steps;
+        if (eventDef && Array.isArray(eventDef.effects)) return eventDef.effects;
+    }
+    return [];
+}
+
+function v2StepParams(step) {
+    const params = step && typeof step.params === 'object' && !Array.isArray(step.params)
+        ? { ...step.params }
+        : {};
+    Object.entries(step || {}).forEach(([key, value]) => {
+        if (!['op', 'type', 'params', 'then', 'else', 'body', 'steps', 'condition'].includes(key)) {
+            params[key] = value;
+        }
+    });
+    return params;
+}
+
+function v2StepsToEffects(steps) {
+    if (!Array.isArray(steps)) return [];
+    return steps.map(v2StepToEffect).filter(Boolean);
+}
+
+function v2StepToEffect(step) {
+    if (!step || typeof step !== 'object') return null;
+    const op = step.op || step.type || '';
+    const params = v2StepParams(step);
+    if (op === 'if') {
+        return {
+            type: 'if',
+            params: {
+                condition: step.condition || params.condition,
+                then: v2StepsToEffects(step.then || params.then || []),
+                else: v2StepsToEffects(step.else || params.else || []),
+            },
+        };
+    }
+    if (op === 'repeat') {
+        return {
+            type: 'repeat',
+            params: {
+                times: params.times ?? params.count,
+                body: v2StepsToEffects(step.body || step.steps || params.body || params.steps || []),
+            },
+        };
+    }
+    if (op === 'repeat_until') {
+        return {
+            type: 'repeat_until',
+            params: {
+                condition: step.condition || params.condition,
+                body: v2StepsToEffects(step.body || step.steps || params.body || params.steps || []),
+            },
+        };
+    }
+    if (op === 'for_each_selected_card') {
+        return {
+            type: 'for_each_selected_card',
+            params: {
+                ...params,
+                body: v2StepsToEffects(step.body || step.steps || params.body || params.steps || []),
+            },
+        };
+    }
+    if (op === 'draw_cards') return { type: 'draw', params };
+    if (op === 'add_status') return { type: 'status_add_named', params: { ...params, status: params.status || params.id || params.name } };
+    if (op === 'remove_status') return { type: 'status_remove_named', params: { ...params, status: params.status || params.id || params.name } };
+    if (op === 'set_status') return { type: 'status_set_named', params: { ...params, status: params.status || params.id || params.name } };
+    if (op === 'move_card') {
+        const zone = String(params.to || params.zone || 'discard');
+        const map = { hand: 'move_to_hand', deck: 'move_to_deck', discard: 'move_to_discard', exile: 'move_to_exile' };
+        return { type: map[zone] || 'move_to_discard', params };
+    }
+    if (op === 'create_card') {
+        const zone = String(params.to || params.zone || 'hand');
+        const map = { hand: 'give_card_to_hand', deck: 'give_card_to_deck', discard: 'give_card_to_discard' };
+        return { type: map[zone] || 'give_card_to_hand', params: { ...params, card: params.card || params.card_id || params.id } };
+    }
+    if (op === 'destroy_equipment') return { type: 'destroy_equipment_choice_or_first', params };
+    if (op === 'log') return { type: 'log', params };
+    return { type: op, params };
+}
+
 function getScriptEffects(def, entry) {
     const scripts = (def && def.scripts) || {};
     const aliases = SCRIPT_ENTRY_ALIASES[entry] || [entry];
@@ -145,6 +267,8 @@ function getScriptEffects(def, entry) {
             return scriptEffectsFrom(scripts[key]);
         }
     }
+    const v2Steps = v2EventSteps(def, entry);
+    if (v2Steps.length) return v2StepsToEffects(v2Steps);
     return [];
 }
 
@@ -959,6 +1083,10 @@ class LocalSoloEngine {
         if (ref == null) return currentCard;
         if (typeof ref === 'string') return ['current_card', 'this', 'this_card'].includes(ref) ? currentCard : null;
         if (typeof ref !== 'object') return null;
+        if (ref.op === 'last_created_card') ref = { ref: 'last_created_card' };
+        if (ref.op === 'selected_card_at') ref = { ref: 'selected_card_at', index: ref.index };
+        if (ref.op === 'selected_card') ref = { ref: 'selected_card' };
+        if (ref.op === 'current_card') ref = { ref: 'current_card' };
         if (['current_card', 'this_card'].includes(ref.ref)) return currentCard;
         if (['event_card', 'used_card', 'trigger_card', 'destroyed_card'].includes(ref.ref)) {
             return this.findCardByInstanceId((this._active_effect_context || {}).event_card_instance_id);
@@ -1239,6 +1367,58 @@ class LocalSoloEngine {
         }
         if (typeof expr !== 'object') return fallbackValue;
         const ref = expr.ref;
+        const op = expr.op || expr.type || '';
+        if (op === 'const') return expr.value ?? fallbackValue;
+        if (op === 'var') {
+            const store = this.varStoreForTarget(playerId, expr.target || 'self');
+            return this.scalarValue(store[String(expr.name || 'var')], 0);
+        }
+        if (op === 'player_stat') {
+            const tid = this.resolveTarget(playerId, expr.target || 'self');
+            if (tid < 0) {
+                return this.players.reduce((sum, _, idx) => sum + this.playerPropertyValue(idx, expr.stat || expr.property || 'health'), 0);
+            }
+            return this.playerPropertyValue(tid, expr.stat || expr.property || 'health');
+        }
+        if (op === 'card_prop') {
+            const card = this.resolveCardRef(playerId, expr.card || { ref: 'current_card' }, currentCard);
+            if (!card) return fallbackValue;
+            const prop = String(expr.property || expr.prop || 'cost_e');
+            if (prop === 'cost_e') return toInt(card.cost_e, 0);
+            if (prop === 'cost_m') return toInt(card.cost_m, 0);
+            if (prop === 'tag_count' || prop === 'tags_count') return card.flags.size;
+            return toInt(card[prop], fallbackValue);
+        }
+        if (op === 'status_stack') {
+            const tid = this.resolveTarget(playerId, expr.target || 'self');
+            return this.statusCount(tid, expr.status || expr.name || expr.id || '');
+        }
+        if (op === 'count') {
+            if (expr.zone) return this.zoneSize(this.resolveTarget(playerId, expr.target || 'self'), expr.zone);
+            if (expr.list) return this.evalList(playerId, expr.list, currentCard).length;
+            return fallbackValue;
+        }
+        if (op === 'add' || op === '+') return this.evalExpr(playerId, expr.a, currentCard, 0) + this.evalExpr(playerId, expr.b, currentCard, 0);
+        if (op === 'sub' || op === '-') return this.evalExpr(playerId, expr.a, currentCard, 0) - this.evalExpr(playerId, expr.b, currentCard, 0);
+        if (op === 'mul' || op === '*') return this.evalExpr(playerId, expr.a, currentCard, 0) * this.evalExpr(playerId, expr.b, currentCard, 0);
+        if (op === 'div' || op === '/') {
+            const b = this.evalExpr(playerId, expr.b, currentCard, 0);
+            return b === 0 ? 0 : this.evalExpr(playerId, expr.a, currentCard, 0) / b;
+        }
+        if (op === 'floor') return Math.floor(this.evalExpr(playerId, expr.value ?? expr.a, currentCard, 0));
+        if (op === 'ceil') return Math.ceil(this.evalExpr(playerId, expr.value ?? expr.a, currentCard, 0));
+        if (op === 'min') return Math.min(this.evalExpr(playerId, expr.a, currentCard, 0), this.evalExpr(playerId, expr.b, currentCard, 0));
+        if (op === 'max') return Math.max(this.evalExpr(playerId, expr.a, currentCard, 0), this.evalExpr(playerId, expr.b, currentCard, 0));
+        if (op === 'last_damage') {
+            const tid = this.resolveTarget(playerId, expr.target || 'enemy');
+            return toInt(this._last_damage_value[tid], 0);
+        }
+        if (op === 'selected_cards_count') {
+            const choice = this._active_choice || {};
+            if (Array.isArray(choice.target_instance_ids)) return choice.target_instance_ids.length;
+            return choice.target_instance_id != null || choice.target_def_id != null ? 1 : 0;
+        }
+        if (op === 'selected_card_index') return toInt((this._active_effect_context || {}).selected_card_index, 0);
         if (ref === 'var') {
             const store = this.varStoreForTarget(playerId, expr.target || 'self');
             return this.scalarValue(store[String(expr.name || 'var')], 0);
@@ -2319,6 +2499,12 @@ class LocalSoloEngine {
         else this.players[targetId].deck.unshift(target);
     }
 
+    effect_move_to_exile(playerId, card, params) {
+        const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
+        const loc = this.removeCardFromCurrentZone(target);
+        if (loc) this.players[loc.ownerId].exile.push(target);
+    }
+
     effect_remove_specific_card(playerId, card, params) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
         const loc = this.findCardLocation(target);
@@ -2499,6 +2685,29 @@ class LocalSoloEngine {
         if (status) this.players[targetId][status] = toInt(this.players[targetId][status], 0) + amount;
     }
 
+    effect_status_set_named(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const status = String(params.status || params.name || '');
+        const amount = this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+        if (status) this.players[targetId][status] = amount;
+    }
+
+    effect_add_status(playerId, card, params, log, choice) {
+        this.effect_status_add_named(playerId, card, { ...params, status: params.status || params.id || params.name }, log, choice);
+    }
+
+    effect_remove_status(playerId, card, params, log, choice) {
+        this.effect_status_remove_named(playerId, card, { ...params, status: params.status || params.id || params.name }, log, choice);
+    }
+
+    effect_set_status(playerId, card, params, log, choice) {
+        this.effect_status_set_named(playerId, card, { ...params, status: params.status || params.id || params.name }, log, choice);
+    }
+
+    effect_draw_cards(playerId, card, params, log, choice) {
+        this.effect_draw(playerId, card, params, log, choice);
+    }
+
     effect_add_tag(playerId, card, params, log) {
         this.effect_tag_add_named(playerId, card, params, log);
     }
@@ -2527,6 +2736,42 @@ class LocalSoloEngine {
         const targetId = this.resolveTarget(playerId, params.target || 'self');
         const ps = this.players[targetId];
         ['poison', 'fire', 'vulnerable', 'toxic', 'dodge'].forEach(prop => { ps[prop] = 0; });
+    }
+
+    effect_set_health(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        this.setPlayerPropertyValue(targetId, 'health', this.evalInt(playerId, params.value ?? params.amount ?? 0, card, 0));
+    }
+
+    effect_invincible(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        this.players[targetId].invincible = this.evalInt(playerId, params.value ?? params.amount ?? 1, card, 1) > 0;
+    }
+
+    effect_mod_e_regen(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        this.players[targetId].enemy_e_reduction = Math.max(0, toInt(this.players[targetId].enemy_e_reduction, 0) - this.evalInt(playerId, params.amount ?? 0, card, 0));
+    }
+
+    effect_mod_m_regen() {}
+
+    effect_mod_draw(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        this.players[targetId].enemy_draw_reduction = Math.max(0, toInt(this.players[targetId].enemy_draw_reduction, 0) - this.evalInt(playerId, params.amount ?? 0, card, 0));
+    }
+
+    effect_equip_protection(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        this.players[targetId].equipment_protection += this.evalInt(playerId, params.amount ?? 1, card, 1);
+    }
+
+    effect_response_declare() {}
+
+    effect_trigger_manual() {}
+
+    effect_log(playerId, card, params, log) {
+        const message = log || params.message || params.text || '';
+        if (message) this.logMsg(String(message));
     }
 
     effect_nullify_current_card() {

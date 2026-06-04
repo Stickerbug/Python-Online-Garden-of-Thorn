@@ -451,6 +451,9 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
     if text == "target":
         return int(context.get("target_player", _enemy_id(engine, int(context.get("source_player", 0)))))
     if text == "enemy":
+        explicit_target = _explicit_target_id(engine, context)
+        if explicit_target is not None:
+            return explicit_target
         return _enemy_id(engine, int(context.get("source_player", 0)))
     if text in ("friendly", "self_team", "all_friendlies"):
         source = int(context.get("source_player", 0))
@@ -779,6 +782,16 @@ def _as_player_list(engine, value: Any) -> List[int]:
         if _valid_player(engine, player_id):
             out.append(player_id)
     return out
+
+
+def _explicit_target_id(engine, context: Dict[str, Any]) -> Optional[int]:
+    if not isinstance(context, dict) or not context.get("target_player_explicit"):
+        return None
+    try:
+        target_id = int(context.get("target_player"))
+    except Exception:
+        return None
+    return target_id if _valid_player(engine, target_id) else None
 
 
 def _enemy_id(engine, source: int) -> int:
@@ -1225,6 +1238,11 @@ def _engine_target_selector(engine, context: Dict[str, Any], value: Any):
         if player_count <= 2:
             return "self" if target == source else "enemy"
         return target
+    if value == "enemy":
+        explicit_target = _explicit_target_id(engine, context)
+        if explicit_target is not None and player_count > 2:
+            return explicit_target
+        return "enemy"
     if value == "all_friendlies":
         return "friendly"
     if value == "all_enemies":
