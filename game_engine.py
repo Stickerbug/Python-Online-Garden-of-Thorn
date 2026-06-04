@@ -1217,6 +1217,7 @@ class GameEngine:
         text = text.strip()
         if not text:
             return ''
+        text = self._normalize_damage_log_text(text)
         m = re.fullmatch(r'(.+)触发(.+)！(.+)', text)
         if m:
             return f'{m.group(1)}触发{m.group(2)}，{m.group(3)}'
@@ -1245,6 +1246,19 @@ class GameEngine:
             taken = re.fullmatch(rf'{re.escape(target)}受到(\d+)点电池伤害（H=(.+)）', last)
             if taken:
                 self.log[-1] = f'{owner}的电池反伤{target}：{damage}D（H={taken.group(2)}）'
+                return True
+
+        m = re.fullmatch(r'(.+)闪避了攻击！?', text)
+        if m:
+            responder = m.group(1)
+            if re.fullmatch(rf'{re.escape(responder)}使用泡泡进行反制！?', last):
+                self.log[-1] = f'{responder}使用泡泡，闪避了攻击'
+                return True
+
+        if text == '精准牌被闪避反制，伤害减半！':
+            m = re.fullmatch(r'(.+)使用泡泡进行反制！?', last)
+            if m:
+                self.log[-1] = f'{m.group(1)}使用泡泡，精准攻击伤害减半'
                 return True
 
         m = re.fullmatch(r'(.+)装备了(.+)', text)
@@ -1287,11 +1301,32 @@ class GameEngine:
             return True
         return self._merge_counted_log(text, last)
 
+    def _normalize_damage_log_text(self, text: str) -> str:
+        parsed = self._parse_damage_taken_log(text)
+        if not parsed:
+            return text
+        return (
+            f"{parsed['prefix']}{parsed['target']}受到"
+            f"{self._format_damage_parts(parsed['parts'])}"
+            f"（H={parsed['start_hp']}→{parsed['end_hp']}）"
+        )
+
     def _parse_damage_taken_log(self, text: str):
         m = re.fullmatch(r'(.+)受到(\d+(?:\+\d+)*)点伤害（H=([^）]+)）', text)
-        if not m:
-            return None
-        before, parts, hp_text = m.group(1), m.group(2), m.group(3)
+        if m:
+            before, raw_damage, hp_text = m.group(1), m.group(2), m.group(3)
+            parts = [int(p) for p in raw_damage.split('+')]
+        else:
+            m = re.fullmatch(r'(.+)受到(\d+)D(?:×(\d+))?（H=([^）]+)）', text)
+            if m:
+                before, raw_damage, raw_times, hp_text = m.group(1), m.group(2), m.group(3), m.group(4)
+                parts = [int(raw_damage)] * max(1, int(raw_times or 1))
+            else:
+                m = re.fullmatch(r'(.+)受到\((\d+(?:\+\d+)*)\)D（H=([^）]+)）', text)
+                if not m:
+                    return None
+                before, raw_damage, hp_text = m.group(1), m.group(2), m.group(3)
+                parts = [int(p) for p in raw_damage.split('+')]
         comma_idx = before.rfind('，')
         prefix = before[:comma_idx + 1] if comma_idx >= 0 else ''
         target = before[comma_idx + 1:] if comma_idx >= 0 else before
@@ -1301,7 +1336,7 @@ class GameEngine:
         else:
             end_hp = hp_text
             try:
-                start_hp = str(int(end_hp) + sum(int(p) for p in parts.split('+')))
+                start_hp = str(int(end_hp) + sum(parts))
             except Exception:
                 start_hp = ''
         return {
@@ -1311,6 +1346,16 @@ class GameEngine:
             'start_hp': start_hp,
             'end_hp': end_hp,
         }
+
+    def _format_damage_parts(self, parts) -> str:
+        values = [int(p) for p in (parts or [])]
+        if not values:
+            return '0D'
+        if len(values) == 1:
+            return f'{values[0]}D'
+        if all(v == values[0] for v in values):
+            return f'{values[0]}D×{len(values)}'
+        return f"({'+'.join(str(v) for v in values)})D"
 
     def _merge_damage_taken_log(self, text: str, last: str) -> bool:
         current = self._parse_damage_taken_log(text)
@@ -1324,7 +1369,7 @@ class GameEngine:
             return False
         self.log[-1] = (
             f"{previous['prefix']}{previous['target']}受到"
-            f"{previous['parts']}+{current['parts']}点伤害"
+            f"{self._format_damage_parts(previous['parts'] + current['parts'])}"
             f"（H={start_hp}→{current['end_hp']}）"
         )
         return True
@@ -1353,6 +1398,7 @@ class GameEngine:
         if not detail.startswith(allowed_starts):
             result_patterns = (
                 r'.+受到\d+点.*（H=.+）',
+                r'.+受到(?:\d+D(?:×\d+)?|\(\d+(?:\+\d+)*\)D)（H=.+）',
                 r'.+回复\d+[HE]',
                 r'.+获得\d+(E|M|护甲|闪避)',
                 r'.+\+\d+(中毒|灼烧|淬毒|易伤)',
