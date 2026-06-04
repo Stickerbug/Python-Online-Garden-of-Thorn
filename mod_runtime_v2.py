@@ -323,7 +323,16 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
     if op in ("const", "literal"):
         return expr.get("value", expr.get("const"))
     if op in ("var", "temp_var"):
-        return context.get("vars", {}).get(expr.get("name", expr.get("id")), expr.get("default", 0))
+        # A plain var is a temporary runtime var.  If a target is supplied, it
+        # means a per-player custom var in editor output.
+        name = str(expr.get("name") or expr.get("id") or "")
+        if "target" in expr:
+            target = resolve_v2_target(engine, context, expr.get("target", "source"))
+            player_id = _player_id(engine, target)
+            if _valid_player(engine, player_id):
+                return getattr(engine.players[player_id], "custom_vars", {}).get(name, expr.get("default", 0))
+            return expr.get("default", 0)
+        return context.get("vars", {}).get(name, expr.get("default", 0))
     if op in ("player_var", "global_var"):
         target = resolve_v2_target(engine, context, expr.get("target", "source"))
         player_id = _player_id(engine, target)
@@ -488,8 +497,23 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
         return 0 if not getattr(engine, "players", []) else int(context.get("_rng_index", 0)) % len(engine.players)
     if text in ("hand", "deck", "discard", "exile", "equipment"):
         return _zone(engine, int(context.get("source_player", 0)), text)
-    if text == "chosen_card":
-        return context.get("chosen_card")
+    if text in ("choice_target", "selected_target", "chosen_target", "event_target"):
+        return int(context.get("target_player", _enemy_id(engine, int(context.get("source_player", 0)))))
+    if text in ("chosen_card", "selected_card", "choice_card"):
+        chosen = context.get("chosen_card")
+        if chosen is not None:
+            return chosen
+        action = context.get("current_action") if isinstance(context.get("current_action"), dict) else {}
+        choice = action.get("choice") if isinstance(action.get("choice"), dict) else action
+        instance_id = choice.get("target_instance_id")
+        if instance_id is None and isinstance(choice.get("target_instance_ids"), list) and choice.get("target_instance_ids"):
+            instance_id = choice.get("target_instance_ids")[0]
+        return _find_card_by_instance_id(engine, instance_id) if instance_id is not None else None
+    if text in ("last_created_card", "created_card", "last_copied_card"):
+        instance_id = context.get("last_created_card_instance_id")
+        if instance_id is None:
+            instance_id = getattr(engine, "_last_created_card_instance_id", None)
+        return _find_card_by_instance_id(engine, instance_id) if instance_id is not None else None
     if text == "current_card":
         return context.get("card")
     if text == "current_equipment":

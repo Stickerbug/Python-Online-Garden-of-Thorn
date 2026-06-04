@@ -1281,7 +1281,62 @@ class GameEngine:
 
         if self._merge_simple_use_detail(text, last):
             return True
+        if self._merge_legacy_use_damage_log(text, last):
+            return True
+        if self._merge_damage_taken_log(text, last):
+            return True
         return self._merge_counted_log(text, last)
+
+    def _parse_damage_taken_log(self, text: str):
+        m = re.fullmatch(r'(.+)受到(\d+(?:\+\d+)*)点伤害（H=([^）]+)）', text)
+        if not m:
+            return None
+        before, parts, hp_text = m.group(1), m.group(2), m.group(3)
+        comma_idx = before.rfind('，')
+        prefix = before[:comma_idx + 1] if comma_idx >= 0 else ''
+        target = before[comma_idx + 1:] if comma_idx >= 0 else before
+        hp_parts = hp_text.split('→', 1)
+        if len(hp_parts) == 2:
+            start_hp, end_hp = hp_parts[0], hp_parts[1]
+        else:
+            end_hp = hp_text
+            try:
+                start_hp = str(int(end_hp) + sum(int(p) for p in parts.split('+')))
+            except Exception:
+                start_hp = ''
+        return {
+            'prefix': prefix,
+            'target': target,
+            'parts': parts,
+            'start_hp': start_hp,
+            'end_hp': end_hp,
+        }
+
+    def _merge_damage_taken_log(self, text: str, last: str) -> bool:
+        current = self._parse_damage_taken_log(text)
+        previous = self._parse_damage_taken_log(last)
+        if not current or not previous:
+            return False
+        if current['target'] != previous['target']:
+            return False
+        start_hp = previous['start_hp']
+        if not start_hp:
+            return False
+        self.log[-1] = (
+            f"{previous['prefix']}{previous['target']}受到"
+            f"{previous['parts']}+{current['parts']}点伤害"
+            f"（H={start_hp}→{current['end_hp']}）"
+        )
+        return True
+
+    def _merge_legacy_use_damage_log(self, text: str, last: str) -> bool:
+        if not self._parse_damage_taken_log(text):
+            return False
+        m = re.fullmatch(r'(.+)使用(.+)！(?:对.+)?造成.+伤害', last)
+        if not m:
+            return False
+        self.log[-1] = f'{m.group(1)}使用{m.group(2)}，{text}'
+        return True
 
     def _merge_simple_use_detail(self, text: str, last: str) -> bool:
         m = re.fullmatch(r'(.+)使用了(.+)', last)
@@ -2159,10 +2214,10 @@ class GameEngine:
             return False
         if getattr(card.card_def, 'heal', 0):
             return True
-        for effect in self._play_effects_for_card(card):
+        for effect in list(self._play_effects_for_card(card) or []) + list(self._v2_play_steps_for_card(card) or []):
             if not isinstance(effect, dict):
                 continue
-            effect_type = effect.get('type', '')
+            effect_type = self._effect_type(effect)
             if effect_type in ('heal', 'lifesteal_damage'):
                 return True
         return False
@@ -2457,7 +2512,8 @@ class GameEngine:
         self._incoming_damage_hint[target_id] = int(amount)
         dealt = self.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
         self._last_damage_value[target_id] = int(dealt)
-        self.log_msg(log or f"{self.pn(player_id)}对{self.pn(target_id)}造成{dealt}伤害")
+        if log:
+            self.log_msg(log)
 
     def _atomic_heal(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -2697,8 +2753,12 @@ class GameEngine:
         times = params.get('times', 1)
         total = 0
         for _ in range(times):
-            total += self.deal_attack_damage(target_id, amount)
-        self.log_msg(log or f"{self.pn(player_id)}对{self.pn(target_id)}造成{times}x{amount}={total}伤害")
+            try:
+                total += self.deal_attack_damage(target_id, amount, attacker_id=player_id)
+            except TypeError:
+                total += self.deal_attack_damage(target_id, amount)
+        if log:
+            self.log_msg(log)
 
     def _atomic_remove_armor(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -3760,13 +3820,12 @@ class GameEngine:
         ps = self.players[player_id]
         base = 6 + 3 * ps.triangle_stacks
         dmg = self._modified_attack_damage(base, card)
+        if int(getattr(card, 'fission_hit', 0) or 0) == 0:
+            self._log_card_play(player_id, card)
         dealt = self.deal_attack_damage(1 - player_id, dmg)
         if dealt > 0:
             if ps.triangle_stacks < 4:
                 ps.triangle_stacks += 1
-            self.log_msg(f"{self.pn(player_id)}使用三角形！造成{dealt}伤害，三角形层数+1（{ps.triangle_stacks}）")
-        else:
-            self.log_msg(f"{self.pn(player_id)}使用三角形！未造成伤害")
 
     def _effect_magicbone(self, player_id: int, card: CardInstance, choice=None):
         dmg = self._modified_attack_damage(15, card)
@@ -4221,6 +4280,8 @@ class GameEngine:
         if self._has_script_entry(card_def, event_name):
             return True
         event_type = f'on_{event_name}'
+        if self._card_has_v2_event(card_def, event_type):
+            return True
         return any(isinstance(effect, dict) and effect.get('type') == event_type for effect in (card_def.effects or []))
 
     def _play_effects_for_card(self, card: CardInstance):
@@ -4228,23 +4289,52 @@ class GameEngine:
             return self._get_script_effects(card.card_def, 'play')
         return card.card_def.effects or []
 
+    def _v2_play_steps_for_card(self, card: CardInstance):
+        events = getattr(card.card_def, 'v2_events', None) or {}
+        event_def = events.get('on_play')
+        if isinstance(event_def, dict):
+            steps = event_def.get('steps', event_def.get('effects', []))
+            return steps if isinstance(steps, list) else []
+        return event_def if isinstance(event_def, list) else []
+
+    def _effect_type(self, effect) -> str:
+        if not isinstance(effect, dict):
+            return ''
+        return str(effect.get('type') or effect.get('op') or '')
+
+    def _effect_params(self, effect) -> dict:
+        if not isinstance(effect, dict):
+            return {}
+        params = effect.get('params')
+        if isinstance(params, dict):
+            return params
+        return {
+            key: value
+            for key, value in effect.items()
+            if key not in {'type', 'op', 'log', 'then', 'else', 'steps', 'body', 'condition', 'cond'}
+        }
+
     def _walk_choice_effects(self, effects):
         for effect in effects or []:
             if not isinstance(effect, dict):
                 continue
-            effect_type = effect.get('type', '')
+            effect_type = self._effect_type(effect)
             if effect_type in self.EVENT_EFFECT_TYPES:
                 continue
             yield effect
-            params = effect.get('params', {}) or {}
+            params = self._effect_params(effect)
             for key in ('then', 'else', 'body', 'effects', 'a', 'b'):
                 nested = params.get(key)
                 if isinstance(nested, list):
                     yield from self._walk_choice_effects(nested)
+                direct_nested = effect.get(key)
+                if isinstance(direct_nested, list):
+                    yield from self._walk_choice_effects(direct_nested)
 
     def _get_choice_request(self, card: CardInstance):
-        for effect in self._walk_choice_effects(self._play_effects_for_card(card)):
-            effect_type = effect.get('type', '')
+        effects = list(self._play_effects_for_card(card) or []) + list(self._v2_play_steps_for_card(card) or [])
+        for effect in self._walk_choice_effects(effects):
+            effect_type = self._effect_type(effect)
             if effect_type in self.CHOICE_EFFECT_TYPES:
                 return effect
             if effect_type in ('discard_choice_then_draw', 'destroy_equipment_choice_or_first',
@@ -4309,10 +4399,16 @@ class GameEngine:
         if card_ref is None:
             return current_card
         if isinstance(card_ref, str):
-            return current_card if card_ref in ('current_card', 'this') else None
+            if card_ref in ('current_card', 'this', 'this_card'):
+                return current_card
+            if card_ref in ('selected_card', 'choice_card', 'chosen_card'):
+                return self._resolve_card_ref(player_id, {'ref': 'selected_card'}, current_card)
+            if card_ref in ('last_created_card', 'created_card', 'last_copied_card'):
+                return self._resolve_card_ref(player_id, {'ref': 'last_created_card'}, current_card)
+            return None
         if not isinstance(card_ref, dict):
             return None
-        ref = card_ref.get('ref')
+        ref = card_ref.get('ref') or card_ref.get('op') or card_ref.get('type')
         if ref in ('event_card', 'used_card', 'trigger_card', 'destroyed_card'):
             context = getattr(self, '_active_effect_context', {}) or {}
             instance_id = context.get('event_card_instance_id') if isinstance(context, dict) else None
@@ -4334,7 +4430,7 @@ class GameEngine:
             return self._resolve_card_ref(player_id, raw, current_card)
         if ref == 'list_item':
             return self._resolve_card_ref(player_id, self._list_item_raw(player_id, card_ref, current_card), current_card)
-        if ref in ('selected_card', 'choice_card'):
+        if ref in ('selected_card', 'choice_card', 'chosen_card'):
             choice = getattr(self, '_active_choice', None) or {}
             if isinstance(choice, dict):
                 instance_id = choice.get('target_instance_id')
@@ -4916,8 +5012,8 @@ class GameEngine:
     def _get_choice_type(self, card: CardInstance) -> str:
         effect = self._get_choice_request(card)
         if effect:
-            effect_type = effect.get('type', '')
-            params = effect.get('params', {}) or {}
+            effect_type = self._effect_type(effect)
+            params = self._effect_params(effect)
             if effect_type == 'request_target':
                 return 'choose_target'
             if effect_type == 'request_card':
@@ -4946,8 +5042,8 @@ class GameEngine:
             return False
         choice_request = self._get_choice_request(card)
         choice_type = self._get_choice_type(card)
-        params = choice_request.get('params', {}) if isinstance(choice_request, dict) else {}
-        effect_type = choice_request.get('type', '') if isinstance(choice_request, dict) else ''
+        params = self._effect_params(choice_request) if isinstance(choice_request, dict) else {}
+        effect_type = self._effect_type(choice_request) if isinstance(choice_request, dict) else ''
         if choice.get('cancelled') and params.get('continue_on_cancel'):
             return True
         if effect_type == 'request_target' or choice_type == 'choose_target':
@@ -5074,6 +5170,28 @@ class GameEngine:
             'current_event': event_name,
             'current_action': {'choice': choice or {}, **(extra_context or {})},
         }
+        if isinstance(choice, dict):
+            instance_ids = []
+            if choice.get('target_instance_id') is not None:
+                instance_ids.append(choice.get('target_instance_id'))
+            if isinstance(choice.get('target_instance_ids'), list):
+                instance_ids.extend(choice.get('target_instance_ids'))
+            chosen_cards = []
+            seen_ids = set()
+            for instance_id in instance_ids:
+                try:
+                    iid = int(instance_id)
+                except Exception:
+                    continue
+                if iid in seen_ids:
+                    continue
+                seen_ids.add(iid)
+                selected = self._find_card_by_instance_id(iid)
+                if selected is not None:
+                    chosen_cards.append(selected)
+            if chosen_cards:
+                context['chosen_card'] = chosen_cards[0]
+                context['chosen_cards'] = chosen_cards
         result = run_v2_event(self, context, event_def)
         if isinstance(result, dict) and result.get('needs_v2_ui'):
             self._store_v2_ui_pause(result.get('v2_ui_pause') or {}, card)
@@ -5615,11 +5733,11 @@ class GameEngine:
         needs_choice = self._card_needs_choice(card)
         if needs_choice and not self._choice_satisfies_request(card, choice):
             choice_request = self._get_choice_request(card)
-            choice_params = (choice_request.get('params', {}) if isinstance(choice_request, dict) else {}) or {}
+            choice_params = self._effect_params(choice_request) if isinstance(choice_request, dict) else {}
             choice_type = self._get_choice_type(card)
             choice_target_id = None
             if isinstance(choice_request, dict):
-                request_type = choice_request.get('type')
+                request_type = self._effect_type(choice_request)
                 target_defaults = {
                     'request_card': 'self',
                     'choose_from_deck': 'self',
@@ -5804,7 +5922,8 @@ class GameEngine:
         except TypeError:
             dealt = self.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
         self._last_damage_value[target_id] = int(dealt)
-        self.log_msg(log or f"{self.pn(player_id)}对{self.pn(target_id)}造成{dealt}伤害")
+        if log:
+            self.log_msg(log)
 
     def _atomic_direct_damage(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))

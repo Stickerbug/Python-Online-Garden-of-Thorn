@@ -2966,6 +2966,10 @@ def start_event_select(room):
 
 
 def start_game(room):
+    if hasattr(room.engine, 'log'):
+        room.engine.log = []
+    if hasattr(room.engine, '_log_compaction_floor'):
+        room.engine._log_compaction_floor = 0
     room.engine.start_game()
     room.started_at = time.time()
     admin_event('game', f'room {room.room_id} started mode={room.mode}')
@@ -6058,6 +6062,10 @@ def on_rematch(data=None):
                         names.append(f'Player {pidx + 1}')
                 room.engine.player_names = names
                 if room.mode == 'urf':
+                    if hasattr(room.engine, 'log'):
+                        room.engine.log = []
+                    if hasattr(room.engine, '_log_compaction_floor'):
+                        room.engine._log_compaction_floor = 0
                     room.engine.start_game()
                     room.started_at = time.time()
                     record_room_replay_keyframe(room, 'game_start')

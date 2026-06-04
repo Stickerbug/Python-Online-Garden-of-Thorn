@@ -2144,6 +2144,9 @@ let pendingServerAction = null;
 let pendingServerActionTimer = null;
 let optimisticResourceOverride = null;
 let selectedPlayCardId = null;
+let classicAimPointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+let classicAimHoverTarget = '';
+let classicHoverPreviewTimer = null;
 let actionToastTimer = null;
 let combatFloatSeq = 0;
 const localSoloRuntime = {
@@ -3436,10 +3439,150 @@ function ensureMobilePlayConfirm() {
 
 function clearSelectedPlayCard() {
     selectedPlayCardId = null;
+    classicAimHoverTarget = '';
+    if (classicHoverPreviewTimer) {
+        clearTimeout(classicHoverPreviewTimer);
+        classicHoverPreviewTimer = null;
+    }
     document.querySelectorAll('.card.tap-selected').forEach(el => el.classList.remove('tap-selected'));
+    document.querySelectorAll('.classic-fighter.is-aim-hover').forEach(el => el.classList.remove('is-aim-hover'));
+    const aim = $('classic-aim-layer');
+    if (aim) aim.classList.add('hidden');
     const bar = $('mobile-play-confirm');
     if (bar) bar.classList.add('hidden');
     if (shouldUseClassicBattle(gameState)) renderClassicBattle(gameState);
+}
+
+function getSelectedClassicCard() {
+    const hand = (gameState && gameState.you && gameState.you.hand) || [];
+    const cardDict = hand.find(c => c.instance_id === selectedPlayCardId);
+    if (!cardDict) return null;
+    return normalizeBattleCard(cardDict, gameState.you || {});
+}
+
+function isClassicSelfOnlyCard(card) {
+    if (!card) return false;
+    const flags = new Set([
+        ...((card.flags || []).map(String)),
+        ...(((card.raw && card.raw.instance_flags) || []).map(String)),
+    ]);
+    const cardDef = card.cardDef || getCardDef(card.def_id || '');
+    ((cardDef && cardDef.flags) || []).forEach(flag => flags.add(String(flag)));
+    return flags.has('self_only') || flags.has('tag_self_only');
+}
+
+function ensureClassicAimLayer() {
+    const root = $('battle-classic');
+    if (!root) return null;
+    let svg = $('classic-aim-layer');
+    if (!svg) {
+        svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.id = 'classic-aim-layer';
+        svg.classList.add('classic-aim-layer', 'hidden');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.setAttribute('focusable', 'false');
+        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+        marker.setAttribute('id', 'classic-aim-arrowhead');
+        marker.setAttribute('markerWidth', '10');
+        marker.setAttribute('markerHeight', '10');
+        marker.setAttribute('refX', '8');
+        marker.setAttribute('refY', '5');
+        marker.setAttribute('orient', 'auto');
+        marker.setAttribute('markerUnits', 'strokeWidth');
+        const head = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        head.setAttribute('d', 'M1,1 L9,5 L1,9 Z');
+        marker.appendChild(head);
+        defs.appendChild(marker);
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.classList.add('classic-aim-path');
+        path.setAttribute('marker-end', 'url(#classic-aim-arrowhead)');
+        svg.appendChild(defs);
+        svg.appendChild(path);
+        root.appendChild(svg);
+    }
+    return svg;
+}
+
+function classicAimPathData(x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 6) return `M ${x1.toFixed(1)} ${y1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+    const points = [];
+    const bend = Math.max(-90, Math.min(90, dx * 0.12));
+    for (let i = 0; i <= 30; i++) {
+        const t = i / 30;
+        const logT = Math.log1p(t * 11) / Math.log(12);
+        const bow = Math.sin(Math.PI * t) * bend;
+        const x = x1 + dx * t + bow * 0.18;
+        const y = y1 + dy * logT - Math.sin(Math.PI * t) * Math.min(42, dist * 0.16);
+        points.push(`${i ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`);
+    }
+    return points.join(' ');
+}
+
+function selectedClassicCardCenter() {
+    if (selectedPlayCardId == null) return null;
+    const cardEl = document.querySelector(`.classic-hand-card[data-instance-id="${selectedPlayCardId}"]`);
+    if (!cardEl) return null;
+    const rect = cardEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+function updateClassicAimHoverTarget() {
+    let hoverId = '';
+    const el = document.elementFromPoint(classicAimPointer.x, classicAimPointer.y);
+    const fighter = el && el.closest ? el.closest('#classic-fighter-self, #classic-fighter-enemy') : null;
+    if (fighter && classicCanPlayFromElement(fighter.id)) hoverId = fighter.id;
+    if (hoverId === classicAimHoverTarget) return;
+    classicAimHoverTarget = hoverId;
+    document.querySelectorAll('.classic-fighter.is-aim-hover').forEach(item => item.classList.remove('is-aim-hover'));
+    if (hoverId) {
+        const target = $(hoverId);
+        if (target) target.classList.add('is-aim-hover');
+    }
+}
+
+function updateClassicAimCurve() {
+    const root = $('battle-classic');
+    const selected = getSelectedClassicCard();
+    const selfOnly = isClassicSelfOnlyCard(selected);
+    const svg = ensureClassicAimLayer();
+    if (!root || !svg || !selected || selfOnly || !shouldUseClassicBattle(gameState)) {
+        if (svg) svg.classList.add('hidden');
+        return;
+    }
+    const center = selectedClassicCardCenter();
+    if (!center) {
+        svg.classList.add('hidden');
+        return;
+    }
+    svg.setAttribute('viewBox', `0 0 ${window.innerWidth} ${window.innerHeight}`);
+    svg.setAttribute('width', String(window.innerWidth));
+    svg.setAttribute('height', String(window.innerHeight));
+    const path = svg.querySelector('.classic-aim-path');
+    if (path) path.setAttribute('d', classicAimPathData(center.x, center.y, classicAimPointer.x, classicAimPointer.y));
+    svg.classList.remove('hidden');
+    updateClassicAimHoverTarget();
+}
+
+function scheduleClassicAimCurveUpdate() {
+    if (!shouldUseClassicBattle(gameState)) return;
+    requestAnimationFrame(updateClassicAimCurve);
+}
+
+function onClassicAimPointerMove(event) {
+    classicAimPointer = { x: event.clientX, y: event.clientY };
+    if (selectedPlayCardId != null && shouldUseClassicBattle(gameState)) updateClassicAimCurve();
+}
+
+function cancelClassicSelection(event) {
+    if (!shouldUseClassicBattle(gameState) || selectedPlayCardId == null) return false;
+    if (event) event.preventDefault();
+    clearSelectedPlayCard();
+    return true;
 }
 
 function selectPlayCardForConfirm(cardInstanceId) {
@@ -3476,7 +3619,7 @@ function selectPlayCardForConfirm(cardInstanceId) {
     return true;
 }
 
-function selectClassicPlayCard(cardInstanceId) {
+function selectClassicPlayCard(cardInstanceId, event = null) {
     if (!shouldUseClassicBattle(gameState) || isActionBusy()) return false;
     const hand = (gameState.you || {}).hand || [];
     const cardDict = hand.find(c => c.instance_id === cardInstanceId);
@@ -3485,15 +3628,13 @@ function selectClassicPlayCard(cardInstanceId) {
         if (cardDict) flashStatus(getCannotPlayReason(cardDict), 2200, 'error');
         return false;
     }
-    if (selectedPlayCardId === cardInstanceId) {
-        classicPlaySelectedCard();
-        return true;
-    }
+    if (event && typeof event.clientX === 'number') classicAimPointer = { x: event.clientX, y: event.clientY };
     selectedPlayCardId = cardInstanceId;
     document.querySelectorAll('.card.tap-selected').forEach(el => el.classList.remove('tap-selected'));
     const cardEl = document.querySelector(`.card[data-instance-id="${cardInstanceId}"]`);
     if (cardEl) cardEl.classList.add('tap-selected');
     renderClassicBattle(gameState);
+    scheduleClassicAimCurveUpdate();
     return true;
 }
 
@@ -3506,14 +3647,29 @@ async function classicPlaySelectedCard() {
 }
 
 function classicCanPlayFromElement(elementId) {
-    if (elementId === 'classic-play-lane') return true;
     const hand = (gameState && gameState.you && gameState.you.hand) || [];
     const cardDict = hand.find(c => c.instance_id === selectedPlayCardId);
     const cardDef = cardDict ? getCardDef(cardDict.def_id) : null;
-    const role = getClassicPlayRole(cardDef ? normalizeBattleCard(cardDict, gameState.you || {}) : null);
+    const card = cardDef ? normalizeBattleCard(cardDict, gameState.you || {}) : null;
+    const selfOnly = isClassicSelfOnlyCard(card);
+    const role = getClassicPlayRole(card);
+    if (elementId === 'classic-play-lane') return selfOnly || role === 'stage';
     if (elementId === 'classic-fighter-enemy') return role === 'enemy';
-    if (elementId === 'classic-fighter-self') return role === 'self' || role === 'equip';
+    if (elementId === 'classic-fighter-self') return !selfOnly && (role === 'self' || role === 'equip');
     return false;
+}
+
+function classicCanAutoPlaySelfOnlyFromEvent(event) {
+    if (!shouldUseClassicBattle(gameState) || selectedPlayCardId == null || isActionBusy()) return false;
+    const selected = getSelectedClassicCard();
+    if (!isClassicSelfOnlyCard(selected)) return false;
+    const target = event && event.target;
+    if (target && target.closest && target.closest('.classic-hand-card, .classic-end-turn, .classic-icon-btn, .classic-log-drawer, .classic-fighter, #classic-play-lane')) {
+        return false;
+    }
+    const hand = $('classic-hand-fan');
+    const handRect = hand ? hand.getBoundingClientRect() : null;
+    return !handRect || event.clientY < handRect.top;
 }
 
 function showModal(html) {
@@ -5805,7 +5961,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=7');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=8');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;
@@ -7569,15 +7725,39 @@ function getClassicPlayRole(card) {
     if (type === 'root') return 'equip';
     if (type === 'bloom') {
         const cardDef = card.cardDef || getCardDef(card.def_id || '');
-        const effectText = JSON.stringify((cardDef && cardDef.effects) || []);
-        if (/"target"\s*:\s*"(enemy|target|all_enemies)"/i.test(effectText)) return 'enemy';
+        if (cardEffectTargetsEnemy(cardDef)) return 'enemy';
         return 'self';
     }
     return 'stage';
 }
 
+function cardEffectTargetsEnemy(cardDef) {
+    if (!cardDef) return false;
+    const ids = new Set(['Iris', 'Fire', 'Cancer']);
+    if (ids.has(cardDef.id)) return true;
+    const inspect = (value) => {
+        if (value == null) return false;
+        if (typeof value === 'string') return ['enemy', 'target', 'all_enemies', 'random_enemy'].includes(value);
+        if (Array.isArray(value)) return value.some(inspect);
+        if (typeof value === 'object') return Object.entries(value).some(([key, child]) => {
+            if (['target', 'targets', 'target1', 'target2', 'items'].includes(key) && inspect(child)) return true;
+            return inspect(child);
+        });
+        return false;
+    };
+    if (inspect(cardDef.effects || [])) return true;
+    if (inspect(cardDef.scripts || {})) return true;
+    const v2Events = (cardDef.v2_events && typeof cardDef.v2_events === 'object')
+        ? cardDef.v2_events
+        : ((cardDef.v2_resource && cardDef.v2_resource.events && typeof cardDef.v2_resource.events === 'object')
+            ? cardDef.v2_resource.events
+            : {});
+    return inspect(v2Events);
+}
+
 function getClassicPlayHint(card) {
     if (!card) return UI.classic_select_card || UI.your_turn;
+    if (isClassicSelfOnlyCard(card)) return UI.classic_target_self || UI.classic_play_center || UI.drag_to_play;
     const role = getClassicPlayRole(card);
     if (role === 'enemy') return UI.classic_target_enemy || UI.drag_to_play;
     if (role === 'self') return UI.classic_target_self || UI.drag_to_play;
@@ -7590,7 +7770,10 @@ function renderClassicPlayLane(vm) {
     if (!lane) return;
     const selected = vm && vm.selectedCard;
     const role = getClassicPlayRole(selected);
-    lane.classList.toggle('is-armed', !!selected);
+    const selfOnly = isClassicSelfOnlyCard(selected);
+    lane.classList.toggle('is-armed', !!selected && (selfOnly || role === 'stage'));
+    lane.classList.toggle('is-aim-passive', !!selected && !selfOnly && role !== 'stage');
+    lane.classList.toggle('is-self-only', !!selected && selfOnly);
     lane.classList.toggle('is-equip-role', role === 'equip');
     lane.classList.toggle('is-self-role', role === 'self');
     lane.classList.toggle('is-enemy-role', role === 'enemy');
@@ -7634,13 +7817,16 @@ function renderClassicFighter(container, player, side, selectedCard = null) {
     if (!container) return;
     const hpPct = player.maxHp > 0 ? Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100)) : 0;
     const role = getClassicPlayRole(selectedCard);
+    const selfOnly = isClassicSelfOnlyCard(selectedCard);
+    const isHardTarget = !!selectedCard && !selfOnly && (role === side || (role === 'enemy' && side === 'enemy') || (role === 'self' && side === 'self'));
+    const isSoftTarget = !!selectedCard && !selfOnly && role === 'equip' && side === 'self';
     container.classList.toggle('is-current', !!player.isCurrent);
     container.classList.toggle('is-defeated', !!player.isDefeated);
-    container.classList.toggle('is-play-target', !!selectedCard && (role === side || (role === 'enemy' && side === 'enemy') || (role === 'self' && side === 'self')));
-    container.classList.toggle('is-soft-target', !!selectedCard && role === 'equip' && side === 'self');
+    container.classList.toggle('is-play-target', isHardTarget);
+    container.classList.toggle('is-soft-target', isSoftTarget);
     const intentText = side === 'enemy'
         ? (player.isCurrent ? (UI.opponent_turn || 'Opponent') : (selectedCard && role === 'enemy' ? (UI.classic_target_enemy || '') : ''))
-        : (player.isCurrent ? (UI.your_turn || 'Your turn') : (selectedCard && (role === 'self' || role === 'equip') ? getClassicPlayHint(selectedCard) : ''));
+        : (player.isCurrent ? (UI.your_turn || 'Your turn') : (selectedCard && !selfOnly && (role === 'self' || role === 'equip') ? getClassicPlayHint(selectedCard) : ''));
     container.innerHTML = `
         <div class="classic-fighter-name">${escapeHtml(player.name || '?')}</div>
         ${intentText ? `<div class="classic-intent-badge">${escapeHtml(intentText)}</div>` : '<div class="classic-intent-badge is-empty"></div>'}
@@ -7681,13 +7867,23 @@ function renderClassicHand(vm) {
         const cardEl = createCardElement(card.raw || card, {
             draggable: false,
             onClick: playable
-                ? () => selectClassicPlayCard(card.instance_id)
+                ? (event) => selectClassicPlayCard(card.instance_id, event)
                 : () => flashStatus(getCannotPlayReason(card.raw || card), 2200, 'error'),
         });
         cardEl.classList.add('classic-fan-card-inner');
         wrap.appendChild(cardEl);
-        wrap.addEventListener('mouseenter', () => renderClassicCardPreview(card));
+        wrap.addEventListener('mouseenter', () => {
+            if (classicHoverPreviewTimer) clearTimeout(classicHoverPreviewTimer);
+            classicHoverPreviewTimer = setTimeout(() => {
+                classicHoverPreviewTimer = null;
+                renderClassicCardPreview(card);
+            }, 200);
+        });
         wrap.addEventListener('mouseleave', () => {
+            if (classicHoverPreviewTimer) {
+                clearTimeout(classicHoverPreviewTimer);
+                classicHoverPreviewTimer = null;
+            }
             if (!selectedPlayCardId) renderClassicCardPreview(vm.selectedCard);
         });
         container.appendChild(wrap);
@@ -7749,6 +7945,11 @@ function renderClassicBattle(gs) {
         }
         renderClassicHand(vm);
         renderClassicLog(vm);
+        if (selected) scheduleClassicAimCurveUpdate();
+        else {
+            const aim = $('classic-aim-layer');
+            if (aim) aim.classList.add('hidden');
+        }
         const endBtn = $('classic-end-turn');
         if (endBtn) {
             endBtn.textContent = UI.end_turn;
@@ -11404,6 +11605,18 @@ async function init() {
     $('btn-end-turn').addEventListener('click', onEndTurn);
     if ($('classic-end-turn')) $('classic-end-turn').addEventListener('click', onEndTurn);
     if ($('classic-settings')) $('classic-settings').addEventListener('click', () => openSettings({ hideServer: true }));
+    document.addEventListener('mousemove', onClassicAimPointerMove);
+    document.addEventListener('contextmenu', (event) => {
+        if (cancelClassicSelection(event)) return;
+    });
+    if ($('battle-classic')) {
+        $('battle-classic').addEventListener('click', (event) => {
+            if (classicCanAutoPlaySelfOnlyFromEvent(event)) {
+                event.preventDefault();
+                classicPlaySelectedCard();
+            }
+        });
+    }
     ['classic-play-lane', 'classic-fighter-self', 'classic-fighter-enemy'].forEach(id => {
         const el = $(id);
         if (el) el.addEventListener('click', (event) => {

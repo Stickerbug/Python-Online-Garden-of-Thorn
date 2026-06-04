@@ -701,7 +701,62 @@ class LocalSoloEngine {
     }
 
     logMsg(message) {
-        this.log.push(String(message));
+        const text = String(message || '').trim();
+        if (!text) return;
+        if (this.mergeSimpleUseDamageLog(text)) return;
+        if (this.mergeLegacyUseDamageLog(text)) return;
+        if (this.mergeDamageTakenLog(text)) return;
+        this.log.push(text);
+    }
+
+    parseDamageTakenLog(text) {
+        const match = String(text || '').match(/^(.+)受到(\d+(?:\+\d+)*)点伤害（H=([^）]+)）$/);
+        if (!match) return null;
+        const before = match[1];
+        const cut = before.lastIndexOf('，');
+        const prefix = cut >= 0 ? before.slice(0, cut + 1) : '';
+        const target = cut >= 0 ? before.slice(cut + 1) : before;
+        const parts = match[2];
+        const hpText = match[3];
+        let startHp = '';
+        let endHp = hpText;
+        const arrow = hpText.indexOf('→');
+        if (arrow >= 0) {
+            startHp = hpText.slice(0, arrow);
+            endHp = hpText.slice(arrow + 1);
+        } else {
+            const hp = Number.parseInt(hpText, 10);
+            const total = parts.split('+').reduce((sum, part) => sum + toInt(part, 0), 0);
+            if (Number.isFinite(hp)) startHp = String(hp + total);
+        }
+        return { prefix, target, parts, startHp, endHp };
+    }
+
+    mergeDamageTakenLog(text) {
+        if (!this.log.length) return false;
+        const current = this.parseDamageTakenLog(text);
+        const previous = this.parseDamageTakenLog(this.log[this.log.length - 1]);
+        if (!current || !previous || current.target !== previous.target || !previous.startHp) {
+            return false;
+        }
+        this.log[this.log.length - 1] = `${previous.prefix}${previous.target}受到${previous.parts}+${current.parts}点伤害（H=${previous.startHp}→${current.endHp}）`;
+        return true;
+    }
+
+    mergeSimpleUseDamageLog(text) {
+        if (!this.log.length || !this.parseDamageTakenLog(text)) return false;
+        const match = String(this.log[this.log.length - 1]).match(/^(.+)使用了(.+)$/);
+        if (!match) return false;
+        this.log[this.log.length - 1] = `${match[1]}使用${match[2]}，${text}`;
+        return true;
+    }
+
+    mergeLegacyUseDamageLog(text) {
+        if (!this.log.length || !this.parseDamageTakenLog(text)) return false;
+        const match = String(this.log[this.log.length - 1]).match(/^(.+)使用(.+)！(?:对.+)?造成.+伤害$/);
+        if (!match) return false;
+        this.log[this.log.length - 1] = `${match[1]}使用${match[2]}，${text}`;
+        return true;
     }
 
     publicState(perspective = null) {
@@ -1081,7 +1136,16 @@ class LocalSoloEngine {
     resolveCardRef(playerId, ref, currentCard = null) {
         if (ref instanceof LocalCard) return ref;
         if (ref == null) return currentCard;
-        if (typeof ref === 'string') return ['current_card', 'this', 'this_card'].includes(ref) ? currentCard : null;
+        if (typeof ref === 'string') {
+            if (['current_card', 'this', 'this_card'].includes(ref)) return currentCard;
+            if (['selected_card', 'choice_card', 'chosen_card'].includes(ref)) {
+                return this.resolveCardRef(playerId, { ref: 'selected_card' }, currentCard);
+            }
+            if (['last_created_card', 'created_card', 'last_copied_card'].includes(ref)) {
+                return this.resolveCardRef(playerId, { ref: 'last_created_card' }, currentCard);
+            }
+            return null;
+        }
         if (typeof ref !== 'object') return null;
         if (ref.op === 'last_created_card') ref = { ref: 'last_created_card' };
         if (ref.op === 'selected_card_at') ref = { ref: 'selected_card_at', index: ref.index };
@@ -1101,7 +1165,7 @@ class LocalSoloEngine {
             return this.resolveCardRef(playerId, raw, currentCard);
         }
         if (ref.ref === 'list_item') return this.resolveCardRef(playerId, this.listItemRaw(playerId, ref, currentCard), currentCard);
-        if (['selected_card', 'choice_card'].includes(ref.ref)) {
+        if (['selected_card', 'choice_card', 'chosen_card'].includes(ref.ref)) {
             const choice = this._active_choice || {};
             const id = choice.target_instance_id ?? (Array.isArray(choice.target_instance_ids) ? choice.target_instance_ids[0] : null);
             if (id != null) return this.findCardByInstanceId(id);
@@ -2140,14 +2204,14 @@ class LocalSoloEngine {
         });
     }
 
-    effect_deal_damage(playerId, card, params) {
+    effect_deal_damage(playerId, card, params, log = '') {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         const amount = this.modifiedAttackDamage(this.evalInt(playerId, params.amount ?? 6, card, 6), card);
         const hits = Math.max(1, this.evalInt(playerId, params.hits ?? 1, card, 1));
         this._incoming_damage_hint[targetId] = amount;
         const dealt = this.dealAttackDamage(targetId, amount, hits, !!params.is_precision, playerId);
         this._last_damage_value[targetId] = dealt;
-        this.logMsg(`${this.pn(playerId)}对${this.pn(targetId)}造成${dealt}伤害`);
+        if (log) this.logMsg(log);
     }
 
     effect_direct_damage(playerId, card, params) {

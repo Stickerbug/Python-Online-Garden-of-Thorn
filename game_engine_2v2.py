@@ -1279,10 +1279,11 @@ class GameEngine2v2(GameEngine):
         target = self._attack_target(player_id, choice)
         ps = self.players[player_id]
         dmg = self._modified_attack_damage(6 + 3 * ps.triangle_stacks, card)
+        if int(getattr(card, 'fission_hit', 0) or 0) == 0:
+            self._log_card_play(player_id, card)
         dealt = self.deal_attack_damage(target, dmg, attacker_id=player_id)
         if dealt > 0 and ps.triangle_stacks < 4:
             ps.triangle_stacks += 1
-            self.log_msg(f"{self.pn(player_id)}三角形层数+1（{ps.triangle_stacks}）")
 
     def _effect_magicbone(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
