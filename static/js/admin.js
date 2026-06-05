@@ -375,6 +375,11 @@ function renderServerResources(metrics) {
   ));
   const dbFiles = (database.files || []).map(file => `${file.name} ${formatBytes(file.bytes)}`).join(' / ');
   const cards = [
+    resourceCard(
+      '实例',
+      `${profile.instance || '-'} :${profile.port || '-'}`,
+      `分支 ${profile.git_branch || '-'}${profile.service_name ? ` · 服务 ${profile.service_name}` : ''}${profile.base_dir ? ` · ${profile.base_dir}` : ''}`,
+    ),
     resourceCard('服务器规格', `${profile.cpu_target || system.cpu_count || '-'} / ${profile.memory_target || formatBytes(system.memory_total)} / ${profile.disk_target || '-'}`, `${profile.provider || 'Aliyun'} · ${profile.os || 'Ubuntu 22.04'}`),
     resourceCard('数据库文件', formatBytes(database.bytes), `${database.path || ''}${dbFiles ? ` · ${dbFiles}` : ''}`),
     resourceCard('Python 进程', `PID ${process.pid || '-'}`, `RSS ${formatBytes(process.memory_rss)} · VMS ${formatBytes(process.memory_vms)} · 线程 ${process.threads ?? '-'}`),
@@ -385,7 +390,7 @@ function renderServerResources(metrics) {
   ];
   grid.innerHTML = cards.join('');
   const label = $('server-profile-label');
-  if (label) label.textContent = `${profile.provider || 'Aliyun'} · ${profile.os || 'Ubuntu 22.04'}`;
+  if (label) label.textContent = `${profile.instance || 'combined'} · ${profile.provider || 'Aliyun'} · ${profile.os || 'Ubuntu 22.04'}`;
 }
 
 function chartPolyline(samples, key, color, width = 320, height = 110) {

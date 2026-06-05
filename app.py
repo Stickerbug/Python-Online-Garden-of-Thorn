@@ -22,7 +22,7 @@ from functools import wraps
 from collections import deque
 from datetime import datetime, timedelta, timezone
 
-from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session
+from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash
 from game_engine import GameEngine
@@ -162,6 +162,32 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'garden_of_thorn_secret'
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=int(os.environ.get('GTN_SESSION_DAYS', '30')))
 REMEMBER_COOKIE_NAME = 'gtn_remember'
+
+
+def _normalize_instance(value):
+    normalized = str(value or 'combined').strip().lower()
+    return normalized if normalized in {'combined', 'release', 'beta'} else 'combined'
+
+
+GTN_INSTANCE = _normalize_instance(os.environ.get('GTN_INSTANCE', 'combined'))
+GTN_RELEASE_PUBLIC_URL = os.environ.get('GTN_RELEASE_PUBLIC_URL', '').strip()
+GTN_BETA_PUBLIC_URL = os.environ.get('GTN_BETA_PUBLIC_URL', '').strip()
+GTN_BIND_HOST = os.environ.get('GTN_BIND_HOST', '0.0.0.0').strip() or '0.0.0.0'
+GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 5000)
+
+
+def is_beta_instance():
+    return GTN_INSTANCE == 'beta'
+
+
+def is_release_instance():
+    return GTN_INSTANCE == 'release'
+
+
+def is_combined_instance():
+    return GTN_INSTANCE == 'combined'
+
+
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
@@ -2238,6 +2264,14 @@ def _collect_runtime_metrics():
         'time': iso_now(),
         'uptime_seconds': uptime,
         'server_profile': {
+            'instance': GTN_INSTANCE,
+            'port': GTN_PORT,
+            'bind_host': GTN_BIND_HOST,
+            'git_branch': os.environ.get('GTN_GIT_BRANCH', 'main').strip() or 'main',
+            'service_name': os.environ.get('GTN_SYSTEMD_SERVICE', '').strip(),
+            'base_dir': os.path.dirname(os.path.abspath(__file__)),
+            'release_url': GTN_RELEASE_PUBLIC_URL,
+            'beta_url': GTN_BETA_PUBLIC_URL,
             'provider': os.environ.get('GTN_SERVER_PROVIDER', 'Aliyun'),
             'os': platform.platform(),
             'python': platform.python_version(),
@@ -2371,6 +2405,14 @@ def get_admin_status_payload():
         history = list(MATCH_HISTORY)[:80]
     return {
         'success': True,
+        'instance': {
+            'name': GTN_INSTANCE,
+            'port': GTN_PORT,
+            'bind_host': GTN_BIND_HOST,
+            'git_branch': os.environ.get('GTN_GIT_BRANCH', 'main').strip() or 'main',
+            'service_name': os.environ.get('GTN_SYSTEMD_SERVICE', '').strip(),
+            'base_dir': os.path.dirname(os.path.abspath(__file__)),
+        },
         'metrics': metrics,
         'summary': {
             'online_players': len(player_list),
@@ -2741,9 +2783,13 @@ def execute_admin_command(line):
         payload = get_admin_status_payload()
         summary = payload['summary']
         metrics = payload['metrics']
+        profile = metrics.get('server_profile', {})
         socket_metrics = metrics.get('socket', {})
         r2_metrics = metrics.get('r2', {})
         return {'success': True, 'output': (
+            f"Instance: {profile.get('instance', GTN_INSTANCE)} | Port: {profile.get('port', GTN_PORT)} | "
+            f"Branch: {profile.get('git_branch', os.environ.get('GTN_GIT_BRANCH', 'main'))} | "
+            f"Service: {profile.get('service_name') or '-'}\n"
             f"在线：{summary['online_players']} | 大厅：{summary['lobby_players']} | "
             f"对局：{summary['rooms']} | 观战：{summary['spectators']}\n"
             f"运行时间：{metrics['uptime_seconds']} 秒 | "
@@ -3965,18 +4011,34 @@ def both_disconnected_cleanup(room_id):
 
 @app.route('/')
 def index():
+    if is_beta_instance():
+        return beta_entry_response()
     return render_template('index.html', beta_mode=False)
 
 
-@app.route('/beta')
-def beta_index():
+def beta_entry_response():
     if is_beta_authenticated():
         return render_template('index.html', beta_mode=True)
     return render_template('beta_gate.html')
 
 
+@app.route('/beta')
+def beta_index():
+    if is_release_instance():
+        if GTN_BETA_PUBLIC_URL:
+            return redirect(GTN_BETA_PUBLIC_URL, code=302)
+        return 'Beta server is not served by this release instance. Configure GTN_BETA_PUBLIC_URL or use the beta port.', 404
+    return beta_entry_response()
+
+
 @app.route('/api/beta/login', methods=['POST'])
 def beta_login():
+    if is_release_instance():
+        return jsonify({
+            'success': False,
+            'error': '内测服不在当前正式服实例上，请使用独立内测入口',
+            'beta_url': GTN_BETA_PUBLIC_URL,
+        }), 404
     ip = _client_ip()
     if should_rate_limit_beta_login(ip):
         admin_event('security', f'beta login rate limited from {ip}')
@@ -4109,6 +4171,9 @@ def admin_status():
 def healthz():
     return jsonify({
         'success': True,
+        'instance': GTN_INSTANCE,
+        'port': GTN_PORT,
+        'git_branch': os.environ.get('GTN_GIT_BRANCH', 'main').strip() or 'main',
         'time': iso_now(),
         'uptime_seconds': max(0, int(time.time() - SERVER_STARTED_AT)),
         'players': len(players),
@@ -5041,6 +5106,12 @@ def on_login(data):
     raw_name = data.get('nickname', '')
     wants_account_login = bool(data.get('account_login'))
     is_beta_mode = bool(data.get('beta_mode'))
+    if is_beta_instance() and not is_beta_mode:
+        emit('login_fail', {'reason': 'This server only accepts beta clients'})
+        return
+    if is_release_instance() and is_beta_mode:
+        emit('login_fail', {'reason': 'This server only accepts release clients'})
+        return
     if is_beta_mode and not is_beta_authenticated():
         emit('login_fail', {'reason': '内测登录已过期，请重新输入内测秘钥'})
         return
@@ -7018,6 +7089,9 @@ def start_replay_cleanup_thread():
     global _replay_cleanup_started
     if _replay_cleanup_started:
         return
+    cleanup_enabled = str(os.environ.get('GTN_REPLAY_CLEANUP_ENABLED', '1')).strip().lower()
+    if cleanup_enabled in {'0', 'false', 'no', 'off'}:
+        return
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'false':
         return
     _replay_cleanup_started = True
@@ -7029,6 +7103,4 @@ start_replay_cleanup_thread()
 
 
 if __name__ == '__main__':
-    import os
-    port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+    socketio.run(app, host=GTN_BIND_HOST, port=GTN_PORT, debug=False)
