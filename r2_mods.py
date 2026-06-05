@@ -244,6 +244,11 @@ def _asset_data_url(zf: zipfile.ZipFile, member: str) -> str:
     return f'data:{mime};base64,{base64.b64encode(raw).decode("ascii")}'
 
 
+def _is_stale_mod_asset_url(value: str) -> bool:
+    text = str(value or '').strip()
+    return text.startswith('/api/mod-assets/') or text.startswith('/static/assets/mod-card-art/')
+
+
 def _attach_gtnmod_data_urls(data: Dict[str, Any], zf: zipfile.ZipFile) -> Dict[str, Any]:
     out = copy.deepcopy(data)
     member_lookup = {_safe_zip_member(name).lower(): _safe_zip_member(name) for name in zf.namelist()}
@@ -255,6 +260,8 @@ def _attach_gtnmod_data_urls(data: Dict[str, Any], zf: zipfile.ZipFile) -> Dict[
         assets = card.get('assets') if isinstance(card.get('assets'), dict) else {}
         if not explicit:
             explicit = str(assets.get('image') or assets.get('card_image') or '').strip()
+        if _is_stale_mod_asset_url(explicit):
+            explicit = ''
         if explicit.startswith(('http://', 'https://', '/static/', '/api/', 'data:')):
             card.setdefault('image_url', explicit)
             return

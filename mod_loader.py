@@ -29,7 +29,13 @@ _MOD_ASSET_REGISTRY: Dict[str, dict] = {}
 
 def _is_url_or_public_path(value: str) -> bool:
     text = str(value or '').strip()
-    return text.startswith(('http://', 'https://', '/static/', '/api/'))
+    if _is_stale_mod_asset_url(text):
+        return False
+    return text.startswith(('http://', 'https://', 'data:image/', '/static/', '/api/'))
+
+
+def _is_stale_mod_asset_url(value: str) -> bool:
+    return str(value or '').strip().startswith('/api/mod-assets/')
 
 
 def _safe_zip_member(name: str) -> str:
@@ -155,8 +161,8 @@ def _find_gtnmod_asset_entry(asset_id: str) -> Optional[dict]:
                     candidate_id = hashlib.sha256(f'{package_key}|{safe_member}'.encode('utf-8')).hexdigest()[:32]
                     if candidate_id != requested:
                         continue
-                    url = _register_gtnmod_asset(filepath, safe_member, package_key)
-                    return _MOD_ASSET_REGISTRY.get(url.rsplit('/', 1)[-1])
+                    _register_gtnmod_asset(filepath, safe_member, package_key)
+                    return _MOD_ASSET_REGISTRY.get(candidate_id)
         except Exception:
             continue
     return None
@@ -221,7 +227,7 @@ def _attach_gtnmod_asset_urls(data: dict, filepath: str, zf: zipfile.ZipFile) ->
         if explicit and _is_url_or_public_path(explicit):
             card.setdefault('image_url', explicit)
             return
-        candidates = [explicit] if explicit else []
+        candidates = [] if _is_stale_mod_asset_url(explicit) else ([explicit] if explicit else [])
         candidates.extend(_candidate_asset_names(card))
         for candidate in candidates:
             safe = _safe_zip_member(candidate)
