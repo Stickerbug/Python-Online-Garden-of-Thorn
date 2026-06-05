@@ -766,6 +766,7 @@ async function deleteCommunityStorageObject(key) {
 
 function replayQuery(offset = 0) {
   const params = new URLSearchParams();
+  params.set('admin', '1');
   params.set('limit', '50');
   params.set('offset', String(offset));
   const player = $('replay-search-player')?.value || '';
@@ -838,7 +839,7 @@ async function openReplayViewer(replayId) {
   viewer.classList.remove('hidden');
   $('replay-frame').textContent = '正在生成时间线。';
   try {
-    const data = await api(`/api/replays/${encodeURIComponent(replayId)}/timeline`);
+    const data = await api(`/api/replays/${encodeURIComponent(replayId)}/timeline?admin=1`);
     replayTimeline = data.timeline || [];
     replayFrameIndex = 0;
     const meta = (data.replay && data.replay.meta) || {};
@@ -1012,7 +1013,7 @@ async function openReplayViewer(replayId) {
   replayData = null;
   $('replay-frame').innerHTML = '<div class="admin-replay-empty">正在生成时间线...</div>';
   try {
-    const data = await api(`/api/replays/${encodeURIComponent(replayId)}/timeline`);
+    const data = await api(`/api/replays/${encodeURIComponent(replayId)}/timeline?admin=1`);
     replayData = data.replay || null;
     replayTimeline = data.timeline || [];
     replayFrameIndex = 0;

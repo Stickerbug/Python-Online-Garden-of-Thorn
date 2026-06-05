@@ -526,8 +526,12 @@ def replay_api_allowed():
     return bool(is_admin_authenticated() or session.get('user_id'))
 
 
-def replay_item_visible_to_current_user(item):
-    if is_admin_authenticated():
+def replay_admin_context_requested():
+    return is_admin_authenticated() and str(request.args.get('admin', '')).lower() in ('1', 'true', 'yes')
+
+
+def replay_item_visible_to_current_user(item, admin_context=False):
+    if admin_context:
         return True
     username = str(session.get('username') or '').lower()
     if not username:
@@ -4272,8 +4276,11 @@ def api_replays():
     if not replay_api_allowed():
         return jsonify({'success': False, 'error': 'unauthorized'}), 401
     try:
+        admin_context = replay_admin_context_requested()
+        if not admin_context and not session.get('user_id'):
+            return jsonify({'success': False, 'error': 'unauthorized'}), 401
         player_filter = request.args.get('player', '')
-        if not is_admin_authenticated():
+        if not admin_context:
             player_filter = session.get('username') or ''
         data = list_replays(
             limit=request.args.get('limit', 50),
@@ -4282,7 +4289,7 @@ def api_replays():
             player=player_filter,
             mod_source=request.args.get('mod_source', ''),
         )
-        if not is_admin_authenticated():
+        if not admin_context:
             data['items'] = [item for item in data.get('items', []) if replay_item_visible_to_current_user(item)]
         return jsonify({'success': True, **data})
     except Exception as exc:
@@ -4296,10 +4303,13 @@ def api_replay_detail(replay_id):
         return db_unavailable_response()
     if not replay_api_allowed():
         return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    admin_context = replay_admin_context_requested()
+    if not admin_context and not session.get('user_id'):
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
     item = get_replay(replay_id)
     if not item:
         return jsonify({'success': False, 'error': '回放不存在'}), 404
-    if not replay_item_visible_to_current_user(item):
+    if not replay_item_visible_to_current_user(item, admin_context=admin_context):
         return jsonify({'success': False, 'error': 'forbidden'}), 403
     return jsonify({'success': True, 'replay': item})
 
@@ -4310,10 +4320,13 @@ def api_replay_timeline(replay_id):
         return db_unavailable_response()
     if not replay_api_allowed():
         return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    admin_context = replay_admin_context_requested()
+    if not admin_context and not session.get('user_id'):
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
     item = get_replay(replay_id)
     if not item:
         return jsonify({'success': False, 'error': '回放不存在'}), 404
-    if not replay_item_visible_to_current_user(item):
+    if not replay_item_visible_to_current_user(item, admin_context=admin_context):
         return jsonify({'success': False, 'error': 'forbidden'}), 403
     try:
         data = replay_timeline(replay_id)
