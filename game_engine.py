@@ -2,6 +2,7 @@ import random
 import math
 import json
 import re
+import copy
 from typing import List, Dict, Optional, Tuple, Set
 from engine_runtime_ext import install_runtime_ext
 from cards import (
@@ -2261,9 +2262,21 @@ class GameEngine:
         if not needs_response:
             needs_response = self._check_precision_response_needed(player_id, card)
         if needs_response:
+            response_target_id = 1 - player_id
+            if isinstance(choice, dict):
+                for key in ('target_player', 'target_player_id', 'target_id'):
+                    if key in choice:
+                        try:
+                            maybe_target = int(choice.get(key))
+                            if 0 <= maybe_target < len(self.players):
+                                response_target_id = maybe_target
+                                break
+                        except Exception:
+                            pass
             self.pending_response = {
                 'card': card.to_dict(),
                 'player_id': player_id,
+                'target_player_id': response_target_id,
                 'original_choice': choice,
                 'is_precision': 'precision' in card.flags,
             }
@@ -2375,6 +2388,81 @@ class GameEngine:
                 self.negated_card = True
             return self._execute_card_effect(player_id, card, choice)
         return self._execute_card_effect(player_id, card, choice)
+
+    def _response_prediction_target_id(self, responder_id: int) -> int:
+        pending = self.pending_response or {}
+        target_id = pending.get('target_player_id')
+        try:
+            target_id = int(target_id)
+        except Exception:
+            target_id = responder_id
+        if not (0 <= target_id < len(self.players)):
+            target_id = responder_id
+        if not (0 <= target_id < len(self.players)):
+            target_id = 0
+        return target_id
+
+    def _prediction_damage_parts_from_log(self, log_start: int, target_id: int) -> List[int]:
+        target_name = self.pn(target_id)
+        parts: List[int] = []
+        for line in list(self.log[log_start:]):
+            parsed = self._parse_damage_taken_log(line)
+            if parsed and parsed.get('target') == target_name:
+                parts.extend(int(v) for v in parsed.get('parts', []) if int(v) > 0)
+        return parts
+
+    def _simulate_pending_response_damage(self, responder_id: int, card_instance_id: Optional[int] = None) -> dict:
+        if self.pending_response is None:
+            return {'total': 0, 'parts': [], 'display': ''}
+        target_id = self._response_prediction_target_id(responder_id)
+        try:
+            sim = copy.deepcopy(self)
+            sim_target_id = sim._response_prediction_target_id(responder_id)
+            before_health = int(getattr(sim.players[sim_target_id], 'health', 0))
+            log_start = len(sim.log)
+            sim.handle_response(responder_id, card_instance_id)
+            parts = sim._prediction_damage_parts_from_log(log_start, sim_target_id)
+            total = sum(parts)
+            if total <= 0:
+                after_health = int(getattr(sim.players[sim_target_id], 'health', before_health))
+                total = max(0, before_health - after_health)
+                parts = [total] if total > 0 else []
+            return {
+                'target_player_id': target_id,
+                'total': int(total),
+                'parts': parts,
+                'display': self._format_damage_parts(parts) if parts else ('0D' if total == 0 else f'{total}D'),
+            }
+        except Exception:
+            return {'target_player_id': target_id, 'total': 0, 'parts': [], 'display': ''}
+
+    def build_response_damage_prediction(self, responder_id: int, counter_cards=None) -> dict:
+        baseline = self._simulate_pending_response_damage(responder_id, None)
+        base_total = int(baseline.get('total') or 0)
+        predictions = {}
+        for entry in counter_cards or []:
+            if isinstance(entry, CardInstance):
+                instance_id = entry.instance_id
+            elif isinstance(entry, dict):
+                instance_id = entry.get('instance_id')
+            else:
+                instance_id = None
+            try:
+                instance_id = int(instance_id)
+            except Exception:
+                continue
+            after = self._simulate_pending_response_damage(responder_id, instance_id)
+            after_total = int(after.get('total') or 0)
+            reduction = max(0, base_total - after_total)
+            predictions[str(instance_id)] = {
+                'after': after,
+                'reduction': reduction,
+                'reduction_display': f'-{self._format_damage_parts([reduction])}' if reduction > 0 else '',
+            }
+        return {
+            'no_counter': baseline,
+            'counters': predictions,
+        }
 
     def _execute_counter_effect(self, responder_id: int, counter_card: CardInstance, original_card: CardInstance, original_player_id: Optional[int] = None):
         ps = self.players[responder_id]
@@ -4419,6 +4507,38 @@ class GameEngine:
             return True
         return any(isinstance(effect, dict) and effect.get('type') == event_type for effect in (card_def.effects or []))
 
+    def _card_event_requires_self_destroy(self, card_def, event_name: str) -> bool:
+        def walk_steps(value):
+            if isinstance(value, list):
+                return any(walk_steps(item) for item in value)
+            if not isinstance(value, dict):
+                return False
+            if str(value.get('op') or value.get('type') or '') == 'destroy_self_equipment':
+                return True
+            for key in ('steps', 'effects', 'body', 'then', 'else', 'on_cancel'):
+                if walk_steps(value.get(key)):
+                    return True
+            params = value.get('params')
+            return isinstance(params, dict) and walk_steps(params)
+
+        v2_key = f'on_{event_name}'
+        events = getattr(card_def, 'v2_events', None) or {}
+        event_def = events.get(v2_key) if isinstance(events, dict) else None
+        if isinstance(event_def, dict):
+            if event_def.get('destroy_self'):
+                return True
+            if walk_steps(event_def.get('steps', event_def.get('effects', []))):
+                return True
+        elif isinstance(event_def, list) and walk_steps(event_def):
+            return True
+        for effect in getattr(card_def, 'effects', None) or []:
+            if not isinstance(effect, dict) or effect.get('type') != v2_key:
+                continue
+            params = effect.get('params', {}) or {}
+            if params.get('destroy_self') or walk_steps(params.get('effects', [])):
+                return True
+        return False
+
     def _play_effects_for_card(self, card: CardInstance):
         if self._card_has_script(card.card_def):
             return self._get_script_effects(card.card_def, 'play')
@@ -4971,7 +5091,31 @@ class GameEngine:
 
     def _eval_expr(self, player_id, expr, card=None):
         if isinstance(expr, dict):
-            ref = expr.get('ref')
+            ref = expr.get('ref') or expr.get('op') or expr.get('type')
+            if ref in ('const', 'literal'):
+                return expr.get('value', expr.get('const', 0))
+            if ref in ('add', 'sub', 'mul', 'div', '+', '-', '*', '/', 'min', 'max'):
+                op = {'+': 'add', '-': 'sub', '*': 'mul', '/': 'div'}.get(ref, ref)
+                values = expr.get('values')
+                if values is None:
+                    values = [expr.get('a', 0), expr.get('b', 0)]
+                nums = [self._eval_expr(player_id, value, card) for value in values]
+                nums = [int(self._scalar_value(num, 0)) for num in nums]
+                if op == 'add':
+                    return sum(nums)
+                if op == 'sub':
+                    return nums[0] - sum(nums[1:]) if nums else 0
+                if op == 'mul':
+                    out = 1
+                    for num in nums:
+                        out *= num
+                    return out
+                if op == 'div':
+                    return 0 if len(nums) < 2 or nums[1] == 0 else nums[0] // nums[1]
+                if op == 'min':
+                    return min(nums) if nums else 0
+                if op == 'max':
+                    return max(nums) if nums else 0
             if ref == 'equip_turns':
                 eq = self._find_equipment_for_card(player_id, card)
                 return int(eq.turns_equipped) if eq is not None else int(getattr(card, 'equip_turns', 0) if card is not None else 0)
@@ -5033,7 +5177,7 @@ class GameEngine:
                 if isinstance(ids, list):
                     return len(ids)
                 return 1 if active_choice.get('target_instance_id') is not None else 0
-            if ref == 'card_property':
+            if ref in ('card_property', 'card_prop'):
                 target_card = self._resolve_card_ref(player_id, expr.get('card', {'ref': 'current_card'}), card)
                 if target_card is None:
                     return 0
@@ -5624,7 +5768,7 @@ class GameEngine:
         events = getattr(card.card_def, 'v2_events', None)
         if isinstance(events, dict) and events.get(v2_event_name):
             event_def = events.get(v2_event_name)
-            if v2_event_name == 'on_equipment_trigger' and isinstance(event_def, dict) and event_def.get('destroy_self'):
+            if v2_event_name == 'on_equipment_trigger' and self._card_event_requires_self_destroy(card.card_def, 'equipment_trigger'):
                 eq = self._find_equipment_for_card(owner_id, card)
                 if eq is not None and not self._destroy_equipment(owner_id, eq):
                     return True
@@ -6085,6 +6229,7 @@ class GameEngine:
     def _atomic_lifesteal_damage(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         amount = self._eval_int(player_id, params.get('amount', 8), card, 8)
+        amount = self._modified_attack_damage(amount, card)
         heal = self._eval_int(player_id, params.get('heal', 4), card, 4)
         try:
             dealt = self.deal_attack_damage(target_id, amount, attacker_id=player_id)
@@ -6630,6 +6775,8 @@ class GameEngine:
         max_uses = self._equipment_trigger_max_uses(eq)
         if max_uses > 0 and int(getattr(eq, 'uses_this_turn', 0)) >= max_uses:
             return {'success': False, 'error': f'该装备本回合最多触发{max_uses}次'}
+        if self._card_event_requires_self_destroy(eq.card_def, 'equipment_trigger') and int(getattr(ps, 'equipment_protection', 0) or 0) > 0:
+            return {'success': False, 'error': '装备保护会抵消摧毁，无法触发'}
         self._spend_resource(player_id, 'elixir', trigger_cost, eq.card_instance)
         eq.uses_this_turn = int(getattr(eq, 'uses_this_turn', 0)) + 1
         if has_mod_trigger and self._run_card_event(player_id, eq.card_instance, 'equipment_trigger', None,

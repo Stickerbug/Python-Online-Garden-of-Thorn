@@ -280,6 +280,17 @@ function hasScriptEntry(def, entry) {
     return getScriptEffects(def, entry).length > 0;
 }
 
+function cardEventRequiresSelfDestroy(def, entry) {
+    const walk = value => {
+        if (Array.isArray(value)) return value.some(walk);
+        if (!value || typeof value !== 'object') return false;
+        if (String(value.type || value.op || '') === 'destroy_self_equipment') return true;
+        const params = value.params && typeof value.params === 'object' ? value.params : {};
+        return ['steps', 'effects', 'body', 'then', 'else', 'on_cancel'].some(key => walk(value[key]) || walk(params[key]));
+    };
+    return walk(getScriptEffects(def, entry));
+}
+
 function playEffectsFor(card) {
     const def = card.def();
     const scriptEffects = getScriptEffects(def, 'play');
@@ -668,6 +679,142 @@ class LocalSoloEngine {
         this.players.forEach(player => {
             player.onEnterHand = (playerId, card) => this.handleCardEnterHand(playerId, card);
         });
+    }
+
+    cloneForPrediction() {
+        const clone = Object.create(LocalSoloEngine.prototype);
+        const cloneJson = value => {
+            try {
+                return typeof structuredClone === 'function'
+                    ? structuredClone(value)
+                    : JSON.parse(JSON.stringify(value));
+            } catch (_) {
+                return null;
+            }
+        };
+        clone.players = this.players.map(source => {
+            const player = new LocalPlayer(source.player_id);
+            const data = source.toDict(true);
+            [
+                'health', 'max_health', 'base_max_health', 'elixir', 'max_elixir', 'magic', 'max_magic',
+                'armor', 'poison', 'fire', 'vulnerable', 'toxic', 'triangle_stacks', 'dodge',
+                'nazar_active', 'nazar_big_hits', 'equipment_protection', 'magic_battery_m_this_turn',
+                'coffee_first_use', 'invincible', 'skip_turn', 'damage_multiplier', 'bandage_active',
+                'bandage_death_pending', 'attack_blocked', 'untargetable', 'sponge_active',
+                'shovel_active', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
+                'extra_hand_limit_bonus', 'negate_next_skill', 'is_first_player',
+                'turn_damage_taken', 'turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt',
+            ].forEach(key => { player[key] = data[key] ?? source[key]; });
+            player.hand = (data.hand || []).map(card => new LocalCard(card));
+            player.deck = (data.deck || []).map(card => new LocalCard(card));
+            player.discard = (data.discard || []).map(card => new LocalCard(card));
+            player.exile = (data.exile || []).map(card => new LocalCard(card));
+            player.equipment = (source.equipment || []).map(eq => {
+                const copy = new LocalEquipment(new LocalCard(eq.card_instance.toDict()), eq.owner);
+                copy.effect_target = eq.effect_target;
+                copy.turns_equipped = eq.turns_equipped;
+                copy.uses_this_turn = eq.uses_this_turn;
+                copy.corruption_active = !!eq.corruption_active;
+                return copy;
+            });
+            player.cards_played_this_turn = { ...(source.cards_played_this_turn || {}) };
+            player.custom_vars = { ...(source.custom_vars || {}) };
+            return player;
+        });
+        clone.player_names = [...this.player_names];
+        clone.phase = this.phase;
+        clone.first_player = this.first_player;
+        clone.current_player = this.current_player;
+        clone.round_num = this.round_num;
+        clone.game_over = this.game_over;
+        clone.winner = this.winner;
+        clone.log = [...this.log];
+        clone.pending_response = cloneJson(this.pending_response);
+        clone.pending_choice = cloneJson(this.pending_choice);
+        clone.opening_event_picks = [...this.opening_event_picks];
+        clone.opening_event_sub_choices = cloneJson(this.opening_event_sub_choices) || [null, null];
+        clone._antenna_reveal = cloneJson(this._antenna_reveal) || [null, null];
+        clone._last_damage_value = [...this._last_damage_value];
+        clone._incoming_damage_hint = [...this._incoming_damage_hint];
+        clone._game_over_defer_depth = this._game_over_defer_depth;
+        clone.halve_next_attack = this.halve_next_attack;
+        clone.negated_card = this.negated_card;
+        clone._last_created_card_instance_id = this._last_created_card_instance_id;
+        clone._active_choice = cloneJson(this._active_choice);
+        clone._active_effect_context = cloneJson(this._active_effect_context) || {};
+        clone.timed_effects = cloneJson(this.timed_effects) || [];
+        clone.tutorial = this.tutorial;
+        clone.match_key = this.match_key;
+        clone.bindPlayerCallbacks();
+        return clone;
+    }
+
+    responsePredictionTargetId(responderId) {
+        const pending = this.pending_response || {};
+        let targetId = toInt(pending.target_player_id, responderId);
+        if (targetId < 0 || targetId >= this.players.length) targetId = responderId;
+        if (targetId < 0 || targetId >= this.players.length) targetId = 0;
+        return targetId;
+    }
+
+    predictionDamagePartsFromLog(logStart, targetId) {
+        const targetName = this.pn(targetId);
+        const parts = [];
+        this.log.slice(logStart).forEach(line => {
+            const parsed = this.parseDamageTakenLog(line);
+            if (parsed && parsed.target === targetName) {
+                parsed.parts.forEach(part => {
+                    const value = toInt(part, 0);
+                    if (value > 0) parts.push(value);
+                });
+            }
+        });
+        return parts;
+    }
+
+    simulatePendingResponseDamage(responderId, instanceId = null) {
+        if (!this.pending_response) return { total: 0, parts: [], display: '' };
+        const targetId = this.responsePredictionTargetId(responderId);
+        try {
+            const sim = this.cloneForPrediction();
+            const simTargetId = sim.responsePredictionTargetId(responderId);
+            const beforeHealth = toInt(sim.players[simTargetId].health, 0);
+            const logStart = sim.log.length;
+            sim.handleResponse(responderId, instanceId);
+            let parts = sim.predictionDamagePartsFromLog(logStart, simTargetId);
+            let total = parts.reduce((sum, part) => sum + toInt(part, 0), 0);
+            if (total <= 0) {
+                const afterHealth = toInt(sim.players[simTargetId].health, beforeHealth);
+                total = Math.max(0, beforeHealth - afterHealth);
+                parts = total > 0 ? [total] : [];
+            }
+            return {
+                target_player_id: targetId,
+                total,
+                parts,
+                display: parts.length ? this.formatDamageParts(parts) : (total === 0 ? '0D' : `${total}D`),
+            };
+        } catch (_) {
+            return { target_player_id: targetId, total: 0, parts: [], display: '' };
+        }
+    }
+
+    buildResponseDamagePrediction(responderId, counterCards = []) {
+        const noCounter = this.simulatePendingResponseDamage(responderId, null);
+        const baseTotal = toInt(noCounter.total, 0);
+        const counters = {};
+        counterCards.forEach(card => {
+            const instanceId = toInt(card && card.instance_id, 0);
+            if (!instanceId) return;
+            const after = this.simulatePendingResponseDamage(responderId, instanceId);
+            const reduction = Math.max(0, baseTotal - toInt(after.total, 0));
+            counters[String(instanceId)] = {
+                after,
+                reduction,
+                reduction_display: reduction > 0 ? `-${this.formatDamageParts([reduction])}` : '',
+            };
+        });
+        return { no_counter: noCounter, counters };
     }
 
     handleCardEnterHand(playerId, card) {
@@ -2016,6 +2163,10 @@ class LocalSoloEngine {
         const def = card.def();
         const effects = getScriptEffects(def, eventName);
         if (effects.length) {
+            if (eventName === 'equipment_trigger' && cardEventRequiresSelfDestroy(def, eventName)) {
+                const eq = this.findEquipmentForCard(ownerId, card);
+                if (eq && !this.destroyEquipment(ownerId, eq)) return true;
+            }
             this.runEffectList(ownerId, card, effects, choice, { event: eventName, ...extraContext });
             return true;
         }
@@ -3538,6 +3689,9 @@ class LocalSoloEngine {
         if (triggerCost > ps.elixir) return { success: false, error: '能量不足' };
         const maxUses = this.equipmentTriggerMaxUses(eq);
         if (maxUses > 0 && toInt(eq.uses_this_turn, 0) >= maxUses) return { success: false, error: `该装备本回合最多触发${maxUses}次` };
+        if (cardEventRequiresSelfDestroy(eq.card_def, 'equipment_trigger') && toInt(ps.equipment_protection, 0) > 0) {
+            return { success: false, error: '装备保护会抵消摧毁，无法触发' };
+        }
         if (triggerCost > 0) this.spendResource(playerId, 'elixir', triggerCost, eq.card_instance);
         eq.uses_this_turn = toInt(eq.uses_this_turn, 0) + 1;
         if (this.hasCardEvent(eq.card_def, 'equipment_trigger')) {
@@ -3698,10 +3852,14 @@ onmessage = event => {
                     return;
                 }
                 engine.sendState(engine.tutorial ? 0 : 1 - pidx);
+                const responder = 1 - pidx;
+                const counterCards = engine.getCounterCards(responder, new LocalCard(result.card));
                 emit('response_request', {
                     card: result.card,
                     player_id: pidx,
-                    counter_cards: engine.getCounterCards(1 - pidx, new LocalCard(result.card)).map(card => card.toDict()),
+                    target_player_id: responder,
+                    counter_cards: counterCards.map(card => card.toDict()),
+                    damage_prediction: engine.buildResponseDamagePrediction(responder, counterCards),
                 });
                 return;
             }
@@ -3765,10 +3923,13 @@ onmessage = event => {
                 const result = engine.playCard(1, card.instance_id);
                 if (result.needs_response) {
                     engine.sendState(0);
+                    const counterCards = engine.getCounterCards(0, new LocalCard(result.card));
                     emit('response_request', {
                         card: result.card,
                         player_id: 1,
-                        counter_cards: engine.getCounterCards(0, new LocalCard(result.card)).map(c => c.toDict()),
+                        target_player_id: 0,
+                        counter_cards: counterCards.map(c => c.toDict()),
+                        damage_prediction: engine.buildResponseDamagePrediction(0, counterCards),
                     });
                     return;
                 }

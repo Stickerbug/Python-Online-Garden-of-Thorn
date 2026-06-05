@@ -3309,6 +3309,10 @@ body {
   outline: none;
 }
 
+.game-chat-channel.hidden {
+  display: none !important;
+}
+
 .game-chat-channel:focus {
   border-color: var(--magic);
 }
@@ -4991,6 +4995,22 @@ body {
 
 .counter-card-cost {
   font-weight: 800;
+}
+
+.counter-card-count {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.counter-damage-reduction {
+  padding: 2px 7px;
+  border: 1px solid rgba(192, 57, 43, 0.28);
+  border-radius: 8px;
+  background: rgba(192, 57, 43, 0.1);
+  color: var(--damage);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .btn-counter-disabled {
@@ -8958,6 +8978,14 @@ html[data-ui-style="minimal"] .btn-end-turn {
   display: none !important;
 }
 
+.battle-classic.is-target-aim {
+  cursor: crosshair;
+}
+
+.battle-classic.is-self-only-aim {
+  cursor: pointer;
+}
+
 .classic-bg {
   position: absolute;
   inset: 0;
@@ -9193,6 +9221,23 @@ html[data-ui-style="minimal"] .btn-end-turn {
     radial-gradient(ellipse at 50% 50%, rgba(26,188,156,0.18), transparent 58%),
     rgba(255,255,255,0.06);
   box-shadow: 0 0 22px rgba(26,188,156,0.18);
+  animation: classicSelfOnlyPulse 1.45s ease-in-out infinite;
+}
+
+.battle-classic.is-self-only-aim .classic-stage {
+  background:
+    radial-gradient(ellipse at 50% 64%, rgba(26, 188, 156, 0.08), transparent 44%);
+}
+
+@keyframes classicSelfOnlyPulse {
+  0%, 100% {
+    box-shadow: 0 0 18px rgba(26,188,156,0.16);
+    transform: translateY(-1px) scale(1.01);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(26,188,156,0.3);
+    transform: translateY(-3px) scale(1.04);
+  }
 }
 
 .classic-lane-mark {
@@ -9346,6 +9391,20 @@ html[data-ui-style="minimal"] .btn-end-turn {
   background: rgba(255,255,255,0.74);
 }
 
+[data-theme="light"] .classic-aim-path {
+  stroke: rgba(156, 36, 82, 0.96);
+  filter: drop-shadow(0 0 4px rgba(156, 36, 82, 0.22));
+}
+
+[data-theme="light"] .classic-aim-outline {
+  stroke: rgba(255, 255, 255, 0.92);
+}
+
+[data-theme="light"] .classic-aim-tip {
+  fill: rgba(156, 36, 82, 0.96);
+  stroke: rgba(255, 255, 255, 0.95);
+}
+
 .classic-stage-response {
   position: absolute;
   left: 50%;
@@ -9381,6 +9440,10 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 .classic-fighter.is-soft-target {
   filter: drop-shadow(0 14px 22px rgba(26,188,156,0.18));
+}
+
+.classic-fighter.is-self-only-target {
+  transform: translateY(-2px);
 }
 
 .classic-fighter.is-aim-hover {
@@ -9464,11 +9527,23 @@ html[data-ui-style="minimal"] .btn-end-turn {
   box-shadow: 0 0 0 7px rgba(26,188,156,0.07);
 }
 
+.classic-fighter.is-self-only-target .player-avatar::after {
+  opacity: 1;
+  border-color: rgba(26,188,156,0.62);
+  box-shadow: 0 0 0 7px rgba(26,188,156,0.08), 0 0 26px rgba(26,188,156,0.22);
+  animation: classicSelfTargetPulse 1.45s ease-in-out infinite;
+}
+
 .classic-fighter.is-aim-hover .player-avatar::after {
   opacity: 1;
   border-color: rgba(255,223,124,0.9);
   transform: scale(1.06);
   box-shadow: 0 0 0 8px rgba(255,223,124,0.1), 0 0 34px rgba(255,223,124,0.42);
+}
+
+@keyframes classicSelfTargetPulse {
+  0%, 100% { transform: scale(1.015); opacity: 0.68; }
+  50% { transform: scale(1.06); opacity: 1; }
 }
 
 .player-avatar.is-current::before {
@@ -9600,7 +9675,8 @@ html[data-ui-style="minimal"] .btn-end-turn {
   margin-inline: clamp(-20px, -1.45vw, -7px);
   transform: translateY(var(--fan-y, 0)) rotate(var(--fan-rot, 0));
   transform-origin: 50% 110%;
-  transition: transform 170ms ease, filter 170ms ease, margin 170ms ease;
+  transition: transform 200ms cubic-bezier(.2,.78,.24,1), filter 170ms ease, margin 170ms ease;
+  will-change: transform;
 }
 
 .classic-hand-card:hover:not(.is-selected) {
@@ -9613,8 +9689,8 @@ html[data-ui-style="minimal"] .btn-end-turn {
 .classic-hand-card.is-selected {
   z-index: 1000 !important;
   margin-inline: 4px;
-  transform: translateY(-16px) rotate(0deg) scale(0.94);
-  filter: drop-shadow(0 0 18px rgba(244,143,177,0.58)) drop-shadow(0 14px 22px rgba(0,0,0,0.28));
+  transform: translateY(-18px) rotate(0deg) scale(0.9);
+  filter: drop-shadow(0 0 18px rgba(244,143,177,0.72)) drop-shadow(0 14px 22px rgba(0,0,0,0.28));
 }
 
 .classic-hand-card.is-selected::after {
@@ -9643,11 +9719,27 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 .classic-aim-path {
   fill: none;
-  stroke: rgba(255, 235, 246, 0.9);
-  stroke-width: 4.2;
+  stroke: rgba(255, 235, 246, 0.96);
+  stroke-width: 3.4;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 7px rgba(244,143,177,0.34));
+  filter: drop-shadow(0 0 5px rgba(244,143,177,0.26));
+}
+
+.classic-aim-outline {
+  fill: none;
+  stroke: rgba(88, 24, 47, 0.58);
+  stroke-width: 6.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+}
+
+.classic-aim-tip {
+  fill: rgba(255, 235, 246, 0.95);
+  stroke: rgba(88, 24, 47, 0.62);
+  stroke-width: 1.3;
+  filter: drop-shadow(0 0 5px rgba(244,143,177,0.22));
 }
 
 #classic-aim-arrowhead path {

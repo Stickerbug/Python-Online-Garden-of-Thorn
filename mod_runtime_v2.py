@@ -131,6 +131,13 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         amount = max(0, _to_int(eval_v2_value(engine, context, params.get("amount", 0))))
         hits = max(1, _to_int(eval_v2_value(engine, context, params.get("hits", 1))))
         card = context.get("card")
+        if (
+            card is not None
+            and context.get("current_event") == "on_play"
+            and getattr(getattr(card, "card_def", None), "card_type", getattr(card, "card_type", "")) == "thorn"
+            and hasattr(engine, "_modified_attack_damage")
+        ):
+            amount = max(0, _to_int(engine._modified_attack_damage(amount, card)))
         card_flags = getattr(card, "flags", set()) or set()
         is_precision = bool(params.get("is_precision", params.get("precision", False))) or "precision" in card_flags
         targets = _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "target")))
@@ -429,6 +436,25 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         return context.get("damage_source", context.get("source_player", 0))
     if op in ("target_player",):
         return context.get("target_player", 0)
+    if op == "selected_cards_count":
+        choice = _active_choice(context)
+        ids = choice.get("target_instance_ids")
+        if isinstance(ids, list):
+            return len(ids)
+        return 1 if choice.get("target_instance_id") is not None or choice.get("target_def_id") is not None else 0
+    if op == "selected_card_index":
+        return _to_int(context.get("selected_card_index", context.get("vars", {}).get("selected_card_index", 0)))
+    if op in ("selected_card", "choice_card", "chosen_card"):
+        return resolve_v2_target(engine, context, op)
+    if op == "selected_card_at":
+        choice = _active_choice(context)
+        ids = choice.get("target_instance_ids")
+        if not isinstance(ids, list):
+            ids = [choice.get("target_instance_id")] if choice.get("target_instance_id") is not None else []
+        index = _to_int(eval_v2_value(engine, context, expr.get("index", 1))) - 1
+        if 0 <= index < len(ids):
+            return _find_card_by_instance_id(engine, ids[index])
+        return None
     if op == "status_stack":
         target = resolve_v2_target(engine, context, expr.get("target", "target"))
         return _status_stack(engine, _player_id(engine, target), str(expr.get("status") or ""))
@@ -895,6 +921,21 @@ def _resolve_card(engine, context: Dict[str, Any], selector: Any):
     return None
 
 
+def _active_choice(context: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(context, dict):
+        return {}
+    choice = context.get("choice")
+    if isinstance(choice, dict):
+        return choice
+    action = context.get("current_action")
+    if isinstance(action, dict):
+        nested = action.get("choice")
+        if isinstance(nested, dict):
+            return nested
+        return action
+    return {}
+
+
 def _resolve_equipment(engine, context: Dict[str, Any], owner_id: int, selector: Any):
     if selector in (None, "", "first"):
         return engine.players[owner_id].equipment[0] if engine.players[owner_id].equipment else None
@@ -1196,30 +1237,40 @@ def _try_run_engine_atomic_op(engine, context: Dict[str, Any], op: str, params: 
     return {"success": True}
 
 
-def _engine_effect_from_step(engine, context: Dict[str, Any], step: Dict[str, Any], effect_type: Optional[str] = None) -> Dict[str, Any]:
+def _engine_effect_from_step(
+    engine,
+    context: Dict[str, Any],
+    step: Dict[str, Any],
+    effect_type: Optional[str] = None,
+    defer_values: bool = False,
+) -> Dict[str, Any]:
+    resolved_effect_type = effect_type or ATOMIC_OP_ALIASES.get(
+        str(step.get("op") or step.get("type") or ""),
+        str(step.get("op") or step.get("type") or ""),
+    )
     raw_params = step.get("params") if isinstance(step.get("params"), dict) else {
         key: value
         for key, value in step.items()
         if key not in {"op", "type", "log", "then", "else", "steps", "body", "condition", "cond"}
     }
-    params = _materialize_atomic_value(engine, context, raw_params)
+    params = copy.deepcopy(raw_params) if defer_values else _materialize_atomic_value(engine, context, raw_params)
     if not isinstance(params, dict):
         params = {}
     if "condition" in step or "cond" in step:
         params["condition"] = _normalize_condition_for_engine(engine, context, step.get("condition", step.get("cond")))
     if isinstance(step.get("then"), list):
-        params["then"] = [_engine_effect_from_step(engine, context, child) for child in step.get("then", []) if isinstance(child, dict)]
+        params["then"] = [_engine_effect_from_step(engine, context, child, defer_values=True) for child in step.get("then", []) if isinstance(child, dict)]
     if isinstance(step.get("else"), list):
-        params["else"] = [_engine_effect_from_step(engine, context, child) for child in step.get("else", []) if isinstance(child, dict)]
+        params["else"] = [_engine_effect_from_step(engine, context, child, defer_values=True) for child in step.get("else", []) if isinstance(child, dict)]
     body = step.get("body", step.get("steps"))
     if isinstance(body, list):
-        params["body"] = [_engine_effect_from_step(engine, context, child) for child in body if isinstance(child, dict)]
+        params["body"] = [_engine_effect_from_step(engine, context, child, defer_values=True) for child in body if isinstance(child, dict)]
         params.setdefault("effects", params["body"])
     for target_key in ("target", "targets", "owner", "effect_target", "target_player"):
         if target_key in params:
             params[target_key] = _engine_target_selector(engine, context, params[target_key])
     return {
-        "type": effect_type or ATOMIC_OP_ALIASES.get(str(step.get("op") or step.get("type") or ""), str(step.get("op") or step.get("type") or "")),
+        "type": resolved_effect_type,
         "params": params,
         "log": step.get("log"),
     }

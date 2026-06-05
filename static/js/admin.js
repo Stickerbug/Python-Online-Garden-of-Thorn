@@ -334,7 +334,7 @@ function renderPlayers(players) {
   }
   $('players-table').innerHTML = `
     <table>
-      <thead><tr><th>昵称</th><th>账号ID</th><th>状态</th><th>模式</th><th>房间</th><th>SID</th><th>操作</th></tr></thead>
+      <thead><tr><th>昵称</th><th>ID</th><th>状态</th><th>模式</th><th>房间</th><th>SID</th><th>操作</th></tr></thead>
       <tbody>
         ${players.map((p) => `
           <tr>
@@ -411,7 +411,8 @@ function renderRegisteredUserCard(user) {
             ${renderOnlinePill(user)}
           </div>
           <div class="user-meta-row">
-            <span>ID ${escapeHtml(user.id)}</span>
+            <span>ID:${escapeHtml(user.player_id || '-')}</span>
+            <span>注册顺序：${escapeHtml(user.id)}</span>
             <span>上次下线 ${escapeHtml(formatAdminTime(user.last_login_at))}</span>
             <span>注册 ${escapeHtml(formatAdminTime(user.created_at))}</span>
           </div>
@@ -445,7 +446,8 @@ function renderRegisteredUserDetails(user, detail) {
           <h3>账号数据</h3>
           <dl>
             <div><dt>用户名</dt><dd>${escapeHtml(user.username)}</dd></div>
-            <div><dt>账号ID</dt><dd>${escapeHtml(user.id)}</dd></div>
+            <div><dt>ID</dt><dd>${escapeHtml(user.player_id || '-')}</dd></div>
+            <div><dt>注册顺序</dt><dd>${escapeHtml(user.id)}</dd></div>
             <div><dt>注册时间</dt><dd>${escapeHtml(formatAdminTime(user.created_at))}</dd></div>
             <div><dt>上次下线</dt><dd>${escapeHtml(formatAdminTime(user.last_login_at))}</dd></div>
             <div><dt>当前状态</dt><dd>${online ? `${escapeHtml(labelFrom(STATUS_LABELS, online.status))} ${online.room_id != null ? `#${escapeHtml(online.room_id)}` : ''}` : '离线'}</dd></div>

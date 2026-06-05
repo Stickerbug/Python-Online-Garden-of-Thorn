@@ -1083,6 +1083,7 @@ class GameEngine2v2(GameEngine):
                             })
                 self.pending_response = {
                     'player_id': player_id,
+                    'target_player_id': target_id,
                     'card': card.to_dict(),
                     'original_choice': choice,
                     'counter_cards': counter_cards,
@@ -1708,6 +1709,8 @@ class GameEngine2v2(GameEngine):
         max_uses = self._equipment_trigger_max_uses(eq)
         if max_uses > 0 and int(getattr(eq, 'uses_this_turn', 0)) >= max_uses:
             return {'success': False, 'error': f'该装备本回合最多触发{max_uses}次'}
+        if self._card_event_requires_self_destroy(eq.card_def, 'equipment_trigger') and int(getattr(ps, 'equipment_protection', 0) or 0) > 0:
+            return {'success': False, 'error': '装备保护会抵消摧毁，无法触发'}
         self._spend_resource(player_id, 'elixir', trigger_cost, eq.card_instance)
         eq.uses_this_turn = int(getattr(eq, 'uses_this_turn', 0)) + 1
         if has_mod_trigger and self._run_card_event(player_id, eq.card_instance, 'equipment_trigger', None,

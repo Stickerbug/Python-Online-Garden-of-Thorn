@@ -2079,6 +2079,9 @@ let CARD_DEFS = {};
 let gameState = {};
 let activeV2UiRequestId = null;
 let draftState = {};
+let activeViewId = '';
+let lastDraftOptionsSignature = '';
+let lastDraftPicksSignature = '';
 let eventSelectData = {};
 let phaseChatEntries = [];
 let phaseChatMatchKey = '';
@@ -2147,6 +2150,7 @@ let optimisticResourceOverride = null;
 let selectedPlayCardId = null;
 let classicAimPointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 let classicAimHoverTarget = '';
+let classicAimFrame = 0;
 let classicHoverPreviewTimer = null;
 let actionToastTimer = null;
 let combatFloatSeq = 0;
@@ -2721,11 +2725,15 @@ function maybeAnimateTurnFocus(gs) {
 }
 
 function showView(viewId) {
-    removeFloatingCardPreview();
-    document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     const el = $(viewId);
-    if (el) el.classList.remove('hidden');
-    updatePhaseChatPanelVisibility(viewId);
+    const sameView = activeViewId === viewId && el && !el.classList.contains('hidden');
+    if (!sameView) {
+        removeFloatingCardPreview();
+        document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+        if (el) el.classList.remove('hidden');
+        activeViewId = viewId;
+        updatePhaseChatPanelVisibility(viewId);
+    }
     const accountTop = $('btn-account-top');
     if (accountTop) accountTop.classList.toggle('hidden', viewId !== 'view-login');
     const friendsTop = $('btn-friends-top');
@@ -2734,11 +2742,10 @@ function showView(viewId) {
         toggleAccountPopover(false);
         toggleFriendsPopover(false);
     }
-    if (viewId !== 'view-game') {
-        gameTimelineEntries = [];
-        renderedBattleLogCount = 0;
-        renderedBattleLogTotal = 0;
-        renderedTimelineDomCount = 0;
+    if (!sameView && viewId !== 'view-game') {
+        const logContainer = $('battle-log');
+        const logContent = logContainer ? logContainer.querySelector('.log-content') : null;
+        resetBattleLogState(logContent);
         renderedBattleLogMatchKey = '';
         lastRenderedTurnKey = '';
         lastStatusSignatures.clear();
@@ -3441,6 +3448,10 @@ function ensureMobilePlayConfirm() {
 function clearSelectedPlayCard() {
     selectedPlayCardId = null;
     classicAimHoverTarget = '';
+    if (classicAimFrame) {
+        cancelAnimationFrame(classicAimFrame);
+        classicAimFrame = 0;
+    }
     if (classicHoverPreviewTimer) {
         clearTimeout(classicHoverPreviewTimer);
         classicHoverPreviewTimer = null;
@@ -3449,6 +3460,10 @@ function clearSelectedPlayCard() {
     document.querySelectorAll('.classic-fighter.is-aim-hover').forEach(el => el.classList.remove('is-aim-hover'));
     const aim = $('classic-aim-layer');
     if (aim) aim.classList.add('hidden');
+    const root = $('battle-classic');
+    if (root) {
+        root.classList.remove('is-aiming', 'is-target-aim', 'is-self-only-aim');
+    }
     const bar = $('mobile-play-confirm');
     if (bar) bar.classList.add('hidden');
     if (shouldUseClassicBattle(gameState)) renderClassicBattle(gameState);
@@ -3495,11 +3510,18 @@ function ensureClassicAimLayer() {
         head.setAttribute('d', 'M1,1 L9,5 L1,9 Z');
         marker.appendChild(head);
         defs.appendChild(marker);
+        const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        outline.classList.add('classic-aim-outline');
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.classList.add('classic-aim-path');
         path.setAttribute('marker-end', 'url(#classic-aim-arrowhead)');
+        const tip = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        tip.classList.add('classic-aim-tip');
+        tip.setAttribute('r', '5');
         svg.appendChild(defs);
+        svg.appendChild(outline);
         svg.appendChild(path);
+        svg.appendChild(tip);
         root.appendChild(svg);
     }
     return svg;
@@ -3534,6 +3556,12 @@ function selectedClassicCardCenter() {
 
 function updateClassicAimHoverTarget() {
     let hoverId = '';
+    const selected = getSelectedClassicCard();
+    if (isClassicSelfOnlyCard(selected)) {
+        document.querySelectorAll('.classic-fighter.is-aim-hover').forEach(item => item.classList.remove('is-aim-hover'));
+        classicAimHoverTarget = '';
+        return;
+    }
     const el = document.elementFromPoint(classicAimPointer.x, classicAimPointer.y);
     const fighter = el && el.closest ? el.closest('#classic-fighter-self, #classic-fighter-enemy') : null;
     if (fighter && classicCanPlayFromElement(fighter.id)) hoverId = fighter.id;
@@ -3563,20 +3591,32 @@ function updateClassicAimCurve() {
     svg.setAttribute('viewBox', `0 0 ${window.innerWidth} ${window.innerHeight}`);
     svg.setAttribute('width', String(window.innerWidth));
     svg.setAttribute('height', String(window.innerHeight));
+    const d = classicAimPathData(center.x, center.y, classicAimPointer.x, classicAimPointer.y);
+    const outline = svg.querySelector('.classic-aim-outline');
     const path = svg.querySelector('.classic-aim-path');
-    if (path) path.setAttribute('d', classicAimPathData(center.x, center.y, classicAimPointer.x, classicAimPointer.y));
+    const tip = svg.querySelector('.classic-aim-tip');
+    if (outline) outline.setAttribute('d', d);
+    if (path) path.setAttribute('d', d);
+    if (tip) {
+        tip.setAttribute('cx', classicAimPointer.x.toFixed(1));
+        tip.setAttribute('cy', classicAimPointer.y.toFixed(1));
+    }
     svg.classList.remove('hidden');
     updateClassicAimHoverTarget();
 }
 
 function scheduleClassicAimCurveUpdate() {
     if (!shouldUseClassicBattle(gameState)) return;
-    requestAnimationFrame(updateClassicAimCurve);
+    if (classicAimFrame) return;
+    classicAimFrame = requestAnimationFrame(() => {
+        classicAimFrame = 0;
+        updateClassicAimCurve();
+    });
 }
 
 function onClassicAimPointerMove(event) {
     classicAimPointer = { x: event.clientX, y: event.clientY };
-    if (selectedPlayCardId != null && shouldUseClassicBattle(gameState)) updateClassicAimCurve();
+    if (selectedPlayCardId != null && shouldUseClassicBattle(gameState)) scheduleClassicAimCurveUpdate();
 }
 
 function cancelClassicSelection(event) {
@@ -3665,7 +3705,7 @@ function classicCanAutoPlaySelfOnlyFromEvent(event) {
     const selected = getSelectedClassicCard();
     if (!isClassicSelfOnlyCard(selected)) return false;
     const target = event && event.target;
-    if (target && target.closest && target.closest('.classic-hand-card, .classic-end-turn, .classic-icon-btn, .classic-log-drawer, .classic-fighter, #classic-play-lane')) {
+    if (target && target.closest && target.closest('.classic-hand-card, .classic-end-turn, .classic-icon-btn, .classic-log-drawer, .classic-card-preview, .classic-left-rail, .classic-top-hud, .classic-fighter')) {
         return false;
     }
     const hand = $('classic-hand-fan');
@@ -4208,6 +4248,29 @@ function cardChoiceOption(cardDict, extra = {}) {
     };
 }
 
+function stableJsonForCard(value) {
+    if (Array.isArray(value)) return value.map(stableJsonForCard);
+    if (value && typeof value === 'object') {
+        const out = {};
+        Object.keys(value).sort().forEach(key => {
+            if (key === 'instance_id' || key === 'responder_id') return;
+            out[key] = stableJsonForCard(value[key]);
+        });
+        return out;
+    }
+    return value;
+}
+
+function counterCardGroupSignature(cardDict) {
+    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
+    return JSON.stringify({
+        card: stableJsonForCard(cardDict || {}),
+        type: cardDef ? cardDef.card_type : '',
+        trigger: cardDef ? cardDef.response_trigger : '',
+        flags: cardDef ? Array.from(cardDef.flags || []).sort() : [],
+    });
+}
+
 function cardComboChoiceOption(cards, extra = {}) {
     const list = Array.isArray(cards) ? cards : [];
     return {
@@ -4308,10 +4371,53 @@ function getResponseAttackerState(data) {
     return playerId == null ? {} : (getPlayerDataById(playerId) || {});
 }
 
-function getActualAttackDamageText(cardDict, attackerState = {}) {
+function getResponseTargetState(data) {
+    const pending = (gameState && gameState.pending_response) || {};
+    let targetId = normalizePlayerId(
+        (data && data.target_player_id) != null ? data.target_player_id
+            : ((data && data.target_id) != null ? data.target_id : pending.target_player_id)
+    );
+    if (targetId == null) targetId = normalizePlayerId(playerId);
+    return targetId == null ? {} : (getPlayerDataById(targetId) || {});
+}
+
+function readPlayerHealthValue(playerState, keys, fallback = 0) {
+    for (const key of keys) {
+        const value = Number(playerState && playerState[key]);
+        if (Number.isFinite(value)) return value;
+    }
+    return fallback;
+}
+
+function getClawDamageHits(cardDict, attackerState, targetState, info) {
+    const fusion = Math.max(1, Number(cardDict.fusion_level || 1));
+    const fission = Math.max(1, Number(cardDict.fission_level || 1));
+    const baseHits = Math.max(1, Math.round(Number((info && info.hits) || 1)));
+    const bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
+    const maxHealth = readPlayerHealthValue(targetState, ['max_health', 'maxHp', 'maxH', 'max_h'], 0);
+    let health = readPlayerHealthValue(targetState, ['health', 'hp', 'h'], maxHealth);
+    if (!maxHealth) {
+        const amount = Number((info && info.amount) || 5) + bonus;
+        const perHit = Math.ceil(amount * fusion / fission);
+        return Array.from({ length: baseHits * fission }, () => perHit);
+    }
+    const hits = [];
+    for (let i = 0; i < baseHits * fission; i++) {
+        const base = health >= maxHealth / 2 ? 10 : 5;
+        const dealt = Math.ceil((base + bonus) * fusion / fission);
+        hits.push(dealt);
+        health = Math.max(0, health - dealt);
+    }
+    return hits;
+}
+
+function getActualAttackDamageText(cardDict, attackerState = {}, targetState = {}) {
     const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
     const info = getAttackDamageBaseInfo(cardDict || {}, cardDef);
     if (!info) return '';
+    if ((cardDict.def_id || cardDef.id || '') === 'Claw') {
+        return formatDamageHits(getClawDamageHits(cardDict || {}, attackerState || {}, targetState || {}, info));
+    }
     const fusion = Math.max(1, Number(cardDict.fusion_level || 1));
     const fission = Math.max(1, Number(cardDict.fission_level || 1));
     let bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
@@ -4876,19 +4982,24 @@ function connectSocket(serverUrl) {
         } else if (phase === 'action' || phase === 'draw' || phase === 'response' || phase === 'choice') {
             showView('view-game');
         }
+        syncBattleLogMatch(data || {});
+        syncPhaseChatMatch(data || {});
     });
     socket.on('draft_state', (data) => {
+        const previousDraftState = draftState;
         const oldOptIds = draftState && draftState.options ? draftState.options.map(o => o.def_id) : [];
         const newOptIds = data.options ? data.options.map(o => o.def_id) : [];
         const isReroll = oldOptIds.length > 0 && JSON.stringify(oldOptIds) !== JSON.stringify(newOptIds) && (draftState ? draftState.rerolls : 0) > (data.rerolls || 0);
         draftState = data;
+        syncBattleLogMatch(data || {});
         if (data.your_id != null) playerId = data.your_id;
-        renderDraft(data, isReroll);
+        renderDraft(data, isReroll, previousDraftState);
     });
     socket.on('event_select', (data) => {
         debugLog('[client] event_select');
         phase = 'event_select';
         eventSelectData = data;
+        syncBattleLogMatch(data || {});
         if (data.your_id != null) playerId = data.your_id;
         renderEventSelect(data);
     });
@@ -4896,6 +5007,7 @@ function connectSocket(serverUrl) {
         debugLog('[client] state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null, 'spectating=', data.spectating);
         const previousGameState = gameState;
         soloMode = !!data.solo;
+        syncBattleLogMatch(data || {});
         gameState = data;
         phase = data.phase || phase;
         if (data.spectating) {
@@ -4945,6 +5057,7 @@ function connectSocket(serverUrl) {
         soloMode = true;
         tutorialMode = !!data.tutorial || tutorialMode;
         isSpectating = false;
+        syncBattleLogMatch(data || {});
         gameState = data;
         phase = data.phase || phase;
         playerId = data.your_id;
@@ -5888,6 +6001,8 @@ function handleLocalGamePhase(data) {
     } else if (phase === 'game_over') {
         updateStatus(UI.game_over);
     }
+    syncBattleLogMatch(data || {});
+    syncPhaseChatMatch(data || {});
 }
 
 function handleLocalSoloState(data) {
@@ -5895,6 +6010,7 @@ function handleLocalSoloState(data) {
     soloMode = true;
     tutorialMode = !!data.tutorial || tutorialMode;
     isSpectating = false;
+    syncBattleLogMatch(data || {});
     gameState = data;
     phase = data.phase || phase;
     playerId = data.your_id;
@@ -6846,7 +6962,7 @@ function renderLobby(data) {
     updateStatus(UI.lobby_status.replace('{0}', nickname));
 }
 
-function renderDraft(data, isReroll) {
+function renderDraft(data, isReroll, previousDraftState = null) {
     showView('view-draft');
     syncPhaseChatMatch(data || {});
     updatePhaseChatChannelOptions(data || {});
@@ -6860,7 +6976,7 @@ function renderDraft(data, isReroll) {
     const oppPicksCount = Number.isFinite(Number(data.opponent_picks_count))
         ? Number(data.opponent_picks_count)
         : Number(Object.values(othersPicksCount)[0] || 0);
-    const prevPicks = draftState ? (draftState.picks || []).length : -1;
+    const prevPicks = previousDraftState ? (previousDraftState.picks || []).length : -1;
     const iJustPicked = picks.length > prevPicks;
     const shouldAnimate = isReroll || iJustPicked;
     const info = $('draft-info');
@@ -6887,42 +7003,72 @@ function renderDraft(data, isReroll) {
     }
     const optionsEl = $('draft-options');
     if (optionsEl) {
-        optionsEl.innerHTML = '';
-        if (picks.length >= totalRounds) {
-            optionsEl.innerHTML = `<div class="empty-hint">${UI.draft_waiting}</div>`;
-        } else {
-            options.forEach((opt, i) => {
-                const card = createCardElement(opt, {});
-                card.style.cursor = 'pointer';
-                card.onclick = () => socket.emit('draft_pick', { def_id: opt.def_id });
-                if (shouldAnimate) {
-                    card.style.opacity = '0';
-                    card.style.transform = 'scale(0.6)';
-                    card.style.transition = 'opacity 0.15s ease-out, transform 0.15s ease-out';
-                    if (isReroll) {
-                        card.style.transitionDelay = (i * 0.05) + 's';
-                    }
-                    requestAnimationFrame(() => {
+        const optionIds = options.map(opt => {
+            if (typeof opt === 'string') return opt;
+            return [
+                opt.def_id || opt.id || '',
+                opt.instance_id || '',
+                opt.fusion_level || 1,
+                opt.fission_level || 1,
+                opt.tomato_level || 0,
+                (opt.flags || []).join('|'),
+            ].join(':');
+        });
+        const optionsSignature = JSON.stringify({
+            match: phaseContextMatchKey(data),
+            lang: currentLang,
+            ui: currentUiStyle,
+            waiting: picks.length >= totalRounds,
+            options: optionIds,
+        });
+        if (optionsSignature !== lastDraftOptionsSignature) {
+            lastDraftOptionsSignature = optionsSignature;
+            optionsEl.innerHTML = '';
+            if (picks.length >= totalRounds) {
+                optionsEl.innerHTML = `<div class="empty-hint">${UI.draft_waiting}</div>`;
+            } else {
+                options.forEach((opt, i) => {
+                    const card = createCardElement(opt, {});
+                    card.style.cursor = 'pointer';
+                    card.onclick = () => socket.emit('draft_pick', { def_id: opt.def_id });
+                    if (shouldAnimate) {
+                        card.style.opacity = '0';
+                        card.style.transform = 'scale(0.6)';
+                        card.style.transition = 'opacity 0.15s ease-out, transform 0.15s ease-out';
+                        if (isReroll) {
+                            card.style.transitionDelay = (i * 0.05) + 's';
+                        }
                         requestAnimationFrame(() => {
-                            card.style.opacity = '1';
-                            card.style.transform = 'scale(1)';
+                            requestAnimationFrame(() => {
+                                card.style.opacity = '1';
+                                card.style.transform = 'scale(1)';
+                            });
                         });
-                    });
-                }
-                optionsEl.appendChild(card);
-            });
+                    }
+                    optionsEl.appendChild(card);
+                });
+            }
         }
     }
     const picksEl = $('draft-picks');
     if (picksEl) {
-        picksEl.innerHTML = '';
-        picks.forEach(defId => {
-            const cardDef = getCardDef(defId);
-            const tag = createCardChoiceChip({ def_id: defId }, { includeLayers: false, includeTomato: false });
-            tag.classList.add('draft-pick-token');
-            if (!cardDef) tag.textContent = defId;
-            picksEl.appendChild(tag);
+        const picksSignature = JSON.stringify({
+            match: phaseContextMatchKey(data),
+            lang: currentLang,
+            ui: currentUiStyle,
+            picks,
         });
+        if (picksSignature !== lastDraftPicksSignature) {
+            lastDraftPicksSignature = picksSignature;
+            picksEl.innerHTML = '';
+            picks.forEach(defId => {
+                const cardDef = getCardDef(defId);
+                const tag = createCardChoiceChip({ def_id: defId }, { includeLayers: false, includeTomato: false });
+                tag.classList.add('draft-pick-token');
+                if (!cardDef) tag.textContent = defId;
+                picksEl.appendChild(tag);
+            });
+        }
     }
     const rerollBtn = $('btn-draft-reroll');
     if (rerollBtn) {
@@ -7307,13 +7453,18 @@ function chatPlayerNameFromContext(ctx, id) {
 
 function populateChatChannelSelect(select, ctx) {
     if (!select) return;
-    const show = !!(ctx && ctx.mode === '2v2' && !ctx.spectating && !isSpectating && ctx.phase !== 'game_over');
+    const mode = String((ctx && ctx.mode) || '');
+    const show = mode === '2v2' && !!(ctx && !ctx.spectating && !isSpectating && ctx.phase !== 'game_over');
     select.classList.toggle('hidden', !show);
     select.disabled = !show;
     select.title = UI.chat_channel_label;
     select.setAttribute('aria-label', UI.chat_channel_label);
     if (!show) {
-        select.innerHTML = '';
+        if (select.dataset.signature !== 'hidden') {
+            select.innerHTML = '';
+            select.dataset.signature = 'hidden';
+        }
+        select.value = 'public';
         return;
     }
 
@@ -7330,6 +7481,11 @@ function populateChatChannelSelect(select, ctx) {
             label: `[${tf('chat_channel_private_to', chatPlayerNameFromContext(ctx, id))}]`,
         });
     });
+    const signature = JSON.stringify(options);
+    if (select.dataset.signature === signature) {
+        select.value = options.some(option => option.value === previous) ? previous : 'public';
+        return;
+    }
 
     select.innerHTML = '';
     options.forEach(optionData => {
@@ -7338,6 +7494,7 @@ function populateChatChannelSelect(select, ctx) {
         option.textContent = optionData.label;
         select.appendChild(option);
     });
+    select.dataset.signature = signature;
     select.value = options.some(option => option.value === previous) ? previous : 'public';
 }
 
@@ -7379,6 +7536,19 @@ function syncPhaseChatMatch(ctx) {
     if (key) {
         phaseChatMatchKey = key;
         pregameChatMatchKey = key;
+    }
+}
+
+function syncBattleLogMatch(ctx) {
+    const key = phaseContextMatchKey(ctx);
+    if (!key) return;
+    if (renderedBattleLogMatchKey !== key) {
+        const container = $('battle-log');
+        const content = container ? container.querySelector('.log-content') : null;
+        resetBattleLogState(content);
+        renderedBattleLogMatchKey = key;
+        lastDraftOptionsSignature = '';
+        lastDraftPicksSignature = '';
     }
 }
 
@@ -7435,7 +7605,7 @@ function appendPhaseChat(nick, text, meta = {}, channelMeta = {}) {
 
 function seedPregameChatEntriesForBattleLog() {
     if (!pregameChatEntries.length) return;
-    const matchKey = gameState && String(gameState.match_key || (gameState.room_id != null ? `room:${gameState.room_id}` : ''));
+    const matchKey = phaseContextMatchKey(gameState);
     if (pregameChatMatchKey && matchKey && pregameChatMatchKey !== matchKey) return;
     if (gameTimelineEntries.some(entry => entry && entry.pregameChatSeed)) return;
     pregameChatEntries.forEach((entry, index) => {
@@ -7842,11 +8012,13 @@ function renderClassicFighter(container, player, side, selectedCard = null) {
     const role = getClassicPlayRole(selectedCard);
     const selfOnly = isClassicSelfOnlyCard(selectedCard);
     const isHardTarget = !!selectedCard && !selfOnly && (role === side || (role === 'enemy' && side === 'enemy') || (role === 'self' && side === 'self'));
-    const isSoftTarget = !!selectedCard && !selfOnly && role === 'equip' && side === 'self';
+    const isSelfOnlyTarget = !!selectedCard && selfOnly && side === 'self';
+    const isSoftTarget = (!!selectedCard && !selfOnly && role === 'equip' && side === 'self') || isSelfOnlyTarget;
     container.classList.toggle('is-current', !!player.isCurrent);
     container.classList.toggle('is-defeated', !!player.isDefeated);
     container.classList.toggle('is-play-target', isHardTarget);
     container.classList.toggle('is-soft-target', isSoftTarget);
+    container.classList.toggle('is-self-only-target', isSelfOnlyTarget);
     const intentText = side === 'enemy'
         ? (player.isCurrent ? (UI.opponent_turn || 'Opponent') : (selectedCard && role === 'enemy' ? (UI.classic_target_enemy || '') : ''))
         : (player.isCurrent ? (UI.your_turn || 'Your turn') : (selectedCard && !selfOnly && (role === 'self' || role === 'equip') ? getClassicPlayHint(selectedCard) : ''));
@@ -7944,9 +8116,13 @@ function renderClassicBattle(gs) {
         oldContainer.classList.add('classic-battle-hidden');
         const selected = vm.selectedCard;
         const selectedRole = getClassicPlayRole(selected);
+        const selectedSelfOnly = isClassicSelfOnlyCard(selected);
         const missingResource = !!selected && ((Number(selected.cost_e || 0) > Number(vm.self.e || 0)) || (Number(selected.cost_m || 0) > Number(vm.self.m || 0)));
         root.classList.toggle('has-selected-card', !!selected);
         root.classList.toggle('has-missing-resource', missingResource);
+        root.classList.toggle('is-aiming', !!selected);
+        root.classList.toggle('is-self-only-aim', !!selected && selectedSelfOnly);
+        root.classList.toggle('is-target-aim', !!selected && !selectedSelfOnly);
         root.dataset.selectedRole = selected ? selectedRole : '';
         $('classic-mode').textContent = vm.turn.modeText || '1v1';
         $('classic-round').textContent = `R${vm.turn.round || 0}`;
@@ -9340,7 +9516,7 @@ function renderLog(log, logStart = 0, logTotal = null) {
     if (!Array.isArray(log)) log = [];
     logStart = Number.isFinite(Number(logStart)) ? Number(logStart) : 0;
     logTotal = Number.isFinite(Number(logTotal)) ? Number(logTotal) : logStart + log.length;
-    const matchKey = gameState && (gameState.match_key || gameState.room_id || '');
+    const matchKey = phaseContextMatchKey(gameState);
     if (matchKey && renderedBattleLogMatchKey && renderedBattleLogMatchKey !== String(matchKey)) {
         resetBattleLogState(content);
     }
@@ -9994,6 +10170,34 @@ function showResponseUI(data) {
         if (canAfford) hasAffordable = true;
         return { cc, ccDef, costE, costM, canAfford };
     });
+    const groupedCardCosts = [];
+    const groupedBySignature = new Map();
+    cardCosts.forEach(item => {
+        const signature = counterCardGroupSignature(item.cc);
+        let group = groupedBySignature.get(signature);
+        if (!group) {
+            group = {
+                ...item,
+                items: [],
+                count: 0,
+                canAffordAny: false,
+            };
+            groupedBySignature.set(signature, group);
+            groupedCardCosts.push(group);
+        }
+        group.items.push(item);
+        group.count += 1;
+        if (item.canAfford) {
+            group.canAffordAny = true;
+            if (!group.canAfford) {
+                group.cc = item.cc;
+                group.ccDef = item.ccDef;
+                group.costE = item.costE;
+                group.costM = item.costM;
+                group.canAfford = item.canAfford;
+            }
+        }
+    });
     if (!hasAffordable) {
         flashStatus(UI.counter_insufficient, 3000);
     }
@@ -10024,7 +10228,10 @@ function showResponseUI(data) {
     prefix.textContent = triggerDesc ? `${triggerDesc}:` : '';
     if (prefix.textContent) label.appendChild(prefix);
     label.appendChild(createCardChoiceChip(cardDict));
-    const damageText = getActualAttackDamageText(cardDict, getResponseAttackerState(data));
+    const prediction = data.damage_prediction || {};
+    const noCounterPrediction = prediction.no_counter || {};
+    const predictedDamageText = noCounterPrediction && noCounterPrediction.total > 0 ? noCounterPrediction.display : '';
+    const damageText = predictedDamageText || getActualAttackDamageText(cardDict, getResponseAttackerState(data), getResponseTargetState(data));
     if (damageText) {
         const damage = document.createElement('span');
         damage.className = 'response-damage-preview card-token damage';
@@ -10040,17 +10247,30 @@ function showResponseUI(data) {
     }
     const btnRow = document.createElement('div');
     btnRow.className = 'response-btn-row';
-    cardCosts.forEach(({ cc, ccDef, costE, costM, canAfford }) => {
+    groupedCardCosts.forEach(({ cc, ccDef, costE, costM, canAffordAny, count }) => {
         if (!ccDef) return;
         const costStr = costM === 0 ? `${costE}E` : `${costE}E/${costM}M`;
         const btn = document.createElement('button');
-        btn.className = 'btn counter-card-btn ' + (canAfford ? 'btn-primary' : 'btn-counter-disabled');
+        btn.className = 'btn counter-card-btn ' + (canAffordAny ? 'btn-primary' : 'btn-counter-disabled');
         btn.appendChild(createCardChoiceChip(cc));
+        if (count > 1) {
+            const countEl = document.createElement('span');
+            countEl.className = 'counter-card-count';
+            countEl.textContent = `×${count}`;
+            btn.appendChild(countEl);
+        }
         const cost = document.createElement('span');
         cost.className = 'counter-card-cost';
         cost.textContent = `[${costStr}]`;
         btn.appendChild(cost);
-        btn.disabled = !canAfford;
+        const counterPrediction = prediction.counters && prediction.counters[String(cc.instance_id)];
+        if (counterPrediction && noCounterPrediction && noCounterPrediction.total > 0) {
+            const reduction = document.createElement('span');
+            reduction.className = 'counter-damage-reduction';
+            reduction.textContent = counterPrediction.reduction_display || `-${counterPrediction.reduction || 0}D`;
+            btn.appendChild(reduction);
+        }
+        btn.disabled = !canAffordAny;
         btn.onclick = () => onRespond(cc.instance_id);
         btnRow.appendChild(btn);
     });
@@ -11629,6 +11849,10 @@ async function init() {
     if ($('classic-end-turn')) $('classic-end-turn').addEventListener('click', onEndTurn);
     if ($('classic-settings')) $('classic-settings').addEventListener('click', () => openSettings({ hideServer: true }));
     document.addEventListener('mousemove', onClassicAimPointerMove);
+    document.addEventListener('pointermove', onClassicAimPointerMove);
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') cancelClassicSelection(event);
+    });
     document.addEventListener('contextmenu', (event) => {
         if (cancelClassicSelection(event)) return;
     });

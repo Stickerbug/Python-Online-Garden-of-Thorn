@@ -707,6 +707,7 @@ class GameRoom:
         self.team_assignments = None
         self._history_recorded = False
         self.created_at = time.time()
+        self.match_seq = 1
         self.started_at = None
         reset_room_replay(self)
         if mode == '2v2' and len(player_sids) == 4:
@@ -719,7 +720,7 @@ class GameRoom:
 
 
 def room_match_key(room):
-    return f"{room.room_id}:{int(getattr(room, 'created_at', 0) * 1000)}"
+    return f"{room.room_id}:{getattr(room, 'match_seq', 1)}:{int(getattr(room, 'created_at', 0) * 1000)}"
 
 
 def room_mod_payload(room):
@@ -2054,9 +2055,9 @@ ADMIN_COMMANDS = {
     'history': 'history [数量] - 查看最近历史对局',
     'broadcast': 'broadcast <内容> - 发送服务器广播',
     'kick': 'kick <sid|昵称> - 踢出玩家',
-    'userpass': 'userpass <账号ID|用户名> <新密码> - 管理员修改账号密码',
-    'banuser': 'banuser <账号ID|用户名> [原因] - 封禁账号并踢下线',
-    'unbanuser': 'unbanuser <账号ID|用户名> - 解除账号封禁',
+    'userpass': 'userpass <ID|注册顺序|用户名> <新密码> - 管理员修改账号密码',
+    'banuser': 'banuser <ID|注册顺序|用户名> [原因] - 封禁账号并踢下线',
+    'unbanuser': 'unbanuser <ID|注册顺序|用户名> - 解除账号封禁',
     'skip': 'skip <房间ID> - 尝试跳过当前回合',
     'endgame': 'endgame <房间ID> <winner|draw> - 强制结束对局；winner 可用 0/1，2v2 表示队伍',
     'set': 'set <房间ID> <玩家序号> <h|e|m|armor|dodge|poison|burn|toxic|vulnerable> <数值>',
@@ -2320,7 +2321,7 @@ def execute_admin_command(line):
         if not rows:
             return {'success': True, 'output': '当前没有在线玩家。'}
         return {'success': True, 'output': '\n'.join(
-            f"{p['nickname']} ID={p.get('player_id') or '-'} [{p['sid']}] 状态={zh_status(p['status'])} 房间={p.get('room_id')}" for p in rows
+            f"{p['nickname']} ID:{p.get('player_id') or '-'} [{p['sid']}] 状态={zh_status(p['status'])} 房间={p.get('room_id')}" for p in rows
         )}
     if cmd == 'rooms':
         with _lock:
@@ -2360,11 +2361,11 @@ def execute_admin_command(line):
                     team = f" 队伍={e.team_of(pidx)}"
                 if ps is not None:
                     rows.append(
-                        f"{pidx}: {nickname} ID={account_player_id} [{sid}] {online}{team} "
+                        f"{pidx}: {nickname} ID:{account_player_id} [{sid}] {online}{team} "
                         f"H={ps.health}/{ps.max_health} E={ps.elixir}/{ps.max_elixir} M={ps.magic}/{ps.max_magic} 手牌={len(ps.hand)}"
                     )
                 else:
-                    rows.append(f"{pidx}: {nickname} ID={account_player_id} [{sid}] {online}{team}")
+                    rows.append(f"{pidx}: {nickname} ID:{account_player_id} [{sid}] {online}{team}")
         return {'success': True, 'output': '\n'.join(rows) or '房间内没有玩家。'}
     if cmd == 'logs':
         count = parse_int_token(parts[1], 'count') if len(parts) > 1 else 20
@@ -2386,15 +2387,15 @@ def execute_admin_command(line):
         return {'success': True, 'output': f'已发送广播：{msg}'}
     if cmd in ('userpass', 'passwd', 'setpass'):
         if len(parts) < 3:
-            return {'success': False, 'output': command_error(raw, len(raw), '<账号ID|用户名> <新密码>')}
+            return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> <新密码>')}
         user, error = admin_change_user_password(parts[1], parts[2])
         if error:
             return {'success': False, 'output': error}
         admin_event('admin', f"changed password for account {user['username']}#{user['id']}")
-        return {'success': True, 'output': f"已修改账号 {user['username']} (ID {user['id']}) 的密码。"}
+        return {'success': True, 'output': f"已修改账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 的密码。"}
     if cmd in ('banuser', 'banaccount'):
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), '<账号ID|用户名> [原因]')}
+            return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> [原因]')}
         reason = raw.split(None, 2)[2].strip() if len(raw.split(None, 2)) >= 3 else ''
         user, error = admin_set_user_ban(parts[1], True, reason)
         if error:
@@ -2414,15 +2415,15 @@ def execute_admin_command(line):
             broadcast_lobby()
         admin_event('admin', f"banned account {user['username']}#{user['id']}: {reason or '-'}")
         suffix = f" 原因：{reason}" if reason else ''
-        return {'success': True, 'output': f"已封禁账号 {user['username']} (ID {user['id']})。已踢出在线会话 {len(kicked)} 个。{suffix}"}
+        return {'success': True, 'output': f"已封禁账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']})。已踢出在线会话 {len(kicked)} 个。{suffix}"}
     if cmd in ('unbanuser', 'unbanaccount'):
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), '<账号ID|用户名>')}
+            return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名>')}
         user, error = admin_set_user_ban(parts[1], False, '')
         if error:
             return {'success': False, 'output': error}
         admin_event('admin', f"unbanned account {user['username']}#{user['id']}")
-        return {'success': True, 'output': f"已解除账号 {user['username']} (ID {user['id']}) 的封禁。"}
+        return {'success': True, 'output': f"已解除账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 的封禁。"}
     if cmd == 'kick':
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), '<sid|昵称>')}
@@ -2579,6 +2580,7 @@ def admin_completions(line):
             rows = list_admin_users(query=token, sort='username', order='asc', limit=30).get('users', [])
             values = []
             for user in rows:
+                values.append(user.get('player_id', ''))
                 values.append(str(user.get('id')))
                 values.append(user.get('username', ''))
             return [v for v in values if v and v.lower().startswith(token.lower())][:30]
@@ -3156,6 +3158,29 @@ def send_solo_state(sid, perspective=None):
     socketio.emit('solo_state', state, room=sid)
 
 
+def build_response_request_payload(engine, responder_id, played_card, player_id, counter_cards, target_player_id=None):
+    serialized_cards = [
+        c.to_dict() if hasattr(c, 'to_dict') else c
+        for c in (counter_cards or [])
+    ]
+    pending = getattr(engine, 'pending_response', None) or {}
+    if target_player_id is None:
+        target_player_id = pending.get('target_player_id')
+    payload = {
+        'card': played_card,
+        'player_id': player_id,
+        'target_player_id': target_player_id,
+        'counter_cards': serialized_cards,
+    }
+    predictor = getattr(engine, 'build_response_damage_prediction', None)
+    if callable(predictor):
+        try:
+            payload['damage_prediction'] = predictor(responder_id, counter_cards or serialized_cards)
+        except Exception as exc:
+            admin_event('mod_error', f'response damage prediction failed: {exc}')
+    return payload
+
+
 def emit_solo_response_request(sid, engine, pidx, played_card):
     opp_pidx = 1 - pidx
     played_def = CARD_DEFS.get(played_card.get('def_id', ''), None)
@@ -3173,11 +3198,14 @@ def emit_solo_response_request(sid, engine, pidx, played_card):
     counter_cards = []
     for tt in trigger_types:
         counter_cards.extend(engine.get_counter_cards(opp_pidx, tt))
-    socketio.emit('response_request', {
-        'card': played_card,
-        'player_id': pidx,
-        'counter_cards': [c.to_dict() for c in counter_cards],
-    }, room=sid)
+    socketio.emit('response_request', build_response_request_payload(
+        engine,
+        opp_pidx,
+        played_card,
+        pidx,
+        counter_cards,
+        (engine.pending_response or {}).get('target_player_id', opp_pidx),
+    ), room=sid)
 
 
 def _schedule_v2_ui_timeout(scope, engine, player_id, request_id, timeout_ms):
@@ -5620,11 +5648,14 @@ def on_play_card(data):
                     if isinstance(responder_id, int) and 0 <= responder_id < len(room.player_sids):
                         r_sid = room.player_sids[responder_id]
                         if r_sid in players:
-                            socketio.emit('response_request', {
-                                'card': played_card,
-                                'player_id': pidx,
-                                'counter_cards': counter_cards,
-                            }, room=r_sid)
+                            socketio.emit('response_request', build_response_request_payload(
+                                engine,
+                                responder_id,
+                                played_card,
+                                pidx,
+                                counter_cards,
+                                (engine.pending_response or {}).get('target_player_id'),
+                            ), room=r_sid)
             else:
                 opp_pidx = 1 - pidx
                 counter_cards = []
@@ -5632,11 +5663,14 @@ def on_play_card(data):
                     counter_cards.extend(engine.get_counter_cards(opp_pidx, tt))
                 opp_sid = room.player_sids[opp_pidx]
                 if opp_sid in players:
-                    socketio.emit('response_request', {
-                        'card': played_card,
-                        'player_id': pidx,
-                        'counter_cards': [c.to_dict() for c in counter_cards],
-                    }, room=opp_sid)
+                    socketio.emit('response_request', build_response_request_payload(
+                        engine,
+                        opp_pidx,
+                        played_card,
+                        pidx,
+                        counter_cards,
+                        (engine.pending_response or {}).get('target_player_id', opp_pidx),
+                    ), room=opp_sid)
         elif result.get('needs_choice'):
             broadcast_game_state(room)
             emit('choice_request', {
@@ -5711,11 +5745,14 @@ def on_ally_consent_response(data):
                 if isinstance(responder_id, int) and 0 <= responder_id < len(room.player_sids):
                     r_sid = room.player_sids[responder_id]
                     if r_sid in players:
-                        socketio.emit('response_request', {
-                            'card': played_card,
-                            'player_id': (room.engine.pending_response or {}).get('player_id'),
-                            'counter_cards': counter_cards,
-                        }, room=r_sid)
+                        socketio.emit('response_request', build_response_request_payload(
+                            room.engine,
+                            responder_id,
+                            played_card,
+                            (room.engine.pending_response or {}).get('player_id'),
+                            counter_cards,
+                            (room.engine.pending_response or {}).get('target_player_id'),
+                        ), room=r_sid)
         elif result.get('needs_choice'):
             broadcast_game_state(room)
             requester_sid = room.player_sids[result.get('player_id', room.engine.current_player)] if result.get('player_id') is not None else sid
@@ -6103,6 +6140,7 @@ def on_rematch(data=None):
                 else:
                     room.engine = GameEngine()
                 room._history_recorded = False
+                room.match_seq = int(getattr(room, 'match_seq', 1) or 1) + 1
                 room.created_at = time.time()
                 room.started_at = None
                 reset_room_replay(room)
