@@ -14,6 +14,7 @@ const registeredUserDetails = new Map();
 let replayState = { items: [], offset: 0, hasMore: false, loading: false };
 let replayTimeline = [];
 let replayFrameIndex = 0;
+let replayPerspectiveIndex = 0;
 let replaySpeed = 1;
 let replayTimer = null;
 let replayData = null;
@@ -524,8 +525,8 @@ function renderRegisteredUserCard(user) {
           <div class="user-meta-row">
             <span>ID:${escapeHtml(user.player_id || '-')}</span>
             <span>注册顺序：${escapeHtml(user.id)}</span>
-            <span>上次下线 ${escapeHtml(formatAdminTime(user.last_login_at))}</span>
-            <span>注册 ${escapeHtml(formatAdminTime(user.created_at))}</span>
+            <span class="admin-data">上次下线 ${escapeHtml(formatAdminTime(user.last_login_at))}</span>
+            <span class="admin-data">注册 ${escapeHtml(formatAdminTime(user.created_at))}</span>
           </div>
         </div>
         <div class="user-score-row" aria-label="账号战绩">
@@ -559,8 +560,8 @@ function renderRegisteredUserDetails(user, detail) {
             <div><dt>用户名</dt><dd>${escapeHtml(user.username)}</dd></div>
             <div><dt>ID</dt><dd>${escapeHtml(user.player_id || '-')}</dd></div>
             <div><dt>注册顺序</dt><dd>${escapeHtml(user.id)}</dd></div>
-            <div><dt>注册时间</dt><dd>${escapeHtml(formatAdminTime(user.created_at))}</dd></div>
-            <div><dt>上次下线</dt><dd>${escapeHtml(formatAdminTime(user.last_login_at))}</dd></div>
+            <div><dt>注册时间</dt><dd class="admin-data">${escapeHtml(formatAdminTime(user.created_at))}</dd></div>
+            <div><dt>上次下线</dt><dd class="admin-data">${escapeHtml(formatAdminTime(user.last_login_at))}</dd></div>
             <div><dt>当前状态</dt><dd>${online ? `${escapeHtml(labelFrom(STATUS_LABELS, online.status))} ${online.room_id != null ? `#${escapeHtml(online.room_id)}` : ''}` : '离线'}</dd></div>
           </dl>
         </div>
@@ -582,7 +583,7 @@ function renderUserMatch(match) {
     <div class="user-match-row">
       <time>${escapeHtml(formatAdminTime(match.ended_at || match.started_at))}</time>
       <div><b>${escapeHtml(match.mode || '-')}</b> · ${escapeHtml(players)}</div>
-      <div class="muted">结果 ${escapeHtml(result)} · 回合 ${escapeHtml(valueOrDash(match.rounds))} · 时长 ${escapeHtml(formatUptime(match.duration_seconds || 0))}</div>
+      <div class="muted admin-data">结果 ${escapeHtml(result)} · 回合 ${escapeHtml(valueOrDash(match.rounds))} · 时长 ${escapeHtml(formatUptime(match.duration_seconds || 0))}</div>
     </div>`;
 }
 
@@ -646,7 +647,7 @@ function renderHistory(history) {
     <div class="log-item">
       <time>${escapeHtml(formatAdminTime(item.time))} · 房间 #${escapeHtml(item.room_id)} · ${escapeHtml(item.mode)}</time>
       ${escapeHtml((item.players || []).join(' / '))}<br>
-      胜者=${escapeHtml(item.winner)} · 回合=${escapeHtml(item.round)} · 时长=${formatUptime(item.duration_seconds || 0)}
+      <span class="admin-data">胜者=${escapeHtml(item.winner)} · 回合=${escapeHtml(item.round)} · 时长=${formatUptime(item.duration_seconds || 0)}</span>
     </div>`).join('') : '<div class="log-item">暂无历史对局。</div>';
 }
 
@@ -838,32 +839,6 @@ function renderReplays() {
     </table>`;
 }
 
-async function openReplayViewer(replayId) {
-  pauseReplay();
-  const viewer = $('replay-viewer');
-  viewer.classList.remove('hidden');
-  $('replay-frame').textContent = '正在生成时间线。';
-  try {
-    const data = await api(`/api/replays/${encodeURIComponent(replayId)}/timeline?admin=1`);
-    replayTimeline = data.timeline || [];
-    replayFrameIndex = 0;
-    const meta = (data.replay && data.replay.meta) || {};
-    $('replay-viewer-title').textContent = `${meta.mode || '-'} · ${(meta.players || []).join(' / ')}`;
-    const progress = $('replay-progress');
-    progress.max = String(Math.max(0, replayTimeline.length - 1));
-    progress.value = '0';
-    renderReplayFrame();
-  } catch (error) {
-    $('replay-frame').textContent = `回放加载失败：${error.message}`;
-  }
-}
-
-function renderReplayFrame() {
-  const frame = replayTimeline[replayFrameIndex] || null;
-  $('replay-progress').value = String(replayFrameIndex);
-  $('replay-frame').textContent = frame ? JSON.stringify(frame, null, 2) : '暂无时间线数据。';
-}
-
 function pauseReplay() {
   if (replayTimer) {
     clearTimeout(replayTimer);
@@ -899,7 +874,10 @@ function replayFrameState(frame) {
 
 function replayPerspective(frame) {
   const state = replayFrameState(frame);
-  if (Array.isArray(state.perspectives) && state.perspectives.length) return state.perspectives[0] || {};
+  if (Array.isArray(state.perspectives) && state.perspectives.length) {
+    const index = Math.max(0, Math.min(state.perspectives.length - 1, Number(replayPerspectiveIndex) || 0));
+    return state.perspectives[index] || state.perspectives[0] || {};
+  }
   return state || {};
 }
 
@@ -915,6 +893,20 @@ function replayName(frame, playerId, fallback) {
   const names = replayNames(frame);
   const id = Number(playerId);
   return Number.isInteger(id) && names[id] ? names[id] : fallback;
+}
+
+function replayPerspectiveButtons(frame) {
+  const state = replayFrameState(frame);
+  const names = replayNames(frame);
+  const perspectives = Array.isArray(state.perspectives) ? state.perspectives : [];
+  if (perspectives.length <= 1) return '';
+  return `
+    <div class="admin-replay-perspectives">
+      ${perspectives.map((perspective, index) => {
+        const label = names[index] || perspective.your_name || `P${index + 1}`;
+        return `<button class="row-action${index === replayPerspectiveIndex ? ' active' : ''}" type="button" data-admin-replay-perspective="${index}">${escapeHtml(label)}</button>`;
+      }).join('')}
+    </div>`;
 }
 
 function replayMs(ms) {
@@ -972,7 +964,7 @@ function replayStatusRow(player) {
   return items.length ? items.map(item => `<span class="admin-replay-chip">${escapeHtml(item)}</span>`).join('') : '<span class="admin-replay-chip">无</span>';
 }
 
-function replayPlayerPanel(frame, role, player, playerId, fallbackName, revealHand) {
+function replayPlayerPanel(frame, role, player, playerId, fallbackName, revealHand = true) {
   const p = player || {};
   const current = Number(replayFrameState(frame).current_player ?? frame.current_player) === Number(playerId);
   const hand = revealHand ? (p.hand || p.revealed_hand || []) : (p.revealed_hand || []);
@@ -1022,6 +1014,7 @@ async function openReplayViewer(replayId) {
     replayData = data.replay || null;
     replayTimeline = data.timeline || [];
     replayFrameIndex = 0;
+    replayPerspectiveIndex = 0;
     const meta = (data.replay && data.replay.meta) || {};
     $('replay-viewer-title').textContent = `${meta.mode || '-'} · ${(meta.players || []).join(' / ')}`;
     const progress = $('replay-progress');
@@ -1049,8 +1042,8 @@ function renderReplayFrame() {
   const enemyIds = Array.isArray(perspective.enemy_ids) ? perspective.enemy_ids : [];
   const top = [];
   const bottom = [];
-  if (perspective.opponent) top.push(replayPlayerPanel(frame, '敌方', perspective.opponent, enemyIds[0] ?? (yourId === 0 ? 1 : 0), 'Opponent', false));
-  if (perspective.opponent2) top.push(replayPlayerPanel(frame, '敌方2', perspective.opponent2, enemyIds[1] ?? 3, 'Opponent 2', false));
+  if (perspective.opponent) top.push(replayPlayerPanel(frame, '敌方', perspective.opponent, enemyIds[0] ?? (yourId === 0 ? 1 : 0), 'Opponent', true));
+  if (perspective.opponent2) top.push(replayPlayerPanel(frame, '敌方2', perspective.opponent2, enemyIds[1] ?? 3, 'Opponent 2', true));
   if (perspective.teammate) bottom.push(replayPlayerPanel(frame, '队友', perspective.teammate, perspective.teammate_id ?? 1, 'Teammate', true));
   if (perspective.you) bottom.push(replayPlayerPanel(frame, '自己', perspective.you, yourId, 'You', true));
   if (!top.length && !bottom.length && Array.isArray(state.player_names)) {
@@ -1065,6 +1058,7 @@ function renderReplayFrame() {
       <span>时间 ${replayMs(frame.t)}${duration ? ` / ${duration}` : ''}</span>
       <span>第${escapeHtml(frame.round || 0)}回合</span>
     </div>
+    ${replayPerspectiveButtons(frame)}
     <div class="admin-replay-board">
       <div class="admin-replay-main">
         <div class="admin-replay-row">${top.join('') || '<div class="admin-replay-empty">无玩家状态</div>'}</div>
@@ -1304,6 +1298,7 @@ function bindEvents() {
     const suggestion = event.target.dataset && event.target.dataset.suggestion;
     const suggestionIndex = event.target.dataset && event.target.dataset.suggestionIndex;
     const replayView = event.target.dataset && event.target.dataset.replayView;
+    const replayPerspective = event.target.dataset && event.target.dataset.adminReplayPerspective;
     const r2Delete = event.target.dataset && event.target.dataset.r2Delete;
     if (suggestionIndex != null && completionState) {
       applyCompletionIndex(Number(suggestionIndex));
@@ -1319,6 +1314,11 @@ function bindEvents() {
     }
     if (replayView) {
       await openReplayViewer(replayView);
+      return;
+    }
+    if (replayPerspective != null) {
+      replayPerspectiveIndex = Number(replayPerspective) || 0;
+      renderReplayFrame();
       return;
     }
     if (r2Delete) {
