@@ -4330,6 +4330,12 @@ function createCardChoiceChip(cardDict, options = {}) {
     name.style.color = typeColor;
     name.textContent = getCardName(cardDef);
     chip.appendChild(name);
+    if (options.extraCostText) {
+        const cost = document.createElement('span');
+        cost.className = 'choice-card-extra-cost';
+        cost.textContent = options.extraCostText;
+        chip.appendChild(cost);
+    }
     const flagsHtml = buildInstanceOnlyFlagHtml(cardDict, cardDef, options);
     if (flagsHtml) {
         const flags = document.createElement('span');
@@ -4349,6 +4355,11 @@ function cardChoiceOption(cardDict, extra = {}) {
         text: cardDef ? getCardName(cardDef) : ((cardDict && cardDict.def_id) || '?'),
         ...extra,
     };
+}
+
+function isMimicCardDict(cardDict) {
+    const rawId = String((cardDict && (cardDict.def_id || cardDict.id)) || '');
+    return rawId === 'Mimic' || rawId.toLowerCase().endsWith(':mimic');
 }
 
 function getMimicSpecialCostForCard(cardDict) {
@@ -4371,9 +4382,9 @@ function getAvailableElixirForMimicChoice(sourceCard, ownerState = null) {
 function mimicCardChoiceOption(cardDict, sourceCard = null, ownerState = null) {
     const cost = getMimicSpecialCostForCard(cardDict);
     const availableE = getAvailableElixirForMimicChoice(sourceCard, ownerState);
-    const detail = (UI.mimic_extra_cost || 'Cost {0}E').replace('{0}', cost);
+    const extraCostText = (UI.mimic_extra_cost || 'Cost {0}E').replace('{0}', cost);
     return cardChoiceOption(cardDict, {
-        detail,
+        extraCostText,
         disabled: cost > availableE,
     });
 }
@@ -10820,7 +10831,7 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
         const comboSel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), comboOptions);
         if (comboSel < 0) return false;
         return { target_instance_ids: uniqueCombos[comboSel].map(c => c.instance_id) };
-    } else if (defId === 'Mimic') {
+    } else if (isMimicCardDict(cardDict)) {
         const others = hand.filter(c => c.instance_id !== cardDict.instance_id);
         if (!others.length) { gameAlert(UI.notice, UI.no_attack_cards); return false; }
         const options = others.map(c => mimicCardChoiceOption(c, cardDict, gameState && gameState.you));
@@ -11332,7 +11343,7 @@ async function showChoiceUI(data) {
             if (selected.length >= minCount) choiceResult = { target_instance_ids: selected.map(i => cards[i].instance_id) };
         }
     } else if (choiceType === 'choose_card_from_hand') {
-        const isMimicChoice = cardDict && cardDict.def_id === 'Mimic';
+        const isMimicChoice = isMimicCardDict(cardDict);
         const otherCards = (choiceTargetData().hand || []).filter(c => (
             !isMimicChoice || c.instance_id !== cardDict.instance_id
         ));
