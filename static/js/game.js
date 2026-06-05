@@ -2194,7 +2194,9 @@ let pregameChatMatchKey = '';
 let lobbyChatHistorySignature = '';
 let lobbyPlayers = [];
 let lobbyOngoingGames = [];
-const FALLBACK_PUBLIC_SERVER = 'http://121.41.93.192';
+const FALLBACK_RELEASE_SERVER = 'http://121.41.93.192';
+const FALLBACK_BETA_SERVER = 'http://121.41.93.192:8081';
+const FALLBACK_PUBLIC_SERVER = GTN_BETA_MODE ? FALLBACK_BETA_SERVER : FALLBACK_RELEASE_SERVER;
 const DEFAULT_SERVER = (() => {
     try {
         const origin = String(window.location && window.location.origin || '').trim();
@@ -7040,13 +7042,8 @@ async function saveSocialSettings() {
 }
 
 function getServerAddress() {
-    const custom = (localStorage.getItem('gtn_server') || '').trim();
-    if (!custom) return DEFAULT_SERVER;
-    if (LEGACY_DEFAULT_SERVER_KEYS.has(canonicalServerKey(custom))) {
-        localStorage.removeItem('gtn_server');
-        return DEFAULT_SERVER;
-    }
-    return custom;
+    localStorage.removeItem('gtn_server');
+    return DEFAULT_SERVER;
 }
 
 function isLocalSoloRuntimeActive() {
@@ -12718,8 +12715,9 @@ function openSettings(options = {}) {
     loadSettingsMods();
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
-        const custom = localStorage.getItem('gtn_server') || '';
-        serverInput.value = LEGACY_DEFAULT_SERVER_KEYS.has(canonicalServerKey(custom)) ? '' : custom;
+        localStorage.removeItem('gtn_server');
+        serverInput.value = '';
+        serverInput.placeholder = DEFAULT_SERVER;
     }
     const serverHint = $('settings-server-hint');
     if (serverHint && settingsAllowServerEdit) {
@@ -13287,14 +13285,8 @@ function saveDisabledMods() {
     localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
-        const serverValue = serverInput.value.trim();
-        const serverKey = canonicalServerKey(serverValue);
-        const defaultKey = canonicalServerKey(DEFAULT_SERVER);
-        if (!serverValue || serverKey === defaultKey || LEGACY_DEFAULT_SERVER_KEYS.has(serverKey)) {
-            localStorage.removeItem('gtn_server');
-        } else {
-            localStorage.setItem('gtn_server', serverValue);
-        }
+        localStorage.removeItem('gtn_server');
+        serverInput.value = '';
     }
     if (socket && socket.connected && phase === 'lobby') {
         socket.emit('update_mod_settings', { disabled_mods: disabled, ...getCommunityModSelection() });
