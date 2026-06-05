@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import base64
 import copy
 import hashlib
 import mimetypes
@@ -66,6 +67,9 @@ def _register_gtnmod_asset(filepath: str, member: str, package_key: str) -> str:
     static_url = _extract_gtnmod_asset_to_static(filepath, safe_member, asset_id)
     if static_url:
         return static_url
+    data_url = _gtnmod_asset_data_url(filepath, safe_member, mime)
+    if data_url:
+        return data_url
     return f'/api/mod-assets/{asset_id}'
 
 
@@ -83,6 +87,23 @@ def _extract_gtnmod_asset_to_static(filepath: str, member: str, asset_id: str) -
             with open(target, 'wb') as f:
                 f.write(data)
         return f'{STATIC_MOD_ASSET_URL}/{filename}'
+    except Exception:
+        return ''
+
+
+def _gtnmod_asset_data_url(filepath: str, member: str, mime: str = '') -> str:
+    ext = os.path.splitext(member)[1].lower()
+    if ext not in GTNMOD_ASSET_EXTS:
+        return ''
+    try:
+        with zipfile.ZipFile(filepath, 'r') as zf:
+            data = zf.read(member)
+        if not mime:
+            mime, _ = mimetypes.guess_type(member)
+        if not mime:
+            mime = 'image/svg+xml' if ext == '.svg' else 'application/octet-stream'
+        encoded = base64.b64encode(data).decode('ascii')
+        return f'data:{mime};base64,{encoded}'
     except Exception:
         return ''
 
