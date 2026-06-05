@@ -233,10 +233,16 @@ MATCH_HISTORY = deque(maxlen=120)
 ADMIN_LOGIN_FAILURES = {}
 BETA_LOGIN_FAILURES = {}
 AUTH_LOGIN_FAILURES = {}
-LOBBY_CHAT_CACHE = deque(maxlen=200)
+LOBBY_CHAT_CACHE = {
+    'release': deque(maxlen=200),
+    'beta': deque(maxlen=200),
+}
 ADMIN_GAME_CHAT_CACHE = deque(maxlen=500)
 LOBBY_CHAT_RATE = {}
-LOBBY_CHAT_SEQUENCE = 0
+LOBBY_CHAT_SEQUENCE = {
+    'release': 0,
+    'beta': 0,
+}
 ADMIN_GAME_CHAT_SEQUENCE = 0
 CHAT_RATE_WINDOW_SECONDS = 60
 CHAT_RATE_LIMIT = 10
@@ -736,10 +742,11 @@ def protect_admin_api():
 
 
 class GameRoom:
-    def __init__(self, room_id, player_sids, allowed_card_ids=None, mode='1v1'):
+    def __init__(self, room_id, player_sids, allowed_card_ids=None, mode='1v1', beta_mode=False):
         self.room_id = room_id
         self.player_sids = list(player_sids)
         self.mode = mode
+        self.beta_mode = bool(beta_mode)
         if mode == '2v2':
             self.engine = GameEngine2v2()
         elif mode == 'urf':
@@ -791,6 +798,7 @@ def room_mod_payload(room):
         'community_mod_hash': first.get('community_mod_hash', ''),
         'community_mod_name': first.get('community_mod_name', ''),
         'community_mods': list(first.get('community_mods', [])),
+        'beta_mode': bool(getattr(room, 'beta_mode', False)),
     }
 
 
@@ -1014,18 +1022,44 @@ def _chat_entry_signature(entry):
     )
 
 
-def _lobby_chat_recent_locked(limit=100):
-    items = list(LOBBY_CHAT_CACHE)
+def _lobby_chat_scope_key(beta_mode=False):
+    return 'beta' if bool(beta_mode) else 'release'
+
+
+def _lobby_chat_cache_locked(beta_mode=False):
+    key = _lobby_chat_scope_key(beta_mode)
+    if key not in LOBBY_CHAT_CACHE:
+        LOBBY_CHAT_CACHE[key] = deque(maxlen=200)
+    return LOBBY_CHAT_CACHE[key]
+
+
+def _lobby_chat_next_id_locked(beta_mode=False):
+    key = _lobby_chat_scope_key(beta_mode)
+    if not isinstance(LOBBY_CHAT_SEQUENCE.get(key), int):
+        LOBBY_CHAT_SEQUENCE[key] = 0
+    LOBBY_CHAT_SEQUENCE[key] += 1
+    return LOBBY_CHAT_SEQUENCE[key]
+
+
+def _lobby_chat_recent_locked(limit=100, beta_mode=None):
+    if beta_mode is None:
+        items = []
+        for cache in LOBBY_CHAT_CACHE.values():
+            items.extend(list(cache))
+        items.sort(key=lambda item: float(item.get('ts', 0)) if isinstance(item, dict) else 0)
+    else:
+        items = list(_lobby_chat_cache_locked(beta_mode))
     if limit and limit > 0:
         items = items[-limit:]
     return [copy.deepcopy(item) for item in items]
 
 
-def _lobby_chat_history_payload_locked(limit=100):
+def _lobby_chat_history_payload_locked(limit=100, beta_mode=False):
+    cache = _lobby_chat_cache_locked(beta_mode)
     return {
-        'items': _lobby_chat_recent_locked(limit),
+        'items': _lobby_chat_recent_locked(limit, beta_mode),
         'limit': limit,
-        'total_cached': len(LOBBY_CHAT_CACHE),
+        'total_cached': len(cache),
     }
 
 
@@ -1033,9 +1067,10 @@ def _lobby_chat_time_label(ts):
     return datetime.fromtimestamp(ts, timezone(timedelta(hours=8))).strftime('%H:%M')
 
 
-def lobby_chat_would_fold_locked(payload, now=None):
+def lobby_chat_would_fold_locked(payload, now=None, beta_mode=False):
     now = time.time() if now is None else float(now)
-    last = LOBBY_CHAT_CACHE[-1] if LOBBY_CHAT_CACHE else None
+    cache = _lobby_chat_cache_locked(beta_mode)
+    last = cache[-1] if cache else None
     if not isinstance(last, dict) or last.get('type') != 'chat':
         return False
     probe = copy.deepcopy(payload or {})
@@ -1044,14 +1079,15 @@ def lobby_chat_would_fold_locked(payload, now=None):
     return idle < CHAT_IDLE_SEPARATOR_SECONDS and _chat_entry_signature(last) == _chat_entry_signature(probe)
 
 
-def append_lobby_chat_locked(payload, now=None):
-    global LOBBY_CHAT_SEQUENCE
+def append_lobby_chat_locked(payload, now=None, beta_mode=False):
     now = time.time() if now is None else float(now)
+    cache = _lobby_chat_cache_locked(beta_mode)
     chat_payload = copy.deepcopy(payload or {})
     chat_payload['type'] = 'chat'
+    chat_payload['beta_mode'] = bool(beta_mode)
     chat_payload['time'] = datetime.fromtimestamp(now, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
     chat_payload.setdefault('repeat_count', 1)
-    last = LOBBY_CHAT_CACHE[-1] if LOBBY_CHAT_CACHE else None
+    last = cache[-1] if cache else None
     last_chat = last if isinstance(last, dict) and last.get('type') == 'chat' else None
     idle = now - float((last_chat or {}).get('ts', now))
     can_fold = (
@@ -1065,28 +1101,33 @@ def append_lobby_chat_locked(payload, now=None):
         last_chat['ts'] = now
         return False
     if last_chat is not None and idle >= CHAT_IDLE_SEPARATOR_SECONDS:
-        LOBBY_CHAT_SEQUENCE += 1
-        LOBBY_CHAT_CACHE.append({
+        cache.append({
             'type': 'time',
-            'id': LOBBY_CHAT_SEQUENCE,
+            'id': _lobby_chat_next_id_locked(beta_mode),
             'time': chat_payload['time'],
             'display_time': _lobby_chat_time_label(now),
             'ts': now,
         })
-    LOBBY_CHAT_SEQUENCE += 1
-    chat_payload['id'] = LOBBY_CHAT_SEQUENCE
+    chat_payload['id'] = _lobby_chat_next_id_locked(beta_mode)
     chat_payload['ts'] = now
-    LOBBY_CHAT_CACHE.append(chat_payload)
+    cache.append(chat_payload)
     return True
 
 
-def lobby_chat_history_payloads_locked(limit=100):
-    history = _lobby_chat_history_payload_locked(limit)
-    return [
-        (sid, copy.deepcopy(history))
-        for sid, player in players.items()
-        if player.get('status') == 'lobby'
-    ]
+def lobby_chat_history_payloads_locked(limit=100, beta_mode=None):
+    histories = {}
+    payloads = []
+    for sid, player in players.items():
+        if player.get('status') != 'lobby':
+            continue
+        player_beta = bool(player.get('beta_mode', False))
+        if beta_mode is not None and player_beta != bool(beta_mode):
+            continue
+        key = _lobby_chat_scope_key(player_beta)
+        if key not in histories:
+            histories[key] = _lobby_chat_history_payload_locked(limit, player_beta)
+        payloads.append((sid, copy.deepcopy(histories[key])))
+    return payloads
 
 
 def emit_lobby_chat_history_payloads(payloads):
@@ -1775,6 +1816,43 @@ def player_loadout_hash(player):
     return player.get('loadout_hash') or player.get('mods_hash') or ''
 
 
+def runtime_scope_key(beta_mode=False):
+    return 'beta' if bool(beta_mode) else 'release'
+
+
+def player_runtime_scope(player):
+    return runtime_scope_key((player or {}).get('beta_mode', False))
+
+
+def room_runtime_scope(room):
+    return runtime_scope_key(getattr(room, 'beta_mode', False))
+
+
+def same_runtime_scope_players(*items):
+    scopes = set()
+    for item in items:
+        if isinstance(item, str):
+            player = players.get(item)
+            if player is None:
+                return False
+            scopes.add(player_runtime_scope(player))
+        elif isinstance(item, dict):
+            scopes.add(player_runtime_scope(item))
+        elif isinstance(item, GameRoom):
+            scopes.add(room_runtime_scope(item))
+        else:
+            scopes.add(runtime_scope_key(bool(item)))
+    return len(scopes) <= 1
+
+
+def same_runtime_scope_sids(sids):
+    return same_runtime_scope_players(*list(sids or []))
+
+
+def runtime_scope_mismatch_message():
+    return '内测版和正式版不能互相联机，请切换到相同入口后再开始对局'
+
+
 def same_mod_loadout(sids):
     hashes = []
     for sid in sids:
@@ -1784,19 +1862,23 @@ def same_mod_loadout(sids):
     return len(set(hashes)) <= 1
 
 
-def get_lobby_list():
+def get_lobby_list(beta_mode=None):
     lobby = []
     for sid, p in players.items():
+        if beta_mode is not None and bool(p.get('beta_mode')) != bool(beta_mode):
+            continue
         if p['status'] == 'lobby':
             lobby.append(public_player_info(sid, p))
     lobby.sort(key=lambda item: (item.get('special_role_sort', 99), item.get('nickname', '').lower()))
     return lobby
 
 
-def get_ongoing_games():
+def get_ongoing_games(beta_mode=None):
     games = []
     spectatable_phases = {'action', 'draw', 'playing', 'response', 'choice'}
     for rid, room in rooms.items():
+        if beta_mode is not None and bool(getattr(room, 'beta_mode', False)) != bool(beta_mode):
+            continue
         phase = room.engine.phase
         if phase in ('action', 'draw', 'response', 'choice', 'playing', 'draft', 'event_select'):
             player_names = []
@@ -1816,6 +1898,7 @@ def get_ongoing_games():
                 'phase': phase,
                 'both_disconnected': both_disconnected,
                 'mode': room.mode,
+                'beta_mode': bool(getattr(room, 'beta_mode', False)),
                 'can_spectate': phase in spectatable_phases,
             }
             if room.mode == '2v2':
@@ -1862,6 +1945,7 @@ def build_admin_rooms():
         result.append({
             'room_id': rid,
             'mode': room.mode,
+            'beta_mode': bool(getattr(room, 'beta_mode', False)),
             'players': names,
             'player_sids': list(room.player_sids),
             'disconnected': disconnected,
@@ -2616,7 +2700,8 @@ def send_system_broadcast(message):
     }
     now = time.time()
     with _lock:
-        append_lobby_chat_locked(payload, now)
+        append_lobby_chat_locked(payload, now, beta_mode=False)
+        append_lobby_chat_locked(payload, now, beta_mode=True)
         append_admin_game_chat_locked(payload, now, scope='system')
         lobby_history_payloads = lobby_chat_history_payloads_locked(100)
         recipients = [(sid, p.get('status')) for sid, p in players.items()]
@@ -3122,39 +3207,61 @@ def set_room_player_attr(room_id, pidx, key, val):
 
 
 def _build_lobby_update_payloads_locked():
-    lobby_list = get_lobby_list()
-    ongoing = get_ongoing_games()
-    team_list = []
-    seen_teams = set()
-    for sid, team in teams.items():
-        team_id = id(team)
-        if team_id not in seen_teams:
+    scope_payload_cache = {}
+
+    def team_list_for_scope(beta_mode):
+        team_list = []
+        seen_teams = set()
+        for team in teams.values():
+            team_id = id(team)
+            if team_id in seen_teams:
+                continue
             seen_teams.add(team_id)
-            member_infos = [public_player_info(ms, players[ms]) for ms in team['members'] if ms in players]
+            member_sids = [ms for ms in team['members'] if ms in players]
+            if not member_sids:
+                continue
+            if any(bool(players[ms].get('beta_mode')) != bool(beta_mode) for ms in member_sids):
+                continue
+            member_infos = [public_player_info(ms, players[ms]) for ms in member_sids]
             team_list.append({
                 'leader': team['leader'],
                 'members': [info['nickname'] for info in member_infos],
                 'member_infos': member_infos,
-                'member_sids': team['members'],
+                'member_sids': member_sids,
                 'has_admin_player': any(info.get('is_admin_player') for info in member_infos),
                 'special_role_sort': min([info.get('special_role_sort', 99) for info in member_infos] or [99]),
             })
-    team_list.sort(key=lambda item: (
-        item.get('special_role_sort', 99),
-        ' '.join(item.get('members') or []).lower()
-    ))
+        team_list.sort(key=lambda item: (
+            item.get('special_role_sort', 99),
+            ' '.join(item.get('members') or []).lower()
+        ))
+        return team_list
+
+    def payload_base_for_scope(beta_mode):
+        key = runtime_scope_key(beta_mode)
+        if key not in scope_payload_cache:
+            scope_payload_cache[key] = {
+                'players': get_lobby_list(beta_mode),
+                'ongoing_games': get_ongoing_games(beta_mode),
+                'teams': team_list_for_scope(beta_mode),
+                'chat_history': _lobby_chat_history_payload_locked(100, beta_mode),
+            }
+        return scope_payload_cache[key]
+
     payloads = []
     for sid, p in players.items():
         if p['status'] == 'lobby':
+            base = copy.deepcopy(payload_base_for_scope(p.get('beta_mode', False)))
             payloads.append((sid, {
-                'players': lobby_list,
+                'players': base['players'],
                 'your_sid': sid,
-                'ongoing_games': ongoing,
-                'teams': team_list,
+                'ongoing_games': base['ongoing_games'],
+                'teams': base['teams'],
                 'your_team': teams[sid]['members'] if sid in teams else None,
                 'your_team_leader': teams[sid]['leader'] if sid in teams else None,
                 'your_mode': p.get('mode', '1v1'),
-                'chat_history': _lobby_chat_history_payload_locked(100),
+                'beta_mode': bool(p.get('beta_mode', False)),
+                'chat_history': base['chat_history'],
             }))
     return payloads
 
@@ -4763,7 +4870,8 @@ def admin_game_chat_send():
     payload = console_chat_payload(text)
     now = time.time()
     with _lock:
-        append_lobby_chat_locked(payload, now)
+        append_lobby_chat_locked(payload, now, beta_mode=False)
+        append_lobby_chat_locked(payload, now, beta_mode=True)
         append_admin_game_chat_locked(payload, now, scope='console')
         lobby_history_payloads = lobby_chat_history_payloads_locked(100)
         recipients = [(sid, p.get('status')) for sid, p in players.items()]
@@ -4973,12 +5081,14 @@ def on_login(data):
     with _lock:
         name_key = normalize_username_key(name)
         for p in players.values():
-            if normalize_username_key(p.get('nickname', '')) == name_key:
+            if bool(p.get('beta_mode', False)) == bool(is_beta_mode) and normalize_username_key(p.get('nickname', '')) == name_key:
                 emit('login_fail', {'reason': 'Nickname already exists'})
                 return
         reconnect_room = None
         reconnect_old_sid = None
         for room in rooms.values():
+            if bool(getattr(room, 'beta_mode', False)) != bool(is_beta_mode):
+                continue
             for dc_sid, dc_info in room.disconnected_players.items():
                 if normalize_username_key(dc_info.get('nickname', '')) == name_key:
                     reconnect_room = room
@@ -5070,6 +5180,9 @@ def on_form_team(data):
         if players[sid]['status'] != 'lobby' or players[target_sid]['status'] != 'lobby':
             return
         if players[sid].get('mode') != '2v2' or players[target_sid].get('mode') != '2v2':
+            return
+        if not same_runtime_scope_players(sid, target_sid):
+            emit('server_error', {'message': runtime_scope_mismatch_message()})
             return
         if sid in teams or target_sid in teams:
             return
@@ -5199,6 +5312,9 @@ def on_accept_team(data):
             return
         if players[sid]['status'] != 'lobby' or players[leader_sid]['status'] != 'lobby':
             return
+        if not same_runtime_scope_players(sid, leader_sid):
+            emit('server_error', {'message': runtime_scope_mismatch_message()})
+            return
         if player_loadout_hash(players[sid]) != player_loadout_hash(players[leader_sid]):
             emit('server_error', {'message': '模组组合不一致，无法开始对局'})
             return
@@ -5256,6 +5372,10 @@ def on_invite_team(data):
             return
         my_team = teams[sid]
         target_team = teams[target_team_leader]
+        all_invite_sids = list(my_team['members']) + list(target_team['members'])
+        if not same_runtime_scope_sids(all_invite_sids):
+            emit('server_error', {'message': runtime_scope_mismatch_message()})
+            return
         my_team_all_2v2 = all(players.get(ms, {}).get('mode') == '2v2' for ms in my_team['members'] if ms in players)
         target_team_all_2v2 = all(players.get(ms, {}).get('mode') == '2v2' for ms in target_team['members'] if ms in players)
         if not my_team_all_2v2 or not target_team_all_2v2:
@@ -5302,6 +5422,9 @@ def on_accept_team_match(data):
         for s in all_sids:
             if s not in players or players[s]['status'] != 'lobby':
                 return
+        if not same_runtime_scope_sids(all_sids):
+            emit('server_error', {'message': runtime_scope_mismatch_message()})
+            return
         if not same_mod_loadout(all_sids):
             emit('server_error', {'message': '模组组合不一致，无法开始对局'})
             return
@@ -5311,7 +5434,7 @@ def on_accept_team_match(data):
         first_sid = all_sids[0]
         if first_sid in players and players[first_sid].get('allowed_card_ids'):
             allowed = players[first_sid]['allowed_card_ids']
-        room = GameRoom(room_id, all_sids, allowed, mode='2v2')
+        room = GameRoom(room_id, all_sids, allowed, mode='2v2', beta_mode=bool(players[first_sid].get('beta_mode', False)))
         apply_v2_loadout_to_engine(room.engine, players.get(first_sid, {}))
         rooms[room_id] = room
         admin_event('game', f"room {room_id} created mode=2v2: {' / '.join(players[s]['nickname'] for s in all_sids)}")
@@ -5451,6 +5574,9 @@ def on_reconnect_accept(data):
             player['status'] = 'lobby'
             return
         room = rooms[room_id]
+        if bool(getattr(room, 'beta_mode', False)) != bool(player.get('beta_mode', False)):
+            player['status'] = 'lobby'
+            return
         if old_sid not in room.disconnected_players:
             player['status'] = 'lobby'
             return
@@ -5492,6 +5618,10 @@ def on_reconnect_decline(data):
             player['status'] = 'lobby'
             return
         room = rooms[room_id]
+        if bool(getattr(room, 'beta_mode', False)) != bool(player.get('beta_mode', False)):
+            player['status'] = 'lobby'
+            player['room_id'] = None
+            return
         if room.mode == '2v2':
             dc_info = room.disconnected_players.get(old_sid, {})
             dc_pidx = int(dc_info.get('player_index', -1)) if dc_info else -1
@@ -5539,6 +5669,9 @@ def on_invite(data):
             emit('server_error', {'message': '目标玩家不在大厅'})
             return
         inviter = players[sid]
+        if not same_runtime_scope_players(inviter, target):
+            emit('server_error', {'message': runtime_scope_mismatch_message()})
+            return
         inviter_mode = inviter.get('mode', '1v1')
         target_mode = target.get('mode', '1v1')
         if inviter_mode not in ('1v1', 'urf') or target_mode != inviter_mode:
@@ -5589,13 +5722,16 @@ def on_accept_invite(data):
         accepter = players[sid]
         if inviter['status'] != 'lobby' or accepter['status'] != 'lobby':
             return
+        if not same_runtime_scope_players(inviter, accepter):
+            emit('server_error', {'message': runtime_scope_mismatch_message()})
+            return
         if player_loadout_hash(inviter) != player_loadout_hash(accepter):
             emit('server_error', {'message': '模组组合不一致，无法开始对局'})
             return
         room_id = _next_room_id
         _next_room_id += 1
         allowed_card_ids = inviter.get('allowed_card_ids') or get_allowed_card_ids(inviter.get('disabled_mods', []))
-        room = GameRoom(room_id, [inviter_sid, sid], allowed_card_ids, mode=inviter.get('mode', '1v1'))
+        room = GameRoom(room_id, [inviter_sid, sid], allowed_card_ids, mode=inviter.get('mode', '1v1'), beta_mode=bool(inviter.get('beta_mode', False)))
         apply_v2_loadout_to_engine(room.engine, inviter)
         rooms[room_id] = room
         admin_event('game', f"room {room_id} created mode={room.mode}: {inviter['nickname']} vs {accepter['nickname']}")
@@ -5719,13 +5855,14 @@ def on_chat(data):
             append_admin_game_chat_locked(chat_data, now, scope='spectate', room_id=room.room_id)
             emit_chat_to(list(room.player_sids) + list(room.spectators), chat_data)
         else:
-            will_fold = lobby_chat_would_fold_locked(chat_data, now)
+            beta_mode = bool(player.get('beta_mode', False))
+            will_fold = lobby_chat_would_fold_locked(chat_data, now, beta_mode=beta_mode)
             if not will_fold and not check_chat_rate_locked(sid, player, now):
                 emit('server_error', {'message': '聊天发送过快'})
                 return
-            append_lobby_chat_locked(chat_data, now)
+            append_lobby_chat_locked(chat_data, now, beta_mode=beta_mode)
             append_admin_game_chat_locked(chat_data, now, scope='lobby')
-            emit_lobby_chat_history_payloads(lobby_chat_history_payloads_locked(100))
+            emit_lobby_chat_history_payloads(lobby_chat_history_payloads_locked(100, beta_mode=beta_mode))
 
 
 @socketio.on('draft_pick')
@@ -6731,6 +6868,9 @@ def on_spectate(data):
             emit('server_error', {'message': '对局不存在'})
             return
         room = rooms[room_id]
+        if bool(getattr(room, 'beta_mode', False)) != bool(player.get('beta_mode', False)):
+            emit('server_error', {'message': runtime_scope_mismatch_message()})
+            return
         if _player_matches_room_participant(room, player.get('nickname')):
             emit('server_error', {'message': '请返回自己的对局，不能观战自己的对局'})
             return
