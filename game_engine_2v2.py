@@ -491,6 +491,22 @@ class GameEngine2v2(GameEngine):
         ps.equipment = surviving_equip
         self._check_game_over()
 
+    def _remove_equipment_targeting_dead_player(self, dead_player_id: int):
+        if not self._is_valid_player_id(dead_player_id):
+            return
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in list(owner_state.equipment):
+                if getattr(eq, 'effect_target', owner_id) != dead_player_id:
+                    continue
+                if eq.def_id == 'Disc':
+                    self.players[dead_player_id].armor = max(0, self.players[dead_player_id].armor - 2)
+                owner_state.equipment.remove(eq)
+                if 'exile' in eq.card_instance.flags:
+                    owner_state.exile.append(eq.card_instance)
+                else:
+                    self._discard_card(owner_state, eq.card_instance)
+                self.log_msg(f"{self.pn(owner_id)}的{eq.card_def.name_cn}因目标死亡移出装备区")
+
     def surrender(self, player_id: int):
         if self.game_over:
             return {'success': False, 'error': '游戏已结束'}
@@ -1159,6 +1175,13 @@ class GameEngine2v2(GameEngine):
                 ps.discard.append(eq.card_instance)
                 self.log_msg(f"{self.pn(player_id)}的{eq.card_def.name_cn}因死亡被摧毁")
         ps.equipment = surviving_equip
+        self._remove_equipment_targeting_dead_player(player_id)
+        pending_ally = getattr(self, 'pending_ally_request', None)
+        if pending_ally and (
+            pending_ally.get('player_id') == player_id
+            or pending_ally.get('target_player_id') == player_id
+        ):
+            self.pending_ally_request = None
         self._check_game_over()
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
@@ -1735,18 +1758,20 @@ class GameEngine2v2(GameEngine):
             target_id = self._selected_choice_target(player_id)
             return target_id if self._is_valid_effect_target(player_id, target_id) else player_id
         if target_str in ('event_target', 'target'):
-            return int(context.get('target_id', player_id))
+            target_id = self._normalize_player_id(context.get('target_id', player_id))
+            return target_id if self._is_valid_effect_target(player_id, target_id) else -1
         if target_str in ('event_source', 'source', 'last_actor', 'damage_source'):
-            return int(context.get('source_id', player_id))
+            source_id = self._normalize_player_id(context.get('source_id', player_id))
+            return source_id if self._is_valid_effect_target(player_id, source_id) else -1
         if getattr(self, '_active_choice', None):
             selected = self._active_choice.get('target_player')
             if self._is_valid_effect_target(player_id, selected):
                 if target_str in ('friendly', 'enemy'):
                     return selected
         if target_str is None or target_str == '' or target_str == 'self':
-            return player_id
+            return player_id if self._is_valid_effect_target(player_id, player_id) else -1
         if isinstance(target_str, int):
-            return target_str
+            return target_str if self._is_valid_effect_target(player_id, target_str) else -1
         if target_str == 'enemy':
             enemies = self.get_enemies(player_id)
             return enemies[0] if enemies else -1
@@ -1756,8 +1781,9 @@ class GameEngine2v2(GameEngine):
             enemies = self.get_enemies(player_id)
             return random.choice(enemies) if enemies else -1
         if target_str == 'teammate':
-            return self.get_teammate(player_id)
-        return player_id
+            teammate_id = self.get_teammate(player_id)
+            return teammate_id if self._is_valid_effect_target(player_id, teammate_id) else -1
+        return player_id if self._is_valid_effect_target(player_id, player_id) else -1
 
     def _resolve_targets(self, player_id, target_str):
         if isinstance(target_str, dict) and target_str.get('ref') == 'card_owner':
@@ -1771,16 +1797,16 @@ class GameEngine2v2(GameEngine):
             if self._is_valid_effect_target(player_id, selected):
                 return [selected]
         if target_str in ('both', 'random_side'):
-            return list(range(self.num_players))
+            return [i for i, p in enumerate(self.players) if p.health > 0]
         if target_str in ('friendly', 'self', None, ''):
-            return [player_id]
+            return [player_id] if self._is_valid_effect_target(player_id, player_id) else []
         if target_str == 'teammate':
             mate = self.get_teammate(player_id)
-            return [mate] if mate >= 0 else []
+            return [mate] if self._is_valid_effect_target(player_id, mate) else []
         if target_str == 'enemy':
             return self.get_enemies(player_id)
         if target_str == 'all_enemies':
-            return self.get_all_enemies(player_id)
+            return [i for i in self.get_all_enemies(player_id) if self.players[i].health > 0]
         if target_str == 'random_friendly':
             team = self.teams[self.team_of(player_id)]
             alive = [p for p in team if self.players[p].health > 0]
@@ -1793,5 +1819,5 @@ class GameEngine2v2(GameEngine):
             return [random.choice(alive)] if alive else []
         tid = self._resolve_target(player_id, target_str)
         if tid == -1:
-            return list(range(self.num_players))
-        return [tid]
+            return []
+        return [tid] if self._is_valid_effect_target(player_id, tid) else []

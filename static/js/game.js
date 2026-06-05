@@ -981,12 +981,12 @@ Object.assign(I18N.ja, {
     community_uploading: 'アップロード中...', community_upload_success: 'アップロード成功：{0}', community_update_success: '更新成功：{0}',
     community_delete_success: 'コミュニティModを削除しました', community_file_summary: '{0} · v{1} · {2}枚', community_cards_count: '{0}枚'
 });
-Object.assign(I18N.en, { community_json_only: 'Only .json files are allowed', community_file_too_large: 'File is too large. Max 300KB', community_json_parse_failed: 'JSON parse failed: {0}', community_upload_url_failed: 'Could not create upload URL', community_r2_upload_failed: 'R2 upload failed: HTTP {0}', community_register_failed: 'Registration failed', community_delete_failed: 'Delete failed' });
-Object.assign(I18N.zh, { community_json_only: '只允许上传 .json 文件', community_file_too_large: '文件过大，最大 300KB', community_json_parse_failed: 'JSON 解析失败：{0}', community_upload_url_failed: '无法创建上传地址', community_r2_upload_failed: 'R2 上传失败 HTTP {0}', community_register_failed: '登记失败', community_delete_failed: '删除失败' });
-Object.assign(I18N.fr, { community_json_only: 'Seuls les fichiers .json sont autorisés', community_file_too_large: 'Fichier trop volumineux. Maximum 300 Ko', community_json_parse_failed: 'Échec d’analyse JSON : {0}', community_upload_url_failed: 'Impossible de créer l’URL de téléversement', community_r2_upload_failed: 'Échec R2 : HTTP {0}', community_register_failed: 'Échec d’enregistrement', community_delete_failed: 'Échec de suppression' });
-Object.assign(I18N.pt, { community_json_only: 'Somente arquivos .json são permitidos', community_file_too_large: 'Arquivo grande demais. Máximo 300KB', community_json_parse_failed: 'Falha ao ler JSON: {0}', community_upload_url_failed: 'Não foi possível criar URL de envio', community_r2_upload_failed: 'Falha no R2: HTTP {0}', community_register_failed: 'Falha ao registrar', community_delete_failed: 'Falha ao excluir' });
-Object.assign(I18N.ru, { community_json_only: 'Разрешены только файлы .json', community_file_too_large: 'Файл слишком большой. Максимум 300 КБ', community_json_parse_failed: 'Ошибка разбора JSON: {0}', community_upload_url_failed: 'Не удалось создать URL загрузки', community_r2_upload_failed: 'Ошибка R2: HTTP {0}', community_register_failed: 'Ошибка регистрации', community_delete_failed: 'Ошибка удаления' });
-Object.assign(I18N.ja, { community_json_only: '.json ファイルのみアップロードできます', community_file_too_large: 'ファイルが大きすぎます。最大 300KB', community_json_parse_failed: 'JSON 解析失敗：{0}', community_upload_url_failed: 'アップロードURLを作成できません', community_r2_upload_failed: 'R2 アップロード失敗 HTTP {0}', community_register_failed: '登録失敗', community_delete_failed: '削除失敗' });
+Object.assign(I18N.en, { community_upload: 'Upload mod', community_json_only: 'Only .json or .gtnmod files are allowed', community_file_too_large: 'File is too large. JSON max 300KB, GTNMOD max 5MB', community_json_parse_failed: 'JSON parse failed: {0}', community_upload_url_failed: 'Could not create upload URL', community_r2_upload_failed: 'R2 upload failed: HTTP {0}', community_register_failed: 'Registration failed', community_delete_failed: 'Delete failed' });
+Object.assign(I18N.zh, { community_upload: '上传模组', community_json_only: '只允许上传 .json 或 .gtnmod 文件', community_file_too_large: '文件过大，JSON 最大 300KB，GTNMOD 最大 5MB', community_json_parse_failed: 'JSON 解析失败：{0}', community_upload_url_failed: '无法创建上传地址', community_r2_upload_failed: 'R2 上传失败 HTTP {0}', community_register_failed: '登记失败', community_delete_failed: '删除失败' });
+Object.assign(I18N.fr, { community_upload: 'Téléverser', community_json_only: 'Seuls les fichiers .json ou .gtnmod sont autorisés', community_file_too_large: 'Fichier trop volumineux. JSON 300 Ko, GTNMOD 5 Mo', community_json_parse_failed: 'Échec d’analyse JSON : {0}', community_upload_url_failed: 'Impossible de créer l’URL de téléversement', community_r2_upload_failed: 'Échec R2 : HTTP {0}', community_register_failed: 'Échec d’enregistrement', community_delete_failed: 'Échec de suppression' });
+Object.assign(I18N.pt, { community_upload: 'Enviar mod', community_json_only: 'Somente arquivos .json ou .gtnmod são permitidos', community_file_too_large: 'Arquivo grande demais. JSON 300KB, GTNMOD 5MB', community_json_parse_failed: 'Falha ao ler JSON: {0}', community_upload_url_failed: 'Não foi possível criar URL de envio', community_r2_upload_failed: 'Falha no R2: HTTP {0}', community_register_failed: 'Falha ao registrar', community_delete_failed: 'Falha ao excluir' });
+Object.assign(I18N.ru, { community_upload: 'Загрузить мод', community_json_only: 'Разрешены только .json или .gtnmod', community_file_too_large: 'Файл слишком большой. JSON 300 КБ, GTNMOD 5 МБ', community_json_parse_failed: 'Ошибка разбора JSON: {0}', community_upload_url_failed: 'Не удалось создать URL загрузки', community_r2_upload_failed: 'Ошибка R2: HTTP {0}', community_register_failed: 'Ошибка регистрации', community_delete_failed: 'Ошибка удаления' });
+Object.assign(I18N.ja, { community_upload: 'Modをアップロード', community_json_only: '.json または .gtnmod のみアップロードできます', community_file_too_large: 'ファイルが大きすぎます。JSON 最大300KB、GTNMOD 最大5MB', community_json_parse_failed: 'JSON 解析失敗：{0}', community_upload_url_failed: 'アップロードURLを作成できません', community_r2_upload_failed: 'R2 アップロード失敗 HTTP {0}', community_register_failed: '登録失敗', community_delete_failed: '削除失敗' });
 Object.assign(I18N.en, { mod_validation_error: 'Format error' });
 Object.assign(I18N.zh, { mod_validation_error: '格式错误' });
 Object.assign(I18N.fr, { mod_validation_error: 'Erreur de format' });
@@ -2152,6 +2152,8 @@ let classicAimPointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 let classicAimHoverTarget = '';
 let classicAimFrame = 0;
 let classicHoverPreviewTimer = null;
+let classicHoverInfoEl = null;
+let classicHoveredCardId = null;
 let actionToastTimer = null;
 let combatFloatSeq = 0;
 const localSoloRuntime = {
@@ -2205,6 +2207,7 @@ let renderedBattleLogCount = 0;
 let renderedBattleLogTotal = 0;
 let renderedTimelineDomCount = 0;
 let renderedBattleLogMatchKey = '';
+let renderedClassicLogSignature = '';
 let lastRenderedTurnKey = '';
 const lastStatusSignatures = new Map();
 const GALLERY_MECHANIC_FLAGS = new Set(['fusion_layer', 'fission_layer']);
@@ -2310,7 +2313,7 @@ function applyUiStyle(style) {
 }
 
 function compactText(normalKey, compactKey) {
-    if (!isClassicUiStyle() || !compactKey) return t(normalKey);
+    if (!isMinimalUiStyle() || !compactKey) return t(normalKey);
     return t(compactKey);
 }
 
@@ -2330,6 +2333,11 @@ function updateCompactUiText() {
     setCompactButtonText('btn-urf-sell', 'urf_sell', 'compact_urf_sell');
     setCompactButtonText('btn-solo-next-draw', 'set_next_draw', 'compact_set_next_draw');
     setCompactButtonText('btn-solo-edit', 'pause_edit', 'compact_pause_edit');
+    setCompactButtonText('classic-view-deck', 'view_deck', 'compact_view_deck');
+    setCompactButtonText('classic-urf-replace', 'urf_replace', 'compact_urf_replace');
+    setCompactButtonText('classic-urf-sell', 'urf_sell', 'compact_urf_sell');
+    setCompactButtonText('classic-solo-next-draw', 'set_next_draw', 'compact_set_next_draw');
+    setCompactButtonText('classic-solo-edit', 'pause_edit', 'compact_pause_edit');
     setCompactButtonText('btn-surrender', 'surrender', 'compact_surrender');
     setCompactButtonText('btn-leave-spectate', 'leave_spectate', 'compact_leave_spectate');
     setCompactButtonText('btn-game-chat-send', 'send', 'compact_send');
@@ -2434,6 +2442,8 @@ function updateStaticText() {
     if (communityDisable) communityDisable.textContent = UI.community_disable;
     const refreshCommunity = $('btn-community-refresh');
     if (refreshCommunity) refreshCommunity.textContent = UI.refresh;
+    const uploadCommunity = $('btn-community-upload');
+    if (uploadCommunity) uploadCommunity.textContent = UI.community_upload || '上传模组';
     const settingsLabelTheme = $('settings-label-theme');
     if (settingsLabelTheme) settingsLabelTheme.textContent = UI.settings_theme;
     const settingsLabelUiStyle = $('settings-label-ui-style');
@@ -2625,12 +2635,22 @@ function updateStaticText() {
     if (btnSurrender) btnSurrender.textContent = UI.surrender;
     const btnViewDeck = $('btn-view-deck');
     if (btnViewDeck) btnViewDeck.textContent = UI.view_deck;
+    const classicViewDeck = $('classic-view-deck');
+    if (classicViewDeck) classicViewDeck.textContent = UI.view_deck;
     const btnEndTurn = $('btn-end-turn');
     if (btnEndTurn) btnEndTurn.textContent = UI.end_turn;
     const btnSoloNextDraw = $('btn-solo-next-draw');
     if (btnSoloNextDraw) btnSoloNextDraw.textContent = UI.set_next_draw;
     const btnSoloEdit = $('btn-solo-edit');
     if (btnSoloEdit) btnSoloEdit.textContent = UI.pause_edit;
+    const classicSoloNextDraw = $('classic-solo-next-draw');
+    if (classicSoloNextDraw) classicSoloNextDraw.textContent = UI.set_next_draw;
+    const classicSoloEdit = $('classic-solo-edit');
+    if (classicSoloEdit) classicSoloEdit.textContent = UI.pause_edit;
+    const classicUrfReplace = $('classic-urf-replace');
+    if (classicUrfReplace) classicUrfReplace.textContent = UI.urf_replace;
+    const classicUrfSell = $('classic-urf-sell');
+    if (classicUrfSell) classicUrfSell.textContent = UI.urf_sell;
     const soloTitle = $('solo-title');
     if (soloTitle) soloTitle.textContent = UI.solo_training;
     const btnSoloLoad = $('btn-solo-load');
@@ -2655,11 +2675,11 @@ function updateStaticText() {
     if (youLabel && (!gameState || !gameState.your_name)) youLabel.textContent = UI.you;
     const oppInfo = $('opp-info');
     if (oppInfo && (!gameState || !gameState.opponent)) {
-        setPileInfoText(oppInfo, isClassicUiStyle() ? { text: '✦0 ▣0', title: UI.hand_deck_zero_opp } : { text: UI.hand_deck_zero_opp, title: '' });
+        setPileInfoText(oppInfo, isMinimalUiStyle() ? { text: '✦0 ▣0', title: UI.hand_deck_zero_opp } : { text: UI.hand_deck_zero_opp, title: '' });
     }
     const youInfo = $('you-info');
     if (youInfo && (!gameState || !gameState.you)) {
-        setPileInfoText(youInfo, isClassicUiStyle() ? { text: '✦0 ▣0 ⟲0', title: UI.hand_deck_zero_you } : { text: UI.hand_deck_zero_you, title: '' });
+        setPileInfoText(youInfo, isMinimalUiStyle() ? { text: '✦0 ▣0 ⟲0', title: UI.hand_deck_zero_you } : { text: UI.hand_deck_zero_you, title: '' });
     }
     const onlineCount = $('lobby-online-count');
     if (onlineCount && phase !== 'lobby') onlineCount.textContent = tf('online_count', 0);
@@ -3456,6 +3476,7 @@ function clearSelectedPlayCard() {
         clearTimeout(classicHoverPreviewTimer);
         classicHoverPreviewTimer = null;
     }
+    removeClassicHoverInfo();
     document.querySelectorAll('.card.tap-selected').forEach(el => el.classList.remove('tap-selected'));
     document.querySelectorAll('.classic-fighter.is-aim-hover').forEach(el => el.classList.remove('is-aim-hover'));
     const aim = $('classic-aim-layer');
@@ -3547,7 +3568,8 @@ function classicAimPathData(x1, y1, x2, y2) {
 
 function selectedClassicCardCenter() {
     if (selectedPlayCardId == null) return null;
-    const cardEl = document.querySelector(`.classic-hand-card[data-instance-id="${selectedPlayCardId}"]`);
+    const wrapper = document.querySelector(`.classic-hand-card[data-instance-id="${selectedPlayCardId}"]`);
+    const cardEl = wrapper ? (wrapper.querySelector('.classic-fan-card-inner') || wrapper) : null;
     if (!cardEl) return null;
     const rect = cardEl.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
@@ -3670,6 +3692,7 @@ function selectClassicPlayCard(cardInstanceId, event = null) {
         return false;
     }
     if (event && typeof event.clientX === 'number') classicAimPointer = { x: event.clientX, y: event.clientY };
+    removeClassicHoverInfo();
     selectedPlayCardId = cardInstanceId;
     document.querySelectorAll('.card.tap-selected').forEach(el => el.classList.remove('tap-selected'));
     const cardEl = document.querySelector(`.card[data-instance-id="${cardInstanceId}"]`);
@@ -3705,12 +3728,28 @@ function classicCanAutoPlaySelfOnlyFromEvent(event) {
     const selected = getSelectedClassicCard();
     if (!isClassicSelfOnlyCard(selected)) return false;
     const target = event && event.target;
-    if (target && target.closest && target.closest('.classic-hand-card, .classic-end-turn, .classic-icon-btn, .classic-log-drawer, .classic-card-preview, .classic-left-rail, .classic-top-hud, .classic-fighter')) {
+    if (target && target.closest && target.closest('.classic-hand-card, .classic-command-panel, .classic-end-turn, .classic-icon-btn, .classic-log-drawer, .classic-left-rail, .classic-top-hud, .classic-fighter')) {
         return false;
     }
     const hand = $('classic-hand-fan');
     const handRect = hand ? hand.getBoundingClientRect() : null;
     return !handRect || event.clientY < handRect.top;
+}
+
+function getClassicPlayedCardAnimationTarget(cardDict, cardDef, targetPlayerId = -1) {
+    if (!shouldUseClassicBattle(gameState) || !cardDict || !cardDef) return null;
+    const card = normalizeBattleCard(cardDict, (gameState && gameState.you) || {});
+    if (isClassicSelfOnlyCard(card)) return null;
+    if (targetPlayerId >= 0) {
+        const selfId = normalizePlayerId(gameState && gameState.your_id);
+        return targetPlayerId === selfId
+            ? document.querySelector('#classic-fighter-self .player-avatar') || $('classic-fighter-self')
+            : document.querySelector('#classic-fighter-enemy .player-avatar') || $('classic-fighter-enemy');
+    }
+    const role = getClassicPlayRole(card);
+    if (role === 'enemy') return document.querySelector('#classic-fighter-enemy .player-avatar') || $('classic-fighter-enemy');
+    if (role === 'self' || role === 'equip') return document.querySelector('#classic-fighter-self .player-avatar') || $('classic-fighter-self');
+    return $('classic-play-lane');
 }
 
 function showModal(html) {
@@ -4057,6 +4096,12 @@ function getCardLayerLabel(cardDict) {
     return parts.length ? ` (${parts.join(' ')})` : '';
 }
 
+function getCardArtUrl(cardDict, cardDef) {
+    return (cardDict && (cardDict.image_url || cardDict.image))
+        || (cardDef && (cardDef.image_url || cardDef.image))
+        || '';
+}
+
 function createCardElement(cardDict, options = {}) {
     const { faceDown = false, small = false, draggable = false, onClick = null, showAllFlags = false } = options;
     const el = document.createElement('div');
@@ -4080,6 +4125,10 @@ function createCardElement(cardDict, options = {}) {
     const englishName = shouldShowEnglishCardName(cardDef, cardName) ? getEnglishCardName(cardDef) : '';
     const effectText = getCardEffectText(cardDef);
     const descriptionText = getCardDescriptionText(cardDef);
+    const imageUrl = getCardArtUrl(cardDict, cardDef);
+    const cardArtHtml = imageUrl
+        ? `<div class="card-art"><img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.closest('.card-art').classList.add('hidden')"></div>`
+        : '';
     const { totalE, totalM, flags } = getCardDisplayCosts(cardDict, cardDef, gameState && gameState.you);
     el.style.borderColor = typeColor;
     el.dataset.instanceId = cardDict.instance_id;
@@ -4119,6 +4168,7 @@ function createCardElement(cardDict, options = {}) {
             <span class="cost-m">${totalM}</span>
         </div>
         ${englishName ? `<div class="card-english-name" style="color:${typeColor}">${escapeHtml(englishName)}</div>` : ''}
+        ${cardArtHtml}
         <div class="card-type-label-wrap"><span class="card-type-label" style="color:${typeColor}">${escapeHtml(typeLabel)}</span></div>
         <div class="card-effect">${colorizeCardText(effectText || '')}</div>
         ${descriptionText ? `<div class="card-description">${colorizeCardText(descriptionText)}</div>` : ''}
@@ -4572,11 +4622,11 @@ function getPointerPos(e) {
     return { x: e.clientX, y: e.clientY };
 }
 
-function isClassicUiStyle() {
+function isMinimalUiStyle() {
     return document.documentElement.getAttribute('data-ui-style') === 'minimal';
 }
 
-function isNewClassicUiStyle() {
+function isClassicBattleUiStyle() {
     return document.documentElement.getAttribute('data-ui-style') === 'classic';
 }
 
@@ -4611,21 +4661,26 @@ function updateCardHoldPreview(pos) {
     el.style.top = `${top}px`;
 }
 
-function showCardHoldPreview(cardEl, pos) {
-    if (!dragState || dragState.previewEl || !isClassicUiStyle() || dragState.moved) return;
-    const cardDef = getCardDef(cardEl.dataset.defId || '');
-    if (!cardDef) return;
-    const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
+function buildCardHoldPreviewHtml(cardDef) {
+    if (!cardDef) return '';
     const effectText = getCardEffectText(cardDef) || '';
     const descriptionText = getCardDescriptionText(cardDef) || '';
-    const preview = document.createElement('div');
-    preview.className = 'card-hold-preview';
-    preview.style.setProperty('--preview-color', typeColor);
-    preview.innerHTML = `
+    return `
         <div class="card-hold-preview-title">${escapeHtml(getCardName(cardDef))}</div>
         ${effectText ? `<div class="card-hold-preview-effect">${colorizeCardText(effectText)}</div>` : ''}
         ${descriptionText ? `<div class="card-hold-preview-desc">${colorizeCardText(descriptionText)}</div>` : ''}
     `;
+}
+
+function showCardHoldPreview(cardEl, pos) {
+    if (!dragState || dragState.previewEl || !isMinimalUiStyle() || dragState.moved) return;
+    const cardDef = getCardDef(cardEl.dataset.defId || '');
+    if (!cardDef) return;
+    const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
+    const preview = document.createElement('div');
+    preview.className = 'card-hold-preview';
+    preview.style.setProperty('--preview-color', typeColor);
+    preview.innerHTML = buildCardHoldPreviewHtml(cardDef);
     document.body.appendChild(preview);
     dragState.previewEl = preview;
     dragState.previewShown = true;
@@ -4670,7 +4725,7 @@ function startCardDrag(e, cardEl) {
         previewShown: false,
         touch: !!(e.touches && e.touches.length)
     };
-    if (isClassicUiStyle()) {
+    if (isMinimalUiStyle()) {
         dragState.previewTimer = setTimeout(() => {
             if (dragState && !dragState.moved) {
                 showCardHoldPreview(cardEl, { x: dragState.lastX, y: dragState.lastY });
@@ -7696,6 +7751,56 @@ function updateModeSpecificControls(gs) {
     updateGameChatChannelOptions(gs);
 }
 
+function setClassicControlButton(id, visible, options = {}) {
+    const btn = $(id);
+    if (!btn) return false;
+    btn.classList.toggle('hidden', !visible);
+    btn.style.display = visible ? '' : 'none';
+    if (options.text != null) btn.textContent = options.text;
+    if (options.title != null) btn.title = options.title;
+    btn.disabled = !!options.disabled;
+    return !!visible;
+}
+
+function updateClassicExtraControls(gs) {
+    const panel = $('classic-extra-controls');
+    if (!panel) return;
+    const inSoloGame = !!gs?.solo;
+    const inTutorial = !!gs?.tutorial || tutorialMode;
+    const gameOver = gs?.phase === 'game_over';
+    const isUrf = gs?.mode === 'urf';
+    const myTurn = isMyTurn();
+    const busy = isActionBusy({ includeAnimation: false });
+    let visibleCount = 0;
+
+    if (setClassicControlButton('classic-view-deck', !isUrf, {
+        text: UI.view_deck,
+        disabled: false,
+    })) visibleCount += 1;
+    if (setClassicControlButton('classic-solo-next-draw', inSoloGame && !inTutorial && !gameOver && !isSpectating, {
+        text: UI.set_next_draw,
+        disabled: busy,
+    })) visibleCount += 1;
+    if (setClassicControlButton('classic-solo-edit', inSoloGame && !inTutorial && !isSpectating, {
+        text: UI.pause_edit,
+        disabled: busy,
+    })) visibleCount += 1;
+
+    const showUrf = isUrf && !isSpectating && !gameOver;
+    if (setClassicControlButton('classic-urf-replace', showUrf, {
+        text: UI.urf_replace || '替换手牌',
+        disabled: !myTurn || busy || !gs?.urf_replace_available,
+    })) visibleCount += 1;
+
+    const sellableEquipment = ((gs?.you || {}).equipment || []).filter(isUrfEquipmentSellable);
+    if (setClassicControlButton('classic-urf-sell', showUrf, {
+        text: UI.urf_sell || '售卖装备',
+        disabled: !myTurn || busy || !gs?.urf_sell_available || !sellableEquipment.length,
+    })) visibleCount += 1;
+
+    panel.classList.toggle('hidden', visibleCount === 0);
+}
+
 function formatPlayerPileInfo(playerData, includeDiscard, opponentStyle = false) {
     const hand = playerData.hand_count || 0;
     const deck = playerData.deck_count || 0;
@@ -7703,7 +7808,7 @@ function formatPlayerPileInfo(playerData, includeDiscard, opponentStyle = false)
     const full = includeDiscard
         ? UI.hand_deck_discard_info.replace('{0}', hand).replace('{1}', deck).replace('{2}', discard)
         : UI.hand_deck_info_opp.replace('{0}', hand).replace('{1}', deck);
-    if (!isClassicUiStyle()) return { text: full, title: '' };
+    if (!isMinimalUiStyle()) return { text: full, title: '' };
     const compact = includeDiscard ? `✦${hand} ▣${deck} ⟲${discard}` : `✦${hand} ▣${deck}`;
     return { text: compact, title: full, opponentStyle };
 }
@@ -7820,7 +7925,7 @@ function buildBattleViewModel(state) {
 }
 
 function shouldUseClassicBattle(gs) {
-    if (!isNewClassicUiStyle() || !gs) return false;
+    if (!isClassicBattleUiStyle() || !gs) return false;
     if (isSpectating || gs.mode === '2v2') return false;
     return ['action', 'draw', 'response', 'choice', 'game_over'].includes(gs.phase);
 }
@@ -7900,6 +8005,9 @@ function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e
     const cur = Math.max(0, Number(current) || 0);
     const total = Math.max(0, Math.min(16, Number(max) || 0));
     const cost = Math.max(0, Number(spend) || 0);
+    container.dataset.current = String(cur);
+    container.dataset.max = String(total);
+    container.dataset.spend = String(cost);
     container.innerHTML = '';
     for (let i = 0; i < total; i++) {
         const orb = document.createElement('span');
@@ -7910,6 +8018,35 @@ function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e
         container.appendChild(orb);
     }
     if (!total) container.textContent = '0';
+}
+
+function getClassicResourcePreviewCard(vm = null) {
+    if (vm && vm.selectedCard) return vm.selectedCard;
+    const selected = getSelectedClassicCard();
+    if (selected) return selected;
+    const hoverId = classicHoveredCardId == null ? null : Number(classicHoveredCardId);
+    if (hoverId == null || !Number.isFinite(hoverId)) return null;
+    if (vm && Array.isArray(vm.hand)) {
+        const found = vm.hand.find(card => Number(card.instance_id) === hoverId);
+        if (found) return found;
+    }
+    const raw = ((gameState && gameState.you && gameState.you.hand) || []).find(card => Number(card.instance_id) === hoverId);
+    return raw ? normalizeBattleCard(raw, (gameState && gameState.you) || {}) : null;
+}
+
+function applyClassicResourcePreview(card = null, ownerState = null) {
+    const root = $('battle-classic');
+    const you = ownerState || ((gameState && gameState.you) || {});
+    const preview = card || null;
+    const costE = preview ? Number(preview.cost_e || 0) : 0;
+    const costM = preview ? Number(preview.cost_m || 0) : 0;
+    const missing = !!preview && (costE > Number(you.elixir || 0) || costM > Number(you.magic || 0));
+    if (root) {
+        root.classList.toggle('has-resource-preview', !!preview);
+        root.classList.toggle('has-missing-resource', missing);
+    }
+    renderClassicResourceOrbs($('classic-e-orbs'), you.elixir, you.max_elixir, costE, 'e');
+    renderClassicResourceOrbs($('classic-m-orbs'), you.magic, you.max_magic, costM, 'm');
 }
 
 function getClassicPlayRole(card) {
@@ -7977,33 +8114,50 @@ function renderClassicPlayLane(vm) {
     `;
 }
 
-function getClassicCardImageUrl(card) {
-    const defId = card && card.def_id ? String(card.def_id) : 'default';
-    return (card && (card.image_url || card.image)) || `/static/cards/${encodeURIComponent(defId)}.webp`;
+function removeClassicHoverInfo() {
+    if (classicHoverPreviewTimer) {
+        clearTimeout(classicHoverPreviewTimer);
+        classicHoverPreviewTimer = null;
+    }
+    if (classicHoverInfoEl) {
+        classicHoverInfoEl.remove();
+        classicHoverInfoEl = null;
+    }
 }
 
-function renderClassicCardPreview(card) {
-    const preview = $('classic-card-preview');
-    if (!preview) return;
-    if (!card || !card.def_id) {
-        preview.classList.add('hidden');
-        preview.innerHTML = '';
-        return;
-    }
-    const typeColor = CARD_TYPE_COLORS[card.card_type] || COLORS.text_primary;
-    const artUrl = getClassicCardImageUrl(card);
-    preview.style.setProperty('--classic-card-color', typeColor);
-    preview.innerHTML = `
-        <div class="classic-preview-art">
-            <img src="${escapeHtml(artUrl)}" alt="" onerror="this.onerror=null;this.src='/static/cards/default.webp';this.classList.add('classic-art-fallback');">
-        </div>
-        <div class="classic-preview-body"></div>
-    `;
-    const body = preview.querySelector('.classic-preview-body');
-    const cardEl = createCardElement(card.raw || card, { showAllFlags: true });
-    cardEl.classList.add('classic-preview-card');
-    body.appendChild(cardEl);
-    preview.classList.remove('hidden');
+function positionClassicHoverInfo(anchor) {
+    if (!classicHoverInfoEl || !anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const width = classicHoverInfoEl.offsetWidth || 260;
+    const height = classicHoverInfoEl.offsetHeight || 140;
+    const gap = Math.max(14, Math.min(28, rect.width * 0.18));
+    let left = rect.right + gap;
+    if (left + width > window.innerWidth - 8) left = rect.left - width - gap;
+    let top = rect.top + rect.height * 0.5 - height * 0.5;
+    left = Math.max(8, Math.min(window.innerWidth - width - 8, left));
+    top = Math.max(8, Math.min(window.innerHeight - height - 8, top));
+    classicHoverInfoEl.style.left = `${left}px`;
+    classicHoverInfoEl.style.top = `${top}px`;
+}
+
+function showClassicHoverInfo(card, anchor) {
+    if (!card || !card.def_id || !anchor) return;
+    if (window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse)').matches) return;
+    const cardDef = card.cardDef || getCardDef(card.def_id || '');
+    if (!cardDef) return;
+    removeClassicHoverInfo();
+    const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
+    const preview = document.createElement('div');
+    preview.className = 'card-hold-preview classic-hover-info';
+    preview.style.setProperty('--preview-color', typeColor);
+    preview.innerHTML = buildCardHoldPreviewHtml(cardDef);
+    document.body.appendChild(preview);
+    classicHoverInfoEl = preview;
+    positionClassicHoverInfo(anchor);
+    requestAnimationFrame(() => {
+        positionClassicHoverInfo(anchor);
+        preview.classList.add('active');
+    });
 }
 
 function renderClassicFighter(container, player, side, selectedCard = null) {
@@ -8026,7 +8180,7 @@ function renderClassicFighter(container, player, side, selectedCard = null) {
         <div class="classic-fighter-name">${escapeHtml(player.name || '?')}</div>
         ${intentText ? `<div class="classic-intent-badge">${escapeHtml(intentText)}</div>` : '<div class="classic-intent-badge is-empty"></div>'}
         ${renderPlayerAvatar(player)}
-        <div class="classic-hp-wrap">
+        <div class="classic-hp-wrap" data-bar-key="health" data-bar-label="H" data-bar-armor="${Number(player.armor || 0)}">
             <div class="classic-hp-track"><div class="classic-hp-fill" style="width:${hpPct}%"></div></div>
             <div class="classic-hp-text">H ${player.hp}/${player.maxHp}${player.armor ? ` · A ${player.armor}` : ''}</div>
         </div>
@@ -8038,6 +8192,7 @@ function renderClassicFighter(container, player, side, selectedCard = null) {
 function renderClassicHand(vm) {
     const container = $('classic-hand-fan');
     if (!container) return;
+    removeClassicHoverInfo();
     const oldRects = new Map();
     container.querySelectorAll('.classic-hand-card[data-instance-id]').forEach(el => {
         oldRects.set(String(el.dataset.instanceId), el.getBoundingClientRect());
@@ -8055,6 +8210,7 @@ function renderClassicHand(vm) {
         wrap.dataset.instanceId = card.instance_id == null ? '' : String(card.instance_id);
         wrap.dataset.defId = card.def_id;
         wrap.style.setProperty('--fan-rot', `${rotate}deg`);
+        wrap.style.setProperty('--fan-rot-inverse', `${-rotate}deg`);
         wrap.style.setProperty('--fan-y', `${-lift}px`);
         wrap.style.setProperty('--fan-z', String(100 + Math.round(20 - Math.abs(offset))));
         if (!playable) wrap.classList.add('card-disabled');
@@ -8068,34 +8224,48 @@ function renderClassicHand(vm) {
         cardEl.classList.add('classic-fan-card-inner');
         wrap.appendChild(cardEl);
         wrap.addEventListener('mouseenter', () => {
-            if (classicHoverPreviewTimer) clearTimeout(classicHoverPreviewTimer);
+            removeClassicHoverInfo();
+            classicHoveredCardId = card.instance_id;
+            if (!selectedPlayCardId) applyClassicResourcePreview(card, gameState && gameState.you);
             classicHoverPreviewTimer = setTimeout(() => {
                 classicHoverPreviewTimer = null;
-                renderClassicCardPreview(card);
+                showClassicHoverInfo(card, wrap);
             }, 200);
         });
+        wrap.addEventListener('mousemove', () => {
+            if (classicHoverInfoEl) positionClassicHoverInfo(wrap);
+        });
         wrap.addEventListener('mouseleave', () => {
-            if (classicHoverPreviewTimer) {
-                clearTimeout(classicHoverPreviewTimer);
-                classicHoverPreviewTimer = null;
+            const leavingId = classicHoveredCardId;
+            removeClassicHoverInfo();
+            if (leavingId === card.instance_id) {
+                classicHoveredCardId = null;
+                applyClassicResourcePreview(getSelectedClassicCard(), gameState && gameState.you);
             }
-            if (!selectedPlayCardId) renderClassicCardPreview(vm.selectedCard);
         });
         container.appendChild(wrap);
     });
-    if (vm.selectedCard) renderClassicCardPreview(vm.selectedCard);
-    else renderClassicCardPreview(null);
 }
 
 function renderClassicLog(vm) {
     const content = $('classic-log-content');
     if (!content) return;
-    const wasAtBottom = content.scrollTop + content.clientHeight >= content.scrollHeight - 30;
-    content.innerHTML = '';
     const entries = gameTimelineEntries.length
         ? gameTimelineEntries.slice(-80)
         : (vm.log || []).slice(-80).map(text => ({ type: 'battle', text }));
+    const signature = `${currentLang}|${entries.map(entry => {
+        if (!entry) return '';
+        if (entry.type === 'chat') {
+            return `c:${entry.channel || ''}:${entry.nick || ''}:${entry.text || ''}:${entry.system ? 1 : 0}:${entry.isAdmin ? 1 : 0}:${entry.specialRoleColor || ''}`;
+        }
+        return `b:${entry.text || ''}`;
+    }).join('\n')}`;
+    if (content.dataset.renderSignature === signature) return;
+    const wasAtBottom = content.scrollTop + content.clientHeight >= content.scrollHeight - 30;
+    content.innerHTML = '';
     entries.forEach(entry => content.appendChild(createBattleLogElement(entry)));
+    content.dataset.renderSignature = signature;
+    renderedClassicLogSignature = signature;
     if (wasAtBottom) content.scrollTop = content.scrollHeight;
 }
 
@@ -8115,10 +8285,12 @@ function renderClassicBattle(gs) {
         root.setAttribute('aria-hidden', 'false');
         oldContainer.classList.add('classic-battle-hidden');
         const selected = vm.selectedCard;
+        const resourcePreviewCard = getClassicResourcePreviewCard(vm);
         const selectedRole = getClassicPlayRole(selected);
         const selectedSelfOnly = isClassicSelfOnlyCard(selected);
-        const missingResource = !!selected && ((Number(selected.cost_e || 0) > Number(vm.self.e || 0)) || (Number(selected.cost_m || 0) > Number(vm.self.m || 0)));
+        const missingResource = !!resourcePreviewCard && ((Number(resourcePreviewCard.cost_e || 0) > Number(vm.self.e || 0)) || (Number(resourcePreviewCard.cost_m || 0) > Number(vm.self.m || 0)));
         root.classList.toggle('has-selected-card', !!selected);
+        root.classList.toggle('has-resource-preview', !!resourcePreviewCard);
         root.classList.toggle('has-missing-resource', missingResource);
         root.classList.toggle('is-aiming', !!selected);
         root.classList.toggle('is-self-only-aim', !!selected && selectedSelfOnly);
@@ -8128,20 +8300,14 @@ function renderClassicBattle(gs) {
         $('classic-round').textContent = `R${vm.turn.round || 0}`;
         $('classic-phase').textContent = vm.turn.phaseText || '';
         $('classic-action-hint').textContent = selected ? getClassicPlayHint(selected) : (vm.turn.isMyTurn ? UI.your_turn : UI.opponent_turn);
-        renderClassicResourceOrbs($('classic-e-orbs'), vm.self.e, vm.self.maxE, selected ? selected.cost_e : 0, 'e');
-        renderClassicResourceOrbs($('classic-m-orbs'), vm.self.m, vm.self.maxM, selected ? selected.cost_m : 0, 'm');
+        renderClassicResourceOrbs($('classic-e-orbs'), vm.self.e, vm.self.maxE, resourcePreviewCard ? resourcePreviewCard.cost_e : 0, 'e');
+        renderClassicResourceOrbs($('classic-m-orbs'), vm.self.m, vm.self.maxM, resourcePreviewCard ? resourcePreviewCard.cost_m : 0, 'm');
         $('classic-deck-count').textContent = `▣${vm.deckCount}`;
         $('classic-discard-count').textContent = `⟲${vm.discardCount}`;
         $('classic-exile-count').textContent = `◇${vm.exileCount}`;
         renderClassicFighter($('classic-fighter-self'), vm.self, 'self', selected);
         renderClassicFighter($('classic-fighter-enemy'), vm.enemy, 'enemy', selected);
         renderClassicPlayLane(vm);
-        const responseEl = $('classic-stage-response');
-        if (responseEl) {
-            const waiting = !!vm.pendingResponse || responsePending;
-            responseEl.classList.toggle('hidden', !waiting);
-            responseEl.textContent = waiting ? (UI.waiting_opponent_counter || UI.waiting_response) : '';
-        }
         renderClassicHand(vm);
         renderClassicLog(vm);
         if (selected) scheduleClassicAimCurveUpdate();
@@ -8155,6 +8321,7 @@ function renderClassicBattle(gs) {
             endBtn.disabled = !vm.turn.isMyTurn || isActionBusy({ includeAnimation: false }) || gs.phase === 'game_over';
             endBtn.classList.toggle('is-ready', !endBtn.disabled);
         }
+        updateClassicExtraControls(gs);
         return true;
     } catch (error) {
         console.error('[classic-ui] render failed', error);
@@ -8281,9 +8448,9 @@ function renderGame(data) {
             : gs.phase === 'game_over' ? UI.game_over : '';
     }
     const fullRoundStatus = UI.round_status.replace('{0}', gs.round_num || 0).replace('{1}', phaseText);
-    updateStatus(isClassicUiStyle() ? `R${gs.round_num || 0} · ${phaseText}` : fullRoundStatus);
+    updateStatus(isMinimalUiStyle() ? `R${gs.round_num || 0} · ${phaseText}` : fullRoundStatus);
     const statusTextEl = $('status-text');
-    if (statusTextEl) statusTextEl.title = isClassicUiStyle() ? fullRoundStatus : '';
+    if (statusTextEl) statusTextEl.title = isMinimalUiStyle() ? fullRoundStatus : '';
 
     const endTurnBtn = $('btn-end-turn');
     if (endTurnBtn) {
@@ -8657,6 +8824,8 @@ function syncPlayerRegionTargets(gs) {
     assign('.opp-half.opp-left', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
     assign('#opp2-half', (gs.enemy_ids || [])[1]);
     assign('#teammate-sidebar', gs.teammate_id);
+    assign('#classic-fighter-self', gs.your_id);
+    assign('#classic-fighter-enemy', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
 }
 
 function getPlayerRegionById(id) {
@@ -8720,14 +8889,15 @@ function getStatePlayerRefs(gs) {
         refs.push({ id: pid, data, selector });
     };
     const yourId = normalizePlayerId(gs.your_id);
-    add(yourId, gs.you, '.player-section');
+    const useClassicRefs = shouldUseClassicBattle(gs);
+    add(yourId, gs.you, useClassicRefs ? '#classic-fighter-self' : '.player-section');
     if (gs.mode === '2v2') {
         const enemyIds = gs.enemy_ids || [];
         add(enemyIds[0], gs.opponent, '.opp-half.opp-left');
         add(enemyIds[1], gs.opponent2, '#opp2-half');
         add(gs.teammate_id, gs.teammate, '#teammate-sidebar');
     } else {
-        add(yourId === 1 ? 0 : 1, gs.opponent, '.opp-half.opp-left');
+        add(yourId === 1 ? 0 : 1, gs.opponent, useClassicRefs ? '#classic-fighter-enemy' : '.opp-half.opp-left');
     }
     return refs;
 }
@@ -8750,6 +8920,10 @@ function areSequentialGameStates(previous, next) {
 
 function getCombatFloatAnchor(region, kind) {
     if (!region) return null;
+    if (region.id === 'classic-fighter-self') {
+        if (kind === 'elixir') return $('classic-e-orbs') || region;
+        if (kind === 'magic') return $('classic-m-orbs') || region;
+    }
     const barKey = kind === 'elixir' ? 'elixir'
         : kind === 'magic' ? 'magic'
         : (kind === 'damage' || kind === 'heal') ? 'health'
@@ -8758,7 +8932,7 @@ function getCombatFloatAnchor(region, kind) {
         const bar = region.querySelector(`[data-bar-key="${barKey}"] .bar-track`) || region.querySelector(`[data-bar-key="${barKey}"]`);
         if (bar) return bar;
     }
-    return region.querySelector('.status-tags') || region.querySelector('.player-info-bar') || region;
+    return region.querySelector('.classic-status-ring') || region.querySelector('.status-tags') || region.querySelector('.player-info-bar') || region;
 }
 
 function getCombatFloatTimeline(events) {
@@ -8857,13 +9031,28 @@ function getBarValueForKey(data, key) {
 
 function setRenderedBarValue(selector, key, value, max, immediate = false) {
     const region = document.querySelector(selector);
-    const wrapper = region && region.querySelector(`[data-bar-key="${key}"]`);
+    let wrapper = region && region.querySelector(`[data-bar-key="${key}"]`);
+    if (!wrapper && region && region.id === 'classic-fighter-self' && (key === 'elixir' || key === 'magic')) {
+        const orbs = key === 'elixir' ? $('classic-e-orbs') : $('classic-m-orbs');
+        wrapper = orbs ? orbs.closest('.classic-resource-block') : null;
+    }
     if (!wrapper) return;
-    const fill = wrapper.querySelector('.bar-fill');
-    const text = wrapper.querySelector('.bar-text');
+    const fill = wrapper.querySelector('.bar-fill') || wrapper.querySelector('.classic-hp-fill');
+    const text = wrapper.querySelector('.bar-text') || wrapper.querySelector('.classic-hp-text');
     const cur = Number.isFinite(Number(value)) ? Number(value) : 0;
     const maxValue = Number.isFinite(Number(max)) && Number(max) > 0 ? Number(max) : getBarMaxForKey({}, key);
+    if (wrapper.classList.contains('classic-resource-block')) {
+        renderClassicResourceOrbs(wrapper.querySelector('.classic-orbs'), cur, maxValue, 0, key === 'magic' ? 'm' : 'e');
+        if (!immediate) {
+            wrapper.classList.remove('classic-resource-pop');
+            wrapper.offsetHeight;
+            wrapper.classList.add('classic-resource-pop');
+            setTimeout(() => wrapper.classList.remove('classic-resource-pop'), 420);
+        }
+        return;
+    }
     const pct = Math.max(0, Math.min(100, (cur / maxValue) * 100));
+    const prevValue = Number(wrapper.dataset.renderedValue);
     if (fill) {
         if (immediate) fill.classList.add('bar-fill-instant');
         fill.style.width = `${pct}%`;
@@ -8872,7 +9061,28 @@ function setRenderedBarValue(selector, key, value, max, immediate = false) {
             requestAnimationFrame(() => fill.classList.remove('bar-fill-instant'));
         }
     }
-    if (text) text.textContent = `${cur}/${maxValue}`;
+    if (text) {
+        const label = wrapper.dataset.barLabel || '';
+        const armor = Number(wrapper.dataset.barArmor || 0);
+        const suffix = label === 'H' && armor ? ` · A ${armor}` : '';
+        text.textContent = label ? `${label} ${cur}/${maxValue}${suffix}` : `${cur}/${maxValue}`;
+    }
+    wrapper.dataset.renderedValue = String(cur);
+    if (!immediate && wrapper.classList.contains('classic-hp-wrap')) {
+        const changed = Number.isFinite(prevValue) ? cur - prevValue : 0;
+        const cls = changed < 0 ? 'classic-hp-hit' : changed > 0 ? 'classic-hp-heal' : 'classic-hp-change';
+        wrapper.classList.remove('classic-hp-hit', 'classic-hp-heal', 'classic-hp-change');
+        wrapper.offsetHeight;
+        wrapper.classList.add(cls);
+        const fighter = wrapper.closest('.classic-fighter');
+        if (fighter && changed < 0) {
+            fighter.classList.remove('classic-hit-shake');
+            fighter.offsetHeight;
+            fighter.classList.add('classic-hit-shake');
+            setTimeout(() => fighter.classList.remove('classic-hit-shake'), 520);
+        }
+        setTimeout(() => wrapper.classList.remove(cls), 520);
+    }
 }
 
 function animateBarEventSequence(selector, scheduledEvents, oldData, newData, options = {}) {
@@ -9403,13 +9613,13 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
         const equipName = `${getCardName(cardDef)}${targetSuffix ? `(${targetSuffix})` : ''}`;
         const fullText = UI.equip_info.replace('{0}', equipName).replace('{1}', turns) + (corruption ? UI.equip_corruption : '');
         const compactTextValue = `${equipName}${turns ? ` · ${turns}` : ''}${corruption ? ` · ${UI.compact_corrupted}` : ''}`;
-        const text = isClassicUiStyle() ? compactTextValue : fullText;
+        const text = isMinimalUiStyle() ? compactTextValue : fullText;
         if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && isFriendlyTurn() && !isSpectating) {
             const btn = document.createElement('button');
             btn.className = 'btn btn-small btn-equip-trigger';
             const triggerText = UI.equip_trigger_cost.replace('{0}', fullText).replace('{1}', cardDef.trigger_cost_e);
-            btn.textContent = isClassicUiStyle() ? `⚡ ${equipName} ${cardDef.trigger_cost_e}E` : triggerText;
-            btn.title = isClassicUiStyle() ? triggerText : '';
+            btn.textContent = isMinimalUiStyle() ? `⚡ ${equipName} ${cardDef.trigger_cost_e}E` : triggerText;
+            btn.title = isMinimalUiStyle() ? triggerText : '';
             btn.disabled = isActionBusy({ includeAnimation: false });
             btn.onclick = async () => {
                 if (isActionBusy({ includeAnimation: false })) return;
@@ -9444,7 +9654,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             container.appendChild(btn);
         } else {
             el.textContent = text;
-            el.title = isClassicUiStyle() ? fullText : '';
+            el.title = isMinimalUiStyle() ? fullText : '';
             container.appendChild(el);
         }
     });
@@ -9496,6 +9706,12 @@ function resetBattleLogState(content) {
     gameTimelineEntries = [];
     renderedBattleLogCount = 0;
     renderedBattleLogTotal = 0;
+    renderedClassicLogSignature = '';
+    const classicContent = $('classic-log-content');
+    if (classicContent) {
+        classicContent.dataset.renderSignature = '';
+        classicContent.innerHTML = '';
+    }
     resetBattleLogDom(content);
 }
 
@@ -9843,17 +10059,29 @@ function animatePlayedCard(cardInstanceId, options = {}) {
     flash.style.left = `${rect.left}px`;
     flash.style.top = `${rect.top}px`;
     flash.style.width = `${rect.width}px`;
+    let targeted = false;
+    if (options.targetElement) {
+        const targetRect = options.targetElement.getBoundingClientRect();
+        if (targetRect.width > 0 && targetRect.height > 0) {
+            const dx = targetRect.left + targetRect.width / 2 - (rect.left + rect.width / 2);
+            const dy = targetRect.top + targetRect.height / 2 - (rect.top + rect.height / 2);
+            flash.classList.add('card-play-flash-targeted');
+            flash.style.setProperty('--play-dx', `${dx}px`);
+            flash.style.setProperty('--play-dy', `${dy}px`);
+            targeted = true;
+        }
+    }
     document.body.appendChild(flash);
     if (options.shatterAfter) {
-        lockCardAnimation(900);
+        lockCardAnimation(targeted ? 980 : 900);
         setTimeout(() => {
             animateCardShatterFromElement(flash);
             flash.remove();
-        }, 340);
-        setTimeout(() => flash.remove(), 760);
+        }, targeted ? 420 : 340);
+        setTimeout(() => flash.remove(), targeted ? 900 : 760);
     } else {
-        lockCardAnimation(360);
-        setTimeout(() => flash.remove(), 420);
+        lockCardAnimation(targeted ? 500 : 360);
+        setTimeout(() => flash.remove(), targeted ? 560 : 420);
     }
 }
 
@@ -9992,7 +10220,10 @@ async function onPlayCard(cardInstanceId, options = {}) {
     if (cardDict.def_id === 'Fusion' && choice && Array.isArray(choice.target_instance_ids)) {
         animateFusionMerge(cardInstanceId, choice.target_instance_ids, { startDelay: 300 });
     } else {
-        animatePlayedCard(cardInstanceId, { shatterAfter: shouldShatterAfterPlay });
+        animatePlayedCard(cardInstanceId, {
+            shatterAfter: shouldShatterAfterPlay,
+            targetElement: getClassicPlayedCardAnimationTarget(cardDict, cardDef, targetPlayerId),
+        });
     }
     pendingPlayCard = cardDict;
     renderPendingCard();
@@ -11016,8 +11247,10 @@ let settingsActiveTab = 'appearance';
 let settingsActiveModTab = ['official', 'community'].includes(localStorage.getItem('gtn_settings_mod_tab'))
     ? localStorage.getItem('gtn_settings_mod_tab')
     : 'official';
-const VANILLA_MOD_FILENAME = 'VanillaCards.json';
+const VANILLA_MOD_FILENAME = 'VanillaCards.gtnmod';
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
+const COMMUNITY_JSON_MAX_BYTES = 300 * 1024;
+const COMMUNITY_GTNMOD_MAX_BYTES = 5 * 1024 * 1024;
 
 function getCommunityModSelection() {
     let mods = [];
@@ -11362,8 +11595,72 @@ function renderCommunityCurrent() {
 }
 
 function updateCommunityUploadState() {
-    // Community mod uploads are currently disabled in the client. The server APIs
-    // remain available for registered/repository-driven workflows.
+    const btn = $('btn-community-upload');
+    if (!btn) return;
+    btn.disabled = !currentAccount;
+    btn.title = currentAccount ? '' : (UI.community_upload_hint || '');
+}
+
+function validateCommunityUploadFile(file) {
+    const name = String(file?.name || '').toLowerCase();
+    if (!name.endsWith('.json') && !name.endsWith('.gtnmod')) {
+        throw new Error(UI.community_json_only);
+    }
+    const maxBytes = name.endsWith('.gtnmod') ? COMMUNITY_GTNMOD_MAX_BYTES : COMMUNITY_JSON_MAX_BYTES;
+    if (file.size > maxBytes) {
+        throw new Error(UI.community_file_too_large);
+    }
+}
+
+async function uploadCommunityModFile(file) {
+    const statusEl = $('settings-community-status');
+    const setStatus = text => { if (statusEl) statusEl.textContent = text || ''; };
+    if (!currentAccount) {
+        setStatus(UI.account_need_login || UI.community_upload_hint || '');
+        return;
+    }
+    try {
+        validateCommunityUploadFile(file);
+        const lowerName = String(file.name || '').toLowerCase();
+        if (lowerName.endsWith('.json')) {
+            try {
+                JSON.parse(await file.text());
+            } catch (e) {
+                throw new Error(tf('community_json_parse_failed', e.message || String(e)));
+            }
+        }
+        setStatus(UI.community_uploading);
+        const urlResp = await fetch('/api/community-mods/upload-url', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: file.name }),
+        });
+        const urlData = await urlResp.json().catch(() => ({}));
+        if (!urlResp.ok || !urlData.success) throw new Error(urlData.error || UI.community_upload_url_failed);
+        const putResp = await fetch(urlData.put_url, {
+            method: 'PUT',
+            headers: { 'Content-Type': urlData.content_type || (lowerName.endsWith('.gtnmod') ? 'application/zip' : 'application/json') },
+            body: file,
+        });
+        if (!putResp.ok) throw new Error(tf('community_r2_upload_failed', putResp.status));
+        const registerResp = await fetch('/api/community-mods/register', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: urlData.key, public_url: urlData.public_url, uploader_name: currentAccount.username || '' }),
+        });
+        const registerData = await registerResp.json().catch(() => ({}));
+        if (!registerResp.ok || !registerData.success) {
+            const errorText = Array.isArray(registerData.errors) ? registerData.errors.join('；') : (registerData.error || UI.community_register_failed);
+            throw new Error(errorText);
+        }
+        const mod = registerData.mod || {};
+        setStatus(tf('community_upload_success', mod.name || file.name));
+        await loadSettingsCommunityMods();
+    } catch (e) {
+        setStatus(e.message || String(e));
+    }
 }
 
 async function loadSettingsCommunityMods() {
@@ -11823,6 +12120,12 @@ async function init() {
     if ($('settings-mod-tab-community')) $('settings-mod-tab-community').addEventListener('click', () => setSettingsModSourceTab('community'));
     if ($('btn-community-refresh')) $('btn-community-refresh').addEventListener('click', loadSettingsCommunityMods);
     if ($('btn-community-disable')) $('btn-community-disable').addEventListener('click', clearCommunityModSelection);
+    if ($('btn-community-upload')) $('btn-community-upload').addEventListener('click', () => $('community-mod-file-input')?.click());
+    if ($('community-mod-file-input')) $('community-mod-file-input').addEventListener('change', async (event) => {
+        const file = event.target.files && event.target.files[0];
+        if (file) await uploadCommunityModFile(file);
+        event.target.value = '';
+    });
     if ($('about-tab-rules')) $('about-tab-rules').addEventListener('click', () => setAboutPage('rules'));
     if ($('about-tab-credits')) $('about-tab-credits').addEventListener('click', () => setAboutPage('credits'));
     if ($('btn-about-close')) $('btn-about-close').addEventListener('click', closeAbout);
@@ -11879,11 +12182,17 @@ async function init() {
             if (drawer) drawer.classList.toggle('is-open');
         });
     }
+    const handleSoloPauseEdit = () => { if (socket || isLocalSoloRuntimeActive()) emitSoloEvent('solo_pause', {}); else showSoloTraining(); };
     $('btn-view-deck').addEventListener('click', onViewDeck);
+    if ($('classic-view-deck')) $('classic-view-deck').addEventListener('click', onViewDeck);
     if ($('btn-urf-replace')) $('btn-urf-replace').addEventListener('click', onUrfReplaceCard);
+    if ($('classic-urf-replace')) $('classic-urf-replace').addEventListener('click', onUrfReplaceCard);
     if ($('btn-urf-sell')) $('btn-urf-sell').addEventListener('click', onUrfSellEquipment);
+    if ($('classic-urf-sell')) $('classic-urf-sell').addEventListener('click', onUrfSellEquipment);
     $('btn-solo-next-draw').addEventListener('click', onSoloNextDraw);
-    $('btn-solo-edit').addEventListener('click', () => { if (socket || isLocalSoloRuntimeActive()) emitSoloEvent('solo_pause', {}); else showSoloTraining(); });
+    if ($('classic-solo-next-draw')) $('classic-solo-next-draw').addEventListener('click', onSoloNextDraw);
+    $('btn-solo-edit').addEventListener('click', handleSoloPauseEdit);
+    if ($('classic-solo-edit')) $('classic-solo-edit').addEventListener('click', handleSoloPauseEdit);
     $('solo-card-search').addEventListener('input', renderSoloBuilder);
     $('solo-event-a').addEventListener('change', (e) => { soloEventA = e.target.value; });
     $('solo-event-b').addEventListener('change', (e) => { soloEventB = e.target.value; });

@@ -3,6 +3,9 @@ import os
 import sys
 import copy
 import hashlib
+import mimetypes
+import posixpath
+import zipfile
 from typing import Dict, List, Optional, Any
 from mod_validator_v2 import validate_mod_v2
 
@@ -15,6 +18,145 @@ MODS_DIR = os.path.join(_get_base_dir(), 'mods')
 GAME_VERSION = 'v0.3.1-alpha'
 _MODS_CACHE_SIGNATURE = None
 _MODS_CACHE: List['Mod'] = []
+GTNMOD_MAIN_FILES = ('mod.json', 'gtnmod.json')
+GTNMOD_ASSET_DIRS = ('assets/cards', 'assets/card-art', 'card-art', 'cards')
+GTNMOD_ASSET_EXTS = ('.svg', '.webp', '.png', '.jpg', '.jpeg')
+_MOD_ASSET_REGISTRY: Dict[str, dict] = {}
+
+
+def _is_url_or_public_path(value: str) -> bool:
+    text = str(value or '').strip()
+    return text.startswith(('http://', 'https://', '/static/', '/api/'))
+
+
+def _safe_zip_member(name: str) -> str:
+    normalized = posixpath.normpath(str(name or '').replace('\\', '/')).lstrip('/')
+    if not normalized or normalized == '.' or normalized.startswith('../') or '/..' in normalized:
+        return ''
+    return normalized
+
+
+def _gtnmod_package_key(filepath: str) -> str:
+    try:
+        digest = hashlib.sha256()
+        with open(filepath, 'rb') as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                digest.update(chunk)
+        return digest.hexdigest()[:16]
+    except OSError:
+        return hashlib.sha256(os.path.abspath(filepath).encode('utf-8')).hexdigest()[:16]
+
+
+def _register_gtnmod_asset(filepath: str, member: str, package_key: str) -> str:
+    safe_member = _safe_zip_member(member)
+    if not safe_member:
+        return ''
+    asset_id = hashlib.sha256(f'{package_key}|{safe_member}'.encode('utf-8')).hexdigest()[:32]
+    mime, _ = mimetypes.guess_type(safe_member)
+    if not mime:
+        mime = 'image/svg+xml' if safe_member.lower().endswith('.svg') else 'application/octet-stream'
+    _MOD_ASSET_REGISTRY[asset_id] = {
+        'zip_path': filepath,
+        'member': safe_member,
+        'mime': mime,
+        'filename': os.path.basename(safe_member),
+    }
+    return f'/api/mod-assets/{asset_id}'
+
+
+def get_mod_asset(asset_id: str) -> Optional[dict]:
+    entry = _MOD_ASSET_REGISTRY.get(str(asset_id or '').strip())
+    if not entry:
+        return None
+    try:
+        with zipfile.ZipFile(entry['zip_path'], 'r') as zf:
+            data = zf.read(entry['member'])
+    except Exception:
+        return None
+    return {
+        'data': data,
+        'mime': entry.get('mime') or 'application/octet-stream',
+        'filename': entry.get('filename') or 'asset',
+    }
+
+
+def _find_gtnmod_main_file(zf: zipfile.ZipFile) -> str:
+    members = {_safe_zip_member(name).lower(): _safe_zip_member(name) for name in zf.namelist()}
+    for name in GTNMOD_MAIN_FILES:
+        if name in members:
+            return members[name]
+    for lowered, original in members.items():
+        if lowered.endswith('.json') and '/' not in lowered:
+            return original
+    return ''
+
+
+def _candidate_asset_names(card: dict) -> List[str]:
+    raw_ids = []
+    for key in ('legacy_id', 'runtime_id', 'id', 'name_en'):
+        value = str(card.get(key) or '').strip()
+        if not value:
+            continue
+        raw_ids.append(value.split(':', 1)[-1])
+    candidates = []
+    seen = set()
+    for raw_id in raw_ids:
+        forms = {
+            raw_id,
+            raw_id.replace(' ', ''),
+            raw_id.replace('_', ''),
+            raw_id.replace('-', ''),
+            raw_id.lower(),
+            raw_id.lower().replace(' ', ''),
+            raw_id.lower().replace('_', ''),
+            raw_id.lower().replace('-', ''),
+        }
+        for form in forms:
+            if not form:
+                continue
+            for folder in GTNMOD_ASSET_DIRS:
+                for ext in GTNMOD_ASSET_EXTS:
+                    path = f'{folder}/{form}{ext}'
+                    key = path.lower()
+                    if key not in seen:
+                        seen.add(key)
+                        candidates.append(path)
+    return candidates
+
+
+def _attach_gtnmod_asset_urls(data: dict, filepath: str, zf: zipfile.ZipFile) -> dict:
+    out = copy.deepcopy(data)
+    package_key = _gtnmod_package_key(filepath)
+    member_lookup = {_safe_zip_member(name).lower(): _safe_zip_member(name) for name in zf.namelist()}
+
+    def attach(card: dict):
+        if not isinstance(card, dict):
+            return
+        explicit = str(card.get('image_url') or card.get('image') or '').strip()
+        assets = card.get('assets') if isinstance(card.get('assets'), dict) else {}
+        if not explicit:
+            explicit = str(assets.get('image') or assets.get('card_image') or '').strip()
+        if explicit and _is_url_or_public_path(explicit):
+            card.setdefault('image_url', explicit)
+            return
+        candidates = [explicit] if explicit else []
+        candidates.extend(_candidate_asset_names(card))
+        for candidate in candidates:
+            safe = _safe_zip_member(candidate)
+            if not safe:
+                continue
+            member = member_lookup.get(safe.lower())
+            if member:
+                card['image_url'] = _register_gtnmod_asset(filepath, member, package_key)
+                card.setdefault('image', card['image_url'])
+                return
+
+    registries = out.get('registries') if isinstance(out.get('registries'), dict) else {}
+    for card in registries.get('cards', []) if isinstance(registries.get('cards', []), list) else []:
+        attach(card)
+    for card in out.get('cards', []) if isinstance(out.get('cards', []), list) else []:
+        attach(card)
+    return out
 
 
 class ModCard:
@@ -54,6 +196,8 @@ class ModCard:
         self.v2_events = data.get('v2_events', {}) if isinstance(data.get('v2_events', {}), dict) else {}
         self.v2_resource = data.get('v2_resource', {}) if isinstance(data.get('v2_resource', {}), dict) else {}
         self.v2_mod_id = data.get('v2_mod_id', '')
+        self.image = data.get('image', '')
+        self.image_url = data.get('image_url', self.image)
 
     def to_dict(self) -> dict:
         return {
@@ -76,6 +220,8 @@ class ModCard:
             'v2_events': self.v2_events,
             'v2_resource': self.v2_resource,
             'v2_mod_id': self.v2_mod_id,
+            'image': self.image,
+            'image_url': self.image_url,
         }
 
     def to_card_def(self):
@@ -102,6 +248,8 @@ class ModCard:
             v2_events=self.v2_events,
             v2_resource=self.v2_resource,
             v2_mod_id=self.v2_mod_id,
+            image=self.image,
+            image_url=self.image_url,
         )
 
 
@@ -379,10 +527,22 @@ def load_v2_mod_from_data(data: dict, source: str = "memory", allow_reserved_nam
 def load_mod(filepath: str) -> Mod:
     mod = Mod(filepath)
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        if filepath.lower().endswith('.gtnmod'):
+            with zipfile.ZipFile(filepath, 'r') as zf:
+                main_file = _find_gtnmod_main_file(zf)
+                if not main_file:
+                    mod.errors.append('GTNMOD包缺少根目录 mod.json')
+                    return mod
+                data = json.loads(zf.read(main_file).decode('utf-8-sig'))
+                data = _attach_gtnmod_asset_urls(data, filepath, zf)
+        else:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
     except json.JSONDecodeError as e:
         mod.errors.append(f'JSON解析错误: {e}')
+        return mod
+    except zipfile.BadZipFile as e:
+        mod.errors.append(f'GTNMOD压缩包读取失败: {e}')
         return mod
     except Exception as e:
         mod.errors.append(f'读取失败: {e}')
@@ -395,7 +555,7 @@ def _mods_signature():
         return ()
     items = []
     for entry in os.scandir(MODS_DIR):
-        if not entry.name.endswith('.json'):
+        if not entry.name.endswith(('.json', '.gtnmod')):
             continue
         try:
             stat = entry.stat()
@@ -420,7 +580,7 @@ def load_all_mods(force: bool = False) -> List[Mod]:
     if not os.path.isdir(MODS_DIR):
         return mods
     for fname in os.listdir(MODS_DIR):
-        if fname.endswith('.json'):
+        if fname.endswith(('.json', '.gtnmod')):
             mod = load_mod(os.path.join(MODS_DIR, fname))
             mods.append(mod)
     _MODS_CACHE_SIGNATURE = signature

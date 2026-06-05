@@ -3659,6 +3659,11 @@ body {
   box-shadow: 0 16px 35px rgba(0, 0, 0, 0.2);
 }
 
+.card-play-flash.card-play-flash-targeted {
+  animation: cardPlayTargetFlash 460ms cubic-bezier(.17,.78,.18,1) forwards;
+  transform-origin: 50% 50%;
+}
+
 .card-shatter-wrap {
   position: fixed;
   z-index: 4400;
@@ -3694,6 +3699,24 @@ body {
   0% { opacity: 0.92; transform: translate3d(0, 0, 0) scale(1); }
   62% { opacity: 0.84; transform: translate3d(0, -22vh, 0) scale(1.13); }
   100% { opacity: 0; transform: translate3d(0, -28vh, 0) scale(0.92); }
+}
+
+@keyframes cardPlayTargetFlash {
+  0% {
+    opacity: 0.96;
+    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+    filter: brightness(1);
+  }
+  34% {
+    opacity: 0.98;
+    transform: translate3d(calc(var(--play-dx) * 0.38), calc(var(--play-dy) * 0.32 - 16px), 0) scale(1.08) rotate(-1.5deg);
+    filter: brightness(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--play-dx), var(--play-dy), 0) scale(0.42) rotate(4deg);
+    filter: brightness(1.22);
+  }
 }
 
 @keyframes cardShatterPiece {
@@ -4477,7 +4500,7 @@ body {
 
 .combat-float {
   position: fixed;
-  z-index: 3850;
+  z-index: 12010;
   pointer-events: none;
   transform: translate(-92%, -50%);
   padding: 3px 8px;
@@ -4916,7 +4939,7 @@ body {
   border: 2px solid var(--damage);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
-  z-index: 3720;
+  z-index: 12020;
   min-width: 300px;
   max-width: 500px;
 }
@@ -8360,205 +8383,6 @@ body {
   }
 }
 
-html[data-ui-style="classic"] .game-container {
-  background:
-    radial-gradient(circle at 8% 6%, rgba(192, 57, 43, 0.1), transparent 24%),
-    radial-gradient(circle at 92% 92%, rgba(26, 188, 156, 0.12), transparent 26%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(245, 245, 240, 0.9));
-}
-
-html[data-ui-style="classic"][data-theme="dark"] .game-container {
-  background:
-    radial-gradient(circle at 8% 6%, rgba(192, 57, 43, 0.18), transparent 24%),
-    radial-gradient(circle at 92% 92%, rgba(52, 152, 219, 0.16), transparent 28%),
-    linear-gradient(135deg, #12172b, #1a2038);
-}
-
-html[data-ui-style="classic"] .opp-section,
-html[data-ui-style="classic"] .player-section,
-html[data-ui-style="classic"] .battle-log,
-html[data-ui-style="classic"] .teammate-sidebar {
-  position: relative;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.4)),
-    repeating-linear-gradient(135deg, rgba(44, 62, 80, 0.035) 0 1px, transparent 1px 12px);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.44);
-}
-
-html[data-ui-style="classic"][data-theme="dark"] .opp-section,
-html[data-ui-style="classic"][data-theme="dark"] .player-section,
-html[data-ui-style="classic"][data-theme="dark"] .battle-log,
-html[data-ui-style="classic"][data-theme="dark"] .teammate-sidebar {
-  background:
-    linear-gradient(135deg, rgba(22, 33, 62, 0.82), rgba(22, 33, 62, 0.58)),
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 12px);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-}
-
-html[data-ui-style="classic"] .player-info-bar {
-  position: relative;
-  padding-left: 36px;
-}
-
-html[data-ui-style="classic"] .player-info-bar::before {
-  content: "";
-  width: 16px;
-  height: 16px;
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 50% 50%, transparent 35%, rgba(44, 62, 80, 0.45) 37% 45%, transparent 47%),
-    conic-gradient(from 0deg, var(--thorn), var(--bloom), var(--guard), var(--root), var(--thorn));
-  opacity: 0.72;
-}
-
-html[data-ui-style="classic"] .info-extra {
-  font-size: 11px;
-  opacity: 0.72;
-}
-
-html[data-ui-style="classic"] .info-extra.compact-info {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 7px;
-  border: 1px solid rgba(44, 62, 80, 0.12);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.34);
-  letter-spacing: 0;
-}
-
-html[data-ui-style="classic"][data-theme="dark"] .info-extra.compact-info {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-html[data-ui-style="classic"] .bar-track {
-  height: 18px;
-  border-radius: 999px;
-  border-color: rgba(44, 62, 80, 0.16);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.16);
-}
-
-html[data-ui-style="classic"] .bar-fill {
-  border-radius: 999px;
-}
-
-html[data-ui-style="classic"] .card {
-  border-width: 1.5px;
-  background:
-    radial-gradient(circle at 82% 8%, rgba(255, 255, 255, 0.78), transparent 28%),
-    linear-gradient(180deg, var(--bg-card), rgba(255, 255, 255, 0.88));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.48), 0 4px 12px rgba(44, 62, 80, 0.12);
-}
-
-html[data-ui-style="classic"][data-theme="dark"] .card {
-  background:
-    radial-gradient(circle at 82% 8%, rgba(255, 255, 255, 0.13), transparent 28%),
-    linear-gradient(180deg, #263658, #1f2b47);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 4px 12px rgba(0, 0, 0, 0.28);
-}
-
-html[data-ui-style="classic"] .card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 38%;
-  aspect-ratio: 1;
-  border-radius: 0 1cqi 0 100%;
-  opacity: 0.11;
-  pointer-events: none;
-}
-
-html[data-ui-style="classic"] .card.thorn::before { background: var(--thorn); }
-html[data-ui-style="classic"] .card.bloom::before { background: var(--bloom); }
-html[data-ui-style="classic"] .card.root::before { background: var(--root); }
-html[data-ui-style="classic"] .card.guard::before { background: var(--guard); }
-
-html[data-ui-style="classic"] .card .card-description,
-html[data-ui-style="classic"] .drag-ghost .card-description,
-html[data-ui-style="classic"] .card-play-flash .card-description,
-html[data-ui-style="classic"] .fusion-merge-clone .card-description,
-html[data-ui-style="classic"] .card-shatter-piece .card-description {
-  display: none;
-}
-
-html[data-ui-style="classic"] .card-effect {
-  font-size: 9.45cqi;
-  line-height: 1.24;
-}
-
-html[data-ui-style="classic"] .hand-area .card-effect {
-  padding-top: 3.5cqi;
-}
-
-html[data-ui-style="classic"] .card-type-label {
-  border-radius: 999px;
-  font-weight: 700;
-}
-
-html[data-ui-style="classic"] .equip-card {
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
-}
-
-html[data-ui-style="classic"] .equip-row {
-  gap: 4px;
-  min-height: 24px;
-  padding-top: 1px;
-  padding-bottom: 1px;
-}
-
-html[data-ui-style="classic"] .equip-item,
-html[data-ui-style="classic"] .btn-equip-trigger {
-  padding: 3px 7px;
-  border-radius: 6px;
-  font-size: 11px;
-  line-height: 1.25;
-}
-
-html[data-ui-style="classic"] .controls-bar {
-  gap: 6px;
-  padding: 5px 10px;
-}
-
-html[data-ui-style="classic"] .controls-group {
-  gap: 5px;
-}
-
-html[data-ui-style="classic"] .controls-bar .btn,
-html[data-ui-style="classic"] .controls-right .btn {
-  padding-left: 10px;
-  padding-right: 10px;
-  min-width: 0;
-}
-
-html[data-ui-style="classic"] .btn-end-turn {
-  padding: 8px 18px;
-  min-width: 56px;
-}
-
-html[data-ui-style="classic"] .controls-right input {
-  width: clamp(92px, 13vw, 170px);
-}
-
-html[data-ui-style="classic"] .game-chat-channel {
-  width: clamp(74px, 9vw, 120px);
-}
-
-html[data-ui-style="classic"] .teammate-sidebar-section {
-  font-size: 10px;
-  letter-spacing: 0;
-  opacity: 0.72;
-}
-
-html[data-ui-style="classic"] .btn {
-  box-shadow: 0 3px 10px rgba(44, 62, 80, 0.12);
-}
-
 button:not(:disabled):active,
 .btn:not(:disabled):active,
 .game-prompt-option:active,
@@ -8594,6 +8418,7 @@ button:not(:disabled):active,
   --card-cost-font: 9cqi;
   --card-name-font-scale: 9.5cqi;
   --card-name-height: 18cqi;
+  --card-art-height: 25cqi;
   --card-type-font-scale: 6.5cqi;
   --card-effect-font-scale: 9cqi;
   --card-effect-padding-y: 6cqi;
@@ -8613,11 +8438,6 @@ button:not(:disabled):active,
 
 [lang="zh"] .card {
   --card-name-font-scale: 10.5cqi;
-}
-
-html[data-ui-style="classic"] .card {
-  --card-effect-font-scale: 9.45cqi;
-  --card-effect-padding-y: 3.5cqi;
 }
 
 .card.card-small,
@@ -8678,6 +8498,39 @@ html[data-ui-style="classic"] .card {
   margin-top: var(--card-english-margin-top);
   margin-bottom: 0.2cqi;
   padding: 0 var(--card-english-padding-x) 0.4cqi;
+}
+
+.card-art {
+  width: 88%;
+  height: var(--card-art-height);
+  margin: -0.18cqi auto 0.28cqi;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2.2cqi;
+  background: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+}
+
+[data-theme="dark"] .card-art {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.card-art.hidden {
+  display: none;
+}
+
+.card-art img {
+  display: block;
+  width: 98%;
+  height: 98%;
+  object-fit: contain;
+}
+
+.card.card-small,
+.teammate-hand-row .card,
+.game-container.mode-spectate .card {
+  --card-art-height: 20.8cqi;
 }
 
 .card {
@@ -8742,12 +8595,6 @@ html[data-ui-style="classic"] .card {
   padding: var(--card-effect-padding-y) var(--card-effect-padding-x);
 }
 
-html[data-ui-style="classic"] .card .card-effect,
-html[data-ui-style="classic"] .card.card-small .card-effect,
-html[data-ui-style="classic"] .teammate-hand-row .card .card-effect {
-  line-height: 1.24;
-}
-
 .card .card-description,
 .card.card-small .card-description,
 .teammate-hand-row .card .card-description {
@@ -8773,7 +8620,7 @@ html[data-ui-style="classic"] .teammate-hand-row .card .card-effect {
   min-height: 0;
 }
 
-/* UI v2 migration: the former classic functional interface is now minimal. */
+/* UI v2 migration: the old functional battle interface is now minimal. */
 html[data-ui-style="minimal"] .game-container {
   background:
     radial-gradient(circle at 8% 6%, rgba(192, 57, 43, 0.1), transparent 24%),
@@ -8861,7 +8708,8 @@ html[data-ui-style="minimal"] .bar-fill {
   border-radius: 999px;
 }
 
-html[data-ui-style="minimal"] .card {
+html[data-ui-style="minimal"] .card,
+.battle-classic .card {
   --card-effect-font-scale: 9.45cqi;
   --card-effect-padding-y: 3.5cqi;
   border-width: 1.5px;
@@ -8871,14 +8719,16 @@ html[data-ui-style="minimal"] .card {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.48), 0 4px 12px rgba(44, 62, 80, 0.12);
 }
 
-html[data-ui-style="minimal"][data-theme="dark"] .card {
+html[data-ui-style="minimal"][data-theme="dark"] .card,
+[data-theme="dark"] .battle-classic .card {
   background:
     radial-gradient(circle at 82% 8%, rgba(255, 255, 255, 0.13), transparent 28%),
     linear-gradient(180deg, #263658, #1f2b47);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 4px 12px rgba(0, 0, 0, 0.28);
 }
 
-html[data-ui-style="minimal"] .card::before {
+html[data-ui-style="minimal"] .card::before,
+.battle-classic .card::before {
   content: "";
   position: absolute;
   top: 0;
@@ -8890,26 +8740,39 @@ html[data-ui-style="minimal"] .card::before {
   pointer-events: none;
 }
 
-html[data-ui-style="minimal"] .card.thorn::before { background: var(--thorn); }
-html[data-ui-style="minimal"] .card.bloom::before { background: var(--bloom); }
-html[data-ui-style="minimal"] .card.root::before { background: var(--root); }
-html[data-ui-style="minimal"] .card.guard::before { background: var(--guard); }
+html[data-ui-style="minimal"] .card.thorn::before,
+.battle-classic .card.thorn::before { background: var(--thorn); }
+html[data-ui-style="minimal"] .card.bloom::before,
+.battle-classic .card.bloom::before { background: var(--bloom); }
+html[data-ui-style="minimal"] .card.root::before,
+.battle-classic .card.root::before { background: var(--root); }
+html[data-ui-style="minimal"] .card.guard::before,
+.battle-classic .card.guard::before { background: var(--guard); }
 
 html[data-ui-style="minimal"] .card .card-description,
 html[data-ui-style="minimal"] .drag-ghost .card-description,
 html[data-ui-style="minimal"] .card-play-flash .card-description,
 html[data-ui-style="minimal"] .fusion-merge-clone .card-description,
-html[data-ui-style="minimal"] .card-shatter-piece .card-description {
+html[data-ui-style="minimal"] .card-shatter-piece .card-description,
+.battle-classic .card .card-description,
+.battle-classic .drag-ghost .card-description,
+.battle-classic .card-play-flash .card-description,
+.battle-classic .fusion-merge-clone .card-description,
+.battle-classic .card-shatter-piece .card-description {
   display: none;
 }
 
 html[data-ui-style="minimal"] .card .card-effect,
 html[data-ui-style="minimal"] .card.card-small .card-effect,
-html[data-ui-style="minimal"] .teammate-hand-row .card .card-effect {
+html[data-ui-style="minimal"] .teammate-hand-row .card .card-effect,
+.battle-classic .card .card-effect,
+.battle-classic .card.card-small .card-effect,
+.battle-classic .teammate-hand-row .card .card-effect {
   line-height: 1.24;
 }
 
-html[data-ui-style="minimal"] .card-type-label {
+html[data-ui-style="minimal"] .card-type-label,
+.battle-classic .card-type-label {
   border-radius: 999px;
   font-weight: 700;
 }
@@ -9092,7 +8955,8 @@ html[data-ui-style="minimal"] .btn-end-turn {
   transition: transform 180ms ease, filter 180ms ease;
 }
 
-.battle-classic.has-selected-card .classic-resource-block {
+.battle-classic.has-selected-card .classic-resource-block,
+.battle-classic.has-resource-preview .classic-resource-block {
   transform: translateX(6px);
 }
 
@@ -9145,6 +9009,16 @@ html[data-ui-style="minimal"] .btn-end-turn {
 .classic-orb.is-missing {
   background: #c0392b;
   box-shadow: 0 0 10px rgba(192, 57, 43, 0.72);
+}
+
+.classic-resource-block.classic-resource-pop .classic-orb.is-filled {
+  animation: classicResourcePop 360ms ease-out;
+}
+
+@keyframes classicResourcePop {
+  0% { transform: scale(1); filter: brightness(1); }
+  35% { transform: scale(1.18); filter: brightness(1.55); }
+  100% { transform: scale(1); filter: brightness(1); }
 }
 
 .classic-piles {
@@ -9366,17 +9240,10 @@ html[data-ui-style="minimal"] .btn-end-turn {
   box-shadow: inset 0 0 0 8px rgba(44,62,80,0.025);
 }
 
-[data-theme="light"] .classic-stage-response {
-  color: #9f2e37;
-  border-color: rgba(192,57,43,0.22);
-  background: rgba(192,57,43,0.1);
-}
-
 [data-theme="light"] .classic-empty-mark {
   color: rgba(44,62,80,0.35);
 }
 
-[data-theme="light"] .classic-card-preview,
 [data-theme="light"] .classic-log-drawer {
   background: rgba(255,255,255,0.78);
   box-shadow: 0 18px 42px rgba(44,62,80,0.14);
@@ -9403,18 +9270,6 @@ html[data-ui-style="minimal"] .btn-end-turn {
 [data-theme="light"] .classic-aim-tip {
   fill: rgba(156, 36, 82, 0.96);
   stroke: rgba(255, 255, 255, 0.95);
-}
-
-.classic-stage-response {
-  position: absolute;
-  left: 50%;
-  top: 18px;
-  transform: translateX(-50%);
-  padding: 6px 12px;
-  border-radius: 999px;
-  color: #ffd6d6;
-  border: 1px solid rgba(192,57,43,0.34);
-  background: rgba(192,57,43,0.16);
 }
 
 .classic-fighter {
@@ -9602,8 +9457,39 @@ html[data-ui-style="minimal"] .btn-end-turn {
 .classic-hp-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #a61f2b, #f48fb1);
-  transition: width 280ms ease;
+  background: var(--thorn);
+  transition: width 360ms cubic-bezier(.2,.8,.22,1), filter 180ms ease;
+}
+
+.classic-hp-wrap.classic-hp-hit .classic-hp-track {
+  animation: classicHpHit 420ms ease-out;
+}
+
+.classic-hp-wrap.classic-hp-heal .classic-hp-track {
+  animation: classicHpHeal 420ms ease-out;
+}
+
+.classic-fighter.classic-hit-shake {
+  animation: classicFighterShake 320ms ease-out;
+}
+
+@keyframes classicHpHit {
+  0% { box-shadow: 0 0 0 rgba(192,57,43,0); filter: brightness(1); }
+  32% { box-shadow: 0 0 18px rgba(192,57,43,0.62); filter: brightness(1.2); }
+  100% { box-shadow: 0 0 0 rgba(192,57,43,0); filter: brightness(1); }
+}
+
+@keyframes classicHpHeal {
+  0% { box-shadow: 0 0 0 rgba(244,143,177,0); filter: brightness(1); }
+  32% { box-shadow: 0 0 18px rgba(244,143,177,0.58); filter: brightness(1.18); }
+  100% { box-shadow: 0 0 0 rgba(244,143,177,0); filter: brightness(1); }
+}
+
+@keyframes classicFighterShake {
+  0%, 100% { transform: translateX(0); }
+  18% { transform: translateX(-5px); }
+  38% { transform: translateX(4px); }
+  58% { transform: translateX(-2px); }
 }
 
 .classic-hp-text {
@@ -9675,22 +9561,16 @@ html[data-ui-style="minimal"] .btn-end-turn {
   margin-inline: clamp(-20px, -1.45vw, -7px);
   transform: translateY(var(--fan-y, 0)) rotate(var(--fan-rot, 0));
   transform-origin: 50% 110%;
-  transition: transform 200ms cubic-bezier(.2,.78,.24,1), filter 170ms ease, margin 170ms ease;
+  transition: margin 170ms ease;
   will-change: transform;
 }
 
 .classic-hand-card:hover:not(.is-selected) {
   z-index: 999 !important;
-  margin-inline: 5px;
-  transform: translateY(-30px) rotate(0deg) scale(1.08);
-  filter: drop-shadow(0 18px 28px rgba(0,0,0,0.38));
 }
 
 .classic-hand-card.is-selected {
   z-index: 1000 !important;
-  margin-inline: 4px;
-  transform: translateY(-18px) rotate(0deg) scale(0.9);
-  filter: drop-shadow(0 0 18px rgba(244,143,177,0.72)) drop-shadow(0 14px 22px rgba(0,0,0,0.28));
 }
 
 .classic-hand-card.is-selected::after {
@@ -9700,6 +9580,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
   border-radius: 12px;
   border: 2px solid rgba(244,143,177,0.78);
   pointer-events: none;
+  transform: rotate(var(--fan-rot-inverse, 0deg));
   animation: classicSelectedCard 1.4s ease-in-out infinite;
 }
 
@@ -9759,58 +9640,23 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 .classic-fan-card-inner.card {
   width: 100%;
+  transition: transform 200ms cubic-bezier(.2,.78,.24,1), filter 170ms ease, box-shadow 170ms ease;
+  will-change: transform;
 }
 
-.classic-card-preview {
-  grid-area: log;
-  z-index: 4;
-  align-self: end;
-  justify-self: stretch;
-  margin: 0 14px 76px 0;
-  max-height: min(46vh, 400px);
-  display: grid;
-  grid-template-columns: minmax(66px, 0.72fr) minmax(108px, 1fr);
-  gap: 10px;
-  padding: 10px;
-  border-radius: 12px;
-  background: rgba(13, 18, 31, 0.78);
-  border: 1px solid color-mix(in srgb, var(--classic-card-color, #fff) 40%, rgba(255,255,255,0.14));
-  box-shadow: 0 18px 42px rgba(0,0,0,0.34);
-  backdrop-filter: blur(14px);
-  overflow: hidden;
+.classic-hand-card:hover:not(.is-selected) .classic-fan-card-inner.card {
+  transform: translateY(-42px) rotate(var(--fan-rot-inverse, 0deg)) scale(1.18);
+  filter: drop-shadow(0 18px 28px rgba(0,0,0,0.38));
 }
 
-.classic-card-preview.hidden {
-  display: none;
+.classic-hand-card.is-selected .classic-fan-card-inner.card {
+  transform: rotate(var(--fan-rot-inverse, 0deg)) scale(1);
+  filter: drop-shadow(0 0 18px rgba(244,143,177,0.72)) drop-shadow(0 14px 22px rgba(0,0,0,0.28));
 }
 
-.classic-preview-art {
-  min-width: 0;
-  border-radius: 10px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 28% 18%, rgba(255,255,255,0.24), transparent 32%),
-    linear-gradient(135deg, color-mix(in srgb, var(--classic-card-color, #fff) 36%, #172033), #101522);
-}
-
-.classic-preview-art img {
-  width: 100%;
-  height: 100%;
-  min-height: 120px;
-  object-fit: cover;
-}
-
-.classic-preview-art img.classic-art-fallback {
-  opacity: 0.2;
-}
-
-.classic-preview-card.card {
-  width: min(138px, 100%);
-  margin: 0 auto;
-}
-
-.battle-classic .classic-preview-card .card-description {
-  display: block !important;
+.classic-hover-info {
+  width: min(248px, calc(100vw - 20px));
+  z-index: 10020;
 }
 
 .classic-log-drawer {
@@ -9849,6 +9695,98 @@ html[data-ui-style="minimal"] .btn-end-turn {
   line-height: 1.45;
 }
 
+.classic-command-panel {
+  grid-area: end;
+  align-self: stretch;
+  justify-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  z-index: 6;
+}
+
+.classic-extra-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  max-width: 100%;
+}
+
+.classic-extra-controls.hidden {
+  display: none !important;
+}
+
+.classic-mini-btn {
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  cursor: pointer;
+  text-shadow: none;
+  box-shadow: var(--shadow-md);
+  transition: transform 120ms ease, filter 160ms ease, opacity 160ms ease, background 160ms ease;
+}
+
+.classic-mini-btn:not(:disabled):hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+  filter: none;
+}
+
+#classic-view-deck,
+#classic-solo-next-draw,
+#classic-urf-replace {
+  background: var(--magic);
+  color: #fff;
+  border-color: var(--magic);
+}
+
+#classic-view-deck:not(:disabled):hover,
+#classic-solo-next-draw:not(:disabled):hover,
+#classic-urf-replace:not(:disabled):hover {
+  background: #5dade2;
+  color: #fff;
+  border-color: var(--magic);
+}
+
+#classic-urf-sell {
+  background: var(--bloom);
+  color: #fff;
+  border-color: var(--bloom);
+}
+
+#classic-urf-sell:not(:disabled):hover {
+  background: #1dd1a1;
+  color: #fff;
+  border-color: var(--bloom);
+}
+
+.classic-mini-btn:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+.classic-mini-btn:disabled {
+  opacity: 0.46;
+  filter: grayscale(0.35);
+  cursor: default;
+}
+
+.classic-mini-btn.hidden {
+  display: none !important;
+}
+
 .classic-end-turn {
   grid-area: end;
   align-self: center;
@@ -9856,14 +9794,13 @@ html[data-ui-style="minimal"] .btn-end-turn {
   width: min(180px, 84%);
   min-height: 70px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.2);
-  background:
-    linear-gradient(180deg, #c84b72, #8f2439);
+  border: 1px solid var(--bloom);
+  background: var(--bloom);
   color: #fff;
   font-size: 18px;
   font-weight: 900;
   letter-spacing: 0;
-  box-shadow: 0 16px 36px rgba(162,29,53,0.32);
+  box-shadow: var(--shadow-lg);
   cursor: pointer;
   transition: transform 120ms ease, filter 160ms ease, opacity 160ms ease;
 }
@@ -9883,8 +9820,8 @@ html[data-ui-style="minimal"] .btn-end-turn {
 }
 
 @keyframes classicEndTurnReady {
-  0%, 100% { box-shadow: 0 16px 36px rgba(162,29,53,0.32); transform: translateY(0); }
-  50% { box-shadow: 0 18px 44px rgba(244,143,177,0.46); transform: translateY(-1px); }
+  0%, 100% { box-shadow: var(--shadow-lg); transform: translateY(0); }
+  50% { box-shadow: 0 0 0 4px var(--bloom-glow), var(--shadow-lg); transform: translateY(-1px); }
 }
 
 @media (max-width: 860px), (max-height: 560px) {
@@ -9926,9 +9863,6 @@ html[data-ui-style="minimal"] .btn-end-turn {
     width: clamp(58px, min(8.4vw, 20vh), 96px);
     margin-inline: clamp(-14px, -1.2vw, -5px);
   }
-  .classic-card-preview {
-    display: none;
-  }
   .classic-log-drawer {
     max-width: 156px;
     margin: 6px 6px 6px 0;
@@ -9941,6 +9875,19 @@ html[data-ui-style="minimal"] .btn-end-turn {
     min-height: 54px;
     font-size: 16px;
     border-radius: 16px;
+  }
+  .classic-command-panel {
+    gap: 5px;
+    padding: 5px 6px;
+  }
+  .classic-extra-controls {
+    gap: 4px;
+  }
+  .classic-mini-btn {
+    min-height: 25px;
+    padding: 4px 7px;
+    border-radius: 8px;
+    font-size: 10.5px;
   }
 }
 
@@ -9971,12 +9918,32 @@ html[data-ui-style="minimal"] .btn-end-turn {
     transform: none;
     margin-inline: 2px;
   }
-  .classic-hand-card:hover,
-  .classic-hand-card.is-selected {
-    transform: translateY(-10px) scale(1.04);
+  .classic-hand-card:hover:not(.is-selected) .classic-fan-card-inner.card {
+    transform: translateY(-38px) scale(1);
+  }
+  .classic-hand-card.is-selected .classic-fan-card-inner.card {
+    transform: scale(1);
+  }
+  .classic-hand-card.is-selected::after {
+    transform: none;
   }
   .classic-end-turn {
     width: min(220px, 80vw);
     min-height: 46px;
+  }
+  .classic-command-panel {
+    flex-direction: row;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 8px;
+  }
+  .classic-extra-controls {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    justify-content: flex-start;
+    max-width: calc(100vw - 180px);
+  }
+  .classic-mini-btn {
+    white-space: nowrap;
   }
 }

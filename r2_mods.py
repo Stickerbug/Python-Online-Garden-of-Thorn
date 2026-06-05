@@ -1,10 +1,14 @@
 import copy
+import base64
 import hashlib
+import io
 import json
+import mimetypes
 import os
 import posixpath
 import secrets
 import time
+import zipfile
 import copy
 from collections import deque
 from datetime import datetime
@@ -29,6 +33,7 @@ from mod_validator_v2 import validate_mod_v2
 
 
 MAX_COMMUNITY_MOD_BYTES = 300_000
+MAX_COMMUNITY_PACKAGE_BYTES = int(os.environ.get('MAX_COMMUNITY_PACKAGE_BYTES', str(5 * 1024 * 1024)))
 MAX_COMMUNITY_CARDS = 120
 MAX_COMMUNITY_EVENTS = 30
 COMMUNITY_INDEX_KEY = 'community/index.json'
@@ -172,9 +177,105 @@ def _safe_filename(filename: str) -> str:
         if ch.isalnum() or ch in ('-', '_', '.', ' '):
             keep.append(ch)
     safe = ''.join(keep).strip().replace(' ', '_') or 'community_mod.json'
-    if not safe.lower().endswith('.json'):
+    if not safe.lower().endswith(('.json', '.gtnmod')):
         raise ValueError('只允许上传 .json 模组文件')
     return safe[:96]
+
+
+def _content_type_for_filename(filename: str) -> str:
+    return 'application/zip' if str(filename or '').lower().endswith('.gtnmod') else 'application/json'
+
+
+def _safe_zip_member(name: str) -> str:
+    normalized = posixpath.normpath(str(name or '').replace('\\', '/')).lstrip('/')
+    if not normalized or normalized == '.' or normalized.startswith('../') or '/..' in normalized:
+        return ''
+    return normalized
+
+
+def _find_gtnmod_main_file(zf: zipfile.ZipFile) -> str:
+    members = {_safe_zip_member(name).lower(): _safe_zip_member(name) for name in zf.namelist()}
+    for name in ('mod.json', 'gtnmod.json'):
+        if name in members:
+            return members[name]
+    for lowered, original in members.items():
+        if lowered.endswith('.json') and '/' not in lowered:
+            return original
+    return ''
+
+
+def _candidate_asset_names(card: Dict[str, Any]) -> list:
+    raw_ids = []
+    for key in ('legacy_id', 'runtime_id', 'id', 'name_en'):
+        value = str(card.get(key) or '').strip()
+        if value:
+            raw_ids.append(value.split(':', 1)[-1])
+    candidates = []
+    seen = set()
+    for raw_id in raw_ids:
+        forms = {
+            raw_id,
+            raw_id.replace(' ', ''),
+            raw_id.replace('_', ''),
+            raw_id.replace('-', ''),
+            raw_id.lower(),
+            raw_id.lower().replace(' ', ''),
+            raw_id.lower().replace('_', ''),
+            raw_id.lower().replace('-', ''),
+        }
+        for form in forms:
+            if not form:
+                continue
+            for folder in ('assets/cards', 'assets/card-art', 'card-art', 'cards'):
+                for ext in ('.svg', '.webp', '.png', '.jpg', '.jpeg'):
+                    path = f'{folder}/{form}{ext}'
+                    key = path.lower()
+                    if key not in seen:
+                        seen.add(key)
+                        candidates.append(path)
+    return candidates
+
+
+def _asset_data_url(zf: zipfile.ZipFile, member: str) -> str:
+    raw = zf.read(member)
+    mime, _ = mimetypes.guess_type(member)
+    if not mime:
+        mime = 'image/svg+xml' if member.lower().endswith('.svg') else 'application/octet-stream'
+    return f'data:{mime};base64,{base64.b64encode(raw).decode("ascii")}'
+
+
+def _attach_gtnmod_data_urls(data: Dict[str, Any], zf: zipfile.ZipFile) -> Dict[str, Any]:
+    out = copy.deepcopy(data)
+    member_lookup = {_safe_zip_member(name).lower(): _safe_zip_member(name) for name in zf.namelist()}
+
+    def attach(card: Dict[str, Any]) -> None:
+        if not isinstance(card, dict):
+            return
+        explicit = str(card.get('image_url') or card.get('image') or '').strip()
+        assets = card.get('assets') if isinstance(card.get('assets'), dict) else {}
+        if not explicit:
+            explicit = str(assets.get('image') or assets.get('card_image') or '').strip()
+        if explicit.startswith(('http://', 'https://', '/static/', '/api/', 'data:')):
+            card.setdefault('image_url', explicit)
+            return
+        candidates = [explicit] if explicit else []
+        candidates.extend(_candidate_asset_names(card))
+        for candidate in candidates:
+            safe = _safe_zip_member(candidate)
+            if not safe:
+                continue
+            member = member_lookup.get(safe.lower())
+            if member:
+                url = _asset_data_url(zf, member)
+                card['image_url'] = url
+                card.setdefault('image', url)
+                return
+
+    registries = out.get('registries') if isinstance(out.get('registries'), dict) else {}
+    cards = registries.get('cards', []) if isinstance(registries.get('cards'), list) else []
+    for card in cards:
+        attach(card)
+    return out
 
 
 def _public_url_for_key(key: str) -> str:
@@ -189,7 +290,7 @@ def create_presigned_mod_upload(filename: str) -> Dict[str, Any]:
     token = secrets.token_hex(8)
     key = f'community/uploads/{now}-{token}-{safe}'
     expires_in = 300
-    content_type = 'application/json'
+    content_type = _content_type_for_filename(safe)
     put_url = _client().generate_presigned_url(
         ClientMethod='put_object',
         Params={
@@ -223,6 +324,8 @@ def fetch_json_from_public_url(url: str, max_bytes: int = MAX_COMMUNITY_MOD_BYTE
     base = r2_public_base_url()
     if not base:
         raise R2ConfigError('社区模组未配置 R2_PUBLIC_BASE_URL')
+    if url.lower().split('?', 1)[0].endswith('.gtnmod') and max_bytes == MAX_COMMUNITY_MOD_BYTES:
+        max_bytes = MAX_COMMUNITY_PACKAGE_BYTES
     if not url.startswith(base + '/'):
         raise ValueError('public_url 不属于当前 R2 公开域名')
     connect_timeout = float(os.environ.get('R2_PUBLIC_CONNECT_TIMEOUT', '3'))
@@ -242,6 +345,37 @@ def fetch_json_from_public_url(url: str, max_bytes: int = MAX_COMMUNITY_MOD_BYTE
                 raise ValueError(f'模组文件过大，最大允许 {max_bytes} 字节')
             chunks.append(chunk)
     raw = b''.join(chunks)
+    package_sha256 = hashlib.sha256(raw).hexdigest()
+    is_gtnmod = url.lower().split('?', 1)[0].endswith('.gtnmod') or raw[:4] == b'PK\x03\x04'
+    if is_gtnmod:
+        try:
+            with zipfile.ZipFile(io.BytesIO(raw), 'r') as zf:
+                main_file = _find_gtnmod_main_file(zf)
+                if not main_file:
+                    raise ValueError('GTNMOD 包缺少根目录 mod.json')
+                main_info = zf.getinfo(main_file)
+                if main_info.file_size > MAX_COMMUNITY_MOD_BYTES:
+                    raise ValueError(f'mod.json 过大，最大允许 {MAX_COMMUNITY_MOD_BYTES} 字节')
+                for info in zf.infolist():
+                    member = _safe_zip_member(info.filename)
+                    if not member:
+                        raise ValueError('GTNMOD 包包含不安全路径')
+                    ext = os.path.splitext(member)[1].lower()
+                    if ext and ext not in ('.json', '.svg', '.webp', '.png', '.jpg', '.jpeg'):
+                        raise ValueError(f'GTNMOD 包包含不允许的文件类型: {ext}')
+                raw_json = zf.read(main_file)
+        except zipfile.BadZipFile as exc:
+            raise ValueError(f'GTNMOD 压缩包读取失败: {exc}') from exc
+        try:
+            data = json.loads(raw_json.decode('utf-8-sig'))
+        except Exception as exc:
+            raise ValueError(f'GTNMOD mod.json 解析错误: {exc}') from exc
+        if not isinstance(data, dict):
+            raise ValueError('模组根节点必须是对象')
+        with zipfile.ZipFile(io.BytesIO(raw), 'r') as zf:
+            data = _attach_gtnmod_data_urls(data, zf)
+        data['_package_sha256'] = package_sha256
+        return data
     try:
         data = json.loads(raw.decode('utf-8-sig'))
     except Exception as exc:
@@ -445,6 +579,7 @@ def _move_object_to_trash(key: str, sha256: str = '') -> Optional[str]:
 
 def validate_community_mod_url(public_url: str) -> Dict[str, Any]:
     data = fetch_json_from_public_url(public_url)
+    package_sha256 = str(data.pop('_package_sha256', '') or '').strip().lower() if isinstance(data, dict) else ''
     candidate, strip_warnings = _community_validation_input(data)
     validation = _validate_community_mod_data(candidate, source=public_url)
     warnings = list(validation.warnings) + strip_warnings
@@ -475,13 +610,14 @@ def register_community_mod(public_url: str, key: str, uploader_name: Optional[st
                            uploader_user_id: Optional[int] = None,
                            replace_sha256: Optional[str] = None) -> Dict[str, Any]:
     data = fetch_json_from_public_url(public_url)
+    package_sha256 = str(data.pop('_package_sha256', '') or '').strip().lower() if isinstance(data, dict) else ''
     candidate, strip_warnings = _community_validation_input(data)
     validation = _validate_community_mod_data(candidate, source=public_url)
     warnings = list(validation.warnings) + strip_warnings
     if validation.errors:
         return {'success': False, 'errors': validation.errors, 'warnings': warnings}
     normalized = validation.normalized if validation.normalized else candidate
-    sha256 = hashlib.sha256(
+    sha256 = package_sha256 or hashlib.sha256(
         json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
     ).hexdigest()
     index = get_community_index(force=True)
@@ -654,13 +790,14 @@ def load_community_mod(public_url: str, expected_hash: Optional[str] = None):
     if cache_key in COMMUNITY_MOD_CACHE:
         return COMMUNITY_MOD_CACHE[cache_key]
     data = fetch_json_from_public_url(public_url)
+    package_sha256 = str(data.pop('_package_sha256', '') or '').strip().lower() if isinstance(data, dict) else ''
     candidate, strip_warnings = _community_validation_input(data)
     validation = _validate_community_mod_data(candidate, source=public_url)
     warnings = list(validation.warnings) + strip_warnings
     if validation.errors:
         raise ValueError('; '.join(validation.errors))
     normalized = validation.normalized if validation.normalized else candidate
-    sha256 = hashlib.sha256(
+    sha256 = package_sha256 or hashlib.sha256(
         json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
     ).hexdigest()
     if expected_hash and sha256 != expected_hash:

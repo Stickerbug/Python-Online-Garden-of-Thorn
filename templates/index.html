@@ -4,8 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 荆棘花园</title>
+<link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
+<link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=157">
+<link rel="stylesheet" href="/static/css/style.css?v=171">
 <script>
 (() => {
   const lang = localStorage.getItem('gtn_lang') || 'zh';
@@ -338,17 +340,24 @@
     <div id="classic-fighter-self" class="classic-fighter fighter-self"></div>
     <div class="classic-stage-center">
       <div id="classic-play-lane" class="classic-play-lane"></div>
-      <div id="classic-stage-response" class="classic-stage-response hidden"></div>
     </div>
     <div id="classic-fighter-enemy" class="classic-fighter fighter-enemy"></div>
   </div>
-  <div id="classic-card-preview" class="classic-card-preview hidden"></div>
   <div id="classic-log-drawer" class="classic-log-drawer">
     <button id="classic-log-toggle" class="classic-log-toggle" type="button">战斗日志</button>
     <div id="classic-log-content" class="classic-log-content"></div>
   </div>
   <div id="classic-hand-fan" class="classic-hand-fan"></div>
-  <button id="classic-end-turn" class="classic-end-turn" type="button">结束回合</button>
+  <div class="classic-command-panel">
+    <div id="classic-extra-controls" class="classic-extra-controls hidden">
+      <button id="classic-view-deck" class="classic-mini-btn" type="button">查看牌堆</button>
+      <button id="classic-urf-replace" class="classic-mini-btn hidden" type="button">替换手牌</button>
+      <button id="classic-urf-sell" class="classic-mini-btn hidden" type="button">售卖装备</button>
+      <button id="classic-solo-next-draw" class="classic-mini-btn hidden" type="button">设置下次抽牌</button>
+      <button id="classic-solo-edit" class="classic-mini-btn hidden" type="button">暂停编辑</button>
+    </div>
+    <button id="classic-end-turn" class="classic-end-turn" type="button">结束回合</button>
+  </div>
 </div>
 <div class="game-container">
   <div class="opp-section">
@@ -432,8 +441,8 @@
       </div>
     </div>
   </div>
-  <div id="response-panel" class="response-panel hidden"></div>
 </div>
+<div id="response-panel" class="response-panel hidden"></div>
 </div>
 
 <div id="view-gameover" class="view hidden">
@@ -535,6 +544,8 @@
 <div id="settings-community-mods-list" class="settings-mods-list"></div>
 <p id="settings-no-community-mods" class="info-text">未找到社区模组</p>
 <div class="community-upload-actions community-refresh-row">
+<input id="community-mod-file-input" type="file" accept=".json,.gtnmod,application/json,application/zip" hidden>
+<button id="btn-community-upload" type="button" class="btn btn-primary">上传模组</button>
 <button id="btn-community-refresh" type="button" class="btn btn-secondary">??</button>
 </div>
 <p id="settings-community-status" class="info-text"></p>
@@ -711,6 +722,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-<script src="/static/js/game.js?v=178"></script>
+<script src="/static/js/game.js?v=187"></script>
 </body>
 </html>

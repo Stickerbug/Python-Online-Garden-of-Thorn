@@ -6,6 +6,7 @@ except Exception:
 
 import sys
 import os
+import io
 import re
 import time
 import json
@@ -20,7 +21,7 @@ from functools import wraps
 from collections import deque
 from datetime import datetime, timedelta, timezone
 
-from flask import Flask, render_template, jsonify, request, send_from_directory, session
+from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash
 from game_engine import GameEngine
@@ -31,7 +32,7 @@ from cards import (
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
 )
-from mod_loader import GAME_VERSION, merge_mod_cards_to_card_defs, load_all_mods
+from mod_loader import GAME_VERSION, merge_mod_cards_to_card_defs, load_all_mods, get_mod_asset
 from mod_loadout_v2 import build_v2_loadout
 from mod_spec_v2 import sha256_json
 from card_i18n import apply_card_i18n_defaults, card_text, event_text
@@ -93,8 +94,10 @@ from replay_core import (
 
 BASE_CARD_IDS = set(CARD_DEFS.keys())
 BASE_CARD_DEFS = copy.deepcopy(CARD_DEFS)
-VANILLA_MOD_FILENAME = 'VanillaCards.json'
+VANILLA_MOD_FILENAME = 'VanillaCards.gtnmod'
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
+VANILLA_CARD_ART_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'assets', 'card-art', 'vanilla')
+VANILLA_CARD_ART_URL = '/static/assets/card-art/vanilla'
 
 try:
     merged = merge_mod_cards_to_card_defs()
@@ -116,7 +119,7 @@ def current_mods_signature():
         return ()
     items = []
     for filename in sorted(os.listdir(mods_dir)):
-        if not filename.endswith('.json'):
+        if not filename.endswith(('.json', '.gtnmod')):
             continue
         path = os.path.join(mods_dir, filename)
         try:
@@ -125,6 +128,16 @@ def current_mods_signature():
         except OSError:
             items.append((filename, 0, 0))
     return tuple(items)
+
+
+def vanilla_card_art_url(def_id):
+    safe_id = re.sub(r'[^A-Za-z0-9_-]', '', str(def_id or ''))
+    if not safe_id:
+        return ''
+    filename = f'{safe_id}.svg'
+    if os.path.exists(os.path.join(VANILLA_CARD_ART_DIR, filename)):
+        return f'{VANILLA_CARD_ART_URL}/{filename}'
+    return ''
 
 
 def reload_mod_card_defs(force=False):
@@ -1431,6 +1444,8 @@ def register_v2_loadout_cards(v2_loadout):
             v2_events=resource.get('events') if isinstance(resource.get('events'), dict) else {},
             v2_resource=dict(resource),
             v2_mod_id=str(resource.get('_mod_id') or ''),
+            image=str(resource.get('image') or ''),
+            image_url=str(resource.get('image_url') or resource.get('image') or ''),
         )
         CARD_DEFS[runtime_id] = card_def
         registered.append(runtime_id)
@@ -3471,6 +3486,14 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/favicon.ico')
+def favicon():
+    icons_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'assets', 'icons')
+    response = send_from_directory(icons_dir, 'favicon.ico', mimetype='image/x-icon')
+    response.headers['Cache-Control'] = 'public, max-age=604800'
+    return response
+
+
 @app.route('/fonts/<path:filename>')
 def serve_font(filename):
     fonts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'fonts')
@@ -3478,6 +3501,20 @@ def serve_font(filename):
     response = send_from_directory(fonts_dir, filename, mimetype=mimetype)
     if filename.endswith('.woff2') or filename.endswith('.ttf'):
         response.headers['Cache-Control'] = 'public, max-age=604800'
+    return response
+
+
+@app.route('/api/mod-assets/<asset_id>')
+def api_mod_asset(asset_id):
+    asset = get_mod_asset(asset_id)
+    if not asset:
+        return ('Not found', 404)
+    response = send_file(
+        io.BytesIO(asset['data']),
+        mimetype=asset.get('mime') or 'application/octet-stream',
+        download_name=asset.get('filename') or 'asset',
+    )
+    response.headers['Cache-Control'] = 'public, max-age=604800'
     return response
 
 
@@ -3989,6 +4026,9 @@ def api_cards():
         if def_id not in allowed_card_ids:
             continue
         source = card_mod_sources.get(def_id, {})
+        image_url = str(getattr(card_def, 'image_url', '') or getattr(card_def, 'image', '') or '')
+        if not image_url and bool(source.get('is_vanilla', False)):
+            image_url = vanilla_card_art_url(def_id)
         card_payload = {
             'id': card_def.id,
             'name_en': card_def.name_en,
@@ -4014,6 +4054,8 @@ def api_cards():
             'effects': card_def.effects,
             'scripts': getattr(card_def, 'scripts', {}) or {},
             'v2_events': getattr(card_def, 'v2_events', {}) or {},
+            'image': image_url,
+            'image_url': image_url,
         }
         if getattr(card_def, 'v2_mod_id', ''):
             card_payload['v2_mod_id'] = getattr(card_def, 'v2_mod_id', '')
@@ -4119,7 +4161,7 @@ def api_community_mod_upload_url():
         return _json_error('上传过于频繁，请稍后再试', 429)
     data = request.get_json(silent=True) or {}
     filename = str(data.get('filename') or '').strip()
-    if not filename.lower().endswith('.json'):
+    if not filename.lower().endswith(('.json', '.gtnmod')):
         return _json_error('只允许上传 .json 文件')
     try:
         result = create_presigned_mod_upload(filename)

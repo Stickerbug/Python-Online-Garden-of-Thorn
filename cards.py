@@ -29,6 +29,8 @@ class CardDef:
     v2_events: Dict[str, Any] = field(default_factory=dict)
     v2_resource: Dict[str, Any] = field(default_factory=dict)
     v2_mod_id: str = ''
+    image: str = ''
+    image_url: str = ''
 
     @property
     def display_name(self) -> str:
