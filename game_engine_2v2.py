@@ -426,6 +426,7 @@ class GameEngine2v2(GameEngine):
             ps.attack_blocked -= 1
         if ps.attack_only > 0:
             ps.attack_only -= 1
+        self._save_last_turn_damage_snapshot(player_id)
         self._advance_turn()
 
     def _end_round(self):
@@ -972,8 +973,7 @@ class GameEngine2v2(GameEngine):
                 ps.heal(2)
                 self.log_msg(f"{self.pn(player_id)}的叶子效果：+2H")
             elif eq.def_id == 'Yucca':
-                ps.heal(5)
-                self.log_msg(f"{self.pn(player_id)}的丝兰效果：+5H")
+                self._apply_yucca_turn_start_heal(player_id)
             elif eq.def_id == 'MagicLeaf':
                 ps.gain_magic(1)
                 self.log_msg(f"{self.pn(player_id)}的魔法叶效果：+1M")
@@ -1419,8 +1419,7 @@ class GameEngine2v2(GameEngine):
                     ps.heal(2)
                     self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2H")
                 elif eq.def_id == 'Yucca':
-                    ps.heal(5)
-                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+5H")
+                    self._apply_yucca_turn_start_heal(player_id, eq.card_def.name_cn)
                 elif eq.def_id == 'MagicLeaf':
                     ps.gain_magic(1)
                     self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+1M")
@@ -1592,8 +1591,7 @@ class GameEngine2v2(GameEngine):
                     ps.heal(2)
                     self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2H")
                 elif eq.def_id == 'Yucca':
-                    ps.heal(5)
-                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+5H")
+                    self._apply_yucca_turn_start_heal(player_id, eq.card_def.name_cn)
                 elif eq.def_id == 'MagicLeaf':
                     ps.gain_magic(1)
                     self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+1M")

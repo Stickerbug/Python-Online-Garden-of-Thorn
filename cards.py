@@ -255,7 +255,7 @@ _reg(CardDef('Leaf', 'Leaf', '叶子', 1, 0, 'root', 5, 'Common',
              trigger_cost_e=1, trigger_effect_text='若已装备一回合则可摧毁此装备，造成8D'))
 
 _reg(CardDef('Yucca', 'Yucca', '丝兰', 4, 0, 'root', 5, 'Common',
-             '叶子的加强版。', '自己回合开始时+5H'))
+             '在平缓的回合后积蓄更多生机。', '自己回合开始时+3H；若上个自己的回合造成的实际伤害低于10D，则额外+7H'))
 
 _reg(CardDef('Disc', 'Disc', '圆盘', 3, 0, 'root', 3, 'Common',
              '坚实的护盾，减免来袭的伤害。', '+2A', flags={'non_stackable'}))

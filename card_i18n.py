@@ -95,8 +95,8 @@ CARD_I18N = {
     },
     'Yucca': {
         'name': _t('丝兰', 'Yucca', 'Yucca', 'Yucca', 'Юкка', 'ユッカ'),
-        'desc': _t('叶子的加强版。', 'An enhanced version of Leaf.', 'Une version renforcée de Feuille.', 'Uma versão reforçada de Folha.', 'Усиленная версия Листа.', '葉の強化版。'),
-        'effect': _t('自己回合开始时+5H', 'At your turn start +5H', 'Au début de votre tour +5H', 'No início do seu turno +5H', 'В начале вашего хода +5H', '自分のターン開始時+5H'),
+        'desc': _t('在平缓的回合后积蓄更多生机。', 'Stores extra vitality after a low-impact turn.', 'Accumule plus de vitalité après un tour peu offensif.', 'Acumula vitalidade extra após um turno de baixo impacto.', 'Накапливает больше жизненной силы после спокойного хода.', '穏やかなターンの後、さらに生命力を蓄える。'),
+        'effect': _t('自己回合开始时+3H；若上个自己的回合造成的实际伤害低于10D，则额外+7H', 'At your turn start +3H; if your last turn dealt less than 10D actual damage, +7H more', 'Au début de votre tour +3H ; si votre tour précédent a infligé moins de 10D réels, +7H en plus', 'No início do seu turno +3H; se seu turno anterior causou menos de 10D reais, +7H extra', 'В начале вашего хода +3H; если в прошлый ваш ход было нанесено меньше 10D фактического урона, дополнительно +7H', '自分のターン開始時+3H。前の自分のターンで実際に与えたダメージが10D未満なら、追加で+7H'),
     },
     'Disc': {
         'name': _t('圆盘', 'Disc', 'Disque', 'Disco', 'Диск', '円盤'),

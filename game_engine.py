@@ -126,6 +126,8 @@ class PlayerState:
         self.cards_played_this_turn: Dict[str, int] = {}
         self.turn_damage_taken: int = 0
         self.turn_damage_dealt: int = 0
+        self.last_turn_damage_taken: int = 0
+        self.last_turn_damage_dealt: int = 0
         self.total_damage_taken: int = 0
         self.total_damage_dealt: int = 0
         self.custom_vars: Dict[str, int] = {
@@ -182,6 +184,8 @@ class PlayerState:
             'hand_limit': self.hand_limit(),
             'turn_damage_taken': self.turn_damage_taken,
             'turn_damage_dealt': self.turn_damage_dealt,
+            'last_turn_damage_taken': self.last_turn_damage_taken,
+            'last_turn_damage_dealt': self.last_turn_damage_dealt,
             'total_damage_taken': self.total_damage_taken,
             'total_damage_dealt': self.total_damage_dealt,
             'custom_statuses': dict(self.custom_statuses),
@@ -245,6 +249,8 @@ class PlayerState:
             ps.cards_played_this_turn = d['cards_played_this_turn']
         ps.turn_damage_taken = int(d.get('turn_damage_taken', 0))
         ps.turn_damage_dealt = int(d.get('turn_damage_dealt', 0))
+        ps.last_turn_damage_taken = int(d.get('last_turn_damage_taken', 0))
+        ps.last_turn_damage_dealt = int(d.get('last_turn_damage_dealt', 0))
         ps.total_damage_taken = int(d.get('total_damage_taken', 0))
         ps.total_damage_dealt = int(d.get('total_damage_dealt', 0))
         if 'custom_vars' in d:
@@ -671,6 +677,33 @@ class GameEngine:
             ps.turn_damage_taken = 0
             ps.turn_damage_dealt = 0
 
+    def _save_last_turn_damage_snapshot(self, player_id: int):
+        if 0 <= player_id < len(self.players):
+            ps = self.players[player_id]
+            ps.last_turn_damage_taken = int(getattr(ps, 'turn_damage_taken', 0) or 0)
+            ps.last_turn_damage_dealt = int(getattr(ps, 'turn_damage_dealt', 0) or 0)
+
+    def _apply_yucca_turn_start_heal(self, player_id: int, label: str = '丝兰') -> int:
+        if not (0 <= player_id < len(self.players)):
+            return 0
+        ps = self.players[player_id]
+        before = ps.health
+        ps.heal(3)
+        base_healed = max(0, ps.health - before)
+        bonus_healed = 0
+        if int(getattr(ps, 'last_turn_damage_dealt', 0) or 0) < 10:
+            bonus_before = ps.health
+            ps.heal(7)
+            bonus_healed = max(0, ps.health - bonus_before)
+        healed = base_healed + bonus_healed
+        if healed <= 0:
+            return 0
+        if bonus_healed:
+            self.log_msg(f"{label}效果：{self.pn(player_id)}+{base_healed}H，低伤害回合额外+{bonus_healed}H")
+        else:
+            self.log_msg(f"{label}效果：{self.pn(player_id)}+{base_healed}H")
+        return healed
+
     def _record_damage(self, target_id, amount, source_id=None):
         try:
             amount = int(amount)
@@ -1090,7 +1123,8 @@ class GameEngine:
             return len(ps.equipment)
         if prop == 'equipment_count':
             return len(ps.equipment)
-        if prop in ('turn_damage_taken', 'turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt'):
+        if prop in ('turn_damage_taken', 'turn_damage_dealt', 'last_turn_damage_taken',
+                    'last_turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt'):
             return int(getattr(ps, prop, 0))
         return 0
 
@@ -1997,8 +2031,7 @@ class GameEngine:
                 ps.heal(2)
                 self.log_msg(f"{self.pn(player_id)}的叶子效果：+2H")
             elif eq.def_id == 'Yucca':
-                ps.heal(5)
-                self.log_msg(f"{self.pn(player_id)}的丝兰效果：+5H")
+                self._apply_yucca_turn_start_heal(player_id)
             elif eq.def_id == 'MagicLeaf':
                 ps.gain_magic(1)
                 self.log_msg(f"{self.pn(player_id)}的魔法叶效果：+1M")
@@ -2242,6 +2275,40 @@ class GameEngine:
         if 'symbiosis' in card.flags:
             return 0
         return dup_count
+
+    def _mimic_special_cost_for_card(self, target: Optional[CardInstance]) -> int:
+        if target is None:
+            return 0
+        try:
+            fusion_extra = max(0, int(getattr(target, 'fusion_level', 1) or 1) - 1)
+        except Exception:
+            fusion_extra = 0
+        try:
+            fission_extra = max(0, int(getattr(target, 'fission_level', 1) or 1) - 1)
+        except Exception:
+            fission_extra = 0
+        tomato_layer = 0
+        if getattr(target, 'def_id', '') == 'Tomato':
+            try:
+                tomato_layer = max(0, int(getattr(target, 'held_turns', 0) or 0))
+            except Exception:
+                tomato_layer = 0
+        return int(math.ceil((fusion_extra + fission_extra + tomato_layer) / 2))
+
+    def _can_pay_mimic_special_cost(self, player_id: int, target: Optional[CardInstance]) -> bool:
+        if not (0 <= player_id < len(self.players)):
+            return False
+        cost = self._mimic_special_cost_for_card(target)
+        return int(getattr(self.players[player_id], 'elixir', 0)) >= cost
+
+    def _pay_mimic_special_cost(self, player_id: int, target: Optional[CardInstance], source_card: Optional[CardInstance] = None) -> bool:
+        cost = self._mimic_special_cost_for_card(target)
+        if cost <= 0:
+            return True
+        if not self._can_pay_mimic_special_cost(player_id, target):
+            return False
+        self._spend_resource(player_id, 'elixir', cost, source_card)
+        return True
 
     def _refund_pending_choice_cost(self, player_id: int, card: CardInstance):
         ps = self.players[player_id]
@@ -3116,6 +3183,8 @@ class GameEngine:
         if choice and 'target_instance_id' in choice:
             target = ps.find_hand_card(choice['target_instance_id'])
         if target and ps.can_add_to_hand():
+            if card is not None and card.def_id == 'Mimic' and not self._pay_mimic_special_cost(player_id, target, card):
+                return
             new_card = target.copy()
             ps.add_to_hand(new_card)
             self._remember_created_card(new_card, context)
@@ -4228,6 +4297,8 @@ class GameEngine:
         if choice and 'target_instance_id' in choice:
             target = ps.find_hand_card(choice['target_instance_id'])
             if target:
+                if not self._pay_mimic_special_cost(player_id, target, card):
+                    return
                 copy_card = target.copy()
                 copy_card.mimic_discount = 1
                 if ps.can_add_to_hand():
@@ -4411,6 +4482,7 @@ class GameEngine:
             ps.attack_blocked -= 1
         if ps.attack_only > 0:
             ps.attack_only -= 1
+        self._save_last_turn_damage_snapshot(player_id)
         if player_id == self.first_player:
             other = 1 - self.first_player
             self._start_player_turn(other)
@@ -5174,7 +5246,8 @@ class GameEngine:
             if ref == 'zone_count':
                 target_id = self._resolve_target(player_id, expr.get('target', 'self'))
                 return self._zone_size(target_id, expr.get('zone', 'hand'))
-            if ref in ('turn_damage_taken', 'turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt'):
+            if ref in ('turn_damage_taken', 'turn_damage_dealt', 'last_turn_damage_taken',
+                       'last_turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt'):
                 target_id = self._resolve_target(player_id, expr.get('target', 'self'))
                 return self._get_player_property_value(target_id, ref)
             if ref == 'choice_target':
@@ -5928,8 +6001,7 @@ class GameEngine:
                 ps.heal(2)
                 self.log_msg(f"{self.pn(player_id)}的叶子效果：+2H")
             elif eq.def_id == 'Yucca':
-                ps.heal(5)
-                self.log_msg(f"{self.pn(player_id)}的丝兰效果：+5H")
+                self._apply_yucca_turn_start_heal(player_id)
             elif eq.def_id == 'MagicLeaf':
                 ps.gain_magic(1)
                 self.log_msg(f"{self.pn(player_id)}的魔法叶效果：+1M")
@@ -6083,6 +6155,12 @@ class GameEngine:
                 'target_player_id': choice_target_id,
                 'card': card.to_dict(),
             }
+        if card.def_id == 'Mimic' and isinstance(choice, dict) and choice.get('target_instance_id') is not None:
+            target = ps.find_hand_card(choice.get('target_instance_id'))
+            if target is not None and not self._can_pay_mimic_special_cost(player_id, target):
+                ps.hand.insert(0, card)
+                self._refund_pending_choice_cost(player_id, card)
+                return {'success': False, 'error': '\u80fd\u91cf\u4e0d\u8db3'}
         if self._uses_atomic_play_effects(card):
             self._log_card_play(player_id, card)
         if card.card_type == 'thorn':
@@ -6317,6 +6395,8 @@ class GameEngine:
             return
         target = ps.find_hand_card(choice['target_instance_id'])
         if target is None or not ps.can_add_to_hand():
+            return
+        if card is not None and card.def_id == 'Mimic' and not self._pay_mimic_special_cost(player_id, target, card):
             return
         copy_card = target.copy()
         copy_card.mimic_discount = self._eval_int(player_id, params.get('discount_e', 1), card, 1)

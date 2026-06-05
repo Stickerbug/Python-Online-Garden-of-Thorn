@@ -446,6 +446,8 @@ class LocalPlayer {
         this.cards_played_this_turn = {};
         this.turn_damage_taken = 0;
         this.turn_damage_dealt = 0;
+        this.last_turn_damage_taken = 0;
+        this.last_turn_damage_dealt = 0;
         this.total_damage_taken = 0;
         this.total_damage_dealt = 0;
         this.custom_vars = {
@@ -612,6 +614,8 @@ class LocalPlayer {
             hand_limit: this.handLimit(),
             turn_damage_taken: this.turn_damage_taken,
             turn_damage_dealt: this.turn_damage_dealt,
+            last_turn_damage_taken: this.last_turn_damage_taken,
+            last_turn_damage_dealt: this.last_turn_damage_dealt,
             total_damage_taken: this.total_damage_taken,
             total_damage_dealt: this.total_damage_dealt,
         };
@@ -703,7 +707,8 @@ class LocalSoloEngine {
                 'bandage_death_pending', 'attack_blocked', 'untargetable', 'sponge_active',
                 'shovel_active', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
                 'extra_hand_limit_bonus', 'negate_next_skill', 'is_first_player',
-                'turn_damage_taken', 'turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt',
+                'turn_damage_taken', 'turn_damage_dealt', 'last_turn_damage_taken', 'last_turn_damage_dealt',
+                'total_damage_taken', 'total_damage_dealt',
             ].forEach(key => { player[key] = data[key] ?? source[key]; });
             player.hand = (data.hand || []).map(card => new LocalCard(card));
             player.deck = (data.deck || []).map(card => new LocalCard(card));
@@ -1672,6 +1677,13 @@ class LocalSoloEngine {
         });
     }
 
+    saveLastTurnDamageSnapshot(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        ps.last_turn_damage_taken = toInt(ps.turn_damage_taken, 0);
+        ps.last_turn_damage_dealt = toInt(ps.turn_damage_dealt, 0);
+    }
+
     recordDamage(targetId, amount, sourceId = null) {
         const value = Math.max(0, toInt(amount, 0));
         if (value <= 0) return;
@@ -1826,7 +1838,7 @@ class LocalSoloEngine {
             const tid = this.resolveTarget(playerId, expr.target || 'self');
             return this.zoneSize(tid, expr.zone || 'hand');
         }
-        if (['turn_damage_taken', 'turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt'].includes(ref)) {
+        if (['turn_damage_taken', 'turn_damage_dealt', 'last_turn_damage_taken', 'last_turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt'].includes(ref)) {
             const tid = this.resolveTarget(playerId, expr.target || 'self');
             const ps = this.players[tid] || this.players[playerId];
             return toInt(ps[ref], 0);
@@ -2108,6 +2120,28 @@ class LocalSoloEngine {
         }
         this.dispatchPlayerStatChanges(before, playerId, sourceCard);
         return actual;
+    }
+
+    mimicSpecialCostForCard(target) {
+        if (!target) return 0;
+        const fusionExtra = Math.max(0, toInt(target.fusion_level, 1) - 1);
+        const fissionExtra = Math.max(0, toInt(target.fission_level, 1) - 1);
+        const tomatoLayer = target.def_id === 'Tomato' ? Math.max(0, toInt(target.held_turns, 0)) : 0;
+        return Math.ceil((fusionExtra + fissionExtra + tomatoLayer) / 2);
+    }
+
+    canPayMimicSpecialCost(playerId, target) {
+        const ps = this.players[playerId];
+        if (!ps) return false;
+        return toInt(ps.elixir, 0) >= this.mimicSpecialCostForCard(target);
+    }
+
+    payMimicSpecialCost(playerId, target, sourceCard = null) {
+        const cost = this.mimicSpecialCostForCard(target);
+        if (cost <= 0) return true;
+        if (!this.canPayMimicSpecialCost(playerId, target)) return false;
+        this.spendResource(playerId, 'elixir', cost, sourceCard);
+        return true;
     }
 
     equipmentTriggerMaxUses(eq) {
@@ -2759,6 +2793,7 @@ class LocalSoloEngine {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
         if (!target) return;
         if (!this.players[playerId].canAddToHand()) return;
+        if (card && card.def_id === 'Mimic' && !this.payMimicSpecialCost(playerId, target, card)) return;
         const copy = target.copy();
         copy.instance_id = randintId();
         this.players[playerId].addToHand(copy);
@@ -3539,6 +3574,16 @@ class LocalSoloEngine {
                 card: card.toDict(),
             };
         }
+        if (card.def_id === 'Mimic' && choice && choice.target_instance_id != null) {
+            const target = ps.findHandCard(choice.target_instance_id);
+            if (target && !this.canPayMimicSpecialCost(playerId, target)) {
+                ps.hand.unshift(card);
+                ps.elixir += card.cost_e + Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
+                ps.magic += card.cost_m;
+                ps.cards_played_this_turn[card.def_id] = Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
+                return { success: false, error: '能量不足' };
+            }
+        }
         if (playEffectsFor(card).length) {
             this.logCardPlay(playerId, card);
         }
@@ -3745,6 +3790,7 @@ class LocalSoloEngine {
         });
         if (ps.attack_blocked > 0) ps.attack_blocked -= 1;
         if (ps.attack_only > 0) ps.attack_only -= 1;
+        this.saveLastTurnDamageSnapshot(playerId);
         if (playerId === this.first_player) this.startPlayerTurn(1 - this.first_player);
         else this.endRound();
     }

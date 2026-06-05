@@ -1190,6 +1190,12 @@ Object.assign(I18N.fr, { settings_ui_style: 'Style UI', ui_style_minimal: 'Minim
 Object.assign(I18N.pt, { settings_ui_style: 'Estilo da UI', ui_style_minimal: 'Minimalista', ui_style_classic: 'Clássico' });
 Object.assign(I18N.ru, { settings_ui_style: 'Стиль интерфейса', ui_style_minimal: 'Минимализм', ui_style_classic: 'Классика' });
 Object.assign(I18N.ja, { settings_ui_style: 'UIスタイル', ui_style_minimal: 'ミニマル', ui_style_classic: 'クラシック' });
+Object.assign(I18N.en, { mimic_extra_cost: 'Cost {0}E' });
+Object.assign(I18N.zh, { mimic_extra_cost: '\u6d88\u8017 {0}E' });
+Object.assign(I18N.fr, { mimic_extra_cost: 'Co\u00fbt {0}E' });
+Object.assign(I18N.pt, { mimic_extra_cost: 'Custo {0}E' });
+Object.assign(I18N.ru, { mimic_extra_cost: '\u0426\u0435\u043d\u0430 {0}E' });
+Object.assign(I18N.ja, { mimic_extra_cost: '\u6d88\u8cbb {0}E' });
 Object.assign(I18N.en, {
     tutorial_player_you: 'You', tutorial_player_opponent: 'Practice Opponent',
     error_urf_equip_limit: 'Infinite Fire equipment limit is {0}. Sell equipment first.',
@@ -2287,8 +2293,18 @@ function gamePrompt(title, options, config = {}) {
         options.forEach((opt, i) => {
             const div = document.createElement('div');
             div.className = 'game-prompt-option';
+            const disabled = !!(opt && typeof opt === 'object' && opt.disabled);
+            if (disabled) {
+                div.classList.add('disabled');
+                div.setAttribute('aria-disabled', 'true');
+            }
             renderChoiceOptionContent(div, opt, i, config);
-            div.onclick = () => { removeFloatingCardPreview(); el.classList.remove('active'); resolve(i); };
+            div.onclick = () => {
+                if (disabled) return;
+                removeFloatingCardPreview();
+                el.classList.remove('active');
+                resolve(i);
+            };
             optsEl.appendChild(div);
         });
         const cancelBtn = $('game-prompt-cancel');
@@ -3955,7 +3971,7 @@ function escapeClassToken(value) {
     return String(value || 'default').replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
-const DATA_CACHE_VERSION = 'v5';
+const DATA_CACHE_VERSION = 'v6';
 
 function getDataCacheKey(kind) {
     const disabled = getDisabledMods().slice().sort().join(',') || 'none';
@@ -4117,6 +4133,19 @@ function getCardArtUrl(cardDict, cardDef) {
     return (cardDict && (cardDict.image_url || cardDict.image))
         || (cardDef && (cardDef.image_url || cardDef.image))
         || '';
+}
+
+function getEquipmentIconHtml(cardInst, cardDef) {
+    const imageUrl = getCardArtUrl(cardInst || {}, cardDef || {});
+    const type = cardDef && cardDef.card_type ? cardDef.card_type : 'root';
+    const typeColor = CARD_TYPE_COLORS[type] || COLORS.root || COLORS.text_primary;
+    const fallbackText = (type === 'root' ? 'R' : String(type || '?').slice(0, 1).toUpperCase());
+    const style = `--equip-icon-color:${typeColor}`;
+    const fallback = `<span class="equip-icon-fallback${imageUrl ? ' hidden' : ''}">${escapeHtml(fallbackText)}</span>`;
+    const img = imageUrl
+        ? `<img class="equip-icon-img" src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden')">`
+        : '';
+    return `<span class="equip-icon" style="${style}">${img}${fallback}</span>`;
 }
 
 function createCardElement(cardDict, options = {}) {
@@ -4322,6 +4351,33 @@ function cardChoiceOption(cardDict, extra = {}) {
     };
 }
 
+function getMimicSpecialCostForCard(cardDict) {
+    if (!cardDict) return 0;
+    const fusionExtra = Math.max(0, Math.floor(Number(cardDict.fusion_level || 1)) - 1);
+    const fissionExtra = Math.max(0, Math.floor(Number(cardDict.fission_level || 1)) - 1);
+    const tomatoLayer = cardDict.def_id === 'Tomato'
+        ? Math.max(0, Math.floor(Number(cardDict.held_turns || 0)))
+        : 0;
+    return Math.ceil((fusionExtra + fissionExtra + tomatoLayer) / 2);
+}
+
+function getAvailableElixirForMimicChoice(sourceCard, ownerState = null) {
+    const owner = ownerState || (gameState && gameState.you) || {};
+    const current = getBarValueForKey(owner, 'elixir');
+    const normalCost = sourceCard ? (getOptimisticResourceCost(sourceCard, owner) || {}).totalE || 0 : 0;
+    return Math.max(0, current - normalCost);
+}
+
+function mimicCardChoiceOption(cardDict, sourceCard = null, ownerState = null) {
+    const cost = getMimicSpecialCostForCard(cardDict);
+    const availableE = getAvailableElixirForMimicChoice(sourceCard, ownerState);
+    const detail = (UI.mimic_extra_cost || 'Cost {0}E').replace('{0}', cost);
+    return cardChoiceOption(cardDict, {
+        detail,
+        disabled: cost > availableE,
+    });
+}
+
 function stableJsonForCard(value) {
     if (Array.isArray(value)) return value.map(stableJsonForCard);
     if (value && typeof value === 'object') {
@@ -4379,7 +4435,7 @@ const ATTACK_DAMAGE_FALLBACKS = {
     MagicBone: { amount: 15, hits: 1 },
     MagicStinger: { amount: 30, hits: 1 },
     Claw: { amount: 5, hits: 1 },
-    Rice: { amount: 4, hits: 1 },
+    Rice: { amount: 6, hits: 1 },
     Glass: { amount: 5, hits: 1 },
     MagicGlass: { amount: 4, hits: 1 },
     Tomato: { amount: 8, hits: 1 },
@@ -8491,7 +8547,7 @@ function renderClassicEquipmentList(player) {
         const cardDef = getCardDef(cardInst.def_id || '');
         const name = cardDef ? getCardName(cardDef) : (cardInst.def_id || '?');
         const typeColor = cardDef ? (CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary) : COLORS.text_primary;
-        return `<span class="classic-equip-chip" style="--chip-color:${typeColor}">${escapeHtml(name)}</span>`;
+        return `<span class="classic-equip-chip" style="--chip-color:${typeColor}">${getEquipmentIconHtml(cardInst, cardDef)}<span class="classic-equip-name">${escapeHtml(name)}</span></span>`;
     }).join('');
 }
 
@@ -10113,7 +10169,8 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             const btn = document.createElement('button');
             btn.className = 'btn btn-small btn-equip-trigger';
             const triggerText = UI.equip_trigger_cost.replace('{0}', fullText).replace('{1}', cardDef.trigger_cost_e);
-            btn.textContent = isMinimalUiStyle() ? `⚡ ${equipName} ${cardDef.trigger_cost_e}E` : triggerText;
+            const visibleText = isMinimalUiStyle() ? `⚡ ${equipName} ${cardDef.trigger_cost_e}E` : triggerText;
+            btn.innerHTML = `${getEquipmentIconHtml(cardInst, cardDef)}<span class="equip-trigger-text">${escapeHtml(visibleText)}</span>`;
             btn.title = isMinimalUiStyle() ? triggerText : '';
             btn.disabled = isActionBusy({ includeAnimation: false });
             btn.onclick = async () => {
@@ -10148,7 +10205,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             };
             container.appendChild(btn);
         } else {
-            el.textContent = text;
+            el.innerHTML = `${getEquipmentIconHtml(cardInst, cardDef)}<span class="equip-name">${escapeHtml(text)}</span>`;
             el.title = isMinimalUiStyle() ? fullText : '';
             container.appendChild(el);
         }
@@ -10766,7 +10823,7 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
     } else if (defId === 'Mimic') {
         const others = hand.filter(c => c.instance_id !== cardDict.instance_id);
         if (!others.length) { gameAlert(UI.notice, UI.no_attack_cards); return false; }
-        const options = others.map(c => cardChoiceOption(c));
+        const options = others.map(c => mimicCardChoiceOption(c, cardDict, gameState && gameState.you));
         const sel = await simpleChoice(UI.choose_hand_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
         if (sel < 0) return false;
         return { target_instance_id: others[sel].instance_id };
@@ -11275,9 +11332,16 @@ async function showChoiceUI(data) {
             if (selected.length >= minCount) choiceResult = { target_instance_ids: selected.map(i => cards[i].instance_id) };
         }
     } else if (choiceType === 'choose_card_from_hand') {
-        const otherCards = choiceTargetData().hand || [];
+        const isMimicChoice = cardDict && cardDict.def_id === 'Mimic';
+        const otherCards = (choiceTargetData().hand || []).filter(c => (
+            !isMimicChoice || c.instance_id !== cardDict.instance_id
+        ));
         if (otherCards.length) {
-            const options = otherCards.map(c => cardChoiceOption(c));
+            const options = otherCards.map(c => (
+                isMimicChoice
+                    ? mimicCardChoiceOption(c, cardDict, gameState && gameState.you)
+                    : cardChoiceOption(c)
+            ));
             const sel = await simpleChoice(choiceTitle(UI.choose_hand_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < otherCards.length) choiceResult = { target_instance_id: otherCards[sel].instance_id };
         }

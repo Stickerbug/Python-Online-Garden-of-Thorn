@@ -322,8 +322,7 @@ class GameEngineInfiniteFire(GameEngine):
                 ps.heal(2)
                 self.log_msg(f"{self.pn(player_id)}的叶子效果：+2H")
             elif eq.def_id == 'Yucca':
-                ps.heal(5)
-                self.log_msg(f"{self.pn(player_id)}的丝兰效果：+5H")
+                self._apply_yucca_turn_start_heal(player_id)
             elif eq.def_id == 'MagicLeaf':
                 ps.gain_magic(1)
                 self.log_msg(f"{self.pn(player_id)}的魔法叶效果：+1M")
@@ -396,6 +395,8 @@ class GameEngineInfiniteFire(GameEngine):
         if choice and 'target_instance_id' in choice:
             target = ps.find_hand_card(choice['target_instance_id'])
             if target:
+                if not self._pay_mimic_special_cost(player_id, target, card):
+                    return
                 copy_card = target.copy()
                 copy_card.mimic_discount = 1
                 if self.add_card_to_urf_hand(player_id, copy_card, log=False):
