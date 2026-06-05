@@ -2194,12 +2194,20 @@ let pregameChatMatchKey = '';
 let lobbyChatHistorySignature = '';
 let lobbyPlayers = [];
 let lobbyOngoingGames = [];
-const DEFAULT_SERVER = 'http://121.41.93.192';
+const FALLBACK_PUBLIC_SERVER = 'http://121.41.93.192';
+const DEFAULT_SERVER = (() => {
+    try {
+        const origin = String(window.location && window.location.origin || '').trim();
+        if (origin && origin !== 'null') return origin;
+    } catch (_) {}
+    return FALLBACK_PUBLIC_SERVER;
+})();
 const SERVER_ACTION_TIMEOUT_MS = 6000;
 const SOCKET_CONNECT_TIMEOUT_MS = 5000;
 const LEGACY_DEFAULT_SERVER_KEYS = new Set([
     'python-online-garden-of-thorn.onrender.com',
     'gtn.stickerbug.top',
+    '121.41.93.192',
     '121.41.93.192:5000',
 ]);
 let phase = 'connecting';

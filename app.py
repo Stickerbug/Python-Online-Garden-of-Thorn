@@ -1940,9 +1940,13 @@ def get_ongoing_games(beta_mode=None):
     return games
 
 
-def build_admin_players():
+def build_admin_players(beta_mode=None):
+    if beta_mode is None:
+        beta_mode = is_beta_instance()
     result = []
     for sid, p in players.items():
+        if bool(p.get('beta_mode', False)) != bool(beta_mode):
+            continue
         result.append({
             'sid': sid,
             'nickname': p.get('nickname', '?'),
@@ -1958,9 +1962,13 @@ def build_admin_players():
     return result
 
 
-def build_admin_rooms():
+def build_admin_rooms(beta_mode=None):
+    if beta_mode is None:
+        beta_mode = is_beta_instance()
     result = []
     for rid, room in rooms.items():
+        if bool(getattr(room, 'beta_mode', False)) != bool(beta_mode):
+            continue
         e = room.engine
         names = []
         disconnected = []
@@ -5098,11 +5106,12 @@ def on_login(data):
     account_user = _current_account_user() if DB_AVAILABLE else None
     raw_name = data.get('nickname', '')
     wants_account_login = bool(data.get('account_login'))
-    is_beta_mode = bool(data.get('beta_mode'))
-    if is_beta_instance() and not is_beta_mode:
+    client_beta_mode = bool(data.get('beta_mode'))
+    is_beta_mode = is_beta_instance()
+    if is_beta_instance() and not client_beta_mode:
         emit('login_fail', {'reason': 'This server only accepts beta clients'})
         return
-    if is_release_instance() and is_beta_mode:
+    if is_release_instance() and client_beta_mode:
         emit('login_fail', {'reason': 'This server only accepts release clients'})
         return
     if is_beta_mode and not is_beta_authenticated():
