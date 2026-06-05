@@ -3955,7 +3955,7 @@ function escapeClassToken(value) {
     return String(value || 'default').replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
-const DATA_CACHE_VERSION = 'v4';
+const DATA_CACHE_VERSION = 'v5';
 
 function getDataCacheKey(kind) {
     const disabled = getDisabledMods().slice().sort().join(',') || 'none';
@@ -7017,6 +7017,83 @@ function getSearchLocalizedText(source, i18nKey, fallbackKey) {
     return [...new Set(parts.filter(Boolean))].join(' ');
 }
 
+const BUILTIN_PINYIN_SEARCH_MODS = new Set([
+    'vanillacards.gtnmod',
+    'trollcards.gtnmod',
+    'thorncardssupplement1.gtnmod',
+]);
+
+const BUILTIN_CARD_PINYIN_ALIASES = {
+    Basic: 'ji ben',
+    Bone: 'gu tou',
+    Stinger: 'ci',
+    Sand: 'sha zi',
+    Wing: 'chi bang',
+    Light: 'qing',
+    Fang: 'jian ya',
+    Triangle: 'san jiao xing',
+    MagicBone: 'mo fa gu tou',
+    MagicStinger: 'mo fa ci',
+    Fission: 'lie bian',
+    Fusion: 'ju bian',
+    Iris: 'yuan wei',
+    Fire: 'huo',
+    Fries: 'shu tiao',
+    Rose: 'mei gui',
+    ManaOrb: 'mo fa qiu',
+    Coffee: 'ka fei',
+    Chilli: 'la jiao',
+    Chromosome: 'ran se ti',
+    Sewage: 'wu shui',
+    MagicSewage: 'mo fa wu shui',
+    Mimic: 'ni tai',
+    Yggdrasil: 'shi jie shu zhi ye shi jie shu',
+    Leaf: 'ye zi',
+    Yucca: 'si lan',
+    Disc: 'yuan pan',
+    Battery: 'dian chi',
+    MagicLeaf: 'mo fa ye',
+    MagicYucca: 'mo fa si lan',
+    MagicBattery: 'mo fa dian chi',
+    Powder: 'fen mo',
+    GoldenLeaf: 'huang jin ye',
+    Pincer: 'shi zhen zhe zhen',
+    Cancer: 'ai xi bao',
+    Corruption: 'fu hua',
+    Mark: 'biao ji',
+    Mine: 'di lei',
+    Bubble: 'pao pao',
+    Nazar: 'xie yan hu fu',
+    MagicNazar: 'mo fa xie yan',
+    MagicBubble: 'mo fa pao pao',
+    Bandage: 'beng dai',
+    Jelly: 'guo dong',
+    Shovel: 'chan zi',
+    Compass: 'zhi nan zhen',
+    Sponge: 'hai mian',
+    Poo: 'bian bian',
+    Honey: 'feng mi',
+    Pill: 'yao wan',
+    Magnet: 'ci tie',
+    Antenna: 'chu jiao',
+    Claw: 'zhua zi',
+    Rice: 'mi',
+    Glass: 'bo li',
+    MagicGlass: 'mo fa bo li',
+    Tomato: 'fan qie',
+};
+
+function getBuiltinCardPinyinSearchText(cd) {
+    if (currentLang !== 'zh' || !cd) return '';
+    const filename = String(cd.source_mod_filename || '').toLowerCase();
+    if (!cd.source_mod_is_vanilla && !BUILTIN_PINYIN_SEARCH_MODS.has(filename)) return '';
+    const alias = BUILTIN_CARD_PINYIN_ALIASES[cd.id];
+    if (!alias) return '';
+    const spaced = String(alias).toLowerCase().trim().replace(/\s+/g, ' ');
+    const compact = spaced.replace(/\s+/g, '');
+    return `${spaced} ${compact}`;
+}
+
 function cardSearchText(defId) {
     const cd = getCardDef(defId);
     if (!cd) return defId.toLowerCase();
@@ -7035,6 +7112,7 @@ function cardSearchText(defId) {
         getCardDescriptionText(cd),
         getSearchLocalizedText(cd, 'description_i18n', 'description'),
         flagText,
+        getBuiltinCardPinyinSearchText(cd),
     ].join(' ').toLowerCase();
 }
 
