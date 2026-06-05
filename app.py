@@ -172,7 +172,8 @@ def _normalize_instance(value):
 GTN_INSTANCE = _normalize_instance(os.environ.get('GTN_INSTANCE', 'combined'))
 GTN_RELEASE_PUBLIC_URL = os.environ.get('GTN_RELEASE_PUBLIC_URL', '').strip()
 GTN_BETA_PUBLIC_URL = os.environ.get('GTN_BETA_PUBLIC_URL', '').strip()
-GTN_BIND_HOST = os.environ.get('GTN_BIND_HOST', '0.0.0.0').strip() or '0.0.0.0'
+_default_bind_host = '0.0.0.0' if GTN_INSTANCE == 'combined' else '127.0.0.1'
+GTN_BIND_HOST = os.environ.get('GTN_BIND_HOST', _default_bind_host).strip() or _default_bind_host
 GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 5000)
 
 
