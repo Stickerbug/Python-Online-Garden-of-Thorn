@@ -32,8 +32,8 @@ from mod_loader import load_mod_from_data
 from mod_validator_v2 import validate_mod_v2
 
 
-MAX_COMMUNITY_MOD_BYTES = 300_000
-MAX_COMMUNITY_PACKAGE_BYTES = int(os.environ.get('MAX_COMMUNITY_PACKAGE_BYTES', str(5 * 1024 * 1024)))
+MAX_COMMUNITY_MOD_BYTES = 150_000
+MAX_COMMUNITY_PACKAGE_BYTES = int(os.environ.get('MAX_COMMUNITY_PACKAGE_BYTES', str(1024 * 1024)))
 MAX_COMMUNITY_CARDS = 120
 MAX_COMMUNITY_EVENTS = 30
 COMMUNITY_INDEX_KEY = 'community/index.json'

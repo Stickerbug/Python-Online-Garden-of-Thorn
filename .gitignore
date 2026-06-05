@@ -221,3 +221,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Runtime cache extracted from .gtnmod packages.
+static/assets/mod-card-art/

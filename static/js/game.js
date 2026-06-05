@@ -981,12 +981,12 @@ Object.assign(I18N.ja, {
     community_uploading: 'アップロード中...', community_upload_success: 'アップロード成功：{0}', community_update_success: '更新成功：{0}',
     community_delete_success: 'コミュニティModを削除しました', community_file_summary: '{0} · v{1} · {2}枚', community_cards_count: '{0}枚'
 });
-Object.assign(I18N.en, { community_upload: 'Upload mod', community_json_only: 'Only .json or .gtnmod files are allowed', community_file_too_large: 'File is too large. JSON max 300KB, GTNMOD max 5MB', community_json_parse_failed: 'JSON parse failed: {0}', community_upload_url_failed: 'Could not create upload URL', community_r2_upload_failed: 'R2 upload failed: HTTP {0}', community_register_failed: 'Registration failed', community_delete_failed: 'Delete failed' });
-Object.assign(I18N.zh, { community_upload: '上传模组', community_json_only: '只允许上传 .json 或 .gtnmod 文件', community_file_too_large: '文件过大，JSON 最大 300KB，GTNMOD 最大 5MB', community_json_parse_failed: 'JSON 解析失败：{0}', community_upload_url_failed: '无法创建上传地址', community_r2_upload_failed: 'R2 上传失败 HTTP {0}', community_register_failed: '登记失败', community_delete_failed: '删除失败' });
+Object.assign(I18N.en, { community_upload: 'Upload mod', community_json_only: 'Only .json or .gtnmod files are allowed', community_file_too_large: 'File is too large. JSON max 150KB, GTNMOD max 1MB', community_json_parse_failed: 'JSON parse failed: {0}', community_upload_url_failed: 'Could not create upload URL', community_r2_upload_failed: 'R2 upload failed: HTTP {0}', community_register_failed: 'Registration failed', community_delete_failed: 'Delete failed' });
+Object.assign(I18N.zh, { community_upload: '上传模组', community_json_only: '只允许上传 .json 或 .gtnmod 文件', community_file_too_large: '文件过大，JSON 最大 150KB，GTNMOD 最大 1MB', community_json_parse_failed: 'JSON 解析失败：{0}', community_upload_url_failed: '无法创建上传地址', community_r2_upload_failed: 'R2 上传失败 HTTP {0}', community_register_failed: '登记失败', community_delete_failed: '删除失败' });
 Object.assign(I18N.fr, { community_upload: 'Téléverser', community_json_only: 'Seuls les fichiers .json ou .gtnmod sont autorisés', community_file_too_large: 'Fichier trop volumineux. JSON 300 Ko, GTNMOD 5 Mo', community_json_parse_failed: 'Échec d’analyse JSON : {0}', community_upload_url_failed: 'Impossible de créer l’URL de téléversement', community_r2_upload_failed: 'Échec R2 : HTTP {0}', community_register_failed: 'Échec d’enregistrement', community_delete_failed: 'Échec de suppression' });
-Object.assign(I18N.pt, { community_upload: 'Enviar mod', community_json_only: 'Somente arquivos .json ou .gtnmod são permitidos', community_file_too_large: 'Arquivo grande demais. JSON 300KB, GTNMOD 5MB', community_json_parse_failed: 'Falha ao ler JSON: {0}', community_upload_url_failed: 'Não foi possível criar URL de envio', community_r2_upload_failed: 'Falha no R2: HTTP {0}', community_register_failed: 'Falha ao registrar', community_delete_failed: 'Falha ao excluir' });
+Object.assign(I18N.pt, { community_upload: 'Enviar mod', community_json_only: 'Somente arquivos .json ou .gtnmod são permitidos', community_file_too_large: 'Arquivo grande demais. JSON 150KB, GTNMOD 1MB', community_json_parse_failed: 'Falha ao ler JSON: {0}', community_upload_url_failed: 'Não foi possível criar URL de envio', community_r2_upload_failed: 'Falha no R2: HTTP {0}', community_register_failed: 'Falha ao registrar', community_delete_failed: 'Falha ao excluir' });
 Object.assign(I18N.ru, { community_upload: 'Загрузить мод', community_json_only: 'Разрешены только .json или .gtnmod', community_file_too_large: 'Файл слишком большой. JSON 300 КБ, GTNMOD 5 МБ', community_json_parse_failed: 'Ошибка разбора JSON: {0}', community_upload_url_failed: 'Не удалось создать URL загрузки', community_r2_upload_failed: 'Ошибка R2: HTTP {0}', community_register_failed: 'Ошибка регистрации', community_delete_failed: 'Ошибка удаления' });
-Object.assign(I18N.ja, { community_upload: 'Modをアップロード', community_json_only: '.json または .gtnmod のみアップロードできます', community_file_too_large: 'ファイルが大きすぎます。JSON 最大300KB、GTNMOD 最大5MB', community_json_parse_failed: 'JSON 解析失敗：{0}', community_upload_url_failed: 'アップロードURLを作成できません', community_r2_upload_failed: 'R2 アップロード失敗 HTTP {0}', community_register_failed: '登録失敗', community_delete_failed: '削除失敗' });
+Object.assign(I18N.ja, { community_upload: 'Modをアップロード', community_json_only: '.json または .gtnmod のみアップロードできます', community_file_too_large: 'ファイルが大きすぎます。JSON 最大150KB、GTNMOD 最大1MB', community_json_parse_failed: 'JSON 解析失敗：{0}', community_upload_url_failed: 'アップロードURLを作成できません', community_r2_upload_failed: 'R2 アップロード失敗 HTTP {0}', community_register_failed: '登録失敗', community_delete_failed: '削除失敗' });
 Object.assign(I18N.en, { mod_validation_error: 'Format error' });
 Object.assign(I18N.zh, { mod_validation_error: '格式错误' });
 Object.assign(I18N.fr, { mod_validation_error: 'Erreur de format' });
@@ -2310,7 +2310,7 @@ function applyUiStyle(style) {
     const sel = $('settings-ui-style-select');
     if (sel) sel.value = currentUiStyle;
     updateCompactUiText();
-    if (gameState && gameState.phase) renderGame(gameState);
+    refreshVisibleCardDisplays();
 }
 
 function compactText(normalKey, compactKey) {
@@ -2395,14 +2395,11 @@ function applyShowCardImages(value) {
 }
 
 function refreshVisibleCardDisplays() {
-    const isVisible = (id) => {
-        const el = $(id);
-        return !!el && !el.classList.contains('hidden');
-    };
-    if (isVisible('view-game') && gameState) renderGame(gameState);
-    if (isVisible('view-draft') && draftState) renderDraft(draftState, false);
-    if (isVisible('view-solo')) renderSoloBuilder();
-    if (isVisible('view-card-gallery')) renderCardGallery();
+    const viewId = getVisibleViewId();
+    if (viewId === 'view-game' && gameState) renderGame(gameState);
+    if (viewId === 'view-draft' && draftState) renderDraft(draftState, false);
+    if (viewId === 'view-solo') renderSoloBuilder();
+    if (viewId === 'view-card-gallery') renderCardGallery();
 }
 
 function updateStaticText() {
@@ -11265,8 +11262,8 @@ let settingsActiveModTab = ['official', 'community'].includes(localStorage.getIt
     : 'official';
 const VANILLA_MOD_FILENAME = 'VanillaCards.gtnmod';
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
-const COMMUNITY_JSON_MAX_BYTES = 300 * 1024;
-const COMMUNITY_GTNMOD_MAX_BYTES = 5 * 1024 * 1024;
+const COMMUNITY_JSON_MAX_BYTES = 150 * 1024;
+const COMMUNITY_GTNMOD_MAX_BYTES = 1024 * 1024;
 
 function getCommunityModSelection() {
     let mods = [];

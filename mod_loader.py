@@ -21,6 +21,8 @@ _MODS_CACHE: List['Mod'] = []
 GTNMOD_MAIN_FILES = ('mod.json', 'gtnmod.json')
 GTNMOD_ASSET_DIRS = ('assets/cards', 'assets/card-art', 'card-art', 'cards')
 GTNMOD_ASSET_EXTS = ('.svg', '.webp', '.png', '.jpg', '.jpeg')
+STATIC_MOD_ASSET_DIR = os.path.join(_get_base_dir(), 'static', 'assets', 'mod-card-art')
+STATIC_MOD_ASSET_URL = '/static/assets/mod-card-art'
 _MOD_ASSET_REGISTRY: Dict[str, dict] = {}
 
 
@@ -61,7 +63,28 @@ def _register_gtnmod_asset(filepath: str, member: str, package_key: str) -> str:
         'mime': mime,
         'filename': os.path.basename(safe_member),
     }
+    static_url = _extract_gtnmod_asset_to_static(filepath, safe_member, asset_id)
+    if static_url:
+        return static_url
     return f'/api/mod-assets/{asset_id}'
+
+
+def _extract_gtnmod_asset_to_static(filepath: str, member: str, asset_id: str) -> str:
+    ext = os.path.splitext(member)[1].lower()
+    if ext not in GTNMOD_ASSET_EXTS:
+        return ''
+    filename = f'{asset_id}{ext}'
+    target = os.path.join(STATIC_MOD_ASSET_DIR, filename)
+    try:
+        os.makedirs(STATIC_MOD_ASSET_DIR, exist_ok=True)
+        if not os.path.exists(target) or os.path.getsize(target) <= 0:
+            with zipfile.ZipFile(filepath, 'r') as zf:
+                data = zf.read(member)
+            with open(target, 'wb') as f:
+                f.write(data)
+        return f'{STATIC_MOD_ASSET_URL}/{filename}'
+    except Exception:
+        return ''
 
 
 def get_mod_asset(asset_id: str) -> Optional[dict]:
