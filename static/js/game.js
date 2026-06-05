@@ -18,6 +18,8 @@ const I18N = {
         event_selected: 'Event selected: {0}', event_waiting: 'Waiting for opponent to select an event', drag_to_play: 'Drag to Play',
         drag_to_play_full: 'Drag here to play', tap_play_hint: 'Tap a card, then confirm to play', confirm_play: 'Play {0}', cancel_play: 'Cancel',
         classic_select_card: 'Choose a card',
+        prediction_target: 'Target',
+        prediction_self: 'Self',
         classic_play_center: 'Click the stage to play',
         classic_target_enemy: 'Click opponent to play',
         classic_target_self: 'Click yourself to play',
@@ -126,6 +128,8 @@ I18N.zh = { ...I18N.en,
     drag_to_play: '拖动打出', cannot_play: '无法打出', enemy_attack: '敌方攻击', enemy_skill: '敌方技能', enemy_destroy_equip: '，摧毁装备',
     drag_to_play_full: '拖动到此处以出牌', tap_play_hint: '点击手牌后确认出牌', confirm_play: '打出 {0}', cancel_play: '取消出牌',
     classic_select_card: '选择一张手牌',
+    prediction_target: '对目标',
+    prediction_self: '对自己',
     classic_play_center: '点击战场打出',
     classic_target_enemy: '点击对手使用',
     classic_target_self: '点击自己使用',
@@ -4174,6 +4178,13 @@ function createCardElement(cardDict, options = {}) {
         const tomatoLayer = Math.max(0, Number(cardDict.held_turns || 0));
         flagsHtml += `<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || '层数')}: ${tomatoLayer}</span>`;
     }
+    const predictionHtml = getCardPlayEffectPredictionHtml(cardDict);
+    const bottomHtml = (predictionHtml || flagsHtml)
+        ? `<div class="card-bottom-zone ${predictionHtml ? 'has-prediction' : ''}">
+                ${predictionHtml || ''}
+                ${predictionHtml || flagsHtml ? `<div class="card-flags ${flagsHtml ? '' : 'card-flags-empty'}">${flagsHtml}</div>` : ''}
+           </div>`
+        : '';
     el.innerHTML = `
         <div class="card-costs">
             <span class="cost-e">${totalE}</span>
@@ -4185,7 +4196,7 @@ function createCardElement(cardDict, options = {}) {
         <div class="card-type-label-wrap"><span class="card-type-label" style="color:${typeColor}">${escapeHtml(typeLabel)}</span></div>
         <div class="card-effect">${colorizeCardText(effectText || '')}</div>
         ${descriptionText ? `<div class="card-description">${colorizeCardText(descriptionText)}</div>` : ''}
-        ${flagsHtml ? `<div class="card-flags">${flagsHtml}</div>` : ''}
+        ${bottomHtml}
     `;
     if (draggable) {
         el.classList.add('card-draggable');
@@ -4474,12 +4485,12 @@ function getClawDamageHits(cardDict, attackerState, targetState, info) {
     return hits;
 }
 
-function getActualAttackDamageText(cardDict, attackerState = {}, targetState = {}) {
+function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {}) {
     const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
     const info = getAttackDamageBaseInfo(cardDict || {}, cardDef);
-    if (!info) return '';
+    if (!info) return [];
     if ((cardDict.def_id || cardDef.id || '') === 'Claw') {
-        return formatDamageHits(getClawDamageHits(cardDict || {}, attackerState || {}, targetState || {}, info));
+        return getClawDamageHits(cardDict || {}, attackerState || {}, targetState || {}, info);
     }
     const fusion = Math.max(1, Number(cardDict.fusion_level || 1));
     const fission = Math.max(1, Number(cardDict.fission_level || 1));
@@ -4495,12 +4506,405 @@ function getActualAttackDamageText(cardDict, attackerState = {}, targetState = {
             const amount = Number(info.amount || 0) + 3 * stack + bonus;
             hits.push(Math.ceil(amount * fusion / fission));
         }
-        return formatDamageHits(hits);
+        return hits;
     }
     const amount = Number(info.amount || 0) + bonus;
     const perHit = Math.ceil(amount * fusion / fission);
     const totalHits = Math.max(1, Math.round(Number(info.hits || 1))) * fission;
-    return formatDamageHits(Array.from({ length: totalHits }, () => perHit));
+    return Array.from({ length: totalHits }, () => perHit);
+}
+
+function getActualAttackDamageText(cardDict, attackerState = {}, targetState = {}) {
+    return formatDamageHits(getActualAttackDamageHits(cardDict, attackerState, targetState));
+}
+
+function getPredictionPlayerById(id) {
+    const pid = normalizePlayerId(id);
+    if (pid == null || !gameState) return {};
+    return getPlayerDataById(pid) || {};
+}
+
+function getDefaultPredictionTargetState(cardDict) {
+    if (!gameState) return {};
+    const targetId = normalizePlayerId(cardDict && (cardDict.target_player_id ?? cardDict.target_id));
+    if (targetId != null) return getPredictionPlayerById(targetId);
+    const enemyIds = Array.isArray(gameState.enemy_ids) ? gameState.enemy_ids.map(normalizePlayerId).filter(id => id != null) : [];
+    if (enemyIds.length) return getPredictionPlayerById(enemyIds[0]);
+    return gameState.opponent || {};
+}
+
+function cardHasEffectiveFlagForPrediction(cardDict, cardDef, flag) {
+    const sets = getEffectiveCardFlagSets(cardDict || {}, cardDef || {});
+    return sets.effective.has(flag);
+}
+
+function countActiveCorruptionEquipment() {
+    if (!gameState) return 0;
+    const players = [gameState.you, gameState.teammate, gameState.opponent, gameState.opponent2]
+        .filter(Boolean);
+    if (Array.isArray(gameState.spectate_players)) players.push(...gameState.spectate_players);
+    let count = 0;
+    players.forEach(player => {
+        (Array.isArray(player && player.equipment) ? player.equipment : []).forEach(eq => {
+            const card = eq && (eq.card_instance || eq.card || eq);
+            if (card && card.def_id === 'Corruption' && eq.corruption_active) count += 1;
+        });
+    });
+    return count;
+}
+
+function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState = {}) {
+    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
+    const rawHits = getActualAttackDamageHits(cardDict || {}, attackerState || {}, targetState || {});
+    if (!rawHits.length) return [];
+    const hits = [];
+    let dodge = Math.max(0, Number(targetState && targetState.dodge || 0));
+    const armor = Math.max(0, Number(targetState && targetState.armor || 0));
+    const invincible = !!(targetState && targetState.invincible);
+    const sponge = !!(targetState && targetState.sponge_active);
+    let nazarActive = !!(targetState && targetState.nazar_active);
+    let nazarBigHits = Math.max(0, Number(targetState && targetState.nazar_big_hits || 0));
+    const corruptionMult = 2 ** countActiveCorruptionEquipment();
+    const precision = cardHasEffectiveFlagForPrediction(cardDict || {}, cardDef || {}, 'precision');
+    rawHits.forEach(raw => {
+        let dmg = Math.max(0, Math.ceil(Number(raw || 0)));
+        let precisionDodged = false;
+        if (dodge > 0) {
+            dodge -= 1;
+            if (precision) {
+                precisionDodged = true;
+            } else {
+                hits.push(0);
+                return;
+            }
+        }
+        if (invincible) {
+            hits.push(0);
+            return;
+        }
+        if (precisionDodged) dmg = Math.ceil(dmg / 2);
+        if (corruptionMult > 1) dmg *= corruptionMult;
+        if (nazarActive) {
+            const original = dmg;
+            dmg = Math.max(1, dmg - 9);
+            if (original >= 10) {
+                nazarBigHits += 1;
+                if (nazarBigHits >= 2) {
+                    nazarActive = false;
+                    nazarBigHits = 0;
+                }
+            }
+        }
+        dmg = Math.max(0, dmg - armor);
+        if (sponge && dmg > 0) {
+            hits.push(0);
+            return;
+        }
+        hits.push(dmg);
+    });
+    return hits;
+}
+
+function formatPredictionPart(value, suffix, cls) {
+    const amount = Math.max(0, Math.ceil(Number(value || 0)));
+    if (amount <= 0) return '';
+    return `<span class="card-prediction-part ${cls}">${escapeHtml(`${amount}${suffix}`)}</span>`;
+}
+
+function formatPredictionDamagePart(hits) {
+    const text = formatDamageHits(hits);
+    if (!text) return '';
+    return `<span class="card-prediction-part damage">${escapeHtml(text)}</span>`;
+}
+
+function formatPositiveEffectHits(values, suffix) {
+    const times = '\u00d7';
+    const list = (Array.isArray(values) ? values : [])
+        .map(v => Math.max(0, Math.ceil(Number(v || 0))))
+        .filter(v => Number.isFinite(v) && v > 0);
+    if (!list.length) return '';
+    if (list.length === 1) return `+${list[0]}${suffix}`;
+    const first = list[0];
+    if (list.every(v => v === first)) return `+${first}${suffix}${times}${list.length}`;
+    return list.map(v => `+${v}${suffix}`).join(' ');
+}
+
+function formatPredictionSelfPart(values, suffix, cls) {
+    const text = formatPositiveEffectHits(values, suffix);
+    if (!text) return '';
+    return `<span class="card-prediction-part ${cls}">${escapeHtml(text)}</span>`;
+}
+
+function pushPositiveValue(list, value, count = 1) {
+    const amount = Math.max(0, Math.ceil(Number(value || 0)));
+    const rawCount = Number(count);
+    const times = Number.isFinite(rawCount) ? Math.max(0, Math.floor(rawCount)) : 1;
+    if (amount <= 0 || times <= 0) return;
+    for (let i = 0; i < times; i++) list.push(amount);
+}
+
+function effectTargetIsSelf(target) {
+    if (target == null || target === '') return true;
+    if (typeof target === 'string') {
+        return ['self', 'source', 'owner', 'you', 'current_player'].includes(target);
+    }
+    if (target && typeof target === 'object') {
+        const ref = String(target.ref || target.selector || target.type || '').toLowerCase();
+        const value = String(target.value || target.target || '').toLowerCase();
+        return ['self', 'source', 'owner'].includes(ref) || ['self', 'source', 'owner'].includes(value);
+    }
+    return false;
+}
+
+function collectSelfPredictionFromEffects(prediction, cardDict, cardDef, selfState, positiveHitCount) {
+    const effects = Array.isArray(cardDef && cardDef.effects) ? cardDef.effects : [];
+    effects.forEach(effect => {
+        if (!effect || typeof effect !== 'object') return;
+        const type = effect.type || effect.op;
+        const params = effect.params || effect;
+        if (type === 'lifesteal_damage') {
+            pushPositiveValue(prediction.self.heal, firstNumericEffectValue(params.heal) || 4, positiveHitCount);
+            return;
+        }
+        if (!effectTargetIsSelf(params.target)) return;
+        if (type === 'heal') {
+            pushPositiveValue(prediction.self.heal, firstNumericEffectValue(params.amount));
+        } else if (type === 'gain_e' || type === 'gain_elixir') {
+            pushPositiveValue(prediction.self.elixir, firstNumericEffectValue(params.amount));
+        } else if (type === 'gain_m' || type === 'gain_magic') {
+            pushPositiveValue(prediction.self.magic, firstNumericEffectValue(params.amount));
+        } else if (type === 'gain_armor' || type === 'add_armor') {
+            pushPositiveValue(prediction.self.armor, firstNumericEffectValue(params.amount));
+        } else if (type === 'coffee_gain_e') {
+            pushPositiveValue(prediction.self.elixir, getCoffeePredictionAmount(selfState));
+        }
+    });
+}
+
+function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positiveHitCount) {
+    (Array.isArray(steps) ? steps : []).forEach(step => {
+        if (!step || typeof step !== 'object') return;
+        const op = step.op || step.type;
+        const params = step.params && typeof step.params === 'object' ? step.params : step;
+        if (op === 'if') {
+            return;
+        }
+        if (op === 'lifesteal_damage') {
+            pushPositiveValue(prediction.self.heal, firstNumericEffectValue(params.heal) || 4, positiveHitCount);
+            return;
+        }
+        if (!effectTargetIsSelf(params.target)) return;
+        if (op === 'heal') {
+            pushPositiveValue(prediction.self.heal, firstNumericEffectValue(params.amount));
+        } else if (op === 'gain_e') {
+            pushPositiveValue(prediction.self.elixir, firstNumericEffectValue(params.amount));
+        } else if (op === 'gain_m') {
+            pushPositiveValue(prediction.self.magic, firstNumericEffectValue(params.amount));
+        } else if (op === 'add_armor' || op === 'gain_armor') {
+            pushPositiveValue(prediction.self.armor, firstNumericEffectValue(params.amount));
+        } else if (op === 'coffee_gain_e') {
+            pushPositiveValue(prediction.self.elixir, getCoffeePredictionAmount(selfState));
+        }
+    });
+}
+
+function getCoffeePredictionAmount(selfState) {
+    const vars = (selfState && selfState.custom_vars) || {};
+    const marker = Number(vars['咖啡首次使用']);
+    const hasMarker = Number.isFinite(marker);
+    const firstUse = hasMarker ? marker > 0 : !!(selfState && selfState.coffee_first_use);
+    return firstUse ? 2 : 1;
+}
+
+function addKnownSelfPrediction(prediction, cardDict, selfState) {
+    const positiveHitCount = prediction.target.damageHits.filter(v => Number(v) > 0).length;
+    switch (cardDict.def_id) {
+        case 'Fang':
+            if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, 4, positiveHitCount);
+            break;
+        case 'Fries':
+            if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, 12);
+            break;
+        case 'Rose':
+            if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, 7);
+            break;
+        case 'ManaOrb':
+            if (!prediction.self.magic.length) pushPositiveValue(prediction.self.magic, 3);
+            break;
+        case 'Coffee':
+            if (!prediction.self.elixir.length) pushPositiveValue(prediction.self.elixir, getCoffeePredictionAmount(selfState));
+            break;
+        case 'MagicGlass':
+            if (!prediction.self.magic.length) pushPositiveValue(prediction.self.magic, 2);
+            break;
+        default:
+            break;
+    }
+}
+
+function getCardPlayEffectPredictionParts(cardDict, options = {}) {
+    const result = {
+        target: { damageHits: [], poison: 0, fire: 0 },
+        self: { heal: [], elixir: [], magic: [], armor: [] },
+        damageHits: [],
+        poison: 0,
+        fire: 0,
+    };
+    if (!gameState || !cardDict || !cardDict.def_id) return result;
+    const cardDef = getCardDef(cardDict.def_id);
+    if (!cardDef) return result;
+    const attackerState = options.attackerState || gameState.you || {};
+    const targetState = options.targetState || getDefaultPredictionTargetState(cardDict);
+    const hasDamageOverride = Object.prototype.hasOwnProperty.call(options, 'damageHits');
+    if (cardDef.card_type === 'thorn') {
+        const hits = hasDamageOverride
+            ? (Array.isArray(options.damageHits) ? options.damageHits : [])
+            : simulateNoCounterAttackHits(cardDict, attackerState, targetState);
+        result.target.damageHits = hits
+            .map(v => Math.max(0, Math.ceil(Number(v || 0))))
+            .filter(v => Number.isFinite(v));
+        const toxic = Math.max(0, Number(targetState && targetState.toxic || 0));
+        const positiveHits = result.target.damageHits.filter(v => Number(v) > 0).length;
+        if (toxic > 0 && positiveHits > 0) {
+            result.target.poison = toxic * positiveHits;
+        }
+    } else if (cardDict.def_id === 'Iris') {
+        result.target.poison = 10;
+    } else if (cardDict.def_id === 'Fire') {
+        result.target.fire = 2;
+    }
+    const positiveHitCount = result.target.damageHits.filter(v => Number(v) > 0).length;
+    collectSelfPredictionFromEffects(result, cardDict, cardDef, attackerState, positiveHitCount);
+    const onPlay = cardDef.v2_events && cardDef.v2_events.on_play;
+    const steps = onPlay && (onPlay.steps || onPlay);
+    collectSelfPredictionFromV2Steps(result, steps, attackerState, positiveHitCount);
+    addKnownSelfPrediction(result, cardDict, attackerState);
+    result.damageHits = result.target.damageHits;
+    result.poison = result.target.poison;
+    result.fire = result.target.fire;
+    return result;
+}
+
+function getCardPlayEffectPredictionHtml(cardDict, options = {}) {
+    if (!gameState || !cardDict || !cardDict.def_id) return '';
+    if (cardDict.instance_id == null && !options.allowDefinitionCard) return '';
+    const prediction = getCardPlayEffectPredictionParts(cardDict, options);
+    const targetParts = [];
+    const selfParts = [];
+    if (prediction.target.damageHits.length) targetParts.push(formatPredictionDamagePart(prediction.target.damageHits));
+    if (prediction.target.poison > 0) targetParts.push(formatPredictionPart(prediction.target.poison, 'P', 'poison'));
+    if (prediction.target.fire > 0) targetParts.push(formatPredictionPart(prediction.target.fire, 'F', 'fire'));
+    selfParts.push(formatPredictionSelfPart(prediction.self.heal, 'H', 'heal'));
+    selfParts.push(formatPredictionSelfPart(prediction.self.elixir, 'E', 'elixir'));
+    selfParts.push(formatPredictionSelfPart(prediction.self.magic, 'M', 'magic'));
+    selfParts.push(formatPredictionSelfPart(prediction.self.armor, 'A', 'armor'));
+    const sections = [];
+    const targetHtml = targetParts.filter(Boolean).join('');
+    const selfHtml = selfParts.filter(Boolean).join('');
+    if (targetHtml) {
+        sections.push(`<span class="card-prediction-section"><span class="card-prediction-label">${escapeHtml(UI.prediction_target || '对目标')}:</span>${targetHtml}</span>`);
+    }
+    if (selfHtml) {
+        sections.push(`<span class="card-prediction-section"><span class="card-prediction-label">${escapeHtml(UI.prediction_self || '对自己')}:</span>${selfHtml}</span>`);
+    }
+    const html = sections.join('');
+    return html ? `<div class="card-prediction">${html}</div>` : '';
+}
+
+function normalizePredictionHits(parts) {
+    return (Array.isArray(parts) ? parts : [])
+        .map(v => Math.max(0, Math.ceil(Number(v || 0))))
+        .filter(v => Number.isFinite(v));
+}
+
+function getResponseBaseEffectPrediction(data, cardDict, noCounterPrediction = {}) {
+    const attackerState = getResponseAttackerState(data);
+    const targetState = getResponseTargetState(data);
+    const options = {
+        attackerState,
+        targetState,
+        allowDefinitionCard: true,
+    };
+    if (noCounterPrediction && Object.prototype.hasOwnProperty.call(noCounterPrediction, 'parts')) {
+        options.damageHits = normalizePredictionHits(noCounterPrediction.parts);
+    }
+    return getCardPlayEffectPredictionParts(cardDict, options);
+}
+
+function appendResponseEffectToken(parent, text, cls, extraClass = '') {
+    if (!parent || !text) return;
+    const token = document.createElement('span');
+    token.className = `response-damage-preview response-effect-preview card-token ${cls}${extraClass ? ` ${extraClass}` : ''}`;
+    token.textContent = text;
+    parent.appendChild(token);
+}
+
+function appendResponseEffectPreview(parent, prediction) {
+    if (!prediction) return;
+    const damageText = formatDamageHits(prediction.damageHits || []);
+    appendResponseEffectToken(parent, damageText, 'damage');
+    if (Number(prediction.poison || 0) > 0) {
+        appendResponseEffectToken(parent, `${Math.ceil(Number(prediction.poison))}P`, 'poison');
+    }
+    if (Number(prediction.fire || 0) > 0) {
+        appendResponseEffectToken(parent, `${Math.ceil(Number(prediction.fire))}F`, 'fire');
+    }
+}
+
+function counterCardCancelsResponseCard(counterCard, responseCard) {
+    const counterDef = getCardDef(counterCard && counterCard.def_id);
+    const responseDef = getCardDef(responseCard && responseCard.def_id);
+    if (!counterDef || !responseDef) return false;
+    if (counterCard.def_id === 'MagicBubble' && responseDef.card_type === 'bloom') return true;
+    if (counterDef.response_trigger === responseDef.card_type && responseDef.card_type === 'bloom') return true;
+    return false;
+}
+
+function getResponseCounterStatusReduction(data, cardDict, basePrediction, counterPrediction, counterCard) {
+    const reduction = { poison: 0, fire: 0 };
+    if (!basePrediction || (!basePrediction.poison && !basePrediction.fire)) return reduction;
+    const cardDef = getCardDef(cardDict && cardDict.def_id);
+    if (cardDef && cardDef.card_type === 'thorn') {
+        const beforeHits = normalizePredictionHits(basePrediction.damageHits);
+        const afterHits = normalizePredictionHits(counterPrediction && counterPrediction.after && counterPrediction.after.parts);
+        if (beforeHits.length && (counterPrediction && counterPrediction.after && Object.prototype.hasOwnProperty.call(counterPrediction.after, 'parts'))) {
+            const beforePositive = beforeHits.filter(v => v > 0).length;
+            const afterPositive = afterHits.filter(v => v > 0).length;
+            const targetState = getResponseTargetState(data);
+            const toxic = Math.max(0, Number(targetState && targetState.toxic || 0));
+            reduction.poison = Math.max(0, (beforePositive - afterPositive) * toxic);
+        } else if (Number(counterPrediction && counterPrediction.reduction || 0) >= beforeHits.reduce((sum, v) => sum + v, 0)) {
+            reduction.poison = Math.max(0, Number(basePrediction.poison || 0));
+        }
+        return reduction;
+    }
+    if (counterCardCancelsResponseCard(counterCard, cardDict)) {
+        reduction.poison = Math.max(0, Number(basePrediction.poison || 0));
+        reduction.fire = Math.max(0, Number(basePrediction.fire || 0));
+    }
+    return reduction;
+}
+
+function appendCounterEffectReductions(parent, prediction) {
+    if (!parent || !prediction) return;
+    if (Number(prediction.damage || 0) > 0) {
+        const reduction = document.createElement('span');
+        reduction.className = 'counter-damage-reduction';
+        reduction.textContent = prediction.damageText || `-${Math.ceil(Number(prediction.damage))}D`;
+        parent.appendChild(reduction);
+    }
+    if (Number(prediction.poison || 0) > 0) {
+        const reduction = document.createElement('span');
+        reduction.className = 'counter-status-reduction poison';
+        reduction.textContent = `-${Math.ceil(Number(prediction.poison))}P`;
+        parent.appendChild(reduction);
+    }
+    if (Number(prediction.fire || 0) > 0) {
+        const reduction = document.createElement('span');
+        reduction.className = 'counter-status-reduction fire';
+        reduction.textContent = `-${Math.ceil(Number(prediction.fire))}F`;
+        parent.appendChild(reduction);
+    }
 }
 
 let floatingCardPreviewEl = null;
@@ -10474,14 +10878,8 @@ function showResponseUI(data) {
     label.appendChild(createCardChoiceChip(cardDict));
     const prediction = data.damage_prediction || {};
     const noCounterPrediction = prediction.no_counter || {};
-    const predictedDamageText = noCounterPrediction && noCounterPrediction.total > 0 ? noCounterPrediction.display : '';
-    const damageText = predictedDamageText || getActualAttackDamageText(cardDict, getResponseAttackerState(data), getResponseTargetState(data));
-    if (damageText) {
-        const damage = document.createElement('span');
-        damage.className = 'response-damage-preview card-token damage';
-        damage.textContent = damageText;
-        label.appendChild(damage);
-    }
+    const baseEffectPrediction = getResponseBaseEffectPrediction(data, cardDict, noCounterPrediction);
+    appendResponseEffectPreview(label, baseEffectPrediction);
     container.appendChild(label);
     if (responseWindowDef && responseWindowDef.response_content) {
         const content = document.createElement('div');
@@ -10508,12 +10906,13 @@ function showResponseUI(data) {
         cost.textContent = `[${costStr}]`;
         btn.appendChild(cost);
         const counterPrediction = prediction.counters && prediction.counters[String(cc.instance_id)];
-        if (counterPrediction && noCounterPrediction && noCounterPrediction.total > 0) {
-            const reduction = document.createElement('span');
-            reduction.className = 'counter-damage-reduction';
-            reduction.textContent = counterPrediction.reduction_display || `-${counterPrediction.reduction || 0}D`;
-            btn.appendChild(reduction);
-        }
+        const statusReduction = getResponseCounterStatusReduction(data, cardDict, baseEffectPrediction, counterPrediction, cc);
+        appendCounterEffectReductions(btn, {
+            damage: Math.max(0, Number(counterPrediction && counterPrediction.reduction || 0)),
+            damageText: counterPrediction && counterPrediction.reduction_display,
+            poison: statusReduction.poison,
+            fire: statusReduction.fire,
+        });
         btn.disabled = !canAffordAny;
         btn.onclick = () => onRespond(cc.instance_id);
         btnRow.appendChild(btn);

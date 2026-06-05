@@ -15,6 +15,11 @@ from cards import (
 )
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 from mod_runtime_v2 import run_v2_event, run_v2_steps, validate_v2_ui_response
+from damage_types import (
+    DAMAGE_TAG_DIRECT, DAMAGE_TAG_FIRE, DAMAGE_TAG_PHYSICAL, DAMAGE_TAG_POISON,
+    DAMAGE_TYPE_MAGIC, DAMAGE_TYPE_PHYSICAL, damage_type_tag, infer_damage_type,
+    status_damage_tag,
+)
 
 
 class ModLoopBreak(Exception):
@@ -849,9 +854,11 @@ class GameEngine:
                     return value
         return None
 
-    def _v2_damage_tags(self, damage_kind: str, damage_tag: str, source: str = '') -> List[str]:
+    def _v2_damage_tags(self, damage_kind: str, damage_tag: str, source: str = '',
+                        damage_type: str = DAMAGE_TYPE_PHYSICAL) -> List[str]:
         tags = []
-        for value in (damage_tag, damage_kind):
+        type_tag = damage_type_tag(damage_type)
+        for value in (type_tag, damage_tag, damage_kind):
             text = str(value or '').strip()
             if text and text not in tags:
                 tags.append(text)
@@ -876,11 +883,13 @@ class GameEngine:
     def _v2_damage_context(self, target_id: int, amount: int, source_id=None, *,
                            damage_kind: str = 'attack', damage_tag: str = 'gtn:physical',
                            source: str = '', is_battery: bool = False, is_precision: bool = False,
-                           card: Optional[CardInstance] = None) -> dict:
+                           card: Optional[CardInstance] = None, damage_type: Optional[str] = None) -> dict:
         if card is None:
             card = self._v2_active_damage_card()
         source_player = source_id if isinstance(source_id, int) and 0 <= source_id < len(self.players) else target_id
-        tags = self._v2_damage_tags(damage_kind, damage_tag, source)
+        resolved_damage_type = infer_damage_type(source, damage_kind, damage_tag, damage_type)
+        tags = self._v2_damage_tags(damage_kind, damage_tag, source, resolved_damage_type)
+        primary_tag = str(damage_tag or '').strip() or (tags[0] if tags else '')
         return {
             'source_player': source_player,
             'target_player': target_id,
@@ -891,7 +900,8 @@ class GameEngine:
                 'amount': amount,
                 'original_amount': amount,
                 'damage_kind': damage_kind,
-                'damage_tag': tags[0] if tags else '',
+                'damage_type': resolved_damage_type,
+                'damage_tag': primary_tag,
                 'damage_tags': tags,
                 'source': source,
                 'is_battery': bool(is_battery),
@@ -903,7 +913,8 @@ class GameEngine:
                 'amount': amount,
                 'original_amount': amount,
                 'damage_kind': damage_kind,
-                'damage_tag': tags[0] if tags else '',
+                'damage_type': resolved_damage_type,
+                'damage_tag': primary_tag,
                 'damage_tags': tags,
                 'source': source,
                 'is_battery': bool(is_battery),
@@ -921,6 +932,11 @@ class GameEngine:
                 return 0
 
     def _run_v2_damage_modifiers(self, context: dict, amount: int) -> int:
+        action = context.get('current_action', {}) if isinstance(context, dict) else {}
+        vars_dict = context.get('vars', {}) if isinstance(context, dict) else {}
+        damage_type = action.get('damage_type') or vars_dict.get('damage_type')
+        if infer_damage_type(damage_type=damage_type) == DAMAGE_TYPE_MAGIC:
+            return max(0, int(amount or 0))
         if not getattr(self, 'v2_event_hooks', None):
             return max(0, int(amount or 0))
         context.setdefault('vars', {})
@@ -1946,7 +1962,7 @@ class GameEngine:
                 self.log_msg(f"{self.pn(1 - player_id)}的腐化效果激活！全场伤害翻倍！")
         if ps.poison > 0:
             dmg = ps.poison
-            self._deal_direct_damage(player_id, dmg, '中毒')
+            self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             if self.game_over or ps.health <= 0:
                 return
             ps.poison = ps.poison // 2
@@ -1954,7 +1970,7 @@ class GameEngine:
                 self.log_msg(f"{self.pn(player_id)}中毒减半为{ps.poison}层")
         if ps.fire > 0:
             dmg = ps.fire
-            self._deal_direct_damage(player_id, dmg, '灼烧')
+            self._deal_direct_damage(player_id, dmg, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
                 return
         if self.round_num > 1:
@@ -1996,7 +2012,8 @@ class GameEngine:
                 ps.draw_cards(1)
                 self.log_msg(f"{self.pn(player_id)}的黄金叶效果：多抽1张牌")
 
-    def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None):
+    def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None,
+                            damage_type: Optional[str] = None, damage_tag: Optional[str] = None):
         ps = self.players[player_id]
         if ps.invincible:
             self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
@@ -2006,13 +2023,16 @@ class GameEngine:
         if corruption_count > 0:
             actual = actual * (2 ** corruption_count)
             self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
+        resolved_damage_type = infer_damage_type(source, 'direct', damage_tag or '', damage_type)
+        resolved_damage_tag = damage_tag or (status_damage_tag(source) if resolved_damage_type == DAMAGE_TYPE_MAGIC else DAMAGE_TAG_DIRECT)
         damage_context = self._v2_damage_context(
             player_id,
             actual,
             source_id,
             damage_kind='direct',
-            damage_tag='gtn:direct',
+            damage_tag=resolved_damage_tag,
             source=source,
+            damage_type=resolved_damage_type,
         )
         actual = self._run_v2_damage_modifiers(damage_context, actual)
         if getattr(self, 'pending_v2_ui', None):
@@ -5866,12 +5886,12 @@ class GameEngine:
                 self.log_msg(f"{self.pn(opp_id)}的腐化效果激活")
         if ps.poison > 0:
             dmg = ps.poison
-            self._deal_direct_damage(player_id, dmg, '中毒')
+            self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             if self.game_over or ps.health <= 0:
                 return
             ps.poison = ps.poison // 2
         if ps.fire > 0:
-            self._deal_direct_damage(player_id, ps.fire, '灼烧')
+            self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
                 return
         if self.round_num > 1:
@@ -5969,7 +5989,8 @@ class GameEngine:
                 dmg,
                 attacker_id,
                 damage_kind='attack',
-                damage_tag='gtn:physical',
+                damage_tag=DAMAGE_TAG_PHYSICAL,
+                damage_type=DAMAGE_TYPE_PHYSICAL,
                 is_battery=is_battery,
                 is_precision=is_precision,
             )
@@ -6224,7 +6245,15 @@ class GameEngine:
     def _atomic_direct_damage(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self._deal_direct_damage(target_id, amount, str(params.get('source', card.name_cn if card else '效果')), player_id)
+        source = str(params.get('source', card.name_cn if card else '效果'))
+        self._deal_direct_damage(
+            target_id,
+            amount,
+            source,
+            player_id,
+            damage_type=params.get('damage_type'),
+            damage_tag=params.get('damage_tag'),
+        )
 
     def _atomic_lifesteal_damage(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))

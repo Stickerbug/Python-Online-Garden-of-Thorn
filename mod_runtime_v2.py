@@ -7,6 +7,7 @@ import uuid
 from typing import Any, Dict, Iterable, List, Optional
 
 from cards import CARD_DEFS, CardInstance, ERROR_CARD_ID
+from damage_types import DAMAGE_TYPE_PHYSICAL
 
 
 STEP_BUDGET = 1000
@@ -149,6 +150,31 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                 dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision, attacker_id=source)
             except TypeError:
                 dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
+            total += int(dealt or 0)
+        context["last_damage"] = total
+        return {"success": True, "last_damage": total}
+
+    if op in ("direct_damage", "deal_direct_damage"):
+        source = _player_id(engine, resolve_v2_target(engine, context, params.get("source", "source")))
+        amount = max(0, _to_int(eval_v2_value(engine, context, params.get("amount", 0))))
+        source_text = str(params.get("source_text") or params.get("source_name") or params.get("label") or "效果")
+        damage_type = str(params.get("damage_type") or DAMAGE_TYPE_PHYSICAL)
+        damage_tag = params.get("damage_tag")
+        total = 0
+        for target_id in _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "target"))):
+            if not _valid_player(engine, target_id) or not hasattr(engine, "_deal_direct_damage"):
+                continue
+            try:
+                dealt = engine._deal_direct_damage(
+                    target_id,
+                    amount,
+                    source_text,
+                    source,
+                    damage_type=damage_type,
+                    damage_tag=damage_tag,
+                )
+            except TypeError:
+                dealt = engine._deal_direct_damage(target_id, amount, source_text, source)
             total += int(dealt or 0)
         context["last_damage"] = total
         return {"success": True, "last_damage": total}

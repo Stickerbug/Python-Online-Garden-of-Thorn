@@ -2,6 +2,10 @@ import random
 import math
 from typing import List, Dict, Optional, Tuple, Set
 from game_engine import GameEngine, PlayerState, EquipmentInstance
+from damage_types import (
+    DAMAGE_TAG_DIRECT, DAMAGE_TAG_FIRE, DAMAGE_TAG_PHYSICAL, DAMAGE_TAG_POISON,
+    DAMAGE_TYPE_MAGIC, DAMAGE_TYPE_PHYSICAL, infer_damage_type, status_damage_tag,
+)
 from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DRAFT_REROLLS,
     DRAW_PER_TURN, ELIXIR_RECOVERY, BASE_MAX_HEALTH,
@@ -948,12 +952,12 @@ class GameEngine2v2(GameEngine):
                     self.log_msg(f"{self.pn(eid)}的腐化效果激活！")
         if ps.poison > 0:
             dmg = ps.poison
-            self._deal_direct_damage(player_id, dmg, '中毒')
+            self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             if self.game_over or ps.health <= 0:
                 return
             ps.poison = ps.poison // 2
         if ps.fire > 0:
-            self._deal_direct_damage(player_id, ps.fire, '灼烧')
+            self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
                 return
         for eq in list(ps.equipment):
@@ -1131,7 +1135,8 @@ class GameEngine2v2(GameEngine):
         choice['_ally_approved'] = True
         return self.play_card(player_id, req['card_instance_id'], target_player_id=target_player_id, choice=choice)
 
-    def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None):
+    def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None,
+                            damage_type: Optional[str] = None, damage_tag: Optional[str] = None):
         if not self._is_valid_player_id(player_id):
             return 0
         ps = self.players[player_id]
@@ -1143,13 +1148,16 @@ class GameEngine2v2(GameEngine):
         if corruption_count > 0:
             actual = actual * (2 ** corruption_count)
             self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
+        resolved_damage_type = infer_damage_type(source, 'direct', damage_tag or '', damage_type)
+        resolved_damage_tag = damage_tag or (status_damage_tag(source) if resolved_damage_type == DAMAGE_TYPE_MAGIC else DAMAGE_TAG_DIRECT)
         damage_context = self._v2_damage_context(
             player_id,
             actual,
             source_id,
             damage_kind='direct',
-            damage_tag='gtn:direct',
+            damage_tag=resolved_damage_tag,
             source=source,
+            damage_type=resolved_damage_type,
         )
         actual = self._run_v2_damage_modifiers(damage_context, actual)
         if getattr(self, 'pending_v2_ui', None):
@@ -1391,12 +1399,12 @@ class GameEngine2v2(GameEngine):
                     eq.corruption_active = True
                     self.log_msg(f"{self.pn(eid)}的腐化效果激活！")
         if ps.poison > 0:
-            self._deal_direct_damage(player_id, ps.poison, '中毒')
+            self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             if self.game_over or ps.health <= 0:
                 return
             ps.poison = ps.poison // 2
         if ps.fire > 0:
-            self._deal_direct_damage(player_id, ps.fire, '灼烧')
+            self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
                 return
         for eq in list(ps.equipment):
@@ -1558,12 +1566,12 @@ class GameEngine2v2(GameEngine):
                     eq.corruption_active = True
                     self.log_msg(f"{self.pn(eid)}的腐化效果激活")
         if ps.poison > 0:
-            self._deal_direct_damage(player_id, ps.poison, '中毒')
+            self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             if self.game_over or ps.health <= 0:
                 return
             ps.poison = ps.poison // 2
         if ps.fire > 0:
-            self._deal_direct_damage(player_id, ps.fire, '灼烧')
+            self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
                 return
         for eq in list(ps.equipment):
@@ -1649,7 +1657,8 @@ class GameEngine2v2(GameEngine):
                 dmg,
                 attacker_id,
                 damage_kind='attack',
-                damage_tag='gtn:physical',
+                damage_tag=DAMAGE_TAG_PHYSICAL,
+                damage_type=DAMAGE_TYPE_PHYSICAL,
                 is_battery=is_battery,
                 is_precision=is_precision,
             )

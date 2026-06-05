@@ -4044,13 +4044,110 @@ body {
   color: var(--color-toxic);
 }
 
+.card-bottom-zone {
+  margin-top: auto;
+  padding-bottom: 2cqi;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 16.5cqi;
+}
+
+.card-bottom-zone.has-prediction {
+  min-height: 28cqi;
+}
+
+.card-prediction {
+  margin-top: 0;
+  padding: 0.6cqi 2.2cqi 0.3cqi;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.05cqi 1.65cqi;
+  min-height: 13.3cqi;
+  font-size: 7.1cqi;
+  line-height: 1.06;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.card-prediction-section {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.65cqi;
+  white-space: nowrap;
+}
+
+.card-prediction-label {
+  color: var(--text-secondary);
+  font-size: 6.2cqi;
+  font-weight: 750;
+}
+
+.card-prediction-part {
+  padding: 0.42cqi 1.05cqi;
+  border-radius: 1.1cqi;
+  border: 0.1cqi solid currentColor;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 0.6cqi 1.5cqi rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+}
+
+.card-prediction-part.damage {
+  color: #C0392B;
+  background: rgba(192, 57, 43, 0.12);
+}
+
+.card-prediction-part.poison {
+  color: var(--color-poison);
+  background: var(--color-poison-bg);
+}
+
+.card-prediction-part.fire {
+  color: var(--color-fire);
+  background: var(--color-fire-bg);
+}
+
+.card-prediction-part.heal {
+  color: var(--color-heal);
+  background: var(--color-heal-bg);
+}
+
+.card-prediction-part.elixir {
+  color: var(--color-elixir-text);
+  background: var(--color-elixir-bg);
+}
+
+.card-prediction-part.magic {
+  color: var(--color-magic);
+  background: var(--color-magic-bg);
+}
+
+.card-prediction-part.armor {
+  color: var(--color-armor-text);
+  background: var(--color-armor-bg);
+}
+
+[data-theme="dark"] .card-prediction-part {
+  background: rgba(255, 255, 255, 0.78);
+}
+
 .card-flags {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 1.5cqi;
-  padding: 1.5cqi 3cqi 3cqi;
-  margin-top: auto;
+  padding: 0.8cqi 3cqi 0;
+  margin-top: 0;
+  min-height: 8.4cqi;
+  align-content: flex-start;
+}
+
+.card-flags.card-flags-empty {
+  visibility: hidden;
 }
 
 .card-flag {
@@ -4988,6 +5085,18 @@ body {
   font-weight: 900;
 }
 
+.response-effect-preview.poison {
+  border-color: rgba(142, 68, 173, 0.28);
+  background: var(--color-poison-bg);
+  color: var(--color-poison);
+}
+
+.response-effect-preview.fire {
+  border-color: rgba(230, 126, 34, 0.28);
+  background: var(--color-fire-bg);
+  color: var(--color-fire);
+}
+
 .response-content {
   color: var(--text-secondary);
   font-weight: 500;
@@ -5034,6 +5143,27 @@ body {
   color: var(--damage);
   font-size: 12px;
   font-weight: 900;
+}
+
+.counter-status-reduction {
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.counter-status-reduction.poison {
+  color: var(--color-poison);
+  background: var(--color-poison-bg);
+  border-color: rgba(142, 68, 173, 0.28);
+}
+
+.counter-status-reduction.fire {
+  color: var(--color-fire);
+  background: var(--color-fire-bg);
+  border-color: rgba(230, 126, 34, 0.28);
 }
 
 .btn-counter-disabled {
@@ -8608,6 +8738,12 @@ button:not(:disabled):active,
 .teammate-hand-row .card .card-flags {
   gap: 1.5cqi;
   padding: 1.5cqi 3cqi 3cqi;
+}
+
+.card .card-flags.card-flags-empty,
+.card.card-small .card-flags.card-flags-empty,
+.teammate-hand-row .card .card-flags.card-flags-empty {
+  min-height: calc(var(--card-flag-font-scale) + 5.7cqi + 2px);
 }
 
 .card .card-flag,
