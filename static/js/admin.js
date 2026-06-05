@@ -390,7 +390,7 @@ function renderServerResources(metrics) {
   ];
   grid.innerHTML = cards.join('');
   const label = $('server-profile-label');
-  if (label) label.textContent = `${profile.instance || 'combined'} · ${profile.provider || 'Aliyun'} · ${profile.os || 'Ubuntu 22.04'}`;
+  if (label) label.textContent = `${profile.instance || 'release'} · ${profile.provider || 'Aliyun'} · ${profile.os || 'Ubuntu 22.04'}`;
 }
 
 function chartPolyline(samples, key, color, width = 320, height = 110) {

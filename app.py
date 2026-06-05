@@ -165,14 +165,14 @@ REMEMBER_COOKIE_NAME = 'gtn_remember'
 
 
 def _normalize_instance(value):
-    normalized = str(value or 'combined').strip().lower()
-    return normalized if normalized in {'combined', 'release', 'beta'} else 'combined'
+    normalized = str(value or 'release').strip().lower()
+    return normalized if normalized in {'release', 'beta'} else 'release'
 
 
-GTN_INSTANCE = _normalize_instance(os.environ.get('GTN_INSTANCE', 'combined'))
+GTN_INSTANCE = _normalize_instance(os.environ.get('GTN_INSTANCE', 'release'))
 GTN_RELEASE_PUBLIC_URL = os.environ.get('GTN_RELEASE_PUBLIC_URL', '').strip()
 GTN_BETA_PUBLIC_URL = os.environ.get('GTN_BETA_PUBLIC_URL', '').strip()
-_default_bind_host = '0.0.0.0' if GTN_INSTANCE == 'combined' else '127.0.0.1'
+_default_bind_host = '127.0.0.1'
 GTN_BIND_HOST = os.environ.get('GTN_BIND_HOST', _default_bind_host).strip() or _default_bind_host
 GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 5000)
 
@@ -183,10 +183,6 @@ def is_beta_instance():
 
 def is_release_instance():
     return GTN_INSTANCE == 'release'
-
-
-def is_combined_instance():
-    return GTN_INSTANCE == 'combined'
 
 
 socketio = SocketIO(
