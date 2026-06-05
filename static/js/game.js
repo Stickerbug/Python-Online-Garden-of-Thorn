@@ -919,12 +919,12 @@ Object.assign(I18N.ja, {
     tag_desc_fission_layer: '通常のタグではなく特殊な仕組みです。分裂層は攻撃カードが何回に分かれて解決されるかを表し、融合層と共同で作用します。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。三角形のようにヒットごとに以後のダメージが変わるカードは、各分裂ヒットでその時点の層数を使って再計算します。カードが捨て札に入ると分裂は既定値1に戻ります。'
 });
 
-Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card names' });
-Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称' });
-Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes' });
-Object.assign(I18N.pt, { settings_show_english_card_names: 'Mostrar nomes ingleses das cartas' });
-Object.assign(I18N.ru, { settings_show_english_card_names: 'Показывать английские названия карт' });
-Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示' });
+Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card names', settings_show_card_images: 'Show card images' });
+Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称', settings_show_card_images: '显示卡牌图片' });
+Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes', settings_show_card_images: 'Afficher les images des cartes' });
+Object.assign(I18N.pt, { settings_show_english_card_names: 'Mostrar nomes ingleses das cartas', settings_show_card_images: 'Mostrar imagens das cartas' });
+Object.assign(I18N.ru, { settings_show_english_card_names: 'Показывать английские названия карт', settings_show_card_images: 'Показывать изображения карт' });
+Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示', settings_show_card_images: 'カード画像を表示' });
 Object.assign(I18N.en, { official_mods: 'Official Mods', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found' });
 Object.assign(I18N.zh, { official_mods: '官方模组', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组' });
 Object.assign(I18N.en, {
@@ -1522,6 +1522,7 @@ Object.assign(I18N.ja, {
 
 let currentLang = localStorage.getItem('gtn_lang') || 'zh';
 let showEnglishCardNames = localStorage.getItem('gtn_show_english_card_names') !== '0';
+let showCardImages = localStorage.getItem('gtn_show_card_images') !== '0';
 const UI_STYLE_MIGRATION_KEY = 'gtn_ui_style_v2_migrated';
 function migrateStoredUiStyle() {
     let stored = localStorage.getItem('gtn_ui_style') || 'minimal';
@@ -2381,6 +2382,18 @@ function applyShowEnglishCardNames(value) {
     refreshVisibleCardDisplays();
 }
 
+function updateCardImageSettingInput() {
+    const input = $('settings-show-card-images');
+    if (input) input.checked = showCardImages;
+}
+
+function applyShowCardImages(value) {
+    showCardImages = !!value;
+    localStorage.setItem('gtn_show_card_images', showCardImages ? '1' : '0');
+    updateCardImageSettingInput();
+    refreshVisibleCardDisplays();
+}
+
 function refreshVisibleCardDisplays() {
     const isVisible = (id) => {
         const el = $(id);
@@ -2452,7 +2465,10 @@ function updateStaticText() {
     if (settingsLabelLang) settingsLabelLang.textContent = UI.settings_lang;
     const settingsEnglishNameLabel = $('settings-label-show-english-names');
     if (settingsEnglishNameLabel) settingsEnglishNameLabel.textContent = UI.settings_show_english_card_names;
+    const settingsCardImagesLabel = $('settings-label-show-card-images');
+    if (settingsCardImagesLabel) settingsCardImagesLabel.textContent = UI.settings_show_card_images;
     updateEnglishNameSettingVisibility();
+    updateCardImageSettingInput();
     const themeSelect = $('settings-theme-select');
     if (themeSelect) {
         themeSelect.options[0].textContent = UI.settings_theme_light;
@@ -4125,7 +4141,7 @@ function createCardElement(cardDict, options = {}) {
     const englishName = shouldShowEnglishCardName(cardDef, cardName) ? getEnglishCardName(cardDef) : '';
     const effectText = getCardEffectText(cardDef);
     const descriptionText = getCardDescriptionText(cardDef);
-    const imageUrl = getCardArtUrl(cardDict, cardDef);
+    const imageUrl = showCardImages ? getCardArtUrl(cardDict, cardDef) : '';
     const cardArtHtml = imageUrl
         ? `<div class="card-art"><img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.closest('.card-art').classList.add('hidden')"></div>`
         : '';
@@ -12139,6 +12155,11 @@ async function init() {
     if (englishNameToggle) {
         englishNameToggle.checked = showEnglishCardNames;
         englishNameToggle.addEventListener('change', (e) => applyShowEnglishCardNames(e.target.checked));
+    }
+    const cardImagesToggle = $('settings-show-card-images');
+    if (cardImagesToggle) {
+        cardImagesToggle.checked = showCardImages;
+        cardImagesToggle.addEventListener('change', (e) => applyShowCardImages(e.target.checked));
     }
     $('btn-lobby-back').addEventListener('click', () => {
         phase = 'login';
