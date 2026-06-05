@@ -17,6 +17,7 @@ import shutil
 import shlex
 import hashlib
 import platform
+import subprocess
 from functools import wraps
 from collections import deque
 from datetime import datetime, timedelta, timezone
@@ -2073,6 +2074,7 @@ ADMIN_COMMANDS = {
     'userpass': 'userpass <ID|注册顺序|用户名> <新密码> - 管理员修改账号密码',
     'banuser': 'banuser <ID|注册顺序|用户名> [原因] - 封禁账号并踢下线',
     'unbanuser': 'unbanuser <ID|注册顺序|用户名> - 解除账号封禁',
+    'gitpull': 'gitpull - 手动拉取 GitHub origin/main（只允许 fast-forward，不覆盖本地改动）',
     'skip': 'skip <房间ID> - 尝试跳过当前回合',
     'endgame': 'endgame <房间ID> <winner|draw> - 强制结束对局；winner 可用 0/1，2v2 表示队伍',
     'set': 'set <房间ID> <玩家序号> <h|e|m|armor|dodge|poison|burn|toxic|vulnerable> <数值>',
@@ -2086,6 +2088,92 @@ def command_error(command, pointer=0, expected=''):
     caret = ' ' * max(0, pointer) + '^'
     detail = f'\n需要：{expected}' if expected else ''
     return f'未知或不完整的指令\n{command}\n{caret}{detail}'
+
+
+def run_git_command(args, timeout=120):
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    proc = subprocess.run(
+        ['git', '-C', repo_dir, *args],
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+        timeout=timeout,
+        shell=False,
+    )
+    stdout = (proc.stdout or '').strip()
+    stderr = (proc.stderr or '').strip()
+    output = '\n'.join(part for part in (stdout, stderr) if part)
+    return proc.returncode, output
+
+
+def ensure_git_clean_tracked_worktree():
+    checks = [
+        (['diff', '--quiet', '--ignore-submodules', '--'], '存在未提交的工作区改动'),
+        (['diff', '--cached', '--quiet', '--ignore-submodules', '--'], '存在已暂存但未提交的改动'),
+    ]
+    for args, message in checks:
+        code, output = run_git_command(args, timeout=30)
+        if code == 1:
+            return False, message
+        if code != 0:
+            return False, output or message
+    return True, ''
+
+
+def run_admin_git_pull_main():
+    remote = os.environ.get('GTN_GIT_REMOTE', 'origin').strip() or 'origin'
+    branch = os.environ.get('GTN_GIT_BRANCH', 'main').strip() or 'main'
+    if not re.fullmatch(r'[A-Za-z0-9._/-]+', remote) or not re.fullmatch(r'[A-Za-z0-9._/-]+', branch):
+        return {'success': False, 'output': 'GTN_GIT_REMOTE 或 GTN_GIT_BRANCH 含有非法字符。'}
+
+    code, inside = run_git_command(['rev-parse', '--is-inside-work-tree'], timeout=30)
+    if code != 0 or inside.strip().lower() != 'true':
+        return {'success': False, 'output': '当前代码目录不是 Git 仓库，无法拉取。'}
+
+    code, current_branch = run_git_command(['rev-parse', '--abbrev-ref', 'HEAD'], timeout=30)
+    if code != 0:
+        return {'success': False, 'output': current_branch or '无法读取当前 Git 分支。'}
+    current_branch = current_branch.strip()
+    if current_branch != branch:
+        return {
+            'success': False,
+            'output': f'当前分支是 {current_branch}，不是 {branch}。为避免误合并，已取消。',
+        }
+
+    clean, reason = ensure_git_clean_tracked_worktree()
+    if not clean:
+        return {'success': False, 'output': f'工作区不干净，已取消拉取：{reason}'}
+
+    code, before = run_git_command(['rev-parse', '--short', 'HEAD'], timeout=30)
+    if code != 0:
+        return {'success': False, 'output': before or '无法读取当前提交。'}
+
+    code, fetch_output = run_git_command(['fetch', '--prune', remote, branch], timeout=180)
+    if code != 0:
+        return {'success': False, 'output': f'fetch 失败：\n{fetch_output}'}
+
+    target = f'{remote}/{branch}'
+    code, merge_output = run_git_command(['merge', '--ff-only', target], timeout=180)
+    if code != 0:
+        return {'success': False, 'output': f'无法 fast-forward 到 {target}：\n{merge_output}'}
+
+    code, after = run_git_command(['rev-parse', '--short', 'HEAD'], timeout=30)
+    if code != 0:
+        after = '?'
+    before = before.strip()
+    after = after.strip()
+    changed = before != after
+    output = [
+        f'仓库：{os.path.dirname(os.path.abspath(__file__))}',
+        f'分支：{branch}',
+        f'远程：{target}',
+        f'提交：{before} -> {after}',
+        merge_output or ('已更新。' if changed else '已经是最新。'),
+    ]
+    if changed:
+        output.append('提示：代码已更新。如服务没有自动重启，请手动重启 Python 服务使新代码生效。')
+    return {'success': True, 'output': '\n'.join(output)}
 
 
 def find_player_sid(token):
@@ -2311,6 +2399,10 @@ def execute_admin_command(line):
         return {'success': True, 'output': '\n'.join(ADMIN_COMMANDS.values())}
     if cmd == 'clear':
         return {'success': True, 'output': '', 'clear': True}
+    if cmd in ('gitpull', 'pullmain', 'updatecode'):
+        result = run_admin_git_pull_main()
+        admin_event('admin' if result.get('success') else 'error', f"gitpull: {result.get('output', '')[:240]}")
+        return result
     if cmd == 'status':
         payload = get_admin_status_payload()
         summary = payload['summary']
