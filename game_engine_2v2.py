@@ -840,7 +840,7 @@ class GameEngine2v2(GameEngine):
     def _card_requires_target(self, card: CardInstance) -> bool:
         if card.card_type == 'guard':
             return False
-        if 'self_only' in card.flags:
+        if 'self_only' in card.flags and card.card_type != 'thorn':
             return False
         if card.card_type == 'root' and card.card_def.trigger_cost_e >= 0:
             return False
@@ -1042,7 +1042,7 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '等待对手反制响应'}
         if getattr(self, 'pending_v2_ui', None) is not None:
             return {'success': False, 'error': 'Waiting for mod UI response'}
-        if 'self_only' in card.flags or card.card_type == 'guard':
+        if ('self_only' in card.flags and card.card_type != 'thorn') or card.card_type == 'guard':
             target_player_id = player_id
         elif self._card_requires_target(card) and card.card_type == 'thorn' and target_player_id == player_id:
             return {'success': False, 'error': '攻击牌不能选择自己作为目标'}

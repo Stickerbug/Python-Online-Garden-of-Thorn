@@ -2,6 +2,50 @@ const DEBUG_CLIENT_LOGS = false;
 const debugLog = (...args) => {
     if (DEBUG_CLIENT_LOGS) console.log(...args);
 };
+const GTN_BETA_MODE = !!window.__GTN_BETA_MODE__;
+const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
+    'gtn_theme',
+    'gtn_lang',
+    'gtn_ui_style',
+    'gtn_ui_style_v2_migrated',
+    'gtn_show_english_card_names',
+    'gtn_show_card_images',
+    'gtn_server',
+    'gtn_disabled_mods',
+    'gtn_community_mods',
+    'gtn_settings_mod_tab',
+    'gtn_solo_decks',
+    'gtn_seen_intro',
+    'preferred_mode',
+]);
+const GTN_BETA_STORAGE_PREFIXES = [
+    'gtn_settings_mod_detail_',
+    'gtn_cards_cache_',
+    'gtn_opening_events_cache_',
+];
+function gtnBetaStorageKey(key) {
+    if (!GTN_BETA_MODE) return key;
+    const raw = String(key || '');
+    if (!raw) return key;
+    if (raw === 'preferred_mode') return 'gtn_beta_preferred_mode';
+    if (GTN_BETA_STORAGE_EXACT_KEYS.has(raw)) return `gtn_beta_${raw.slice(4)}`;
+    for (const prefix of GTN_BETA_STORAGE_PREFIXES) {
+        if (raw.startsWith(prefix)) return `gtn_beta_${raw.slice(4)}`;
+    }
+    return key;
+}
+(() => {
+    if (!GTN_BETA_MODE || !window.localStorage) return;
+    const proto = Object.getPrototypeOf(window.localStorage);
+    if (!proto || proto.__gtnBetaStoragePatched) return;
+    const rawGet = proto.getItem;
+    const rawSet = proto.setItem;
+    const rawRemove = proto.removeItem;
+    proto.getItem = function(key) { return rawGet.call(this, gtnBetaStorageKey(key)); };
+    proto.setItem = function(key, value) { return rawSet.call(this, gtnBetaStorageKey(key), value); };
+    proto.removeItem = function(key) { return rawRemove.call(this, gtnBetaStorageKey(key)); };
+    Object.defineProperty(proto, '__gtnBetaStoragePatched', { value: true });
+})();
 
 const I18N = {
     en: {
@@ -1003,6 +1047,12 @@ Object.assign(I18N.fr, { admin_prefix: 'Admin', login_admin_reserved: 'Ce pseudo
 Object.assign(I18N.pt, { admin_prefix: 'Administrador', login_admin_reserved: 'Este apelido está ocupado pelo administrador' });
 Object.assign(I18N.ru, { admin_prefix: 'Администратор', login_admin_reserved: 'Этот псевдоним занят администратором' });
 Object.assign(I18N.ja, { admin_prefix: '管理者', login_admin_reserved: 'このニックネームは管理者が使用しています' });
+Object.assign(I18N.en, { chat_rate_limited: 'Chat rate limit reached. Please wait.' });
+Object.assign(I18N.zh, { chat_rate_limited: '聊天发送过快，请稍后再试。' });
+Object.assign(I18N.fr, { chat_rate_limited: 'Messages trop fréquents. Veuillez patienter.' });
+Object.assign(I18N.pt, { chat_rate_limited: 'Mensagens muito frequentes. Aguarde um pouco.' });
+Object.assign(I18N.ru, { chat_rate_limited: 'Сообщения отправляются слишком часто. Подождите.' });
+Object.assign(I18N.ja, { chat_rate_limited: 'チャットの送信が速すぎます。少し待ってください。' });
 Object.assign(I18N.en, {
     account: 'Account', account_guest: 'Guest Mode', account_username: 'Username', account_password: 'Password',
     account_password_confirm: 'Confirm Password', account_old_password: 'Current Password', account_new_password: 'New Password',
@@ -1173,6 +1223,12 @@ Object.assign(I18N.ja, {
 });
 Object.assign(I18N.en, { chief_designer_prefix: 'Chief Designer' });
 Object.assign(I18N.zh, { admin_prefix: '\u7ba1\u7406\u5458', login_admin_reserved: '\u6b64\u6635\u79f0\u88ab\u7ba1\u7406\u5458\u5360\u7528' });
+Object.assign(I18N.en, { console_prefix: 'Console' });
+Object.assign(I18N.zh, { console_prefix: '\u63a7\u5236\u53f0' });
+Object.assign(I18N.fr, { console_prefix: 'Console' });
+Object.assign(I18N.pt, { console_prefix: 'Console' });
+Object.assign(I18N.ru, { console_prefix: 'Console' });
+Object.assign(I18N.ja, { console_prefix: 'Console' });
 Object.assign(I18N.zh, { chief_designer_prefix: '\u603b\u8bbe\u8ba1\u5e08' });
 Object.assign(I18N.fr, { chief_designer_prefix: 'Concepteur en chef' });
 Object.assign(I18N.pt, { chief_designer_prefix: 'Designer-chefe' });
@@ -1196,6 +1252,12 @@ Object.assign(I18N.fr, { mimic_extra_cost: 'Co\u00fbt {0}E' });
 Object.assign(I18N.pt, { mimic_extra_cost: 'Custo {0}E' });
 Object.assign(I18N.ru, { mimic_extra_cost: '\u0426\u0435\u043d\u0430 {0}E' });
 Object.assign(I18N.ja, { mimic_extra_cost: '\u6d88\u8cbb {0}E' });
+Object.assign(I18N.en, { spectate_unavailable: 'Not spectatable yet' });
+Object.assign(I18N.zh, { spectate_unavailable: '\u6682\u4e0d\u80fd\u89c2\u6218' });
+Object.assign(I18N.fr, { spectate_unavailable: 'Observation indisponible' });
+Object.assign(I18N.pt, { spectate_unavailable: 'Ainda indispon\u00edvel' });
+Object.assign(I18N.ru, { spectate_unavailable: '\u041d\u0430\u0431\u043b\u044e\u0434\u0435\u043d\u0438\u0435 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e' });
+Object.assign(I18N.ja, { spectate_unavailable: '\u307e\u3060\u89b3\u6226\u3067\u304d\u307e\u305b\u3093' });
 Object.assign(I18N.en, {
     tutorial_player_you: 'You', tutorial_player_opponent: 'Practice Opponent',
     error_urf_equip_limit: 'Infinite Fire equipment limit is {0}. Sell equipment first.',
@@ -1559,6 +1621,7 @@ function isSpecialPlayer(player) {
 
 function getSpecialRolePrefix(player) {
     if (!player) return '';
+    if (player.console_player || player.special_role === 'console') return UI.console_prefix || '控制台';
     if (isAdminPlayer(player)) return UI.admin_prefix;
     if (player.special_role === 'chief_designer') return UI.chief_designer_prefix;
     if (player.special_role === 'right_angle_person') return UI.right_angle_person_prefix;
@@ -1804,6 +1867,8 @@ Object.assign(LOG_TEXT.en, {
     replenish_card: '{p} replenishes 1 {type} card: {card}',
     hand_full_discard: "{p}'s hand is full. {card} goes to discard.",
     replace_card: '{p} replaces {old} and gets {card}',
+    chilli_discard_draw: '{p} uses Chilli, discards 1 card and draws 1 card',
+    chilli_draw: '{p} uses Chilli and draws 1 card',
     sell_equipment: '{p} sells {card} and recovers {e}E/{m}M',
     team_draw: 'Both teams are defeated. Draw.',
     team_win: 'Team {team} wins.',
@@ -1819,6 +1884,8 @@ Object.assign(LOG_TEXT.fr, {
     replenish_card: '{p} récupère 1 carte {type} : {card}',
     hand_full_discard: 'La main de {p} est pleine. {card} va dans la défausse.',
     replace_card: '{p} remplace {old} et obtient {card}',
+    chilli_discard_draw: '{p} joue Chilli, défausse 1 carte et pioche 1 carte',
+    chilli_draw: '{p} joue Chilli et pioche 1 carte',
     sell_equipment: '{p} vend {card} et récupère {e}E/{m}M',
     team_draw: 'Les deux équipes sont vaincues. Égalité.',
     team_win: 'Équipe {team} gagne.',
@@ -1834,6 +1901,8 @@ Object.assign(LOG_TEXT.pt, {
     replenish_card: '{p} repõe 1 carta {type}: {card}',
     hand_full_discard: 'A mão de {p} está cheia. {card} vai para o descarte.',
     replace_card: '{p} substitui {old} e recebe {card}',
+    chilli_discard_draw: '{p} usa Chilli, descarta 1 carta e compra 1 carta',
+    chilli_draw: '{p} usa Chilli e compra 1 carta',
     sell_equipment: '{p} vende {card} e recupera {e}E/{m}M',
     team_draw: 'As duas equipes foram derrotadas. Empate.',
     team_win: 'Equipe {team} vence.',
@@ -1849,6 +1918,8 @@ Object.assign(LOG_TEXT.ru, {
     replenish_card: '{p} добирает 1 карту {type}: {card}',
     hand_full_discard: 'Рука {p} заполнена. {card} уходит в сброс.',
     replace_card: '{p} заменяет {old} и получает {card}',
+    chilli_discard_draw: '{p} использует Chilli, сбрасывает 1 карту и берет 1 карту',
+    chilli_draw: '{p} использует Chilli и берет 1 карту',
     sell_equipment: '{p} продает {card} и восстанавливает {e}E/{m}M',
     team_draw: 'Обе команды побеждены. Ничья.',
     team_win: 'Команда {team} побеждает.',
@@ -1864,12 +1935,21 @@ Object.assign(LOG_TEXT.ja, {
     replenish_card: '{p}が{type}カードを1枚補充：{card}',
     hand_full_discard: '{p}の手札が満杯。{card}は捨て札へ。',
     replace_card: '{p}が{old}を入れ替え、{card}を得る',
+    chilli_discard_draw: '{p}がChilliを使用：1枚捨て、1枚ドロー',
+    chilli_draw: '{p}がChilliを使用：1枚ドロー',
     sell_equipment: '{p}が{card}を売却し、{e}E/{m}M回復',
     team_draw: '両チームが全滅。引き分け。',
     team_win: 'チーム{team}の勝利。',
     disconnect_loss: '{p}の切断が長すぎました。{winner}の勝利。',
     team_disconnect_loss: '{p}の切断が長すぎました。チーム{team}の勝利。',
 });
+
+Object.assign(LOG_TEXT.en, { battery_counter: 'Battery counter' });
+Object.assign(LOG_TEXT.zh || (LOG_TEXT.zh = {}), { battery_counter: '\u7535\u6c60\u53cd\u4f24' });
+Object.assign(LOG_TEXT.fr, { battery_counter: 'contre de Batterie' });
+Object.assign(LOG_TEXT.pt, { battery_counter: 'contra-ataque da Bateria' });
+Object.assign(LOG_TEXT.ru, { battery_counter: 'Battery counter' });
+Object.assign(LOG_TEXT.ja, { battery_counter: '\u96fb\u6c60\u53cd\u6483' });
 
 const LOG_FALLBACK_REPLACE = {
     en: [
@@ -1970,14 +2050,20 @@ function localizeKnownLogText(line) {
 
 function localizeDamageSource(source) {
     const table = LOG_TEXT[currentLang] || LOG_TEXT.en;
-    return String(source || '')
+    const raw = String(source || '');
+    if (/电池|電池|battery/i.test(raw)) {
+        return table.battery_counter || '电池反伤';
+    }
+    return raw
         .replaceAll('\u4e2d\u6bd2', table.poison)
         .replaceAll('\u707c\u70e7', table.burn)
         .replaceAll('\u7269\u7406', table.physical);
 }
 
 function translateLogLine(line) {
-    if (currentLang === 'zh') return line;
+    if (currentLang === 'zh') {
+        return String(line || '').replace(/受到(\d+)点电池伤害/g, '受到$1点电池反伤');
+    }
     let m;
     const lp = localizeCanonicalPlayerName;
     if ((m = line.match(/^\u6e38\u620f\u5f00\u59cb\uff01(.+)\u5148\u624b\u3002?$/))) return fmtLog('game_start', { p: lp(m[1]) });
@@ -1998,6 +2084,8 @@ function translateLogLine(line) {
     if ((m = line.match(/^(.+)\u65ad\u7ebf\u8d85\u65f6\uff0c(.+)\u83b7\u80dc\uff01$/))) return fmtLog('disconnect_loss', { p: lp(m[1]), winner: lp(m[2]) });
     if ((m = line.match(/^\u961f\u4f0d(.+)\u83b7\u80dc\uff01$/))) return fmtLog('team_win', { team: localizePlayerNameInText(m[1]) });
     if ((m = line.match(/^(.+)\u62bd(\d+)\u5f20\u724c$/))) return fmtLog('draw_cards', { p: lp(m[1]), n: m[2] });
+    if ((m = line.match(/^(.+)\u4f7f\u7528\u8fa3\u6912\uff0c\u5f031\u5f20\u5e76\u62bd1\u5f20\u724c$/))) return fmtLog('chilli_discard_draw', { p: lp(m[1]) });
+    if ((m = line.match(/^(.+)\u4f7f\u7528\u8fa3\u6912\uff0c\u62bd1\u5f20\u724c$/))) return fmtLog('chilli_draw', { p: lp(m[1]) });
     if ((m = line.match(/^(.+)\u56de\u590d(\d+)E$/))) return fmtLog('recover_e', { p: lp(m[1]), n: m[2] });
     if ((m = line.match(/^(.+)\u53d7\u5230(\d+)\u70b9(.+)\u4f24\u5bb3\uff08H=(-?\d+)\uff09$/))) return fmtLog('take_damage', { p: lp(m[1]), n: m[2], source: localizeDamageSource(m[3]), h: m[4] });
     if ((m = line.match(/^(.+)\u53d7\u5230(\d+)\u70b9\u4f24\u5bb3\uff08H=(-?\d+)\uff09$/))) return fmtLog('take_damage', { p: lp(m[1]), n: m[2], source: '', h: m[3] });
@@ -2019,6 +2107,7 @@ function translateServerMessage(message) {
     if (!message) return UI.operation_failed;
     if (message === 'Operation failed') return UI.operation_failed;
     if (message === 'Invalid chat target') return UI.error_target_invalid;
+    if (message === '聊天发送过快') return UI.chat_rate_limited || message;
     if (message === 'Teammate is not online') return UI.surrender_teammate_offline || message;
     if (message === 'A surrender request is already pending') return UI.surrender_pending || message;
     if (message === 'No pending surrender request') return UI.surrender_no_pending || message;
@@ -2098,6 +2187,7 @@ let phaseChatEntries = [];
 let phaseChatMatchKey = '';
 let pregameChatEntries = [];
 let pregameChatMatchKey = '';
+let lobbyChatHistorySignature = '';
 let lobbyPlayers = [];
 let lobbyOngoingGames = [];
 const DEFAULT_SERVER = 'http://121.41.93.192';
@@ -2115,6 +2205,8 @@ let choicePending = false;
 let choiceData = {};
 let isSpectating = false;
 let spectatePerspective = 0;
+let pendingSpectateRoomId = null;
+let activeSpectateRoomId = null;
 let responseTimerId = null;
 let responseCountdown = 0;
 let allyConsentTimerId = null;
@@ -2350,11 +2442,13 @@ function setCompactButtonText(id, normalKey, compactKey) {
 function updateCompactUiText() {
     setCompactButtonText('btn-end-turn', 'end_turn', 'compact_end_turn');
     setCompactButtonText('btn-view-deck', 'view_deck', 'compact_view_deck');
+    setCompactButtonText('btn-spectate-view-deck', 'view_deck', 'compact_view_deck');
     setCompactButtonText('btn-urf-replace', 'urf_replace', 'compact_urf_replace');
     setCompactButtonText('btn-urf-sell', 'urf_sell', 'compact_urf_sell');
     setCompactButtonText('btn-solo-next-draw', 'set_next_draw', 'compact_set_next_draw');
     setCompactButtonText('btn-solo-edit', 'pause_edit', 'compact_pause_edit');
     setCompactButtonText('classic-view-deck', 'view_deck', 'compact_view_deck');
+    setCompactButtonText('classic-switch-perspective', 'switch_perspective', 'switch_perspective');
     setCompactButtonText('classic-urf-replace', 'urf_replace', 'compact_urf_replace');
     setCompactButtonText('classic-urf-sell', 'urf_sell', 'compact_urf_sell');
     setCompactButtonText('classic-solo-next-draw', 'set_next_draw', 'compact_set_next_draw');
@@ -2668,8 +2762,12 @@ function updateStaticText() {
     if (btnSurrender) btnSurrender.textContent = UI.surrender;
     const btnViewDeck = $('btn-view-deck');
     if (btnViewDeck) btnViewDeck.textContent = UI.view_deck;
+    const btnSpectateViewDeck = $('btn-spectate-view-deck');
+    if (btnSpectateViewDeck) btnSpectateViewDeck.textContent = UI.view_deck;
     const classicViewDeck = $('classic-view-deck');
     if (classicViewDeck) classicViewDeck.textContent = UI.view_deck;
+    const classicSwitchPerspective = $('classic-switch-perspective');
+    if (classicSwitchPerspective && !classicSwitchPerspective.dataset.dynamic) classicSwitchPerspective.textContent = UI.switch_perspective;
     const btnEndTurn = $('btn-end-turn');
     if (btnEndTurn) btnEndTurn.textContent = UI.end_turn;
     const btnSoloNextDraw = $('btn-solo-next-draw');
@@ -3498,7 +3596,7 @@ function ensureMobilePlayConfirm() {
     return bar;
 }
 
-function clearSelectedPlayCard() {
+function clearSelectedPlayCard(options = {}) {
     selectedPlayCardId = null;
     classicAimHoverTarget = '';
     if (classicAimFrame) {
@@ -3520,7 +3618,7 @@ function clearSelectedPlayCard() {
     }
     const bar = $('mobile-play-confirm');
     if (bar) bar.classList.add('hidden');
-    if (shouldUseClassicBattle(gameState)) renderClassicBattle(gameState);
+    if (!options.skipRender && shouldUseClassicBattle(gameState)) renderClassicBattle(gameState);
 }
 
 function getSelectedClassicCard() {
@@ -3532,13 +3630,7 @@ function getSelectedClassicCard() {
 
 function isClassicSelfOnlyCard(card) {
     if (!card) return false;
-    const flags = new Set([
-        ...((card.flags || []).map(String)),
-        ...(((card.raw && card.raw.instance_flags) || []).map(String)),
-    ]);
-    const cardDef = card.cardDef || getCardDef(card.def_id || '');
-    ((cardDef && cardDef.flags) || []).forEach(flag => flags.add(String(flag)));
-    return flags.has('self_only') || flags.has('tag_self_only');
+    return cardHasSelfOnlyFlag(card.raw || card, card.cardDef || getCardDef(card.def_id || ''));
 }
 
 function ensureClassicAimLayer() {
@@ -3971,7 +4063,7 @@ function escapeClassToken(value) {
     return String(value || 'default').replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
-const DATA_CACHE_VERSION = 'v6';
+const DATA_CACHE_VERSION = 'v7';
 
 function getDataCacheKey(kind) {
     const disabled = getDisabledMods().slice().sort().join(',') || 'none';
@@ -4175,7 +4267,9 @@ function createCardElement(cardDict, options = {}) {
     const cardArtHtml = imageUrl
         ? `<div class="card-art"><img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.closest('.card-art').classList.add('hidden')"></div>`
         : '';
-    const { totalE, totalM, flags } = getCardDisplayCosts(cardDict, cardDef, gameState && gameState.you);
+    const predictionOptions = options.prediction || options.predictionOptions || {};
+    const cardOwnerState = options.ownerState || options.attackerState || predictionOptions.attackerState || getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you);
+    const { totalE, totalM, flags } = getCardDisplayCosts(cardDict, cardDef, cardOwnerState);
     el.style.borderColor = typeColor;
     el.dataset.instanceId = cardDict.instance_id;
     el.dataset.defId = defId;
@@ -4207,7 +4301,11 @@ function createCardElement(cardDict, options = {}) {
         const tomatoLayer = Math.max(0, Number(cardDict.held_turns || 0));
         flagsHtml += `<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || '层数')}: ${tomatoLayer}</span>`;
     }
-    const predictionHtml = getCardPlayEffectPredictionHtml(cardDict);
+    const predictionHtml = getCardPlayEffectPredictionHtml(cardDict, {
+        ...predictionOptions,
+        ownerState: predictionOptions.ownerState || cardOwnerState,
+        attackerState: predictionOptions.attackerState || cardOwnerState,
+    });
     const bottomHtml = (predictionHtml || flagsHtml)
         ? `<div class="card-bottom-zone ${predictionHtml ? 'has-prediction' : ''}">
                 ${predictionHtml || ''}
@@ -4272,6 +4370,12 @@ function getEffectiveCardFlagSets(cardDict, cardDef) {
     const effective = new Set([...base, ...added]);
     disabled.forEach(flag => effective.delete(flag));
     return { base, added, disabled, effective };
+}
+
+function cardHasSelfOnlyFlag(cardDict, cardDef = null) {
+    const resolvedDef = cardDef || getCardDef(cardDict && cardDict.def_id);
+    const { effective } = getEffectiveCardFlagSets(cardDict || {}, resolvedDef || {});
+    return effective.has('self_only') || effective.has('tag_self_only');
 }
 
 function cardFlagHtml(flag, text = null) {
@@ -4343,7 +4447,8 @@ function createCardChoiceChip(cardDict, options = {}) {
         flags.innerHTML = flagsHtml;
         chip.appendChild(flags);
     }
-    attachFloatingCardPreview(chip, cardDict);
+    const previewOptions = options.previewOptions || options.cardOptions || null;
+    attachFloatingCardPreview(chip, cardDict, previewOptions || {});
     return chip;
 }
 
@@ -4591,13 +4696,68 @@ function getPredictionPlayerById(id) {
     return getPlayerDataById(pid) || {};
 }
 
-function getDefaultPredictionTargetState(cardDict) {
+function getPredictionPlayerRefs() {
+    if (!gameState) return [];
+    const refs = [gameState.you, gameState.teammate, gameState.opponent, gameState.opponent2];
+    if (Array.isArray(gameState.spectate_players)) refs.push(...gameState.spectate_players);
+    const seen = new Set();
+    return refs.filter(player => {
+        if (!player) return false;
+        const id = normalizePlayerId(player.player_id);
+        const key = id != null ? `id:${id}` : player;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function getCardOwnerStateForPrediction(cardDict) {
+    if (!cardDict || cardDict.instance_id == null) return null;
+    const instanceId = String(cardDict.instance_id);
+    for (const player of getPredictionPlayerRefs()) {
+        const zones = [
+            Array.isArray(player.hand) ? player.hand : [],
+            Array.isArray(player.revealed_hand) ? player.revealed_hand : [],
+        ];
+        if (zones.some(zone => zone.some(card => String(card && card.instance_id) === instanceId))) {
+            return player;
+        }
+    }
+    return null;
+}
+
+function getPredictionOwnerId(ownerState) {
+    return normalizePlayerId(ownerState && ownerState.player_id);
+}
+
+function getDefaultEnemyIdsForPredictionOwner(ownerState) {
+    const ownerId = getPredictionOwnerId(ownerState);
+    if (!gameState) return [];
+    if (gameState.mode === '2v2' && ownerId != null) {
+        if (ownerId === 0 || ownerId === 1) return [2, 3];
+        if (ownerId === 2 || ownerId === 3) return [0, 1];
+    }
+    if (ownerId === 0) return [1];
+    if (ownerId === 1) return [0];
+    return Array.isArray(gameState.enemy_ids)
+        ? gameState.enemy_ids.map(normalizePlayerId).filter(id => id != null)
+        : [];
+}
+
+function getFirstPredictionEnemyState(ownerState) {
+    const enemyIds = getDefaultEnemyIdsForPredictionOwner(ownerState);
+    if (enemyIds.length) {
+        const aliveId = enemyIds.find(id => Number(getPredictionPlayerById(id).health || 0) > 0);
+        return getPredictionPlayerById(aliveId != null ? aliveId : enemyIds[0]);
+    }
+    return gameState && gameState.opponent ? gameState.opponent : {};
+}
+
+function getDefaultPredictionTargetState(cardDict, ownerState = null) {
     if (!gameState) return {};
     const targetId = normalizePlayerId(cardDict && (cardDict.target_player_id ?? cardDict.target_id));
     if (targetId != null) return getPredictionPlayerById(targetId);
-    const enemyIds = Array.isArray(gameState.enemy_ids) ? gameState.enemy_ids.map(normalizePlayerId).filter(id => id != null) : [];
-    if (enemyIds.length) return getPredictionPlayerById(enemyIds[0]);
-    return gameState.opponent || {};
+    return getFirstPredictionEnemyState(ownerState);
 }
 
 function cardHasEffectiveFlagForPrediction(cardDict, cardDef, flag) {
@@ -4820,8 +4980,8 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     if (!gameState || !cardDict || !cardDict.def_id) return result;
     const cardDef = getCardDef(cardDict.def_id);
     if (!cardDef) return result;
-    const attackerState = options.attackerState || gameState.you || {};
-    const targetState = options.targetState || getDefaultPredictionTargetState(cardDict);
+    const attackerState = options.attackerState || options.ownerState || getCardOwnerStateForPrediction(cardDict) || gameState.you || {};
+    const targetState = options.targetState || getDefaultPredictionTargetState(cardDict, attackerState);
     const hasDamageOverride = Object.prototype.hasOwnProperty.call(options, 'damageHits');
     if (cardDef.card_type === 'thorn') {
         const hits = hasDamageOverride
@@ -4852,9 +5012,27 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     return result;
 }
 
+function shouldShowCardPlayEffectPrediction(cardDict, options = {}) {
+    if (!gameState || !cardDict || !cardDict.def_id) return false;
+    if (cardDict.instance_id == null && !options.allowDefinitionCard) return false;
+    const activePhases = new Set(['action', 'draw', 'response', 'choice']);
+    if (!activePhases.has(gameState.phase)) return false;
+    if (cardDict.instance_id != null) {
+        const id = String(cardDict.instance_id);
+        const ownerState = options.ownerState || options.attackerState || getCardOwnerStateForPrediction(cardDict);
+        const ownerHand = ownerState && Array.isArray(ownerState.hand) ? ownerState.hand : null;
+        if (ownerHand) {
+            if (!ownerHand.some(card => String(card && card.instance_id) === id)) return false;
+        } else {
+            const hand = gameState && gameState.you && Array.isArray(gameState.you.hand) ? gameState.you.hand : [];
+            if (!hand.some(card => String(card && card.instance_id) === id)) return false;
+        }
+    }
+    return true;
+}
+
 function getCardPlayEffectPredictionHtml(cardDict, options = {}) {
-    if (!gameState || !cardDict || !cardDict.def_id) return '';
-    if (cardDict.instance_id == null && !options.allowDefinitionCard) return '';
+    if (!shouldShowCardPlayEffectPrediction(cardDict, options)) return '';
     const prediction = getCardPlayEffectPredictionParts(cardDict, options);
     const targetParts = [];
     const selfParts = [];
@@ -5008,13 +5186,25 @@ function positionFloatingCardPreview(anchor, pos = null) {
     floatingCardPreviewEl.style.top = `${top}px`;
 }
 
-function showFloatingCardPreview(cardDict, anchor, pos = null) {
+function getCardPredictionOptionsForOwner(cardDict, ownerState = null) {
+    const attackerState = ownerState || getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you) || {};
+    return {
+        ownerState: attackerState,
+        attackerState,
+        targetState: getDefaultPredictionTargetState(cardDict, attackerState),
+    };
+}
+
+function showFloatingCardPreview(cardDict, anchor, pos = null, cardOptions = {}) {
     const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
     if (!cardDef) return;
     removeFloatingCardPreview();
     const preview = document.createElement('div');
     preview.className = 'floating-card-preview';
-    const card = createCardElement(cardDict, { showAllFlags: false });
+    const card = createCardElement(cardDict, {
+        showAllFlags: false,
+        ...cardOptions,
+    });
     card.classList.add('floating-card-preview-card');
     preview.appendChild(card);
     document.body.appendChild(preview);
@@ -5023,11 +5213,11 @@ function showFloatingCardPreview(cardDict, anchor, pos = null) {
     requestAnimationFrame(() => preview.classList.add('active'));
 }
 
-function attachFloatingCardPreview(anchor, cardDict) {
+function attachFloatingCardPreview(anchor, cardDict, cardOptions = {}) {
     if (!anchor || !cardDict || !cardDict.def_id) return;
     anchor.addEventListener('mouseenter', (event) => {
         if (window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse)').matches) return;
-        showFloatingCardPreview(cardDict, anchor, { x: event.clientX, y: event.clientY });
+        showFloatingCardPreview(cardDict, anchor, { x: event.clientX, y: event.clientY }, cardOptions);
     });
     anchor.addEventListener('mousemove', (event) => {
         if (floatingCardPreviewEl) positionFloatingCardPreview(anchor, { x: event.clientX, y: event.clientY });
@@ -5039,7 +5229,7 @@ function attachFloatingCardPreview(anchor, cardDict) {
         floatingCardPreviewTouchStart = pos;
         if (floatingCardPreviewTimer) clearTimeout(floatingCardPreviewTimer);
         floatingCardPreviewTimer = setTimeout(() => {
-            showFloatingCardPreview(cardDict, anchor, pos);
+            showFloatingCardPreview(cardDict, anchor, pos, cardOptions);
         }, CARD_CHIP_PREVIEW_DELAY);
     }, { passive: true });
     anchor.addEventListener('touchmove', (event) => {
@@ -5362,6 +5552,7 @@ function connectSocket(serverUrl) {
             nickname: loginCredential || nickname,
             mode: preferredMode,
             account_login: !!currentAccount,
+            beta_mode: GTN_BETA_MODE,
             ...getModLoginPayload(),
         });
     });
@@ -5423,6 +5614,10 @@ function connectSocket(serverUrl) {
         mySid = data.your_sid || mySid;
         phase = 'lobby';
         renderLobby(data);
+        if (data.chat_history) renderLobbyChatHistory(data.chat_history);
+    });
+    socket.on('lobby_chat_history', (data) => {
+        renderLobbyChatHistory(data || {});
     });
     socket.on('invite_received', (data) => {
         debugLog('[client] invite_received:', data);
@@ -5544,6 +5739,18 @@ function connectSocket(serverUrl) {
     });
     socket.on('state_update', (data) => {
         debugLog('[client] state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null, 'spectating=', data.spectating);
+        if (data && data.spectating && pendingSpectateRoomId != null && data.room_id != null && Number(data.room_id) !== Number(pendingSpectateRoomId)) {
+            debugLog('[client] ignored stale spectate state for room=', data.room_id, 'pending=', pendingSpectateRoomId);
+            return;
+        }
+        if (data && data.spectating && pendingSpectateRoomId == null && !isSpectating) {
+            debugLog('[client] ignored late spectate state after leaving, room=', data.room_id);
+            return;
+        }
+        if (data && data.spectating && activeSpectateRoomId != null && data.room_id != null && Number(data.room_id) !== Number(activeSpectateRoomId)) {
+            debugLog('[client] ignored spectate state for inactive room=', data.room_id, 'active=', activeSpectateRoomId);
+            return;
+        }
         const previousGameState = gameState;
         soloMode = !!data.solo;
         syncBattleLogMatch(data || {});
@@ -5551,6 +5758,7 @@ function connectSocket(serverUrl) {
         phase = data.phase || phase;
         if (data.spectating) {
             isSpectating = true;
+            if (data.room_id != null) activeSpectateRoomId = Number(data.room_id);
             if (data.spectate_perspective != null) spectatePerspective = data.spectate_perspective;
         }
         if (!isSpectating && data.your_id != null) playerId = data.your_id;
@@ -5693,6 +5901,7 @@ function connectSocket(serverUrl) {
     socket.on('server_error', (data) => {
         debugLog('[client] server_error:', data.message);
         flashStatus(translateServerMessage(data.message), 3600, 'error');
+        pendingSpectateRoomId = null;
         clearPendingServerAction();
         pendingPlayCard = null;
         clearSelectedPlayCard();
@@ -5766,19 +5975,27 @@ function connectSocket(serverUrl) {
         if (phase === 'game_over') updateGameOverRematchButton(gameState);
     });
     socket.on('spectate_enter', (data) => {
+        if (data && pendingSpectateRoomId != null && data.room_id != null && Number(data.room_id) !== Number(pendingSpectateRoomId)) {
+            debugLog('[client] ignored stale spectate_enter for room=', data.room_id, 'pending=', pendingSpectateRoomId);
+            return;
+        }
+        pendingSpectateRoomId = null;
+        activeSpectateRoomId = data && data.room_id != null ? Number(data.room_id) : null;
         isSpectating = true;
         spectatePerspective = 0;
         phase = 'playing';
         showView('view-game');
     });
     socket.on('spectate_leave', () => {
+        pendingSpectateRoomId = null;
+        activeSpectateRoomId = null;
         isSpectating = false;
         spectatePerspective = 0;
         phase = 'lobby';
         showView('view-lobby');
     });
     socket.on('server_broadcast', (data) => {
-        flashStatus(UI.server_broadcast.replace('{0}', data.message || ''), 4000);
+        flashStatus(data.message || '', 4000);
     });
     socket.on('solo_paused', () => {
         if (suppressSoloPausedHandler) {
@@ -7565,11 +7782,18 @@ function renderLobby(data) {
                     gameLabel = `${g.player1} vs ${g.player2} (${UI.round}${g.round})`;
                 }
                 row.innerHTML = `<span>${gameLabel}</span>`;
-                const btn = document.createElement('button');
-                btn.textContent = UI.spectate;
-                btn.className = 'btn btn-secondary';
-                btn.onclick = () => socket.emit('spectate', { room_id: g.room_id });
-                row.appendChild(btn);
+                const canSpectate = g.can_spectate !== false && !['draft', 'event_select'].includes(g.phase);
+                if (canSpectate) {
+                    const btn = document.createElement('button');
+                    btn.textContent = UI.spectate;
+                    btn.className = 'btn btn-secondary spectate-btn';
+                    btn.onclick = () => {
+                        pendingSpectateRoomId = Number(g.room_id);
+                        activeSpectateRoomId = null;
+                        socket.emit('spectate', { room_id: g.room_id });
+                    };
+                    row.appendChild(btn);
+                }
                 gamesList.appendChild(row);
             });
         } else {
@@ -8156,12 +8380,75 @@ function syncPhaseChatMatch(ctx) {
     }
 }
 
+function resetMatchRuntimeState(options = {}) {
+    if (targetPickCleanup) {
+        try { targetPickCleanup(); } catch (_) {}
+        targetPickCleanup = null;
+    }
+    cleanupDragState();
+    clearScheduledGameOver();
+    clearPendingServerAction();
+    clearSelectedPlayCard({ skipRender: true });
+    removeFloatingCardPreview();
+    hideGameAlert();
+    responsePending = false;
+    responseData = {};
+    choicePending = false;
+    choiceData = {};
+    activeV2UiRequestId = null;
+    pendingPlayCard = null;
+    optimisticResourceOverride = null;
+    pendingLocalResourceCosts = [];
+    pendingOptimisticResourceCosts = [];
+    hasPlayerHandSnapshot = false;
+    recentlyPlayedExileCards.clear();
+    lastRenderedTurnKey = '';
+    lastStatusSignatures.clear();
+    if (responseTimerId) {
+        clearInterval(responseTimerId);
+        responseTimerId = null;
+    }
+    if (allyConsentTimerId) {
+        clearInterval(allyConsentTimerId);
+        allyConsentTimerId = null;
+    }
+    if (surrenderConsentTimerId) {
+        clearInterval(surrenderConsentTimerId);
+        surrenderConsentTimerId = null;
+    }
+    if (cardAnimationUnlockTimer) {
+        clearTimeout(cardAnimationUnlockTimer);
+        cardAnimationUnlockTimer = null;
+    }
+    cardAnimationLockUntil = 0;
+    const responsePanel = $('response-panel');
+    if (responsePanel) {
+        responsePanel.innerHTML = '';
+        responsePanel.classList.add('hidden');
+    }
+    const prompt = $('game-prompt');
+    if (prompt) prompt.classList.remove('active');
+    const dropOverlay = $('card-drop-overlay');
+    if (dropOverlay) dropOverlay.classList.add('hidden');
+    const mobileBar = $('mobile-play-confirm');
+    if (mobileBar) mobileBar.classList.add('hidden');
+    const aim = $('classic-aim-layer');
+    if (aim) aim.classList.add('hidden');
+    document.body.classList.remove('server-action-pending', 'card-dragging');
+    if (options.clearGameState) {
+        gameState = {};
+    }
+}
+
 function syncBattleLogMatch(ctx) {
     const key = phaseContextMatchKey(ctx);
     if (!key) return;
     if (renderedBattleLogMatchKey !== key) {
         const container = $('battle-log');
         const content = container ? container.querySelector('.log-content') : null;
+        if (renderedBattleLogMatchKey) {
+            resetMatchRuntimeState({ clearGameState: true });
+        }
         resetBattleLogState(content);
         renderedBattleLogMatchKey = key;
         lastDraftOptionsSignature = '';
@@ -8251,6 +8538,7 @@ function updateModeSpecificControls(gs) {
     const soloNextDrawBtn = $('btn-solo-next-draw');
     const soloEditBtn = $('btn-solo-edit');
     const viewDeckBtn = $('btn-view-deck');
+    const spectateViewDeckBtn = $('btn-spectate-view-deck');
     const urfReplaceBtn = $('btn-urf-replace');
     const urfSellBtn = $('btn-urf-sell');
     const surrenderBtn = $('btn-surrender');
@@ -8282,6 +8570,11 @@ function updateModeSpecificControls(gs) {
         viewDeckBtn.classList.toggle('hidden', !showViewDeck);
         viewDeckBtn.style.display = showViewDeck ? '' : 'none';
     }
+    if (spectateViewDeckBtn) {
+        const showSpectateViewDeck = isSpectating && gs?.mode !== 'urf';
+        spectateViewDeckBtn.classList.toggle('hidden', !showSpectateViewDeck);
+        spectateViewDeckBtn.style.display = showSpectateViewDeck ? '' : 'none';
+    }
     if (urfReplaceBtn) {
         const show = gs?.mode === 'urf' && !isSpectating && !gameOver;
         urfReplaceBtn.textContent = UI.urf_replace || '替换手牌';
@@ -8305,8 +8598,17 @@ function updateModeSpecificControls(gs) {
     }
     const switchBtn = $('btn-switch-perspective');
     if (switchBtn) {
-        switchBtn.classList.add('hidden');
-        switchBtn.style.display = 'none';
+        const count = Array.isArray(gs?.spectate_players) ? gs.spectate_players.length : 0;
+        const showSwitch = isSpectating && count > 1;
+        switchBtn.dataset.dynamic = showSwitch ? '1' : '';
+        switchBtn.classList.toggle('hidden', !showSwitch);
+        switchBtn.style.display = showSwitch ? '' : 'none';
+        if (showSwitch) {
+            const current = getSpectatePerspectivePlayer(gs);
+            switchBtn.textContent = current && current.name
+                ? `${UI.switch_perspective}: ${localizeCanonicalPlayerName(current.name)}`
+                : UI.switch_perspective;
+        }
     }
     if (gameControls) gameControls.style.display = showGameControls ? '' : 'none';
     if (playZone) playZone.style.display = showPlayZone ? '' : 'none';
@@ -8334,6 +8636,17 @@ function updateClassicExtraControls(gs) {
     const myTurn = isMyTurn();
     const busy = isActionBusy({ includeAnimation: false });
     let visibleCount = 0;
+    const spectatePlayerCount = Array.isArray(gs?.spectate_players) ? gs.spectate_players.length : 0;
+    const currentSpectatePlayer = getSpectatePerspectivePlayer(gs);
+
+    if (setClassicControlButton('classic-switch-perspective', isSpectating && spectatePlayerCount > 1, {
+        text: currentSpectatePlayer && currentSpectatePlayer.name
+            ? `${UI.switch_perspective}: ${localizeCanonicalPlayerName(currentSpectatePlayer.name)}`
+            : UI.switch_perspective,
+        disabled: false,
+    })) visibleCount += 1;
+    const classicSwitch = $('classic-switch-perspective');
+    if (classicSwitch) classicSwitch.dataset.dynamic = (isSpectating && spectatePlayerCount > 1) ? '1' : '';
 
     if (setClassicControlButton('classic-view-deck', !isUrf, {
         text: UI.view_deck,
@@ -8558,8 +8871,23 @@ function renderClassicEquipmentList(player) {
         const cardDef = getCardDef(cardInst.def_id || '');
         const name = cardDef ? getCardName(cardDef) : (cardInst.def_id || '?');
         const typeColor = cardDef ? (CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary) : COLORS.text_primary;
-        return `<span class="classic-equip-chip" style="--chip-color:${typeColor}">${getEquipmentIconHtml(cardInst, cardDef)}<span class="classic-equip-name">${escapeHtml(name)}</span></span>`;
+        const instanceId = cardInst.instance_id != null ? String(cardInst.instance_id) : '';
+        return `<span class="classic-equip-chip" data-instance-id="${escapeHtml(instanceId)}" style="--chip-color:${typeColor}">${getEquipmentIconHtml(cardInst, cardDef)}<span class="classic-equip-name">${escapeHtml(name)}</span></span>`;
     }).join('');
+}
+
+function attachClassicEquipmentPreviews(container, player) {
+    if (!container || !player) return;
+    const equipment = (player.equipment || []);
+    container.querySelectorAll('.classic-equip-chip[data-instance-id]').forEach(chip => {
+        const instanceId = Number(chip.dataset.instanceId);
+        const eq = equipment.find(item => {
+            const cardInst = item && (item.card_instance || item.card || item);
+            return Number(cardInst && cardInst.instance_id) === instanceId;
+        });
+        const cardInst = eq && (eq.card_instance || eq.card || eq);
+        if (cardInst && cardInst.def_id) attachFloatingCardPreview(chip, cardInst);
+    });
 }
 
 function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e') {
@@ -8749,6 +9077,7 @@ function renderClassicFighter(container, player, side, selectedCard = null) {
         <div class="classic-status-ring">${renderClassicStatusList(player)}</div>
         <div class="classic-equipment-ring">${renderClassicEquipmentList(player)}</div>
     `;
+    attachClassicEquipmentPreviews(container, player);
 }
 
 function renderClassicHand(vm) {
@@ -8782,6 +9111,8 @@ function renderClassicHand(vm) {
             onClick: playable
                 ? (event) => selectClassicPlayCard(card.instance_id, event)
                 : () => flashStatus(getCannotPlayReason(card.raw || card), 2200, 'error'),
+            ownerState: vm.self.raw || gameState.you || {},
+            prediction: getCardPredictionOptionsForOwner(card.raw || card, vm.self.raw || gameState.you || {}),
         });
         cardEl.classList.add('classic-fan-card-inner');
         wrap.appendChild(cardEl);
@@ -9173,9 +9504,12 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
     const revealedHand = oppData.revealed_hand || oppData.hand;
     if (revealedHand && revealedHand.length > 0) {
         revealedHand.forEach(cd => {
-            const el = isSpectating ? createCardElement(cd, { small: true }) : createCardChoiceChip(cd);
+            const prediction = getCardPredictionOptionsForOwner(cd, oppData);
+            const el = isSpectating
+                ? createCardElement(cd, { small: true, prediction, ownerState: oppData })
+                : createCardChoiceChip(cd, { previewOptions: { prediction, ownerState: oppData } });
             el.classList.add(isSpectating ? 'opp-hand-card' : 'opp-hand-chip');
-            if (isSpectating) attachFloatingCardPreview(el, cd);
+            if (isSpectating) attachFloatingCardPreview(el, cd, { prediction, ownerState: oppData });
             container.appendChild(el);
         });
     } else {
@@ -9194,13 +9528,14 @@ function renderTeammateHand(teammateData) {
     container.innerHTML = '';
     const hand = teammateData.hand || [];
     hand.forEach(card => {
-        const el = isSpectating ? createCardElement(card, { small: true }) : createTeammateHandChip(card);
-        if (isSpectating) attachFloatingCardPreview(el, card);
+        const prediction = getCardPredictionOptionsForOwner(card, teammateData);
+        const el = isSpectating ? createCardElement(card, { small: true, prediction, ownerState: teammateData }) : createTeammateHandChip(card, teammateData);
+        if (isSpectating) attachFloatingCardPreview(el, card, { prediction, ownerState: teammateData });
         container.appendChild(el);
     });
 }
 
-function createTeammateHandChip(cardDict) {
+function createTeammateHandChip(cardDict, ownerState = null) {
     const cardDef = getCardDef(cardDict.def_id);
     const typeColor = cardDef ? (CARD_TYPE_COLORS[cardDef.card_type] || COLORS.border_color) : COLORS.border_color;
     const name = cardDef ? getCardName(cardDef) : (cardDict.def_id || '?');
@@ -9212,7 +9547,10 @@ function createTeammateHandChip(cardDict) {
     el.title = name;
     el.style.borderColor = typeColor;
     el.style.color = typeColor;
-    attachFloatingCardPreview(el, cardDict);
+    attachFloatingCardPreview(el, cardDict, {
+        ownerState,
+        prediction: getCardPredictionOptionsForOwner(cardDict, ownerState),
+    });
     return el;
 }
 
@@ -9238,6 +9576,8 @@ function renderPlayerHand(playerData) {
             small: !!isSpectating,
             draggable: !isSpectating && canPlay && cardDef && cardDef.card_type !== 'guard',
             onClick: canPlay ? () => selectPlayCardForConfirm(cardDict.instance_id) : null,
+            ownerState: playerData,
+            prediction: getCardPredictionOptionsForOwner(cardDict, playerData),
         });
         if (selectedPlayCardId === cardDict.instance_id) {
             card.classList.add('tap-selected');
@@ -9408,6 +9748,7 @@ function choosePlayerTargetOnBoard(title, targets) {
             <div class="target-picker-panel">
                 <div class="target-picker-title">${escapeHtml(title || UI.choose_target || UI.select_target || 'Choose target')}</div>
                 <div class="target-picker-subtitle">${escapeHtml(UI.target_pick_hint || '')}</div>
+                <div class="target-picker-buttons"></div>
                 <button type="button" class="target-picker-cancel">${escapeHtml(UI.cancel || 'Cancel')}</button>
             </div>
         `;
@@ -9436,6 +9777,24 @@ function choosePlayerTargetOnBoard(title, targets) {
             el.classList.add('target-pickable');
             el.addEventListener('click', handler, true);
         });
+        const buttonWrap = overlay.querySelector('.target-picker-buttons');
+        if (buttonWrap) {
+            targets.forEach(target => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'target-picker-button';
+                btn.textContent = target.label;
+                btn.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const region = getPlayerRegionById(target.id);
+                    if (region) region.classList.add('target-picked');
+                    flashTargetRegion(target.id);
+                    setTimeout(() => finish(target.id), 80);
+                });
+                buttonWrap.appendChild(btn);
+            });
+        }
         const cancel = overlay.querySelector('.target-picker-cancel');
         if (cancel) cancel.addEventListener('click', finishCancel);
         targetPickCleanup = finishCancel;
@@ -10054,6 +10413,16 @@ async function choosePlayerTarget(title, opts = {}) {
     return selectedId;
 }
 
+async function choosePlayerTargetFromDialog(title, opts = {}) {
+    const targets = getPlayerTargetOptions(opts);
+    if (!targets.length) {
+        gameAlert(UI.notice, UI.no_valid_target || 'No valid target');
+        return -1;
+    }
+    const sel = await simpleChoice(title || UI.choose_target || UI.select_target || 'Choose target', targets.map(t => t.label));
+    return sel >= 0 ? targets[sel].id : -1;
+}
+
 function getCardTargetPickOptions(cardDef) {
     if (!cardDef || !gameState || gameState.mode !== '2v2') {
         return {};
@@ -10120,10 +10489,10 @@ async function chooseEnemyTarget(title) {
     return selectedId;
 }
 
-function cardNeedsPlayerTarget(cardDef) {
+function cardNeedsPlayerTarget(cardDef, cardDict = null) {
     const gs = gameState || {};
     if (!cardDef || gs.mode !== '2v2') return false;
-    if ((cardDef.flags || []).includes('self_only')) return false;
+    if (cardHasSelfOnlyFlag(cardDict || {}, cardDef) && cardDef.card_type !== 'thorn') return false;
     if (cardDef.card_type === 'guard') return false;
     if (equipmentChoosesTargetOnTrigger(cardDef)) return false;
     if (['thorn', 'bloom', 'root'].includes(cardDef.card_type)) return true;
@@ -10184,14 +10553,17 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             btn.innerHTML = `${getEquipmentIconHtml(cardInst, cardDef)}<span class="equip-trigger-text">${escapeHtml(visibleText)}</span>`;
             btn.title = isMinimalUiStyle() ? triggerText : '';
             btn.disabled = isActionBusy({ includeAnimation: false });
+            attachFloatingCardPreview(btn, cardInst);
             btn.onclick = async () => {
                 if (isActionBusy({ includeAnimation: false })) return;
                 const payload = { equipment_instance_id: cardInst.instance_id };
                 if (gameState && gameState.mode === '2v2' && equipmentChoosesTargetOnTrigger(cardDef)) {
-                    const targetId = await choosePlayerTarget(
-                        UI.choose_target || UI.select_target || 'Choose target',
-                        { includeSelf: true, candidates: 'all', aliveOnly: true },
-                    );
+                    const targetId = cardHasSelfOnlyFlag(cardInst, cardDef)
+                        ? normalizePlayerId(gameState && gameState.your_id)
+                        : await choosePlayerTargetFromDialog(
+                            UI.choose_target || UI.select_target || 'Choose target',
+                            { includeSelf: true, candidates: 'all', aliveOnly: true },
+                        );
                     if (targetId < 0) return;
                     payload.target_player_id = targetId;
                 }
@@ -10218,6 +10590,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
         } else {
             el.innerHTML = `${getEquipmentIconHtml(cardInst, cardDef)}<span class="equip-name">${escapeHtml(text)}</span>`;
             el.title = isMinimalUiStyle() ? fullText : '';
+            attachFloatingCardPreview(el, cardInst);
             container.appendChild(el);
         }
     });
@@ -10240,9 +10613,16 @@ function createBattleLogElement(entry) {
     if (entry.isAdmin) nameSpan.classList.add('admin-name');
         if (entry.specialRoleColor === 'bloom') nameSpan.classList.add('bloom-name');
         if (entry.specialRoleColor === 'guard') nameSpan.classList.add('guard-name');
-        nameSpan.textContent = `${entry.nick}: `;
+        nameSpan.textContent = entry.system ? `${entry.nick} ` : `${entry.nick}: `;
         el.appendChild(nameSpan);
         el.appendChild(document.createTextNode(entry.text));
+        const repeatCount = Number(entry.repeatCount || entry.repeat_count || 1);
+        if (repeatCount > 1) {
+            const repeatSpan = document.createElement('span');
+            repeatSpan.className = 'chat-repeat-count';
+            repeatSpan.textContent = ` ×${repeatCount}`;
+            el.appendChild(repeatSpan);
+        }
         return el;
     }
     const line = entry.text || '';
@@ -10338,18 +10718,69 @@ function getChatChannelLogLabel(entry) {
 function appendLobbyChat(nick, text, meta = {}) {
     const container = $('lobby-chat-log');
     if (!container) return;
+    appendLobbyChatEntry({
+        type: 'chat',
+        nickname: meta.nickname || nick,
+        display_nick: nick,
+        text,
+        repeat_count: meta.repeat_count || 1,
+        ...meta,
+    });
+}
+
+function appendLobbyChatEntry(entry = {}) {
+    const container = $('lobby-chat-log');
+    if (!container) return;
+    if (entry.type === 'time') {
+        const timeEl = document.createElement('div');
+        timeEl.className = 'chat-time-separator';
+        timeEl.textContent = entry.display_time || entry.displayTime || '';
+        container.appendChild(timeEl);
+        container.scrollTop = container.scrollHeight;
+        return;
+    }
     const el = document.createElement('div');
     el.className = 'chat-msg';
     const nameSpan = document.createElement('span');
     nameSpan.className = 'chat-nick';
-    if (meta.system) nameSpan.classList.add('system-name');
-    if (isAdminPlayer(meta)) nameSpan.classList.add('admin-name');
-    if (getSpecialRoleColor(meta) === 'bloom') nameSpan.classList.add('bloom-name');
-    if (getSpecialRoleColor(meta) === 'guard') nameSpan.classList.add('guard-name');
-    nameSpan.textContent = `${nick}: `;
+    if (entry.system) nameSpan.classList.add('system-name');
+    if (isAdminPlayer(entry)) nameSpan.classList.add('admin-name');
+    if (getSpecialRoleColor(entry) === 'bloom') nameSpan.classList.add('bloom-name');
+    if (getSpecialRoleColor(entry) === 'guard') nameSpan.classList.add('guard-name');
+    const nick = entry.display_nick || getChatDisplayName(entry);
+    nameSpan.textContent = entry.system ? `${nick} ` : `${nick}: `;
     el.appendChild(nameSpan);
-    el.appendChild(document.createTextNode(text));
+    el.appendChild(document.createTextNode(entry.text || ''));
+    const repeatCount = Number(entry.repeat_count || entry.repeatCount || 1);
+    if (repeatCount > 1) {
+        const repeatSpan = document.createElement('span');
+        repeatSpan.className = 'chat-repeat-count';
+        repeatSpan.textContent = ` ×${repeatCount}`;
+        el.appendChild(repeatSpan);
+    }
     container.appendChild(el);
+    container.scrollTop = container.scrollHeight;
+}
+
+function renderLobbyChatHistory(data = {}) {
+    const container = $('lobby-chat-log');
+    if (!container) return;
+    const items = Array.isArray(data.items) ? data.items : [];
+    const signature = JSON.stringify(items.map(entry => [
+        entry && entry.type,
+        entry && entry.id,
+        entry && entry.time,
+        entry && entry.nickname,
+        entry && entry.text,
+        entry && entry.repeat_count,
+        entry && entry.display_time,
+        entry && entry.chat_channel,
+        entry && entry.system,
+    ]));
+    if (signature === lobbyChatHistorySignature) return;
+    lobbyChatHistorySignature = signature;
+    container.innerHTML = '';
+    items.forEach(entry => appendLobbyChatEntry(entry));
     container.scrollTop = container.scrollHeight;
 }
 
@@ -10765,8 +11196,13 @@ async function onPlayCard(cardInstanceId, options = {}) {
     }
     const cardDef = getCardDef(cardDict.def_id);
     let targetPlayerId = -1;
-    if (!soloMode && gameState.mode === '2v2' && cardNeedsPlayerTarget(cardDef)) {
-        targetPlayerId = await choosePlayerTarget(
+    if (!soloMode && gameState.mode === '2v2' && cardHasSelfOnlyFlag(cardDict, cardDef) && (!cardDef || cardDef.card_type !== 'thorn')) {
+        targetPlayerId = normalizePlayerId(gameState.your_id);
+    } else if (!soloMode && gameState.mode === '2v2' && cardNeedsPlayerTarget(cardDef, cardDict)) {
+        const chooseTarget = cardDef && cardDef.card_type === 'root'
+            ? choosePlayerTargetFromDialog
+            : choosePlayerTarget;
+        targetPlayerId = await chooseTarget(
             UI.choose_target || UI.select_target || 'Choose target',
             getCardTargetPickOptions(cardDef),
         );
@@ -11520,8 +11956,9 @@ function updateGameOverRematchButton(gs) {
 }
 
 function renderGameOver(data) {
-    showView('view-gameover');
     const gs = data || gameState;
+    resetMatchRuntimeState({ clearGameState: false });
+    showView('view-gameover');
     syncRematchStateFromGameState(gs);
     const isTutorialGameOver = !!gs.tutorial;
     const isSpectatorGameOver = !!(gs.spectating || isSpectating || gs.your_id === -1 || playerId === -1);
@@ -11685,6 +12122,25 @@ function onSurrender() {
     ]);
 }
 
+function getSpectatePerspectivePlayer(gs = gameState) {
+    if (!gs || !Array.isArray(gs.spectate_players) || !gs.spectate_players.length) {
+        return null;
+    }
+    const current = normalizePlayerId(gs.spectate_perspective != null ? gs.spectate_perspective : spectatePerspective);
+    if (current != null) {
+        const byId = gs.spectate_players.find(p => normalizePlayerId(p && p.player_id) === current);
+        if (byId) return byId;
+    }
+    return gs.spectate_players[0] || null;
+}
+
+function getDeckViewerPlayer() {
+    if (isSpectating || (gameState && gameState.spectating)) {
+        return getSpectatePerspectivePlayer(gameState) || gameState.you || {};
+    }
+    return (gameState && gameState.you) || {};
+}
+
 function onViewDeck() {
     if (gameState && gameState.mode === 'urf') {
         return;
@@ -11694,7 +12150,8 @@ function onViewDeck() {
         hideTutorialOverlay();
         setTimeout(updateTutorialOverlay, 80);
     }
-    const deck = (gameState.you || {}).deck || [];
+    const deckPlayer = getDeckViewerPlayer();
+    const deck = deckPlayer.deck || [];
     const modal = $('modal');
     const content = $('modal-content');
     if (!modal || !content) return;
@@ -11709,7 +12166,10 @@ function onViewDeck() {
     content.className = 'modal-inner view-deck-modal';
     content.innerHTML = '';
     const title = document.createElement('h3');
-    title.textContent = UI.view_deck_title;
+    const deckOwnerName = (isSpectating || (gameState && gameState.spectating)) && deckPlayer && deckPlayer.name
+        ? localizeCanonicalPlayerName(deckPlayer.name)
+        : '';
+    title.textContent = deckOwnerName ? `${UI.view_deck_title} - ${deckOwnerName}` : UI.view_deck_title;
     content.appendChild(title);
     const total = document.createElement('p');
     total.className = 'deck-total';
@@ -12754,7 +13214,18 @@ async function init() {
     }
     const handleSoloPauseEdit = () => { if (socket || isLocalSoloRuntimeActive()) emitSoloEvent('solo_pause', {}); else showSoloTraining(); };
     $('btn-view-deck').addEventListener('click', onViewDeck);
+    if ($('btn-spectate-view-deck')) $('btn-spectate-view-deck').addEventListener('click', onViewDeck);
+    if ($('btn-switch-perspective')) {
+        $('btn-switch-perspective').addEventListener('click', () => {
+            if (socket && isSpectating) socket.emit('switch_spectate_perspective', {});
+        });
+    }
     if ($('classic-view-deck')) $('classic-view-deck').addEventListener('click', onViewDeck);
+    if ($('classic-switch-perspective')) {
+        $('classic-switch-perspective').addEventListener('click', () => {
+            if (socket && isSpectating) socket.emit('switch_spectate_perspective', {});
+        });
+    }
     if ($('btn-urf-replace')) $('btn-urf-replace').addEventListener('click', onUrfReplaceCard);
     if ($('classic-urf-replace')) $('classic-urf-replace').addEventListener('click', onUrfReplaceCard);
     if ($('btn-urf-sell')) $('btn-urf-sell').addEventListener('click', onUrfSellEquipment);

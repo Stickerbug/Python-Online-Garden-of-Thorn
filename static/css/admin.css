@@ -93,6 +93,7 @@ button {
 .admin-login-card input,
 .fake-login-card input,
 .admin-tools-row input,
+.admin-game-chat-form input,
 .registered-users-toolbar input,
 .registered-users-toolbar select,
 .replay-toolbar input,
@@ -115,6 +116,7 @@ button {
 .admin-login-card input:focus,
 .fake-login-card input:focus,
 .admin-tools-row input:focus,
+.admin-game-chat-form input:focus,
 .registered-users-toolbar input:focus,
 .registered-users-toolbar select:focus,
 .replay-toolbar input:focus,
@@ -329,6 +331,24 @@ button {
 .admin-table .muted {
   color: var(--muted);
   font-size: 12px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.08);
+}
+
+.pill.warn {
+  color: #f6d68b;
+  border-color: rgba(246, 214, 139, .34);
+  background: rgba(246, 214, 139, .12);
 }
 
 .metric-card strong {
@@ -831,6 +851,116 @@ button {
   display: block;
   color: var(--muted);
   font-size: 11px;
+}
+
+.admin-game-chat-section {
+  display: grid;
+  grid-template-rows: auto minmax(360px, calc(100vh - 300px)) auto;
+}
+
+.admin-game-chat-log {
+  min-height: 360px;
+  padding: 12px 14px;
+  overflow: auto;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.admin-game-chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  background: rgba(238, 243, 248, 0.72);
+}
+
+.admin-game-chat-form input {
+  padding: 10px 12px;
+}
+
+.admin-game-chat-form button {
+  min-width: 90px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--accent-2);
+  color: #fff;
+  font-weight: 800;
+}
+
+.admin-game-chat-log .log-chat {
+  padding: 4px 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.admin-game-chat-log .chat-nick {
+  color: #7a2f1f;
+  font-weight: 800;
+}
+
+.admin-game-chat-log .chat-nick.system-name {
+  color: var(--accent-2);
+  font-weight: 900;
+}
+
+.admin-game-chat-log .chat-nick.admin-name {
+  color: var(--danger) !important;
+  font-weight: 900;
+}
+
+.admin-game-chat-log .chat-nick.bloom-name {
+  color: var(--accent) !important;
+  font-weight: 900;
+}
+
+.admin-game-chat-log .chat-nick.guard-name {
+  color: var(--accent-2) !important;
+  font-weight: 900;
+}
+
+.admin-game-chat-log .chat-channel {
+  color: var(--accent-2);
+  font-weight: 900;
+  margin-right: 2px;
+}
+
+.admin-game-chat-log .chat-channel-team {
+  color: var(--accent);
+}
+
+.admin-game-chat-log .chat-channel-enemy {
+  color: var(--danger);
+}
+
+.admin-game-chat-log .chat-channel-private {
+  color: #b8860b;
+}
+
+.admin-game-chat-log .chat-time-separator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-game-chat-log .chat-time-separator::before,
+.admin-game-chat-log .chat-time-separator::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.admin-game-chat-log .chat-repeat-count {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .terminal-wrap {

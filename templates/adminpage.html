@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 管理台</title>
-<link rel="stylesheet" href="/static/css/admin.css?v=9">
+<link rel="stylesheet" href="/static/css/admin.css?v=11">
 </head>
 <body class="admin-body">
 <div id="admin-login" class="admin-login">
@@ -36,6 +36,7 @@
     <button class="admin-tab active" data-tab="gui" type="button">概览</button>
     <button class="admin-tab" data-tab="storage" type="button">存储管理</button>
     <button class="admin-tab" data-tab="replays" type="button">回放列表</button>
+    <button class="admin-tab" data-tab="game-chat" type="button">游戏内聊天</button>
     <button class="admin-tab" data-tab="terminal" type="button">终端</button>
   </nav>
 
@@ -231,6 +232,20 @@
     </section>
   </section>
 
+  <section id="admin-game-chat" class="admin-panel hidden">
+    <section class="admin-section admin-game-chat-section">
+      <div class="section-title">
+        <h2>游戏内聊天</h2>
+        <span id="admin-game-chat-count">0</span>
+      </div>
+      <div id="admin-game-chat-log" class="admin-game-chat-log" aria-live="polite"></div>
+      <form id="admin-game-chat-form" class="admin-game-chat-form">
+        <input id="admin-game-chat-input" type="text" maxlength="500" autocomplete="off" placeholder="以 [控制台]Stickerbug 发送到游戏内聊天">
+        <button id="admin-game-chat-send" type="submit">发送</button>
+      </form>
+    </section>
+  </section>
+
   <section id="admin-terminal" class="admin-panel hidden">
     <div class="terminal-wrap">
       <div id="terminal-output" class="terminal-output" aria-live="polite"></div>
@@ -243,6 +258,6 @@
   </section>
 </main>
 
-<script src="/static/js/admin.js?v=12"></script>
+<script src="/static/js/admin.js?v=14"></script>
 </body>
 </html>

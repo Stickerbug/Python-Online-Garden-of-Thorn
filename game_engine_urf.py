@@ -168,10 +168,7 @@ class GameEngineInfiniteFire(GameEngine):
         card = self.create_infinite_card(card_type)
         if not card:
             return
-        added = self.add_card_to_urf_hand(player_id, card, log=True)
-        if added:
-            type_name = CARD_TYPE_CN.get(card_type, card_type)
-            self.log_msg(f"{self.pn(player_id)}补充1张{type_name}牌")
+        self.add_card_to_urf_hand(player_id, card, log=False)
 
     def _fusion_extra_replenish_types(self, player_id: int, card: Optional[CardInstance], choice) -> List[str]:
         if not card or card.def_id != 'Fusion' or not isinstance(choice, dict):

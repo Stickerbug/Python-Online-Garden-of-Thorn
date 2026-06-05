@@ -7,20 +7,25 @@
 <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=171">
+<link rel="stylesheet" href="/static/css/style.css?v=172">
 <script>
 (() => {
-  const lang = localStorage.getItem('gtn_lang') || 'zh';
-  const migrationKey = 'gtn_ui_style_v2_migrated';
-  let uiStyle = localStorage.getItem('gtn_ui_style') || 'minimal';
+  window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
+  const betaExactKeys = new Set(['gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated']);
+  const betaKey = (key) => window.__GTN_BETA_MODE__ && betaExactKeys.has(key) ? `gtn_beta_${key.slice(4)}` : key;
+  const lang = localStorage.getItem(betaKey('gtn_lang')) || 'zh';
+  const migrationKey = betaKey('gtn_ui_style_v2_migrated');
+  const uiStyleKey = betaKey('gtn_ui_style');
+  let uiStyle = localStorage.getItem(uiStyleKey) || 'minimal';
   if (!localStorage.getItem(migrationKey) && uiStyle === 'classic') {
     uiStyle = 'minimal';
-    localStorage.setItem('gtn_ui_style', 'minimal');
+    localStorage.setItem(uiStyleKey, 'minimal');
     localStorage.setItem(migrationKey, '1');
   }
   if (uiStyle !== 'classic') uiStyle = 'minimal';
   document.documentElement.setAttribute('lang', lang);
   document.documentElement.setAttribute('data-ui-style', uiStyle);
+  if (window.__GTN_BETA_MODE__) document.documentElement.setAttribute('data-beta-mode', 'true');
   window.__bootLang = lang;
 })();
 </script>
@@ -28,7 +33,7 @@
 #app { visibility: hidden; }
 </style>
 </head>
-<body>
+<body{% if beta_mode|default(false) %} class="beta-mode"{% endif %}>
 <div id="app">
 <div id="boot-loader" class="boot-loader">
   <div class="boot-loader-inner">
@@ -145,6 +150,7 @@
 
 <div id="view-login" class="view">
 <div class="login-container">
+<div id="beta-mode-badge" class="beta-mode-badge{% if not beta_mode|default(false) %} hidden{% endif %}">内测模式</div>
 <h1 class="title-main">Garden of Thorn</h1>
 <h2 class="title-sub">荆棘花园</h2>
 <p class="subtitle">局域网联机卡牌对战</p>
@@ -350,6 +356,7 @@
   <div id="classic-hand-fan" class="classic-hand-fan"></div>
   <div class="classic-command-panel">
     <div id="classic-extra-controls" class="classic-extra-controls hidden">
+      <button id="classic-switch-perspective" class="classic-mini-btn hidden" type="button">Switch</button>
       <button id="classic-view-deck" class="classic-mini-btn" type="button">查看牌堆</button>
       <button id="classic-urf-replace" class="classic-mini-btn hidden" type="button">替换手牌</button>
       <button id="classic-urf-sell" class="classic-mini-btn hidden" type="button">售卖装备</button>
@@ -432,7 +439,9 @@
         <button id="btn-surrender" class="btn btn-secondary btn-surrender">投降</button>
       </div>
       <div id="spectate-controls" class="controls-group hidden">
-        <button id="btn-leave-spectate" class="btn btn-danger btn-leave-spectate">退出观战</button>
+        <button id="btn-switch-perspective" class="btn btn-secondary">Switch</button>
+        <button id="btn-spectate-view-deck" class="btn btn-magic btn-view-deck">Deck</button>
+        <button id="btn-leave-spectate" class="btn btn-danger btn-leave-spectate">Leave</button>
       </div>
       <div class="controls-group controls-right">
         <select id="game-chat-channel" class="game-chat-channel hidden" aria-label="Chat channel"></select>
@@ -617,6 +626,7 @@
 <p>Nether_Dog</p>
 <p>Eric</p>
 <p>CommonGoldIngot</p>
+<p>2EX7427</p>
 </section>
 </div>
 <div class="settings-footer">
@@ -699,7 +709,7 @@
   setText('.boot-sub', t.bootSub); setText('#boot-step', t.bootStep); setText('#view-login .subtitle', t.subtitle); setText('label[for="input-nickname"]', t.nickname); setPlaceholder('#input-nickname', t.nicknamePlaceholder);
   setText('#btn-connect', t.enterLobby); setText('#btn-solo-training', t.soloTraining); setText('#btn-open-settings', t.settings); setText('#solo-title', t.soloTraining); setText('#btn-solo-load', t.loadLast); setText('#btn-solo-save', t.saveDecks); setText('#btn-solo-start', t.startTraining); setText('#btn-solo-back', t.back); setPlaceholder('#solo-card-search', t.searchCards); setText('#solo-deck-a-title', t.soloDeckA); setText('#solo-deck-b-title', t.soloDeckB); setText('#solo-event-a-label', t.soloEventA); setText('#solo-event-b-label', t.soloEventB);
   setText('#view-lobby .lobby-header h2', t.lobby); setText('#view-lobby .lobby-left .lobby-section:first-child h3', t.onlinePlayers); setText('#lobby-online-count', t.onlineCount); setText('#view-lobby .lobby-left .lobby-section:last-child h3', t.ongoingGames); setText('#view-lobby .lobby-right .lobby-section h3', t.chat); setPlaceholder('#lobby-chat-input', t.messagePlaceholder); setText('#btn-lobby-chat-send', t.send); setText('#btn-lobby-back', t.backHome);
-  setText('#view-draft h2', t.draft); setText('#btn-draft-reroll', t.reroll); setText('#view-event-select h2', t.selectEvent); setText('#view-event-select .event-desc', t.selectEventDesc); setText('#opp-label', t.opponent); setText('#opp-info', t.oppInfo); setText('#battle-log .log-header', t.battleLog); setText('#you-label', t.you); setText('#you-info', t.youInfo); setText('#play-zone .play-zone-hint', t.dragToPlay); setText('#btn-end-turn', t.endTurn); setText('#btn-view-deck', t.viewDeck); setText('#btn-solo-next-draw', t.setNextDraw); setText('#btn-solo-edit', t.pauseEdit); setText('#btn-surrender', t.surrender); setText('#btn-switch-perspective', t.switchPerspective); setText('#btn-leave-spectate', t.leaveSpectate); setPlaceholder('#game-chat-input', t.messagePlaceholder); setText('#btn-game-chat-send', t.send);
+  setText('#view-draft h2', t.draft); setText('#btn-draft-reroll', t.reroll); setText('#view-event-select h2', t.selectEvent); setText('#view-event-select .event-desc', t.selectEventDesc); setText('#opp-label', t.opponent); setText('#opp-info', t.oppInfo); setText('#battle-log .log-header', t.battleLog); setText('#you-label', t.you); setText('#you-info', t.youInfo); setText('#play-zone .play-zone-hint', t.dragToPlay); setText('#btn-end-turn', t.endTurn); setText('#btn-view-deck', t.viewDeck); setText('#btn-solo-next-draw', t.setNextDraw); setText('#btn-solo-edit', t.pauseEdit); setText('#btn-surrender', t.surrender); setText('#btn-switch-perspective', t.switchPerspective); setText('#btn-spectate-view-deck', t.viewDeck); setText('#btn-leave-spectate', t.leaveSpectate); setPlaceholder('#game-chat-input', t.messagePlaceholder); setText('#btn-game-chat-send', t.send);
   setText('#btn-rematch', t.rematch); setText('#btn-return-lobby', t.returnLobby); setText('#view-mod-editor h2', t.modEditor); setPlaceholder('#mod-editor-area', t.modPlaceholder); setText('#btn-mod-load', t.loadMod); setText('#btn-mod-save', t.save); setText('#btn-mod-validate', t.validateJson); setText('#btn-mod-back', t.back);
   setText('#settings-title', t.settings); setText('#settings-tab-appearance', t.appearance); setText('#settings-tab-server', t.server); setText('#settings-tab-mods', t.mods); setText('#settings-section-appearance', t.appearance); setText('#settings-label-theme', t.theme); setText('#settings-theme-select option[value=\"light\"]', t.light); setText('#settings-theme-select option[value=\"dark\"]', t.dark); setText('#settings-label-ui-style', t.uiStyle); setText('#settings-ui-style-select option[value=\"minimal\"]', t.minimal); setText('#settings-ui-style-select option[value=\"classic\"]', t.classic); setText('#settings-label-lang', t.language); setText('#settings-section-server', t.server); setText('#settings-label-server', t.address); setPlaceholder('#settings-server-input', t.serverPlaceholder); setText('#settings-section-mods', t.mods); setText('#settings-no-mods', t.noMods); setText('#btn-settings-close', t.ok); setText('#game-prompt-cancel', t.cancel); setText('.rotate-text', t.rotatePrompt); setText('.rotate-text-en', t.rotateSub); setText('#btn-dismiss-rotate', t.continueEnter);
   const app = document.getElementById('app'); if (app) app.style.visibility = 'visible';
@@ -726,6 +736,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-<script src="/static/js/game.js?v=187"></script>
+<script src="/static/js/game.js?v=188"></script>
 </body>
 </html>

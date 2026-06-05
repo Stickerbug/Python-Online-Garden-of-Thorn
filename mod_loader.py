@@ -16,7 +16,7 @@ def _get_base_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 MODS_DIR = os.path.join(_get_base_dir(), 'mods')
-GAME_VERSION = 'v0.3.1-alpha'
+GAME_VERSION = 'v0.5.6'
 _MODS_CACHE_SIGNATURE = None
 _MODS_CACHE: List['Mod'] = []
 GTNMOD_MAIN_FILES = ('mod.json', 'gtnmod.json')

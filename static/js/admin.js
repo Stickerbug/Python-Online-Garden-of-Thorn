@@ -17,6 +17,8 @@ let replayFrameIndex = 0;
 let replaySpeed = 1;
 let replayTimer = null;
 let replayData = null;
+let gameChatTimer = null;
+let gameChatSignature = '';
 
 const STATUS_LABELS = {
   lobby: '大厅',
@@ -145,6 +147,103 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function gameChatChannelLabel(entry = {}) {
+  const channel = entry.chat_channel || entry.channel || '';
+  if (!channel || channel === 'public') return '';
+  if (channel === 'team') return '队伍';
+  if (channel === 'enemy') return '敌方';
+  if (channel === 'private') return `私聊→${entry.chat_target_name || entry.targetName || '?'}`;
+  return channel;
+}
+
+function gameChatRolePrefix(entry = {}) {
+  if (entry.console_player || entry.special_role === 'console') return '控制台';
+  if (entry.is_admin_player || entry.admin || entry.isAdminPlayer) return '管理员';
+  if (entry.special_role === 'chief_designer') return '总设计师';
+  if (entry.special_role === 'right_angle_person') return '直角人';
+  return entry.special_role_label || '';
+}
+
+function gameChatDisplayName(entry = {}) {
+  if (entry.system) return '[系统]';
+  const spectator = entry.is_spectator ? '[观战]' : '';
+  const prefix = gameChatRolePrefix(entry);
+  const name = entry.nickname || entry.display_nick || '?';
+  return `${spectator}${prefix ? `[${prefix}]` : ''}${name}`;
+}
+
+function renderGameChatEntry(entry = {}) {
+  if (entry.type === 'time') {
+    return `<div class="chat-time-separator">${escapeHtml(entry.display_time || '')}</div>`;
+  }
+  const channelLabel = gameChatChannelLabel(entry);
+  const channel = entry.chat_channel || entry.channel || 'public';
+  const roleColor = entry.special_role_color || (entry.is_admin_player ? 'admin' : '');
+  const nameClasses = [
+    'chat-nick',
+    entry.system ? 'system-name' : '',
+    (entry.is_admin_player || entry.console_player || roleColor === 'admin') ? 'admin-name' : '',
+    roleColor === 'bloom' ? 'bloom-name' : '',
+    roleColor === 'guard' ? 'guard-name' : '',
+  ].filter(Boolean).join(' ');
+  const nick = gameChatDisplayName(entry);
+  const repeatCount = Number(entry.repeat_count || entry.repeatCount || 1);
+  const repeatHtml = repeatCount > 1 ? `<span class="chat-repeat-count"> ×${repeatCount}</span>` : '';
+  return `
+    <div class="log-entry log-chat">
+      ${channelLabel ? `<span class="chat-channel chat-channel-${escapeHtml(channel)}">[${escapeHtml(channelLabel)}] </span>` : ''}
+      <span class="${nameClasses}">${escapeHtml(entry.system ? `${nick} ` : `${nick}: `)}</span>${escapeHtml(entry.text || '')}${repeatHtml}
+    </div>
+  `;
+}
+
+function renderGameChat(data = {}) {
+  const log = $('admin-game-chat-log');
+  if (!log) return;
+  const items = Array.isArray(data.items) ? data.items : [];
+  const signature = JSON.stringify(items.map((entry) => [
+    entry && entry.type,
+    entry && entry.id,
+    entry && entry.time,
+    entry && entry.nickname,
+    entry && entry.text,
+    entry && entry.repeat_count,
+    entry && entry.display_time,
+    entry && entry.chat_channel,
+    entry && entry.system,
+    entry && entry.scope,
+    entry && entry.room_id,
+  ]));
+  if (signature === gameChatSignature) return;
+  gameChatSignature = signature;
+  log.innerHTML = items.map(renderGameChatEntry).join('');
+  log.scrollTop = log.scrollHeight;
+  const count = $('admin-game-chat-count');
+  if (count) count.textContent = `${items.length}/${data.total_cached ?? items.length}`;
+}
+
+async function loadGameChat() {
+  if (!$('admin-game-chat-log')) return;
+  try {
+    const data = await api('/api/admin/game-chat?limit=300');
+    renderGameChat(data);
+  } catch (err) {
+    const log = $('admin-game-chat-log');
+    if (log) log.innerHTML = `<div class="empty-detail">聊天读取失败：${escapeHtml(err.message || '')}</div>`;
+  }
+}
+
+async function sendGameChatMessage(text) {
+  const message = String(text || '').trim();
+  if (!message) return;
+  await api('/api/admin/game-chat/send', {
+    method: 'POST',
+    body: JSON.stringify({ text: message }),
+  });
+  gameChatSignature = '';
+  await loadGameChat();
+}
+
 function showShell(authenticated) {
   $('admin-login').classList.toggle('hidden', authenticated);
   $('admin-shell').classList.toggle('hidden', !authenticated);
@@ -153,8 +252,10 @@ function showShell(authenticated) {
     loadRegisteredUsers();
     loadStorageSummary();
     resetAndLoadReplays();
+    loadGameChat();
     if (!refreshTimer) refreshTimer = setInterval(loadStatus, 1000);
     if (!registeredRefreshTimer) registeredRefreshTimer = setInterval(loadRegisteredUsers, 10000);
+    if (!gameChatTimer) gameChatTimer = setInterval(loadGameChat, 3000);
   } else {
     if (refreshTimer) {
       clearInterval(refreshTimer);
@@ -163,6 +264,10 @@ function showShell(authenticated) {
     if (registeredRefreshTimer) {
       clearInterval(registeredRefreshTimer);
       registeredRefreshTimer = null;
+    }
+    if (gameChatTimer) {
+      clearInterval(gameChatTimer);
+      gameChatTimer = null;
     }
   }
 }
@@ -334,13 +439,14 @@ function renderPlayers(players) {
   }
   $('players-table').innerHTML = `
     <table>
-      <thead><tr><th>昵称</th><th>ID</th><th>状态</th><th>模式</th><th>房间</th><th>SID</th><th>操作</th></tr></thead>
+      <thead><tr><th>昵称</th><th>ID</th><th>状态</th><th>入口</th><th>模式</th><th>房间</th><th>SID</th><th>操作</th></tr></thead>
       <tbody>
         ${players.map((p) => `
           <tr>
             <td>${escapeHtml(p.nickname)}</td>
             <td><span class="muted">${escapeHtml(p.player_id || '-')}</span></td>
             <td>${escapeHtml(labelFrom(STATUS_LABELS, p.status))}</td>
+            <td>${p.beta_mode ? '<span class="pill warn">内测</span>' : '<span class="muted">正式</span>'}</td>
             <td>${escapeHtml(p.mode || '')}</td>
             <td>${escapeHtml(p.room_id ?? p.spectating_room ?? '-')}</td>
             <td><span class="muted">${escapeHtml(p.sid)}</span></td>
@@ -1120,12 +1226,16 @@ function bindEvents() {
       document.querySelectorAll('.admin-tab').forEach((item) => item.classList.remove('active'));
       tab.classList.add('active');
       const target = tab.dataset.tab;
-      ['gui', 'storage', 'replays', 'terminal'].forEach((name) => {
+      ['gui', 'storage', 'replays', 'game-chat', 'terminal'].forEach((name) => {
         const panel = $(`admin-${name}`);
         if (panel) panel.classList.toggle('hidden', target !== name);
       });
       if (target === 'storage') loadStorageSummary();
       if (target === 'replays') resetAndLoadReplays();
+      if (target === 'game-chat') {
+        loadGameChat();
+        $('admin-game-chat-input')?.focus();
+      }
       if (target === 'terminal') $('terminal-input').focus();
     });
   });
@@ -1169,6 +1279,15 @@ function bindEvents() {
     if (!msg) return;
     await runCommand(`broadcast ${msg}`);
     $('broadcast-input').value = '';
+  });
+
+  $('admin-game-chat-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = $('admin-game-chat-input');
+    const msg = input ? input.value.trim() : '';
+    if (!msg) return;
+    await sendGameChatMessage(msg);
+    if (input) input.value = '';
   });
 
   document.addEventListener('click', async (event) => {

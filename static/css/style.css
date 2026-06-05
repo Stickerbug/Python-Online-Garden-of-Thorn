@@ -185,6 +185,22 @@ html.fonts-loaded-main {
     #22304f;
 }
 
+[data-theme="dark"] .game-container.mode-spectate .card,
+[data-theme="dark"] .game-container.mode-spectate .card-small,
+[data-theme="dark"] .game-container.mode-spectate .card-back.revealed {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04)),
+    #26385f;
+  border-color: currentColor;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.42);
+}
+
+[data-theme="dark"] .game-container.mode-spectate .opp-hand-row,
+[data-theme="dark"] .game-container.mode-spectate .teammate-hand-row {
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 6px;
+}
+
 [data-theme="dark"] .card-effect,
 [data-theme="dark"] .card-description {
   color: #d7deea;
@@ -2799,6 +2815,18 @@ body {
   background: rgba(52, 152, 219, 0.25);
 }
 
+.lobby-game-row .spectate-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+.lobby-game-row .spectate-btn:disabled:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
 .lobby-right .lobby-section {
   flex: 1;
   display: flex;
@@ -2838,7 +2866,23 @@ body {
 }
 
 .chat-msg {
-  color: var(--text-primary);
+    color: var(--text-primary);
+}
+
+.chat-time-separator {
+    margin: 8px 0;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0.78;
+}
+
+.chat-repeat-count {
+    margin-left: 4px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 800;
 }
 
 .chat-input-row {
@@ -4549,7 +4593,8 @@ body {
   grid-template-columns: 1fr auto;
   grid-template-areas:
     "title cancel"
-    "subtitle cancel";
+    "subtitle cancel"
+    "buttons buttons";
   gap: 2px 10px;
   padding: 10px 12px;
   border-radius: 8px;
@@ -4572,6 +4617,37 @@ body {
   color: var(--text-muted);
   font-size: 11px;
   min-height: 1em;
+}
+
+.target-picker-buttons {
+  grid-area: buttons;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 6px;
+}
+
+.target-picker-button {
+  border: 1px solid rgba(26, 188, 156, 0.32);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  padding: 6px 9px;
+  font-family: var(--font-main);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.target-picker-button:hover {
+  border-color: rgba(26, 188, 156, 0.72);
+  background: color-mix(in srgb, var(--bg-card) 88%, rgba(26, 188, 156, 0.14));
+}
+
+.target-picker-button:active {
+  transform: scale(0.96);
 }
 
 .target-picker-cancel {
@@ -8399,7 +8475,7 @@ body {
 .game-container.mode-urf .hand-area .card {
   --card-english-font: clamp(4.6px, 5.5cqi, 6.1px);
   --card-english-margin-top: -1.45cqi;
-  width: clamp(54px, calc((100vw - 54px) / 10.15), 100px);
+  width: clamp(64px, min(calc((100% - 36px) / var(--hand-card-slots, 10.35)), calc((100vh - 250px) * 63 / 88)), 116px);
 }
 
 .game-container.mode-urf .hand-area .card-english-name {
@@ -8416,7 +8492,7 @@ body {
   .game-container.mode-urf .hand-area .card {
     --card-english-font: clamp(4.2px, 5.2cqi, 5.2px);
     --card-english-margin-top: -1.35cqi;
-    width: clamp(58px, calc((100vw - 50px) / 10.05), 86px);
+    width: clamp(64px, min(calc((100% - 30px) / var(--hand-card-slots, 10.35)), calc((100vh - 226px) * 63 / 88)), 104px);
   }
 
   .game-container.mode-urf .hand-area .card-english-name {
@@ -8513,7 +8589,7 @@ body {
   }
 
   .game-container.mode-urf .hand-area .card {
-    width: clamp(50px, calc((76vw - 42px) / 10), 78px);
+    width: clamp(64px, min(calc((100% - 30px) / var(--hand-card-slots, 10.35)), calc((100vh - 226px) * 63 / 88)), 104px);
   }
 
   .game-container.mode-2v2 {
@@ -8566,7 +8642,7 @@ body {
     flex-wrap: wrap;
     justify-content: center;
     align-content: flex-start;
-    width: min(calc(100vw - 32px), 352px);
+    width: min(calc(100vw - 24px), 400px);
     max-width: 100%;
     margin: 0 auto;
     gap: 3px;
@@ -8575,7 +8651,7 @@ body {
   }
 
   .game-container.mode-urf .hand-area .card {
-    width: min(calc((100vw - 32px) / 5), 68px);
+    width: min(calc((100% - 12px) / 5), 78px);
   }
 }
 
@@ -8709,7 +8785,7 @@ button:not(:disabled):active,
 }
 
 [data-theme="dark"] .card-art {
-  background: rgba(255, 255, 255, 0.72);
+  background: transparent;
 }
 
 .card-art.hidden {
@@ -10161,4 +10237,20 @@ html[data-ui-style="minimal"] .btn-end-turn {
   .classic-mini-btn {
     white-space: nowrap;
   }
+}
+
+.hidden {
+  display: none !important;
+}
+
+.beta-mode-badge {
+  width: fit-content;
+  margin: 0 auto 10px;
+  padding: 5px 12px;
+  border: 1px solid rgba(47, 141, 89, 0.28);
+  border-radius: 7px;
+  background: rgba(47, 141, 89, 0.1);
+  color: #1f6f43;
+  font-size: 13px;
+  font-weight: 800;
 }

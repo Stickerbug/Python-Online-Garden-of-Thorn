@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garden of Thorn 荆棘花园 · 内测模式</title>
+<link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
+<link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
+<style>
+html, body {
+  margin: 0;
+  min-height: 100%;
+  font-family: "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  background: #f4f7f4;
+  color: #20342a;
+}
+body {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+.beta-card {
+  width: min(420px, 100%);
+  padding: 28px;
+  border: 1px solid rgba(65, 112, 82, 0.22);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 45px rgba(25, 46, 31, 0.14);
+}
+.beta-title {
+  margin: 0 0 4px;
+  font-size: 24px;
+  font-weight: 800;
+}
+.beta-subtitle {
+  margin: 0 0 22px;
+  color: #5f7166;
+  font-size: 14px;
+}
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 13px;
+  border-radius: 8px;
+  border: 1px solid #b8cabb;
+  font-size: 15px;
+  outline: none;
+}
+input:focus {
+  border-color: #2f8d59;
+  box-shadow: 0 0 0 3px rgba(47, 141, 89, 0.14);
+}
+button {
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #2f8d59;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+button:active {
+  transform: scale(0.98);
+}
+.beta-error {
+  min-height: 20px;
+  margin: 12px 0 0;
+  color: #b3261e;
+  font-size: 13px;
+}
+.beta-note {
+  margin-top: 18px;
+  color: #6d7c71;
+  font-size: 12px;
+  line-height: 1.6;
+}
+</style>
+</head>
+<body>
+<main class="beta-card">
+  <h1 class="beta-title">Garden of Thorn 荆棘花园</h1>
+  <p class="beta-subtitle">内测模式</p>
+  <form id="beta-form">
+    <label for="beta-key">请输入内测秘钥：</label>
+    <input id="beta-key" name="key" type="password" autocomplete="current-password" autofocus>
+    <button id="beta-submit" type="submit">进入内测</button>
+    <p id="beta-error" class="beta-error" aria-live="polite"></p>
+  </form>
+  <div class="beta-note">内测模式使用同一账号与好友系统，但本地设置与正式入口分离。</div>
+</main>
+<script>
+const form = document.getElementById('beta-form');
+const input = document.getElementById('beta-key');
+const error = document.getElementById('beta-error');
+const button = document.getElementById('beta-submit');
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  error.textContent = '';
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/beta/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ key: input.value || '' }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      error.textContent = data.error || '内测秘钥错误';
+      input.value = '';
+      input.focus();
+      return;
+    }
+    window.location.replace('/beta');
+  } catch (err) {
+    error.textContent = '无法连接服务器';
+  } finally {
+    button.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

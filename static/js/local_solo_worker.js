@@ -2522,7 +2522,8 @@ class LocalSoloEngine {
     effect_direct_damage(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
-        this.dealDirectDamage(targetId, amount, String(params.source || (card ? cardName(card.def_id) : '效果')), playerId);
+        const sourceText = String(params.source_text || params.source_name || params.label || params.source || (card ? cardName(card.def_id) : '\u6548\u679c'));
+        this.dealDirectDamage(targetId, amount, sourceText, playerId);
     }
 
     effect_lifesteal_damage(playerId, card, params) {

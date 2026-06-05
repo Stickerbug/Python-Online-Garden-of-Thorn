@@ -165,7 +165,7 @@ REMEMBER_COOKIE_NAME = 'gtn_remember'
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode='eventlet',
+    async_mode='eventlet' if eventlet is not None else 'threading',
     ping_interval=int(os.environ.get('GTN_SOCKET_PING_INTERVAL', '25')),
     ping_timeout=int(os.environ.get('GTN_SOCKET_PING_TIMEOUT', '35')),
 )
@@ -189,6 +189,8 @@ RECONNECT_TIMEOUT_SECONDS = int(os.environ.get('RECONNECT_TIMEOUT_SECONDS', '120
 BOTH_DISCONNECTED_CLEANUP_SECONDS = int(os.environ.get('BOTH_DISCONNECTED_CLEANUP_SECONDS', '60'))
 DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2:sha256:260000$82e7gAIa0D6034Qq$a0c9a5ad6028ce6c8798abc1314bc74b099b2441c3f39c3b3e6255ea2156f06b'
 ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', DEFAULT_ADMIN_PASSWORD_HASH)
+DEFAULT_BETA_ACCESS_KEY_HASH = 'scrypt:32768:8:1$GIMYfhSs9RpKMGUK$6f592ac96112ce2f7323012956fc2624890779b9f540c4b7601aff88e3635b3aea26157143eb26874b11cbe30f7da33b25e46285f1f547a846a3f12dc740eb0b'
+BETA_ACCESS_KEY_HASH = os.environ.get('BETA_ACCESS_KEY_HASH', DEFAULT_BETA_ACCESS_KEY_HASH)
 ADMIN_PLAYER_DISPLAY_NAME = 'Stickerbug'
 ADMIN_NICKNAME_RESERVED_REASON = 'Admin nickname reserved'
 SPECIAL_ACCOUNT_PROFILES = [
@@ -229,7 +231,18 @@ SPECIAL_PLAYER_PROFILES = SPECIAL_ACCOUNT_PROFILES
 ADMIN_EVENTS = deque(maxlen=300)
 MATCH_HISTORY = deque(maxlen=120)
 ADMIN_LOGIN_FAILURES = {}
+BETA_LOGIN_FAILURES = {}
 AUTH_LOGIN_FAILURES = {}
+LOBBY_CHAT_CACHE = deque(maxlen=200)
+ADMIN_GAME_CHAT_CACHE = deque(maxlen=500)
+LOBBY_CHAT_RATE = {}
+LOBBY_CHAT_SEQUENCE = 0
+ADMIN_GAME_CHAT_SEQUENCE = 0
+CHAT_RATE_WINDOW_SECONDS = 60
+CHAT_RATE_LIMIT = 10
+CHAT_DISPLAY_WIDTH_LIMIT = 200
+CHAT_IDLE_SEPARATOR_SECONDS = 300
+CHAT_EXEMPT_NAMES = {'stickerbug', 'eric', 'netherdog'}
 
 
 def _env_float(name, default):
@@ -444,6 +457,10 @@ def is_admin_authenticated():
     return bool(session.get('admin_authenticated'))
 
 
+def is_beta_authenticated():
+    return bool(session.get('beta_authenticated'))
+
+
 def admin_unauthorized():
     return jsonify({'success': False, 'error': 'unauthorized'}), 401
 
@@ -459,6 +476,23 @@ def record_admin_login_failure(ip):
     failures = ADMIN_LOGIN_FAILURES.setdefault(ip, [])
     failures.append(time.time())
     ADMIN_LOGIN_FAILURES[ip] = [ts for ts in failures if time.time() - ts < 300]
+
+
+def should_rate_limit_beta_login(ip):
+    now = time.time()
+    failures = [ts for ts in BETA_LOGIN_FAILURES.get(ip, []) if now - ts < 300]
+    BETA_LOGIN_FAILURES[ip] = failures
+    return len(failures) >= 10
+
+
+def record_beta_login_failure(ip):
+    failures = BETA_LOGIN_FAILURES.setdefault(ip, [])
+    failures.append(time.time())
+    BETA_LOGIN_FAILURES[ip] = [ts for ts in failures if time.time() - ts < 300]
+
+
+def clear_beta_login_failures(ip):
+    BETA_LOGIN_FAILURES.pop(ip, None)
 
 
 def should_rate_limit_auth_login(ip):
@@ -920,6 +954,206 @@ def sanitize_nickname(raw):
     name = re.sub(r'[\u3000\s]+', '', name)
     name = re.sub(r'[^\w\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af\-]', '', name)
     return name.strip()
+
+
+def _trim_display_width(text, limit):
+    if limit <= 0:
+        return ''
+    out = []
+    width = 0
+    for ch in str(text or ''):
+        ch_width = _display_width(ch)
+        if width + ch_width > limit:
+            break
+        out.append(ch)
+        width += ch_width
+    return ''.join(out)
+
+
+def normalize_chat_text(raw, exempt=False):
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', str(raw or ''))
+    text = re.sub(r'[\r\n\t]+', ' ', text).strip()
+    if not exempt and _display_width(text) > CHAT_DISPLAY_WIDTH_LIMIT:
+        text = _trim_display_width(text, CHAT_DISPLAY_WIDTH_LIMIT).rstrip()
+    return text
+
+
+def is_chat_limit_exempt(player):
+    name = str((player or {}).get('nickname') or '').strip().lower()
+    return name in CHAT_EXEMPT_NAMES
+
+
+def chat_rate_key(sid, player):
+    if (player or {}).get('user_id'):
+        return f"user:{player.get('user_id')}"
+    return f"sid:{sid}"
+
+
+def check_chat_rate_locked(sid, player, now):
+    if is_chat_limit_exempt(player):
+        return True
+    key = chat_rate_key(sid, player)
+    bucket = LOBBY_CHAT_RATE.setdefault(key, deque())
+    while bucket and now - bucket[0] >= CHAT_RATE_WINDOW_SECONDS:
+        bucket.popleft()
+    if len(bucket) >= CHAT_RATE_LIMIT:
+        return False
+    bucket.append(now)
+    return True
+
+
+def _chat_entry_signature(entry):
+    if not isinstance(entry, dict) or entry.get('type') != 'chat':
+        return None
+    return (
+        entry.get('nickname', ''),
+        entry.get('text', ''),
+        bool(entry.get('system')),
+        entry.get('chat_channel', ''),
+        entry.get('chat_target_name', ''),
+    )
+
+
+def _lobby_chat_recent_locked(limit=100):
+    items = list(LOBBY_CHAT_CACHE)
+    if limit and limit > 0:
+        items = items[-limit:]
+    return [copy.deepcopy(item) for item in items]
+
+
+def _lobby_chat_history_payload_locked(limit=100):
+    return {
+        'items': _lobby_chat_recent_locked(limit),
+        'limit': limit,
+        'total_cached': len(LOBBY_CHAT_CACHE),
+    }
+
+
+def _lobby_chat_time_label(ts):
+    return datetime.fromtimestamp(ts, timezone(timedelta(hours=8))).strftime('%H:%M')
+
+
+def lobby_chat_would_fold_locked(payload, now=None):
+    now = time.time() if now is None else float(now)
+    last = LOBBY_CHAT_CACHE[-1] if LOBBY_CHAT_CACHE else None
+    if not isinstance(last, dict) or last.get('type') != 'chat':
+        return False
+    probe = copy.deepcopy(payload or {})
+    probe['type'] = 'chat'
+    idle = now - float(last.get('ts', now))
+    return idle < CHAT_IDLE_SEPARATOR_SECONDS and _chat_entry_signature(last) == _chat_entry_signature(probe)
+
+
+def append_lobby_chat_locked(payload, now=None):
+    global LOBBY_CHAT_SEQUENCE
+    now = time.time() if now is None else float(now)
+    chat_payload = copy.deepcopy(payload or {})
+    chat_payload['type'] = 'chat'
+    chat_payload['time'] = datetime.fromtimestamp(now, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
+    chat_payload.setdefault('repeat_count', 1)
+    last = LOBBY_CHAT_CACHE[-1] if LOBBY_CHAT_CACHE else None
+    last_chat = last if isinstance(last, dict) and last.get('type') == 'chat' else None
+    idle = now - float((last_chat or {}).get('ts', now))
+    can_fold = (
+        last_chat is not None
+        and idle < CHAT_IDLE_SEPARATOR_SECONDS
+        and _chat_entry_signature(last_chat) == _chat_entry_signature(chat_payload)
+    )
+    if can_fold:
+        last_chat['repeat_count'] = int(last_chat.get('repeat_count') or 1) + 1
+        last_chat['time'] = chat_payload['time']
+        last_chat['ts'] = now
+        return False
+    if last_chat is not None and idle >= CHAT_IDLE_SEPARATOR_SECONDS:
+        LOBBY_CHAT_SEQUENCE += 1
+        LOBBY_CHAT_CACHE.append({
+            'type': 'time',
+            'id': LOBBY_CHAT_SEQUENCE,
+            'time': chat_payload['time'],
+            'display_time': _lobby_chat_time_label(now),
+            'ts': now,
+        })
+    LOBBY_CHAT_SEQUENCE += 1
+    chat_payload['id'] = LOBBY_CHAT_SEQUENCE
+    chat_payload['ts'] = now
+    LOBBY_CHAT_CACHE.append(chat_payload)
+    return True
+
+
+def lobby_chat_history_payloads_locked(limit=100):
+    history = _lobby_chat_history_payload_locked(limit)
+    return [
+        (sid, copy.deepcopy(history))
+        for sid, player in players.items()
+        if player.get('status') == 'lobby'
+    ]
+
+
+def emit_lobby_chat_history_payloads(payloads):
+    for sid, payload in payloads or []:
+        socketio.emit('lobby_chat_history', payload, room=sid)
+
+
+def append_admin_game_chat_locked(payload, now=None, scope='global', room_id=None):
+    global ADMIN_GAME_CHAT_SEQUENCE
+    now = time.time() if now is None else float(now)
+    chat_payload = copy.deepcopy(payload or {})
+    chat_payload['type'] = 'chat'
+    chat_payload['time'] = datetime.fromtimestamp(now, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
+    chat_payload.setdefault('repeat_count', 1)
+    chat_payload.setdefault('scope', scope or 'global')
+    if room_id is not None:
+        chat_payload['room_id'] = room_id
+    last = ADMIN_GAME_CHAT_CACHE[-1] if ADMIN_GAME_CHAT_CACHE else None
+    last_chat = last if isinstance(last, dict) and last.get('type') == 'chat' else None
+    idle = now - float((last_chat or {}).get('ts', now))
+    if (
+        last_chat is not None
+        and idle < CHAT_IDLE_SEPARATOR_SECONDS
+        and _chat_entry_signature(last_chat) == _chat_entry_signature(chat_payload)
+        and last_chat.get('scope') == chat_payload.get('scope')
+        and last_chat.get('room_id') == chat_payload.get('room_id')
+    ):
+        last_chat['repeat_count'] = int(last_chat.get('repeat_count') or 1) + 1
+        last_chat['time'] = chat_payload['time']
+        last_chat['ts'] = now
+        return False
+    if last_chat is not None and idle >= CHAT_IDLE_SEPARATOR_SECONDS:
+        ADMIN_GAME_CHAT_SEQUENCE += 1
+        ADMIN_GAME_CHAT_CACHE.append({
+            'type': 'time',
+            'id': ADMIN_GAME_CHAT_SEQUENCE,
+            'time': chat_payload['time'],
+            'display_time': _lobby_chat_time_label(now),
+            'ts': now,
+        })
+    ADMIN_GAME_CHAT_SEQUENCE += 1
+    chat_payload['id'] = ADMIN_GAME_CHAT_SEQUENCE
+    chat_payload['ts'] = now
+    ADMIN_GAME_CHAT_CACHE.append(chat_payload)
+    return True
+
+
+def admin_game_chat_recent_locked(limit=300):
+    items = list(ADMIN_GAME_CHAT_CACHE)
+    if limit and limit > 0:
+        items = items[-limit:]
+    return [copy.deepcopy(item) for item in items]
+
+
+def console_chat_payload(text):
+    return {
+        'nickname': ADMIN_PLAYER_DISPLAY_NAME,
+        'text': text,
+        'is_spectator': False,
+        'is_admin_player': True,
+        'is_special_player': True,
+        'special_role': 'console',
+        'special_role_color': 'admin',
+        'special_role_sort': 0,
+        'console_player': True,
+        'chat_channel': 'public',
+    }
 
 
 def get_special_player_profile(raw):
@@ -1561,6 +1795,7 @@ def get_lobby_list():
 
 def get_ongoing_games():
     games = []
+    spectatable_phases = {'action', 'draw', 'playing', 'response', 'choice'}
     for rid, room in rooms.items():
         phase = room.engine.phase
         if phase in ('action', 'draw', 'response', 'choice', 'playing', 'draft', 'event_select'):
@@ -1581,6 +1816,7 @@ def get_ongoing_games():
                 'phase': phase,
                 'both_disconnected': both_disconnected,
                 'mode': room.mode,
+                'can_spectate': phase in spectatable_phases,
             }
             if room.mode == '2v2':
                 game_info['player3'] = player_names[2] if len(player_names) > 2 else '?'
@@ -1601,6 +1837,7 @@ def build_admin_players():
             'room_id': p.get('room_id'),
             'spectating_room': p.get('spectating_room'),
             'mode': p.get('mode', '1v1'),
+            'beta_mode': bool(p.get('beta_mode')),
             'mods': p.get('mods_list', []),
         })
     return result
@@ -2068,6 +2305,7 @@ ADMIN_COMMANDS = {
     'rooms': 'rooms - 列出当前对局',
     'roomplayers': 'roomplayers <房间ID> - 显示房间内玩家编号、昵称和状态',
     'logs': 'logs [数量] - 查看最近管理事件',
+    'lobbychat': 'lobbychat [数量] - 查看大厅聊天缓存',
     'history': 'history [数量] - 查看最近历史对局',
     'broadcast': 'broadcast <内容> - 发送服务器广播',
     'kick': 'kick <sid|昵称> - 踢出玩家',
@@ -2376,12 +2614,19 @@ def send_system_broadcast(message):
         'system': True,
         'is_spectator': False,
     }
+    now = time.time()
     with _lock:
-        recipients = list(players.keys())
+        append_lobby_chat_locked(payload, now)
+        append_admin_game_chat_locked(payload, now, scope='system')
+        lobby_history_payloads = lobby_chat_history_payloads_locked(100)
+        recipients = [(sid, p.get('status')) for sid, p in players.items()]
     sent = 0
-    for sid in recipients:
+    for sid, status in recipients:
+        if status == 'lobby':
+            continue
         socketio.emit('chat', payload, room=sid)
         sent += 1
+    emit_lobby_chat_history_payloads(lobby_history_payloads)
     socketio.emit('server_broadcast', {'message': f'[系统]{msg}'})
     return sent
 
@@ -2428,7 +2673,7 @@ def execute_admin_command(line):
         if not rows:
             return {'success': True, 'output': '当前没有在线玩家。'}
         return {'success': True, 'output': '\n'.join(
-            f"{p['nickname']} ID:{p.get('player_id') or '-'} [{p['sid']}] 状态={zh_status(p['status'])} 房间={p.get('room_id')}" for p in rows
+            f"{'[内测]' if p.get('beta_mode') else '[正式]'} {p['nickname']} ID:{p.get('player_id') or '-'} [{p['sid']}] 状态={zh_status(p['status'])} 房间={p.get('room_id')}" for p in rows
         )}
     if cmd == 'rooms':
         with _lock:
@@ -2478,6 +2723,24 @@ def execute_admin_command(line):
         count = parse_int_token(parts[1], 'count') if len(parts) > 1 else 20
         rows = list(ADMIN_EVENTS)[:max(1, min(count, 120))]
         return {'success': True, 'output': '\n'.join(f"{admin_display_time(e.get('time'))} [{e['kind']}] {e['message']}" for e in rows) or '暂无日志。'}
+    if cmd == 'lobbychat':
+        count = parse_int_token(parts[1], 'count') if len(parts) > 1 else 200
+        with _lock:
+            rows = _lobby_chat_recent_locked(max(1, min(count, 200)))
+        lines = []
+        for entry in rows:
+            if entry.get('type') == 'time':
+                lines.append(f"--- {entry.get('display_time') or admin_display_time(entry.get('time'))} ---")
+                continue
+            channel = entry.get('chat_channel') or 'public'
+            repeat = int(entry.get('repeat_count') or 1)
+            repeat_text = f" x{repeat}" if repeat > 1 else ''
+            system_prefix = '[系统]' if entry.get('system') else ''
+            lines.append(
+                f"{admin_display_time(entry.get('time'))} {system_prefix}{entry.get('nickname', '?')} "
+                f"[{channel}]{repeat_text}: {entry.get('text', '')}"
+            )
+        return {'success': True, 'output': '\n'.join(lines) or '暂无大厅聊天。'}
     if cmd == 'history':
         count = parse_int_token(parts[1], 'count') if len(parts) > 1 else 20
         rows = list(MATCH_HISTORY)[:max(1, min(count, 80))]
@@ -2891,6 +3154,7 @@ def _build_lobby_update_payloads_locked():
                 'your_team': teams[sid]['members'] if sid in teams else None,
                 'your_team_leader': teams[sid]['leader'] if sid in teams else None,
                 'your_mode': p.get('mode', '1v1'),
+                'chat_history': _lobby_chat_history_payload_locked(100),
             }))
     return payloads
 
@@ -3392,7 +3656,8 @@ def broadcast_spectate_state(room):
     for spid in room.spectators:
         if spid not in players:
             continue
-        state = build_spectate_state(room)
+        perspective = players[spid].get('spectate_perspective', 0)
+        state = build_spectate_state(room, perspective=perspective)
         state['your_id'] = -1
         state['spectating'] = True
         for i, psid in enumerate(room.player_sids):
@@ -3414,7 +3679,7 @@ def redact_error_cards_from_player_payload(payload):
     return payload
 
 
-def build_spectate_state(room):
+def build_spectate_state(room, perspective=0):
     engine = room.engine
     base = engine.get_public_state(0)
     full_players = []
@@ -3437,33 +3702,47 @@ def build_spectate_state(room):
     base['room_id'] = room.room_id
     base['match_key'] = room_match_key(room)
     base.update(room_mod_payload(room))
+    try:
+        perspective = int(perspective or 0)
+    except (TypeError, ValueError):
+        perspective = 0
+    if perspective < 0 or perspective >= len(full_players):
+        perspective = 0
+    base['spectate_perspective'] = perspective
     if room.mode == '2v2' and len(full_players) >= 4:
-        base['you'] = full_players[0]
-        base['teammate'] = full_players[1]
-        base['opponent'] = full_players[2]
-        base['opponent2'] = full_players[3]
-        base['your_id'] = 0
-        base['teammate_id'] = 1
-        base['enemy_ids'] = [2, 3]
-        base['your_name'] = full_players[0]['name']
-        base['your_is_admin_player'] = full_players[0].get('is_admin_player', False)
-        base['your_special'] = special_public_fields(full_players[0])
-        base['teammate_name'] = full_players[1]['name']
-        base['teammate_is_admin_player'] = full_players[1].get('is_admin_player', False)
-        base['teammate_special'] = special_public_fields(full_players[1])
-        base['opponent_names'] = [full_players[2]['name'], full_players[3]['name']]
-        base['opponent_admin_flags'] = [full_players[2].get('is_admin_player', False), full_players[3].get('is_admin_player', False)]
-        base['opponent_specials'] = [special_public_fields(full_players[2]), special_public_fields(full_players[3])]
+        teammate_id = engine.get_teammate(perspective) if hasattr(engine, 'get_teammate') else (perspective ^ 1)
+        enemy_ids = engine.get_enemies(perspective) if hasattr(engine, 'get_enemies') else [i for i in range(4) if i not in (perspective, teammate_id)]
+        enemy_ids = [i for i in enemy_ids if 0 <= i < len(full_players)]
+        while len(enemy_ids) < 2:
+            enemy_ids.append(0)
+        base['you'] = full_players[perspective]
+        base['teammate'] = full_players[teammate_id] if 0 <= teammate_id < len(full_players) else {}
+        base['opponent'] = full_players[enemy_ids[0]]
+        base['opponent2'] = full_players[enemy_ids[1]]
+        base['your_id'] = perspective
+        base['teammate_id'] = teammate_id
+        base['enemy_ids'] = enemy_ids[:2]
+        base['your_name'] = full_players[perspective]['name']
+        base['your_is_admin_player'] = full_players[perspective].get('is_admin_player', False)
+        base['your_special'] = special_public_fields(full_players[perspective])
+        teammate_payload = full_players[teammate_id] if 0 <= teammate_id < len(full_players) else {}
+        base['teammate_name'] = teammate_payload.get('name', '?')
+        base['teammate_is_admin_player'] = teammate_payload.get('is_admin_player', False)
+        base['teammate_special'] = special_public_fields(teammate_payload)
+        base['opponent_names'] = [full_players[enemy_ids[0]]['name'], full_players[enemy_ids[1]]['name']]
+        base['opponent_admin_flags'] = [full_players[enemy_ids[0]].get('is_admin_player', False), full_players[enemy_ids[1]].get('is_admin_player', False)]
+        base['opponent_specials'] = [special_public_fields(full_players[enemy_ids[0]]), special_public_fields(full_players[enemy_ids[1]])]
     elif len(full_players) >= 2:
-        base['you'] = full_players[0]
-        base['opponent'] = full_players[1]
-        base['your_id'] = 0
-        base['your_name'] = full_players[0]['name']
-        base['your_is_admin_player'] = full_players[0].get('is_admin_player', False)
-        base['your_special'] = special_public_fields(full_players[0])
-        base['opponent_name'] = full_players[1]['name']
-        base['opponent_is_admin_player'] = full_players[1].get('is_admin_player', False)
-        base['opponent_special'] = special_public_fields(full_players[1])
+        opponent_id = 1 - perspective if perspective in (0, 1) else 1
+        base['you'] = full_players[perspective]
+        base['opponent'] = full_players[opponent_id]
+        base['your_id'] = perspective
+        base['your_name'] = full_players[perspective]['name']
+        base['your_is_admin_player'] = full_players[perspective].get('is_admin_player', False)
+        base['your_special'] = special_public_fields(full_players[perspective])
+        base['opponent_name'] = full_players[opponent_id]['name']
+        base['opponent_is_admin_player'] = full_players[opponent_id].get('is_admin_player', False)
+        base['opponent_special'] = special_public_fields(full_players[opponent_id])
     return base
 
 
@@ -3575,7 +3854,42 @@ def both_disconnected_cleanup(room_id):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', beta_mode=False)
+
+
+@app.route('/beta')
+def beta_index():
+    if is_beta_authenticated():
+        return render_template('index.html', beta_mode=True)
+    return render_template('beta_gate.html')
+
+
+@app.route('/api/beta/login', methods=['POST'])
+def beta_login():
+    ip = _client_ip()
+    if should_rate_limit_beta_login(ip):
+        admin_event('security', f'beta login rate limited from {ip}')
+        return jsonify({'success': False, 'error': '尝试次数过多，请稍后再试'}), 429
+    data = request.get_json(silent=True) or {}
+    key = str(data.get('key') or '')
+    if check_password_hash(BETA_ACCESS_KEY_HASH, key):
+        session.permanent = True
+        session['beta_authenticated'] = True
+        session['beta_login_time'] = time.time()
+        clear_beta_login_failures(ip)
+        admin_event('security', f'beta login success from {ip}')
+        return jsonify({'success': True})
+    record_beta_login_failure(ip)
+    admin_event('security', f'beta login failed from {ip}')
+    return jsonify({'success': False, 'error': '内测秘钥错误'}), 401
+
+
+@app.route('/api/beta/logout', methods=['POST'])
+def beta_logout():
+    session.pop('beta_authenticated', None)
+    session.pop('beta_login_time', None)
+    admin_event('security', f'beta logout from {_client_ip()}')
+    return jsonify({'success': True})
 
 
 @app.route('/favicon.ico')
@@ -4424,6 +4738,46 @@ def admin_broadcast():
     return jsonify({'success': True})
 
 
+@app.route('/api/admin/game-chat')
+def admin_game_chat():
+    try:
+        limit = max(1, min(int(request.args.get('limit', 300)), 500))
+    except (TypeError, ValueError):
+        limit = 300
+    with _lock:
+        items = admin_game_chat_recent_locked(limit)
+    return jsonify({
+        'success': True,
+        'items': items,
+        'limit': limit,
+        'total_cached': len(ADMIN_GAME_CHAT_CACHE),
+    })
+
+
+@app.route('/api/admin/game-chat/send', methods=['POST'])
+def admin_game_chat_send():
+    data = request.get_json(silent=True) or {}
+    text = normalize_chat_text(data.get('text', ''), exempt=True)[:500]
+    if not text.strip():
+        return jsonify({'success': False, 'error': 'empty message'}), 400
+    payload = console_chat_payload(text)
+    now = time.time()
+    with _lock:
+        append_lobby_chat_locked(payload, now)
+        append_admin_game_chat_locked(payload, now, scope='console')
+        lobby_history_payloads = lobby_chat_history_payloads_locked(100)
+        recipients = [(sid, p.get('status')) for sid, p in players.items()]
+    sent = 0
+    for sid, status in recipients:
+        if status == 'lobby':
+            continue
+        socketio.emit('chat', payload, room=sid)
+        sent += 1
+    emit_lobby_chat_history_payloads(lobby_history_payloads)
+    admin_event('admin', f'game chat: {text}')
+    return jsonify({'success': True, 'sent': sent})
+
+
 @app.route('/api/admin/room/<int:room_id>/skip', methods=['POST'])
 def admin_skip(room_id):
     with _lock:
@@ -4565,6 +4919,10 @@ def on_login(data):
     account_user = _current_account_user() if DB_AVAILABLE else None
     raw_name = data.get('nickname', '')
     wants_account_login = bool(data.get('account_login'))
+    is_beta_mode = bool(data.get('beta_mode'))
+    if is_beta_mode and not is_beta_authenticated():
+        emit('login_fail', {'reason': '内测登录已过期，请重新输入内测秘钥'})
+        return
     if account_user and account_user.get('banned'):
         session.pop('user_id', None)
         session.pop('username', None)
@@ -4653,10 +5011,11 @@ def on_login(data):
             'community_mod_hash': community_fields.get('community_mod_hash', ''),
             'community_mod_name': community_fields.get('community_mod_name', ''),
             'community_mods': community_fields.get('community_mods', []),
+            'beta_mode': is_beta_mode,
         }
         if special_profile:
             players[sid].update(special_public_fields(special_profile))
-        admin_event('player', f'{name} joined as {initial_status}', sid=sid, mode=preferred_mode)
+        admin_event('player', f'{"[beta] " if is_beta_mode else ""}{name} joined as {initial_status}', sid=sid, mode=preferred_mode)
     if reconnect_room:
         reconnect_info = reconnect_room.disconnected_players.get(reconnect_old_sid, {})
         reconnect_pidx = int(reconnect_info.get('player_index', -1))
@@ -4691,6 +5050,7 @@ def on_login(data):
         'community_mod_hash': players.get(sid, {}).get('community_mod_hash', ''),
         'community_mod_name': players.get(sid, {}).get('community_mod_name', ''),
         'community_mods': players.get(sid, {}).get('community_mods', []),
+        'beta_mode': players.get(sid, {}).get('beta_mode', False),
     }
     if is_registered_user:
         login_payload['user'] = auth_user_payload(account_user)
@@ -5285,7 +5645,9 @@ def on_chat(data):
         player = players[sid]
         room_id = player.get('room_id')
         spectating_room = player.get('spectating_room')
-        text = str(data.get('text', ''))[:200]
+        now = time.time()
+        exempt = is_chat_limit_exempt(player)
+        text = normalize_chat_text(data.get('text', ''), exempt=exempt)
         if not text.strip():
             return
         nickname = player['nickname']
@@ -5342,16 +5704,28 @@ def on_chat(data):
                     chat_data['chat_target_player_id'] = target_pidx
                     chat_data['chat_target_name'] = player_name_at(room, target_pidx)
                     recipients = [sid, room.player_sids[target_pidx]]
+            if not check_chat_rate_locked(sid, player, now):
+                emit('server_error', {'message': '聊天发送过快'})
+                return
+            append_admin_game_chat_locked(chat_data, now, scope='room', room_id=room.room_id)
             emit_chat_to(recipients, chat_data)
         elif spectating_room is not None and spectating_room in rooms:
             room = rooms[spectating_room]
             if room.mode == '2v2':
                 chat_data['chat_channel'] = 'public'
+            if not check_chat_rate_locked(sid, player, now):
+                emit('server_error', {'message': '聊天发送过快'})
+                return
+            append_admin_game_chat_locked(chat_data, now, scope='spectate', room_id=room.room_id)
             emit_chat_to(list(room.player_sids) + list(room.spectators), chat_data)
         else:
-            for other_sid, other_p in players.items():
-                if other_p['status'] == 'lobby':
-                    socketio.emit('chat', chat_data, room=other_sid)
+            will_fold = lobby_chat_would_fold_locked(chat_data, now)
+            if not will_fold and not check_chat_rate_locked(sid, player, now):
+                emit('server_error', {'message': '聊天发送过快'})
+                return
+            append_lobby_chat_locked(chat_data, now)
+            append_admin_game_chat_locked(chat_data, now, scope='lobby')
+            emit_lobby_chat_history_payloads(lobby_chat_history_payloads_locked(100))
 
 
 @socketio.on('draft_pick')
@@ -6394,7 +6768,8 @@ def on_spectate(data):
 
 
 def _send_spectate_state_internal(spid, room):
-    state = build_spectate_state(room)
+    perspective = players.get(spid, {}).get('spectate_perspective', 0)
+    state = build_spectate_state(room, perspective=perspective)
     state['your_id'] = -1
     state['spectating'] = True
     for i, psid in enumerate(room.player_sids):
@@ -6430,7 +6805,36 @@ def on_leave_spectate(data=None):
 
 @socketio.on('switch_spectate_perspective')
 def on_switch_spectate_perspective(data=None):
-    return
+    sid = request.sid
+    with _lock:
+        player = players.get(sid)
+        if not player:
+            return
+        room_id = player.get('spectating_room')
+        if room_id not in rooms:
+            emit('server_error', {'message': 'not_spectating'})
+            return
+        room = rooms[room_id]
+        total = len(room.player_sids)
+        if total <= 0:
+            return
+        current = player.get('spectate_perspective', 0)
+        try:
+            current = int(current or 0)
+        except (TypeError, ValueError):
+            current = 0
+        next_index = None
+        if isinstance(data, dict) and data.get('perspective') is not None:
+            try:
+                requested = int(data.get('perspective'))
+                if 0 <= requested < total:
+                    next_index = requested
+            except (TypeError, ValueError):
+                next_index = None
+        if next_index is None:
+            next_index = (current + 1) % total
+        player['spectate_perspective'] = next_index
+        _send_spectate_state_internal(sid, room)
 
 
 def _seconds_until_cleanup_time():

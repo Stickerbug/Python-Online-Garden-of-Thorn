@@ -4,7 +4,6 @@ import json
 import re
 import copy
 from typing import List, Dict, Optional, Tuple, Set
-from engine_runtime_ext import install_runtime_ext
 from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DRAFT_REROLLS,
     HAND_LIMIT, DRAW_PER_TURN, ELIXIR_RECOVERY, BASE_MAX_HEALTH,
@@ -1257,6 +1256,13 @@ class GameEngine:
         if self._merge_log_text(text):
             return
         self.log.append(text)
+
+    def _clear_hand_reveal_for_player(self, player_id: int):
+        if hasattr(self, '_antenna_reveal') and 0 <= player_id < len(self._antenna_reveal):
+            self._antenna_reveal[player_id] = None
+        reveal_targets = getattr(self, '_antenna_reveal_targets', None)
+        if reveal_targets is not None and 0 <= player_id < len(reveal_targets):
+            reveal_targets[player_id] = None
 
     def _mark_log_visible(self):
         self._log_compaction_floor = len(self.log)
@@ -2889,6 +2895,8 @@ class GameEngine:
         else:
             self.log_msg(log or f"{self.pn(player_id)}未选择要夺取的牌")
 
+        self._clear_hand_reveal_for_player(player_id)
+
     def _atomic_choose_from_deck(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
         selector = params.get('selector')
@@ -3544,7 +3552,7 @@ class GameEngine:
         if owner_id is None:
             owner_id = player_id
         self._discard_card(self.players[owner_id], target_card)
-        if params.get('silent') or params.get('hide_log'):
+        if params.get('silent') or params.get('hide_log') or (isinstance(context, dict) and context.get('suppress_detail_logs')):
             return
         self.log_msg(log or f"{target_card.name_cn}移入弃牌堆")
 
@@ -4239,10 +4247,10 @@ class GameEngine:
                 ps.remove_hand_card(target.instance_id)
                 ps.discard.append(target)
                 ps.draw_cards(1)
-                self.log_msg(f"{self.pn(player_id)}使用辣椒！丢弃{target.name_cn}，抽1张牌")
+                self.log_msg(f"{self.pn(player_id)}使用辣椒，弃1张并抽1张牌")
         else:
             ps.draw_cards(1)
-            self.log_msg(f"{self.pn(player_id)}使用辣椒！抽1张牌")
+            self.log_msg(f"{self.pn(player_id)}使用辣椒，抽1张牌")
 
     def _effect_chromosome(self, player_id: int, card: CardInstance, choice=None):
         ps = self.players[player_id]
@@ -4466,6 +4474,8 @@ class GameEngine:
             ps.bandage_death_pending = False
             ps.invincible = False
             self.log_msg(f"{self.pn(player_id)}的绷带效果结束，死亡！")
+            if self._start_turn_status_damage_would_defeat(1 - player_id):
+                self._resolve_start_turn_status_damage_for_transition(1 - player_id)
             self._check_game_over()
             if self.game_over:
                 return
@@ -5509,6 +5519,25 @@ class GameEngine:
     def _uses_atomic_play_effects(self, card: CardInstance) -> bool:
         return bool(self._card_has_v2_event(card.card_def, 'on_play') or self._card_has_script(card.card_def) or card.card_def.effects)
 
+    def _is_chilli_card(self, card: Optional[CardInstance]) -> bool:
+        if card is None:
+            return False
+        card_def = getattr(card, 'card_def', None)
+        values = {
+            str(getattr(card, 'def_id', '') or ''),
+            str(getattr(card_def, 'id', '') or ''),
+            str(getattr(card_def, 'legacy_id', '') or ''),
+            str(getattr(card_def, 'name_cn', '') or ''),
+            str(getattr(card_def, 'name_en', '') or ''),
+        }
+        return bool(values.intersection({'Chilli', 'vanilla:chilli', '辣椒'}))
+
+    def _log_chilli_summary(self, player_id: int, discarded: bool):
+        if discarded:
+            self.log_msg(f"{self.pn(player_id)}使用辣椒，弃1张并抽1张牌")
+        else:
+            self.log_msg(f"{self.pn(player_id)}使用辣椒，抽1张牌")
+
     def _card_has_v2_event(self, card_def, event_name: str) -> bool:
         events = getattr(card_def, 'v2_events', None)
         return isinstance(events, dict) and bool(events.get(event_name))
@@ -5555,6 +5584,8 @@ class GameEngine:
             'current_event': event_name,
             'current_action': {'choice': choice or {}, **extra_context},
         }
+        if event_name == 'on_play' and self._is_chilli_card(card):
+            context['suppress_detail_logs'] = True
         if isinstance(choice, dict):
             instance_ids = []
             if choice.get('target_instance_id') is not None:
@@ -5580,6 +5611,8 @@ class GameEngine:
         result = run_v2_event(self, context, event_def)
         if isinstance(result, dict) and result.get('needs_v2_ui'):
             self._store_v2_ui_pause(result.get('v2_ui_pause') or {}, card)
+        elif event_name == 'on_play' and self._is_chilli_card(card):
+            self._log_chilli_summary(player_id, bool(context.get('chosen_cards')))
         return result
 
     def _store_v2_ui_pause(self, pause: dict, card: Optional[CardInstance] = None):
@@ -5767,6 +5800,48 @@ class GameEngine:
             if not self._has_card_event(listener_card.card_def, event_name):
                 continue
             self._run_card_event(owner_id, listener_card, event_name, choice, context)
+
+    def _has_fatal_prevention(self, player_id: int) -> bool:
+        if not (0 <= player_id < len(self.players)):
+            return False
+        ps = self.players[player_id]
+        if ps.bandage_active or ps.invincible:
+            return True
+        for card in list(ps.hand):
+            if getattr(card, 'def_id', '') == 'Yggdrasil':
+                return True
+            for effect in getattr(card.card_def, 'effects', []) or []:
+                if isinstance(effect, dict) and effect.get('type') == 'on_fatal_set_health_exile':
+                    return True
+        return False
+
+    def _start_turn_status_damage_would_defeat(self, player_id: int) -> bool:
+        if not (0 <= player_id < len(self.players)):
+            return False
+        ps = self.players[player_id]
+        if ps.health <= 0:
+            return True
+        if self._has_fatal_prevention(player_id):
+            return False
+        multiplier = 2 ** max(0, self._get_corruption_count())
+        pending_damage = max(0, int(ps.poison or 0)) + max(0, int(ps.fire or 0))
+        return pending_damage * multiplier >= ps.health
+
+    def _resolve_start_turn_status_damage_for_transition(self, player_id: int):
+        if not (0 <= player_id < len(self.players)):
+            return
+        ps = self.players[player_id]
+        self._game_over_defer_depth += 1
+        try:
+            if ps.poison > 0:
+                dmg = ps.poison
+                self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
+                if ps.health > 0 and not self.game_over:
+                    ps.poison = ps.poison // 2
+            if ps.health > 0 and not self.game_over and ps.fire > 0:
+                self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
+        finally:
+            self._game_over_defer_depth -= 1
 
     TRACKED_PLAYER_STATS = (
         'health', 'max_health', 'elixir', 'max_elixir', 'magic', 'max_magic',
@@ -6161,7 +6236,7 @@ class GameEngine:
                 ps.hand.insert(0, card)
                 self._refund_pending_choice_cost(player_id, card)
                 return {'success': False, 'error': '\u80fd\u91cf\u4e0d\u8db3'}
-        if self._uses_atomic_play_effects(card):
+        if self._uses_atomic_play_effects(card) and not self._is_chilli_card(card):
             self._log_card_play(player_id, card)
         if card.card_type == 'thorn':
             fission_level = max(1, int(getattr(card, 'fission_level', 1)))
@@ -6368,12 +6443,17 @@ class GameEngine:
 
     def _atomic_discard_choice_then_draw(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
+        discarded = False
         if choice and 'target_instance_id' in choice:
             target = ps.find_hand_card(choice['target_instance_id'])
             if target:
                 ps.hand.remove(target)
                 ps.discard.append(target)
+                discarded = True
         ps.draw_cards(1)
+        if self._is_chilli_card(card):
+            self._log_chilli_summary(player_id, discarded)
+            return
         self.log_msg(log or f"{self.pn(player_id)}抽1张牌")
 
     def _atomic_coffee_gain_e(self, player_id, card, params, log, choice, context):
@@ -6908,6 +6988,3 @@ class GameEngine:
                                   target_id=opp_id, equipment=eq, equipment_owner_id=player_id)
         self._check_game_over()
         return {'success': True}
-
-
-install_runtime_ext(GameEngine)

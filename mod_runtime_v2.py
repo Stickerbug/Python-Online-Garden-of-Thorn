@@ -155,9 +155,14 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         return {"success": True, "last_damage": total}
 
     if op in ("direct_damage", "deal_direct_damage"):
-        source = _player_id(engine, resolve_v2_target(engine, context, params.get("source", "source")))
+        raw_source = params.get("source", "source")
+        source_selector = raw_source if _looks_like_target_selector(raw_source) else "source"
+        source = _player_id(engine, resolve_v2_target(engine, context, source_selector))
         amount = max(0, _to_int(eval_v2_value(engine, context, params.get("amount", 0))))
-        source_text = str(params.get("source_text") or params.get("source_name") or params.get("label") or "效果")
+        source_text = params.get("source_text") or params.get("source_name") or params.get("label")
+        if source_text is None and not _looks_like_target_selector(raw_source):
+            source_text = raw_source
+        source_text = str(source_text or "效果")
         damage_type = str(params.get("damage_type") or DAMAGE_TYPE_PHYSICAL)
         damage_tag = params.get("damage_tag")
         total = 0
@@ -198,7 +203,8 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                     drawn = engine._draw_cards_with_v2_hooks(target_id, amount, "v2_runtime")
                 else:
                     drawn = engine.players[target_id].draw_cards(amount)
-                engine.log_msg(f"{engine.pn(target_id)}抽{len(drawn)}张牌")
+                if not context.get("suppress_detail_logs"):
+                    engine.log_msg(f"{engine.pn(target_id)}抽{len(drawn)}张牌")
         return {"success": True}
 
     if op in ("gain_e", "gain_m"):
@@ -842,6 +848,20 @@ def _log_runtime_error(engine, context: Dict[str, Any], effect_type: str, exc: E
 
 def _valid_player(engine, player_id: int) -> bool:
     return isinstance(player_id, int) and 0 <= player_id < len(getattr(engine, "players", []))
+
+
+def _looks_like_target_selector(value: Any) -> bool:
+    if isinstance(value, (dict, list, tuple)):
+        return True
+    text = str(value or "").strip().lower()
+    return text in {
+        "source", "self", "owner", "you", "current_player",
+        "event_source", "source_id", "last_actor", "damage_source",
+        "target", "event_target", "choice_target", "selected_target", "chosen_target",
+        "enemy", "opponent", "all_players", "all_enemies", "all_opponents",
+        "allies", "all_friends", "friends", "friend", "ally", "teammate",
+        "random_player", "random_enemy", "random_ally",
+    }
 
 
 def _player_id(engine, value: Any) -> int:
