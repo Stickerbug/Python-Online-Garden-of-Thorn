@@ -4119,8 +4119,8 @@ def api_cards():
             continue
         source = card_mod_sources.get(def_id, {})
         image_url = str(getattr(card_def, 'image_url', '') or getattr(card_def, 'image', '') or '')
-        if not image_url and bool(source.get('is_vanilla', False)):
-            image_url = vanilla_card_art_url(def_id)
+        if bool(source.get('is_vanilla', False)):
+            image_url = vanilla_card_art_url(def_id) or image_url
         card_payload = {
             'id': card_def.id,
             'name_en': card_def.name_en,

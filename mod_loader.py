@@ -65,19 +65,57 @@ def _register_gtnmod_asset(filepath: str, member: str, package_key: str) -> str:
 
 
 def get_mod_asset(asset_id: str) -> Optional[dict]:
-    entry = _MOD_ASSET_REGISTRY.get(str(asset_id or '').strip())
+    requested = str(asset_id or '').strip()
+    entry = _MOD_ASSET_REGISTRY.get(requested)
+    if not entry:
+        entry = _find_gtnmod_asset_entry(requested)
     if not entry:
         return None
     try:
         with zipfile.ZipFile(entry['zip_path'], 'r') as zf:
             data = zf.read(entry['member'])
     except Exception:
-        return None
+        entry = _find_gtnmod_asset_entry(requested)
+        if not entry:
+            return None
+        try:
+            with zipfile.ZipFile(entry['zip_path'], 'r') as zf:
+                data = zf.read(entry['member'])
+        except Exception:
+            return None
     return {
         'data': data,
         'mime': entry.get('mime') or 'application/octet-stream',
         'filename': entry.get('filename') or 'asset',
     }
+
+
+def _find_gtnmod_asset_entry(asset_id: str) -> Optional[dict]:
+    requested = str(asset_id or '').strip()
+    if not requested or not os.path.isdir(MODS_DIR):
+        return None
+    for entry in os.scandir(MODS_DIR):
+        if not entry.name.lower().endswith('.gtnmod') or not entry.is_file():
+            continue
+        filepath = entry.path
+        package_key = _gtnmod_package_key(filepath)
+        try:
+            with zipfile.ZipFile(filepath, 'r') as zf:
+                for raw_member in zf.namelist():
+                    safe_member = _safe_zip_member(raw_member)
+                    lowered = safe_member.lower()
+                    if not safe_member or not lowered.endswith(GTNMOD_ASSET_EXTS):
+                        continue
+                    if not any(lowered.startswith(f'{folder}/') for folder in GTNMOD_ASSET_DIRS):
+                        continue
+                    candidate_id = hashlib.sha256(f'{package_key}|{safe_member}'.encode('utf-8')).hexdigest()[:32]
+                    if candidate_id != requested:
+                        continue
+                    url = _register_gtnmod_asset(filepath, safe_member, package_key)
+                    return _MOD_ASSET_REGISTRY.get(url.rsplit('/', 1)[-1])
+        except Exception:
+            continue
+    return None
 
 
 def _find_gtnmod_main_file(zf: zipfile.ZipFile) -> str:
