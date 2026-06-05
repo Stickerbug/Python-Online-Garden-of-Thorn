@@ -22,7 +22,7 @@ from functools import wraps
 from collections import deque
 from datetime import datetime, timedelta, timezone
 
-from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session, redirect
+from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash
 from game_engine import GameEngine
@@ -4022,15 +4022,6 @@ def beta_entry_response():
     if is_beta_authenticated():
         return render_template('index.html', beta_mode=True)
     return render_template('beta_gate.html')
-
-
-@app.route('/beta')
-def beta_index():
-    if is_release_instance():
-        if GTN_BETA_PUBLIC_URL:
-            return redirect(GTN_BETA_PUBLIC_URL, code=302)
-        return 'Beta server is not served by this release instance. Configure GTN_BETA_PUBLIC_URL or use the beta port.', 404
-    return beta_entry_response()
 
 
 @app.route('/api/beta/login', methods=['POST'])
