@@ -201,7 +201,7 @@ CARD_I18N = {
     'Corruption': {
         'name': _t('腐化', 'Corruption', 'Corruption', 'Corrupção', 'Порча', '腐化'),
         'desc': _t('伤敌一千，自损八百。', 'Hurt the enemy badly, but hurt yourself too.', 'Blesser lourdement l’ennemi, au prix de vos propres blessures.', 'Fere muito o inimigo, mas também fere você.', 'Сильно ранит врага, но и вам достаётся.', '敵を大きく傷つけるが、自分も傷つく。'),
-        'effect': _t('自下个敌方回合开始，全场所有伤害翻倍', 'Starting from the next enemy turn, all damage on the field is doubled', 'À partir du prochain tour ennemi, tous les dégâts sur le terrain sont doublés', 'A partir do próximo turno inimigo, todo dano no campo é dobrado', 'Со следующего хода врага весь урон на поле удваивается', '次の敵ターンから、場の全てのダメージが2倍になる'),
+        'effect': _t('自下个敌方回合开始，全场所有伤害变为1.5倍（向上取整）', 'Starting from the next enemy turn, all damage on the field is multiplied by 1.5 (rounded up)', 'À partir du prochain tour ennemi, tous les dégâts du terrain sont multipliés par 1,5 (arrondis au supérieur)', 'A partir do próximo turno inimigo, todo dano no campo é multiplicado por 1,5 (arredondado para cima)', 'Со следующего хода врага весь урон на поле умножается на 1,5 (округление вверх)', '次の敵ターンから、場の全てのダメージは1.5倍（切り上げ）になる'),
     },
     'Chilli': {
         'name': _t('辣椒', 'Chilli', 'Piment', 'Pimenta', 'Чили', '唐辛子'),

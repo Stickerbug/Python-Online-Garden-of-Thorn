@@ -4795,7 +4795,7 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
     const sponge = !!(targetState && targetState.sponge_active);
     let nazarActive = !!(targetState && targetState.nazar_active);
     let nazarBigHits = Math.max(0, Number(targetState && targetState.nazar_big_hits || 0));
-    const corruptionMult = 2 ** countActiveCorruptionEquipment();
+    const corruptionMult = 1.5 ** countActiveCorruptionEquipment();
     const precision = cardHasEffectiveFlagForPrediction(cardDict || {}, cardDef || {}, 'precision');
     rawHits.forEach(raw => {
         let dmg = Math.max(0, Math.ceil(Number(raw || 0)));
@@ -4814,7 +4814,7 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
             return;
         }
         if (precisionDodged) dmg = Math.ceil(dmg / 2);
-        if (corruptionMult > 1) dmg *= corruptionMult;
+        if (corruptionMult > 1) dmg = Math.ceil(dmg * corruptionMult);
         if (nazarActive) {
             const original = dmg;
             dmg = Math.max(1, dmg - 9);

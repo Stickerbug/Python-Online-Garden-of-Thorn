@@ -20,6 +20,9 @@ from damage_types import (
     status_damage_tag,
 )
 
+CORRUPTION_DAMAGE_MULTIPLIER = 1.5
+LATE_ROUND_FIRE_START = 20
+
 
 class ModLoopBreak(Exception):
     pass
@@ -1843,6 +1846,7 @@ class GameEngine:
         self.round_num = 1
         self.log_msg(f"游戏开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
+        self._apply_late_round_fire_pressure()
         self._start_player_turn(self.first_player)
 
     def _opening_event_enemy_targets(self, player_id: int):
@@ -1959,6 +1963,9 @@ class GameEngine:
             ps.magic_battery_m_this_turn = 0
             ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0
         self.log_msg(f"=== 第{self.round_num}回合 ===")
+        self._apply_late_round_fire_pressure()
+        if self.game_over:
+            return
         self._start_player_turn(self.first_player)
 
     def _start_player_turn(self, player_id: int):
@@ -1999,7 +2006,7 @@ class GameEngine:
         for eq in opp.equipment:
             if eq.def_id == 'Corruption' and not eq.corruption_active:
                 eq.corruption_active = True
-                self.log_msg(f"{self.pn(1 - player_id)}的腐化效果激活！全场伤害翻倍！")
+                self.log_msg(f"{self.pn(1 - player_id)}的腐化效果激活！全场伤害x1.5！")
         if ps.poison > 0:
             dmg = ps.poison
             self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
@@ -2058,10 +2065,7 @@ class GameEngine:
             self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
             return 0
         actual = amount
-        corruption_count = self._get_corruption_count()
-        if corruption_count > 0:
-            actual = actual * (2 ** corruption_count)
-            self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
+        actual = self._apply_corruption_multiplier_to_damage(actual)
         resolved_damage_type = infer_damage_type(source, 'direct', damage_tag or '', damage_type)
         resolved_damage_tag = damage_tag or (status_damage_tag(source) if resolved_damage_type == DAMAGE_TYPE_MAGIC else DAMAGE_TAG_DIRECT)
         damage_context = self._v2_damage_context(
@@ -2113,10 +2117,7 @@ class GameEngine:
                 self.log_msg(f"精准被反制，伤害减半：{amount}->{dmg}")
             elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
-            corruption_count = self._get_corruption_count()
-            if corruption_count > 0:
-                dmg = dmg * (2 ** corruption_count)
-                self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
+            dmg = self._apply_corruption_multiplier_to_damage(dmg)
             if ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
@@ -2166,6 +2167,33 @@ class GameEngine:
                 if eq.def_id == 'Corruption' and eq.corruption_active:
                     count += 1
         return count
+
+    def _get_corruption_multiplier(self) -> float:
+        return CORRUPTION_DAMAGE_MULTIPLIER ** max(0, self._get_corruption_count())
+
+    def _format_damage_multiplier(self, value: float) -> str:
+        text = f"{float(value):.4f}".rstrip('0').rstrip('.')
+        return text or '1'
+
+    def _apply_corruption_multiplier_to_damage(self, amount, log: bool = True) -> int:
+        multiplier = self._get_corruption_multiplier()
+        if multiplier <= 1:
+            return int(amount)
+        result = int(math.ceil(float(amount) * multiplier))
+        if log:
+            self.log_msg(f"腐化效果：伤害x{self._format_damage_multiplier(multiplier)}")
+        return result
+
+    def _apply_late_round_fire_pressure(self):
+        if self.round_num < LATE_ROUND_FIRE_START:
+            return
+        applied = 0
+        for ps in self.players:
+            if ps.health > 0:
+                ps.fire += 1
+                applied += 1
+        if applied:
+            self.log_msg(f"第{self.round_num}回合开始，所有存活玩家+1灼烧")
 
     def _check_yggdrasil(self, player_id: int):
         ps = self.players[player_id]
@@ -4356,7 +4384,7 @@ class GameEngine:
         self.log_msg(f"{self.pn(player_id)}装备了癌细胞！敌方+1淬毒")
 
     def _effect_corruption(self, player_id: int, card: CardInstance, choice=None):
-        self.log_msg(f"{self.pn(player_id)}装备了腐化！下回合起全场伤害翻倍")
+        self.log_msg(f"{self.pn(player_id)}装备了腐化！下回合起全场伤害x1.5")
 
     def _effect_mark(self, player_id: int, card: CardInstance, choice=None):
         pass
@@ -5823,9 +5851,12 @@ class GameEngine:
             return True
         if self._has_fatal_prevention(player_id):
             return False
-        multiplier = 2 ** max(0, self._get_corruption_count())
-        pending_damage = max(0, int(ps.poison or 0)) + max(0, int(ps.fire or 0))
-        return pending_damage * multiplier >= ps.health
+        multiplier = self._get_corruption_multiplier()
+        pending_damage = (
+            math.ceil(max(0, int(ps.poison or 0)) * multiplier)
+            + math.ceil(max(0, int(ps.fire or 0)) * multiplier)
+        )
+        return pending_damage >= ps.health
 
     def _resolve_start_turn_status_damage_for_transition(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
@@ -6120,9 +6151,7 @@ class GameEngine:
                 dmg = math.ceil(dmg / 2)
             elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
-            corruption_count = self._get_corruption_count()
-            if corruption_count > 0:
-                dmg *= (2 ** corruption_count)
+            dmg = self._apply_corruption_multiplier_to_damage(dmg, log=False)
             if ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)

@@ -17,6 +17,8 @@ const FIRST_PLAYER_HAND_SIZE = 4;
 const DECK_SIZE = 15;
 const ERROR_CARD_ID = 'Error';
 const MOD_RUNTIME_ERROR_MESSAGE = '模组执行出现了一个意外错误。请联系管理员。';
+const CORRUPTION_DAMAGE_MULTIPLIER = 1.5;
+const LATE_ROUND_FIRE_START = 20;
 
 class ModLoopBreak extends Error {}
 class ModLoopContinue extends Error {}
@@ -1164,6 +1166,8 @@ class LocalSoloEngine {
             ps.custom_vars['魔法电池本回合回魔'] = 0;
         });
         this.logMsg(`=== 第${this.round_num}回合 ===`);
+        this.applyLateRoundFirePressure();
+        if (this.game_over) return;
         this.startPlayerTurn(this.first_player);
     }
 
@@ -3240,15 +3244,35 @@ class LocalSoloEngine {
         return count;
     }
 
+    getCorruptionMultiplier() {
+        return CORRUPTION_DAMAGE_MULTIPLIER ** Math.max(0, this.getCorruptionCount());
+    }
+
+    applyCorruptionMultiplier(amount) {
+        const multiplier = this.getCorruptionMultiplier();
+        const base = Math.max(0, toInt(amount, 0));
+        return multiplier > 1 ? Math.ceil(base * multiplier) : base;
+    }
+
+    applyLateRoundFirePressure() {
+        if (this.round_num < LATE_ROUND_FIRE_START) return;
+        let applied = 0;
+        this.players.forEach(ps => {
+            if (ps.health > 0) {
+                ps.fire += 1;
+                applied += 1;
+            }
+        });
+        if (applied > 0) this.logMsg(`第${this.round_num}回合开始，所有存活玩家+1灼烧`);
+    }
+
     dealDirectDamage(playerId, amount, source = '', sourceId = null) {
         const ps = this.players[playerId];
         if (!ps || ps.invincible) {
             if (ps) this.logMsg(`${this.pn(playerId)}无敌，免疫${source}伤害`);
             return 0;
         }
-        let actual = Math.max(0, toInt(amount, 0));
-        const corruption = this.getCorruptionCount();
-        if (corruption > 0) actual *= (2 ** corruption);
+        let actual = this.applyCorruptionMultiplier(amount);
         ps.health -= actual;
         this.recordDamage(playerId, actual, sourceId);
         this.logMsg(`${this.pn(playerId)}受到${actual}点${source}伤害（H=${ps.health}）`);
@@ -3282,8 +3306,7 @@ class LocalSoloEngine {
             let dmg = Math.max(0, toInt(amount, 0));
             if (this.halve_next_attack) dmg = Math.ceil(dmg / 2);
             else if (precisionDodged) dmg = Math.ceil(dmg / 2);
-            const corruption = this.getCorruptionCount();
-            if (corruption > 0) dmg *= (2 ** corruption);
+            dmg = this.applyCorruptionMultiplier(dmg);
             if (ps.nazar_active) {
                 const original = dmg;
                 dmg = Math.max(1, dmg - 9);

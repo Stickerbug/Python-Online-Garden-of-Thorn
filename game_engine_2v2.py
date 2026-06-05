@@ -442,6 +442,9 @@ class GameEngine2v2(GameEngine):
 
     def _start_draw_phase(self):
         self.log_msg(f"=== 第{self.round_num}回合 ===")
+        self._apply_late_round_fire_pressure()
+        if self.game_over:
+            return
         self.turn_index = 0
         first = self.turn_order[0]
         self._start_player_turn(first)
@@ -734,10 +737,7 @@ class GameEngine2v2(GameEngine):
             elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
                 self.log_msg(f"精准被反制，伤害减半：{amount}→{dmg}")
-            corruption_count = self._get_corruption_count()
-            if corruption_count > 0:
-                dmg = dmg * (2 ** corruption_count)
-                self.log_msg(f"腐化效果：伤害×{2 ** corruption_count}")
+            dmg = self._apply_corruption_multiplier_to_damage(dmg)
             if ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
@@ -883,6 +883,9 @@ class GameEngine2v2(GameEngine):
 
     def _start_draw_phase(self):
         self.log_msg(f"=== 第{self.round_num}回合 ===")
+        self._apply_late_round_fire_pressure()
+        if self.game_over:
+            return
         self.turn_index = 0
         self._start_player_turn(self.turn_order[0])
 
@@ -1144,10 +1147,7 @@ class GameEngine2v2(GameEngine):
             self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
             return 0
         actual = amount
-        corruption_count = self._get_corruption_count()
-        if corruption_count > 0:
-            actual = actual * (2 ** corruption_count)
-            self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
+        actual = self._apply_corruption_multiplier_to_damage(actual)
         resolved_damage_type = infer_damage_type(source, 'direct', damage_tag or '', damage_type)
         resolved_damage_tag = damage_tag or (status_damage_tag(source) if resolved_damage_type == DAMAGE_TYPE_MAGIC else DAMAGE_TAG_DIRECT)
         damage_context = self._v2_damage_context(
@@ -1222,10 +1222,7 @@ class GameEngine2v2(GameEngine):
                 dmg = math.ceil(dmg / 2)
             elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
-            corruption_count = self._get_corruption_count()
-            if corruption_count > 0:
-                dmg = dmg * (2 ** corruption_count)
-                self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
+            dmg = self._apply_corruption_multiplier_to_damage(dmg)
             if ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
@@ -1639,9 +1636,7 @@ class GameEngine2v2(GameEngine):
                 dmg = math.ceil(dmg / 2)
             elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
-            corruption_count = self._get_corruption_count()
-            if corruption_count > 0:
-                dmg *= (2 ** corruption_count)
+            dmg = self._apply_corruption_multiplier_to_damage(dmg, log=False)
             if ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)

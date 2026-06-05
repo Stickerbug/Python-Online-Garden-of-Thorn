@@ -285,7 +285,7 @@ _reg(CardDef('Cancer', 'Cancer', '癌细胞', 4, 0, 'root', 2, 'Common',
              '无法根除的恶性细胞。', '对目标施加1层淬毒', flags={'indestructible'}))
 
 _reg(CardDef('Corruption', 'Corruption', '腐化', 0, 0, 'root', 2, 'Common',
-             '伤敌一千，自损八百。', '自下个敌方回合开始，全场所有伤害翻倍', flags={'indestructible', 'self_only'}))
+             '伤敌一千，自损八百。', '自下个敌方回合开始，全场所有伤害变为1.5倍（向上取整）', flags={'indestructible', 'self_only'}))
 
 _reg(CardDef('Mark', 'Mark', '标记', 4, 0, 'root', 3, 'Common',
              '你被标记了！', '禁止目标行动一回合',

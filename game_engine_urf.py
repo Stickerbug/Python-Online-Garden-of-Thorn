@@ -234,6 +234,9 @@ class GameEngineInfiniteFire(GameEngine):
         self.round_num = 1
         self.log_msg(f"无限火力开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
+        self._apply_late_round_fire_pressure()
+        if self.game_over:
+            return
         self._start_player_turn(self.first_player)
 
     def _start_draw_phase(self):
@@ -244,6 +247,9 @@ class GameEngineInfiniteFire(GameEngine):
             ps.urf_replace_available = True
             ps.urf_sell_available = True
         self.log_msg(f"=== 第{self.round_num}回合 ===")
+        self._apply_late_round_fire_pressure()
+        if self.game_over:
+            return
         self._start_player_turn(self.first_player)
 
     def _start_player_turn(self, player_id: int):
