@@ -6,11 +6,27 @@
 <title>Garden of Thorn 荆棘花园 · 内测模式</title>
 <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/Kreadon-Regular.subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+@font-face {
+  font-family: "Kreadon";
+  src: url("/fonts/Kreadon-Regular.subset.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: optional;
+}
+@font-face {
+  font-family: "Kreadon Demi";
+  src: url("/fonts/Kreadon-Demi.subset.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 html, body {
   margin: 0;
   min-height: 100%;
-  font-family: "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  font-family: "Kreadon", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
   background: #f4f7f4;
   color: #20342a;
 }
@@ -30,6 +46,7 @@ body {
 }
 .beta-title {
   margin: 0 0 4px;
+  font-family: "Kreadon Demi", "Kreadon", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
   font-size: 24px;
   font-weight: 800;
 }
@@ -41,6 +58,7 @@ body {
 label {
   display: block;
   margin-bottom: 8px;
+  font-family: "Kreadon Demi", "Kreadon", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
   font-weight: 700;
 }
 input {
@@ -64,6 +82,7 @@ button {
   border-radius: 8px;
   background: #2f8d59;
   color: #fff;
+  font-family: "Kreadon Demi", "Kreadon", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
