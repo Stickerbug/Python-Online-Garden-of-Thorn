@@ -602,10 +602,15 @@ def _replay_capture_state(room):
     perspectives = []
     for pidx in range(len(getattr(room, 'player_sids', []) or [])):
         try:
-            state = engine.get_public_state(pidx)
-            state['your_id'] = pidx
-            state['mode'] = getattr(room, 'mode', '')
-            perspectives.append(_replay_strip_private_logs(state))
+            if 'build_spectate_state' in globals():
+                state = build_spectate_state(room, perspective=pidx)
+                state['spectating'] = True
+                state['replay_mode'] = True
+            else:
+                state = engine.get_public_state(pidx)
+                state['your_id'] = pidx
+                state['mode'] = getattr(room, 'mode', '')
+            perspectives.append(state)
         except Exception as exc:
             perspectives.append({'error': f'{type(exc).__name__}: {exc}', 'your_id': pidx})
     snapshot = {
@@ -6326,6 +6331,12 @@ def on_play_card(data):
             target_player_id = -1
         if card_instance_id is None:
             return
+        replay_def_id = ''
+        try:
+            replay_card = next((c for c in getattr(engine.players[pidx], 'hand', []) if str(getattr(c, 'instance_id', '')) == str(card_instance_id)), None)
+            replay_def_id = getattr(replay_card, 'def_id', '') or ''
+        except Exception:
+            replay_def_id = ''
         if room.mode == '2v2':
             result = engine.play_card(pidx, card_instance_id, target_player_id=target_player_id, choice=choice)
         else:
@@ -6333,6 +6344,7 @@ def on_play_card(data):
         if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui'):
             record_room_replay_action(room, 'play_card', pidx, {
                 'card_instance_id': card_instance_id,
+                'def_id': replay_def_id,
                 'target_player_id': target_player_id,
                 'choice': choice,
                 'result': result,
@@ -6432,8 +6444,14 @@ def on_response(data):
             return
         engine = room.engine
         card_instance_id = data.get('card_instance_id')
+        replay_def_id = ''
+        try:
+            replay_card = next((c for c in getattr(engine.players[pidx], 'hand', []) if str(getattr(c, 'instance_id', '')) == str(card_instance_id)), None)
+            replay_def_id = getattr(replay_card, 'def_id', '') or ''
+        except Exception:
+            replay_def_id = ''
         engine.handle_response(pidx, card_instance_id)
-        record_room_replay_action(room, 'response', pidx, {'card_instance_id': card_instance_id})
+        record_room_replay_action(room, 'response', pidx, {'card_instance_id': card_instance_id, 'def_id': replay_def_id})
         broadcast_game_state(room)
 
 
@@ -6577,6 +6595,12 @@ def on_use_trigger(data):
             target_player_id = int(target_player_id)
         except (TypeError, ValueError):
             target_player_id = -1
+        replay_def_id = ''
+        try:
+            equipment = next((eq for eq in getattr(engine.players[pidx], 'equipment', []) if str(getattr(getattr(eq, 'card_instance', None), 'instance_id', '')) == str(equipment_instance_id)), None)
+            replay_def_id = getattr(getattr(equipment, 'card_instance', None), 'def_id', '') or getattr(getattr(equipment, 'card_def', None), 'id', '') or ''
+        except Exception:
+            replay_def_id = ''
         if room.mode == '2v2':
             result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
         else:
@@ -6584,6 +6608,7 @@ def on_use_trigger(data):
         if result.get('success') or result.get('needs_ally_consent') or result.get('needs_choice') or result.get('needs_response') or result.get('needs_v2_ui'):
             record_room_replay_action(room, 'use_trigger', pidx, {
                 'equipment_instance_id': equipment_instance_id,
+                'def_id': replay_def_id,
                 'target_player_id': target_player_id,
                 'result': result,
             })

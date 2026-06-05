@@ -2172,6 +2172,10 @@ let accountReplayTimeline = [];
 let accountReplayFrameIndex = 0;
 let accountReplaySpeed = 1;
 let accountReplayTimer = null;
+let accountReplayData = null;
+let accountReplayPerspective = 0;
+let accountReplayReturnContext = null;
+let replayMode = false;
 let socket = null;
 let manualDisconnect = false;
 let latencyPingTimer = null;
@@ -6097,6 +6101,289 @@ function stopAccountReplayPlayback() {
     }
 }
 
+function cloneReplayJson(value) {
+    if (value == null) return value;
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+        return value;
+    }
+}
+
+function getReplaySnapshot(frame) {
+    return (frame && frame.state && typeof frame.state === 'object') ? frame.state : {};
+}
+
+function getReplayPerspectives(snapshot) {
+    return Array.isArray(snapshot && snapshot.perspectives) ? snapshot.perspectives.filter(p => p && typeof p === 'object') : [];
+}
+
+function collectReplayPlayers(snapshot) {
+    const perspectives = getReplayPerspectives(snapshot);
+    const firstSpectate = perspectives.find(p => Array.isArray(p.spectate_players) && p.spectate_players.length);
+    if (firstSpectate) {
+        return firstSpectate.spectate_players.map((p, i) => ({
+            ...(cloneReplayJson(p) || {}),
+            player_id: normalizePlayerId(p && p.player_id) ?? i,
+            name: (p && p.name) || (snapshot.player_names || [])[i] || `P${i + 1}`,
+        }));
+    }
+    const players = [];
+    perspectives.forEach((perspective, i) => {
+        const player = perspective.you || perspective.self || null;
+        if (player && typeof player === 'object') {
+            players[i] = {
+                ...(cloneReplayJson(player) || {}),
+                player_id: normalizePlayerId(player.player_id) ?? i,
+                name: player.name || perspective.your_name || (snapshot.player_names || [])[i] || `P${i + 1}`,
+            };
+        }
+    });
+    if (!players.length && snapshot.you && snapshot.opponent) {
+        players[0] = { ...(cloneReplayJson(snapshot.you) || {}), player_id: 0, name: snapshot.your_name || snapshot.you.name || 'P1' };
+        players[1] = { ...(cloneReplayJson(snapshot.opponent) || {}), player_id: 1, name: snapshot.opponent_name || snapshot.opponent.name || 'P2' };
+        if (snapshot.teammate) players[1] = { ...(cloneReplayJson(snapshot.teammate) || {}), player_id: 1, name: snapshot.teammate_name || snapshot.teammate.name || 'P2' };
+        if (snapshot.opponent2) players[3] = { ...(cloneReplayJson(snapshot.opponent2) || {}), player_id: 3, name: (snapshot.opponent_names || [])[1] || snapshot.opponent2.name || 'P4' };
+    }
+    const names = Array.isArray(snapshot.player_names) ? snapshot.player_names : [];
+    return players.filter(Boolean).map((p, i) => ({
+        ...p,
+        player_id: normalizePlayerId(p.player_id) ?? i,
+        name: p.name || names[i] || `P${i + 1}`,
+    }));
+}
+
+function getReplayTeamLayout(perspective, count) {
+    if (count >= 4) {
+        const teammate = perspective < 2 ? 1 - perspective : (perspective === 2 ? 3 : 2);
+        const enemies = [0, 1, 2, 3].filter(id => id !== perspective && id !== teammate);
+        return { teammate, enemies };
+    }
+    return { teammate: null, enemies: [perspective === 0 ? 1 : 0] };
+}
+
+function buildReplaySpectateState(frame, perspective = accountReplayPerspective) {
+    const snapshot = getReplaySnapshot(frame);
+    const perspectives = getReplayPerspectives(snapshot);
+    const players = collectReplayPlayers(snapshot);
+    const count = players.length || perspectives.length || 2;
+    let safePerspective = Number.isFinite(Number(perspective)) ? Number(perspective) : 0;
+    safePerspective = Math.max(0, Math.min(Math.max(0, count - 1), safePerspective));
+    let base = {};
+    if (perspectives[safePerspective]) {
+        base = cloneReplayJson(perspectives[safePerspective]) || {};
+    } else if (perspectives[0]) {
+        base = cloneReplayJson(perspectives[0]) || {};
+    } else {
+        base = cloneReplayJson(snapshot) || {};
+    }
+    const mode = snapshot.mode || base.mode || (players.length >= 4 ? '2v2' : '1v1');
+    const playerNames = players.map((p, i) => p.name || (snapshot.player_names || [])[i] || `P${i + 1}`);
+    base.mode = mode;
+    base.phase = snapshot.phase || frame.phase || base.phase || 'action';
+    base.round_num = snapshot.round_num || frame.round || base.round_num || 0;
+    base.current_player = snapshot.current_player ?? frame.current_player ?? base.current_player;
+    base.game_over = snapshot.game_over ?? base.game_over ?? false;
+    base.winner = snapshot.winner ?? base.winner;
+    base.winning_team = snapshot.winning_team ?? base.winning_team;
+    base.player_names = playerNames;
+    base.spectate_players = players;
+    base.spectating = true;
+    base.replay_mode = true;
+    base.your_id = safePerspective;
+    base.spectate_perspective = safePerspective;
+    base.room_id = `replay-${accountReplayData && accountReplayData.id ? accountReplayData.id : 'local'}`;
+    base.match_key = `replay:${accountReplayData && accountReplayData.id ? accountReplayData.id : 'local'}`;
+    if (!Array.isArray(base.log)) {
+        const logSource = perspectives.find(p => Array.isArray(p.log)) || {};
+        base.log = Array.isArray(frame.log) && frame.log.length ? frame.log : (Array.isArray(logSource.log) ? logSource.log : []);
+        base.log_start = Number(logSource.log_start || 0);
+        base.log_total = Number(logSource.log_total != null ? logSource.log_total : base.log.length);
+    }
+    playerNames.forEach((name, i) => {
+        base[`player${i + 1}_name`] = name;
+    });
+    if (mode === '2v2' && players.length >= 4) {
+        const layout = getReplayTeamLayout(safePerspective, players.length);
+        const teammate = players[layout.teammate] || {};
+        const enemyIds = layout.enemies.slice(0, 2);
+        base.you = players[safePerspective] || {};
+        base.teammate = teammate;
+        base.opponent = players[enemyIds[0]] || {};
+        base.opponent2 = players[enemyIds[1]] || {};
+        base.teammate_id = layout.teammate;
+        base.enemy_ids = enemyIds;
+        base.your_name = playerNames[safePerspective] || `P${safePerspective + 1}`;
+        base.teammate_name = playerNames[layout.teammate] || `P${layout.teammate + 1}`;
+        base.opponent_names = enemyIds.map(id => playerNames[id] || `P${id + 1}`);
+        base.opponent_admin_flags = enemyIds.map(id => !!(players[id] && players[id].is_admin_player));
+        base.opponent_specials = enemyIds.map(id => specialPublicReplayFields(players[id]));
+        base.your_is_admin_player = !!(players[safePerspective] && players[safePerspective].is_admin_player);
+        base.teammate_is_admin_player = !!(teammate && teammate.is_admin_player);
+        base.your_special = specialPublicReplayFields(players[safePerspective]);
+        base.teammate_special = specialPublicReplayFields(teammate);
+    } else if (players.length >= 2) {
+        const opponentId = safePerspective === 0 ? 1 : 0;
+        base.you = players[safePerspective] || {};
+        base.opponent = players[opponentId] || {};
+        base.your_name = playerNames[safePerspective] || `P${safePerspective + 1}`;
+        base.opponent_name = playerNames[opponentId] || `P${opponentId + 1}`;
+        base.your_is_admin_player = !!(players[safePerspective] && players[safePerspective].is_admin_player);
+        base.opponent_is_admin_player = !!(players[opponentId] && players[opponentId].is_admin_player);
+        base.your_special = specialPublicReplayFields(players[safePerspective]);
+        base.opponent_special = specialPublicReplayFields(players[opponentId]);
+    }
+    return base;
+}
+
+function specialPublicReplayFields(player) {
+    if (!player || typeof player !== 'object') return {};
+    return {
+        special_role: player.special_role || '',
+        special_role_color: player.special_role_color || '',
+        display_name: player.display_name || player.name || '',
+        is_admin_player: !!player.is_admin_player,
+    };
+}
+
+function replayTimeText(ms) {
+    const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+    const minutes = Math.floor(total / 60);
+    const seconds = total % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function replayActionLabel(frame) {
+    if (!frame) return '';
+    const action = frame.action || null;
+    const snapshot = getReplaySnapshot(frame);
+    const names = Array.isArray(snapshot.player_names) ? snapshot.player_names : [];
+    const actorName = action && action.actor != null ? localizeCanonicalPlayerName(names[action.actor] || `P${Number(action.actor) + 1}`) : '';
+    if (!action) return frame.label || frame.phase || '';
+    const payload = action.payload || {};
+    const cardDef = payload.def_id ? getCardDef(payload.def_id) : null;
+    const cardName = cardDef ? getCardName(cardDef) : (payload.def_id || '');
+    const targetName = payload.target_player_id != null ? localizeCanonicalPlayerName(names[payload.target_player_id] || `P${Number(payload.target_player_id) + 1}`) : '';
+    const typeMap = {
+        play_card: '使用手牌',
+        use_trigger: '触发装备',
+        response: '反制',
+        end_turn: '结束回合',
+        resolve_choice: '选择',
+        v2_ui_response: '提交窗口',
+        ally_consent_response: '回应队友请求',
+        urf_replace_card: '替换手牌',
+        urf_sell_equipment: '售卖装备',
+        surrender: '投降',
+        draft_pick: '选择卡牌',
+        draft_reroll: '重抽',
+        select_opening_event: '选择开局事件',
+        game_over: '对局结束',
+        disconnect_timeout: '断线超时',
+        admin_delete_card: '管理员删牌',
+    };
+    const label = typeMap[action.type] || action.type || '动作';
+    return [actorName, label, cardName, targetName ? `→ ${targetName}` : ''].filter(Boolean).join(' ');
+}
+
+function ensureAccountReplayPlaybackBar() {
+    let bar = $('account-replay-playback-bar');
+    if (bar) return bar;
+    bar = document.createElement('div');
+    bar.id = 'account-replay-playback-bar';
+    bar.className = 'account-replay-playback-bar hidden';
+    bar.innerHTML = `
+        <div class="account-replay-playback-main">
+            <button class="mini-btn" type="button" data-account-replay-live-control="close">退出回放</button>
+            <button class="mini-btn" type="button" data-account-replay-live-control="prev">上一步</button>
+            <button class="mini-btn" type="button" data-account-replay-live-control="play">播放</button>
+            <button class="mini-btn" type="button" data-account-replay-live-control="pause">暂停</button>
+            <button class="mini-btn" type="button" data-account-replay-live-speed="1">1x</button>
+            <button class="mini-btn" type="button" data-account-replay-live-speed="2">2x</button>
+            <button class="mini-btn" type="button" data-account-replay-live-speed="4">4x</button>
+            <button class="mini-btn" type="button" data-account-replay-live-speed="instant">立即</button>
+            <button class="mini-btn" type="button" data-account-replay-live-control="next">下一步</button>
+        </div>
+        <div id="account-replay-live-meta" class="account-replay-live-meta"></div>
+        <div id="account-replay-live-perspectives" class="account-replay-live-perspectives"></div>
+        <input id="account-replay-live-progress" class="account-replay-progress" type="range" min="0" max="0" value="0">
+    `;
+    document.body.appendChild(bar);
+    bar.addEventListener('click', (event) => {
+        const control = event.target.closest('[data-account-replay-live-control]');
+        if (control) {
+            const action = control.dataset.accountReplayLiveControl;
+            if (action === 'close') closeAccountReplayModal();
+            if (action === 'prev') stepAccountReplay(-1);
+            if (action === 'next') stepAccountReplay(1);
+            if (action === 'play') playAccountReplay();
+            if (action === 'pause') stopAccountReplayPlayback();
+            return;
+        }
+        const speed = event.target.closest('[data-account-replay-live-speed]');
+        if (speed) {
+            accountReplaySpeed = speed.dataset.accountReplayLiveSpeed === 'instant' ? 'instant' : Number(speed.dataset.accountReplayLiveSpeed || 1);
+            renderAccountReplayPlaybackBar();
+            if (accountReplayTimer) playAccountReplay();
+            return;
+        }
+        const perspective = event.target.closest('[data-account-replay-perspective]');
+        if (perspective) {
+            stopAccountReplayPlayback();
+            accountReplayPerspective = Number(perspective.dataset.accountReplayPerspective) || 0;
+            renderAccountReplayFrame();
+        }
+    });
+    const liveProgress = bar.querySelector('#account-replay-live-progress');
+    if (liveProgress) {
+        liveProgress.addEventListener('input', (event) => {
+            stopAccountReplayPlayback();
+            accountReplayFrameIndex = Number(event.target.value) || 0;
+            renderAccountReplayFrame();
+        });
+    }
+    return bar;
+}
+
+function renderReplayPerspectiveButtons(container, snapshot) {
+    if (!container) return;
+    const players = collectReplayPlayers(snapshot);
+    if (players.length <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    container.innerHTML = players.map((player, i) => `
+        <button class="mini-btn account-replay-perspective-btn ${i === accountReplayPerspective ? 'active' : ''}" type="button" data-account-replay-perspective="${i}">
+            ${escapeHtml(localizeCanonicalPlayerName(player.name || `P${i + 1}`))}
+        </button>
+    `).join('');
+}
+
+function renderAccountReplayPlaybackBar() {
+    const frame = accountReplayTimeline[accountReplayFrameIndex] || null;
+    const snapshot = getReplaySnapshot(frame);
+    const bar = ensureAccountReplayPlaybackBar();
+    bar.classList.toggle('hidden', !replayMode);
+    const progress = $('account-replay-live-progress');
+    if (progress) {
+        progress.max = String(Math.max(0, accountReplayTimeline.length - 1));
+        progress.value = String(accountReplayFrameIndex);
+    }
+    const meta = $('account-replay-live-meta');
+    if (meta) {
+        const title = accountReplayData && accountReplayData.meta
+            ? [accountReplayData.meta.mode, replayTimeText(frame && frame.t), `${accountReplayFrameIndex + 1}/${Math.max(1, accountReplayTimeline.length)}`].filter(Boolean).join(' · ')
+            : `${replayTimeText(frame && frame.t)} · ${accountReplayFrameIndex + 1}/${Math.max(1, accountReplayTimeline.length)}`;
+        const action = replayActionLabel(frame);
+        meta.textContent = action ? `${title} · ${action}` : title;
+    }
+    renderReplayPerspectiveButtons($('account-replay-live-perspectives'), snapshot);
+    bar.querySelectorAll('[data-account-replay-live-speed]').forEach(btn => {
+        const value = btn.dataset.accountReplayLiveSpeed === 'instant' ? 'instant' : Number(btn.dataset.accountReplayLiveSpeed || 1);
+        btn.classList.toggle('active', value === accountReplaySpeed);
+    });
+}
+
 function renderAccountReplayList() {
     const list = $('account-replays-list');
     if (!list) return;
@@ -6147,7 +6434,31 @@ function renderAccountReplayFrame() {
         progress.value = String(accountReplayFrameIndex);
     }
     const output = $('account-replay-frame');
-    if (output) output.textContent = frame ? JSON.stringify(frame, null, 2) : UI.replay_frame_empty;
+    if (!frame) {
+        if (output) output.textContent = UI.replay_frame_empty;
+        renderAccountReplayPlaybackBar();
+        return;
+    }
+    const replayState = buildReplaySpectateState(frame, accountReplayPerspective);
+    replayMode = true;
+    isSpectating = true;
+    playerId = -1;
+    spectatePerspective = accountReplayPerspective;
+    gameState = replayState;
+    phase = replayState.phase || 'action';
+    syncBattleLogMatch(replayState);
+    renderGame(replayState);
+    renderAccountReplayPlaybackBar();
+    const meta = $('account-replay-meta');
+    if (meta) meta.textContent = replayActionLabel(frame);
+    renderReplayPerspectiveButtons($('account-replay-perspectives'), getReplaySnapshot(frame));
+    if (output) {
+        output.innerHTML = `
+            <div class="account-replay-empty">
+                ${escapeHtml(replayActionLabel(frame) || UI.replay_viewer)}
+            </div>
+        `;
+    }
 }
 
 function stepAccountReplay(delta) {
@@ -6156,14 +6467,27 @@ function stepAccountReplay(delta) {
     renderAccountReplayFrame();
 }
 
+function switchAccountReplayPerspective() {
+    if (!accountReplayTimeline.length) return;
+    const frame = accountReplayTimeline[accountReplayFrameIndex] || null;
+    const players = collectReplayPlayers(getReplaySnapshot(frame));
+    const count = Math.max(1, players.length);
+    accountReplayPerspective = (Number(accountReplayPerspective || 0) + 1) % count;
+    spectatePerspective = accountReplayPerspective;
+    renderAccountReplayFrame();
+}
+
 function playAccountReplay() {
     stopAccountReplayPlayback();
     if (!accountReplayTimeline.length || accountReplayFrameIndex >= accountReplayTimeline.length - 1) return;
+    if (accountReplaySpeed === 'instant') {
+        accountReplayFrameIndex = accountReplayTimeline.length - 1;
+        renderAccountReplayFrame();
+        return;
+    }
     const current = accountReplayTimeline[accountReplayFrameIndex] || {};
     const next = accountReplayTimeline[accountReplayFrameIndex + 1] || {};
-    const delay = accountReplaySpeed === 'instant'
-        ? 0
-        : Math.max(80, ((Number(next.t) || 0) - (Number(current.t) || 0)) / Number(accountReplaySpeed || 1));
+    const delay = Math.max(80, ((Number(next.t) || 0) - (Number(current.t) || 0)) / Number(accountReplaySpeed || 1));
     accountReplayTimer = setTimeout(() => {
         stepAccountReplay(1);
         playAccountReplay();
@@ -6172,16 +6496,32 @@ function playAccountReplay() {
 
 async function openAccountReplay(replayId) {
     stopAccountReplayPlayback();
+    accountReplayReturnContext = {
+        viewId: getVisibleViewId(),
+        gameState: cloneReplayJson(gameState || {}),
+        phase,
+        playerId,
+        isSpectating,
+        spectatePerspective,
+        activeSpectateRoomId,
+        pendingSpectateRoomId,
+    };
     const modal = $('account-replay-modal');
     const output = $('account-replay-frame');
     if (modal) modal.classList.remove('hidden');
     if (output) output.textContent = UI.replay_loading;
     try {
         const data = await authRequest(`/api/replays/${encodeURIComponent(replayId)}/timeline`);
+        accountReplayData = data.replay || { id: replayId };
         accountReplayTimeline = Array.isArray(data.timeline) ? data.timeline : [];
         accountReplayFrameIndex = 0;
+        accountReplayPerspective = 0;
+        replayMode = true;
+        if (modal) modal.classList.add('hidden');
+        ensureAccountReplayPlaybackBar();
         renderAccountReplayFrame();
     } catch (err) {
+        replayMode = false;
         if (output) output.textContent = `${UI.replay_load_failed}: ${err.message || ''}`;
     }
 }
@@ -6190,6 +6530,29 @@ function closeAccountReplayModal() {
     stopAccountReplayPlayback();
     const modal = $('account-replay-modal');
     if (modal) modal.classList.add('hidden');
+    const bar = $('account-replay-playback-bar');
+    if (bar) bar.classList.add('hidden');
+    replayMode = false;
+    accountReplayData = null;
+    accountReplayTimeline = [];
+    accountReplayFrameIndex = 0;
+    accountReplayPerspective = 0;
+    const ctx = accountReplayReturnContext || {};
+    accountReplayReturnContext = null;
+    isSpectating = !!ctx.isSpectating;
+    spectatePerspective = ctx.spectatePerspective || 0;
+    activeSpectateRoomId = ctx.activeSpectateRoomId || null;
+    pendingSpectateRoomId = ctx.pendingSpectateRoomId || null;
+    playerId = Number.isFinite(Number(ctx.playerId)) ? Number(ctx.playerId) : -1;
+    phase = ctx.phase || phase;
+    gameState = ctx.gameState || {};
+    if (ctx.viewId && ctx.viewId !== 'view-game') {
+        showView(ctx.viewId);
+    } else if (ctx.viewId === 'view-game' && gameState && gameState.phase) {
+        renderGame(gameState);
+    } else {
+        showView(currentAccount ? 'view-login' : 'view-login');
+    }
 }
 
 function loadCachedAccount() {
@@ -8545,11 +8908,12 @@ function updateModeSpecificControls(gs) {
     const spectateControls = $('spectate-controls');
     const gameControls = $('game-controls');
     const playZone = $('play-zone');
+    const controlsRight = document.querySelector('.controls-right');
 
-    const showSoloNextDraw = inSoloGame && !inTutorial && !gameOver && !isSpectating;
-    const showSoloEdit = inSoloGame && !inTutorial && !isSpectating;
+    const showSoloNextDraw = inSoloGame && !inTutorial && !gameOver && !isSpectating && !replayMode;
+    const showSoloEdit = inSoloGame && !inTutorial && !isSpectating && !replayMode;
     const showSpectateControls = !!isSpectating;
-    const showGameControls = !isSpectating;
+    const showGameControls = !isSpectating && !replayMode;
     const showPlayZone = !isSpectating;
 
     if (soloNextDrawBtn) {
@@ -8610,8 +8974,11 @@ function updateModeSpecificControls(gs) {
                 : UI.switch_perspective;
         }
     }
+    const leaveBtn = $('btn-leave-spectate');
+    if (leaveBtn && replayMode) leaveBtn.textContent = UI.close || 'Close';
     if (gameControls) gameControls.style.display = showGameControls ? '' : 'none';
     if (playZone) playZone.style.display = showPlayZone ? '' : 'none';
+    if (controlsRight) controlsRight.style.display = replayMode ? 'none' : '';
     updateGameChatChannelOptions(gs);
 }
 
@@ -9248,6 +9615,7 @@ function renderGame(data) {
         gameContainer.classList.toggle('mode-tutorial', !!gs.tutorial || tutorialMode);
         gameContainer.classList.toggle('mode-solo', !!gs.solo);
         gameContainer.classList.toggle('mode-urf', gs.mode === 'urf');
+        gameContainer.classList.toggle('mode-replay', !!replayMode || !!gs.replay_mode);
     }
 
     const opp2Half = $('opp2-half');
@@ -13217,12 +13585,20 @@ async function init() {
     if ($('btn-spectate-view-deck')) $('btn-spectate-view-deck').addEventListener('click', onViewDeck);
     if ($('btn-switch-perspective')) {
         $('btn-switch-perspective').addEventListener('click', () => {
+            if (replayMode) {
+                switchAccountReplayPerspective();
+                return;
+            }
             if (socket && isSpectating) socket.emit('switch_spectate_perspective', {});
         });
     }
     if ($('classic-view-deck')) $('classic-view-deck').addEventListener('click', onViewDeck);
     if ($('classic-switch-perspective')) {
         $('classic-switch-perspective').addEventListener('click', () => {
+            if (replayMode) {
+                switchAccountReplayPerspective();
+                return;
+            }
             if (socket && isSpectating) socket.emit('switch_spectate_perspective', {});
         });
     }
@@ -13261,6 +13637,10 @@ async function init() {
         phase = 'lobby';
     });
     $('btn-leave-spectate').addEventListener('click', () => {
+        if (replayMode) {
+            closeAccountReplayModal();
+            return;
+        }
         if (socket) socket.emit('leave_spectate', {});
     });
     $('btn-lobby-chat-send').addEventListener('click', onLobbyChatSend);

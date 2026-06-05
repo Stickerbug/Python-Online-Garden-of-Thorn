@@ -790,6 +790,50 @@ body {
   display: none;
 }
 
+.account-replay-playback-bar {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  z-index: 2550;
+  width: min(980px, calc(100vw - 20px));
+  transform: translateX(-50%);
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(10px);
+}
+
+.account-replay-playback-bar.hidden {
+  display: none;
+}
+
+.account-replay-playback-main,
+.account-replay-live-perspectives {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+.account-replay-live-meta {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.account-replay-playback-bar .mini-btn.active {
+  border-color: var(--magic);
+  background: var(--magic-bg);
+  color: var(--magic);
+}
+
 .account-replay-dialog {
   width: min(1080px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 32px));
@@ -832,6 +876,10 @@ body {
 .account-replay-perspective-btn.active {
   border-color: var(--magic);
   background: var(--magic-bg);
+}
+
+.game-container.mode-replay .controls-right {
+  display: none !important;
 }
 
 .account-replay-frame {
