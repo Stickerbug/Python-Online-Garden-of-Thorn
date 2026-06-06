@@ -506,6 +506,8 @@ class GameEngine2v2(GameEngine):
             for eq in list(owner_state.equipment):
                 if getattr(eq, 'effect_target', owner_id) != dead_player_id:
                     continue
+                if 'indestructible' in eq.card_instance.flags:
+                    continue
                 if eq.def_id == 'Disc':
                     self.players[dead_player_id].armor = max(0, self.players[dead_player_id].armor - 2)
                 owner_state.equipment.remove(eq)
@@ -1561,6 +1563,9 @@ class GameEngine2v2(GameEngine):
                 if eq.def_id == 'Corruption' and not eq.corruption_active:
                     eq.corruption_active = True
                     self.log_msg(f"{self.pn(eid)}的腐化效果激活")
+        early_owner_turn_start_equipment = self._run_owner_turn_start_healing_equipment(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         if ps.poison > 0:
             self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             if self.game_over or ps.health <= 0:
@@ -1570,11 +1575,17 @@ class GameEngine2v2(GameEngine):
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
                 return
-        for eq in list(ps.equipment):
-            eq.turns_equipped += 1
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(owner_state.equipment):
                 if getattr(eq, 'effect_target', owner_id) != player_id:
+                    continue
+                if self._equipment_turn_start_key(eq) not in early_owner_turn_start_equipment:
+                    eq.turns_equipped += 1
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in list(owner_state.equipment):
+                if getattr(eq, 'effect_target', owner_id) != player_id:
+                    continue
+                if self._equipment_turn_start_key(eq) in early_owner_turn_start_equipment:
                     continue
                 handled = False
                 if self._has_card_event(eq.card_def, 'owner_turn_start'):

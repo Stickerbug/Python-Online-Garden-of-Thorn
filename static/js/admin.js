@@ -20,7 +20,10 @@ let replayTimer = null;
 let replayData = null;
 let gameChatTimer = null;
 let gameChatSignature = '';
+let lastStatusErrorSignature = '';
+let lastStatusErrorAt = 0;
 let draftStatsState = { items: [], total: 0 };
+let reportState = { items: [], total: 0, selectedId: null };
 
 const STATUS_LABELS = {
   lobby: '大厅',
@@ -218,10 +221,14 @@ function renderGameChat(data = {}) {
   ]));
   if (signature === gameChatSignature) return;
   gameChatSignature = signature;
-  log.innerHTML = items.map(renderGameChatEntry).join('');
-  log.scrollTop = log.scrollHeight;
   const count = $('admin-game-chat-count');
   if (count) count.textContent = `${items.length}/${data.total_cached ?? items.length}`;
+  if (!items.length) {
+    log.innerHTML = '<div class="empty-detail">暂无游戏内聊天消息。</div>';
+    return;
+  }
+  log.innerHTML = items.map(renderGameChatEntry).join('');
+  log.scrollTop = log.scrollHeight;
 }
 
 async function loadGameChat() {
@@ -305,13 +312,21 @@ async function logout() {
 async function loadStatus() {
   try {
     adminState = await api('/api/admin/status');
+    lastStatusErrorSignature = '';
+    lastStatusErrorAt = 0;
     renderStatus(adminState);
   } catch (error) {
     if (error.status === 401) {
       showShell(false);
       return;
     }
-    appendTerminal('status', `状态加载失败：${error.message}`, true);
+    const message = `状态加载失败：${error.message}`;
+    const now = Date.now();
+    if (message !== lastStatusErrorSignature || now - lastStatusErrorAt > 30000) {
+      appendTerminal('status', message, true);
+      lastStatusErrorSignature = message;
+      lastStatusErrorAt = now;
+    }
   }
 }
 
@@ -349,6 +364,7 @@ function renderStatus(data) {
   renderPlayers(data.players || []);
   renderRooms(data.rooms || []);
   renderEvents(data.events || []);
+  renderSuspiciousEvents(data.suspicious_events || []);
   renderHistory(data.history || []);
 }
 
@@ -699,20 +715,207 @@ function renderRooms(rooms) {
 }
 
 function renderEvents(events) {
-  $('events-list').innerHTML = events.length ? events.slice(0, 80).map((event) => `
+  const el = $('events-list');
+  if (!el) return;
+  el.innerHTML = events.length ? events.slice(0, 80).map((event) => `
     <div class="log-item">
       <time>${escapeHtml(formatAdminTime(event.time))} · ${escapeHtml(labelFrom(EVENT_KIND_LABELS, event.kind))}</time>
       ${escapeHtml(event.message)}
     </div>`).join('') : '<div class="log-item">暂无事件。</div>';
 }
 
+function renderSuspiciousEvents(events) {
+  const el = $('suspicious-list');
+  if (!el) return;
+  el.innerHTML = events.length ? events.slice(0, 80).map((event) => `
+    <div class="log-item">
+      <time>${escapeHtml(formatAdminTime(event.ts))} · ${escapeHtml(event.severity || '-')} · ${escapeHtml(event.kind || '-')}</time>
+      ${escapeHtml(event.message || '')}<br>
+      <span class="admin-data">sid=${escapeHtml(event.sid || '-')} · user=${escapeHtml(event.user_id || '-')} · ip=${escapeHtml(event.ip || '-')}</span>
+    </div>`).join('') : '<div class="log-item">暂无可疑事件。</div>';
+}
+
 function renderHistory(history) {
-  $('history-list').innerHTML = history.length ? history.slice(0, 80).map((item) => `
+  const el = $('history-list');
+  if (!el) return;
+  el.innerHTML = history.length ? history.slice(0, 80).map((item) => `
     <div class="log-item">
       <time>${escapeHtml(formatAdminTime(item.time))} · 房间 #${escapeHtml(item.room_id)} · ${escapeHtml(item.mode)}</time>
       ${escapeHtml((item.players || []).join(' / '))}<br>
       <span class="admin-data">胜者=${escapeHtml(item.winner)} · 回合=${escapeHtml(item.round)} · 时长=${formatUptime(item.duration_seconds || 0)}</span>
     </div>`).join('') : '<div class="log-item">暂无历史对局。</div>';
+}
+
+function reportStatusLabel(status) {
+  return {
+    pending: '待处理',
+    accepted: '已通过',
+    rejected: '已驳回',
+    abusive: '恶意举报',
+  }[status] || status || '-';
+}
+
+function reportCategoryLabel(category) {
+  return {
+    abusive_language: '攻击性语言',
+    sexual_content: '不当内容',
+    spam: '刷屏',
+    privacy_leak: '隐私泄露',
+    harassment: '骚扰',
+    cheating: '作弊',
+    smurfing: '小号',
+    boosting: '刷分',
+    stalling: '拖延',
+    inappropriate_name: '不当昵称',
+    bug_abuse: '漏洞滥用',
+    abnormal_match: '异常对局',
+    other: '其他',
+  }[category] || category || '-';
+}
+
+function reportObjectLabel(type) {
+  return {
+    chat_message: '聊天消息',
+    player: '玩家',
+    match: '对局',
+    replay: '回放',
+    mod: '模组',
+  }[type] || type || '-';
+}
+
+async function loadReports() {
+  const table = $('reports-table');
+  if (!table) return;
+  const status = $('report-status-filter')?.value || 'pending';
+  try {
+    if (!reportState.items.length) {
+      table.innerHTML = '<div class="log-item">正在读取举报列表。</div>';
+    }
+    const data = await api(`/api/admin/reports?status=${encodeURIComponent(status)}&limit=80&offset=0`);
+    reportState = { items: data.items || [], total: data.total || 0, selectedId: reportState.selectedId };
+    renderReports();
+  } catch (error) {
+    table.innerHTML = `<div class="log-item error">举报列表加载失败：${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderReports() {
+  const table = $('reports-table');
+  const count = $('reports-count');
+  if (!table) return;
+  if (count) count.textContent = `${reportState.items.length}/${reportState.total || 0}`;
+  if (!reportState.items.length) {
+    table.innerHTML = '<div class="log-item">暂无举报。</div>';
+    return;
+  }
+  table.innerHTML = `
+    <table class="reports-table-inner">
+      <thead><tr><th>ID</th><th>时间</th><th>举报者</th><th>对象</th><th>分类</th><th>风险</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody>
+        ${reportState.items.map((item) => `
+          <tr class="${String(item.id) === String(reportState.selectedId) ? 'selected-row' : ''}">
+            <td class="admin-data">#${escapeHtml(item.id)}</td>
+            <td class="admin-data">${escapeHtml(formatAdminTime(item.created_at))}</td>
+            <td>${escapeHtml(item.reporter_username || '-')}</td>
+            <td>
+              <strong>${escapeHtml(reportObjectLabel(item.object_type))}</strong>
+              <span class="muted"> ${escapeHtml(item.target_username || item.object_id || '-')}</span>
+            </td>
+            <td>${escapeHtml(reportCategoryLabel(item.category))}</td>
+            <td><span class="risk-badge risk-${escapeHtml(item.risk_level || 0)}">${escapeHtml(item.risk_level ?? 0)}</span></td>
+            <td>${escapeHtml(reportStatusLabel(item.status))}</td>
+            <td><button class="row-action" data-report-detail="${escapeHtml(item.id)}">查看</button></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function loadReportDetail(reportId) {
+  const detailBox = $('report-detail');
+  if (!detailBox) return;
+  reportState.selectedId = String(reportId);
+  renderReports();
+  detailBox.innerHTML = '<div class="log-item">正在读取举报详情。</div>';
+  try {
+    const data = await api(`/api/admin/reports/${encodeURIComponent(reportId)}`);
+    renderReportDetail(data.report || {});
+  } catch (error) {
+    detailBox.innerHTML = `<div class="log-item error">举报详情加载失败：${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderReportDetail(report) {
+  const detailBox = $('report-detail');
+  if (!detailBox) return;
+  const evidence = Array.isArray(report.evidence) ? report.evidence : [];
+  const actions = Array.isArray(report.actions) ? report.actions : [];
+  const history = report.reporter_history || {};
+  detailBox.innerHTML = `
+    <div class="report-detail-grid">
+      <div class="report-summary-card">
+        <h3>#${escapeHtml(report.id)} · ${escapeHtml(reportObjectLabel(report.object_type))}</h3>
+        <p><b>状态：</b>${escapeHtml(reportStatusLabel(report.status))}　<b>风险：</b><span class="risk-badge risk-${escapeHtml(report.risk_level || 0)}">${escapeHtml(report.risk_level ?? 0)}</span></p>
+        <p><b>分类：</b>${escapeHtml(reportCategoryLabel(report.category))}</p>
+        <p><b>举报者：</b>${escapeHtml(report.reporter_username || '-')}　<b>被举报：</b>${escapeHtml(report.target_username || '-')}</p>
+        <p><b>对象：</b>${escapeHtml(report.object_type || '-')} / ${escapeHtml(report.object_id || '-')}</p>
+        <p><b>时间：</b><span class="admin-data">${escapeHtml(formatAdminTime(report.created_at))}</span></p>
+        <p><b>举报者历史：</b>属实 ${escapeHtml(history.accepted || 0)} / 驳回 ${escapeHtml(history.rejected || 0)} / 恶意 ${escapeHtml(history.abusive || 0)}</p>
+        <p class="report-reason">${escapeHtml(report.reason_text || '无补充说明。')}</p>
+      </div>
+      <div class="report-action-card">
+        <label>处理结果
+          <select id="report-resolve-action">
+            <option value="accept">通过举报</option>
+            <option value="reject">驳回举报</option>
+            <option value="abusive">标记恶意举报</option>
+          </select>
+        </label>
+        <label>处罚动作
+          <select id="report-moderation-action">
+            <option value="none">不处罚</option>
+            <option value="warn">警告</option>
+            <option value="mute">禁言</option>
+            <option value="ban">封禁账号</option>
+            <option value="invalidate_match">作废对局</option>
+          </select>
+        </label>
+        <label>持续秒数
+          <input id="report-duration" type="number" min="0" max="2592000" step="60" value="0">
+        </label>
+        <label>处理备注
+          <textarea id="report-note" maxlength="500" placeholder="后台备注，不会展示给普通玩家"></textarea>
+        </label>
+        <button class="ghost-btn danger" type="button" data-report-resolve="${escapeHtml(report.id)}">提交处理</button>
+      </div>
+    </div>
+    <div class="report-detail-grid">
+      <section>
+        <h3>证据</h3>
+        <pre class="admin-json-result">${escapeHtml(JSON.stringify(evidence, null, 2))}</pre>
+      </section>
+      <section>
+        <h3>已执行动作</h3>
+        <pre class="admin-json-result">${escapeHtml(JSON.stringify(actions, null, 2))}</pre>
+      </section>
+    </div>`;
+}
+
+async function resolveSelectedReport(reportId) {
+  const action = $('report-resolve-action')?.value || 'reject';
+  const moderationAction = $('report-moderation-action')?.value || 'none';
+  const duration = Number($('report-duration')?.value || 0);
+  const note = $('report-note')?.value || '';
+  await api(`/api/admin/reports/${encodeURIComponent(reportId)}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify({
+      action,
+      moderation_action: moderationAction,
+      duration_seconds: duration,
+      note,
+    }),
+  });
+  await loadReports();
+  await loadReportDetail(reportId);
 }
 
 async function loadStorageSummary() {
@@ -1288,16 +1491,31 @@ function bindEvents() {
   $('draft-stats-mode')?.addEventListener('change', loadDraftStats);
   $('draft-stats-sort')?.addEventListener('change', loadDraftStats);
   $('draft-stats-order')?.addEventListener('change', loadDraftStats);
+  $('reports-refresh')?.addEventListener('click', loadReports);
+  $('report-status-filter')?.addEventListener('change', () => {
+    reportState.selectedId = null;
+    const detail = $('report-detail');
+    if (detail) detail.textContent = '选择一条举报查看详情。';
+    loadReports();
+  });
 
   document.querySelectorAll('.admin-tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.admin-tab').forEach((item) => item.classList.remove('active'));
       tab.classList.add('active');
       const target = tab.dataset.tab;
-      ['gui', 'draft-stats', 'storage', 'replays', 'game-chat', 'terminal'].forEach((name) => {
+      ['gui', 'events', 'moderation', 'draft-stats', 'storage', 'replays', 'game-chat', 'terminal'].forEach((name) => {
         const panel = $(`admin-${name}`);
         if (panel) panel.classList.toggle('hidden', target !== name);
       });
+      if (target === 'events') {
+        renderEvents(adminState?.events || []);
+        renderHistory(adminState?.history || []);
+      }
+      if (target === 'moderation') {
+        renderSuspiciousEvents(adminState?.suspicious_events || []);
+        loadReports();
+      }
       if (target === 'draft-stats') loadDraftStats();
       if (target === 'storage') loadStorageSummary();
       if (target === 'replays') resetAndLoadReplays();
@@ -1369,6 +1587,8 @@ function bindEvents() {
     const replayView = event.target.dataset && event.target.dataset.replayView;
     const replayPerspective = event.target.dataset && event.target.dataset.adminReplayPerspective;
     const r2Delete = event.target.dataset && event.target.dataset.r2Delete;
+    const reportDetail = event.target.dataset && event.target.dataset.reportDetail;
+    const reportResolve = event.target.dataset && event.target.dataset.reportResolve;
     if (suggestionIndex != null && completionState) {
       applyCompletionIndex(Number(suggestionIndex));
       return;
@@ -1392,6 +1612,14 @@ function bindEvents() {
     }
     if (r2Delete) {
       await deleteCommunityStorageObject(r2Delete);
+      return;
+    }
+    if (reportDetail) {
+      await loadReportDetail(reportDetail);
+      return;
+    }
+    if (reportResolve) {
+      await resolveSelectedReport(reportResolve);
       return;
     }
     if (kickSid) {

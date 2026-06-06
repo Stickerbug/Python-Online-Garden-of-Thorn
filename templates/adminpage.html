@@ -36,6 +36,8 @@
 
   <nav class="admin-tabs" aria-label="管理台视图">
     <button class="admin-tab active" data-tab="gui" type="button">概览</button>
+    <button class="admin-tab" data-tab="events" type="button">事件日志</button>
+    <button class="admin-tab" data-tab="moderation" type="button">风控审核</button>
     <button class="admin-tab" data-tab="draft-stats" type="button">抽牌统计</button>
     <button class="admin-tab" data-tab="storage" type="button">存储管理</button>
     <button class="admin-tab" data-tab="replays" type="button">回放列表</button>
@@ -141,7 +143,9 @@
       </div>
       <div id="rooms-table" class="admin-table"></div>
     </section>
+  </section>
 
+  <section id="admin-events" class="admin-panel hidden">
     <div class="admin-two-col">
       <section class="admin-section">
         <div class="section-title">
@@ -158,6 +162,42 @@
         <div id="history-list" class="log-list"></div>
       </section>
     </div>
+  </section>
+
+  <section id="admin-moderation" class="admin-panel hidden">
+    <div class="moderation-layout">
+      <section class="admin-section">
+        <div class="section-title">
+          <h2>异常事件</h2>
+          <span>应用层防护</span>
+        </div>
+        <div id="suspicious-list" class="log-list tall-log-list"></div>
+      </section>
+      <section class="admin-section">
+        <div class="section-title">
+          <h2>举报处理</h2>
+          <span id="reports-count">0</span>
+        </div>
+        <div class="registered-users-toolbar">
+          <select id="report-status-filter" aria-label="举报状态">
+            <option value="pending">待处理</option>
+            <option value="accepted">已通过</option>
+            <option value="rejected">已驳回</option>
+            <option value="abusive">恶意举报</option>
+            <option value="all">全部</option>
+          </select>
+          <button id="reports-refresh" class="ghost-btn" type="button">刷新举报</button>
+        </div>
+        <div id="reports-table" class="admin-table"></div>
+      </section>
+    </div>
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>举报详情</h2>
+        <span>证据与处理</span>
+      </div>
+      <div id="report-detail" class="report-detail empty-detail">选择一条举报查看详情。</div>
+    </section>
   </section>
 
   <section id="admin-draft-stats" class="admin-panel hidden">
@@ -291,6 +331,6 @@
   </section>
 </main>
 
-<script src="/static/js/admin.js?v=16"></script>
+  <script src="/static/js/admin.js?v=19"></script>
 </body>
 </html>

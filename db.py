@@ -287,6 +287,8 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN searchable_by_nickname INTEGER DEFAULT 1')
         if 'searchable_by_player_id' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN searchable_by_player_id INTEGER DEFAULT 1')
+        if 'false_report_count' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN false_report_count INTEGER DEFAULT 0')
         _assign_missing_player_ids(conn)
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
         conn.execute(
@@ -456,6 +458,96 @@ def init_db():
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_stats_mode ON card_draft_stats(mode)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_stats_rate ON card_draft_stats(picked_count, shown_count)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reporter_user_id INTEGER NOT NULL,
+                reporter_username TEXT NOT NULL,
+                target_user_id INTEGER,
+                target_username TEXT,
+                object_type TEXT NOT NULL,
+                object_id TEXT NOT NULL,
+                category TEXT NOT NULL,
+                reason_text TEXT,
+                status TEXT DEFAULT 'pending',
+                risk_level INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                resolved_at TEXT,
+                resolved_by TEXT,
+                resolution_note TEXT,
+                FOREIGN KEY(reporter_user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_reports_status_created ON reports(status, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_reports_reporter_created ON reports(reporter_user_id, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_reports_object ON reports(object_type, object_id, category, created_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS report_evidence (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_id INTEGER NOT NULL,
+                evidence_type TEXT NOT NULL,
+                data_json TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(report_id) REFERENCES reports(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_report_evidence_report ON report_evidence(report_id)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS moderation_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_username TEXT,
+                target_user_id INTEGER,
+                target_username TEXT,
+                action_type TEXT NOT NULL,
+                reason TEXT,
+                duration_seconds INTEGER,
+                created_at TEXT NOT NULL,
+                expires_at TEXT,
+                related_report_id INTEGER,
+                FOREIGN KEY(target_user_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY(related_report_id) REFERENCES reports(id) ON DELETE SET NULL
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_moderation_actions_target ON moderation_actions(target_user_id, created_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_id TEXT,
+                channel TEXT,
+                sender_user_id INTEGER,
+                sender_name TEXT,
+                message TEXT NOT NULL,
+                normalized_message TEXT,
+                risk_level INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                hidden INTEGER DEFAULT 0
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(room_id, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_sender ON chat_messages(sender_user_id, created_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS muted_users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                muted_until TEXT,
+                reason TEXT,
+                created_at TEXT NOT NULL,
+                muted_by TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_muted_users_until ON muted_users(muted_until)')
         conn.commit()
 
 
@@ -544,6 +636,7 @@ def row_to_user(row):
         'accept_friend_requests': bool(row['accept_friend_requests']) if 'accept_friend_requests' in row.keys() else True,
         'searchable_by_nickname': bool(row['searchable_by_nickname']) if 'searchable_by_nickname' in row.keys() else True,
         'searchable_by_player_id': bool(row['searchable_by_player_id']) if 'searchable_by_player_id' in row.keys() else True,
+        'false_report_count': int(row['false_report_count'] or 0) if 'false_report_count' in row.keys() else 0,
         'banned': bool(row['banned']) if 'banned' in row.keys() else False,
         'ban_reason': row['ban_reason'] if 'ban_reason' in row.keys() else None,
         'banned_at': row['banned_at'] if 'banned_at' in row.keys() else None,
@@ -693,6 +786,411 @@ def admin_set_user_ban(identifier, banned=True, reason=''):
         conn.commit()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
         return row_to_user(row), None
+
+
+def _parse_utc(value):
+    text = str(value or '')
+    if not text:
+        return None
+    if text.endswith('Z'):
+        text = text[:-1] + '+00:00'
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def record_chat_message(room_id, channel, sender_user_id, sender_name, message, normalized_message='', risk_level=0, hidden=False):
+    now = utc_now()
+    try:
+        uid = int(sender_user_id) if sender_user_id is not None else None
+    except (TypeError, ValueError):
+        uid = None
+    with get_db_connection() as conn:
+        cur = conn.execute(
+            '''
+            INSERT INTO chat_messages (
+                room_id, channel, sender_user_id, sender_name, message,
+                normalized_message, risk_level, created_at, hidden
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                str(room_id) if room_id is not None else None,
+                str(channel or 'public')[:40],
+                uid,
+                str(sender_name or '')[:80],
+                str(message or '')[:1000],
+                str(normalized_message or '')[:1000],
+                int(risk_level or 0),
+                now,
+                1 if hidden else 0,
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def _row_to_chat_message(row):
+    if row is None:
+        return None
+    return {
+        'id': row['id'],
+        'room_id': row['room_id'],
+        'channel': row['channel'],
+        'sender_user_id': row['sender_user_id'],
+        'sender_name': row['sender_name'],
+        'message': row['message'],
+        'normalized_message': row['normalized_message'],
+        'risk_level': row['risk_level'],
+        'created_at': row['created_at'],
+        'hidden': bool(row['hidden']),
+    }
+
+
+def get_chat_message_with_context(message_id, context_limit=8):
+    try:
+        mid = int(message_id)
+    except (TypeError, ValueError):
+        return None
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM chat_messages WHERE id = ?', (mid,)).fetchone()
+        if row is None:
+            return None
+        room_id = row['room_id']
+        created_at = row['created_at']
+        if room_id:
+            before = conn.execute(
+                '''
+                SELECT * FROM chat_messages
+                WHERE room_id = ? AND created_at <= ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                ''',
+                (room_id, created_at, max(1, int(context_limit))),
+            ).fetchall()
+            after = conn.execute(
+                '''
+                SELECT * FROM chat_messages
+                WHERE room_id = ? AND created_at > ?
+                ORDER BY created_at ASC
+                LIMIT ?
+                ''',
+                (room_id, created_at, max(1, int(context_limit // 2))),
+            ).fetchall()
+        else:
+            before = [row]
+            after = []
+        items = [_row_to_chat_message(item) for item in reversed(before)] + [_row_to_chat_message(item) for item in after]
+        return {'message': _row_to_chat_message(row), 'context': items}
+
+
+def set_user_mute(user_id, username='', seconds=600, reason='', muted_by=''):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '账号不存在'
+    duration = max(1, min(int(seconds or 600), 60 * 60 * 24 * 30))
+    now_dt = utc_now_dt()
+    until = utc_iso(now_dt + timedelta(seconds=duration))
+    now = utc_iso(now_dt)
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            return None, '账号不存在'
+        conn.execute(
+            '''
+            INSERT INTO muted_users (user_id, username, muted_until, reason, created_at, muted_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username=excluded.username,
+                muted_until=excluded.muted_until,
+                reason=excluded.reason,
+                created_at=excluded.created_at,
+                muted_by=excluded.muted_by
+            ''',
+            (uid, str(username or row['username']), until, str(reason or '')[:300], now, str(muted_by or '')[:80]),
+        )
+        conn.commit()
+        return {'user_id': uid, 'username': str(username or row['username']), 'muted_until': until}, None
+
+
+def is_user_muted_db(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return False, None
+    now = utc_now()
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM muted_users WHERE user_id = ?', (uid,)).fetchone()
+        if row is None:
+            return False, None
+        until_dt = _parse_utc(row['muted_until'])
+        if until_dt is None or until_dt <= utc_now_dt():
+            conn.execute('DELETE FROM muted_users WHERE user_id = ?', (uid,))
+            conn.commit()
+            return False, None
+        return True, {
+            'user_id': uid,
+            'username': row['username'],
+            'muted_until': row['muted_until'],
+            'reason': row['reason'],
+            'muted_by': row['muted_by'],
+            'checked_at': now,
+        }
+
+
+def _row_to_report(row):
+    if row is None:
+        return None
+    return {
+        'id': row['id'],
+        'reporter_user_id': row['reporter_user_id'],
+        'reporter_username': row['reporter_username'],
+        'target_user_id': row['target_user_id'],
+        'target_username': row['target_username'],
+        'object_type': row['object_type'],
+        'object_id': row['object_id'],
+        'category': row['category'],
+        'reason_text': row['reason_text'],
+        'status': row['status'],
+        'risk_level': row['risk_level'],
+        'created_at': row['created_at'],
+        'resolved_at': row['resolved_at'],
+        'resolved_by': row['resolved_by'],
+        'resolution_note': row['resolution_note'],
+    }
+
+
+def create_report_entry(
+    reporter_user_id,
+    object_type,
+    object_id,
+    category,
+    reason_text='',
+    target_user_id=None,
+    target_username='',
+    risk_level=0,
+    evidence=None,
+):
+    try:
+        reporter_id = int(reporter_user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    now_dt = utc_now_dt()
+    now = utc_iso(now_dt)
+    ten_min_ago = utc_iso(now_dt - timedelta(minutes=10))
+    day_ago = utc_iso(now_dt - timedelta(hours=24))
+    object_type = str(object_type or '').strip()[:40]
+    object_id = str(object_id or '').strip()[:120]
+    category = str(category or '').strip()[:60]
+    reason = str(reason_text or '').strip()[:300]
+    if not object_type or not object_id or not category:
+        return None, '举报对象不完整'
+    try:
+        target_id = int(target_user_id) if target_user_id not in (None, '') else None
+    except (TypeError, ValueError):
+        target_id = None
+    with get_db_connection() as conn:
+        reporter = conn.execute('SELECT * FROM users WHERE id = ?', (reporter_id,)).fetchone()
+        if reporter is None:
+            return None, '请先登录账号'
+        if int(reporter['false_report_count'] or 0) >= 10:
+            return None, '举报功能已被限制，请联系管理员'
+        recent_10m = conn.execute(
+            'SELECT COUNT(*) FROM reports WHERE reporter_user_id = ? AND created_at >= ?',
+            (reporter_id, ten_min_ago),
+        ).fetchone()[0]
+        if recent_10m >= 5:
+            return None, '举报过于频繁，请稍后再试'
+        recent_day = conn.execute(
+            'SELECT COUNT(*) FROM reports WHERE reporter_user_id = ? AND created_at >= ?',
+            (reporter_id, day_ago),
+        ).fetchone()[0]
+        if recent_day >= 30:
+            return None, '今日举报次数已达上限'
+        duplicate = conn.execute(
+            '''
+            SELECT id FROM reports
+            WHERE reporter_user_id = ? AND object_type = ? AND object_id = ? AND category = ? AND created_at >= ?
+            LIMIT 1
+            ''',
+            (reporter_id, object_type, object_id, category, day_ago),
+        ).fetchone()
+        if duplicate is not None:
+            return None, '24小时内不能重复举报同一对象'
+        cur = conn.execute(
+            '''
+            INSERT INTO reports (
+                reporter_user_id, reporter_username, target_user_id, target_username,
+                object_type, object_id, category, reason_text, status, risk_level, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+            ''',
+            (
+                reporter_id,
+                reporter['username'],
+                target_id,
+                str(target_username or '')[:80],
+                object_type,
+                object_id,
+                category,
+                reason,
+                int(risk_level or 0),
+                now,
+            ),
+        )
+        report_id = cur.lastrowid
+        for item in evidence or []:
+            if not isinstance(item, dict):
+                continue
+            conn.execute(
+                'INSERT INTO report_evidence (report_id, evidence_type, data_json, created_at) VALUES (?, ?, ?, ?)',
+                (
+                    report_id,
+                    str(item.get('evidence_type') or item.get('type') or 'context')[:60],
+                    json.dumps(item.get('data') if 'data' in item else item, ensure_ascii=False),
+                    now,
+                ),
+            )
+        conn.commit()
+        row = conn.execute('SELECT * FROM reports WHERE id = ?', (report_id,)).fetchone()
+        return _row_to_report(row), None
+
+
+def list_reports(status='pending', limit=50, offset=0):
+    limit = max(1, min(int(limit or 50), 100))
+    offset = max(0, int(offset or 0))
+    status_text = str(status or 'pending').strip().lower()
+    where = ''
+    params = []
+    if status_text and status_text != 'all':
+        where = 'WHERE status = ?'
+        params.append(status_text)
+    with get_db_connection() as conn:
+        total = conn.execute(f'SELECT COUNT(*) FROM reports {where}', params).fetchone()[0]
+        rows = conn.execute(
+            f'SELECT * FROM reports {where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
+            params + [limit, offset],
+        ).fetchall()
+        return {
+            'items': [_row_to_report(row) for row in rows],
+            'total': total,
+            'limit': limit,
+            'offset': offset,
+            'has_more': offset + len(rows) < total,
+        }
+
+
+def get_report_detail(report_id):
+    try:
+        rid = int(report_id)
+    except (TypeError, ValueError):
+        return None
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM reports WHERE id = ?', (rid,)).fetchone()
+        if row is None:
+            return None
+        evidence_rows = conn.execute('SELECT * FROM report_evidence WHERE report_id = ? ORDER BY id ASC', (rid,)).fetchall()
+        actions = conn.execute('SELECT * FROM moderation_actions WHERE related_report_id = ? ORDER BY id ASC', (rid,)).fetchall()
+        reporter_stats = conn.execute(
+            '''
+            SELECT
+                SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) AS accepted_count,
+                SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected_count,
+                SUM(CASE WHEN status = 'abusive' THEN 1 ELSE 0 END) AS abusive_count
+            FROM reports WHERE reporter_user_id = ?
+            ''',
+            (row['reporter_user_id'],),
+        ).fetchone()
+        data = _row_to_report(row)
+        data['evidence'] = [
+            {
+                'id': ev['id'],
+                'evidence_type': ev['evidence_type'],
+                'data': json.loads(ev['data_json'] or '{}'),
+                'created_at': ev['created_at'],
+            }
+            for ev in evidence_rows
+        ]
+        data['actions'] = [
+            {
+                'id': action['id'],
+                'admin_username': action['admin_username'],
+                'target_user_id': action['target_user_id'],
+                'target_username': action['target_username'],
+                'action_type': action['action_type'],
+                'reason': action['reason'],
+                'duration_seconds': action['duration_seconds'],
+                'created_at': action['created_at'],
+                'expires_at': action['expires_at'],
+            }
+            for action in actions
+        ]
+        data['reporter_history'] = {
+            'accepted': int(reporter_stats['accepted_count'] or 0),
+            'rejected': int(reporter_stats['rejected_count'] or 0),
+            'abusive': int(reporter_stats['abusive_count'] or 0),
+        }
+        return data
+
+
+def resolve_report_entry(report_id, action, moderation_action='none', admin_username='', note='', duration_seconds=None):
+    try:
+        rid = int(report_id)
+    except (TypeError, ValueError):
+        return None, '举报不存在'
+    action = str(action or '').strip().lower()
+    moderation_action = str(moderation_action or 'none').strip().lower()
+    status_map = {'accept': 'accepted', 'reject': 'rejected', 'abusive': 'abusive'}
+    if action not in status_map:
+        return None, '处理动作无效'
+    if moderation_action not in {'none', 'warn', 'mute', 'ban', 'invalidate_match'}:
+        return None, '处罚动作无效'
+    now_dt = utc_now_dt()
+    now = utc_iso(now_dt)
+    duration = int(duration_seconds or 0) if duration_seconds is not None else None
+    expires_at = utc_iso(now_dt + timedelta(seconds=max(1, duration))) if duration and moderation_action == 'mute' else None
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM reports WHERE id = ?', (rid,)).fetchone()
+        if row is None:
+            return None, '举报不存在'
+        conn.execute(
+            '''
+            UPDATE reports
+            SET status = ?, resolved_at = ?, resolved_by = ?, resolution_note = ?
+            WHERE id = ?
+            ''',
+            (status_map[action], now, str(admin_username or '')[:80], str(note or '')[:500], rid),
+        )
+        if action == 'abusive':
+            conn.execute(
+                'UPDATE users SET false_report_count = COALESCE(false_report_count, 0) + 1 WHERE id = ?',
+                (row['reporter_user_id'],),
+            )
+        if moderation_action != 'none':
+            conn.execute(
+                '''
+                INSERT INTO moderation_actions (
+                    admin_username, target_user_id, target_username, action_type,
+                    reason, duration_seconds, created_at, expires_at, related_report_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    str(admin_username or '')[:80],
+                    row['target_user_id'],
+                    row['target_username'],
+                    moderation_action,
+                    str(note or '')[:500],
+                    duration,
+                    now,
+                    expires_at,
+                    rid,
+                ),
+            )
+        conn.commit()
+    return get_report_detail(rid), None
 
 
 def _role_row_to_profile(user_row, role_row):
@@ -1220,6 +1718,8 @@ def _row_to_match_summary(row, perspective_username=None):
         'mod_hash': row['mod_hash'],
         'result': result,
         'result_raw': raw_result,
+        'valid_for_ranking': bool(summary.get('valid_for_ranking', True)),
+        'ranking_invalid_reason': summary.get('ranking_invalid_reason', ''),
         'room_id': summary.get('room_id'),
     }
 

@@ -898,10 +898,20 @@ button {
   gap: 12px;
 }
 
+.moderation-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(420px, 1.35fr);
+  gap: 12px;
+}
+
 .log-list {
   max-height: 310px;
   overflow: auto;
   padding: 8px 0;
+}
+
+.tall-log-list {
+  max-height: 430px;
 }
 
 .log-item {
@@ -920,6 +930,99 @@ button {
   display: block;
   color: var(--muted);
   font-size: 11px;
+}
+
+.reports-table-inner .selected-row {
+  background: rgba(44, 123, 229, 0.08);
+}
+
+.risk-badge {
+  display: inline-flex;
+  min-width: 24px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(115, 132, 151, 0.16);
+  color: var(--text);
+  font-family: Kreadon, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 900;
+}
+
+.risk-badge.risk-2 {
+  background: rgba(245, 158, 11, 0.18);
+  color: #9a5b00;
+}
+
+.risk-badge.risk-3,
+.risk-badge.risk-4 {
+  background: rgba(220, 38, 38, 0.16);
+  color: var(--danger);
+}
+
+.report-detail {
+  padding: 12px 14px;
+}
+
+.report-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.72fr);
+  gap: 12px;
+}
+
+.report-detail-grid + .report-detail-grid {
+  margin-top: 12px;
+}
+
+.report-summary-card,
+.report-action-card,
+.report-detail section {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 12px;
+}
+
+.report-summary-card h3,
+.report-detail section h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.report-summary-card p {
+  margin: 6px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.report-reason {
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(238, 243, 248, 0.72);
+}
+
+.report-action-card {
+  display: grid;
+  gap: 10px;
+}
+
+.report-action-card label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.report-action-card select,
+.report-action-card input,
+.report-action-card textarea {
+  width: 100%;
+}
+
+.report-action-card textarea {
+  min-height: 82px;
+  resize: vertical;
 }
 
 .admin-game-chat-section {
@@ -1127,6 +1230,11 @@ button {
     grid-column: 2 / -1;
     justify-content: flex-start;
   }
+
+  .moderation-layout,
+  .report-detail-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1154,7 +1262,9 @@ button {
   .storage-summary-grid,
   .server-resource-grid,
   .resource-history-grid,
-  .admin-two-col {
+  .admin-two-col,
+  .moderation-layout,
+  .report-detail-grid {
     grid-template-columns: 1fr;
   }
 

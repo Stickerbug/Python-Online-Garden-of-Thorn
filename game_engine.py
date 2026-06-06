@@ -3615,6 +3615,8 @@ class GameEngine:
             self.players[owner_id].deck.insert(insert_at, target_card)
         else:
             self.players[owner_id].deck.insert(0, target_card)
+        if params.get('silent') or params.get('no_log'):
+            return
         self.log_msg(log or f"{target_card.name_cn}移入牌堆{position}")
 
     def _atomic_global_damage_mult(self, player_id, card, params, log, choice, context):
@@ -6031,6 +6033,70 @@ class GameEngine:
                     self._run_card_event(player_id, zone_card, event_name, None,
                                          {'source_id': player_id, 'target_id': player_id, 'zone': zone_name})
 
+    def _equipment_turn_start_key(self, eq) -> int:
+        return int(getattr(getattr(eq, 'card_instance', None), 'instance_id', id(eq)) or id(eq))
+
+    def _effect_tree_contains_heal(self, value, depth: int = 0) -> bool:
+        if depth > 16:
+            return False
+        if isinstance(value, dict):
+            op = str(value.get('op') or value.get('type') or '').strip()
+            if op == 'heal':
+                return True
+            return any(self._effect_tree_contains_heal(v, depth + 1) for v in value.values())
+        if isinstance(value, (list, tuple)):
+            return any(self._effect_tree_contains_heal(item, depth + 1) for item in value)
+        return False
+
+    def _owner_turn_start_equipment_heals(self, eq) -> bool:
+        if eq is None:
+            return False
+        if getattr(eq, 'def_id', '') in ('Leaf', 'Yucca'):
+            return True
+        card_def = getattr(eq, 'card_def', None)
+        if card_def is None:
+            return False
+        events = getattr(card_def, 'v2_events', None)
+        if isinstance(events, dict) and self._effect_tree_contains_heal(events.get('on_owner_turn_start')):
+            return True
+        for effect in getattr(card_def, 'effects', []) or []:
+            if isinstance(effect, dict) and effect.get('type') == 'on_owner_turn_start':
+                if self._effect_tree_contains_heal(effect):
+                    return True
+        if self._has_script_entry(card_def, 'owner_turn_start'):
+            return self._effect_tree_contains_heal(self._get_script_effects(card_def, 'owner_turn_start'))
+        return False
+
+    def _iter_equipment_targeting_player(self, player_id: int):
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in list(getattr(owner_state, 'equipment', [])):
+                if getattr(eq, 'effect_target', owner_id) == player_id:
+                    yield owner_id, eq
+
+    def _run_owner_turn_start_healing_equipment(self, player_id: int) -> set:
+        if not (0 <= player_id < len(self.players)):
+            return set()
+        ps = self.players[player_id]
+        handled = set()
+        for owner_id, eq in self._iter_equipment_targeting_player(player_id):
+            if not self._owner_turn_start_equipment_heals(eq):
+                continue
+            key = self._equipment_turn_start_key(eq)
+            if key in handled:
+                continue
+            eq.turns_equipped += 1
+            handled.add(key)
+            if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
+                    player_id, eq.card_instance, 'owner_turn_start', None,
+                    {'source_id': owner_id, 'target_id': player_id}):
+                continue
+            if eq.def_id == 'Leaf':
+                ps.heal(2)
+                self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2H")
+            elif eq.def_id == 'Yucca':
+                self._apply_yucca_turn_start_heal(player_id, eq.card_def.name_cn)
+        return handled
+
     def _apply_turn_start_effects(self, player_id: int):
         ps = self.players[player_id]
         opp_id = 1 - player_id
@@ -6069,6 +6135,9 @@ class GameEngine:
             if eq.def_id == 'Corruption' and not eq.corruption_active:
                 eq.corruption_active = True
                 self.log_msg(f"{self.pn(opp_id)}的腐化效果激活")
+        early_owner_turn_start_equipment = self._run_owner_turn_start_healing_equipment(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         if ps.poison > 0:
             dmg = ps.poison
             self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
@@ -6104,7 +6173,11 @@ class GameEngine:
             for eq in getattr(owner_state, 'equipment', []):
                 eq.uses_this_turn = 0
         for eq in list(ps.equipment):
-            eq.turns_equipped += 1
+            eq_key = self._equipment_turn_start_key(eq)
+            if eq_key not in early_owner_turn_start_equipment:
+                eq.turns_equipped += 1
+            else:
+                continue
             if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
                     player_id, eq.card_instance, 'owner_turn_start', None,
                     {'source_id': player_id, 'target_id': player_id}):

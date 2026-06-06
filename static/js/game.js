@@ -2390,6 +2390,15 @@ function gameAlert(title, message, buttons) {
     el.classList.add('active');
 }
 
+function gameConfirm(title, message = '') {
+    return new Promise((resolve) => {
+        gameAlert(title, message, [
+            { text: UI.confirm || UI.ok || 'OK', cls: 'btn-primary', action: () => resolve(true) },
+            { text: UI.cancel || 'Cancel', cls: 'btn-secondary', action: () => resolve(false) },
+        ]);
+    });
+}
+
 function hideGameAlert() {
     const el = $('game-alert');
     if (el) el.classList.remove('active');
@@ -2959,6 +2968,31 @@ function showView(viewId) {
         updateModeSpecificControls({ solo: false, phase: '' });
         refreshBaseStatus(viewId);
     }
+}
+
+function isNetworkMatchPhase(value = phase) {
+    return !soloMode && !replayMode && [
+        'draft', 'event_select', 'playing', 'action', 'draw', 'response', 'choice', 'game_over',
+    ].includes(String(value || ''));
+}
+
+function clearNetworkMatchStateForLobby() {
+    if (soloMode || replayMode) return;
+    gameState = {};
+    draftState = {};
+    eventSelectData = {};
+    isSpectating = false;
+    pendingSpectateRoomId = null;
+    activeSpectateRoomId = null;
+    spectatePerspective = 0;
+    pendingPlayCard = null;
+    responsePending = false;
+    responseData = null;
+    activeV2UiRequestId = null;
+    removeFloatingCardPreview();
+    clearSelectedPlayCard();
+    clearPendingServerAction();
+    resetRematchUiState();
 }
 
 let gallerySelectedId = null;
@@ -5678,6 +5712,7 @@ function connectSocket(serverUrl) {
         lobbyPlayers = data.players || [];
         lobbyOngoingGames = data.ongoing_games || [];
         mySid = data.your_sid || mySid;
+        clearNetworkMatchStateForLobby();
         phase = 'lobby';
         renderLobby(data);
         if (data.chat_history) renderLobbyChatHistory(data.chat_history);
@@ -5971,7 +6006,18 @@ function connectSocket(serverUrl) {
         clearPendingServerAction();
         pendingPlayCard = null;
         clearSelectedPlayCard();
-        if (gameState && gameState.phase) renderGame(gameState);
+        if (gameState && gameState.phase && activeViewId === 'view-game' && isNetworkMatchPhase(phase)) {
+            renderGame(gameState);
+        }
+    });
+    socket.on('match_start_failed', (data = {}) => {
+        const message = data.message || UI.mod_mismatch_msg || UI.operation_failed;
+        debugLog('[client] match_start_failed:', message);
+        hideModal();
+        clearNetworkMatchStateForLobby();
+        phase = 'lobby';
+        showView('view-lobby');
+        flashStatus(translateServerMessage(message), 4200, 'error');
     });
     socket.on('opponent_disconnected', (data) => {
         if (data && data.timeout) {
@@ -5987,6 +6033,7 @@ function connectSocket(serverUrl) {
             }
             updateStatus(UI.opponent_disconnected);
             socket.emit('return_lobby');
+            clearNetworkMatchStateForLobby();
             showView('view-lobby');
             phase = 'lobby';
         } else if (data && data.reconnect_timeout > 0) {
@@ -5994,6 +6041,7 @@ function connectSocket(serverUrl) {
         } else {
             updateStatus(UI.opponent_disconnected);
             socket.emit('return_lobby');
+            clearNetworkMatchStateForLobby();
             showView('view-lobby');
             phase = 'lobby';
         }
@@ -6053,6 +6101,7 @@ function connectSocket(serverUrl) {
         showView('view-game');
     });
     socket.on('spectate_leave', () => {
+        clearNetworkMatchStateForLobby();
         pendingSpectateRoomId = null;
         activeSpectateRoomId = null;
         isSpectating = false;
@@ -8148,6 +8197,15 @@ function renderLobby(data) {
     const myTeamLeader = data.your_team_leader || null;
     const serverMode = data.your_mode || '1v1';
     debugLog('[client] renderLobby: players=', lobbyPlayers.length, 'mySid=', mySid, 'myTeam=', myTeam, 'mode=', serverMode);
+    const modeCounts = data.mode_counts && typeof data.mode_counts === 'object'
+        ? data.mode_counts
+        : lobbyPlayers.reduce((acc, player) => {
+            const mode = player.mode || '1v1';
+            if (mode === '1v1' || mode === '2v2' || mode === 'urf') {
+                acc[mode] = (acc[mode] || 0) + 1;
+            }
+            return acc;
+        }, { '1v1': 0, '2v2': 0, urf: 0 });
 
     const modeTabs = $('lobby-mode-tabs');
     if (modeTabs) {
@@ -8155,17 +8213,19 @@ function renderLobby(data) {
         const currentMode = serverMode || cachedMode;
         modeTabs.querySelectorAll('.mode-tab').forEach(tab => {
             const tabMode = tab.getAttribute('data-mode');
-            tab.textContent = UI[`mode_${tabMode}`] || tab.textContent;
+            const label = UI[`mode_${tabMode}`] || tabMode;
+            tab.textContent = `${label} (${Number(modeCounts[tabMode] || 0)})`;
             if (tabMode === currentMode) {
                 tab.classList.add('active');
             } else {
                 tab.classList.remove('active');
             }
-            tab.onclick = () => {
+            tab.onclick = async () => {
                 const newMode = tab.getAttribute('data-mode');
                 if (newMode === currentMode) return;
                 if (myTeam && newMode !== '2v2') {
-                    if (!confirm(UI.mode_switch_confirm)) return;
+                    const confirmed = await gameConfirm(UI.mode_switch_confirm);
+                    if (!confirmed) return;
                 }
                 localStorage.setItem('preferred_mode', newMode);
                 socket.emit('set_mode', { mode: newMode });
@@ -10282,29 +10342,39 @@ function choosePlayerTargetOnBoard(title, targets) {
     if (!regions.length) return Promise.resolve(null);
     return new Promise(resolve => {
         if (targetPickCleanup) targetPickCleanup();
-        const overlay = document.createElement('div');
-        overlay.className = 'target-picker-overlay';
-        overlay.innerHTML = `
-            <div class="target-picker-panel">
-                <div class="target-picker-title">${escapeHtml(title || UI.choose_target || UI.select_target || 'Choose target')}</div>
-                <div class="target-picker-subtitle">${escapeHtml(UI.target_pick_hint || '')}</div>
-                <div class="target-picker-buttons"></div>
-                <button type="button" class="target-picker-cancel">${escapeHtml(UI.cancel || 'Cancel')}</button>
-            </div>
-        `;
-        document.body.appendChild(overlay);
+        let settled = false;
+        let outsideEnabled = false;
+        const handlers = new Map();
         const finish = (value) => {
+            if (settled) return;
+            settled = true;
             regions.forEach(({ el }) => {
                 el.classList.remove('target-pickable', 'target-picked');
                 el.removeEventListener('click', handlers.get(el), true);
             });
             handlers.clear();
-            overlay.remove();
+            document.removeEventListener('pointerdown', outsideHandler, true);
+            document.removeEventListener('keydown', keyHandler, true);
+            document.removeEventListener('contextmenu', contextHandler, true);
             if (targetPickCleanup === finishCancel) targetPickCleanup = null;
             resolve(value);
         };
         const finishCancel = () => finish(-1);
-        const handlers = new Map();
+        const isPickableNode = (node) => !!(node && node.closest && node.closest('[data-player-target-region].target-pickable'));
+        const outsideHandler = (event) => {
+            if (!outsideEnabled || isPickableNode(event.target)) return;
+            event.preventDefault();
+            finishCancel();
+        };
+        const keyHandler = (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            finishCancel();
+        };
+        const contextHandler = (event) => {
+            event.preventDefault();
+            finishCancel();
+        };
         regions.forEach(({ target, el }) => {
             const handler = (event) => {
                 event.preventDefault();
@@ -10317,26 +10387,10 @@ function choosePlayerTargetOnBoard(title, targets) {
             el.classList.add('target-pickable');
             el.addEventListener('click', handler, true);
         });
-        const buttonWrap = overlay.querySelector('.target-picker-buttons');
-        if (buttonWrap) {
-            targets.forEach(target => {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'target-picker-button';
-                btn.textContent = target.label;
-                btn.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const region = getPlayerRegionById(target.id);
-                    if (region) region.classList.add('target-picked');
-                    flashTargetRegion(target.id);
-                    setTimeout(() => finish(target.id), 80);
-                });
-                buttonWrap.appendChild(btn);
-            });
-        }
-        const cancel = overlay.querySelector('.target-picker-cancel');
-        if (cancel) cancel.addEventListener('click', finishCancel);
+        document.addEventListener('pointerdown', outsideHandler, true);
+        document.addEventListener('keydown', keyHandler, true);
+        document.addEventListener('contextmenu', contextHandler, true);
+        setTimeout(() => { outsideEnabled = true; }, 0);
         targetPickCleanup = finishCancel;
     });
 }
@@ -10649,18 +10703,69 @@ function getNewBattleLogLines(previous, next) {
     return nextLog.slice(startIndex);
 }
 
+function splitDamageLogTarget(before) {
+    const text = String(before || '');
+    const comma = Math.max(text.lastIndexOf('，'), text.lastIndexOf(','));
+    return (comma >= 0 ? text.slice(comma + 1) : text).trim();
+}
+
+function parseDamagePartsText(raw, repeatRaw = null) {
+    const text = String(raw || '').trim();
+    if (!text) return [];
+    let parts = [];
+    if (/^\d+(?:\+\d+)+$/.test(text)) {
+        parts = text.split('+').map(v => Number(v));
+    } else if (/^\d+$/.test(text)) {
+        const amount = Number(text);
+        const repeat = repeatRaw == null || repeatRaw === '' ? 1 : Number(repeatRaw);
+        const count = Number.isFinite(repeat) ? Math.max(1, Math.floor(repeat)) : 1;
+        parts = Array.from({ length: count }, () => amount);
+    }
+    return parts.filter(v => Number.isFinite(v) && v > 0);
+}
+
+function expandDamageLogHits(name, parts, hpText) {
+    const cleanParts = (Array.isArray(parts) ? parts : [])
+        .map(v => Math.max(0, Math.ceil(Number(v || 0))))
+        .filter(v => Number.isFinite(v) && v > 0);
+    if (!name || !cleanParts.length) return [];
+    const hpRaw = String(hpText || '').trim();
+    const hpParts = hpRaw.split('→');
+    const startHp = hpParts.length === 2 ? Number(hpParts[0]) : null;
+    const endHp = hpParts.length === 2 ? Number(hpParts[1]) : Number(hpRaw);
+    let staged = Number.isFinite(startHp) ? startHp : null;
+    return cleanParts.map((amount, index) => {
+        let health = null;
+        if (Number.isFinite(staged)) {
+            staged -= amount;
+            health = staged;
+        } else if (index === cleanParts.length - 1 && Number.isFinite(endHp)) {
+            health = endHp;
+        }
+        return { name, amount, health };
+    });
+}
+
 function parseDamageLogLine(line) {
     const text = String(line || '');
-    const match = text.match(/^(.+?)受到(\d+)(?:点)?(?:.*?伤害)?（H=(-?\d+)）$/);
-    if (!match) return null;
-    const amount = Number(match[2]);
-    if (!Number.isFinite(amount) || amount <= 0) return null;
-    const health = Number(match[3]);
-    return {
-        name: match[1],
-        amount,
-        health: Number.isFinite(health) ? health : null,
-    };
+    const hpSuffix = '[（(]H=([^）)]+)[）)]$';
+    let match = text.match(new RegExp(`^(.+?)受到[（(](\\d+(?:\\+\\d+)*)[）)]D${hpSuffix}`));
+    if (match) {
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[3]);
+    }
+    match = text.match(new RegExp(`^(.+?)受到(\\d+)D(?:[×x](\\d+))?${hpSuffix}`));
+    if (match) {
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2], match[3]), match[4]);
+    }
+    match = text.match(new RegExp(`^(.+?)受到(\\d+(?:\\+\\d+)*)点(?:[^（）()]*?)伤害${hpSuffix}`));
+    if (match) {
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[3]);
+    }
+    match = text.match(new RegExp(`^(.+?)受到(\\d+)点[^（）()]*?${hpSuffix}`));
+    if (match) {
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[3]);
+    }
+    return [];
 }
 
 function getStatePlayerDisplayNames(gs, ref) {
@@ -10698,12 +10803,14 @@ function getDamageLogEventsByPlayer(previous, next) {
     });
     const out = new Map();
     getNewBattleLogLines(previous, next).forEach(line => {
-        const parsed = parseDamageLogLine(line);
-        if (!parsed) return;
-        const id = nameToId.get(parsed.name);
-        if (id == null) return;
-        if (!out.has(id)) out.set(id, []);
-        out.get(id).push(parsed);
+        const parsedHits = parseDamageLogLine(line);
+        if (!parsedHits.length) return;
+        parsedHits.forEach(parsed => {
+            const id = nameToId.get(parsed.name);
+            if (id == null) return;
+            if (!out.has(id)) out.set(id, []);
+            out.get(id).push(parsed);
+        });
     });
     return out;
 }
@@ -10848,8 +10955,7 @@ function clearScheduledGameOver() {
 function estimateGameOverAnimationDelay(previous, next) {
     if (!previous || !next || !areSequentialGameStates(previous, next)) return 0;
     const damageCount = getNewBattleLogLines(previous, next)
-        .filter(line => !!parseDamageLogLine(line))
-        .length;
+        .reduce((count, line) => count + parseDamageLogLine(line).length, 0);
     if (damageCount <= 0) return 650;
     const rawLastDelay = Math.max(0, damageCount - 1) * 200;
     const lastDelay = Math.min(rawLastDelay, Math.max(0, COMBAT_FLOAT_MAX_LAST_DELAY_MS));
@@ -10952,20 +11058,13 @@ async function choosePlayerTarget(title, opts = {}) {
     if (boardTarget !== null) {
         return boardTarget;
     }
+    if (gameState && gameState.mode === '2v2') {
+        return -1;
+    }
     const sel = await simpleChoice(title || UI.choose_target || UI.select_target || 'Choose target', targets.map(t => t.label));
     const selectedId = sel >= 0 ? targets[sel].id : -1;
     if (selectedId >= 0) flashTargetRegion(selectedId);
     return selectedId;
-}
-
-async function choosePlayerTargetFromDialog(title, opts = {}) {
-    const targets = getPlayerTargetOptions(opts);
-    if (!targets.length) {
-        gameAlert(UI.notice, UI.no_valid_target || 'No valid target');
-        return -1;
-    }
-    const sel = await simpleChoice(title || UI.choose_target || UI.select_target || 'Choose target', targets.map(t => t.label));
-    return sel >= 0 ? targets[sel].id : -1;
 }
 
 function getCardTargetPickOptions(cardDef) {
@@ -11105,7 +11204,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
                 if (gameState && gameState.mode === '2v2' && equipmentChoosesTargetOnTrigger(cardDef)) {
                     const targetId = cardHasSelfOnlyFlag(cardInst, cardDef)
                         ? normalizePlayerId(gameState && gameState.your_id)
-                        : await choosePlayerTargetFromDialog(
+                        : await choosePlayerTarget(
                             UI.choose_target || UI.select_target || 'Choose target',
                             { includeSelf: true, candidates: 'all', aliveOnly: true },
                         );
@@ -11744,10 +11843,7 @@ async function onPlayCard(cardInstanceId, options = {}) {
     if (!soloMode && gameState.mode === '2v2' && cardHasSelfOnlyFlag(cardDict, cardDef) && (!cardDef || cardDef.card_type !== 'thorn')) {
         targetPlayerId = normalizePlayerId(gameState.your_id);
     } else if (!soloMode && gameState.mode === '2v2' && cardNeedsPlayerTarget(cardDef, cardDict)) {
-        const chooseTarget = cardDef && cardDef.card_type === 'root'
-            ? choosePlayerTargetFromDialog
-            : choosePlayerTarget;
-        targetPlayerId = await chooseTarget(
+        targetPlayerId = await choosePlayerTarget(
             UI.choose_target || UI.select_target || 'Choose target',
             getCardTargetPickOptions(cardDef),
         );
@@ -12590,6 +12686,7 @@ function renderGameOver(data) {
             returnLobbyBtn.onclick = () => {
                 if (!socket) return;
                 socket.emit('return_lobby');
+                clearNetworkMatchStateForLobby();
                 showView('view-lobby');
                 phase = 'lobby';
             };
@@ -13468,7 +13565,12 @@ async function deleteCommunityMod(mod) {
 function getDisabledMods() {
     try {
         const raw = localStorage.getItem('gtn_disabled_mods');
-        const disabled = raw ? JSON.parse(raw) : getDefaultDisabledMods();
+        let disabled = raw ? JSON.parse(raw) : getDefaultDisabledMods();
+        if (shouldMigrateLegacyOfficialModDefault(disabled)) {
+            disabled = getDefaultDisabledMods();
+            localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
+            localStorage.setItem('gtn_official_mod_default_v2', '1');
+        }
         return coerceValidDisabledMods(disabled).disabled;
     } catch (e) {
         return coerceValidDisabledMods(getDefaultDisabledMods()).disabled;
@@ -13476,10 +13578,23 @@ function getDisabledMods() {
 }
 
 function getDefaultDisabledMods() {
+    return [];
+}
+
+function getLegacyDefaultDisabledMods() {
     if (!Array.isArray(settingsMods) || settingsMods.length === 0) return [];
     return settingsMods
         .map(mod => mod.filename || '')
         .filter(filename => filename && filename !== VANILLA_MOD_FILENAME);
+}
+
+function shouldMigrateLegacyOfficialModDefault(disabled) {
+    if (localStorage.getItem('gtn_official_mod_default_v2') === '1') return false;
+    if (!Array.isArray(disabled) || !Array.isArray(settingsMods) || settingsMods.length === 0) return false;
+    const legacy = getLegacyDefaultDisabledMods();
+    if (!legacy.length || disabled.length !== legacy.length) return false;
+    const currentSet = new Set(disabled.map(String));
+    return legacy.every(filename => currentSet.has(filename));
 }
 
 function getModCardTypeCounts(mod) {
