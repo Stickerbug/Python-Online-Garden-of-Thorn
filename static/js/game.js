@@ -7264,7 +7264,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=8');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=9');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;

@@ -306,6 +306,9 @@ class PlayerState:
         return max(0, self.hand_limit() - self.rule_hand_size())
 
     def add_to_hand(self, card: CardInstance):
+        if getattr(card, 'def_id', '') == 'Tomato':
+            card.bonus_damage = 0
+            card.held_turns = 0
         self.hand.append(card)
         callback = getattr(self, '_enter_hand_callback', None)
         if callback:

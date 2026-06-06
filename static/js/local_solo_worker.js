@@ -85,8 +85,8 @@ const V2_EVENT_ALIASES = {
     damage_taken: ['on_damage_taken'],
     equipment_trigger: ['on_equipment_trigger'],
     equipment_destroy: ['on_equipment_destroy', 'on_before_destroyed'],
-    hand_owner_turn_start: ['on_hand_owner_turn_start', 'on_enter_hand'],
-    enter_hand: ['on_enter_hand', 'on_hand_owner_turn_start'],
+    hand_owner_turn_start: ['on_hand_owner_turn_start'],
+    enter_hand: ['on_enter_hand'],
     discard_owner_turn_start: ['on_discard_owner_turn_start', 'on_discard'],
     deck_owner_turn_start: ['on_deck_owner_turn_start'],
     card_used: ['on_card_used', 'after_play_card'],
@@ -493,6 +493,10 @@ class LocalPlayer {
     }
 
     addToHand(card) {
+        if (card && card.def_id === 'Tomato') {
+            card.bonus_damage = 0;
+            card.held_turns = 0;
+        }
         this.hand.push(card);
         if (typeof this.onEnterHand === 'function') {
             this.onEnterHand(this.player_id, card);
