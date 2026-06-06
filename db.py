@@ -297,6 +297,20 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_match_replays_mode ON match_replays(mode)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_replay_dependencies_replay_id ON replay_dependencies(replay_id)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_replay_dependencies_hash ON replay_dependencies(dep_type, dep_hash)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS card_draft_stats (
+                mode TEXT NOT NULL,
+                card_id TEXT NOT NULL,
+                shown_count INTEGER NOT NULL DEFAULT 0,
+                picked_count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (mode, card_id)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_stats_mode ON card_draft_stats(mode)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_stats_rate ON card_draft_stats(picked_count, shown_count)')
         conn.commit()
 
 
@@ -638,6 +652,105 @@ ADMIN_USER_SORTS = {
     'draws': 'draws',
     'win_rate': 'CASE WHEN games_played > 0 THEN CAST(wins AS REAL) / games_played ELSE 0 END',
 }
+
+
+CARD_DRAFT_STAT_SORTS = {
+    'mode': 'mode',
+    'card_id': 'card_id',
+    'shown_count': 'shown_count',
+    'picked_count': 'picked_count',
+    'pick_rate': 'CASE WHEN shown_count > 0 THEN CAST(picked_count AS REAL) / shown_count ELSE 0 END',
+    'updated_at': 'updated_at',
+}
+
+
+def record_card_draft_pick(mode, option_ids, picked_id):
+    mode_key = str(mode or '').strip()
+    if mode_key not in ('1v1', '2v2'):
+        return False
+    picked = str(picked_id or '').strip()
+    counts = {}
+    for raw_id in option_ids or []:
+        card_id = str(raw_id or '').strip()
+        if not card_id:
+            continue
+        counts[card_id] = counts.get(card_id, 0) + 1
+    if not counts or not picked:
+        return False
+    now = utc_now()
+    with get_db_connection() as conn:
+        for card_id, shown_inc in counts.items():
+            picked_inc = 1 if card_id == picked else 0
+            conn.execute(
+                '''
+                INSERT INTO card_draft_stats (mode, card_id, shown_count, picked_count, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(mode, card_id) DO UPDATE SET
+                    shown_count = shown_count + excluded.shown_count,
+                    picked_count = picked_count + excluded.picked_count,
+                    updated_at = excluded.updated_at
+                ''',
+                (mode_key, card_id, int(shown_inc), int(picked_inc), now),
+            )
+        conn.commit()
+    return True
+
+
+def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0):
+    mode_key = str(mode or '').strip()
+    sort_key = str(sort or 'pick_rate')
+    sort_expr = CARD_DRAFT_STAT_SORTS.get(sort_key, CARD_DRAFT_STAT_SORTS['pick_rate'])
+    direction = 'ASC' if str(order or '').lower() == 'asc' else 'DESC'
+    try:
+        safe_limit = max(1, min(int(limit), 1000))
+    except (TypeError, ValueError):
+        safe_limit = 300
+    try:
+        safe_offset = max(0, int(offset))
+    except (TypeError, ValueError):
+        safe_offset = 0
+    where = ''
+    params = []
+    if mode_key in ('1v1', '2v2'):
+        where = 'WHERE mode = ?'
+        params.append(mode_key)
+    order_clause = f'{sort_expr} {direction}, shown_count DESC, card_id ASC'
+    with get_db_connection() as conn:
+        total = conn.execute(f'SELECT COUNT(*) FROM card_draft_stats {where}', params).fetchone()[0]
+        rows = conn.execute(
+            f'''
+            SELECT
+                mode,
+                card_id,
+                shown_count,
+                picked_count,
+                updated_at,
+                CASE WHEN shown_count > 0 THEN CAST(picked_count AS REAL) / shown_count * 100 ELSE 0 END AS pick_rate
+            FROM card_draft_stats
+            {where}
+            ORDER BY {order_clause}
+            LIMIT ? OFFSET ?
+            ''',
+            params + [safe_limit, safe_offset],
+        ).fetchall()
+    return {
+        'items': [
+            {
+                'mode': row['mode'],
+                'card_id': row['card_id'],
+                'shown_count': row['shown_count'],
+                'picked_count': row['picked_count'],
+                'pick_rate': round(float(row['pick_rate'] or 0), 2),
+                'updated_at': row['updated_at'],
+            }
+            for row in rows
+        ],
+        'total': total,
+        'limit': safe_limit,
+        'offset': safe_offset,
+        'sort': sort_key if sort_key in CARD_DRAFT_STAT_SORTS else 'pick_rate',
+        'order': 'asc' if direction == 'ASC' else 'desc',
+    }
 
 
 def list_admin_users(query='', sort='last_login_at', order='desc', limit=100, offset=0):

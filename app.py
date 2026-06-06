@@ -65,8 +65,10 @@ from db import (
     get_user_by_id,
     get_user_by_username,
     list_friends,
+    list_card_draft_stats,
     mark_user_last_seen,
     normalize_username_key,
+    record_card_draft_pick,
     remove_friend,
     revoke_remember_token,
     respond_friend_request,
@@ -2447,6 +2449,7 @@ ADMIN_COMMANDS = {
     'logs': 'logs [数量] - 查看最近管理事件',
     'lobbychat': 'lobbychat [数量] - 查看大厅聊天缓存',
     'history': 'history [数量] - 查看最近历史对局',
+    'draftstats': 'draftstats [1v1|2v2] - 查看卡牌选牌抽取率统计',
     'broadcast': 'broadcast <内容> - 发送服务器广播',
     'kick': 'kick <sid|昵称> - 踢出玩家',
     'userpass': 'userpass <ID|注册顺序|用户名> <新密码> - 管理员修改账号密码',
@@ -2893,6 +2896,25 @@ def execute_admin_command(line):
             f"{admin_display_time(h.get('time'))} #{h['room_id']} {h['mode']} 回合={h['round']} 胜者={h['winner']} 玩家={' vs '.join(h['players'])}"
             for h in rows
         ) or '暂无历史对局。'}
+    if cmd in ('draftstats', 'draftstat', 'pickrate'):
+        mode = parts[1] if len(parts) > 1 else ''
+        if mode and mode not in ('1v1', '2v2'):
+            return {'success': False, 'output': command_error(raw, len(raw), '[1v1|2v2]')}
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        data = list_card_draft_stats(mode=mode, sort='pick_rate', order='desc', limit=30)
+        rows = data.get('items', [])
+        if not rows:
+            return {'success': True, 'output': '暂无选牌统计。'}
+        lines = ['模式  卡牌ID  名称  抽取/刷出  抽取率']
+        for item in rows:
+            card_def = CARD_DEFS.get(item.get('card_id'))
+            name = card_def.name_cn if card_def else item.get('card_id')
+            lines.append(
+                f"{item['mode']}  {item['card_id']}  {name}  "
+                f"{item['picked_count']}/{item['shown_count']}  {item['pick_rate']:.1f}%"
+            )
+        return {'success': True, 'output': '\n'.join(lines)}
     if cmd == 'broadcast':
         msg = raw[len(parts[0]):].strip()
         if not msg:
@@ -4232,6 +4254,30 @@ def admin_user_detail(user_id):
         online = _admin_online_user_map()
     detail['user']['online'] = online.get(str(detail['user'].get('username', '')).lower())
     return jsonify({'success': True, **detail})
+
+
+@app.route('/api/admin/draft-stats')
+def admin_draft_stats():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        data = list_card_draft_stats(
+            mode=request.args.get('mode', ''),
+            sort=request.args.get('sort', 'pick_rate'),
+            order=request.args.get('order', 'desc'),
+            limit=request.args.get('limit', 300),
+            offset=request.args.get('offset', 0),
+        )
+    except Exception as exc:
+        admin_event('error', f'admin draft stats failed: {exc}')
+        return jsonify({'success': False, 'error': '抽牌统计数据库不可用'}), 500
+    for item in data.get('items', []):
+        card_def = CARD_DEFS.get(item.get('card_id'))
+        item['name_cn'] = card_def.name_cn if card_def else item.get('card_id')
+        item['name_en'] = card_def.name_en if card_def else item.get('card_id')
+        item['card_type'] = card_def.card_type if card_def else ''
+        item['quality'] = card_def.quality if card_def else ''
+    return jsonify({'success': True, **data})
 
 
 @app.route('/api/admin/storage/summary')
@@ -5971,12 +6017,19 @@ def on_draft_pick(data):
         def_id = data.get('def_id')
         if not def_id:
             return
+        draft_options_before = [card.def_id for card in (engine.draft_options[pidx] or [])]
         success = engine.draft_pick(pidx, def_id)
         if not success:
             if not engine.draft_options[pidx]:
                 engine._generate_draft_options_for_player(pidx)
+            draft_options_before = [card.def_id for card in (engine.draft_options[pidx] or [])]
             success = engine.draft_pick(pidx, def_id)
         if success:
+            if DB_AVAILABLE and room.mode in ('1v1', '2v2'):
+                try:
+                    record_card_draft_pick(room.mode, draft_options_before, def_id)
+                except Exception as exc:
+                    admin_event('error', f'draft stats record failed: {exc}')
             record_room_replay_action(room, 'draft_pick', pidx, {'def_id': def_id})
             for pi in range(len(room.player_sids)):
                 send_draft_state(room, pi)

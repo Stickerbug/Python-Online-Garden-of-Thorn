@@ -20,6 +20,7 @@ let replayTimer = null;
 let replayData = null;
 let gameChatTimer = null;
 let gameChatSignature = '';
+let draftStatsState = { items: [], total: 0 };
 
 const STATUS_LABELS = {
   lobby: '大厅',
@@ -251,6 +252,7 @@ function showShell(authenticated) {
   if (authenticated) {
     loadStatus();
     loadRegisteredUsers();
+    loadDraftStats();
     loadStorageSummary();
     resetAndLoadReplays();
     loadGameChat();
@@ -457,6 +459,68 @@ function renderPlayers(players) {
             <td>${escapeHtml(p.room_id ?? p.spectating_room ?? '-')}</td>
             <td><span class="muted">${escapeHtml(p.sid)}</span></td>
             <td><button class="row-action danger" data-kick="${escapeHtml(p.sid)}">踢出</button></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function draftStatsQuery() {
+  const params = new URLSearchParams();
+  params.set('mode', $('draft-stats-mode')?.value || '');
+  params.set('sort', $('draft-stats-sort')?.value || 'pick_rate');
+  params.set('order', $('draft-stats-order')?.value || 'desc');
+  params.set('limit', '500');
+  return params;
+}
+
+async function loadDraftStats() {
+  const table = $('draft-stats-table');
+  if (!table) return;
+  try {
+    if (!draftStatsState.items.length) {
+      table.innerHTML = '<div class="log-item">正在读取抽牌统计。</div>';
+    }
+    draftStatsState = await api(`/api/admin/draft-stats?${draftStatsQuery().toString()}`);
+    renderDraftStats(draftStatsState);
+  } catch (error) {
+    table.innerHTML = `<div class="log-item error">抽牌统计加载失败：${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function cardTypeLabel(type) {
+  if (type === 'thorn') return 'Thorn';
+  if (type === 'bloom') return 'Bloom';
+  if (type === 'guard') return 'Guard';
+  if (type === 'root') return 'Root';
+  return type || '-';
+}
+
+function renderDraftStats(data) {
+  const items = data.items || [];
+  const count = $('draft-stats-count');
+  if (count) count.textContent = `${items.length}/${data.total || 0}`;
+  const table = $('draft-stats-table');
+  if (!table) return;
+  if (!items.length) {
+    table.innerHTML = '<div class="log-item">暂无抽牌统计。统计会在玩家完成选牌选择后写入。</div>';
+    return;
+  }
+  table.innerHTML = `
+    <table>
+      <thead><tr><th>模式</th><th>卡牌</th><th>类型</th><th>抽取</th><th>刷出</th><th>抽取率</th><th>最近更新</th></tr></thead>
+      <tbody>
+        ${items.map((item) => `
+          <tr>
+            <td>${escapeHtml(item.mode || '-')}</td>
+            <td>
+              <strong>${escapeHtml(item.name_cn || item.card_id || '-')}</strong>
+              <span class="muted"> ${escapeHtml(item.card_id || '')}</span>
+            </td>
+            <td>${escapeHtml(cardTypeLabel(item.card_type))}</td>
+            <td class="admin-data">${escapeHtml(formatNumber(item.picked_count || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatNumber(item.shown_count || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatPercent(item.pick_rate || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatAdminTime(item.updated_at))}</td>
           </tr>`).join('')}
       </tbody>
     </table>`;
@@ -1220,16 +1284,21 @@ function bindEvents() {
   $('registered-users-search')?.addEventListener('input', queueRegisteredUsersLoad);
   $('registered-users-sort')?.addEventListener('change', loadRegisteredUsers);
   $('registered-users-order')?.addEventListener('change', loadRegisteredUsers);
+  $('draft-stats-refresh')?.addEventListener('click', loadDraftStats);
+  $('draft-stats-mode')?.addEventListener('change', loadDraftStats);
+  $('draft-stats-sort')?.addEventListener('change', loadDraftStats);
+  $('draft-stats-order')?.addEventListener('change', loadDraftStats);
 
   document.querySelectorAll('.admin-tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.admin-tab').forEach((item) => item.classList.remove('active'));
       tab.classList.add('active');
       const target = tab.dataset.tab;
-      ['gui', 'storage', 'replays', 'game-chat', 'terminal'].forEach((name) => {
+      ['gui', 'draft-stats', 'storage', 'replays', 'game-chat', 'terminal'].forEach((name) => {
         const panel = $(`admin-${name}`);
         if (panel) panel.classList.toggle('hidden', target !== name);
       });
+      if (target === 'draft-stats') loadDraftStats();
       if (target === 'storage') loadStorageSummary();
       if (target === 'replays') resetAndLoadReplays();
       if (target === 'game-chat') {
