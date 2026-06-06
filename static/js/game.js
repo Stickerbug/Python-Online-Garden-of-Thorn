@@ -2889,6 +2889,31 @@ function maybeAnimateTurnFocus(gs) {
     });
 }
 
+function formatRoundStatus(gs, phaseText = '') {
+    const roundNum = Number(gs && gs.round_num);
+    const phaseName = phaseText || ((gs && gs.phase) === 'draft'
+        ? UI.draft_phase
+        : (gs && gs.phase) === 'event_select'
+            ? UI.select_event
+            : '');
+    if (!Number.isFinite(roundNum) || roundNum <= 0) {
+        if ((gs && gs.phase) === 'draft') return UI.draft_phase;
+        if ((gs && gs.phase) === 'event_select') return UI.select_event;
+        return phaseName || UI.draft_phase;
+    }
+    return UI.round_status.replace('{0}', roundNum).replace('{1}', phaseName);
+}
+
+function formatCompactRoundStatus(gs, phaseText = '') {
+    const roundNum = Number(gs && gs.round_num);
+    if (!Number.isFinite(roundNum) || roundNum <= 0) {
+        if ((gs && gs.phase) === 'draft') return UI.draft_phase;
+        if ((gs && gs.phase) === 'event_select') return UI.select_event;
+        return phaseText || UI.draft_phase;
+    }
+    return `R${roundNum} · ${phaseText}`;
+}
+
 function showView(viewId) {
     const el = $(viewId);
     const sameView = activeViewId === viewId && el && !el.classList.contains('hidden');
@@ -9154,6 +9179,8 @@ function buildBattleViewModel(state) {
         : gs.phase === 'draw' ? UI.draw_phase
         : gs.phase === 'response' ? UI.waiting_response
         : gs.phase === 'choice' ? UI.choose_target
+        : gs.phase === 'draft' ? UI.draft_phase
+        : gs.phase === 'event_select' ? UI.select_event
         : gs.phase === 'game_over' ? UI.game_over
         : (gs.phase || '');
     return {
@@ -9571,7 +9598,7 @@ function renderClassicBattle(gs) {
         root.classList.toggle('is-target-aim', !!selected && !selectedSelfOnly);
         root.dataset.selectedRole = selected ? selectedRole : '';
         $('classic-mode').textContent = vm.turn.modeText || '1v1';
-        $('classic-round').textContent = `R${vm.turn.round || 0}`;
+        $('classic-round').textContent = formatCompactRoundStatus(gs, vm.turn.phaseText);
         $('classic-phase').textContent = vm.turn.phaseText || '';
         $('classic-action-hint').textContent = selected ? getClassicPlayHint(selected) : (vm.turn.isMyTurn ? UI.your_turn : UI.opponent_turn);
         renderClassicResourceOrbs($('classic-e-orbs'), vm.self.e, vm.self.maxE, resourcePreviewCard ? resourcePreviewCard.cost_e : 0, 'e');
@@ -9722,8 +9749,8 @@ function renderGame(data) {
             : gs.phase === 'draw' ? UI.draw_phase
             : gs.phase === 'game_over' ? UI.game_over : '';
     }
-    const fullRoundStatus = UI.round_status.replace('{0}', gs.round_num || 0).replace('{1}', phaseText);
-    updateStatus(isMinimalUiStyle() ? `R${gs.round_num || 0} · ${phaseText}` : fullRoundStatus);
+    const fullRoundStatus = formatRoundStatus(gs, phaseText);
+    updateStatus(isMinimalUiStyle() ? formatCompactRoundStatus(gs, phaseText) : fullRoundStatus);
     const statusTextEl = $('status-text');
     if (statusTextEl) statusTextEl.title = isMinimalUiStyle() ? fullRoundStatus : '';
 
