@@ -54,8 +54,10 @@ from r2_mods import (
 )
 from db import (
     DB_PATH,
+    admin_clear_user_role,
     admin_change_user_password,
     admin_set_user_ban,
+    admin_set_user_role,
     add_friend_request,
     change_user_password,
     create_remember_token,
@@ -63,9 +65,11 @@ from db import (
     find_user_for_admin,
     get_admin_user_detail,
     get_user_by_id,
+    get_user_role_profile,
     get_user_by_username,
     list_friends,
     list_card_draft_stats,
+    list_user_roles,
     mark_user_last_seen,
     normalize_username_key,
     record_card_draft_pick,
@@ -253,6 +257,7 @@ SPECIAL_ACCOUNT_PROFILES = [
     },
 ]
 SPECIAL_PLAYER_PROFILES = SPECIAL_ACCOUNT_PROFILES
+BUILTIN_SPECIAL_ACCOUNT_NAMES = {profile['display_name'].lower() for profile in SPECIAL_ACCOUNT_PROFILES}
 ADMIN_EVENTS = deque(maxlen=300)
 MATCH_HISTORY = deque(maxlen=120)
 ADMIN_LOGIN_FAILURES = {}
@@ -273,7 +278,7 @@ CHAT_RATE_WINDOW_SECONDS = 60
 CHAT_RATE_LIMIT = 10
 CHAT_DISPLAY_WIDTH_LIMIT = 200
 CHAT_IDLE_SEPARATOR_SECONDS = 300
-CHAT_EXEMPT_NAMES = {'stickerbug', 'eric', 'netherdog'}
+CHAT_EXEMPT_NAMES = set()
 
 
 def _env_float(name, default):
@@ -1021,7 +1026,14 @@ def normalize_chat_text(raw, exempt=False):
 
 
 def is_chat_limit_exempt(player):
-    name = str((player or {}).get('nickname') or '').strip().lower()
+    if not player:
+        return False
+    if player.get('chat_exempt') or player.get('is_admin_player'):
+        return True
+    role_type = str(player.get('role_type') or '').strip().lower()
+    if role_type in ('admin', 'staff'):
+        return True
+    name = str(player.get('nickname') or '').strip().lower()
     return name in CHAT_EXEMPT_NAMES
 
 
@@ -1238,6 +1250,14 @@ def get_special_player_profile(raw):
 
 
 def get_special_account_profile(username):
+    if DB_AVAILABLE:
+        try:
+            profile = get_user_role_profile(username)
+            if profile:
+                return profile
+            return None
+        except Exception as exc:
+            admin_event('error', f'failed to load account role for {username}: {exc}')
     lower = str(username or '').strip().lower()
     for profile in SPECIAL_ACCOUNT_PROFILES:
         if lower == profile['display_name'].lower():
@@ -1251,8 +1271,12 @@ def special_public_fields(player_or_profile):
         'is_admin_player': bool(source.get('is_admin_player')),
         'is_special_player': bool(role),
         'special_role': role or None,
+        'role_type': source.get('role_type') or ('admin' if source.get('is_admin_player') else None),
+        'special_role_label': source.get('special_role_label') or None,
         'special_role_color': source.get('special_role_color') or ('admin' if source.get('is_admin_player') else None),
         'special_role_sort': int(source.get('special_role_sort', 99)),
+        'can_direct_friend': bool(source.get('can_direct_friend')),
+        'chat_exempt': bool(source.get('chat_exempt')),
     }
 
 
@@ -1278,13 +1302,14 @@ def is_admin_player_secret(raw):
 
 def is_reserved_special_nickname(name):
     lower = str(name or '').lower()
-    special_names = {profile['display_name'].lower() for profile in SPECIAL_ACCOUNT_PROFILES}
+    special_names = set(BUILTIN_SPECIAL_ACCOUNT_NAMES)
     return ('sticker' in lower and 'bug' in lower) or lower in special_names
 
 
 def is_exact_special_account_name(name):
     lower = str(name or '').strip().lower()
-    return lower in {profile['display_name'].lower() for profile in SPECIAL_ACCOUNT_PROFILES}
+    profile = get_special_account_profile(name)
+    return bool(profile) or lower in BUILTIN_SPECIAL_ACCOUNT_NAMES
 
 
 def auth_user_payload(user):
@@ -1490,7 +1515,8 @@ def _current_account_identity():
 
 
 def _current_account_can_manage_all_community_mods():
-    return str(session.get('username') or '').strip().lower() == ADMIN_PLAYER_DISPLAY_NAME.lower()
+    profile = get_special_account_profile(session.get('username') or '')
+    return bool(profile and profile.get('is_admin_player'))
 
 
 def _require_account_json():
@@ -2455,6 +2481,7 @@ ADMIN_COMMANDS = {
     'userpass': 'userpass <ID|注册顺序|用户名> <新密码> - 管理员修改账号密码',
     'banuser': 'banuser <ID|注册顺序|用户名> [原因] - 封禁账号并踢下线',
     'unbanuser': 'unbanuser <ID|注册顺序|用户名> - 解除账号封禁',
+    'role': 'role list|get|set|clear ... - 管理账号身份；例：role set 46namknat staff title=设计师 color=bloom',
     'gitpull': 'gitpull - 手动拉取 GitHub origin/main（只允许 fast-forward，不覆盖本地改动）',
     'skip': 'skip <房间ID> - 尝试跳过当前回合',
     'endgame': 'endgame <房间ID> <winner|draw> - 强制结束对局；winner 可用 0/1，2v2 表示队伍',
@@ -2617,6 +2644,68 @@ def parse_givecard_options(tokens):
         'fusion': max(1, fusion),
         'fission': max(1, fission),
     }
+
+
+def _parse_bool_option(value):
+    text = str(value or '').strip().lower()
+    if text in ('1', 'true', 'yes', 'y', 'on', '是', '开'):
+        return True
+    if text in ('0', 'false', 'no', 'n', 'off', '否', '关'):
+        return False
+    raise ValueError(f'需要布尔值：{value}')
+
+
+def parse_role_options(tokens):
+    options = {
+        'title': '',
+        'color': '',
+        'sort_order': None,
+        'role_key': '',
+        'can_direct_friend': None,
+        'chat_exempt': None,
+    }
+    for token in tokens:
+        key, sep, value = token.partition('=')
+        if not sep:
+            if not options['title']:
+                options['title'] = token
+                continue
+            raise ValueError(f'无法识别参数：{token}')
+        key = key.lower().strip()
+        value = value.strip()
+        if key in ('title', 'label', 'name', '称号', '名称'):
+            options['title'] = value
+        elif key in ('color', 'colour', '颜色'):
+            options['color'] = value
+        elif key in ('sort', 'order', 'rank', '排序'):
+            options['sort_order'] = parse_int_token(value, 'sort')
+        elif key in ('key', 'role_key', 'prefix_key'):
+            options['role_key'] = value
+        elif key in ('direct', 'friend', 'direct_friend', '好友'):
+            options['can_direct_friend'] = _parse_bool_option(value)
+        elif key in ('chat', 'chat_exempt', '聊天'):
+            options['chat_exempt'] = _parse_bool_option(value)
+        else:
+            raise ValueError(f'未知参数：{key}')
+    return options
+
+
+def format_role_profile(user, profile):
+    if not profile:
+        return f"{user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 无特殊身份"
+    perms = []
+    if profile.get('is_admin_player'):
+        perms.append('最高权限')
+    if profile.get('can_direct_friend'):
+        perms.append('直接加好友')
+    if profile.get('chat_exempt'):
+        perms.append('聊天无限制')
+    return (
+        f"{user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) "
+        f"类型={profile.get('role_type')} 称号={profile.get('special_role_label') or '-'} "
+        f"颜色={profile.get('special_role_color') or '-'} 排序={profile.get('special_role_sort')} "
+        f"权限={','.join(perms) if perms else '-'}"
+    )
 
 
 def make_admin_card_instance(card_id, options):
@@ -2922,6 +3011,74 @@ def execute_admin_command(line):
         sent = send_system_broadcast(msg)
         admin_event('admin', f'broadcast: {msg}')
         return {'success': True, 'output': f'已发送广播：{msg}'}
+    if cmd in ('role', 'userrole'):
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'role list|get|set|clear')}
+        sub = parts[1].lower()
+        if sub == 'list':
+            query = parts[2] if len(parts) > 2 else ''
+            rows = list_user_roles(query=query, limit=120)
+            if not rows:
+                return {'success': True, 'output': '暂无特殊身份。'}
+            lines = ['账号  ID  类型  称号  颜色  排序  权限']
+            for row in rows:
+                perms = []
+                if row.get('role_type') == 'admin':
+                    perms.append('最高权限')
+                if row.get('can_direct_friend'):
+                    perms.append('直接加好友')
+                if row.get('chat_exempt'):
+                    perms.append('聊天无限制')
+                lines.append(
+                    f"{row.get('username')}  {row.get('player_id') or '-'}  {row.get('role_type')}  "
+                    f"{row.get('title') or '-'}  {row.get('color') or '-'}  {row.get('sort_order')}  "
+                    f"{','.join(perms) if perms else '-'}"
+                )
+            return {'success': True, 'output': '\n'.join(lines)}
+        if sub == 'get':
+            if len(parts) < 3:
+                return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名>')}
+            user = find_user_for_admin(parts[2])
+            if not user:
+                return {'success': False, 'output': '账号不存在'}
+            profile = get_user_role_profile(user['id'])
+            return {'success': True, 'output': format_role_profile(user, profile)}
+        if sub == 'clear':
+            if len(parts) < 3:
+                return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名>')}
+            user, error = admin_clear_user_role(parts[2])
+            if error:
+                return {'success': False, 'output': error}
+            admin_event('admin', f"cleared role for account {user['username']}#{user['id']}")
+            return {'success': True, 'output': f"已清除 {user['username']} 的特殊身份。"}
+        if sub == 'set':
+            if len(parts) < 4:
+                return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> <admin|staff|contributor|sponsor> [title=称号] [color=bloom]')}
+            try:
+                options = parse_role_options(parts[4:])
+            except ValueError as exc:
+                return {'success': False, 'output': str(exc)}
+            user, profile, error = admin_set_user_role(
+                parts[2],
+                parts[3],
+                title=options.get('title', ''),
+                color=options.get('color', ''),
+                sort_order=options.get('sort_order'),
+                role_key=options.get('role_key', ''),
+                can_direct_friend=options.get('can_direct_friend'),
+                chat_exempt=options.get('chat_exempt'),
+            )
+            if error:
+                return {'success': False, 'output': error}
+            admin_event('admin', f"set role for account {user['username']}#{user['id']} -> {profile.get('role_type') if profile else 'none'}")
+            output = format_role_profile(user, profile)
+            with _lock:
+                for psid, player in players.items():
+                    if player.get('user_id') == user['id']:
+                        player.update(special_public_fields(profile or {}))
+                broadcast_lobby()
+            return {'success': True, 'output': output}
+        return {'success': False, 'output': command_error(raw, len(raw), 'role list|get|set|clear')}
     if cmd in ('userpass', 'passwd', 'setpass'):
         if len(parts) < 3:
             return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> <新密码>')}
@@ -3111,6 +3268,26 @@ def admin_completions(line):
         return [v for v in values if v.lower().startswith(token.lower())][:30]
     if cmd in ('delcard', 'remcard', 'rmcard', 'deletecard') and position >= 5:
         values = ['all', 'count=']
+        return [v for v in values if v.lower().startswith(token.lower())]
+    if cmd in ('role', 'userrole') and position == 1:
+        values = ['list', 'get', 'set', 'clear']
+        return [v for v in values if v.startswith(token.lower())]
+    if cmd in ('role', 'userrole') and position == 2 and len(parts) > 1 and parts[1].lower() in ('get', 'set', 'clear'):
+        try:
+            rows = list_admin_users(query=token, sort='username', order='asc', limit=30).get('users', [])
+            values = []
+            for user in rows:
+                values.append(user.get('player_id', ''))
+                values.append(str(user.get('id')))
+                values.append(user.get('username', ''))
+            return [v for v in values if v and v.lower().startswith(token.lower())][:30]
+        except Exception:
+            return []
+    if cmd in ('role', 'userrole') and position == 3 and len(parts) > 1 and parts[1].lower() == 'set':
+        values = ['staff', 'contributor', 'sponsor']
+        return [v for v in values if v.startswith(token.lower())]
+    if cmd in ('role', 'userrole') and position >= 4 and len(parts) > 1 and parts[1].lower() == 'set':
+        values = ['title=', 'color=bloom', 'color=guard', 'sort=', 'key=', 'direct=', 'chat=']
         return [v for v in values if v.lower().startswith(token.lower())]
     if cmd in ('userpass', 'passwd', 'setpass', 'banuser', 'banaccount', 'unbanuser', 'unbanaccount') and position == 1:
         try:

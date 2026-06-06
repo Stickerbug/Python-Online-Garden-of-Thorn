@@ -21,6 +21,69 @@ _PLAYER_ID_BLACKLIST_CACHE = None
 FRIEND_REQUEST_TTL_DAYS = 30
 REMEMBER_TOKEN_DAYS = 60
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
+ROLE_TYPES = {'admin', 'staff', 'contributor', 'sponsor', 'none'}
+ROLE_COLOR_TOKENS = {'admin', 'bloom', 'guard', 'thorn', 'root', 'neutral'}
+ROLE_DEFAULTS = {
+    'admin': {
+        'role_key': 'admin',
+        'title': '管理员',
+        'color': 'admin',
+        'sort_order': 0,
+        'can_direct_friend': True,
+        'chat_exempt': True,
+    },
+    'staff': {
+        'role_key': 'staff',
+        'title': '技术人员',
+        'color': 'bloom',
+        'sort_order': 1,
+        'can_direct_friend': True,
+        'chat_exempt': True,
+    },
+    'contributor': {
+        'role_key': 'contributor',
+        'title': '贡献者',
+        'color': 'guard',
+        'sort_order': 2,
+        'can_direct_friend': False,
+        'chat_exempt': False,
+    },
+    'sponsor': {
+        'role_key': 'sponsor',
+        'title': '赞助者',
+        'color': 'bloom',
+        'sort_order': 3,
+        'can_direct_friend': False,
+        'chat_exempt': False,
+    },
+}
+BUILTIN_USER_ROLES = {
+    'stickerbug': {
+        **ROLE_DEFAULTS['admin'],
+        'role_type': 'admin',
+        'role_key': 'admin',
+        'title': '管理员',
+    },
+    'netherdog': {
+        **ROLE_DEFAULTS['staff'],
+        'role_type': 'staff',
+        'role_key': 'chief_designer',
+        'title': '总设计师',
+    },
+    'eric': {
+        **ROLE_DEFAULTS['staff'],
+        'role_type': 'staff',
+        'role_key': 'chief_designer',
+        'title': '总设计师',
+    },
+    'winniepooh': {
+        **ROLE_DEFAULTS['contributor'],
+        'role_type': 'contributor',
+        'role_key': 'right_angle_person',
+        'title': '直角人',
+        'color': 'guard',
+    },
+}
 
 
 def utc_now():
@@ -125,6 +188,68 @@ def _assign_missing_player_ids(conn):
         conn.execute('UPDATE users SET player_id = ? WHERE id = ?', (player_id, row['id']))
 
 
+def _role_defaults(role_type):
+    normalized = str(role_type or '').strip().lower()
+    return dict(ROLE_DEFAULTS.get(normalized) or ROLE_DEFAULTS['contributor'])
+
+
+def _normalize_role_color(value, fallback='neutral'):
+    text = str(value or '').strip().lower()
+    if text in ROLE_COLOR_TOKENS:
+        return text
+    if re.fullmatch(r'#[0-9a-fA-F]{6}', text):
+        return text
+    return fallback
+
+
+def _normalize_role_type(value):
+    text = str(value or '').strip().lower()
+    return text if text in ROLE_TYPES else ''
+
+
+def _builtin_role_for_username(username):
+    return BUILTIN_USER_ROLES.get(normalize_username_key(username))
+
+
+def _ensure_builtin_role_for_row(conn, row):
+    if row is None:
+        return
+    builtin = _builtin_role_for_username(row['username'])
+    if not builtin:
+        return
+    existing = conn.execute('SELECT user_id FROM user_roles WHERE user_id = ?', (row['id'],)).fetchone()
+    if existing is not None:
+        return
+    now = utc_now()
+    conn.execute(
+        '''
+        INSERT INTO user_roles (
+            user_id, role_type, role_key, title, color, sort_order,
+            can_direct_friend, chat_exempt, visible, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        ''',
+        (
+            row['id'],
+            builtin.get('role_type'),
+            builtin.get('role_key'),
+            builtin.get('title'),
+            builtin.get('color'),
+            int(builtin.get('sort_order', 99)),
+            1 if builtin.get('can_direct_friend') else 0,
+            1 if builtin.get('chat_exempt') else 0,
+            now,
+            now,
+        ),
+    )
+
+
+def _seed_builtin_user_roles(conn):
+    rows = conn.execute('SELECT * FROM users').fetchall()
+    for row in rows:
+        _ensure_builtin_role_for_row(conn, row)
+
+
 def init_db():
     parent = os.path.dirname(os.path.abspath(DB_PATH))
     if parent:
@@ -164,6 +289,26 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN searchable_by_player_id INTEGER DEFAULT 1')
         _assign_missing_player_ids(conn)
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS user_roles (
+                user_id INTEGER PRIMARY KEY,
+                role_type TEXT NOT NULL,
+                role_key TEXT,
+                title TEXT,
+                color TEXT,
+                sort_order INTEGER DEFAULT 99,
+                can_direct_friend INTEGER DEFAULT 0,
+                chat_exempt INTEGER DEFAULT 0,
+                visible INTEGER DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_user_roles_type_sort ON user_roles(role_type, sort_order)')
+        _seed_builtin_user_roles(conn)
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS remember_tokens (
@@ -438,6 +583,8 @@ def create_user(username, password):
                 ''',
                 (name, normalize_username_key(name), password_hash, now, player_id),
             )
+            row = conn.execute('SELECT * FROM users WHERE id = ?', (cur.lastrowid,)).fetchone()
+            _ensure_builtin_role_for_row(conn, row)
             conn.commit()
             row = conn.execute('SELECT * FROM users WHERE id = ?', (cur.lastrowid,)).fetchone()
             return row_to_user(row), None
@@ -546,6 +693,198 @@ def admin_set_user_ban(identifier, banned=True, reason=''):
         conn.commit()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
         return row_to_user(row), None
+
+
+def _role_row_to_profile(user_row, role_row):
+    if user_row is None or role_row is None:
+        return None
+    role_type = str(role_row['role_type'] or '').strip().lower()
+    if role_type == 'none' or not bool(role_row['visible']):
+        return None
+    defaults = _role_defaults(role_type)
+    role_key = str(role_row['role_key'] or defaults.get('role_key') or role_type).strip()
+    title = str(role_row['title'] or defaults.get('title') or '').strip()
+    color = _normalize_role_color(role_row['color'], defaults.get('color') or 'neutral')
+    is_admin = role_type == 'admin'
+    return {
+        'user_id': user_row['id'],
+        'display_name': user_row['username'],
+        'role_type': role_type,
+        'special_role': role_key or role_type,
+        'special_role_label': title,
+        'special_role_color': color,
+        'special_role_sort': int(role_row['sort_order'] if role_row['sort_order'] is not None else defaults.get('sort_order', 99)),
+        'is_admin_player': is_admin,
+        'can_direct_friend': bool(role_row['can_direct_friend']),
+        'chat_exempt': bool(role_row['chat_exempt']),
+    }
+
+
+def get_user_role_profile(identifier):
+    token = str(identifier or '').strip()
+    if not token:
+        return None
+    with get_db_connection() as conn:
+        user_row = None
+        if isinstance(identifier, int) or token.isdigit():
+            user_row = conn.execute('SELECT * FROM users WHERE id = ?', (int(token),)).fetchone()
+        if user_row is None:
+            user_row = _find_user_row_by_username_key(conn, token)
+        if user_row is None:
+            return None
+        _ensure_builtin_role_for_row(conn, user_row)
+        conn.commit()
+        role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user_row['id'],)).fetchone()
+        return _role_row_to_profile(user_row, role_row)
+
+
+def user_role_can_direct_friend(user_row_or_id):
+    with get_db_connection() as conn:
+        if isinstance(user_row_or_id, sqlite3.Row):
+            user_row = user_row_or_id
+        else:
+            try:
+                uid = int(user_row_or_id)
+            except (TypeError, ValueError):
+                return False
+            user_row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if user_row is None:
+            return False
+        _ensure_builtin_role_for_row(conn, user_row)
+        conn.commit()
+        role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user_row['id'],)).fetchone()
+        profile = _role_row_to_profile(user_row, role_row)
+        return bool(profile and profile.get('can_direct_friend'))
+
+
+def list_user_roles(query='', limit=100):
+    try:
+        safe_limit = max(1, min(int(limit), 300))
+    except (TypeError, ValueError):
+        safe_limit = 100
+    name = sanitize_username(query)
+    where = 'WHERE r.role_type <> ?'
+    params = ['none']
+    if name:
+        where += ' AND (u.username_lower LIKE ? OR u.player_id LIKE ? OR r.role_type LIKE ? OR r.title LIKE ?)'
+        params.extend([f'%{name.lower()}%', f'%{str(query or "").strip().upper()}%', f'%{name.lower()}%', f'%{name}%'])
+    with get_db_connection() as conn:
+        _seed_builtin_user_roles(conn)
+        conn.commit()
+        rows = conn.execute(
+            f'''
+            SELECT u.*, r.role_type, r.role_key, r.title, r.color, r.sort_order,
+                   r.can_direct_friend, r.chat_exempt, r.visible
+            FROM user_roles r
+            JOIN users u ON u.id = r.user_id
+            {where}
+            ORDER BY r.sort_order ASC, u.username_lower ASC
+            LIMIT ?
+            ''',
+            params + [safe_limit],
+        ).fetchall()
+        result = []
+        for row in rows:
+            if not bool(row['visible']):
+                continue
+            result.append({
+                'user_id': row['id'],
+                'username': row['username'],
+                'player_id': row['player_id'],
+                'role_type': row['role_type'],
+                'role_key': row['role_key'],
+                'title': row['title'],
+                'color': row['color'],
+                'sort_order': row['sort_order'],
+                'can_direct_friend': bool(row['can_direct_friend']),
+                'chat_exempt': bool(row['chat_exempt']),
+            })
+        return result
+
+
+def admin_set_user_role(identifier, role_type, title='', color='', sort_order=None, role_key='', can_direct_friend=None, chat_exempt=None, visible=True):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, None, '账号不存在'
+    normalized_type = _normalize_role_type(role_type)
+    if not normalized_type:
+        return None, None, '身份类型必须是 admin/staff/contributor/sponsor/none'
+    user_key = normalize_username_key(user['username'])
+    if normalized_type == 'admin' and user_key != 'stickerbug':
+        return None, None, '管理员身份只能授予 Stickerbug'
+    if user_key == 'stickerbug' and normalized_type != 'admin':
+        return None, None, 'Stickerbug 必须保持管理员身份'
+    defaults = _role_defaults(normalized_type)
+    title_text = str(title or defaults.get('title') or '').strip()[:32]
+    role_key_text = str(role_key or defaults.get('role_key') or normalized_type).strip()[:40]
+    color_text = _normalize_role_color(color, defaults.get('color') or 'neutral')
+    if sort_order is None:
+        order_value = int(defaults.get('sort_order', 99))
+    else:
+        try:
+            order_value = max(0, min(int(sort_order), 99))
+        except (TypeError, ValueError):
+            return None, None, 'sort 必须是 0-99 的整数'
+    direct = defaults.get('can_direct_friend') if can_direct_friend is None else bool(can_direct_friend)
+    chat = defaults.get('chat_exempt') if chat_exempt is None else bool(chat_exempt)
+    if normalized_type == 'admin':
+        direct = True
+        chat = True
+        order_value = 0
+    if normalized_type == 'staff':
+        direct = True
+        chat = True
+        order_value = min(order_value, 1)
+    now = utc_now()
+    with get_db_connection() as conn:
+        conn.execute(
+            '''
+            INSERT INTO user_roles (
+                user_id, role_type, role_key, title, color, sort_order,
+                can_direct_friend, chat_exempt, visible, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                role_type = excluded.role_type,
+                role_key = excluded.role_key,
+                title = excluded.title,
+                color = excluded.color,
+                sort_order = excluded.sort_order,
+                can_direct_friend = excluded.can_direct_friend,
+                chat_exempt = excluded.chat_exempt,
+                visible = excluded.visible,
+                updated_at = excluded.updated_at
+            ''',
+            (
+                user['id'],
+                normalized_type,
+                role_key_text,
+                title_text,
+                color_text,
+                order_value,
+                1 if direct else 0,
+                1 if chat else 0,
+                1 if visible and normalized_type != 'none' else 0,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
+        role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user['id'],)).fetchone()
+        return row_to_user(user_row), _role_row_to_profile(user_row, role_row), None
+
+
+def admin_clear_user_role(identifier):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, '账号不存在'
+    if normalize_username_key(user['username']) == 'stickerbug':
+        return None, '不能清除 Stickerbug 的管理员身份'
+    _, _, error = admin_set_user_role(user['id'], 'none', title='', color='neutral', sort_order=99, role_key='none', can_direct_friend=False, chat_exempt=False, visible=False)
+    if error:
+        return None, error
+    return user, None
 
 
 def get_user_by_id(user_id):
@@ -875,6 +1214,7 @@ def _public_social_user(row):
         'losses': user.get('losses') or 0,
         'draws': user.get('draws') or 0,
         'win_rate': user.get('win_rate') or 0.0,
+        'role': get_user_role_profile(user['id']),
     }
 
 
@@ -907,9 +1247,15 @@ def _friend_request_expires_at():
     return utc_iso(utc_now_dt() + timedelta(days=FRIEND_REQUEST_TTL_DAYS))
 
 
-def _is_auto_friend_requester(row):
-    name = row['username'] if row is not None and 'username' in row.keys() else ''
-    return normalize_username_key(name) in AUTO_FRIEND_REQUESTER_NAMES
+def _is_auto_friend_requester(row, conn=None):
+    if row is None:
+        return False
+    if conn is not None:
+        _ensure_builtin_role_for_row(conn, row)
+        role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (row['id'],)).fetchone()
+        profile = _role_row_to_profile(row, role_row)
+        return bool(profile and profile.get('can_direct_friend'))
+    return user_role_can_direct_friend(row)
 
 
 def _mark_friend_notifications_read(conn, user_id):
@@ -1087,7 +1433,7 @@ def add_friend_request(user_id, identifier):
             return None, '账号不存在'
         if int(target['id']) == uid:
             return None, '不能添加自己为好友'
-        auto_add = _is_auto_friend_requester(requester)
+        auto_add = _is_auto_friend_requester(requester, conn)
         if not auto_add and not bool(target['accept_friend_requests']):
             return None, '对方暂不接受好友请求'
         existing = conn.execute(

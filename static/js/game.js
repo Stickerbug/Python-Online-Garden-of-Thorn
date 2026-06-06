@@ -1637,7 +1637,8 @@ function getSpecialRolePrefix(player) {
     if (isAdminPlayer(player)) return UI.admin_prefix;
     if (player.special_role === 'chief_designer') return UI.chief_designer_prefix;
     if (player.special_role === 'right_angle_person') return UI.right_angle_person_prefix;
-    return player.special_role_label || '';
+    if (player.special_role_label) return player.special_role_label;
+    return '';
 }
 
 function getSpecialRoleColor(player) {
@@ -6301,6 +6302,9 @@ function specialPublicReplayFields(player) {
     return {
         special_role: player.special_role || '',
         special_role_color: player.special_role_color || '',
+        special_role_label: player.special_role_label || '',
+        special_role_sort: player.special_role_sort ?? 99,
+        role_type: player.role_type || '',
         display_name: player.display_name || player.name || '',
         is_admin_player: !!player.is_admin_player,
     };
