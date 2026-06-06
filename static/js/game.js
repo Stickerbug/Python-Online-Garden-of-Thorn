@@ -4781,14 +4781,23 @@ function cardHasEffectiveFlagForPrediction(cardDict, cardDef, flag) {
 
 function countActiveCorruptionEquipment() {
     if (!gameState) return 0;
-    const players = [gameState.you, gameState.teammate, gameState.opponent, gameState.opponent2]
-        .filter(Boolean);
-    if (Array.isArray(gameState.spectate_players)) players.push(...gameState.spectate_players);
+    const players = Array.isArray(gameState.spectate_players) && gameState.spectate_players.length
+        ? gameState.spectate_players
+        : [gameState.you, gameState.teammate, gameState.opponent, gameState.opponent2].filter(Boolean);
+    const seenEquipment = new Set();
     let count = 0;
-    players.forEach(player => {
+    players.forEach((player, playerIndex) => {
+        const ownerId = normalizePlayerId(player && player.player_id);
         (Array.isArray(player && player.equipment) ? player.equipment : []).forEach(eq => {
             const card = eq && (eq.card_instance || eq.card || eq);
-            if (card && card.def_id === 'Corruption' && eq.corruption_active) count += 1;
+            if (!card || card.def_id !== 'Corruption' || !eq.corruption_active) return;
+            const instanceId = eq.instance_id ?? eq.equipment_instance_id ?? card.instance_id ?? card.instanceId;
+            const key = instanceId != null && instanceId !== ''
+                ? `eq:${instanceId}`
+                : `owner:${ownerId != null ? ownerId : playerIndex}:slot:${(player.equipment || []).indexOf(eq)}`;
+            if (seenEquipment.has(key)) return;
+            seenEquipment.add(key);
+            count += 1;
         });
     });
     return count;
@@ -10201,6 +10210,11 @@ function areSequentialGameStates(previous, next) {
     if (!previous.phase || !next.phase) return false;
     if ((previous.mode || '') !== (next.mode || '')) return false;
     if (!!previous.solo !== !!next.solo) return false;
+    if (!!previous.spectating !== !!next.spectating) return false;
+    if (previous.spectating && next.spectating) {
+        if (Number(previous.room_id) !== Number(next.room_id)) return false;
+        if (normalizePlayerId(previous.spectate_perspective) !== normalizePlayerId(next.spectate_perspective)) return false;
+    }
     if (normalizePlayerId(previous.your_id) !== normalizePlayerId(next.your_id)) return false;
     const prevTotal = Number(previous.log_total);
     const nextTotal = Number(next.log_total);

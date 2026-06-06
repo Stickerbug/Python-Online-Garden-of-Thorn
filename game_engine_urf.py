@@ -442,6 +442,11 @@ class GameEngineInfiniteFire(GameEngine):
         eq = ps.remove_equipment(equipment_instance_id)
         if not eq:
             return {'success': False, 'error': '装备不存在'}
+        if eq.def_id == 'Disc':
+            effect_target = int(getattr(eq, 'effect_target', getattr(eq, 'owner', player_id)))
+            if not (0 <= effect_target < len(self.players)):
+                effect_target = player_id
+            self.players[effect_target].armor = max(0, self.players[effect_target].armor - 2)
         refund_e = (eq.card_def.cost_e + 1) // 2
         refund_m = (eq.card_def.cost_m + 1) // 2
         ps.gain_elixir(refund_e)
