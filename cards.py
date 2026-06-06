@@ -315,6 +315,11 @@ _reg(CardDef('MagicBubble', 'Magic Bubble', '魔法泡泡', 0, 4, 'guard', 3, 'C
 
 DRAFT_RATIO = {'thorn': 6, 'bloom': 4, 'root': 3, 'guard': 2}
 DRAFT_REROLLS = 3
+FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS = {
+    # Keep Sewage at the current official-card-pool ratio: 10 / 229.
+    # The weight is adjusted when extra mod cards enter the draft pool.
+    'Sewage': (10, 229),
+}
 HAND_LIMIT = 7
 DRAW_PER_TURN = 3
 ELIXIR_RECOVERY = 5
@@ -331,15 +336,45 @@ INITIAL_HAND_SIZE = 5
 FIRST_PLAYER_HAND_SIZE = 4
 
 
-def build_draft_pool(allowed_def_ids: Optional[Set[str]] = None) -> List[CardInstance]:
-    pool = []
+def _effective_draft_weights(allowed_def_ids: Optional[Set[str]] = None) -> Dict[str, float]:
+    allowed = {}
     for def_id, card_def in CARD_DEFS.items():
         if def_id == 'Yggdrasil':
             continue
         if allowed_def_ids is not None and def_id not in allowed_def_ids:
             continue
-        for _ in range(card_def.count):
-            pool.append(CardInstance(def_id=def_id))
+        count = max(0, int(getattr(card_def, 'count', 0) or 0))
+        if count <= 0:
+            continue
+        allowed[def_id] = float(count)
+
+    fixed_ids = [def_id for def_id in FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS if def_id in allowed]
+    if not fixed_ids:
+        return allowed
+
+    fixed_ratio_sum = 0.0
+    for def_id in fixed_ids:
+        numerator, denominator = FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS[def_id]
+        if denominator:
+            fixed_ratio_sum += max(0.0, float(numerator) / float(denominator))
+    other_total = sum(weight for def_id, weight in allowed.items() if def_id not in fixed_ids)
+    if other_total <= 0 or fixed_ratio_sum <= 0 or fixed_ratio_sum >= 1:
+        return allowed
+
+    for def_id in fixed_ids:
+        numerator, denominator = FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS[def_id]
+        target_ratio = max(0.0, float(numerator) / float(denominator)) if denominator else 0.0
+        if target_ratio > 0:
+            allowed[def_id] = target_ratio * other_total / (1.0 - fixed_ratio_sum)
+    return allowed
+
+
+def build_draft_pool(allowed_def_ids: Optional[Set[str]] = None) -> List[CardInstance]:
+    pool = []
+    for def_id, weight in _effective_draft_weights(allowed_def_ids).items():
+        card = CardInstance(def_id=def_id)
+        card.draft_weight = weight
+        pool.append(card)
     return pool
 
 
@@ -352,7 +387,7 @@ def generate_draft_options(pool: List[CardInstance], card_type: str, count: int 
             if card.def_id not in first_by_id:
                 first_by_id[card.def_id] = card
                 weights[card.def_id] = 0
-            weights[card.def_id] += 1
+            weights[card.def_id] += max(0.0, float(getattr(card, 'draft_weight', 1.0) or 0.0))
         ids = list(first_by_id.keys())
         picked = []
         while ids and len(picked) < sample_count:
