@@ -7,7 +7,7 @@
 <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=172">
+<link rel="stylesheet" href="/static/css/style.css?v=173">
 <script>
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
@@ -561,6 +561,12 @@
 <button id="btn-community-upload" type="button" class="btn btn-primary">上传模组</button>
 <button id="btn-community-refresh" type="button" class="btn btn-secondary">??</button>
 </div>
+<div id="community-upload-progress" class="community-upload-progress hidden" aria-live="polite">
+<div class="community-upload-progress-track">
+<div id="community-upload-progress-fill" class="community-upload-progress-fill"></div>
+</div>
+<div id="community-upload-progress-text" class="community-upload-progress-text"></div>
+</div>
 <p id="settings-community-status" class="info-text"></p>
 </div>
 </div>
@@ -736,6 +742,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-<script src="/static/js/game.js?v=188"></script>
+<script src="/static/js/game.js?v=189"></script>
 </body>
 </html>

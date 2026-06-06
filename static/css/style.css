@@ -2181,6 +2181,44 @@ body {
   margin: 8px 0 4px;
 }
 
+.community-upload-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 4px;
+}
+
+.community-upload-progress.hidden {
+  display: none;
+}
+
+.community-upload-progress-track {
+  height: 7px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .community-upload-progress-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.community-upload-progress-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--bloom);
+  transition: width 0.12s ease;
+}
+
+.community-upload-progress-text {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
 .settings-community-card {
   display: grid;
   grid-template-columns: auto auto 1fr;

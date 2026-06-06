@@ -1035,6 +1035,12 @@ Object.assign(I18N.fr, { community_upload: 'Téléverser', community_json_only: 
 Object.assign(I18N.pt, { community_upload: 'Enviar mod', community_json_only: 'Somente arquivos .json ou .gtnmod são permitidos', community_file_too_large: 'Arquivo grande demais. JSON 150KB, GTNMOD 1MB', community_json_parse_failed: 'Falha ao ler JSON: {0}', community_upload_url_failed: 'Não foi possível criar URL de envio', community_r2_upload_failed: 'Falha no R2: HTTP {0}', community_register_failed: 'Falha ao registrar', community_delete_failed: 'Falha ao excluir' });
 Object.assign(I18N.ru, { community_upload: 'Загрузить мод', community_json_only: 'Разрешены только .json или .gtnmod', community_file_too_large: 'Файл слишком большой. JSON 300 КБ, GTNMOD 5 МБ', community_json_parse_failed: 'Ошибка разбора JSON: {0}', community_upload_url_failed: 'Не удалось создать URL загрузки', community_r2_upload_failed: 'Ошибка R2: HTTP {0}', community_register_failed: 'Ошибка регистрации', community_delete_failed: 'Ошибка удаления' });
 Object.assign(I18N.ja, { community_upload: 'Modをアップロード', community_json_only: '.json または .gtnmod のみアップロードできます', community_file_too_large: 'ファイルが大きすぎます。JSON 最大150KB、GTNMOD 最大1MB', community_json_parse_failed: 'JSON 解析失敗：{0}', community_upload_url_failed: 'アップロードURLを作成できません', community_r2_upload_failed: 'R2 アップロード失敗 HTTP {0}', community_register_failed: '登録失敗', community_delete_failed: '削除失敗' });
+Object.assign(I18N.en, { community_upload_progress: '{0}/{1} · {2}/s · ETA {3}', community_upload_registering: 'Registering and validating...' });
+Object.assign(I18N.zh, { community_upload_progress: '{0}/{1} · {2}/秒 · 预计剩余 {3}', community_upload_registering: '正在登记并校验...' });
+Object.assign(I18N.fr, { community_upload_progress: '{0}/{1} · {2}/s · reste {3}', community_upload_registering: 'Enregistrement et validation...' });
+Object.assign(I18N.pt, { community_upload_progress: '{0}/{1} · {2}/s · restante {3}', community_upload_registering: 'Registrando e validando...' });
+Object.assign(I18N.ru, { community_upload_progress: '{0}/{1} · {2}/с · осталось {3}', community_upload_registering: 'Регистрация и проверка...' });
+Object.assign(I18N.ja, { community_upload_progress: '{0}/{1} · {2}/秒 · 残り {3}', community_upload_registering: '登録と検証中...' });
 Object.assign(I18N.en, { mod_validation_error: 'Format error' });
 Object.assign(I18N.zh, { mod_validation_error: '格式错误' });
 Object.assign(I18N.fr, { mod_validation_error: 'Erreur de format' });
@@ -12690,6 +12696,7 @@ const VANILLA_MOD_FILENAME = 'VanillaCards.gtnmod';
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 const COMMUNITY_JSON_MAX_BYTES = 150 * 1024;
 const COMMUNITY_GTNMOD_MAX_BYTES = 1024 * 1024;
+let communityUploadInProgress = false;
 
 function getCommunityModSelection() {
     let mods = [];
@@ -13034,10 +13041,89 @@ function renderCommunityCurrent() {
     if (disableBtn) disableBtn.disabled = false;
 }
 
+function formatCommunityUploadBytes(bytes) {
+    const value = Math.max(0, Number(bytes) || 0);
+    if (value < 1024) return `${Math.round(value)} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(value < 100 * 1024 ? 1 : 0)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function formatCommunityUploadDuration(seconds) {
+    const value = Number(seconds);
+    if (!Number.isFinite(value) || value < 0) return '--';
+    if (value < 1) return '<1s';
+    if (value < 60) return `${Math.ceil(value)}s`;
+    const minutes = Math.floor(value / 60);
+    const rest = Math.ceil(value % 60);
+    return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
+}
+
+function setCommunityUploadProgress(loaded, total, text) {
+    const box = $('community-upload-progress');
+    const fill = $('community-upload-progress-fill');
+    const textEl = $('community-upload-progress-text');
+    if (!box) return;
+    box.classList.remove('hidden');
+    const safeTotal = Math.max(0, Number(total) || 0);
+    const safeLoaded = Math.max(0, Number(loaded) || 0);
+    const percent = safeTotal > 0 ? Math.max(0, Math.min(100, (safeLoaded / safeTotal) * 100)) : 0;
+    if (fill) fill.style.width = `${percent}%`;
+    if (textEl) textEl.textContent = text || '';
+}
+
+function hideCommunityUploadProgress() {
+    const box = $('community-upload-progress');
+    const fill = $('community-upload-progress-fill');
+    const textEl = $('community-upload-progress-text');
+    if (fill) fill.style.width = '0%';
+    if (textEl) textEl.textContent = '';
+    if (box) box.classList.add('hidden');
+}
+
+function buildCommunityUploadProgressText(loaded, total, startedAt) {
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const elapsed = Math.max(0.1, (now - startedAt) / 1000);
+    const safeTotal = Math.max(Number(total) || 0, Number(loaded) || 0);
+    const safeLoaded = Math.max(0, Number(loaded) || 0);
+    const speed = safeLoaded / elapsed;
+    const eta = speed > 0 && safeTotal > safeLoaded
+        ? (safeTotal - safeLoaded) / speed
+        : (safeTotal > safeLoaded ? NaN : 0);
+    return tf(
+        'community_upload_progress',
+        formatCommunityUploadBytes(safeLoaded),
+        formatCommunityUploadBytes(safeTotal),
+        formatCommunityUploadBytes(speed),
+        formatCommunityUploadDuration(eta)
+    );
+}
+
+function uploadCommunityFileToR2(url, file, contentType, onProgress) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url, true);
+        xhr.setRequestHeader('Content-Type', contentType);
+        xhr.upload.onprogress = event => {
+            const total = event.lengthComputable ? event.total : (file?.size || event.loaded || 0);
+            onProgress?.(event.loaded || 0, total);
+        };
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(xhr);
+            } else {
+                reject(new Error(tf('community_r2_upload_failed', xhr.status || 0)));
+            }
+        };
+        xhr.onerror = () => reject(new Error(tf('community_r2_upload_failed', xhr.status || 0)));
+        xhr.onabort = () => reject(new Error(tf('community_r2_upload_failed', xhr.status || 0)));
+        xhr.send(file);
+    });
+}
+
 function updateCommunityUploadState() {
     const btn = $('btn-community-upload');
     if (!btn) return;
-    btn.disabled = !currentAccount;
+    btn.disabled = !currentAccount || communityUploadInProgress;
     btn.title = currentAccount ? '' : (UI.community_upload_hint || '');
 }
 
@@ -13055,11 +13141,16 @@ function validateCommunityUploadFile(file) {
 async function uploadCommunityModFile(file) {
     const statusEl = $('settings-community-status');
     const setStatus = text => { if (statusEl) statusEl.textContent = text || ''; };
+    if (communityUploadInProgress) return;
     if (!currentAccount) {
+        hideCommunityUploadProgress();
         setStatus(UI.account_need_login || UI.community_upload_hint || '');
         return;
     }
+    communityUploadInProgress = true;
+    updateCommunityUploadState();
     try {
+        hideCommunityUploadProgress();
         validateCommunityUploadFile(file);
         const lowerName = String(file.name || '').toLowerCase();
         if (lowerName.endsWith('.json')) {
@@ -13069,7 +13160,10 @@ async function uploadCommunityModFile(file) {
                 throw new Error(tf('community_json_parse_failed', e.message || String(e)));
             }
         }
+        const uploadTotal = file.size || 0;
+        const uploadStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         setStatus(UI.community_uploading);
+        setCommunityUploadProgress(0, uploadTotal, buildCommunityUploadProgressText(0, uploadTotal, uploadStartedAt));
         const urlResp = await fetch('/api/community-mods/upload-url', {
             method: 'POST',
             credentials: 'same-origin',
@@ -13078,12 +13172,12 @@ async function uploadCommunityModFile(file) {
         });
         const urlData = await urlResp.json().catch(() => ({}));
         if (!urlResp.ok || !urlData.success) throw new Error(urlData.error || UI.community_upload_url_failed);
-        const putResp = await fetch(urlData.put_url, {
-            method: 'PUT',
-            headers: { 'Content-Type': urlData.content_type || (lowerName.endsWith('.gtnmod') ? 'application/zip' : 'application/json') },
-            body: file,
+        const contentType = urlData.content_type || (lowerName.endsWith('.gtnmod') ? 'application/zip' : 'application/json');
+        await uploadCommunityFileToR2(urlData.put_url, file, contentType, (loaded, total) => {
+            const safeTotal = total || uploadTotal || loaded;
+            setCommunityUploadProgress(loaded, safeTotal, buildCommunityUploadProgressText(loaded, safeTotal, uploadStartedAt));
         });
-        if (!putResp.ok) throw new Error(tf('community_r2_upload_failed', putResp.status));
+        setCommunityUploadProgress(uploadTotal, uploadTotal, UI.community_upload_registering);
         const registerResp = await fetch('/api/community-mods/register', {
             method: 'POST',
             credentials: 'same-origin',
@@ -13097,9 +13191,13 @@ async function uploadCommunityModFile(file) {
         }
         const mod = registerData.mod || {};
         setStatus(tf('community_upload_success', mod.name || file.name));
+        setCommunityUploadProgress(uploadTotal, uploadTotal, tf('community_upload_success', mod.name || file.name));
         await loadSettingsCommunityMods();
     } catch (e) {
         setStatus(e.message || String(e));
+    } finally {
+        communityUploadInProgress = false;
+        updateCommunityUploadState();
     }
 }
 
