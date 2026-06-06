@@ -6981,13 +6981,21 @@ function friendStatsLine(user) {
     return `${tf('win_rate', Number(user.win_rate || 0).toFixed(1))} · ${accountStatsText(user)}`;
 }
 
+function friendMatchResultText(result) {
+    const key = String(result || '').toLowerCase();
+    if (key === 'win') return UI.victory || 'Win';
+    if (key === 'loss' || key === 'lose') return UI.defeat || 'Loss';
+    if (key === 'draw') return UI.draw || 'Draw';
+    return result || '';
+}
+
 function friendCardHtml(item, type) {
     const user = item?.user || {};
     const matches = Array.isArray(item?.matches) ? item.matches : [];
     const isNotice = item?.notice_type === 'auto_add' || item?.status === 'notice';
     const showPrivateInfo = type === 'friend';
     const matchText = matches.length
-        ? matches.slice(0, 3).map(match => escapeHtml(`${match.mode || '-'} ${match.result || ''} ${friendDateText(match.ended_at || match.started_at)}`)).join('<br>')
+        ? matches.slice(0, 3).map(match => escapeHtml(`${match.mode || '-'} ${friendMatchResultText(match.result)} ${friendDateText(match.ended_at || match.started_at)}`)).join('<br>')
         : escapeHtml(`${UI.recent_matches}: -`);
     let actions = '';
     if (type === 'incoming' && !isNotice) {

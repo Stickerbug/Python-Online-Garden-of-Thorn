@@ -1141,17 +1141,71 @@ def list_admin_users(query='', sort='last_login_at', order='desc', limit=100, of
     }
 
 
-def _row_to_match_summary(row):
+def _safe_json_loads(value, fallback):
+    try:
+        return json.loads(value or '')
+    except Exception:
+        return fallback
+
+
+def _match_winner_keys(row, player_names, summary):
+    winner_keys = set()
+    winner_name = str(row['winner_name'] or '').strip()
+    if winner_name and normalize_username_key(winner_name) not in {'draw', '平局'}:
+        if not re.search(r'\s*/\s*|\s*,\s*', winner_name):
+            winner_keys.add(normalize_username_key(winner_name))
+        for part in re.split(r'\s*/\s*|\s*,\s*', winner_name):
+            part_key = normalize_username_key(part)
+            if part_key and part_key not in {'draw', '平局'}:
+                winner_keys.add(part_key)
+    try:
+        winner_index = int(row['winner_index']) if row['winner_index'] is not None else None
+    except (TypeError, ValueError):
+        winner_index = None
+    mode = str(row['mode'] or summary.get('mode') or '').lower()
+    if winner_index is not None and winner_index >= 0:
+        if mode == '2v2':
+            for idx in ({0: [0, 1], 1: [2, 3]}.get(winner_index, [])):
+                if 0 <= idx < len(player_names):
+                    key = normalize_username_key(player_names[idx])
+                    if key:
+                        winner_keys.add(key)
+        elif 0 <= winner_index < len(player_names):
+            key = normalize_username_key(player_names[winner_index])
+            if key:
+                winner_keys.add(key)
+    return winner_keys
+
+
+def _match_result_for_username(row, username, player_names, summary):
+    raw_result = str(row['result'] or '').strip()
+    lower_result = raw_result.lower()
+    winner_name_key = normalize_username_key(row['winner_name'] or '')
+    try:
+        winner_index = int(row['winner_index']) if row['winner_index'] is not None else None
+    except (TypeError, ValueError):
+        winner_index = None
+    if lower_result == 'draw' or winner_name_key in {'draw', '平局'} or winner_index == -1:
+        return 'draw'
+    user_key = normalize_username_key(username)
+    if not user_key:
+        return raw_result
+    participant_keys = {normalize_username_key(name) for name in (player_names or []) if normalize_username_key(name)}
+    winner_keys = _match_winner_keys(row, player_names, summary)
+    if winner_keys:
+        return 'win' if user_key in winner_keys else 'loss'
+    if user_key not in participant_keys:
+        return raw_result
+    return raw_result or 'finished'
+
+
+def _row_to_match_summary(row, perspective_username=None):
     if row is None:
         return None
-    try:
-        player_names = json.loads(row['player_names_json'] or '[]')
-    except Exception:
-        player_names = []
-    try:
-        summary = json.loads(row['summary_json'] or '{}')
-    except Exception:
-        summary = {}
+    player_names = _safe_json_loads(row['player_names_json'], [])
+    summary = _safe_json_loads(row['summary_json'], {})
+    raw_result = row['result']
+    result = _match_result_for_username(row, perspective_username, player_names, summary) if perspective_username else raw_result
     return {
         'id': row['id'],
         'mode': row['mode'],
@@ -1164,7 +1218,8 @@ def _row_to_match_summary(row):
         'rounds': row['rounds'],
         'mod_source': row['mod_source'],
         'mod_hash': row['mod_hash'],
-        'result': row['result'],
+        'result': result,
+        'result_raw': raw_result,
         'room_id': summary.get('room_id'),
     }
 
@@ -1297,7 +1352,7 @@ def _recent_matches_for_username(conn, username, limit=5):
         ''',
         (pattern, max(1, min(int(limit or 5), 20))),
     ).fetchall()
-    return [_row_to_match_summary(row) for row in rows]
+    return [_row_to_match_summary(row, perspective_username=username) for row in rows]
 
 
 def get_user_social_settings(user_id):
