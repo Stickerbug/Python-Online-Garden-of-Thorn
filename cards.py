@@ -316,9 +316,9 @@ _reg(CardDef('MagicBubble', 'Magic Bubble', '魔法泡泡', 0, 4, 'guard', 3, 'C
 DRAFT_RATIO = {'thorn': 6, 'bloom': 4, 'root': 3, 'guard': 2}
 DRAFT_REROLLS = 3
 FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS = {
-    # Keep Sewage at the current official Bloom-card-pool ratio: 10 / 74.
+    # Keep Sewage at a fixed 14% within the Bloom draft pool.
     # The weight is adjusted when extra Bloom mod cards enter the draft pool.
-    'Sewage': (10, 74),
+    'Sewage': (14, 100),
 }
 HAND_LIMIT = 7
 DRAW_PER_TURN = 3
