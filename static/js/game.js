@@ -1190,42 +1190,48 @@ Object.assign(I18N.en, {
     replay_empty: 'No replay in the last 90 days.', replay_loading: 'Loading replays...',
     replay_load_failed: 'Failed to load replay', replay_prev: 'Prev', replay_play: 'Play',
     replay_pause: 'Pause', replay_next: 'Next', replay_instant: 'Instant',
-    replay_winner: 'Winner: {0}', replay_round: 'Round {0}', replay_frame_empty: 'No timeline data.'
+    replay_winner: 'Winner: {0}', replay_round: 'Round {0}', replay_frame_empty: 'No timeline data.',
+    replay_loading_progress: 'Loaded {0}/{1} frames', replay_prepare: 'Preparing replay...'
 });
 Object.assign(I18N.zh, {
     account_replays: '最近回放', replay_viewer: '回放查看器', replay_view: '查看',
     replay_empty: '最近90天暂无回放。', replay_loading: '正在读取回放...',
     replay_load_failed: '回放加载失败', replay_prev: '上一步', replay_play: '播放',
     replay_pause: '暂停', replay_next: '下一步', replay_instant: '立即',
-    replay_winner: '胜者：{0}', replay_round: '第{0}回合', replay_frame_empty: '暂无时间线数据。'
+    replay_winner: '胜者：{0}', replay_round: '第{0}回合', replay_frame_empty: '暂无时间线数据。',
+    replay_loading_progress: '已加载 {0}/{1} 帧', replay_prepare: '正在准备回放...'
 });
 Object.assign(I18N.fr, {
     account_replays: 'Replays récents', replay_viewer: 'Lecteur de replay', replay_view: 'Voir',
     replay_empty: 'Aucun replay sur 90 jours.', replay_loading: 'Chargement...',
     replay_load_failed: 'Échec du replay', replay_prev: 'Préc.', replay_play: 'Lire',
     replay_pause: 'Pause', replay_next: 'Suiv.', replay_instant: 'Instant',
-    replay_winner: 'Vainqueur : {0}', replay_round: 'Tour {0}', replay_frame_empty: 'Aucune timeline.'
+    replay_winner: 'Vainqueur : {0}', replay_round: 'Tour {0}', replay_frame_empty: 'Aucune timeline.',
+    replay_loading_progress: '{0}/{1} frames chargées', replay_prepare: 'Préparation du replay...'
 });
 Object.assign(I18N.pt, {
     account_replays: 'Replays recentes', replay_viewer: 'Visualizador', replay_view: 'Ver',
     replay_empty: 'Nenhum replay em 90 dias.', replay_loading: 'Carregando...',
     replay_load_failed: 'Falha ao carregar replay', replay_prev: 'Anterior', replay_play: 'Reproduzir',
     replay_pause: 'Pausar', replay_next: 'Próximo', replay_instant: 'Instantâneo',
-    replay_winner: 'Vencedor: {0}', replay_round: 'Rodada {0}', replay_frame_empty: 'Sem timeline.'
+    replay_winner: 'Vencedor: {0}', replay_round: 'Rodada {0}', replay_frame_empty: 'Sem timeline.',
+    replay_loading_progress: '{0}/{1} quadros carregados', replay_prepare: 'Preparando replay...'
 });
 Object.assign(I18N.ru, {
     account_replays: 'Последние повторы', replay_viewer: 'Просмотр повтора', replay_view: 'Открыть',
     replay_empty: 'Нет повторов за 90 дней.', replay_loading: 'Загрузка...',
     replay_load_failed: 'Не удалось загрузить повтор', replay_prev: 'Назад', replay_play: 'Пуск',
     replay_pause: 'Пауза', replay_next: 'Далее', replay_instant: 'Сразу',
-    replay_winner: 'Победитель: {0}', replay_round: 'Раунд {0}', replay_frame_empty: 'Нет timeline.'
+    replay_winner: 'Победитель: {0}', replay_round: 'Раунд {0}', replay_frame_empty: 'Нет timeline.',
+    replay_loading_progress: 'Загружено {0}/{1} кадров', replay_prepare: 'Подготовка повтора...'
 });
 Object.assign(I18N.ja, {
     account_replays: '最近のリプレイ', replay_viewer: 'リプレイビューア', replay_view: '表示',
     replay_empty: '90日以内のリプレイはありません。', replay_loading: '読み込み中...',
     replay_load_failed: 'リプレイ読み込み失敗', replay_prev: '前へ', replay_play: '再生',
     replay_pause: '一時停止', replay_next: '次へ', replay_instant: '即時',
-    replay_winner: '勝者: {0}', replay_round: 'ラウンド {0}', replay_frame_empty: 'タイムラインなし。'
+    replay_winner: '勝者: {0}', replay_round: 'ラウンド {0}', replay_frame_empty: 'タイムラインなし。',
+    replay_loading_progress: '{0}/{1}フレーム読込済み', replay_prepare: 'リプレイ準備中...'
 });
 Object.assign(I18N.en, { chief_designer_prefix: 'Chief Designer' });
 Object.assign(I18N.zh, { admin_prefix: '\u7ba1\u7406\u5458', login_admin_reserved: '\u6b64\u6635\u79f0\u88ab\u7ba1\u7406\u5458\u5360\u7528' });
@@ -2181,6 +2187,10 @@ let accountReplayTimer = null;
 let accountReplayData = null;
 let accountReplayPerspective = 0;
 let accountReplayReturnContext = null;
+let accountReplayTotalFrames = 0;
+let accountReplayLoading = false;
+let accountReplayLoadToken = 0;
+let accountReplayControlsCollapsed = false;
 let replayMode = false;
 let socket = null;
 let manualDisconnect = false;
@@ -2725,11 +2735,11 @@ function updateStaticText() {
     if (accountReplaysRefresh) accountReplaysRefresh.textContent = UI.refresh;
     const accountReplayTitle = $('account-replay-title');
     if (accountReplayTitle) accountReplayTitle.textContent = UI.replay_viewer;
-    document.querySelectorAll('[data-account-replay-control="prev"]').forEach((btn) => { btn.textContent = UI.replay_prev; });
-    document.querySelectorAll('[data-account-replay-control="play"]').forEach((btn) => { btn.textContent = UI.replay_play; });
-    document.querySelectorAll('[data-account-replay-control="pause"]').forEach((btn) => { btn.textContent = UI.replay_pause; });
-    document.querySelectorAll('[data-account-replay-control="next"]').forEach((btn) => { btn.textContent = UI.replay_next; });
-    document.querySelectorAll('[data-account-replay-speed="instant"]').forEach((btn) => { btn.textContent = UI.replay_instant; });
+    document.querySelectorAll('[data-account-replay-control="prev"]').forEach((btn) => { btn.title = UI.replay_prev; if (btn.classList.contains('replay-icon-btn')) btn.textContent = '‹'; });
+    document.querySelectorAll('[data-account-replay-control="play"]').forEach((btn) => { btn.title = UI.replay_play; if (btn.classList.contains('replay-icon-btn')) btn.textContent = '▶'; });
+    document.querySelectorAll('[data-account-replay-control="pause"]').forEach((btn) => { btn.title = UI.replay_pause; if (btn.classList.contains('replay-icon-btn')) btn.textContent = 'Ⅱ'; });
+    document.querySelectorAll('[data-account-replay-control="next"]').forEach((btn) => { btn.title = UI.replay_next; if (btn.classList.contains('replay-icon-btn')) btn.textContent = '›'; });
+    document.querySelectorAll('[data-account-replay-speed="instant"]').forEach((btn) => { btn.title = UI.replay_instant; if (btn.classList.contains('replay-speed-btn')) btn.textContent = '»'; });
     const guestDivider = $('guest-divider-label');
     if (guestDivider) guestDivider.textContent = UI.account_guest;
     renderAccountState();
@@ -6343,20 +6353,29 @@ function ensureAccountReplayPlaybackBar() {
     bar.id = 'account-replay-playback-bar';
     bar.className = 'account-replay-playback-bar hidden';
     bar.innerHTML = `
-        <div class="account-replay-playback-main">
-            <button class="mini-btn" type="button" data-account-replay-live-control="close">退出回放</button>
-            <button class="mini-btn" type="button" data-account-replay-live-control="prev">上一步</button>
-            <button class="mini-btn" type="button" data-account-replay-live-control="play">播放</button>
-            <button class="mini-btn" type="button" data-account-replay-live-control="pause">暂停</button>
-            <button class="mini-btn" type="button" data-account-replay-live-speed="1">1x</button>
-            <button class="mini-btn" type="button" data-account-replay-live-speed="2">2x</button>
-            <button class="mini-btn" type="button" data-account-replay-live-speed="4">4x</button>
-            <button class="mini-btn" type="button" data-account-replay-live-speed="instant">立即</button>
-            <button class="mini-btn" type="button" data-account-replay-live-control="next">下一步</button>
+        <div class="account-replay-playback-head">
+            <button class="mini-btn replay-icon-btn" type="button" data-account-replay-live-control="close" title="退出回放">×</button>
+            <div id="account-replay-live-meta" class="account-replay-live-meta"></div>
+            <button class="mini-btn replay-icon-btn" type="button" data-account-replay-live-control="toggle" title="收起/展开">▴</button>
         </div>
-        <div id="account-replay-live-meta" class="account-replay-live-meta"></div>
-        <div id="account-replay-live-perspectives" class="account-replay-live-perspectives"></div>
-        <input id="account-replay-live-progress" class="account-replay-progress" type="range" min="0" max="0" value="0">
+        <div class="account-replay-playback-body">
+            <div class="account-replay-playback-main">
+                <button class="mini-btn replay-icon-btn" type="button" data-account-replay-live-control="prev" title="上一步">‹</button>
+                <button class="mini-btn replay-icon-btn" type="button" data-account-replay-live-control="play" title="播放">▶</button>
+                <button class="mini-btn replay-icon-btn" type="button" data-account-replay-live-control="pause" title="暂停">Ⅱ</button>
+                <button class="mini-btn replay-speed-btn" type="button" data-account-replay-live-speed="1">1x</button>
+                <button class="mini-btn replay-speed-btn" type="button" data-account-replay-live-speed="2">2x</button>
+                <button class="mini-btn replay-speed-btn" type="button" data-account-replay-live-speed="4">4x</button>
+                <button class="mini-btn replay-speed-btn" type="button" data-account-replay-live-speed="instant">»</button>
+                <button class="mini-btn replay-icon-btn" type="button" data-account-replay-live-control="next" title="下一步">›</button>
+            </div>
+            <div id="account-replay-live-perspectives" class="account-replay-live-perspectives"></div>
+            <input id="account-replay-live-progress" class="account-replay-progress" type="range" min="0" max="0" value="0">
+            <div id="account-replay-load-progress" class="account-replay-load-progress hidden">
+                <div class="account-replay-load-track"><div id="account-replay-load-fill" class="account-replay-load-fill"></div></div>
+                <div id="account-replay-load-text" class="account-replay-load-text"></div>
+            </div>
+        </div>
     `;
     document.body.appendChild(bar);
     bar.addEventListener('click', (event) => {
@@ -6368,6 +6387,10 @@ function ensureAccountReplayPlaybackBar() {
             if (action === 'next') stepAccountReplay(1);
             if (action === 'play') playAccountReplay();
             if (action === 'pause') stopAccountReplayPlayback();
+            if (action === 'toggle') {
+                accountReplayControlsCollapsed = !accountReplayControlsCollapsed;
+                renderAccountReplayPlaybackBar();
+            }
             return;
         }
         const speed = event.target.closest('[data-account-replay-live-speed]');
@@ -6409,29 +6432,58 @@ function renderReplayPerspectiveButtons(container, snapshot) {
     `).join('');
 }
 
+function setAccountReplayLoadProgress(loaded, total, text) {
+    const box = $('account-replay-load-progress');
+    const fill = $('account-replay-load-fill');
+    const label = $('account-replay-load-text');
+    const safeTotal = Math.max(0, Number(total) || 0);
+    const safeLoaded = Math.max(0, Number(loaded) || 0);
+    const visible = accountReplayLoading || (safeTotal > 0 && safeLoaded < safeTotal);
+    if (box) box.classList.toggle('hidden', !visible);
+    if (fill) {
+        const pct = safeTotal > 0 ? Math.max(0, Math.min(100, (safeLoaded / safeTotal) * 100)) : 8;
+        fill.style.width = `${pct}%`;
+    }
+    if (label) {
+        label.textContent = text || (safeTotal
+            ? tf('replay_loading_progress', safeLoaded, safeTotal)
+            : (UI.replay_prepare || UI.replay_loading));
+    }
+}
+
 function renderAccountReplayPlaybackBar() {
     const frame = accountReplayTimeline[accountReplayFrameIndex] || null;
     const snapshot = getReplaySnapshot(frame);
     const bar = ensureAccountReplayPlaybackBar();
     bar.classList.toggle('hidden', !replayMode);
+    bar.classList.toggle('collapsed', !!accountReplayControlsCollapsed);
     const progress = $('account-replay-live-progress');
     if (progress) {
-        progress.max = String(Math.max(0, accountReplayTimeline.length - 1));
+        progress.max = String(Math.max(0, (accountReplayTotalFrames || accountReplayTimeline.length) - 1));
         progress.value = String(accountReplayFrameIndex);
     }
     const meta = $('account-replay-live-meta');
     if (meta) {
         const title = accountReplayData && accountReplayData.meta
-            ? [accountReplayData.meta.mode, replayTimeText(frame && frame.t), `${accountReplayFrameIndex + 1}/${Math.max(1, accountReplayTimeline.length)}`].filter(Boolean).join(' · ')
-            : `${replayTimeText(frame && frame.t)} · ${accountReplayFrameIndex + 1}/${Math.max(1, accountReplayTimeline.length)}`;
+            ? [accountReplayData.meta.mode, replayTimeText(frame && frame.t), `${accountReplayFrameIndex + 1}/${Math.max(1, accountReplayTotalFrames || accountReplayTimeline.length)}`].filter(Boolean).join(' · ')
+            : `${replayTimeText(frame && frame.t)} · ${accountReplayFrameIndex + 1}/${Math.max(1, accountReplayTotalFrames || accountReplayTimeline.length)}`;
         const action = replayActionLabel(frame);
         meta.textContent = action ? `${title} · ${action}` : title;
     }
+    const toggleBtn = bar.querySelector('[data-account-replay-live-control="toggle"]');
+    if (toggleBtn) toggleBtn.textContent = accountReplayControlsCollapsed ? '▾' : '▴';
     renderReplayPerspectiveButtons($('account-replay-live-perspectives'), snapshot);
     bar.querySelectorAll('[data-account-replay-live-speed]').forEach(btn => {
         const value = btn.dataset.accountReplayLiveSpeed === 'instant' ? 'instant' : Number(btn.dataset.accountReplayLiveSpeed || 1);
         btn.classList.toggle('active', value === accountReplaySpeed);
     });
+    setAccountReplayLoadProgress(
+        accountReplayTimeline.filter(Boolean).length,
+        accountReplayTotalFrames || accountReplayTimeline.length,
+        accountReplayLoading
+            ? tf('replay_loading_progress', accountReplayTimeline.filter(Boolean).length, accountReplayTotalFrames || '?')
+            : ''
+    );
 }
 
 function renderAccountReplayList() {
@@ -6476,16 +6528,47 @@ async function loadAccountReplays() {
     }
 }
 
+function mergeAccountReplayFrames(frames, offset) {
+    const start = Math.max(0, Number(offset) || 0);
+    (Array.isArray(frames) ? frames : []).forEach((frame, index) => {
+        if (frame && typeof frame === 'object') accountReplayTimeline[start + index] = frame;
+    });
+}
+
+async function fetchAccountReplayFrames(replayId, offset, limit) {
+    const data = await authRequest(`/api/replays/${encodeURIComponent(replayId)}/timeline?offset=${offset}&limit=${limit}`);
+    if (data.replay) accountReplayData = data.replay;
+    accountReplayTotalFrames = Math.max(0, Number(data.total_frames || data.timeline_total || 0) || 0);
+    mergeAccountReplayFrames(data.timeline || [], data.offset ?? offset);
+    return data;
+}
+
+async function continueAccountReplayLoading(replayId, startOffset, token) {
+    const chunkSize = 80;
+    let offset = Math.max(0, Number(startOffset) || 0);
+    while (token === accountReplayLoadToken && offset < accountReplayTotalFrames) {
+        const data = await fetchAccountReplayFrames(replayId, offset, chunkSize);
+        offset = Math.max(offset + chunkSize, Number(data.offset || offset) + (Array.isArray(data.timeline) ? data.timeline.length : 0));
+        renderAccountReplayPlaybackBar();
+        if (!accountReplayTimeline[accountReplayFrameIndex]) renderAccountReplayFrame();
+        await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    if (token === accountReplayLoadToken) {
+        accountReplayLoading = false;
+        renderAccountReplayPlaybackBar();
+    }
+}
+
 function renderAccountReplayFrame() {
     const frame = accountReplayTimeline[accountReplayFrameIndex] || null;
     const progress = $('account-replay-progress');
     if (progress) {
-        progress.max = String(Math.max(0, accountReplayTimeline.length - 1));
+        progress.max = String(Math.max(0, (accountReplayTotalFrames || accountReplayTimeline.length) - 1));
         progress.value = String(accountReplayFrameIndex);
     }
     const output = $('account-replay-frame');
     if (!frame) {
-        if (output) output.textContent = UI.replay_frame_empty;
+        if (output) output.textContent = accountReplayLoading ? (UI.replay_loading || UI.replay_prepare) : UI.replay_frame_empty;
         renderAccountReplayPlaybackBar();
         return;
     }
@@ -6512,8 +6595,8 @@ function renderAccountReplayFrame() {
 }
 
 function stepAccountReplay(delta) {
-    if (!accountReplayTimeline.length) return;
-    accountReplayFrameIndex = Math.max(0, Math.min(accountReplayTimeline.length - 1, accountReplayFrameIndex + delta));
+    if (!accountReplayTimeline.length && !accountReplayTotalFrames) return;
+    accountReplayFrameIndex = Math.max(0, Math.min((accountReplayTotalFrames || accountReplayTimeline.length) - 1, accountReplayFrameIndex + delta));
     renderAccountReplayFrame();
 }
 
@@ -6529,14 +6612,20 @@ function switchAccountReplayPerspective() {
 
 function playAccountReplay() {
     stopAccountReplayPlayback();
-    if (!accountReplayTimeline.length || accountReplayFrameIndex >= accountReplayTimeline.length - 1) return;
+    const totalFrames = accountReplayTotalFrames || accountReplayTimeline.length;
+    if (!totalFrames || accountReplayFrameIndex >= totalFrames - 1) return;
     if (accountReplaySpeed === 'instant') {
-        accountReplayFrameIndex = accountReplayTimeline.length - 1;
+        accountReplayFrameIndex = totalFrames - 1;
         renderAccountReplayFrame();
         return;
     }
     const current = accountReplayTimeline[accountReplayFrameIndex] || {};
-    const next = accountReplayTimeline[accountReplayFrameIndex + 1] || {};
+    const next = accountReplayTimeline[accountReplayFrameIndex + 1] || null;
+    if (!next && accountReplayLoading) {
+        accountReplayTimer = setTimeout(playAccountReplay, 180);
+        return;
+    }
+    if (!next) return;
     const delay = Math.max(80, ((Number(next.t) || 0) - (Number(current.t) || 0)) / Number(accountReplaySpeed || 1));
     accountReplayTimer = setTimeout(() => {
         stepAccountReplay(1);
@@ -6546,6 +6635,7 @@ function playAccountReplay() {
 
 async function openAccountReplay(replayId) {
     stopAccountReplayPlayback();
+    const loadToken = ++accountReplayLoadToken;
     accountReplayReturnContext = {
         viewId: getVisibleViewId(),
         gameState: cloneReplayJson(gameState || {}),
@@ -6558,19 +6648,38 @@ async function openAccountReplay(replayId) {
     };
     const modal = $('account-replay-modal');
     const output = $('account-replay-frame');
+    accountReplayData = { id: replayId };
+    accountReplayTimeline = [];
+    accountReplayTotalFrames = 0;
+    accountReplayFrameIndex = 0;
+    accountReplayPerspective = 0;
+    accountReplayLoading = true;
+    replayMode = false;
     if (modal) modal.classList.remove('hidden');
-    if (output) output.textContent = UI.replay_loading;
+    if (output) {
+        output.innerHTML = `
+            <div class="account-replay-loading">
+                <div class="account-replay-load-track"><div class="account-replay-load-fill" style="width:8%"></div></div>
+                <div class="account-replay-load-text">${escapeHtml(UI.replay_prepare || UI.replay_loading)}</div>
+            </div>
+        `;
+    }
     try {
-        const data = await authRequest(`/api/replays/${encodeURIComponent(replayId)}/timeline`);
-        accountReplayData = data.replay || { id: replayId };
-        accountReplayTimeline = Array.isArray(data.timeline) ? data.timeline : [];
-        accountReplayFrameIndex = 0;
-        accountReplayPerspective = 0;
+        await fetchAccountReplayFrames(replayId, 0, 24);
+        if (loadToken !== accountReplayLoadToken) return;
         replayMode = true;
         if (modal) modal.classList.add('hidden');
         ensureAccountReplayPlaybackBar();
         renderAccountReplayFrame();
+        continueAccountReplayLoading(replayId, accountReplayTimeline.filter(Boolean).length, loadToken).catch((err) => {
+            if (loadToken !== accountReplayLoadToken) return;
+            accountReplayLoading = false;
+            flashStatus(`${UI.replay_load_failed}: ${err.message || ''}`, 4000);
+            renderAccountReplayPlaybackBar();
+        });
     } catch (err) {
+        if (loadToken !== accountReplayLoadToken) return;
+        accountReplayLoading = false;
         replayMode = false;
         if (output) output.textContent = `${UI.replay_load_failed}: ${err.message || ''}`;
     }
@@ -6578,6 +6687,7 @@ async function openAccountReplay(replayId) {
 
 function closeAccountReplayModal() {
     stopAccountReplayPlayback();
+    accountReplayLoadToken += 1;
     const modal = $('account-replay-modal');
     if (modal) modal.classList.add('hidden');
     const bar = $('account-replay-playback-bar');
@@ -6587,6 +6697,8 @@ function closeAccountReplayModal() {
     accountReplayTimeline = [];
     accountReplayFrameIndex = 0;
     accountReplayPerspective = 0;
+    accountReplayTotalFrames = 0;
+    accountReplayLoading = false;
     const ctx = accountReplayReturnContext || {};
     accountReplayReturnContext = null;
     isSpectating = !!ctx.isSpectating;

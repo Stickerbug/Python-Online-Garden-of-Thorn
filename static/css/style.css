@@ -812,6 +812,26 @@ body {
   display: none;
 }
 
+.account-replay-playback-bar.collapsed {
+  width: min(520px, calc(100vw - 20px));
+}
+
+.account-replay-playback-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.account-replay-playback-body {
+  display: grid;
+  gap: 6px;
+}
+
+.account-replay-playback-bar.collapsed .account-replay-playback-body {
+  display: none;
+}
+
 .account-replay-playback-main,
 .account-replay-live-perspectives {
   display: flex;
@@ -823,15 +843,71 @@ body {
 
 .account-replay-live-meta {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 850;
   text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .account-replay-playback-bar .mini-btn.active {
   border-color: var(--magic);
   background: var(--magic-bg);
   color: var(--magic);
+}
+
+.account-replay-playback-bar .mini-btn {
+  padding: 5px 7px;
+  font-size: 11px;
+}
+
+.replay-icon-btn {
+  min-width: 28px;
+  text-align: center;
+}
+
+.replay-speed-btn {
+  min-width: 32px;
+}
+
+.account-replay-load-progress,
+.account-replay-loading {
+  display: grid;
+  gap: 6px;
+}
+
+.account-replay-load-progress.hidden {
+  display: none;
+}
+
+.account-replay-load-track {
+  height: 7px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .account-replay-load-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.account-replay-load-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--magic);
+  transition: width 0.16s ease;
+}
+
+.account-replay-load-text {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .account-replay-dialog {

@@ -7,7 +7,7 @@
 <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=173">
+<link rel="stylesheet" href="/static/css/style.css?v=174">
 <script>
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
@@ -132,14 +132,14 @@
       <button id="btn-account-replay-close" class="account-close-btn" type="button">×</button>
     </div>
     <div class="account-replay-controls">
-      <button class="mini-btn" type="button" data-account-replay-control="prev">上一步</button>
-      <button class="mini-btn" type="button" data-account-replay-control="play">播放</button>
-      <button class="mini-btn" type="button" data-account-replay-control="pause">暂停</button>
+      <button class="mini-btn replay-icon-btn" type="button" data-account-replay-control="prev" title="上一步">‹</button>
+      <button class="mini-btn replay-icon-btn" type="button" data-account-replay-control="play" title="播放">▶</button>
+      <button class="mini-btn replay-icon-btn" type="button" data-account-replay-control="pause" title="暂停">Ⅱ</button>
       <button class="mini-btn" type="button" data-account-replay-speed="1">1x</button>
       <button class="mini-btn" type="button" data-account-replay-speed="2">2x</button>
       <button class="mini-btn" type="button" data-account-replay-speed="4">4x</button>
-      <button class="mini-btn" type="button" data-account-replay-speed="instant">立即</button>
-      <button class="mini-btn" type="button" data-account-replay-control="next">下一步</button>
+      <button class="mini-btn replay-speed-btn" type="button" data-account-replay-speed="instant">»</button>
+      <button class="mini-btn replay-icon-btn" type="button" data-account-replay-control="next" title="下一步">›</button>
     </div>
     <div id="account-replay-meta" class="account-replay-meta"></div>
     <div id="account-replay-perspectives" class="account-replay-perspectives"></div>
@@ -742,6 +742,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-<script src="/static/js/game.js?v=189"></script>
+<script src="/static/js/game.js?v=190"></script>
 </body>
 </html>

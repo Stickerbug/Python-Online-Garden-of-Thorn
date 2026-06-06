@@ -4441,7 +4441,12 @@ def api_replay_timeline(replay_id):
     if not replay_item_visible_to_current_user(item, admin_context=admin_context):
         return jsonify({'success': False, 'error': 'forbidden'}), 403
     try:
-        data = replay_timeline(replay_id)
+        has_slice_args = 'offset' in request.args or 'limit' in request.args
+        data = replay_timeline(
+            replay_id,
+            offset=request.args.get('offset', 0) if has_slice_args else None,
+            limit=request.args.get('limit', 50) if has_slice_args else None,
+        )
     except Exception as exc:
         admin_event('error', f'replay timeline failed: {exc}')
         return jsonify({'success': False, 'error': str(exc)}), 500
