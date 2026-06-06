@@ -4354,7 +4354,7 @@ function createCardElement(cardDict, options = {}) {
         flagsHtml += `<span class="card-flag fission-layer">${escapeHtml(UI.fission_layer || 'Fission')}: ${fissionLevel}</span>`;
     }
     if (!showAllFlags && defId === 'Tomato' && cardDict.instance_id != null) {
-        const tomatoLayer = Math.max(0, Number(cardDict.held_turns || 0));
+        const tomatoLayer = Math.min(6, Math.max(0, Number(cardDict.held_turns || 0)));
         flagsHtml += `<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || '层数')}: ${tomatoLayer}</span>`;
     }
     const predictionHtml = getCardPlayEffectPredictionHtml(cardDict, {
@@ -4467,7 +4467,7 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
         if (fissionLevel > 1) parts.push(cardFlagHtml('fission_layer', `${UI.fission_layer || 'Fission'}: ${fissionLevel}`));
     }
     if (includeTomato && cardDict.def_id === 'Tomato') {
-        const tomatoLayer = Math.max(0, Number(cardDict.held_turns || 0));
+        const tomatoLayer = Math.min(6, Math.max(0, Number(cardDict.held_turns || 0)));
         if (tomatoLayer > 0) {
             parts.push(`<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || 'Layer')}: ${tomatoLayer}</span>`);
         }
@@ -4528,7 +4528,7 @@ function getMimicSpecialCostForCard(cardDict) {
     const fusionExtra = Math.max(0, Math.floor(Number(cardDict.fusion_level || 1)) - 1);
     const fissionExtra = Math.max(0, Math.floor(Number(cardDict.fission_level || 1)) - 1);
     const tomatoLayer = cardDict.def_id === 'Tomato'
-        ? Math.max(0, Math.floor(Number(cardDict.held_turns || 0)))
+        ? Math.min(6, Math.max(0, Math.floor(Number(cardDict.held_turns || 0))))
         : 0;
     return Math.ceil((fusionExtra + fissionExtra + tomatoLayer) / 2);
 }
@@ -4723,8 +4723,9 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
     const fusion = Math.max(1, Number(cardDict.fusion_level || 1));
     const fission = Math.max(1, Number(cardDict.fission_level || 1));
     let bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
-    if ((cardDict.def_id || '') === 'Tomato' && bonus === 0) {
-        bonus = Math.max(0, Number(cardDict.held_turns || 0)) * 3;
+    if ((cardDict.def_id || '') === 'Tomato') {
+        const tomatoLayer = Math.min(6, Math.max(0, Number(cardDict.held_turns || 0)));
+        bonus = bonus > 0 ? Math.min(18, bonus) : tomatoLayer * 3;
     }
     if (info.triangle) {
         const startStacks = Math.max(0, Number(attackerState.triangle_stacks || 0));
@@ -7380,7 +7381,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=9');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=10');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;

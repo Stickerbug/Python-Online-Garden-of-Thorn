@@ -319,6 +319,10 @@ class LocalCard {
         this.bonus_damage = toInt(source.bonus_damage, 0);
         this.return_to_hand_turns = toInt(source.return_to_hand_turns, 0);
         this.held_turns = toInt(source.held_turns, 0);
+        if (this.def_id === 'Tomato') {
+            this.bonus_damage = Math.min(18, Math.max(0, this.bonus_damage));
+            this.held_turns = Math.min(6, Math.max(0, this.held_turns));
+        }
         this.durability = toInt(source.durability, 0);
         this._placed_as_equipment = false;
         this._placed_as_equipment_owner = null;
@@ -365,9 +369,9 @@ class LocalCard {
             mimic_discount: this.mimic_discount,
             instance_flags: Array.from(this.instance_flags),
             disabled_flags: Array.from(this.disabled_flags),
-            bonus_damage: this.bonus_damage,
+            bonus_damage: this.def_id === 'Tomato' ? Math.min(18, Math.max(0, this.bonus_damage)) : this.bonus_damage,
             return_to_hand_turns: this.return_to_hand_turns,
-            held_turns: this.held_turns,
+            held_turns: this.def_id === 'Tomato' ? Math.min(6, Math.max(0, this.held_turns)) : this.held_turns,
             durability: this.durability,
         };
     }
@@ -2134,7 +2138,7 @@ class LocalSoloEngine {
         if (!target) return 0;
         const fusionExtra = Math.max(0, toInt(target.fusion_level, 1) - 1);
         const fissionExtra = Math.max(0, toInt(target.fission_level, 1) - 1);
-        const tomatoLayer = target.def_id === 'Tomato' ? Math.max(0, toInt(target.held_turns, 0)) : 0;
+        const tomatoLayer = target.def_id === 'Tomato' ? Math.min(6, Math.max(0, toInt(target.held_turns, 0))) : 0;
         return Math.ceil((fusionExtra + fissionExtra + tomatoLayer) / 2);
     }
 
@@ -2726,13 +2730,27 @@ class LocalSoloEngine {
         this.spendResource(targetId, 'magic', amount, card);
     }
 
+    clampCardProperty(target, prop, value) {
+        let next = toInt(value, 0);
+        if (prop === 'fusion_level' || prop === 'fission_level') {
+            next = Math.max(1, next);
+        } else {
+            next = Math.max(0, next);
+        }
+        if (target && target.def_id === 'Tomato') {
+            if (prop === 'held_turns') next = Math.min(6, next);
+            if (prop === 'bonus_damage') next = Math.min(18, next);
+        }
+        return next;
+    }
+
     effect_card_prop_set(playerId, card, params) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
         if (!target) return;
         let prop = String(params.property || 'fusion_level');
         if (prop === 'cost_e') prop = 'cost_e_override';
         if (prop === 'cost_m') prop = 'cost_m_override';
-        target[prop] = Math.max(0, this.evalInt(playerId, params.value ?? 0, card, 0));
+        target[prop] = this.clampCardProperty(target, prop, this.evalInt(playerId, params.value ?? 0, card, 0));
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
     }
@@ -2748,7 +2766,7 @@ class LocalSoloEngine {
             : prop === 'cost_m_override'
                 ? (target.cost_m_override != null ? target.cost_m_override : toInt(target.def().cost_m, 0))
                 : toInt(target[prop], 0);
-        target[prop] = Math.max(0, current + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0));
+        target[prop] = this.clampCardProperty(target, prop, current + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0));
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
     }
@@ -2765,7 +2783,7 @@ class LocalSoloEngine {
             : prop === 'cost_m_override'
                 ? (target.cost_m_override != null ? target.cost_m_override : toInt(target.def().cost_m, 0))
                 : toInt(target[prop], 0);
-        target[prop] = Math.max(0, current * multiplier);
+        target[prop] = this.clampCardProperty(target, prop, current * multiplier);
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
     }
@@ -3232,7 +3250,9 @@ class LocalSoloEngine {
     }
 
     modifiedAttackDamage(base, card) {
-        let amount = toInt(base, 0) + Math.max(0, toInt(card && card.bonus_damage, 0));
+        let bonus = Math.max(0, toInt(card && card.bonus_damage, 0));
+        if (card && card.def_id === 'Tomato') bonus = Math.min(18, bonus);
+        let amount = toInt(base, 0) + bonus;
         const fusion = Math.max(1, toInt(card && card.fusion_level, 1));
         const fission = Math.max(1, toInt(card && card.fission_level, 1));
         return Math.ceil((amount * fusion) / fission);

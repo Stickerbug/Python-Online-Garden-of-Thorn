@@ -2327,7 +2327,7 @@ class GameEngine:
         tomato_layer = 0
         if getattr(target, 'def_id', '') == 'Tomato':
             try:
-                tomato_layer = max(0, int(getattr(target, 'held_turns', 0) or 0))
+                tomato_layer = min(6, max(0, int(getattr(target, 'held_turns', 0) or 0)))
             except Exception:
                 tomato_layer = 0
         return int(math.ceil((fusion_extra + fission_extra + tomato_layer) / 2))
@@ -4117,7 +4117,10 @@ class GameEngine:
         self._atomic_tag_remove_named(player_id, card, {'tag': params.get('tag', '')}, log, choice, context)
 
     def _modified_attack_damage(self, base: int, card: CardInstance) -> int:
-        base += max(0, int(getattr(card, 'bonus_damage', 0)))
+        bonus_damage = max(0, int(getattr(card, 'bonus_damage', 0)))
+        if getattr(card, 'def_id', '') == 'Tomato':
+            bonus_damage = min(18, bonus_damage)
+        base += bonus_damage
         fusion = max(1, int(getattr(card, 'fusion_level', 1)))
         fission = max(1, int(getattr(card, 'fission_level', 1)))
         return math.ceil(base * fusion / fission)
@@ -6530,6 +6533,11 @@ class GameEngine:
             value = max(1, value)
         elif prop in ('mimic_discount', 'cost_e_override', 'cost_m_override', 'bonus_damage', 'return_to_hand_turns', 'held_turns'):
             value = max(0, value)
+        if getattr(target_card, 'def_id', '') == 'Tomato':
+            if prop == 'held_turns':
+                value = min(6, value)
+            elif prop == 'bonus_damage':
+                value = min(18, value)
         if prop in ('fusion_level', 'fission_level', 'mimic_discount', 'cost_e_override', 'cost_m_override',
                     'bonus_damage', 'return_to_hand_turns', 'held_turns'):
             setattr(target_card, prop, value)
@@ -6544,7 +6552,13 @@ class GameEngine:
             value = getattr(target_card, prop, 0)
         if value is None:
             return 0
-        return int(value)
+        value = int(value)
+        if getattr(target_card, 'def_id', '') == 'Tomato':
+            if prop == 'held_turns':
+                return min(6, max(0, value))
+            if prop == 'bonus_damage':
+                return min(18, max(0, value))
+        return value
 
     def _atomic_card_prop_set(self, player_id, card, params, log, choice, context):
         value = self._eval_int(player_id, params.get('value', 0), card)
