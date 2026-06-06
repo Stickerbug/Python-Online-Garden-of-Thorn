@@ -316,9 +316,9 @@ _reg(CardDef('MagicBubble', 'Magic Bubble', '魔法泡泡', 0, 4, 'guard', 3, 'C
 DRAFT_RATIO = {'thorn': 6, 'bloom': 4, 'root': 3, 'guard': 2}
 DRAFT_REROLLS = 3
 FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS = {
-    # Keep Sewage at the current official-card-pool ratio: 10 / 229.
-    # The weight is adjusted when extra mod cards enter the draft pool.
-    'Sewage': (10, 229),
+    # Keep Sewage at the current official Bloom-card-pool ratio: 10 / 74.
+    # The weight is adjusted when extra Bloom mod cards enter the draft pool.
+    'Sewage': (10, 74),
 }
 HAND_LIMIT = 7
 DRAW_PER_TURN = 3
@@ -348,24 +348,29 @@ def _effective_draft_weights(allowed_def_ids: Optional[Set[str]] = None) -> Dict
             continue
         allowed[def_id] = float(count)
 
-    fixed_ids = [def_id for def_id in FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS if def_id in allowed]
-    if not fixed_ids:
-        return allowed
+    by_type_fixed = {}
+    for def_id in FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS:
+        if def_id not in allowed or def_id not in CARD_DEFS:
+            continue
+        by_type_fixed.setdefault(CARD_DEFS[def_id].card_type, []).append(def_id)
 
-    fixed_ratio_sum = 0.0
-    for def_id in fixed_ids:
-        numerator, denominator = FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS[def_id]
-        if denominator:
-            fixed_ratio_sum += max(0.0, float(numerator) / float(denominator))
-    other_total = sum(weight for def_id, weight in allowed.items() if def_id not in fixed_ids)
-    if other_total <= 0 or fixed_ratio_sum <= 0 or fixed_ratio_sum >= 1:
-        return allowed
-
-    for def_id in fixed_ids:
-        numerator, denominator = FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS[def_id]
-        target_ratio = max(0.0, float(numerator) / float(denominator)) if denominator else 0.0
-        if target_ratio > 0:
-            allowed[def_id] = target_ratio * other_total / (1.0 - fixed_ratio_sum)
+    for card_type, fixed_ids in by_type_fixed.items():
+        fixed_ratio_sum = 0.0
+        for def_id in fixed_ids:
+            numerator, denominator = FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS[def_id]
+            if denominator:
+                fixed_ratio_sum += max(0.0, float(numerator) / float(denominator))
+        other_total = sum(
+            weight for def_id, weight in allowed.items()
+            if def_id not in fixed_ids and CARD_DEFS.get(def_id) and CARD_DEFS[def_id].card_type == card_type
+        )
+        if other_total <= 0 or fixed_ratio_sum <= 0 or fixed_ratio_sum >= 1:
+            continue
+        for def_id in fixed_ids:
+            numerator, denominator = FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS[def_id]
+            target_ratio = max(0.0, float(numerator) / float(denominator)) if denominator else 0.0
+            if target_ratio > 0:
+                allowed[def_id] = target_ratio * other_total / (1.0 - fixed_ratio_sum)
     return allowed
 
 
