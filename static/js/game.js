@@ -2483,6 +2483,37 @@ function translateLoginReason(reason) {
     if (reason === 'Registered nickname reserved') return UI.login_registered_reserved;
     return reason;
 }
+
+function formatRemainingDuration(seconds) {
+    let value = Math.max(0, Math.floor(Number(seconds) || 0));
+    const days = Math.floor(value / 86400);
+    value %= 86400;
+    const hours = Math.floor(value / 3600);
+    value %= 3600;
+    const minutes = Math.floor(value / 60);
+    const secs = value % 60;
+    if (currentLang === 'zh') {
+        if (days) return `${days}天${hours}小时`;
+        if (hours) return `${hours}小时${minutes}分钟`;
+        if (minutes) return `${minutes}分钟${secs}秒`;
+        return `${secs}秒`;
+    }
+    if (days) return `${days}d ${hours}h`;
+    if (hours) return `${hours}h ${minutes}m`;
+    if (minutes) return `${minutes}m ${secs}s`;
+    return `${secs}s`;
+}
+
+function moderationMessageFromPayload(data = {}, fallback = '') {
+    let message = String(fallback || data.message || data.reason || data.error || '');
+    if (data.permanent && !/永久|permanent/i.test(message)) {
+        message = `${message} (${currentLang === 'zh' ? '永久' : 'permanent'})`;
+    } else if (data.remaining_seconds != null && !/剩余|remaining|left|永久|permanent/i.test(message)) {
+        const duration = formatRemainingDuration(data.remaining_seconds);
+        message = currentLang === 'zh' ? `${message}（剩余${duration}）` : `${message} (${duration} left)`;
+    }
+    return message;
+}
 let playerId = -1;
 let mySid = '';
 let nickname = '';
@@ -6444,7 +6475,7 @@ function connectSocket(serverUrl) {
     socket.on('login_fail', (data) => {
         showView('view-login');
         const err = $('login-error');
-        if (err) err.textContent = translateLoginReason(data.reason);
+        if (err) err.textContent = moderationMessageFromPayload(data, translateLoginReason(data.reason));
     });
     socket.on('lobby_update', (data) => {
         debugLog('[client] lobby_update players=', (data.players || []).length);
@@ -6740,7 +6771,7 @@ function connectSocket(serverUrl) {
     });
     socket.on('server_error', (data) => {
         debugLog('[client] server_error:', data.message);
-        flashStatus(translateServerMessage(data.message), 3600, 'error');
+        flashStatus(moderationMessageFromPayload(data, translateServerMessage(data.message)), 3600, 'error');
         pendingSpectateRoomId = null;
         clearPendingServerAction();
         pendingPlayCard = null;
@@ -7635,7 +7666,7 @@ async function authRequest(path, body) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data.success === false) {
-        throw new Error(data.error || UI.account_error);
+        throw new Error(moderationMessageFromPayload(data, data.error || UI.account_error));
     }
     return data;
 }

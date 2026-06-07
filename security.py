@@ -111,6 +111,19 @@ def is_muted(identifier):
         return bool(until and until > now)
 
 
+def mute_remaining_seconds(identifier):
+    if identifier is None:
+        return 0
+    key = str(identifier)
+    now = _now()
+    with _LOCK:
+        until = float(_MUTES.get(key) or 0)
+        if until and until <= now:
+            _MUTES.pop(key, None)
+            return 0
+        return max(0, int(round(until - now))) if until else 0
+
+
 def mute_user(identifier, seconds=600, reason=''):
     if identifier is None:
         return None

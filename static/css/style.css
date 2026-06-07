@@ -3087,6 +3087,12 @@ body {
 
 .chat-report-btn {
   vertical-align: baseline;
+  margin-left: 5px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  opacity: 0.56;
 }
 
 .chat-time-separator {

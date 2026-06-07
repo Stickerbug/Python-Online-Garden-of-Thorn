@@ -98,6 +98,23 @@ def utc_iso(value):
     return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
 
 
+def format_duration_zh(seconds):
+    try:
+        value = max(0, int(seconds))
+    except (TypeError, ValueError):
+        value = 0
+    days, rem = divmod(value, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, secs = divmod(rem, 60)
+    if days:
+        return f'{days}天{hours}小时'
+    if hours:
+        return f'{hours}小时{minutes}分钟'
+    if minutes:
+        return f'{minutes}分钟{secs}秒'
+    return f'{secs}秒'
+
+
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
@@ -279,6 +296,8 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN ban_reason TEXT')
         if 'banned_at' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN banned_at TEXT')
+        if 'ban_until' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN ban_until TEXT')
         if 'player_id' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN player_id TEXT')
         if 'accept_friend_requests' not in existing_columns:
@@ -613,10 +632,19 @@ def validate_username(username):
 
 def validate_password(password):
     text = str(password or '')
-    if len(text) < 6:
-        return False, '密码至少需要 6 位'
+    if len(text) < 8:
+        return False, '密码至少需要 8 位'
     if len(text) > 72:
         return False, '密码最多 72 位'
+    if any(ord(ch) < 33 or ord(ch) > 126 for ch in text):
+        return False, '密码只能使用可见 ASCII 字符，且不能包含空格'
+    classes = 0
+    classes += 1 if re.search(r'[0-9]', text) else 0
+    classes += 1 if re.search(r'[A-Z]', text) else 0
+    classes += 1 if re.search(r'[a-z]', text) else 0
+    classes += 1 if re.search(r'[^0-9A-Za-z]', text) else 0
+    if classes < 2:
+        return False, '密码需包含数字、大写字母、小写字母、特殊符号中的任意两类'
     return True, ''
 
 
@@ -640,6 +668,7 @@ def row_to_user(row):
         'banned': bool(row['banned']) if 'banned' in row.keys() else False,
         'ban_reason': row['ban_reason'] if 'ban_reason' in row.keys() else None,
         'banned_at': row['banned_at'] if 'banned_at' in row.keys() else None,
+        'ban_until': row['ban_until'] if 'ban_until' in row.keys() else None,
     }
 
 
@@ -693,10 +722,16 @@ def verify_user(username, password):
         row = _find_user_row_by_username_key(conn, name)
         if row is None or not check_password_hash(row['password_hash'], str(password or '')):
             return None, '用户名或密码错误'
-        is_banned = bool(row['banned']) if 'banned' in row.keys() else False
-        if is_banned:
-            reason = (row['ban_reason'] if 'ban_reason' in row.keys() else '') or ''
-            return None, f'账号已被封禁：{reason}' if reason else '账号已被封禁'
+        row = _clear_expired_user_ban(conn, row)
+        ban_status = get_user_ban_status(user_id=row['id'])
+        if ban_status.get('banned'):
+            reason = ban_status.get('reason') or ''
+            remaining = ban_status.get('remaining_seconds')
+            if remaining is None:
+                suffix = '永久'
+            else:
+                suffix = f'剩余{format_duration_zh(remaining)}'
+            return None, f'账号已被封禁（{suffix}）：{reason}' if reason else f'账号已被封禁（{suffix}）'
         return row_to_user(row), None
 
 
@@ -768,20 +803,29 @@ def admin_change_user_password(identifier, new_password):
         return row_to_user(row), None
 
 
-def admin_set_user_ban(identifier, banned=True, reason=''):
+def admin_set_user_ban(identifier, banned=True, reason='', duration_seconds=None):
     user = find_user_for_admin(identifier)
     if not user:
         return None, '账号不存在'
     reason_text = str(reason or '').strip()[:200]
     banned_at = utc_now() if banned else None
+    ban_until = None
+    if banned and duration_seconds is not None:
+        try:
+            duration = int(duration_seconds)
+        except (TypeError, ValueError):
+            duration = 0
+        if duration > 0:
+            duration = min(duration, 60 * 60 * 24 * 365)
+            ban_until = utc_iso(utc_now_dt() + timedelta(seconds=duration))
     with get_db_connection() as conn:
         conn.execute(
             '''
             UPDATE users
-            SET banned = ?, ban_reason = ?, banned_at = ?
+            SET banned = ?, ban_reason = ?, banned_at = ?, ban_until = ?
             WHERE id = ?
             ''',
-            (1 if banned else 0, reason_text if banned else None, banned_at, user['id']),
+            (1 if banned else 0, reason_text if banned else None, banned_at, ban_until if banned else None, user['id']),
         )
         conn.commit()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
@@ -798,6 +842,60 @@ def _parse_utc(value):
         return datetime.fromisoformat(text)
     except ValueError:
         return None
+
+
+def _remaining_seconds_until(value):
+    until_dt = _parse_utc(value)
+    if until_dt is None:
+        return None
+    return max(0, int((until_dt - utc_now_dt()).total_seconds()))
+
+
+def _clear_expired_user_ban(conn, row):
+    if row is None:
+        return None
+    is_banned = bool(row['banned']) if 'banned' in row.keys() else False
+    if not is_banned:
+        return row
+    ban_until = row['ban_until'] if 'ban_until' in row.keys() else None
+    until_dt = _parse_utc(ban_until)
+    if until_dt is not None and until_dt <= utc_now_dt():
+        conn.execute(
+            'UPDATE users SET banned = 0, ban_reason = NULL, banned_at = NULL, ban_until = NULL WHERE id = ?',
+            (row['id'],),
+        )
+        conn.commit()
+        return conn.execute('SELECT * FROM users WHERE id = ?', (row['id'],)).fetchone()
+    return row
+
+
+def get_user_ban_status(user_id=None, username=None):
+    with get_db_connection() as conn:
+        row = None
+        if user_id is not None:
+            try:
+                uid = int(user_id)
+                row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+            except (TypeError, ValueError):
+                row = None
+        if row is None and username:
+            row = _find_user_row_by_username_key(conn, username)
+        row = _clear_expired_user_ban(conn, row)
+        if row is None:
+            return {'banned': False}
+        is_banned = bool(row['banned']) if 'banned' in row.keys() else False
+        if not is_banned:
+            return {'banned': False, 'user': row_to_user(row)}
+        ban_until = row['ban_until'] if 'ban_until' in row.keys() else None
+        remaining = _remaining_seconds_until(ban_until)
+        return {
+            'banned': True,
+            'user': row_to_user(row),
+            'reason': (row['ban_reason'] if 'ban_reason' in row.keys() else '') or '',
+            'ban_until': ban_until,
+            'remaining_seconds': remaining,
+            'permanent': remaining is None,
+        }
 
 
 def record_chat_message(room_id, channel, sender_user_id, sender_name, message, normalized_message='', risk_level=0, hidden=False):
@@ -1391,7 +1489,9 @@ def get_user_by_id(user_id):
     except (TypeError, ValueError):
         return None
     with get_db_connection() as conn:
-        return row_to_user(conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone())
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        row = _clear_expired_user_ban(conn, row)
+        return row_to_user(row)
 
 
 def get_user_by_username(username):
@@ -1399,7 +1499,9 @@ def get_user_by_username(username):
     if not name:
         return None
     with get_db_connection() as conn:
-        return row_to_user(_find_user_row_by_username_key(conn, name))
+        row = _find_user_row_by_username_key(conn, name)
+        row = _clear_expired_user_ban(conn, row)
+        return row_to_user(row)
 
 
 def _remember_token_hash(token):

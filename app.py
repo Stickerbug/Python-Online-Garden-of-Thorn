@@ -66,8 +66,10 @@ from db import (
     create_remember_token,
     create_user,
     find_user_for_admin,
+    format_duration_zh,
     get_admin_user_detail,
     get_chat_message_with_context,
+    get_user_ban_status,
     get_report_detail,
     get_user_by_id,
     get_user_role_profile,
@@ -119,6 +121,7 @@ from replay_core import (
 )
 from security import (
     is_muted,
+    mute_remaining_seconds,
     mute_user,
     rate_limiter,
     recent_suspicious_events,
@@ -582,6 +585,39 @@ def record_auth_login_failure(ip):
 
 def clear_auth_login_failures(ip):
     AUTH_LOGIN_FAILURES.pop(ip, None)
+
+
+def moderation_duration_text(remaining_seconds=None, permanent=False):
+    if permanent or remaining_seconds is None:
+        return '永久'
+    return format_duration_zh(max(0, int(remaining_seconds or 0)))
+
+
+def ban_error_payload(status, *, reason_key='reason'):
+    reason = (status or {}).get('reason') or ''
+    remaining = (status or {}).get('remaining_seconds')
+    permanent = bool((status or {}).get('permanent')) or remaining is None
+    duration_text = moderation_duration_text(remaining, permanent)
+    message = f'账号已被封禁（剩余{duration_text}）：{reason}' if not permanent and reason else (
+        f'账号已被封禁（永久）：{reason}' if reason else (
+            f'账号已被封禁（剩余{duration_text}）' if not permanent else '账号已被封禁（永久）'
+        )
+    )
+    payload = {
+        reason_key: message,
+        'remaining_seconds': remaining,
+        'permanent': permanent,
+        'ban_until': (status or {}).get('ban_until'),
+    }
+    if reason:
+        payload['ban_reason'] = reason
+    return payload
+
+
+def muted_error_payload(remaining_seconds=0, *, message='你已被禁言，请稍后再试'):
+    remaining = max(0, int(remaining_seconds or 0))
+    text = f'{message}（剩余{format_duration_zh(remaining)}）' if remaining else message
+    return {'message': text, 'remaining_seconds': remaining}
 
 
 def db_unavailable_response():
@@ -2035,11 +2071,17 @@ def _apply_report_moderation_action(report_detail, moderation_action, duration_s
         set_user_mute(target_user_id, target_username, seconds, note, session.get('username') or ADMIN_PLAYER_DISPLAY_NAME)
         for sid in _online_sids_for_user(target_user_id, target_username):
             mute_user(chat_mute_key(sid, players.get(sid, {})), seconds, note)
-            socketio.emit('server_error', {'message': '你已被管理员禁言'}, room=sid)
+            socketio.emit('server_error', muted_error_payload(seconds, message='你已被管理员禁言'), room=sid)
     elif action == 'ban' and (target_user_id or target_username):
         target = target_user_id or target_username
-        admin_set_user_ban(target, True, note)
+        try:
+            duration = int(duration_seconds or 0) if str(duration_seconds or '').strip() else None
+        except (TypeError, ValueError):
+            duration = None
+        user, _ = admin_set_user_ban(target, True, note, duration_seconds=duration)
+        status = get_user_ban_status(user_id=(user or {}).get('id'), username=target_username) if user else {'banned': True, 'reason': note, 'remaining_seconds': duration, 'permanent': duration is None}
         for sid in _online_sids_for_user(target_user_id, target_username):
+            socketio.emit('server_error', {'message': ban_error_payload(status).get('reason', '账号已被封禁')}, room=sid)
             socketio.emit('kicked', {'reason': 'account banned'}, room=sid)
             socketio.server.disconnect(sid)
     elif action == 'warn':
@@ -3049,7 +3091,7 @@ ADMIN_COMMANDS = {
     'kick': 'kick <sid|昵称> - 踢出玩家',
     'mutechat': 'mutechat <sid|昵称> [秒数] - 禁言在线玩家',
     'userpass': 'userpass <ID|注册顺序|用户名> <新密码> - 管理员修改账号密码',
-    'banuser': 'banuser <ID|注册顺序|用户名> [原因] - 封禁账号并踢下线',
+    'banuser': 'banuser <ID|注册顺序|用户名> [秒数] [原因] - 封禁账号并踢下线；不填秒数为永久',
     'unbanuser': 'unbanuser <ID|注册顺序|用户名> - 解除账号封禁',
     'role': 'role list|get|set|clear ... - 管理账号身份；例：role set 46namknat staff title=设计师 color=bloom',
     'gitpull': 'gitpull - 手动拉取 GitHub origin/main（只允许 fast-forward，不覆盖本地改动）',
@@ -3666,11 +3708,22 @@ def execute_admin_command(line):
         return {'success': True, 'output': f"已修改账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 的密码。"}
     if cmd in ('banuser', 'banaccount'):
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> [原因]')}
-        reason = raw.split(None, 2)[2].strip() if len(raw.split(None, 2)) >= 3 else ''
-        user, error = admin_set_user_ban(parts[1], True, reason)
+            return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> [秒数] [原因]')}
+        duration = None
+        reason_parts = parts[2:]
+        if reason_parts:
+            try:
+                parsed_duration = int(reason_parts[0])
+            except (TypeError, ValueError):
+                parsed_duration = None
+            if parsed_duration is not None and parsed_duration > 0:
+                duration = parsed_duration
+                reason_parts = reason_parts[1:]
+        reason = ' '.join(reason_parts).strip()
+        user, error = admin_set_user_ban(parts[1], True, reason, duration_seconds=duration)
         if error:
             return {'success': False, 'output': error}
+        status = get_user_ban_status(user_id=user['id'])
         kicked = []
         with _lock:
             for sid, player in list(players.items()):
@@ -3681,12 +3734,14 @@ def execute_admin_command(line):
                     kicked.append((sid, player.get('nickname', user['username'])))
                     remove_player_by_admin(sid)
         for sid, _nickname in kicked:
+            socketio.emit('server_error', {'message': ban_error_payload(status).get('reason', '账号已被封禁')}, room=sid)
             socketio.emit('kicked', {'reason': 'account banned'}, room=sid)
         if kicked:
             broadcast_lobby()
         admin_event('admin', f"banned account {user['username']}#{user['id']}: {reason or '-'}")
         suffix = f" 原因：{reason}" if reason else ''
-        return {'success': True, 'output': f"已封禁账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']})。已踢出在线会话 {len(kicked)} 个。{suffix}"}
+        duration_label = f"时长：{format_duration_zh(duration)}。" if duration else "时长：永久。"
+        return {'success': True, 'output': f"已封禁账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']})。{duration_label}已踢出在线会话 {len(kicked)} 个。{suffix}"}
     if cmd in ('unbanuser', 'unbanaccount'):
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名>')}
@@ -5506,6 +5561,11 @@ def api_auth_login():
     user, error = verify_user(data.get('username', ''), data.get('password', ''))
     if error:
         record_auth_login_failure(ip)
+        if str(error).startswith('账号已被封禁'):
+            status = get_user_ban_status(username=data.get('username', ''))
+            payload = ban_error_payload(status, reason_key='error') if status.get('banned') else {'error': error}
+            payload['success'] = False
+            return jsonify(payload), 401
         return jsonify({'success': False, 'error': error}), 401
     clear_auth_login_failures(ip)
     _set_account_session(user)
@@ -5552,12 +5612,10 @@ def api_auth_me():
         return jsonify({'authenticated': False, 'db_available': True})
     if user.get('banned'):
         _clear_account_session()
-        reason = user.get('ban_reason') or ''
-        return _clear_remember_cookie(jsonify({
-            'authenticated': False,
-            'db_available': True,
-            'error': f'账号已被封禁：{reason}' if reason else '账号已被封禁',
-        }))
+        status = get_user_ban_status(user_id=user.get('id'), username=user.get('username'))
+        payload = ban_error_payload(status, reason_key='error') if status.get('banned') else {'error': '账号已被封禁'}
+        payload.update({'authenticated': False, 'db_available': True})
+        return _clear_remember_cookie(jsonify(payload))
     _set_account_session(user)
     response = jsonify({'authenticated': True, 'db_available': True, 'user': auth_user_payload(user)})
     if not request.cookies.get(REMEMBER_COOKIE_NAME):
@@ -6245,8 +6303,8 @@ def on_login(data):
     if account_user and account_user.get('banned'):
         session.pop('user_id', None)
         session.pop('username', None)
-        reason = account_user.get('ban_reason') or ''
-        emit('login_fail', {'reason': f'账号已被封禁：{reason}' if reason else '账号已被封禁'})
+        status = get_user_ban_status(user_id=account_user.get('id'), username=account_user.get('username'))
+        emit('login_fail', ban_error_payload(status) if status.get('banned') else {'reason': '账号已被封禁'})
         return
     if wants_account_login and not account_user:
         emit('login_fail', {'reason': 'Account session expired'})
@@ -7093,13 +7151,19 @@ def on_chat(data):
         player = players[sid]
         mute_key = chat_mute_key(sid, player)
         if is_muted(mute_key):
-            emit('server_error', {'message': '你已被禁言，请稍后再试'})
+            emit('server_error', muted_error_payload(mute_remaining_seconds(mute_key)))
             _security_record('chat_muted_attempt', 'muted player tried to chat', sid=sid, severity='low')
             return
         if DB_AVAILABLE and player.get('user_id'):
             muted, mute_info = is_user_muted_db(player.get('user_id'))
             if muted:
-                emit('server_error', {'message': '你已被禁言，请稍后再试'})
+                remaining = 0
+                try:
+                    until_dt = datetime.fromisoformat(str(mute_info.get('muted_until') or '').replace('Z', '+00:00'))
+                    remaining = max(0, int((until_dt - datetime.now(timezone.utc)).total_seconds()))
+                except Exception:
+                    remaining = 0
+                emit('server_error', muted_error_payload(remaining))
                 _security_record('chat_muted_attempt', 'db-muted player tried to chat', sid=sid, severity='low', extra=mute_info)
                 return
         room_id = player.get('room_id')
@@ -7150,7 +7214,7 @@ def on_chat(data):
                 except Exception as exc:
                     admin_event('error', f'failed to persist severe chat mute: {exc}')
             _security_record('chat_rejected', 'severe chat risk rejected', sid=sid, severity='high', extra={'rules': matched_rules})
-            emit('server_error', {'message': '消息包含高风险内容，已被拦截'})
+            emit('server_error', muted_error_payload(300, message='消息包含高风险内容，已被拦截并临时禁言'))
             return
         if risk_action == 'mask_flag' or risk_level >= 3:
             text = risk.get('sanitized_text') or text
