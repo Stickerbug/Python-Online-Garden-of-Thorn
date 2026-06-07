@@ -5785,14 +5785,15 @@ let termIntroOverlayEl = null;
 let termIntroCardGhostEl = null;
 
 function getTermIntroLibrary() {
+    const magicDamageDesc = '不能被护甲、圆盘、邪眼等减少。注意，不是“消耗魔力造成的伤害”。';
     return {
         card_type_thorn: { label: getCardTypeLabel('thorn') || 'Thorn', desc: '攻击牌。需要选择目标，主要用来压低对方 H；2v2 中也可以攻击队友。', color: CARD_TYPE_COLORS.thorn },
         card_type_bloom: { label: getCardTypeLabel('bloom') || 'Bloom', desc: '技能牌。用于回血、抽牌、加状态、调整 E/M 或改变场面。', color: CARD_TYPE_COLORS.bloom },
         card_type_root: { label: getCardTypeLabel('root') || 'Root', desc: '装备牌。打出后留在装备栏，有些过一回合后才能主动触发，有些能持续提供效果。', color: CARD_TYPE_COLORS.root },
         card_type_guard: { label: getCardTypeLabel('guard') || 'Guard', desc: '反制牌。仅对方行动弹出反制窗口时可使用，用来闪避、保护装备或减少伤害。', color: CARD_TYPE_COLORS.guard },
         D: { label: 'D：物理伤害(Damage)', desc: '会受护甲、装备、闪避和反制影响。只有实际造成伤害，才会触发淬毒、尖牙回血等效果。', color: COLORS.damage },
-        electric_damage: { label: '电伤：电击伤害(Electric Damage)', desc: '电池造成的电击伤害，是一种魔法伤害；它表现为直接打到目标，但不会被护甲、圆盘或邪眼减少。', color: COLORS.damage },
-        magic_damage: { label: '魔法伤害(Magic Damage)', desc: '不能被护甲、圆盘、邪眼等减少。注意，不是“消耗魔力造成的伤害”。', color: COLORS.magic },
+        electric_damage: { label: '电伤：电击伤害(Electric Damage)', desc: `一种类似于物理伤害的魔法伤害。${magicDamageDesc}`, color: COLORS.damage },
+        magic_damage: { label: '魔法伤害(Magic Damage)', desc: magicDamageDesc, color: COLORS.magic },
         A: { label: 'A：护甲(Armor)', desc: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。', color: COLORS.armor_text },
         P: { label: 'P：中毒(Poison)', desc: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', color: COLORS.poison },
         F: { label: 'F：灼烧(Fire)', desc: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 20 回合及以上后，每回合开始时对所有玩家施加一层灼烧。', color: COLORS.fire },
