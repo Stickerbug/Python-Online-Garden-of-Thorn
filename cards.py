@@ -5,6 +5,32 @@ import copy
 
 ERROR_CARD_ID = 'Error'
 
+CARD_FLAG_ALIASES = {
+    'tag_troll_cards:exile': 'exile',
+    'troll_cards:exile': 'exile',
+    'tag_troll_cards_exile': 'exile',
+    'troll_cards_exile': 'exile',
+}
+
+
+def normalize_card_flag(flag: Any) -> str:
+    text = str(flag or '').strip()
+    if not text:
+        return ''
+    return CARD_FLAG_ALIASES.get(text.lower(), text)
+
+
+def normalize_card_flags(flags) -> Set[str]:
+    if not flags:
+        return set()
+    if isinstance(flags, str):
+        raw_items = [item.strip() for item in flags.replace(',', ' ').split()]
+    elif isinstance(flags, dict):
+        raw_items = [item for item, enabled in flags.items() if enabled]
+    else:
+        raw_items = list(flags)
+    return {flag for flag in (normalize_card_flag(item) for item in raw_items) if flag}
+
 
 @dataclass
 class CardDef:
@@ -103,7 +129,10 @@ class CardInstance:
 
     @property
     def flags(self) -> Set[str]:
-        return (self.card_def.flags | self.instance_flags) - self.disabled_flags
+        base = normalize_card_flags(self.card_def.flags)
+        added = normalize_card_flags(self.instance_flags)
+        disabled = normalize_card_flags(self.disabled_flags)
+        return (base | added) - disabled
 
     def to_dict(self) -> dict:
         return {
@@ -138,8 +167,8 @@ class CardInstance:
             bonus_damage=max(0, int(d.get('bonus_damage', 0))),
             held_turns=max(0, int(d.get('held_turns', 0))),
             return_to_hand_turns=max(0, int(d.get('return_to_hand_turns', 0))),
-            instance_flags=set(d.get('instance_flags', [])),
-            disabled_flags=set(d.get('disabled_flags', [])),
+            instance_flags=normalize_card_flags(d.get('instance_flags', [])),
+            disabled_flags=normalize_card_flags(d.get('disabled_flags', [])),
         )
 
     def copy(self) -> 'CardInstance':

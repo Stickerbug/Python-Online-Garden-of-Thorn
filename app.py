@@ -32,10 +32,12 @@ from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
+    normalize_card_flag, normalize_card_flags,
 )
 from mod_loader import GAME_VERSION, merge_mod_cards_to_card_defs, load_all_mods, get_mod_asset
 from mod_loadout_v2 import build_v2_loadout
 from mod_spec_v2 import sha256_json
+from font_subsets import ensure_community_font_subset
 from card_i18n import apply_card_i18n_defaults, card_text, event_text
 from runtime_errors import set_mod_runtime_error_logger
 from r2_mods import (
@@ -2270,13 +2272,13 @@ def register_v2_loadout_cards(v2_loadout):
             continue
         runtime_id = str(resource.get('legacy_id') or resource.get('runtime_id') or card_id)
         cost = resource.get('cost') if isinstance(resource.get('cost'), dict) else {}
-        flags = set(resource.get('flags', []) if isinstance(resource.get('flags', []), list) else [])
+        flags = normalize_card_flags(resource.get('flags', []) if isinstance(resource.get('flags', []), list) else [])
         if isinstance(resource.get('tags'), list):
             for tag in resource.get('tags') or []:
                 tag_text = str(tag)
                 if tag_text.startswith('gtn:'):
                     tag_text = tag_text.split(':', 1)[1]
-                flags.add(tag_text)
+                flags.add(normalize_card_flag(tag_text))
         card_def = CardDef(
             id=runtime_id,
             name_en=str(resource.get('name_en') or resource.get('name') or _v2_card_name_from_id(card_id)),
@@ -3281,7 +3283,7 @@ def make_admin_card_instance(card_id, options):
     tags = [t for t in options.get('tags', []) if t]
     if tags:
         card.instance_flags = set(getattr(card, 'instance_flags', set()) or set())
-        card.instance_flags.update(tags)
+        card.instance_flags.update(normalize_card_flag(tag) for tag in tags)
     fusion = int(options.get('fusion', 1) or 1)
     fission = int(options.get('fission', 1) or 1)
     card.fusion_level = max(1, fusion)
@@ -5887,6 +5889,29 @@ def api_community_mod_validate_url():
         return jsonify({'success': result.get('ok', False), **result})
     except Exception as exc:
         admin_event('error', f'validate community mod url failed: {exc}')
+        return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
+
+
+@app.route('/api/font-subsets/community', methods=['POST'])
+def api_community_font_subset():
+    data = request.get_json(silent=True) or {}
+    try:
+        community_fields, community_mods = resolve_community_loadout(data)
+        if community_fields.get('mod_source') != 'community':
+            return jsonify({'success': True, 'font_subset': {'url': '', 'missing_count': 0, 'warnings': []}})
+        mod_datas = [
+            getattr(mod, 'community_data', None)
+            for mod in (community_mods or [])
+            if getattr(mod, 'community_data', None) is not None
+        ]
+        report = ensure_community_font_subset(
+            mod_datas,
+            hash_key=community_fields.get('community_mod_hash', ''),
+            generate=True,
+        )
+        return jsonify({'success': True, 'font_subset': report})
+    except Exception as exc:
+        admin_event('error', f'community font subset failed: {exc}')
         return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
 
 

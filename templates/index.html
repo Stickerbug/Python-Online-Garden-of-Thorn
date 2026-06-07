@@ -6,8 +6,8 @@
 <title>Garden of Thorn 荆棘花园</title>
 <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
-<link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=174">
+<link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/css/style.css?v=184">
 <script>
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
@@ -725,7 +725,7 @@
 (() => {
   const loadMainFont = () => {
     if (!('FontFace' in window)) return;
-    const font = new FontFace('Kreadon', "url('/fonts/Kreadon-Regular.subset.woff2') format('woff2')", {
+    const font = new FontFace('Kreadon', "url('/fonts/Kreadon-Regular.subset.woff2?v=2') format('woff2')", {
       weight: '400',
       style: 'normal'
     });
@@ -742,6 +742,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-<script src="/static/js/game.js?v=194"></script>
+<script src="/static/js/game.js?v=205"></script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import zipfile
 
 from fontTools.ttLib import TTFont
 from fontTools.subset import Subsetter, Options
@@ -9,22 +10,101 @@ from fontTools.subset import Subsetter, Options
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 FONTS_DIR = os.path.join(PROJECT_DIR, 'static', 'fonts')
 
-SOURCE_FILES = [
-    os.path.join(PROJECT_DIR, 'cards.py'),
-    os.path.join(PROJECT_DIR, 'game_engine.py'),
-    os.path.join(PROJECT_DIR, 'static', 'js', 'game.js'),
-    os.path.join(PROJECT_DIR, 'templates', 'index.html'),
-    os.path.join(PROJECT_DIR, 'mod_loader.py'),
-    os.path.join(PROJECT_DIR, 'app.py'),
-]
+TEXT_EXTENSIONS = {
+    '.py', '.js', '.css', '.html', '.json', '.toml', '.md', '.txt',
+}
+
+ZIP_TEXT_EXTENSIONS = {
+    '.json', '.txt', '.md',
+}
+
+EXCLUDED_DIRS = {
+    '.git', '__pycache__', 'venv', '.venv', 'node_modules', '.pytest_cache',
+    'third_party', 'vendor', 'assets',
+}
+
+EXCLUDED_FILES = {
+    # 词库不是玩家可见常规文案，纳入会显著膨胀中文子集。
+    os.path.normcase(os.path.join(PROJECT_DIR, 'static', 'data', 'moderation_rules.json')),
+    os.path.normcase(os.path.join(PROJECT_DIR, 'playerid_blacklist.txt')),
+}
 
 EXTRA_RANGES = [
     (0x3040, 0x309F, '平假名'),
     (0x30A0, 0x30FF, '片假名'),
     (0xFF65, 0xFF9F, '半角片假名'),
-    (0xAC00, 0xD7AF, '韩文音节'),
-    (0x1100, 0x11FF, '韩文字母'),
 ]
+
+
+def should_scan_file(fpath):
+    norm = os.path.normcase(os.path.abspath(fpath))
+    if norm in EXCLUDED_FILES:
+        return False
+    ext = os.path.splitext(fpath)[1].lower()
+    return ext in TEXT_EXTENSIONS
+
+
+def decode_unicode_escapes(text):
+    def repl_short(match):
+        try:
+            return chr(int(match.group(1), 16))
+        except ValueError:
+            return match.group(0)
+
+    def repl_long(match):
+        try:
+            return chr(int(match.group(1), 16))
+        except ValueError:
+            return match.group(0)
+
+    text = re.sub(r'\\u([0-9a-fA-F]{4})', repl_short, text)
+    text = re.sub(r'\\U([0-9a-fA-F]{8})', repl_long, text)
+    return text
+
+
+def add_text_chars(chars, content):
+    before = len(chars)
+    chars.update(content)
+    decoded = decode_unicode_escapes(content)
+    if decoded != content:
+        chars.update(decoded)
+    return len(chars) - before
+
+
+def iter_project_text_files():
+    for root, dirs, files in os.walk(PROJECT_DIR):
+        dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
+        for name in files:
+            fpath = os.path.join(root, name)
+            if should_scan_file(fpath):
+                yield fpath
+
+
+def read_text_file(fpath):
+    try:
+        with open(fpath, 'r', encoding='utf-8') as f:
+            return f.read()
+    except UnicodeDecodeError:
+        with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
+            return f.read()
+
+
+def collect_chars_from_gtnmod(chars, fpath):
+    added_total = 0
+    try:
+        with zipfile.ZipFile(fpath) as zf:
+            for info in zf.infolist():
+                ext = os.path.splitext(info.filename)[1].lower()
+                if ext not in ZIP_TEXT_EXTENSIONS or info.file_size > 512 * 1024:
+                    continue
+                try:
+                    content = zf.read(info).decode('utf-8')
+                except UnicodeDecodeError:
+                    content = zf.read(info).decode('utf-8', errors='replace')
+                added_total += add_text_chars(chars, content)
+    except zipfile.BadZipFile:
+        print(f'  [跳过] {os.path.relpath(fpath, PROJECT_DIR)} 不是有效 gtnmod/zip')
+    return added_total
 
 
 def collect_chars_from_files():
@@ -32,23 +112,26 @@ def collect_chars_from_files():
     for start, end, name in EXTRA_RANGES:
         for cp in range(start, end + 1):
             chars.add(chr(cp))
-    for fpath in SOURCE_FILES:
-        if not os.path.exists(fpath):
-            print(f'  [跳过] {fpath} 不存在')
-            continue
-        try:
-            with open(fpath, 'r', encoding='utf-8') as f:
-                content = f.read()
-        except UnicodeDecodeError:
-            with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
-                content = f.read()
-        before = len(chars)
-        for ch in content:
-            chars.add(ch)
-        added = len(chars) - before
+    scanned = 0
+    for fpath in iter_project_text_files():
+        content = read_text_file(fpath)
+        added = add_text_chars(chars, content)
         fsize = os.path.getsize(fpath)
         ja_chars_in_file = sum(1 for c in content if 0x3040 <= ord(c) <= 0x309F or 0x30A0 <= ord(c) <= 0x30FF)
-        print(f'  [{added:+d}] {os.path.basename(fpath)} ({fsize/1024:.0f}KB, 日文字符: {ja_chars_in_file})')
+        rel = os.path.relpath(fpath, PROJECT_DIR)
+        print(f'  [{added:+d}] {rel} ({fsize/1024:.0f}KB, 日文字符: {ja_chars_in_file})')
+        scanned += 1
+    for root, dirs, files in os.walk(PROJECT_DIR):
+        dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
+        for name in files:
+            if not name.lower().endswith('.gtnmod'):
+                continue
+            fpath = os.path.join(root, name)
+            added = collect_chars_from_gtnmod(chars, fpath)
+            rel = os.path.relpath(fpath, PROJECT_DIR)
+            print(f'  [{added:+d}] {rel} 包内文本')
+            scanned += 1
+    print(f'  扫描文件/包: {scanned}')
     return chars
 
 

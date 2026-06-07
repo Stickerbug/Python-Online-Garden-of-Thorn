@@ -10,7 +10,7 @@ from cards import (
     BASE_MAX_ELIXIR, BASE_MAX_MAGIC, INITIAL_HEALTH, INITIAL_ELIXIR,
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     DECK_SIZE, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, build_draft_pool, generate_draft_options,
-    create_deck_from_draft, ERROR_CARD_ID,
+    create_deck_from_draft, ERROR_CARD_ID, normalize_card_flag, normalize_card_flags,
 )
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 from mod_runtime_v2 import run_v2_event, run_v2_steps, validate_v2_ui_response
@@ -3498,7 +3498,7 @@ class GameEngine:
             self.log_msg(log or f"{self.pn(player_id)}没有足够的{card_type}牌聚变")
 
     def _atomic_add_tag(self, player_id, card, params, log, choice, context):
-        tag = params.get('tag', '')
+        tag = normalize_card_flag(params.get('tag', ''))
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if tag and target_card:
             target_card.instance_flags = getattr(target_card, 'instance_flags', set())
@@ -3506,7 +3506,7 @@ class GameEngine:
             self.log_msg(log or f"{target_card.name_cn}获得标签{tag}")
 
     def _atomic_remove_tag(self, player_id, card, params, log, choice, context):
-        tag = params.get('tag', '')
+        tag = normalize_card_flag(params.get('tag', ''))
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if tag and target_card and hasattr(target_card, 'instance_flags'):
             target_card.instance_flags.discard(tag)
@@ -4097,7 +4097,7 @@ class GameEngine:
             self._atomic_status_remove_named(player_id, card, {'target': 'self' if tid == player_id else 'enemy', 'status': params.get('status', '')}, log, choice, context)
 
     def _atomic_tag_add_named(self, player_id, card, params, log, choice, context):
-        tag = str(params.get('tag', '')).strip()
+        tag = normalize_card_flag(params.get('tag', ''))
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if tag and target_card:
             target_card.instance_flags = getattr(target_card, 'instance_flags', set())
@@ -4105,7 +4105,7 @@ class GameEngine:
             self.log_msg(log or f"{target_card.name_cn}添加标签[{tag}]")
 
     def _atomic_tag_remove_named(self, player_id, card, params, log, choice, context):
-        tag = str(params.get('tag', '')).strip()
+        tag = normalize_card_flag(params.get('tag', ''))
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if tag and target_card:
             target_card.instance_flags = getattr(target_card, 'instance_flags', set())
@@ -5334,9 +5334,9 @@ class GameEngine:
                 target_card = self._resolve_card_ref(player_id, expr.get('card', {'ref': 'current_card'}), card)
                 if target_card is None:
                     return 0
-                flags = set(getattr(target_card.card_def, 'flags', set()) or set())
-                flags.update(getattr(target_card, 'instance_flags', set()) or set())
-                flags.difference_update(getattr(target_card, 'disabled_flags', set()) or set())
+                flags = normalize_card_flags(getattr(target_card.card_def, 'flags', set()) or set())
+                flags.update(normalize_card_flags(getattr(target_card, 'instance_flags', set()) or set()))
+                flags.difference_update(normalize_card_flags(getattr(target_card, 'disabled_flags', set()) or set()))
                 return len(flags)
             if ref == 'card_def_property':
                 return self._get_card_def_property_value(player_id, expr.get('card', ''), expr.get('property', 'cost_e'), card)
@@ -5406,10 +5406,10 @@ class GameEngine:
             target_card = self._resolve_card_ref(player_id, cond.get('card', {'ref': 'current_card'}), card)
             if target_card is None:
                 return False
-            tag = str(cond.get('tag', '')).strip()
-            flags = set(getattr(target_card.card_def, 'flags', set()) or set())
-            flags.update(getattr(target_card, 'instance_flags', set()) or set())
-            flags.difference_update(getattr(target_card, 'disabled_flags', set()) or set())
+            tag = normalize_card_flag(cond.get('tag', ''))
+            flags = normalize_card_flags(getattr(target_card.card_def, 'flags', set()) or set())
+            flags.update(normalize_card_flags(getattr(target_card, 'instance_flags', set()) or set()))
+            flags.difference_update(normalize_card_flags(getattr(target_card, 'disabled_flags', set()) or set()))
             return tag in flags
         return self._base_eval_condition(player_id, cond, card)
 
@@ -5738,9 +5738,9 @@ class GameEngine:
     def _effective_card_flags(self, target_card: Optional[CardInstance]) -> Set[str]:
         if target_card is None:
             return set()
-        flags = set(getattr(target_card.card_def, 'flags', set()) or set())
-        flags.update(getattr(target_card, 'instance_flags', set()) or set())
-        flags.difference_update(getattr(target_card, 'disabled_flags', set()) or set())
+        flags = normalize_card_flags(getattr(target_card.card_def, 'flags', set()) or set())
+        flags.update(normalize_card_flags(getattr(target_card, 'instance_flags', set()) or set()))
+        flags.difference_update(normalize_card_flags(getattr(target_card, 'disabled_flags', set()) or set()))
         return flags
 
     def _event_relation_matches(self, listener_owner: int, actor_id: int, relation: str) -> bool:

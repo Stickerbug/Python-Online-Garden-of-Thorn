@@ -19,6 +19,12 @@ const ERROR_CARD_ID = 'Error';
 const MOD_RUNTIME_ERROR_MESSAGE = '模组执行出现了一个意外错误。请联系管理员。';
 const CORRUPTION_DAMAGE_MULTIPLIER = 1.5;
 const LATE_ROUND_FIRE_START = 20;
+const CARD_FLAG_ALIASES = {
+    'tag_troll_cards:exile': 'exile',
+    'troll_cards:exile': 'exile',
+    'tag_troll_cards_exile': 'exile',
+    'troll_cards_exile': 'exile',
+};
 
 class ModLoopBreak extends Error {}
 class ModLoopContinue extends Error {}
@@ -139,6 +145,24 @@ function toInt(value, fallbackValue = 0) {
 
 function escapeRegExp(value) {
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeCardFlag(flag) {
+    const text = String(flag == null ? '' : flag).trim();
+    if (!text) return '';
+    return CARD_FLAG_ALIASES[text.toLowerCase()] || text;
+}
+
+function normalizeCardFlags(flags) {
+    if (!flags) return [];
+    if (flags instanceof Set) return Array.from(flags).map(normalizeCardFlag).filter(Boolean);
+    if (Array.isArray(flags)) return flags.map(normalizeCardFlag).filter(Boolean);
+    if (typeof flags === 'string') return flags.split(/[,\s]+/).map(normalizeCardFlag).filter(Boolean);
+    if (typeof flags === 'object') return Object.entries(flags)
+        .filter(([_, enabled]) => !!enabled)
+        .map(([flag]) => normalizeCardFlag(flag))
+        .filter(Boolean);
+    return [];
 }
 
 function cardDef(defId) {
@@ -314,8 +338,8 @@ class LocalCard {
         this.fusion_level = Math.max(1, toInt(source.fusion_level ?? this.fusion_multiplier, 1));
         this.mimic_discount = toInt(source.mimic_discount, 0);
         this.fission_hit = toInt(source.fission_hit, 0);
-        this.instance_flags = new Set(source.instance_flags || []);
-        this.disabled_flags = new Set(source.disabled_flags || []);
+        this.instance_flags = new Set(normalizeCardFlags(source.instance_flags || []));
+        this.disabled_flags = new Set(normalizeCardFlags(source.disabled_flags || []));
         this.bonus_damage = toInt(source.bonus_damage, 0);
         this.return_to_hand_turns = toInt(source.return_to_hand_turns, 0);
         this.held_turns = toInt(source.held_turns, 0);
@@ -346,7 +370,7 @@ class LocalCard {
     }
 
     get flags() {
-        const flags = new Set(this.def().flags || []);
+        const flags = new Set(normalizeCardFlags(this.def().flags || []));
         this.instance_flags.forEach(flag => flags.add(flag));
         this.disabled_flags.forEach(flag => flags.delete(flag));
         return flags;
@@ -1956,7 +1980,7 @@ class LocalSoloEngine {
         if (op === 'has_tag') {
             const targetCard = this.resolveCardRef(playerId, cond.card || { ref: 'current_card' }, currentCard);
             if (!targetCard) return false;
-            const tag = String(cond.tag || '');
+            const tag = normalizeCardFlag(cond.tag || '');
             return targetCard.flags.has(tag);
         }
         if (op === 'damage_source_relation') {
@@ -3133,7 +3157,7 @@ class LocalSoloEngine {
 
     effect_tag_add_named(playerId, card, params, log) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
-        const tag = String(params.tag || '').trim();
+        const tag = normalizeCardFlag(params.tag || '');
         if (!target || !tag) return;
         target.instance_flags.add(tag);
         if (log) this.logMsg(log);
@@ -3141,7 +3165,7 @@ class LocalSoloEngine {
 
     effect_tag_remove_named(playerId, card, params, log) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
-        const tag = String(params.tag || '').trim();
+        const tag = normalizeCardFlag(params.tag || '');
         if (!target || !tag) return;
         target.instance_flags.delete(tag);
         if (log) this.logMsg(log);

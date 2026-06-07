@@ -9,6 +9,7 @@ import posixpath
 import zipfile
 from typing import Dict, List, Optional, Any
 from mod_validator_v2 import validate_mod_v2
+from cards import normalize_card_flag, normalize_card_flags
 
 def _get_base_dir():
     if getattr(sys, 'frozen', False):
@@ -262,7 +263,7 @@ class ModCard:
         self.quality = data.get('quality', 'Common')
         self.description = data.get('description', '')
         self.effect_text = data.get('effect_text', '')
-        self.flags = set(data.get('flags', []))
+        self.flags = normalize_card_flags(data.get('flags', []))
         self.effects = data.get('effects', [])
         self.scripts = data.get('scripts', {}) if isinstance(data.get('scripts', {}), dict) else {}
         self.trigger_cost_e = data.get('trigger_cost_e', -1)
@@ -520,12 +521,12 @@ def _v2_card_to_legacy_data(resource: dict) -> dict:
         card['cost_e'] = cost.get('e', 0)
     if 'cost_m' not in card:
         card['cost_m'] = cost.get('m', 0)
-    flags = set(card.get('flags', []) if isinstance(card.get('flags', []), list) else [])
+    flags = normalize_card_flags(card.get('flags', []) if isinstance(card.get('flags', []), list) else [])
     for tag in card.get('tags', []) if isinstance(card.get('tags', []), list) else []:
         tag_text = str(tag)
         if tag_text.startswith('gtn:'):
             tag_text = tag_text.split(':', 1)[1]
-        flags.add(tag_text)
+        flags.add(normalize_card_flag(tag_text))
     card['flags'] = list(flags)
     events = card.get('events') if isinstance(card.get('events'), dict) else {}
     card['v2_events'] = copy.deepcopy(events)

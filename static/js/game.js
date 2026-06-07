@@ -83,8 +83,8 @@ const I18N = {
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable',
-        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Infinite Fire exclude',
+        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Infinite Fire exclude',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
@@ -191,7 +191,7 @@ I18N.zh = { ...I18N.en,
     status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼',
     status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力排除',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
@@ -232,7 +232,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力排除',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '开局事件', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
@@ -314,7 +314,7 @@ I18N.fr = { ...I18N.en,
     set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks doivent avoir exactement 15 cartes',
     solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
     edit_tags: 'Modifier tags', tag_precision: 'Précision', tag_exile: 'Exil', tag_non_stackable: 'Non-cumul',
-    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Soi uniquement', tag_uncancellable: 'Non annulable',
+    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Soi uniquement', tag_uncancellable: 'Non annulable', tag_infinite_exclude: 'Exclu Infinite Fire',
     fusion_layer: 'Fusion', fission_layer: 'Fission',
     app_subtitle: 'Combat de cartes en réseau local',
     nickname_placeholder: 'Saisir un pseudo',
@@ -382,7 +382,7 @@ I18N.pt = { ...I18N.en,
     set_next_draw: 'Definir Próxima Compra', solo_saved: 'Decks salvos', solo_need_15: 'Ambos os decks devem ter exatamente 15 cartas',
     solo_event_a: 'Evento inicial', solo_event_b: 'Evento do oponente', no_event: 'Nenhum',
     edit_tags: 'Editar tags', tag_precision: 'Precisão', tag_exile: 'Exílio', tag_non_stackable: 'Não acumula',
-    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Somente si', tag_uncancellable: 'Não cancelável',
+    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Somente si', tag_uncancellable: 'Não cancelável', tag_infinite_exclude: 'Excluído do Infinite Fire',
     fusion_layer: 'Fusão', fission_layer: 'Fissão',
     app_subtitle: 'Batalha de cartas em rede local',
     nickname_placeholder: 'Digite um apelido',
@@ -450,7 +450,7 @@ I18N.ru = { ...I18N.en,
     set_next_draw: 'Задать следующую карту', solo_saved: 'Колоды сохранены', solo_need_15: 'В обеих колодах должно быть ровно 15 карт',
     solo_event_a: 'Ваше стартовое событие', solo_event_b: 'Событие соперника', no_event: 'Нет',
     edit_tags: 'Изменить теги', tag_precision: 'Точность', tag_exile: 'Изгнание', tag_non_stackable: 'Не складывается',
-    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота', tag_self_only: 'Только на себя', tag_uncancellable: 'Нельзя отменить',
+    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота', tag_self_only: 'Только на себя', tag_uncancellable: 'Нельзя отменить', tag_infinite_exclude: 'Исключено из Infinite Fire',
     fusion_layer: 'Слияние', fission_layer: 'Деление',
     app_subtitle: 'Карточная дуэль по локальной сети',
     nickname_placeholder: 'Введите никнейм',
@@ -518,7 +518,7 @@ I18N.ja = { ...I18N.en,
     set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '両方のデッキは15枚ちょうど必要です',
     solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
     edit_tags: 'タグ編集', tag_precision: '精密', tag_exile: '追放', tag_non_stackable: '非重複',
-    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '自分専用', tag_uncancellable: 'キャンセル不可',
+    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '自分専用', tag_uncancellable: 'キャンセル不可', tag_infinite_exclude: 'Infinite Fire除外',
     fusion_layer: '融合', fission_layer: '分裂',
     app_subtitle: 'LANカード対戦',
     nickname_placeholder: 'ニックネームを入力',
@@ -1746,9 +1746,40 @@ const CARD_FLAG_STYLES = {
     void: { label: '', fg: '#8e44ad', bg: 'rgba(142,68,173,0.15)', cls: 'void' },
     self_only: { label: '', fg: '#2f3542', bg: 'rgba(47,53,66,0.12)', cls: 'self-only' },
     uncancellable: { label: '', fg: '#7f1d1d', bg: 'rgba(127,29,29,0.12)', cls: 'uncancellable' },
+    infinite_exclude: { label: '', fg: '#455A64', bg: 'rgba(69,90,100,0.12)', cls: 'infinite-exclude' },
     fusion_layer: { label: '', fg: '#8e44ad', bg: 'rgba(142,68,173,0.15)', cls: 'fusion-layer' },
     fission_layer: { label: '', fg: '#0f766e', bg: 'rgba(15,118,110,0.14)', cls: 'fission-layer' },
 };
+
+const CARD_FLAG_TERM_COLORS = {
+    precision: 'var(--color-precise)',
+    exile: 'var(--color-banish)',
+    non_stackable: 'var(--color-non-stack)',
+    indestructible: 'var(--color-indestructible)',
+    sprout: 'var(--color-sprout)',
+    symbiosis: 'var(--color-symbiosis)',
+    attract: 'var(--color-adhere)',
+    void: 'var(--color-void)',
+    self_only: '#2f3542',
+    uncancellable: '#7f1d1d',
+    infinite_exclude: '#455A64',
+    fusion_layer: 'var(--color-poison)',
+    fission_layer: '#0f766e',
+    tomato_layer: '#b42318',
+};
+
+const CARD_FLAG_ALIASES = {
+    'tag_troll_cards:exile': 'exile',
+    'troll_cards:exile': 'exile',
+    'tag_troll_cards_exile': 'exile',
+    'troll_cards_exile': 'exile',
+};
+
+function normalizeCardFlag(flag) {
+    const text = String(flag == null ? '' : flag).trim();
+    if (!text) return '';
+    return CARD_FLAG_ALIASES[text.toLowerCase()] || text;
+}
 
 function getCardName(cardDef) {
     if (!cardDef) return '?';
@@ -1796,6 +1827,32 @@ function getCardDescriptionText(cardDef) {
 
 function getCardTriggerText(cardDef) {
     return getLocalizedCardText(cardDef, 'trigger_effect_text_i18n', 'trigger_effect_text');
+}
+
+function normalizeCardIntroText(value) {
+    return String(value || '').replace(/\s+/g, '').trim();
+}
+
+function hasCardTriggerContent(cardDef) {
+    if (!cardDef) return false;
+    if (String(cardDef.trigger_effect_text || '').trim()) return true;
+    if (Number(cardDef.trigger_cost_e) >= 0) return true;
+    if (Array.isArray(cardDef.trigger_effects) && cardDef.trigger_effects.length) return true;
+    const events = cardDef.v2_events || {};
+    return ['on_equipment_trigger', 'on_turn_start_while_equipped', 'on_before_destroyed'].some(key => {
+        const event = events[key];
+        const steps = event && (event.steps || event);
+        return Array.isArray(steps) && steps.length > 0;
+    });
+}
+
+function getCardIntroTriggerText(cardDef) {
+    if (!hasCardTriggerContent(cardDef)) return '';
+    const triggerText = getCardTriggerText(cardDef) || '';
+    if (!triggerText) return '';
+    const effectText = getCardEffectText(cardDef) || '';
+    if (normalizeCardIntroText(triggerText) === normalizeCardIntroText(effectText)) return '';
+    return triggerText;
 }
 
 function escapeHtml(value) {
@@ -3145,7 +3202,8 @@ function showCardGallery(selectedId = null, mode = 'cards') {
 }
 
 function getCustomTagDef(flag) {
-    return (CUSTOM_TAG_DEFS && CUSTOM_TAG_DEFS[flag]) || null;
+    const normalized = normalizeCardFlag(flag);
+    return (CUSTOM_TAG_DEFS && CUSTOM_TAG_DEFS[normalized]) || null;
 }
 
 function getCustomStatusDef(statusId) {
@@ -3169,26 +3227,29 @@ function safeRegistryColor(value, fallback = '#2C3E50') {
 }
 
 function customTagHtml(flag, text = null) {
-    const def = getCustomTagDef(flag);
-    const label = text || getRegistryText(def, 'name', flag);
+    const normalized = normalizeCardFlag(flag);
+    const def = getCustomTagDef(normalized);
+    const label = text || getRegistryText(def, 'name', normalized);
     const color = safeRegistryColor(def && def.color, '#2C3E50');
     const icon = def && def.icon ? `${escapeHtml(def.icon)} ` : '';
     return `<span class="card-flag custom" style="color:${color};border-color:${color};background:#fff">${icon}${escapeHtml(label)}</span>`;
 }
 
 function makeGalleryFlagHtml(flag) {
-    const custom = getCustomTagDef(flag);
-    if (custom) return customTagHtml(flag);
-    const style = CARD_FLAG_STYLES[flag];
-    const label = getFlagLabel(flag);
+    const normalized = normalizeCardFlag(flag);
+    const custom = getCustomTagDef(normalized);
+    if (custom) return customTagHtml(normalized);
+    const style = CARD_FLAG_STYLES[normalized];
+    const label = getFlagLabel(normalized);
     if (style) return `<span class="card-flag ${style.cls}">${label}</span>`;
     return `<span class="card-flag">${label}</span>`;
 }
 
 function getGalleryFlagDescription(flag) {
-    const custom = getCustomTagDef(flag);
+    const normalized = normalizeCardFlag(flag);
+    const custom = getCustomTagDef(normalized);
     if (custom) return getRegistryText(custom, 'description', custom.description || '');
-    return UI[`tag_desc_${flag}`] || UI.tag_desc_default;
+    return UI[`tag_desc_${normalized}`] || UI.tag_desc_default;
 }
 
 function isGalleryMechanicFlag(flag) {
@@ -3196,16 +3257,18 @@ function isGalleryMechanicFlag(flag) {
 }
 
 function getGalleryFlagEnglishLabel(flag) {
-    const custom = getCustomTagDef(flag);
-    if (custom) return custom.name_en || custom.name || flag;
-    return I18N.en[`tag_${flag}`] || I18N.en[`flag_${flag}`] || I18N.en[flag] || flag;
+    const normalized = normalizeCardFlag(flag);
+    const custom = getCustomTagDef(normalized);
+    if (custom) return custom.name_en || custom.name || normalized;
+    return I18N.en[`tag_${normalized}`] || I18N.en[`flag_${normalized}`] || I18N.en[normalized] || normalized;
 }
 
 function getGalleryFlagUsers(flag) {
+    const normalized = normalizeCardFlag(flag);
     const defs = Object.values(CARD_DEFS).filter(cd => cd && cd.id !== 'Error');
-    if (flag === 'fusion_layer') return defs.filter(cd => cd && cd.id === 'Fusion');
-    if (flag === 'fission_layer') return defs.filter(cd => cd && cd.id === 'Fission');
-    return defs.filter(cd => (cd.flags || []).includes(flag));
+    if (normalized === 'fusion_layer') return defs.filter(cd => cd && cd.id === 'Fusion');
+    if (normalized === 'fission_layer') return defs.filter(cd => cd && cd.id === 'Fission');
+    return defs.filter(cd => normalizeFlagList(cd.flags || []).includes(normalized));
 }
 
 const GALLERY_CARD_TYPE_ORDER = { thorn: 0, bloom: 1, guard: 2, root: 3 };
@@ -3233,9 +3296,13 @@ function compareGalleryCards(a, b) {
 
 function getAllGalleryFlags() {
     const flags = new Set(Object.keys(CARD_FLAG_STYLES));
-    Object.keys(CUSTOM_TAG_DEFS || {}).forEach(flag => flags.add(flag));
+    Object.keys(CUSTOM_TAG_DEFS || {}).forEach(flag => {
+        const normalized = normalizeCardFlag(flag);
+        if (normalized && normalized !== 'infinite_exclude') flags.add(normalized);
+    });
     Object.values(CARD_DEFS).filter(cd => cd && cd.id !== 'Error').forEach(cd => (cd.flags || []).forEach(flag => {
-        if (flag !== 'infinite_exclude') flags.add(flag);
+        const normalized = normalizeCardFlag(flag);
+        if (normalized && normalized !== 'infinite_exclude') flags.add(normalized);
     }));
     return [...flags].sort((a, b) => getFlagLabel(a).localeCompare(getFlagLabel(b)));
 }
@@ -3263,7 +3330,7 @@ function renderCardGallery() {
     list.innerHTML = '';
     ids.forEach(id => {
         const cd = CARD_DEFS[id];
-        const flags = (cd.flags || []).filter(flag => flag !== 'infinite_exclude').map(getFlagLabel).join(' / ');
+        const flags = [...new Set(normalizeFlagList(cd.flags || []).filter(flag => flag !== 'infinite_exclude'))].map(getFlagLabel).join(' / ');
         const row = document.createElement('div');
         row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
         row.innerHTML = `<div class="gallery-row-title">${getCardName(cd)}</div>${flags ? `<div class="gallery-row-meta">${flags}</div>` : ''}`;
@@ -3278,15 +3345,10 @@ function renderCardGallery() {
     }
     gallerySelectedId = cd.id;
     const cardEl = createCardElement({ def_id: cd.id, instance_flags: [], disabled_flags: [] }, { small: false, showAllFlags: true });
-    const flags = (cd.flags || []).filter(flag => flag !== 'infinite_exclude');
     detail.innerHTML = `<div class="gallery-detail-card"><div id="gallery-card-preview"></div><div class="gallery-detail-info">
         <h3>${escapeHtml(getCardName(cd))}</h3>
-        <p><b>${UI.gallery_type}：</b>${escapeHtml(getCardTypeLabel(cd.card_type))}</p>
-        <p><b>${UI.gallery_cost}：</b>${colorizeCardText(`${cd.cost_e || 0}E / ${cd.cost_m || 0}M`)}</p>
-        ${flags.length ? `<p><b>${UI.gallery_tags_label}：</b>${escapeHtml(flags.map(getFlagLabel).join(' / '))}</p>` : ''}
-        <p><b>${UI.gallery_description}：</b>${colorizeCardText(getCardDescriptionText(cd) || '-')}</p>
-        <p><b>${UI.gallery_effect}：</b>${colorizeCardText(getCardEffectText(cd) || '-')}</p>
-        ${cd.trigger_effect_text ? `<p><b>${UI.gallery_trigger}：</b>${colorizeCardText(getCardTriggerText(cd))}</p>` : ''}
+        ${buildCardIntroSummaryHtml(cd)}
+        <div class="term-intro-list gallery-term-intro-list">${renderTermIntroItems(collectCardIntroTerms({ def_id: cd.id, instance_flags: [], disabled_flags: [] }))}</div>
     </div></div>`;
     const preview = $('gallery-card-preview');
     if (preview) preview.appendChild(cardEl);
@@ -3321,7 +3383,7 @@ function renderTagGallery(list, detail, q) {
         <h3>${getFlagLabel(gallerySelectedId)}</h3>
         <div class="gallery-tag-list">${makeGalleryFlagHtml(gallerySelectedId)}</div>
         <p><b>ID：</b>${gallerySelectedId}</p>
-        <p><b>${UI.gallery_explanation}：</b>${getGalleryFlagDescription(gallerySelectedId)}</p>
+        <p><b>${UI.gallery_explanation}：</b>${getIntroFlagDescription(gallerySelectedId, getCustomTagDef(gallerySelectedId))}</p>
         <p><b>${relatedLabel}：</b>${usedBy.length ? usedBy.map(getCardName).join(' / ') : '-'}</p>
     </div>`;
 }
@@ -4154,6 +4216,71 @@ function escapeClassToken(value) {
 }
 
 const DATA_CACHE_VERSION = 'v7';
+const loadedCommunityFontSubsets = new Set();
+const communityFontFaceUrls = new Set();
+
+function injectCommunityFontFallback() {
+    let style = document.getElementById('community-font-fallback-style');
+    if (!style) {
+        style = document.createElement('style');
+        style.id = 'community-font-fallback-style';
+        document.head.appendChild(style);
+    }
+    style.textContent = `
+html.fonts-loaded-main {
+  --font-main: 'Kreadon', 'Kreadon Community', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
+}
+:root {
+  --font-card: 'Kreadon Demi', 'Kreadon', 'Kreadon Community', 'Microsoft YaHei', sans-serif;
+}`;
+}
+
+function installCommunityFontFace(url) {
+    const safeUrl = String(url || '').trim();
+    if (!safeUrl || communityFontFaceUrls.has(safeUrl)) return;
+    communityFontFaceUrls.add(safeUrl);
+    let style = document.getElementById('community-font-face-style');
+    if (!style) {
+        style = document.createElement('style');
+        style.id = 'community-font-face-style';
+        document.head.appendChild(style);
+    }
+    const rules = Array.from(communityFontFaceUrls).map(fontUrl => `
+@font-face {
+  font-family: 'Kreadon Community';
+  src: url('${fontUrl.replace(/'/g, '%27')}') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}`).join('\n');
+    style.textContent = rules;
+    injectCommunityFontFallback();
+}
+
+async function loadCommunityFontSubsetForCurrentSelection() {
+    const community = getCommunityModSelection();
+    if (community.mod_source !== 'community' || !community.community_mods.length) return;
+    const key = community.community_mod_hash || JSON.stringify(community.community_mods);
+    if (loadedCommunityFontSubsets.has(key)) return;
+    loadedCommunityFontSubsets.add(key);
+    try {
+        const resp = await fetch('/api/font-subsets/community', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                mod_source: 'community',
+                community_mods: community.community_mods,
+            }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.success) throw new Error(data.error || 'community font subset failed');
+        const subset = data.font_subset || {};
+        if (subset.url) installCommunityFontFace(subset.url);
+    } catch (e) {
+        console.warn('Failed to load community font subset:', e);
+    }
+}
 
 function getDataCacheKey(kind) {
     const disabled = getDisabledMods().slice().sort().join(',') || 'none';
@@ -4215,6 +4342,7 @@ async function refreshCardDefsFromServer({ silent = false } = {}) {
         const nextDefs = await resp.json();
         CARD_DEFS = nextDefs || {};
         writeDataCache('cards', CARD_DEFS);
+        await loadCommunityFontSubsetForCurrentSelection();
         refreshCardDataViews();
     } catch (e) {
         console.error('Failed to fetch card defs:', e);
@@ -4283,17 +4411,19 @@ function getCardDef(defId) {
 }
 
 function getFlagLabel(flag) {
-    const custom = getCustomTagDef(flag);
-    if (custom) return getRegistryText(custom, 'name', flag);
-    if (flag === 'fusion_layer' || flag === 'fission_layer') return UI[flag] || flag;
-    return UI[`tag_${flag}`] || UI[`flag_${flag}`] || flag;
+    const normalized = normalizeCardFlag(flag);
+    const custom = getCustomTagDef(normalized);
+    if (custom) return getRegistryText(custom, 'name', normalized);
+    if (normalized === 'fusion_layer' || normalized === 'fission_layer') return UI[normalized] || normalized;
+    return UI[`tag_${normalized}`] || UI[`flag_${normalized}`] || normalized;
 }
 
 function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
     const baseE = cardDict.cost_e_override != null ? cardDict.cost_e_override : cardDef.cost_e;
     const baseM = cardDict.cost_m_override != null ? cardDict.cost_m_override : cardDef.cost_m;
     const mimicDiscount = Number(cardDict.mimic_discount || 0);
-    const flags = new Set([...(cardDef.flags || []), ...(cardDict.instance_flags || [])]);
+    const flags = new Set([...normalizeFlagList(cardDef.flags || []), ...normalizeFlagList(cardDict.instance_flags || [])]);
+    normalizeFlagList(cardDict.disabled_flags || []).forEach(flag => flags.delete(flag));
     const dup = ownerState && ownerState.cards_played_this_turn
         ? Number(ownerState.cards_played_this_turn[cardDict.def_id] || 0)
         : 0;
@@ -4331,7 +4461,7 @@ function getEquipmentIconHtml(cardInst, cardDef) {
 }
 
 function createCardElement(cardDict, options = {}) {
-    const { faceDown = false, small = false, draggable = false, onClick = null, showAllFlags = false } = options;
+    const { faceDown = false, small = false, draggable = false, onClick = null, showAllFlags = false, disableIntro = false } = options;
     const el = document.createElement('div');
     el.className = 'card' + (small ? ' card-small' : '') + (faceDown ? ' card-facedown' : '');
     if (faceDown) {
@@ -4354,6 +4484,8 @@ function createCardElement(cardDict, options = {}) {
     const effectText = getCardEffectText(cardDef);
     const descriptionText = getCardDescriptionText(cardDef);
     const imageUrl = showCardImages ? getCardArtUrl(cardDict, cardDef) : '';
+    el.classList.add(englishName ? 'card-has-english' : 'card-no-english');
+    el.classList.add(imageUrl ? 'card-has-art' : 'card-no-art');
     const cardArtHtml = imageUrl
         ? `<div class="card-art"><img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.closest('.card-art').classList.add('hidden')"></div>`
         : '';
@@ -4424,17 +4556,23 @@ function createCardElement(cardDict, options = {}) {
         el.addEventListener('click', onClick);
         el.style.cursor = 'pointer';
     }
+    if (!disableIntro) {
+        attachTermIntroToCard(el, cardDict, {
+            ownerState: cardOwnerState,
+            prediction: predictionOptions,
+        });
+    }
     return el;
 }
 
 function normalizeFlagList(value) {
     if (!value) return [];
-    if (Array.isArray(value)) return value.map(String).filter(Boolean);
-    if (value instanceof Set) return Array.from(value).map(String).filter(Boolean);
-    if (typeof value === 'string') return value.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+    if (Array.isArray(value)) return value.map(normalizeCardFlag).filter(Boolean);
+    if (value instanceof Set) return Array.from(value).map(normalizeCardFlag).filter(Boolean);
+    if (typeof value === 'string') return value.split(/[,\s]+/).map(normalizeCardFlag).filter(Boolean);
     if (typeof value === 'object') return Object.entries(value)
         .filter(([_, enabled]) => !!enabled)
-        .map(([flag]) => String(flag))
+        .map(([flag]) => normalizeCardFlag(flag))
         .filter(Boolean);
     return [];
 }
@@ -4454,7 +4592,7 @@ function collectCardDisabledFlags(cardDict) {
 }
 
 function getEffectiveCardFlagSets(cardDict, cardDef) {
-    const base = new Set((cardDef && cardDef.flags) || []);
+    const base = new Set(normalizeFlagList((cardDef && cardDef.flags) || []));
     const added = collectCardAddedFlags(cardDict);
     const disabled = collectCardDisabledFlags(cardDict);
     const effective = new Set([...base, ...added]);
@@ -4469,17 +4607,18 @@ function cardHasSelfOnlyFlag(cardDict, cardDef = null) {
 }
 
 function cardFlagHtml(flag, text = null) {
-    if (getCustomTagDef(flag)) return customTagHtml(flag, text);
-    if (flag === 'fusion_layer') {
+    const normalized = normalizeCardFlag(flag);
+    if (getCustomTagDef(normalized)) return customTagHtml(normalized, text);
+    if (normalized === 'fusion_layer') {
         const label = text || `${UI.fusion_layer || 'Fusion'}`;
         return `<span class="card-flag fusion-layer">${escapeHtml(label)}</span>`;
     }
-    if (flag === 'fission_layer') {
+    if (normalized === 'fission_layer') {
         const label = text || `${UI.fission_layer || 'Fission'}`;
         return `<span class="card-flag fission-layer">${escapeHtml(label)}</span>`;
     }
-    const style = CARD_FLAG_STYLES[flag];
-    const label = text || UI['flag_' + flag] || UI['tag_' + flag] || flag;
+    const style = CARD_FLAG_STYLES[normalized];
+    const label = text || UI['flag_' + normalized] || UI['tag_' + normalized] || normalized;
     const cls = style ? style.cls : 'custom';
     return `<span class="card-flag ${cls}">${escapeHtml(label)}</span>`;
 }
@@ -4539,6 +4678,7 @@ function createCardChoiceChip(cardDict, options = {}) {
     }
     const previewOptions = options.previewOptions || options.cardOptions || null;
     attachFloatingCardPreview(chip, cardDict, previewOptions || {});
+    attachTermIntroToCard(chip, cardDict, previewOptions || {});
     return chip;
 }
 
@@ -5303,6 +5443,7 @@ function showFloatingCardPreview(cardDict, anchor, pos = null, cardOptions = {})
     preview.className = 'floating-card-preview';
     const card = createCardElement(cardDict, {
         showAllFlags: false,
+        disableIntro: true,
         ...cardOptions,
     });
     card.classList.add('floating-card-preview-card');
@@ -5342,6 +5483,363 @@ function attachFloatingCardPreview(anchor, cardDict, cardOptions = {}) {
     }, { passive: true });
     anchor.addEventListener('touchend', removeFloatingCardPreview, { passive: true });
     anchor.addEventListener('touchcancel', removeFloatingCardPreview, { passive: true });
+}
+
+const TERM_INTRO_DELAY = 1000;
+const TERM_INTRO_MOVE_CANCEL = 18;
+let termIntroOverlayEl = null;
+
+function getTermIntroLibrary() {
+    return {
+        card_type_thorn: { label: getCardTypeLabel('thorn') || 'Thorn', desc: '攻击牌。需要选择目标，主要用来压低对方 H；2v2 中也可以攻击队友。', color: CARD_TYPE_COLORS.thorn },
+        card_type_bloom: { label: getCardTypeLabel('bloom') || 'Bloom', desc: '技能牌。用于回血、抽牌、加状态、调整 E/M 或改变场面。', color: CARD_TYPE_COLORS.bloom },
+        card_type_root: { label: getCardTypeLabel('root') || 'Root', desc: '装备牌。打出后留在装备栏，有些过一回合后才能主动触发，有些能持续提供效果。', color: CARD_TYPE_COLORS.root },
+        card_type_guard: { label: getCardTypeLabel('guard') || 'Guard', desc: '反制牌。仅对方行动弹出反制窗口时可使用，用来闪避、保护装备或减少伤害。', color: CARD_TYPE_COLORS.guard },
+        H: { label: 'H：生命(Health)', desc: '降到 0 或更低会失败；双方同时失败时按当前模式判定平局或胜负。', color: COLORS.health },
+        E: { label: 'E：能量(Elixir)', desc: '多数卡牌消耗 E；回合开始回复，超过上限的部分不会保留。', color: COLORS.elixir },
+        M: { label: 'M：魔力(Magic)', desc: '部分卡牌消耗或回复 M，和 E 分开计算；超过上限的部分不会保留。', color: COLORS.magic },
+        D: { label: 'D：物理伤害(Damage)', desc: '会受护甲、装备、闪避和反制影响。只有实际造成伤害，才会触发淬毒、尖牙回血等效果。', color: COLORS.damage },
+        magic_damage: { label: '魔法伤害(Magic Damage)', desc: '不能被护甲、圆盘、邪眼等减少。注意，不是“消耗魔力造成的伤害”。', color: COLORS.magic },
+        A: { label: 'A：护甲(Armor)', desc: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。', color: COLORS.armor },
+        P: { label: 'P：中毒(Poison)', desc: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', color: COLORS.poison },
+        F: { label: 'F：灼烧(Fire)', desc: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 20 回合及以上后，每回合开始时对所有玩家施加一层灼烧。', color: COLORS.fire },
+        toxic: { label: `${UI.status_toxic || '淬毒'}(Toxic)`, desc: '造成实际 D 后，对目标施加与淬毒层数相同的 P 层数。伤害被完全挡住时不会触发。', color: '#6C3483' },
+        hand_limit: { label: '手牌上限', desc: '你能保留在手中的最大牌数。抽牌、回手或创建牌时超过上限，就会发生爆牌。', color: COLORS.text_primary },
+        overdraw: { label: '爆牌', desc: '手牌超过上限时，多出来的牌不能留在手中，会按规则被移出手牌。装备黄金叶等效果可以提高上限。', color: COLORS.damage },
+        overcap: { label: '爆费', desc: 'E 或 M 回复超过上限时，超过部分直接丢失；提前规划资源可以避免浪费。', color: COLORS.elixir },
+        deck: { label: '牌堆', desc: '未抽到的牌所在区域。抽牌通常从牌堆顶进入手牌；查看牌堆只能看到抽牌堆。', color: COLORS.text_primary },
+        discard: { label: '弃牌堆', desc: '大多数打出后的牌会进入弃牌堆，之后会被重新洗回牌堆。', color: COLORS.text_secondary },
+        exile_zone: { label: '放逐区', desc: '被放逐的牌离开正常循环，不会再被抽到。', color: '#7F8C8D' },
+        equipment: { label: '装备栏', desc: '装备牌所在区域。装备有些持续生效，也有些在满足触发条件时让你主动使用。', color: CARD_TYPE_COLORS.root },
+        response: { label: UI.counter || '反制', desc: '对方行动满足条件时会出现响应机会。反制能改变对方行动的结果。', color: CARD_TYPE_COLORS.guard },
+        same_name_penalty: { label: '同名卡惩罚', desc: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', color: COLORS.elixir },
+        fusion_layer: { label: UI.fusion_layer || '聚变', desc: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#8E44AD' },
+        fission_layer: { label: UI.fission_layer || '裂变', desc: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#2874A6' },
+        tomato_layer: { label: UI.tomato_layer || '层数', desc: '番茄在手中每保留一回合增加层数，最多 6 层；打出后层数重置。', color: '#C0392B' },
+        layers: { label: '层数', desc: '状态或特殊属性的数量。层数越高效果会越强，或持续越久。', color: COLORS.text_primary },
+    };
+}
+
+function addTermIntroItem(items, seen, key, override = null) {
+    if (!key || seen.has(key)) return;
+    const library = getTermIntroLibrary();
+    const item = override || library[key];
+    if (!item) return;
+    seen.add(key);
+    items.push({
+        key,
+        label: item.label || key,
+        desc: item.desc || item.description || '',
+        color: item.color || COLORS.text_primary,
+    });
+}
+
+function getIntroFlagDescription(flag, custom = null) {
+    const normalized = normalizeCardFlag(flag);
+    if (custom) return getRegistryText(custom, 'description', '') || '自定义标签。具体效果由对应模组或卡牌说明决定。';
+    const desc = {
+        precision: '攻击被闪避时不会完全失效，而是把实际伤害改为一半，向上取整。',
+        exile: '结算后进入放逐区，而不是弃牌堆；不会再被抽到。',
+        non_stackable: '可以装备多张，但同类效果只算一份；一张被摧毁后，剩下的还能继续发挥作用。',
+        indestructible: '作为装备时不会被摧毁效果破坏；玩家死亡时也不会被清除。',
+        sprout: '抽到时会额外抽牌。手牌满时仍然会爆牌。',
+        symbiosis: '同一回合重复使用同名卡时，不会受到同名卡费用惩罚。',
+        attract: '爆牌时，会优先挤掉没有吸引的牌。',
+        void: '回合结束仍留在手牌中时，会进入放逐区。',
+        self_only: '只能对自己使用；2v2 中不能选择队友或敌人。',
+        uncancellable: '相关选择窗口不能取消，避免免费查看隐藏信息后退出选择。',
+        infinite_exclude: '不会进入无限火力随机牌池。',
+        fusion_layer: getTermIntroLibrary().fusion_layer.desc,
+        fission_layer: getTermIntroLibrary().fission_layer.desc,
+    };
+    return desc[normalized] || UI.tag_desc_default || '该标签的具体含义由对应卡牌或模组定义。';
+}
+
+function addFlagIntroItem(items, seen, flag) {
+    const normalized = normalizeCardFlag(flag);
+    if (!normalized || seen.has(`flag:${normalized}`)) return;
+    const custom = getCustomTagDef(normalized);
+    const label = custom ? getRegistryText(custom, 'name', normalized) : getFlagLabel(normalized);
+    const desc = getIntroFlagDescription(normalized, custom);
+    const style = CARD_FLAG_STYLES[normalized];
+    const color = custom
+        ? safeRegistryColor(custom.color, COLORS.text_primary)
+        : CARD_FLAG_TERM_COLORS[normalized] || (style && (style.fg || style.color)) || COLORS.text_primary;
+    addTermIntroItem(items, seen, `flag:${normalized}`, { label, desc: desc || UI.tag_desc_default || '该标签的具体含义由卡牌效果定义。', color });
+}
+
+function buildCardIntroSummaryHtml(cardDef) {
+    if (!cardDef) return '';
+    const triggerText = getCardIntroTriggerText(cardDef) || '';
+    const descriptionText = getCardDescriptionText(cardDef) || '';
+    if (!triggerText && !descriptionText) return '';
+    return `
+        <section class="term-intro-summary">
+            ${descriptionText ? `<div class="term-intro-flavor">${colorizeCardText(descriptionText)}</div>` : ''}
+            ${triggerText ? `<div class="term-intro-summary-block">
+                <div class="term-intro-summary-label">触发</div>
+                <div class="term-intro-summary-text">${colorizeCardText(triggerText)}</div>
+            </div>` : ''}
+        </section>
+    `;
+}
+
+function buildCardIntroTermsHtml(cardDict) {
+    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
+    return `${buildCardIntroSummaryHtml(cardDef)}${renderTermIntroItems(collectCardIntroTerms(cardDict))}`;
+}
+
+function collectCardIntroTerms(cardDict) {
+    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
+    const items = [];
+    const seen = new Set();
+    if (!cardDef) return items;
+    addTermIntroItem(items, seen, `card_type_${cardDef.card_type || 'bloom'}`);
+    const { totalE, totalM, flags } = getCardDisplayCosts(cardDict || {}, cardDef, getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you));
+    if (Number(totalE || 0) > 0) addTermIntroItem(items, seen, 'E');
+    if (Number(totalM || 0) > 0) addTermIntroItem(items, seen, 'M');
+    flags.forEach(flag => addFlagIntroItem(items, seen, flag));
+    const rawText = [
+        getCardName(cardDef),
+        getCardEffectText(cardDef),
+        getCardDescriptionText(cardDef),
+        (cardDef.flags || []).join(' '),
+    ].filter(Boolean).join(' ');
+    const probes = [
+        [/(\d+\s*D|造成|伤害|damage|D\b)/i, 'D'],
+        [/(\+\s*\d+\s*H|回复|治疗|heal|H\b)/i, 'H'],
+        [/(\+\s*\d+\s*E|消耗|能量|elixir|E\b)/i, 'E'],
+        [/(\+\s*\d+\s*M|魔力|magic|M\b)/i, 'M'],
+        [/(\+\s*\d+\s*A|护甲|armor|A\b)/i, 'A'],
+        [/(\d+\s*(?:P|层P)|中毒|Poison)/i, 'P'],
+        [/(\d+\s*(?:F|层F)|灼烧|Burn)/i, 'F'],
+        [/(魔法伤害|Magic Damage)/i, 'magic_damage'],
+        [/(淬毒|Toxic)/i, 'toxic'],
+        [/(抽牌|牌堆|draw|deck)/i, 'deck'],
+        [/(弃牌|discard)/i, 'discard'],
+        [/(放逐|exile)/i, 'exile_zone'],
+        [/(装备|equipment|Root)/i, 'equipment'],
+        [/(反制|counter|Guard)/i, 'response'],
+        [/(爆牌|overflow)/i, 'overdraw'],
+        [/(手牌上限|hand limit)/i, 'hand_limit'],
+        [/(爆费|上限)/i, 'overcap'],
+        [/(同名|共生|same-name)/i, 'same_name_penalty'],
+    ];
+    probes.forEach(([re, key]) => {
+        if (re.test(rawText)) addTermIntroItem(items, seen, key);
+    });
+    const fusionLevel = Math.max(1, Number(cardDict && cardDict.fusion_level || 1));
+    const fissionLevel = Math.max(1, Number(cardDict && cardDict.fission_level || 1));
+    if (fusionLevel > 1 || cardDef.id === 'Fusion') addTermIntroItem(items, seen, 'fusion_layer');
+    if (fissionLevel > 1 || cardDef.id === 'Fission') addTermIntroItem(items, seen, 'fission_layer');
+    if (cardDef.id === 'Tomato') addTermIntroItem(items, seen, 'tomato_layer');
+    if (!items.some(item => item.key === 'D') && cardDef.card_type === 'thorn') addTermIntroItem(items, seen, 'D');
+    if (seen.has('P') || seen.has('F')) addTermIntroItem(items, seen, 'magic_damage');
+    return items;
+}
+
+function getStatusIntroItem(statusInfo) {
+    const key = statusInfo && statusInfo.key;
+    const customDef = (statusInfo && statusInfo.customDef) || getCustomStatusDef(key);
+    if (customDef) {
+        return {
+            label: getRegistryText(customDef, 'name', key),
+            desc: getRegistryText(customDef, 'description', '由模组定义的自定义状态。'),
+            color: safeRegistryColor(customDef.color, statusInfo.fg || COLORS.text_primary),
+        };
+    }
+    const builtIns = {
+        poison: { label: UI.status_poison, desc: getTermIntroLibrary().P.desc, color: COLORS.poison },
+        fire: { label: UI.status_fire, desc: getTermIntroLibrary().F.desc, color: COLORS.fire },
+        toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc, color: '#6C3483' },
+        triangle: { label: UI.status_triangle, desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
+        dodge: { label: UI.status_dodge, desc: '可响应攻击。普通攻击会被闪避，精准攻击被闪避时只造成一半伤害。', color: COLORS.guard },
+        nazar: { label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
+        equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
+        invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
+        stunned: { label: UI.status_stunned, desc: '跳过主动行动，但装备的被动回合效果仍会正常处理。', color: COLORS.damage },
+        attack_blocked: { label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
+        attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
+        untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。', color: '#1A5276' },
+        bandage: { label: UI.status_bandage, desc: '绷带提供临时保护，回合开始时会按规则结束。', color: '#1E8449' },
+        sponge: { label: UI.status_sponge, desc: '海绵相关的临时状态，会影响下一次结算。', color: '#6C3483' },
+        shovel: { label: UI.status_shovel, desc: '铲子相关的临时状态，会限制或改变当前回合行动。', color: '#5D4037' },
+    };
+    return builtIns[key] || {
+        label: (statusInfo && statusInfo.name) || key || '状态',
+        desc: '状态会暂时改变玩家的资源、行动或受伤规则。具体效果由卡牌定义。',
+        color: (statusInfo && statusInfo.fg) || COLORS.text_primary,
+    };
+}
+
+function ensureTermIntroOverlay() {
+    if (termIntroOverlayEl) return termIntroOverlayEl;
+    const overlay = document.createElement('div');
+    overlay.id = 'term-intro-overlay';
+    overlay.className = 'term-intro-overlay hidden';
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.innerHTML = `
+        <div class="term-intro-dialog" role="dialog" aria-modal="true">
+            <button id="term-intro-close" class="term-intro-close" type="button" aria-label="关闭">×</button>
+            <div id="term-intro-card" class="term-intro-card-wrap"></div>
+            <section class="term-intro-panel">
+                <div id="term-intro-title" class="term-intro-title">术语说明</div>
+                <div id="term-intro-list" class="term-intro-list"></div>
+            </section>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#term-intro-close')?.addEventListener('click', hideTermIntroOverlay);
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) hideTermIntroOverlay();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !overlay.classList.contains('hidden')) hideTermIntroOverlay();
+    });
+    termIntroOverlayEl = overlay;
+    return overlay;
+}
+
+function hideTermIntroOverlay() {
+    if (!termIntroOverlayEl) return;
+    termIntroOverlayEl.classList.remove('visible');
+    termIntroOverlayEl.classList.add('hidden');
+    termIntroOverlayEl.setAttribute('aria-hidden', 'true');
+}
+
+function renderTermIntroItems(items) {
+    if (!items || !items.length) {
+        return '<div class="term-intro-empty">这张牌没有需要额外说明的术语。</div>';
+    }
+    return items.map(item => `
+        <article class="term-intro-item" style="--term-color:${escapeHtml(item.color || COLORS.text_primary)}">
+            <div class="term-intro-item-title">${escapeHtml(item.label)}</div>
+            <div class="term-intro-item-desc">${escapeHtml(item.desc || '')}</div>
+        </article>
+    `).join('');
+}
+
+function showTermIntroForCard(cardDict, cardOptions = {}) {
+    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
+    if (!cardDef) return;
+    removeFloatingCardPreview();
+    removeCardHoldPreview();
+    if (typeof cleanupDragState === 'function') cleanupDragState();
+    const overlay = ensureTermIntroOverlay();
+    const cardSlot = overlay.querySelector('#term-intro-card');
+    const title = overlay.querySelector('#term-intro-title');
+    const list = overlay.querySelector('#term-intro-list');
+    cardSlot.innerHTML = '';
+    const card = createCardElement(cardDict, {
+        showAllFlags: true,
+        disableIntro: true,
+        ownerState: cardOptions.ownerState || getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you),
+        prediction: cardOptions.prediction || getCardPredictionOptionsForOwner(cardDict, cardOptions.ownerState),
+    });
+    card.classList.add('term-intro-card');
+    cardSlot.appendChild(card);
+    title.textContent = `${getCardName(cardDef)} · 术语说明`;
+    list.innerHTML = buildCardIntroTermsHtml(cardDict);
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+}
+
+function showTermIntroForStatus(statusInfo) {
+    const overlay = ensureTermIntroOverlay();
+    removeFloatingCardPreview();
+    removeCardHoldPreview();
+    const item = getStatusIntroItem(statusInfo || {});
+    const cardSlot = overlay.querySelector('#term-intro-card');
+    const title = overlay.querySelector('#term-intro-title');
+    const list = overlay.querySelector('#term-intro-list');
+    const valueText = statusInfo && statusInfo.val ? `<span class="term-intro-status-value">${escapeHtml(String(statusInfo.val))}</span>` : '';
+    cardSlot.innerHTML = `
+        <div class="term-intro-status-card" style="--term-color:${escapeHtml(item.color || COLORS.text_primary)}">
+            <div class="term-intro-status-name">${escapeHtml(item.label)}</div>
+            ${valueText}
+            <div class="term-intro-status-note">状态</div>
+        </div>
+    `;
+    title.textContent = `${item.label} · 状态说明`;
+    const terms = [item];
+    if (statusInfo && statusInfo.val) {
+        terms.push(getTermIntroLibrary().layers);
+    }
+    if (['poison', 'fire'].includes(statusInfo && statusInfo.key)) {
+        terms.push(getTermIntroLibrary().magic_damage);
+    }
+    if (statusInfo && statusInfo.key === 'toxic') {
+        terms.push(getTermIntroLibrary().P);
+    }
+    list.innerHTML = renderTermIntroItems(terms);
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+}
+
+function attachTermIntroLongPress(anchor, onShow) {
+    if (!anchor || anchor.dataset.termIntroBound === '1') return;
+    anchor.dataset.termIntroBound = '1';
+    let timer = null;
+    let start = null;
+    let docMove = null;
+    let docEnd = null;
+    const cancel = () => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+        start = null;
+        if (docMove) document.removeEventListener('pointermove', docMove);
+        if (docEnd) {
+            document.removeEventListener('pointerup', docEnd);
+            document.removeEventListener('pointercancel', docEnd);
+        }
+        docMove = null;
+        docEnd = null;
+    };
+    anchor.addEventListener('pointerdown', (event) => {
+        if (event.button != null && event.button !== 0) return;
+        start = { x: event.clientX, y: event.clientY };
+        if (timer) clearTimeout(timer);
+        docMove = (moveEvent) => {
+            if (!timer || !start) return;
+            const dist = Math.hypot(moveEvent.clientX - start.x, moveEvent.clientY - start.y);
+            if (dist > TERM_INTRO_MOVE_CANCEL) cancel();
+        };
+        docEnd = cancel;
+        document.addEventListener('pointermove', docMove);
+        document.addEventListener('pointerup', docEnd);
+        document.addEventListener('pointercancel', docEnd);
+        timer = setTimeout(() => {
+            timer = null;
+            if (docMove) document.removeEventListener('pointermove', docMove);
+            if (docEnd) {
+                document.removeEventListener('pointerup', docEnd);
+                document.removeEventListener('pointercancel', docEnd);
+            }
+            docMove = null;
+            docEnd = null;
+            onShow();
+        }, TERM_INTRO_DELAY);
+    });
+    anchor.addEventListener('pointermove', (event) => {
+        if (!timer || !start) return;
+        const dist = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+        if (dist > TERM_INTRO_MOVE_CANCEL) cancel();
+    });
+    ['pointerup', 'pointerleave', 'pointercancel', 'lostpointercapture'].forEach(type => {
+        anchor.addEventListener(type, cancel);
+    });
+}
+
+function attachTermIntroToCard(anchor, cardDict, cardOptions = {}) {
+    if (!anchor || !cardDict || !cardDict.def_id) return;
+    attachTermIntroLongPress(anchor, () => showTermIntroForCard(cardDict, cardOptions));
+}
+
+function attachTermIntroToStatus(anchor, statusInfo) {
+    if (!anchor || !statusInfo) return;
+    attachTermIntroLongPress(anchor, () => showTermIntroForStatus(statusInfo));
 }
 
 function renderChoiceOptionContent(container, option, index, config = {}) {
@@ -5499,13 +5997,6 @@ function startCardDrag(e, cardEl) {
         previewShown: false,
         touch: !!(e.touches && e.touches.length)
     };
-    if (isMinimalUiStyle()) {
-        dragState.previewTimer = setTimeout(() => {
-            if (dragState && !dragState.moved) {
-                showCardHoldPreview(cardEl, { x: dragState.lastX, y: dragState.lastY });
-            }
-        }, CARD_HOLD_PREVIEW_DELAY);
-    }
     showDropOverlay();
 }
 
@@ -7438,7 +7929,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=10');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=11');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;
@@ -9485,7 +9976,22 @@ function attachClassicEquipmentPreviews(container, player) {
             return Number(cardInst && cardInst.instance_id) === instanceId;
         });
         const cardInst = eq && (eq.card_instance || eq.card || eq);
-        if (cardInst && cardInst.def_id) attachFloatingCardPreview(chip, cardInst);
+        if (cardInst && cardInst.def_id) {
+            attachFloatingCardPreview(chip, cardInst);
+            attachTermIntroToCard(chip, cardInst);
+        }
+    });
+}
+
+function attachClassicStatusIntros(container) {
+    if (!container) return;
+    container.querySelectorAll('.classic-status-ring .status-tag').forEach(tag => {
+        attachTermIntroToStatus(tag, {
+            key: tag.dataset.statusKey || '',
+            name: tag.dataset.statusName || tag.textContent || '',
+            val: tag.dataset.statusValue || '',
+            fg: tag.style.color || '',
+        });
     });
 }
 
@@ -9677,6 +10183,7 @@ function renderClassicFighter(container, player, side, selectedCard = null) {
         <div class="classic-equipment-ring">${renderClassicEquipmentList(player)}</div>
     `;
     attachClassicEquipmentPreviews(container, player);
+    attachClassicStatusIntros(container);
 }
 
 function renderClassicHand(vm) {
@@ -10042,21 +10549,21 @@ function renderStatusTags(containerId, playerData) {
     container.innerHTML = '';
     const tags = [];
     const p = playerData;
-    if (p.poison > 0) tags.push({ name: UI.status_poison, abbr: 'P', val: p.poison, fg: COLORS.poison, bg: COLORS.poison_bg });
-    if (p.fire > 0) tags.push({ name: UI.status_fire, abbr: 'F', val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
-    if (p.toxic > 0) tags.push({ name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
-    if (p.triangle_stacks > 0) tags.push({ name: UI.status_triangle, abbr: '△', val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
-    if (p.dodge > 0) tags.push({ name: UI.status_dodge, abbr: 'Dg', val: p.dodge, fg: COLORS.guard, bg: COLORS.guard_bg });
-    if (p.nazar_active) tags.push({ name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
-    if (p.equipment_protection > 0) tags.push({ name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
-    if (p.invincible) tags.push({ name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
-    if (p.skip_turn) tags.push({ name: UI.status_stunned, abbr: 'Stn', val: '', fg: COLORS.damage, bg: COLORS.damage_bg });
-    if (p.attack_blocked > 0) tags.push({ name: UI.status_attack_blocked, abbr: 'NoT', val: p.attack_blocked, fg: '#C0392B', bg: '#FDEDEC' });
-    if (p.attack_only > 0) tags.push({ name: UI.status_attack_only, abbr: 'TOnly', val: p.attack_only, fg: '#D35400', bg: '#FEF5E7' });
-    if (p.untargetable) tags.push({ name: UI.status_untargetable, abbr: 'Unt', val: '', fg: '#1A5276', bg: '#EBF5FB' });
-    if (p.bandage_active) tags.push({ name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
-    if (p.sponge_active) tags.push({ name: UI.status_sponge, abbr: 'Spg', val: '', fg: '#6C3483', bg: '#F4ECF7' });
-    if (p.shovel_active) tags.push({ name: UI.status_shovel, abbr: 'Shv', val: '', fg: '#5D4037', bg: '#EFEBE9' });
+    if (p.poison > 0) tags.push({ key: 'poison', name: UI.status_poison, abbr: 'P', val: p.poison, fg: COLORS.poison, bg: COLORS.poison_bg });
+    if (p.fire > 0) tags.push({ key: 'fire', name: UI.status_fire, abbr: 'F', val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
+    if (p.toxic > 0) tags.push({ key: 'toxic', name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
+    if (p.triangle_stacks > 0) tags.push({ key: 'triangle', name: UI.status_triangle, abbr: '△', val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
+    if (p.dodge > 0) tags.push({ key: 'dodge', name: UI.status_dodge, abbr: 'Dg', val: p.dodge, fg: COLORS.guard, bg: COLORS.guard_bg });
+    if (p.nazar_active) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
+    if (p.equipment_protection > 0) tags.push({ key: 'equip_protect', name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
+    if (p.invincible) tags.push({ key: 'invincible', name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
+    if (p.skip_turn) tags.push({ key: 'stunned', name: UI.status_stunned, abbr: 'Stn', val: '', fg: COLORS.damage, bg: COLORS.damage_bg });
+    if (p.attack_blocked > 0) tags.push({ key: 'attack_blocked', name: UI.status_attack_blocked, abbr: 'NoT', val: p.attack_blocked, fg: '#C0392B', bg: '#FDEDEC' });
+    if (p.attack_only > 0) tags.push({ key: 'attack_only', name: UI.status_attack_only, abbr: 'TOnly', val: p.attack_only, fg: '#D35400', bg: '#FEF5E7' });
+    if (p.untargetable) tags.push({ key: 'untargetable', name: UI.status_untargetable, abbr: 'Unt', val: '', fg: '#1A5276', bg: '#EBF5FB' });
+    if (p.bandage_active) tags.push({ key: 'bandage', name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
+    if (p.sponge_active) tags.push({ key: 'sponge', name: UI.status_sponge, abbr: 'Spg', val: '', fg: '#6C3483', bg: '#F4ECF7' });
+    if (p.shovel_active) tags.push({ key: 'shovel', name: UI.status_shovel, abbr: 'Shv', val: '', fg: '#5D4037', bg: '#EFEBE9' });
     if (p.custom_statuses && typeof p.custom_statuses === 'object') {
         Object.entries(p.custom_statuses).forEach(([name, value]) => {
             const count = Number(value || 0);
@@ -10067,11 +10574,13 @@ function renderStatusTags(containerId, playerData) {
             const icon = def && def.icon ? `${def.icon} ` : '';
             const color = safeRegistryColor(def && def.color, '#1F618D');
             tags.push({
+                key: name,
                 name: `${icon}${label}`,
                 abbr: String(label).slice(0, 3),
                 val: count,
                 fg: color,
                 bg: '#EAF2F8',
+                customDef: def,
                 title: def ? getRegistryText(def, 'description', '') : '',
             });
         });
@@ -10088,9 +10597,13 @@ function renderStatusTags(containerId, playerData) {
         nextItems.push(fullText);
         el.textContent = fullText;
         el.title = t.title || '';
+        el.dataset.statusKey = t.key || '';
+        el.dataset.statusName = t.name || '';
+        el.dataset.statusValue = t.val == null ? '' : String(t.val);
         if (previousSignature !== undefined && !previousItems.has(fullText)) {
             el.classList.add('status-tag-changed');
         }
+        attachTermIntroToStatus(el, t);
         container.appendChild(el);
     });
     lastStatusSignatures.set(containerId, nextItems.join('\u0001'));
@@ -10148,6 +10661,10 @@ function createTeammateHandChip(cardDict, ownerState = null) {
     el.style.borderColor = typeColor;
     el.style.color = typeColor;
     attachFloatingCardPreview(el, cardDict, {
+        ownerState,
+        prediction: getCardPredictionOptionsForOwner(cardDict, ownerState),
+    });
+    attachTermIntroToCard(el, cardDict, {
         ownerState,
         prediction: getCardPredictionOptionsForOwner(cardDict, ownerState),
     });
@@ -13412,8 +13929,11 @@ async function uploadCommunityModFile(file) {
             throw new Error(errorText);
         }
         const mod = registerData.mod || {};
-        setStatus(tf('community_upload_success', mod.name || file.name));
-        setCommunityUploadProgress(uploadTotal, uploadTotal, tf('community_upload_success', mod.name || file.name));
+        const uploadSuccess = tf('community_upload_success', mod.name || file.name);
+        const warnings = Array.isArray(registerData.warnings) ? registerData.warnings.filter(Boolean) : [];
+        const warningSuffix = warnings.length ? ` · ${warnings[0]}` : '';
+        setStatus(`${uploadSuccess}${warningSuffix}`);
+        setCommunityUploadProgress(uploadTotal, uploadTotal, `${uploadSuccess}${warningSuffix}`);
         await loadSettingsCommunityMods();
     } catch (e) {
         setStatus(e.message || String(e));
@@ -13513,6 +14033,14 @@ function renderCommunityModList() {
             desc.className = 'community-card-desc';
             desc.textContent = mod.description;
             details.appendChild(desc);
+        }
+        const warnings = Array.isArray(mod.warnings) ? mod.warnings.filter(Boolean) : [];
+        if (warnings.length) {
+            const warning = document.createElement('div');
+            warning.className = 'community-card-warning';
+            warning.textContent = warnings.slice(0, 3).join('；');
+            warning.title = warnings.join('\n');
+            details.appendChild(warning);
         }
         const actions = document.createElement('div');
         actions.className = 'community-card-actions';
