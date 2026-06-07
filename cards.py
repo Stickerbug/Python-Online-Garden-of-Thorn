@@ -290,7 +290,7 @@ _reg(CardDef('Disc', 'Disc', '圆盘', 3, 0, 'root', 3, 'Common',
              '坚实的护盾，减免来袭的伤害。', '+2A', flags={'non_stackable'}))
 
 _reg(CardDef('Battery', 'Battery', '电池', 3, 0, 'root', 5, 'Common',
-             '受击时会漏电。', '受到物理伤害时，对攻击者造成3点电击魔法伤害'))
+             '受击时会漏电。', '受到物理伤害时，对攻击者造成3电伤'))
 
 _reg(CardDef('MagicLeaf', 'Magic Leaf', '魔法叶', 1, 0, 'root', 5, 'Common',
              '不再能造成伤害了，但它可以回复魔力。', '自己回合开始时+1M'))

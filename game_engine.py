@@ -1303,12 +1303,12 @@ class GameEngine:
             return False
         last = self.log[-1]
 
-        m = re.fullmatch(r'(.+)的电池效果：对(.+)造成(\d+)(?:D|点电击魔法伤害)', text)
+        m = re.fullmatch(r'(.+)的电池效果：对(.+)造成(\d+)(?:D|电伤|点电击魔法伤害)', text)
         if m:
             owner, target, damage = m.group(1), m.group(2), int(m.group(3))
             taken = re.fullmatch(rf'{re.escape(target)}受到(\d+)点电池(?:电击)?伤害（H=(.+)）', last)
             if taken:
-                self.log[-1] = f'{owner}的电池反伤{target}：{damage}点电击（H={taken.group(2)}）'
+                self.log[-1] = f'{owner}的电池反伤{target}：{damage}电伤（H={taken.group(2)}）'
                 return True
 
         m = re.fullmatch(r'(.+)闪避了攻击！?', text)
@@ -2149,7 +2149,7 @@ class GameEngine:
                 if dmg > 0 and not is_battery:
                     for eq in list(ps.equipment):
                         if eq.def_id == 'Battery':
-                            self.log_msg(f"{self.pn(target_id)}的电池效果：对敌方造成3点电击魔法伤害")
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对敌方造成3电伤")
                             self._deal_direct_damage(
                                 opp_id, 3, '电池电击', target_id,
                                 damage_type=DAMAGE_TYPE_MAGIC,
@@ -6281,7 +6281,7 @@ class GameEngine:
                             damage_type=DAMAGE_TYPE_MAGIC,
                             damage_tag=DAMAGE_TAG_BATTERY,
                         )
-                        self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3点电击魔法伤害")
+                        self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
                     elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                         ps.gain_magic(1)
                         ps.magic_battery_m_this_turn += 1

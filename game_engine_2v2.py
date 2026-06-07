@@ -774,7 +774,7 @@ class GameEngine2v2(GameEngine):
                                 damage_type=DAMAGE_TYPE_MAGIC,
                                 damage_tag=DAMAGE_TAG_BATTERY,
                             )
-                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3点电击魔法伤害")
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
                     if eq.def_id == 'MagicBattery':
                         if ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
@@ -1263,7 +1263,7 @@ class GameEngine2v2(GameEngine):
                                 damage_type=DAMAGE_TYPE_MAGIC,
                                 damage_tag=DAMAGE_TAG_BATTERY,
                             )
-                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3点电击魔法伤害")
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
                         elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
                             ps.magic_battery_m_this_turn += 1
@@ -1713,7 +1713,7 @@ class GameEngine2v2(GameEngine):
                                 damage_type=DAMAGE_TYPE_MAGIC,
                                 damage_tag=DAMAGE_TAG_BATTERY,
                             )
-                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3点电击魔法伤害")
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
                         elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
                             ps.magic_battery_m_this_turn += 1

@@ -3396,7 +3396,7 @@ class LocalSoloEngine {
                                 damage_type: 'magic',
                                 damage_tag: 'gtn:battery',
                             });
-                            this.logMsg(`${this.pn(targetId)}的电池效果：对${this.pn(attackerId)}造成3点电击魔法伤害`);
+                            this.logMsg(`${this.pn(targetId)}的电池效果：对${this.pn(attackerId)}造成3电伤`);
                         } else if (eq.def_id === 'MagicBattery' && ps.magic_battery_m_this_turn < 3) {
                             ps.gainMagic(1);
                             ps.magic_battery_m_this_turn += 1;

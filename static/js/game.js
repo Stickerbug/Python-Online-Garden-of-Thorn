@@ -2122,7 +2122,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'toxic', re: /^(?:\d+层淬毒|\d+\s*(?:Toxic|Toxique|Tóxico|Токсин)|淬毒\d+)/i },
     { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/i },
     { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/i },
-    { cls: 'damage', re: /^(?:\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/i },
+    { cls: 'damage', re: /^(?:[+-]?\d+电伤|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/i },
     { cls: 'armor', re: /^[+-]?\d+A/i },
     { cls: 'heal', re: /^\+\d+H/i },
     { cls: 'elixir', re: /^[+-]?\d+E/i },
@@ -4784,9 +4784,7 @@ function createCardElement(cardDict, options = {}) {
     el.dataset.defId = defId;
     let flagsHtml = '';
     for (const flag of flags) {
-        if (!showAllFlags && flag === 'self_only' && (!gameState || gameState.mode !== '2v2')) {
-            continue;
-        }
+        if (!shouldDisplayCardFlag(flag)) continue;
         const custom = getCustomTagDef(flag);
         if (custom) {
             flagsHtml += customTagHtml(flag);
@@ -4893,6 +4891,15 @@ function cardHasSelfOnlyFlag(cardDict, cardDef = null) {
     return effective.has('self_only') || effective.has('tag_self_only');
 }
 
+function shouldDisplayCardFlag(flag) {
+    const normalized = normalizeCardFlag(flag);
+    if (!normalized) return false;
+    if ((normalized === 'self_only' || normalized === 'tag_self_only') && (!gameState || gameState.mode !== '2v2')) {
+        return false;
+    }
+    return true;
+}
+
 function cardFlagHtml(flag, text = null) {
     const normalized = normalizeCardFlag(flag);
     if (getCustomTagDef(normalized)) return customTagHtml(normalized, text);
@@ -4917,7 +4924,7 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     const parts = [];
     effective.forEach(flag => {
         if (base.has(flag)) return;
-        if (flag === 'self_only' && (!gameState || gameState.mode !== '2v2')) return;
+        if (!shouldDisplayCardFlag(flag)) return;
         parts.push(cardFlagHtml(flag));
     });
     if (includeLayers) {
@@ -5772,9 +5779,10 @@ function attachFloatingCardPreview(anchor, cardDict, cardOptions = {}) {
     anchor.addEventListener('touchcancel', removeFloatingCardPreview, { passive: true });
 }
 
-const TERM_INTRO_DELAY = 1000;
+const TERM_INTRO_DELAY = 600;
 const TERM_INTRO_MOVE_CANCEL = 18;
 let termIntroOverlayEl = null;
+let termIntroCardGhostEl = null;
 
 function getTermIntroLibrary() {
     return {
@@ -5783,8 +5791,9 @@ function getTermIntroLibrary() {
         card_type_root: { label: getCardTypeLabel('root') || 'Root', desc: '装备牌。打出后留在装备栏，有些过一回合后才能主动触发，有些能持续提供效果。', color: CARD_TYPE_COLORS.root },
         card_type_guard: { label: getCardTypeLabel('guard') || 'Guard', desc: '反制牌。仅对方行动弹出反制窗口时可使用，用来闪避、保护装备或减少伤害。', color: CARD_TYPE_COLORS.guard },
         D: { label: 'D：物理伤害(Damage)', desc: '会受护甲、装备、闪避和反制影响。只有实际造成伤害，才会触发淬毒、尖牙回血等效果。', color: COLORS.damage },
+        electric_damage: { label: '电伤：电击伤害(Electric Damage)', desc: '电池造成的电击伤害，是一种魔法伤害；它表现为直接打到目标，但不会被护甲、圆盘或邪眼减少。', color: COLORS.damage },
         magic_damage: { label: '魔法伤害(Magic Damage)', desc: '不能被护甲、圆盘、邪眼等减少。注意，不是“消耗魔力造成的伤害”。', color: COLORS.magic },
-        A: { label: 'A：护甲(Armor)', desc: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。', color: COLORS.armor },
+        A: { label: 'A：护甲(Armor)', desc: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。', color: COLORS.armor_text },
         P: { label: 'P：中毒(Poison)', desc: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', color: COLORS.poison },
         F: { label: 'F：灼烧(Fire)', desc: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 20 回合及以上后，每回合开始时对所有玩家施加一层灼烧。', color: COLORS.fire },
         toxic: { label: `${UI.status_toxic || '淬毒'}(Toxic)`, desc: '造成实际 D 后，对目标施加与淬毒层数相同的 P 层数。伤害被完全挡住时不会触发。', color: '#6C3483' },
@@ -5880,7 +5889,9 @@ function collectCardIntroTerms(cardDict) {
     if (!cardDef) return items;
     addTermIntroItem(items, seen, `card_type_${cardDef.card_type || 'bloom'}`);
     const { flags } = getCardDisplayCosts(cardDict || {}, cardDef, getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you));
-    flags.forEach(flag => addFlagIntroItem(items, seen, flag));
+    flags.forEach(flag => {
+        if (shouldDisplayCardFlag(flag)) addFlagIntroItem(items, seen, flag);
+    });
     const rawText = [
         getCardName(cardDef),
         getCardEffectText(cardDef),
@@ -5892,6 +5903,7 @@ function collectCardIntroTerms(cardDict) {
         [/(\+\s*\d+\s*A|护甲|armor|A\b)/i, 'A'],
         [/(\d+\s*(?:P|层P)|中毒|Poison)/i, 'P'],
         [/(\d+\s*(?:F|层F)|灼烧|Burn)/i, 'F'],
+        [/(\d+\s*电伤|电击伤害|电伤|Electric Damage)/i, 'electric_damage'],
         [/(魔法伤害|Magic Damage)/i, 'magic_damage'],
         [/(淬毒|Toxic)/i, 'toxic'],
         [/(抽牌|牌堆|draw|deck)/i, 'deck'],
@@ -5981,9 +5993,115 @@ function ensureTermIntroOverlay() {
 
 function hideTermIntroOverlay() {
     if (!termIntroOverlayEl) return;
+    removeTermIntroCardGhost();
     termIntroOverlayEl.classList.remove('visible');
+    termIntroOverlayEl.classList.remove('card-flying');
     termIntroOverlayEl.classList.add('hidden');
     termIntroOverlayEl.setAttribute('aria-hidden', 'true');
+}
+
+function removeTermIntroCardGhost() {
+    if (termIntroCardGhostEl) {
+        termIntroCardGhostEl.remove();
+        termIntroCardGhostEl = null;
+    }
+}
+
+function cloneDomRect(rect) {
+    if (!rect) return null;
+    return {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+    };
+}
+
+function isUsableRect(rect) {
+    return rect
+        && Number.isFinite(rect.left)
+        && Number.isFinite(rect.top)
+        && rect.width > 8
+        && rect.height > 8;
+}
+
+function getTermIntroSourceRect(anchor) {
+    const isChip = !!(anchor && anchor.classList && anchor.classList.contains('choice-card-token'));
+    if (isChip && floatingCardPreviewEl) {
+        const previewCard = floatingCardPreviewEl.querySelector('.floating-card-preview-card') || floatingCardPreviewEl;
+        const previewRect = cloneDomRect(previewCard.getBoundingClientRect());
+        if (isUsableRect(previewRect)) return previewRect;
+    }
+    if (!anchor || typeof anchor.getBoundingClientRect !== 'function') return null;
+    const rect = cloneDomRect(anchor.getBoundingClientRect());
+    return isUsableRect(rect) ? rect : null;
+}
+
+function animateTermIntroCardFromSource(cardEl, sourceRect, overlay) {
+    if (!cardEl || !isUsableRect(sourceRect)) {
+        if (cardEl) cardEl.classList.remove('term-intro-card-hidden');
+        if (overlay) overlay.classList.remove('card-flying');
+        return;
+    }
+    const targetRect = cloneDomRect(cardEl.getBoundingClientRect());
+    if (!isUsableRect(targetRect)) {
+        cardEl.classList.remove('term-intro-card-hidden');
+        if (overlay) overlay.classList.remove('card-flying');
+        return;
+    }
+    if (!cardEl.animate) {
+        cardEl.classList.remove('term-intro-card-hidden');
+        if (overlay) overlay.classList.remove('card-flying');
+        return;
+    }
+    removeTermIntroCardGhost();
+    const startX = sourceRect.left - targetRect.left;
+    const startY = sourceRect.top - targetRect.top;
+    const startScaleX = sourceRect.width / targetRect.width;
+    const startScaleY = sourceRect.height / targetRect.height;
+    const startTransform = `translate(${startX}px, ${startY}px) scale(${startScaleX}, ${startScaleY})`;
+    const ghost = cardEl.cloneNode(true);
+    ghost.classList.add('term-intro-card-ghost');
+    ghost.classList.remove('term-intro-card-hidden');
+    ghost.style.left = `${targetRect.left}px`;
+    ghost.style.top = `${targetRect.top}px`;
+    ghost.style.width = `${targetRect.width}px`;
+    ghost.style.height = `${targetRect.height}px`;
+    ghost.style.transform = startTransform;
+    ghost.style.opacity = '0.92';
+    document.body.appendChild(ghost);
+    termIntroCardGhostEl = ghost;
+    cardEl.classList.add('term-intro-card-hidden');
+    let finished = false;
+    const finish = () => {
+        if (finished) return;
+        finished = true;
+        cardEl.classList.remove('term-intro-card-hidden');
+        requestAnimationFrame(() => {
+            if (termIntroCardGhostEl === ghost) removeTermIntroCardGhost();
+            else ghost.remove();
+        });
+        if (overlay) overlay.classList.remove('card-flying');
+    };
+    const animation = ghost.animate([
+        {
+            transform: startTransform,
+            opacity: 0.92,
+            filter: 'drop-shadow(0 12px 26px rgba(0, 0, 0, 0.24))',
+        },
+        {
+            transform: 'translate(0, 0) scale(1)',
+            opacity: 1,
+            filter: 'drop-shadow(0 20px 38px rgba(0, 0, 0, 0.28))',
+        },
+    ], {
+        duration: 320,
+        easing: 'cubic-bezier(.18,.82,.22,1)',
+        fill: 'forwards',
+    });
+    animation.addEventListener('finish', finish, { once: true });
+    animation.addEventListener('cancel', finish, { once: true });
+    setTimeout(finish, 460);
 }
 
 function renderTermIntroItems(items) {
@@ -6001,6 +6119,7 @@ function renderTermIntroItems(items) {
 function showTermIntroForCard(cardDict, cardOptions = {}) {
     const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
     if (!cardDef) return;
+    const sourceRect = cardOptions.sourceRect || null;
     removeFloatingCardPreview();
     removeCardHoldPreview();
     if (typeof cleanupDragState === 'function') cleanupDragState();
@@ -6016,18 +6135,26 @@ function showTermIntroForCard(cardDict, cardOptions = {}) {
         prediction: cardOptions.prediction || getCardPredictionOptionsForOwner(cardDict, cardOptions.ownerState),
     });
     card.classList.add('term-intro-card');
+    if (isUsableRect(sourceRect)) card.classList.add('term-intro-card-hidden');
     cardSlot.appendChild(card);
     title.textContent = `${getCardName(cardDef)} · 术语说明`;
     list.innerHTML = buildCardIntroTermsHtml(cardDict);
+    overlay.classList.remove('visible');
+    overlay.classList.toggle('card-flying', isUsableRect(sourceRect));
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
-    requestAnimationFrame(() => overlay.classList.add('visible'));
+    requestAnimationFrame(() => {
+        overlay.classList.add('visible');
+        requestAnimationFrame(() => animateTermIntroCardFromSource(card, sourceRect, overlay));
+    });
 }
 
 function showTermIntroForStatus(statusInfo) {
     const overlay = ensureTermIntroOverlay();
     removeFloatingCardPreview();
     removeCardHoldPreview();
+    overlay.classList.remove('visible');
+    overlay.classList.remove('card-flying');
     const item = getStatusIntroItem(statusInfo || {});
     const cardSlot = overlay.querySelector('#term-intro-card');
     const title = overlay.querySelector('#term-intro-title');
@@ -6113,7 +6240,12 @@ function attachTermIntroLongPress(anchor, onShow) {
 
 function attachTermIntroToCard(anchor, cardDict, cardOptions = {}) {
     if (!anchor || !cardDict || !cardDict.def_id) return;
-    attachTermIntroLongPress(anchor, () => showTermIntroForCard(cardDict, cardOptions));
+    attachTermIntroLongPress(anchor, () => {
+        showTermIntroForCard(cardDict, {
+            ...cardOptions,
+            sourceRect: getTermIntroSourceRect(anchor),
+        });
+    });
 }
 
 function attachTermIntroToStatus(anchor, statusInfo) {
@@ -8208,7 +8340,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=12');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=13');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;
