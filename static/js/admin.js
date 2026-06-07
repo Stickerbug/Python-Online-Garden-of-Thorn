@@ -3,6 +3,7 @@ const $ = (id) => document.getElementById(id);
 let adminState = null;
 let refreshTimer = null;
 let registeredRefreshTimer = null;
+let activeAdminTab = 'gui';
 let commandHistory = [];
 let historyIndex = 0;
 let completionState = null;
@@ -18,12 +19,18 @@ let replayPerspectiveIndex = 0;
 let replaySpeed = 1;
 let replayTimer = null;
 let replayData = null;
+let replayCurrentId = null;
+let replayTotalFrames = 0;
+const replayChunkPromises = new Map();
+const REPLAY_CHUNK_SIZE = 80;
 let gameChatTimer = null;
 let gameChatSignature = '';
 let lastStatusErrorSignature = '';
 let lastStatusErrorAt = 0;
 let draftStatsState = { items: [], total: 0 };
 let reportState = { items: [], total: 0, selectedId: null };
+const ADMIN_STATUS_REFRESH_MS = 5000;
+const ADMIN_GAME_CHAT_REFRESH_MS = 6000;
 
 const STATUS_LABELS = {
   lobby: '大厅',
@@ -68,7 +75,14 @@ async function api(path, options = {}) {
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    data = { success: false, error: text || response.statusText };
+    const htmlLike = /^\s*</.test(text || '');
+    const nginxLimited = response.status === 503 && /limiting requests|Service Temporarily Unavailable|nginx/i.test(text || '');
+    data = {
+      success: false,
+      error: nginxLimited
+        ? '请求被 nginx 限流或后端暂不可用，请稍后刷新。'
+        : (htmlLike ? response.statusText : (text || response.statusText)),
+    };
   }
   if (!response.ok) {
     const error = new Error(data.error || response.statusText);
@@ -257,15 +271,23 @@ function showShell(authenticated) {
   $('admin-login').classList.toggle('hidden', authenticated);
   $('admin-shell').classList.toggle('hidden', !authenticated);
   if (authenticated) {
+    activeAdminTab = document.querySelector('.admin-tab.active')?.dataset.tab || 'gui';
     loadStatus();
-    loadRegisteredUsers();
-    loadDraftStats();
-    loadStorageSummary();
-    resetAndLoadReplays();
-    loadGameChat();
-    if (!refreshTimer) refreshTimer = setInterval(loadStatus, 1000);
-    if (!registeredRefreshTimer) registeredRefreshTimer = setInterval(loadRegisteredUsers, 10000);
-    if (!gameChatTimer) gameChatTimer = setInterval(loadGameChat, 3000);
+    if (activeAdminTab === 'gui') loadRegisteredUsers();
+    if (activeAdminTab === 'draft-stats') loadDraftStats();
+    if (activeAdminTab === 'storage') loadStorageSummary();
+    if (activeAdminTab === 'replays') resetAndLoadReplays();
+    if (activeAdminTab === 'game-chat') loadGameChat();
+    if (!refreshTimer) {
+      refreshTimer = setInterval(() => {
+        if (['gui', 'events', 'moderation', 'terminal'].includes(activeAdminTab)) loadStatus();
+      }, ADMIN_STATUS_REFRESH_MS);
+    }
+    if (!gameChatTimer) {
+      gameChatTimer = setInterval(() => {
+        if (activeAdminTab === 'game-chat') loadGameChat();
+      }, ADMIN_GAME_CHAT_REFRESH_MS);
+    }
   } else {
     if (refreshTimer) {
       clearInterval(refreshTimer);
@@ -1113,8 +1135,61 @@ function pauseReplay() {
   }
 }
 
+function replayChunkOffset(index) {
+  const value = Math.max(0, Number(index) || 0);
+  return Math.floor(value / REPLAY_CHUNK_SIZE) * REPLAY_CHUNK_SIZE;
+}
+
+function replayFrameLoaded(index) {
+  return !!(replayTimeline && replayTimeline[index]);
+}
+
+function mergeReplayTimelineChunk(data) {
+  const total = Math.max(0, Number(data.total_frames || 0));
+  const offset = Math.max(0, Number(data.offset || 0));
+  const frames = Array.isArray(data.timeline) ? data.timeline : [];
+  replayTotalFrames = Math.max(replayTotalFrames, total, offset + frames.length);
+  if (!Array.isArray(replayTimeline) || replayTimeline.length < replayTotalFrames) {
+    replayTimeline.length = replayTotalFrames;
+  }
+  frames.forEach((frame, idx) => {
+    replayTimeline[offset + idx] = frame;
+  });
+  if (data.replay) replayData = data.replay;
+}
+
+async function loadReplayChunk(replayId, index = 0) {
+  const offset = replayChunkOffset(index);
+  const end = Math.min(replayTotalFrames || Infinity, offset + REPLAY_CHUNK_SIZE);
+  let complete = replayTotalFrames > 0;
+  for (let i = offset; i < end; i += 1) {
+    if (!replayFrameLoaded(i)) {
+      complete = false;
+      break;
+    }
+  }
+  if (complete) return;
+  const key = `${replayId}:${offset}`;
+  if (replayChunkPromises.has(key)) return replayChunkPromises.get(key);
+  const promise = api(`/api/replays/${encodeURIComponent(replayId)}/timeline?admin=1&offset=${offset}&limit=${REPLAY_CHUNK_SIZE}`)
+    .then((data) => {
+      mergeReplayTimelineChunk(data);
+      return data;
+    })
+    .finally(() => replayChunkPromises.delete(key));
+  replayChunkPromises.set(key, promise);
+  return promise;
+}
+
+async function ensureReplayFrameLoaded(index) {
+  if (replayFrameLoaded(index)) return true;
+  if (!replayCurrentId) return false;
+  await loadReplayChunk(replayCurrentId, index);
+  return replayFrameLoaded(index);
+}
+
 function nextReplayFrame() {
-  replayFrameIndex = Math.min(replayTimeline.length - 1, replayFrameIndex + 1);
+  replayFrameIndex = Math.min(Math.max(0, replayTotalFrames - 1), replayFrameIndex + 1);
   renderReplayFrame();
 }
 
@@ -1123,9 +1198,11 @@ function prevReplayFrame() {
   renderReplayFrame();
 }
 
-function playReplay() {
+async function playReplay() {
   pauseReplay();
-  if (!replayTimeline.length || replayFrameIndex >= replayTimeline.length - 1) return;
+  if (!replayTotalFrames || replayFrameIndex >= replayTotalFrames - 1) return;
+  await ensureReplayFrameLoaded(replayFrameIndex);
+  await ensureReplayFrameLoaded(replayFrameIndex + 1);
   const current = replayTimeline[replayFrameIndex] || {};
   const next = replayTimeline[replayFrameIndex + 1] || {};
   const delay = replaySpeed === 'instant' ? 0 : Math.max(80, ((Number(next.t) || 0) - (Number(current.t) || 0)) / Number(replaySpeed || 1));
@@ -1275,19 +1352,27 @@ async function openReplayViewer(replayId) {
   const viewer = $('replay-viewer');
   viewer.classList.remove('hidden');
   replayData = null;
-  $('replay-frame').innerHTML = '<div class="admin-replay-empty">正在生成时间线...</div>';
+  replayCurrentId = replayId;
+  replayTotalFrames = 0;
+  replayTimeline = [];
+  replayFrameIndex = 0;
+  replayPerspectiveIndex = 0;
+  replayChunkPromises.clear();
+  $('replay-frame').innerHTML = '<div class="admin-replay-empty">正在加载回放首屏...</div>';
   try {
-    const data = await api(`/api/replays/${encodeURIComponent(replayId)}/timeline?admin=1`);
-    replayData = data.replay || null;
-    replayTimeline = data.timeline || [];
-    replayFrameIndex = 0;
-    replayPerspectiveIndex = 0;
+    const data = await loadReplayChunk(replayId, 0);
+    replayData = (data && data.replay) || replayData || null;
     const meta = (data.replay && data.replay.meta) || {};
     $('replay-viewer-title').textContent = `${meta.mode || '-'} · ${(meta.players || []).join(' / ')}`;
     const progress = $('replay-progress');
-    progress.max = String(Math.max(0, replayTimeline.length - 1));
+    progress.max = String(Math.max(0, replayTotalFrames - 1));
     progress.value = '0';
     renderReplayFrame();
+    setTimeout(() => {
+      if (replayCurrentId === replayId && replayTotalFrames > REPLAY_CHUNK_SIZE) {
+        loadReplayChunk(replayId, REPLAY_CHUNK_SIZE).catch(() => {});
+      }
+    }, 80);
   } catch (error) {
     $('replay-frame').innerHTML = `<div class="admin-replay-empty">回放加载失败：${escapeHtml(error.message)}</div>`;
   }
@@ -1300,7 +1385,14 @@ function renderReplayFrame() {
   const target = $('replay-frame');
   if (!target) return;
   if (!frame) {
-    target.innerHTML = '<div class="admin-replay-empty">暂无时间线数据。</div>';
+    const frameNo = replayFrameIndex + 1;
+    const total = Math.max(1, replayTotalFrames || replayTimeline.length || 0);
+    target.innerHTML = `<div class="admin-replay-empty">正在加载第 ${frameNo}/${total} 帧...</div>`;
+    ensureReplayFrameLoaded(replayFrameIndex).then((loaded) => {
+      if (loaded && Number(progress?.value || 0) === replayFrameIndex) renderReplayFrame();
+    }).catch((error) => {
+      target.innerHTML = `<div class="admin-replay-empty">回放帧加载失败：${escapeHtml(error.message)}</div>`;
+    });
     return;
   }
   const state = replayFrameState(frame);
@@ -1317,11 +1409,12 @@ function renderReplayFrame() {
     state.player_names.forEach((name, index) => bottom.push(replayPlayerPanel(frame, `玩家${index + 1}`, {}, index, name, false)));
   }
   const actionLines = replayTimeline.slice(Math.max(0, replayFrameIndex - 13), replayFrameIndex + 1)
+    .filter(Boolean)
     .map(item => `${replayMs(item.t)} ${replayActionText(item)}`);
   const duration = replayData && replayData.duration_ms != null ? replayMs(replayData.duration_ms) : '';
   target.innerHTML = `
     <div class="admin-replay-meta">
-      <span>帧 ${replayFrameIndex + 1}/${Math.max(1, replayTimeline.length)}</span>
+      <span>帧 ${replayFrameIndex + 1}/${Math.max(1, replayTotalFrames || replayTimeline.length)}</span>
       <span>时间 ${replayMs(frame.t)}${duration ? ` / ${duration}` : ''}</span>
       <span>第${escapeHtml(frame.round || 0)}回合</span>
     </div>
@@ -1504,10 +1597,13 @@ function bindEvents() {
       document.querySelectorAll('.admin-tab').forEach((item) => item.classList.remove('active'));
       tab.classList.add('active');
       const target = tab.dataset.tab;
+      activeAdminTab = target || 'gui';
       ['gui', 'events', 'moderation', 'draft-stats', 'storage', 'replays', 'game-chat', 'terminal'].forEach((name) => {
         const panel = $(`admin-${name}`);
         if (panel) panel.classList.toggle('hidden', target !== name);
       });
+      if (['gui', 'events', 'moderation', 'terminal'].includes(target)) loadStatus();
+      if (target === 'gui') loadRegisteredUsers();
       if (target === 'events') {
         renderEvents(adminState?.events || []);
         renderHistory(adminState?.history || []);
@@ -1545,6 +1641,10 @@ function bindEvents() {
     pauseReplay();
     replayFrameIndex = Number(event.target.value) || 0;
     renderReplayFrame();
+    const nextOffset = replayChunkOffset(replayFrameIndex + REPLAY_CHUNK_SIZE);
+    if (replayCurrentId && nextOffset < replayTotalFrames) {
+      loadReplayChunk(replayCurrentId, nextOffset).catch(() => {});
+    }
   });
   document.querySelectorAll('[data-replay-control]').forEach((btn) => {
     btn.addEventListener('click', () => {

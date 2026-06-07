@@ -15,7 +15,7 @@ from cards import (
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 from mod_runtime_v2 import run_v2_event, run_v2_steps, validate_v2_ui_response
 from damage_types import (
-    DAMAGE_TAG_DIRECT, DAMAGE_TAG_FIRE, DAMAGE_TAG_PHYSICAL, DAMAGE_TAG_POISON,
+    DAMAGE_TAG_BATTERY, DAMAGE_TAG_DIRECT, DAMAGE_TAG_FIRE, DAMAGE_TAG_PHYSICAL, DAMAGE_TAG_POISON,
     DAMAGE_TYPE_MAGIC, DAMAGE_TYPE_PHYSICAL, damage_type_tag, infer_damage_type,
     status_damage_tag,
 )
@@ -1303,12 +1303,12 @@ class GameEngine:
             return False
         last = self.log[-1]
 
-        m = re.fullmatch(r'(.+)的电池效果：对(.+)造成(\d+)D', text)
+        m = re.fullmatch(r'(.+)的电池效果：对(.+)造成(\d+)(?:D|点电击魔法伤害)', text)
         if m:
             owner, target, damage = m.group(1), m.group(2), int(m.group(3))
-            taken = re.fullmatch(rf'{re.escape(target)}受到(\d+)点电池伤害（H=(.+)）', last)
+            taken = re.fullmatch(rf'{re.escape(target)}受到(\d+)点电池(?:电击)?伤害（H=(.+)）', last)
             if taken:
-                self.log[-1] = f'{owner}的电池反伤{target}：{damage}D（H={taken.group(2)}）'
+                self.log[-1] = f'{owner}的电池反伤{target}：{damage}点电击（H={taken.group(2)}）'
                 return True
 
         m = re.fullmatch(r'(.+)闪避了攻击！?', text)
@@ -1798,11 +1798,11 @@ class GameEngine:
     def select_opening_event(self, player_id: int, event_id: int) -> bool:
         if self.phase != 'event_select':
             return False
-        valid = any(self._opening_event_ids_equal(e.get('id'), event_id) for e in self.opening_event_options[player_id] if e)
-        if not valid:
-            return False
-        self.opening_event_picks[player_id] = event_id
-        return True
+        for event in self.opening_event_options[player_id]:
+            if event and self._opening_event_ids_equal(event.get('id'), event_id):
+                self.opening_event_picks[player_id] = event.get('id')
+                return True
+        return False
 
     def both_events_selected(self) -> bool:
         return self.opening_event_picks[0] is not None and self.opening_event_picks[1] is not None
@@ -2149,8 +2149,12 @@ class GameEngine:
                 if dmg > 0 and not is_battery:
                     for eq in list(ps.equipment):
                         if eq.def_id == 'Battery':
-                            self.log_msg(f"{self.pn(target_id)}的电池效果：对敌方造成3D")
-                        self._deal_direct_damage(opp_id, 3, '电池', target_id)
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对敌方造成3点电击魔法伤害")
+                            self._deal_direct_damage(
+                                opp_id, 3, '电池电击', target_id,
+                                damage_type=DAMAGE_TYPE_MAGIC,
+                                damage_tag=DAMAGE_TAG_BATTERY,
+                            )
                         if eq.def_id == 'MagicBattery':
                             if ps.magic_battery_m_this_turn < 3:
                                 ps.gain_magic(1)
@@ -3598,7 +3602,6 @@ class GameEngine:
             return
         self._remove_card_from_current_zone(target_card)
         self.players[target_id].add_to_hand(target_card)
-        self.log_msg(log or f"{target_card.name_cn}移入{self.pn(target_id)}手牌")
 
     def _atomic_move_to_deck(self, player_id, card, params, log, choice, context):
         position = params.get('position', 'top')
@@ -6273,8 +6276,12 @@ class GameEngine:
                             {'source_id': attacker_id, 'target_id': target_id, 'damage': dmg}):
                         continue
                     if eq.def_id == 'Battery':
-                        self._deal_direct_damage(attacker_id, 3, '电池', target_id)
-                        self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3D")
+                        self._deal_direct_damage(
+                            attacker_id, 3, '电池电击', target_id,
+                            damage_type=DAMAGE_TYPE_MAGIC,
+                            damage_tag=DAMAGE_TAG_BATTERY,
+                        )
+                        self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3点电击魔法伤害")
                     elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                         ps.gain_magic(1)
                         ps.magic_battery_m_this_turn += 1

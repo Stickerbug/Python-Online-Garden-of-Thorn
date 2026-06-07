@@ -106,7 +106,7 @@ CARD_I18N = {
     'Battery': {
         'name': _t('电池', 'Battery', 'Batterie', 'Bateria', 'Батарея', '電池'),
         'desc': _t('受击时会漏电。', 'Leaks electricity when hit.', 'Fuit de l’électricité lorsqu’elle est touchée.', 'Vaza eletricidade quando atingida.', 'При ударе даёт утечку тока.', '攻撃されると漏電する。'),
-        'effect': _t('受到物理伤害时对攻击者造成3D', 'When taking physical damage, deal 3D to the attacker', 'Quand vous subissez des dégâts physiques, inflige 3D à l’attaquant', 'Ao sofrer dano físico, causa 3D ao atacante', 'При получении физического урона наносит атакующему 3D', '物理ダメージを受けた時、攻撃者に3Dを与える'),
+        'effect': _t('受到物理伤害时，对攻击者造成3点电击魔法伤害', 'When taking physical damage, deal 3 electric magic damage to the attacker', 'Quand vous subissez des dégâts physiques, inflige 3 dégâts magiques électriques à l’attaquant', 'Ao sofrer dano físico, causa 3 de dano mágico elétrico ao atacante', 'При получении физического урона наносит атакующему 3 магического электрического урона', '物理ダメージを受けた時、攻撃者に3点の電撃魔法ダメージを与える'),
     },
     'Bubble': {
         'name': _t('泡泡', 'Bubble', 'Bulle', 'Bolha', 'Пузырь', '泡'),

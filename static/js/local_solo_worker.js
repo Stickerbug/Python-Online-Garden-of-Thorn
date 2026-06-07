@@ -2559,7 +2559,10 @@ class LocalSoloEngine {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
         const sourceText = String(params.source_text || params.source_name || params.label || params.source || (card ? cardName(card.def_id) : '\u6548\u679c'));
-        this.dealDirectDamage(targetId, amount, sourceText, playerId);
+        this.dealDirectDamage(targetId, amount, sourceText, playerId, {
+            damage_type: params.damage_type || null,
+            damage_tag: params.damage_tag || null,
+        });
     }
 
     effect_lifesteal_damage(playerId, card, params) {
@@ -3314,7 +3317,7 @@ class LocalSoloEngine {
         if (applied > 0) this.logMsg(`第${this.round_num}回合开始，所有存活玩家+1灼烧`);
     }
 
-    dealDirectDamage(playerId, amount, source = '', sourceId = null) {
+    dealDirectDamage(playerId, amount, source = '', sourceId = null, damageMeta = null) {
         const ps = this.players[playerId];
         if (!ps || ps.invincible) {
             if (ps) this.logMsg(`${this.pn(playerId)}无敌，免疫${source}伤害`);
@@ -3389,8 +3392,11 @@ class LocalSoloEngine {
                                 damage: dmg,
                             });
                         } else if (eq.def_id === 'Battery') {
-                            this.dealDirectDamage(attackerId, 3, '电池', targetId);
-                            this.logMsg(`${this.pn(targetId)}的电池效果：对${this.pn(attackerId)}造成3D`);
+                            this.dealDirectDamage(attackerId, 3, '电池电击', targetId, {
+                                damage_type: 'magic',
+                                damage_tag: 'gtn:battery',
+                            });
+                            this.logMsg(`${this.pn(targetId)}的电池效果：对${this.pn(attackerId)}造成3点电击魔法伤害`);
                         } else if (eq.def_id === 'MagicBattery' && ps.magic_battery_m_this_turn < 3) {
                             ps.gainMagic(1);
                             ps.magic_battery_m_this_turn += 1;

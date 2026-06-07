@@ -3,7 +3,7 @@ import math
 from typing import List, Dict, Optional, Tuple, Set
 from game_engine import GameEngine, PlayerState, EquipmentInstance
 from damage_types import (
-    DAMAGE_TAG_DIRECT, DAMAGE_TAG_FIRE, DAMAGE_TAG_PHYSICAL, DAMAGE_TAG_POISON,
+    DAMAGE_TAG_BATTERY, DAMAGE_TAG_DIRECT, DAMAGE_TAG_FIRE, DAMAGE_TAG_PHYSICAL, DAMAGE_TAG_POISON,
     DAMAGE_TYPE_MAGIC, DAMAGE_TYPE_PHYSICAL, infer_damage_type, status_damage_tag,
 )
 from cards import (
@@ -769,8 +769,12 @@ class GameEngine2v2(GameEngine):
                 for eq in ps.equipment:
                     if eq.def_id == 'Battery':
                         if attacker_id >= 0:
-                            self._deal_direct_damage(attacker_id, 3, '电池')
-                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3D")
+                            self._deal_direct_damage(
+                                attacker_id, 3, '电池电击', target_id,
+                                damage_type=DAMAGE_TYPE_MAGIC,
+                                damage_tag=DAMAGE_TAG_BATTERY,
+                            )
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3点电击魔法伤害")
                     if eq.def_id == 'MagicBattery':
                         if ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
@@ -1254,8 +1258,12 @@ class GameEngine2v2(GameEngine):
                 if dmg > 0 and not is_battery:
                     for eq in list(ps.equipment):
                         if eq.def_id == 'Battery' and attacker_id >= 0:
-                            self._deal_direct_damage(attacker_id, 3, '电池', target_id)
-                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3D")
+                            self._deal_direct_damage(
+                                attacker_id, 3, '电池电击', target_id,
+                                damage_type=DAMAGE_TYPE_MAGIC,
+                                damage_tag=DAMAGE_TAG_BATTERY,
+                            )
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3点电击魔法伤害")
                         elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
                             ps.magic_battery_m_this_turn += 1
@@ -1700,8 +1708,12 @@ class GameEngine2v2(GameEngine):
                         ):
                             continue
                         if eq.def_id == 'Battery' and attacker_id >= 0:
-                            self._deal_direct_damage(attacker_id, 3, '电池', target_id)
-                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3D")
+                            self._deal_direct_damage(
+                                attacker_id, 3, '电池电击', target_id,
+                                damage_type=DAMAGE_TYPE_MAGIC,
+                                damage_tag=DAMAGE_TAG_BATTERY,
+                            )
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3点电击魔法伤害")
                         elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
                             ps.magic_battery_m_this_turn += 1
@@ -1723,6 +1735,8 @@ class GameEngine2v2(GameEngine):
         eq = ps.find_equipment(equipment_instance_id)
         if eq is None:
             return {'success': False, 'error': '装备不存在'}
+        if 'self_only' in eq.card_instance.flags:
+            target_player_id = player_id
         has_mod_trigger = self._has_card_event(eq.card_def, 'equipment_trigger')
         if eq.card_def.trigger_cost_e < 0 and not has_mod_trigger:
             return {'success': False, 'error': '该装备没有触发效果'}

@@ -2947,6 +2947,14 @@ body {
   margin-left: 6px;
 }
 
+.lobby-player-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .lobby-player-row .btn-primary {
   padding: 8px 20px;
   font-size: 14px;
@@ -3042,6 +3050,45 @@ body {
     color: var(--text-primary);
 }
 
+.report-inline-btn {
+  margin-left: 8px;
+  padding: 2px 7px;
+  font-family: var(--font-main);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 28%, transparent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: 0.68;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast), opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.report-inline-btn:hover,
+.report-inline-btn:focus-visible {
+  color: var(--damage);
+  border-color: color-mix(in srgb, var(--damage) 48%, transparent);
+  background: color-mix(in srgb, var(--damage-bg) 70%, transparent);
+  opacity: 1;
+  outline: none;
+}
+
+.report-inline-btn:active {
+  transform: scale(0.96);
+}
+
+.lobby-report-btn {
+  margin-left: 0;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.chat-report-btn {
+  vertical-align: baseline;
+}
+
 .chat-time-separator {
     margin: 8px 0;
     text-align: center;
@@ -3056,6 +3103,84 @@ body {
     color: var(--text-secondary);
     font-size: 11px;
     font-weight: 800;
+}
+
+.report-modal {
+  display: grid;
+  gap: 12px;
+  min-width: min(420px, calc(100vw - 42px));
+}
+
+.report-modal h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 20px;
+}
+
+.report-target {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.035);
+}
+
+.report-target span,
+.report-field span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.report-target strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.report-field {
+  display: grid;
+  gap: 6px;
+}
+
+.report-field select,
+.report-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-main);
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  outline: none;
+}
+
+.report-field select {
+  padding: 8px 10px;
+}
+
+.report-field textarea {
+  min-height: 90px;
+  resize: vertical;
+  padding: 9px 10px;
+}
+
+.report-field select:focus,
+.report-field textarea:focus {
+  border-color: color-mix(in srgb, var(--damage) 46%, var(--border-color));
+}
+
+.report-error {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--damage);
+  background: var(--damage-bg);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.report-actions {
+  justify-content: flex-end;
 }
 
 .chat-input-row {

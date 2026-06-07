@@ -461,6 +461,7 @@
 <div id="gameover-log" class="gameover-log"></div>
 <div class="gameover-buttons">
 <button id="btn-rematch" class="btn btn-bloom">再来一局</button>
+<button id="btn-report-match" class="btn btn-danger hidden">举报本局</button>
 <button id="btn-return-lobby" class="btn btn-secondary">返回大厅</button>
 </div>
 </div>
@@ -716,7 +717,7 @@
   setText('#btn-connect', t.enterLobby); setText('#btn-solo-training', t.soloTraining); setText('#btn-open-settings', t.settings); setText('#solo-title', t.soloTraining); setText('#btn-solo-load', t.loadLast); setText('#btn-solo-save', t.saveDecks); setText('#btn-solo-start', t.startTraining); setText('#btn-solo-back', t.back); setPlaceholder('#solo-card-search', t.searchCards); setText('#solo-deck-a-title', t.soloDeckA); setText('#solo-deck-b-title', t.soloDeckB); setText('#solo-event-a-label', t.soloEventA); setText('#solo-event-b-label', t.soloEventB);
   setText('#view-lobby .lobby-header h2', t.lobby); setText('#view-lobby .lobby-left .lobby-section:first-child h3', t.onlinePlayers); setText('#lobby-online-count', t.onlineCount); setText('#view-lobby .lobby-left .lobby-section:last-child h3', t.ongoingGames); setText('#view-lobby .lobby-right .lobby-section h3', t.chat); setPlaceholder('#lobby-chat-input', t.messagePlaceholder); setText('#btn-lobby-chat-send', t.send); setText('#btn-lobby-back', t.backHome);
   setText('#view-draft h2', t.draft); setText('#btn-draft-reroll', t.reroll); setText('#view-event-select h2', t.selectEvent); setText('#view-event-select .event-desc', t.selectEventDesc); setText('#opp-label', t.opponent); setText('#opp-info', t.oppInfo); setText('#battle-log .log-header', t.battleLog); setText('#you-label', t.you); setText('#you-info', t.youInfo); setText('#play-zone .play-zone-hint', t.dragToPlay); setText('#btn-end-turn', t.endTurn); setText('#btn-view-deck', t.viewDeck); setText('#btn-solo-next-draw', t.setNextDraw); setText('#btn-solo-edit', t.pauseEdit); setText('#btn-surrender', t.surrender); setText('#btn-switch-perspective', t.switchPerspective); setText('#btn-spectate-view-deck', t.viewDeck); setText('#btn-leave-spectate', t.leaveSpectate); setPlaceholder('#game-chat-input', t.messagePlaceholder); setText('#btn-game-chat-send', t.send);
-  setText('#btn-rematch', t.rematch); setText('#btn-return-lobby', t.returnLobby); setText('#view-mod-editor h2', t.modEditor); setPlaceholder('#mod-editor-area', t.modPlaceholder); setText('#btn-mod-load', t.loadMod); setText('#btn-mod-save', t.save); setText('#btn-mod-validate', t.validateJson); setText('#btn-mod-back', t.back);
+  setText('#btn-rematch', t.rematch); setText('#btn-return-lobby', t.returnLobby); setText('#btn-report-match', (window.__bootLang === 'zh' ? '举报本局' : 'Report Match')); setText('#view-mod-editor h2', t.modEditor); setPlaceholder('#mod-editor-area', t.modPlaceholder); setText('#btn-mod-load', t.loadMod); setText('#btn-mod-save', t.save); setText('#btn-mod-validate', t.validateJson); setText('#btn-mod-back', t.back);
   setText('#settings-title', t.settings); setText('#settings-tab-appearance', t.appearance); setText('#settings-tab-server', t.server); setText('#settings-tab-mods', t.mods); setText('#settings-section-appearance', t.appearance); setText('#settings-label-theme', t.theme); setText('#settings-theme-select option[value=\"light\"]', t.light); setText('#settings-theme-select option[value=\"dark\"]', t.dark); setText('#settings-label-ui-style', t.uiStyle); setText('#settings-ui-style-select option[value=\"minimal\"]', t.minimal); setText('#settings-ui-style-select option[value=\"classic\"]', t.classic); setText('#settings-label-lang', t.language); setText('#settings-section-server', t.server); setText('#settings-label-server', t.address); setPlaceholder('#settings-server-input', t.serverPlaceholder); setText('#settings-section-mods', t.mods); setText('#settings-no-mods', t.noMods); setText('#btn-settings-close', t.ok); setText('#game-prompt-cancel', t.cancel); setText('.rotate-text', t.rotatePrompt); setText('.rotate-text-en', t.rotateSub); setText('#btn-dismiss-rotate', t.continueEnter);
   const app = document.getElementById('app'); if (app) app.style.visibility = 'visible';
 })();
@@ -742,6 +743,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-<script src="/static/js/game.js?v=205"></script>
+<script src="/static/js/game.js?v=209"></script>
 </body>
 </html>

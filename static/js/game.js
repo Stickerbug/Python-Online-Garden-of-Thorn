@@ -1603,6 +1603,122 @@ Object.assign(I18N.ja, {
     chat_channel_enemy: 'Enemy',
     chat_channel_private_to: 'Private -> {0}',
 });
+Object.assign(I18N.en, {
+    report: 'Report',
+    report_chat: 'Report message',
+    report_player: 'Report player',
+    report_match: 'Report match',
+    report_title: 'Submit Report',
+    report_object: 'Object',
+    report_category: 'Category',
+    report_reason: 'Reason',
+    report_reason_placeholder: 'Optional details, up to 300 characters',
+    report_submit: 'Submit',
+    report_success: 'Report submitted',
+    report_login_required: 'Log in to an account before reporting.',
+    report_error: 'Report failed: {0}',
+    report_category_abusive_language: 'Abusive language',
+    report_category_sexual_content: 'Sexual content',
+    report_category_spam: 'Spam',
+    report_category_privacy_leak: 'Privacy leak',
+    report_category_harassment: 'Harassment',
+    report_category_cheating: 'Cheating',
+    report_category_smurfing: 'Smurfing',
+    report_category_boosting: 'Boosting',
+    report_category_stalling: 'Stalling',
+    report_category_inappropriate_name: 'Inappropriate name',
+    report_category_bug_abuse: 'Bug abuse',
+    report_category_abnormal_match: 'Abnormal match',
+    report_category_other: 'Other',
+});
+Object.assign(I18N.zh, {
+    report: '举报',
+    report_chat: '举报消息',
+    report_player: '举报玩家',
+    report_match: '举报本局',
+    report_title: '提交举报',
+    report_object: '对象',
+    report_category: '分类',
+    report_reason: '说明',
+    report_reason_placeholder: '可选补充说明，最多300字',
+    report_submit: '提交',
+    report_success: '举报已提交',
+    report_login_required: '请先登录账号再举报。',
+    report_error: '举报失败：{0}',
+    report_category_abusive_language: '不当言语',
+    report_category_sexual_content: '色情内容',
+    report_category_spam: '刷屏/广告',
+    report_category_privacy_leak: '泄露隐私',
+    report_category_harassment: '骚扰',
+    report_category_cheating: '作弊',
+    report_category_smurfing: '小号扰乱',
+    report_category_boosting: '刷分',
+    report_category_stalling: '拖延',
+    report_category_inappropriate_name: '不当昵称',
+    report_category_bug_abuse: '利用漏洞',
+    report_category_abnormal_match: '异常对局',
+    report_category_other: '其他',
+});
+Object.assign(I18N.fr, {
+    report: 'Signaler',
+    report_chat: 'Signaler message',
+    report_player: 'Signaler joueur',
+    report_match: 'Signaler partie',
+    report_title: 'Envoyer un signalement',
+    report_object: 'Objet',
+    report_category: 'Categorie',
+    report_reason: 'Raison',
+    report_reason_placeholder: 'Details facultatifs, 300 caracteres max',
+    report_submit: 'Envoyer',
+    report_success: 'Signalement envoye',
+    report_login_required: 'Connectez-vous a un compte pour signaler.',
+    report_error: 'Signalement echoue : {0}',
+});
+Object.assign(I18N.pt, {
+    report: 'Denunciar',
+    report_chat: 'Denunciar mensagem',
+    report_player: 'Denunciar jogador',
+    report_match: 'Denunciar partida',
+    report_title: 'Enviar denuncia',
+    report_object: 'Objeto',
+    report_category: 'Categoria',
+    report_reason: 'Motivo',
+    report_reason_placeholder: 'Detalhes opcionais, ate 300 caracteres',
+    report_submit: 'Enviar',
+    report_success: 'Denuncia enviada',
+    report_login_required: 'Entre com uma conta para denunciar.',
+    report_error: 'Falha ao denunciar: {0}',
+});
+Object.assign(I18N.ru, {
+    report: 'Report',
+    report_chat: 'Report message',
+    report_player: 'Report player',
+    report_match: 'Report match',
+    report_title: 'Submit Report',
+    report_object: 'Object',
+    report_category: 'Category',
+    report_reason: 'Reason',
+    report_reason_placeholder: 'Optional details, up to 300 characters',
+    report_submit: 'Submit',
+    report_success: 'Report submitted',
+    report_login_required: 'Log in to an account before reporting.',
+    report_error: 'Report failed: {0}',
+});
+Object.assign(I18N.ja, {
+    report: '通報',
+    report_chat: 'メッセージを通報',
+    report_player: 'プレイヤーを通報',
+    report_match: '対戦を通報',
+    report_title: '通報を送信',
+    report_object: '対象',
+    report_category: '分類',
+    report_reason: '理由',
+    report_reason_placeholder: '任意の補足、300文字以内',
+    report_submit: '送信',
+    report_success: '通報を送信しました',
+    report_login_required: '通報するにはアカウントでログインしてください。',
+    report_error: '通報失敗: {0}',
+});
 
 let currentLang = localStorage.getItem('gtn_lang') || 'zh';
 let showEnglishCardNames = localStorage.getItem('gtn_show_english_card_names') !== '0';
@@ -1709,6 +1825,144 @@ function getChatDisplayName(data) {
     const prefix = getSpecialRolePrefix(data);
     const name = prefix ? `[${prefix}]${base}` : base;
     return `${spectator}${name}`;
+}
+
+const REPORT_CATEGORIES = {
+    chat_message: ['abusive_language', 'sexual_content', 'spam', 'privacy_leak', 'harassment', 'other'],
+    player: ['cheating', 'smurfing', 'boosting', 'stalling', 'inappropriate_name', 'harassment', 'other'],
+    match: ['cheating', 'bug_abuse', 'boosting', 'stalling', 'abnormal_match', 'other'],
+};
+
+function reportCategoryLabel(category) {
+    return t(`report_category_${category}`) || category;
+}
+
+function reportObjectLabel(objectType, fallback = '') {
+    if (objectType === 'chat_message') return UI.report_chat || UI.report;
+    if (objectType === 'player') return UI.report_player || UI.report;
+    if (objectType === 'match') return UI.report_match || UI.report;
+    return fallback || UI.report || 'Report';
+}
+
+function isReportableChatEntry(entry) {
+    return !!(entry && !entry.system && (entry.message_id || entry.messageId));
+}
+
+function chatEntryReportMeta(entry = {}) {
+    return {
+        objectType: 'chat_message',
+        objectId: String(entry.message_id || entry.messageId || ''),
+        targetUserId: entry.sender_user_id || entry.senderUserId || '',
+        targetUsername: entry.nickname || entry.sender_name || entry.senderName || entry.nick || '',
+        title: UI.report_chat,
+    };
+}
+
+function createReportButton(config = {}, options = {}) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = options.className || 'report-inline-btn';
+    btn.textContent = options.text || UI.report || 'Report';
+    btn.title = options.title || btn.textContent;
+    btn.setAttribute('aria-label', btn.title);
+    btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openReportDialog(config);
+    };
+    return btn;
+}
+
+function getReportMatchObjectId(gs = gameState) {
+    if (!gs) return '';
+    if (gs.match_id != null) return String(gs.match_id);
+    if (gs.room_id != null) return String(gs.room_id);
+    const matchKey = String(gs.match_key || '');
+    if (matchKey.startsWith('room:')) return matchKey.slice('room:'.length);
+    return matchKey;
+}
+
+async function openReportDialog(config = {}) {
+    if (!currentAccount) {
+        gameAlert(UI.report || 'Report', UI.report_login_required || 'Log in to an account before reporting.');
+        return;
+    }
+    const objectType = String(config.objectType || config.object_type || '');
+    const objectId = String(config.objectId || config.object_id || '');
+    if (!objectType || !objectId) {
+        flashStatus(UI.operation_failed, 2200, 'error');
+        return;
+    }
+    const categories = REPORT_CATEGORIES[objectType] || ['other'];
+    const title = config.title || reportObjectLabel(objectType);
+    const targetUsername = String(config.targetUsername || config.target_username || '');
+    const targetUserId = config.targetUserId || config.target_user_id || '';
+    showModal(`
+        <div class="report-modal">
+            <h3>${escapeHtml(UI.report_title || 'Submit Report')}</h3>
+            <div class="report-target">
+                <span>${escapeHtml(UI.report_object || 'Object')}</span>
+                <strong>${escapeHtml(title)}${targetUsername ? ` · ${escapeHtml(targetUsername)}` : ''}</strong>
+            </div>
+            <label class="report-field">
+                <span>${escapeHtml(UI.report_category || 'Category')}</span>
+                <select id="report-category">
+                    ${categories.map(cat => `<option value="${escapeHtml(cat)}">${escapeHtml(reportCategoryLabel(cat))}</option>`).join('')}
+                </select>
+            </label>
+            <label class="report-field">
+                <span>${escapeHtml(UI.report_reason || 'Reason')}</span>
+                <textarea id="report-reason" maxlength="300" placeholder="${escapeHtml(UI.report_reason_placeholder || '')}"></textarea>
+            </label>
+            <div id="report-error" class="report-error hidden"></div>
+            <div class="modal-buttons report-actions">
+                <button class="btn btn-secondary" id="report-cancel">${escapeHtml(UI.cancel || 'Cancel')}</button>
+                <button class="btn btn-danger" id="report-submit">${escapeHtml(UI.report_submit || UI.report || 'Submit')}</button>
+            </div>
+        </div>
+    `);
+    const cancelBtn = $('report-cancel');
+    const submitBtn = $('report-submit');
+    const errorEl = $('report-error');
+    if (cancelBtn) cancelBtn.onclick = hideModal;
+    if (!submitBtn) return;
+    submitBtn.onclick = async () => {
+        submitBtn.disabled = true;
+        if (errorEl) errorEl.classList.add('hidden');
+        const category = $('report-category') ? $('report-category').value : categories[0];
+        const reasonText = $('report-reason') ? $('report-reason').value : '';
+        try {
+            const res = await fetch('/api/report', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    object_type: objectType,
+                    object_id: objectId,
+                    category,
+                    reason_text: reasonText,
+                    target_user_id: targetUserId || undefined,
+                    target_username: targetUsername || undefined,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || data.message || res.statusText || UI.operation_failed);
+            }
+            hideModal();
+            flashStatus(UI.report_success || 'Report submitted', 2200);
+        } catch (err) {
+            const message = err && err.message ? err.message : UI.operation_failed;
+            if (errorEl) {
+                errorEl.textContent = tf('report_error', message);
+                errorEl.classList.remove('hidden');
+            } else {
+                flashStatus(tf('report_error', message), 3000, 'error');
+            }
+        } finally {
+            submitBtn.disabled = false;
+        }
+    };
 }
 
 const COLORS = {
@@ -2132,7 +2386,7 @@ function localizeDamageSource(source) {
 
 function translateLogLine(line) {
     if (currentLang === 'zh') {
-        return String(line || '').replace(/受到(\d+)点电池伤害/g, '受到$1点电池反伤');
+        return String(line || '').replace(/受到(\d+)点电池(?:电击)?伤害/g, '受到$1点电池反伤');
     }
     let m;
     const lp = localizeCanonicalPlayerName;
@@ -2853,6 +3107,8 @@ function updateStaticText() {
     if (btnPhaseChatSend) btnPhaseChatSend.textContent = UI.send;
     const btnReturnLobby = $('btn-return-lobby');
     if (btnReturnLobby) btnReturnLobby.textContent = UI.return_lobby;
+    const btnReportMatch = $('btn-report-match');
+    if (btnReportMatch) btnReportMatch.textContent = UI.report_match || UI.report;
     const btnRematch = $('btn-rematch');
     if (btnRematch) btnRematch.textContent = UI.rematch;
     const btnSurrender = $('btn-surrender');
@@ -5495,9 +5751,6 @@ function getTermIntroLibrary() {
         card_type_bloom: { label: getCardTypeLabel('bloom') || 'Bloom', desc: '技能牌。用于回血、抽牌、加状态、调整 E/M 或改变场面。', color: CARD_TYPE_COLORS.bloom },
         card_type_root: { label: getCardTypeLabel('root') || 'Root', desc: '装备牌。打出后留在装备栏，有些过一回合后才能主动触发，有些能持续提供效果。', color: CARD_TYPE_COLORS.root },
         card_type_guard: { label: getCardTypeLabel('guard') || 'Guard', desc: '反制牌。仅对方行动弹出反制窗口时可使用，用来闪避、保护装备或减少伤害。', color: CARD_TYPE_COLORS.guard },
-        H: { label: 'H：生命(Health)', desc: '降到 0 或更低会失败；双方同时失败时按当前模式判定平局或胜负。', color: COLORS.health },
-        E: { label: 'E：能量(Elixir)', desc: '多数卡牌消耗 E；回合开始回复，超过上限的部分不会保留。', color: COLORS.elixir },
-        M: { label: 'M：魔力(Magic)', desc: '部分卡牌消耗或回复 M，和 E 分开计算；超过上限的部分不会保留。', color: COLORS.magic },
         D: { label: 'D：物理伤害(Damage)', desc: '会受护甲、装备、闪避和反制影响。只有实际造成伤害，才会触发淬毒、尖牙回血等效果。', color: COLORS.damage },
         magic_damage: { label: '魔法伤害(Magic Damage)', desc: '不能被护甲、圆盘、邪眼等减少。注意，不是“消耗魔力造成的伤害”。', color: COLORS.magic },
         A: { label: 'A：护甲(Armor)', desc: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。', color: COLORS.armor },
@@ -5595,9 +5848,7 @@ function collectCardIntroTerms(cardDict) {
     const seen = new Set();
     if (!cardDef) return items;
     addTermIntroItem(items, seen, `card_type_${cardDef.card_type || 'bloom'}`);
-    const { totalE, totalM, flags } = getCardDisplayCosts(cardDict || {}, cardDef, getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you));
-    if (Number(totalE || 0) > 0) addTermIntroItem(items, seen, 'E');
-    if (Number(totalM || 0) > 0) addTermIntroItem(items, seen, 'M');
+    const { flags } = getCardDisplayCosts(cardDict || {}, cardDef, getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you));
     flags.forEach(flag => addFlagIntroItem(items, seen, flag));
     const rawText = [
         getCardName(cardDef),
@@ -5606,10 +5857,7 @@ function collectCardIntroTerms(cardDict) {
         (cardDef.flags || []).join(' '),
     ].filter(Boolean).join(' ');
     const probes = [
-        [/(\d+\s*D|造成|伤害|damage|D\b)/i, 'D'],
-        [/(\+\s*\d+\s*H|回复|治疗|heal|H\b)/i, 'H'],
-        [/(\+\s*\d+\s*E|消耗|能量|elixir|E\b)/i, 'E'],
-        [/(\+\s*\d+\s*M|魔力|magic|M\b)/i, 'M'],
+        [/(\d+\s*D|物理伤害|physical damage|D\b)/i, 'D'],
         [/(\+\s*\d+\s*A|护甲|armor|A\b)/i, 'A'],
         [/(\d+\s*(?:P|层P)|中毒|Poison)/i, 'P'],
         [/(\d+\s*(?:F|层F)|灼烧|Burn)/i, 'F'],
@@ -7929,7 +8177,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=11');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=12');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;
@@ -8778,12 +9026,14 @@ function renderLobby(data) {
         nameSpan.className = isMe ? 'player-name player-self' : 'player-name';
         setPlayerNameContent(nameSpan, p, { adminPrefix: true });
         row.appendChild(nameSpan);
+        const actions = document.createElement('div');
+        actions.className = 'lobby-player-actions';
         if (!isMe && buttonMode === 'team' && !myTeam) {
             const btn = document.createElement('button');
             btn.textContent = UI.form_team;
             btn.className = 'btn btn-primary btn-sm';
             btn.onclick = () => socket.emit('form_team', { target_sid: p.sid });
-            row.appendChild(btn);
+            actions.appendChild(btn);
         } else if (!isMe && buttonMode === 'invite') {
             const btn = document.createElement('button');
             btn.textContent = UI.invite;
@@ -8793,8 +9043,22 @@ function renderLobby(data) {
                 socket.emit('invite', { target_sid: p.sid });
                 updateStatus(UI.invite_sent);
             };
-            row.appendChild(btn);
+            actions.appendChild(btn);
         }
+        if (!isMe) {
+            actions.appendChild(createReportButton({
+                objectType: 'player',
+                objectId: String(p.user_id || p.sid || p.nickname || ''),
+                targetUserId: p.user_id || '',
+                targetUsername: p.nickname || '',
+                title: UI.report_player,
+            }, {
+                className: 'report-inline-btn lobby-report-btn',
+                text: UI.report,
+                title: UI.report_player,
+            }));
+        }
+        if (actions.children.length) row.appendChild(actions);
         list.appendChild(row);
     };
     const renderTeamRow = (team) => {
@@ -9562,6 +9826,10 @@ function makeChatTimelineEntry(nick, text, meta = {}, channelMeta = {}) {
         type: 'chat',
         nick,
         text,
+        message_id: meta.message_id || meta.messageId || '',
+        sender_user_id: meta.sender_user_id || meta.senderUserId || meta.user_id || '',
+        sender_name: meta.sender_name || meta.senderName || meta.nickname || nick,
+        nickname: meta.nickname || nick,
         system: !!meta.system,
         isAdmin: isAdminPlayer(meta),
         specialRoleColor: getSpecialRoleColor(meta),
@@ -10832,6 +11100,7 @@ function syncPlayerRegionTargets(gs) {
         });
     clear();
     if (!gs) return;
+    const useClassicRefs = shouldUseClassicBattle(gs);
     const assign = (selector, id) => {
         const el = document.querySelector(selector);
         const pid = normalizePlayerId(id);
@@ -10839,24 +11108,40 @@ function syncPlayerRegionTargets(gs) {
         el.dataset.playerTargetRegion = '1';
         el.dataset.playerId = String(pid);
     };
+    if (useClassicRefs) {
+        assign('#classic-fighter-self', gs.your_id);
+        assign('#classic-fighter-enemy', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
+        return;
+    }
     assign('.player-section', gs.your_id);
     assign('.opp-half.opp-left', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
-    assign('#opp2-half', (gs.enemy_ids || [])[1]);
-    assign('#teammate-sidebar', gs.teammate_id);
-    assign('#classic-fighter-self', gs.your_id);
-    assign('#classic-fighter-enemy', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
+    if (gs.mode === '2v2') {
+        assign('#opp2-half', (gs.enemy_ids || [])[1]);
+        assign('#teammate-sidebar', gs.teammate_id);
+    }
+}
+
+function isVisibleTargetRegion(el) {
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    if (!rect || rect.width <= 2 || rect.height <= 2) return false;
+    const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+    return !style || (style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0);
 }
 
 function getPlayerRegionById(id) {
     const pid = normalizePlayerId(id);
     if (pid == null) return null;
-    return document.querySelector(`[data-player-target-region][data-player-id="${pid}"]`);
+    const regions = Array.from(document.querySelectorAll(`[data-player-target-region][data-player-id="${pid}"]`));
+    return regions.find(isVisibleTargetRegion) || regions[0] || null;
 }
 
 function choosePlayerTargetOnBoard(title, targets) {
     if (!Array.isArray(targets) || !targets.length) return Promise.resolve(null);
-    const regions = targets.map(target => ({ target, el: getPlayerRegionById(target.id) })).filter(item => item.el);
-    if (!regions.length) return Promise.resolve(null);
+    const regions = targets
+        .map(target => ({ target, el: getPlayerRegionById(target.id) }))
+        .filter(item => item.el && isVisibleTargetRegion(item.el));
+    if (!regions.length || regions.length < targets.length) return Promise.resolve(null);
     return new Promise(resolve => {
         if (targetPickCleanup) targetPickCleanup();
         let settled = false;
@@ -11538,12 +11823,13 @@ function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true, candida
         const targetId = normalizePlayerId(id);
         if (targetId == null || (!includeSelf && targetId === normalizePlayerId(gameState.your_id))) return;
         if (!targetCandidateAllows(role, candidates)) return;
-        const alive = (data && Number(data.health || 0) > 0);
+        const stateData = getPlayerDataById(targetId) || data || {};
+        const alive = (stateData && Number(stateData.health || 0) > 0);
         if (aliveOnly && !alive) return;
         out.push({
             id: targetId,
             group,
-            label: `${group} ${getPlayerNameById(targetId)} H:${data ? (data.health || 0) : 0}/${data ? (data.max_health || 0) : 0}`,
+            label: `${group} ${getPlayerNameById(targetId)} H:${stateData ? (stateData.health || 0) : 0}/${stateData ? (stateData.max_health || 0) : 0}`,
             alive
         });
     };
@@ -11631,7 +11917,7 @@ function equipmentChoosesTargetOnTrigger(cardDef) {
     if (!cardDef || cardDef.card_type !== 'root') return false;
     const triggerCost = Number(cardDef.trigger_cost_e);
     if (!Number.isFinite(triggerCost) || triggerCost < 0) return false;
-    return getEquipmentTriggerPayloads(cardDef).some(effectTreeUsesEventTarget);
+    return true;
 }
 
 async function chooseEnemyTarget(title) {
@@ -11784,6 +12070,13 @@ function createBattleLogElement(entry) {
             repeatSpan.textContent = ` ×${repeatCount}`;
             el.appendChild(repeatSpan);
         }
+        if (isReportableChatEntry(entry)) {
+            el.appendChild(createReportButton(chatEntryReportMeta(entry), {
+                className: 'report-inline-btn chat-report-btn',
+                text: UI.report,
+                title: UI.report_chat,
+            }));
+        }
         return el;
     }
     const line = entry.text || '';
@@ -11883,6 +12176,9 @@ function appendLobbyChat(nick, text, meta = {}) {
         type: 'chat',
         nickname: meta.nickname || nick,
         display_nick: nick,
+        message_id: meta.message_id || meta.messageId || '',
+        sender_user_id: meta.sender_user_id || meta.senderUserId || meta.user_id || '',
+        sender_name: meta.sender_name || meta.senderName || meta.nickname || nick,
         text,
         repeat_count: meta.repeat_count || 1,
         ...meta,
@@ -11919,6 +12215,13 @@ function appendLobbyChatEntry(entry = {}) {
         repeatSpan.textContent = ` ×${repeatCount}`;
         el.appendChild(repeatSpan);
     }
+    if (isReportableChatEntry(entry)) {
+        el.appendChild(createReportButton(chatEntryReportMeta(entry), {
+            className: 'report-inline-btn chat-report-btn',
+            text: UI.report,
+            title: UI.report_chat,
+        }));
+    }
     container.appendChild(el);
     container.scrollTop = container.scrollHeight;
 }
@@ -11950,6 +12253,10 @@ function appendGameChat(nick, text, meta = {}, channelMeta = {}) {
         type: 'chat',
         nick,
         text,
+        message_id: meta.message_id || meta.messageId || '',
+        sender_user_id: meta.sender_user_id || meta.senderUserId || meta.user_id || '',
+        sender_name: meta.sender_name || meta.senderName || meta.nickname || nick,
+        nickname: meta.nickname || nick,
         system: !!meta.system,
         isAdmin: isAdminPlayer(meta),
         specialRoleColor: getSpecialRoleColor(meta),
@@ -13182,6 +13489,19 @@ function renderGameOver(data) {
         } else {
             updateGameOverRematchButton(gs);
         }
+    }
+    const reportMatchBtn = $('btn-report-match');
+    if (reportMatchBtn) {
+        const matchObjectId = getReportMatchObjectId(gs);
+        const showReportMatch = !!matchObjectId && !isTutorialGameOver && !soloMode && gs.mode !== 'solo';
+        reportMatchBtn.textContent = UI.report_match || UI.report || 'Report';
+        reportMatchBtn.classList.toggle('hidden', !showReportMatch);
+        reportMatchBtn.style.display = showReportMatch ? '' : 'none';
+        reportMatchBtn.onclick = showReportMatch ? (() => openReportDialog({
+            objectType: 'match',
+            objectId: matchObjectId,
+            title: UI.report_match,
+        })) : null;
     }
     const returnLobbyBtn = $('btn-return-lobby');
     if (returnLobbyBtn) {
