@@ -10,6 +10,10 @@ CARD_FLAG_ALIASES = {
     'troll_cards:exile': 'exile',
     'tag_troll_cards_exile': 'exile',
     'troll_cards_exile': 'exile',
+    'tag_thorn_cards_supplement_1:sticky': 'sticky',
+    'thorn_cards_supplement_1:sticky': 'sticky',
+    'tag_thorn_cards_supplement_1_sticky': 'sticky',
+    'thorn_cards_supplement_1_sticky': 'sticky',
 }
 
 

@@ -10,6 +10,7 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_ui_style_v2_migrated',
     'gtn_show_english_card_names',
     'gtn_show_card_images',
+    'gtn_skin_config',
     'gtn_server',
     'gtn_disabled_mods',
     'gtn_community_mods',
@@ -76,15 +77,15 @@ const I18N = {
         discard_empty: 'Discard pile empty', no_same_attack: 'No matching attack cards', confirm_surrender: 'Surrender?', request_rematch: 'Request Rematch',
         opponent_rematch: 'Opponent requests rematch', rematch_sent: 'Rematch request sent', rematch_waiting: 'Waiting for opponent', rematch_agreed: 'Rematch accepted',
         rematch_progress: 'Rematch ({0}/{1})',
-        agree_rematch: 'Accept Rematch', you_win: 'You Win!', you_lose: 'You Lose!', you_draw: 'Draw!', send: 'Send', cancel: 'Cancel', ok: 'OK', close: 'Close', notice: 'Notice',
+        agree_rematch: 'Accept Rematch', you_win: 'You Win!', you_lose: 'You Lose!', you_draw: 'Draw!', send: 'Send', cancel: 'Cancel', confirm: 'Confirm', ok: 'OK', close: 'Close', notice: 'Notice',
         opponent_disconnected: 'Opponent disconnected', opponent_reconnected: 'Opponent reconnected', reconnect_title: 'Reconnect', reconnect_prompt: 'Reconnect to the previous match?',
         reconnecting: 'Reconnecting...', reconnect_timeout: 'Reconnect timed out', mod_mismatch_title: 'Mod Mismatch', mod_mismatch_msg: 'Mods do not match, cannot start the match',
         switch_perspective: 'Switch Perspective', leave_spectate: 'Leave Spectate', switch_to_perspective: 'Switch to {0}', battle_log: 'Battle Log',
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Infinite Fire exclude',
-        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Infinite Fire exclude',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_sticky: 'Sticky',
+        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_sticky: 'Sticky',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
@@ -153,7 +154,7 @@ const I18N = {
         trigger_on_ally_turn: 'Trigger equipment (ally turn)', player_dead: 'Defeated',
         choose_target: 'Choose Target', ally_consent_title: 'Teammate Card Use', ally_consent_msg: '{0} wants to use {1} on you',
         ally_accept_countdown: 'Accept ({0})', ally_decline: 'Decline',
-        mode_switch_confirm: 'Switching mode will leave your current team. Continue?',
+        mode_switch_confirm: 'Switching mode will leave your current team.\nContinue?',
         waiting_for_team: 'Waiting for another team...',
         all_players_draft_status: 'Draft Status',
         urf_replace: 'Replace Card', urf_sell: 'Sell Equipment'
@@ -184,14 +185,14 @@ I18N.zh = { ...I18N.en,
     no_enemy_hand: '对方没有手牌', deck_empty: '牌堆为空', discard_empty: '弃牌堆为空', no_same_attack: '没有同名攻击牌',
     confirm_surrender: '确认投降？', request_rematch: '请求再来一局', opponent_rematch: '对方请求再来一局', rematch_sent: '已发送再来一局请求',
     rematch_waiting: '等待对方', rematch_agreed: '对方已接受', agree_rematch: '接受再来一局', rematch_progress: '再来一局({0}/{1})', you_win: '你赢了！', you_lose: '你输了！', you_draw: '平局！',
-    send: '发送', cancel: '取消', ok: '确定', close: '关闭', notice: '提示', opponent_disconnected: '对手已断开连接', opponent_reconnected: '对手已重新连接',
+    send: '发送', cancel: '取消', confirm: '确认', ok: '确定', close: '关闭', notice: '提示', opponent_disconnected: '对手已断开连接', opponent_reconnected: '对手已重新连接',
     reconnect_title: '重连', reconnect_prompt: '是否重连到上一局对战？', reconnecting: '重连中...', reconnect_timeout: '重连超时',
     mod_mismatch_title: '模组不匹配', mod_mismatch_msg: '模组不一致，无法开始对局', switch_perspective: '切换视角', leave_spectate: '退出观战', switch_to_perspective: '切换到 {0}',
     battle_log: '战斗日志', equip_info: '{0}（{1}回合）', equip_corruption: '[已腐化]', equip_trigger_cost: '{0} 触发：{1}E',
     status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼',
     status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力排除',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_sticky: '粘滞',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
@@ -232,7 +233,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力排除',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_sticky: '粘滞',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '开局事件', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
@@ -245,7 +246,7 @@ I18N.zh = { ...I18N.en,
     trigger_on_ally_turn: '触发装备（队友回合）', player_dead: '已阵亡',
     choose_target: '选择目标', ally_consent_title: '队友用牌确认', ally_consent_msg: '{0} 想对你使用 {1}',
     ally_accept_countdown: '同意（{0}）', ally_decline: '不同意',
-    mode_switch_confirm: '切换模式将离开当前队伍，是否确认？',
+    mode_switch_confirm: '切换模式将离开当前队伍，\n是否确认？',
     waiting_for_team: '等待另一支队伍...',
     all_players_draft_status: '选牌状态',
     urf_replace: '替换手牌', urf_sell: '售卖装备',
@@ -314,7 +315,7 @@ I18N.fr = { ...I18N.en,
     set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks doivent avoir exactement 15 cartes',
     solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
     edit_tags: 'Modifier tags', tag_precision: 'Précision', tag_exile: 'Exil', tag_non_stackable: 'Non-cumul',
-    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Soi uniquement', tag_uncancellable: 'Non annulable', tag_infinite_exclude: 'Exclu Infinite Fire',
+    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Soi uniquement', tag_uncancellable: 'Non annulable', tag_infinite_exclude: 'Retiré d’Infinite Fire', tag_sticky: 'Collant',
     fusion_layer: 'Fusion', fission_layer: 'Fission',
     app_subtitle: 'Combat de cartes en réseau local',
     nickname_placeholder: 'Saisir un pseudo',
@@ -382,7 +383,7 @@ I18N.pt = { ...I18N.en,
     set_next_draw: 'Definir Próxima Compra', solo_saved: 'Decks salvos', solo_need_15: 'Ambos os decks devem ter exatamente 15 cartas',
     solo_event_a: 'Evento inicial', solo_event_b: 'Evento do oponente', no_event: 'Nenhum',
     edit_tags: 'Editar tags', tag_precision: 'Precisão', tag_exile: 'Exílio', tag_non_stackable: 'Não acumula',
-    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Somente si', tag_uncancellable: 'Não cancelável', tag_infinite_exclude: 'Excluído do Infinite Fire',
+    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Somente si', tag_uncancellable: 'Não cancelável', tag_infinite_exclude: 'Removido do Infinite Fire', tag_sticky: 'Pegajoso',
     fusion_layer: 'Fusão', fission_layer: 'Fissão',
     app_subtitle: 'Batalha de cartas em rede local',
     nickname_placeholder: 'Digite um apelido',
@@ -450,7 +451,7 @@ I18N.ru = { ...I18N.en,
     set_next_draw: 'Задать следующую карту', solo_saved: 'Колоды сохранены', solo_need_15: 'В обеих колодах должно быть ровно 15 карт',
     solo_event_a: 'Ваше стартовое событие', solo_event_b: 'Событие соперника', no_event: 'Нет',
     edit_tags: 'Изменить теги', tag_precision: 'Точность', tag_exile: 'Изгнание', tag_non_stackable: 'Не складывается',
-    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота', tag_self_only: 'Только на себя', tag_uncancellable: 'Нельзя отменить', tag_infinite_exclude: 'Исключено из Infinite Fire',
+    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота', tag_self_only: 'Только на себя', tag_uncancellable: 'Нельзя отменить', tag_infinite_exclude: 'Удалено из Infinite Fire', tag_sticky: 'Липкость',
     fusion_layer: 'Слияние', fission_layer: 'Деление',
     app_subtitle: 'Карточная дуэль по локальной сети',
     nickname_placeholder: 'Введите никнейм',
@@ -518,7 +519,7 @@ I18N.ja = { ...I18N.en,
     set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '両方のデッキは15枚ちょうど必要です',
     solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
     edit_tags: 'タグ編集', tag_precision: '精密', tag_exile: '追放', tag_non_stackable: '非重複',
-    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '自分専用', tag_uncancellable: 'キャンセル不可', tag_infinite_exclude: 'Infinite Fire除外',
+    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '自分専用', tag_uncancellable: 'キャンセル不可', tag_infinite_exclude: 'Infinite Fireから削除', tag_sticky: '粘着',
     fusion_layer: '融合', fission_layer: '分裂',
     app_subtitle: 'LANカード対戦',
     nickname_placeholder: 'ニックネームを入力',
@@ -660,6 +661,7 @@ Object.assign(I18N.zh, {
     tag_desc_self_only: '目标限制关键词。2v2 中表示该牌只能对自己使用；1v1 中该限制没有额外显示意义。',
     tag_desc_uncancellable: '选择限制关键词。该牌弹出选择窗口时不显示取消按钮，玩家必须完成选择。用于避免通过0消耗选择牌窗口查看隐藏信息后取消，例如磁铁查看敌方手牌。',
     tag_desc_infinite_exclude: '模式限制关键词。该牌不会进入无限火力的随机牌库，用于排除与该模式机制冲突的牌。',
+    tag_desc_sticky: '结算去向关键词。带有粘滞的牌打出并结算后，会在本局内回到使用者手牌；具体回手时机由卡牌效果决定。',
     tag_desc_default: '模组或扩展标签。该标签的具体含义由对应模组或卡牌效果定义。'
 });
 
@@ -709,6 +711,7 @@ Object.assign(I18N.en, {
     tag_desc_self_only: 'Targeting keyword. In 2v2, this card can only target yourself; in 1v1, it has no extra display meaning.',
     tag_desc_uncancellable: 'Choice keyword. Selection windows from this card do not show a cancel button; the player must complete the choice. This prevents checking hidden information for 0 cost and canceling, such as with Magnet.',
     tag_desc_infinite_exclude: 'Mode keyword. This card is excluded from Infinite Fire random pools because it conflicts with that mode.',
+    tag_desc_sticky: 'Resolution keyword. After being played and resolved, this card can return to its user’s hand during this match. The exact timing is defined by the card effect.',
     tag_desc_default: 'Mod or extension tag. Its exact meaning is defined by the relevant mod or card effect.'
 });
 
@@ -888,6 +891,7 @@ Object.assign(I18N.fr, {
     tag_desc_self_only: 'Mot-clé de ciblage. En 2v2, cette carte ne peut cibler que vous-même ; en 1v1, il n’a pas d’effet d’affichage supplémentaire.',
     tag_desc_uncancellable: 'Mot-clé de choix. Les fenêtres de choix de cette carte n’affichent pas de bouton Annuler ; le joueur doit terminer le choix. Cela évite de consulter une information cachée gratuitement puis d’annuler, par exemple avec Aimant.',
     tag_desc_infinite_exclude: 'Mot-clé de mode. Cette carte est exclue de la réserve aléatoire d’Infinite Fire car elle entre en conflit avec ce mode.',
+    tag_desc_sticky: 'Mot-clé de résolution. Après avoir été jouée et résolue, cette carte peut revenir dans la main de son utilisateur pendant cette partie. Le moment exact est défini par l’effet de carte.',
     tag_desc_default: 'Tag de mod ou d’extension. Son sens exact est défini par le mod ou l’effet de carte correspondant.'
 });
 
@@ -903,6 +907,7 @@ Object.assign(I18N.pt, {
     tag_desc_self_only: 'Palavra-chave de alvo. No 2v2, esta carta só pode mirar você mesmo; no 1v1, não tem significado visual extra.',
     tag_desc_uncancellable: 'Palavra-chave de escolha. Janelas de escolha desta carta não mostram botão de cancelar; o jogador deve concluir a escolha. Isso evita ver informação oculta de graça e cancelar, como com Magnet.',
     tag_desc_infinite_exclude: 'Palavra-chave de modo. Esta carta não entra no conjunto aleatório de Infinite Fire por conflitar com esse modo.',
+    tag_desc_sticky: 'Palavra-chave de resolução. Depois de jogada e resolvida, esta carta pode voltar para a mão do usuário durante a partida. O momento exato é definido pelo efeito da carta.',
     tag_desc_default: 'Tag de mod ou extensão. O significado exato é definido pelo mod ou pelo efeito da carta.'
 });
 
@@ -918,6 +923,7 @@ Object.assign(I18N.ru, {
     tag_desc_self_only: 'Ключевое слово цели. В 2v2 эту карту можно применять только к себе; в 1v1 оно не имеет дополнительного значения.',
     tag_desc_uncancellable: 'Ключевое слово выбора. Окна выбора этой карты не показывают кнопку отмены; игрок обязан завершить выбор. Это не дает бесплатно посмотреть скрытую информацию и отменить, например с Magnet.',
     tag_desc_infinite_exclude: 'Ключевое слово режима. Эта карта исключена из случайного пула Infinite Fire, потому что конфликтует с режимом.',
+    tag_desc_sticky: 'Ключевое слово разрешения. После розыгрыша и разрешения эта карта может вернуться в руку пользователя в этой партии. Точный момент задается эффектом карты.',
     tag_desc_default: 'Тег мода или расширения. Точное значение задается соответствующим модом или эффектом карты.'
 });
 
@@ -933,6 +939,7 @@ Object.assign(I18N.ja, {
     tag_desc_self_only: '対象制限キーワード。2v2 では自分だけを対象にできます。1v1 では追加の表示上の意味はありません。',
     tag_desc_uncancellable: '選択制限キーワード。このカードの選択画面にはキャンセルボタンが表示されず、必ず選択を完了します。Magnet のように0コストで非公開情報を見てからキャンセルすることを防ぎます。',
     tag_desc_infinite_exclude: 'モード制限キーワード。このカードは Infinite Fire のランダムカードプールに入りません。',
+    tag_desc_sticky: '解決先キーワード。打ち出して解決した後、この対局中に使用者の手札へ戻ることがあります。具体的なタイミングはカード効果で決まります。',
     tag_desc_default: 'Mod または拡張タグです。具体的な意味は対応する Mod またはカード効果で定義されます。'
 });
 
@@ -1112,6 +1119,48 @@ Object.assign(I18N.ja, {
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
     account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
     login_registered_reserved: 'この名前は登録済みアカウントです'
+});
+Object.assign(I18N.en, {
+    skin: 'Skin', skin_title: 'Skin', skin_primary_color: 'Main Color', skin_eye_shape: 'Eye Shape',
+    skin_eye_oval: 'Oval', skin_eye_rectangle: 'Rectangle', skin_eye_diamond: 'Diamond', skin_eye_hexagon: 'Hexagon',
+    skin_face_layout_placeholder: 'Face Layout: coming soon', skin_face_shape_placeholder: 'Face Shape: coming soon',
+    skin_sync_guest: 'Guest skin is saved locally. Account skin is saved on the server.',
+    skin_save: 'Save', skin_reset: 'Reset', skin_saved: 'Skin saved'
+});
+Object.assign(I18N.zh, {
+    skin: '皮肤', skin_title: '皮肤', skin_primary_color: '主颜色', skin_eye_shape: '眼睛形状',
+    skin_eye_oval: '椭圆', skin_eye_rectangle: '长方形', skin_eye_diamond: '菱形', skin_eye_hexagon: '六边形',
+    skin_face_layout_placeholder: '脸部布局：暂未开放', skin_face_shape_placeholder: '脸型：暂未开放',
+    skin_sync_guest: '游客皮肤会保存在本地；账号皮肤会保存到服务器。',
+    skin_save: '保存', skin_reset: '恢复默认', skin_saved: '皮肤已保存'
+});
+Object.assign(I18N.fr, {
+    skin: 'Apparence', skin_title: 'Apparence', skin_primary_color: 'Couleur', skin_eye_shape: 'Yeux',
+    skin_eye_oval: 'Ovale', skin_eye_rectangle: 'Rectangle', skin_eye_diamond: 'Losange', skin_eye_hexagon: 'Hexagone',
+    skin_face_layout_placeholder: 'Disposition du visage : bientôt', skin_face_shape_placeholder: 'Forme du visage : bientôt',
+    skin_sync_guest: 'Invité : local. Compte : serveur.',
+    skin_save: 'Enregistrer', skin_reset: 'Réinitialiser', skin_saved: 'Apparence enregistrée'
+});
+Object.assign(I18N.pt, {
+    skin: 'Visual', skin_title: 'Visual', skin_primary_color: 'Cor', skin_eye_shape: 'Olhos',
+    skin_eye_oval: 'Oval', skin_eye_rectangle: 'Retângulo', skin_eye_diamond: 'Diamante', skin_eye_hexagon: 'Hexágono',
+    skin_face_layout_placeholder: 'Layout do rosto: em breve', skin_face_shape_placeholder: 'Formato do rosto: em breve',
+    skin_sync_guest: 'Convidado: local. Conta: servidor.',
+    skin_save: 'Salvar', skin_reset: 'Redefinir', skin_saved: 'Visual salvo'
+});
+Object.assign(I18N.ru, {
+    skin: 'Скин', skin_title: 'Скин', skin_primary_color: 'Цвет', skin_eye_shape: 'Глаза',
+    skin_eye_oval: 'Овал', skin_eye_rectangle: 'Прямоугольник', skin_eye_diamond: 'Ромб', skin_eye_hexagon: 'Шестиугольник',
+    skin_face_layout_placeholder: 'Расположение лица: скоро', skin_face_shape_placeholder: 'Форма лица: скоро',
+    skin_sync_guest: 'Гость: локально. Аккаунт: сервер.',
+    skin_save: 'Сохранить', skin_reset: 'Сброс', skin_saved: 'Скин сохранён'
+});
+Object.assign(I18N.ja, {
+    skin: 'スキン', skin_title: 'スキン', skin_primary_color: 'メイン色', skin_eye_shape: '目の形',
+    skin_eye_oval: '楕円', skin_eye_rectangle: '長方形', skin_eye_diamond: 'ひし形', skin_eye_hexagon: '六角形',
+    skin_face_layout_placeholder: '顔レイアウト：準備中', skin_face_shape_placeholder: '顔の形：準備中',
+    skin_sync_guest: 'ゲストはローカル保存、アカウントはサーバー保存です。',
+    skin_save: '保存', skin_reset: '初期化', skin_saved: 'スキンを保存しました'
 });
 Object.assign(I18N.en, {
     friends: 'Friends', player_id: 'ID', friend_add_placeholder: 'Nickname or ID', friend_add: 'Add',
@@ -2001,6 +2050,7 @@ const CARD_FLAG_STYLES = {
     self_only: { label: '', fg: '#2f3542', bg: 'rgba(47,53,66,0.12)', cls: 'self-only' },
     uncancellable: { label: '', fg: '#7f1d1d', bg: 'rgba(127,29,29,0.12)', cls: 'uncancellable' },
     infinite_exclude: { label: '', fg: '#455A64', bg: 'rgba(69,90,100,0.12)', cls: 'infinite-exclude' },
+    sticky: { label: '', fg: '#9B59B6', bg: 'rgba(155,89,182,0.14)', cls: 'sticky' },
     fusion_layer: { label: '', fg: '#8e44ad', bg: 'rgba(142,68,173,0.15)', cls: 'fusion-layer' },
     fission_layer: { label: '', fg: '#0f766e', bg: 'rgba(15,118,110,0.14)', cls: 'fission-layer' },
 };
@@ -2017,6 +2067,7 @@ const CARD_FLAG_TERM_COLORS = {
     self_only: '#2f3542',
     uncancellable: '#7f1d1d',
     infinite_exclude: '#455A64',
+    sticky: '#9B59B6',
     fusion_layer: 'var(--color-poison)',
     fission_layer: '#0f766e',
     tomato_layer: '#b42318',
@@ -2027,6 +2078,10 @@ const CARD_FLAG_ALIASES = {
     'troll_cards:exile': 'exile',
     'tag_troll_cards_exile': 'exile',
     'troll_cards_exile': 'exile',
+    'tag_thorn_cards_supplement_1:sticky': 'sticky',
+    'thorn_cards_supplement_1:sticky': 'sticky',
+    'tag_thorn_cards_supplement_1_sticky': 'sticky',
+    'thorn_cards_supplement_1_sticky': 'sticky',
 };
 
 function normalizeCardFlag(flag) {
@@ -2535,6 +2590,19 @@ let accountReplayLoading = false;
 let accountReplayLoadToken = 0;
 let accountReplayControlsCollapsed = false;
 let replayMode = false;
+const DEFAULT_SKIN_CONFIG = Object.freeze({ primary_color: '#FFE763', eye_shape: 'oval' });
+const SKIN_EYE_SHAPES = new Set(['oval', 'rectangle', 'diamond', 'hexagon']);
+const DEFAULT_SKIN_LOOK = Object.freeze({ x: 0.707, y: -0.707 });
+const SKIN_LOOK_OFFSET_X_PERCENT = 38;
+const SKIN_LOOK_OFFSET_Y_PERCENT = 56;
+const SKIN_LOOK_EMIT_INTERVAL_MS = 160;
+const SKIN_DAMAGE_HOLD_MS = 3000;
+let localSkinLook = { ...DEFAULT_SKIN_LOOK };
+let lastSkinLookEmitAt = 0;
+let lastSkinLookEmitKey = '';
+const skinLookByPlayerId = new Map();
+const skinDamageMoodByPlayerId = new Map();
+const skinMouthTByPlayerId = new Map();
 let socket = null;
 let manualDisconnect = false;
 let latencyPingTimer = null;
@@ -2735,8 +2803,8 @@ function gameAlert(title, message, buttons) {
 function gameConfirm(title, message = '') {
     return new Promise((resolve) => {
         gameAlert(title, message, [
-            { text: UI.confirm || UI.ok || 'OK', cls: 'btn-primary', action: () => resolve(true) },
             { text: UI.cancel || 'Cancel', cls: 'btn-secondary', action: () => resolve(false) },
+            { text: UI.confirm || UI.ok || 'OK', cls: 'btn-primary', action: () => resolve(true) },
         ]);
     });
 }
@@ -3029,6 +3097,34 @@ function updateStaticText() {
     if (btnAccountTop) btnAccountTop.textContent = UI.account;
     const btnFriendsTop = $('btn-friends-top');
     if (btnFriendsTop) btnFriendsTop.textContent = UI.friends;
+    const btnSkinTop = $('btn-skin-top');
+    if (btnSkinTop) btnSkinTop.textContent = UI.skin;
+    const skinTitle = $('skin-title');
+    if (skinTitle) skinTitle.textContent = UI.skin_title || UI.skin;
+    const skinBack = $('btn-skin-back');
+    if (skinBack) skinBack.textContent = UI.back_to_home;
+    const skinPrimaryLabel = $('skin-primary-label');
+    if (skinPrimaryLabel) skinPrimaryLabel.textContent = UI.skin_primary_color;
+    const skinEyeShapeLabel = $('skin-eye-shape-label');
+    if (skinEyeShapeLabel) skinEyeShapeLabel.textContent = UI.skin_eye_shape;
+    const skinEyeOval = $('skin-eye-oval');
+    if (skinEyeOval) skinEyeOval.textContent = UI.skin_eye_oval;
+    const skinEyeRectangle = $('skin-eye-rectangle');
+    if (skinEyeRectangle) skinEyeRectangle.textContent = UI.skin_eye_rectangle;
+    const skinEyeDiamond = $('skin-eye-diamond');
+    if (skinEyeDiamond) skinEyeDiamond.textContent = UI.skin_eye_diamond;
+    const skinEyeHexagon = $('skin-eye-hexagon');
+    if (skinEyeHexagon) skinEyeHexagon.textContent = UI.skin_eye_hexagon;
+    const skinLayoutPlaceholder = $('skin-face-layout-placeholder');
+    if (skinLayoutPlaceholder) skinLayoutPlaceholder.textContent = UI.skin_face_layout_placeholder;
+    const skinShapePlaceholder = $('skin-face-shape-placeholder');
+    if (skinShapePlaceholder) skinShapePlaceholder.textContent = UI.skin_face_shape_placeholder;
+    const skinSyncNote = $('skin-sync-note');
+    if (skinSyncNote) skinSyncNote.textContent = UI.skin_sync_guest;
+    const skinSave = $('btn-skin-save');
+    if (skinSave) skinSave.textContent = UI.skin_save;
+    const skinReset = $('btn-skin-reset');
+    if (skinReset) skinReset.textContent = UI.skin_reset;
     const friendsTitle = $('friends-popover-title');
     if (friendsTitle) friendsTitle.textContent = UI.friends;
     const friendIdentifier = $('input-friend-identifier');
@@ -3298,6 +3394,8 @@ function showView(viewId) {
     if (accountTop) accountTop.classList.toggle('hidden', viewId !== 'view-login');
     const friendsTop = $('btn-friends-top');
     if (friendsTop) friendsTop.classList.toggle('hidden', viewId !== 'view-login' || !currentAccount);
+    const skinTop = $('btn-skin-top');
+    if (skinTop) skinTop.classList.toggle('hidden', viewId !== 'view-login');
     if (viewId !== 'view-login') {
         toggleAccountPopover(false);
         toggleFriendsPopover(false);
@@ -3585,11 +3683,11 @@ function getAllGalleryFlags() {
     const flags = new Set(Object.keys(CARD_FLAG_STYLES));
     Object.keys(CUSTOM_TAG_DEFS || {}).forEach(flag => {
         const normalized = normalizeCardFlag(flag);
-        if (normalized && normalized !== 'infinite_exclude') flags.add(normalized);
+        if (normalized) flags.add(normalized);
     });
     Object.values(CARD_DEFS).filter(cd => cd && cd.id !== 'Error').forEach(cd => (cd.flags || []).forEach(flag => {
         const normalized = normalizeCardFlag(flag);
-        if (normalized && normalized !== 'infinite_exclude') flags.add(normalized);
+        if (normalized) flags.add(normalized);
     }));
     return [...flags].sort((a, b) => getFlagLabel(a).localeCompare(getFlagLabel(b)));
 }
@@ -4784,7 +4882,7 @@ function createCardElement(cardDict, options = {}) {
     el.dataset.defId = defId;
     let flagsHtml = '';
     for (const flag of flags) {
-        if (!shouldDisplayCardFlag(flag)) continue;
+        if (!shouldDisplayCardFlag(flag, { showSystemFlags: showAllFlags })) continue;
         const custom = getCustomTagDef(flag);
         if (custom) {
             flagsHtml += customTagHtml(flag);
@@ -4891,9 +4989,10 @@ function cardHasSelfOnlyFlag(cardDict, cardDef = null) {
     return effective.has('self_only') || effective.has('tag_self_only');
 }
 
-function shouldDisplayCardFlag(flag) {
+function shouldDisplayCardFlag(flag, options = {}) {
     const normalized = normalizeCardFlag(flag);
     if (!normalized) return false;
+    if (normalized === 'infinite_exclude') return !!options.showSystemFlags;
     if ((normalized === 'self_only' || normalized === 'tag_self_only') && (!gameState || gameState.mode !== '2v2')) {
         return false;
     }
@@ -6556,6 +6655,7 @@ function connectSocket(serverUrl) {
             mode: preferredMode,
             account_login: !!currentAccount,
             beta_mode: GTN_BETA_MODE,
+            skin: getCurrentSkinConfig(),
             ...getModLoginPayload(),
         });
     });
@@ -6578,6 +6678,14 @@ function connectSocket(serverUrl) {
             transport: socket.io && socket.io.engine && socket.io.engine.transport ? socket.io.engine.transport.name : '',
         });
     });
+    socket.on('skin_look_update', (data = {}) => {
+        const pid = normalizePlayerId(data.player_id);
+        if (pid == null) return;
+        if (!isSpectating && pid === normalizePlayerId(playerId)) return;
+        const look = normalizeSkinLook(data.look || data);
+        skinLookByPlayerId.set(pid, look);
+        applySkinLookToRenderedAvatars(pid, look);
+    });
     socket.on('login_ok', (data) => {
         debugLog('[client] login ok: sid=', data.sid, 'nickname=', data.nickname);
         mySid = data.sid || '';
@@ -6588,6 +6696,7 @@ function connectSocket(serverUrl) {
             renderAccountState();
         } else if (!data.is_special_player && !data.is_admin_player) {
             loginCredential = nickname;
+            if (data.skin) saveLocalSkinConfig(data.skin);
         }
         const nickInput = $('input-nickname');
         if (nickInput) nickInput.value = nickname;
@@ -6731,6 +6840,7 @@ function connectSocket(serverUrl) {
         draftState = data;
         syncBattleLogMatch(data || {});
         if (data.your_id != null) playerId = data.your_id;
+        mergeSkinLooksFromPayload(data);
         renderDraft(data, isReroll, previousDraftState);
     });
     socket.on('event_select', (data) => {
@@ -6739,6 +6849,7 @@ function connectSocket(serverUrl) {
         eventSelectData = data;
         syncBattleLogMatch(data || {});
         if (data.your_id != null) playerId = data.your_id;
+        mergeSkinLooksFromPayload(data);
         renderEventSelect(data);
     });
     socket.on('state_update', (data) => {
@@ -6766,6 +6877,7 @@ function connectSocket(serverUrl) {
             if (data.spectate_perspective != null) spectatePerspective = data.spectate_perspective;
         }
         if (!isSpectating && data.your_id != null) playerId = data.your_id;
+        mergeSkinLooksFromPayload(data);
         if (!isSpectating && data.pending_response != null) {
             pendingPlayCard = pendingPlayCard || data.pending_response;
         } else if (!responsePending) {
@@ -7106,6 +7218,447 @@ function accountStatsText(user) {
         user.losses || 0,
         user.draws || 0
     );
+}
+
+function normalizeSkinConfig(raw) {
+    let data = raw;
+    if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch (_) { data = {}; }
+    }
+    if (!data || typeof data !== 'object') data = {};
+    const skin = { ...DEFAULT_SKIN_CONFIG };
+    const color = String(data.primary_color || data.primaryColor || '').trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(color)) skin.primary_color = color.toUpperCase();
+    const eyeShape = String(data.eye_shape || data.eyeShape || '').trim().toLowerCase();
+    if (SKIN_EYE_SHAPES.has(eyeShape)) skin.eye_shape = eyeShape;
+    return skin;
+}
+
+function loadLocalSkinConfig() {
+    try {
+        return normalizeSkinConfig(localStorage.getItem('gtn_skin_config'));
+    } catch (_) {
+        return { ...DEFAULT_SKIN_CONFIG };
+    }
+}
+
+function saveLocalSkinConfig(skin) {
+    try {
+        localStorage.setItem('gtn_skin_config', JSON.stringify(normalizeSkinConfig(skin)));
+    } catch (_) {}
+}
+
+function getCurrentSkinConfig() {
+    if (currentAccount && currentAccount.skin) return normalizeSkinConfig(currentAccount.skin);
+    return loadLocalSkinConfig();
+}
+
+function setSkinError(message = '') {
+    const el = $('skin-error');
+    if (el) el.textContent = message || '';
+}
+
+function readSkinFormConfig() {
+    return normalizeSkinConfig({
+        primary_color: $('skin-primary-color')?.value || DEFAULT_SKIN_CONFIG.primary_color,
+        eye_shape: $('skin-eye-shape')?.value || DEFAULT_SKIN_CONFIG.eye_shape,
+    });
+}
+
+function hexToRgb(hex) {
+    const text = String(hex || '').replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(text)) return { r: 255, g: 231, b: 99 };
+    return {
+        r: parseInt(text.slice(0, 2), 16),
+        g: parseInt(text.slice(2, 4), 16),
+        b: parseInt(text.slice(4, 6), 16),
+    };
+}
+
+function rgbToHex(rgb) {
+    return `#${[rgb.r, rgb.g, rgb.b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+}
+
+function deriveSkinBorderColor(color) {
+    const rgb = hexToRgb(color);
+    return rgbToHex({ r: rgb.r * 0.81, g: rgb.g * 0.81, b: rgb.b * 0.81 });
+}
+
+function skinLuminance(color) {
+    const { r, g, b } = hexToRgb(color);
+    const srgb = [r, g, b].map(v => {
+        const c = v / 255;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+}
+
+function normalizeSkinLook(raw) {
+    if (!raw || typeof raw !== 'object') return { ...DEFAULT_SKIN_LOOK };
+    let x = Number(raw.x || 0);
+    let y = Number(raw.y || 0);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return { ...DEFAULT_SKIN_LOOK };
+    const length = Math.hypot(x, y);
+    if (length < 0.001) return { ...DEFAULT_SKIN_LOOK };
+    x = Math.max(-1, Math.min(1, x / length));
+    y = Math.max(-1, Math.min(1, y / length));
+    return {
+        x: Math.round(x * 1000) / 1000,
+        y: Math.round(y * 1000) / 1000,
+    };
+}
+
+function skinLookCssVars(rawLook) {
+    const look = normalizeSkinLook(rawLook);
+    return `--skin-look-x:${(look.x * SKIN_LOOK_OFFSET_X_PERCENT).toFixed(1)}%;--skin-look-y:${(look.y * SKIN_LOOK_OFFSET_Y_PERCENT).toFixed(1)}%`;
+}
+
+function getSkinLookForPlayerId(id) {
+    const pid = normalizePlayerId(id);
+    if (pid == null) return { ...DEFAULT_SKIN_LOOK };
+    if (pid === normalizePlayerId(playerId)) return normalizeSkinLook(localSkinLook);
+    return normalizeSkinLook(skinLookByPlayerId.get(pid));
+}
+
+function resolveSkinLookForPlayer(id, dataLook = null) {
+    const pid = normalizePlayerId(id);
+    if (pid === normalizePlayerId(playerId)) return normalizeSkinLook(localSkinLook);
+    return normalizeSkinLook(dataLook || getSkinLookForPlayerId(pid));
+}
+
+function setSkinLookForPlayerId(id, look, { local = false } = {}) {
+    const pid = normalizePlayerId(id);
+    const normalized = normalizeSkinLook(look);
+    if (local || pid === normalizePlayerId(playerId)) {
+        localSkinLook = normalized;
+    }
+    if (pid != null) {
+        skinLookByPlayerId.set(pid, normalized);
+        applySkinLookToRenderedAvatars(pid, normalized);
+    }
+    if (local || pid === normalizePlayerId(playerId) || pid == null) {
+        applySkinLookToLocalPreview(normalized);
+    }
+    return normalized;
+}
+
+function applySkinLookVarsToAvatar(avatar, look) {
+    if (!avatar || !avatar.style) return;
+    const normalized = normalizeSkinLook(look);
+    avatar.style.setProperty('--skin-look-x', `${(normalized.x * SKIN_LOOK_OFFSET_X_PERCENT).toFixed(1)}%`);
+    avatar.style.setProperty('--skin-look-y', `${(normalized.y * SKIN_LOOK_OFFSET_Y_PERCENT).toFixed(1)}%`);
+}
+
+function applySkinLookToRenderedAvatars(id, look) {
+    const pid = normalizePlayerId(id);
+    if (pid == null) return;
+    document.querySelectorAll(`.skin-avatar[data-player-id="${pid}"]`).forEach(avatar => {
+        applySkinLookVarsToAvatar(avatar, look);
+    });
+}
+
+function applySkinLookToLocalPreview(look = localSkinLook) {
+    document.querySelectorAll('.skin-avatar[data-look-owner="local"], #skin-preview-avatar .skin-avatar').forEach(avatar => {
+        applySkinLookVarsToAvatar(avatar, look);
+    });
+}
+
+const SKIN_MOUTH_NORMAL_POINTS = Object.freeze([20, 18, 36, 32, 64, 32, 80, 18]);
+const SKIN_MOUTH_HURT_POINTS = Object.freeze([20, 26, 36, 12, 64, 12, 80, 26]);
+const skinMouthAnimationByAvatar = new WeakMap();
+
+function skinMouthPathAt(t) {
+    const amount = Math.max(0, Math.min(1, Number(t) || 0));
+    const values = SKIN_MOUTH_NORMAL_POINTS.map((base, index) => {
+        const next = SKIN_MOUTH_HURT_POINTS[index];
+        return Number((base + (next - base) * amount).toFixed(2));
+    });
+    return `M ${values[0]} ${values[1]} C ${values[2]} ${values[3]} ${values[4]} ${values[5]} ${values[6]} ${values[7]}`;
+}
+
+function setSkinMouthT(avatar, t) {
+    if (!avatar) return;
+    const amount = Math.max(0, Math.min(1, Number(t) || 0));
+    const path = avatar.querySelector('.skin-mouth-line');
+    if (path) path.setAttribute('d', skinMouthPathAt(amount));
+    avatar.dataset.skinMouthT = String(amount);
+    const pid = normalizePlayerId(avatar.dataset.playerId);
+    if (pid != null) skinMouthTByPlayerId.set(pid, amount);
+}
+
+function getSkinMouthT(avatar) {
+    if (!avatar) return 0;
+    const stored = Number(avatar.dataset.skinMouthT);
+    if (Number.isFinite(stored)) return Math.max(0, Math.min(1, stored));
+    return avatar.classList.contains('skin-mouth-hurt') ? 1 : 0;
+}
+
+function animateSkinMouthTo(avatar, targetT) {
+    if (!avatar) return;
+    const target = Math.max(0, Math.min(1, Number(targetT) || 0));
+    const current = skinMouthAnimationByAvatar.get(avatar);
+    if (current && current.raf) cancelAnimationFrame(current.raf);
+    const start = getSkinMouthT(avatar);
+    if (Math.abs(start - target) < 0.01) {
+        setSkinMouthT(avatar, target);
+        skinMouthAnimationByAvatar.delete(avatar);
+        return;
+    }
+    const duration = 360;
+    const startTime = performance.now();
+    const animation = { raf: 0 };
+    const step = (now) => {
+        const raw = Math.max(0, Math.min(1, (now - startTime) / duration));
+        const eased = raw < 0.5 ? 4 * raw * raw * raw : 1 - Math.pow(-2 * raw + 2, 3) / 2;
+        setSkinMouthT(avatar, start + (target - start) * eased);
+        if (raw < 1) {
+            animation.raf = requestAnimationFrame(step);
+        } else {
+            setSkinMouthT(avatar, target);
+            skinMouthAnimationByAvatar.delete(avatar);
+        }
+    };
+    animation.raf = requestAnimationFrame(step);
+    skinMouthAnimationByAvatar.set(avatar, animation);
+}
+
+function getActiveSkinDamageMood(playerId) {
+    const pid = normalizePlayerId(playerId);
+    if (pid == null) return null;
+    const entry = skinDamageMoodByPlayerId.get(pid);
+    if (!entry) return null;
+    if (Number(entry.until || 0) <= Date.now()) {
+        skinDamageMoodByPlayerId.delete(pid);
+        return null;
+    }
+    return entry;
+}
+
+function skinDamageMoodClasses(playerId) {
+    const mood = getActiveSkinDamageMood(playerId);
+    if (!mood) return '';
+    const kind = String(mood.kind || '');
+    return [
+        'skin-mouth-hurt',
+        kind === 'poison' ? 'skin-hit-poison' : '',
+        kind === 'fire' ? 'skin-hit-fire' : '',
+    ].filter(Boolean).join(' ');
+}
+
+function applySkinDamageMoodToAvatar(avatar, mood) {
+    if (!avatar) return;
+    avatar.classList.remove('skin-mouth-hurt', 'skin-hit-poison', 'skin-hit-fire');
+    const playerAvatar = avatar.closest && avatar.closest('.player-avatar');
+    if (playerAvatar) playerAvatar.classList.remove('skin-hit-poison', 'skin-hit-fire');
+    if (!mood) {
+        animateSkinMouthTo(avatar, 0);
+        return;
+    }
+    avatar.classList.add('skin-mouth-hurt');
+    animateSkinMouthTo(avatar, 1);
+    if (mood.kind === 'poison') avatar.classList.add('skin-hit-poison');
+    else if (mood.kind === 'fire') avatar.classList.add('skin-hit-fire');
+    if (playerAvatar && mood.kind === 'poison') playerAvatar.classList.add('skin-hit-poison');
+    else if (playerAvatar && mood.kind === 'fire') playerAvatar.classList.add('skin-hit-fire');
+}
+
+function applySkinDamageMoodToRenderedAvatars(playerId) {
+    const pid = normalizePlayerId(playerId);
+    if (pid == null) return;
+    const mood = getActiveSkinDamageMood(pid);
+    document.querySelectorAll(`.skin-avatar[data-player-id="${pid}"]`).forEach(avatar => {
+        applySkinDamageMoodToAvatar(avatar, mood);
+    });
+    document.querySelectorAll(`[data-player-target-region][data-player-id="${pid}"]`).forEach(region => {
+        region.classList.remove('skin-hit-poison', 'skin-hit-fire');
+        if (mood && mood.kind === 'poison') region.classList.add('skin-hit-poison');
+        else if (mood && mood.kind === 'fire') region.classList.add('skin-hit-fire');
+    });
+}
+
+function triggerSkinDamageMood(playerId, kind = 'damage', delay = 0) {
+    const pid = normalizePlayerId(playerId);
+    if (pid == null) return;
+    const run = () => {
+        const current = skinDamageMoodByPlayerId.get(pid);
+        if (current && current.timer) clearTimeout(current.timer);
+        if (!current || !getActiveSkinDamageMood(pid)) {
+            skinMouthTByPlayerId.set(pid, 0);
+        }
+        const mood = {
+            kind: kind === 'poison' || kind === 'fire' ? kind : 'damage',
+            until: Date.now() + SKIN_DAMAGE_HOLD_MS,
+            timer: null,
+        };
+        mood.timer = setTimeout(() => {
+            const latest = skinDamageMoodByPlayerId.get(pid);
+            if (latest !== mood) return;
+            skinDamageMoodByPlayerId.delete(pid);
+            applySkinDamageMoodToRenderedAvatars(pid);
+        }, SKIN_DAMAGE_HOLD_MS);
+        skinDamageMoodByPlayerId.set(pid, mood);
+        applySkinDamageMoodToRenderedAvatars(pid);
+    };
+    const wait = Math.max(0, Number(delay) || 0);
+    if (wait) setTimeout(run, wait);
+    else run();
+}
+
+function renderSkinAvatar(skinInput, options = {}) {
+    const skin = normalizeSkinConfig(skinInput);
+    const border = deriveSkinBorderColor(skin.primary_color);
+    const inverted = skinLuminance(skin.primary_color) < 0.22;
+    const invertedClass = inverted ? ' is-inverted' : '';
+    const pid = normalizePlayerId(options.playerId);
+    const look = options.look || (pid != null ? getSkinLookForPlayerId(pid) : localSkinLook);
+    const damageMood = skinDamageMoodClasses(pid);
+    const storedMouthT = pid != null ? Number(skinMouthTByPlayerId.get(pid)) : NaN;
+    const mouthT = damageMood && Number.isFinite(storedMouthT) ? storedMouthT : 0;
+    const style = `--skin-main:${escapeHtml(skin.primary_color)};--skin-border:${escapeHtml(border)};${skinLookCssVars(look)}`;
+    const ownerAttr = pid != null
+        ? ` data-player-id="${pid}"`
+        : ` data-look-owner="${escapeHtml(options.lookOwner || 'local')}"`;
+    return `
+        <div class="skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${invertedClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr} style="${style}">
+            <div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>
+            <div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>
+            <svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">
+                <path class="skin-mouth-line" d="${skinMouthPathAt(mouthT)}"></path>
+            </svg>
+        </div>
+    `;
+}
+
+function renderSkinEditorPreview() {
+    const preview = $('skin-preview-avatar');
+    if (!preview) return;
+    preview.innerHTML = renderSkinAvatar(readSkinFormConfig(), { look: localSkinLook, lookOwner: 'local' });
+}
+
+function syncSkinFormFromCurrent() {
+    const skin = getCurrentSkinConfig();
+    const colorInput = $('skin-primary-color');
+    if (colorInput) colorInput.value = skin.primary_color;
+    const shapeSelect = $('skin-eye-shape');
+    if (shapeSelect) shapeSelect.value = skin.eye_shape;
+    renderSkinEditorPreview();
+}
+
+async function saveSkinFromEditor() {
+    setSkinError('');
+    const skin = readSkinFormConfig();
+    saveLocalSkinConfig(skin);
+    if (currentAccount) {
+        try {
+            const data = await authRequest('/api/auth/skin', { skin });
+            currentAccount = data.user || { ...currentAccount, skin };
+            cacheAccount(currentAccount);
+        } catch (err) {
+            setSkinError(err.message || UI.account_error);
+            return;
+        }
+    }
+    renderSkinEditorPreview();
+    flashStatus(UI.skin_saved || '皮肤已保存', 1600);
+}
+
+function resetSkinEditor() {
+    const colorInput = $('skin-primary-color');
+    if (colorInput) colorInput.value = DEFAULT_SKIN_CONFIG.primary_color;
+    const shapeSelect = $('skin-eye-shape');
+    if (shapeSelect) shapeSelect.value = DEFAULT_SKIN_CONFIG.eye_shape;
+    renderSkinEditorPreview();
+}
+
+function openSkinEditor() {
+    setSkinError('');
+    syncSkinFormFromCurrent();
+    showView('view-skin');
+}
+
+function applyClientSoloSkins(data) {
+    if (!data || typeof data !== 'object') return data;
+    const skins = [getCurrentSkinConfig(), { ...DEFAULT_SKIN_CONFIG }];
+    const looks = [normalizeSkinLook(localSkinLook), { ...DEFAULT_SKIN_LOOK }];
+    data.player_skins = skins;
+    data.player_skin_looks = looks;
+    const pidx = Number.isFinite(Number(data.your_id)) ? Number(data.your_id) : 0;
+    if (data.you && typeof data.you === 'object') {
+        data.you.skin = skins[pidx] || skins[0];
+        data.you.skin_look = looks[pidx] || looks[0];
+    }
+    const opp = 1 - pidx;
+    if (data.opponent && typeof data.opponent === 'object') {
+        data.opponent.skin = skins[opp] || skins[1];
+        data.opponent.skin_look = looks[opp] || looks[1];
+    }
+    return data;
+}
+
+function findLocalSkinLookAvatar(localPid = normalizePlayerId(playerId)) {
+    const candidates = [];
+    if (localPid != null) {
+        candidates.push(...document.querySelectorAll(`.skin-avatar[data-player-id="${localPid}"]`));
+    }
+    candidates.push(...document.querySelectorAll('#skin-preview-avatar .skin-avatar, .skin-avatar[data-look-owner="local"]'));
+    return candidates.find(el => {
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+        return rect && rect.width > 2 && rect.height > 2 && (!style || (style.display !== 'none' && style.visibility !== 'hidden'));
+    }) || null;
+}
+
+function shouldEmitSkinLook() {
+    if (!socket || !socket.connected) return false;
+    if (soloMode || isSpectating) return false;
+    if (normalizePlayerId(playerId) == null || normalizePlayerId(playerId) < 0) return false;
+    if (!['draft', 'event_select', 'playing', 'action', 'draw', 'response', 'choice', 'game_over'].includes(phase)) return false;
+    return !!((gameState && gameState.room_id != null) || (draftState && draftState.room_id != null) || (eventSelectData && eventSelectData.room_id != null));
+}
+
+function maybeEmitSkinLook(look) {
+    if (!shouldEmitSkinLook()) return;
+    const normalized = normalizeSkinLook(look);
+    const key = `${normalized.x.toFixed(2)},${normalized.y.toFixed(2)}`;
+    const now = Date.now();
+    if (key === lastSkinLookEmitKey || now - lastSkinLookEmitAt < SKIN_LOOK_EMIT_INTERVAL_MS) return;
+    lastSkinLookEmitAt = now;
+    lastSkinLookEmitKey = key;
+    socket.emit('skin_look', normalized);
+}
+
+function mergeSkinLooksFromPayload(data) {
+    if (!data || typeof data !== 'object') return;
+    const looks = Array.isArray(data.player_skin_looks) ? data.player_skin_looks : [];
+    looks.forEach((look, index) => {
+        const pid = normalizePlayerId(index);
+        if (pid == null) return;
+        if (!isSpectating && pid === normalizePlayerId(playerId)) return;
+        skinLookByPlayerId.set(pid, normalizeSkinLook(look));
+    });
+}
+
+function updateSkinEyeTracking(event) {
+    const point = { x: Number(event.clientX || 0), y: Number(event.clientY || 0) };
+    const localPid = normalizePlayerId(playerId);
+    const targetAvatar = findLocalSkinLookAvatar(localPid);
+    let cx = Math.max(1, window.innerWidth || 1) / 2;
+    let cy = Math.max(1, window.innerHeight || 1) / 2;
+    if (targetAvatar) {
+        const rect = targetAvatar.getBoundingClientRect();
+        if (rect && rect.width > 0 && rect.height > 0) {
+            cx = rect.left + rect.width / 2;
+            cy = rect.top + rect.height / 2;
+        }
+    }
+    const dx = point.x - cx;
+    const dy = point.y - cy;
+    if (Math.hypot(dx, dy) < 1.5) {
+        return;
+    }
+    const look = normalizeSkinLook({ x: dx, y: dy });
+    setSkinLookForPlayerId(localPid, look, { local: true });
+    maybeEmitSkinLook(look);
 }
 
 function stopAccountReplayPlayback() {
@@ -7700,6 +8253,7 @@ function cacheAccount(user) {
                 accept_friend_requests: user.accept_friend_requests !== false,
                 searchable_by_nickname: user.searchable_by_nickname !== false,
                 searchable_by_player_id: user.searchable_by_player_id !== false,
+                skin: normalizeSkinConfig(user.skin || {}),
             };
             localStorage.setItem('gtn_account_user', JSON.stringify(safeUser));
         } else {
@@ -7738,6 +8292,8 @@ function renderAccountState() {
     const friendsTop = $('btn-friends-top');
     const loginVisible = !$('view-login')?.classList.contains('hidden');
     if (friendsTop) friendsTop.classList.toggle('hidden', !currentAccount || !loginVisible);
+    const skinTop = $('btn-skin-top');
+    if (skinTop) skinTop.classList.toggle('hidden', !loginVisible);
     const guestDivider = $('guest-divider-label')?.closest('.login-divider');
     if (guestDivider) guestDivider.classList.toggle('hidden', !!currentAccount);
     const nicknameInput = $('input-nickname');
@@ -7756,6 +8312,7 @@ function renderAccountState() {
     renderAccountMode();
     updateCommunityUploadState();
     renderCommunityModList();
+    if (activeViewId === 'view-skin') syncSkinFormFromCurrent();
 }
 
 function renderAccountMode() {
@@ -8247,6 +8804,7 @@ function handleLocalGamePhase(data) {
 }
 
 function handleLocalSoloState(data) {
+    applyClientSoloSkins(data);
     const previousGameState = gameState;
     soloMode = true;
     tutorialMode = !!data.tutorial || tutorialMode;
@@ -8844,7 +9402,7 @@ const BUILTIN_CARD_PINYIN_ALIASES = {
     Honey: 'feng mi',
     Pill: 'yao wan',
     Magnet: 'ci tie',
-    Antenna: 'chu jiao',
+    Antennae: 'chu jiao',
     Claw: 'zhua zi',
     Rice: 'mi',
     Glass: 'bo li',
@@ -9127,7 +9685,7 @@ function renderLobby(data) {
                 const newMode = tab.getAttribute('data-mode');
                 if (newMode === currentMode) return;
                 if (myTeam && newMode !== '2v2') {
-                    const confirmed = await gameConfirm(UI.mode_switch_confirm);
+                    const confirmed = await gameConfirm(UI.notice || '', UI.mode_switch_confirm);
                     if (!confirmed) return;
                 }
                 localStorage.setItem('preferred_mode', newMode);
@@ -10238,6 +10796,8 @@ function normalizeBattlePlayer(gs, raw, slot) {
         name: localizeCanonicalPlayerName(name),
         avatar_url: data.avatar_url || data.avatar || '',
         avatar_id: data.avatar_id || '',
+        skin: normalizeSkinConfig(data.skin || (Array.isArray(gs.player_skins) && id != null ? gs.player_skins[id] : null)),
+        skin_look: resolveSkinLookForPlayer(id, data.skin_look || (Array.isArray(gs.player_skin_looks) && id != null ? gs.player_skin_looks[id] : null)),
         hp: Number(data.health || 0),
         maxHp: Number(data.max_health || 100),
         e: Number(data.elixir || 0),
@@ -10345,11 +10905,27 @@ function renderPlayerAvatar(player, options = {}) {
     const targetable = options.targetable ? ' is-targetable' : '';
     const style = `--avatar-hue:${hue};--avatar-color:hsl(${hue} 62% 52%);--avatar-color-2:hsl(${(hue + 44) % 360} 70% 58%)`;
     const image = p.avatar_url ? `<img class="player-avatar-img" src="${escapeHtml(p.avatar_url)}" alt="">` : '';
+    const skinHtml = renderSkinAvatar(p.skin || DEFAULT_SKIN_CONFIG, {
+        playerId: p.id,
+        look: resolveSkinLookForPlayer(p.id, p.skin_look),
+    });
+    const skinClass = image ? '' : ' has-skin';
     return `
-        <div class="player-avatar${active}${defeated}${targetable}" style="${style}">
-            ${image || `<div class="player-avatar-flower"><span>${escapeHtml(initial)}</span></div>`}
+        <div class="player-avatar${skinClass}${active}${defeated}${targetable}" style="${style}">
+            ${image || skinHtml || `<div class="player-avatar-flower"><span>${escapeHtml(initial)}</span></div>`}
         </div>
     `;
+}
+
+function renderMiniPlayerSkin(containerId, playerData = {}, id = null) {
+    const el = $(containerId);
+    if (!el) return;
+    const data = playerData || {};
+    const pid = normalizePlayerId(id != null ? id : data.player_id);
+    el.innerHTML = renderSkinAvatar(data.skin || DEFAULT_SKIN_CONFIG, {
+        playerId: pid,
+        look: resolveSkinLookForPlayer(pid, data.skin_look),
+    });
 }
 
 function renderClassicStatusList(player) {
@@ -10839,6 +11415,14 @@ function renderGame(data) {
         if (youLabel) youLabel.textContent = `${localizeCanonicalPlayerName(gs.your_name || UI.you)} - ${youResult}`;
         if (oppLabel) oppLabel.textContent = `${localizeCanonicalPlayerName(gs.opponent_name || UI.opponent)} - ${oppResult}`;
     }
+
+    const yourPlayerId = normalizePlayerId(gs.your_id);
+    const enemyIdsForSkin = Array.isArray(gs.enemy_ids) ? gs.enemy_ids.map(normalizePlayerId) : [];
+    const opponentSkinId = is2v2 ? enemyIdsForSkin[0] : (yourPlayerId === 1 ? 0 : 1);
+    renderMiniPlayerSkin('opp-skin', opp, opponentSkinId);
+    renderMiniPlayerSkin('you-skin', you, yourPlayerId);
+    renderMiniPlayerSkin('opp2-skin', opp2, enemyIdsForSkin[1]);
+    renderMiniPlayerSkin('teammate-skin', teammate, gs.teammate_id);
 
     renderPlayerBars('opp-bars', opp);
     renderPlayerBars('you-bars', getOptimisticPlayerBarsData(you));
@@ -11383,7 +11967,7 @@ function getStatePlayerRefs(gs) {
     return refs;
 }
 
-function areSequentialGameStates(previous, next) {
+function areSequentialGameStates(previous, next, options = {}) {
     if (!previous || !next || previous === next) return false;
     if (!previous.phase || !next.phase) return false;
     if ((previous.mode || '') !== (next.mode || '')) return false;
@@ -11393,7 +11977,12 @@ function areSequentialGameStates(previous, next) {
         if (Number(previous.room_id) !== Number(next.room_id)) return false;
         if (normalizePlayerId(previous.spectate_perspective) !== normalizePlayerId(next.spectate_perspective)) return false;
     }
-    if (normalizePlayerId(previous.your_id) !== normalizePlayerId(next.your_id)) return false;
+    const previousYourId = normalizePlayerId(previous.your_id);
+    const nextYourId = normalizePlayerId(next.your_id);
+    if (previousYourId !== nextYourId) {
+        const allowSoloPerspectiveShift = !!options.allowSoloPerspectiveShift && previous.solo && next.solo;
+        if (!allowSoloPerspectiveShift) return false;
+    }
     const prevTotal = Number(previous.log_total);
     const nextTotal = Number(next.log_total);
     if (Number.isFinite(prevTotal) && Number.isFinite(nextTotal) && nextTotal < prevTotal) return false;
@@ -11496,6 +12085,13 @@ function showCombatFloatSequence(selector, events, interval = 200) {
         }, Math.max(0, event.delay));
     });
     return timeline.events;
+}
+
+function scheduleSkinDamageMoods(playerId, events) {
+    (events || []).forEach(event => {
+        if (!event) return;
+        triggerSkinDamageMood(playerId, event.kind || 'damage', event.delay || 0);
+    });
 }
 
 function getBarMaxForKey(data, key) {
@@ -11690,7 +12286,14 @@ function parseDamagePartsText(raw, repeatRaw = null) {
     return parts.filter(v => Number.isFinite(v) && v > 0);
 }
 
-function expandDamageLogHits(name, parts, hpText) {
+function damageVisualKindFromSource(source, rawLine = '') {
+    const text = `${source || ''} ${rawLine || ''}`;
+    if (/(中毒|毒伤|poison|\bP\b|P伤害)/i.test(text)) return 'poison';
+    if (/(灼烧|火伤|burn|fire|\bF\b|F伤害)/i.test(text)) return 'fire';
+    return 'damage';
+}
+
+function expandDamageLogHits(name, parts, hpText, source = '', rawLine = '') {
     const cleanParts = (Array.isArray(parts) ? parts : [])
         .map(v => Math.max(0, Math.ceil(Number(v || 0))))
         .filter(v => Number.isFinite(v) && v > 0);
@@ -11700,6 +12303,7 @@ function expandDamageLogHits(name, parts, hpText) {
     const startHp = hpParts.length === 2 ? Number(hpParts[0]) : null;
     const endHp = hpParts.length === 2 ? Number(hpParts[1]) : Number(hpRaw);
     let staged = Number.isFinite(startHp) ? startHp : null;
+    const visualKind = damageVisualKindFromSource(source, rawLine);
     return cleanParts.map((amount, index) => {
         let health = null;
         if (Number.isFinite(staged)) {
@@ -11708,7 +12312,7 @@ function expandDamageLogHits(name, parts, hpText) {
         } else if (index === cleanParts.length - 1 && Number.isFinite(endHp)) {
             health = endHp;
         }
-        return { name, amount, health };
+        return { name, amount, health, source, visualKind };
     });
 }
 
@@ -11717,19 +12321,23 @@ function parseDamageLogLine(line) {
     const hpSuffix = '[（(]H=([^）)]+)[）)]$';
     let match = text.match(new RegExp(`^(.+?)受到[（(](\\d+(?:\\+\\d+)*)[）)]D${hpSuffix}`));
     if (match) {
-        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[3]);
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[3], 'D', text);
     }
     match = text.match(new RegExp(`^(.+?)受到(\\d+)D(?:[×x](\\d+))?${hpSuffix}`));
     if (match) {
-        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2], match[3]), match[4]);
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2], match[3]), match[4], 'D', text);
     }
-    match = text.match(new RegExp(`^(.+?)受到(\\d+(?:\\+\\d+)*)点(?:[^（）()]*?)伤害${hpSuffix}`));
+    match = text.match(new RegExp(`^(.+?)受到(\\d+(?:\\+\\d+)*)(中毒|毒伤|灼烧|火伤|P|F|Poison|Burn|Fire)伤害${hpSuffix}`, 'i'));
     if (match) {
-        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[3]);
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[4], match[3], text);
     }
-    match = text.match(new RegExp(`^(.+?)受到(\\d+)点[^（）()]*?${hpSuffix}`));
+    match = text.match(new RegExp(`^(.+?)受到(\\d+(?:\\+\\d+)*)点([^（）()]*?)伤害${hpSuffix}`));
     if (match) {
-        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[3]);
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[4], match[3], text);
+    }
+    match = text.match(new RegExp(`^(.+?)受到(\\d+)点([^（）()]*?)${hpSuffix}`));
+    if (match) {
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[4], match[3], text);
     }
     return [];
 }
@@ -11781,8 +12389,33 @@ function getDamageLogEventsByPlayer(previous, next) {
     return out;
 }
 
+function inferStatusDamageKindForRef(previous, next, ref, oldData, newData, healthDelta, damageHits) {
+    if (Number(healthDelta || 0) >= 0) return null;
+    if ((damageHits || []).some(hit => hit && (hit.visualKind === 'poison' || hit.visualKind === 'fire'))) return null;
+    const names = getStatePlayerDisplayNames(next, ref);
+    const lines = getNewBattleLogLines(previous, next);
+    for (const line of lines) {
+        const kind = damageVisualKindFromSource('', line);
+        if (kind !== 'poison' && kind !== 'fire') continue;
+        const parsed = parseDamageLogLine(line);
+        const matchedByParsedTarget = parsed.some(hit => hit && names.has(hit.name));
+        const matchedByText = [...names].some(name => name && String(line).includes(name));
+        if (matchedByParsedTarget || matchedByText) return kind;
+    }
+    if ((damageHits || []).length) return null;
+    const refId = normalizePlayerId(ref && ref.id);
+    const currentId = normalizePlayerId(next && next.current_player);
+    if (refId == null || currentId !== refId) return null;
+    const oldPoison = Number(oldData && oldData.poison || 0);
+    const newPoison = Number(newData && newData.poison || 0);
+    const oldFire = Number(oldData && oldData.fire || 0);
+    if (oldPoison > 0 && newPoison < oldPoison) return 'poison';
+    if (oldFire > 0) return 'fire';
+    return null;
+}
+
 function showStateDeltas(previous, next) {
-    if (!areSequentialGameStates(previous, next)) return;
+    if (!areSequentialGameStates(previous, next, { allowSoloPerspectiveShift: true })) return;
     if (!next.phase || next.phase === 'draft' || next.phase === 'event_select') return;
     const prev = new Map(getStatePlayerRefs(previous).map(ref => [ref.id, ref]));
     const damageLogEvents = getDamageLogEventsByPlayer(previous, next);
@@ -11815,6 +12448,8 @@ function showStateDeltas(previous, next) {
         const newMagic = getBarValueForKey(newData, 'magic');
         let stagedHealth = oldHealth;
         let lastHealthDelay = 0;
+        const skinDamageEvents = [];
+        const inferredStatusDamageKind = inferStatusDamageKindForRef(previous, next, ref, oldData, newData, healthDelta, damageHits);
         if (damageHits.length) {
             damageHits.forEach((hit, hitIndex) => {
                 const amount = Number(hit && hit.amount);
@@ -11822,6 +12457,7 @@ function showStateDeltas(previous, next) {
                 const delay = hitIndex * 200;
                 stagedHealth = Number.isFinite(Number(hit.health)) ? Number(hit.health) : stagedHealth - amount;
                 lastHealthDelay = delay;
+                skinDamageEvents.push({ delay, kind: hit.visualKind || 'damage' });
                 events.push({
                     text: `-${amount}H`,
                     kind: 'damage',
@@ -11846,6 +12482,7 @@ function showStateDeltas(previous, next) {
             }
         } else if (healthDelta < 0) {
             events.push({ text: `${healthDelta}H`, kind: 'damage', barKey: 'health', barValue: newHealth, barMax: healthMax });
+            skinDamageEvents.push({ delay: 0, kind: 'damage' });
         } else if (healthDelta > 0) {
             events.push({ text: `+${healthDelta}H`, kind: 'heal', barKey: 'health', barValue: newHealth, barMax: healthMax });
         }
@@ -11902,7 +12539,12 @@ function showStateDeltas(previous, next) {
         } else if (magicDelta < 0) {
             events.push({ text: `${magicDelta}M`, kind: 'magic', delay: resourceDelay, stackIndex: resourceCost ? 2 : undefined, barKey: 'magic', barValue: newMagic, barMax: magicMax });
         }
+        if (inferredStatusDamageKind && !skinDamageEvents.some(event => event.kind === 'poison' || event.kind === 'fire')) {
+            if (skinDamageEvents.length) skinDamageEvents[0].kind = inferredStatusDamageKind;
+            else skinDamageEvents.push({ delay: 0, kind: inferredStatusDamageKind });
+        }
         const scheduledEvents = showCombatFloatSequence(ref.selector, events);
+        scheduleSkinDamageMoods(ref.id, skinDamageEvents);
         animateBarEventSequence(ref.selector, scheduledEvents, oldData, newData, { startValues: barStartValues });
         if (newEquipCount > oldEquipCount) {
             setTimeout(() => animateEquipmentForRegion(ref.selector), 30);
@@ -11919,7 +12561,7 @@ function clearScheduledGameOver() {
 }
 
 function estimateGameOverAnimationDelay(previous, next) {
-    if (!previous || !next || !areSequentialGameStates(previous, next)) return 0;
+    if (!previous || !next || !areSequentialGameStates(previous, next, { allowSoloPerspectiveShift: true })) return 0;
     const damageCount = getNewBattleLogLines(previous, next)
         .reduce((count, line) => count + parseDamageLogLine(line).length, 0);
     if (damageCount <= 0) return 650;
@@ -11936,7 +12578,7 @@ function renderGameOverAfterFinalAnimation(previous, next, options = {}) {
         && next
         && previous.phase !== 'game_over'
         && next.phase === 'game_over'
-        && areSequentialGameStates(previous, next);
+        && areSequentialGameStates(previous, next, { allowSoloPerspectiveShift: true });
     if (!shouldAnimate) {
         if (options.tutorial) stopTutorialUiForGameOver();
         if (options.fullScreen === false) renderGame(next);
@@ -14792,6 +15434,13 @@ async function init() {
     if ($('btn-account-mode-register')) $('btn-account-mode-register').addEventListener('click', () => setAccountMode('register'));
     if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());
     if ($('btn-friends-top')) $('btn-friends-top').addEventListener('click', () => toggleFriendsPopover());
+    if ($('btn-skin-top')) $('btn-skin-top').addEventListener('click', openSkinEditor);
+    if ($('btn-skin-back')) $('btn-skin-back').addEventListener('click', () => showView('view-login'));
+    if ($('btn-skin-save')) $('btn-skin-save').addEventListener('click', saveSkinFromEditor);
+    if ($('btn-skin-reset')) $('btn-skin-reset').addEventListener('click', resetSkinEditor);
+    if ($('skin-primary-color')) $('skin-primary-color').addEventListener('input', renderSkinEditorPreview);
+    if ($('skin-eye-shape')) $('skin-eye-shape').addEventListener('change', renderSkinEditorPreview);
+    document.addEventListener('pointermove', updateSkinEyeTracking, { passive: true });
     if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
     if ($('btn-friends-popover-close')) $('btn-friends-popover-close').addEventListener('click', () => toggleFriendsPopover(false));
     if ($('btn-account-popover-logout')) $('btn-account-popover-logout').addEventListener('click', onAccountLogout);

@@ -24,6 +24,10 @@ const CARD_FLAG_ALIASES = {
     'troll_cards:exile': 'exile',
     'tag_troll_cards_exile': 'exile',
     'troll_cards_exile': 'exile',
+    'tag_thorn_cards_supplement_1:sticky': 'sticky',
+    'thorn_cards_supplement_1:sticky': 'sticky',
+    'tag_thorn_cards_supplement_1_sticky': 'sticky',
+    'thorn_cards_supplement_1_sticky': 'sticky',
 };
 
 class ModLoopBreak extends Error {}
@@ -683,7 +687,7 @@ class LocalSoloEngine {
         this.pending_choice = null;
         this.opening_event_picks = [payload.event0 ?? null, payload.event1 ?? null];
         this.opening_event_sub_choices = [payload.sub0 || null, payload.sub1 || null];
-        this._antenna_reveal = [null, null];
+        this._antennae_reveal = [null, null];
         this._last_damage_value = [0, 0];
         this._incoming_damage_hint = [0, 0];
         this._game_over_defer_depth = 0;
@@ -772,7 +776,7 @@ class LocalSoloEngine {
         clone.pending_choice = cloneJson(this.pending_choice);
         clone.opening_event_picks = [...this.opening_event_picks];
         clone.opening_event_sub_choices = cloneJson(this.opening_event_sub_choices) || [null, null];
-        clone._antenna_reveal = cloneJson(this._antenna_reveal) || [null, null];
+        clone._antennae_reveal = cloneJson(this._antennae_reveal) || [null, null];
         clone._last_damage_value = [...this._last_damage_value];
         clone._incoming_damage_hint = [...this._incoming_damage_hint];
         clone._game_over_defer_depth = this._game_over_defer_depth;
@@ -1097,7 +1101,7 @@ class LocalSoloEngine {
                 }
             }
         }
-        if (this._antenna_reveal[forPlayer]) {
+        if (this._antennae_reveal[forPlayer]) {
             oppData.revealed_hand = this.players[opponent].hand.filter(card => card.def_id !== ERROR_CARD_ID).map(card => card.toDict());
             oppData.hand = this.players[opponent].hand.filter(card => card.def_id !== ERROR_CARD_ID).map(card => card.toDict());
         }
@@ -1116,7 +1120,7 @@ class LocalSoloEngine {
             pending_response: this.pending_response,
             pending_choice: this.pending_choice,
             opening_event_picks: this.opening_event_picks,
-            antenna_reveal: this._antenna_reveal[forPlayer],
+            antennae_reveal: this._antennae_reveal[forPlayer],
             your_id: forPlayer,
             your_name: this.tutorial ? '你' : (forPlayer === 0 ? 'Player A' : 'Player B'),
             opponent_name: this.tutorial ? '练习对手' : (forPlayer === 0 ? 'Player B' : 'Player A'),
@@ -1249,7 +1253,7 @@ class LocalSoloEngine {
         const ps = this.players[playerId];
         const oppId = 1 - playerId;
         const opp = this.players[oppId];
-        this._antenna_reveal[playerId] = null;
+        this._antennae_reveal[playerId] = null;
         this.runZoneOwnerTurnStartEvents(playerId);
         this.runTimedEffectsForTurn(playerId);
         this.players.forEach(owner => {
@@ -3052,7 +3056,7 @@ class LocalSoloEngine {
 
     effect_reveal_enemy_hand(playerId, card, params, log) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
-        this._antenna_reveal[playerId] = this.players[targetId].hand.map(c => c.toDict());
+        this._antennae_reveal[playerId] = this.players[targetId].hand.map(c => c.toDict());
         this.logMsg(log || `${this.pn(playerId)}查看了${this.pn(targetId)}的手牌`);
     }
 

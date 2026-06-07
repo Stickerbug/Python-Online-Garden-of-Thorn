@@ -80,6 +80,7 @@ from db import (
     list_reports,
     list_user_roles,
     mark_user_last_seen,
+    normalize_skin_config,
     normalize_username_key,
     record_chat_message,
     record_card_draft_pick,
@@ -92,6 +93,7 @@ from db import (
     list_admin_users,
     save_match_summary,
     set_user_mute,
+    update_user_skin,
     update_user_social_settings,
     verify_remember_token,
     verify_user,
@@ -1527,6 +1529,109 @@ def auth_user_payload(user):
     return payload
 
 
+DEFAULT_PUBLIC_SKIN = normalize_skin_config({})
+DEFAULT_SKIN_LOOK = {'x': 0.707, 'y': -0.707}
+
+
+def public_skin_config(value=None):
+    return normalize_skin_config(value or {})
+
+
+def normalize_skin_look(value=None):
+    if not isinstance(value, dict):
+        return dict(DEFAULT_SKIN_LOOK)
+    try:
+        x = float(value.get('x', 0) or 0)
+        y = float(value.get('y', 0) or 0)
+    except (TypeError, ValueError):
+        return dict(DEFAULT_SKIN_LOOK)
+    if not (abs(x) < 1000 and abs(y) < 1000):
+        return dict(DEFAULT_SKIN_LOOK)
+    length = (x * x + y * y) ** 0.5
+    if length < 0.001:
+        return dict(DEFAULT_SKIN_LOOK)
+    return {
+        'x': round(max(-1.0, min(1.0, x / length)), 3),
+        'y': round(max(-1.0, min(1.0, y / length)), 3),
+    }
+
+
+def player_skin_for_sid(sid, room=None):
+    if sid in players:
+        return public_skin_config(players[sid].get('skin'))
+    if room is not None and sid in getattr(room, 'disconnected_players', {}):
+        return public_skin_config(room.disconnected_players[sid].get('skin'))
+    return dict(DEFAULT_PUBLIC_SKIN)
+
+
+def player_skin_look_for_sid(sid, room=None):
+    if sid in players:
+        return normalize_skin_look(players[sid].get('skin_look'))
+    if room is not None and sid in getattr(room, 'disconnected_players', {}):
+        return normalize_skin_look(room.disconnected_players[sid].get('skin_look'))
+    return dict(DEFAULT_SKIN_LOOK)
+
+
+def inject_player_skins(state, room, perspective):
+    if not isinstance(state, dict) or room is None:
+        return state
+    player_skins = []
+    player_skin_looks = []
+    for psid in getattr(room, 'player_sids', []) or []:
+        player_skins.append(player_skin_for_sid(psid, room))
+        player_skin_looks.append(player_skin_look_for_sid(psid, room))
+    state['player_skins'] = player_skins
+    state['player_skin_looks'] = player_skin_looks
+    try:
+        pidx = int(perspective)
+    except (TypeError, ValueError):
+        pidx = -1
+    if 0 <= pidx < len(player_skins):
+        if isinstance(state.get('you'), dict):
+            state['you']['skin'] = player_skins[pidx]
+            state['you']['skin_look'] = player_skin_looks[pidx]
+    if getattr(room, 'mode', '') == '2v2':
+        engine = getattr(room, 'engine', None)
+        teammate_id = getattr(engine, 'get_teammate', lambda _p: -1)(pidx) if pidx >= 0 else -1
+        enemy_ids = getattr(engine, 'get_all_enemies', lambda _p: [])(pidx) if pidx >= 0 else []
+        if isinstance(state.get('teammate'), dict) and 0 <= teammate_id < len(player_skins):
+            state['teammate']['skin'] = player_skins[teammate_id]
+            state['teammate']['skin_look'] = player_skin_looks[teammate_id]
+        if isinstance(state.get('opponent'), dict) and len(enemy_ids) > 0 and 0 <= enemy_ids[0] < len(player_skins):
+            state['opponent']['skin'] = player_skins[enemy_ids[0]]
+            state['opponent']['skin_look'] = player_skin_looks[enemy_ids[0]]
+        if isinstance(state.get('opponent2'), dict) and len(enemy_ids) > 1 and 0 <= enemy_ids[1] < len(player_skins):
+            state['opponent2']['skin'] = player_skins[enemy_ids[1]]
+            state['opponent2']['skin_look'] = player_skin_looks[enemy_ids[1]]
+    else:
+        opp_pidx = 1 - pidx
+        if isinstance(state.get('opponent'), dict) and 0 <= opp_pidx < len(player_skins):
+            state['opponent']['skin'] = player_skins[opp_pidx]
+            state['opponent']['skin_look'] = player_skin_looks[opp_pidx]
+    return state
+
+
+def inject_solo_skins(state, owner_skin=None, perspective=0):
+    if not isinstance(state, dict):
+        return state
+    skins = [public_skin_config(owner_skin), dict(DEFAULT_PUBLIC_SKIN)]
+    looks = [dict(DEFAULT_SKIN_LOOK), dict(DEFAULT_SKIN_LOOK)]
+    state['player_skins'] = skins
+    state['player_skin_looks'] = looks
+    try:
+        pidx = int(perspective)
+    except (TypeError, ValueError):
+        pidx = 0
+    if isinstance(state.get('you'), dict) and 0 <= pidx < len(skins):
+        state['you']['skin'] = skins[pidx]
+        state['you']['skin_look'] = looks[pidx]
+    opp = 1 - pidx
+    if isinstance(state.get('opponent'), dict) and 0 <= opp < len(skins):
+        state['opponent']['skin'] = skins[opp]
+        state['opponent']['skin_look'] = looks[opp]
+    return state
+
+
 def mark_player_session_last_seen(player):
     if not DB_AVAILABLE or not player:
         return
@@ -1544,6 +1649,8 @@ def public_player_info(sid, player=None):
         'sid': sid,
         'nickname': p.get('nickname', '?'),
         'mode': p.get('mode', '1v1'),
+        'skin': public_skin_config(p.get('skin')),
+        'skin_look': normalize_skin_look(p.get('skin_look')),
     }
     info.update(special_public_fields(p))
     return info
@@ -1682,6 +1789,7 @@ SOCKET_EVENT_LIMITS = {
     'solo_end_turn': (60, 60),
     'solo_set_next_draw': (20, 60),
     'solo_pause': (12, 60),
+    'skin_look': (80, 10),
 }
 SOCKET_DEFAULT_LIMIT = (80, 60)
 SOCKET_ILLEGAL_KICK_LIMIT = 12
@@ -4253,6 +4361,8 @@ def send_draft_state(room, pidx):
         'match_key': room_match_key(room),
         'your_id': pidx,
         'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
+        'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
+        'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
     }
     payload.update(room_mod_payload(room))
     socketio.emit('draft_state', payload, room=sid)
@@ -4284,6 +4394,8 @@ def send_event_state(room, pidx):
         'match_key': room_match_key(room),
         'your_id': pidx,
         'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
+        'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
+        'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
     }
     payload.update(room_mod_payload(room))
     socketio.emit('event_select', payload, room=sid)
@@ -4340,6 +4452,7 @@ def broadcast_game_state(room):
             state['your_name'] = room_player_nickname(room, sid)
             state['your_is_admin_player'] = player_is_admin(sid, room)
             state['your_special'] = player_special_fields(sid, room)
+        inject_player_skins(state, room, pidx)
         socketio.emit('state_update', state, room=sid)
         _broadcast_recipients += 1
     broadcast_spectate_state(room)
@@ -4403,6 +4516,7 @@ def send_game_state_to(room, pidx):
             state['your_name'] = room_player_nickname(room, sid)
             state['your_is_admin_player'] = player_is_admin(sid, room)
             state['your_special'] = player_special_fields(sid, room)
+        inject_player_skins(state, room, pidx)
         socketio.emit('state_update', state, room=sid)
 
 
@@ -4552,6 +4666,8 @@ def send_solo_state(sid, perspective=None):
     else:
         state['your_name'] = 'Player A' if perspective == 0 else 'Player B'
         state['opponent_name'] = 'Player B' if perspective == 0 else 'Player A'
+    owner_skin = players.get(sid, {}).get('skin') if sid in players else None
+    inject_solo_skins(state, owner_skin=owner_skin, perspective=perspective)
     state['solo'] = True
     socketio.emit('solo_state', state, room=sid)
 
@@ -4821,10 +4937,13 @@ def build_spectate_state(room, perspective=0):
         redact_error_cards_from_player_payload(pdata)
         pdata['player_id'] = i
         pdata['name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', f'P{i + 1}')
+        pdata['skin'] = player_skin_for_sid(psid, room)
+        pdata['skin_look'] = player_skin_look_for_sid(psid, room)
         pdata['is_admin_player'] = player_is_admin(psid, room)
         pdata.update(player_special_fields(psid, room))
         full_players.append(pdata)
     base['spectate_players'] = full_players
+    base['player_skin_looks'] = [player_skin_look_for_sid(psid, room) for psid in room.player_sids]
     base['player_names'] = [p.get('name', f'P{i + 1}') for i, p in enumerate(full_players)]
     for i, pdata in enumerate(full_players):
         base[f'player{i + 1}_name'] = pdata.get('name', f'P{i + 1}')
@@ -5591,6 +5710,27 @@ def api_auth_change_password():
     return jsonify({'success': True, 'user': auth_user_payload(user)})
 
 
+@app.route('/api/auth/skin', methods=['POST'])
+def api_auth_skin():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True) or {}
+    skin = data.get('skin', data)
+    user, error = update_user_skin(user_id, skin)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    _set_account_session(user)
+    normalized_skin = public_skin_config(user.get('skin'))
+    with _lock:
+        for sid, player in players.items():
+            if player.get('user_id') == user_id:
+                player['skin'] = normalized_skin
+    return jsonify({'success': True, 'user': auth_user_payload(user), 'skin': normalized_skin})
+
+
 @app.route('/api/auth/logout', methods=['POST'])
 def api_auth_logout():
     if DB_AVAILABLE and session.get('user_id'):
@@ -6234,6 +6374,32 @@ def on_latency_report(data=None):
     record_socket_latency(sid, rtt_ms, transport)
 
 
+@socketio.on('skin_look')
+def on_skin_look(data=None):
+    sid = request.sid
+    data = socket_guard('skin_look', data, require_player=True, emit_error=False)
+    if data is None:
+        return
+    look = normalize_skin_look(data)
+    with _lock:
+        player = players.get(sid)
+        if not player:
+            return
+        player['skin_look'] = look
+        room_id = player.get('room_id')
+        if room_id is None or room_id not in rooms:
+            return
+        room = rooms[room_id]
+        pidx = room.player_index(sid)
+        if pidx < 0:
+            return
+        payload = {'player_id': pidx, 'look': look}
+        targets = {tsid for tsid in room.player_sids if tsid in players}
+        targets.update(tsid for tsid in getattr(room, 'spectators', []) if tsid in players)
+        for target_sid in targets:
+            socketio.emit('skin_look_update', payload, room=target_sid)
+
+
 @socketio.on('draft_reroll')
 @measure_socket_action('draft_reroll')
 def on_draft_reroll(data=None):
@@ -6315,6 +6481,7 @@ def on_login(data):
         is_admin_player = bool(special_profile and special_profile.get('is_admin_player'))
         user_id = account_user['id']
         is_registered_user = True
+        skin_config = public_skin_config(account_user.get('skin'))
     else:
         special_profile = get_special_player_profile(raw_name)
         is_admin_player = bool(special_profile and special_profile.get('is_admin_player'))
@@ -6333,6 +6500,7 @@ def on_login(data):
             return
         user_id = None
         is_registered_user = False
+        skin_config = public_skin_config(data.get('skin'))
     disabled_mods = ensure_valid_disabled_mods(data.get('disabled_mods', []))
     if preferred_mode not in ('1v1', '2v2', 'urf'):
         preferred_mode = '1v1'
@@ -6390,6 +6558,8 @@ def on_login(data):
             'community_mod_name': community_fields.get('community_mod_name', ''),
             'community_mods': community_fields.get('community_mods', []),
             'beta_mode': is_beta_mode,
+            'skin': skin_config,
+            'skin_look': dict(DEFAULT_SKIN_LOOK),
         }
         if special_profile:
             players[sid].update(special_public_fields(special_profile))
@@ -6429,6 +6599,7 @@ def on_login(data):
         'community_mod_name': players.get(sid, {}).get('community_mod_name', ''),
         'community_mods': players.get(sid, {}).get('community_mods', []),
         'beta_mode': players.get(sid, {}).get('beta_mode', False),
+        'skin': players.get(sid, {}).get('skin', DEFAULT_PUBLIC_SKIN),
     }
     if is_registered_user:
         login_payload['user'] = auth_user_payload(account_user)
@@ -6823,6 +6994,8 @@ def on_disconnect():
                     'mods_hash': player.get('mods_hash', ''),
                     'loadout_hash': player_loadout_hash(player),
                     'v2_loadout_hash': player.get('v2_loadout_hash', ''),
+                    'skin': public_skin_config(player.get('skin')),
+                    'skin_look': normalize_skin_look(player.get('skin_look')),
                 }
                 room.disconnected_players[sid].update(special_public_fields(player))
                 dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)
@@ -6924,6 +7097,7 @@ def on_reconnect_accept(data):
         del room.disconnected_players[old_sid]
         player['room_id'] = room_id
         player['status'] = 'in_game'
+        player['skin_look'] = normalize_skin_look(dc_info.get('skin_look'))
         player.update(special_public_fields(dc_info))
         join_room(room_id)
         for other_sid in room.player_sids:

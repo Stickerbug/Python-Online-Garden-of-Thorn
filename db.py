@@ -23,6 +23,11 @@ REMEMBER_TOKEN_DAYS = 60
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
 ROLE_TYPES = {'admin', 'staff', 'contributor', 'sponsor', 'none'}
 ROLE_COLOR_TOKENS = {'admin', 'bloom', 'guard', 'thorn', 'root', 'neutral'}
+DEFAULT_SKIN_CONFIG = {
+    'primary_color': '#FFE763',
+    'eye_shape': 'oval',
+}
+SKIN_EYE_SHAPES = {'oval', 'rectangle', 'diamond', 'hexagon'}
 ROLE_DEFAULTS = {
     'admin': {
         'role_key': 'admin',
@@ -308,6 +313,8 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN searchable_by_player_id INTEGER DEFAULT 1')
         if 'false_report_count' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN false_report_count INTEGER DEFAULT 0')
+        if 'skin_json' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN skin_json TEXT')
         _assign_missing_player_ids(conn)
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
         conn.execute(
@@ -648,9 +655,28 @@ def validate_password(password):
     return True, ''
 
 
+def normalize_skin_config(value):
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            value = {}
+    if not isinstance(value, dict):
+        value = {}
+    skin = dict(DEFAULT_SKIN_CONFIG)
+    primary = str(value.get('primary_color') or value.get('primaryColor') or '').strip()
+    if re.fullmatch(r'#[0-9A-Fa-f]{6}', primary):
+        skin['primary_color'] = primary.upper()
+    eye_shape = str(value.get('eye_shape') or value.get('eyeShape') or '').strip().lower()
+    if eye_shape in SKIN_EYE_SHAPES:
+        skin['eye_shape'] = eye_shape
+    return skin
+
+
 def row_to_user(row):
     if row is None:
         return None
+    skin_raw = row['skin_json'] if 'skin_json' in row.keys() else None
     return {
         'id': row['id'],
         'username': row['username'],
@@ -669,6 +695,7 @@ def row_to_user(row):
         'ban_reason': row['ban_reason'] if 'ban_reason' in row.keys() else None,
         'banned_at': row['banned_at'] if 'banned_at' in row.keys() else None,
         'ban_until': row['ban_until'] if 'ban_until' in row.keys() else None,
+        'skin': normalize_skin_config(skin_raw),
     }
 
 
@@ -763,6 +790,25 @@ def change_user_password(user_id, old_password, new_password):
         conn.execute(
             'UPDATE users SET password_hash = ? WHERE id = ?',
             (generate_password_hash(str(new_password)), uid),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        return row_to_user(row), None
+
+
+def update_user_skin(user_id, skin_config):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    skin = normalize_skin_config(skin_config)
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            return None, '请先登录账号'
+        conn.execute(
+            'UPDATE users SET skin_json = ? WHERE id = ?',
+            (json.dumps(skin, ensure_ascii=False, separators=(',', ':')), uid),
         )
         conn.commit()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()

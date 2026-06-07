@@ -166,6 +166,76 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+const DEFAULT_ADMIN_SKIN = Object.freeze({ primary_color: '#FFE763', eye_shape: 'oval' });
+const ADMIN_SKIN_EYE_SHAPES = new Set(['oval', 'rectangle', 'diamond', 'hexagon']);
+const DEFAULT_ADMIN_SKIN_LOOK = Object.freeze({ x: 0.707, y: -0.707 });
+const ADMIN_SKIN_LOOK_OFFSET_X_PERCENT = 38;
+const ADMIN_SKIN_LOOK_OFFSET_Y_PERCENT = 56;
+
+function normalizeAdminSkin(raw) {
+  let data = raw;
+  if (typeof data === 'string') {
+    try { data = JSON.parse(data); } catch (_) { data = {}; }
+  }
+  if (!data || typeof data !== 'object') data = {};
+  const skin = { ...DEFAULT_ADMIN_SKIN };
+  const color = String(data.primary_color || data.primaryColor || '').trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) skin.primary_color = color.toUpperCase();
+  const eyeShape = String(data.eye_shape || data.eyeShape || '').trim().toLowerCase();
+  if (ADMIN_SKIN_EYE_SHAPES.has(eyeShape)) skin.eye_shape = eyeShape;
+  return skin;
+}
+
+function adminHexToRgb(hex) {
+  const text = String(hex || '').replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(text)) return { r: 255, g: 231, b: 99 };
+  return {
+    r: parseInt(text.slice(0, 2), 16),
+    g: parseInt(text.slice(2, 4), 16),
+    b: parseInt(text.slice(4, 6), 16),
+  };
+}
+
+function adminRgbToHex(rgb) {
+  return `#${[rgb.r, rgb.g, rgb.b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+}
+
+function deriveAdminSkinBorderColor(color) {
+  const rgb = adminHexToRgb(color);
+  return adminRgbToHex({ r: rgb.r * 0.81, g: rgb.g * 0.81, b: rgb.b * 0.81 });
+}
+
+function adminSkinLuminance(color) {
+  const { r, g, b } = adminHexToRgb(color);
+  const srgb = [r, g, b].map(v => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+}
+
+function adminSkinLookCssVars(rawLook = DEFAULT_ADMIN_SKIN_LOOK) {
+  const look = rawLook && typeof rawLook === 'object' ? rawLook : DEFAULT_ADMIN_SKIN_LOOK;
+  const x = Number.isFinite(Number(look.x)) ? Number(look.x) : DEFAULT_ADMIN_SKIN_LOOK.x;
+  const y = Number.isFinite(Number(look.y)) ? Number(look.y) : DEFAULT_ADMIN_SKIN_LOOK.y;
+  return `--skin-look-x:${(x * ADMIN_SKIN_LOOK_OFFSET_X_PERCENT).toFixed(1)}%;--skin-look-y:${(y * ADMIN_SKIN_LOOK_OFFSET_Y_PERCENT).toFixed(1)}%`;
+}
+
+function renderAdminSkinAvatar(skinInput) {
+  const skin = normalizeAdminSkin(skinInput);
+  const border = deriveAdminSkinBorderColor(skin.primary_color);
+  const inverted = adminSkinLuminance(skin.primary_color) < 0.22 ? ' is-inverted' : '';
+  const style = `--skin-main:${escapeHtml(skin.primary_color)};--skin-border:${escapeHtml(border)};${adminSkinLookCssVars()}`;
+  return `
+    <div class="admin-skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${inverted}" style="${style}" aria-hidden="true">
+      <div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>
+      <div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>
+      <svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">
+        <path d="M 20 18 C 36 32 64 32 80 18"></path>
+      </svg>
+    </div>`;
+}
+
 function gameChatChannelLabel(entry = {}) {
   const channel = entry.chat_channel || entry.channel || '';
   if (!channel || channel === 'public') return '';
@@ -618,7 +688,7 @@ function renderRegisteredUserCard(user) {
   return `
     <article class="registered-user-card ${expanded ? 'expanded' : ''}">
       <button class="registered-user-main" type="button" data-user-toggle="${escapeHtml(key)}">
-        <div class="user-avatar">${escapeHtml(String(user.username || '?').slice(0, 1).toUpperCase())}</div>
+        <div class="user-avatar">${renderAdminSkinAvatar(user.skin)}</div>
         <div class="user-main-text">
           <div class="user-title-row">
             <strong>${escapeHtml(user.username)}</strong>

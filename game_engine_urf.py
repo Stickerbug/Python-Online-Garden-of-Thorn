@@ -262,7 +262,7 @@ class GameEngineInfiniteFire(GameEngine):
         ps = self.players[player_id]
         opp_id = 1 - player_id
         opp = self.players[opp_id]
-        self._antenna_reveal[player_id] = None
+        self._antennae_reveal[player_id] = None
         self._run_v2_event_hooks('turn_start', {
             'source_player': player_id,
             'target_player': player_id,

@@ -51,8 +51,8 @@ class GameEngine2v2(GameEngine):
         self._game_over_defer_depth: int = 0
         self.negated_card: bool = False
         self._yggdrasil_check: bool = True
-        self._antenna_reveal: List[Optional[list]] = [None] * 4
-        self._antenna_reveal_targets: List[Optional[int]] = [None] * 4
+        self._antennae_reveal: List[Optional[list]] = [None] * 4
+        self._antennae_reveal_targets: List[Optional[int]] = [None] * 4
         self.opening_event_options: List[List[dict]] = [[], [], [], []]
         self.opening_event_picks: List[Optional[int]] = [None] * 4
         self.opening_event_sub_choices: List[Optional[dict]] = [None] * 4
@@ -176,8 +176,8 @@ class GameEngine2v2(GameEngine):
             ed['deck_count'] = len([c for c in self.players[eid].deck if c.def_id != ERROR_CARD_ID])
             ed['discard_count'] = len([c for c in self.players[eid].discard if c.def_id != ERROR_CARD_ID])
             ed['exile_count'] = len([c for c in self.players[eid].exile if c.def_id != ERROR_CARD_ID])
-            reveal_target = getattr(self, '_antenna_reveal_targets', [None] * self.num_players)[for_player]
-            if self._antenna_reveal[for_player] and reveal_target == eid:
+            reveal_target = getattr(self, '_antennae_reveal_targets', [None] * self.num_players)[for_player]
+            if self._antennae_reveal[for_player] and reveal_target == eid:
                 ed['revealed_hand'] = self._visible_card_dicts(self.players[eid].hand, for_player, eid)
             opp_data_list.append(ed)
 
@@ -229,7 +229,7 @@ class GameEngine2v2(GameEngine):
             'pending_v2_ui': self._public_v2_ui(for_player),
             'pending_ally_request': getattr(self, 'pending_ally_request', None),
             'opening_event_picks': self.opening_event_picks,
-            'antenna_reveal': self._antenna_reveal[for_player],
+            'antennae_reveal': self._antennae_reveal[for_player],
             'mode': '2v2',
         }
 
@@ -914,7 +914,7 @@ class GameEngine2v2(GameEngine):
 
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]
-        self._antenna_reveal[player_id] = None
+        self._antennae_reveal[player_id] = None
         self._reset_turn_damage_counters()
         self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
         if self.game_over or getattr(self, 'pending_v2_ui', None):
@@ -1022,10 +1022,10 @@ class GameEngine2v2(GameEngine):
         if not self._is_valid_player_id(target_id):
             return
         opp = self.players[target_id]
-        self._antenna_reveal[player_id] = [c.to_dict() for c in opp.hand]
-        if not hasattr(self, '_antenna_reveal_targets'):
-            self._antenna_reveal_targets = [None] * self.num_players
-        self._antenna_reveal_targets[player_id] = target_id
+        self._antennae_reveal[player_id] = [c.to_dict() for c in opp.hand]
+        if not hasattr(self, '_antennae_reveal_targets'):
+            self._antennae_reveal_targets = [None] * self.num_players
+        self._antennae_reveal_targets[player_id] = target_id
         self.log_msg(log or f"{self.pn(player_id)}查看了{self.pn(target_id)}的手牌")
 
     def resolve_choice(self, player_id: int, choice: dict) -> dict:
@@ -1363,7 +1363,7 @@ class GameEngine2v2(GameEngine):
 
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]
-        self._antenna_reveal[player_id] = None
+        self._antennae_reveal[player_id] = None
         self._reset_turn_damage_counters()
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
@@ -1500,9 +1500,9 @@ class GameEngine2v2(GameEngine):
 
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]
-        self._antenna_reveal[player_id] = None
-        if hasattr(self, '_antenna_reveal_targets'):
-            self._antenna_reveal_targets[player_id] = None
+        self._antennae_reveal[player_id] = None
+        if hasattr(self, '_antennae_reveal_targets'):
+            self._antennae_reveal_targets[player_id] = None
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
         ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0

@@ -1236,7 +1236,7 @@ class GameEngine:
         self._game_over_defer_depth: int = 0
         self.negated_card: bool = False
         self._yggdrasil_check: bool = True
-        self._antenna_reveal: List[Optional[list]] = [None, None]
+        self._antennae_reveal: List[Optional[list]] = [None, None]
         self.opening_event_options: List[List[dict]] = [[], []]
         self.opening_event_picks: List[Optional[int]] = [None, None]
         self.opening_event_sub_choices: List[Optional[dict]] = [None, None]
@@ -1264,9 +1264,9 @@ class GameEngine:
         self.log.append(text)
 
     def _clear_hand_reveal_for_player(self, player_id: int):
-        if hasattr(self, '_antenna_reveal') and 0 <= player_id < len(self._antenna_reveal):
-            self._antenna_reveal[player_id] = None
-        reveal_targets = getattr(self, '_antenna_reveal_targets', None)
+        if hasattr(self, '_antennae_reveal') and 0 <= player_id < len(self._antennae_reveal):
+            self._antennae_reveal[player_id] = None
+        reveal_targets = getattr(self, '_antennae_reveal_targets', None)
         if reveal_targets is not None and 0 <= player_id < len(reveal_targets):
             reveal_targets[player_id] = None
 
@@ -1642,7 +1642,7 @@ class GameEngine:
                     opp_data['discard'] = self._visible_card_dicts(self.players[opponent].discard, for_player, opponent)
                 if ct == 'choose_from_exile' or zone == 'exile':
                     opp_data['exile'] = self._visible_card_dicts(self.players[opponent].exile, for_player, opponent)
-        if self._antenna_reveal[for_player]:
+        if self._antennae_reveal[for_player]:
             opp_data['revealed_hand'] = self._visible_card_dicts(self.players[opponent].hand, for_player, opponent)
         log_start = 0
         self._mark_log_visible()
@@ -1661,7 +1661,7 @@ class GameEngine:
             'pending_choice': self.pending_choice,
             'pending_v2_ui': self._public_v2_ui(for_player),
             'opening_event_picks': self.opening_event_picks,
-            'antenna_reveal': self._antenna_reveal[for_player],
+            'antennae_reveal': self._antennae_reveal[for_player],
         }
 
     def start_draft(self):
@@ -1993,7 +1993,7 @@ class GameEngine:
     def _apply_turn_start_effects(self, player_id: int):
         ps = self.players[player_id]
         opp = self.players[1 - player_id]
-        self._antenna_reveal[player_id] = None
+        self._antennae_reveal[player_id] = None
         self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
@@ -2912,7 +2912,7 @@ class GameEngine:
     def _atomic_reveal_enemy_hand(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         opp = self.players[target_id]
-        self._antenna_reveal[player_id] = [c.to_dict() for c in opp.hand]
+        self._antennae_reveal[player_id] = [c.to_dict() for c in opp.hand]
         self.log_msg(log or f"{self.pn(player_id)}查看了{self.pn(target_id)}的手牌")
 
     def _atomic_steal_enemy_card(self, player_id, card, params, log, choice, context):
@@ -6104,7 +6104,7 @@ class GameEngine:
         ps = self.players[player_id]
         opp_id = 1 - player_id
         opp = self.players[opp_id]
-        self._antenna_reveal[player_id] = None
+        self._antennae_reveal[player_id] = None
         self._reset_turn_damage_counters()
         self._run_v2_event_hooks('turn_start', {
             'source_player': player_id,

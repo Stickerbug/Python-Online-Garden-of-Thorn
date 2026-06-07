@@ -381,10 +381,11 @@ body {
   margin-top: 16px;
 }
 
-.account-top-btn {
+.account-top-btn,
+.friends-top-btn,
+.skin-top-btn {
   position: fixed;
   top: 14px;
-  left: 14px;
   z-index: 2500;
   padding: 9px 16px;
   border-radius: var(--radius-md);
@@ -398,21 +399,20 @@ body {
   cursor: pointer;
 }
 
+.account-top-btn {
+  left: 14px;
+}
+
 .friends-top-btn {
-  position: fixed;
-  top: 14px;
   left: 92px;
-  z-index: 2500;
-  padding: 9px 16px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.86);
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 700;
-  font-family: var(--font-main);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
+}
+
+.skin-top-btn {
+  left: 164px;
+}
+
+.friends-top-btn.hidden + .skin-top-btn {
+  left: 92px;
 }
 
 .friends-top-btn.has-badge::after {
@@ -435,7 +435,8 @@ body {
 }
 
 .account-top-btn.hidden,
-.friends-top-btn.hidden {
+.friends-top-btn.hidden,
+.skin-top-btn.hidden {
   display: none;
 }
 
@@ -457,6 +458,148 @@ body {
 
 .account-popover.hidden {
   display: none;
+}
+
+.skin-editor-page {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 72px 18px 28px;
+}
+
+.skin-editor-panel {
+  width: min(760px, 94vw);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+  padding: 20px;
+}
+
+.skin-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.skin-editor-head h2 {
+  margin: 0;
+  font-size: 24px;
+  color: var(--text-primary);
+}
+
+.skin-editor-body {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(280px, 1.15fr);
+  gap: 22px;
+  align-items: center;
+}
+
+.skin-preview-column {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+
+.skin-preview-avatar {
+  width: min(260px, 56vw);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+
+.skin-sync-note {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.skin-controls-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.skin-control-row {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.skin-control-row input[type="color"] {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  padding: 4px;
+  cursor: pointer;
+}
+
+.skin-control-row select {
+  min-height: 42px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 0 10px;
+  font-family: var(--font-main);
+  font-weight: 700;
+}
+
+.skin-placeholder-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.skin-placeholder-row .btn {
+  justify-content: center;
+  opacity: 0.65;
+}
+
+.skin-action-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 700px) {
+  .skin-editor-body {
+    grid-template-columns: 1fr;
+  }
+
+  .skin-control-row {
+    grid-template-columns: 1fr;
+  }
+
+  .skin-placeholder-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mini-skin-avatar {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+}
+
+.mini-skin-avatar:empty {
+  display: none;
+}
+
+.mini-skin-avatar .skin-avatar {
+  width: 100%;
+  --skin-border-width: 2px;
+  border-width: 2px;
 }
 
 .friends-popover {
@@ -4857,6 +5000,12 @@ body {
   color: #455A64;
   background: rgba(69, 90, 100, 0.12);
   border-color: rgba(69, 90, 100, 0.28);
+}
+
+.card-flag.sticky {
+  color: #9B59B6;
+  background: rgba(155, 89, 182, 0.14);
+  border-color: rgba(155, 89, 182, 0.3);
 }
 
 .card-flag.fusion-layer {
@@ -10237,12 +10386,26 @@ html[data-ui-style="minimal"] .btn-end-turn {
   box-shadow: 0 20px 44px rgba(0,0,0,0.34), inset 0 0 0 8px rgba(10,14,24,0.74);
 }
 
+.player-avatar.has-skin {
+  background: transparent;
+  box-shadow: none;
+}
+
+.player-avatar.has-skin .skin-avatar {
+  width: 100%;
+}
+
 .player-avatar::before {
   content: "";
   position: absolute;
   inset: -8px;
   border-radius: inherit;
   border: 2px solid rgba(255,255,255,0.16);
+}
+
+.player-avatar.has-skin::before {
+  inset: -6px;
+  border-color: transparent;
 }
 
 .player-avatar::after {
@@ -10320,6 +10483,172 @@ html[data-ui-style="minimal"] .btn-end-turn {
   color: #172033;
   font-size: clamp(26px, 5vw, 48px);
   font-weight: 900;
+}
+
+.skin-avatar {
+  --skin-main: #FFE763;
+  --skin-border: #CFBB50;
+  --skin-feature: #111;
+  --skin-pupil: #fff;
+  --skin-look-x: 0%;
+  --skin-look-y: 0%;
+  --skin-border-width: clamp(6px, 1.25vw, 11px);
+  position: relative;
+  width: 82%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--skin-main);
+  border: var(--skin-border-width) solid var(--skin-border);
+  overflow: hidden;
+  box-shadow: inset 0 4px 12px rgba(255,255,255,0.18), inset 0 -8px 20px rgba(0,0,0,0.08);
+  transition: background 3000ms ease, border-color 3000ms ease, box-shadow 3000ms ease, filter 3000ms ease;
+}
+
+.skin-avatar.is-inverted {
+  --skin-feature: #fff;
+  --skin-pupil: #111;
+}
+
+.skin-avatar::before,
+.skin-avatar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 3000ms ease;
+}
+
+.skin-avatar::before {
+  z-index: 0;
+}
+
+.skin-avatar::after {
+  z-index: 2;
+  padding: var(--skin-border-width);
+  border-radius: inherit;
+  background: transparent;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+.skin-avatar.skin-hit-poison {
+  --skin-main: #D8B4F0;
+  --skin-border: #A569BD;
+  background: var(--skin-main);
+  border-color: var(--skin-border);
+  box-shadow: inset 0 4px 12px rgba(255,255,255,0.18), inset 0 -8px 20px rgba(0,0,0,0.08);
+}
+
+.skin-avatar.skin-hit-fire {
+  --skin-main: #F7B267;
+  --skin-border: #E67E22;
+  background: var(--skin-main);
+  border-color: var(--skin-border);
+  box-shadow: inset 0 4px 12px rgba(255,255,255,0.18), inset 0 -8px 20px rgba(0,0,0,0.08);
+}
+
+.skin-eye {
+  position: absolute;
+  z-index: 1;
+  top: 32%;
+  width: 10%;
+  height: 20%;
+  background: var(--skin-feature);
+  overflow: hidden;
+  z-index: 1;
+}
+
+.skin-eye-left {
+  left: 33%;
+}
+
+.skin-eye-right {
+  right: 33%;
+}
+
+.skin-eye-shape-oval .skin-eye {
+  border-radius: 50% / 50%;
+}
+
+.skin-eye-shape-oval .skin-pupil {
+  border-radius: 50% / 50%;
+}
+
+.skin-eye-shape-rectangle .skin-eye {
+  border-radius: 2px;
+}
+
+.skin-eye-shape-rectangle .skin-pupil {
+  border-radius: 1px;
+}
+
+.skin-eye-shape-diamond .skin-eye {
+  top: 31%;
+  width: 12%;
+  height: 22%;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.skin-eye-shape-diamond .skin-eye-left {
+  left: 32%;
+}
+
+.skin-eye-shape-diamond .skin-eye-right {
+  right: 32%;
+}
+
+.skin-eye-shape-diamond .skin-pupil {
+  width: 62%;
+  height: 62%;
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.skin-eye-shape-hexagon .skin-eye {
+  clip-path: polygon(22% 0, 78% 0, 100% 50%, 78% 100%, 22% 100%, 0 50%);
+}
+
+.skin-eye-shape-hexagon .skin-pupil {
+  width: 62%;
+  height: 62%;
+  border-radius: 0;
+  clip-path: polygon(22% 0, 78% 0, 100% 50%, 78% 100%, 22% 100%, 0 50%);
+}
+
+.skin-pupil {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 84%;
+  height: 54%;
+  border-radius: 50%;
+  background: var(--skin-pupil);
+  transform: translate(calc(-50% + var(--skin-look-x)), calc(-50% + var(--skin-look-y)));
+  transition: transform 300ms cubic-bezier(.22, .8, .24, 1);
+  will-change: transform;
+}
+
+.skin-mouth {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 63%;
+  width: 38%;
+  height: 20%;
+  transform: translateX(-50%);
+  z-index: 1;
+  overflow: visible;
+}
+
+.skin-mouth-line {
+  fill: none;
+  stroke: var(--skin-feature);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 @keyframes classicAvatarPulse {
