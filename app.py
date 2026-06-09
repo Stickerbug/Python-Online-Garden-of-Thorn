@@ -2453,6 +2453,8 @@ def register_v2_loadout_cards(v2_loadout):
             v2_mod_id=str(resource.get('_mod_id') or ''),
             image=str(resource.get('image') or ''),
             image_url=str(resource.get('image_url') or resource.get('image') or ''),
+            damage=_v2_int(resource.get('damage', 0), 0),
+            hits=_v2_int(resource.get('hits', 1), 1),
         )
         CARD_DEFS[runtime_id] = card_def
         registered.append(runtime_id)
@@ -8572,7 +8574,7 @@ def on_rematch(data=None):
                             'total': len(room.player_sids),
                         }, room=other_sid)
             if len(room._rematch_votes) == len(room.player_sids):
-                print("[server] debug")
+                print("")
                 room._rematch_votes = set()
                 room.pending_surrender_request = None
                 if room.mode == '2v2':

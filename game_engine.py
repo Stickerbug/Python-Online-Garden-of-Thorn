@@ -6010,13 +6010,11 @@ class GameEngine:
             # apply attack damage first (from card_def damage/hits attributes)
             card_damage = getattr(card.card_def, 'damage', 0)
             card_hits_val = max(1, getattr(card.card_def, 'hits', 1))
-            self.log_msg(f"[DEBUG] _apply_card_effect: card={card.name_cn}({card.def_id}) type={card.card_type} damage={card_damage} hits={card_hits_val} v2_events={getattr(card.card_def, 'v2_events', None)} effects={card.card_def.effects}")
             if card.card_type == 'thorn' and card_damage > 0:
                 method_name = f'_effect_{card.def_id.lower()}'
                 if not hasattr(self, method_name):
                     dmg = self._modified_attack_damage(card_damage, card)
                     is_precision = 'precision' in card.flags
-                    self.log_msg(f"[DEBUG] dealing attack damage: {dmg}x{card_hits_val} precision={is_precision}")
                     self.deal_attack_damage(1 - player_id, dmg, card_hits_val, is_precision=is_precision)
             if self._card_has_v2_event(card.card_def, 'on_play'):
                 self._run_v2_card_event(player_id, card, 'on_play', choice)

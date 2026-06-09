@@ -238,7 +238,7 @@ I18N.zh = { ...I18N.en,
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
     tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_sticky: '粘滞', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隐匿', tag_revealed: '被揭示',
-    gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '开局事件', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
+    gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '开局事件', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
     form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
@@ -3638,7 +3638,7 @@ function closeAbout() {
 
 function setGalleryMode(mode) {
     galleryMode = mode || 'cards';
-    ['cards', 'tags', 'events'].forEach(name => {
+    ['cards', 'tags', 'events', 'statuses'].forEach(name => {
         const tab = $(`gallery-tab-${name}`);
         if (tab) tab.classList.toggle('active', galleryMode === name);
     });
@@ -3778,6 +3778,10 @@ function renderCardGallery() {
         renderOpeningEventGallery(list, detail, q);
         return;
     }
+    if (galleryMode === 'statuses') {
+        renderStatusGallery(list, detail, q);
+        return;
+    }
     const ids = Object.keys(CARD_DEFS)
         .filter(id => id !== 'Error')
         .filter(id => {
@@ -3879,6 +3883,89 @@ function renderOpeningEventGallery(list, detail, q) {
         <h3>${getLocalizedEventText(ev, 'name') || '?'}</h3>
         <p><b>ID：</b>${ev.id}</p>
         <p>${getLocalizedEventText(ev, 'desc') || ''}</p>
+    </div>`;
+}
+
+function getAllStatusDefs() {
+    const result = new Map();
+    const termLib = getTermIntroLibrary();
+    const builtInList = [
+        { key: 'poison', label: UI.status_poison, desc: termLib.P ? termLib.P.desc : '', color: COLORS.poison },
+        { key: 'fire', label: UI.status_fire, desc: termLib.F ? termLib.F.desc : '', color: COLORS.fire },
+        { key: 'toxic', label: UI.status_toxic, desc: termLib.toxic ? termLib.toxic.desc : '', color: '#6C3483' },
+        { key: 'vulnerable', label: '易伤', desc: '受到的物理伤害增加50%。', color: COLORS.damage },
+        { key: 'triangle', label: UI.status_triangle || '三角形', desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
+        { key: 'dodge', label: UI.status_dodge, desc: '可响应攻击。普通攻击会被闪避，精准攻击被闪避时只造成一半伤害。', color: COLORS.guard },
+        { key: 'nazar', label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
+        { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
+        { key: 'invincible', label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
+        { key: 'stunned', label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
+        { key: 'attack_blocked', label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
+        { key: 'attack_only', label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
+        { key: 'untargetable', label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。', color: '#1A5276' },
+        { key: 'bandage', label: UI.status_bandage, desc: '绷带提供临时保护，回合开始时会按规则结束。', color: '#1E8449' },
+        { key: 'sponge', label: UI.status_sponge, desc: '海绵相关的临时状态，会影响下一次结算。', color: '#6C3483' },
+        { key: 'shovel', label: UI.status_shovel, desc: '铲子相关的临时状态，会限制或改变当前回合行动。', color: '#5D4037' },
+        { key: 'sluggish', label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
+        { key: 'overload', label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
+        { key: 'foresight', label: UI.status_foresight, desc: '每回合可以最多从抽牌堆替换层数张手牌。', color: '#2980B9' },
+        { key: 'fracture', label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
+        { key: 'heal_block', label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数-1。', color: '#E84393' },
+        { key: 'weakness', label: UI.status_weakness, desc: '造成物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
+        { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
+        { key: 'fragment', label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
+    ];
+    builtInList.forEach(s => result.set(s.key, { ...s, source: 'vanilla' }));
+    if (CUSTOM_STATUS_DEFS && typeof CUSTOM_STATUS_DEFS === 'object') {
+        Object.entries(CUSTOM_STATUS_DEFS).forEach(([id, def]) => {
+            const existing = result.get(id);
+            const label = getRegistryText(def, 'name', id);
+            const desc = getRegistryText(def, 'description', '');
+            const color = safeRegistryColor(def.color, existing ? existing.color : '#1F618D');
+            const icon = def.icon || '';
+            result.set(id, {
+                key: id,
+                label: icon ? `${icon} ${label}` : label,
+                desc: desc || (existing ? existing.desc : ''),
+                color,
+                source: def.v2_mod_id || def.source_mod || 'mod',
+                customDef: def,
+            });
+        });
+    }
+    return result;
+}
+
+function renderStatusGallery(list, detail, q) {
+    const allStatuses = getAllStatusDefs();
+    const statuses = [...allStatuses.values()].filter(s => {
+        const text = `${s.key} ${s.label} ${s.desc}`.toLowerCase();
+        return !q || text.includes(q);
+    });
+    const statusIds = statuses.map(s => `status:${s.key}`);
+    if (!statusIds.includes(gallerySelectedId)) gallerySelectedId = statusIds[0] || null;
+    list.innerHTML = '';
+    statuses.forEach(s => {
+        const id = `status:${s.key}`;
+        const row = document.createElement('div');
+        row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
+        const sourceTag = s.source === 'vanilla' ? '' : `<span class="gallery-row-meta" style="color:${s.color}">${s.source}</span>`;
+        row.innerHTML = `<div class="gallery-row-title" style="color:${s.color}">${escapeHtml(s.label)}</div>${sourceTag}`;
+        row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
+        list.appendChild(row);
+    });
+    const selectedKey = gallerySelectedId ? String(gallerySelectedId).replace('status:', '') : null;
+    const s = allStatuses.get(selectedKey);
+    if (!s) {
+        detail.innerHTML = `<p>${UI.gallery_no_items}</p>`;
+        return;
+    }
+    gallerySelectedId = `status:${s.key}`;
+    detail.innerHTML = `<div class="gallery-simple-detail">
+        <h3 style="color:${s.color}">${escapeHtml(s.label)}</h3>
+        <p><b>ID：</b>${s.key}</p>
+        <p><b>来源：</b>${s.source === 'vanilla' ? '原版' : s.source}</p>
+        <p>${escapeHtml(s.desc)}</p>
     </div>`;
 }
 
@@ -6143,6 +6230,7 @@ function getStatusIntroItem(statusInfo) {
         poison: { label: UI.status_poison, desc: getTermIntroLibrary().P.desc, color: COLORS.poison },
         fire: { label: UI.status_fire, desc: getTermIntroLibrary().F.desc, color: COLORS.fire },
         toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc, color: '#6C3483' },
+        vulnerable: { label: '易伤', desc: '受到的物理伤害增加50%。', color: COLORS.damage },
         triangle: { label: UI.status_triangle, desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
         dodge: { label: UI.status_dodge, desc: '可响应攻击。普通攻击会被闪避，精准攻击被闪避时只造成一半伤害。', color: COLORS.guard },
         nazar: { label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
@@ -16033,6 +16121,7 @@ async function init() {
     if ($('gallery-tab-cards')) $('gallery-tab-cards').addEventListener('click', () => { setGalleryMode('cards'); gallerySelectedId = null; renderCardGallery(); });
     if ($('gallery-tab-tags')) $('gallery-tab-tags').addEventListener('click', () => { setGalleryMode('tags'); gallerySelectedId = null; renderCardGallery(); });
     if ($('gallery-tab-events')) $('gallery-tab-events').addEventListener('click', () => { setGalleryMode('events'); gallerySelectedId = null; renderCardGallery(); });
+    if ($('gallery-tab-statuses')) $('gallery-tab-statuses').addEventListener('click', () => { setGalleryMode('statuses'); gallerySelectedId = null; renderCardGallery(); });
     if ($('btn-open-rules')) $('btn-open-rules').addEventListener('click', () => openAbout());
     if ($('btn-gallery-back')) $('btn-gallery-back').addEventListener('click', () => {
         if (galleryReturnToRules) {

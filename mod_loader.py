@@ -271,7 +271,6 @@ class ModCard:
         self.trigger_effects = data.get('trigger_effects', [])
         self.damage = data.get('damage', 0)
         self.hits = data.get('hits', 1)
-        print(f"[DEBUG ModCard] id={self.id} damage={self.damage} hits={self.hits} raw_damage={data.get('damage')} raw_hits={data.get('hits')}")
         self.heal = data.get('heal', 0)
         self.draw = data.get('draw', 0)
         self.gain_e = data.get('gain_e', 0)
@@ -320,7 +319,6 @@ class ModCard:
 
     def to_card_def(self):
         from cards import CardDef
-        print(f"[DEBUG to_card_def] id={self.id} damage={self.damage} hits={self.hits}")
         return CardDef(
             id=self.id,
             name_en=self.name_en,
