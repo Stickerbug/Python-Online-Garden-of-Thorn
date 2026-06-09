@@ -9,6 +9,7 @@ import posixpath
 import zipfile
 from typing import Dict, List, Optional, Any
 from mod_validator_v2 import validate_mod_v2
+from cards import normalize_card_flag, normalize_card_flags
 
 def _get_base_dir():
     if getattr(sys, 'frozen', False):
@@ -262,7 +263,7 @@ class ModCard:
         self.quality = data.get('quality', 'Common')
         self.description = data.get('description', '')
         self.effect_text = data.get('effect_text', '')
-        self.flags = set(data.get('flags', []))
+        self.flags = normalize_card_flags(data.get('flags', []))
         self.effects = data.get('effects', [])
         self.scripts = data.get('scripts', {}) if isinstance(data.get('scripts', {}), dict) else {}
         self.trigger_cost_e = data.get('trigger_cost_e', -1)
@@ -270,6 +271,7 @@ class ModCard:
         self.trigger_effects = data.get('trigger_effects', [])
         self.damage = data.get('damage', 0)
         self.hits = data.get('hits', 1)
+        print(f"[DEBUG ModCard] id={self.id} damage={self.damage} hits={self.hits} raw_damage={data.get('damage')} raw_hits={data.get('hits')}")
         self.heal = data.get('heal', 0)
         self.draw = data.get('draw', 0)
         self.gain_e = data.get('gain_e', 0)
@@ -286,6 +288,8 @@ class ModCard:
         self.v2_mod_id = data.get('v2_mod_id', '')
         self.image = data.get('image', '')
         self.image_url = data.get('image_url', self.image)
+        self.copy_count = max(0, int(data.get('copy_count', 0)))
+        self.swift_value = max(0, int(data.get('swift_value', 0)))
 
     def to_dict(self) -> dict:
         return {
@@ -310,10 +314,13 @@ class ModCard:
             'v2_mod_id': self.v2_mod_id,
             'image': self.image,
             'image_url': self.image_url,
+            'copy_count': self.copy_count,
+            'swift_value': self.swift_value,
         }
 
     def to_card_def(self):
         from cards import CardDef
+        print(f"[DEBUG to_card_def] id={self.id} damage={self.damage} hits={self.hits}")
         return CardDef(
             id=self.id,
             name_en=self.name_en,
@@ -338,6 +345,10 @@ class ModCard:
             v2_mod_id=self.v2_mod_id,
             image=self.image,
             image_url=self.image_url,
+            copy_count=self.copy_count,
+            swift_value=self.swift_value,
+            damage=self.damage,
+            hits=self.hits,
         )
 
 
@@ -520,12 +531,12 @@ def _v2_card_to_legacy_data(resource: dict) -> dict:
         card['cost_e'] = cost.get('e', 0)
     if 'cost_m' not in card:
         card['cost_m'] = cost.get('m', 0)
-    flags = set(card.get('flags', []) if isinstance(card.get('flags', []), list) else [])
+    flags = normalize_card_flags(card.get('flags', []) if isinstance(card.get('flags', []), list) else [])
     for tag in card.get('tags', []) if isinstance(card.get('tags', []), list) else []:
         tag_text = str(tag)
         if tag_text.startswith('gtn:'):
             tag_text = tag_text.split(':', 1)[1]
-        flags.add(tag_text)
+        flags.add(normalize_card_flag(tag_text))
     card['flags'] = list(flags)
     events = card.get('events') if isinstance(card.get('events'), dict) else {}
     card['v2_events'] = copy.deepcopy(events)

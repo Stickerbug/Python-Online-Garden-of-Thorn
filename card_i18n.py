@@ -106,7 +106,7 @@ CARD_I18N = {
     'Battery': {
         'name': _t('电池', 'Battery', 'Batterie', 'Bateria', 'Батарея', '電池'),
         'desc': _t('受击时会漏电。', 'Leaks electricity when hit.', 'Fuit de l’électricité lorsqu’elle est touchée.', 'Vaza eletricidade quando atingida.', 'При ударе даёт утечку тока.', '攻撃されると漏電する。'),
-        'effect': _t('受到物理伤害时对攻击者造成3D', 'When taking physical damage, deal 3D to the attacker', 'Quand vous subissez des dégâts physiques, inflige 3D à l’attaquant', 'Ao sofrer dano físico, causa 3D ao atacante', 'При получении физического урона наносит атакующему 3D', '物理ダメージを受けた時、攻撃者に3Dを与える'),
+        'effect': _t('受到物理伤害时，对攻击者造成3电伤', 'When taking physical damage, deal 3 electric damage to the attacker', 'Quand vous subissez des dégâts physiques, inflige 3 dégâts électriques à l’attaquant', 'Ao sofrer dano físico, causa 3 de dano elétrico ao atacante', 'При получении физического урона наносит атакующему 3 электрического урона', '物理ダメージを受けた時、攻撃者に3電撃ダメージを与える'),
     },
     'Bubble': {
         'name': _t('泡泡', 'Bubble', 'Bulle', 'Bolha', 'Пузырь', '泡'),
@@ -185,8 +185,8 @@ CARD_I18N = {
     },
     'Pincer': {
         'name': _t('螫针', 'Pincer', 'Pince', 'Pinça', 'Клешня', '毒針'),
-        'desc': _t('毒素可以减缓对手行动，但小心别划伤自己。', 'Toxin can slow the opponent, but be careful not to scratch yourself.', 'La toxine peut ralentir l’adversaire, mais attention à ne pas vous égratigner.', 'A toxina pode atrasar o oponente, mas cuidado para não se arranhar.', 'Токсин замедляет противника, но не поцарапайтесь сами.', '毒素は相手の行動を遅らせるが、自分を傷つけないよう注意。'),
-        'effect': _t('目标回合开始时E回复-1', 'At the target’s turn start, E recovery -1', 'Au début du tour de la cible, récupération de E -1', 'No início do turno do alvo, recuperação de E -1', 'В начале хода цели восстановление E -1', '対象のターン開始時、E回復-1'),
+        'desc': _t('毒素可以减缓对手行动，但小心别划伤自己。', 'Toxin can slow the opponent, but be careful not to scratch yourself.', 'La toxine peut ralentir l\'adversaire, mais attention à ne pas vous égratigner.', 'A toxina pode atrasar o oponente, mas cuidado para não se arranhar.', 'Токсин замедляет противника, но не поцарапайтесь сами.', '毒素は相手の行動を遅らせるが、自分を傷つけないよう注意。'),
+        'effect': _t('装备时，每回合对目标施加1层超载', 'When equipped, apply 1 Overload to the target each turn', 'Quand équipé, applique 1 Surcharge à la cible chaque tour', 'Quando equipado, aplica 1 Sobrecarga ao alvo a cada turno', 'При снаряжении накладывает на цель 1 Перегрузку каждый ход', '装備時、毎ターン対象に過負荷1を付与'),
     },
     'Cancer': {
         'name': _t('癌细胞', 'Cancer', 'Cellule cancéreuse', 'Célula cancerosa', 'Раковая клетка', 'がん細胞'),
@@ -201,7 +201,7 @@ CARD_I18N = {
     'Corruption': {
         'name': _t('腐化', 'Corruption', 'Corruption', 'Corrupção', 'Порча', '腐化'),
         'desc': _t('伤敌一千，自损八百。', 'Hurt the enemy badly, but hurt yourself too.', 'Blesser lourdement l’ennemi, au prix de vos propres blessures.', 'Fere muito o inimigo, mas também fere você.', 'Сильно ранит врага, но и вам достаётся.', '敵を大きく傷つけるが、自分も傷つく。'),
-        'effect': _t('自下个敌方回合开始，全场所有伤害翻倍', 'Starting from the next enemy turn, all damage on the field is doubled', 'À partir du prochain tour ennemi, tous les dégâts sur le terrain sont doublés', 'A partir do próximo turno inimigo, todo dano no campo é dobrado', 'Со следующего хода врага весь урон на поле удваивается', '次の敵ターンから、場の全てのダメージが2倍になる'),
+        'effect': _t('自下个敌方回合开始，全场所有伤害变为1.5倍（向上取整）', 'Starting from the next enemy turn, all damage on the field is multiplied by 1.5 (rounded up)', 'À partir du prochain tour ennemi, tous les dégâts du terrain sont multipliés par 1,5 (arrondis au supérieur)', 'A partir do próximo turno inimigo, todo dano no campo é multiplicado por 1,5 (arredondado para cima)', 'Со следующего хода врага весь урон на поле умножается на 1,5 (округление вверх)', '次の敵ターンから、場の全てのダメージは1.5倍（切り上げ）になる'),
     },
     'Chilli': {
         'name': _t('辣椒', 'Chilli', 'Piment', 'Pimenta', 'Чили', '唐辛子'),
@@ -281,13 +281,13 @@ def card_text(card_id, fallback):
         out = dict(fallback)
         name = _fill({
             'zh': fallback.get('name_cn') or fallback.get('name_en') or card_id_to_english(card_id),
-            'en': card_id_to_english(card_id),
+            'en': fallback.get('name_en') or card_id_to_english(card_id),
         })
         out['name_en'] = name['en']
         out['name_i18n'] = name
         return out
     name = _fill(data.get('name', {}))
-    name['en'] = card_id_to_english(card_id)
+    name['en'] = fallback.get('name_en') or name.get('en') or card_id_to_english(card_id)
     return {
         'name_i18n': name,
         'description_i18n': _fill(data.get('desc', {})),
@@ -327,4 +327,5 @@ def apply_card_i18n_defaults(card_defs):
         if trigger.get('zh'):
             card.trigger_effect_text = trigger['zh']
     for card_id, card in card_defs.items():
-        card.name_en = card_id_to_english(card_id)
+        if not getattr(card, 'name_en', ''):
+            card.name_en = card_id_to_english(card_id)

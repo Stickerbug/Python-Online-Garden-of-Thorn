@@ -18,14 +18,28 @@ _MAGIC_SOURCE_TEXT = {
     "poison",
     "fire",
     "burn",
+    "battery",
     "\u4e2d\u6bd2",
     "\u707c\u70e7",
+    "\u7535\u6c60",
+    "\u96fb\u6c60",
+    "\u7535\u6c60\u7535\u51fb",
+    "\u96fb\u6c60\u96fb\u64ca",
     DAMAGE_TAG_POISON,
     DAMAGE_TAG_FIRE,
+    DAMAGE_TAG_BATTERY,
 }
 
 _FIRE_SOURCE_TEXT = {"fire", "burn", "\u707c\u70e7", DAMAGE_TAG_FIRE}
 _POISON_SOURCE_TEXT = {"poison", "\u4e2d\u6bd2", DAMAGE_TAG_POISON}
+_BATTERY_SOURCE_TEXT = {
+    "battery",
+    "\u7535\u6c60",
+    "\u96fb\u6c60",
+    "\u7535\u6c60\u7535\u51fb",
+    "\u96fb\u6c60\u96fb\u64ca",
+    DAMAGE_TAG_BATTERY,
+}
 
 
 def normalize_damage_type(value: str | None) -> str:
@@ -56,6 +70,8 @@ def status_damage_tag(source: str = "", damage_tag: str = "") -> str:
         return DAMAGE_TAG_FIRE
     if lowered.intersection(_POISON_SOURCE_TEXT) or values.intersection(_POISON_SOURCE_TEXT):
         return DAMAGE_TAG_POISON
+    if lowered.intersection(_BATTERY_SOURCE_TEXT) or values.intersection(_BATTERY_SOURCE_TEXT):
+        return DAMAGE_TAG_BATTERY
     return DAMAGE_TAG_MAGIC
 
 

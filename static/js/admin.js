@@ -3,6 +3,7 @@ const $ = (id) => document.getElementById(id);
 let adminState = null;
 let refreshTimer = null;
 let registeredRefreshTimer = null;
+let activeAdminTab = 'gui';
 let commandHistory = [];
 let historyIndex = 0;
 let completionState = null;
@@ -14,11 +15,22 @@ const registeredUserDetails = new Map();
 let replayState = { items: [], offset: 0, hasMore: false, loading: false };
 let replayTimeline = [];
 let replayFrameIndex = 0;
+let replayPerspectiveIndex = 0;
 let replaySpeed = 1;
 let replayTimer = null;
 let replayData = null;
+let replayCurrentId = null;
+let replayTotalFrames = 0;
+const replayChunkPromises = new Map();
+const REPLAY_CHUNK_SIZE = 80;
 let gameChatTimer = null;
 let gameChatSignature = '';
+let lastStatusErrorSignature = '';
+let lastStatusErrorAt = 0;
+let draftStatsState = { items: [], total: 0 };
+let reportState = { items: [], total: 0, selectedId: null };
+const ADMIN_STATUS_REFRESH_MS = 5000;
+const ADMIN_GAME_CHAT_REFRESH_MS = 6000;
 
 const STATUS_LABELS = {
   lobby: '大厅',
@@ -63,7 +75,14 @@ async function api(path, options = {}) {
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    data = { success: false, error: text || response.statusText };
+    const htmlLike = /^\s*</.test(text || '');
+    const nginxLimited = response.status === 503 && /limiting requests|Service Temporarily Unavailable|nginx/i.test(text || '');
+    data = {
+      success: false,
+      error: nginxLimited
+        ? '请求被 nginx 限流或后端暂不可用，请稍后刷新。'
+        : (htmlLike ? response.statusText : (text || response.statusText)),
+    };
   }
   if (!response.ok) {
     const error = new Error(data.error || response.statusText);
@@ -147,6 +166,76 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+const DEFAULT_ADMIN_SKIN = Object.freeze({ primary_color: '#FFE763', eye_shape: 'oval' });
+const ADMIN_SKIN_EYE_SHAPES = new Set(['oval', 'rectangle', 'diamond', 'hexagon']);
+const DEFAULT_ADMIN_SKIN_LOOK = Object.freeze({ x: 0.707, y: -0.707 });
+const ADMIN_SKIN_LOOK_OFFSET_X_PERCENT = 38;
+const ADMIN_SKIN_LOOK_OFFSET_Y_PERCENT = 56;
+
+function normalizeAdminSkin(raw) {
+  let data = raw;
+  if (typeof data === 'string') {
+    try { data = JSON.parse(data); } catch (_) { data = {}; }
+  }
+  if (!data || typeof data !== 'object') data = {};
+  const skin = { ...DEFAULT_ADMIN_SKIN };
+  const color = String(data.primary_color || data.primaryColor || '').trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) skin.primary_color = color.toUpperCase();
+  const eyeShape = String(data.eye_shape || data.eyeShape || '').trim().toLowerCase();
+  if (ADMIN_SKIN_EYE_SHAPES.has(eyeShape)) skin.eye_shape = eyeShape;
+  return skin;
+}
+
+function adminHexToRgb(hex) {
+  const text = String(hex || '').replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(text)) return { r: 255, g: 231, b: 99 };
+  return {
+    r: parseInt(text.slice(0, 2), 16),
+    g: parseInt(text.slice(2, 4), 16),
+    b: parseInt(text.slice(4, 6), 16),
+  };
+}
+
+function adminRgbToHex(rgb) {
+  return `#${[rgb.r, rgb.g, rgb.b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+}
+
+function deriveAdminSkinBorderColor(color) {
+  const rgb = adminHexToRgb(color);
+  return adminRgbToHex({ r: rgb.r * 0.81, g: rgb.g * 0.81, b: rgb.b * 0.81 });
+}
+
+function adminSkinLuminance(color) {
+  const { r, g, b } = adminHexToRgb(color);
+  const srgb = [r, g, b].map(v => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+}
+
+function adminSkinLookCssVars(rawLook = DEFAULT_ADMIN_SKIN_LOOK) {
+  const look = rawLook && typeof rawLook === 'object' ? rawLook : DEFAULT_ADMIN_SKIN_LOOK;
+  const x = Number.isFinite(Number(look.x)) ? Number(look.x) : DEFAULT_ADMIN_SKIN_LOOK.x;
+  const y = Number.isFinite(Number(look.y)) ? Number(look.y) : DEFAULT_ADMIN_SKIN_LOOK.y;
+  return `--skin-look-x:${(x * ADMIN_SKIN_LOOK_OFFSET_X_PERCENT).toFixed(1)}%;--skin-look-y:${(y * ADMIN_SKIN_LOOK_OFFSET_Y_PERCENT).toFixed(1)}%`;
+}
+
+function renderAdminSkinAvatar(skinInput) {
+  const skin = normalizeAdminSkin(skinInput);
+  const border = deriveAdminSkinBorderColor(skin.primary_color);
+  const inverted = adminSkinLuminance(skin.primary_color) < 0.22 ? ' is-inverted' : '';
+  const style = `--skin-main:${escapeHtml(skin.primary_color)};--skin-border:${escapeHtml(border)};${adminSkinLookCssVars()}`;
+  return `
+    <div class="admin-skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${inverted}" style="${style}" aria-hidden="true">
+      <div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>
+      <div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>
+      <svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">
+        <path d="M 20 18 C 36 32 64 32 80 18"></path>
+      </svg>
+    </div>`;
+}
+
 function gameChatChannelLabel(entry = {}) {
   const channel = entry.chat_channel || entry.channel || '';
   if (!channel || channel === 'public') return '';
@@ -216,10 +305,14 @@ function renderGameChat(data = {}) {
   ]));
   if (signature === gameChatSignature) return;
   gameChatSignature = signature;
-  log.innerHTML = items.map(renderGameChatEntry).join('');
-  log.scrollTop = log.scrollHeight;
   const count = $('admin-game-chat-count');
   if (count) count.textContent = `${items.length}/${data.total_cached ?? items.length}`;
+  if (!items.length) {
+    log.innerHTML = '<div class="empty-detail">暂无游戏内聊天消息。</div>';
+    return;
+  }
+  log.innerHTML = items.map(renderGameChatEntry).join('');
+  log.scrollTop = log.scrollHeight;
 }
 
 async function loadGameChat() {
@@ -248,14 +341,23 @@ function showShell(authenticated) {
   $('admin-login').classList.toggle('hidden', authenticated);
   $('admin-shell').classList.toggle('hidden', !authenticated);
   if (authenticated) {
+    activeAdminTab = document.querySelector('.admin-tab.active')?.dataset.tab || 'gui';
     loadStatus();
-    loadRegisteredUsers();
-    loadStorageSummary();
-    resetAndLoadReplays();
-    loadGameChat();
-    if (!refreshTimer) refreshTimer = setInterval(loadStatus, 1000);
-    if (!registeredRefreshTimer) registeredRefreshTimer = setInterval(loadRegisteredUsers, 10000);
-    if (!gameChatTimer) gameChatTimer = setInterval(loadGameChat, 3000);
+    if (activeAdminTab === 'gui') loadRegisteredUsers();
+    if (activeAdminTab === 'draft-stats') loadDraftStats();
+    if (activeAdminTab === 'storage') loadStorageSummary();
+    if (activeAdminTab === 'replays') resetAndLoadReplays();
+    if (activeAdminTab === 'game-chat') loadGameChat();
+    if (!refreshTimer) {
+      refreshTimer = setInterval(() => {
+        if (['gui', 'events', 'moderation', 'terminal'].includes(activeAdminTab)) loadStatus();
+      }, ADMIN_STATUS_REFRESH_MS);
+    }
+    if (!gameChatTimer) {
+      gameChatTimer = setInterval(() => {
+        if (activeAdminTab === 'game-chat') loadGameChat();
+      }, ADMIN_GAME_CHAT_REFRESH_MS);
+    }
   } else {
     if (refreshTimer) {
       clearInterval(refreshTimer);
@@ -302,13 +404,21 @@ async function logout() {
 async function loadStatus() {
   try {
     adminState = await api('/api/admin/status');
+    lastStatusErrorSignature = '';
+    lastStatusErrorAt = 0;
     renderStatus(adminState);
   } catch (error) {
     if (error.status === 401) {
       showShell(false);
       return;
     }
-    appendTerminal('status', `状态加载失败：${error.message}`, true);
+    const message = `状态加载失败：${error.message}`;
+    const now = Date.now();
+    if (message !== lastStatusErrorSignature || now - lastStatusErrorAt > 30000) {
+      appendTerminal('status', message, true);
+      lastStatusErrorSignature = message;
+      lastStatusErrorAt = now;
+    }
   }
 }
 
@@ -346,6 +456,7 @@ function renderStatus(data) {
   renderPlayers(data.players || []);
   renderRooms(data.rooms || []);
   renderEvents(data.events || []);
+  renderSuspiciousEvents(data.suspicious_events || []);
   renderHistory(data.history || []);
 }
 
@@ -461,6 +572,68 @@ function renderPlayers(players) {
     </table>`;
 }
 
+function draftStatsQuery() {
+  const params = new URLSearchParams();
+  params.set('mode', $('draft-stats-mode')?.value || '');
+  params.set('sort', $('draft-stats-sort')?.value || 'pick_rate');
+  params.set('order', $('draft-stats-order')?.value || 'desc');
+  params.set('limit', '500');
+  return params;
+}
+
+async function loadDraftStats() {
+  const table = $('draft-stats-table');
+  if (!table) return;
+  try {
+    if (!draftStatsState.items.length) {
+      table.innerHTML = '<div class="log-item">正在读取抽牌统计。</div>';
+    }
+    draftStatsState = await api(`/api/admin/draft-stats?${draftStatsQuery().toString()}`);
+    renderDraftStats(draftStatsState);
+  } catch (error) {
+    table.innerHTML = `<div class="log-item error">抽牌统计加载失败：${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function cardTypeLabel(type) {
+  if (type === 'thorn') return 'Thorn';
+  if (type === 'bloom') return 'Bloom';
+  if (type === 'guard') return 'Guard';
+  if (type === 'root') return 'Root';
+  return type || '-';
+}
+
+function renderDraftStats(data) {
+  const items = data.items || [];
+  const count = $('draft-stats-count');
+  if (count) count.textContent = `${items.length}/${data.total || 0}`;
+  const table = $('draft-stats-table');
+  if (!table) return;
+  if (!items.length) {
+    table.innerHTML = '<div class="log-item">暂无抽牌统计。统计会在玩家完成选牌选择后写入。</div>';
+    return;
+  }
+  table.innerHTML = `
+    <table>
+      <thead><tr><th>模式</th><th>卡牌</th><th>类型</th><th>抽取</th><th>刷出</th><th>抽取率</th><th>最近更新</th></tr></thead>
+      <tbody>
+        ${items.map((item) => `
+          <tr>
+            <td>${escapeHtml(item.mode || '-')}</td>
+            <td>
+              <strong>${escapeHtml(item.name_cn || item.card_id || '-')}</strong>
+              <span class="muted"> ${escapeHtml(item.card_id || '')}</span>
+            </td>
+            <td>${escapeHtml(cardTypeLabel(item.card_type))}</td>
+            <td class="admin-data">${escapeHtml(formatNumber(item.picked_count || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatNumber(item.shown_count || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatPercent(item.pick_rate || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatAdminTime(item.updated_at))}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
 function registeredUsersQuery() {
   const params = new URLSearchParams();
   params.set('query', $('registered-users-search')?.value || '');
@@ -515,7 +688,7 @@ function renderRegisteredUserCard(user) {
   return `
     <article class="registered-user-card ${expanded ? 'expanded' : ''}">
       <button class="registered-user-main" type="button" data-user-toggle="${escapeHtml(key)}">
-        <div class="user-avatar">${escapeHtml(String(user.username || '?').slice(0, 1).toUpperCase())}</div>
+        <div class="user-avatar">${renderAdminSkinAvatar(user.skin)}</div>
         <div class="user-main-text">
           <div class="user-title-row">
             <strong>${escapeHtml(user.username)}</strong>
@@ -524,8 +697,8 @@ function renderRegisteredUserCard(user) {
           <div class="user-meta-row">
             <span>ID:${escapeHtml(user.player_id || '-')}</span>
             <span>注册顺序：${escapeHtml(user.id)}</span>
-            <span>上次下线 ${escapeHtml(formatAdminTime(user.last_login_at))}</span>
-            <span>注册 ${escapeHtml(formatAdminTime(user.created_at))}</span>
+            <span class="admin-data">上次下线 ${escapeHtml(formatAdminTime(user.last_login_at))}</span>
+            <span class="admin-data">注册 ${escapeHtml(formatAdminTime(user.created_at))}</span>
           </div>
         </div>
         <div class="user-score-row" aria-label="账号战绩">
@@ -559,8 +732,8 @@ function renderRegisteredUserDetails(user, detail) {
             <div><dt>用户名</dt><dd>${escapeHtml(user.username)}</dd></div>
             <div><dt>ID</dt><dd>${escapeHtml(user.player_id || '-')}</dd></div>
             <div><dt>注册顺序</dt><dd>${escapeHtml(user.id)}</dd></div>
-            <div><dt>注册时间</dt><dd>${escapeHtml(formatAdminTime(user.created_at))}</dd></div>
-            <div><dt>上次下线</dt><dd>${escapeHtml(formatAdminTime(user.last_login_at))}</dd></div>
+            <div><dt>注册时间</dt><dd class="admin-data">${escapeHtml(formatAdminTime(user.created_at))}</dd></div>
+            <div><dt>上次下线</dt><dd class="admin-data">${escapeHtml(formatAdminTime(user.last_login_at))}</dd></div>
             <div><dt>当前状态</dt><dd>${online ? `${escapeHtml(labelFrom(STATUS_LABELS, online.status))} ${online.room_id != null ? `#${escapeHtml(online.room_id)}` : ''}` : '离线'}</dd></div>
           </dl>
         </div>
@@ -582,7 +755,7 @@ function renderUserMatch(match) {
     <div class="user-match-row">
       <time>${escapeHtml(formatAdminTime(match.ended_at || match.started_at))}</time>
       <div><b>${escapeHtml(match.mode || '-')}</b> · ${escapeHtml(players)}</div>
-      <div class="muted">结果 ${escapeHtml(result)} · 回合 ${escapeHtml(valueOrDash(match.rounds))} · 时长 ${escapeHtml(formatUptime(match.duration_seconds || 0))}</div>
+      <div class="muted admin-data">结果 ${escapeHtml(result)} · 回合 ${escapeHtml(valueOrDash(match.rounds))} · 时长 ${escapeHtml(formatUptime(match.duration_seconds || 0))}</div>
     </div>`;
 }
 
@@ -634,20 +807,207 @@ function renderRooms(rooms) {
 }
 
 function renderEvents(events) {
-  $('events-list').innerHTML = events.length ? events.slice(0, 80).map((event) => `
+  const el = $('events-list');
+  if (!el) return;
+  el.innerHTML = events.length ? events.slice(0, 80).map((event) => `
     <div class="log-item">
       <time>${escapeHtml(formatAdminTime(event.time))} · ${escapeHtml(labelFrom(EVENT_KIND_LABELS, event.kind))}</time>
       ${escapeHtml(event.message)}
     </div>`).join('') : '<div class="log-item">暂无事件。</div>';
 }
 
+function renderSuspiciousEvents(events) {
+  const el = $('suspicious-list');
+  if (!el) return;
+  el.innerHTML = events.length ? events.slice(0, 80).map((event) => `
+    <div class="log-item">
+      <time>${escapeHtml(formatAdminTime(event.ts))} · ${escapeHtml(event.severity || '-')} · ${escapeHtml(event.kind || '-')}</time>
+      ${escapeHtml(event.message || '')}<br>
+      <span class="admin-data">sid=${escapeHtml(event.sid || '-')} · user=${escapeHtml(event.user_id || '-')} · ip=${escapeHtml(event.ip || '-')}</span>
+    </div>`).join('') : '<div class="log-item">暂无可疑事件。</div>';
+}
+
 function renderHistory(history) {
-  $('history-list').innerHTML = history.length ? history.slice(0, 80).map((item) => `
+  const el = $('history-list');
+  if (!el) return;
+  el.innerHTML = history.length ? history.slice(0, 80).map((item) => `
     <div class="log-item">
       <time>${escapeHtml(formatAdminTime(item.time))} · 房间 #${escapeHtml(item.room_id)} · ${escapeHtml(item.mode)}</time>
       ${escapeHtml((item.players || []).join(' / '))}<br>
-      胜者=${escapeHtml(item.winner)} · 回合=${escapeHtml(item.round)} · 时长=${formatUptime(item.duration_seconds || 0)}
+      <span class="admin-data">胜者=${escapeHtml(item.winner)} · 回合=${escapeHtml(item.round)} · 时长=${formatUptime(item.duration_seconds || 0)}</span>
     </div>`).join('') : '<div class="log-item">暂无历史对局。</div>';
+}
+
+function reportStatusLabel(status) {
+  return {
+    pending: '待处理',
+    accepted: '已通过',
+    rejected: '已驳回',
+    abusive: '恶意举报',
+  }[status] || status || '-';
+}
+
+function reportCategoryLabel(category) {
+  return {
+    abusive_language: '攻击性语言',
+    sexual_content: '不当内容',
+    spam: '刷屏',
+    privacy_leak: '隐私泄露',
+    harassment: '骚扰',
+    cheating: '作弊',
+    smurfing: '小号',
+    boosting: '刷分',
+    stalling: '拖延',
+    inappropriate_name: '不当昵称',
+    bug_abuse: '漏洞滥用',
+    abnormal_match: '异常对局',
+    other: '其他',
+  }[category] || category || '-';
+}
+
+function reportObjectLabel(type) {
+  return {
+    chat_message: '聊天消息',
+    player: '玩家',
+    match: '对局',
+    replay: '回放',
+    mod: '模组',
+  }[type] || type || '-';
+}
+
+async function loadReports() {
+  const table = $('reports-table');
+  if (!table) return;
+  const status = $('report-status-filter')?.value || 'pending';
+  try {
+    if (!reportState.items.length) {
+      table.innerHTML = '<div class="log-item">正在读取举报列表。</div>';
+    }
+    const data = await api(`/api/admin/reports?status=${encodeURIComponent(status)}&limit=80&offset=0`);
+    reportState = { items: data.items || [], total: data.total || 0, selectedId: reportState.selectedId };
+    renderReports();
+  } catch (error) {
+    table.innerHTML = `<div class="log-item error">举报列表加载失败：${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderReports() {
+  const table = $('reports-table');
+  const count = $('reports-count');
+  if (!table) return;
+  if (count) count.textContent = `${reportState.items.length}/${reportState.total || 0}`;
+  if (!reportState.items.length) {
+    table.innerHTML = '<div class="log-item">暂无举报。</div>';
+    return;
+  }
+  table.innerHTML = `
+    <table class="reports-table-inner">
+      <thead><tr><th>ID</th><th>时间</th><th>举报者</th><th>对象</th><th>分类</th><th>风险</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody>
+        ${reportState.items.map((item) => `
+          <tr class="${String(item.id) === String(reportState.selectedId) ? 'selected-row' : ''}">
+            <td class="admin-data">#${escapeHtml(item.id)}</td>
+            <td class="admin-data">${escapeHtml(formatAdminTime(item.created_at))}</td>
+            <td>${escapeHtml(item.reporter_username || '-')}</td>
+            <td>
+              <strong>${escapeHtml(reportObjectLabel(item.object_type))}</strong>
+              <span class="muted"> ${escapeHtml(item.target_username || item.object_id || '-')}</span>
+            </td>
+            <td>${escapeHtml(reportCategoryLabel(item.category))}</td>
+            <td><span class="risk-badge risk-${escapeHtml(item.risk_level || 0)}">${escapeHtml(item.risk_level ?? 0)}</span></td>
+            <td>${escapeHtml(reportStatusLabel(item.status))}</td>
+            <td><button class="row-action" data-report-detail="${escapeHtml(item.id)}">查看</button></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function loadReportDetail(reportId) {
+  const detailBox = $('report-detail');
+  if (!detailBox) return;
+  reportState.selectedId = String(reportId);
+  renderReports();
+  detailBox.innerHTML = '<div class="log-item">正在读取举报详情。</div>';
+  try {
+    const data = await api(`/api/admin/reports/${encodeURIComponent(reportId)}`);
+    renderReportDetail(data.report || {});
+  } catch (error) {
+    detailBox.innerHTML = `<div class="log-item error">举报详情加载失败：${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderReportDetail(report) {
+  const detailBox = $('report-detail');
+  if (!detailBox) return;
+  const evidence = Array.isArray(report.evidence) ? report.evidence : [];
+  const actions = Array.isArray(report.actions) ? report.actions : [];
+  const history = report.reporter_history || {};
+  detailBox.innerHTML = `
+    <div class="report-detail-grid">
+      <div class="report-summary-card">
+        <h3>#${escapeHtml(report.id)} · ${escapeHtml(reportObjectLabel(report.object_type))}</h3>
+        <p><b>状态：</b>${escapeHtml(reportStatusLabel(report.status))}　<b>风险：</b><span class="risk-badge risk-${escapeHtml(report.risk_level || 0)}">${escapeHtml(report.risk_level ?? 0)}</span></p>
+        <p><b>分类：</b>${escapeHtml(reportCategoryLabel(report.category))}</p>
+        <p><b>举报者：</b>${escapeHtml(report.reporter_username || '-')}　<b>被举报：</b>${escapeHtml(report.target_username || '-')}</p>
+        <p><b>对象：</b>${escapeHtml(report.object_type || '-')} / ${escapeHtml(report.object_id || '-')}</p>
+        <p><b>时间：</b><span class="admin-data">${escapeHtml(formatAdminTime(report.created_at))}</span></p>
+        <p><b>举报者历史：</b>属实 ${escapeHtml(history.accepted || 0)} / 驳回 ${escapeHtml(history.rejected || 0)} / 恶意 ${escapeHtml(history.abusive || 0)}</p>
+        <p class="report-reason">${escapeHtml(report.reason_text || '无补充说明。')}</p>
+      </div>
+      <div class="report-action-card">
+        <label>处理结果
+          <select id="report-resolve-action">
+            <option value="accept">通过举报</option>
+            <option value="reject">驳回举报</option>
+            <option value="abusive">标记恶意举报</option>
+          </select>
+        </label>
+        <label>处罚动作
+          <select id="report-moderation-action">
+            <option value="none">不处罚</option>
+            <option value="warn">警告</option>
+            <option value="mute">禁言</option>
+            <option value="ban">封禁账号</option>
+            <option value="invalidate_match">作废对局</option>
+          </select>
+        </label>
+        <label>持续秒数
+          <input id="report-duration" type="number" min="0" max="2592000" step="60" value="0">
+        </label>
+        <label>处理备注
+          <textarea id="report-note" maxlength="500" placeholder="后台备注，不会展示给普通玩家"></textarea>
+        </label>
+        <button class="ghost-btn danger" type="button" data-report-resolve="${escapeHtml(report.id)}">提交处理</button>
+      </div>
+    </div>
+    <div class="report-detail-grid">
+      <section>
+        <h3>证据</h3>
+        <pre class="admin-json-result">${escapeHtml(JSON.stringify(evidence, null, 2))}</pre>
+      </section>
+      <section>
+        <h3>已执行动作</h3>
+        <pre class="admin-json-result">${escapeHtml(JSON.stringify(actions, null, 2))}</pre>
+      </section>
+    </div>`;
+}
+
+async function resolveSelectedReport(reportId) {
+  const action = $('report-resolve-action')?.value || 'reject';
+  const moderationAction = $('report-moderation-action')?.value || 'none';
+  const duration = Number($('report-duration')?.value || 0);
+  const note = $('report-note')?.value || '';
+  await api(`/api/admin/reports/${encodeURIComponent(reportId)}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify({
+      action,
+      moderation_action: moderationAction,
+      duration_seconds: duration,
+      note,
+    }),
+  });
+  await loadReports();
+  await loadReportDetail(reportId);
 }
 
 async function loadStorageSummary() {
@@ -838,32 +1198,6 @@ function renderReplays() {
     </table>`;
 }
 
-async function openReplayViewer(replayId) {
-  pauseReplay();
-  const viewer = $('replay-viewer');
-  viewer.classList.remove('hidden');
-  $('replay-frame').textContent = '正在生成时间线。';
-  try {
-    const data = await api(`/api/replays/${encodeURIComponent(replayId)}/timeline?admin=1`);
-    replayTimeline = data.timeline || [];
-    replayFrameIndex = 0;
-    const meta = (data.replay && data.replay.meta) || {};
-    $('replay-viewer-title').textContent = `${meta.mode || '-'} · ${(meta.players || []).join(' / ')}`;
-    const progress = $('replay-progress');
-    progress.max = String(Math.max(0, replayTimeline.length - 1));
-    progress.value = '0';
-    renderReplayFrame();
-  } catch (error) {
-    $('replay-frame').textContent = `回放加载失败：${error.message}`;
-  }
-}
-
-function renderReplayFrame() {
-  const frame = replayTimeline[replayFrameIndex] || null;
-  $('replay-progress').value = String(replayFrameIndex);
-  $('replay-frame').textContent = frame ? JSON.stringify(frame, null, 2) : '暂无时间线数据。';
-}
-
 function pauseReplay() {
   if (replayTimer) {
     clearTimeout(replayTimer);
@@ -871,8 +1205,61 @@ function pauseReplay() {
   }
 }
 
+function replayChunkOffset(index) {
+  const value = Math.max(0, Number(index) || 0);
+  return Math.floor(value / REPLAY_CHUNK_SIZE) * REPLAY_CHUNK_SIZE;
+}
+
+function replayFrameLoaded(index) {
+  return !!(replayTimeline && replayTimeline[index]);
+}
+
+function mergeReplayTimelineChunk(data) {
+  const total = Math.max(0, Number(data.total_frames || 0));
+  const offset = Math.max(0, Number(data.offset || 0));
+  const frames = Array.isArray(data.timeline) ? data.timeline : [];
+  replayTotalFrames = Math.max(replayTotalFrames, total, offset + frames.length);
+  if (!Array.isArray(replayTimeline) || replayTimeline.length < replayTotalFrames) {
+    replayTimeline.length = replayTotalFrames;
+  }
+  frames.forEach((frame, idx) => {
+    replayTimeline[offset + idx] = frame;
+  });
+  if (data.replay) replayData = data.replay;
+}
+
+async function loadReplayChunk(replayId, index = 0) {
+  const offset = replayChunkOffset(index);
+  const end = Math.min(replayTotalFrames || Infinity, offset + REPLAY_CHUNK_SIZE);
+  let complete = replayTotalFrames > 0;
+  for (let i = offset; i < end; i += 1) {
+    if (!replayFrameLoaded(i)) {
+      complete = false;
+      break;
+    }
+  }
+  if (complete) return;
+  const key = `${replayId}:${offset}`;
+  if (replayChunkPromises.has(key)) return replayChunkPromises.get(key);
+  const promise = api(`/api/replays/${encodeURIComponent(replayId)}/timeline?admin=1&offset=${offset}&limit=${REPLAY_CHUNK_SIZE}`)
+    .then((data) => {
+      mergeReplayTimelineChunk(data);
+      return data;
+    })
+    .finally(() => replayChunkPromises.delete(key));
+  replayChunkPromises.set(key, promise);
+  return promise;
+}
+
+async function ensureReplayFrameLoaded(index) {
+  if (replayFrameLoaded(index)) return true;
+  if (!replayCurrentId) return false;
+  await loadReplayChunk(replayCurrentId, index);
+  return replayFrameLoaded(index);
+}
+
 function nextReplayFrame() {
-  replayFrameIndex = Math.min(replayTimeline.length - 1, replayFrameIndex + 1);
+  replayFrameIndex = Math.min(Math.max(0, replayTotalFrames - 1), replayFrameIndex + 1);
   renderReplayFrame();
 }
 
@@ -881,9 +1268,11 @@ function prevReplayFrame() {
   renderReplayFrame();
 }
 
-function playReplay() {
+async function playReplay() {
   pauseReplay();
-  if (!replayTimeline.length || replayFrameIndex >= replayTimeline.length - 1) return;
+  if (!replayTotalFrames || replayFrameIndex >= replayTotalFrames - 1) return;
+  await ensureReplayFrameLoaded(replayFrameIndex);
+  await ensureReplayFrameLoaded(replayFrameIndex + 1);
   const current = replayTimeline[replayFrameIndex] || {};
   const next = replayTimeline[replayFrameIndex + 1] || {};
   const delay = replaySpeed === 'instant' ? 0 : Math.max(80, ((Number(next.t) || 0) - (Number(current.t) || 0)) / Number(replaySpeed || 1));
@@ -899,7 +1288,10 @@ function replayFrameState(frame) {
 
 function replayPerspective(frame) {
   const state = replayFrameState(frame);
-  if (Array.isArray(state.perspectives) && state.perspectives.length) return state.perspectives[0] || {};
+  if (Array.isArray(state.perspectives) && state.perspectives.length) {
+    const index = Math.max(0, Math.min(state.perspectives.length - 1, Number(replayPerspectiveIndex) || 0));
+    return state.perspectives[index] || state.perspectives[0] || {};
+  }
   return state || {};
 }
 
@@ -915,6 +1307,20 @@ function replayName(frame, playerId, fallback) {
   const names = replayNames(frame);
   const id = Number(playerId);
   return Number.isInteger(id) && names[id] ? names[id] : fallback;
+}
+
+function replayPerspectiveButtons(frame) {
+  const state = replayFrameState(frame);
+  const names = replayNames(frame);
+  const perspectives = Array.isArray(state.perspectives) ? state.perspectives : [];
+  if (perspectives.length <= 1) return '';
+  return `
+    <div class="admin-replay-perspectives">
+      ${perspectives.map((perspective, index) => {
+        const label = names[index] || perspective.your_name || `P${index + 1}`;
+        return `<button class="row-action${index === replayPerspectiveIndex ? ' active' : ''}" type="button" data-admin-replay-perspective="${index}">${escapeHtml(label)}</button>`;
+      }).join('')}
+    </div>`;
 }
 
 function replayMs(ms) {
@@ -972,7 +1378,7 @@ function replayStatusRow(player) {
   return items.length ? items.map(item => `<span class="admin-replay-chip">${escapeHtml(item)}</span>`).join('') : '<span class="admin-replay-chip">无</span>';
 }
 
-function replayPlayerPanel(frame, role, player, playerId, fallbackName, revealHand) {
+function replayPlayerPanel(frame, role, player, playerId, fallbackName, revealHand = true) {
   const p = player || {};
   const current = Number(replayFrameState(frame).current_player ?? frame.current_player) === Number(playerId);
   const hand = revealHand ? (p.hand || p.revealed_hand || []) : (p.revealed_hand || []);
@@ -1016,18 +1422,27 @@ async function openReplayViewer(replayId) {
   const viewer = $('replay-viewer');
   viewer.classList.remove('hidden');
   replayData = null;
-  $('replay-frame').innerHTML = '<div class="admin-replay-empty">正在生成时间线...</div>';
+  replayCurrentId = replayId;
+  replayTotalFrames = 0;
+  replayTimeline = [];
+  replayFrameIndex = 0;
+  replayPerspectiveIndex = 0;
+  replayChunkPromises.clear();
+  $('replay-frame').innerHTML = '<div class="admin-replay-empty">正在加载回放首屏...</div>';
   try {
-    const data = await api(`/api/replays/${encodeURIComponent(replayId)}/timeline?admin=1`);
-    replayData = data.replay || null;
-    replayTimeline = data.timeline || [];
-    replayFrameIndex = 0;
+    const data = await loadReplayChunk(replayId, 0);
+    replayData = (data && data.replay) || replayData || null;
     const meta = (data.replay && data.replay.meta) || {};
     $('replay-viewer-title').textContent = `${meta.mode || '-'} · ${(meta.players || []).join(' / ')}`;
     const progress = $('replay-progress');
-    progress.max = String(Math.max(0, replayTimeline.length - 1));
+    progress.max = String(Math.max(0, replayTotalFrames - 1));
     progress.value = '0';
     renderReplayFrame();
+    setTimeout(() => {
+      if (replayCurrentId === replayId && replayTotalFrames > REPLAY_CHUNK_SIZE) {
+        loadReplayChunk(replayId, REPLAY_CHUNK_SIZE).catch(() => {});
+      }
+    }, 80);
   } catch (error) {
     $('replay-frame').innerHTML = `<div class="admin-replay-empty">回放加载失败：${escapeHtml(error.message)}</div>`;
   }
@@ -1040,7 +1455,14 @@ function renderReplayFrame() {
   const target = $('replay-frame');
   if (!target) return;
   if (!frame) {
-    target.innerHTML = '<div class="admin-replay-empty">暂无时间线数据。</div>';
+    const frameNo = replayFrameIndex + 1;
+    const total = Math.max(1, replayTotalFrames || replayTimeline.length || 0);
+    target.innerHTML = `<div class="admin-replay-empty">正在加载第 ${frameNo}/${total} 帧...</div>`;
+    ensureReplayFrameLoaded(replayFrameIndex).then((loaded) => {
+      if (loaded && Number(progress?.value || 0) === replayFrameIndex) renderReplayFrame();
+    }).catch((error) => {
+      target.innerHTML = `<div class="admin-replay-empty">回放帧加载失败：${escapeHtml(error.message)}</div>`;
+    });
     return;
   }
   const state = replayFrameState(frame);
@@ -1049,22 +1471,24 @@ function renderReplayFrame() {
   const enemyIds = Array.isArray(perspective.enemy_ids) ? perspective.enemy_ids : [];
   const top = [];
   const bottom = [];
-  if (perspective.opponent) top.push(replayPlayerPanel(frame, '敌方', perspective.opponent, enemyIds[0] ?? (yourId === 0 ? 1 : 0), 'Opponent', false));
-  if (perspective.opponent2) top.push(replayPlayerPanel(frame, '敌方2', perspective.opponent2, enemyIds[1] ?? 3, 'Opponent 2', false));
+  if (perspective.opponent) top.push(replayPlayerPanel(frame, '敌方', perspective.opponent, enemyIds[0] ?? (yourId === 0 ? 1 : 0), 'Opponent', true));
+  if (perspective.opponent2) top.push(replayPlayerPanel(frame, '敌方2', perspective.opponent2, enemyIds[1] ?? 3, 'Opponent 2', true));
   if (perspective.teammate) bottom.push(replayPlayerPanel(frame, '队友', perspective.teammate, perspective.teammate_id ?? 1, 'Teammate', true));
   if (perspective.you) bottom.push(replayPlayerPanel(frame, '自己', perspective.you, yourId, 'You', true));
   if (!top.length && !bottom.length && Array.isArray(state.player_names)) {
     state.player_names.forEach((name, index) => bottom.push(replayPlayerPanel(frame, `玩家${index + 1}`, {}, index, name, false)));
   }
   const actionLines = replayTimeline.slice(Math.max(0, replayFrameIndex - 13), replayFrameIndex + 1)
+    .filter(Boolean)
     .map(item => `${replayMs(item.t)} ${replayActionText(item)}`);
   const duration = replayData && replayData.duration_ms != null ? replayMs(replayData.duration_ms) : '';
   target.innerHTML = `
     <div class="admin-replay-meta">
-      <span>帧 ${replayFrameIndex + 1}/${Math.max(1, replayTimeline.length)}</span>
+      <span>帧 ${replayFrameIndex + 1}/${Math.max(1, replayTotalFrames || replayTimeline.length)}</span>
       <span>时间 ${replayMs(frame.t)}${duration ? ` / ${duration}` : ''}</span>
       <span>第${escapeHtml(frame.round || 0)}回合</span>
     </div>
+    ${replayPerspectiveButtons(frame)}
     <div class="admin-replay-board">
       <div class="admin-replay-main">
         <div class="admin-replay-row">${top.join('') || '<div class="admin-replay-empty">无玩家状态</div>'}</div>
@@ -1226,16 +1650,39 @@ function bindEvents() {
   $('registered-users-search')?.addEventListener('input', queueRegisteredUsersLoad);
   $('registered-users-sort')?.addEventListener('change', loadRegisteredUsers);
   $('registered-users-order')?.addEventListener('change', loadRegisteredUsers);
+  $('draft-stats-refresh')?.addEventListener('click', loadDraftStats);
+  $('draft-stats-mode')?.addEventListener('change', loadDraftStats);
+  $('draft-stats-sort')?.addEventListener('change', loadDraftStats);
+  $('draft-stats-order')?.addEventListener('change', loadDraftStats);
+  $('reports-refresh')?.addEventListener('click', loadReports);
+  $('report-status-filter')?.addEventListener('change', () => {
+    reportState.selectedId = null;
+    const detail = $('report-detail');
+    if (detail) detail.textContent = '选择一条举报查看详情。';
+    loadReports();
+  });
 
   document.querySelectorAll('.admin-tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.admin-tab').forEach((item) => item.classList.remove('active'));
       tab.classList.add('active');
       const target = tab.dataset.tab;
-      ['gui', 'storage', 'replays', 'game-chat', 'terminal'].forEach((name) => {
+      activeAdminTab = target || 'gui';
+      ['gui', 'events', 'moderation', 'draft-stats', 'storage', 'replays', 'game-chat', 'terminal'].forEach((name) => {
         const panel = $(`admin-${name}`);
         if (panel) panel.classList.toggle('hidden', target !== name);
       });
+      if (['gui', 'events', 'moderation', 'terminal'].includes(target)) loadStatus();
+      if (target === 'gui') loadRegisteredUsers();
+      if (target === 'events') {
+        renderEvents(adminState?.events || []);
+        renderHistory(adminState?.history || []);
+      }
+      if (target === 'moderation') {
+        renderSuspiciousEvents(adminState?.suspicious_events || []);
+        loadReports();
+      }
+      if (target === 'draft-stats') loadDraftStats();
       if (target === 'storage') loadStorageSummary();
       if (target === 'replays') resetAndLoadReplays();
       if (target === 'game-chat') {
@@ -1264,6 +1711,10 @@ function bindEvents() {
     pauseReplay();
     replayFrameIndex = Number(event.target.value) || 0;
     renderReplayFrame();
+    const nextOffset = replayChunkOffset(replayFrameIndex + REPLAY_CHUNK_SIZE);
+    if (replayCurrentId && nextOffset < replayTotalFrames) {
+      loadReplayChunk(replayCurrentId, nextOffset).catch(() => {});
+    }
   });
   document.querySelectorAll('[data-replay-control]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1304,7 +1755,10 @@ function bindEvents() {
     const suggestion = event.target.dataset && event.target.dataset.suggestion;
     const suggestionIndex = event.target.dataset && event.target.dataset.suggestionIndex;
     const replayView = event.target.dataset && event.target.dataset.replayView;
+    const replayPerspective = event.target.dataset && event.target.dataset.adminReplayPerspective;
     const r2Delete = event.target.dataset && event.target.dataset.r2Delete;
+    const reportDetail = event.target.dataset && event.target.dataset.reportDetail;
+    const reportResolve = event.target.dataset && event.target.dataset.reportResolve;
     if (suggestionIndex != null && completionState) {
       applyCompletionIndex(Number(suggestionIndex));
       return;
@@ -1321,8 +1775,21 @@ function bindEvents() {
       await openReplayViewer(replayView);
       return;
     }
+    if (replayPerspective != null) {
+      replayPerspectiveIndex = Number(replayPerspective) || 0;
+      renderReplayFrame();
+      return;
+    }
     if (r2Delete) {
       await deleteCommunityStorageObject(r2Delete);
+      return;
+    }
+    if (reportDetail) {
+      await loadReportDetail(reportDetail);
+      return;
+    }
+    if (reportResolve) {
+      await resolveSelectedReport(reportResolve);
       return;
     }
     if (kickSid) {

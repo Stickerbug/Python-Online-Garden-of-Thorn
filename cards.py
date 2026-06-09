@@ -5,6 +5,57 @@ import copy
 
 ERROR_CARD_ID = 'Error'
 
+CARD_FLAG_ALIASES = {
+    'tag_troll_cards:exile': 'exile',
+    'troll_cards:exile': 'exile',
+    'tag_troll_cards_exile': 'exile',
+    'troll_cards_exile': 'exile',
+    'tag_thorn_cards_supplement_1:sticky': 'sticky',
+    'thorn_cards_supplement_1:sticky': 'sticky',
+    'tag_thorn_cards_supplement_1_sticky': 'sticky',
+    'thorn_cards_supplement_1_sticky': 'sticky',
+    'copy': 'copy',
+    'unique': 'unique',
+    'swift': 'swift',
+    'stealth': 'stealth',
+    'revealed': 'revealed',
+}
+
+# Known vanilla flags that can be referenced by namespace-prefixed tags
+_VANILLA_FLAGS = {
+    'precision', 'exile', 'non_stackable', 'indestructible', 'sprout',
+    'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
+    'infinite_exclude', 'sticky', 'copy', 'unique',
+    'swift', 'stealth', 'revealed',
+}
+
+
+def normalize_card_flag(flag: Any) -> str:
+    text = str(flag or '').strip()
+    if not text:
+        return ''
+    lower = text.lower()
+    if lower in CARD_FLAG_ALIASES:
+        return CARD_FLAG_ALIASES[lower]
+    # Auto-strip namespace prefix for known vanilla flags (e.g. "factory:sticky" -> "sticky")
+    if ':' in lower:
+        _, local = lower.split(':', 1)
+        if local in _VANILLA_FLAGS:
+            return local
+    return text
+
+
+def normalize_card_flags(flags) -> Set[str]:
+    if not flags:
+        return set()
+    if isinstance(flags, str):
+        raw_items = [item.strip() for item in flags.replace(',', ' ').split()]
+    elif isinstance(flags, dict):
+        raw_items = [item for item, enabled in flags.items() if enabled]
+    else:
+        raw_items = list(flags)
+    return {flag for flag in (normalize_card_flag(item) for item in raw_items) if flag}
+
 
 @dataclass
 class CardDef:
@@ -31,6 +82,10 @@ class CardDef:
     v2_mod_id: str = ''
     image: str = ''
     image_url: str = ''
+    copy_count: int = 0
+    swift_value: int = 0
+    damage: int = 0
+    hits: int = 1
 
     @property
     def display_name(self) -> str:
@@ -67,6 +122,7 @@ class CardInstance:
     return_to_hand_turns: int = 0
     instance_flags: Set[str] = field(default_factory=set)
     disabled_flags: Set[str] = field(default_factory=set)
+    swift_value: int = 0
 
     def __post_init__(self):
         if not self.def_id:
@@ -91,7 +147,8 @@ class CardInstance:
     @property
     def cost_e(self) -> int:
         base = self.cost_e_override if self.cost_e_override is not None else self.card_def.cost_e
-        return max(0, base - self.mimic_discount)
+        swift = self.swift_value if self.swift_value > 0 else self.card_def.swift_value
+        return max(0, base - self.mimic_discount - swift)
 
     @property
     def cost_m(self) -> int:
@@ -103,7 +160,10 @@ class CardInstance:
 
     @property
     def flags(self) -> Set[str]:
-        return (self.card_def.flags | self.instance_flags) - self.disabled_flags
+        base = normalize_card_flags(self.card_def.flags)
+        added = normalize_card_flags(self.instance_flags)
+        disabled = normalize_card_flags(self.disabled_flags)
+        return (base | added) - disabled
 
     def to_dict(self) -> dict:
         return {
@@ -121,6 +181,7 @@ class CardInstance:
             'return_to_hand_turns': self.return_to_hand_turns,
             'instance_flags': list(self.instance_flags) if self.instance_flags else [],
             'disabled_flags': list(self.disabled_flags) if self.disabled_flags else [],
+            'swift_value': self.swift_value,
         }
 
     @staticmethod
@@ -138,8 +199,9 @@ class CardInstance:
             bonus_damage=max(0, int(d.get('bonus_damage', 0))),
             held_turns=max(0, int(d.get('held_turns', 0))),
             return_to_hand_turns=max(0, int(d.get('return_to_hand_turns', 0))),
-            instance_flags=set(d.get('instance_flags', [])),
-            disabled_flags=set(d.get('disabled_flags', [])),
+            instance_flags=normalize_card_flags(d.get('instance_flags', [])),
+            disabled_flags=normalize_card_flags(d.get('disabled_flags', [])),
+            swift_value=max(0, int(d.get('swift_value', 0))),
         )
 
     def copy(self) -> 'CardInstance':
@@ -158,6 +220,7 @@ class CardInstance:
             return_to_hand_turns=self.return_to_hand_turns,
             instance_flags=set(self.instance_flags),
             disabled_flags=set(self.disabled_flags),
+            swift_value=self.swift_value,
         )
         return c
 
@@ -261,7 +324,7 @@ _reg(CardDef('Disc', 'Disc', '圆盘', 3, 0, 'root', 3, 'Common',
              '坚实的护盾，减免来袭的伤害。', '+2A', flags={'non_stackable'}))
 
 _reg(CardDef('Battery', 'Battery', '电池', 3, 0, 'root', 5, 'Common',
-             '受击时会漏电。', '受到物理伤害时对攻击者造成3D'))
+             '受击时会漏电。', '受到物理伤害时，对攻击者造成3电伤'))
 
 _reg(CardDef('MagicLeaf', 'Magic Leaf', '魔法叶', 1, 0, 'root', 5, 'Common',
              '不再能造成伤害了，但它可以回复魔力。', '自己回合开始时+1M'))
@@ -279,17 +342,17 @@ _reg(CardDef('GoldenLeaf', 'Golden Leaf', '黄金叶', 3, 0, 'root', 5, 'Common'
              '这闪亮的叶子能为你带来额外的抽牌机会。', '手牌爆牌上限+1；自己回合开始时多抽一张牌'))
 
 _reg(CardDef('Pincer', 'Pincer', '螫针', 4, 0, 'root', 3, 'Common',
-             '毒素可以减缓对手行动。', '目标回合开始时E回复-1'))
+             '毒素可以减缓对手行动，但小心别划伤自己。', '装备时，每回合对目标施加1层超载'))
 
 _reg(CardDef('Cancer', 'Cancer', '癌细胞', 4, 0, 'root', 2, 'Common',
              '无法根除的恶性细胞。', '对目标施加1层淬毒', flags={'indestructible'}))
 
 _reg(CardDef('Corruption', 'Corruption', '腐化', 0, 0, 'root', 2, 'Common',
-             '伤敌一千，自损八百。', '自下个敌方回合开始，全场所有伤害翻倍', flags={'indestructible', 'self_only'}))
+             '伤敌一千，自损八百。', '自下个敌方回合开始，全场所有伤害变为1.5倍（向上取整）', flags={'indestructible', 'self_only'}))
 
 _reg(CardDef('Mark', 'Mark', '标记', 4, 0, 'root', 3, 'Common',
-             '你被标记了！', '禁止目标行动一回合',
-             trigger_cost_e=0, trigger_effect_text='若已装备一回合则可摧毁此装备，直到目标下回合结束目标禁止行动'))
+             '你被标记了！', '使目标+1层眩晕',
+             trigger_cost_e=0, trigger_effect_text='装备1回合后可触发，0E，使目标+1层眩晕'))
 
 _reg(CardDef('Mine', 'Mine', '地雷', 3, 0, 'root', 3, 'Common',
              '它很危险，但需要一回合准备。', '下回合造成20D',
@@ -315,6 +378,11 @@ _reg(CardDef('MagicBubble', 'Magic Bubble', '魔法泡泡', 0, 4, 'guard', 3, 'C
 
 DRAFT_RATIO = {'thorn': 6, 'bloom': 4, 'root': 3, 'guard': 2}
 DRAFT_REROLLS = 3
+FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS = {
+    # Keep Sewage at a fixed 14% within the Bloom draft pool.
+    # The weight is adjusted when extra Bloom mod cards enter the draft pool.
+    'Sewage': (14, 100),
+}
 HAND_LIMIT = 7
 DRAW_PER_TURN = 3
 ELIXIR_RECOVERY = 5
@@ -331,15 +399,50 @@ INITIAL_HAND_SIZE = 5
 FIRST_PLAYER_HAND_SIZE = 4
 
 
-def build_draft_pool(allowed_def_ids: Optional[Set[str]] = None) -> List[CardInstance]:
-    pool = []
+def _effective_draft_weights(allowed_def_ids: Optional[Set[str]] = None) -> Dict[str, float]:
+    allowed = {}
     for def_id, card_def in CARD_DEFS.items():
         if def_id == 'Yggdrasil':
             continue
         if allowed_def_ids is not None and def_id not in allowed_def_ids:
             continue
-        for _ in range(card_def.count):
-            pool.append(CardInstance(def_id=def_id))
+        count = max(0, int(getattr(card_def, 'count', 0) or 0))
+        if count <= 0:
+            continue
+        allowed[def_id] = float(count)
+
+    by_type_fixed = {}
+    for def_id in FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS:
+        if def_id not in allowed or def_id not in CARD_DEFS:
+            continue
+        by_type_fixed.setdefault(CARD_DEFS[def_id].card_type, []).append(def_id)
+
+    for card_type, fixed_ids in by_type_fixed.items():
+        fixed_ratio_sum = 0.0
+        for def_id in fixed_ids:
+            numerator, denominator = FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS[def_id]
+            if denominator:
+                fixed_ratio_sum += max(0.0, float(numerator) / float(denominator))
+        other_total = sum(
+            weight for def_id, weight in allowed.items()
+            if def_id not in fixed_ids and CARD_DEFS.get(def_id) and CARD_DEFS[def_id].card_type == card_type
+        )
+        if other_total <= 0 or fixed_ratio_sum <= 0 or fixed_ratio_sum >= 1:
+            continue
+        for def_id in fixed_ids:
+            numerator, denominator = FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS[def_id]
+            target_ratio = max(0.0, float(numerator) / float(denominator)) if denominator else 0.0
+            if target_ratio > 0:
+                allowed[def_id] = target_ratio * other_total / (1.0 - fixed_ratio_sum)
+    return allowed
+
+
+def build_draft_pool(allowed_def_ids: Optional[Set[str]] = None) -> List[CardInstance]:
+    pool = []
+    for def_id, weight in _effective_draft_weights(allowed_def_ids).items():
+        card = CardInstance(def_id=def_id)
+        card.draft_weight = weight
+        pool.append(card)
     return pool
 
 
@@ -352,7 +455,7 @@ def generate_draft_options(pool: List[CardInstance], card_type: str, count: int 
             if card.def_id not in first_by_id:
                 first_by_id[card.def_id] = card
                 weights[card.def_id] = 0
-            weights[card.def_id] += 1
+            weights[card.def_id] += max(0.0, float(getattr(card, 'draft_weight', 1.0) or 0.0))
         ids = list(first_by_id.keys())
         picked = []
         while ids and len(picked) < sample_count:

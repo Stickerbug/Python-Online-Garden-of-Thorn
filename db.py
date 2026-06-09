@@ -21,6 +21,74 @@ _PLAYER_ID_BLACKLIST_CACHE = None
 FRIEND_REQUEST_TTL_DAYS = 30
 REMEMBER_TOKEN_DAYS = 60
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
+ROLE_TYPES = {'admin', 'staff', 'contributor', 'sponsor', 'none'}
+ROLE_COLOR_TOKENS = {'admin', 'bloom', 'guard', 'thorn', 'root', 'neutral'}
+DEFAULT_SKIN_CONFIG = {
+    'primary_color': '#FFE763',
+    'eye_shape': 'oval',
+}
+SKIN_EYE_SHAPES = {'oval', 'rectangle', 'diamond', 'hexagon'}
+ROLE_DEFAULTS = {
+    'admin': {
+        'role_key': 'admin',
+        'title': '管理员',
+        'color': 'admin',
+        'sort_order': 0,
+        'can_direct_friend': True,
+        'chat_exempt': True,
+    },
+    'staff': {
+        'role_key': 'staff',
+        'title': '技术人员',
+        'color': 'bloom',
+        'sort_order': 1,
+        'can_direct_friend': True,
+        'chat_exempt': True,
+    },
+    'contributor': {
+        'role_key': 'contributor',
+        'title': '贡献者',
+        'color': 'guard',
+        'sort_order': 2,
+        'can_direct_friend': False,
+        'chat_exempt': False,
+    },
+    'sponsor': {
+        'role_key': 'sponsor',
+        'title': '赞助者',
+        'color': 'bloom',
+        'sort_order': 3,
+        'can_direct_friend': False,
+        'chat_exempt': False,
+    },
+}
+BUILTIN_USER_ROLES = {
+    'stickerbug': {
+        **ROLE_DEFAULTS['admin'],
+        'role_type': 'admin',
+        'role_key': 'admin',
+        'title': '管理员',
+    },
+    'netherdog': {
+        **ROLE_DEFAULTS['staff'],
+        'role_type': 'staff',
+        'role_key': 'chief_designer',
+        'title': '总设计师',
+    },
+    'eric': {
+        **ROLE_DEFAULTS['staff'],
+        'role_type': 'staff',
+        'role_key': 'chief_designer',
+        'title': '总设计师',
+    },
+    'winniepooh': {
+        **ROLE_DEFAULTS['contributor'],
+        'role_type': 'contributor',
+        'role_key': 'right_angle_person',
+        'title': '直角人',
+        'color': 'guard',
+    },
+}
 
 
 def utc_now():
@@ -33,6 +101,23 @@ def utc_now_dt():
 
 def utc_iso(value):
     return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+
+
+def format_duration_zh(seconds):
+    try:
+        value = max(0, int(seconds))
+    except (TypeError, ValueError):
+        value = 0
+    days, rem = divmod(value, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, secs = divmod(rem, 60)
+    if days:
+        return f'{days}天{hours}小时'
+    if hours:
+        return f'{hours}小时{minutes}分钟'
+    if minutes:
+        return f'{minutes}分钟{secs}秒'
+    return f'{secs}秒'
 
 
 def get_db_connection():
@@ -125,6 +210,68 @@ def _assign_missing_player_ids(conn):
         conn.execute('UPDATE users SET player_id = ? WHERE id = ?', (player_id, row['id']))
 
 
+def _role_defaults(role_type):
+    normalized = str(role_type or '').strip().lower()
+    return dict(ROLE_DEFAULTS.get(normalized) or ROLE_DEFAULTS['contributor'])
+
+
+def _normalize_role_color(value, fallback='neutral'):
+    text = str(value or '').strip().lower()
+    if text in ROLE_COLOR_TOKENS:
+        return text
+    if re.fullmatch(r'#[0-9a-fA-F]{6}', text):
+        return text
+    return fallback
+
+
+def _normalize_role_type(value):
+    text = str(value or '').strip().lower()
+    return text if text in ROLE_TYPES else ''
+
+
+def _builtin_role_for_username(username):
+    return BUILTIN_USER_ROLES.get(normalize_username_key(username))
+
+
+def _ensure_builtin_role_for_row(conn, row):
+    if row is None:
+        return
+    builtin = _builtin_role_for_username(row['username'])
+    if not builtin:
+        return
+    existing = conn.execute('SELECT user_id FROM user_roles WHERE user_id = ?', (row['id'],)).fetchone()
+    if existing is not None:
+        return
+    now = utc_now()
+    conn.execute(
+        '''
+        INSERT INTO user_roles (
+            user_id, role_type, role_key, title, color, sort_order,
+            can_direct_friend, chat_exempt, visible, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        ''',
+        (
+            row['id'],
+            builtin.get('role_type'),
+            builtin.get('role_key'),
+            builtin.get('title'),
+            builtin.get('color'),
+            int(builtin.get('sort_order', 99)),
+            1 if builtin.get('can_direct_friend') else 0,
+            1 if builtin.get('chat_exempt') else 0,
+            now,
+            now,
+        ),
+    )
+
+
+def _seed_builtin_user_roles(conn):
+    rows = conn.execute('SELECT * FROM users').fetchall()
+    for row in rows:
+        _ensure_builtin_role_for_row(conn, row)
+
+
 def init_db():
     parent = os.path.dirname(os.path.abspath(DB_PATH))
     if parent:
@@ -154,6 +301,8 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN ban_reason TEXT')
         if 'banned_at' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN banned_at TEXT')
+        if 'ban_until' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN ban_until TEXT')
         if 'player_id' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN player_id TEXT')
         if 'accept_friend_requests' not in existing_columns:
@@ -162,8 +311,32 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN searchable_by_nickname INTEGER DEFAULT 1')
         if 'searchable_by_player_id' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN searchable_by_player_id INTEGER DEFAULT 1')
+        if 'false_report_count' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN false_report_count INTEGER DEFAULT 0')
+        if 'skin_json' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN skin_json TEXT')
         _assign_missing_player_ids(conn)
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS user_roles (
+                user_id INTEGER PRIMARY KEY,
+                role_type TEXT NOT NULL,
+                role_key TEXT,
+                title TEXT,
+                color TEXT,
+                sort_order INTEGER DEFAULT 99,
+                can_direct_friend INTEGER DEFAULT 0,
+                chat_exempt INTEGER DEFAULT 0,
+                visible INTEGER DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_user_roles_type_sort ON user_roles(role_type, sort_order)')
+        _seed_builtin_user_roles(conn)
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS remember_tokens (
@@ -297,6 +470,110 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_match_replays_mode ON match_replays(mode)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_replay_dependencies_replay_id ON replay_dependencies(replay_id)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_replay_dependencies_hash ON replay_dependencies(dep_type, dep_hash)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS card_draft_stats (
+                mode TEXT NOT NULL,
+                card_id TEXT NOT NULL,
+                shown_count INTEGER NOT NULL DEFAULT 0,
+                picked_count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (mode, card_id)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_stats_mode ON card_draft_stats(mode)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_stats_rate ON card_draft_stats(picked_count, shown_count)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reporter_user_id INTEGER NOT NULL,
+                reporter_username TEXT NOT NULL,
+                target_user_id INTEGER,
+                target_username TEXT,
+                object_type TEXT NOT NULL,
+                object_id TEXT NOT NULL,
+                category TEXT NOT NULL,
+                reason_text TEXT,
+                status TEXT DEFAULT 'pending',
+                risk_level INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                resolved_at TEXT,
+                resolved_by TEXT,
+                resolution_note TEXT,
+                FOREIGN KEY(reporter_user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_reports_status_created ON reports(status, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_reports_reporter_created ON reports(reporter_user_id, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_reports_object ON reports(object_type, object_id, category, created_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS report_evidence (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_id INTEGER NOT NULL,
+                evidence_type TEXT NOT NULL,
+                data_json TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(report_id) REFERENCES reports(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_report_evidence_report ON report_evidence(report_id)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS moderation_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_username TEXT,
+                target_user_id INTEGER,
+                target_username TEXT,
+                action_type TEXT NOT NULL,
+                reason TEXT,
+                duration_seconds INTEGER,
+                created_at TEXT NOT NULL,
+                expires_at TEXT,
+                related_report_id INTEGER,
+                FOREIGN KEY(target_user_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY(related_report_id) REFERENCES reports(id) ON DELETE SET NULL
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_moderation_actions_target ON moderation_actions(target_user_id, created_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_id TEXT,
+                channel TEXT,
+                sender_user_id INTEGER,
+                sender_name TEXT,
+                message TEXT NOT NULL,
+                normalized_message TEXT,
+                risk_level INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                hidden INTEGER DEFAULT 0
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(room_id, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_sender ON chat_messages(sender_user_id, created_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS muted_users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                muted_until TEXT,
+                reason TEXT,
+                created_at TEXT NOT NULL,
+                muted_by TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_muted_users_until ON muted_users(muted_until)')
         conn.commit()
 
 
@@ -362,16 +639,44 @@ def validate_username(username):
 
 def validate_password(password):
     text = str(password or '')
-    if len(text) < 6:
-        return False, '密码至少需要 6 位'
+    if len(text) < 8:
+        return False, '密码至少需要 8 位'
     if len(text) > 72:
         return False, '密码最多 72 位'
+    if any(ord(ch) < 33 or ord(ch) > 126 for ch in text):
+        return False, '密码只能使用可见 ASCII 字符，且不能包含空格'
+    classes = 0
+    classes += 1 if re.search(r'[0-9]', text) else 0
+    classes += 1 if re.search(r'[A-Z]', text) else 0
+    classes += 1 if re.search(r'[a-z]', text) else 0
+    classes += 1 if re.search(r'[^0-9A-Za-z]', text) else 0
+    if classes < 2:
+        return False, '密码需包含数字、大写字母、小写字母、特殊符号中的任意两类'
     return True, ''
+
+
+def normalize_skin_config(value):
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            value = {}
+    if not isinstance(value, dict):
+        value = {}
+    skin = dict(DEFAULT_SKIN_CONFIG)
+    primary = str(value.get('primary_color') or value.get('primaryColor') or '').strip()
+    if re.fullmatch(r'#[0-9A-Fa-f]{6}', primary):
+        skin['primary_color'] = primary.upper()
+    eye_shape = str(value.get('eye_shape') or value.get('eyeShape') or '').strip().lower()
+    if eye_shape in SKIN_EYE_SHAPES:
+        skin['eye_shape'] = eye_shape
+    return skin
 
 
 def row_to_user(row):
     if row is None:
         return None
+    skin_raw = row['skin_json'] if 'skin_json' in row.keys() else None
     return {
         'id': row['id'],
         'username': row['username'],
@@ -385,9 +690,12 @@ def row_to_user(row):
         'accept_friend_requests': bool(row['accept_friend_requests']) if 'accept_friend_requests' in row.keys() else True,
         'searchable_by_nickname': bool(row['searchable_by_nickname']) if 'searchable_by_nickname' in row.keys() else True,
         'searchable_by_player_id': bool(row['searchable_by_player_id']) if 'searchable_by_player_id' in row.keys() else True,
+        'false_report_count': int(row['false_report_count'] or 0) if 'false_report_count' in row.keys() else 0,
         'banned': bool(row['banned']) if 'banned' in row.keys() else False,
         'ban_reason': row['ban_reason'] if 'ban_reason' in row.keys() else None,
         'banned_at': row['banned_at'] if 'banned_at' in row.keys() else None,
+        'ban_until': row['ban_until'] if 'ban_until' in row.keys() else None,
+        'skin': normalize_skin_config(skin_raw),
     }
 
 
@@ -424,6 +732,8 @@ def create_user(username, password):
                 ''',
                 (name, normalize_username_key(name), password_hash, now, player_id),
             )
+            row = conn.execute('SELECT * FROM users WHERE id = ?', (cur.lastrowid,)).fetchone()
+            _ensure_builtin_role_for_row(conn, row)
             conn.commit()
             row = conn.execute('SELECT * FROM users WHERE id = ?', (cur.lastrowid,)).fetchone()
             return row_to_user(row), None
@@ -439,10 +749,16 @@ def verify_user(username, password):
         row = _find_user_row_by_username_key(conn, name)
         if row is None or not check_password_hash(row['password_hash'], str(password or '')):
             return None, '用户名或密码错误'
-        is_banned = bool(row['banned']) if 'banned' in row.keys() else False
-        if is_banned:
-            reason = (row['ban_reason'] if 'ban_reason' in row.keys() else '') or ''
-            return None, f'账号已被封禁：{reason}' if reason else '账号已被封禁'
+        row = _clear_expired_user_ban(conn, row)
+        ban_status = get_user_ban_status(user_id=row['id'])
+        if ban_status.get('banned'):
+            reason = ban_status.get('reason') or ''
+            remaining = ban_status.get('remaining_seconds')
+            if remaining is None:
+                suffix = '永久'
+            else:
+                suffix = f'剩余{format_duration_zh(remaining)}'
+            return None, f'账号已被封禁（{suffix}）：{reason}' if reason else f'账号已被封禁（{suffix}）'
         return row_to_user(row), None
 
 
@@ -474,6 +790,25 @@ def change_user_password(user_id, old_password, new_password):
         conn.execute(
             'UPDATE users SET password_hash = ? WHERE id = ?',
             (generate_password_hash(str(new_password)), uid),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        return row_to_user(row), None
+
+
+def update_user_skin(user_id, skin_config):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    skin = normalize_skin_config(skin_config)
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            return None, '请先登录账号'
+        conn.execute(
+            'UPDATE users SET skin_json = ? WHERE id = ?',
+            (json.dumps(skin, ensure_ascii=False, separators=(',', ':')), uid),
         )
         conn.commit()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
@@ -514,24 +849,684 @@ def admin_change_user_password(identifier, new_password):
         return row_to_user(row), None
 
 
-def admin_set_user_ban(identifier, banned=True, reason=''):
+def admin_set_user_ban(identifier, banned=True, reason='', duration_seconds=None):
     user = find_user_for_admin(identifier)
     if not user:
         return None, '账号不存在'
     reason_text = str(reason or '').strip()[:200]
     banned_at = utc_now() if banned else None
+    ban_until = None
+    if banned and duration_seconds is not None:
+        try:
+            duration = int(duration_seconds)
+        except (TypeError, ValueError):
+            duration = 0
+        if duration > 0:
+            duration = min(duration, 60 * 60 * 24 * 365)
+            ban_until = utc_iso(utc_now_dt() + timedelta(seconds=duration))
     with get_db_connection() as conn:
         conn.execute(
             '''
             UPDATE users
-            SET banned = ?, ban_reason = ?, banned_at = ?
+            SET banned = ?, ban_reason = ?, banned_at = ?, ban_until = ?
             WHERE id = ?
             ''',
-            (1 if banned else 0, reason_text if banned else None, banned_at, user['id']),
+            (1 if banned else 0, reason_text if banned else None, banned_at, ban_until if banned else None, user['id']),
         )
         conn.commit()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
         return row_to_user(row), None
+
+
+def _parse_utc(value):
+    text = str(value or '')
+    if not text:
+        return None
+    if text.endswith('Z'):
+        text = text[:-1] + '+00:00'
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _remaining_seconds_until(value):
+    until_dt = _parse_utc(value)
+    if until_dt is None:
+        return None
+    return max(0, int((until_dt - utc_now_dt()).total_seconds()))
+
+
+def _clear_expired_user_ban(conn, row):
+    if row is None:
+        return None
+    is_banned = bool(row['banned']) if 'banned' in row.keys() else False
+    if not is_banned:
+        return row
+    ban_until = row['ban_until'] if 'ban_until' in row.keys() else None
+    until_dt = _parse_utc(ban_until)
+    if until_dt is not None and until_dt <= utc_now_dt():
+        conn.execute(
+            'UPDATE users SET banned = 0, ban_reason = NULL, banned_at = NULL, ban_until = NULL WHERE id = ?',
+            (row['id'],),
+        )
+        conn.commit()
+        return conn.execute('SELECT * FROM users WHERE id = ?', (row['id'],)).fetchone()
+    return row
+
+
+def get_user_ban_status(user_id=None, username=None):
+    with get_db_connection() as conn:
+        row = None
+        if user_id is not None:
+            try:
+                uid = int(user_id)
+                row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+            except (TypeError, ValueError):
+                row = None
+        if row is None and username:
+            row = _find_user_row_by_username_key(conn, username)
+        row = _clear_expired_user_ban(conn, row)
+        if row is None:
+            return {'banned': False}
+        is_banned = bool(row['banned']) if 'banned' in row.keys() else False
+        if not is_banned:
+            return {'banned': False, 'user': row_to_user(row)}
+        ban_until = row['ban_until'] if 'ban_until' in row.keys() else None
+        remaining = _remaining_seconds_until(ban_until)
+        return {
+            'banned': True,
+            'user': row_to_user(row),
+            'reason': (row['ban_reason'] if 'ban_reason' in row.keys() else '') or '',
+            'ban_until': ban_until,
+            'remaining_seconds': remaining,
+            'permanent': remaining is None,
+        }
+
+
+def record_chat_message(room_id, channel, sender_user_id, sender_name, message, normalized_message='', risk_level=0, hidden=False):
+    now = utc_now()
+    try:
+        uid = int(sender_user_id) if sender_user_id is not None else None
+    except (TypeError, ValueError):
+        uid = None
+    with get_db_connection() as conn:
+        cur = conn.execute(
+            '''
+            INSERT INTO chat_messages (
+                room_id, channel, sender_user_id, sender_name, message,
+                normalized_message, risk_level, created_at, hidden
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                str(room_id) if room_id is not None else None,
+                str(channel or 'public')[:40],
+                uid,
+                str(sender_name or '')[:80],
+                str(message or '')[:1000],
+                str(normalized_message or '')[:1000],
+                int(risk_level or 0),
+                now,
+                1 if hidden else 0,
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def _row_to_chat_message(row):
+    if row is None:
+        return None
+    return {
+        'id': row['id'],
+        'room_id': row['room_id'],
+        'channel': row['channel'],
+        'sender_user_id': row['sender_user_id'],
+        'sender_name': row['sender_name'],
+        'message': row['message'],
+        'normalized_message': row['normalized_message'],
+        'risk_level': row['risk_level'],
+        'created_at': row['created_at'],
+        'hidden': bool(row['hidden']),
+    }
+
+
+def get_chat_message_with_context(message_id, context_limit=8):
+    try:
+        mid = int(message_id)
+    except (TypeError, ValueError):
+        return None
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM chat_messages WHERE id = ?', (mid,)).fetchone()
+        if row is None:
+            return None
+        room_id = row['room_id']
+        created_at = row['created_at']
+        if room_id:
+            before = conn.execute(
+                '''
+                SELECT * FROM chat_messages
+                WHERE room_id = ? AND created_at <= ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                ''',
+                (room_id, created_at, max(1, int(context_limit))),
+            ).fetchall()
+            after = conn.execute(
+                '''
+                SELECT * FROM chat_messages
+                WHERE room_id = ? AND created_at > ?
+                ORDER BY created_at ASC
+                LIMIT ?
+                ''',
+                (room_id, created_at, max(1, int(context_limit // 2))),
+            ).fetchall()
+        else:
+            before = [row]
+            after = []
+        items = [_row_to_chat_message(item) for item in reversed(before)] + [_row_to_chat_message(item) for item in after]
+        return {'message': _row_to_chat_message(row), 'context': items}
+
+
+def set_user_mute(user_id, username='', seconds=600, reason='', muted_by=''):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '账号不存在'
+    duration = max(1, min(int(seconds or 600), 60 * 60 * 24 * 30))
+    now_dt = utc_now_dt()
+    until = utc_iso(now_dt + timedelta(seconds=duration))
+    now = utc_iso(now_dt)
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            return None, '账号不存在'
+        conn.execute(
+            '''
+            INSERT INTO muted_users (user_id, username, muted_until, reason, created_at, muted_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username=excluded.username,
+                muted_until=excluded.muted_until,
+                reason=excluded.reason,
+                created_at=excluded.created_at,
+                muted_by=excluded.muted_by
+            ''',
+            (uid, str(username or row['username']), until, str(reason or '')[:300], now, str(muted_by or '')[:80]),
+        )
+        conn.commit()
+        return {'user_id': uid, 'username': str(username or row['username']), 'muted_until': until}, None
+
+
+def is_user_muted_db(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return False, None
+    now = utc_now()
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM muted_users WHERE user_id = ?', (uid,)).fetchone()
+        if row is None:
+            return False, None
+        until_dt = _parse_utc(row['muted_until'])
+        if until_dt is None or until_dt <= utc_now_dt():
+            conn.execute('DELETE FROM muted_users WHERE user_id = ?', (uid,))
+            conn.commit()
+            return False, None
+        return True, {
+            'user_id': uid,
+            'username': row['username'],
+            'muted_until': row['muted_until'],
+            'reason': row['reason'],
+            'muted_by': row['muted_by'],
+            'checked_at': now,
+        }
+
+
+def _row_to_report(row):
+    if row is None:
+        return None
+    return {
+        'id': row['id'],
+        'reporter_user_id': row['reporter_user_id'],
+        'reporter_username': row['reporter_username'],
+        'target_user_id': row['target_user_id'],
+        'target_username': row['target_username'],
+        'object_type': row['object_type'],
+        'object_id': row['object_id'],
+        'category': row['category'],
+        'reason_text': row['reason_text'],
+        'status': row['status'],
+        'risk_level': row['risk_level'],
+        'created_at': row['created_at'],
+        'resolved_at': row['resolved_at'],
+        'resolved_by': row['resolved_by'],
+        'resolution_note': row['resolution_note'],
+    }
+
+
+def create_report_entry(
+    reporter_user_id,
+    object_type,
+    object_id,
+    category,
+    reason_text='',
+    target_user_id=None,
+    target_username='',
+    risk_level=0,
+    evidence=None,
+):
+    try:
+        reporter_id = int(reporter_user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    now_dt = utc_now_dt()
+    now = utc_iso(now_dt)
+    ten_min_ago = utc_iso(now_dt - timedelta(minutes=10))
+    day_ago = utc_iso(now_dt - timedelta(hours=24))
+    object_type = str(object_type or '').strip()[:40]
+    object_id = str(object_id or '').strip()[:120]
+    category = str(category or '').strip()[:60]
+    reason = str(reason_text or '').strip()[:300]
+    if not object_type or not object_id or not category:
+        return None, '举报对象不完整'
+    try:
+        target_id = int(target_user_id) if target_user_id not in (None, '') else None
+    except (TypeError, ValueError):
+        target_id = None
+    with get_db_connection() as conn:
+        reporter = conn.execute('SELECT * FROM users WHERE id = ?', (reporter_id,)).fetchone()
+        if reporter is None:
+            return None, '请先登录账号'
+        if int(reporter['false_report_count'] or 0) >= 10:
+            return None, '举报功能已被限制，请联系管理员'
+        recent_10m = conn.execute(
+            'SELECT COUNT(*) FROM reports WHERE reporter_user_id = ? AND created_at >= ?',
+            (reporter_id, ten_min_ago),
+        ).fetchone()[0]
+        if recent_10m >= 5:
+            return None, '举报过于频繁，请稍后再试'
+        recent_day = conn.execute(
+            'SELECT COUNT(*) FROM reports WHERE reporter_user_id = ? AND created_at >= ?',
+            (reporter_id, day_ago),
+        ).fetchone()[0]
+        if recent_day >= 30:
+            return None, '今日举报次数已达上限'
+        duplicate = conn.execute(
+            '''
+            SELECT id FROM reports
+            WHERE reporter_user_id = ? AND object_type = ? AND object_id = ? AND category = ? AND created_at >= ?
+            LIMIT 1
+            ''',
+            (reporter_id, object_type, object_id, category, day_ago),
+        ).fetchone()
+        if duplicate is not None:
+            return None, '24小时内不能重复举报同一对象'
+        cur = conn.execute(
+            '''
+            INSERT INTO reports (
+                reporter_user_id, reporter_username, target_user_id, target_username,
+                object_type, object_id, category, reason_text, status, risk_level, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+            ''',
+            (
+                reporter_id,
+                reporter['username'],
+                target_id,
+                str(target_username or '')[:80],
+                object_type,
+                object_id,
+                category,
+                reason,
+                int(risk_level or 0),
+                now,
+            ),
+        )
+        report_id = cur.lastrowid
+        for item in evidence or []:
+            if not isinstance(item, dict):
+                continue
+            conn.execute(
+                'INSERT INTO report_evidence (report_id, evidence_type, data_json, created_at) VALUES (?, ?, ?, ?)',
+                (
+                    report_id,
+                    str(item.get('evidence_type') or item.get('type') or 'context')[:60],
+                    json.dumps(item.get('data') if 'data' in item else item, ensure_ascii=False),
+                    now,
+                ),
+            )
+        conn.commit()
+        row = conn.execute('SELECT * FROM reports WHERE id = ?', (report_id,)).fetchone()
+        return _row_to_report(row), None
+
+
+def list_reports(status='pending', limit=50, offset=0):
+    limit = max(1, min(int(limit or 50), 100))
+    offset = max(0, int(offset or 0))
+    status_text = str(status or 'pending').strip().lower()
+    where = ''
+    params = []
+    if status_text and status_text != 'all':
+        where = 'WHERE status = ?'
+        params.append(status_text)
+    with get_db_connection() as conn:
+        total = conn.execute(f'SELECT COUNT(*) FROM reports {where}', params).fetchone()[0]
+        rows = conn.execute(
+            f'SELECT * FROM reports {where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
+            params + [limit, offset],
+        ).fetchall()
+        return {
+            'items': [_row_to_report(row) for row in rows],
+            'total': total,
+            'limit': limit,
+            'offset': offset,
+            'has_more': offset + len(rows) < total,
+        }
+
+
+def get_report_detail(report_id):
+    try:
+        rid = int(report_id)
+    except (TypeError, ValueError):
+        return None
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM reports WHERE id = ?', (rid,)).fetchone()
+        if row is None:
+            return None
+        evidence_rows = conn.execute('SELECT * FROM report_evidence WHERE report_id = ? ORDER BY id ASC', (rid,)).fetchall()
+        actions = conn.execute('SELECT * FROM moderation_actions WHERE related_report_id = ? ORDER BY id ASC', (rid,)).fetchall()
+        reporter_stats = conn.execute(
+            '''
+            SELECT
+                SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) AS accepted_count,
+                SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected_count,
+                SUM(CASE WHEN status = 'abusive' THEN 1 ELSE 0 END) AS abusive_count
+            FROM reports WHERE reporter_user_id = ?
+            ''',
+            (row['reporter_user_id'],),
+        ).fetchone()
+        data = _row_to_report(row)
+        data['evidence'] = [
+            {
+                'id': ev['id'],
+                'evidence_type': ev['evidence_type'],
+                'data': json.loads(ev['data_json'] or '{}'),
+                'created_at': ev['created_at'],
+            }
+            for ev in evidence_rows
+        ]
+        data['actions'] = [
+            {
+                'id': action['id'],
+                'admin_username': action['admin_username'],
+                'target_user_id': action['target_user_id'],
+                'target_username': action['target_username'],
+                'action_type': action['action_type'],
+                'reason': action['reason'],
+                'duration_seconds': action['duration_seconds'],
+                'created_at': action['created_at'],
+                'expires_at': action['expires_at'],
+            }
+            for action in actions
+        ]
+        data['reporter_history'] = {
+            'accepted': int(reporter_stats['accepted_count'] or 0),
+            'rejected': int(reporter_stats['rejected_count'] or 0),
+            'abusive': int(reporter_stats['abusive_count'] or 0),
+        }
+        return data
+
+
+def resolve_report_entry(report_id, action, moderation_action='none', admin_username='', note='', duration_seconds=None):
+    try:
+        rid = int(report_id)
+    except (TypeError, ValueError):
+        return None, '举报不存在'
+    action = str(action or '').strip().lower()
+    moderation_action = str(moderation_action or 'none').strip().lower()
+    status_map = {'accept': 'accepted', 'reject': 'rejected', 'abusive': 'abusive'}
+    if action not in status_map:
+        return None, '处理动作无效'
+    if moderation_action not in {'none', 'warn', 'mute', 'ban', 'invalidate_match'}:
+        return None, '处罚动作无效'
+    now_dt = utc_now_dt()
+    now = utc_iso(now_dt)
+    duration = int(duration_seconds or 0) if duration_seconds is not None else None
+    expires_at = utc_iso(now_dt + timedelta(seconds=max(1, duration))) if duration and moderation_action == 'mute' else None
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM reports WHERE id = ?', (rid,)).fetchone()
+        if row is None:
+            return None, '举报不存在'
+        conn.execute(
+            '''
+            UPDATE reports
+            SET status = ?, resolved_at = ?, resolved_by = ?, resolution_note = ?
+            WHERE id = ?
+            ''',
+            (status_map[action], now, str(admin_username or '')[:80], str(note or '')[:500], rid),
+        )
+        if action == 'abusive':
+            conn.execute(
+                'UPDATE users SET false_report_count = COALESCE(false_report_count, 0) + 1 WHERE id = ?',
+                (row['reporter_user_id'],),
+            )
+        if moderation_action != 'none':
+            conn.execute(
+                '''
+                INSERT INTO moderation_actions (
+                    admin_username, target_user_id, target_username, action_type,
+                    reason, duration_seconds, created_at, expires_at, related_report_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    str(admin_username or '')[:80],
+                    row['target_user_id'],
+                    row['target_username'],
+                    moderation_action,
+                    str(note or '')[:500],
+                    duration,
+                    now,
+                    expires_at,
+                    rid,
+                ),
+            )
+        conn.commit()
+    return get_report_detail(rid), None
+
+
+def _role_row_to_profile(user_row, role_row):
+    if user_row is None or role_row is None:
+        return None
+    role_type = str(role_row['role_type'] or '').strip().lower()
+    if role_type == 'none' or not bool(role_row['visible']):
+        return None
+    defaults = _role_defaults(role_type)
+    role_key = str(role_row['role_key'] or defaults.get('role_key') or role_type).strip()
+    title = str(role_row['title'] or defaults.get('title') or '').strip()
+    color = _normalize_role_color(role_row['color'], defaults.get('color') or 'neutral')
+    is_admin = role_type == 'admin'
+    return {
+        'user_id': user_row['id'],
+        'display_name': user_row['username'],
+        'role_type': role_type,
+        'special_role': role_key or role_type,
+        'special_role_label': title,
+        'special_role_color': color,
+        'special_role_sort': int(role_row['sort_order'] if role_row['sort_order'] is not None else defaults.get('sort_order', 99)),
+        'is_admin_player': is_admin,
+        'can_direct_friend': bool(role_row['can_direct_friend']),
+        'chat_exempt': bool(role_row['chat_exempt']),
+    }
+
+
+def get_user_role_profile(identifier):
+    token = str(identifier or '').strip()
+    if not token:
+        return None
+    with get_db_connection() as conn:
+        user_row = None
+        if isinstance(identifier, int) or token.isdigit():
+            user_row = conn.execute('SELECT * FROM users WHERE id = ?', (int(token),)).fetchone()
+        if user_row is None:
+            user_row = _find_user_row_by_username_key(conn, token)
+        if user_row is None:
+            return None
+        _ensure_builtin_role_for_row(conn, user_row)
+        conn.commit()
+        role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user_row['id'],)).fetchone()
+        return _role_row_to_profile(user_row, role_row)
+
+
+def user_role_can_direct_friend(user_row_or_id):
+    with get_db_connection() as conn:
+        if isinstance(user_row_or_id, sqlite3.Row):
+            user_row = user_row_or_id
+        else:
+            try:
+                uid = int(user_row_or_id)
+            except (TypeError, ValueError):
+                return False
+            user_row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if user_row is None:
+            return False
+        _ensure_builtin_role_for_row(conn, user_row)
+        conn.commit()
+        role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user_row['id'],)).fetchone()
+        profile = _role_row_to_profile(user_row, role_row)
+        return bool(profile and profile.get('can_direct_friend'))
+
+
+def list_user_roles(query='', limit=100):
+    try:
+        safe_limit = max(1, min(int(limit), 300))
+    except (TypeError, ValueError):
+        safe_limit = 100
+    name = sanitize_username(query)
+    where = 'WHERE r.role_type <> ?'
+    params = ['none']
+    if name:
+        where += ' AND (u.username_lower LIKE ? OR u.player_id LIKE ? OR r.role_type LIKE ? OR r.title LIKE ?)'
+        params.extend([f'%{name.lower()}%', f'%{str(query or "").strip().upper()}%', f'%{name.lower()}%', f'%{name}%'])
+    with get_db_connection() as conn:
+        _seed_builtin_user_roles(conn)
+        conn.commit()
+        rows = conn.execute(
+            f'''
+            SELECT u.*, r.role_type, r.role_key, r.title, r.color, r.sort_order,
+                   r.can_direct_friend, r.chat_exempt, r.visible
+            FROM user_roles r
+            JOIN users u ON u.id = r.user_id
+            {where}
+            ORDER BY r.sort_order ASC, u.username_lower ASC
+            LIMIT ?
+            ''',
+            params + [safe_limit],
+        ).fetchall()
+        result = []
+        for row in rows:
+            if not bool(row['visible']):
+                continue
+            result.append({
+                'user_id': row['id'],
+                'username': row['username'],
+                'player_id': row['player_id'],
+                'role_type': row['role_type'],
+                'role_key': row['role_key'],
+                'title': row['title'],
+                'color': row['color'],
+                'sort_order': row['sort_order'],
+                'can_direct_friend': bool(row['can_direct_friend']),
+                'chat_exempt': bool(row['chat_exempt']),
+            })
+        return result
+
+
+def admin_set_user_role(identifier, role_type, title='', color='', sort_order=None, role_key='', can_direct_friend=None, chat_exempt=None, visible=True):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, None, '账号不存在'
+    normalized_type = _normalize_role_type(role_type)
+    if not normalized_type:
+        return None, None, '身份类型必须是 admin/staff/contributor/sponsor/none'
+    user_key = normalize_username_key(user['username'])
+    if normalized_type == 'admin' and user_key != 'stickerbug':
+        return None, None, '管理员身份只能授予 Stickerbug'
+    if user_key == 'stickerbug' and normalized_type != 'admin':
+        return None, None, 'Stickerbug 必须保持管理员身份'
+    defaults = _role_defaults(normalized_type)
+    title_text = str(title or defaults.get('title') or '').strip()[:32]
+    role_key_text = str(role_key or defaults.get('role_key') or normalized_type).strip()[:40]
+    color_text = _normalize_role_color(color, defaults.get('color') or 'neutral')
+    if sort_order is None:
+        order_value = int(defaults.get('sort_order', 99))
+    else:
+        try:
+            order_value = max(0, min(int(sort_order), 99))
+        except (TypeError, ValueError):
+            return None, None, 'sort 必须是 0-99 的整数'
+    direct = defaults.get('can_direct_friend') if can_direct_friend is None else bool(can_direct_friend)
+    chat = defaults.get('chat_exempt') if chat_exempt is None else bool(chat_exempt)
+    if normalized_type == 'admin':
+        direct = True
+        chat = True
+        order_value = 0
+    if normalized_type == 'staff':
+        direct = True
+        chat = True
+        order_value = min(order_value, 1)
+    now = utc_now()
+    with get_db_connection() as conn:
+        conn.execute(
+            '''
+            INSERT INTO user_roles (
+                user_id, role_type, role_key, title, color, sort_order,
+                can_direct_friend, chat_exempt, visible, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                role_type = excluded.role_type,
+                role_key = excluded.role_key,
+                title = excluded.title,
+                color = excluded.color,
+                sort_order = excluded.sort_order,
+                can_direct_friend = excluded.can_direct_friend,
+                chat_exempt = excluded.chat_exempt,
+                visible = excluded.visible,
+                updated_at = excluded.updated_at
+            ''',
+            (
+                user['id'],
+                normalized_type,
+                role_key_text,
+                title_text,
+                color_text,
+                order_value,
+                1 if direct else 0,
+                1 if chat else 0,
+                1 if visible and normalized_type != 'none' else 0,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
+        role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user['id'],)).fetchone()
+        return row_to_user(user_row), _role_row_to_profile(user_row, role_row), None
+
+
+def admin_clear_user_role(identifier):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, '账号不存在'
+    if normalize_username_key(user['username']) == 'stickerbug':
+        return None, '不能清除 Stickerbug 的管理员身份'
+    _, _, error = admin_set_user_role(user['id'], 'none', title='', color='neutral', sort_order=99, role_key='none', can_direct_friend=False, chat_exempt=False, visible=False)
+    if error:
+        return None, error
+    return user, None
 
 
 def get_user_by_id(user_id):
@@ -540,7 +1535,9 @@ def get_user_by_id(user_id):
     except (TypeError, ValueError):
         return None
     with get_db_connection() as conn:
-        return row_to_user(conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone())
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        row = _clear_expired_user_ban(conn, row)
+        return row_to_user(row)
 
 
 def get_user_by_username(username):
@@ -548,7 +1545,9 @@ def get_user_by_username(username):
     if not name:
         return None
     with get_db_connection() as conn:
-        return row_to_user(_find_user_row_by_username_key(conn, name))
+        row = _find_user_row_by_username_key(conn, name)
+        row = _clear_expired_user_ban(conn, row)
+        return row_to_user(row)
 
 
 def _remember_token_hash(token):
@@ -640,6 +1639,105 @@ ADMIN_USER_SORTS = {
 }
 
 
+CARD_DRAFT_STAT_SORTS = {
+    'mode': 'mode',
+    'card_id': 'card_id',
+    'shown_count': 'shown_count',
+    'picked_count': 'picked_count',
+    'pick_rate': 'CASE WHEN shown_count > 0 THEN CAST(picked_count AS REAL) / shown_count ELSE 0 END',
+    'updated_at': 'updated_at',
+}
+
+
+def record_card_draft_pick(mode, option_ids, picked_id):
+    mode_key = str(mode or '').strip()
+    if mode_key not in ('1v1', '2v2'):
+        return False
+    picked = str(picked_id or '').strip()
+    counts = {}
+    for raw_id in option_ids or []:
+        card_id = str(raw_id or '').strip()
+        if not card_id:
+            continue
+        counts[card_id] = counts.get(card_id, 0) + 1
+    if not counts or not picked:
+        return False
+    now = utc_now()
+    with get_db_connection() as conn:
+        for card_id, shown_inc in counts.items():
+            picked_inc = 1 if card_id == picked else 0
+            conn.execute(
+                '''
+                INSERT INTO card_draft_stats (mode, card_id, shown_count, picked_count, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(mode, card_id) DO UPDATE SET
+                    shown_count = shown_count + excluded.shown_count,
+                    picked_count = picked_count + excluded.picked_count,
+                    updated_at = excluded.updated_at
+                ''',
+                (mode_key, card_id, int(shown_inc), int(picked_inc), now),
+            )
+        conn.commit()
+    return True
+
+
+def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0):
+    mode_key = str(mode or '').strip()
+    sort_key = str(sort or 'pick_rate')
+    sort_expr = CARD_DRAFT_STAT_SORTS.get(sort_key, CARD_DRAFT_STAT_SORTS['pick_rate'])
+    direction = 'ASC' if str(order or '').lower() == 'asc' else 'DESC'
+    try:
+        safe_limit = max(1, min(int(limit), 1000))
+    except (TypeError, ValueError):
+        safe_limit = 300
+    try:
+        safe_offset = max(0, int(offset))
+    except (TypeError, ValueError):
+        safe_offset = 0
+    where = ''
+    params = []
+    if mode_key in ('1v1', '2v2'):
+        where = 'WHERE mode = ?'
+        params.append(mode_key)
+    order_clause = f'{sort_expr} {direction}, shown_count DESC, card_id ASC'
+    with get_db_connection() as conn:
+        total = conn.execute(f'SELECT COUNT(*) FROM card_draft_stats {where}', params).fetchone()[0]
+        rows = conn.execute(
+            f'''
+            SELECT
+                mode,
+                card_id,
+                shown_count,
+                picked_count,
+                updated_at,
+                CASE WHEN shown_count > 0 THEN CAST(picked_count AS REAL) / shown_count * 100 ELSE 0 END AS pick_rate
+            FROM card_draft_stats
+            {where}
+            ORDER BY {order_clause}
+            LIMIT ? OFFSET ?
+            ''',
+            params + [safe_limit, safe_offset],
+        ).fetchall()
+    return {
+        'items': [
+            {
+                'mode': row['mode'],
+                'card_id': row['card_id'],
+                'shown_count': row['shown_count'],
+                'picked_count': row['picked_count'],
+                'pick_rate': round(float(row['pick_rate'] or 0), 2),
+                'updated_at': row['updated_at'],
+            }
+            for row in rows
+        ],
+        'total': total,
+        'limit': safe_limit,
+        'offset': safe_offset,
+        'sort': sort_key if sort_key in CARD_DRAFT_STAT_SORTS else 'pick_rate',
+        'order': 'asc' if direction == 'ASC' else 'desc',
+    }
+
+
 def list_admin_users(query='', sort='last_login_at', order='desc', limit=100, offset=0):
     sort_key = str(sort or 'last_login_at')
     sort_expr = ADMIN_USER_SORTS.get(sort_key, ADMIN_USER_SORTS['last_login_at'])
@@ -689,17 +1787,71 @@ def list_admin_users(query='', sort='last_login_at', order='desc', limit=100, of
     }
 
 
-def _row_to_match_summary(row):
+def _safe_json_loads(value, fallback):
+    try:
+        return json.loads(value or '')
+    except Exception:
+        return fallback
+
+
+def _match_winner_keys(row, player_names, summary):
+    winner_keys = set()
+    winner_name = str(row['winner_name'] or '').strip()
+    if winner_name and normalize_username_key(winner_name) not in {'draw', '平局'}:
+        if not re.search(r'\s*/\s*|\s*,\s*', winner_name):
+            winner_keys.add(normalize_username_key(winner_name))
+        for part in re.split(r'\s*/\s*|\s*,\s*', winner_name):
+            part_key = normalize_username_key(part)
+            if part_key and part_key not in {'draw', '平局'}:
+                winner_keys.add(part_key)
+    try:
+        winner_index = int(row['winner_index']) if row['winner_index'] is not None else None
+    except (TypeError, ValueError):
+        winner_index = None
+    mode = str(row['mode'] or summary.get('mode') or '').lower()
+    if winner_index is not None and winner_index >= 0:
+        if mode == '2v2':
+            for idx in ({0: [0, 1], 1: [2, 3]}.get(winner_index, [])):
+                if 0 <= idx < len(player_names):
+                    key = normalize_username_key(player_names[idx])
+                    if key:
+                        winner_keys.add(key)
+        elif 0 <= winner_index < len(player_names):
+            key = normalize_username_key(player_names[winner_index])
+            if key:
+                winner_keys.add(key)
+    return winner_keys
+
+
+def _match_result_for_username(row, username, player_names, summary):
+    raw_result = str(row['result'] or '').strip()
+    lower_result = raw_result.lower()
+    winner_name_key = normalize_username_key(row['winner_name'] or '')
+    try:
+        winner_index = int(row['winner_index']) if row['winner_index'] is not None else None
+    except (TypeError, ValueError):
+        winner_index = None
+    if lower_result == 'draw' or winner_name_key in {'draw', '平局'} or winner_index == -1:
+        return 'draw'
+    user_key = normalize_username_key(username)
+    if not user_key:
+        return raw_result
+    participant_keys = {normalize_username_key(name) for name in (player_names or []) if normalize_username_key(name)}
+    winner_keys = _match_winner_keys(row, player_names, summary)
+    if winner_keys:
+        return 'win' if user_key in winner_keys else 'loss'
+    if user_key not in participant_keys:
+        return raw_result
+    return raw_result or 'finished'
+
+
+def _row_to_match_summary(row, perspective_username=None):
     if row is None:
         return None
-    try:
-        player_names = json.loads(row['player_names_json'] or '[]')
-    except Exception:
-        player_names = []
-    try:
-        summary = json.loads(row['summary_json'] or '{}')
-    except Exception:
-        summary = {}
+    player_names = _safe_json_loads(row['player_names_json'], [])
+    summary = _safe_json_loads(row['summary_json'], {})
+    raw_result = row['result']
+    result = _match_result_for_username(row, perspective_username, player_names, summary) if perspective_username else raw_result
     return {
         'id': row['id'],
         'mode': row['mode'],
@@ -712,7 +1864,10 @@ def _row_to_match_summary(row):
         'rounds': row['rounds'],
         'mod_source': row['mod_source'],
         'mod_hash': row['mod_hash'],
-        'result': row['result'],
+        'result': result,
+        'result_raw': raw_result,
+        'valid_for_ranking': bool(summary.get('valid_for_ranking', True)),
+        'ranking_invalid_reason': summary.get('ranking_invalid_reason', ''),
         'room_id': summary.get('room_id'),
     }
 
@@ -762,6 +1917,7 @@ def _public_social_user(row):
         'losses': user.get('losses') or 0,
         'draws': user.get('draws') or 0,
         'win_rate': user.get('win_rate') or 0.0,
+        'role': get_user_role_profile(user['id']),
     }
 
 
@@ -794,9 +1950,15 @@ def _friend_request_expires_at():
     return utc_iso(utc_now_dt() + timedelta(days=FRIEND_REQUEST_TTL_DAYS))
 
 
-def _is_auto_friend_requester(row):
-    name = row['username'] if row is not None and 'username' in row.keys() else ''
-    return normalize_username_key(name) in AUTO_FRIEND_REQUESTER_NAMES
+def _is_auto_friend_requester(row, conn=None):
+    if row is None:
+        return False
+    if conn is not None:
+        _ensure_builtin_role_for_row(conn, row)
+        role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (row['id'],)).fetchone()
+        profile = _role_row_to_profile(row, role_row)
+        return bool(profile and profile.get('can_direct_friend'))
+    return user_role_can_direct_friend(row)
 
 
 def _mark_friend_notifications_read(conn, user_id):
@@ -838,7 +2000,7 @@ def _recent_matches_for_username(conn, username, limit=5):
         ''',
         (pattern, max(1, min(int(limit or 5), 20))),
     ).fetchall()
-    return [_row_to_match_summary(row) for row in rows]
+    return [_row_to_match_summary(row, perspective_username=username) for row in rows]
 
 
 def get_user_social_settings(user_id):
@@ -974,7 +2136,7 @@ def add_friend_request(user_id, identifier):
             return None, '账号不存在'
         if int(target['id']) == uid:
             return None, '不能添加自己为好友'
-        auto_add = _is_auto_friend_requester(requester)
+        auto_add = _is_auto_friend_requester(requester, conn)
         if not auto_add and not bool(target['accept_friend_requests']):
             return None, '对方暂不接受好友请求'
         existing = conn.execute(

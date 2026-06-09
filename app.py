@@ -32,10 +32,12 @@ from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
+    normalize_card_flag, normalize_card_flags,
 )
 from mod_loader import GAME_VERSION, merge_mod_cards_to_card_defs, load_all_mods, get_mod_asset
 from mod_loadout_v2 import build_v2_loadout
 from mod_spec_v2 import sha256_json
+from font_subsets import ensure_community_font_subset
 from card_i18n import apply_card_i18n_defaults, card_text, event_text
 from runtime_errors import set_mod_runtime_error_logger
 from r2_mods import (
@@ -54,29 +56,56 @@ from r2_mods import (
 )
 from db import (
     DB_PATH,
+    admin_clear_user_role,
     admin_change_user_password,
     admin_set_user_ban,
+    admin_set_user_role,
     add_friend_request,
     change_user_password,
+    create_report_entry,
     create_remember_token,
     create_user,
     find_user_for_admin,
+    format_duration_zh,
     get_admin_user_detail,
+    get_chat_message_with_context,
+    get_user_ban_status,
+    get_report_detail,
     get_user_by_id,
+    get_user_role_profile,
     get_user_by_username,
+    is_user_muted_db,
     list_friends,
+    list_card_draft_stats,
+    list_reports,
+    list_user_roles,
     mark_user_last_seen,
+    normalize_skin_config,
     normalize_username_key,
+    record_chat_message,
+    record_card_draft_pick,
     remove_friend,
     revoke_remember_token,
+    resolve_report_entry,
     respond_friend_request,
     increment_user_stats,
     init_db,
     list_admin_users,
     save_match_summary,
+    set_user_mute,
+    update_user_skin,
     update_user_social_settings,
     verify_remember_token,
     verify_user,
+)
+from moderation import (
+    REPORT_CATEGORIES,
+    VALID_MODERATION_ACTIONS,
+    VALID_REPORT_ACTIONS,
+    VALID_REPORT_OBJECT_TYPES,
+    check_message_risk,
+    normalize_message,
+    report_category_allowed,
 )
 from replay_core import (
     CLEANUP_HOUR,
@@ -91,6 +120,17 @@ from replay_core import (
     save_replay_snapshot,
     storage_summary,
     vacuum_db,
+)
+from security import (
+    is_muted,
+    mute_remaining_seconds,
+    mute_user,
+    rate_limiter,
+    recent_suspicious_events,
+    record_illegal_operation,
+    record_suspicious_event,
+    validate_int,
+    validate_str,
 )
 
 BASE_CARD_IDS = set(CARD_DEFS.keys())
@@ -251,6 +291,7 @@ SPECIAL_ACCOUNT_PROFILES = [
     },
 ]
 SPECIAL_PLAYER_PROFILES = SPECIAL_ACCOUNT_PROFILES
+BUILTIN_SPECIAL_ACCOUNT_NAMES = {profile['display_name'].lower() for profile in SPECIAL_ACCOUNT_PROFILES}
 ADMIN_EVENTS = deque(maxlen=300)
 MATCH_HISTORY = deque(maxlen=120)
 ADMIN_LOGIN_FAILURES = {}
@@ -271,7 +312,7 @@ CHAT_RATE_WINDOW_SECONDS = 60
 CHAT_RATE_LIMIT = 10
 CHAT_DISPLAY_WIDTH_LIMIT = 200
 CHAT_IDLE_SEPARATOR_SECONDS = 300
-CHAT_EXEMPT_NAMES = {'stickerbug', 'eric', 'netherdog'}
+CHAT_EXEMPT_NAMES = set()
 
 
 def _env_float(name, default):
@@ -388,7 +429,7 @@ def admin_match_record(room, result='finished'):
         winner_index = None
         stats_winners = []
         stats_result = 'draw'
-        if getattr(e, 'winning_team', None) is not None:
+        if getattr(e, 'winning_team', None) is not None and int(getattr(e, 'winning_team', -1)) >= 0:
             winner_index = int(e.winning_team)
             team_members = []
             try:
@@ -421,6 +462,7 @@ def admin_match_record(room, result='finished'):
         community_mod_url = first_meta.get('community_mod_url', '')
         community_mod_name = first_meta.get('community_mod_name', '')
         community_mods = first_meta.get('community_mods', []) if isinstance(first_meta.get('community_mods', []), list) else []
+        valid_for_ranking, ranking_invalid_reason = is_room_valid_for_ranking(room, result)
         history_entry = {
             'time': iso_now(),
             'room_id': room.room_id,
@@ -434,6 +476,8 @@ def admin_match_record(room, result='finished'):
             'started_at': started_at,
             'ended_at': ended_at,
             'duration_seconds': duration_seconds,
+            'valid_for_ranking': valid_for_ranking,
+            'ranking_invalid_reason': ranking_invalid_reason,
         }
         MATCH_HISTORY.appendleft(history_entry)
         summary = {
@@ -453,6 +497,10 @@ def admin_match_record(room, result='finished'):
             'community_mod_url': community_mod_url,
             'community_mod_name': community_mod_name,
             'community_mods': community_mods,
+            'valid_for_ranking': valid_for_ranking,
+            'ranking_invalid_reason': ranking_invalid_reason,
+            'valid_action_counts': getattr(room, '_valid_action_counts', {}) or {},
+            'valid_action_counts_by_side': room_valid_actions_by_side(room),
         }
         if getattr(e, 'game_over', False):
             replay_actions = getattr(room, '_replay_actions', []) or []
@@ -473,7 +521,7 @@ def admin_match_record(room, result='finished'):
                     card_defs=CARD_DEFS,
                     game_version=GAME_VERSION,
                 )
-                if result in ('finished', 'admin_endgame') and getattr(e, 'game_over', False):
+                if valid_for_ranking and result == 'finished' and getattr(e, 'game_over', False):
                     increment_user_stats(registered_usernames, stats_winners, stats_result)
             except Exception as db_exc:
                 admin_event('error', f'failed to persist match summary: {db_exc}')
@@ -539,6 +587,39 @@ def record_auth_login_failure(ip):
 
 def clear_auth_login_failures(ip):
     AUTH_LOGIN_FAILURES.pop(ip, None)
+
+
+def moderation_duration_text(remaining_seconds=None, permanent=False):
+    if permanent or remaining_seconds is None:
+        return '永久'
+    return format_duration_zh(max(0, int(remaining_seconds or 0)))
+
+
+def ban_error_payload(status, *, reason_key='reason'):
+    reason = (status or {}).get('reason') or ''
+    remaining = (status or {}).get('remaining_seconds')
+    permanent = bool((status or {}).get('permanent')) or remaining is None
+    duration_text = moderation_duration_text(remaining, permanent)
+    message = f'账号已被封禁（剩余{duration_text}）：{reason}' if not permanent and reason else (
+        f'账号已被封禁（永久）：{reason}' if reason else (
+            f'账号已被封禁（剩余{duration_text}）' if not permanent else '账号已被封禁（永久）'
+        )
+    )
+    payload = {
+        reason_key: message,
+        'remaining_seconds': remaining,
+        'permanent': permanent,
+        'ban_until': (status or {}).get('ban_until'),
+    }
+    if reason:
+        payload['ban_reason'] = reason
+    return payload
+
+
+def muted_error_payload(remaining_seconds=0, *, message='你已被禁言，请稍后再试'):
+    remaining = max(0, int(remaining_seconds or 0))
+    text = f'{message}（剩余{format_duration_zh(remaining)}）' if remaining else message
+    return {'message': text, 'remaining_seconds': remaining}
 
 
 def db_unavailable_response():
@@ -977,6 +1058,131 @@ def _force_2v2_disconnect_death(room, player_index, nickname):
     return was_alive
 
 
+def _clear_room_pending_on_forfeit(room):
+    e = room.engine
+    e.pending_response = None
+    e.pending_choice = None
+    if hasattr(e, 'pending_v2_ui'):
+        e.pending_v2_ui = None
+    if hasattr(e, 'pending_ally_request'):
+        e.pending_ally_request = None
+    room.pending_surrender_request = None
+
+
+def _cancel_room_reconnect_timers(room):
+    for timer in list(getattr(room, 'reconnect_timers', {}).values()):
+        try:
+            timer.cancel()
+        except Exception:
+            pass
+    room.reconnect_timers.clear()
+    both_timer = getattr(room, 'both_dc_timer', None)
+    if both_timer:
+        try:
+            both_timer.cancel()
+        except Exception:
+            pass
+        room.both_dc_timer = None
+
+
+def _room_team_for_player(room, player_index):
+    e = room.engine
+    if room.mode == '2v2' and hasattr(e, 'team_of'):
+        try:
+            return int(e.team_of(player_index))
+        except Exception:
+            return -1
+    if player_index in (0, 1):
+        return int(player_index)
+    return -1
+
+
+def _room_disconnected_teams(room):
+    teams_seen = set()
+    for dc_info in getattr(room, 'disconnected_players', {}).values():
+        try:
+            pidx = int(dc_info.get('player_index', -1))
+        except Exception:
+            pidx = -1
+        team = _room_team_for_player(room, pidx)
+        if team >= 0:
+            teams_seen.add(team)
+    return teams_seen
+
+
+def _set_room_draw(room, log_message):
+    e = room.engine
+    e.game_over = True
+    e.winner = -1
+    if hasattr(e, 'winning_team'):
+        e.winning_team = -1
+    e.phase = 'game_over'
+    e.log_msg(log_message)
+    return True
+
+
+def _finish_room_by_health_tiebreak(room, reason='双方中途退出'):
+    e = room.engine
+    if getattr(e, 'game_over', False):
+        return False
+    _clear_room_pending_on_forfeit(room)
+    if room.mode == '2v2' and hasattr(e, 'teams'):
+        try:
+            team_h = [
+                sum(int(getattr(e.players[pidx], 'health', 0)) for pidx in e.teams[0]),
+                sum(int(getattr(e.players[pidx], 'health', 0)) for pidx in e.teams[1]),
+            ]
+        except Exception:
+            team_h = [0, 0]
+        if team_h[0] == team_h[1]:
+            return _set_room_draw(room, f"{reason}，双方队伍H总和相同（{team_h[0]}），平局！")
+        winner_team = 0 if team_h[0] > team_h[1] else 1
+        e.game_over = True
+        e.winning_team = winner_team
+        e.winner = winner_team
+        e.phase = 'game_over'
+        e.log_msg(f"{reason}，按队伍H总和判定：队伍{winner_team + 1}获胜（{team_h[0]}:{team_h[1]}）！")
+        return True
+    if len(getattr(e, 'players', [])) < 2:
+        return False
+    h0 = int(getattr(e.players[0], 'health', 0))
+    h1 = int(getattr(e.players[1], 'health', 0))
+    if h0 == h1:
+        return _set_room_draw(room, f"{reason}，双方H相同（{h0}），平局！")
+    winner = 0 if h0 > h1 else 1
+    e.game_over = True
+    e.winner = winner
+    e.phase = 'game_over'
+    e.log_msg(f"{reason}，按当前H判定：{e.pn(winner)}获胜（{h0}:{h1}）！")
+    return True
+
+
+def _finish_room_by_forfeit(room, player_index, nickname, reason='中途退出'):
+    e = room.engine
+    if getattr(e, 'game_over', False):
+        return False
+    if player_index < 0 or player_index >= len(getattr(e, 'players', [])):
+        return False
+    _clear_room_pending_on_forfeit(room)
+    if room.mode == '2v2' and hasattr(e, 'team_of'):
+        losing_team = _room_team_for_player(room, player_index)
+        if losing_team < 0:
+            return False
+        winning_team = 1 - losing_team
+        e.game_over = True
+        e.winning_team = winning_team
+        e.winner = winning_team
+        e.phase = 'game_over'
+        e.log_msg(f"{nickname}{reason}，队伍{winning_team + 1}获胜！")
+        return True
+    winner = 1 - player_index
+    e.game_over = True
+    e.winner = winner
+    e.phase = 'game_over'
+    e.log_msg(f"{nickname}{reason}，{e.pn(winner)}获胜！")
+    return True
+
+
 def _display_width(s):
     w = 0
     for ch in s:
@@ -1019,7 +1225,14 @@ def normalize_chat_text(raw, exempt=False):
 
 
 def is_chat_limit_exempt(player):
-    name = str((player or {}).get('nickname') or '').strip().lower()
+    if not player:
+        return False
+    if player.get('chat_exempt') or player.get('is_admin_player'):
+        return True
+    role_type = str(player.get('role_type') or '').strip().lower()
+    if role_type in ('admin', 'staff'):
+        return True
+    name = str(player.get('nickname') or '').strip().lower()
     return name in CHAT_EXEMPT_NAMES
 
 
@@ -1040,6 +1253,10 @@ def check_chat_rate_locked(sid, player, now):
         return False
     bucket.append(now)
     return True
+
+
+def chat_mute_key(sid, player):
+    return f"user:{player.get('user_id')}" if (player or {}).get('user_id') else f"sid:{sid}"
 
 
 def _chat_entry_signature(entry):
@@ -1236,6 +1453,14 @@ def get_special_player_profile(raw):
 
 
 def get_special_account_profile(username):
+    if DB_AVAILABLE:
+        try:
+            profile = get_user_role_profile(username)
+            if profile:
+                return profile
+            return None
+        except Exception as exc:
+            admin_event('error', f'failed to load account role for {username}: {exc}')
     lower = str(username or '').strip().lower()
     for profile in SPECIAL_ACCOUNT_PROFILES:
         if lower == profile['display_name'].lower():
@@ -1249,8 +1474,12 @@ def special_public_fields(player_or_profile):
         'is_admin_player': bool(source.get('is_admin_player')),
         'is_special_player': bool(role),
         'special_role': role or None,
+        'role_type': source.get('role_type') or ('admin' if source.get('is_admin_player') else None),
+        'special_role_label': source.get('special_role_label') or None,
         'special_role_color': source.get('special_role_color') or ('admin' if source.get('is_admin_player') else None),
         'special_role_sort': int(source.get('special_role_sort', 99)),
+        'can_direct_friend': bool(source.get('can_direct_friend')),
+        'chat_exempt': bool(source.get('chat_exempt')),
     }
 
 
@@ -1276,13 +1505,14 @@ def is_admin_player_secret(raw):
 
 def is_reserved_special_nickname(name):
     lower = str(name or '').lower()
-    special_names = {profile['display_name'].lower() for profile in SPECIAL_ACCOUNT_PROFILES}
+    special_names = set(BUILTIN_SPECIAL_ACCOUNT_NAMES)
     return ('sticker' in lower and 'bug' in lower) or lower in special_names
 
 
 def is_exact_special_account_name(name):
     lower = str(name or '').strip().lower()
-    return lower in {profile['display_name'].lower() for profile in SPECIAL_ACCOUNT_PROFILES}
+    profile = get_special_account_profile(name)
+    return bool(profile) or lower in BUILTIN_SPECIAL_ACCOUNT_NAMES
 
 
 def auth_user_payload(user):
@@ -1297,6 +1527,109 @@ def auth_user_payload(user):
         payload['display_name'] = payload.get('username', '')
         payload.update(special_public_fields({}))
     return payload
+
+
+DEFAULT_PUBLIC_SKIN = normalize_skin_config({})
+DEFAULT_SKIN_LOOK = {'x': 0.707, 'y': -0.707}
+
+
+def public_skin_config(value=None):
+    return normalize_skin_config(value or {})
+
+
+def normalize_skin_look(value=None):
+    if not isinstance(value, dict):
+        return dict(DEFAULT_SKIN_LOOK)
+    try:
+        x = float(value.get('x', 0) or 0)
+        y = float(value.get('y', 0) or 0)
+    except (TypeError, ValueError):
+        return dict(DEFAULT_SKIN_LOOK)
+    if not (abs(x) < 1000 and abs(y) < 1000):
+        return dict(DEFAULT_SKIN_LOOK)
+    length = (x * x + y * y) ** 0.5
+    if length < 0.001:
+        return dict(DEFAULT_SKIN_LOOK)
+    return {
+        'x': round(max(-1.0, min(1.0, x / length)), 3),
+        'y': round(max(-1.0, min(1.0, y / length)), 3),
+    }
+
+
+def player_skin_for_sid(sid, room=None):
+    if sid in players:
+        return public_skin_config(players[sid].get('skin'))
+    if room is not None and sid in getattr(room, 'disconnected_players', {}):
+        return public_skin_config(room.disconnected_players[sid].get('skin'))
+    return dict(DEFAULT_PUBLIC_SKIN)
+
+
+def player_skin_look_for_sid(sid, room=None):
+    if sid in players:
+        return normalize_skin_look(players[sid].get('skin_look'))
+    if room is not None and sid in getattr(room, 'disconnected_players', {}):
+        return normalize_skin_look(room.disconnected_players[sid].get('skin_look'))
+    return dict(DEFAULT_SKIN_LOOK)
+
+
+def inject_player_skins(state, room, perspective):
+    if not isinstance(state, dict) or room is None:
+        return state
+    player_skins = []
+    player_skin_looks = []
+    for psid in getattr(room, 'player_sids', []) or []:
+        player_skins.append(player_skin_for_sid(psid, room))
+        player_skin_looks.append(player_skin_look_for_sid(psid, room))
+    state['player_skins'] = player_skins
+    state['player_skin_looks'] = player_skin_looks
+    try:
+        pidx = int(perspective)
+    except (TypeError, ValueError):
+        pidx = -1
+    if 0 <= pidx < len(player_skins):
+        if isinstance(state.get('you'), dict):
+            state['you']['skin'] = player_skins[pidx]
+            state['you']['skin_look'] = player_skin_looks[pidx]
+    if getattr(room, 'mode', '') == '2v2':
+        engine = getattr(room, 'engine', None)
+        teammate_id = getattr(engine, 'get_teammate', lambda _p: -1)(pidx) if pidx >= 0 else -1
+        enemy_ids = getattr(engine, 'get_all_enemies', lambda _p: [])(pidx) if pidx >= 0 else []
+        if isinstance(state.get('teammate'), dict) and 0 <= teammate_id < len(player_skins):
+            state['teammate']['skin'] = player_skins[teammate_id]
+            state['teammate']['skin_look'] = player_skin_looks[teammate_id]
+        if isinstance(state.get('opponent'), dict) and len(enemy_ids) > 0 and 0 <= enemy_ids[0] < len(player_skins):
+            state['opponent']['skin'] = player_skins[enemy_ids[0]]
+            state['opponent']['skin_look'] = player_skin_looks[enemy_ids[0]]
+        if isinstance(state.get('opponent2'), dict) and len(enemy_ids) > 1 and 0 <= enemy_ids[1] < len(player_skins):
+            state['opponent2']['skin'] = player_skins[enemy_ids[1]]
+            state['opponent2']['skin_look'] = player_skin_looks[enemy_ids[1]]
+    else:
+        opp_pidx = 1 - pidx
+        if isinstance(state.get('opponent'), dict) and 0 <= opp_pidx < len(player_skins):
+            state['opponent']['skin'] = player_skins[opp_pidx]
+            state['opponent']['skin_look'] = player_skin_looks[opp_pidx]
+    return state
+
+
+def inject_solo_skins(state, owner_skin=None, perspective=0):
+    if not isinstance(state, dict):
+        return state
+    skins = [public_skin_config(owner_skin), dict(DEFAULT_PUBLIC_SKIN)]
+    looks = [dict(DEFAULT_SKIN_LOOK), dict(DEFAULT_SKIN_LOOK)]
+    state['player_skins'] = skins
+    state['player_skin_looks'] = looks
+    try:
+        pidx = int(perspective)
+    except (TypeError, ValueError):
+        pidx = 0
+    if isinstance(state.get('you'), dict) and 0 <= pidx < len(skins):
+        state['you']['skin'] = skins[pidx]
+        state['you']['skin_look'] = looks[pidx]
+    opp = 1 - pidx
+    if isinstance(state.get('opponent'), dict) and 0 <= opp < len(skins):
+        state['opponent']['skin'] = skins[opp]
+        state['opponent']['skin_look'] = looks[opp]
+    return state
 
 
 def mark_player_session_last_seen(player):
@@ -1316,6 +1649,8 @@ def public_player_info(sid, player=None):
         'sid': sid,
         'nickname': p.get('nickname', '?'),
         'mode': p.get('mode', '1v1'),
+        'skin': public_skin_config(p.get('skin')),
+        'skin_look': normalize_skin_look(p.get('skin_look')),
     }
     info.update(special_public_fields(p))
     return info
@@ -1407,6 +1742,272 @@ def _client_ip():
     return request.remote_addr or 'unknown'
 
 
+SOCKET_EVENT_LIMITS = {
+    'login': (8, 60),
+    'chat': (10, 60),
+    'invite': (12, 60),
+    'form_team': (12, 60),
+    'invite_team': (10, 60),
+    'accept_invite': (12, 60),
+    'decline_invite': (20, 60),
+    'accept_team': (12, 60),
+    'decline_team': (20, 60),
+    'leave_team': (12, 60),
+    'accept_team_match': (8, 60),
+    'decline_team_match': (12, 60),
+    'reconnect_accept': (8, 60),
+    'reconnect_decline': (8, 60),
+    'set_mode': (20, 60),
+    'update_mod_settings': (10, 60),
+    'draft_pick': (40, 60),
+    'draft_reroll': (8, 60),
+    'select_opening_event': (10, 60),
+    'play_card': (30, 30),
+    'response': (30, 30),
+    'ally_consent_response': (20, 30),
+    'resolve_choice': (30, 30),
+    'v2_ui_response': (30, 30),
+    'use_trigger': (30, 30),
+    'urf_replace_card': (12, 60),
+    'urf_sell_equipment': (12, 60),
+    'end_turn': (20, 30),
+    'surrender': (6, 60),
+    'surrender_consent_response': (10, 60),
+    'rematch': (10, 60),
+    'return_lobby': (12, 60),
+    'spectate': (20, 60),
+    'leave_spectate': (20, 60),
+    'switch_spectate_perspective': (30, 60),
+    'solo_start': (8, 60),
+    'tutorial_start': (6, 60),
+    'tutorial_bot_action': (60, 60),
+    'solo_play_card': (60, 60),
+    'solo_response': (60, 60),
+    'solo_resolve_choice': (60, 60),
+    'solo_v2_ui_response': (60, 60),
+    'solo_use_trigger': (60, 60),
+    'solo_end_turn': (60, 60),
+    'solo_set_next_draw': (20, 60),
+    'solo_pause': (12, 60),
+    'skin_look': (80, 10),
+}
+SOCKET_DEFAULT_LIMIT = (80, 60)
+SOCKET_ILLEGAL_KICK_LIMIT = 12
+SOCKET_ILLEGAL_WINDOW = 300
+
+
+def _security_player_for_sid(sid):
+    return players.get(sid) or {}
+
+
+def _security_user_id_for_sid(sid):
+    player = _security_player_for_sid(sid)
+    return player.get('user_id')
+
+
+def _security_record(kind, message, *, sid=None, severity='medium', extra=None):
+    player = _security_player_for_sid(sid)
+    user_id = player.get('user_id') if player else None
+    event = record_suspicious_event(
+        kind,
+        message,
+        sid=sid,
+        user_id=user_id,
+        ip=_client_ip(),
+        severity=severity,
+        extra=extra,
+    )
+    try:
+        admin_event('suspicious', f"{event['severity']} {event['kind']}: {event['message']}", sid=sid, user_id=user_id)
+    except Exception:
+        pass
+    return event
+
+
+def _security_illegal(sid, event_name, message, *, severity='medium', emit_error=True, extra=None):
+    user_id = _security_user_id_for_sid(sid)
+    key = f'user:{user_id}' if user_id else f'sid:{sid}'
+    count, should_kick = record_illegal_operation(
+        key,
+        limit=SOCKET_ILLEGAL_KICK_LIMIT,
+        window=SOCKET_ILLEGAL_WINDOW,
+    )
+    _security_record(
+        event_name,
+        f'{message} (illegal={count})',
+        sid=sid,
+        severity=severity,
+        extra=extra,
+    )
+    if emit_error:
+        emit('server_error', {'message': message})
+    if should_kick:
+        _security_record('auto_kick', f'frequent illegal operations after {event_name}', sid=sid, severity='high')
+        def _kick_later(target_sid):
+            try:
+                time.sleep(0.05)
+                socketio.server.disconnect(target_sid)
+            except Exception:
+                pass
+        socketio.start_background_task(_kick_later, sid)
+        return True
+    return False
+
+
+def _socket_rate_allowed(sid, event_name, *, exempt=False):
+    if exempt:
+        return True
+    limit, window = SOCKET_EVENT_LIMITS.get(event_name, SOCKET_DEFAULT_LIMIT)
+    if not rate_limiter(f'socket:sid:{sid}:{event_name}', limit=limit, window=window):
+        return False
+    user_id = _security_user_id_for_sid(sid)
+    if user_id and not rate_limiter(f'socket:user:{user_id}:{event_name}', limit=limit * 2, window=window):
+        return False
+    return True
+
+
+def socket_guard(event_name, data=None, *, require_player=True, allow_empty=False, emit_error=True):
+    sid = request.sid
+    if data is None:
+        payload = {}
+    elif isinstance(data, dict):
+        payload = data
+    else:
+        _security_illegal(sid, event_name, '参数格式错误', emit_error=emit_error, extra={'data_type': type(data).__name__})
+        return None
+    player = _security_player_for_sid(sid)
+    if require_player and sid not in players:
+        _security_illegal(sid, event_name, '玩家未登录', emit_error=emit_error)
+        return None
+    if not allow_empty and data is None:
+        _security_illegal(sid, event_name, '缺少参数', emit_error=emit_error)
+        return None
+    exempt = is_chat_limit_exempt(player) if event_name == 'chat' else bool(player.get('is_admin_player'))
+    if not _socket_rate_allowed(sid, event_name, exempt=exempt):
+        _security_illegal(sid, event_name, '操作过于频繁', emit_error=emit_error, severity='high')
+        return None
+    return payload
+
+
+def validate_instance_id(value, *, name='instance_id', required=True):
+    text = validate_str(value, min_len=1 if required else 0, max_len=80, name=name)
+    if text and not re.fullmatch(r'[A-Za-z0-9_.:\-]+', text):
+        raise ValueError(f'{name} format is invalid')
+    if re.fullmatch(r'\d+', text or ''):
+        return validate_int(text, minimum=0, maximum=10**12, name=name)
+    return text
+
+
+def validate_socket_sid(value, *, name='sid'):
+    return validate_str(value, min_len=1, max_len=120, pattern=r'[A-Za-z0-9_.:\-]+', name=name)
+
+
+def validate_card_def_id(value, *, name='def_id'):
+    return validate_str(value, min_len=1, max_len=80, pattern=r'[A-Za-z0-9_.:\-/]+', name=name)
+
+
+def validate_tag_id_list(value, *, name='tags', maximum=12):
+    if value is None:
+        return []
+    if not isinstance(value, list) or len(value) > maximum:
+        raise ValueError(f'{name} format is invalid')
+    return [
+        validate_str(item, min_len=1, max_len=80, pattern=r'[A-Za-z0-9_.:\-/]+', name=name)
+        for item in value
+    ]
+
+
+def validate_solo_deck_entries(value, *, name='deck'):
+    if not isinstance(value, list) or len(value) != DECK_SIZE:
+        raise ValueError(f'{name} must contain {DECK_SIZE} cards')
+    clean = []
+    for index, entry in enumerate(value):
+        if isinstance(entry, dict):
+            clean.append({
+                'def_id': validate_card_def_id(entry.get('def_id'), name=f'{name}[{index}].def_id'),
+                'instance_flags': validate_tag_id_list(entry.get('instance_flags'), name=f'{name}[{index}].instance_flags'),
+                'disabled_flags': validate_tag_id_list(entry.get('disabled_flags'), name=f'{name}[{index}].disabled_flags'),
+            })
+        else:
+            clean.append(validate_card_def_id(entry, name=f'{name}[{index}]'))
+    return clean
+
+
+def validate_choice_payload(choice, *, depth=0):
+    if choice is None:
+        return None
+    if depth > 4:
+        raise ValueError('choice too deep')
+    if isinstance(choice, bool):
+        return bool(choice)
+    if isinstance(choice, int):
+        return validate_int(choice, minimum=-1, maximum=1000000, name='choice')
+    if isinstance(choice, str):
+        return validate_str(choice, max_len=120, name='choice')
+    if isinstance(choice, list):
+        if len(choice) > 60:
+            raise ValueError('choice list too long')
+        return [validate_choice_payload(item, depth=depth + 1) for item in choice]
+    if isinstance(choice, dict):
+        if len(choice) > 30:
+            raise ValueError('choice object too large')
+        clean = {}
+        for key, value in choice.items():
+            safe_key = validate_str(key, min_len=1, max_len=64, pattern=r'[A-Za-z0-9_.:\-]+', name='choice key')
+            clean[safe_key] = validate_choice_payload(value, depth=depth + 1)
+        return clean
+    raise ValueError('choice contains unsupported value')
+
+
+def record_valid_player_action(room, player_index, action):
+    if room is None or player_index is None or player_index < 0:
+        return
+    counts = getattr(room, '_valid_action_counts', None)
+    if not isinstance(counts, dict):
+        counts = {}
+        room._valid_action_counts = counts
+    counts[player_index] = int(counts.get(player_index, 0)) + 1
+    room._last_valid_action = {
+        'player_index': player_index,
+        'action': action,
+        'time': time.time(),
+    }
+
+
+def room_valid_actions_by_side(room):
+    counts = getattr(room, '_valid_action_counts', {}) or {}
+    if getattr(room, 'mode', '') == '2v2' and hasattr(getattr(room, 'engine', None), 'teams'):
+        return [
+            sum(int(counts.get(pidx, 0)) for pidx in team)
+            for team in getattr(room.engine, 'teams', [[0, 1], [2, 3]])
+        ]
+    return [int(counts.get(0, 0)), int(counts.get(1, 0))]
+
+
+def is_room_valid_for_ranking(room, result='finished'):
+    if not room or str(result) != 'finished':
+        return False, 'abnormal_result'
+    if not getattr(getattr(room, 'engine', None), 'game_over', False):
+        return False, 'not_game_over'
+    participant_meta = []
+    for psid in getattr(room, 'player_sids', []):
+        if psid in players:
+            participant_meta.append(players[psid])
+        elif psid in getattr(room, 'disconnected_players', {}):
+            participant_meta.append(room.disconnected_players[psid])
+        else:
+            participant_meta.append({})
+    if not participant_meta or any(not meta.get('is_registered_user') for meta in participant_meta):
+        return False, 'guest_match'
+    started_ts = getattr(room, 'started_at', None) or getattr(room, 'created_at', time.time())
+    if time.time() - started_ts < 120:
+        return False, 'too_short'
+    side_counts = room_valid_actions_by_side(room)
+    if len(side_counts) < 2 or any(count < 3 for count in side_counts[:2]):
+        return False, 'not_enough_actions'
+    return True, ''
+
+
 def _set_account_session(user):
     if not user:
         return
@@ -1488,7 +2089,8 @@ def _current_account_identity():
 
 
 def _current_account_can_manage_all_community_mods():
-    return str(session.get('username') or '').strip().lower() == ADMIN_PLAYER_DISPLAY_NAME.lower()
+    profile = get_special_account_profile(session.get('username') or '')
+    return bool(profile and profile.get('is_admin_player'))
 
 
 def _require_account_json():
@@ -1496,6 +2098,103 @@ def _require_account_json():
     if not user_id:
         return None, None, _json_error('请先登录账号', 401)
     return user_id, username, None
+
+
+def _report_target_user(target_user_id=None, target_username=''):
+    target = None
+    if target_user_id not in (None, ''):
+        target = get_user_by_id(target_user_id)
+    if target is None and target_username:
+        target = get_user_by_username(target_username)
+    if target:
+        return target.get('id'), target.get('username')
+    try:
+        return int(target_user_id), str(target_username or '')
+    except (TypeError, ValueError):
+        return None, str(target_username or '')[:80]
+
+
+def _collect_report_evidence(object_type, object_id, reporter_user_id=None):
+    evidence = [{
+        'evidence_type': 'request',
+        'data': {
+            'object_type': object_type,
+            'object_id': object_id,
+            'reporter_user_id': reporter_user_id,
+            'ip': _client_ip(),
+            'time': iso_now(),
+        },
+    }]
+    try:
+        if object_type == 'chat_message':
+            context = get_chat_message_with_context(object_id, context_limit=10)
+            if context:
+                evidence.append({'evidence_type': 'chat_context', 'data': context})
+        elif object_type in ('match', 'replay'):
+            oid = str(object_id)
+            with _lock:
+                history_match = next((item for item in MATCH_HISTORY if str(item.get('room_id')) == oid or str(item.get('id', '')) == oid), None)
+                if history_match:
+                    evidence.append({'evidence_type': 'match_summary', 'data': history_match})
+                if oid.isdigit() and int(oid) in rooms:
+                    room = rooms[int(oid)]
+                    evidence.append({'evidence_type': 'active_room', 'data': {
+                        'room_id': room.room_id,
+                        'mode': room.mode,
+                        'phase': getattr(room.engine, 'phase', ''),
+                        'round': getattr(room.engine, 'round_num', 0),
+                        'players': [room_player_nickname(room, psid) for psid in room.player_sids],
+                    }})
+        elif object_type == 'player':
+            with _lock:
+                target = str(object_id)
+                for psid, player in players.items():
+                    if target in {psid, str(player.get('user_id') or ''), str(player.get('nickname') or '')}:
+                        evidence.append({'evidence_type': 'player_snapshot', 'data': public_player_info(psid, player)})
+                        break
+    except Exception as exc:
+        evidence.append({'evidence_type': 'collection_error', 'data': {'error': str(exc)[:300]}})
+    return evidence
+
+
+def _online_sids_for_user(user_id=None, username=''):
+    found = []
+    key = normalize_username_key(username) if username else ''
+    for sid, player in players.items():
+        if user_id and player.get('user_id') == user_id:
+            found.append(sid)
+        elif key and normalize_username_key(player.get('nickname', '')) == key:
+            found.append(sid)
+    return found
+
+
+def _apply_report_moderation_action(report_detail, moderation_action, duration_seconds=0, note=''):
+    action = str(moderation_action or 'none').strip().lower()
+    if action == 'none' or not report_detail:
+        return
+    target_user_id = report_detail.get('target_user_id')
+    target_username = report_detail.get('target_username') or ''
+    if action == 'mute' and target_user_id:
+        seconds = max(60, min(int(duration_seconds or 600), 60 * 60 * 24 * 30))
+        set_user_mute(target_user_id, target_username, seconds, note, session.get('username') or ADMIN_PLAYER_DISPLAY_NAME)
+        for sid in _online_sids_for_user(target_user_id, target_username):
+            mute_user(chat_mute_key(sid, players.get(sid, {})), seconds, note)
+            socketio.emit('server_error', muted_error_payload(seconds, message='你已被管理员禁言'), room=sid)
+    elif action == 'ban' and (target_user_id or target_username):
+        target = target_user_id or target_username
+        try:
+            duration = int(duration_seconds or 0) if str(duration_seconds or '').strip() else None
+        except (TypeError, ValueError):
+            duration = None
+        user, _ = admin_set_user_ban(target, True, note, duration_seconds=duration)
+        status = get_user_ban_status(user_id=(user or {}).get('id'), username=target_username) if user else {'banned': True, 'reason': note, 'remaining_seconds': duration, 'permanent': duration is None}
+        for sid in _online_sids_for_user(target_user_id, target_username):
+            socketio.emit('server_error', {'message': ban_error_payload(status).get('reason', '账号已被封禁')}, room=sid)
+            socketio.emit('kicked', {'reason': 'account banned'}, room=sid)
+            socketio.server.disconnect(sid)
+    elif action == 'warn':
+        for sid in _online_sids_for_user(target_user_id, target_username):
+            socketio.emit('server_error', {'message': f'管理员警告：{note or "请注意游戏内行为"}'}, room=sid)
 
 
 def _community_request_fields(data):
@@ -1723,13 +2422,13 @@ def register_v2_loadout_cards(v2_loadout):
             continue
         runtime_id = str(resource.get('legacy_id') or resource.get('runtime_id') or card_id)
         cost = resource.get('cost') if isinstance(resource.get('cost'), dict) else {}
-        flags = set(resource.get('flags', []) if isinstance(resource.get('flags', []), list) else [])
+        flags = normalize_card_flags(resource.get('flags', []) if isinstance(resource.get('flags', []), list) else [])
         if isinstance(resource.get('tags'), list):
             for tag in resource.get('tags') or []:
                 tag_text = str(tag)
                 if tag_text.startswith('gtn:'):
                     tag_text = tag_text.split(':', 1)[1]
-                flags.add(tag_text)
+                flags.add(normalize_card_flag(tag_text))
         card_def = CardDef(
             id=runtime_id,
             name_en=str(resource.get('name_en') or resource.get('name') or _v2_card_name_from_id(card_id)),
@@ -1894,6 +2593,13 @@ def same_mod_loadout(sids):
     return len(set(hashes)) <= 1
 
 
+def emit_match_start_failed(sids, message, reason='mod_mismatch'):
+    payload = {'message': message, 'reason': reason}
+    for psid in set(sids or []):
+        if psid in players:
+            socketio.emit('match_start_failed', payload, room=psid)
+
+
 def get_lobby_list(beta_mode=None):
     lobby = []
     for sid, p in players.items():
@@ -1940,9 +2646,13 @@ def get_ongoing_games(beta_mode=None):
     return games
 
 
-def build_admin_players():
+def build_admin_players(beta_mode=None):
+    if beta_mode is None:
+        beta_mode = is_beta_instance()
     result = []
     for sid, p in players.items():
+        if bool(p.get('beta_mode', False)) != bool(beta_mode):
+            continue
         result.append({
             'sid': sid,
             'nickname': p.get('nickname', '?'),
@@ -1958,9 +2668,13 @@ def build_admin_players():
     return result
 
 
-def build_admin_rooms():
+def build_admin_rooms(beta_mode=None):
+    if beta_mode is None:
+        beta_mode = is_beta_instance()
     result = []
     for rid, room in rooms.items():
+        if bool(getattr(room, 'beta_mode', False)) != bool(beta_mode):
+            continue
         e = room.engine
         names = []
         disconnected = []
@@ -2398,13 +3112,52 @@ def get_runtime_metrics():
 
 
 def get_admin_status_payload():
-    metrics = get_runtime_metrics()
+    status_errors = []
+    try:
+        metrics = get_runtime_metrics()
+    except Exception as exc:
+        status_errors.append(f'metrics: {exc}')
+        metrics = {
+            'time': now_iso_z(),
+            'uptime_seconds': int(time.time() - SERVER_START_TIME),
+            'process': {},
+            'system': {},
+            'disk': {},
+            'metrics_error': str(exc),
+        }
     with _lock:
-        player_list = build_admin_players()
-        room_list = build_admin_rooms()
-        spectator_count = sum(1 for p in players.values() if p.get('status') == 'spectating')
-        events = list(ADMIN_EVENTS)[:120]
-        history = list(MATCH_HISTORY)[:80]
+        try:
+            player_list = build_admin_players()
+        except Exception as exc:
+            status_errors.append(f'players: {exc}')
+            player_list = []
+        try:
+            room_list = build_admin_rooms()
+        except Exception as exc:
+            status_errors.append(f'rooms: {exc}')
+            room_list = []
+        try:
+            spectator_count = sum(1 for p in players.values() if p.get('status') == 'spectating')
+        except Exception as exc:
+            status_errors.append(f'spectators: {exc}')
+            spectator_count = 0
+        try:
+            events = list(ADMIN_EVENTS)[:120]
+        except Exception as exc:
+            status_errors.append(f'events: {exc}')
+            events = []
+        try:
+            suspicious = recent_suspicious_events(120)
+        except Exception as exc:
+            status_errors.append(f'suspicious: {exc}')
+            suspicious = []
+        try:
+            history = list(MATCH_HISTORY)[:80]
+        except Exception as exc:
+            status_errors.append(f'history: {exc}')
+            history = []
+    if status_errors:
+        metrics['status_errors'] = status_errors
     return {
         'success': True,
         'instance': {
@@ -2418,7 +3171,7 @@ def get_admin_status_payload():
         'metrics': metrics,
         'summary': {
             'online_players': len(player_list),
-            'lobby_players': sum(1 for p in player_list if p['status'] == 'lobby'),
+            'lobby_players': sum(1 for p in player_list if p.get('status') == 'lobby'),
             'rooms': len(room_list),
             'spectators': spectator_count,
             'history_count': len(history),
@@ -2426,6 +3179,7 @@ def get_admin_status_payload():
         'players': player_list,
         'rooms': room_list,
         'events': events,
+        'suspicious_events': suspicious,
         'history': history,
     }
 
@@ -2437,13 +3191,17 @@ ADMIN_COMMANDS = {
     'rooms': 'rooms - 列出当前对局',
     'roomplayers': 'roomplayers <房间ID> - 显示房间内玩家编号、昵称和状态',
     'logs': 'logs [数量] - 查看最近管理事件',
+    'suspicious': 'suspicious [数量] - 查看最近可疑安全事件',
     'lobbychat': 'lobbychat [数量] - 查看大厅聊天缓存',
     'history': 'history [数量] - 查看最近历史对局',
+    'draftstats': 'draftstats [1v1|2v2] - 查看卡牌选牌抽取率统计',
     'broadcast': 'broadcast <内容> - 发送服务器广播',
     'kick': 'kick <sid|昵称> - 踢出玩家',
+    'mutechat': 'mutechat <sid|昵称> [秒数] - 禁言在线玩家',
     'userpass': 'userpass <ID|注册顺序|用户名> <新密码> - 管理员修改账号密码',
-    'banuser': 'banuser <ID|注册顺序|用户名> [原因] - 封禁账号并踢下线',
+    'banuser': 'banuser <ID|注册顺序|用户名> [秒数] [原因] - 封禁账号并踢下线；不填秒数为永久',
     'unbanuser': 'unbanuser <ID|注册顺序|用户名> - 解除账号封禁',
+    'role': 'role list|get|set|clear ... - 管理账号身份；例：role set 46namknat staff title=设计师 color=bloom',
     'gitpull': 'gitpull - 手动拉取 GitHub origin/main（只允许 fast-forward，不覆盖本地改动）',
     'skip': 'skip <房间ID> - 尝试跳过当前回合',
     'endgame': 'endgame <房间ID> <winner|draw> - 强制结束对局；winner 可用 0/1，2v2 表示队伍',
@@ -2608,12 +3366,74 @@ def parse_givecard_options(tokens):
     }
 
 
+def _parse_bool_option(value):
+    text = str(value or '').strip().lower()
+    if text in ('1', 'true', 'yes', 'y', 'on', '是', '开'):
+        return True
+    if text in ('0', 'false', 'no', 'n', 'off', '否', '关'):
+        return False
+    raise ValueError(f'需要布尔值：{value}')
+
+
+def parse_role_options(tokens):
+    options = {
+        'title': '',
+        'color': '',
+        'sort_order': None,
+        'role_key': '',
+        'can_direct_friend': None,
+        'chat_exempt': None,
+    }
+    for token in tokens:
+        key, sep, value = token.partition('=')
+        if not sep:
+            if not options['title']:
+                options['title'] = token
+                continue
+            raise ValueError(f'无法识别参数：{token}')
+        key = key.lower().strip()
+        value = value.strip()
+        if key in ('title', 'label', 'name', '称号', '名称'):
+            options['title'] = value
+        elif key in ('color', 'colour', '颜色'):
+            options['color'] = value
+        elif key in ('sort', 'order', 'rank', '排序'):
+            options['sort_order'] = parse_int_token(value, 'sort')
+        elif key in ('key', 'role_key', 'prefix_key'):
+            options['role_key'] = value
+        elif key in ('direct', 'friend', 'direct_friend', '好友'):
+            options['can_direct_friend'] = _parse_bool_option(value)
+        elif key in ('chat', 'chat_exempt', '聊天'):
+            options['chat_exempt'] = _parse_bool_option(value)
+        else:
+            raise ValueError(f'未知参数：{key}')
+    return options
+
+
+def format_role_profile(user, profile):
+    if not profile:
+        return f"{user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 无特殊身份"
+    perms = []
+    if profile.get('is_admin_player'):
+        perms.append('最高权限')
+    if profile.get('can_direct_friend'):
+        perms.append('直接加好友')
+    if profile.get('chat_exempt'):
+        perms.append('聊天无限制')
+    return (
+        f"{user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) "
+        f"类型={profile.get('role_type')} 称号={profile.get('special_role_label') or '-'} "
+        f"颜色={profile.get('special_role_color') or '-'} 排序={profile.get('special_role_sort')} "
+        f"权限={','.join(perms) if perms else '-'}"
+    )
+
+
 def make_admin_card_instance(card_id, options):
     card = CardInstance(def_id=card_id)
     tags = [t for t in options.get('tags', []) if t]
     if tags:
         card.instance_flags = set(getattr(card, 'instance_flags', set()) or set())
-        card.instance_flags.update(tags)
+        card.instance_flags.update(normalize_card_flag(tag) for tag in tags)
     fusion = int(options.get('fusion', 1) or 1)
     fission = int(options.get('fission', 1) or 1)
     card.fusion_level = max(1, fusion)
@@ -2860,6 +3680,13 @@ def execute_admin_command(line):
         count = parse_int_token(parts[1], 'count') if len(parts) > 1 else 20
         rows = list(ADMIN_EVENTS)[:max(1, min(count, 120))]
         return {'success': True, 'output': '\n'.join(f"{admin_display_time(e.get('time'))} [{e['kind']}] {e['message']}" for e in rows) or '暂无日志。'}
+    if cmd == 'suspicious':
+        count = parse_int_token(parts[1], 'count') if len(parts) > 1 else 30
+        rows = recent_suspicious_events(max(1, min(count, 200)))
+        return {'success': True, 'output': '\n'.join(
+            f"{admin_display_time(e.get('ts'))} [{e.get('severity')}] {e.get('kind')} sid={e.get('sid') or '-'} user={e.get('user_id') or '-'} ip={e.get('ip') or '-'} {e.get('message')}"
+            for e in rows
+        ) or '暂无可疑安全事件。'}
     if cmd == 'lobbychat':
         count = parse_int_token(parts[1], 'count') if len(parts) > 1 else 200
         with _lock:
@@ -2885,6 +3712,25 @@ def execute_admin_command(line):
             f"{admin_display_time(h.get('time'))} #{h['room_id']} {h['mode']} 回合={h['round']} 胜者={h['winner']} 玩家={' vs '.join(h['players'])}"
             for h in rows
         ) or '暂无历史对局。'}
+    if cmd in ('draftstats', 'draftstat', 'pickrate'):
+        mode = parts[1] if len(parts) > 1 else ''
+        if mode and mode not in ('1v1', '2v2'):
+            return {'success': False, 'output': command_error(raw, len(raw), '[1v1|2v2]')}
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        data = list_card_draft_stats(mode=mode, sort='pick_rate', order='desc', limit=30)
+        rows = data.get('items', [])
+        if not rows:
+            return {'success': True, 'output': '暂无选牌统计。'}
+        lines = ['模式  卡牌ID  名称  抽取/刷出  抽取率']
+        for item in rows:
+            card_def = CARD_DEFS.get(item.get('card_id'))
+            name = card_def.name_cn if card_def else item.get('card_id')
+            lines.append(
+                f"{item['mode']}  {item['card_id']}  {name}  "
+                f"{item['picked_count']}/{item['shown_count']}  {item['pick_rate']:.1f}%"
+            )
+        return {'success': True, 'output': '\n'.join(lines)}
     if cmd == 'broadcast':
         msg = raw[len(parts[0]):].strip()
         if not msg:
@@ -2892,6 +3738,74 @@ def execute_admin_command(line):
         sent = send_system_broadcast(msg)
         admin_event('admin', f'broadcast: {msg}')
         return {'success': True, 'output': f'已发送广播：{msg}'}
+    if cmd in ('role', 'userrole'):
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'role list|get|set|clear')}
+        sub = parts[1].lower()
+        if sub == 'list':
+            query = parts[2] if len(parts) > 2 else ''
+            rows = list_user_roles(query=query, limit=120)
+            if not rows:
+                return {'success': True, 'output': '暂无特殊身份。'}
+            lines = ['账号  ID  类型  称号  颜色  排序  权限']
+            for row in rows:
+                perms = []
+                if row.get('role_type') == 'admin':
+                    perms.append('最高权限')
+                if row.get('can_direct_friend'):
+                    perms.append('直接加好友')
+                if row.get('chat_exempt'):
+                    perms.append('聊天无限制')
+                lines.append(
+                    f"{row.get('username')}  {row.get('player_id') or '-'}  {row.get('role_type')}  "
+                    f"{row.get('title') or '-'}  {row.get('color') or '-'}  {row.get('sort_order')}  "
+                    f"{','.join(perms) if perms else '-'}"
+                )
+            return {'success': True, 'output': '\n'.join(lines)}
+        if sub == 'get':
+            if len(parts) < 3:
+                return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名>')}
+            user = find_user_for_admin(parts[2])
+            if not user:
+                return {'success': False, 'output': '账号不存在'}
+            profile = get_user_role_profile(user['id'])
+            return {'success': True, 'output': format_role_profile(user, profile)}
+        if sub == 'clear':
+            if len(parts) < 3:
+                return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名>')}
+            user, error = admin_clear_user_role(parts[2])
+            if error:
+                return {'success': False, 'output': error}
+            admin_event('admin', f"cleared role for account {user['username']}#{user['id']}")
+            return {'success': True, 'output': f"已清除 {user['username']} 的特殊身份。"}
+        if sub == 'set':
+            if len(parts) < 4:
+                return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> <admin|staff|contributor|sponsor> [title=称号] [color=bloom]')}
+            try:
+                options = parse_role_options(parts[4:])
+            except ValueError as exc:
+                return {'success': False, 'output': str(exc)}
+            user, profile, error = admin_set_user_role(
+                parts[2],
+                parts[3],
+                title=options.get('title', ''),
+                color=options.get('color', ''),
+                sort_order=options.get('sort_order'),
+                role_key=options.get('role_key', ''),
+                can_direct_friend=options.get('can_direct_friend'),
+                chat_exempt=options.get('chat_exempt'),
+            )
+            if error:
+                return {'success': False, 'output': error}
+            admin_event('admin', f"set role for account {user['username']}#{user['id']} -> {profile.get('role_type') if profile else 'none'}")
+            output = format_role_profile(user, profile)
+            with _lock:
+                for psid, player in players.items():
+                    if player.get('user_id') == user['id']:
+                        player.update(special_public_fields(profile or {}))
+                broadcast_lobby()
+            return {'success': True, 'output': output}
+        return {'success': False, 'output': command_error(raw, len(raw), 'role list|get|set|clear')}
     if cmd in ('userpass', 'passwd', 'setpass'):
         if len(parts) < 3:
             return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> <新密码>')}
@@ -2902,11 +3816,22 @@ def execute_admin_command(line):
         return {'success': True, 'output': f"已修改账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 的密码。"}
     if cmd in ('banuser', 'banaccount'):
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> [原因]')}
-        reason = raw.split(None, 2)[2].strip() if len(raw.split(None, 2)) >= 3 else ''
-        user, error = admin_set_user_ban(parts[1], True, reason)
+            return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> [秒数] [原因]')}
+        duration = None
+        reason_parts = parts[2:]
+        if reason_parts:
+            try:
+                parsed_duration = int(reason_parts[0])
+            except (TypeError, ValueError):
+                parsed_duration = None
+            if parsed_duration is not None and parsed_duration > 0:
+                duration = parsed_duration
+                reason_parts = reason_parts[1:]
+        reason = ' '.join(reason_parts).strip()
+        user, error = admin_set_user_ban(parts[1], True, reason, duration_seconds=duration)
         if error:
             return {'success': False, 'output': error}
+        status = get_user_ban_status(user_id=user['id'])
         kicked = []
         with _lock:
             for sid, player in list(players.items()):
@@ -2917,12 +3842,14 @@ def execute_admin_command(line):
                     kicked.append((sid, player.get('nickname', user['username'])))
                     remove_player_by_admin(sid)
         for sid, _nickname in kicked:
+            socketio.emit('server_error', {'message': ban_error_payload(status).get('reason', '账号已被封禁')}, room=sid)
             socketio.emit('kicked', {'reason': 'account banned'}, room=sid)
         if kicked:
             broadcast_lobby()
         admin_event('admin', f"banned account {user['username']}#{user['id']}: {reason or '-'}")
         suffix = f" 原因：{reason}" if reason else ''
-        return {'success': True, 'output': f"已封禁账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']})。已踢出在线会话 {len(kicked)} 个。{suffix}"}
+        duration_label = f"时长：{format_duration_zh(duration)}。" if duration else "时长：永久。"
+        return {'success': True, 'output': f"已封禁账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']})。{duration_label}已踢出在线会话 {len(kicked)} 个。{suffix}"}
     if cmd in ('unbanuser', 'unbanaccount'):
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名>')}
@@ -2947,6 +3874,20 @@ def execute_admin_command(line):
         broadcast_lobby()
         admin_event('admin', f'kicked {nickname}')
         return {'success': True, 'output': f'已踢出 {nickname}'}
+    if cmd in ('mutechat', 'mute'):
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), '<sid|昵称> [秒数]')}
+        seconds = parse_int_token(parts[2], 'seconds') if len(parts) > 2 else 600
+        with _lock:
+            sid = find_player_sid(parts[1])
+            if not sid:
+                return {'success': False, 'output': f"未找到玩家：{parts[1]}"}
+            player = players[sid]
+            nickname = player.get('nickname', '?')
+            key = chat_mute_key(sid, player)
+            mute_user(key, max(1, min(seconds, 86400)), 'admin command')
+        admin_event('admin', f'muted chat for {nickname} {seconds}s')
+        return {'success': True, 'output': f'已禁言 {nickname} {seconds} 秒。'}
     if cmd == 'skip':
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), '<房间ID>')}
@@ -3081,6 +4022,26 @@ def admin_completions(line):
         return [v for v in values if v.lower().startswith(token.lower())][:30]
     if cmd in ('delcard', 'remcard', 'rmcard', 'deletecard') and position >= 5:
         values = ['all', 'count=']
+        return [v for v in values if v.lower().startswith(token.lower())]
+    if cmd in ('role', 'userrole') and position == 1:
+        values = ['list', 'get', 'set', 'clear']
+        return [v for v in values if v.startswith(token.lower())]
+    if cmd in ('role', 'userrole') and position == 2 and len(parts) > 1 and parts[1].lower() in ('get', 'set', 'clear'):
+        try:
+            rows = list_admin_users(query=token, sort='username', order='asc', limit=30).get('users', [])
+            values = []
+            for user in rows:
+                values.append(user.get('player_id', ''))
+                values.append(str(user.get('id')))
+                values.append(user.get('username', ''))
+            return [v for v in values if v and v.lower().startswith(token.lower())][:30]
+        except Exception:
+            return []
+    if cmd in ('role', 'userrole') and position == 3 and len(parts) > 1 and parts[1].lower() == 'set':
+        values = ['staff', 'contributor', 'sponsor']
+        return [v for v in values if v.startswith(token.lower())]
+    if cmd in ('role', 'userrole') and position >= 4 and len(parts) > 1 and parts[1].lower() == 'set':
+        values = ['title=', 'color=bloom', 'color=guard', 'sort=', 'key=', 'direct=', 'chat=']
         return [v for v in values if v.lower().startswith(token.lower())]
     if cmd in ('userpass', 'passwd', 'setpass', 'banuser', 'banaccount', 'unbanuser', 'unbanaccount') and position == 1:
         try:
@@ -3261,6 +4222,19 @@ def set_room_player_attr(room_id, pidx, key, val):
 def _build_lobby_update_payloads_locked():
     scope_payload_cache = {}
 
+    def mode_counts_for_scope(beta_mode):
+        counts = {'1v1': 0, '2v2': 0, 'urf': 0}
+        excluded_statuses = {'solo', 'tutorial', 'spectating'}
+        for player in players.values():
+            if bool(player.get('beta_mode', False)) != bool(beta_mode):
+                continue
+            if player.get('status') in excluded_statuses:
+                continue
+            mode = player.get('mode', '1v1')
+            if mode in counts:
+                counts[mode] += 1
+        return counts
+
     def team_list_for_scope(beta_mode):
         team_list = []
         seen_teams = set()
@@ -3296,6 +4270,7 @@ def _build_lobby_update_payloads_locked():
                 'players': get_lobby_list(beta_mode),
                 'ongoing_games': get_ongoing_games(beta_mode),
                 'teams': team_list_for_scope(beta_mode),
+                'mode_counts': mode_counts_for_scope(beta_mode),
                 'chat_history': _lobby_chat_history_payload_locked(100, beta_mode),
             }
         return scope_payload_cache[key]
@@ -3309,6 +4284,7 @@ def _build_lobby_update_payloads_locked():
                 'your_sid': sid,
                 'ongoing_games': base['ongoing_games'],
                 'teams': base['teams'],
+                'mode_counts': base['mode_counts'],
                 'your_team': teams[sid]['members'] if sid in teams else None,
                 'your_team_leader': teams[sid]['leader'] if sid in teams else None,
                 'your_mode': p.get('mode', '1v1'),
@@ -3385,6 +4361,8 @@ def send_draft_state(room, pidx):
         'match_key': room_match_key(room),
         'your_id': pidx,
         'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
+        'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
+        'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
     }
     payload.update(room_mod_payload(room))
     socketio.emit('draft_state', payload, room=sid)
@@ -3416,6 +4394,8 @@ def send_event_state(room, pidx):
         'match_key': room_match_key(room),
         'your_id': pidx,
         'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
+        'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
+        'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
     }
     payload.update(room_mod_payload(room))
     socketio.emit('event_select', payload, room=sid)
@@ -3472,6 +4452,7 @@ def broadcast_game_state(room):
             state['your_name'] = room_player_nickname(room, sid)
             state['your_is_admin_player'] = player_is_admin(sid, room)
             state['your_special'] = player_special_fields(sid, room)
+        inject_player_skins(state, room, pidx)
         socketio.emit('state_update', state, room=sid)
         _broadcast_recipients += 1
     broadcast_spectate_state(room)
@@ -3535,6 +4516,7 @@ def send_game_state_to(room, pidx):
             state['your_name'] = room_player_nickname(room, sid)
             state['your_is_admin_player'] = player_is_admin(sid, room)
             state['your_special'] = player_special_fields(sid, room)
+        inject_player_skins(state, room, pidx)
         socketio.emit('state_update', state, room=sid)
 
 
@@ -3684,8 +4666,26 @@ def send_solo_state(sid, perspective=None):
     else:
         state['your_name'] = 'Player A' if perspective == 0 else 'Player B'
         state['opponent_name'] = 'Player B' if perspective == 0 else 'Player A'
+    owner_skin = players.get(sid, {}).get('skin') if sid in players else None
+    inject_solo_skins(state, owner_skin=owner_skin, perspective=perspective)
     state['solo'] = True
     socketio.emit('solo_state', state, room=sid)
+    # Check if engine has a pending choice (e.g. foresight_replace) and send choice_request
+    pending = getattr(engine, 'pending_choice', None)
+    if pending and not engine.game_over:
+        choice_payload = {
+            'choice_type': pending.get('choice_type', ''),
+            'card': pending.get('card', {}),
+            'choice_params': pending.get('choice_params', {}),
+            'target_player_id': pending.get('target_player_id'),
+        }
+        if pending.get('deck_cards'):
+            choice_payload['deck_cards'] = pending['deck_cards']
+        if pending.get('message'):
+            choice_payload['message'] = pending['message']
+        if pending.get('top_cards'):
+            choice_payload['top_cards'] = pending['top_cards']
+        socketio.emit('choice_request', choice_payload, room=sid)
 
 
 def build_response_request_payload(engine, responder_id, played_card, player_id, counter_cards, target_player_id=None):
@@ -3711,23 +4711,126 @@ def build_response_request_payload(engine, responder_id, played_card, player_id,
     return payload
 
 
-def emit_solo_response_request(sid, engine, pidx, played_card):
-    opp_pidx = 1 - pidx
-    played_def = CARD_DEFS.get(played_card.get('def_id', ''), None)
+def _response_trigger_types_for_card(engine, played_card):
+    played_def = CARD_DEFS.get((played_card or {}).get('def_id', ''), None)
     trigger_types = []
+
+    def add(trigger_type):
+        if trigger_type and trigger_type not in trigger_types:
+            trigger_types.append(trigger_type)
+
     if played_def:
         if played_def.card_type == 'thorn':
-            trigger_types.append('thorn')
+            add('thorn')
         elif played_def.card_type == 'bloom':
-            trigger_types.append('bloom')
+            add('bloom')
         elif played_def.card_type == 'root':
-            trigger_types.append('root')
-        if played_def.id in ('Sewage', 'MagicSewage'):
-            trigger_types.append('equipment_destroy')
-        trigger_types.append('any')
+            add('root')
+        try:
+            card_instance = CardInstance.from_dict(played_card)
+        except Exception:
+            card_instance = None
+        would_destroy = False
+        destroy_checker = getattr(engine, '_would_destroy_equipment', None)
+        if callable(destroy_checker) and card_instance is not None:
+            try:
+                would_destroy = bool(destroy_checker(card_instance))
+            except Exception:
+                would_destroy = False
+        if would_destroy or played_def.id in ('Sewage', 'MagicSewage'):
+            add('equipment_destroy')
+        heal_checker = getattr(engine, '_would_heal', None)
+        if callable(heal_checker) and card_instance is not None:
+            try:
+                if heal_checker(card_instance):
+                    add('heal')
+            except Exception:
+                pass
+        add('any')
+    return trigger_types
+
+
+def emit_pending_response_requests(room, only_player_index=None):
+    engine = room.engine
+    pending = getattr(engine, 'pending_response', None)
+    if not pending:
+        return 0
+    played_card = pending.get('card') or {}
+    try:
+        player_id = int(pending.get('player_id', -1))
+    except Exception:
+        player_id = -1
+    sent = 0
+    if room.mode == '2v2':
+        by_responder = {}
+        for counter_card in pending.get('counter_cards', []) or []:
+            if not isinstance(counter_card, dict):
+                continue
+            try:
+                responder_id = int(counter_card.get('responder_id', -1))
+            except Exception:
+                responder_id = -1
+            if responder_id < 0:
+                continue
+            if only_player_index is not None and responder_id != only_player_index:
+                continue
+            by_responder.setdefault(responder_id, []).append(counter_card)
+        for responder_id, counter_cards in by_responder.items():
+            if 0 <= responder_id < len(room.player_sids):
+                responder_sid = room.player_sids[responder_id]
+                if responder_sid in players:
+                    socketio.emit('response_request', build_response_request_payload(
+                        engine,
+                        responder_id,
+                        played_card,
+                        player_id,
+                        counter_cards,
+                        pending.get('target_player_id'),
+                    ), room=responder_sid)
+                    sent += 1
+        return sent
+
+    responder_id = 1 - player_id
+    if only_player_index is not None and responder_id != only_player_index:
+        return 0
+    if not (0 <= responder_id < len(room.player_sids)):
+        return 0
+    trigger_types = _response_trigger_types_for_card(engine, played_card)
     counter_cards = []
+    seen_instances = set()
+    for trigger_type in trigger_types:
+        for counter_card in engine.get_counter_cards(responder_id, trigger_type):
+            key = getattr(counter_card, 'instance_id', None)
+            if key in seen_instances:
+                continue
+            seen_instances.add(key)
+            counter_cards.append(counter_card)
+    responder_sid = room.player_sids[responder_id]
+    if responder_sid in players:
+        socketio.emit('response_request', build_response_request_payload(
+            engine,
+            responder_id,
+            played_card,
+            player_id,
+            counter_cards,
+            pending.get('target_player_id', responder_id),
+        ), room=responder_sid)
+        sent += 1
+    return sent
+
+
+def emit_solo_response_request(sid, engine, pidx, played_card):
+    opp_pidx = 1 - pidx
+    trigger_types = _response_trigger_types_for_card(engine, played_card)
+    counter_cards = []
+    seen_instances = set()
     for tt in trigger_types:
-        counter_cards.extend(engine.get_counter_cards(opp_pidx, tt))
+        for counter_card in engine.get_counter_cards(opp_pidx, tt):
+            key = getattr(counter_card, 'instance_id', None)
+            if key in seen_instances:
+                continue
+            seen_instances.add(key)
+            counter_cards.append(counter_card)
     socketio.emit('response_request', build_response_request_payload(
         engine,
         opp_pidx,
@@ -3850,10 +4953,13 @@ def build_spectate_state(room, perspective=0):
         redact_error_cards_from_player_payload(pdata)
         pdata['player_id'] = i
         pdata['name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', f'P{i + 1}')
+        pdata['skin'] = player_skin_for_sid(psid, room)
+        pdata['skin_look'] = player_skin_look_for_sid(psid, room)
         pdata['is_admin_player'] = player_is_admin(psid, room)
         pdata.update(player_special_fields(psid, room))
         full_players.append(pdata)
     base['spectate_players'] = full_players
+    base['player_skin_looks'] = [player_skin_look_for_sid(psid, room) for psid in room.player_sids]
     base['player_names'] = [p.get('name', f'P{i + 1}') for i, p in enumerate(full_players)]
     for i, pdata in enumerate(full_players):
         base[f'player{i + 1}_name'] = pdata.get('name', f'P{i + 1}')
@@ -3911,21 +5017,10 @@ def _mark_disconnect_timeout_loss(room, player_index, nickname):
         return False
     if player_index < 0 or player_index >= len(getattr(e, 'players', [])):
         return False
-    e.pending_response = None
-    e.pending_choice = None
-    if hasattr(e, 'pending_ally_request'):
-        e.pending_ally_request = None
-    room.pending_surrender_request = None
-    if room.mode == '2v2' and hasattr(e, 'team_of'):
-        _force_2v2_disconnect_death(room, player_index, nickname)
-        return bool(getattr(e, 'game_over', False))
-    winner = 1 - player_index
-    e.players[player_index].health = 0
-    e.game_over = True
-    e.winner = winner
-    e.phase = 'game_over'
-    e.log_msg(f"{nickname}断线超时，{e.pn(winner)}获胜！")
-    return True
+    disconnected_teams = _room_disconnected_teams(room)
+    if len(disconnected_teams) >= 2:
+        return _finish_room_by_health_tiebreak(room, '双方断线超时')
+    return _finish_room_by_forfeit(room, player_index, nickname, '断线超时')
 
 
 def reconnect_timeout(room_id, old_sid):
@@ -3951,12 +5046,7 @@ def reconnect_timeout(room_id, old_sid):
         })
         if room.mode == '2v2':
             if ended:
-                for t in room.reconnect_timers.values():
-                    t.cancel()
-                room.reconnect_timers.clear()
-                if hasattr(room, 'both_dc_timer') and room.both_dc_timer:
-                    room.both_dc_timer.cancel()
-                    room.both_dc_timer = None
+                _cancel_room_reconnect_timers(room)
                 for other_sid in room.player_sids:
                     if other_sid in players:
                         socketio.emit('opponent_disconnected', {'timeout': True, 'game_over': True}, room=other_sid)
@@ -3971,23 +5061,18 @@ def reconnect_timeout(room_id, old_sid):
                             'player_defeated': True,
                             'opponent_nickname': dc_info.get('nickname', '?'),
                         }, room=other_sid)
-            admin_event('game', f'room {room_id} disconnect timeout death: {dc_info.get("nickname", "?")}')
+            admin_event('game', f'room {room_id} disconnect timeout result: {dc_info.get("nickname", "?")}')
             broadcast_game_state(room)
             broadcast_lobby()
             return
 
-        for t in room.reconnect_timers.values():
-            t.cancel()
-        room.reconnect_timers.clear()
-        if hasattr(room, 'both_dc_timer') and room.both_dc_timer:
-            room.both_dc_timer.cancel()
-            room.both_dc_timer = None
+        _cancel_room_reconnect_timers(room)
         if ended:
             for other_sid in room.player_sids:
                 if other_sid in players:
                     socketio.emit('opponent_disconnected', {'timeout': True, 'game_over': True}, room=other_sid)
                     socketio.emit('game_phase', {'phase': 'game_over'}, room=other_sid)
-            admin_event('game', f'room {room_id} disconnect timeout loss: {dc_info.get("nickname", "?")}')
+            admin_event('game', f'room {room_id} disconnect timeout result: {dc_info.get("nickname", "?")}')
             broadcast_game_state(room)
         for sid, p in players.items():
             if p['status'] == 'reconnecting' and p['nickname'] == dc_info['nickname']:
@@ -4002,12 +5087,14 @@ def both_disconnected_cleanup(room_id):
         if room_id not in rooms:
             return
         room = rooms[room_id]
-        for t in room.reconnect_timers.values():
-            t.cancel()
-        room.reconnect_timers.clear()
-        if hasattr(room, 'both_dc_timer'):
-            room.both_dc_timer = None
-        del rooms[room_id]
+        _cancel_room_reconnect_timers(room)
+        ended = _finish_room_by_health_tiebreak(room, '双方中途退出')
+        if ended:
+            record_room_replay_action(room, 'both_disconnected_result', None, {'game_over': True})
+            admin_event('game', f'room {room_id} both disconnected: health tiebreak')
+            broadcast_game_state(room)
+        if not any(psid in players for psid in room.player_sids) and not getattr(room, 'spectators', []):
+            rooms.pop(room_id, None)
     broadcast_lobby()
 
 
@@ -4156,8 +5243,21 @@ def admin_status():
             'players': [],
             'rooms': [],
             'events': list(ADMIN_EVENTS)[:120],
+            'suspicious_events': recent_suspicious_events(120),
             'history': list(MATCH_HISTORY)[:80],
         })
+
+
+@app.route('/api/admin/security/suspicious')
+def admin_security_suspicious():
+    if not is_admin_authenticated():
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    try:
+        limit = validate_int(request.args.get('limit', 100), default=100, minimum=1, maximum=500, name='limit')
+        return jsonify({'success': True, 'items': recent_suspicious_events(limit)})
+    except Exception as exc:
+        admin_event('error', f'admin suspicious events failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/api/healthz')
@@ -4173,6 +5273,122 @@ def healthz():
         'rooms': len(rooms),
         'psutil_available': psutil is not None,
     })
+
+
+@app.route('/api/report', methods=['POST'])
+def api_report():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, username, error_response = _require_account_json()
+    if error_response:
+        return error_response
+    data = request.get_json(silent=True) or {}
+    try:
+        object_type = validate_str(data.get('object_type', ''), min_len=1, max_len=40, pattern=r'[A-Za-z0-9_.:\-]+', name='object_type')
+        object_id = validate_str(data.get('object_id', ''), min_len=1, max_len=120, name='object_id')
+        category = validate_str(data.get('category', ''), min_len=1, max_len=60, pattern=r'[A-Za-z0-9_.:\-]+', name='category')
+        reason_text = validate_str(data.get('reason_text', ''), max_len=300, name='reason_text', truncate=True)
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
+    if object_type not in VALID_REPORT_OBJECT_TYPES:
+        return _json_error('举报对象类型无效', 400)
+    if not report_category_allowed(object_type, category):
+        return _json_error('举报分类无效', 400)
+    target_user_id, target_username = _report_target_user(data.get('target_user_id'), data.get('target_username', ''))
+    risk_level = 0
+    evidence = _collect_report_evidence(object_type, object_id, reporter_user_id=user_id)
+    for item in evidence:
+        if item.get('evidence_type') != 'chat_context':
+            continue
+        message = (item.get('data') or {}).get('message') or {}
+        risk_level = max(risk_level, int(message.get('risk_level') or 0))
+        if not target_user_id and message.get('sender_user_id'):
+            target_user_id = message.get('sender_user_id')
+        if not target_username and message.get('sender_name'):
+            target_username = message.get('sender_name')
+    report, error = create_report_entry(
+        user_id,
+        object_type,
+        object_id,
+        category,
+        reason_text=reason_text,
+        target_user_id=target_user_id,
+        target_username=target_username,
+        risk_level=risk_level,
+        evidence=evidence,
+    )
+    if error:
+        record_suspicious_event('report_rejected', error, user_id=user_id, ip=_client_ip(), severity='low', extra={
+            'object_type': object_type,
+            'object_id': object_id,
+            'category': category,
+        })
+        return _json_error(error, 429 if '频繁' in error or '上限' in error or '重复' in error else 400)
+    admin_event('report', f"{username} reported {object_type}:{object_id} category={category}", user_id=user_id)
+    return jsonify({'success': True, 'report': report})
+
+
+@app.route('/api/admin/reports')
+def admin_reports():
+    if not is_admin_authenticated():
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        data = list_reports(
+            status=request.args.get('status', 'pending'),
+            limit=validate_int(request.args.get('limit', 50), default=50, minimum=1, maximum=100, name='limit'),
+            offset=validate_int(request.args.get('offset', 0), default=0, minimum=0, maximum=1000000, name='offset'),
+        )
+        return jsonify({'success': True, **data})
+    except Exception as exc:
+        admin_event('error', f'admin reports query failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/admin/reports/<int:report_id>')
+def admin_report_detail(report_id):
+    if not is_admin_authenticated():
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    detail = get_report_detail(report_id)
+    if not detail:
+        return jsonify({'success': False, 'error': '举报不存在'}), 404
+    return jsonify({'success': True, 'report': detail})
+
+
+@app.route('/api/admin/reports/<int:report_id>/resolve', methods=['POST'])
+def admin_report_resolve(report_id):
+    if not is_admin_authenticated():
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    data = request.get_json(silent=True) or {}
+    try:
+        action = validate_str(data.get('action', ''), min_len=1, max_len=20, pattern=r'[A-Za-z0-9_.:\-]+', name='action')
+        moderation_action = validate_str(data.get('moderation_action', 'none'), min_len=1, max_len=30, pattern=r'[A-Za-z0-9_.:\-]+', name='moderation_action')
+        duration_seconds = validate_int(data.get('duration_seconds', 0), default=0, minimum=0, maximum=60 * 60 * 24 * 30, name='duration_seconds')
+        note = validate_str(data.get('note', ''), max_len=500, name='note', truncate=True)
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
+    if action not in VALID_REPORT_ACTIONS:
+        return _json_error('处理动作无效', 400)
+    if moderation_action not in VALID_MODERATION_ACTIONS:
+        return _json_error('处罚动作无效', 400)
+    detail, error = resolve_report_entry(
+        report_id,
+        action,
+        moderation_action=moderation_action,
+        admin_username=session.get('username') or ADMIN_PLAYER_DISPLAY_NAME,
+        note=note,
+        duration_seconds=duration_seconds,
+    )
+    if error:
+        return _json_error(error, 400)
+    _apply_report_moderation_action(detail, moderation_action, duration_seconds=duration_seconds, note=note)
+    admin_event('moderation', f'report #{report_id} resolved action={action} moderation={moderation_action}')
+    return jsonify({'success': True, 'report': detail})
 
 
 def _admin_online_user_map():
@@ -4224,6 +5440,30 @@ def admin_user_detail(user_id):
         online = _admin_online_user_map()
     detail['user']['online'] = online.get(str(detail['user'].get('username', '')).lower())
     return jsonify({'success': True, **detail})
+
+
+@app.route('/api/admin/draft-stats')
+def admin_draft_stats():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        data = list_card_draft_stats(
+            mode=request.args.get('mode', ''),
+            sort=request.args.get('sort', 'pick_rate'),
+            order=request.args.get('order', 'desc'),
+            limit=request.args.get('limit', 300),
+            offset=request.args.get('offset', 0),
+        )
+    except Exception as exc:
+        admin_event('error', f'admin draft stats failed: {exc}')
+        return jsonify({'success': False, 'error': '抽牌统计数据库不可用'}), 500
+    for item in data.get('items', []):
+        card_def = CARD_DEFS.get(item.get('card_id'))
+        item['name_cn'] = card_def.name_cn if card_def else item.get('card_id')
+        item['name_en'] = card_def.name_en if card_def else item.get('card_id')
+        item['card_type'] = card_def.card_type if card_def else ''
+        item['quality'] = card_def.quality if card_def else ''
+    return jsonify({'success': True, **data})
 
 
 @app.route('/api/admin/storage/summary')
@@ -4387,7 +5627,12 @@ def api_replay_timeline(replay_id):
     if not replay_item_visible_to_current_user(item, admin_context=admin_context):
         return jsonify({'success': False, 'error': 'forbidden'}), 403
     try:
-        data = replay_timeline(replay_id)
+        has_slice_args = 'offset' in request.args or 'limit' in request.args
+        data = replay_timeline(
+            replay_id,
+            offset=request.args.get('offset', 0) if has_slice_args else None,
+            limit=request.args.get('limit', 50) if has_slice_args else None,
+        )
     except Exception as exc:
         admin_event('error', f'replay timeline failed: {exc}')
         return jsonify({'success': False, 'error': str(exc)}), 500
@@ -4419,6 +5664,11 @@ def admin_complete():
 def api_auth_register():
     if not DB_AVAILABLE:
         return db_unavailable_response()
+    ip = _client_ip()
+    if not rate_limiter(f'auth-register:{ip}', limit=5, window=300):
+        record_suspicious_event('auth_register_rate', 'register rate limited', ip=ip, severity='high')
+        admin_event('security', f'auth register rate limited from {ip}')
+        return jsonify({'success': False, 'error': '注册过于频繁，请稍后再试'}), 429
     data = request.get_json(silent=True) or {}
     username = sanitize_nickname(data.get('username', ''))
     password = data.get('password', '')
@@ -4436,12 +5686,21 @@ def api_auth_login():
     if not DB_AVAILABLE:
         return db_unavailable_response()
     ip = _client_ip()
+    if not rate_limiter(f'auth-login:{ip}', limit=30, window=300):
+        record_suspicious_event('auth_login_rate', 'login request rate limited', ip=ip, severity='high')
+        admin_event('security', f'auth login rate limited from {ip}')
+        return jsonify({'success': False, 'error': '登录过于频繁，请稍后再试'}), 429
     if should_rate_limit_auth_login(ip):
         return jsonify({'success': False, 'error': '登录失败次数过多，请稍后再试'}), 429
     data = request.get_json(silent=True) or {}
     user, error = verify_user(data.get('username', ''), data.get('password', ''))
     if error:
         record_auth_login_failure(ip)
+        if str(error).startswith('账号已被封禁'):
+            status = get_user_ban_status(username=data.get('username', ''))
+            payload = ban_error_payload(status, reason_key='error') if status.get('banned') else {'error': error}
+            payload['success'] = False
+            return jsonify(payload), 401
         return jsonify({'success': False, 'error': error}), 401
     clear_auth_login_failures(ip)
     _set_account_session(user)
@@ -4467,6 +5726,27 @@ def api_auth_change_password():
     return jsonify({'success': True, 'user': auth_user_payload(user)})
 
 
+@app.route('/api/auth/skin', methods=['POST'])
+def api_auth_skin():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True) or {}
+    skin = data.get('skin', data)
+    user, error = update_user_skin(user_id, skin)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    _set_account_session(user)
+    normalized_skin = public_skin_config(user.get('skin'))
+    with _lock:
+        for sid, player in players.items():
+            if player.get('user_id') == user_id:
+                player['skin'] = normalized_skin
+    return jsonify({'success': True, 'user': auth_user_payload(user), 'skin': normalized_skin})
+
+
 @app.route('/api/auth/logout', methods=['POST'])
 def api_auth_logout():
     if DB_AVAILABLE and session.get('user_id'):
@@ -4488,12 +5768,10 @@ def api_auth_me():
         return jsonify({'authenticated': False, 'db_available': True})
     if user.get('banned'):
         _clear_account_session()
-        reason = user.get('ban_reason') or ''
-        return _clear_remember_cookie(jsonify({
-            'authenticated': False,
-            'db_available': True,
-            'error': f'账号已被封禁：{reason}' if reason else '账号已被封禁',
-        }))
+        status = get_user_ban_status(user_id=user.get('id'), username=user.get('username'))
+        payload = ban_error_payload(status, reason_key='error') if status.get('banned') else {'error': '账号已被封禁'}
+        payload.update({'authenticated': False, 'db_available': True})
+        return _clear_remember_cookie(jsonify(payload))
     _set_account_session(user)
     response = jsonify({'authenticated': True, 'db_available': True, 'user': auth_user_payload(user)})
     if not request.cookies.get(REMEMBER_COOKIE_NAME):
@@ -4638,6 +5916,8 @@ def api_cards():
             'effects': card_def.effects,
             'scripts': getattr(card_def, 'scripts', {}) or {},
             'v2_events': getattr(card_def, 'v2_events', {}) or {},
+            'damage': getattr(card_def, 'damage', 0),
+            'hits': getattr(card_def, 'hits', 1),
             'image': image_url,
             'image_url': image_url,
         }
@@ -4828,6 +6108,29 @@ def api_community_mod_validate_url():
         return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
 
 
+@app.route('/api/font-subsets/community', methods=['POST'])
+def api_community_font_subset():
+    data = request.get_json(silent=True) or {}
+    try:
+        community_fields, community_mods = resolve_community_loadout(data)
+        if community_fields.get('mod_source') != 'community':
+            return jsonify({'success': True, 'font_subset': {'url': '', 'missing_count': 0, 'warnings': []}})
+        mod_datas = [
+            getattr(mod, 'community_data', None)
+            for mod in (community_mods or [])
+            if getattr(mod, 'community_data', None) is not None
+        ]
+        report = ensure_community_font_subset(
+            mod_datas,
+            hash_key=community_fields.get('community_mod_hash', ''),
+            generate=True,
+        )
+        return jsonify({'success': True, 'font_subset': report})
+    except Exception as exc:
+        admin_event('error', f'community font subset failed: {exc}')
+        return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
+
+
 @app.route('/api/mods/save', methods=['POST'])
 def api_mods_save():
     data = request.get_json(force=True)
@@ -4924,11 +6227,12 @@ def admin_game_chat():
         limit = 300
     with _lock:
         items = admin_game_chat_recent_locked(limit)
+        total_cached = len(ADMIN_GAME_CHAT_CACHE)
     return jsonify({
         'success': True,
         'items': items,
         'limit': limit,
-        'total_cached': len(ADMIN_GAME_CHAT_CACHE),
+        'total_cached': total_cached,
     })
 
 
@@ -5041,28 +6345,86 @@ def admin_set_attr(room_id):
 @socketio.on('connect')
 def on_connect():
     sid = request.sid
+    if not rate_limiter(f'connect-ip:{_client_ip()}', limit=30, window=60):
+        record_suspicious_event('connect_rate_ip', 'Socket connect IP rate limited', sid=sid, ip=_client_ip(), severity='high')
+        socketio.server.disconnect(sid)
+        return
     join_room(sid)
     print("[server] debug")
 
 
 @socketio.on('latency_ping')
 def on_latency_ping(data=None):
+    sid = request.sid
+    if not rate_limiter(f'socket:sid:{sid}:latency_ping', limit=120, window=60):
+        _security_record('latency_ping_rate', 'latency ping rate limited', sid=sid, severity='low')
+        return
+    if data is not None and not isinstance(data, dict):
+        _security_illegal(sid, 'latency_ping', '参数格式错误', emit_error=False, severity='low')
+        return
+    safe_t = None
+    try:
+        safe_t = validate_int((data or {}).get('t'), default=None, minimum=0, maximum=10**16, name='t') if (data or {}).get('t') is not None else None
+    except ValueError:
+        safe_t = None
     emit('latency_pong', {
-        't': (data or {}).get('t'),
+        't': safe_t,
         'server_time': int(time.time() * 1000),
     })
 
 
 @socketio.on('latency_report')
 def on_latency_report(data=None):
+    sid = request.sid
+    if not rate_limiter(f'socket:sid:{sid}:latency_report', limit=60, window=60):
+        _security_record('latency_report_rate', 'latency report rate limited', sid=sid, severity='low')
+        return
+    if data is not None and not isinstance(data, dict):
+        _security_illegal(sid, 'latency_report', '参数格式错误', emit_error=False, severity='low')
+        return
     data = data or {}
-    record_socket_latency(request.sid, data.get('rtt_ms'), data.get('transport', ''))
+    try:
+        rtt_ms = validate_int(data.get('rtt_ms'), default=0, minimum=0, maximum=60000, name='rtt_ms')
+        transport = validate_str(data.get('transport', ''), max_len=32, pattern=r'[A-Za-z0-9_.:\-]*', name='transport')
+    except ValueError as exc:
+        _security_illegal(sid, 'latency_report', str(exc), emit_error=False, severity='low')
+        return
+    record_socket_latency(sid, rtt_ms, transport)
+
+
+@socketio.on('skin_look')
+def on_skin_look(data=None):
+    sid = request.sid
+    data = socket_guard('skin_look', data, require_player=True, emit_error=False)
+    if data is None:
+        return
+    look = normalize_skin_look(data)
+    with _lock:
+        player = players.get(sid)
+        if not player:
+            return
+        player['skin_look'] = look
+        room_id = player.get('room_id')
+        if room_id is None or room_id not in rooms:
+            return
+        room = rooms[room_id]
+        pidx = room.player_index(sid)
+        if pidx < 0:
+            return
+        payload = {'player_id': pidx, 'look': look}
+        targets = {tsid for tsid in room.player_sids if tsid in players}
+        targets.update(tsid for tsid in getattr(room, 'spectators', []) if tsid in players)
+        for target_sid in targets:
+            socketio.emit('skin_look_update', payload, room=target_sid)
 
 
 @socketio.on('draft_reroll')
 @measure_socket_action('draft_reroll')
 def on_draft_reroll(data=None):
     sid = request.sid
+    data = socket_guard('draft_reroll', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
     try:
         with _lock:
             if sid not in players:
@@ -5093,16 +6455,30 @@ def on_draft_reroll(data=None):
 @measure_socket_action('login')
 def on_login(data):
     global _next_room_id
-    data = data or {}
     sid = request.sid
+    data = socket_guard('login', data, require_player=False, allow_empty=True, emit_error=False)
+    if data is None:
+        emit('login_fail', {'reason': '请求过于频繁或参数错误'})
+        return
+    if not rate_limiter(f'login-ip:{_client_ip()}', limit=20, window=60):
+        _security_record('login_rate_ip', 'socket login IP rate limited', sid=sid, severity='high')
+        emit('login_fail', {'reason': '登录过于频繁，请稍后再试'})
+        return
     account_user = _current_account_user() if DB_AVAILABLE else None
-    raw_name = data.get('nickname', '')
+    try:
+        raw_name = validate_str(data.get('nickname', ''), max_len=64, name='nickname')
+        preferred_mode = validate_str(data.get('mode', '1v1'), max_len=8, name='mode')
+    except ValueError as exc:
+        _security_illegal(sid, 'login', str(exc), emit_error=False)
+        emit('login_fail', {'reason': '登录参数错误'})
+        return
     wants_account_login = bool(data.get('account_login'))
-    is_beta_mode = bool(data.get('beta_mode'))
-    if is_beta_instance() and not is_beta_mode:
+    client_beta_mode = bool(data.get('beta_mode'))
+    is_beta_mode = is_beta_instance()
+    if is_beta_instance() and not client_beta_mode:
         emit('login_fail', {'reason': 'This server only accepts beta clients'})
         return
-    if is_release_instance() and is_beta_mode:
+    if is_release_instance() and client_beta_mode:
         emit('login_fail', {'reason': 'This server only accepts release clients'})
         return
     if is_beta_mode and not is_beta_authenticated():
@@ -5111,8 +6487,8 @@ def on_login(data):
     if account_user and account_user.get('banned'):
         session.pop('user_id', None)
         session.pop('username', None)
-        reason = account_user.get('ban_reason') or ''
-        emit('login_fail', {'reason': f'账号已被封禁：{reason}' if reason else '账号已被封禁'})
+        status = get_user_ban_status(user_id=account_user.get('id'), username=account_user.get('username'))
+        emit('login_fail', ban_error_payload(status) if status.get('banned') else {'reason': '账号已被封禁'})
         return
     if wants_account_login and not account_user:
         emit('login_fail', {'reason': 'Account session expired'})
@@ -5123,6 +6499,7 @@ def on_login(data):
         is_admin_player = bool(special_profile and special_profile.get('is_admin_player'))
         user_id = account_user['id']
         is_registered_user = True
+        skin_config = public_skin_config(account_user.get('skin'))
     else:
         special_profile = get_special_player_profile(raw_name)
         is_admin_player = bool(special_profile and special_profile.get('is_admin_player'))
@@ -5141,8 +6518,8 @@ def on_login(data):
             return
         user_id = None
         is_registered_user = False
+        skin_config = public_skin_config(data.get('skin'))
     disabled_mods = ensure_valid_disabled_mods(data.get('disabled_mods', []))
-    preferred_mode = data.get('mode', '1v1')
     if preferred_mode not in ('1v1', '2v2', 'urf'):
         preferred_mode = '1v1'
     try:
@@ -5199,6 +6576,8 @@ def on_login(data):
             'community_mod_name': community_fields.get('community_mod_name', ''),
             'community_mods': community_fields.get('community_mods', []),
             'beta_mode': is_beta_mode,
+            'skin': skin_config,
+            'skin_look': dict(DEFAULT_SKIN_LOOK),
         }
         if special_profile:
             players[sid].update(special_public_fields(special_profile))
@@ -5238,6 +6617,7 @@ def on_login(data):
         'community_mod_name': players.get(sid, {}).get('community_mod_name', ''),
         'community_mods': players.get(sid, {}).get('community_mods', []),
         'beta_mode': players.get(sid, {}).get('beta_mode', False),
+        'skin': players.get(sid, {}).get('skin', DEFAULT_PUBLIC_SKIN),
     }
     if is_registered_user:
         login_payload['user'] = auth_user_payload(account_user)
@@ -5250,7 +6630,14 @@ def on_login(data):
 @socketio.on('form_team')
 def on_form_team(data):
     sid = request.sid
-    target_sid = data.get('target_sid')
+    data = socket_guard('form_team', data, require_player=True)
+    if data is None:
+        return
+    try:
+        target_sid = validate_socket_sid(data.get('target_sid'), name='target_sid')
+    except ValueError as exc:
+        _security_illegal(sid, 'form_team', str(exc))
+        return
     with _lock:
         if sid not in players or target_sid not in players:
             return
@@ -5269,7 +6656,14 @@ def on_form_team(data):
 @socketio.on('set_mode')
 def on_set_mode(data):
     sid = request.sid
-    mode = data.get('mode', '1v1')
+    data = socket_guard('set_mode', data, require_player=True)
+    if data is None:
+        return
+    try:
+        mode = validate_str(data.get('mode', '1v1'), min_len=1, max_len=8, name='mode')
+    except ValueError as exc:
+        _security_illegal(sid, 'set_mode', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
@@ -5295,7 +6689,9 @@ def on_set_mode(data):
 @measure_socket_action('update_mod_settings')
 def on_update_mod_settings(data):
     sid = request.sid
-    data = data or {}
+    data = socket_guard('update_mod_settings', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
     with _lock:
         if sid not in players:
             return
@@ -5383,7 +6779,14 @@ def on_update_mod_settings(data):
 @socketio.on('accept_team')
 def on_accept_team(data):
     sid = request.sid
-    leader_sid = data.get('from_sid')
+    data = socket_guard('accept_team', data, require_player=True)
+    if data is None:
+        return
+    try:
+        leader_sid = validate_socket_sid(data.get('from_sid'), name='from_sid')
+    except ValueError as exc:
+        _security_illegal(sid, 'accept_team', str(exc))
+        return
     with _lock:
         if sid not in players or leader_sid not in players:
             return
@@ -5413,7 +6816,14 @@ def on_accept_team(data):
 @socketio.on('decline_team')
 def on_decline_team(data):
     sid = request.sid
-    leader_sid = data.get('from_sid')
+    data = socket_guard('decline_team', data, require_player=True)
+    if data is None:
+        return
+    try:
+        leader_sid = validate_socket_sid(data.get('from_sid'), name='from_sid')
+    except ValueError as exc:
+        _security_illegal(sid, 'decline_team', str(exc))
+        return
     with _lock:
         if leader_sid not in players:
             return
@@ -5423,6 +6833,9 @@ def on_decline_team(data):
 @socketio.on('leave_team')
 def on_leave_team(data=None):
     sid = request.sid
+    data = socket_guard('leave_team', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
     with _lock:
         if sid not in teams:
             return
@@ -5443,7 +6856,14 @@ def on_leave_team(data=None):
 @socketio.on('invite_team')
 def on_invite_team(data):
     sid = request.sid
-    target_team_leader = data.get('target_team_leader')
+    data = socket_guard('invite_team', data, require_player=True)
+    if data is None:
+        return
+    try:
+        target_team_leader = validate_socket_sid(data.get('target_team_leader'), name='target_team_leader')
+    except ValueError as exc:
+        _security_illegal(sid, 'invite_team', str(exc))
+        return
     with _lock:
         if sid not in teams or target_team_leader not in teams:
             return
@@ -5479,7 +6899,14 @@ def on_invite_team(data):
 def on_accept_team_match(data):
     global _next_room_id
     sid = request.sid
-    from_leader = data.get('from_leader')
+    data = socket_guard('accept_team_match', data, require_player=True)
+    if data is None:
+        return
+    try:
+        from_leader = validate_socket_sid(data.get('from_leader'), name='from_leader')
+    except ValueError as exc:
+        _security_illegal(sid, 'accept_team_match', str(exc))
+        return
     with _lock:
         if sid not in teams or from_leader not in teams:
             return
@@ -5491,20 +6918,20 @@ def on_accept_team_match(data):
             return
         match_key = (min(my_team['leader'], other_team['leader']),
                      max(my_team['leader'], other_team['leader']))
-        pending_team_matches.pop(match_key, None)
-        for member_sid in my_team['members']:
-            if member_sid != sid and member_sid in players:
-                socketio.emit('team_match_accepted', {}, room=member_sid)
         all_sids = other_team['members'] + my_team['members']
         for s in all_sids:
             if s not in players or players[s]['status'] != 'lobby':
                 return
+        pending_team_matches.pop(match_key, None)
         if not same_runtime_scope_sids(all_sids):
-            emit('server_error', {'message': runtime_scope_mismatch_message()})
+            emit_match_start_failed(all_sids, runtime_scope_mismatch_message(), reason='runtime_scope_mismatch')
             return
         if not same_mod_loadout(all_sids):
-            emit('server_error', {'message': '模组组合不一致，无法开始对局'})
+            emit_match_start_failed(all_sids, '模组组合不一致，无法开始对局')
             return
+        for member_sid in my_team['members']:
+            if member_sid != sid and member_sid in players:
+                socketio.emit('team_match_accepted', {}, room=member_sid)
         room_id = _next_room_id
         _next_room_id += 1
         allowed = None
@@ -5532,7 +6959,14 @@ def on_accept_team_match(data):
 @socketio.on('decline_team_match')
 def on_decline_team_match(data):
     sid = request.sid
-    from_leader = data.get('from_leader')
+    data = socket_guard('decline_team_match', data, require_player=True)
+    if data is None:
+        return
+    try:
+        from_leader = validate_socket_sid(data.get('from_leader'), name='from_leader')
+    except ValueError as exc:
+        _security_illegal(sid, 'decline_team_match', str(exc))
+        return
     with _lock:
         if from_leader not in teams:
             return
@@ -5578,6 +7012,8 @@ def on_disconnect():
                     'mods_hash': player.get('mods_hash', ''),
                     'loadout_hash': player_loadout_hash(player),
                     'v2_loadout_hash': player.get('v2_loadout_hash', ''),
+                    'skin': public_skin_config(player.get('skin')),
+                    'skin_look': normalize_skin_look(player.get('skin_look')),
                 }
                 room.disconnected_players[sid].update(special_public_fields(player))
                 dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)
@@ -5641,12 +7077,19 @@ def on_disconnect():
 def on_reconnect_accept(data):
     global _next_room_id
     sid = request.sid
+    data = socket_guard('reconnect_accept', data, require_player=True)
+    if data is None:
+        return
+    try:
+        room_id = validate_int(data.get('room_id'), minimum=0, maximum=10**9, name='room_id')
+        old_sid = validate_socket_sid(data.get('old_sid'), name='old_sid')
+    except ValueError as exc:
+        _security_illegal(sid, 'reconnect_accept', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
         player = players[sid]
-        room_id = data.get('room_id')
-        old_sid = data.get('old_sid')
         if room_id is None or room_id not in rooms:
             player['status'] = 'lobby'
             return
@@ -5672,12 +7115,14 @@ def on_reconnect_accept(data):
         del room.disconnected_players[old_sid]
         player['room_id'] = room_id
         player['status'] = 'in_game'
+        player['skin_look'] = normalize_skin_look(dc_info.get('skin_look'))
         player.update(special_public_fields(dc_info))
         join_room(room_id)
         for other_sid in room.player_sids:
             if other_sid != sid and other_sid in players:
                 socketio.emit('opponent_reconnected', {}, room=other_sid)
         send_game_state_to(room, pidx)
+        emit_pending_response_requests(room, only_player_index=pidx)
     broadcast_lobby()
 
 
@@ -5685,12 +7130,19 @@ def on_reconnect_accept(data):
 def on_reconnect_decline(data):
     global _next_room_id
     sid = request.sid
+    data = socket_guard('reconnect_decline', data, require_player=True)
+    if data is None:
+        return
+    try:
+        room_id = validate_int(data.get('room_id'), minimum=0, maximum=10**9, name='room_id')
+        old_sid = validate_socket_sid(data.get('old_sid'), name='old_sid')
+    except ValueError as exc:
+        _security_illegal(sid, 'reconnect_decline', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
         player = players[sid]
-        room_id = data.get('room_id')
-        old_sid = data.get('old_sid')
         if room_id is None or room_id not in rooms:
             player['status'] = 'lobby'
             return
@@ -5705,41 +7157,62 @@ def on_reconnect_decline(data):
             if _room_player_dead(room, dc_pidx) and old_sid in room.reconnect_timers:
                 room.reconnect_timers[old_sid].cancel()
                 del room.reconnect_timers[old_sid]
-            player['status'] = 'lobby'
-            player['room_id'] = None
-            broadcast_lobby()
-            return
+                player['status'] = 'lobby'
+                player['room_id'] = None
+                broadcast_lobby()
+                return
         if old_sid in room.disconnected_players:
+            dc_info = room.disconnected_players.get(old_sid, {})
+            dc_pidx = int(dc_info.get('player_index', -1)) if dc_info else -1
             if old_sid in room.reconnect_timers:
                 room.reconnect_timers[old_sid].cancel()
                 del room.reconnect_timers[old_sid]
-            del room.disconnected_players[old_sid]
-        for other_sid in room.player_sids:
-            if other_sid != sid and other_sid in players:
-                socketio.emit('opponent_disconnected', {'timeout': True}, room=other_sid)
-                players[other_sid]['room_id'] = None
-                players[other_sid]['status'] = 'lobby'
-        for t in room.reconnect_timers.values():
-            t.cancel()
-        del rooms[room_id]
+            disconnected_teams = _room_disconnected_teams(room)
+            if len(disconnected_teams) >= 2:
+                ended = _finish_room_by_health_tiebreak(room, '双方放弃重连')
+            else:
+                ended = _finish_room_by_forfeit(
+                    room,
+                    dc_pidx,
+                    dc_info.get('nickname', player.get('nickname', '?')),
+                    '放弃重连',
+                )
+            record_room_replay_action(room, 'reconnect_decline', dc_pidx, {
+                'nickname': dc_info.get('nickname', player.get('nickname', '?')),
+                'game_over': ended,
+            })
+            if ended:
+                _cancel_room_reconnect_timers(room)
+                for other_sid in room.player_sids:
+                    if other_sid in players:
+                        socketio.emit('opponent_disconnected', {'timeout': True, 'game_over': True}, room=other_sid)
+                        socketio.emit('game_phase', {'phase': 'game_over'}, room=other_sid)
+                broadcast_game_state(room)
         player['status'] = 'lobby'
+        player['room_id'] = None
     broadcast_lobby()
 
 
 @socketio.on('invite')
 def on_invite(data):
     sid = request.sid
-    target_sid = data.get('target_sid')
-    print("[server] debug")
+    data = socket_guard('invite', data, require_player=True)
+    if data is None:
+        return
+    try:
+        target_sid = validate_socket_sid(data.get('target_sid'), name='target_sid')
+    except ValueError as exc:
+        _security_illegal(sid, 'invite', str(exc))
+        return
     with _lock:
         if sid not in players or target_sid not in players:
-            print("[server] debug")
+            _security_illegal(sid, 'invite', '目标玩家不存在', severity='low')
             emit('server_error', {'message': '目标玩家不存在'})
             return
         if sid == target_sid:
+            _security_illegal(sid, 'invite', '不能邀请自己', severity='low')
             return
         if sid in invites:
-            print("[server] debug")
             return
         target = players[target_sid]
         if target['status'] != 'lobby':
@@ -5763,18 +7236,15 @@ def on_invite(data):
             return
         invites[sid] = target_sid
         inviter_name = players[sid]['nickname']
-        print("[server] debug")
         result = socketio.emit('invite_received', {
             'inviter_sid': sid,
             'inviter_name': inviter_name,
         }, room=target_sid)
-        print("[server] debug")
 
         def _invite_timeout(inviter_sid):
             with _lock:
                 if inviter_sid in invites:
                     del invites[inviter_sid]
-                    print("[server] debug")
 
         timer = threading.Timer(30.0, _invite_timeout, args=[sid])
         timer.daemon = True
@@ -5785,8 +7255,14 @@ def on_invite(data):
 def on_accept_invite(data):
     global _next_room_id
     sid = request.sid
-    inviter_sid = data.get('inviter_sid')
-    print("[server] debug")
+    data = socket_guard('accept_invite', data, require_player=True)
+    if data is None:
+        return
+    try:
+        inviter_sid = validate_socket_sid(data.get('inviter_sid'), name='inviter_sid')
+    except ValueError as exc:
+        _security_illegal(sid, 'accept_invite', str(exc))
+        return
     with _lock:
         if inviter_sid not in players or sid not in players:
             print("[server] debug")
@@ -5800,10 +7276,10 @@ def on_accept_invite(data):
         if inviter['status'] != 'lobby' or accepter['status'] != 'lobby':
             return
         if not same_runtime_scope_players(inviter, accepter):
-            emit('server_error', {'message': runtime_scope_mismatch_message()})
+            emit_match_start_failed([inviter_sid, sid], runtime_scope_mismatch_message(), reason='runtime_scope_mismatch')
             return
         if player_loadout_hash(inviter) != player_loadout_hash(accepter):
-            emit('server_error', {'message': '模组组合不一致，无法开始对局'})
+            emit_match_start_failed([inviter_sid, sid], '模组组合不一致，无法开始对局')
             return
         room_id = _next_room_id
         _next_room_id += 1
@@ -5840,7 +7316,14 @@ def on_accept_invite(data):
 @socketio.on('decline_invite')
 def on_decline_invite(data):
     sid = request.sid
-    inviter_sid = data.get('inviter_sid')
+    data = socket_guard('decline_invite', data, require_player=True)
+    if data is None:
+        return
+    try:
+        inviter_sid = validate_socket_sid(data.get('inviter_sid'), name='inviter_sid')
+    except ValueError as exc:
+        _security_illegal(sid, 'decline_invite', str(exc))
+        return
     with _lock:
         if inviter_sid in invites and invites[inviter_sid] == sid:
             del invites[inviter_sid]
@@ -5851,26 +7334,112 @@ def on_decline_invite(data):
 @socketio.on('chat')
 def on_chat(data):
     sid = request.sid
-    data = data or {}
+    data = socket_guard('chat', data, require_player=True, allow_empty=False)
+    if data is None:
+        return
     with _lock:
         if sid not in players:
             return
         player = players[sid]
+        mute_key = chat_mute_key(sid, player)
+        if is_muted(mute_key):
+            emit('server_error', muted_error_payload(mute_remaining_seconds(mute_key)))
+            _security_record('chat_muted_attempt', 'muted player tried to chat', sid=sid, severity='low')
+            return
+        if DB_AVAILABLE and player.get('user_id'):
+            muted, mute_info = is_user_muted_db(player.get('user_id'))
+            if muted:
+                remaining = 0
+                try:
+                    until_dt = datetime.fromisoformat(str(mute_info.get('muted_until') or '').replace('Z', '+00:00'))
+                    remaining = max(0, int((until_dt - datetime.now(timezone.utc)).total_seconds()))
+                except Exception:
+                    remaining = 0
+                emit('server_error', muted_error_payload(remaining))
+                _security_record('chat_muted_attempt', 'db-muted player tried to chat', sid=sid, severity='low', extra=mute_info)
+                return
         room_id = player.get('room_id')
         spectating_room = player.get('spectating_room')
         now = time.time()
         exempt = is_chat_limit_exempt(player)
-        text = normalize_chat_text(data.get('text', ''), exempt=exempt)
+        if not exempt:
+            if not rate_limiter(f'chat-fast:{mute_key}', limit=1, window=2):
+                _security_record('chat_fast_rate', 'chat sent faster than 1 per 2 seconds', sid=sid, severity='low')
+                emit('server_error', {'message': '聊天发送过快'})
+                return
+            if not rate_limiter(f'chat-burst:{mute_key}', limit=5, window=10):
+                _security_record('chat_burst_rate', 'chat sent faster than 5 per 10 seconds', sid=sid, severity='medium')
+                emit('server_error', {'message': '聊天发送过快'})
+                return
+        try:
+            raw_text = validate_str(data.get('text', ''), max_len=1000 if exempt else 200, name='chat text', truncate=True)
+        except ValueError as exc:
+            _security_illegal(sid, 'chat', str(exc), severity='low')
+            return
+        text = normalize_chat_text(raw_text, exempt=exempt)
         if not text.strip():
             return
+        risk = check_message_risk(text)
+        risk_level = int(risk.get('risk_level') or 0)
+        risk_action = str(risk.get('action') or '')
+        matched_rules = list(risk.get('matched_rules') or [])
+        normalized_message = risk.get('normalized_message') or normalize_message(text)
+        if risk_action == 'reject_mute' or risk_level >= 4:
+            if DB_AVAILABLE:
+                try:
+                    record_chat_message(
+                        f'room:{room_id}' if room_id is not None else ('spectate' if spectating_room is not None else f'lobby:{_lobby_chat_scope_key(player.get("beta_mode", False))}'),
+                        str(data.get('channel') or 'public')[:40],
+                        player.get('user_id'),
+                        player.get('nickname', ''),
+                        text,
+                        normalized_message,
+                        risk_level,
+                        hidden=True,
+                    )
+                except Exception as exc:
+                    admin_event('error', f'failed to record rejected chat: {exc}')
+            mute_user(mute_key, 300, 'severe chat risk')
+            if DB_AVAILABLE and player.get('user_id'):
+                try:
+                    set_user_mute(player.get('user_id'), player.get('nickname', ''), 300, 'severe chat risk', 'system')
+                except Exception as exc:
+                    admin_event('error', f'failed to persist severe chat mute: {exc}')
+            _security_record('chat_rejected', 'severe chat risk rejected', sid=sid, severity='high', extra={'rules': matched_rules})
+            emit('server_error', muted_error_payload(300, message='消息包含高风险内容，已被拦截并临时禁言'))
+            return
+        if risk_action == 'mask_flag' or risk_level >= 3:
+            text = risk.get('sanitized_text') or text
         nickname = player['nickname']
         is_spectator = player.get('status') == 'spectating'
         chat_data = {
             'nickname': nickname,
             'text': text,
             'is_spectator': is_spectator,
+            'risk_level': risk_level,
+            'risk_action': risk_action,
         }
+        if matched_rules:
+            chat_data['matched_rules'] = matched_rules[:5]
         chat_data.update(special_public_fields(player))
+
+        def persist_chat(room_key, channel):
+            if not DB_AVAILABLE:
+                return None
+            try:
+                return record_chat_message(
+                    room_key,
+                    channel,
+                    player.get('user_id'),
+                    nickname,
+                    text,
+                    normalized_message,
+                    risk_level,
+                    hidden=False,
+                )
+            except Exception as exc:
+                admin_event('error', f'failed to record chat message: {exc}')
+                return None
 
         def emit_chat_to(recipients, payload):
             seen = set()
@@ -5893,8 +7462,8 @@ def on_chat(data):
             room = rooms[room_id]
             pidx = room.player_index(sid)
             recipients = list(room.player_sids) + list(room.spectators)
+            channel = str(data.get('channel') or 'public')
             if room.mode == '2v2' and pidx >= 0:
-                channel = str(data.get('channel') or 'public')
                 if channel not in ('public', 'team', 'enemy', 'private'):
                     channel = 'public'
                 chat_data['chat_channel'] = channel
@@ -5908,18 +7477,23 @@ def on_chat(data):
                     recipients = [sid] + [room.player_sids[eid] for eid in enemy_ids if 0 <= eid < len(room.player_sids)]
                 elif channel == 'private':
                     try:
-                        target_pidx = int(data.get('target_player_id'))
-                    except (TypeError, ValueError):
+                        target_pidx = validate_int(data.get('target_player_id'), default=-1, minimum=-1, maximum=16, name='target_player_id')
+                    except ValueError:
                         target_pidx = -1
                     if target_pidx not in enemy_ids or target_pidx < 0 or target_pidx >= len(room.player_sids):
-                        emit('server_error', {'message': 'Invalid chat target'})
+                        _security_illegal(sid, 'chat', 'Invalid chat target', severity='medium')
                         return
                     chat_data['chat_target_player_id'] = target_pidx
                     chat_data['chat_target_name'] = player_name_at(room, target_pidx)
                     recipients = [sid, room.player_sids[target_pidx]]
             if not check_chat_rate_locked(sid, player, now):
+                _security_record('chat_rate', 'room chat rate limited', sid=sid, severity='medium')
+                mute_user(mute_key, 60, 'chat rate limit')
                 emit('server_error', {'message': '聊天发送过快'})
                 return
+            chat_message_id = persist_chat(f'room:{room.room_id}', chat_data.get('chat_channel') or channel or 'public')
+            if chat_message_id:
+                chat_data['message_id'] = chat_message_id
             append_admin_game_chat_locked(chat_data, now, scope='room', room_id=room.room_id)
             emit_chat_to(recipients, chat_data)
         elif spectating_room is not None and spectating_room in rooms:
@@ -5927,16 +7501,26 @@ def on_chat(data):
             if room.mode == '2v2':
                 chat_data['chat_channel'] = 'public'
             if not check_chat_rate_locked(sid, player, now):
+                _security_record('chat_rate', 'spectator chat rate limited', sid=sid, severity='medium')
+                mute_user(mute_key, 60, 'chat rate limit')
                 emit('server_error', {'message': '聊天发送过快'})
                 return
+            chat_message_id = persist_chat(f'room:{room.room_id}:spectate', chat_data.get('chat_channel') or 'public')
+            if chat_message_id:
+                chat_data['message_id'] = chat_message_id
             append_admin_game_chat_locked(chat_data, now, scope='spectate', room_id=room.room_id)
             emit_chat_to(list(room.player_sids) + list(room.spectators), chat_data)
         else:
             beta_mode = bool(player.get('beta_mode', False))
             will_fold = lobby_chat_would_fold_locked(chat_data, now, beta_mode=beta_mode)
             if not will_fold and not check_chat_rate_locked(sid, player, now):
+                _security_record('chat_rate', 'lobby chat rate limited', sid=sid, severity='medium')
+                mute_user(mute_key, 60, 'chat rate limit')
                 emit('server_error', {'message': '聊天发送过快'})
                 return
+            chat_message_id = persist_chat(f'lobby:{_lobby_chat_scope_key(beta_mode)}', 'public')
+            if chat_message_id:
+                chat_data['message_id'] = chat_message_id
             append_lobby_chat_locked(chat_data, now, beta_mode=beta_mode)
             append_admin_game_chat_locked(chat_data, now, scope='lobby')
             emit_lobby_chat_history_payloads(lobby_chat_history_payloads_locked(100, beta_mode=beta_mode))
@@ -5947,6 +7531,14 @@ def on_chat(data):
 def on_draft_pick(data):
     global _next_room_id
     sid = request.sid
+    data = socket_guard('draft_pick', data, require_player=True)
+    if data is None:
+        return
+    try:
+        def_id = validate_card_def_id(data.get('def_id'), name='def_id')
+    except ValueError as exc:
+        _security_illegal(sid, 'draft_pick', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
@@ -5959,15 +7551,21 @@ def on_draft_pick(data):
         if pidx < 0:
             return
         engine = room.engine
-        def_id = data.get('def_id')
         if not def_id:
             return
+        draft_options_before = [card.def_id for card in (engine.draft_options[pidx] or [])]
         success = engine.draft_pick(pidx, def_id)
         if not success:
             if not engine.draft_options[pidx]:
                 engine._generate_draft_options_for_player(pidx)
+            draft_options_before = [card.def_id for card in (engine.draft_options[pidx] or [])]
             success = engine.draft_pick(pidx, def_id)
         if success:
+            if DB_AVAILABLE and room.mode in ('1v1', '2v2'):
+                try:
+                    record_card_draft_pick(room.mode, draft_options_before, def_id)
+                except Exception as exc:
+                    admin_event('error', f'draft stats record failed: {exc}')
             record_room_replay_action(room, 'draft_pick', pidx, {'def_id': def_id})
             for pi in range(len(room.player_sids)):
                 send_draft_state(room, pi)
@@ -5981,6 +7579,15 @@ def on_draft_pick(data):
 @measure_socket_action('select_opening_event')
 def on_select_opening_event(data):
     sid = request.sid
+    data = socket_guard('select_opening_event', data, require_player=True)
+    if data is None:
+        return
+    try:
+        event_id = validate_str(data.get('event_id'), min_len=1, max_len=80, pattern=r'[A-Za-z0-9_.:\-/]+', name='event_id')
+        sub_choice = validate_choice_payload(data.get('sub_choice'))
+    except ValueError as exc:
+        _security_illegal(sid, 'select_opening_event', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
@@ -5993,8 +7600,6 @@ def on_select_opening_event(data):
         if pidx < 0:
             return
         engine = room.engine
-        event_id = data.get('event_id')
-        sub_choice = data.get('sub_choice')
         if event_id is None:
             return
         success = engine.select_opening_event(pidx, event_id)
@@ -6015,13 +7620,18 @@ def on_select_opening_event(data):
 @socketio.on('solo_start')
 def on_solo_start(data):
     sid = request.sid
-    deck0 = data.get('deck0', []) if data else []
-    deck1 = data.get('deck1', []) if data else []
-    event0 = data.get('event0') if data else None
-    event1 = data.get('event1') if data else None
-    sub0 = data.get('sub0') if data else None
-    sub1 = data.get('sub1') if data else None
-    if len(deck0) != DECK_SIZE or len(deck1) != DECK_SIZE:
+    data = socket_guard('solo_start', data, require_player=False)
+    if data is None:
+        return
+    try:
+        deck0 = validate_solo_deck_entries(data.get('deck0', []), name='deck0')
+        deck1 = validate_solo_deck_entries(data.get('deck1', []), name='deck1')
+        event0 = validate_int(data.get('event0'), default=None, minimum=0, maximum=9999, name='event0') if data.get('event0') is not None else None
+        event1 = validate_int(data.get('event1'), default=None, minimum=0, maximum=9999, name='event1') if data.get('event1') is not None else None
+        sub0 = validate_choice_payload(data.get('sub0'))
+        sub1 = validate_choice_payload(data.get('sub1'))
+    except ValueError as exc:
+        _security_illegal(sid, 'solo_start', str(exc))
         emit('server_error', {'message': '训练场牌组必须各为15张'})
         return
     disabled_mods = ensure_valid_disabled_mods(data.get('disabled_mods', [])) if data else []
@@ -6057,6 +7667,9 @@ def on_solo_start(data):
 @socketio.on('tutorial_start')
 def on_tutorial_start(data=None):
     sid = request.sid
+    data = socket_guard('tutorial_start', data, require_player=False, allow_empty=True)
+    if data is None:
+        return
     deck0 = [
         'Basic', 'Rose', 'Leaf', 'Coffee', 'Fission',
         'Triangle', 'Bubble', 'Fusion', 'Basic', 'Basic',
@@ -6112,6 +7725,9 @@ def _pick_tutorial_bot_card(engine):
 @socketio.on('tutorial_bot_action')
 def on_tutorial_bot_action(data=None):
     sid = request.sid
+    data = socket_guard('tutorial_bot_action', data, require_player=False, allow_empty=True, emit_error=False)
+    if data is None:
+        return
     with _lock:
         if sid not in tutorial_sessions:
             return
@@ -6141,13 +7757,22 @@ def on_tutorial_bot_action(data=None):
 @socketio.on('solo_play_card')
 def on_solo_play_card(data):
     sid = request.sid
+    data = socket_guard('solo_play_card', data, require_player=False)
+    if data is None:
+        return
+    try:
+        card_instance_id = validate_instance_id(data.get('card_instance_id'), name='card_instance_id')
+        choice = validate_choice_payload(data.get('choice'))
+    except ValueError as exc:
+        _security_illegal(sid, 'solo_play_card', str(exc))
+        return
     with _lock:
         engine = solo_sessions.get(sid)
         if not engine:
             emit('server_error', {'message': '训练场尚未开始'})
             return
         pidx = engine.current_player
-        result = engine.play_card(pidx, data.get('card_instance_id'), data.get('choice'))
+        result = engine.play_card(pidx, card_instance_id, choice)
         if result.get('needs_response'):
             if sid in tutorial_sessions and pidx == 0:
                 engine.handle_response(1, None)
@@ -6157,12 +7782,17 @@ def on_solo_play_card(data):
             emit_solo_response_request(sid, engine, pidx, result['card'])
         elif result.get('needs_choice'):
             send_solo_state(sid)
-            socketio.emit('choice_request', {
+            choice_payload = {
                 'choice_type': result['choice_type'],
                 'card': result['card'],
                 'choice_params': result.get('choice_params', {}),
                 'target_player_id': result.get('target_player_id'),
-            }, room=sid)
+            }
+            if result.get('deck_cards'):
+                choice_payload['deck_cards'] = result['deck_cards']
+            if result.get('message'):
+                choice_payload['message'] = result['message']
+            socketio.emit('choice_request', choice_payload, room=sid)
         elif result.get('needs_v2_ui'):
             send_solo_state(sid)
             emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
@@ -6175,12 +7805,20 @@ def on_solo_play_card(data):
 @socketio.on('solo_response')
 def on_solo_response(data):
     sid = request.sid
+    data = socket_guard('solo_response', data, require_player=False, allow_empty=True)
+    if data is None:
+        return
+    try:
+        raw_card_id = data.get('card_instance_id') if data else None
+        card_instance_id = None if raw_card_id in (None, '', 'none') else validate_instance_id(raw_card_id, name='card_instance_id', required=False)
+    except ValueError as exc:
+        _security_illegal(sid, 'solo_response', str(exc))
+        return
     with _lock:
         engine = solo_sessions.get(sid)
         if not engine:
             return
         responder = 1 - engine.pending_response['player_id'] if engine.pending_response else engine.current_player
-        card_instance_id = data.get('card_instance_id') if data else None
         if sid in tutorial_sessions and responder != 0:
             card_instance_id = None
         engine.handle_response(responder, card_instance_id)
@@ -6190,18 +7828,40 @@ def on_solo_response(data):
 @socketio.on('solo_resolve_choice')
 def on_solo_resolve_choice(data):
     sid = request.sid
+    data = socket_guard('solo_resolve_choice', data, require_player=False, allow_empty=True)
+    if data is None:
+        return
+    try:
+        choice = validate_choice_payload(data.get('choice') if data else None)
+    except ValueError as exc:
+        _security_illegal(sid, 'solo_resolve_choice', str(exc))
+        return
     with _lock:
         engine = solo_sessions.get(sid)
         if not engine:
             return
         pidx = engine.pending_choice.get('player_id', engine.current_player) if engine.pending_choice else engine.current_player
-        engine.resolve_choice(pidx, data.get('choice') if data else None)
+        engine.resolve_choice(pidx, choice)
         send_solo_state(sid)
 
 
 @socketio.on('solo_v2_ui_response')
 def on_solo_v2_ui_response(data):
     sid = request.sid
+    data = socket_guard('solo_v2_ui_response', data, require_player=False)
+    if data is None:
+        return
+    try:
+        request_id = validate_str(data.get('request_id', ''), max_len=80, pattern=r'[A-Za-z0-9_.:\-]*', name='request_id')
+        values = validate_choice_payload(data.get('values'))
+        button = validate_str(data.get('button', ''), max_len=80, pattern=r'[A-Za-z0-9_.:\-]*', name='button')
+        clean_data = dict(data)
+        clean_data['request_id'] = request_id
+        clean_data['values'] = values
+        clean_data['button'] = button
+    except ValueError as exc:
+        _security_illegal(sid, 'solo_v2_ui_response', str(exc))
+        return
     with _lock:
         engine = solo_sessions.get(sid)
         if not engine:
@@ -6210,9 +7870,8 @@ def on_solo_v2_ui_response(data):
         if not pending:
             return
         pidx = int(pending.get('player_id', engine.current_player))
-        request_id = (data or {}).get('request_id')
         _cancel_v2_ui_timeout(('solo', sid), request_id)
-        result = engine.handle_v2_ui_response(pidx, request_id, data or {})
+        result = engine.handle_v2_ui_response(pidx, request_id, clean_data)
         if result.get('needs_v2_ui'):
             send_solo_state(sid)
             emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
@@ -6226,11 +7885,19 @@ def on_solo_v2_ui_response(data):
 @socketio.on('solo_use_trigger')
 def on_solo_use_trigger(data):
     sid = request.sid
+    data = socket_guard('solo_use_trigger', data, require_player=False)
+    if data is None:
+        return
+    try:
+        equipment_instance_id = validate_instance_id(data.get('equipment_instance_id'), name='equipment_instance_id')
+    except ValueError as exc:
+        _security_illegal(sid, 'solo_use_trigger', str(exc))
+        return
     with _lock:
         engine = solo_sessions.get(sid)
         if not engine:
             return
-        result = engine.use_trigger(engine.current_player, data.get('equipment_instance_id'))
+        result = engine.use_trigger(engine.current_player, equipment_instance_id)
         if not result.get('success'):
             emit('server_error', {'message': result.get('error', 'Operation failed')})
         send_solo_state(sid)
@@ -6239,6 +7906,9 @@ def on_solo_use_trigger(data):
 @socketio.on('solo_end_turn')
 def on_solo_end_turn(data=None):
     sid = request.sid
+    data = socket_guard('solo_end_turn', data, require_player=False, allow_empty=True)
+    if data is None:
+        return
     with _lock:
         engine = solo_sessions.get(sid)
         if not engine:
@@ -6252,12 +7922,20 @@ def on_solo_end_turn(data=None):
 @socketio.on('solo_set_next_draw')
 def on_solo_set_next_draw(data):
     sid = request.sid
+    data = socket_guard('solo_set_next_draw', data, require_player=False)
+    if data is None:
+        return
     def_ids = []
-    if data:
+    try:
         if isinstance(data.get('def_ids'), list):
-            def_ids = [x for x in data.get('def_ids') if x]
+            if len(data.get('def_ids')) > 10:
+                raise ValueError('def_ids too long')
+            def_ids = [validate_card_def_id(x, name='def_ids') for x in data.get('def_ids') if x]
         elif data.get('def_id'):
-            def_ids = [data.get('def_id')]
+            def_ids = [validate_card_def_id(data.get('def_id'), name='def_id')]
+    except ValueError as exc:
+        _security_illegal(sid, 'solo_set_next_draw', str(exc))
+        return
     with _lock:
         engine = solo_sessions.get(sid)
         if not engine or not def_ids:
@@ -6290,6 +7968,9 @@ def on_solo_set_next_draw(data):
 @socketio.on('solo_pause')
 def on_solo_pause(data=None):
     sid = request.sid
+    data = socket_guard('solo_pause', data, require_player=False, allow_empty=True)
+    if data is None:
+        return
     solo_sessions.pop(sid, None)
     tutorial_sessions.discard(sid)
     if sid in players:
@@ -6301,6 +7982,16 @@ def on_solo_pause(data=None):
 @measure_socket_action('play_card')
 def on_play_card(data):
     sid = request.sid
+    data = socket_guard('play_card', data, require_player=True)
+    if data is None:
+        return
+    try:
+        card_instance_id = validate_instance_id(data.get('card_instance_id'), name='card_instance_id')
+        choice = validate_choice_payload(data.get('choice'))
+        target_player_id = validate_int(data.get('target_player_id', -1), default=-1, minimum=-1, maximum=16, name='target_player_id')
+    except ValueError as exc:
+        _security_illegal(sid, 'play_card', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
@@ -6313,15 +8004,6 @@ def on_play_card(data):
         if pidx < 0:
             return
         engine = room.engine
-        card_instance_id = data.get('card_instance_id')
-        choice = data.get('choice')
-        target_player_id = data.get('target_player_id', -1)
-        try:
-            target_player_id = int(target_player_id)
-        except (TypeError, ValueError):
-            target_player_id = -1
-        if card_instance_id is None:
-            return
         replay_def_id = ''
         try:
             replay_card = next((c for c in getattr(engine.players[pidx], 'hand', []) if str(getattr(c, 'instance_id', '')) == str(card_instance_id)), None)
@@ -6333,6 +8015,7 @@ def on_play_card(data):
         else:
             result = engine.play_card(pidx, card_instance_id, choice)
         if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui'):
+            record_valid_player_action(room, pidx, 'play_card')
             record_room_replay_action(room, 'play_card', pidx, {
                 'card_instance_id': card_instance_id,
                 'def_id': replay_def_id,
@@ -6356,64 +8039,27 @@ def on_play_card(data):
                     emit('server_error', {'message': 'Teammate is not online'})
         elif result.get('needs_response'):
             broadcast_game_state(room)
-            played_card = result['card']
-            played_def = CARD_DEFS.get(played_card.get('def_id', ''), None)
-            trigger_types = []
-            if played_def:
-                if played_def.card_type == 'thorn':
-                    trigger_types.append('thorn')
-                elif played_def.card_type == 'bloom':
-                    trigger_types.append('bloom')
-                elif played_def.card_type == 'root':
-                    trigger_types.append('root')
-                if played_def.id in ('Sewage', 'MagicSewage'):
-                    trigger_types.append('equipment_destroy')
-                trigger_types.append('any')
-            if room.mode == '2v2':
-                by_responder = {}
-                for c in (engine.pending_response or {}).get('counter_cards', []):
-                    by_responder.setdefault(c.get('responder_id'), []).append(c)
-                for responder_id, counter_cards in by_responder.items():
-                    if isinstance(responder_id, int) and 0 <= responder_id < len(room.player_sids):
-                        r_sid = room.player_sids[responder_id]
-                        if r_sid in players:
-                            socketio.emit('response_request', build_response_request_payload(
-                                engine,
-                                responder_id,
-                                played_card,
-                                pidx,
-                                counter_cards,
-                                (engine.pending_response or {}).get('target_player_id'),
-                            ), room=r_sid)
-            else:
-                opp_pidx = 1 - pidx
-                counter_cards = []
-                for tt in trigger_types:
-                    counter_cards.extend(engine.get_counter_cards(opp_pidx, tt))
-                opp_sid = room.player_sids[opp_pidx]
-                if opp_sid in players:
-                    socketio.emit('response_request', build_response_request_payload(
-                        engine,
-                        opp_pidx,
-                        played_card,
-                        pidx,
-                        counter_cards,
-                        (engine.pending_response or {}).get('target_player_id', opp_pidx),
-                    ), room=opp_sid)
+            emit_pending_response_requests(room)
         elif result.get('needs_choice'):
             broadcast_game_state(room)
-            emit('choice_request', {
+            choice_payload = {
                 'choice_type': result['choice_type'],
                 'card': result['card'],
                 'choice_params': result.get('choice_params', {}),
                 'target_player_id': result.get('target_player_id'),
-            })
+            }
+            if result.get('deck_cards'):
+                choice_payload['deck_cards'] = result['deck_cards']
+            if result.get('message'):
+                choice_payload['message'] = result['message']
+            emit('choice_request', choice_payload)
         elif result.get('needs_v2_ui'):
             broadcast_game_state(room)
             emit_room_v2_ui_request(room)
         elif result.get('success'):
             broadcast_game_state(room)
         else:
+            _security_illegal(sid, 'play_card', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
             emit('server_error', {'message': result.get('error', 'Operation failed')})
             broadcast_game_state(room)
 
@@ -6422,6 +8068,15 @@ def on_play_card(data):
 @measure_socket_action('response')
 def on_response(data):
     sid = request.sid
+    data = socket_guard('response', data, require_player=True)
+    if data is None:
+        return
+    try:
+        raw_card_id = data.get('card_instance_id')
+        card_instance_id = None if raw_card_id in (None, '', 'none') else validate_instance_id(raw_card_id, name='card_instance_id', required=False)
+    except ValueError as exc:
+        _security_illegal(sid, 'response', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
@@ -6434,7 +8089,6 @@ def on_response(data):
         if pidx < 0:
             return
         engine = room.engine
-        card_instance_id = data.get('card_instance_id')
         replay_def_id = ''
         try:
             replay_card = next((c for c in getattr(engine.players[pidx], 'hand', []) if str(getattr(c, 'instance_id', '')) == str(card_instance_id)), None)
@@ -6442,6 +8096,8 @@ def on_response(data):
         except Exception:
             replay_def_id = ''
         engine.handle_response(pidx, card_instance_id)
+        if card_instance_id:
+            record_valid_player_action(room, pidx, 'response')
         record_room_replay_action(room, 'response', pidx, {'card_instance_id': card_instance_id, 'def_id': replay_def_id})
         broadcast_game_state(room)
 
@@ -6450,6 +8106,10 @@ def on_response(data):
 @measure_socket_action('ally_consent_response')
 def on_ally_consent_response(data):
     sid = request.sid
+    data = socket_guard('ally_consent_response', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
+    accepted = bool(data.get('accepted')) if data else False
     with _lock:
         if sid not in players:
             return
@@ -6463,7 +8123,6 @@ def on_ally_consent_response(data):
         pidx = room.player_index(sid)
         if pidx < 0:
             return
-        accepted = bool(data.get('accepted')) if data else False
         result = room.engine.handle_ally_consent(pidx, accepted)
         if result.get('success') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui') or not accepted:
             record_room_replay_action(room, 'ally_consent_response', pidx, {
@@ -6472,31 +8131,21 @@ def on_ally_consent_response(data):
             })
         if result.get('needs_response'):
             broadcast_game_state(room)
-            played_card = result['card']
-            by_responder = {}
-            for c in (room.engine.pending_response or {}).get('counter_cards', []):
-                by_responder.setdefault(c.get('responder_id'), []).append(c)
-            for responder_id, counter_cards in by_responder.items():
-                if isinstance(responder_id, int) and 0 <= responder_id < len(room.player_sids):
-                    r_sid = room.player_sids[responder_id]
-                    if r_sid in players:
-                        socketio.emit('response_request', build_response_request_payload(
-                            room.engine,
-                            responder_id,
-                            played_card,
-                            (room.engine.pending_response or {}).get('player_id'),
-                            counter_cards,
-                            (room.engine.pending_response or {}).get('target_player_id'),
-                        ), room=r_sid)
+            emit_pending_response_requests(room)
         elif result.get('needs_choice'):
             broadcast_game_state(room)
             requester_sid = room.player_sids[result.get('player_id', room.engine.current_player)] if result.get('player_id') is not None else sid
-            socketio.emit('choice_request', {
+            choice_payload = {
                 'choice_type': result['choice_type'],
                 'card': result['card'],
                 'choice_params': result.get('choice_params', {}),
                 'target_player_id': result.get('target_player_id'),
-            }, room=requester_sid)
+            }
+            if result.get('deck_cards'):
+                choice_payload['deck_cards'] = result['deck_cards']
+            if result.get('message'):
+                choice_payload['message'] = result['message']
+            socketio.emit('choice_request', choice_payload, room=requester_sid)
         elif result.get('needs_v2_ui'):
             broadcast_game_state(room)
             emit_room_v2_ui_request(room)
@@ -6510,6 +8159,14 @@ def on_ally_consent_response(data):
 @measure_socket_action('resolve_choice')
 def on_resolve_choice(data):
     sid = request.sid
+    data = socket_guard('resolve_choice', data, require_player=True)
+    if data is None:
+        return
+    try:
+        choice = validate_choice_payload(data.get('choice'))
+    except ValueError as exc:
+        _security_illegal(sid, 'resolve_choice', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
@@ -6522,8 +8179,8 @@ def on_resolve_choice(data):
         if pidx < 0:
             return
         engine = room.engine
-        choice = data.get('choice')
         engine.resolve_choice(pidx, choice)
+        record_valid_player_action(room, pidx, 'resolve_choice')
         record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice})
         broadcast_game_state(room)
 
@@ -6532,6 +8189,20 @@ def on_resolve_choice(data):
 @measure_socket_action('v2_ui_response')
 def on_v2_ui_response(data):
     sid = request.sid
+    data = socket_guard('v2_ui_response', data, require_player=True)
+    if data is None:
+        return
+    try:
+        request_id = validate_str(data.get('request_id', ''), max_len=80, pattern=r'[A-Za-z0-9_.:\-]*', name='request_id')
+        values = validate_choice_payload(data.get('values'))
+        button = validate_str(data.get('button', ''), max_len=80, pattern=r'[A-Za-z0-9_.:\-]*', name='button')
+        clean_data = dict(data)
+        clean_data['request_id'] = request_id
+        clean_data['values'] = values
+        clean_data['button'] = button
+    except ValueError as exc:
+        _security_illegal(sid, 'v2_ui_response', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
@@ -6543,13 +8214,12 @@ def on_v2_ui_response(data):
         pidx = room.player_index(sid)
         if pidx < 0:
             return
-        request_id = (data or {}).get('request_id')
         _cancel_v2_ui_timeout(('room', room.room_id), request_id)
-        result = room.engine.handle_v2_ui_response(pidx, request_id, data or {})
+        result = room.engine.handle_v2_ui_response(pidx, request_id, clean_data)
         record_room_replay_action(room, 'v2_ui_response', pidx, {
             'request_id': request_id,
-            'button': (data or {}).get('button'),
-            'values': (data or {}).get('values'),
+            'button': button,
+            'values': values,
             'result': result,
         })
         if result.get('needs_v2_ui'):
@@ -6566,6 +8236,15 @@ def on_v2_ui_response(data):
 @measure_socket_action('use_trigger')
 def on_use_trigger(data):
     sid = request.sid
+    data = socket_guard('use_trigger', data, require_player=True)
+    if data is None:
+        return
+    try:
+        equipment_instance_id = validate_instance_id(data.get('equipment_instance_id'), name='equipment_instance_id')
+        target_player_id = validate_int(data.get('target_player_id', -1), default=-1, minimum=-1, maximum=16, name='target_player_id')
+    except ValueError as exc:
+        _security_illegal(sid, 'use_trigger', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
@@ -6578,14 +8257,6 @@ def on_use_trigger(data):
         if pidx < 0:
             return
         engine = room.engine
-        equipment_instance_id = data.get('equipment_instance_id')
-        if equipment_instance_id is None:
-            return
-        target_player_id = data.get('target_player_id', -1)
-        try:
-            target_player_id = int(target_player_id)
-        except (TypeError, ValueError):
-            target_player_id = -1
         replay_def_id = ''
         try:
             equipment = next((eq for eq in getattr(engine.players[pidx], 'equipment', []) if str(getattr(getattr(eq, 'card_instance', None), 'instance_id', '')) == str(equipment_instance_id)), None)
@@ -6597,6 +8268,7 @@ def on_use_trigger(data):
         else:
             result = engine.use_trigger(pidx, equipment_instance_id)
         if result.get('success') or result.get('needs_ally_consent') or result.get('needs_choice') or result.get('needs_response') or result.get('needs_v2_ui'):
+            record_valid_player_action(room, pidx, 'use_trigger')
             record_room_replay_action(room, 'use_trigger', pidx, {
                 'equipment_instance_id': equipment_instance_id,
                 'def_id': replay_def_id,
@@ -6623,6 +8295,7 @@ def on_use_trigger(data):
         elif result.get('success'):
             broadcast_game_state(room)
         else:
+            _security_illegal(sid, 'use_trigger', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
             emit('server_error', {'message': result.get('error', 'Operation failed')})
             broadcast_game_state(room)
 
@@ -6631,6 +8304,14 @@ def on_use_trigger(data):
 @measure_socket_action('urf_replace_card')
 def on_urf_replace_card(data):
     sid = request.sid
+    data = socket_guard('urf_replace_card', data, require_player=True)
+    if data is None:
+        return
+    try:
+        card_instance_id = validate_instance_id(data.get('card_instance_id'), name='card_instance_id')
+    except ValueError as exc:
+        _security_illegal(sid, 'urf_replace_card', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
@@ -6643,11 +8324,13 @@ def on_urf_replace_card(data):
         pidx = room.player_index(sid)
         if pidx < 0:
             return
-        result = room.engine.replace_hand_card(pidx, data.get('card_instance_id'))
+        result = room.engine.replace_hand_card(pidx, card_instance_id)
         if result.get('success'):
-            record_room_replay_action(room, 'urf_replace_card', pidx, {'card_instance_id': data.get('card_instance_id')})
+            record_valid_player_action(room, pidx, 'urf_replace_card')
+            record_room_replay_action(room, 'urf_replace_card', pidx, {'card_instance_id': card_instance_id})
             broadcast_game_state(room)
         else:
+            _security_illegal(sid, 'urf_replace_card', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
             emit('server_error', {'message': result.get('error', 'Operation failed')})
 
 
@@ -6655,6 +8338,14 @@ def on_urf_replace_card(data):
 @measure_socket_action('urf_sell_equipment')
 def on_urf_sell_equipment(data):
     sid = request.sid
+    data = socket_guard('urf_sell_equipment', data, require_player=True)
+    if data is None:
+        return
+    try:
+        equipment_instance_id = validate_instance_id(data.get('equipment_instance_id'), name='equipment_instance_id')
+    except ValueError as exc:
+        _security_illegal(sid, 'urf_sell_equipment', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
@@ -6667,11 +8358,13 @@ def on_urf_sell_equipment(data):
         pidx = room.player_index(sid)
         if pidx < 0:
             return
-        result = room.engine.sell_equipment(pidx, data.get('equipment_instance_id'))
+        result = room.engine.sell_equipment(pidx, equipment_instance_id)
         if result.get('success'):
-            record_room_replay_action(room, 'urf_sell_equipment', pidx, {'equipment_instance_id': data.get('equipment_instance_id')})
+            record_valid_player_action(room, pidx, 'urf_sell_equipment')
+            record_room_replay_action(room, 'urf_sell_equipment', pidx, {'equipment_instance_id': equipment_instance_id})
             broadcast_game_state(room)
         else:
+            _security_illegal(sid, 'urf_sell_equipment', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
             emit('server_error', {'message': result.get('error', 'Operation failed')})
 
 
@@ -6679,38 +8372,36 @@ def on_urf_sell_equipment(data):
 @measure_socket_action('end_turn')
 def on_end_turn(data):
     sid = request.sid
-    print("[server] debug")
+    data = socket_guard('end_turn', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
     try:
         with _lock:
             if sid not in players:
-                print("[server] debug")
                 emit('server_error', {'message': '玩家不在对局中'})
                 return
             player = players[sid]
             room_id = player.get('room_id')
             if room_id is None or room_id not in rooms:
-                print("[server] debug")
                 emit('server_error', {'message': '对局不存在'})
                 return
             room = rooms[room_id]
             pidx = room.player_index(sid)
             if pidx < 0:
-                print("[server] debug")
                 emit('server_error', {'message': '你不是该对局的玩家'})
                 return
             engine = room.engine
-            print("[server] debug")
             result = engine.end_turn(pidx)
-            print("[server] debug")
             if result.get('success'):
+                record_valid_player_action(room, pidx, 'end_turn')
                 record_room_replay_action(room, 'end_turn', pidx, {})
             broadcast_game_state(room)
             if not result.get('success'):
+                _security_illegal(sid, 'end_turn', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
                 emit('server_error', {'message': result.get('error', 'Operation failed')})
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print("[server] debug")
         emit('server_error', {'message': '结束回合失败，请稍后重试'})
 
 
@@ -6718,6 +8409,9 @@ def on_end_turn(data):
 @measure_socket_action('surrender')
 def on_surrender(data):
     sid = request.sid
+    data = socket_guard('surrender', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
     try:
         with _lock:
             if sid not in players:
@@ -6781,6 +8475,10 @@ def on_surrender(data):
 @measure_socket_action('surrender_consent_response')
 def on_surrender_consent_response(data):
     sid = request.sid
+    data = socket_guard('surrender_consent_response', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
+    accepted = bool((data or {}).get('accepted'))
     try:
         with _lock:
             if sid not in players:
@@ -6810,7 +8508,6 @@ def on_surrender_consent_response(data):
             room.pending_surrender_request = None
             requester_id = int(pending.get('player_id', -1))
             requester_sid = room.player_sids[requester_id] if 0 <= requester_id < len(room.player_sids) else None
-            accepted = bool((data or {}).get('accepted'))
             if not accepted:
                 if requester_sid and requester_sid in players:
                     socketio.emit('surrender_consent_result', {'accepted': False}, room=requester_sid)
@@ -6845,6 +8542,9 @@ def on_surrender_consent_response(data):
 @measure_socket_action('rematch')
 def on_rematch(data=None):
     sid = request.sid
+    data = socket_guard('rematch', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
     try:
         with _lock:
             if sid not in players:
@@ -6927,6 +8627,9 @@ def on_rematch(data=None):
 def on_return_lobby(data=None):
     global _next_room_id
     sid = request.sid
+    data = socket_guard('return_lobby', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
     with _lock:
         if sid not in players:
             return
@@ -6937,14 +8640,33 @@ def on_return_lobby(data=None):
         room_id = player.get('room_id')
         if room_id is not None and room_id in rooms:
             room = rooms[room_id]
-            for other_sid in room.player_sids:
-                if other_sid != sid and other_sid in players:
-                    socketio.emit('opponent_disconnected', {}, room=other_sid)
-                    players[other_sid]['room_id'] = None
-                    players[other_sid]['status'] = 'lobby'
-            for t in room.reconnect_timers.values():
-                t.cancel()
-            del rooms[room_id]
+            pidx = room.player_index(sid)
+            if pidx >= 0 and not getattr(room.engine, 'game_over', False):
+                current_team = _room_team_for_player(room, pidx)
+                disconnected_teams = set(_room_disconnected_teams(room))
+                if current_team >= 0:
+                    disconnected_teams.add(current_team)
+                if len(disconnected_teams) >= 2:
+                    ended = _finish_room_by_health_tiebreak(room, '双方中途退出')
+                else:
+                    ended = _finish_room_by_forfeit(room, pidx, player.get('nickname', '?'), '中途退出')
+                record_room_replay_action(room, 'player_exit', pidx, {
+                    'nickname': player.get('nickname', '?'),
+                    'game_over': ended,
+                })
+                if ended:
+                    _cancel_room_reconnect_timers(room)
+                    for other_sid in room.player_sids:
+                        if other_sid in players:
+                            payload = {'timeout': True, 'game_over': True}
+                            if other_sid != sid:
+                                socketio.emit('opponent_disconnected', payload, room=other_sid)
+                            socketio.emit('game_phase', {'phase': 'game_over'}, room=other_sid)
+                    broadcast_game_state(room)
+            elif pidx >= 0 and getattr(room.engine, 'game_over', False):
+                room._rematch_votes.discard(sid)
+            if not any(psid != sid and psid in players for psid in room.player_sids) and not getattr(room, 'spectators', []):
+                rooms.pop(room_id, None)
         player['room_id'] = None
         player['status'] = 'lobby'
     broadcast_lobby()
@@ -6953,6 +8675,14 @@ def on_return_lobby(data=None):
 @socketio.on('spectate')
 def on_spectate(data):
     sid = request.sid
+    data = socket_guard('spectate', data, require_player=True)
+    if data is None:
+        return
+    try:
+        room_id = validate_int(data.get('room_id'), minimum=0, maximum=10**9, name='room_id')
+    except ValueError as exc:
+        _security_illegal(sid, 'spectate', str(exc))
+        return
     with _lock:
         if sid not in players:
             return
@@ -6960,7 +8690,6 @@ def on_spectate(data):
         if player['status'] != 'lobby':
             emit('server_error', {'message': '只有在大厅中才能观战'})
             return
-        room_id = data.get('room_id')
         if room_id is None or room_id not in rooms:
             emit('server_error', {'message': '对局不存在'})
             return
@@ -7034,7 +8763,9 @@ def _handle_leave_spectate_internal(sid):
 @socketio.on('leave_spectate')
 def on_leave_spectate(data=None):
     sid = request.sid
-    print("[server] debug")
+    data = socket_guard('leave_spectate', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
     with _lock:
         _handle_leave_spectate_internal(sid)
     broadcast_lobby()
@@ -7043,6 +8774,9 @@ def on_leave_spectate(data=None):
 @socketio.on('switch_spectate_perspective')
 def on_switch_spectate_perspective(data=None):
     sid = request.sid
+    data = socket_guard('switch_spectate_perspective', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
     with _lock:
         player = players.get(sid)
         if not player:
@@ -7063,7 +8797,7 @@ def on_switch_spectate_perspective(data=None):
         next_index = None
         if isinstance(data, dict) and data.get('perspective') is not None:
             try:
-                requested = int(data.get('perspective'))
+                requested = validate_int(data.get('perspective'), minimum=0, maximum=16, name='perspective')
                 if 0 <= requested < total:
                     next_index = requested
             except (TypeError, ValueError):

@@ -30,6 +30,7 @@ except Exception:  # pragma: no cover
 
 from mod_loader import load_mod_from_data
 from mod_validator_v2 import validate_mod_v2
+from font_subsets import community_font_report_for_data
 
 
 MAX_COMMUNITY_MOD_BYTES = 150_000
@@ -538,6 +539,32 @@ def _community_metadata(data: Dict[str, Any], public_url: str, key: str, sha256:
     }
 
 
+def _community_font_report(data: Dict[str, Any], sha256: str = '', generate: bool = False) -> Dict[str, Any]:
+    try:
+        return community_font_report_for_data(data, hash_key=sha256, generate=generate)
+    except Exception as exc:
+        return {
+            'success': False,
+            'url': '',
+            'missing_count': 0,
+            'missing_chars': [],
+            'unsupported_count': 0,
+            'unsupported_chars': [],
+            'warnings': [f'社区模组字体检查失败：{type(exc).__name__}: {exc}'],
+        }
+
+
+def _append_unique_warnings(warnings, extra_warnings) -> list:
+    result = list(warnings or [])
+    seen = set(result)
+    for warning in extra_warnings or []:
+        text = str(warning or '').strip()
+        if text and text not in seen:
+            result.append(text)
+            seen.add(text)
+    return result
+
+
 def _community_item_owned_by(item: Dict[str, Any], uploader_user_id: Optional[int] = None,
                              uploader_name: Optional[str] = None) -> bool:
     if not isinstance(item, dict):
@@ -594,6 +621,8 @@ def validate_community_mod_url(public_url: str) -> Dict[str, Any]:
     sha256 = hashlib.sha256(
         json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
     ).hexdigest()
+    font_report = _community_font_report(normalized, sha256=sha256, generate=False)
+    warnings = _append_unique_warnings(warnings, font_report.get('warnings'))
     info = _community_mod_info(normalized)
     return {
         'ok': not validation.errors,
@@ -606,6 +635,7 @@ def validate_community_mod_url(public_url: str) -> Dict[str, Any]:
         'sha256': sha256,
         'errors': validation.errors,
         'warnings': warnings,
+        'font_subset': font_report,
         'cards_count': info.get('cards_count', 0),
         'events_count': info.get('events_count', 0),
         'format_version': info.get('format_version', 1),
@@ -627,6 +657,8 @@ def register_community_mod(public_url: str, key: str, uploader_name: Optional[st
     sha256 = package_sha256 or hashlib.sha256(
         json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
     ).hexdigest()
+    font_report = _community_font_report(normalized, sha256=sha256, generate=True)
+    warnings = _append_unique_warnings(warnings, font_report.get('warnings'))
     index = get_community_index(force=True)
     mods = index.setdefault('mods', [])
     replace_sha256 = str(replace_sha256 or '').strip().lower()
@@ -647,12 +679,14 @@ def register_community_mod(public_url: str, key: str, uploader_name: Optional[st
                 if uploader_user_id is not None:
                     item['uploader_user_id'] = int(uploader_user_id)
                 item['warnings'] = warnings
+                item['font_subset'] = font_report
                 put_community_index(index)
             elif replace_item is not None:
                 mods.remove(replace_item)
                 put_community_index(index)
                 _move_object_to_trash(replace_item.get('key'), replace_sha256)
             item.setdefault('warnings', warnings)
+            item.setdefault('font_subset', font_report)
             return {'success': True, 'mod': item, 'duplicate': True, 'warnings': warnings}
     if replace_item is not None:
         mods.remove(replace_item)
@@ -660,6 +694,7 @@ def register_community_mod(public_url: str, key: str, uploader_name: Optional[st
     if uploader_user_id is not None:
         meta['uploader_user_id'] = int(uploader_user_id)
     meta['warnings'] = warnings
+    meta['font_subset'] = font_report
     mods.append(meta)
     mods.sort(key=lambda item: (str(item.get('uploaded_at', '')), str(item.get('sha256', ''))))
     put_community_index(index)

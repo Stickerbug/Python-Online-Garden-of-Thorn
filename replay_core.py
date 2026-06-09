@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 import zlib
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 
 from db import DB_PATH, get_db_connection, utc_now
@@ -12,6 +13,13 @@ REPLAY_VERSION = 1
 DEFAULT_RETENTION_DAYS = int(os.environ.get('GTN_REPLAY_RETENTION_DAYS', '90') or 90)
 CLEANUP_HOUR = int(os.environ.get('GTN_CLEANUP_HOUR', '4') or 4)
 CLEANUP_MINUTE = int(os.environ.get('GTN_CLEANUP_MINUTE', '30') or 30)
+REPLAY_ITEM_COLUMNS = '''
+    id, match_id, created_at, mode, player_names_json, winner_name, winner_index,
+    round_num, duration_ms, replay_version, replay_sha256, replay_size,
+    mod_source, mod_hash, community_mod_name
+'''
+_TIMELINE_CACHE = OrderedDict()
+_TIMELINE_CACHE_MAX = 4
 
 
 def _json_bytes(data):
@@ -484,7 +492,7 @@ def list_replays(limit=50, offset=0, mode='', player='', mod_source='', retentio
     with get_db_connection() as conn:
         rows = conn.execute(
             f'''
-            SELECT * FROM match_replays
+            SELECT {REPLAY_ITEM_COLUMNS} FROM match_replays
             WHERE {where_sql}
             ORDER BY created_at DESC, id DESC
             LIMIT ? OFFSET ?
@@ -528,10 +536,14 @@ def _replay_row_to_item(row):
     except Exception:
         players = []
     meta = {}
-    try:
-        meta = _decode_replay_blob(row['replay_blob']).get('meta', {})
-    except Exception:
-        meta = {}
+    if (
+        (_row_get(row, 'mod_source') is None or _row_get(row, 'community_mod_name') is None or _row_get(row, 'mod_hash') is None)
+        and _row_get(row, 'replay_blob') is not None
+    ):
+        try:
+            meta = _decode_replay_blob(row['replay_blob']).get('meta', {})
+        except Exception:
+            meta = {}
     return {
         'id': row['id'],
         'match_id': row['match_id'],
@@ -551,18 +563,13 @@ def _replay_row_to_item(row):
 
 def get_replay(replay_id):
     with get_db_connection() as conn:
-        row = conn.execute('SELECT * FROM match_replays WHERE id = ?', (int(replay_id),)).fetchone()
+        row = conn.execute(f'SELECT {REPLAY_ITEM_COLUMNS} FROM match_replays WHERE id = ?', (int(replay_id),)).fetchone()
     if row is None:
         return None
     return _replay_row_to_item(row)
 
 
-def replay_timeline(replay_id):
-    with get_db_connection() as conn:
-        row = conn.execute('SELECT * FROM match_replays WHERE id = ?', (int(replay_id),)).fetchone()
-    if row is None:
-        return None
-    replay = _decode_replay_blob(row['replay_blob'])
+def _build_timeline_from_replay(replay):
     keyframes = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
     actions = replay.get('actions') if isinstance(replay.get('actions'), list) else []
     timeline = []
@@ -592,6 +599,42 @@ def replay_timeline(replay_id):
     timeline.sort(key=lambda item: (item.get('t', 0), item.get('i', 0)))
     for index, item in enumerate(timeline):
         item['i'] = index
+    return timeline
+
+
+def _timeline_cache_get(row):
+    replay_id = int(row['id'])
+    replay_sha = str(row['replay_sha256'] or '')
+    cached = _TIMELINE_CACHE.get(replay_id)
+    if cached and cached.get('sha') == replay_sha:
+        _TIMELINE_CACHE.move_to_end(replay_id)
+        return cached['replay'], cached['timeline']
+    replay = _decode_replay_blob(row['replay_blob'])
+    timeline = _build_timeline_from_replay(replay)
+    _TIMELINE_CACHE[replay_id] = {'sha': replay_sha, 'replay': replay, 'timeline': timeline}
+    _TIMELINE_CACHE.move_to_end(replay_id)
+    while len(_TIMELINE_CACHE) > _TIMELINE_CACHE_MAX:
+        _TIMELINE_CACHE.popitem(last=False)
+    return replay, timeline
+
+
+def replay_timeline(replay_id, offset=None, limit=None):
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM match_replays WHERE id = ?', (int(replay_id),)).fetchone()
+    if row is None:
+        return None
+    replay, timeline = _timeline_cache_get(row)
+    total_frames = len(timeline)
+    sliced = False
+    if offset is not None or limit is not None:
+        sliced = True
+        safe_offset = max(0, int(offset or 0))
+        safe_limit = max(1, min(int(limit or 50), 200))
+        response_timeline = timeline[safe_offset:safe_offset + safe_limit]
+    else:
+        safe_offset = 0
+        safe_limit = total_frames
+        response_timeline = timeline
     return {
         'replay': {
             'id': row['id'],
@@ -599,6 +642,10 @@ def replay_timeline(replay_id):
             'rules': replay.get('rules') or {},
             'duration_ms': row['duration_ms'],
         },
-        'timeline': timeline,
+        'timeline': response_timeline,
+        'total_frames': total_frames,
+        'offset': safe_offset,
+        'limit': safe_limit,
+        'has_more': (safe_offset + len(response_timeline)) < total_frames if sliced else False,
         'mismatches': [],
     }

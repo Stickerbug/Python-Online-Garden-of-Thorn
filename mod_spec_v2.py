@@ -284,6 +284,12 @@ VALID_LOGIC_OPS = {
     "on_hand_owner_turn_start",
     "on_owner_turn_start",
     "set_health",
+    "add_tag_to_zone",
+    "reveal_tag_hand",
+    "cogwheel_mark",
+    "goggles_enable",
+    "assembler_effect",
+    "request_reorder_deck",
 }
 
 VALID_EVENT_HOOKS = {

@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Garden of Thorn 管理台</title>
-<link rel="preload" href="/fonts/Kreadon-Regular.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/admin.css?v=12">
+<link rel="preload" href="/fonts/Kreadon-Regular.subset.woff2?v=2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/css/admin.css?v=13">
 </head>
 <body class="admin-body">
 <div id="admin-login" class="admin-login">
@@ -36,6 +36,9 @@
 
   <nav class="admin-tabs" aria-label="管理台视图">
     <button class="admin-tab active" data-tab="gui" type="button">概览</button>
+    <button class="admin-tab" data-tab="events" type="button">事件日志</button>
+    <button class="admin-tab" data-tab="moderation" type="button">风控审核</button>
+    <button class="admin-tab" data-tab="draft-stats" type="button">抽牌统计</button>
     <button class="admin-tab" data-tab="storage" type="button">存储管理</button>
     <button class="admin-tab" data-tab="replays" type="button">回放列表</button>
     <button class="admin-tab" data-tab="game-chat" type="button">游戏内聊天</button>
@@ -140,7 +143,9 @@
       </div>
       <div id="rooms-table" class="admin-table"></div>
     </section>
+  </section>
 
+  <section id="admin-events" class="admin-panel hidden">
     <div class="admin-two-col">
       <section class="admin-section">
         <div class="section-title">
@@ -157,6 +162,72 @@
         <div id="history-list" class="log-list"></div>
       </section>
     </div>
+  </section>
+
+  <section id="admin-moderation" class="admin-panel hidden">
+    <div class="moderation-layout">
+      <section class="admin-section">
+        <div class="section-title">
+          <h2>异常事件</h2>
+          <span>应用层防护</span>
+        </div>
+        <div id="suspicious-list" class="log-list tall-log-list"></div>
+      </section>
+      <section class="admin-section">
+        <div class="section-title">
+          <h2>举报处理</h2>
+          <span id="reports-count">0</span>
+        </div>
+        <div class="registered-users-toolbar">
+          <select id="report-status-filter" aria-label="举报状态">
+            <option value="pending">待处理</option>
+            <option value="accepted">已通过</option>
+            <option value="rejected">已驳回</option>
+            <option value="abusive">恶意举报</option>
+            <option value="all">全部</option>
+          </select>
+          <button id="reports-refresh" class="ghost-btn" type="button">刷新举报</button>
+        </div>
+        <div id="reports-table" class="admin-table"></div>
+      </section>
+    </div>
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>举报详情</h2>
+        <span>证据与处理</span>
+      </div>
+      <div id="report-detail" class="report-detail empty-detail">选择一条举报查看详情。</div>
+    </section>
+  </section>
+
+  <section id="admin-draft-stats" class="admin-panel hidden">
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>卡牌抽取率</h2>
+        <span id="draft-stats-count">0</span>
+      </div>
+      <div class="registered-users-toolbar">
+        <select id="draft-stats-mode" aria-label="模式筛选">
+          <option value="">全部模式</option>
+          <option value="1v1">1v1</option>
+          <option value="2v2">2v2</option>
+        </select>
+        <select id="draft-stats-sort" aria-label="排序字段">
+          <option value="pick_rate">抽取率</option>
+          <option value="picked_count">抽取次数</option>
+          <option value="shown_count">刷出次数</option>
+          <option value="updated_at">最近更新</option>
+          <option value="card_id">卡牌ID</option>
+        </select>
+        <select id="draft-stats-order" aria-label="排序方向">
+          <option value="desc">降序</option>
+          <option value="asc">升序</option>
+        </select>
+        <button id="draft-stats-refresh" class="ghost-btn" type="button">刷新统计</button>
+      </div>
+      <p class="empty-detail">统计口径：玩家最终选择某张牌时，当前三个候选项计入“刷出”；被选中的牌计入“抽取”。被重抽掉的候选项不计入刷出。</p>
+      <div id="draft-stats-table" class="admin-table"></div>
+    </section>
   </section>
 
   <section id="admin-storage" class="admin-panel hidden">
@@ -260,6 +331,6 @@
   </section>
 </main>
 
-<script src="/static/js/admin.js?v=14"></script>
+  <script src="/static/js/admin.js?v=22"></script>
 </body>
 </html>

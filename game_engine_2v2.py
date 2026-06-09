@@ -3,7 +3,7 @@ import math
 from typing import List, Dict, Optional, Tuple, Set
 from game_engine import GameEngine, PlayerState, EquipmentInstance
 from damage_types import (
-    DAMAGE_TAG_DIRECT, DAMAGE_TAG_FIRE, DAMAGE_TAG_PHYSICAL, DAMAGE_TAG_POISON,
+    DAMAGE_TAG_BATTERY, DAMAGE_TAG_DIRECT, DAMAGE_TAG_FIRE, DAMAGE_TAG_PHYSICAL, DAMAGE_TAG_POISON,
     DAMAGE_TYPE_MAGIC, DAMAGE_TYPE_PHYSICAL, infer_damage_type, status_damage_tag,
 )
 from cards import (
@@ -51,8 +51,8 @@ class GameEngine2v2(GameEngine):
         self._game_over_defer_depth: int = 0
         self.negated_card: bool = False
         self._yggdrasil_check: bool = True
-        self._antenna_reveal: List[Optional[list]] = [None] * 4
-        self._antenna_reveal_targets: List[Optional[int]] = [None] * 4
+        self._antennae_reveal: List[Optional[list]] = [None] * 4
+        self._antennae_reveal_targets: List[Optional[int]] = [None] * 4
         self.opening_event_options: List[List[dict]] = [[], [], [], []]
         self.opening_event_picks: List[Optional[int]] = [None] * 4
         self.opening_event_sub_choices: List[Optional[dict]] = [None] * 4
@@ -65,6 +65,7 @@ class GameEngine2v2(GameEngine):
         self.custom_vars: Dict[str, int] = {}
         self.team_custom_vars: Dict[str, Dict[str, int]] = {}
         self._last_created_card_instance_id: Optional[int] = None
+        self._pending_foresight: Optional[dict] = None
         self.timed_effects: List[dict] = []
         self._init_mod_variables()
         self._bind_player_callbacks()
@@ -176,8 +177,8 @@ class GameEngine2v2(GameEngine):
             ed['deck_count'] = len([c for c in self.players[eid].deck if c.def_id != ERROR_CARD_ID])
             ed['discard_count'] = len([c for c in self.players[eid].discard if c.def_id != ERROR_CARD_ID])
             ed['exile_count'] = len([c for c in self.players[eid].exile if c.def_id != ERROR_CARD_ID])
-            reveal_target = getattr(self, '_antenna_reveal_targets', [None] * self.num_players)[for_player]
-            if self._antenna_reveal[for_player] and reveal_target == eid:
+            reveal_target = getattr(self, '_antennae_reveal_targets', [None] * self.num_players)[for_player]
+            if self._antennae_reveal[for_player] and reveal_target == eid:
                 ed['revealed_hand'] = self._visible_card_dicts(self.players[eid].hand, for_player, eid)
             opp_data_list.append(ed)
 
@@ -206,6 +207,7 @@ class GameEngine2v2(GameEngine):
 
         log_start = 0
         self._mark_log_visible()
+        you_data = self.players[for_player].to_dict(include_private=True)
         return {
             'phase': self.phase,
             'current_player': self.current_player,
@@ -213,7 +215,7 @@ class GameEngine2v2(GameEngine):
             'game_over': self.game_over,
             'winner': self.winner,
             'winning_team': self.winning_team,
-            'you': self.players[for_player].to_dict(include_private=True),
+            'you': you_data,
             'opponent': opp_data_list[0] if len(opp_data_list) > 0 else {},
             'opponent2': opp_data_list[1] if len(opp_data_list) > 1 else {},
             'teammate': teammate_data,
@@ -229,7 +231,7 @@ class GameEngine2v2(GameEngine):
             'pending_v2_ui': self._public_v2_ui(for_player),
             'pending_ally_request': getattr(self, 'pending_ally_request', None),
             'opening_event_picks': self.opening_event_picks,
-            'antenna_reveal': self._antenna_reveal[for_player],
+            'antennae_reveal': self._antennae_reveal[for_player],
             'mode': '2v2',
         }
 
@@ -296,7 +298,22 @@ class GameEngine2v2(GameEngine):
             ps.base_max_health = BASE_MAX_HEALTH
             ps.elixir = INITIAL_ELIXIR
             ps.magic = INITIAL_MAGIC
-
+        # Unique: exile duplicate unique cards
+        for pid in range(4):
+            ps = self.players[pid]
+            unique_ids = set()
+            new_deck = []
+            for card in ps.deck:
+                if 'unique' in card.flags:
+                    if card.def_id in unique_ids:
+                        ps.exile.append(card)
+                        self.log_msg(f"{self.pn(pid)}的唯一牌{card.name_cn}多余副本被放逐")
+                    else:
+                        unique_ids.add(card.def_id)
+                        new_deck.append(card)
+                else:
+                    new_deck.append(card)
+            ps.deck = new_deck
         for i in range(4):
             self._apply_opening_event(i)
 
@@ -417,6 +434,33 @@ class GameEngine2v2(GameEngine):
             ps.bandage_active = False
             ps.bandage_death_pending = True
             self.log_msg(f"{self.pn(player_id)}的绷带无敌将持续到下个友方回合结束")
+        # Fracture: clear at end of own turn
+        if ps.fracture > 0:
+            ps.fracture = 0
+            self.log_msg(f"{self.pn(player_id)}的破损效果消失")
+        # Heal block: decrement at end of own turn
+        if ps.heal_block > 0:
+            ps.heal_block = max(0, ps.heal_block - 1)
+            if ps.heal_block == 0:
+                self.log_msg(f"{self.pn(player_id)}的禁疗效果消失")
+        # Weakness: decrement at end of own turn
+        if ps.weakness > 0:
+            ps.weakness = max(0, ps.weakness - 1)
+            if ps.weakness == 0:
+                self.log_msg(f"{self.pn(player_id)}的虚弱效果消失")
+        # Bleed: halve at end of turn
+        if ps.bleed > 0:
+            ps.bleed = max(0, ps.bleed // 2)
+            if ps.bleed == 0:
+                self.log_msg(f"{self.pn(player_id)}的流血效果消失")
+        # Track M gained this turn for next turn's check
+        ps.m_gained_last_turn = ps.m_gained_this_turn
+        ps.m_gained_this_turn = False
+        # Cogwheel: save cards played this turn for next turn return (if marked by v2 event)
+        if hasattr(self, '_cogwheel_active') and self._cogwheel_active.get(player_id):
+            played_ids = list(ps.cards_played_this_turn.keys()) if hasattr(ps, 'cards_played_this_turn') else []
+            ps.cogwheel_pending_return = played_ids
+            self._cogwheel_active[player_id] = False
         void_cards = [c for c in ps.hand if 'void' in c.flags]
         for c in void_cards:
             ps.hand.remove(c)
@@ -442,6 +486,9 @@ class GameEngine2v2(GameEngine):
 
     def _start_draw_phase(self):
         self.log_msg(f"=== 第{self.round_num}回合 ===")
+        self._apply_late_round_fire_pressure()
+        if self.game_over:
+            return
         self.turn_index = 0
         first = self.turn_order[0]
         self._start_player_turn(first)
@@ -502,6 +549,8 @@ class GameEngine2v2(GameEngine):
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(owner_state.equipment):
                 if getattr(eq, 'effect_target', owner_id) != dead_player_id:
+                    continue
+                if 'indestructible' in eq.card_instance.flags:
                     continue
                 if eq.def_id == 'Disc':
                     self.players[dead_player_id].armor = max(0, self.players[dead_player_id].armor - 2)
@@ -734,10 +783,7 @@ class GameEngine2v2(GameEngine):
             elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
                 self.log_msg(f"精准被反制，伤害减半：{amount}→{dmg}")
-            corruption_count = self._get_corruption_count()
-            if corruption_count > 0:
-                dmg = dmg * (2 ** corruption_count)
-                self.log_msg(f"腐化效果：伤害×{2 ** corruption_count}")
+            dmg = self._apply_corruption_multiplier_to_damage(dmg)
             if ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
@@ -767,8 +813,12 @@ class GameEngine2v2(GameEngine):
                 for eq in ps.equipment:
                     if eq.def_id == 'Battery':
                         if attacker_id >= 0:
-                            self._deal_direct_damage(attacker_id, 3, '电池')
-                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3D")
+                            self._deal_direct_damage(
+                                attacker_id, 3, '电池电击', target_id,
+                                damage_type=DAMAGE_TYPE_MAGIC,
+                                damage_tag=DAMAGE_TAG_BATTERY,
+                            )
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
                     if eq.def_id == 'MagicBattery':
                         if ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
@@ -883,6 +933,9 @@ class GameEngine2v2(GameEngine):
 
     def _start_draw_phase(self):
         self.log_msg(f"=== 第{self.round_num}回合 ===")
+        self._apply_late_round_fire_pressure()
+        if self.game_over:
+            return
         self.turn_index = 0
         self._start_player_turn(self.turn_order[0])
 
@@ -905,13 +958,27 @@ class GameEngine2v2(GameEngine):
 
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]
-        self._antenna_reveal[player_id] = None
+        self._antennae_reveal[player_id] = None
         self._reset_turn_damage_counters()
         self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
+        # Cogwheel: return cards from last turn (if marked by v2 event)
+        if ps.cogwheel_pending_return:
+            returned = []
+            for iid in ps.cogwheel_pending_return:
+                for c in list(ps.discard):
+                    if c.instance_id == iid:
+                        ps.discard.remove(c)
+                        c.mimic_discount = 0
+                        ps.add_to_hand(c)
+                        returned.append(c.name_cn)
+                        break
+            if returned:
+                self.log_msg(f"{self.pn(player_id)}的齿轮效果：{', '.join(returned)}回到手中")
+            ps.cogwheel_pending_return = []
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False
@@ -1013,10 +1080,10 @@ class GameEngine2v2(GameEngine):
         if not self._is_valid_player_id(target_id):
             return
         opp = self.players[target_id]
-        self._antenna_reveal[player_id] = [c.to_dict() for c in opp.hand]
-        if not hasattr(self, '_antenna_reveal_targets'):
-            self._antenna_reveal_targets = [None] * self.num_players
-        self._antenna_reveal_targets[player_id] = target_id
+        self._antennae_reveal[player_id] = [c.to_dict() for c in opp.hand]
+        if not hasattr(self, '_antennae_reveal_targets'):
+            self._antennae_reveal_targets = [None] * self.num_players
+        self._antennae_reveal_targets[player_id] = target_id
         self.log_msg(log or f"{self.pn(player_id)}查看了{self.pn(target_id)}的手牌")
 
     def resolve_choice(self, player_id: int, choice: dict) -> dict:
@@ -1144,10 +1211,7 @@ class GameEngine2v2(GameEngine):
             self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
             return 0
         actual = amount
-        corruption_count = self._get_corruption_count()
-        if corruption_count > 0:
-            actual = actual * (2 ** corruption_count)
-            self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
+        actual = self._apply_corruption_multiplier_to_damage(actual)
         resolved_damage_type = infer_damage_type(source, 'direct', damage_tag or '', damage_type)
         resolved_damage_tag = damage_tag or (status_damage_tag(source) if resolved_damage_type == DAMAGE_TYPE_MAGIC else DAMAGE_TAG_DIRECT)
         damage_context = self._v2_damage_context(
@@ -1222,10 +1286,7 @@ class GameEngine2v2(GameEngine):
                 dmg = math.ceil(dmg / 2)
             elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
-            corruption_count = self._get_corruption_count()
-            if corruption_count > 0:
-                dmg = dmg * (2 ** corruption_count)
-                self.log_msg(f"腐化效果：伤害x{2 ** corruption_count}")
+            dmg = self._apply_corruption_multiplier_to_damage(dmg)
             if ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
@@ -1255,8 +1316,12 @@ class GameEngine2v2(GameEngine):
                 if dmg > 0 and not is_battery:
                     for eq in list(ps.equipment):
                         if eq.def_id == 'Battery' and attacker_id >= 0:
-                            self._deal_direct_damage(attacker_id, 3, '电池', target_id)
-                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3D")
+                            self._deal_direct_damage(
+                                attacker_id, 3, '电池电击', target_id,
+                                damage_type=DAMAGE_TYPE_MAGIC,
+                                damage_tag=DAMAGE_TAG_BATTERY,
+                            )
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
                         elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
                             ps.magic_battery_m_this_turn += 1
@@ -1356,10 +1421,24 @@ class GameEngine2v2(GameEngine):
 
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]
-        self._antenna_reveal[player_id] = None
+        self._antennae_reveal[player_id] = None
         self._reset_turn_damage_counters()
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
+        # Cogwheel: return cards from last turn (if marked by v2 event)
+        if ps.cogwheel_pending_return:
+            returned = []
+            for iid in ps.cogwheel_pending_return:
+                for c in list(ps.discard):
+                    if c.instance_id == iid:
+                        ps.discard.remove(c)
+                        c.mimic_discount = 0
+                        ps.add_to_hand(c)
+                        returned.append(c.name_cn)
+                        break
+            if returned:
+                self.log_msg(f"{self.pn(player_id)}的齿轮效果：{', '.join(returned)}回到手中")
+            ps.cogwheel_pending_return = []
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False
@@ -1493,12 +1572,26 @@ class GameEngine2v2(GameEngine):
 
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]
-        self._antenna_reveal[player_id] = None
-        if hasattr(self, '_antenna_reveal_targets'):
-            self._antenna_reveal_targets[player_id] = None
+        self._antennae_reveal[player_id] = None
+        if hasattr(self, '_antennae_reveal_targets'):
+            self._antennae_reveal_targets[player_id] = None
         ps.cards_played_this_turn = {}
         ps.magic_battery_m_this_turn = 0
         ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0
+        # Cogwheel: return cards from last turn (if marked by v2 event)
+        if ps.cogwheel_pending_return:
+            returned = []
+            for iid in ps.cogwheel_pending_return:
+                for c in list(ps.discard):
+                    if c.instance_id == iid:
+                        ps.discard.remove(c)
+                        c.mimic_discount = 0
+                        ps.add_to_hand(c)
+                        returned.append(c.name_cn)
+                        break
+            if returned:
+                self.log_msg(f"{self.pn(player_id)}的齿轮效果：{', '.join(returned)}回到手中")
+            ps.cogwheel_pending_return = []
         self._run_v2_event_hooks('turn_start', {
             'source_player': player_id,
             'target_player': player_id,
@@ -1520,16 +1613,21 @@ class GameEngine2v2(GameEngine):
         if turn_will_be_skipped:
             ps.skip_turn = False
         if self.round_num > 1:
-            draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction)
+            draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - ps.sluggish)
             if ps.enemy_draw_reduction > 0:
                 ps.enemy_draw_reduction -= 1
             ps.draw_cards(draw_count)
-            pincer_reduction = sum(
+            if ps.sluggish > 0:
+                self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
+            pincer_overload = sum(
                 1
                 for owner_id, owner_state in enumerate(self.players)
                 for eq in owner_state.equipment
                 if not eq.card_def.effects and eq.def_id == 'Pincer' and getattr(eq, 'effect_target', owner_id) == player_id
             )
+            if pincer_overload > 0:
+                ps.overload += pincer_overload
+                self.log_msg(f"{self.pn(player_id)}被螫针施加{pincer_overload}层超载")
             aura_delta = 0
             for owner_id, owner_state in enumerate(self.players):
                 for eq in owner_state.equipment:
@@ -1538,9 +1636,15 @@ class GameEngine2v2(GameEngine):
                     for effect in eq.card_def.effects or []:
                         if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
                             aura_delta += self._eval_int(owner_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
-            elixir_recovery = max(0, ELIXIR_RECOVERY - ps.enemy_e_reduction - pincer_reduction + aura_delta)
+            elixir_recovery = max(0, ELIXIR_RECOVERY - ps.enemy_e_reduction + aura_delta)
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}抽{draw_count}张牌，回复{elixir_recovery}E")
+            # Overload: deduct E at turn start, then clear
+            if ps.overload > 0:
+                deduct = min(ps.overload, ps.elixir)
+                ps.elixir -= deduct
+                self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
+                ps.overload = 0
         if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
             draw_needed = ps.hand_space()
             if draw_needed > 0:
@@ -1564,6 +1668,9 @@ class GameEngine2v2(GameEngine):
                 if eq.def_id == 'Corruption' and not eq.corruption_active:
                     eq.corruption_active = True
                     self.log_msg(f"{self.pn(eid)}的腐化效果激活")
+        early_owner_turn_start_equipment = self._run_owner_turn_start_healing_equipment(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         if ps.poison > 0:
             self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             if self.game_over or ps.health <= 0:
@@ -1573,11 +1680,17 @@ class GameEngine2v2(GameEngine):
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
                 return
-        for eq in list(ps.equipment):
-            eq.turns_equipped += 1
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(owner_state.equipment):
                 if getattr(eq, 'effect_target', owner_id) != player_id:
+                    continue
+                if self._equipment_turn_start_key(eq) not in early_owner_turn_start_equipment:
+                    eq.turns_equipped += 1
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in list(owner_state.equipment):
+                if getattr(eq, 'effect_target', owner_id) != player_id:
+                    continue
+                if self._equipment_turn_start_key(eq) in early_owner_turn_start_equipment:
                     continue
                 handled = False
                 if self._has_card_event(eq.card_def, 'owner_turn_start'):
@@ -1608,6 +1721,17 @@ class GameEngine2v2(GameEngine):
             ps.skip_turn = False
             self.log_msg(f"{self.pn(player_id)}被跳过本回合")
             self._skip_current_turn_after_start = True
+        # Foresight: allow replacing cards from hand
+        if ps.foresight > 0 and ps.hand:
+            max_replace = min(ps.foresight, len(ps.hand))
+            self._pending_foresight = {'player_id': player_id, 'max_replace': max_replace}
+            self.pending_choice = {
+                'player_id': player_id,
+                'choice_type': 'foresight_replace',
+                'card': None,
+                'max_replace': max_replace,
+                'message': f'预知：选择最多{max_replace}张手牌替换',
+            }
         self._check_game_over()
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
@@ -1639,9 +1763,7 @@ class GameEngine2v2(GameEngine):
                 dmg = math.ceil(dmg / 2)
             elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
-            corruption_count = self._get_corruption_count()
-            if corruption_count > 0:
-                dmg *= (2 ** corruption_count)
+            dmg = self._apply_corruption_multiplier_to_damage(dmg, log=False)
             if ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
@@ -1663,6 +1785,10 @@ class GameEngine2v2(GameEngine):
             dmg = self._run_v2_damage_modifiers(damage_context, dmg)
             if getattr(self, 'pending_v2_ui', None):
                 break
+            # Weakness: reduce physical damage
+            if ps.weakness > 0:
+                reduction = min(0.6, 0.2 * ps.weakness)
+                dmg = max(1, int(dmg * (1.0 - reduction)))
             dmg = max(0, dmg - ps.armor)
             if ps.sponge_active and dmg > 0:
                 ps.poison += dmg // 2
@@ -1694,8 +1820,12 @@ class GameEngine2v2(GameEngine):
                         ):
                             continue
                         if eq.def_id == 'Battery' and attacker_id >= 0:
-                            self._deal_direct_damage(attacker_id, 3, '电池', target_id)
-                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3D")
+                            self._deal_direct_damage(
+                                attacker_id, 3, '电池电击', target_id,
+                                damage_type=DAMAGE_TYPE_MAGIC,
+                                damage_tag=DAMAGE_TAG_BATTERY,
+                            )
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
                         elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
                             ps.magic_battery_m_this_turn += 1
@@ -1709,6 +1839,16 @@ class GameEngine2v2(GameEngine):
                 break
         return total_dealt
 
+    def _handle_draw_callback(self, player_id, card):
+        """Called when a player draws a card. Triggers v2 after_draw event hooks."""
+        if not (0 <= player_id < len(getattr(self, 'players', []))):
+            return
+        self._run_v2_event_hooks('after_draw', {
+            'source_player': player_id,
+            'target_player': player_id,
+            'vars': {'player_id': player_id, 'drawn_card': card.def_id if card else ''},
+        })
+
     def use_trigger(self, player_id: int, equipment_instance_id: int, target_player_id: int = -1, ally_approved: bool = False) -> dict:
         target_player_id = self._normalize_player_id(target_player_id)
         if self.current_player != player_id and not self.is_ally(self.current_player, player_id):
@@ -1717,6 +1857,8 @@ class GameEngine2v2(GameEngine):
         eq = ps.find_equipment(equipment_instance_id)
         if eq is None:
             return {'success': False, 'error': '装备不存在'}
+        if 'self_only' in eq.card_instance.flags:
+            target_player_id = player_id
         has_mod_trigger = self._has_card_event(eq.card_def, 'equipment_trigger')
         if eq.card_def.trigger_cost_e < 0 and not has_mod_trigger:
             return {'success': False, 'error': '该装备没有触发效果'}

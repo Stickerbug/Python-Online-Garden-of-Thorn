@@ -17,6 +17,18 @@ const FIRST_PLAYER_HAND_SIZE = 4;
 const DECK_SIZE = 15;
 const ERROR_CARD_ID = 'Error';
 const MOD_RUNTIME_ERROR_MESSAGE = '模组执行出现了一个意外错误。请联系管理员。';
+const CORRUPTION_DAMAGE_MULTIPLIER = 1.5;
+const LATE_ROUND_FIRE_START = 20;
+const CARD_FLAG_ALIASES = {
+    'tag_troll_cards:exile': 'exile',
+    'troll_cards:exile': 'exile',
+    'tag_troll_cards_exile': 'exile',
+    'troll_cards_exile': 'exile',
+    'tag_thorn_cards_supplement_1:sticky': 'sticky',
+    'thorn_cards_supplement_1:sticky': 'sticky',
+    'tag_thorn_cards_supplement_1_sticky': 'sticky',
+    'thorn_cards_supplement_1_sticky': 'sticky',
+};
 
 class ModLoopBreak extends Error {}
 class ModLoopContinue extends Error {}
@@ -83,8 +95,8 @@ const V2_EVENT_ALIASES = {
     damage_taken: ['on_damage_taken'],
     equipment_trigger: ['on_equipment_trigger'],
     equipment_destroy: ['on_equipment_destroy', 'on_before_destroyed'],
-    hand_owner_turn_start: ['on_hand_owner_turn_start', 'on_enter_hand'],
-    enter_hand: ['on_enter_hand', 'on_hand_owner_turn_start'],
+    hand_owner_turn_start: ['on_hand_owner_turn_start'],
+    enter_hand: ['on_enter_hand'],
     discard_owner_turn_start: ['on_discard_owner_turn_start', 'on_discard'],
     deck_owner_turn_start: ['on_deck_owner_turn_start'],
     card_used: ['on_card_used', 'after_play_card'],
@@ -137,6 +149,24 @@ function toInt(value, fallbackValue = 0) {
 
 function escapeRegExp(value) {
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeCardFlag(flag) {
+    const text = String(flag == null ? '' : flag).trim();
+    if (!text) return '';
+    return CARD_FLAG_ALIASES[text.toLowerCase()] || text;
+}
+
+function normalizeCardFlags(flags) {
+    if (!flags) return [];
+    if (flags instanceof Set) return Array.from(flags).map(normalizeCardFlag).filter(Boolean);
+    if (Array.isArray(flags)) return flags.map(normalizeCardFlag).filter(Boolean);
+    if (typeof flags === 'string') return flags.split(/[,\s]+/).map(normalizeCardFlag).filter(Boolean);
+    if (typeof flags === 'object') return Object.entries(flags)
+        .filter(([_, enabled]) => !!enabled)
+        .map(([flag]) => normalizeCardFlag(flag))
+        .filter(Boolean);
+    return [];
 }
 
 function cardDef(defId) {
@@ -312,11 +342,15 @@ class LocalCard {
         this.fusion_level = Math.max(1, toInt(source.fusion_level ?? this.fusion_multiplier, 1));
         this.mimic_discount = toInt(source.mimic_discount, 0);
         this.fission_hit = toInt(source.fission_hit, 0);
-        this.instance_flags = new Set(source.instance_flags || []);
-        this.disabled_flags = new Set(source.disabled_flags || []);
+        this.instance_flags = new Set(normalizeCardFlags(source.instance_flags || []));
+        this.disabled_flags = new Set(normalizeCardFlags(source.disabled_flags || []));
         this.bonus_damage = toInt(source.bonus_damage, 0);
         this.return_to_hand_turns = toInt(source.return_to_hand_turns, 0);
         this.held_turns = toInt(source.held_turns, 0);
+        if (this.def_id === 'Tomato') {
+            this.bonus_damage = Math.min(18, Math.max(0, this.bonus_damage));
+            this.held_turns = Math.min(6, Math.max(0, this.held_turns));
+        }
         this.durability = toInt(source.durability, 0);
         this._placed_as_equipment = false;
         this._placed_as_equipment_owner = null;
@@ -340,7 +374,7 @@ class LocalCard {
     }
 
     get flags() {
-        const flags = new Set(this.def().flags || []);
+        const flags = new Set(normalizeCardFlags(this.def().flags || []));
         this.instance_flags.forEach(flag => flags.add(flag));
         this.disabled_flags.forEach(flag => flags.delete(flag));
         return flags;
@@ -363,9 +397,9 @@ class LocalCard {
             mimic_discount: this.mimic_discount,
             instance_flags: Array.from(this.instance_flags),
             disabled_flags: Array.from(this.disabled_flags),
-            bonus_damage: this.bonus_damage,
+            bonus_damage: this.def_id === 'Tomato' ? Math.min(18, Math.max(0, this.bonus_damage)) : this.bonus_damage,
             return_to_hand_turns: this.return_to_hand_turns,
-            held_turns: this.held_turns,
+            held_turns: this.def_id === 'Tomato' ? Math.min(6, Math.max(0, this.held_turns)) : this.held_turns,
             durability: this.durability,
         };
     }
@@ -424,7 +458,7 @@ class LocalPlayer {
         this.magic_battery_m_this_turn = 0;
         this.coffee_first_use = true;
         this.invincible = false;
-        this.skip_turn = false;
+        this.skip_turn = 0;
         this.damage_multiplier = 1.0;
         this.bandage_active = false;
         this.bandage_death_pending = false;
@@ -491,6 +525,10 @@ class LocalPlayer {
     }
 
     addToHand(card) {
+        if (card && card.def_id === 'Tomato') {
+            card.bonus_damage = 0;
+            card.held_turns = 0;
+        }
         this.hand.push(card);
         if (typeof this.onEnterHand === 'function') {
             this.onEnterHand(this.player_id, card);
@@ -649,7 +687,7 @@ class LocalSoloEngine {
         this.pending_choice = null;
         this.opening_event_picks = [payload.event0 ?? null, payload.event1 ?? null];
         this.opening_event_sub_choices = [payload.sub0 || null, payload.sub1 || null];
-        this._antenna_reveal = [null, null];
+        this._antennae_reveal = [null, null];
         this._last_damage_value = [0, 0];
         this._incoming_damage_hint = [0, 0];
         this._game_over_defer_depth = 0;
@@ -738,7 +776,7 @@ class LocalSoloEngine {
         clone.pending_choice = cloneJson(this.pending_choice);
         clone.opening_event_picks = [...this.opening_event_picks];
         clone.opening_event_sub_choices = cloneJson(this.opening_event_sub_choices) || [null, null];
-        clone._antenna_reveal = cloneJson(this._antenna_reveal) || [null, null];
+        clone._antennae_reveal = cloneJson(this._antennae_reveal) || [null, null];
         clone._last_damage_value = [...this._last_damage_value];
         clone._incoming_damage_hint = [...this._incoming_damage_hint];
         clone._game_over_defer_depth = this._game_over_defer_depth;
@@ -1063,7 +1101,7 @@ class LocalSoloEngine {
                 }
             }
         }
-        if (this._antenna_reveal[forPlayer]) {
+        if (this._antennae_reveal[forPlayer]) {
             oppData.revealed_hand = this.players[opponent].hand.filter(card => card.def_id !== ERROR_CARD_ID).map(card => card.toDict());
             oppData.hand = this.players[opponent].hand.filter(card => card.def_id !== ERROR_CARD_ID).map(card => card.toDict());
         }
@@ -1082,7 +1120,7 @@ class LocalSoloEngine {
             pending_response: this.pending_response,
             pending_choice: this.pending_choice,
             opening_event_picks: this.opening_event_picks,
-            antenna_reveal: this._antenna_reveal[forPlayer],
+            antennae_reveal: this._antennae_reveal[forPlayer],
             your_id: forPlayer,
             your_name: this.tutorial ? '你' : (forPlayer === 0 ? 'Player A' : 'Player B'),
             opponent_name: this.tutorial ? '练习对手' : (forPlayer === 0 ? 'Player B' : 'Player A'),
@@ -1164,6 +1202,8 @@ class LocalSoloEngine {
             ps.custom_vars['魔法电池本回合回魔'] = 0;
         });
         this.logMsg(`=== 第${this.round_num}回合 ===`);
+        this.applyLateRoundFirePressure();
+        if (this.game_over) return;
         this.startPlayerTurn(this.first_player);
     }
 
@@ -1173,8 +1213,8 @@ class LocalSoloEngine {
         this.applyTurnStartEffects(playerId);
         if (this.game_over) return;
         const ps = this.players[playerId];
-        if (ps.skip_turn) {
-            ps.skip_turn = false;
+        if (ps.skip_turn > 0) {
+            ps.skip_turn -= 1;
             this.logMsg(`${this.pn(playerId)}被眩晕，跳过本回合！`);
             this.endPlayerTurn(playerId);
             return;
@@ -1213,7 +1253,7 @@ class LocalSoloEngine {
         const ps = this.players[playerId];
         const oppId = 1 - playerId;
         const opp = this.players[oppId];
-        this._antenna_reveal[playerId] = null;
+        this._antennae_reveal[playerId] = null;
         this.runZoneOwnerTurnStartEvents(playerId);
         this.runTimedEffectsForTurn(playerId);
         this.players.forEach(owner => {
@@ -1944,7 +1984,7 @@ class LocalSoloEngine {
         if (op === 'has_tag') {
             const targetCard = this.resolveCardRef(playerId, cond.card || { ref: 'current_card' }, currentCard);
             if (!targetCard) return false;
-            const tag = String(cond.tag || '');
+            const tag = normalizeCardFlag(cond.tag || '');
             return targetCard.flags.has(tag);
         }
         if (op === 'damage_source_relation') {
@@ -2126,7 +2166,7 @@ class LocalSoloEngine {
         if (!target) return 0;
         const fusionExtra = Math.max(0, toInt(target.fusion_level, 1) - 1);
         const fissionExtra = Math.max(0, toInt(target.fission_level, 1) - 1);
-        const tomatoLayer = target.def_id === 'Tomato' ? Math.max(0, toInt(target.held_turns, 0)) : 0;
+        const tomatoLayer = target.def_id === 'Tomato' ? Math.min(6, Math.max(0, toInt(target.held_turns, 0))) : 0;
         return Math.ceil((fusionExtra + fissionExtra + tomatoLayer) / 2);
     }
 
@@ -2523,7 +2563,10 @@ class LocalSoloEngine {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
         const sourceText = String(params.source_text || params.source_name || params.label || params.source || (card ? cardName(card.def_id) : '\u6548\u679c'));
-        this.dealDirectDamage(targetId, amount, sourceText, playerId);
+        this.dealDirectDamage(targetId, amount, sourceText, playerId, {
+            damage_type: params.damage_type || null,
+            damage_tag: params.damage_tag || null,
+        });
     }
 
     effect_lifesteal_damage(playerId, card, params) {
@@ -2718,13 +2761,27 @@ class LocalSoloEngine {
         this.spendResource(targetId, 'magic', amount, card);
     }
 
+    clampCardProperty(target, prop, value) {
+        let next = toInt(value, 0);
+        if (prop === 'fusion_level' || prop === 'fission_level') {
+            next = Math.max(1, next);
+        } else {
+            next = Math.max(0, next);
+        }
+        if (target && target.def_id === 'Tomato') {
+            if (prop === 'held_turns') next = Math.min(6, next);
+            if (prop === 'bonus_damage') next = Math.min(18, next);
+        }
+        return next;
+    }
+
     effect_card_prop_set(playerId, card, params) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
         if (!target) return;
         let prop = String(params.property || 'fusion_level');
         if (prop === 'cost_e') prop = 'cost_e_override';
         if (prop === 'cost_m') prop = 'cost_m_override';
-        target[prop] = Math.max(0, this.evalInt(playerId, params.value ?? 0, card, 0));
+        target[prop] = this.clampCardProperty(target, prop, this.evalInt(playerId, params.value ?? 0, card, 0));
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
     }
@@ -2740,7 +2797,7 @@ class LocalSoloEngine {
             : prop === 'cost_m_override'
                 ? (target.cost_m_override != null ? target.cost_m_override : toInt(target.def().cost_m, 0))
                 : toInt(target[prop], 0);
-        target[prop] = Math.max(0, current + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0));
+        target[prop] = this.clampCardProperty(target, prop, current + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0));
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
     }
@@ -2757,7 +2814,7 @@ class LocalSoloEngine {
             : prop === 'cost_m_override'
                 ? (target.cost_m_override != null ? target.cost_m_override : toInt(target.def().cost_m, 0))
                 : toInt(target[prop], 0);
-        target[prop] = Math.max(0, current * multiplier);
+        target[prop] = this.clampCardProperty(target, prop, current * multiplier);
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
     }
@@ -2994,12 +3051,13 @@ class LocalSoloEngine {
 
     effect_skip_turn(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
-        this.players[targetId].skip_turn = true;
+        const amount = toInt(params.amount, 1);
+        this.players[targetId].skip_turn += amount;
     }
 
     effect_reveal_enemy_hand(playerId, card, params, log) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
-        this._antenna_reveal[playerId] = this.players[targetId].hand.map(c => c.toDict());
+        this._antennae_reveal[playerId] = this.players[targetId].hand.map(c => c.toDict());
         this.logMsg(log || `${this.pn(playerId)}查看了${this.pn(targetId)}的手牌`);
     }
 
@@ -3107,7 +3165,7 @@ class LocalSoloEngine {
 
     effect_tag_add_named(playerId, card, params, log) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
-        const tag = String(params.tag || '').trim();
+        const tag = normalizeCardFlag(params.tag || '');
         if (!target || !tag) return;
         target.instance_flags.add(tag);
         if (log) this.logMsg(log);
@@ -3115,7 +3173,7 @@ class LocalSoloEngine {
 
     effect_tag_remove_named(playerId, card, params, log) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
-        const tag = String(params.tag || '').trim();
+        const tag = normalizeCardFlag(params.tag || '');
         if (!target || !tag) return;
         target.instance_flags.delete(tag);
         if (log) this.logMsg(log);
@@ -3224,7 +3282,9 @@ class LocalSoloEngine {
     }
 
     modifiedAttackDamage(base, card) {
-        let amount = toInt(base, 0) + Math.max(0, toInt(card && card.bonus_damage, 0));
+        let bonus = Math.max(0, toInt(card && card.bonus_damage, 0));
+        if (card && card.def_id === 'Tomato') bonus = Math.min(18, bonus);
+        let amount = toInt(base, 0) + bonus;
         const fusion = Math.max(1, toInt(card && card.fusion_level, 1));
         const fission = Math.max(1, toInt(card && card.fission_level, 1));
         return Math.ceil((amount * fusion) / fission);
@@ -3240,15 +3300,35 @@ class LocalSoloEngine {
         return count;
     }
 
-    dealDirectDamage(playerId, amount, source = '', sourceId = null) {
+    getCorruptionMultiplier() {
+        return CORRUPTION_DAMAGE_MULTIPLIER ** Math.max(0, this.getCorruptionCount());
+    }
+
+    applyCorruptionMultiplier(amount) {
+        const multiplier = this.getCorruptionMultiplier();
+        const base = Math.max(0, toInt(amount, 0));
+        return multiplier > 1 ? Math.ceil(base * multiplier) : base;
+    }
+
+    applyLateRoundFirePressure() {
+        if (this.round_num < LATE_ROUND_FIRE_START) return;
+        let applied = 0;
+        this.players.forEach(ps => {
+            if (ps.health > 0) {
+                ps.fire += 1;
+                applied += 1;
+            }
+        });
+        if (applied > 0) this.logMsg(`第${this.round_num}回合开始，所有存活玩家+1灼烧`);
+    }
+
+    dealDirectDamage(playerId, amount, source = '', sourceId = null, damageMeta = null) {
         const ps = this.players[playerId];
         if (!ps || ps.invincible) {
             if (ps) this.logMsg(`${this.pn(playerId)}无敌，免疫${source}伤害`);
             return 0;
         }
-        let actual = Math.max(0, toInt(amount, 0));
-        const corruption = this.getCorruptionCount();
-        if (corruption > 0) actual *= (2 ** corruption);
+        let actual = this.applyCorruptionMultiplier(amount);
         ps.health -= actual;
         this.recordDamage(playerId, actual, sourceId);
         this.logMsg(`${this.pn(playerId)}受到${actual}点${source}伤害（H=${ps.health}）`);
@@ -3282,8 +3362,7 @@ class LocalSoloEngine {
             let dmg = Math.max(0, toInt(amount, 0));
             if (this.halve_next_attack) dmg = Math.ceil(dmg / 2);
             else if (precisionDodged) dmg = Math.ceil(dmg / 2);
-            const corruption = this.getCorruptionCount();
-            if (corruption > 0) dmg *= (2 ** corruption);
+            dmg = this.applyCorruptionMultiplier(dmg);
             if (ps.nazar_active) {
                 const original = dmg;
                 dmg = Math.max(1, dmg - 9);
@@ -3318,8 +3397,11 @@ class LocalSoloEngine {
                                 damage: dmg,
                             });
                         } else if (eq.def_id === 'Battery') {
-                            this.dealDirectDamage(attackerId, 3, '电池', targetId);
-                            this.logMsg(`${this.pn(targetId)}的电池效果：对${this.pn(attackerId)}造成3D`);
+                            this.dealDirectDamage(attackerId, 3, '电池电击', targetId, {
+                                damage_type: 'magic',
+                                damage_tag: 'gtn:battery',
+                            });
+                            this.logMsg(`${this.pn(targetId)}的电池效果：对${this.pn(attackerId)}造成3电伤`);
                         } else if (eq.def_id === 'MagicBattery' && ps.magic_battery_m_this_turn < 3) {
                             ps.gainMagic(1);
                             ps.magic_battery_m_this_turn += 1;

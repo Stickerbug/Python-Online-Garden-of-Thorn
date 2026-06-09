@@ -6,8 +6,8 @@
 <title>Garden of Thorn 荆棘花园</title>
 <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
-<link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/css/style.css?v=172">
+<link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/css/style.css?v=211">
 <script>
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
@@ -47,6 +47,7 @@
 </div>
 <button id="btn-account-top" class="account-top-btn">账号</button>
 <button id="btn-friends-top" class="friends-top-btn hidden">好友</button>
+<button id="btn-skin-top" class="skin-top-btn">皮肤</button>
 <div id="account-popover" class="account-popover hidden">
   <div class="account-popover-head">
     <div id="account-popover-title" class="account-popover-title">账号</div>
@@ -125,6 +126,46 @@
     <div id="friends-list" class="friend-list"></div>
   </div>
 </div>
+<div id="view-skin" class="view hidden">
+  <div class="skin-editor-page">
+    <div class="skin-editor-panel">
+      <div class="skin-editor-head">
+        <h2 id="skin-title">皮肤</h2>
+        <button id="btn-skin-back" class="btn btn-secondary" type="button">返回</button>
+      </div>
+      <div class="skin-editor-body">
+        <div class="skin-preview-column">
+          <div id="skin-preview-avatar" class="skin-preview-avatar"></div>
+          <div id="skin-sync-note" class="skin-sync-note">游客皮肤会保存在本地；账号皮肤会保存到服务器。</div>
+        </div>
+        <div class="skin-controls-column">
+          <label class="skin-control-row" for="skin-primary-color">
+            <span id="skin-primary-label">主颜色</span>
+            <input id="skin-primary-color" type="color" value="#FFE763">
+          </label>
+          <label class="skin-control-row" for="skin-eye-shape">
+            <span id="skin-eye-shape-label">眼睛形状</span>
+            <select id="skin-eye-shape">
+              <option value="oval" id="skin-eye-oval">椭圆</option>
+              <option value="rectangle" id="skin-eye-rectangle">长方形</option>
+              <option value="diamond" id="skin-eye-diamond">菱形</option>
+              <option value="hexagon" id="skin-eye-hexagon">六边形</option>
+            </select>
+          </label>
+          <div class="skin-placeholder-row">
+            <button id="skin-face-layout-placeholder" class="btn btn-secondary" type="button" disabled>脸部布局：暂未开放</button>
+            <button id="skin-face-shape-placeholder" class="btn btn-secondary" type="button" disabled>脸型：暂未开放</button>
+          </div>
+          <p id="skin-error" class="error-text"></p>
+          <div class="skin-action-row">
+            <button id="btn-skin-save" class="btn btn-primary" type="button">保存</button>
+            <button id="btn-skin-reset" class="btn btn-secondary" type="button">恢复默认</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="account-replay-modal" class="account-replay-modal hidden">
   <div class="account-replay-dialog">
     <div class="account-popover-head">
@@ -132,14 +173,14 @@
       <button id="btn-account-replay-close" class="account-close-btn" type="button">×</button>
     </div>
     <div class="account-replay-controls">
-      <button class="mini-btn" type="button" data-account-replay-control="prev">上一步</button>
-      <button class="mini-btn" type="button" data-account-replay-control="play">播放</button>
-      <button class="mini-btn" type="button" data-account-replay-control="pause">暂停</button>
+      <button class="mini-btn replay-icon-btn" type="button" data-account-replay-control="prev" title="上一步">‹</button>
+      <button class="mini-btn replay-icon-btn" type="button" data-account-replay-control="play" title="播放">▶</button>
+      <button class="mini-btn replay-icon-btn" type="button" data-account-replay-control="pause" title="暂停">Ⅱ</button>
       <button class="mini-btn" type="button" data-account-replay-speed="1">1x</button>
       <button class="mini-btn" type="button" data-account-replay-speed="2">2x</button>
       <button class="mini-btn" type="button" data-account-replay-speed="4">4x</button>
-      <button class="mini-btn" type="button" data-account-replay-speed="instant">立即</button>
-      <button class="mini-btn" type="button" data-account-replay-control="next">下一步</button>
+      <button class="mini-btn replay-speed-btn" type="button" data-account-replay-speed="instant">»</button>
+      <button class="mini-btn replay-icon-btn" type="button" data-account-replay-control="next" title="下一步">›</button>
     </div>
     <div id="account-replay-meta" class="account-replay-meta"></div>
     <div id="account-replay-perspectives" class="account-replay-perspectives"></div>
@@ -371,6 +412,7 @@
     <div class="opp-top-row">
       <div class="opp-half opp-left">
         <div class="player-info-bar">
+          <span id="opp-skin" class="mini-skin-avatar"></span>
           <span id="opp-label" class="player-label opp-label">对手</span>
           <div id="opp-bars" class="bars-row"></div>
           <div id="opp-status" class="status-tags"></div>
@@ -384,6 +426,7 @@
       <div class="opp-divider hidden" id="opp-divider"></div>
       <div class="opp-half opp-right hidden" id="opp2-half">
         <div class="player-info-bar">
+          <span id="opp2-skin" class="mini-skin-avatar"></span>
           <span id="opp2-label" class="player-label opp-label">对手2</span>
           <div id="opp2-bars" class="bars-row"></div>
           <div id="opp2-status" class="status-tags"></div>
@@ -403,6 +446,7 @@
     </div>
     <div id="teammate-sidebar" class="teammate-sidebar hidden">
       <div class="teammate-sidebar-header">
+        <span id="teammate-skin" class="mini-skin-avatar"></span>
         <span id="teammate-label" class="player-label teammate-label">队友</span>
       </div>
       <div id="teammate-bars" class="bars-row"></div>
@@ -416,6 +460,7 @@
   </div>
   <div class="player-section">
     <div class="player-info-bar">
+      <span id="you-skin" class="mini-skin-avatar"></span>
       <span id="you-label" class="player-label you-label">你</span>
       <div id="you-bars" class="bars-row"></div>
       <div id="you-status" class="status-tags"></div>
@@ -461,6 +506,7 @@
 <div id="gameover-log" class="gameover-log"></div>
 <div class="gameover-buttons">
 <button id="btn-rematch" class="btn btn-bloom">再来一局</button>
+<button id="btn-report-match" class="btn btn-danger hidden">举报本局</button>
 <button id="btn-return-lobby" class="btn btn-secondary">返回大厅</button>
 </div>
 </div>
@@ -560,6 +606,12 @@
 <input id="community-mod-file-input" type="file" accept=".json,.gtnmod,application/json,application/zip" hidden>
 <button id="btn-community-upload" type="button" class="btn btn-primary">上传模组</button>
 <button id="btn-community-refresh" type="button" class="btn btn-secondary">??</button>
+</div>
+<div id="community-upload-progress" class="community-upload-progress hidden" aria-live="polite">
+<div class="community-upload-progress-track">
+<div id="community-upload-progress-fill" class="community-upload-progress-fill"></div>
+</div>
+<div id="community-upload-progress-text" class="community-upload-progress-text"></div>
 </div>
 <p id="settings-community-status" class="info-text"></p>
 </div>
@@ -710,7 +762,7 @@
   setText('#btn-connect', t.enterLobby); setText('#btn-solo-training', t.soloTraining); setText('#btn-open-settings', t.settings); setText('#solo-title', t.soloTraining); setText('#btn-solo-load', t.loadLast); setText('#btn-solo-save', t.saveDecks); setText('#btn-solo-start', t.startTraining); setText('#btn-solo-back', t.back); setPlaceholder('#solo-card-search', t.searchCards); setText('#solo-deck-a-title', t.soloDeckA); setText('#solo-deck-b-title', t.soloDeckB); setText('#solo-event-a-label', t.soloEventA); setText('#solo-event-b-label', t.soloEventB);
   setText('#view-lobby .lobby-header h2', t.lobby); setText('#view-lobby .lobby-left .lobby-section:first-child h3', t.onlinePlayers); setText('#lobby-online-count', t.onlineCount); setText('#view-lobby .lobby-left .lobby-section:last-child h3', t.ongoingGames); setText('#view-lobby .lobby-right .lobby-section h3', t.chat); setPlaceholder('#lobby-chat-input', t.messagePlaceholder); setText('#btn-lobby-chat-send', t.send); setText('#btn-lobby-back', t.backHome);
   setText('#view-draft h2', t.draft); setText('#btn-draft-reroll', t.reroll); setText('#view-event-select h2', t.selectEvent); setText('#view-event-select .event-desc', t.selectEventDesc); setText('#opp-label', t.opponent); setText('#opp-info', t.oppInfo); setText('#battle-log .log-header', t.battleLog); setText('#you-label', t.you); setText('#you-info', t.youInfo); setText('#play-zone .play-zone-hint', t.dragToPlay); setText('#btn-end-turn', t.endTurn); setText('#btn-view-deck', t.viewDeck); setText('#btn-solo-next-draw', t.setNextDraw); setText('#btn-solo-edit', t.pauseEdit); setText('#btn-surrender', t.surrender); setText('#btn-switch-perspective', t.switchPerspective); setText('#btn-spectate-view-deck', t.viewDeck); setText('#btn-leave-spectate', t.leaveSpectate); setPlaceholder('#game-chat-input', t.messagePlaceholder); setText('#btn-game-chat-send', t.send);
-  setText('#btn-rematch', t.rematch); setText('#btn-return-lobby', t.returnLobby); setText('#view-mod-editor h2', t.modEditor); setPlaceholder('#mod-editor-area', t.modPlaceholder); setText('#btn-mod-load', t.loadMod); setText('#btn-mod-save', t.save); setText('#btn-mod-validate', t.validateJson); setText('#btn-mod-back', t.back);
+  setText('#btn-rematch', t.rematch); setText('#btn-return-lobby', t.returnLobby); setText('#btn-report-match', (window.__bootLang === 'zh' ? '举报本局' : 'Report Match')); setText('#view-mod-editor h2', t.modEditor); setPlaceholder('#mod-editor-area', t.modPlaceholder); setText('#btn-mod-load', t.loadMod); setText('#btn-mod-save', t.save); setText('#btn-mod-validate', t.validateJson); setText('#btn-mod-back', t.back);
   setText('#settings-title', t.settings); setText('#settings-tab-appearance', t.appearance); setText('#settings-tab-server', t.server); setText('#settings-tab-mods', t.mods); setText('#settings-section-appearance', t.appearance); setText('#settings-label-theme', t.theme); setText('#settings-theme-select option[value=\"light\"]', t.light); setText('#settings-theme-select option[value=\"dark\"]', t.dark); setText('#settings-label-ui-style', t.uiStyle); setText('#settings-ui-style-select option[value=\"minimal\"]', t.minimal); setText('#settings-ui-style-select option[value=\"classic\"]', t.classic); setText('#settings-label-lang', t.language); setText('#settings-section-server', t.server); setText('#settings-label-server', t.address); setPlaceholder('#settings-server-input', t.serverPlaceholder); setText('#settings-section-mods', t.mods); setText('#settings-no-mods', t.noMods); setText('#btn-settings-close', t.ok); setText('#game-prompt-cancel', t.cancel); setText('.rotate-text', t.rotatePrompt); setText('.rotate-text-en', t.rotateSub); setText('#btn-dismiss-rotate', t.continueEnter);
   const app = document.getElementById('app'); if (app) app.style.visibility = 'visible';
 })();
@@ -719,7 +771,7 @@
 (() => {
   const loadMainFont = () => {
     if (!('FontFace' in window)) return;
-    const font = new FontFace('Kreadon', "url('/fonts/Kreadon-Regular.subset.woff2') format('woff2')", {
+    const font = new FontFace('Kreadon', "url('/fonts/Kreadon-Regular.subset.woff2?v=2') format('woff2')", {
       weight: '400',
       style: 'normal'
     });
@@ -736,6 +788,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-<script src="/static/js/game.js?v=188"></script>
+    <script src="/static/js/game.js?v=252"></script>
 </body>
 </html>

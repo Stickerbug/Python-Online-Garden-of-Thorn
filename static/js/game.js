@@ -10,6 +10,7 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_ui_style_v2_migrated',
     'gtn_show_english_card_names',
     'gtn_show_card_images',
+    'gtn_skin_config',
     'gtn_server',
     'gtn_disabled_mods',
     'gtn_community_mods',
@@ -73,22 +74,24 @@ const I18N = {
         choose_discard_for: 'Choose a discard for {0}', choose_from_deck_for: 'Choose from deck', choose_from_discard_for: 'Choose from discard for {0}',
         choose_hand_for: 'Choose from hand for {0}', choose_from_enemy_hand_for: 'Choose from enemy hand', choose_attack_group_for: 'Choose attack group for {0}',
         no_attack_cards: 'No attack cards', no_enemy_equipment: 'No enemy equipment', no_enemy_hand: 'No enemy hand', deck_empty: 'Deck empty',
+        no_matching_cards: 'No matching cards', no_cards_in_hand: 'No cards in hand',
         discard_empty: 'Discard pile empty', no_same_attack: 'No matching attack cards', confirm_surrender: 'Surrender?', request_rematch: 'Request Rematch',
         opponent_rematch: 'Opponent requests rematch', rematch_sent: 'Rematch request sent', rematch_waiting: 'Waiting for opponent', rematch_agreed: 'Rematch accepted',
         rematch_progress: 'Rematch ({0}/{1})',
-        agree_rematch: 'Accept Rematch', you_win: 'You Win!', you_lose: 'You Lose!', you_draw: 'Draw!', send: 'Send', cancel: 'Cancel', ok: 'OK', close: 'Close', notice: 'Notice',
+        agree_rematch: 'Accept Rematch', you_win: 'You Win!', you_lose: 'You Lose!', you_draw: 'Draw!', send: 'Send', cancel: 'Cancel', confirm: 'Confirm', ok: 'OK', close: 'Close', notice: 'Notice',
         opponent_disconnected: 'Opponent disconnected', opponent_reconnected: 'Opponent reconnected', reconnect_title: 'Reconnect', reconnect_prompt: 'Reconnect to the previous match?',
         reconnecting: 'Reconnecting...', reconnect_timeout: 'Reconnect timed out', mod_mismatch_title: 'Mod Mismatch', mod_mismatch_msg: 'Mods do not match, cannot start the match',
         switch_perspective: 'Switch Perspective', leave_spectate: 'Leave Spectate', switch_to_perspective: 'Switch to {0}', battle_log: 'Battle Log',
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_stunned: 'Stunned',
-        status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable',
-        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable',
+        status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_sticky: 'Sticky', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_stealth: 'Stealth', flag_revealed: 'Revealed',
+        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_sticky: 'Sticky', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_stealth: 'Stealth', tag_revealed: 'Revealed',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
+        foresight_replace_title: 'Foresight', foresight_replace_desc: 'Select up to {0} cards to draw from deck', foresight_replace_confirm: 'Draw',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
         lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
         card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard', fusion_layer: 'Fusion', fission_layer: 'Fission',
@@ -153,7 +156,7 @@ const I18N = {
         trigger_on_ally_turn: 'Trigger equipment (ally turn)', player_dead: 'Defeated',
         choose_target: 'Choose Target', ally_consent_title: 'Teammate Card Use', ally_consent_msg: '{0} wants to use {1} on you',
         ally_accept_countdown: 'Accept ({0})', ally_decline: 'Decline',
-        mode_switch_confirm: 'Switching mode will leave your current team. Continue?',
+        mode_switch_confirm: 'Switching mode will leave your current team.\nContinue?',
         waiting_for_team: 'Waiting for another team...',
         all_players_draft_status: 'Draft Status',
         urf_replace: 'Replace Card', urf_sell: 'Sell Equipment'
@@ -181,19 +184,21 @@ I18N.zh = { ...I18N.en,
     use_card: '使用', insufficient_resources: '资源不足', choose_attack_for: '为 {0} 选择攻击牌', choose_equip_for: '选择装备牌',
     choose_discard_for: '为 {0} 选择弃牌', choose_from_deck_for: '从牌堆选择', choose_from_discard_for: '为 {0} 从弃牌堆选择', choose_hand_for: '为 {0} 从手牌选择',
     choose_from_enemy_hand_for: '从敌方手牌选择', choose_attack_group_for: '为 {0} 选择攻击组', no_attack_cards: '没有攻击牌', no_enemy_equipment: '对方没有装备',
-    no_enemy_hand: '对方没有手牌', deck_empty: '牌堆为空', discard_empty: '弃牌堆为空', no_same_attack: '没有同名攻击牌',
+    no_enemy_hand: '对方没有手牌', deck_empty: '牌堆为空', no_matching_cards: '没有符合条件的牌', no_cards_in_hand: '手牌为空', discard_empty: '弃牌堆为空', no_same_attack: '没有同名攻击牌',
     confirm_surrender: '确认投降？', request_rematch: '请求再来一局', opponent_rematch: '对方请求再来一局', rematch_sent: '已发送再来一局请求',
     rematch_waiting: '等待对方', rematch_agreed: '对方已接受', agree_rematch: '接受再来一局', rematch_progress: '再来一局({0}/{1})', you_win: '你赢了！', you_lose: '你输了！', you_draw: '平局！',
-    send: '发送', cancel: '取消', ok: '确定', close: '关闭', notice: '提示', opponent_disconnected: '对手已断开连接', opponent_reconnected: '对手已重新连接',
+    send: '发送', cancel: '取消', confirm: '确认', ok: '确定', close: '关闭', notice: '提示', opponent_disconnected: '对手已断开连接', opponent_reconnected: '对手已重新连接',
     reconnect_title: '重连', reconnect_prompt: '是否重连到上一局对战？', reconnecting: '重连中...', reconnect_timeout: '重连超时',
     mod_mismatch_title: '模组不匹配', mod_mismatch_msg: '模组不一致，无法开始对局', switch_perspective: '切换视角', leave_spectate: '退出观战', switch_to_perspective: '切换到 {0}',
     battle_log: '战斗日志', equip_info: '{0}（{1}回合）', equip_corruption: '[已腐化]', equip_trigger_cost: '{0} 触发：{1}E',
     status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼',
     status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消',
+    status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_sticky: '粘滞', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隐匿', flag_revealed: '被揭示',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
+    foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张牌堆顶的牌抽取', foresight_replace_confirm: '抽取',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
     round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
     select_event_desc: '选择一个开局事件', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
@@ -232,7 +237,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_sticky: '粘滞', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隐匿', tag_revealed: '被揭示',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '开局事件', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
@@ -245,7 +250,7 @@ I18N.zh = { ...I18N.en,
     trigger_on_ally_turn: '触发装备（队友回合）', player_dead: '已阵亡',
     choose_target: '选择目标', ally_consent_title: '队友用牌确认', ally_consent_msg: '{0} 想对你使用 {1}',
     ally_accept_countdown: '同意（{0}）', ally_decline: '不同意',
-    mode_switch_confirm: '切换模式将离开当前队伍，是否确认？',
+    mode_switch_confirm: '切换模式将离开当前队伍，\n是否确认？',
     waiting_for_team: '等待另一支队伍...',
     all_players_draft_status: '选牌状态',
     urf_replace: '替换手牌', urf_sell: '售卖装备',
@@ -296,7 +301,8 @@ I18N.fr = { ...I18N.en,
     status_poison: 'Poison', status_fire: 'Brûlure', status_toxic: 'Toxique', status_triangle: 'Triangle', status_dodge: 'Esquive',
     status_nazar: 'Nazar', status_equip_protect: 'Prot. Équip.', status_invincible: 'Invincible', status_stunned: 'Étourdi', status_attack_blocked: 'Atq bloquée', status_attack_only: 'Atq seule',
     status_untargetable: 'Non ciblable', status_bandage: 'Bandage', status_sponge: 'Éponge', status_shovel: 'Pelle',
-    flag_precision: 'Précision', flag_exile: 'Exil', flag_non_stackable: 'Non-cumul', flag_indestructible: 'Indestructible', flag_sprout: 'Pousse', flag_symbiosis: 'Symbiose',
+    status_sluggish: 'Lenteur', status_overload: 'Surcharge', status_foresight: 'Prévoyance', status_fracture: 'Fracture', status_heal_block: 'Anti-soin', status_weakness: 'Faiblesse', status_bleed: 'Saignement', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
+    flag_precision: 'Précision', flag_exile: 'Exil', flag_non_stackable: 'Non-cumul', flag_indestructible: 'Indestructible', flag_sprout: 'Pousse', flag_symbiosis: 'Symbiose', flag_copy: 'Copie', flag_unique: 'Unique', flag_swift: 'Rapidité', flag_stealth: 'Furtif', flag_revealed: 'Révélé',
     choose_convert_count: 'Nombre de conversions', choose_magic_card_n: 'Carte magie n°{0}', choose_source_card_n: 'Carte source n°{0}',
     choose_light_cards: 'Cartes de conversion Lumière', choose_yggdrasil_card: 'Carte Arbre-Monde', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
     selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
@@ -314,7 +320,7 @@ I18N.fr = { ...I18N.en,
     set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks doivent avoir exactement 15 cartes',
     solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
     edit_tags: 'Modifier tags', tag_precision: 'Précision', tag_exile: 'Exil', tag_non_stackable: 'Non-cumul',
-    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Soi uniquement', tag_uncancellable: 'Non annulable',
+    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Soi uniquement', tag_uncancellable: 'Non annulable', tag_sticky: 'Collant', tag_copy: 'Copie', tag_unique: 'Unique', tag_swift: 'Rapidité', tag_stealth: 'Furtif', tag_revealed: 'Révélé', tag_infinite_exclude: 'Retiré d’Infinite Fire',
     fusion_layer: 'Fusion', fission_layer: 'Fission',
     app_subtitle: 'Combat de cartes en réseau local',
     nickname_placeholder: 'Saisir un pseudo',
@@ -364,7 +370,8 @@ I18N.pt = { ...I18N.en,
     status_poison: 'Veneno', status_fire: 'Queima', status_toxic: 'Tóxico', status_triangle: 'Triângulo', status_dodge: 'Esquiva',
     status_nazar: 'Nazar', status_equip_protect: 'Prot. Equip.', status_invincible: 'Invencível', status_stunned: 'Atordoado', status_attack_blocked: 'Atq Bloqueado', status_attack_only: 'Só Atq',
     status_untargetable: 'Inalvejável', status_bandage: 'Bandagem', status_sponge: 'Esponja', status_shovel: 'Pá',
-    flag_precision: 'Precisão', flag_exile: 'Exílio', flag_non_stackable: 'Não-acumulável', flag_indestructible: 'Indestrutível', flag_sprout: 'Brotar', flag_symbiosis: 'Simbiose',
+    status_sluggish: 'Letargia', status_overload: 'Sobrecarga', status_foresight: 'Previsão', status_fracture: 'Fratura', status_heal_block: 'Anti-cura', status_weakness: 'Fraqueza', status_bleed: 'Sangramento', status_fragment: 'Fragmento', status_fragment_stacks: 'Fragmento',
+    flag_precision: 'Precisão', flag_exile: 'Exílio', flag_non_stackable: 'Não-acumulável', flag_indestructible: 'Indestrutível', flag_sprout: 'Brotar', flag_symbiosis: 'Simbiose', flag_copy: 'Cópia', flag_unique: 'Único', flag_swift: 'Rapidez', flag_stealth: 'Furtivo', flag_revealed: 'Revelado',
     choose_convert_count: 'Escolher quantidade de conversão', choose_magic_card_n: 'Carta mágica n°{0}', choose_source_card_n: 'Carta fonte n°{0}',
     choose_light_cards: 'Cartas de conversão Luz', choose_yggdrasil_card: 'Carta Árvore-Mundo', convert_label: 'Converter', convert_per_type: 'Máx {0} por tipo',
     selected_count: 'Selecionado {0}/{1}', max_selection_warning: 'Não pode exceder {0}', deck_total: 'Deck: {0} cartas', view_deck_title: 'Ver Deck',
@@ -382,7 +389,7 @@ I18N.pt = { ...I18N.en,
     set_next_draw: 'Definir Próxima Compra', solo_saved: 'Decks salvos', solo_need_15: 'Ambos os decks devem ter exatamente 15 cartas',
     solo_event_a: 'Evento inicial', solo_event_b: 'Evento do oponente', no_event: 'Nenhum',
     edit_tags: 'Editar tags', tag_precision: 'Precisão', tag_exile: 'Exílio', tag_non_stackable: 'Não acumula',
-    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Somente si', tag_uncancellable: 'Não cancelável',
+    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Somente si', tag_uncancellable: 'Não cancelável', tag_copy: 'Cópia', tag_unique: 'Único', tag_swift: 'Rapidez', tag_stealth: 'Furtivo', tag_revealed: 'Revelado', tag_infinite_exclude: 'Removido do Infinite Fire', tag_sticky: 'Pegajoso',
     fusion_layer: 'Fusão', fission_layer: 'Fissão',
     app_subtitle: 'Batalha de cartas em rede local',
     nickname_placeholder: 'Digite um apelido',
@@ -432,7 +439,8 @@ I18N.ru = { ...I18N.en,
     status_poison: 'Яд', status_fire: 'Горение', status_toxic: 'Токсичность', status_triangle: 'Треугольник', status_dodge: 'Уклонение',
     status_nazar: 'Назар', status_equip_protect: 'Защита Снар.', status_invincible: 'Неуязвимость', status_stunned: 'Оглушение', status_attack_blocked: 'Атк Заблок.', status_attack_only: 'Только Атк',
     status_untargetable: 'Недоступен', status_bandage: 'Бинт', status_sponge: 'Губка', status_shovel: 'Лопата',
-    flag_precision: 'Точность', flag_exile: 'Изгнание', flag_non_stackable: 'Нескладываемый', flag_indestructible: 'Неразрушимый', flag_sprout: 'Росток', flag_symbiosis: 'Симбиоз',
+    status_sluggish: 'Замедление', status_overload: 'Перегрузка', status_foresight: 'Предвидение', status_fracture: 'Излом', status_heal_block: 'Блок исцеления', status_weakness: 'Слабость', status_bleed: 'Кровотечение', status_fragment: 'Осколок', status_fragment_stacks: 'Осколок',
+    flag_precision: 'Точность', flag_exile: 'Изгнание', flag_non_stackable: 'Нескладываемый', flag_indestructible: 'Неразрушимый', flag_sprout: 'Росток', flag_symbiosis: 'Симбиоз', flag_copy: 'Копия', flag_unique: 'Уникальный', flag_swift: 'Стремительность', flag_stealth: 'Скрытность', flag_revealed: 'Раскрыто',
     choose_convert_count: 'Количество конвертации', choose_magic_card_n: 'Магическая карта №{0}', choose_source_card_n: 'Исходная карта №{0}',
     choose_light_cards: 'Карты конвертации Света', choose_yggdrasil_card: 'Карта Мирового древа', convert_label: 'Конвертировать', convert_per_type: 'Макс {0} на тип',
     selected_count: 'Выбрано {0}/{1}', max_selection_warning: 'Нельзя превышать {0}', deck_total: 'Колода: {0} карт', view_deck_title: 'Посмотреть Колоду',
@@ -450,7 +458,7 @@ I18N.ru = { ...I18N.en,
     set_next_draw: 'Задать следующую карту', solo_saved: 'Колоды сохранены', solo_need_15: 'В обеих колодах должно быть ровно 15 карт',
     solo_event_a: 'Ваше стартовое событие', solo_event_b: 'Событие соперника', no_event: 'Нет',
     edit_tags: 'Изменить теги', tag_precision: 'Точность', tag_exile: 'Изгнание', tag_non_stackable: 'Не складывается',
-    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота', tag_self_only: 'Только на себя', tag_uncancellable: 'Нельзя отменить',
+    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота', tag_self_only: 'Только на себя', tag_uncancellable: 'Нельзя отменить', tag_copy: 'Копия', tag_unique: 'Уникальный', tag_swift: 'Стремительность', tag_stealth: 'Скрытность', tag_revealed: 'Раскрыто', tag_infinite_exclude: 'Удалено из Infinite Fire', tag_sticky: 'Липкость',
     fusion_layer: 'Слияние', fission_layer: 'Деление',
     app_subtitle: 'Карточная дуэль по локальной сети',
     nickname_placeholder: 'Введите никнейм',
@@ -500,7 +508,8 @@ I18N.ja = { ...I18N.en,
     status_poison: '毒', status_fire: '火傷', status_toxic: '猛毒', status_triangle: '三角形', status_dodge: '回避',
     status_nazar: 'ナザール', status_equip_protect: '装備保護', status_invincible: '無敵', status_stunned: 'スタン', status_attack_blocked: '攻撃封印', status_attack_only: '攻撃のみ',
     status_untargetable: '対象不可', status_bandage: '包帯', status_sponge: 'スポンジ', status_shovel: 'シャベル',
-    flag_precision: '精密', flag_exile: '追放', flag_non_stackable: '非スタック', flag_indestructible: '破壊不可', flag_sprout: '発芽', flag_symbiosis: '共生',
+    status_sluggish: '遅鈍', status_overload: '過負荷', status_foresight: '予知', status_fracture: '破損', status_heal_block: '治療封じ', status_weakness: '虚弱', status_bleed: '出血', status_fragment: '破片', status_fragment_stacks: '破片',
+    flag_precision: '精密', flag_exile: '追放', flag_non_stackable: '非スタック', flag_indestructible: '破壊不可', flag_sprout: '発芽', flag_symbiosis: '共生', flag_copy: '複製', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隠密', flag_revealed: '公開',
     choose_convert_count: '変換回数を選択', choose_magic_card_n: 'マジックカード第{0}枚', choose_source_card_n: 'ソースカード第{0}枚',
     choose_light_cards: '光変換カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
     selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
@@ -518,7 +527,7 @@ I18N.ja = { ...I18N.en,
     set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '両方のデッキは15枚ちょうど必要です',
     solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
     edit_tags: 'タグ編集', tag_precision: '精密', tag_exile: '追放', tag_non_stackable: '非重複',
-    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '自分専用', tag_uncancellable: 'キャンセル不可',
+    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '自分専用', tag_uncancellable: 'キャンセル不可', tag_copy: '複製', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隠密', tag_revealed: '公開', tag_infinite_exclude: 'Infinite Fireから削除', tag_sticky: '粘着',
     fusion_layer: '融合', fission_layer: '分裂',
     app_subtitle: 'LANカード対戦',
     nickname_placeholder: 'ニックネームを入力',
@@ -660,6 +669,12 @@ Object.assign(I18N.zh, {
     tag_desc_self_only: '目标限制关键词。2v2 中表示该牌只能对自己使用；1v1 中该限制没有额外显示意义。',
     tag_desc_uncancellable: '选择限制关键词。该牌弹出选择窗口时不显示取消按钮，玩家必须完成选择。用于避免通过0消耗选择牌窗口查看隐藏信息后取消，例如磁铁查看敌方手牌。',
     tag_desc_infinite_exclude: '模式限制关键词。该牌不会进入无限火力的随机牌库，用于排除与该模式机制冲突的牌。',
+    tag_desc_copy: '抽牌关键词。当此牌进入手中时，将层数张放逐复制加入手中。',
+    tag_desc_unique: '牌库关键词。整场对局自己总牌库中仅允许出现一张，多余的将被放逐。',
+    tag_desc_swift: '费用关键词。此牌的E消耗减少X（最低0E）。',
+    tag_desc_sticky: '结算去向关键词。带有粘滞的牌打出并结算后，会在本局内回到使用者手牌；具体回手时机由卡牌效果决定。',
+    tag_desc_stealth: '响应关键词。此牌不会触发对手的响应窗口。',
+    tag_desc_revealed: '可见性关键词。此牌在手中时永久对对手展示。',
     tag_desc_default: '模组或扩展标签。该标签的具体含义由对应模组或卡牌效果定义。'
 });
 
@@ -709,7 +724,13 @@ Object.assign(I18N.en, {
     tag_desc_self_only: 'Targeting keyword. In 2v2, this card can only target yourself; in 1v1, it has no extra display meaning.',
     tag_desc_uncancellable: 'Choice keyword. Selection windows from this card do not show a cancel button; the player must complete the choice. This prevents checking hidden information for 0 cost and canceling, such as with Magnet.',
     tag_desc_infinite_exclude: 'Mode keyword. This card is excluded from Infinite Fire random pools because it conflicts with that mode.',
-    tag_desc_default: 'Mod or extension tag. Its exact meaning is defined by the relevant mod or card effect.'
+    tag_desc_copy: 'Draw keyword. When this card enters your hand, add N exile copies to your hand.',
+    tag_desc_unique: 'Deck keyword. Only one copy of this card is allowed in your deck; extras are exiled.',
+    tag_desc_swift: 'Cost keyword. This card\'s E cost is reduced by X (minimum 0E).',
+    tag_desc_sticky: 'Resolution keyword. After being played and resolved, this card can return to its user’s hand during this match. The exact timing is defined by the card effect.',
+    tag_desc_default: 'Mod or extension tag. Its exact meaning is defined by the relevant mod or card effect.',
+    tag_desc_stealth: 'Response keyword. This card does not trigger opponent response windows.',
+    tag_desc_revealed: 'Visibility keyword. This card is permanently visible to the opponent while in hand.'
 });
 
 Object.assign(I18N.fr, {
@@ -888,7 +909,13 @@ Object.assign(I18N.fr, {
     tag_desc_self_only: 'Mot-clé de ciblage. En 2v2, cette carte ne peut cibler que vous-même ; en 1v1, il n’a pas d’effet d’affichage supplémentaire.',
     tag_desc_uncancellable: 'Mot-clé de choix. Les fenêtres de choix de cette carte n’affichent pas de bouton Annuler ; le joueur doit terminer le choix. Cela évite de consulter une information cachée gratuitement puis d’annuler, par exemple avec Aimant.',
     tag_desc_infinite_exclude: 'Mot-clé de mode. Cette carte est exclue de la réserve aléatoire d’Infinite Fire car elle entre en conflit avec ce mode.',
-    tag_desc_default: 'Tag de mod ou d’extension. Son sens exact est défini par le mod ou l’effet de carte correspondant.'
+    tag_desc_copy: 'Mot-clé de pioche. Quand cette carte entre en main, ajoute N copies exilées.',
+    tag_desc_unique: 'Mot-clé de deck. Une seule copie autorisée; les excédentaires sont exilées.',
+    tag_desc_swift: 'Mot-clé de coût. Le coût E de cette carte est réduit de X (minimum 0E).',
+    tag_desc_sticky: 'Mot-clé de résolution. Après avoir été jouée et résolue, cette carte peut revenir dans la main de son utilisateur pendant cette partie. Le moment exact est défini par l’effet de carte.',
+    tag_desc_default: 'Tag de mod ou d\'extension. Son sens exact est défini par le mod ou l\'effet de carte correspondant.',
+    tag_desc_stealth: 'Mot-clé de réponse. Cette carte ne déclenche pas la fenêtre de réponse adverse.',
+    tag_desc_revealed: 'Mot-clé de visibilité. Cette carte est visible en permanence pour l\'adversaire en main.'
 });
 
 Object.assign(I18N.pt, {
@@ -903,7 +930,13 @@ Object.assign(I18N.pt, {
     tag_desc_self_only: 'Palavra-chave de alvo. No 2v2, esta carta só pode mirar você mesmo; no 1v1, não tem significado visual extra.',
     tag_desc_uncancellable: 'Palavra-chave de escolha. Janelas de escolha desta carta não mostram botão de cancelar; o jogador deve concluir a escolha. Isso evita ver informação oculta de graça e cancelar, como com Magnet.',
     tag_desc_infinite_exclude: 'Palavra-chave de modo. Esta carta não entra no conjunto aleatório de Infinite Fire por conflitar com esse modo.',
-    tag_desc_default: 'Tag de mod ou extensão. O significado exato é definido pelo mod ou pelo efeito da carta.'
+    tag_desc_copy: 'Palavra-chave de compra. Quando esta carta entra na mão, adicione N cópias exiladas.',
+    tag_desc_unique: 'Palavra-chave de deck. Apenas uma cópia permitida; extras são exiladas.',
+    tag_desc_swift: 'Palavra-chave de custo. O custo E desta carta é reduzido em X (mínimo 0E).',
+    tag_desc_sticky: 'Palavra-chave de resolução. Depois de jogada e resolvida, esta carta pode voltar para a mão do usuário durante a partida. O momento exato é definido pelo efeito da carta.',
+    tag_desc_default: 'Tag de mod ou extensão. O significado exato é definido pelo mod ou pelo efeito da carta.',
+    tag_desc_stealth: 'Palavra-chave de resposta. Esta carta não aciona a janela de resposta do oponente.',
+    tag_desc_revealed: 'Palavra-chave de visibilidade. Esta carta é visível permanentemente para o oponente na mão.'
 });
 
 Object.assign(I18N.ru, {
@@ -918,7 +951,13 @@ Object.assign(I18N.ru, {
     tag_desc_self_only: 'Ключевое слово цели. В 2v2 эту карту можно применять только к себе; в 1v1 оно не имеет дополнительного значения.',
     tag_desc_uncancellable: 'Ключевое слово выбора. Окна выбора этой карты не показывают кнопку отмены; игрок обязан завершить выбор. Это не дает бесплатно посмотреть скрытую информацию и отменить, например с Magnet.',
     tag_desc_infinite_exclude: 'Ключевое слово режима. Эта карта исключена из случайного пула Infinite Fire, потому что конфликтует с режимом.',
-    tag_desc_default: 'Тег мода или расширения. Точное значение задается соответствующим модом или эффектом карты.'
+    tag_desc_copy: 'Ключевое слово добора. Когда карта попадает в руку, добавьте N изгнанных копий.',
+    tag_desc_unique: 'Ключевое слово колоды. Допускается только одна копия; лишние изгоняются.',
+    tag_desc_swift: 'Ключевое слово стоимости. Стоимость E снижается на X (минимум 0E).',
+    tag_desc_sticky: 'Ключевое слово разрешения. После розыгрыша и разрешения эта карта может вернуться в руку пользователя в этой партии. Точный момент задается эффектом карты.',
+    tag_desc_default: 'Тег мода или расширения. Точное значение задается соответствующим модом или эффектом карты.',
+    tag_desc_stealth: 'Ключевое слово ответа. Эта карта не вызывает окно ответа противника.',
+    tag_desc_revealed: 'Ключевое слово видимости. Эта карта постоянно видна противнику в руке.'
 });
 
 Object.assign(I18N.ja, {
@@ -933,7 +972,13 @@ Object.assign(I18N.ja, {
     tag_desc_self_only: '対象制限キーワード。2v2 では自分だけを対象にできます。1v1 では追加の表示上の意味はありません。',
     tag_desc_uncancellable: '選択制限キーワード。このカードの選択画面にはキャンセルボタンが表示されず、必ず選択を完了します。Magnet のように0コストで非公開情報を見てからキャンセルすることを防ぎます。',
     tag_desc_infinite_exclude: 'モード制限キーワード。このカードは Infinite Fire のランダムカードプールに入りません。',
-    tag_desc_default: 'Mod または拡張タグです。具体的な意味は対応する Mod またはカード効果で定義されます。'
+    tag_desc_copy: 'ドローキーワード。このカードが手札に入った時、追放コピーをN枚手札に加える。',
+    tag_desc_unique: 'デッキキーワード。デッキに1枚のみ許可され、超過分は追放される。',
+    tag_desc_swift: 'コストキーワード。このカードのE消費がX減少（最低0E）。',
+    tag_desc_sticky: '解決先キーワード。打ち出して解決した後、この対局中に使用者の手札へ戻ることがあります。具体的なタイミングはカード効果で決まります。',
+    tag_desc_default: 'Mod または拡張タグです。具体的な意味は対応する Mod またはカード効果で定義されます。',
+    tag_desc_stealth: '応答キーワード。このカードは相手の応答ウィンドウをトリガーしません。',
+    tag_desc_revealed: '可視性キーワード。このカードは手札にある間、相手に永久に表示されます。'
 });
 
 Object.assign(I18N.zh, {
@@ -1035,6 +1080,12 @@ Object.assign(I18N.fr, { community_upload: 'Téléverser', community_json_only: 
 Object.assign(I18N.pt, { community_upload: 'Enviar mod', community_json_only: 'Somente arquivos .json ou .gtnmod são permitidos', community_file_too_large: 'Arquivo grande demais. JSON 150KB, GTNMOD 1MB', community_json_parse_failed: 'Falha ao ler JSON: {0}', community_upload_url_failed: 'Não foi possível criar URL de envio', community_r2_upload_failed: 'Falha no R2: HTTP {0}', community_register_failed: 'Falha ao registrar', community_delete_failed: 'Falha ao excluir' });
 Object.assign(I18N.ru, { community_upload: 'Загрузить мод', community_json_only: 'Разрешены только .json или .gtnmod', community_file_too_large: 'Файл слишком большой. JSON 300 КБ, GTNMOD 5 МБ', community_json_parse_failed: 'Ошибка разбора JSON: {0}', community_upload_url_failed: 'Не удалось создать URL загрузки', community_r2_upload_failed: 'Ошибка R2: HTTP {0}', community_register_failed: 'Ошибка регистрации', community_delete_failed: 'Ошибка удаления' });
 Object.assign(I18N.ja, { community_upload: 'Modをアップロード', community_json_only: '.json または .gtnmod のみアップロードできます', community_file_too_large: 'ファイルが大きすぎます。JSON 最大150KB、GTNMOD 最大1MB', community_json_parse_failed: 'JSON 解析失敗：{0}', community_upload_url_failed: 'アップロードURLを作成できません', community_r2_upload_failed: 'R2 アップロード失敗 HTTP {0}', community_register_failed: '登録失敗', community_delete_failed: '削除失敗' });
+Object.assign(I18N.en, { community_upload_progress: '{0}/{1} · {2}/s · ETA {3}', community_upload_registering: 'Registering and validating...' });
+Object.assign(I18N.zh, { community_upload_progress: '{0}/{1} · {2}/秒 · 预计剩余 {3}', community_upload_registering: '正在登记并校验...' });
+Object.assign(I18N.fr, { community_upload_progress: '{0}/{1} · {2}/s · reste {3}', community_upload_registering: 'Enregistrement et validation...' });
+Object.assign(I18N.pt, { community_upload_progress: '{0}/{1} · {2}/s · restante {3}', community_upload_registering: 'Registrando e validando...' });
+Object.assign(I18N.ru, { community_upload_progress: '{0}/{1} · {2}/с · осталось {3}', community_upload_registering: 'Регистрация и проверка...' });
+Object.assign(I18N.ja, { community_upload_progress: '{0}/{1} · {2}/秒 · 残り {3}', community_upload_registering: '登録と検証中...' });
 Object.assign(I18N.en, { mod_validation_error: 'Format error' });
 Object.assign(I18N.zh, { mod_validation_error: '格式错误' });
 Object.assign(I18N.fr, { mod_validation_error: 'Erreur de format' });
@@ -1106,6 +1157,48 @@ Object.assign(I18N.ja, {
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
     account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
     login_registered_reserved: 'この名前は登録済みアカウントです'
+});
+Object.assign(I18N.en, {
+    skin: 'Skin', skin_title: 'Skin', skin_primary_color: 'Main Color', skin_eye_shape: 'Eye Shape',
+    skin_eye_oval: 'Oval', skin_eye_rectangle: 'Rectangle', skin_eye_diamond: 'Diamond', skin_eye_hexagon: 'Hexagon',
+    skin_face_layout_placeholder: 'Face Layout: coming soon', skin_face_shape_placeholder: 'Face Shape: coming soon',
+    skin_sync_guest: 'Guest skin is saved locally. Account skin is saved on the server.',
+    skin_save: 'Save', skin_reset: 'Reset', skin_saved: 'Skin saved'
+});
+Object.assign(I18N.zh, {
+    skin: '皮肤', skin_title: '皮肤', skin_primary_color: '主颜色', skin_eye_shape: '眼睛形状',
+    skin_eye_oval: '椭圆', skin_eye_rectangle: '长方形', skin_eye_diamond: '菱形', skin_eye_hexagon: '六边形',
+    skin_face_layout_placeholder: '脸部布局：暂未开放', skin_face_shape_placeholder: '脸型：暂未开放',
+    skin_sync_guest: '游客皮肤会保存在本地；账号皮肤会保存到服务器。',
+    skin_save: '保存', skin_reset: '恢复默认', skin_saved: '皮肤已保存'
+});
+Object.assign(I18N.fr, {
+    skin: 'Apparence', skin_title: 'Apparence', skin_primary_color: 'Couleur', skin_eye_shape: 'Yeux',
+    skin_eye_oval: 'Ovale', skin_eye_rectangle: 'Rectangle', skin_eye_diamond: 'Losange', skin_eye_hexagon: 'Hexagone',
+    skin_face_layout_placeholder: 'Disposition du visage : bientôt', skin_face_shape_placeholder: 'Forme du visage : bientôt',
+    skin_sync_guest: 'Invité : local. Compte : serveur.',
+    skin_save: 'Enregistrer', skin_reset: 'Réinitialiser', skin_saved: 'Apparence enregistrée'
+});
+Object.assign(I18N.pt, {
+    skin: 'Visual', skin_title: 'Visual', skin_primary_color: 'Cor', skin_eye_shape: 'Olhos',
+    skin_eye_oval: 'Oval', skin_eye_rectangle: 'Retângulo', skin_eye_diamond: 'Diamante', skin_eye_hexagon: 'Hexágono',
+    skin_face_layout_placeholder: 'Layout do rosto: em breve', skin_face_shape_placeholder: 'Formato do rosto: em breve',
+    skin_sync_guest: 'Convidado: local. Conta: servidor.',
+    skin_save: 'Salvar', skin_reset: 'Redefinir', skin_saved: 'Visual salvo'
+});
+Object.assign(I18N.ru, {
+    skin: 'Скин', skin_title: 'Скин', skin_primary_color: 'Цвет', skin_eye_shape: 'Глаза',
+    skin_eye_oval: 'Овал', skin_eye_rectangle: 'Прямоугольник', skin_eye_diamond: 'Ромб', skin_eye_hexagon: 'Шестиугольник',
+    skin_face_layout_placeholder: 'Расположение лица: скоро', skin_face_shape_placeholder: 'Форма лица: скоро',
+    skin_sync_guest: 'Гость: локально. Аккаунт: сервер.',
+    skin_save: 'Сохранить', skin_reset: 'Сброс', skin_saved: 'Скин сохранён'
+});
+Object.assign(I18N.ja, {
+    skin: 'スキン', skin_title: 'スキン', skin_primary_color: 'メイン色', skin_eye_shape: '目の形',
+    skin_eye_oval: '楕円', skin_eye_rectangle: '長方形', skin_eye_diamond: 'ひし形', skin_eye_hexagon: '六角形',
+    skin_face_layout_placeholder: '顔レイアウト：準備中', skin_face_shape_placeholder: '顔の形：準備中',
+    skin_sync_guest: 'ゲストはローカル保存、アカウントはサーバー保存です。',
+    skin_save: '保存', skin_reset: '初期化', skin_saved: 'スキンを保存しました'
 });
 Object.assign(I18N.en, {
     friends: 'Friends', player_id: 'ID', friend_add_placeholder: 'Nickname or ID', friend_add: 'Add',
@@ -1184,42 +1277,48 @@ Object.assign(I18N.en, {
     replay_empty: 'No replay in the last 90 days.', replay_loading: 'Loading replays...',
     replay_load_failed: 'Failed to load replay', replay_prev: 'Prev', replay_play: 'Play',
     replay_pause: 'Pause', replay_next: 'Next', replay_instant: 'Instant',
-    replay_winner: 'Winner: {0}', replay_round: 'Round {0}', replay_frame_empty: 'No timeline data.'
+    replay_winner: 'Winner: {0}', replay_round: 'Round {0}', replay_frame_empty: 'No timeline data.',
+    replay_loading_progress: 'Loaded {0}/{1} frames', replay_prepare: 'Preparing replay...'
 });
 Object.assign(I18N.zh, {
     account_replays: '最近回放', replay_viewer: '回放查看器', replay_view: '查看',
     replay_empty: '最近90天暂无回放。', replay_loading: '正在读取回放...',
     replay_load_failed: '回放加载失败', replay_prev: '上一步', replay_play: '播放',
     replay_pause: '暂停', replay_next: '下一步', replay_instant: '立即',
-    replay_winner: '胜者：{0}', replay_round: '第{0}回合', replay_frame_empty: '暂无时间线数据。'
+    replay_winner: '胜者：{0}', replay_round: '第{0}回合', replay_frame_empty: '暂无时间线数据。',
+    replay_loading_progress: '已加载 {0}/{1} 帧', replay_prepare: '正在准备回放...'
 });
 Object.assign(I18N.fr, {
     account_replays: 'Replays récents', replay_viewer: 'Lecteur de replay', replay_view: 'Voir',
     replay_empty: 'Aucun replay sur 90 jours.', replay_loading: 'Chargement...',
     replay_load_failed: 'Échec du replay', replay_prev: 'Préc.', replay_play: 'Lire',
     replay_pause: 'Pause', replay_next: 'Suiv.', replay_instant: 'Instant',
-    replay_winner: 'Vainqueur : {0}', replay_round: 'Tour {0}', replay_frame_empty: 'Aucune timeline.'
+    replay_winner: 'Vainqueur : {0}', replay_round: 'Tour {0}', replay_frame_empty: 'Aucune timeline.',
+    replay_loading_progress: '{0}/{1} frames chargées', replay_prepare: 'Préparation du replay...'
 });
 Object.assign(I18N.pt, {
     account_replays: 'Replays recentes', replay_viewer: 'Visualizador', replay_view: 'Ver',
     replay_empty: 'Nenhum replay em 90 dias.', replay_loading: 'Carregando...',
     replay_load_failed: 'Falha ao carregar replay', replay_prev: 'Anterior', replay_play: 'Reproduzir',
     replay_pause: 'Pausar', replay_next: 'Próximo', replay_instant: 'Instantâneo',
-    replay_winner: 'Vencedor: {0}', replay_round: 'Rodada {0}', replay_frame_empty: 'Sem timeline.'
+    replay_winner: 'Vencedor: {0}', replay_round: 'Rodada {0}', replay_frame_empty: 'Sem timeline.',
+    replay_loading_progress: '{0}/{1} quadros carregados', replay_prepare: 'Preparando replay...'
 });
 Object.assign(I18N.ru, {
     account_replays: 'Последние повторы', replay_viewer: 'Просмотр повтора', replay_view: 'Открыть',
     replay_empty: 'Нет повторов за 90 дней.', replay_loading: 'Загрузка...',
     replay_load_failed: 'Не удалось загрузить повтор', replay_prev: 'Назад', replay_play: 'Пуск',
     replay_pause: 'Пауза', replay_next: 'Далее', replay_instant: 'Сразу',
-    replay_winner: 'Победитель: {0}', replay_round: 'Раунд {0}', replay_frame_empty: 'Нет timeline.'
+    replay_winner: 'Победитель: {0}', replay_round: 'Раунд {0}', replay_frame_empty: 'Нет timeline.',
+    replay_loading_progress: 'Загружено {0}/{1} кадров', replay_prepare: 'Подготовка повтора...'
 });
 Object.assign(I18N.ja, {
     account_replays: '最近のリプレイ', replay_viewer: 'リプレイビューア', replay_view: '表示',
     replay_empty: '90日以内のリプレイはありません。', replay_loading: '読み込み中...',
     replay_load_failed: 'リプレイ読み込み失敗', replay_prev: '前へ', replay_play: '再生',
     replay_pause: '一時停止', replay_next: '次へ', replay_instant: '即時',
-    replay_winner: '勝者: {0}', replay_round: 'ラウンド {0}', replay_frame_empty: 'タイムラインなし。'
+    replay_winner: '勝者: {0}', replay_round: 'ラウンド {0}', replay_frame_empty: 'タイムラインなし。',
+    replay_loading_progress: '{0}/{1}フレーム読込済み', replay_prepare: 'リプレイ準備中...'
 });
 Object.assign(I18N.en, { chief_designer_prefix: 'Chief Designer' });
 Object.assign(I18N.zh, { admin_prefix: '\u7ba1\u7406\u5458', login_admin_reserved: '\u6b64\u6635\u79f0\u88ab\u7ba1\u7406\u5458\u5360\u7528' });
@@ -1591,6 +1690,122 @@ Object.assign(I18N.ja, {
     chat_channel_enemy: 'Enemy',
     chat_channel_private_to: 'Private -> {0}',
 });
+Object.assign(I18N.en, {
+    report: 'Report',
+    report_chat: 'Report message',
+    report_player: 'Report player',
+    report_match: 'Report match',
+    report_title: 'Submit Report',
+    report_object: 'Object',
+    report_category: 'Category',
+    report_reason: 'Reason',
+    report_reason_placeholder: 'Optional details, up to 300 characters',
+    report_submit: 'Submit',
+    report_success: 'Report submitted',
+    report_login_required: 'Log in to an account before reporting.',
+    report_error: 'Report failed: {0}',
+    report_category_abusive_language: 'Abusive language',
+    report_category_sexual_content: 'Sexual content',
+    report_category_spam: 'Spam',
+    report_category_privacy_leak: 'Privacy leak',
+    report_category_harassment: 'Harassment',
+    report_category_cheating: 'Cheating',
+    report_category_smurfing: 'Smurfing',
+    report_category_boosting: 'Boosting',
+    report_category_stalling: 'Stalling',
+    report_category_inappropriate_name: 'Inappropriate name',
+    report_category_bug_abuse: 'Bug abuse',
+    report_category_abnormal_match: 'Abnormal match',
+    report_category_other: 'Other',
+});
+Object.assign(I18N.zh, {
+    report: '举报',
+    report_chat: '举报消息',
+    report_player: '举报玩家',
+    report_match: '举报本局',
+    report_title: '提交举报',
+    report_object: '对象',
+    report_category: '分类',
+    report_reason: '说明',
+    report_reason_placeholder: '可选补充说明，最多300字',
+    report_submit: '提交',
+    report_success: '举报已提交',
+    report_login_required: '请先登录账号再举报。',
+    report_error: '举报失败：{0}',
+    report_category_abusive_language: '不当言语',
+    report_category_sexual_content: '色情内容',
+    report_category_spam: '刷屏/广告',
+    report_category_privacy_leak: '泄露隐私',
+    report_category_harassment: '骚扰',
+    report_category_cheating: '作弊',
+    report_category_smurfing: '小号扰乱',
+    report_category_boosting: '刷分',
+    report_category_stalling: '拖延',
+    report_category_inappropriate_name: '不当昵称',
+    report_category_bug_abuse: '利用漏洞',
+    report_category_abnormal_match: '异常对局',
+    report_category_other: '其他',
+});
+Object.assign(I18N.fr, {
+    report: 'Signaler',
+    report_chat: 'Signaler message',
+    report_player: 'Signaler joueur',
+    report_match: 'Signaler partie',
+    report_title: 'Envoyer un signalement',
+    report_object: 'Objet',
+    report_category: 'Categorie',
+    report_reason: 'Raison',
+    report_reason_placeholder: 'Details facultatifs, 300 caracteres max',
+    report_submit: 'Envoyer',
+    report_success: 'Signalement envoye',
+    report_login_required: 'Connectez-vous a un compte pour signaler.',
+    report_error: 'Signalement echoue : {0}',
+});
+Object.assign(I18N.pt, {
+    report: 'Denunciar',
+    report_chat: 'Denunciar mensagem',
+    report_player: 'Denunciar jogador',
+    report_match: 'Denunciar partida',
+    report_title: 'Enviar denuncia',
+    report_object: 'Objeto',
+    report_category: 'Categoria',
+    report_reason: 'Motivo',
+    report_reason_placeholder: 'Detalhes opcionais, ate 300 caracteres',
+    report_submit: 'Enviar',
+    report_success: 'Denuncia enviada',
+    report_login_required: 'Entre com uma conta para denunciar.',
+    report_error: 'Falha ao denunciar: {0}',
+});
+Object.assign(I18N.ru, {
+    report: 'Report',
+    report_chat: 'Report message',
+    report_player: 'Report player',
+    report_match: 'Report match',
+    report_title: 'Submit Report',
+    report_object: 'Object',
+    report_category: 'Category',
+    report_reason: 'Reason',
+    report_reason_placeholder: 'Optional details, up to 300 characters',
+    report_submit: 'Submit',
+    report_success: 'Report submitted',
+    report_login_required: 'Log in to an account before reporting.',
+    report_error: 'Report failed: {0}',
+});
+Object.assign(I18N.ja, {
+    report: '通報',
+    report_chat: 'メッセージを通報',
+    report_player: 'プレイヤーを通報',
+    report_match: '対戦を通報',
+    report_title: '通報を送信',
+    report_object: '対象',
+    report_category: '分類',
+    report_reason: '理由',
+    report_reason_placeholder: '任意の補足、300文字以内',
+    report_submit: '送信',
+    report_success: '通報を送信しました',
+    report_login_required: '通報するにはアカウントでログインしてください。',
+    report_error: '通報失敗: {0}',
+});
 
 let currentLang = localStorage.getItem('gtn_lang') || 'zh';
 let showEnglishCardNames = localStorage.getItem('gtn_show_english_card_names') !== '0';
@@ -1625,7 +1840,8 @@ function getSpecialRolePrefix(player) {
     if (isAdminPlayer(player)) return UI.admin_prefix;
     if (player.special_role === 'chief_designer') return UI.chief_designer_prefix;
     if (player.special_role === 'right_angle_person') return UI.right_angle_person_prefix;
-    return player.special_role_label || '';
+    if (player.special_role_label) return player.special_role_label;
+    return '';
 }
 
 function getSpecialRoleColor(player) {
@@ -1698,6 +1914,144 @@ function getChatDisplayName(data) {
     return `${spectator}${name}`;
 }
 
+const REPORT_CATEGORIES = {
+    chat_message: ['abusive_language', 'sexual_content', 'spam', 'privacy_leak', 'harassment', 'other'],
+    player: ['cheating', 'smurfing', 'boosting', 'stalling', 'inappropriate_name', 'harassment', 'other'],
+    match: ['cheating', 'bug_abuse', 'boosting', 'stalling', 'abnormal_match', 'other'],
+};
+
+function reportCategoryLabel(category) {
+    return t(`report_category_${category}`) || category;
+}
+
+function reportObjectLabel(objectType, fallback = '') {
+    if (objectType === 'chat_message') return UI.report_chat || UI.report;
+    if (objectType === 'player') return UI.report_player || UI.report;
+    if (objectType === 'match') return UI.report_match || UI.report;
+    return fallback || UI.report || 'Report';
+}
+
+function isReportableChatEntry(entry) {
+    return !!(entry && !entry.system && (entry.message_id || entry.messageId));
+}
+
+function chatEntryReportMeta(entry = {}) {
+    return {
+        objectType: 'chat_message',
+        objectId: String(entry.message_id || entry.messageId || ''),
+        targetUserId: entry.sender_user_id || entry.senderUserId || '',
+        targetUsername: entry.nickname || entry.sender_name || entry.senderName || entry.nick || '',
+        title: UI.report_chat,
+    };
+}
+
+function createReportButton(config = {}, options = {}) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = options.className || 'report-inline-btn';
+    btn.textContent = options.text || UI.report || 'Report';
+    btn.title = options.title || btn.textContent;
+    btn.setAttribute('aria-label', btn.title);
+    btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openReportDialog(config);
+    };
+    return btn;
+}
+
+function getReportMatchObjectId(gs = gameState) {
+    if (!gs) return '';
+    if (gs.match_id != null) return String(gs.match_id);
+    if (gs.room_id != null) return String(gs.room_id);
+    const matchKey = String(gs.match_key || '');
+    if (matchKey.startsWith('room:')) return matchKey.slice('room:'.length);
+    return matchKey;
+}
+
+async function openReportDialog(config = {}) {
+    if (!currentAccount) {
+        gameAlert(UI.report || 'Report', UI.report_login_required || 'Log in to an account before reporting.');
+        return;
+    }
+    const objectType = String(config.objectType || config.object_type || '');
+    const objectId = String(config.objectId || config.object_id || '');
+    if (!objectType || !objectId) {
+        flashStatus(UI.operation_failed, 2200, 'error');
+        return;
+    }
+    const categories = REPORT_CATEGORIES[objectType] || ['other'];
+    const title = config.title || reportObjectLabel(objectType);
+    const targetUsername = String(config.targetUsername || config.target_username || '');
+    const targetUserId = config.targetUserId || config.target_user_id || '';
+    showModal(`
+        <div class="report-modal">
+            <h3>${escapeHtml(UI.report_title || 'Submit Report')}</h3>
+            <div class="report-target">
+                <span>${escapeHtml(UI.report_object || 'Object')}</span>
+                <strong>${escapeHtml(title)}${targetUsername ? ` · ${escapeHtml(targetUsername)}` : ''}</strong>
+            </div>
+            <label class="report-field">
+                <span>${escapeHtml(UI.report_category || 'Category')}</span>
+                <select id="report-category">
+                    ${categories.map(cat => `<option value="${escapeHtml(cat)}">${escapeHtml(reportCategoryLabel(cat))}</option>`).join('')}
+                </select>
+            </label>
+            <label class="report-field">
+                <span>${escapeHtml(UI.report_reason || 'Reason')}</span>
+                <textarea id="report-reason" maxlength="300" placeholder="${escapeHtml(UI.report_reason_placeholder || '')}"></textarea>
+            </label>
+            <div id="report-error" class="report-error hidden"></div>
+            <div class="modal-buttons report-actions">
+                <button class="btn btn-secondary" id="report-cancel">${escapeHtml(UI.cancel || 'Cancel')}</button>
+                <button class="btn btn-danger" id="report-submit">${escapeHtml(UI.report_submit || UI.report || 'Submit')}</button>
+            </div>
+        </div>
+    `);
+    const cancelBtn = $('report-cancel');
+    const submitBtn = $('report-submit');
+    const errorEl = $('report-error');
+    if (cancelBtn) cancelBtn.onclick = hideModal;
+    if (!submitBtn) return;
+    submitBtn.onclick = async () => {
+        submitBtn.disabled = true;
+        if (errorEl) errorEl.classList.add('hidden');
+        const category = $('report-category') ? $('report-category').value : categories[0];
+        const reasonText = $('report-reason') ? $('report-reason').value : '';
+        try {
+            const res = await fetch('/api/report', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    object_type: objectType,
+                    object_id: objectId,
+                    category,
+                    reason_text: reasonText,
+                    target_user_id: targetUserId || undefined,
+                    target_username: targetUsername || undefined,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || data.message || res.statusText || UI.operation_failed);
+            }
+            hideModal();
+            flashStatus(UI.report_success || 'Report submitted', 2200);
+        } catch (err) {
+            const message = err && err.message ? err.message : UI.operation_failed;
+            if (errorEl) {
+                errorEl.textContent = tf('report_error', message);
+                errorEl.classList.remove('hidden');
+            } else {
+                flashStatus(tf('report_error', message), 3000, 'error');
+            }
+        } finally {
+            submitBtn.disabled = false;
+        }
+    };
+}
+
 const COLORS = {
     elixir: '#F1C40F', elixir_text: '#D9A600', elixir_bg: '#FEF9E7',
     magic: '#3498DB', magic_text: '#1A5276', magic_bg: '#EBF5FB',
@@ -1733,9 +2087,78 @@ const CARD_FLAG_STYLES = {
     void: { label: '', fg: '#8e44ad', bg: 'rgba(142,68,173,0.15)', cls: 'void' },
     self_only: { label: '', fg: '#2f3542', bg: 'rgba(47,53,66,0.12)', cls: 'self-only' },
     uncancellable: { label: '', fg: '#7f1d1d', bg: 'rgba(127,29,29,0.12)', cls: 'uncancellable' },
+    infinite_exclude: { label: '', fg: '#455A64', bg: 'rgba(69,90,100,0.12)', cls: 'infinite-exclude' },
+    sticky: { label: '', fg: '#9B59B6', bg: 'rgba(155,89,182,0.14)', cls: 'sticky' },
+    copy: { label: '', fg: '#e17055', bg: 'rgba(225,112,85,0.15)', cls: 'copy' },
+    unique: { label: '', fg: '#fdcb6e', bg: 'rgba(253,203,110,0.15)', cls: 'unique' },
+    swift: { label: '', fg: '#0984e3', bg: 'rgba(9,132,227,0.15)', cls: 'swift' },
     fusion_layer: { label: '', fg: '#8e44ad', bg: 'rgba(142,68,173,0.15)', cls: 'fusion-layer' },
     fission_layer: { label: '', fg: '#0f766e', bg: 'rgba(15,118,110,0.14)', cls: 'fission-layer' },
+    stealth: { label: '', fg: '#2C3E50', bg: '#EBF5FB', cls: 'stealth' },
+    revealed: { label: '', fg: '#E74C3C', bg: '#FDEDEC', cls: 'revealed' },
 };
+
+const CARD_FLAG_TERM_COLORS = {
+    precision: 'var(--color-precise)',
+    exile: 'var(--color-banish)',
+    non_stackable: 'var(--color-non-stack)',
+    indestructible: 'var(--color-indestructible)',
+    sprout: 'var(--color-sprout)',
+    symbiosis: 'var(--color-symbiosis)',
+    attract: 'var(--color-adhere)',
+    void: 'var(--color-void)',
+    self_only: '#2f3542',
+    uncancellable: '#7f1d1d',
+    infinite_exclude: '#455A64',
+    sticky: '#9B59B6',
+    copy: '#e17055',
+    unique: '#fdcb6e',
+    swift: '#0984e3',
+    fusion_layer: 'var(--color-poison)',
+    fission_layer: '#0f766e',
+    tomato_layer: '#b42318',
+    stealth: '#2C3E50',
+    revealed: '#E74C3C',
+};
+
+const CARD_FLAG_ALIASES = {
+    'tag_troll_cards:exile': 'exile',
+    'troll_cards:exile': 'exile',
+    'tag_troll_cards_exile': 'exile',
+    'troll_cards_exile': 'exile',
+    'tag_thorn_cards_supplement_1:sticky': 'sticky',
+    'thorn_cards_supplement_1:sticky': 'sticky',
+    'tag_thorn_cards_supplement_1_sticky': 'sticky',
+    'thorn_cards_supplement_1_sticky': 'sticky',
+    'tag_troll_cards:copy': 'copy',
+    'troll_cards:copy': 'copy',
+    'tag_troll_cards:unique': 'unique',
+    'troll_cards:unique': 'unique',
+    'tag_troll_cards:swift': 'swift',
+    'troll_cards:swift': 'swift',
+    stealth: 'stealth',
+    revealed: 'revealed',
+};
+
+const _VANILLA_FLAGS = new Set([
+    'precision', 'exile', 'non_stackable', 'indestructible', 'sprout',
+    'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
+    'infinite_exclude', 'sticky', 'copy', 'unique',
+    'swift', 'stealth', 'revealed',
+]);
+
+function normalizeCardFlag(flag) {
+    const text = String(flag == null ? '' : flag).trim();
+    if (!text) return '';
+    const lower = text.toLowerCase();
+    if (CARD_FLAG_ALIASES[lower]) return CARD_FLAG_ALIASES[lower];
+    // Auto-strip namespace prefix for known vanilla flags (e.g. "factory:sticky" -> "sticky")
+    if (lower.includes(':')) {
+        const local = lower.split(':').pop();
+        if (_VANILLA_FLAGS.has(local)) return local;
+    }
+    return text;
+}
 
 function getCardName(cardDef) {
     if (!cardDef) return '?';
@@ -1753,7 +2176,9 @@ function formatCardIdForDisplay(cardId) {
 
 function getEnglishCardName(cardDef) {
     if (!cardDef) return '';
-    return formatCardIdForDisplay(cardDef.id || cardDef.def_id || '');
+    if (cardDef.name_en) return cardDef.name_en;
+    const i18n = cardDef.name_i18n || {};
+    return i18n.en || formatCardIdForDisplay(cardDef.id || cardDef.def_id || '');
 }
 
 function shouldShowEnglishCardName(cardDef, localizedName = '') {
@@ -1785,6 +2210,32 @@ function getCardTriggerText(cardDef) {
     return getLocalizedCardText(cardDef, 'trigger_effect_text_i18n', 'trigger_effect_text');
 }
 
+function normalizeCardIntroText(value) {
+    return String(value || '').replace(/\s+/g, '').trim();
+}
+
+function hasCardTriggerContent(cardDef) {
+    if (!cardDef) return false;
+    if (String(cardDef.trigger_effect_text || '').trim()) return true;
+    if (Number(cardDef.trigger_cost_e) >= 0) return true;
+    if (Array.isArray(cardDef.trigger_effects) && cardDef.trigger_effects.length) return true;
+    const events = cardDef.v2_events || {};
+    return ['on_equipment_trigger', 'on_turn_start_while_equipped', 'on_before_destroyed'].some(key => {
+        const event = events[key];
+        const steps = event && (event.steps || event);
+        return Array.isArray(steps) && steps.length > 0;
+    });
+}
+
+function getCardIntroTriggerText(cardDef) {
+    if (!hasCardTriggerContent(cardDef)) return '';
+    const triggerText = getCardTriggerText(cardDef) || '';
+    if (!triggerText) return '';
+    const effectText = getCardEffectText(cardDef) || '';
+    if (normalizeCardIntroText(triggerText) === normalizeCardIntroText(effectText)) return '';
+    return triggerText;
+}
+
 function escapeHtml(value) {
     return String(value == null ? '' : value)
         .replace(/&/g, '&amp;')
@@ -1798,7 +2249,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'toxic', re: /^(?:\d+层淬毒|\d+\s*(?:Toxic|Toxique|Tóxico|Токсин)|淬毒\d+)/i },
     { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/i },
     { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/i },
-    { cls: 'damage', re: /^(?:\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/i },
+    { cls: 'damage', re: /^(?:[+-]?\d+电伤|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/i },
     { cls: 'armor', re: /^[+-]?\d+A/i },
     { cls: 'heal', re: /^\+\d+H/i },
     { cls: 'elixir', re: /^[+-]?\d+E/i },
@@ -2062,7 +2513,7 @@ function localizeDamageSource(source) {
 
 function translateLogLine(line) {
     if (currentLang === 'zh') {
-        return String(line || '').replace(/受到(\d+)点电池伤害/g, '受到$1点电池反伤');
+        return String(line || '').replace(/受到(\d+)点电池(?:电击)?伤害/g, '受到$1点电池反伤');
     }
     let m;
     const lp = localizeCanonicalPlayerName;
@@ -2159,6 +2610,37 @@ function translateLoginReason(reason) {
     if (reason === 'Registered nickname reserved') return UI.login_registered_reserved;
     return reason;
 }
+
+function formatRemainingDuration(seconds) {
+    let value = Math.max(0, Math.floor(Number(seconds) || 0));
+    const days = Math.floor(value / 86400);
+    value %= 86400;
+    const hours = Math.floor(value / 3600);
+    value %= 3600;
+    const minutes = Math.floor(value / 60);
+    const secs = value % 60;
+    if (currentLang === 'zh') {
+        if (days) return `${days}天${hours}小时`;
+        if (hours) return `${hours}小时${minutes}分钟`;
+        if (minutes) return `${minutes}分钟${secs}秒`;
+        return `${secs}秒`;
+    }
+    if (days) return `${days}d ${hours}h`;
+    if (hours) return `${hours}h ${minutes}m`;
+    if (minutes) return `${minutes}m ${secs}s`;
+    return `${secs}s`;
+}
+
+function moderationMessageFromPayload(data = {}, fallback = '') {
+    let message = String(fallback || data.message || data.reason || data.error || '');
+    if (data.permanent && !/永久|permanent/i.test(message)) {
+        message = `${message} (${currentLang === 'zh' ? '永久' : 'permanent'})`;
+    } else if (data.remaining_seconds != null && !/剩余|remaining|left|永久|permanent/i.test(message)) {
+        const duration = formatRemainingDuration(data.remaining_seconds);
+        message = currentLang === 'zh' ? `${message}（剩余${duration}）` : `${message} (${duration} left)`;
+    }
+    return message;
+}
 let playerId = -1;
 let mySid = '';
 let nickname = '';
@@ -2175,7 +2657,24 @@ let accountReplayTimer = null;
 let accountReplayData = null;
 let accountReplayPerspective = 0;
 let accountReplayReturnContext = null;
+let accountReplayTotalFrames = 0;
+let accountReplayLoading = false;
+let accountReplayLoadToken = 0;
+let accountReplayControlsCollapsed = false;
 let replayMode = false;
+const DEFAULT_SKIN_CONFIG = Object.freeze({ primary_color: '#FFE763', eye_shape: 'oval' });
+const SKIN_EYE_SHAPES = new Set(['oval', 'rectangle', 'diamond', 'hexagon']);
+const DEFAULT_SKIN_LOOK = Object.freeze({ x: 0.707, y: -0.707 });
+const SKIN_LOOK_OFFSET_X_PERCENT = 38;
+const SKIN_LOOK_OFFSET_Y_PERCENT = 56;
+const SKIN_LOOK_EMIT_INTERVAL_MS = 160;
+const SKIN_DAMAGE_HOLD_MS = 3000;
+let localSkinLook = { ...DEFAULT_SKIN_LOOK };
+let lastSkinLookEmitAt = 0;
+let lastSkinLookEmitKey = '';
+const skinLookByPlayerId = new Map();
+const skinDamageMoodByPlayerId = new Map();
+const skinMouthTByPlayerId = new Map();
 let socket = null;
 let manualDisconnect = false;
 let latencyPingTimer = null;
@@ -2194,12 +2693,22 @@ let pregameChatMatchKey = '';
 let lobbyChatHistorySignature = '';
 let lobbyPlayers = [];
 let lobbyOngoingGames = [];
-const DEFAULT_SERVER = 'http://121.41.93.192';
+const FALLBACK_RELEASE_SERVER = 'http://121.41.93.192';
+const FALLBACK_BETA_SERVER = 'http://121.41.93.192:8081';
+const FALLBACK_PUBLIC_SERVER = GTN_BETA_MODE ? FALLBACK_BETA_SERVER : FALLBACK_RELEASE_SERVER;
+const DEFAULT_SERVER = (() => {
+    try {
+        const origin = String(window.location && window.location.origin || '').trim();
+        if (origin && origin !== 'null') return origin;
+    } catch (_) {}
+    return FALLBACK_PUBLIC_SERVER;
+})();
 const SERVER_ACTION_TIMEOUT_MS = 6000;
 const SOCKET_CONNECT_TIMEOUT_MS = 5000;
 const LEGACY_DEFAULT_SERVER_KEYS = new Set([
     'python-online-garden-of-thorn.onrender.com',
     'gtn.stickerbug.top',
+    '121.41.93.192',
     '121.41.93.192:5000',
 ]);
 let phase = 'connecting';
@@ -2300,6 +2809,7 @@ const LOCAL_SOLO_SUPPORTED_V2_OPS = new Set([
     'compare', 'and', 'or', 'not', 'has_status_named', 'has_status',
     'hand_full', 'selected_cards_count', 'selected_card_index',
     'selected_card_at', 'selected_card', 'last_created_card',
+    'goggles_enable', 'request_reorder_deck',
 ]);
 const COMBAT_FLOAT_TOTAL_LIMIT_MS = 5000;
 const COMBAT_FLOAT_BASE_DURATION_MS = 1700;
@@ -2361,6 +2871,15 @@ function gameAlert(title, message, buttons) {
         btnsEl.appendChild(btn);
     });
     el.classList.add('active');
+}
+
+function gameConfirm(title, message = '') {
+    return new Promise((resolve) => {
+        gameAlert(title, message, [
+            { text: UI.cancel || 'Cancel', cls: 'btn-secondary', action: () => resolve(false) },
+            { text: UI.confirm || UI.ok || 'OK', cls: 'btn-primary', action: () => resolve(true) },
+        ]);
+    });
 }
 
 function hideGameAlert() {
@@ -2651,6 +3170,34 @@ function updateStaticText() {
     if (btnAccountTop) btnAccountTop.textContent = UI.account;
     const btnFriendsTop = $('btn-friends-top');
     if (btnFriendsTop) btnFriendsTop.textContent = UI.friends;
+    const btnSkinTop = $('btn-skin-top');
+    if (btnSkinTop) btnSkinTop.textContent = UI.skin;
+    const skinTitle = $('skin-title');
+    if (skinTitle) skinTitle.textContent = UI.skin_title || UI.skin;
+    const skinBack = $('btn-skin-back');
+    if (skinBack) skinBack.textContent = UI.back_to_home;
+    const skinPrimaryLabel = $('skin-primary-label');
+    if (skinPrimaryLabel) skinPrimaryLabel.textContent = UI.skin_primary_color;
+    const skinEyeShapeLabel = $('skin-eye-shape-label');
+    if (skinEyeShapeLabel) skinEyeShapeLabel.textContent = UI.skin_eye_shape;
+    const skinEyeOval = $('skin-eye-oval');
+    if (skinEyeOval) skinEyeOval.textContent = UI.skin_eye_oval;
+    const skinEyeRectangle = $('skin-eye-rectangle');
+    if (skinEyeRectangle) skinEyeRectangle.textContent = UI.skin_eye_rectangle;
+    const skinEyeDiamond = $('skin-eye-diamond');
+    if (skinEyeDiamond) skinEyeDiamond.textContent = UI.skin_eye_diamond;
+    const skinEyeHexagon = $('skin-eye-hexagon');
+    if (skinEyeHexagon) skinEyeHexagon.textContent = UI.skin_eye_hexagon;
+    const skinLayoutPlaceholder = $('skin-face-layout-placeholder');
+    if (skinLayoutPlaceholder) skinLayoutPlaceholder.textContent = UI.skin_face_layout_placeholder;
+    const skinShapePlaceholder = $('skin-face-shape-placeholder');
+    if (skinShapePlaceholder) skinShapePlaceholder.textContent = UI.skin_face_shape_placeholder;
+    const skinSyncNote = $('skin-sync-note');
+    if (skinSyncNote) skinSyncNote.textContent = UI.skin_sync_guest;
+    const skinSave = $('btn-skin-save');
+    if (skinSave) skinSave.textContent = UI.skin_save;
+    const skinReset = $('btn-skin-reset');
+    if (skinReset) skinReset.textContent = UI.skin_reset;
     const friendsTitle = $('friends-popover-title');
     if (friendsTitle) friendsTitle.textContent = UI.friends;
     const friendIdentifier = $('input-friend-identifier');
@@ -2709,11 +3256,11 @@ function updateStaticText() {
     if (accountReplaysRefresh) accountReplaysRefresh.textContent = UI.refresh;
     const accountReplayTitle = $('account-replay-title');
     if (accountReplayTitle) accountReplayTitle.textContent = UI.replay_viewer;
-    document.querySelectorAll('[data-account-replay-control="prev"]').forEach((btn) => { btn.textContent = UI.replay_prev; });
-    document.querySelectorAll('[data-account-replay-control="play"]').forEach((btn) => { btn.textContent = UI.replay_play; });
-    document.querySelectorAll('[data-account-replay-control="pause"]').forEach((btn) => { btn.textContent = UI.replay_pause; });
-    document.querySelectorAll('[data-account-replay-control="next"]').forEach((btn) => { btn.textContent = UI.replay_next; });
-    document.querySelectorAll('[data-account-replay-speed="instant"]').forEach((btn) => { btn.textContent = UI.replay_instant; });
+    document.querySelectorAll('[data-account-replay-control="prev"]').forEach((btn) => { btn.title = UI.replay_prev; if (btn.classList.contains('replay-icon-btn')) btn.textContent = '‹'; });
+    document.querySelectorAll('[data-account-replay-control="play"]').forEach((btn) => { btn.title = UI.replay_play; if (btn.classList.contains('replay-icon-btn')) btn.textContent = '▶'; });
+    document.querySelectorAll('[data-account-replay-control="pause"]').forEach((btn) => { btn.title = UI.replay_pause; if (btn.classList.contains('replay-icon-btn')) btn.textContent = 'Ⅱ'; });
+    document.querySelectorAll('[data-account-replay-control="next"]').forEach((btn) => { btn.title = UI.replay_next; if (btn.classList.contains('replay-icon-btn')) btn.textContent = '›'; });
+    document.querySelectorAll('[data-account-replay-speed="instant"]').forEach((btn) => { btn.title = UI.replay_instant; if (btn.classList.contains('replay-speed-btn')) btn.textContent = '»'; });
     const guestDivider = $('guest-divider-label');
     if (guestDivider) guestDivider.textContent = UI.account_guest;
     renderAccountState();
@@ -2760,6 +3307,8 @@ function updateStaticText() {
     if (btnPhaseChatSend) btnPhaseChatSend.textContent = UI.send;
     const btnReturnLobby = $('btn-return-lobby');
     if (btnReturnLobby) btnReturnLobby.textContent = UI.return_lobby;
+    const btnReportMatch = $('btn-report-match');
+    if (btnReportMatch) btnReportMatch.textContent = UI.report_match || UI.report;
     const btnRematch = $('btn-rematch');
     if (btnRematch) btnRematch.textContent = UI.rematch;
     const btnSurrender = $('btn-surrender');
@@ -2879,6 +3428,31 @@ function maybeAnimateTurnFocus(gs) {
     });
 }
 
+function formatRoundStatus(gs, phaseText = '') {
+    const roundNum = Number(gs && gs.round_num);
+    const phaseName = phaseText || ((gs && gs.phase) === 'draft'
+        ? UI.draft_phase
+        : (gs && gs.phase) === 'event_select'
+            ? UI.select_event
+            : '');
+    if (!Number.isFinite(roundNum) || roundNum <= 0) {
+        if ((gs && gs.phase) === 'draft') return UI.draft_phase;
+        if ((gs && gs.phase) === 'event_select') return UI.select_event;
+        return phaseName || UI.draft_phase;
+    }
+    return UI.round_status.replace('{0}', roundNum).replace('{1}', phaseName);
+}
+
+function formatCompactRoundStatus(gs, phaseText = '') {
+    const roundNum = Number(gs && gs.round_num);
+    if (!Number.isFinite(roundNum) || roundNum <= 0) {
+        if ((gs && gs.phase) === 'draft') return UI.draft_phase;
+        if ((gs && gs.phase) === 'event_select') return UI.select_event;
+        return phaseText || UI.draft_phase;
+    }
+    return `R${roundNum} · ${phaseText}`;
+}
+
 function showView(viewId) {
     const el = $(viewId);
     const sameView = activeViewId === viewId && el && !el.classList.contains('hidden');
@@ -2893,6 +3467,8 @@ function showView(viewId) {
     if (accountTop) accountTop.classList.toggle('hidden', viewId !== 'view-login');
     const friendsTop = $('btn-friends-top');
     if (friendsTop) friendsTop.classList.toggle('hidden', viewId !== 'view-login' || !currentAccount);
+    const skinTop = $('btn-skin-top');
+    if (skinTop) skinTop.classList.toggle('hidden', viewId !== 'view-login');
     if (viewId !== 'view-login') {
         toggleAccountPopover(false);
         toggleFriendsPopover(false);
@@ -2907,6 +3483,31 @@ function showView(viewId) {
         updateModeSpecificControls({ solo: false, phase: '' });
         refreshBaseStatus(viewId);
     }
+}
+
+function isNetworkMatchPhase(value = phase) {
+    return !soloMode && !replayMode && [
+        'draft', 'event_select', 'playing', 'action', 'draw', 'response', 'choice', 'game_over',
+    ].includes(String(value || ''));
+}
+
+function clearNetworkMatchStateForLobby() {
+    if (soloMode || replayMode) return;
+    gameState = {};
+    draftState = {};
+    eventSelectData = {};
+    isSpectating = false;
+    pendingSpectateRoomId = null;
+    activeSpectateRoomId = null;
+    spectatePerspective = 0;
+    pendingPlayCard = null;
+    responsePending = false;
+    responseData = null;
+    activeV2UiRequestId = null;
+    removeFloatingCardPreview();
+    clearSelectedPlayCard();
+    clearPendingServerAction();
+    resetRematchUiState();
 }
 
 let gallerySelectedId = null;
@@ -3059,7 +3660,8 @@ function showCardGallery(selectedId = null, mode = 'cards') {
 }
 
 function getCustomTagDef(flag) {
-    return (CUSTOM_TAG_DEFS && CUSTOM_TAG_DEFS[flag]) || null;
+    const normalized = normalizeCardFlag(flag);
+    return (CUSTOM_TAG_DEFS && CUSTOM_TAG_DEFS[normalized]) || null;
 }
 
 function getCustomStatusDef(statusId) {
@@ -3083,26 +3685,29 @@ function safeRegistryColor(value, fallback = '#2C3E50') {
 }
 
 function customTagHtml(flag, text = null) {
-    const def = getCustomTagDef(flag);
-    const label = text || getRegistryText(def, 'name', flag);
+    const normalized = normalizeCardFlag(flag);
+    const def = getCustomTagDef(normalized);
+    const label = text || getRegistryText(def, 'name', normalized);
     const color = safeRegistryColor(def && def.color, '#2C3E50');
     const icon = def && def.icon ? `${escapeHtml(def.icon)} ` : '';
     return `<span class="card-flag custom" style="color:${color};border-color:${color};background:#fff">${icon}${escapeHtml(label)}</span>`;
 }
 
 function makeGalleryFlagHtml(flag) {
-    const custom = getCustomTagDef(flag);
-    if (custom) return customTagHtml(flag);
-    const style = CARD_FLAG_STYLES[flag];
-    const label = getFlagLabel(flag);
+    const normalized = normalizeCardFlag(flag);
+    const custom = getCustomTagDef(normalized);
+    if (custom) return customTagHtml(normalized);
+    const style = CARD_FLAG_STYLES[normalized];
+    const label = getFlagLabel(normalized);
     if (style) return `<span class="card-flag ${style.cls}">${label}</span>`;
     return `<span class="card-flag">${label}</span>`;
 }
 
 function getGalleryFlagDescription(flag) {
-    const custom = getCustomTagDef(flag);
+    const normalized = normalizeCardFlag(flag);
+    const custom = getCustomTagDef(normalized);
     if (custom) return getRegistryText(custom, 'description', custom.description || '');
-    return UI[`tag_desc_${flag}`] || UI.tag_desc_default;
+    return UI[`tag_desc_${normalized}`] || UI.tag_desc_default;
 }
 
 function isGalleryMechanicFlag(flag) {
@@ -3110,16 +3715,18 @@ function isGalleryMechanicFlag(flag) {
 }
 
 function getGalleryFlagEnglishLabel(flag) {
-    const custom = getCustomTagDef(flag);
-    if (custom) return custom.name_en || custom.name || flag;
-    return I18N.en[`tag_${flag}`] || I18N.en[`flag_${flag}`] || I18N.en[flag] || flag;
+    const normalized = normalizeCardFlag(flag);
+    const custom = getCustomTagDef(normalized);
+    if (custom) return custom.name_en || custom.name || normalized;
+    return I18N.en[`tag_${normalized}`] || I18N.en[`flag_${normalized}`] || I18N.en[normalized] || normalized;
 }
 
 function getGalleryFlagUsers(flag) {
+    const normalized = normalizeCardFlag(flag);
     const defs = Object.values(CARD_DEFS).filter(cd => cd && cd.id !== 'Error');
-    if (flag === 'fusion_layer') return defs.filter(cd => cd && cd.id === 'Fusion');
-    if (flag === 'fission_layer') return defs.filter(cd => cd && cd.id === 'Fission');
-    return defs.filter(cd => (cd.flags || []).includes(flag));
+    if (normalized === 'fusion_layer') return defs.filter(cd => cd && cd.id === 'Fusion');
+    if (normalized === 'fission_layer') return defs.filter(cd => cd && cd.id === 'Fission');
+    return defs.filter(cd => normalizeFlagList(cd.flags || []).includes(normalized));
 }
 
 const GALLERY_CARD_TYPE_ORDER = { thorn: 0, bloom: 1, guard: 2, root: 3 };
@@ -3147,9 +3754,13 @@ function compareGalleryCards(a, b) {
 
 function getAllGalleryFlags() {
     const flags = new Set(Object.keys(CARD_FLAG_STYLES));
-    Object.keys(CUSTOM_TAG_DEFS || {}).forEach(flag => flags.add(flag));
+    Object.keys(CUSTOM_TAG_DEFS || {}).forEach(flag => {
+        const normalized = normalizeCardFlag(flag);
+        if (normalized) flags.add(normalized);
+    });
     Object.values(CARD_DEFS).filter(cd => cd && cd.id !== 'Error').forEach(cd => (cd.flags || []).forEach(flag => {
-        if (flag !== 'infinite_exclude') flags.add(flag);
+        const normalized = normalizeCardFlag(flag);
+        if (normalized) flags.add(normalized);
     }));
     return [...flags].sort((a, b) => getFlagLabel(a).localeCompare(getFlagLabel(b)));
 }
@@ -3177,7 +3788,7 @@ function renderCardGallery() {
     list.innerHTML = '';
     ids.forEach(id => {
         const cd = CARD_DEFS[id];
-        const flags = (cd.flags || []).filter(flag => flag !== 'infinite_exclude').map(getFlagLabel).join(' / ');
+        const flags = [...new Set(normalizeFlagList(cd.flags || []).filter(flag => flag !== 'infinite_exclude'))].map(getFlagLabel).join(' / ');
         const row = document.createElement('div');
         row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
         row.innerHTML = `<div class="gallery-row-title">${getCardName(cd)}</div>${flags ? `<div class="gallery-row-meta">${flags}</div>` : ''}`;
@@ -3192,15 +3803,10 @@ function renderCardGallery() {
     }
     gallerySelectedId = cd.id;
     const cardEl = createCardElement({ def_id: cd.id, instance_flags: [], disabled_flags: [] }, { small: false, showAllFlags: true });
-    const flags = (cd.flags || []).filter(flag => flag !== 'infinite_exclude');
     detail.innerHTML = `<div class="gallery-detail-card"><div id="gallery-card-preview"></div><div class="gallery-detail-info">
         <h3>${escapeHtml(getCardName(cd))}</h3>
-        <p><b>${UI.gallery_type}：</b>${escapeHtml(getCardTypeLabel(cd.card_type))}</p>
-        <p><b>${UI.gallery_cost}：</b>${colorizeCardText(`${cd.cost_e || 0}E / ${cd.cost_m || 0}M`)}</p>
-        ${flags.length ? `<p><b>${UI.gallery_tags_label}：</b>${escapeHtml(flags.map(getFlagLabel).join(' / '))}</p>` : ''}
-        <p><b>${UI.gallery_description}：</b>${colorizeCardText(getCardDescriptionText(cd) || '-')}</p>
-        <p><b>${UI.gallery_effect}：</b>${colorizeCardText(getCardEffectText(cd) || '-')}</p>
-        ${cd.trigger_effect_text ? `<p><b>${UI.gallery_trigger}：</b>${colorizeCardText(getCardTriggerText(cd))}</p>` : ''}
+        ${buildCardIntroSummaryHtml(cd)}
+        <div class="term-intro-list gallery-term-intro-list">${renderTermIntroItems(collectCardIntroTerms({ def_id: cd.id, instance_flags: [], disabled_flags: [] }))}</div>
     </div></div>`;
     const preview = $('gallery-card-preview');
     if (preview) preview.appendChild(cardEl);
@@ -3235,7 +3841,7 @@ function renderTagGallery(list, detail, q) {
         <h3>${getFlagLabel(gallerySelectedId)}</h3>
         <div class="gallery-tag-list">${makeGalleryFlagHtml(gallerySelectedId)}</div>
         <p><b>ID：</b>${gallerySelectedId}</p>
-        <p><b>${UI.gallery_explanation}：</b>${getGalleryFlagDescription(gallerySelectedId)}</p>
+        <p><b>${UI.gallery_explanation}：</b>${getIntroFlagDescription(gallerySelectedId, getCustomTagDef(gallerySelectedId))}</p>
         <p><b>${relatedLabel}：</b>${usedBy.length ? usedBy.map(getCardName).join(' / ') : '-'}</p>
     </div>`;
 }
@@ -4068,6 +4674,71 @@ function escapeClassToken(value) {
 }
 
 const DATA_CACHE_VERSION = 'v7';
+const loadedCommunityFontSubsets = new Set();
+const communityFontFaceUrls = new Set();
+
+function injectCommunityFontFallback() {
+    let style = document.getElementById('community-font-fallback-style');
+    if (!style) {
+        style = document.createElement('style');
+        style.id = 'community-font-fallback-style';
+        document.head.appendChild(style);
+    }
+    style.textContent = `
+html.fonts-loaded-main {
+  --font-main: 'Kreadon', 'Kreadon Community', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
+}
+:root {
+  --font-card: 'Kreadon Demi', 'Kreadon', 'Kreadon Community', 'Microsoft YaHei', sans-serif;
+}`;
+}
+
+function installCommunityFontFace(url) {
+    const safeUrl = String(url || '').trim();
+    if (!safeUrl || communityFontFaceUrls.has(safeUrl)) return;
+    communityFontFaceUrls.add(safeUrl);
+    let style = document.getElementById('community-font-face-style');
+    if (!style) {
+        style = document.createElement('style');
+        style.id = 'community-font-face-style';
+        document.head.appendChild(style);
+    }
+    const rules = Array.from(communityFontFaceUrls).map(fontUrl => `
+@font-face {
+  font-family: 'Kreadon Community';
+  src: url('${fontUrl.replace(/'/g, '%27')}') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}`).join('\n');
+    style.textContent = rules;
+    injectCommunityFontFallback();
+}
+
+async function loadCommunityFontSubsetForCurrentSelection() {
+    const community = getCommunityModSelection();
+    if (community.mod_source !== 'community' || !community.community_mods.length) return;
+    const key = community.community_mod_hash || JSON.stringify(community.community_mods);
+    if (loadedCommunityFontSubsets.has(key)) return;
+    loadedCommunityFontSubsets.add(key);
+    try {
+        const resp = await fetch('/api/font-subsets/community', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                mod_source: 'community',
+                community_mods: community.community_mods,
+            }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.success) throw new Error(data.error || 'community font subset failed');
+        const subset = data.font_subset || {};
+        if (subset.url) installCommunityFontFace(subset.url);
+    } catch (e) {
+        console.warn('Failed to load community font subset:', e);
+    }
+}
 
 function getDataCacheKey(kind) {
     const disabled = getDisabledMods().slice().sort().join(',') || 'none';
@@ -4129,6 +4800,7 @@ async function refreshCardDefsFromServer({ silent = false } = {}) {
         const nextDefs = await resp.json();
         CARD_DEFS = nextDefs || {};
         writeDataCache('cards', CARD_DEFS);
+        await loadCommunityFontSubsetForCurrentSelection();
         refreshCardDataViews();
     } catch (e) {
         console.error('Failed to fetch card defs:', e);
@@ -4197,21 +4869,24 @@ function getCardDef(defId) {
 }
 
 function getFlagLabel(flag) {
-    const custom = getCustomTagDef(flag);
-    if (custom) return getRegistryText(custom, 'name', flag);
-    if (flag === 'fusion_layer' || flag === 'fission_layer') return UI[flag] || flag;
-    return UI[`tag_${flag}`] || UI[`flag_${flag}`] || flag;
+    const normalized = normalizeCardFlag(flag);
+    const custom = getCustomTagDef(normalized);
+    if (custom) return getRegistryText(custom, 'name', normalized);
+    if (normalized === 'fusion_layer' || normalized === 'fission_layer') return UI[normalized] || normalized;
+    return UI[`tag_${normalized}`] || UI[`flag_${normalized}`] || normalized;
 }
 
 function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
     const baseE = cardDict.cost_e_override != null ? cardDict.cost_e_override : cardDef.cost_e;
     const baseM = cardDict.cost_m_override != null ? cardDict.cost_m_override : cardDef.cost_m;
     const mimicDiscount = Number(cardDict.mimic_discount || 0);
-    const flags = new Set([...(cardDef.flags || []), ...(cardDict.instance_flags || [])]);
+    const flags = new Set([...normalizeFlagList(cardDef.flags || []), ...normalizeFlagList(cardDict.instance_flags || [])]);
+    normalizeFlagList(cardDict.disabled_flags || []).forEach(flag => flags.delete(flag));
     const dup = ownerState && ownerState.cards_played_this_turn
         ? Number(ownerState.cards_played_this_turn[cardDict.def_id] || 0)
         : 0;
-    const effectiveBaseE = Math.max(0, baseE - mimicDiscount);
+    const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
+    const effectiveBaseE = Math.max(0, baseE - mimicDiscount - swiftValue);
     const totalE = effectiveBaseE + (flags.has('symbiosis') ? 0 : dup);
     return { totalE, totalM: baseM, flags };
 }
@@ -4245,7 +4920,7 @@ function getEquipmentIconHtml(cardInst, cardDef) {
 }
 
 function createCardElement(cardDict, options = {}) {
-    const { faceDown = false, small = false, draggable = false, onClick = null, showAllFlags = false } = options;
+    const { faceDown = false, small = false, draggable = false, onClick = null, showAllFlags = false, disableIntro = false } = options;
     const el = document.createElement('div');
     el.className = 'card' + (small ? ' card-small' : '') + (faceDown ? ' card-facedown' : '');
     if (faceDown) {
@@ -4268,6 +4943,8 @@ function createCardElement(cardDict, options = {}) {
     const effectText = getCardEffectText(cardDef);
     const descriptionText = getCardDescriptionText(cardDef);
     const imageUrl = showCardImages ? getCardArtUrl(cardDict, cardDef) : '';
+    el.classList.add(englishName ? 'card-has-english' : 'card-no-english');
+    el.classList.add(imageUrl ? 'card-has-art' : 'card-no-art');
     const cardArtHtml = imageUrl
         ? `<div class="card-art"><img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.closest('.card-art').classList.add('hidden')"></div>`
         : '';
@@ -4279,9 +4956,7 @@ function createCardElement(cardDict, options = {}) {
     el.dataset.defId = defId;
     let flagsHtml = '';
     for (const flag of flags) {
-        if (!showAllFlags && flag === 'self_only' && (!gameState || gameState.mode !== '2v2')) {
-            continue;
-        }
+        if (!shouldDisplayCardFlag(flag, { showSystemFlags: showAllFlags })) continue;
         const custom = getCustomTagDef(flag);
         if (custom) {
             flagsHtml += customTagHtml(flag);
@@ -4302,8 +4977,16 @@ function createCardElement(cardDict, options = {}) {
         flagsHtml += `<span class="card-flag fission-layer">${escapeHtml(UI.fission_layer || 'Fission')}: ${fissionLevel}</span>`;
     }
     if (!showAllFlags && defId === 'Tomato' && cardDict.instance_id != null) {
-        const tomatoLayer = Math.max(0, Number(cardDict.held_turns || 0));
+        const tomatoLayer = Math.min(6, Math.max(0, Number(cardDict.held_turns || 0)));
         flagsHtml += `<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || '层数')}: ${tomatoLayer}</span>`;
+    }
+    const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
+    if (swiftValue > 0) {
+        flagsHtml += `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}: ${swiftValue}</span>`;
+    }
+    const copyCount = Number(cardDef.copy_count || 0);
+    if (copyCount > 0) {
+        flagsHtml += `<span class="card-flag copy">${escapeHtml(UI.tag_copy || 'Copy')}: ${copyCount}</span>`;
     }
     const predictionHtml = getCardPlayEffectPredictionHtml(cardDict, {
         ...predictionOptions,
@@ -4338,17 +5021,23 @@ function createCardElement(cardDict, options = {}) {
         el.addEventListener('click', onClick);
         el.style.cursor = 'pointer';
     }
+    if (!disableIntro) {
+        attachTermIntroToCard(el, cardDict, {
+            ownerState: cardOwnerState,
+            prediction: predictionOptions,
+        });
+    }
     return el;
 }
 
 function normalizeFlagList(value) {
     if (!value) return [];
-    if (Array.isArray(value)) return value.map(String).filter(Boolean);
-    if (value instanceof Set) return Array.from(value).map(String).filter(Boolean);
-    if (typeof value === 'string') return value.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+    if (Array.isArray(value)) return value.map(normalizeCardFlag).filter(Boolean);
+    if (value instanceof Set) return Array.from(value).map(normalizeCardFlag).filter(Boolean);
+    if (typeof value === 'string') return value.split(/[,\s]+/).map(normalizeCardFlag).filter(Boolean);
     if (typeof value === 'object') return Object.entries(value)
         .filter(([_, enabled]) => !!enabled)
-        .map(([flag]) => String(flag))
+        .map(([flag]) => normalizeCardFlag(flag))
         .filter(Boolean);
     return [];
 }
@@ -4368,7 +5057,7 @@ function collectCardDisabledFlags(cardDict) {
 }
 
 function getEffectiveCardFlagSets(cardDict, cardDef) {
-    const base = new Set((cardDef && cardDef.flags) || []);
+    const base = new Set(normalizeFlagList((cardDef && cardDef.flags) || []));
     const added = collectCardAddedFlags(cardDict);
     const disabled = collectCardDisabledFlags(cardDict);
     const effective = new Set([...base, ...added]);
@@ -4382,30 +5071,43 @@ function cardHasSelfOnlyFlag(cardDict, cardDef = null) {
     return effective.has('self_only') || effective.has('tag_self_only');
 }
 
+function shouldDisplayCardFlag(flag, options = {}) {
+    const normalized = normalizeCardFlag(flag);
+    if (!normalized) return false;
+    if (normalized === 'infinite_exclude') return !!options.showSystemFlags;
+    if ((normalized === 'self_only' || normalized === 'tag_self_only') && (!gameState || gameState.mode !== '2v2')) {
+        return false;
+    }
+    return true;
+}
+
 function cardFlagHtml(flag, text = null) {
-    if (getCustomTagDef(flag)) return customTagHtml(flag, text);
-    if (flag === 'fusion_layer') {
+    const normalized = normalizeCardFlag(flag);
+    if (getCustomTagDef(normalized)) return customTagHtml(normalized, text);
+    if (normalized === 'fusion_layer') {
         const label = text || `${UI.fusion_layer || 'Fusion'}`;
         return `<span class="card-flag fusion-layer">${escapeHtml(label)}</span>`;
     }
-    if (flag === 'fission_layer') {
+    if (normalized === 'fission_layer') {
         const label = text || `${UI.fission_layer || 'Fission'}`;
         return `<span class="card-flag fission-layer">${escapeHtml(label)}</span>`;
     }
-    const style = CARD_FLAG_STYLES[flag];
-    const label = text || UI['flag_' + flag] || UI['tag_' + flag] || flag;
+    const style = CARD_FLAG_STYLES[normalized];
+    const label = text || UI['flag_' + normalized] || UI['tag_' + normalized] || normalized;
     const cls = style ? style.cls : 'custom';
     return `<span class="card-flag ${cls}">${escapeHtml(label)}</span>`;
 }
 
 function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
-    const { includeLayers = true, includeTomato = true } = options;
+    const { includeLayers = true, includeTomato = true, hideFlags = null } = options;
     if (!cardDict || !cardDef) return '';
+    const hideSet = hideFlags ? new Set(hideFlags.map(f => normalizeCardFlag(f))) : null;
     const { base, effective } = getEffectiveCardFlagSets(cardDict, cardDef);
     const parts = [];
     effective.forEach(flag => {
         if (base.has(flag)) return;
-        if (flag === 'self_only' && (!gameState || gameState.mode !== '2v2')) return;
+        if (!shouldDisplayCardFlag(flag)) return;
+        if (hideSet && hideSet.has(normalizeCardFlag(flag))) return;
         parts.push(cardFlagHtml(flag));
     });
     if (includeLayers) {
@@ -4415,10 +5117,18 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
         if (fissionLevel > 1) parts.push(cardFlagHtml('fission_layer', `${UI.fission_layer || 'Fission'}: ${fissionLevel}`));
     }
     if (includeTomato && cardDict.def_id === 'Tomato') {
-        const tomatoLayer = Math.max(0, Number(cardDict.held_turns || 0));
+        const tomatoLayer = Math.min(6, Math.max(0, Number(cardDict.held_turns || 0)));
         if (tomatoLayer > 0) {
             parts.push(`<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || 'Layer')}: ${tomatoLayer}</span>`);
         }
+    }
+    const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
+    if (swiftValue > 0) {
+        parts.push(cardFlagHtml('swift', `${UI.tag_swift || 'Swift'}: ${swiftValue}`));
+    }
+    const copyCount = Number(cardDef.copy_count || 0);
+    if (copyCount > 0) {
+        parts.push(cardFlagHtml('copy', `${UI.tag_copy || 'Copy'}: ${copyCount}`));
     }
     return parts.join('');
 }
@@ -4453,6 +5163,7 @@ function createCardChoiceChip(cardDict, options = {}) {
     }
     const previewOptions = options.previewOptions || options.cardOptions || null;
     attachFloatingCardPreview(chip, cardDict, previewOptions || {});
+    attachTermIntroToCard(chip, cardDict, previewOptions || {});
     return chip;
 }
 
@@ -4476,7 +5187,7 @@ function getMimicSpecialCostForCard(cardDict) {
     const fusionExtra = Math.max(0, Math.floor(Number(cardDict.fusion_level || 1)) - 1);
     const fissionExtra = Math.max(0, Math.floor(Number(cardDict.fission_level || 1)) - 1);
     const tomatoLayer = cardDict.def_id === 'Tomato'
-        ? Math.max(0, Math.floor(Number(cardDict.held_turns || 0)))
+        ? Math.min(6, Math.max(0, Math.floor(Number(cardDict.held_turns || 0))))
         : 0;
     return Math.ceil((fusionExtra + fissionExtra + tomatoLayer) / 2);
 }
@@ -4671,8 +5382,9 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
     const fusion = Math.max(1, Number(cardDict.fusion_level || 1));
     const fission = Math.max(1, Number(cardDict.fission_level || 1));
     let bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
-    if ((cardDict.def_id || '') === 'Tomato' && bonus === 0) {
-        bonus = Math.max(0, Number(cardDict.held_turns || 0)) * 3;
+    if ((cardDict.def_id || '') === 'Tomato') {
+        const tomatoLayer = Math.min(6, Math.max(0, Number(cardDict.held_turns || 0)));
+        bonus = bonus > 0 ? Math.min(18, bonus) : tomatoLayer * 3;
     }
     if (info.triangle) {
         const startStacks = Math.max(0, Number(attackerState.triangle_stacks || 0));
@@ -4771,14 +5483,23 @@ function cardHasEffectiveFlagForPrediction(cardDict, cardDef, flag) {
 
 function countActiveCorruptionEquipment() {
     if (!gameState) return 0;
-    const players = [gameState.you, gameState.teammate, gameState.opponent, gameState.opponent2]
-        .filter(Boolean);
-    if (Array.isArray(gameState.spectate_players)) players.push(...gameState.spectate_players);
+    const players = Array.isArray(gameState.spectate_players) && gameState.spectate_players.length
+        ? gameState.spectate_players
+        : [gameState.you, gameState.teammate, gameState.opponent, gameState.opponent2].filter(Boolean);
+    const seenEquipment = new Set();
     let count = 0;
-    players.forEach(player => {
+    players.forEach((player, playerIndex) => {
+        const ownerId = normalizePlayerId(player && player.player_id);
         (Array.isArray(player && player.equipment) ? player.equipment : []).forEach(eq => {
             const card = eq && (eq.card_instance || eq.card || eq);
-            if (card && card.def_id === 'Corruption' && eq.corruption_active) count += 1;
+            if (!card || card.def_id !== 'Corruption' || !eq.corruption_active) return;
+            const instanceId = eq.instance_id ?? eq.equipment_instance_id ?? card.instance_id ?? card.instanceId;
+            const key = instanceId != null && instanceId !== ''
+                ? `eq:${instanceId}`
+                : `owner:${ownerId != null ? ownerId : playerIndex}:slot:${(player.equipment || []).indexOf(eq)}`;
+            if (seenEquipment.has(key)) return;
+            seenEquipment.add(key);
+            count += 1;
         });
     });
     return count;
@@ -4795,7 +5516,7 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
     const sponge = !!(targetState && targetState.sponge_active);
     let nazarActive = !!(targetState && targetState.nazar_active);
     let nazarBigHits = Math.max(0, Number(targetState && targetState.nazar_big_hits || 0));
-    const corruptionMult = 2 ** countActiveCorruptionEquipment();
+    const corruptionMult = 1.5 ** countActiveCorruptionEquipment();
     const precision = cardHasEffectiveFlagForPrediction(cardDict || {}, cardDef || {}, 'precision');
     rawHits.forEach(raw => {
         let dmg = Math.max(0, Math.ceil(Number(raw || 0)));
@@ -4814,7 +5535,7 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
             return;
         }
         if (precisionDodged) dmg = Math.ceil(dmg / 2);
-        if (corruptionMult > 1) dmg *= corruptionMult;
+        if (corruptionMult > 1) dmg = Math.ceil(dmg * corruptionMult);
         if (nazarActive) {
             const original = dmg;
             dmg = Math.max(1, dmg - 9);
@@ -5207,6 +5928,7 @@ function showFloatingCardPreview(cardDict, anchor, pos = null, cardOptions = {})
     preview.className = 'floating-card-preview';
     const card = createCardElement(cardDict, {
         showAllFlags: false,
+        disableIntro: true,
         ...cardOptions,
     });
     card.classList.add('floating-card-preview-card');
@@ -5246,6 +5968,497 @@ function attachFloatingCardPreview(anchor, cardDict, cardOptions = {}) {
     }, { passive: true });
     anchor.addEventListener('touchend', removeFloatingCardPreview, { passive: true });
     anchor.addEventListener('touchcancel', removeFloatingCardPreview, { passive: true });
+}
+
+const TERM_INTRO_DELAY = 600;
+const TERM_INTRO_MOVE_CANCEL = 18;
+let termIntroOverlayEl = null;
+let termIntroCardGhostEl = null;
+
+function getTermIntroLibrary() {
+    const magicDamageDesc = '不能被护甲、圆盘、邪眼等减少。注意，不是“消耗魔力造成的伤害”。';
+    return {
+        card_type_thorn: { label: getCardTypeLabel('thorn') || 'Thorn', desc: '攻击牌。需要选择目标，主要用来压低对方 H；2v2 中也可以攻击队友。', color: CARD_TYPE_COLORS.thorn },
+        card_type_bloom: { label: getCardTypeLabel('bloom') || 'Bloom', desc: '技能牌。用于回血、抽牌、加状态、调整 E/M 或改变场面。', color: CARD_TYPE_COLORS.bloom },
+        card_type_root: { label: getCardTypeLabel('root') || 'Root', desc: '装备牌。打出后留在装备栏，有些过一回合后才能主动触发，有些能持续提供效果。', color: CARD_TYPE_COLORS.root },
+        card_type_guard: { label: getCardTypeLabel('guard') || 'Guard', desc: '反制牌。仅对方行动弹出反制窗口时可使用，用来闪避、保护装备或减少伤害。', color: CARD_TYPE_COLORS.guard },
+        D: { label: 'D：物理伤害(Damage)', desc: '会受护甲、装备、闪避和反制影响。只有实际造成伤害，才会触发淬毒、尖牙回血等效果。', color: COLORS.damage },
+        electric_damage: { label: '电伤：电击伤害(Electric Damage)', desc: `一种类似于物理伤害的魔法伤害。${magicDamageDesc}`, color: COLORS.damage },
+        magic_damage: { label: '魔法伤害(Magic Damage)', desc: magicDamageDesc, color: COLORS.magic },
+        A: { label: 'A：护甲(Armor)', desc: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。', color: COLORS.armor_text },
+        P: { label: 'P：中毒(Poison)', desc: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', color: COLORS.poison },
+        F: { label: 'F：灼烧(Fire)', desc: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 20 回合及以上后，每回合开始时对所有玩家施加一层灼烧。', color: COLORS.fire },
+        toxic: { label: `${UI.status_toxic || '淬毒'}(Toxic)`, desc: '造成实际 D 后，对目标施加与淬毒层数相同的 P 层数。伤害被完全挡住时不会触发。', color: '#6C3483' },
+        hand_limit: { label: '手牌上限', desc: '你能保留在手中的最大牌数。抽牌、回手或创建牌时超过上限，就会发生爆牌。', color: COLORS.text_primary },
+        overdraw: { label: '爆牌', desc: '手牌超过上限时，多出来的牌不能留在手中，会按规则被移出手牌。装备黄金叶等效果可以提高上限。', color: COLORS.damage },
+        overcap: { label: '爆费', desc: 'E 或 M 回复超过上限时，超过部分直接丢失；提前规划资源可以避免浪费。', color: COLORS.elixir },
+        deck: { label: '牌堆', desc: '未抽到的牌所在区域。抽牌通常从牌堆顶进入手牌；查看牌堆只能看到抽牌堆。', color: COLORS.text_primary },
+        discard: { label: '弃牌堆', desc: '大多数打出后的牌会进入弃牌堆，之后会被重新洗回牌堆。', color: COLORS.text_secondary },
+        exile_zone: { label: '放逐区', desc: '被放逐的牌离开正常循环，不会再被抽到。', color: '#7F8C8D' },
+        equipment: { label: '装备栏', desc: '装备牌所在区域。装备有些持续生效，也有些在满足触发条件时让你主动使用。', color: CARD_TYPE_COLORS.root },
+        response: { label: UI.counter || '反制', desc: '对方行动满足条件时会出现响应机会。反制能改变对方行动的结果。', color: CARD_TYPE_COLORS.guard },
+        same_name_penalty: { label: '同名卡惩罚', desc: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', color: COLORS.elixir },
+        revealed: { label: UI.tag_revealed || '被揭示', desc: '在手中时永久对对手展示。', color: '#E74C3C' },
+        fusion_layer: { label: UI.fusion_layer || '聚变', desc: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#8E44AD' },
+        fission_layer: { label: UI.fission_layer || '裂变', desc: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#2874A6' },
+        tomato_layer: { label: UI.tomato_layer || '层数', desc: '番茄在手中每保留一回合增加层数，最多 6 层；打出后层数重置。', color: '#C0392B' },
+        layers: { label: '层数', desc: '状态或特殊属性的数量。层数越高效果会越强，或持续越久。', color: COLORS.text_primary },
+    };
+}
+
+function addTermIntroItem(items, seen, key, override = null) {
+    if (!key || seen.has(key)) return;
+    const library = getTermIntroLibrary();
+    const item = override || library[key];
+    if (!item) return;
+    seen.add(key);
+    items.push({
+        key,
+        label: item.label || key,
+        desc: item.desc || item.description || '',
+        color: item.color || COLORS.text_primary,
+    });
+}
+
+function getIntroFlagDescription(flag, custom = null) {
+    const normalized = normalizeCardFlag(flag);
+    if (custom) return getRegistryText(custom, 'description', '') || '自定义标签。具体效果由对应模组或卡牌说明决定。';
+    const desc = {
+        precision: '攻击被闪避时不会完全失效，而是把实际伤害变为原来的一半，向上取整。',
+        exile: '结算后进入放逐区，而不是弃牌堆；不会再被抽到。',
+        non_stackable: '可以装备多张，但同类效果只算一份；一张被摧毁后，剩下的还能继续发挥作用。',
+        indestructible: '作为装备时不会被摧毁效果破坏；玩家死亡时也不会被清除。',
+        sprout: '抽到时会额外抽牌。手牌满时仍然会爆牌。',
+        symbiosis: '同一回合重复使用同名卡时，不会受到同名卡费用惩罚。',
+        attract: '爆牌时，会优先挤掉没有吸引的牌。',
+        void: '回合结束仍留在手牌中时，会进入放逐区。',
+        self_only: '只能对自己使用；2v2 中不能选择队友或敌人。',
+        uncancellable: '相关选择窗口不能取消，避免免费查看隐藏信息后退出选择。',
+        infinite_exclude: '不会进入无限火力随机牌池。',
+        sticky: '打出并结算后回到手中。',
+        copy: '进入手中时，将层数张放逐复制加入手中。',
+        unique: '整场对局自己总牌库中仅允许出现一张，多余的将被放逐。',
+        swift: 'E花费减少X，最少为0。',
+        stealth: '不会触发对手的响应窗口。',
+        revealed: '在手中时永久对对手展示。',
+        fusion_layer: getTermIntroLibrary().fusion_layer.desc,
+        fission_layer: getTermIntroLibrary().fission_layer.desc,
+    };
+    return desc[normalized] || UI.tag_desc_default || '该标签的具体含义由对应卡牌或模组定义。';
+}
+
+function addFlagIntroItem(items, seen, flag) {
+    const normalized = normalizeCardFlag(flag);
+    if (!normalized || seen.has(`flag:${normalized}`)) return;
+    const custom = getCustomTagDef(normalized);
+    const label = custom ? getRegistryText(custom, 'name', normalized) : getFlagLabel(normalized);
+    const desc = getIntroFlagDescription(normalized, custom);
+    const style = CARD_FLAG_STYLES[normalized];
+    const color = custom
+        ? safeRegistryColor(custom.color, COLORS.text_primary)
+        : CARD_FLAG_TERM_COLORS[normalized] || (style && (style.fg || style.color)) || COLORS.text_primary;
+    addTermIntroItem(items, seen, `flag:${normalized}`, { label, desc: desc || UI.tag_desc_default || '该标签的具体含义由卡牌效果定义。', color });
+}
+
+function buildCardIntroSummaryHtml(cardDef) {
+    if (!cardDef) return '';
+    const triggerText = getCardIntroTriggerText(cardDef) || '';
+    const descriptionText = getCardDescriptionText(cardDef) || '';
+    if (!triggerText && !descriptionText) return '';
+    return `
+        <section class="term-intro-summary">
+            ${descriptionText ? `<div class="term-intro-flavor">${colorizeCardText(descriptionText)}</div>` : ''}
+            ${triggerText ? `<div class="term-intro-summary-block">
+                <div class="term-intro-summary-label">触发</div>
+                <div class="term-intro-summary-text">${colorizeCardText(triggerText)}</div>
+            </div>` : ''}
+        </section>
+    `;
+}
+
+function buildCardIntroTermsHtml(cardDict) {
+    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
+    return `${buildCardIntroSummaryHtml(cardDef)}${renderTermIntroItems(collectCardIntroTerms(cardDict))}`;
+}
+
+function collectCardIntroTerms(cardDict) {
+    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
+    const items = [];
+    const seen = new Set();
+    if (!cardDef) return items;
+    addTermIntroItem(items, seen, `card_type_${cardDef.card_type || 'bloom'}`);
+    const { flags } = getCardDisplayCosts(cardDict || {}, cardDef, getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you));
+    flags.forEach(flag => {
+        if (shouldDisplayCardFlag(flag)) addFlagIntroItem(items, seen, flag);
+    });
+    const rawText = [
+        getCardName(cardDef),
+        getCardEffectText(cardDef),
+        getCardDescriptionText(cardDef),
+        (cardDef.flags || []).join(' '),
+    ].filter(Boolean).join(' ');
+    const probes = [
+        [/(\d+\s*D|物理伤害|physical damage|D\b)/i, 'D'],
+        [/(\+\s*\d+\s*A|护甲|armor|A\b)/i, 'A'],
+        [/(\d+\s*(?:P|层P)|中毒|Poison)/i, 'P'],
+        [/(\d+\s*(?:F|层F)|灼烧|Burn)/i, 'F'],
+        [/(\d+\s*电伤|电击伤害|电伤|Electric Damage)/i, 'electric_damage'],
+        [/(魔法伤害|Magic Damage)/i, 'magic_damage'],
+        [/(淬毒|Toxic)/i, 'toxic'],
+        [/(抽牌|牌堆|draw|deck)/i, 'deck'],
+        [/(弃牌|discard)/i, 'discard'],
+        [/(放逐|exile)/i, 'exile_zone'],
+        [/(装备|equipment|Root)/i, 'equipment'],
+        [/(反制|counter|Guard)/i, 'response'],
+        [/(爆牌|overflow)/i, 'overdraw'],
+        [/(手牌上限|hand limit)/i, 'hand_limit'],
+        [/(爆费|上限)/i, 'overcap'],
+        [/(同名|共生|same-name)/i, 'same_name_penalty'],
+        [/(被揭示|revealed)/i, 'revealed'],
+    ];
+    probes.forEach(([re, key]) => {
+        if (re.test(rawText)) addTermIntroItem(items, seen, key);
+    });
+    const fusionLevel = Math.max(1, Number(cardDict && cardDict.fusion_level || 1));
+    const fissionLevel = Math.max(1, Number(cardDict && cardDict.fission_level || 1));
+    if (fusionLevel > 1 || cardDef.id === 'Fusion') addTermIntroItem(items, seen, 'fusion_layer');
+    if (fissionLevel > 1 || cardDef.id === 'Fission') addTermIntroItem(items, seen, 'fission_layer');
+    if (cardDef.id === 'Tomato') addTermIntroItem(items, seen, 'tomato_layer');
+    if (!items.some(item => item.key === 'D') && cardDef.card_type === 'thorn') addTermIntroItem(items, seen, 'D');
+    if (seen.has('P') || seen.has('F')) addTermIntroItem(items, seen, 'magic_damage');
+    return items;
+}
+
+function getStatusIntroItem(statusInfo) {
+    const key = statusInfo && statusInfo.key;
+    const customDef = (statusInfo && statusInfo.customDef) || getCustomStatusDef(key);
+    if (customDef) {
+        return {
+            label: getRegistryText(customDef, 'name', key),
+            desc: getRegistryText(customDef, 'description', '由模组定义的自定义状态。'),
+            color: safeRegistryColor(customDef.color, statusInfo.fg || COLORS.text_primary),
+        };
+    }
+    const builtIns = {
+        poison: { label: UI.status_poison, desc: getTermIntroLibrary().P.desc, color: COLORS.poison },
+        fire: { label: UI.status_fire, desc: getTermIntroLibrary().F.desc, color: COLORS.fire },
+        toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc, color: '#6C3483' },
+        triangle: { label: UI.status_triangle, desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
+        dodge: { label: UI.status_dodge, desc: '可响应攻击。普通攻击会被闪避，精准攻击被闪避时只造成一半伤害。', color: COLORS.guard },
+        nazar: { label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
+        equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
+        invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
+        stunned: { label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
+        attack_blocked: { label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
+        attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
+        untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。', color: '#1A5276' },
+        bandage: { label: UI.status_bandage, desc: '绷带提供临时保护，回合开始时会按规则结束。', color: '#1E8449' },
+        sponge: { label: UI.status_sponge, desc: '海绵相关的临时状态，会影响下一次结算。', color: '#6C3483' },
+        shovel: { label: UI.status_shovel, desc: '铲子相关的临时状态，会限制或改变当前回合行动。', color: '#5D4037' },
+        sluggish: { label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
+        overload: { label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
+        foresight: { label: UI.status_foresight, desc: '每回合可以最多从抽牌堆替换层数张手牌。', color: '#2980B9' },
+        fracture: { label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
+        heal_block: { label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数-1。', color: '#E84393' },
+        weakness: { label: UI.status_weakness, desc: '造成物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
+        bleed: { label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
+        fragment: { label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
+    };
+    return builtIns[key] || {
+        label: (statusInfo && statusInfo.name) || key || '状态',
+        desc: '状态会暂时改变玩家的资源、行动或受伤规则。具体效果由卡牌定义。',
+        color: (statusInfo && statusInfo.fg) || COLORS.text_primary,
+    };
+}
+
+function ensureTermIntroOverlay() {
+    if (termIntroOverlayEl) return termIntroOverlayEl;
+    const overlay = document.createElement('div');
+    overlay.id = 'term-intro-overlay';
+    overlay.className = 'term-intro-overlay hidden';
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.innerHTML = `
+        <div class="term-intro-dialog" role="dialog" aria-modal="true">
+            <button id="term-intro-close" class="term-intro-close" type="button" aria-label="关闭">×</button>
+            <div id="term-intro-card" class="term-intro-card-wrap"></div>
+            <section class="term-intro-panel">
+                <div id="term-intro-title" class="term-intro-title">术语说明</div>
+                <div id="term-intro-list" class="term-intro-list"></div>
+            </section>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#term-intro-close')?.addEventListener('click', hideTermIntroOverlay);
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) hideTermIntroOverlay();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !overlay.classList.contains('hidden')) hideTermIntroOverlay();
+    });
+    termIntroOverlayEl = overlay;
+    return overlay;
+}
+
+function hideTermIntroOverlay() {
+    if (!termIntroOverlayEl) return;
+    removeTermIntroCardGhost();
+    termIntroOverlayEl.classList.remove('visible');
+    termIntroOverlayEl.classList.remove('card-flying');
+    termIntroOverlayEl.classList.add('hidden');
+    termIntroOverlayEl.setAttribute('aria-hidden', 'true');
+}
+
+function removeTermIntroCardGhost() {
+    if (termIntroCardGhostEl) {
+        termIntroCardGhostEl.remove();
+        termIntroCardGhostEl = null;
+    }
+}
+
+function cloneDomRect(rect) {
+    if (!rect) return null;
+    return {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+    };
+}
+
+function isUsableRect(rect) {
+    return rect
+        && Number.isFinite(rect.left)
+        && Number.isFinite(rect.top)
+        && rect.width > 8
+        && rect.height > 8;
+}
+
+function getTermIntroSourceRect(anchor) {
+    const isChip = !!(anchor && anchor.classList && anchor.classList.contains('choice-card-token'));
+    if (isChip && floatingCardPreviewEl) {
+        const previewCard = floatingCardPreviewEl.querySelector('.floating-card-preview-card') || floatingCardPreviewEl;
+        const previewRect = cloneDomRect(previewCard.getBoundingClientRect());
+        if (isUsableRect(previewRect)) return previewRect;
+    }
+    if (!anchor || typeof anchor.getBoundingClientRect !== 'function') return null;
+    const rect = cloneDomRect(anchor.getBoundingClientRect());
+    return isUsableRect(rect) ? rect : null;
+}
+
+function animateTermIntroCardFromSource(cardEl, sourceRect, overlay) {
+    if (!cardEl || !isUsableRect(sourceRect)) {
+        if (cardEl) cardEl.classList.remove('term-intro-card-hidden');
+        if (overlay) overlay.classList.remove('card-flying');
+        return;
+    }
+    const targetRect = cloneDomRect(cardEl.getBoundingClientRect());
+    if (!isUsableRect(targetRect)) {
+        cardEl.classList.remove('term-intro-card-hidden');
+        if (overlay) overlay.classList.remove('card-flying');
+        return;
+    }
+    if (!cardEl.animate) {
+        cardEl.classList.remove('term-intro-card-hidden');
+        if (overlay) overlay.classList.remove('card-flying');
+        return;
+    }
+    removeTermIntroCardGhost();
+    const startX = sourceRect.left - targetRect.left;
+    const startY = sourceRect.top - targetRect.top;
+    const startScaleX = sourceRect.width / targetRect.width;
+    const startScaleY = sourceRect.height / targetRect.height;
+    const startTransform = `translate(${startX}px, ${startY}px) scale(${startScaleX}, ${startScaleY})`;
+    const ghost = cardEl.cloneNode(true);
+    ghost.classList.add('term-intro-card-ghost');
+    ghost.classList.remove('term-intro-card-hidden');
+    ghost.style.left = `${targetRect.left}px`;
+    ghost.style.top = `${targetRect.top}px`;
+    ghost.style.width = `${targetRect.width}px`;
+    ghost.style.height = `${targetRect.height}px`;
+    ghost.style.transform = startTransform;
+    ghost.style.opacity = '0.92';
+    document.body.appendChild(ghost);
+    termIntroCardGhostEl = ghost;
+    cardEl.classList.add('term-intro-card-hidden');
+    let finished = false;
+    const finish = () => {
+        if (finished) return;
+        finished = true;
+        cardEl.classList.remove('term-intro-card-hidden');
+        requestAnimationFrame(() => {
+            if (termIntroCardGhostEl === ghost) removeTermIntroCardGhost();
+            else ghost.remove();
+        });
+        if (overlay) overlay.classList.remove('card-flying');
+    };
+    const animation = ghost.animate([
+        {
+            transform: startTransform,
+            opacity: 0.92,
+            filter: 'drop-shadow(0 12px 26px rgba(0, 0, 0, 0.24))',
+        },
+        {
+            transform: 'translate(0, 0) scale(1)',
+            opacity: 1,
+            filter: 'drop-shadow(0 20px 38px rgba(0, 0, 0, 0.28))',
+        },
+    ], {
+        duration: 320,
+        easing: 'cubic-bezier(.18,.82,.22,1)',
+        fill: 'forwards',
+    });
+    animation.addEventListener('finish', finish, { once: true });
+    animation.addEventListener('cancel', finish, { once: true });
+    setTimeout(finish, 460);
+}
+
+function renderTermIntroItems(items) {
+    if (!items || !items.length) {
+        return '<div class="term-intro-empty">这张牌没有需要额外说明的术语。</div>';
+    }
+    return items.map(item => `
+        <article class="term-intro-item" style="--term-color:${escapeHtml(item.color || COLORS.text_primary)}">
+            <div class="term-intro-item-title">${escapeHtml(item.label)}</div>
+            <div class="term-intro-item-desc">${escapeHtml(item.desc || '')}</div>
+        </article>
+    `).join('');
+}
+
+function showTermIntroForCard(cardDict, cardOptions = {}) {
+    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
+    if (!cardDef) return;
+    const sourceRect = cardOptions.sourceRect || null;
+    removeFloatingCardPreview();
+    removeCardHoldPreview();
+    if (typeof cleanupDragState === 'function') cleanupDragState();
+    const overlay = ensureTermIntroOverlay();
+    const cardSlot = overlay.querySelector('#term-intro-card');
+    const title = overlay.querySelector('#term-intro-title');
+    const list = overlay.querySelector('#term-intro-list');
+    cardSlot.innerHTML = '';
+    const card = createCardElement(cardDict, {
+        showAllFlags: true,
+        disableIntro: true,
+        ownerState: cardOptions.ownerState || getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you),
+        prediction: cardOptions.prediction || getCardPredictionOptionsForOwner(cardDict, cardOptions.ownerState),
+    });
+    card.classList.add('term-intro-card');
+    if (isUsableRect(sourceRect)) card.classList.add('term-intro-card-hidden');
+    cardSlot.appendChild(card);
+    title.textContent = `${getCardName(cardDef)} · 术语说明`;
+    list.innerHTML = buildCardIntroTermsHtml(cardDict);
+    overlay.classList.remove('visible');
+    overlay.classList.toggle('card-flying', isUsableRect(sourceRect));
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => {
+        overlay.classList.add('visible');
+        requestAnimationFrame(() => animateTermIntroCardFromSource(card, sourceRect, overlay));
+    });
+}
+
+function showTermIntroForStatus(statusInfo) {
+    const overlay = ensureTermIntroOverlay();
+    removeFloatingCardPreview();
+    removeCardHoldPreview();
+    overlay.classList.remove('visible');
+    overlay.classList.remove('card-flying');
+    const item = getStatusIntroItem(statusInfo || {});
+    const cardSlot = overlay.querySelector('#term-intro-card');
+    const title = overlay.querySelector('#term-intro-title');
+    const list = overlay.querySelector('#term-intro-list');
+    const valueText = statusInfo && statusInfo.val ? `<span class="term-intro-status-value">${escapeHtml(String(statusInfo.val))}</span>` : '';
+    cardSlot.innerHTML = `
+        <div class="term-intro-status-card" style="--term-color:${escapeHtml(item.color || COLORS.text_primary)}">
+            <div class="term-intro-status-name">${escapeHtml(item.label)}</div>
+            ${valueText}
+            <div class="term-intro-status-note">状态</div>
+        </div>
+    `;
+    title.textContent = `${item.label} · 状态说明`;
+    const terms = [item];
+    if (statusInfo && statusInfo.val) {
+        terms.push(getTermIntroLibrary().layers);
+    }
+    if (['poison', 'fire'].includes(statusInfo && statusInfo.key)) {
+        terms.push(getTermIntroLibrary().magic_damage);
+    }
+    if (statusInfo && statusInfo.key === 'toxic') {
+        terms.push(getTermIntroLibrary().P);
+    }
+    list.innerHTML = renderTermIntroItems(terms);
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+}
+
+function attachTermIntroLongPress(anchor, onShow) {
+    if (!anchor || anchor.dataset.termIntroBound === '1') return;
+    anchor.dataset.termIntroBound = '1';
+    let timer = null;
+    let start = null;
+    let docMove = null;
+    let docEnd = null;
+    const cancel = () => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+        start = null;
+        if (docMove) document.removeEventListener('pointermove', docMove);
+        if (docEnd) {
+            document.removeEventListener('pointerup', docEnd);
+            document.removeEventListener('pointercancel', docEnd);
+        }
+        docMove = null;
+        docEnd = null;
+    };
+    anchor.addEventListener('pointerdown', (event) => {
+        if (event.button != null && event.button !== 0) return;
+        start = { x: event.clientX, y: event.clientY };
+        if (timer) clearTimeout(timer);
+        docMove = (moveEvent) => {
+            if (!timer || !start) return;
+            const dist = Math.hypot(moveEvent.clientX - start.x, moveEvent.clientY - start.y);
+            if (dist > TERM_INTRO_MOVE_CANCEL) cancel();
+        };
+        docEnd = cancel;
+        document.addEventListener('pointermove', docMove);
+        document.addEventListener('pointerup', docEnd);
+        document.addEventListener('pointercancel', docEnd);
+        timer = setTimeout(() => {
+            timer = null;
+            if (docMove) document.removeEventListener('pointermove', docMove);
+            if (docEnd) {
+                document.removeEventListener('pointerup', docEnd);
+                document.removeEventListener('pointercancel', docEnd);
+            }
+            docMove = null;
+            docEnd = null;
+            onShow();
+        }, TERM_INTRO_DELAY);
+    });
+    anchor.addEventListener('pointermove', (event) => {
+        if (!timer || !start) return;
+        const dist = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+        if (dist > TERM_INTRO_MOVE_CANCEL) cancel();
+    });
+    ['pointerup', 'pointerleave', 'pointercancel', 'lostpointercapture'].forEach(type => {
+        anchor.addEventListener(type, cancel);
+    });
+}
+
+function attachTermIntroToCard(anchor, cardDict, cardOptions = {}) {
+    if (!anchor || !cardDict || !cardDict.def_id) return;
+    attachTermIntroLongPress(anchor, () => {
+        showTermIntroForCard(cardDict, {
+            ...cardOptions,
+            sourceRect: getTermIntroSourceRect(anchor),
+        });
+    });
+}
+
+function attachTermIntroToStatus(anchor, statusInfo) {
+    if (!anchor || !statusInfo) return;
+    attachTermIntroLongPress(anchor, () => showTermIntroForStatus(statusInfo));
 }
 
 function renderChoiceOptionContent(container, option, index, config = {}) {
@@ -5403,13 +6616,6 @@ function startCardDrag(e, cardEl) {
         previewShown: false,
         touch: !!(e.touches && e.touches.length)
     };
-    if (isMinimalUiStyle()) {
-        dragState.previewTimer = setTimeout(() => {
-            if (dragState && !dragState.moved) {
-                showCardHoldPreview(cardEl, { x: dragState.lastX, y: dragState.lastY });
-            }
-        }, CARD_HOLD_PREVIEW_DELAY);
-    }
     showDropOverlay();
 }
 
@@ -5557,6 +6763,7 @@ function connectSocket(serverUrl) {
             mode: preferredMode,
             account_login: !!currentAccount,
             beta_mode: GTN_BETA_MODE,
+            skin: getCurrentSkinConfig(),
             ...getModLoginPayload(),
         });
     });
@@ -5579,6 +6786,14 @@ function connectSocket(serverUrl) {
             transport: socket.io && socket.io.engine && socket.io.engine.transport ? socket.io.engine.transport.name : '',
         });
     });
+    socket.on('skin_look_update', (data = {}) => {
+        const pid = normalizePlayerId(data.player_id);
+        if (pid == null) return;
+        if (!isSpectating && pid === normalizePlayerId(playerId)) return;
+        const look = normalizeSkinLook(data.look || data);
+        skinLookByPlayerId.set(pid, look);
+        applySkinLookToRenderedAvatars(pid, look);
+    });
     socket.on('login_ok', (data) => {
         debugLog('[client] login ok: sid=', data.sid, 'nickname=', data.nickname);
         mySid = data.sid || '';
@@ -5589,6 +6804,7 @@ function connectSocket(serverUrl) {
             renderAccountState();
         } else if (!data.is_special_player && !data.is_admin_player) {
             loginCredential = nickname;
+            if (data.skin) saveLocalSkinConfig(data.skin);
         }
         const nickInput = $('input-nickname');
         if (nickInput) nickInput.value = nickname;
@@ -5609,13 +6825,14 @@ function connectSocket(serverUrl) {
     socket.on('login_fail', (data) => {
         showView('view-login');
         const err = $('login-error');
-        if (err) err.textContent = translateLoginReason(data.reason);
+        if (err) err.textContent = moderationMessageFromPayload(data, translateLoginReason(data.reason));
     });
     socket.on('lobby_update', (data) => {
         debugLog('[client] lobby_update players=', (data.players || []).length);
         lobbyPlayers = data.players || [];
         lobbyOngoingGames = data.ongoing_games || [];
         mySid = data.your_sid || mySid;
+        clearNetworkMatchStateForLobby();
         phase = 'lobby';
         renderLobby(data);
         if (data.chat_history) renderLobbyChatHistory(data.chat_history);
@@ -5731,6 +6948,7 @@ function connectSocket(serverUrl) {
         draftState = data;
         syncBattleLogMatch(data || {});
         if (data.your_id != null) playerId = data.your_id;
+        mergeSkinLooksFromPayload(data);
         renderDraft(data, isReroll, previousDraftState);
     });
     socket.on('event_select', (data) => {
@@ -5739,6 +6957,7 @@ function connectSocket(serverUrl) {
         eventSelectData = data;
         syncBattleLogMatch(data || {});
         if (data.your_id != null) playerId = data.your_id;
+        mergeSkinLooksFromPayload(data);
         renderEventSelect(data);
     });
     socket.on('state_update', (data) => {
@@ -5766,6 +6985,7 @@ function connectSocket(serverUrl) {
             if (data.spectate_perspective != null) spectatePerspective = data.spectate_perspective;
         }
         if (!isSpectating && data.your_id != null) playerId = data.your_id;
+        mergeSkinLooksFromPayload(data);
         if (!isSpectating && data.pending_response != null) {
             pendingPlayCard = pendingPlayCard || data.pending_response;
         } else if (!responsePending) {
@@ -5904,12 +7124,23 @@ function connectSocket(serverUrl) {
     });
     socket.on('server_error', (data) => {
         debugLog('[client] server_error:', data.message);
-        flashStatus(translateServerMessage(data.message), 3600, 'error');
+        flashStatus(moderationMessageFromPayload(data, translateServerMessage(data.message)), 3600, 'error');
         pendingSpectateRoomId = null;
         clearPendingServerAction();
         pendingPlayCard = null;
         clearSelectedPlayCard();
-        if (gameState && gameState.phase) renderGame(gameState);
+        if (gameState && gameState.phase && activeViewId === 'view-game' && isNetworkMatchPhase(phase)) {
+            renderGame(gameState);
+        }
+    });
+    socket.on('match_start_failed', (data = {}) => {
+        const message = data.message || UI.mod_mismatch_msg || UI.operation_failed;
+        debugLog('[client] match_start_failed:', message);
+        hideModal();
+        clearNetworkMatchStateForLobby();
+        phase = 'lobby';
+        showView('view-lobby');
+        flashStatus(translateServerMessage(message), 4200, 'error');
     });
     socket.on('opponent_disconnected', (data) => {
         if (data && data.timeout) {
@@ -5925,6 +7156,7 @@ function connectSocket(serverUrl) {
             }
             updateStatus(UI.opponent_disconnected);
             socket.emit('return_lobby');
+            clearNetworkMatchStateForLobby();
             showView('view-lobby');
             phase = 'lobby';
         } else if (data && data.reconnect_timeout > 0) {
@@ -5932,6 +7164,7 @@ function connectSocket(serverUrl) {
         } else {
             updateStatus(UI.opponent_disconnected);
             socket.emit('return_lobby');
+            clearNetworkMatchStateForLobby();
             showView('view-lobby');
             phase = 'lobby';
         }
@@ -5991,6 +7224,7 @@ function connectSocket(serverUrl) {
         showView('view-game');
     });
     socket.on('spectate_leave', () => {
+        clearNetworkMatchStateForLobby();
         pendingSpectateRoomId = null;
         activeSpectateRoomId = null;
         isSpectating = false;
@@ -6092,6 +7326,447 @@ function accountStatsText(user) {
         user.losses || 0,
         user.draws || 0
     );
+}
+
+function normalizeSkinConfig(raw) {
+    let data = raw;
+    if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch (_) { data = {}; }
+    }
+    if (!data || typeof data !== 'object') data = {};
+    const skin = { ...DEFAULT_SKIN_CONFIG };
+    const color = String(data.primary_color || data.primaryColor || '').trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(color)) skin.primary_color = color.toUpperCase();
+    const eyeShape = String(data.eye_shape || data.eyeShape || '').trim().toLowerCase();
+    if (SKIN_EYE_SHAPES.has(eyeShape)) skin.eye_shape = eyeShape;
+    return skin;
+}
+
+function loadLocalSkinConfig() {
+    try {
+        return normalizeSkinConfig(localStorage.getItem('gtn_skin_config'));
+    } catch (_) {
+        return { ...DEFAULT_SKIN_CONFIG };
+    }
+}
+
+function saveLocalSkinConfig(skin) {
+    try {
+        localStorage.setItem('gtn_skin_config', JSON.stringify(normalizeSkinConfig(skin)));
+    } catch (_) {}
+}
+
+function getCurrentSkinConfig() {
+    if (currentAccount && currentAccount.skin) return normalizeSkinConfig(currentAccount.skin);
+    return loadLocalSkinConfig();
+}
+
+function setSkinError(message = '') {
+    const el = $('skin-error');
+    if (el) el.textContent = message || '';
+}
+
+function readSkinFormConfig() {
+    return normalizeSkinConfig({
+        primary_color: $('skin-primary-color')?.value || DEFAULT_SKIN_CONFIG.primary_color,
+        eye_shape: $('skin-eye-shape')?.value || DEFAULT_SKIN_CONFIG.eye_shape,
+    });
+}
+
+function hexToRgb(hex) {
+    const text = String(hex || '').replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(text)) return { r: 255, g: 231, b: 99 };
+    return {
+        r: parseInt(text.slice(0, 2), 16),
+        g: parseInt(text.slice(2, 4), 16),
+        b: parseInt(text.slice(4, 6), 16),
+    };
+}
+
+function rgbToHex(rgb) {
+    return `#${[rgb.r, rgb.g, rgb.b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+}
+
+function deriveSkinBorderColor(color) {
+    const rgb = hexToRgb(color);
+    return rgbToHex({ r: rgb.r * 0.81, g: rgb.g * 0.81, b: rgb.b * 0.81 });
+}
+
+function skinLuminance(color) {
+    const { r, g, b } = hexToRgb(color);
+    const srgb = [r, g, b].map(v => {
+        const c = v / 255;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+}
+
+function normalizeSkinLook(raw) {
+    if (!raw || typeof raw !== 'object') return { ...DEFAULT_SKIN_LOOK };
+    let x = Number(raw.x || 0);
+    let y = Number(raw.y || 0);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return { ...DEFAULT_SKIN_LOOK };
+    const length = Math.hypot(x, y);
+    if (length < 0.001) return { ...DEFAULT_SKIN_LOOK };
+    x = Math.max(-1, Math.min(1, x / length));
+    y = Math.max(-1, Math.min(1, y / length));
+    return {
+        x: Math.round(x * 1000) / 1000,
+        y: Math.round(y * 1000) / 1000,
+    };
+}
+
+function skinLookCssVars(rawLook) {
+    const look = normalizeSkinLook(rawLook);
+    return `--skin-look-x:${(look.x * SKIN_LOOK_OFFSET_X_PERCENT).toFixed(1)}%;--skin-look-y:${(look.y * SKIN_LOOK_OFFSET_Y_PERCENT).toFixed(1)}%`;
+}
+
+function getSkinLookForPlayerId(id) {
+    const pid = normalizePlayerId(id);
+    if (pid == null) return { ...DEFAULT_SKIN_LOOK };
+    if (pid === normalizePlayerId(playerId)) return normalizeSkinLook(localSkinLook);
+    return normalizeSkinLook(skinLookByPlayerId.get(pid));
+}
+
+function resolveSkinLookForPlayer(id, dataLook = null) {
+    const pid = normalizePlayerId(id);
+    if (pid === normalizePlayerId(playerId)) return normalizeSkinLook(localSkinLook);
+    return normalizeSkinLook(dataLook || getSkinLookForPlayerId(pid));
+}
+
+function setSkinLookForPlayerId(id, look, { local = false } = {}) {
+    const pid = normalizePlayerId(id);
+    const normalized = normalizeSkinLook(look);
+    if (local || pid === normalizePlayerId(playerId)) {
+        localSkinLook = normalized;
+    }
+    if (pid != null) {
+        skinLookByPlayerId.set(pid, normalized);
+        applySkinLookToRenderedAvatars(pid, normalized);
+    }
+    if (local || pid === normalizePlayerId(playerId) || pid == null) {
+        applySkinLookToLocalPreview(normalized);
+    }
+    return normalized;
+}
+
+function applySkinLookVarsToAvatar(avatar, look) {
+    if (!avatar || !avatar.style) return;
+    const normalized = normalizeSkinLook(look);
+    avatar.style.setProperty('--skin-look-x', `${(normalized.x * SKIN_LOOK_OFFSET_X_PERCENT).toFixed(1)}%`);
+    avatar.style.setProperty('--skin-look-y', `${(normalized.y * SKIN_LOOK_OFFSET_Y_PERCENT).toFixed(1)}%`);
+}
+
+function applySkinLookToRenderedAvatars(id, look) {
+    const pid = normalizePlayerId(id);
+    if (pid == null) return;
+    document.querySelectorAll(`.skin-avatar[data-player-id="${pid}"]`).forEach(avatar => {
+        applySkinLookVarsToAvatar(avatar, look);
+    });
+}
+
+function applySkinLookToLocalPreview(look = localSkinLook) {
+    document.querySelectorAll('.skin-avatar[data-look-owner="local"], #skin-preview-avatar .skin-avatar').forEach(avatar => {
+        applySkinLookVarsToAvatar(avatar, look);
+    });
+}
+
+const SKIN_MOUTH_NORMAL_POINTS = Object.freeze([20, 18, 36, 32, 64, 32, 80, 18]);
+const SKIN_MOUTH_HURT_POINTS = Object.freeze([20, 26, 36, 12, 64, 12, 80, 26]);
+const skinMouthAnimationByAvatar = new WeakMap();
+
+function skinMouthPathAt(t) {
+    const amount = Math.max(0, Math.min(1, Number(t) || 0));
+    const values = SKIN_MOUTH_NORMAL_POINTS.map((base, index) => {
+        const next = SKIN_MOUTH_HURT_POINTS[index];
+        return Number((base + (next - base) * amount).toFixed(2));
+    });
+    return `M ${values[0]} ${values[1]} C ${values[2]} ${values[3]} ${values[4]} ${values[5]} ${values[6]} ${values[7]}`;
+}
+
+function setSkinMouthT(avatar, t) {
+    if (!avatar) return;
+    const amount = Math.max(0, Math.min(1, Number(t) || 0));
+    const path = avatar.querySelector('.skin-mouth-line');
+    if (path) path.setAttribute('d', skinMouthPathAt(amount));
+    avatar.dataset.skinMouthT = String(amount);
+    const pid = normalizePlayerId(avatar.dataset.playerId);
+    if (pid != null) skinMouthTByPlayerId.set(pid, amount);
+}
+
+function getSkinMouthT(avatar) {
+    if (!avatar) return 0;
+    const stored = Number(avatar.dataset.skinMouthT);
+    if (Number.isFinite(stored)) return Math.max(0, Math.min(1, stored));
+    return avatar.classList.contains('skin-mouth-hurt') ? 1 : 0;
+}
+
+function animateSkinMouthTo(avatar, targetT) {
+    if (!avatar) return;
+    const target = Math.max(0, Math.min(1, Number(targetT) || 0));
+    const current = skinMouthAnimationByAvatar.get(avatar);
+    if (current && current.raf) cancelAnimationFrame(current.raf);
+    const start = getSkinMouthT(avatar);
+    if (Math.abs(start - target) < 0.01) {
+        setSkinMouthT(avatar, target);
+        skinMouthAnimationByAvatar.delete(avatar);
+        return;
+    }
+    const duration = 360;
+    const startTime = performance.now();
+    const animation = { raf: 0 };
+    const step = (now) => {
+        const raw = Math.max(0, Math.min(1, (now - startTime) / duration));
+        const eased = raw < 0.5 ? 4 * raw * raw * raw : 1 - Math.pow(-2 * raw + 2, 3) / 2;
+        setSkinMouthT(avatar, start + (target - start) * eased);
+        if (raw < 1) {
+            animation.raf = requestAnimationFrame(step);
+        } else {
+            setSkinMouthT(avatar, target);
+            skinMouthAnimationByAvatar.delete(avatar);
+        }
+    };
+    animation.raf = requestAnimationFrame(step);
+    skinMouthAnimationByAvatar.set(avatar, animation);
+}
+
+function getActiveSkinDamageMood(playerId) {
+    const pid = normalizePlayerId(playerId);
+    if (pid == null) return null;
+    const entry = skinDamageMoodByPlayerId.get(pid);
+    if (!entry) return null;
+    if (Number(entry.until || 0) <= Date.now()) {
+        skinDamageMoodByPlayerId.delete(pid);
+        return null;
+    }
+    return entry;
+}
+
+function skinDamageMoodClasses(playerId) {
+    const mood = getActiveSkinDamageMood(playerId);
+    if (!mood) return '';
+    const kind = String(mood.kind || '');
+    return [
+        'skin-mouth-hurt',
+        kind === 'poison' ? 'skin-hit-poison' : '',
+        kind === 'fire' ? 'skin-hit-fire' : '',
+    ].filter(Boolean).join(' ');
+}
+
+function applySkinDamageMoodToAvatar(avatar, mood) {
+    if (!avatar) return;
+    avatar.classList.remove('skin-mouth-hurt', 'skin-hit-poison', 'skin-hit-fire');
+    const playerAvatar = avatar.closest && avatar.closest('.player-avatar');
+    if (playerAvatar) playerAvatar.classList.remove('skin-hit-poison', 'skin-hit-fire');
+    if (!mood) {
+        animateSkinMouthTo(avatar, 0);
+        return;
+    }
+    avatar.classList.add('skin-mouth-hurt');
+    animateSkinMouthTo(avatar, 1);
+    if (mood.kind === 'poison') avatar.classList.add('skin-hit-poison');
+    else if (mood.kind === 'fire') avatar.classList.add('skin-hit-fire');
+    if (playerAvatar && mood.kind === 'poison') playerAvatar.classList.add('skin-hit-poison');
+    else if (playerAvatar && mood.kind === 'fire') playerAvatar.classList.add('skin-hit-fire');
+}
+
+function applySkinDamageMoodToRenderedAvatars(playerId) {
+    const pid = normalizePlayerId(playerId);
+    if (pid == null) return;
+    const mood = getActiveSkinDamageMood(pid);
+    document.querySelectorAll(`.skin-avatar[data-player-id="${pid}"]`).forEach(avatar => {
+        applySkinDamageMoodToAvatar(avatar, mood);
+    });
+    document.querySelectorAll(`[data-player-target-region][data-player-id="${pid}"]`).forEach(region => {
+        region.classList.remove('skin-hit-poison', 'skin-hit-fire');
+        if (mood && mood.kind === 'poison') region.classList.add('skin-hit-poison');
+        else if (mood && mood.kind === 'fire') region.classList.add('skin-hit-fire');
+    });
+}
+
+function triggerSkinDamageMood(playerId, kind = 'damage', delay = 0) {
+    const pid = normalizePlayerId(playerId);
+    if (pid == null) return;
+    const run = () => {
+        const current = skinDamageMoodByPlayerId.get(pid);
+        if (current && current.timer) clearTimeout(current.timer);
+        if (!current || !getActiveSkinDamageMood(pid)) {
+            skinMouthTByPlayerId.set(pid, 0);
+        }
+        const mood = {
+            kind: kind === 'poison' || kind === 'fire' ? kind : 'damage',
+            until: Date.now() + SKIN_DAMAGE_HOLD_MS,
+            timer: null,
+        };
+        mood.timer = setTimeout(() => {
+            const latest = skinDamageMoodByPlayerId.get(pid);
+            if (latest !== mood) return;
+            skinDamageMoodByPlayerId.delete(pid);
+            applySkinDamageMoodToRenderedAvatars(pid);
+        }, SKIN_DAMAGE_HOLD_MS);
+        skinDamageMoodByPlayerId.set(pid, mood);
+        applySkinDamageMoodToRenderedAvatars(pid);
+    };
+    const wait = Math.max(0, Number(delay) || 0);
+    if (wait) setTimeout(run, wait);
+    else run();
+}
+
+function renderSkinAvatar(skinInput, options = {}) {
+    const skin = normalizeSkinConfig(skinInput);
+    const border = deriveSkinBorderColor(skin.primary_color);
+    const inverted = skinLuminance(skin.primary_color) < 0.22;
+    const invertedClass = inverted ? ' is-inverted' : '';
+    const pid = normalizePlayerId(options.playerId);
+    const look = options.look || (pid != null ? getSkinLookForPlayerId(pid) : localSkinLook);
+    const damageMood = skinDamageMoodClasses(pid);
+    const storedMouthT = pid != null ? Number(skinMouthTByPlayerId.get(pid)) : NaN;
+    const mouthT = damageMood && Number.isFinite(storedMouthT) ? storedMouthT : 0;
+    const style = `--skin-main:${escapeHtml(skin.primary_color)};--skin-border:${escapeHtml(border)};${skinLookCssVars(look)}`;
+    const ownerAttr = pid != null
+        ? ` data-player-id="${pid}"`
+        : ` data-look-owner="${escapeHtml(options.lookOwner || 'local')}"`;
+    return `
+        <div class="skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${invertedClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr} style="${style}">
+            <div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>
+            <div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>
+            <svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">
+                <path class="skin-mouth-line" d="${skinMouthPathAt(mouthT)}"></path>
+            </svg>
+        </div>
+    `;
+}
+
+function renderSkinEditorPreview() {
+    const preview = $('skin-preview-avatar');
+    if (!preview) return;
+    preview.innerHTML = renderSkinAvatar(readSkinFormConfig(), { look: localSkinLook, lookOwner: 'local' });
+}
+
+function syncSkinFormFromCurrent() {
+    const skin = getCurrentSkinConfig();
+    const colorInput = $('skin-primary-color');
+    if (colorInput) colorInput.value = skin.primary_color;
+    const shapeSelect = $('skin-eye-shape');
+    if (shapeSelect) shapeSelect.value = skin.eye_shape;
+    renderSkinEditorPreview();
+}
+
+async function saveSkinFromEditor() {
+    setSkinError('');
+    const skin = readSkinFormConfig();
+    saveLocalSkinConfig(skin);
+    if (currentAccount) {
+        try {
+            const data = await authRequest('/api/auth/skin', { skin });
+            currentAccount = data.user || { ...currentAccount, skin };
+            cacheAccount(currentAccount);
+        } catch (err) {
+            setSkinError(err.message || UI.account_error);
+            return;
+        }
+    }
+    renderSkinEditorPreview();
+    flashStatus(UI.skin_saved || '皮肤已保存', 1600);
+}
+
+function resetSkinEditor() {
+    const colorInput = $('skin-primary-color');
+    if (colorInput) colorInput.value = DEFAULT_SKIN_CONFIG.primary_color;
+    const shapeSelect = $('skin-eye-shape');
+    if (shapeSelect) shapeSelect.value = DEFAULT_SKIN_CONFIG.eye_shape;
+    renderSkinEditorPreview();
+}
+
+function openSkinEditor() {
+    setSkinError('');
+    syncSkinFormFromCurrent();
+    showView('view-skin');
+}
+
+function applyClientSoloSkins(data) {
+    if (!data || typeof data !== 'object') return data;
+    const skins = [getCurrentSkinConfig(), { ...DEFAULT_SKIN_CONFIG }];
+    const looks = [normalizeSkinLook(localSkinLook), { ...DEFAULT_SKIN_LOOK }];
+    data.player_skins = skins;
+    data.player_skin_looks = looks;
+    const pidx = Number.isFinite(Number(data.your_id)) ? Number(data.your_id) : 0;
+    if (data.you && typeof data.you === 'object') {
+        data.you.skin = skins[pidx] || skins[0];
+        data.you.skin_look = looks[pidx] || looks[0];
+    }
+    const opp = 1 - pidx;
+    if (data.opponent && typeof data.opponent === 'object') {
+        data.opponent.skin = skins[opp] || skins[1];
+        data.opponent.skin_look = looks[opp] || looks[1];
+    }
+    return data;
+}
+
+function findLocalSkinLookAvatar(localPid = normalizePlayerId(playerId)) {
+    const candidates = [];
+    if (localPid != null) {
+        candidates.push(...document.querySelectorAll(`.skin-avatar[data-player-id="${localPid}"]`));
+    }
+    candidates.push(...document.querySelectorAll('#skin-preview-avatar .skin-avatar, .skin-avatar[data-look-owner="local"]'));
+    return candidates.find(el => {
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+        return rect && rect.width > 2 && rect.height > 2 && (!style || (style.display !== 'none' && style.visibility !== 'hidden'));
+    }) || null;
+}
+
+function shouldEmitSkinLook() {
+    if (!socket || !socket.connected) return false;
+    if (soloMode || isSpectating) return false;
+    if (normalizePlayerId(playerId) == null || normalizePlayerId(playerId) < 0) return false;
+    if (!['draft', 'event_select', 'playing', 'action', 'draw', 'response', 'choice', 'game_over'].includes(phase)) return false;
+    return !!((gameState && gameState.room_id != null) || (draftState && draftState.room_id != null) || (eventSelectData && eventSelectData.room_id != null));
+}
+
+function maybeEmitSkinLook(look) {
+    if (!shouldEmitSkinLook()) return;
+    const normalized = normalizeSkinLook(look);
+    const key = `${normalized.x.toFixed(2)},${normalized.y.toFixed(2)}`;
+    const now = Date.now();
+    if (key === lastSkinLookEmitKey || now - lastSkinLookEmitAt < SKIN_LOOK_EMIT_INTERVAL_MS) return;
+    lastSkinLookEmitAt = now;
+    lastSkinLookEmitKey = key;
+    socket.emit('skin_look', normalized);
+}
+
+function mergeSkinLooksFromPayload(data) {
+    if (!data || typeof data !== 'object') return;
+    const looks = Array.isArray(data.player_skin_looks) ? data.player_skin_looks : [];
+    looks.forEach((look, index) => {
+        const pid = normalizePlayerId(index);
+        if (pid == null) return;
+        if (!isSpectating && pid === normalizePlayerId(playerId)) return;
+        skinLookByPlayerId.set(pid, normalizeSkinLook(look));
+    });
+}
+
+function updateSkinEyeTracking(event) {
+    const point = { x: Number(event.clientX || 0), y: Number(event.clientY || 0) };
+    const localPid = normalizePlayerId(playerId);
+    const targetAvatar = findLocalSkinLookAvatar(localPid);
+    let cx = Math.max(1, window.innerWidth || 1) / 2;
+    let cy = Math.max(1, window.innerHeight || 1) / 2;
+    if (targetAvatar) {
+        const rect = targetAvatar.getBoundingClientRect();
+        if (rect && rect.width > 0 && rect.height > 0) {
+            cx = rect.left + rect.width / 2;
+            cy = rect.top + rect.height / 2;
+        }
+    }
+    const dx = point.x - cx;
+    const dy = point.y - cy;
+    if (Math.hypot(dx, dy) < 1.5) {
+        return;
+    }
+    const look = normalizeSkinLook({ x: dx, y: dy });
+    setSkinLookForPlayerId(localPid, look, { local: true });
+    maybeEmitSkinLook(look);
 }
 
 function stopAccountReplayPlayback() {
@@ -6241,6 +7916,9 @@ function specialPublicReplayFields(player) {
     return {
         special_role: player.special_role || '',
         special_role_color: player.special_role_color || '',
+        special_role_label: player.special_role_label || '',
+        special_role_sort: player.special_role_sort ?? 99,
+        role_type: player.role_type || '',
         display_name: player.display_name || player.name || '',
         is_admin_player: !!player.is_admin_player,
     };
@@ -6293,20 +7971,29 @@ function ensureAccountReplayPlaybackBar() {
     bar.id = 'account-replay-playback-bar';
     bar.className = 'account-replay-playback-bar hidden';
     bar.innerHTML = `
-        <div class="account-replay-playback-main">
-            <button class="mini-btn" type="button" data-account-replay-live-control="close">退出回放</button>
-            <button class="mini-btn" type="button" data-account-replay-live-control="prev">上一步</button>
-            <button class="mini-btn" type="button" data-account-replay-live-control="play">播放</button>
-            <button class="mini-btn" type="button" data-account-replay-live-control="pause">暂停</button>
-            <button class="mini-btn" type="button" data-account-replay-live-speed="1">1x</button>
-            <button class="mini-btn" type="button" data-account-replay-live-speed="2">2x</button>
-            <button class="mini-btn" type="button" data-account-replay-live-speed="4">4x</button>
-            <button class="mini-btn" type="button" data-account-replay-live-speed="instant">立即</button>
-            <button class="mini-btn" type="button" data-account-replay-live-control="next">下一步</button>
+        <div class="account-replay-playback-head">
+            <button class="mini-btn replay-icon-btn" type="button" data-account-replay-live-control="close" title="退出回放">×</button>
+            <div id="account-replay-live-meta" class="account-replay-live-meta"></div>
+            <button class="mini-btn replay-icon-btn" type="button" data-account-replay-live-control="toggle" title="收起/展开">▴</button>
         </div>
-        <div id="account-replay-live-meta" class="account-replay-live-meta"></div>
-        <div id="account-replay-live-perspectives" class="account-replay-live-perspectives"></div>
-        <input id="account-replay-live-progress" class="account-replay-progress" type="range" min="0" max="0" value="0">
+        <div class="account-replay-playback-body">
+            <div class="account-replay-playback-main">
+                <button class="mini-btn replay-icon-btn" type="button" data-account-replay-live-control="prev" title="上一步">‹</button>
+                <button class="mini-btn replay-icon-btn" type="button" data-account-replay-live-control="play" title="播放">▶</button>
+                <button class="mini-btn replay-icon-btn" type="button" data-account-replay-live-control="pause" title="暂停">Ⅱ</button>
+                <button class="mini-btn replay-speed-btn" type="button" data-account-replay-live-speed="1">1x</button>
+                <button class="mini-btn replay-speed-btn" type="button" data-account-replay-live-speed="2">2x</button>
+                <button class="mini-btn replay-speed-btn" type="button" data-account-replay-live-speed="4">4x</button>
+                <button class="mini-btn replay-speed-btn" type="button" data-account-replay-live-speed="instant">»</button>
+                <button class="mini-btn replay-icon-btn" type="button" data-account-replay-live-control="next" title="下一步">›</button>
+            </div>
+            <div id="account-replay-live-perspectives" class="account-replay-live-perspectives"></div>
+            <input id="account-replay-live-progress" class="account-replay-progress" type="range" min="0" max="0" value="0">
+            <div id="account-replay-load-progress" class="account-replay-load-progress hidden">
+                <div class="account-replay-load-track"><div id="account-replay-load-fill" class="account-replay-load-fill"></div></div>
+                <div id="account-replay-load-text" class="account-replay-load-text"></div>
+            </div>
+        </div>
     `;
     document.body.appendChild(bar);
     bar.addEventListener('click', (event) => {
@@ -6318,6 +8005,10 @@ function ensureAccountReplayPlaybackBar() {
             if (action === 'next') stepAccountReplay(1);
             if (action === 'play') playAccountReplay();
             if (action === 'pause') stopAccountReplayPlayback();
+            if (action === 'toggle') {
+                accountReplayControlsCollapsed = !accountReplayControlsCollapsed;
+                renderAccountReplayPlaybackBar();
+            }
             return;
         }
         const speed = event.target.closest('[data-account-replay-live-speed]');
@@ -6359,29 +8050,58 @@ function renderReplayPerspectiveButtons(container, snapshot) {
     `).join('');
 }
 
+function setAccountReplayLoadProgress(loaded, total, text) {
+    const box = $('account-replay-load-progress');
+    const fill = $('account-replay-load-fill');
+    const label = $('account-replay-load-text');
+    const safeTotal = Math.max(0, Number(total) || 0);
+    const safeLoaded = Math.max(0, Number(loaded) || 0);
+    const visible = accountReplayLoading || (safeTotal > 0 && safeLoaded < safeTotal);
+    if (box) box.classList.toggle('hidden', !visible);
+    if (fill) {
+        const pct = safeTotal > 0 ? Math.max(0, Math.min(100, (safeLoaded / safeTotal) * 100)) : 8;
+        fill.style.width = `${pct}%`;
+    }
+    if (label) {
+        label.textContent = text || (safeTotal
+            ? tf('replay_loading_progress', safeLoaded, safeTotal)
+            : (UI.replay_prepare || UI.replay_loading));
+    }
+}
+
 function renderAccountReplayPlaybackBar() {
     const frame = accountReplayTimeline[accountReplayFrameIndex] || null;
     const snapshot = getReplaySnapshot(frame);
     const bar = ensureAccountReplayPlaybackBar();
     bar.classList.toggle('hidden', !replayMode);
+    bar.classList.toggle('collapsed', !!accountReplayControlsCollapsed);
     const progress = $('account-replay-live-progress');
     if (progress) {
-        progress.max = String(Math.max(0, accountReplayTimeline.length - 1));
+        progress.max = String(Math.max(0, (accountReplayTotalFrames || accountReplayTimeline.length) - 1));
         progress.value = String(accountReplayFrameIndex);
     }
     const meta = $('account-replay-live-meta');
     if (meta) {
         const title = accountReplayData && accountReplayData.meta
-            ? [accountReplayData.meta.mode, replayTimeText(frame && frame.t), `${accountReplayFrameIndex + 1}/${Math.max(1, accountReplayTimeline.length)}`].filter(Boolean).join(' · ')
-            : `${replayTimeText(frame && frame.t)} · ${accountReplayFrameIndex + 1}/${Math.max(1, accountReplayTimeline.length)}`;
+            ? [accountReplayData.meta.mode, replayTimeText(frame && frame.t), `${accountReplayFrameIndex + 1}/${Math.max(1, accountReplayTotalFrames || accountReplayTimeline.length)}`].filter(Boolean).join(' · ')
+            : `${replayTimeText(frame && frame.t)} · ${accountReplayFrameIndex + 1}/${Math.max(1, accountReplayTotalFrames || accountReplayTimeline.length)}`;
         const action = replayActionLabel(frame);
         meta.textContent = action ? `${title} · ${action}` : title;
     }
+    const toggleBtn = bar.querySelector('[data-account-replay-live-control="toggle"]');
+    if (toggleBtn) toggleBtn.textContent = accountReplayControlsCollapsed ? '▾' : '▴';
     renderReplayPerspectiveButtons($('account-replay-live-perspectives'), snapshot);
     bar.querySelectorAll('[data-account-replay-live-speed]').forEach(btn => {
         const value = btn.dataset.accountReplayLiveSpeed === 'instant' ? 'instant' : Number(btn.dataset.accountReplayLiveSpeed || 1);
         btn.classList.toggle('active', value === accountReplaySpeed);
     });
+    setAccountReplayLoadProgress(
+        accountReplayTimeline.filter(Boolean).length,
+        accountReplayTotalFrames || accountReplayTimeline.length,
+        accountReplayLoading
+            ? tf('replay_loading_progress', accountReplayTimeline.filter(Boolean).length, accountReplayTotalFrames || '?')
+            : ''
+    );
 }
 
 function renderAccountReplayList() {
@@ -6426,16 +8146,47 @@ async function loadAccountReplays() {
     }
 }
 
+function mergeAccountReplayFrames(frames, offset) {
+    const start = Math.max(0, Number(offset) || 0);
+    (Array.isArray(frames) ? frames : []).forEach((frame, index) => {
+        if (frame && typeof frame === 'object') accountReplayTimeline[start + index] = frame;
+    });
+}
+
+async function fetchAccountReplayFrames(replayId, offset, limit) {
+    const data = await authRequest(`/api/replays/${encodeURIComponent(replayId)}/timeline?offset=${offset}&limit=${limit}`);
+    if (data.replay) accountReplayData = data.replay;
+    accountReplayTotalFrames = Math.max(0, Number(data.total_frames || data.timeline_total || 0) || 0);
+    mergeAccountReplayFrames(data.timeline || [], data.offset ?? offset);
+    return data;
+}
+
+async function continueAccountReplayLoading(replayId, startOffset, token) {
+    const chunkSize = 80;
+    let offset = Math.max(0, Number(startOffset) || 0);
+    while (token === accountReplayLoadToken && offset < accountReplayTotalFrames) {
+        const data = await fetchAccountReplayFrames(replayId, offset, chunkSize);
+        offset = Math.max(offset + chunkSize, Number(data.offset || offset) + (Array.isArray(data.timeline) ? data.timeline.length : 0));
+        renderAccountReplayPlaybackBar();
+        if (!accountReplayTimeline[accountReplayFrameIndex]) renderAccountReplayFrame();
+        await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    if (token === accountReplayLoadToken) {
+        accountReplayLoading = false;
+        renderAccountReplayPlaybackBar();
+    }
+}
+
 function renderAccountReplayFrame() {
     const frame = accountReplayTimeline[accountReplayFrameIndex] || null;
     const progress = $('account-replay-progress');
     if (progress) {
-        progress.max = String(Math.max(0, accountReplayTimeline.length - 1));
+        progress.max = String(Math.max(0, (accountReplayTotalFrames || accountReplayTimeline.length) - 1));
         progress.value = String(accountReplayFrameIndex);
     }
     const output = $('account-replay-frame');
     if (!frame) {
-        if (output) output.textContent = UI.replay_frame_empty;
+        if (output) output.textContent = accountReplayLoading ? (UI.replay_loading || UI.replay_prepare) : UI.replay_frame_empty;
         renderAccountReplayPlaybackBar();
         return;
     }
@@ -6462,8 +8213,8 @@ function renderAccountReplayFrame() {
 }
 
 function stepAccountReplay(delta) {
-    if (!accountReplayTimeline.length) return;
-    accountReplayFrameIndex = Math.max(0, Math.min(accountReplayTimeline.length - 1, accountReplayFrameIndex + delta));
+    if (!accountReplayTimeline.length && !accountReplayTotalFrames) return;
+    accountReplayFrameIndex = Math.max(0, Math.min((accountReplayTotalFrames || accountReplayTimeline.length) - 1, accountReplayFrameIndex + delta));
     renderAccountReplayFrame();
 }
 
@@ -6479,14 +8230,20 @@ function switchAccountReplayPerspective() {
 
 function playAccountReplay() {
     stopAccountReplayPlayback();
-    if (!accountReplayTimeline.length || accountReplayFrameIndex >= accountReplayTimeline.length - 1) return;
+    const totalFrames = accountReplayTotalFrames || accountReplayTimeline.length;
+    if (!totalFrames || accountReplayFrameIndex >= totalFrames - 1) return;
     if (accountReplaySpeed === 'instant') {
-        accountReplayFrameIndex = accountReplayTimeline.length - 1;
+        accountReplayFrameIndex = totalFrames - 1;
         renderAccountReplayFrame();
         return;
     }
     const current = accountReplayTimeline[accountReplayFrameIndex] || {};
-    const next = accountReplayTimeline[accountReplayFrameIndex + 1] || {};
+    const next = accountReplayTimeline[accountReplayFrameIndex + 1] || null;
+    if (!next && accountReplayLoading) {
+        accountReplayTimer = setTimeout(playAccountReplay, 180);
+        return;
+    }
+    if (!next) return;
     const delay = Math.max(80, ((Number(next.t) || 0) - (Number(current.t) || 0)) / Number(accountReplaySpeed || 1));
     accountReplayTimer = setTimeout(() => {
         stepAccountReplay(1);
@@ -6496,6 +8253,7 @@ function playAccountReplay() {
 
 async function openAccountReplay(replayId) {
     stopAccountReplayPlayback();
+    const loadToken = ++accountReplayLoadToken;
     accountReplayReturnContext = {
         viewId: getVisibleViewId(),
         gameState: cloneReplayJson(gameState || {}),
@@ -6508,19 +8266,38 @@ async function openAccountReplay(replayId) {
     };
     const modal = $('account-replay-modal');
     const output = $('account-replay-frame');
+    accountReplayData = { id: replayId };
+    accountReplayTimeline = [];
+    accountReplayTotalFrames = 0;
+    accountReplayFrameIndex = 0;
+    accountReplayPerspective = 0;
+    accountReplayLoading = true;
+    replayMode = false;
     if (modal) modal.classList.remove('hidden');
-    if (output) output.textContent = UI.replay_loading;
+    if (output) {
+        output.innerHTML = `
+            <div class="account-replay-loading">
+                <div class="account-replay-load-track"><div class="account-replay-load-fill" style="width:8%"></div></div>
+                <div class="account-replay-load-text">${escapeHtml(UI.replay_prepare || UI.replay_loading)}</div>
+            </div>
+        `;
+    }
     try {
-        const data = await authRequest(`/api/replays/${encodeURIComponent(replayId)}/timeline`);
-        accountReplayData = data.replay || { id: replayId };
-        accountReplayTimeline = Array.isArray(data.timeline) ? data.timeline : [];
-        accountReplayFrameIndex = 0;
-        accountReplayPerspective = 0;
+        await fetchAccountReplayFrames(replayId, 0, 24);
+        if (loadToken !== accountReplayLoadToken) return;
         replayMode = true;
         if (modal) modal.classList.add('hidden');
         ensureAccountReplayPlaybackBar();
         renderAccountReplayFrame();
+        continueAccountReplayLoading(replayId, accountReplayTimeline.filter(Boolean).length, loadToken).catch((err) => {
+            if (loadToken !== accountReplayLoadToken) return;
+            accountReplayLoading = false;
+            flashStatus(`${UI.replay_load_failed}: ${err.message || ''}`, 4000);
+            renderAccountReplayPlaybackBar();
+        });
     } catch (err) {
+        if (loadToken !== accountReplayLoadToken) return;
+        accountReplayLoading = false;
         replayMode = false;
         if (output) output.textContent = `${UI.replay_load_failed}: ${err.message || ''}`;
     }
@@ -6528,6 +8305,7 @@ async function openAccountReplay(replayId) {
 
 function closeAccountReplayModal() {
     stopAccountReplayPlayback();
+    accountReplayLoadToken += 1;
     const modal = $('account-replay-modal');
     if (modal) modal.classList.add('hidden');
     const bar = $('account-replay-playback-bar');
@@ -6537,6 +8315,8 @@ function closeAccountReplayModal() {
     accountReplayTimeline = [];
     accountReplayFrameIndex = 0;
     accountReplayPerspective = 0;
+    accountReplayTotalFrames = 0;
+    accountReplayLoading = false;
     const ctx = accountReplayReturnContext || {};
     accountReplayReturnContext = null;
     isSpectating = !!ctx.isSpectating;
@@ -6581,6 +8361,7 @@ function cacheAccount(user) {
                 accept_friend_requests: user.accept_friend_requests !== false,
                 searchable_by_nickname: user.searchable_by_nickname !== false,
                 searchable_by_player_id: user.searchable_by_player_id !== false,
+                skin: normalizeSkinConfig(user.skin || {}),
             };
             localStorage.setItem('gtn_account_user', JSON.stringify(safeUser));
         } else {
@@ -6619,6 +8400,8 @@ function renderAccountState() {
     const friendsTop = $('btn-friends-top');
     const loginVisible = !$('view-login')?.classList.contains('hidden');
     if (friendsTop) friendsTop.classList.toggle('hidden', !currentAccount || !loginVisible);
+    const skinTop = $('btn-skin-top');
+    if (skinTop) skinTop.classList.toggle('hidden', !loginVisible);
     const guestDivider = $('guest-divider-label')?.closest('.login-divider');
     if (guestDivider) guestDivider.classList.toggle('hidden', !!currentAccount);
     const nicknameInput = $('input-nickname');
@@ -6637,6 +8420,7 @@ function renderAccountState() {
     renderAccountMode();
     updateCommunityUploadState();
     renderCommunityModList();
+    if (activeViewId === 'view-skin') syncSkinFormFromCurrent();
 }
 
 function renderAccountMode() {
@@ -6680,7 +8464,7 @@ async function authRequest(path, body) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data.success === false) {
-        throw new Error(data.error || UI.account_error);
+        throw new Error(moderationMessageFromPayload(data, data.error || UI.account_error));
     }
     return data;
 }
@@ -6814,13 +8598,21 @@ function friendStatsLine(user) {
     return `${tf('win_rate', Number(user.win_rate || 0).toFixed(1))} · ${accountStatsText(user)}`;
 }
 
+function friendMatchResultText(result) {
+    const key = String(result || '').toLowerCase();
+    if (key === 'win') return UI.victory || 'Win';
+    if (key === 'loss' || key === 'lose') return UI.defeat || 'Loss';
+    if (key === 'draw') return UI.draw || 'Draw';
+    return result || '';
+}
+
 function friendCardHtml(item, type) {
     const user = item?.user || {};
     const matches = Array.isArray(item?.matches) ? item.matches : [];
     const isNotice = item?.notice_type === 'auto_add' || item?.status === 'notice';
     const showPrivateInfo = type === 'friend';
     const matchText = matches.length
-        ? matches.slice(0, 3).map(match => escapeHtml(`${match.mode || '-'} ${match.result || ''} ${friendDateText(match.ended_at || match.started_at)}`)).join('<br>')
+        ? matches.slice(0, 3).map(match => escapeHtml(`${match.mode || '-'} ${friendMatchResultText(match.result)} ${friendDateText(match.ended_at || match.started_at)}`)).join('<br>')
         : escapeHtml(`${UI.recent_matches}: -`);
     let actions = '';
     if (type === 'incoming' && !isNotice) {
@@ -7032,13 +8824,8 @@ async function saveSocialSettings() {
 }
 
 function getServerAddress() {
-    const custom = (localStorage.getItem('gtn_server') || '').trim();
-    if (!custom) return DEFAULT_SERVER;
-    if (LEGACY_DEFAULT_SERVER_KEYS.has(canonicalServerKey(custom))) {
-        localStorage.removeItem('gtn_server');
-        return DEFAULT_SERVER;
-    }
-    return custom;
+    localStorage.removeItem('gtn_server');
+    return DEFAULT_SERVER;
 }
 
 function isLocalSoloRuntimeActive() {
@@ -7125,6 +8912,7 @@ function handleLocalGamePhase(data) {
 }
 
 function handleLocalSoloState(data) {
+    applyClientSoloSkins(data);
     const previousGameState = gameState;
     soloMode = true;
     tutorialMode = !!data.tutorial || tutorialMode;
@@ -7219,7 +9007,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=8');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=14');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;
@@ -7722,7 +9510,7 @@ const BUILTIN_CARD_PINYIN_ALIASES = {
     Honey: 'feng mi',
     Pill: 'yao wan',
     Magnet: 'ci tie',
-    Antenna: 'chu jiao',
+    Antennae: 'chu jiao',
     Claw: 'zhua zi',
     Rice: 'mi',
     Glass: 'bo li',
@@ -7863,7 +9651,7 @@ async function editSoloCardFlags(which, idx) {
     const card = deck[idx];
     if (!card) return;
     const cd = getCardDef(card.def_id);
-    const allFlags = ['precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis', 'attract', 'void', 'self_only', 'uncancellable'];
+    const allFlags = ['precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis', 'attract', 'void', 'self_only', 'uncancellable', 'copy', 'unique', 'swift', 'stealth', 'revealed'];
     const base = new Set((cd && cd.flags) || []);
     const added = new Set(card.instance_flags || []);
     const disabled = new Set(card.disabled_flags || []);
@@ -7978,6 +9766,15 @@ function renderLobby(data) {
     const myTeamLeader = data.your_team_leader || null;
     const serverMode = data.your_mode || '1v1';
     debugLog('[client] renderLobby: players=', lobbyPlayers.length, 'mySid=', mySid, 'myTeam=', myTeam, 'mode=', serverMode);
+    const modeCounts = data.mode_counts && typeof data.mode_counts === 'object'
+        ? data.mode_counts
+        : lobbyPlayers.reduce((acc, player) => {
+            const mode = player.mode || '1v1';
+            if (mode === '1v1' || mode === '2v2' || mode === 'urf') {
+                acc[mode] = (acc[mode] || 0) + 1;
+            }
+            return acc;
+        }, { '1v1': 0, '2v2': 0, urf: 0 });
 
     const modeTabs = $('lobby-mode-tabs');
     if (modeTabs) {
@@ -7985,17 +9782,19 @@ function renderLobby(data) {
         const currentMode = serverMode || cachedMode;
         modeTabs.querySelectorAll('.mode-tab').forEach(tab => {
             const tabMode = tab.getAttribute('data-mode');
-            tab.textContent = UI[`mode_${tabMode}`] || tab.textContent;
+            const label = UI[`mode_${tabMode}`] || tabMode;
+            tab.textContent = `${label} (${Number(modeCounts[tabMode] || 0)})`;
             if (tabMode === currentMode) {
                 tab.classList.add('active');
             } else {
                 tab.classList.remove('active');
             }
-            tab.onclick = () => {
+            tab.onclick = async () => {
                 const newMode = tab.getAttribute('data-mode');
                 if (newMode === currentMode) return;
                 if (myTeam && newMode !== '2v2') {
-                    if (!confirm(UI.mode_switch_confirm)) return;
+                    const confirmed = await gameConfirm(UI.notice || '', UI.mode_switch_confirm);
+                    if (!confirmed) return;
                 }
                 localStorage.setItem('preferred_mode', newMode);
                 socket.emit('set_mode', { mode: newMode });
@@ -8057,12 +9856,14 @@ function renderLobby(data) {
         nameSpan.className = isMe ? 'player-name player-self' : 'player-name';
         setPlayerNameContent(nameSpan, p, { adminPrefix: true });
         row.appendChild(nameSpan);
+        const actions = document.createElement('div');
+        actions.className = 'lobby-player-actions';
         if (!isMe && buttonMode === 'team' && !myTeam) {
             const btn = document.createElement('button');
             btn.textContent = UI.form_team;
             btn.className = 'btn btn-primary btn-sm';
             btn.onclick = () => socket.emit('form_team', { target_sid: p.sid });
-            row.appendChild(btn);
+            actions.appendChild(btn);
         } else if (!isMe && buttonMode === 'invite') {
             const btn = document.createElement('button');
             btn.textContent = UI.invite;
@@ -8072,8 +9873,22 @@ function renderLobby(data) {
                 socket.emit('invite', { target_sid: p.sid });
                 updateStatus(UI.invite_sent);
             };
-            row.appendChild(btn);
+            actions.appendChild(btn);
         }
+        if (!isMe) {
+            actions.appendChild(createReportButton({
+                objectType: 'player',
+                objectId: String(p.user_id || p.sid || p.nickname || ''),
+                targetUserId: p.user_id || '',
+                targetUsername: p.nickname || '',
+                title: UI.report_player,
+            }, {
+                className: 'report-inline-btn lobby-report-btn',
+                text: UI.report,
+                title: UI.report_player,
+            }));
+        }
+        if (actions.children.length) row.appendChild(actions);
         list.appendChild(row);
     };
     const renderTeamRow = (team) => {
@@ -8841,6 +10656,10 @@ function makeChatTimelineEntry(nick, text, meta = {}, channelMeta = {}) {
         type: 'chat',
         nick,
         text,
+        message_id: meta.message_id || meta.messageId || '',
+        sender_user_id: meta.sender_user_id || meta.senderUserId || meta.user_id || '',
+        sender_name: meta.sender_name || meta.senderName || meta.nickname || nick,
+        nickname: meta.nickname || nick,
         system: !!meta.system,
         isAdmin: isAdminPlayer(meta),
         specialRoleColor: getSpecialRoleColor(meta),
@@ -9085,6 +10904,8 @@ function normalizeBattlePlayer(gs, raw, slot) {
         name: localizeCanonicalPlayerName(name),
         avatar_url: data.avatar_url || data.avatar || '',
         avatar_id: data.avatar_id || '',
+        skin: normalizeSkinConfig(data.skin || (Array.isArray(gs.player_skins) && id != null ? gs.player_skins[id] : null)),
+        skin_look: resolveSkinLookForPlayer(id, data.skin_look || (Array.isArray(gs.player_skin_looks) && id != null ? gs.player_skin_looks[id] : null)),
         hp: Number(data.health || 0),
         maxHp: Number(data.max_health || 100),
         e: Number(data.elixir || 0),
@@ -9140,6 +10961,8 @@ function buildBattleViewModel(state) {
         : gs.phase === 'draw' ? UI.draw_phase
         : gs.phase === 'response' ? UI.waiting_response
         : gs.phase === 'choice' ? UI.choose_target
+        : gs.phase === 'draft' ? UI.draft_phase
+        : gs.phase === 'event_select' ? UI.select_event
         : gs.phase === 'game_over' ? UI.game_over
         : (gs.phase || '');
     return {
@@ -9190,11 +11013,27 @@ function renderPlayerAvatar(player, options = {}) {
     const targetable = options.targetable ? ' is-targetable' : '';
     const style = `--avatar-hue:${hue};--avatar-color:hsl(${hue} 62% 52%);--avatar-color-2:hsl(${(hue + 44) % 360} 70% 58%)`;
     const image = p.avatar_url ? `<img class="player-avatar-img" src="${escapeHtml(p.avatar_url)}" alt="">` : '';
+    const skinHtml = renderSkinAvatar(p.skin || DEFAULT_SKIN_CONFIG, {
+        playerId: p.id,
+        look: resolveSkinLookForPlayer(p.id, p.skin_look),
+    });
+    const skinClass = image ? '' : ' has-skin';
     return `
-        <div class="player-avatar${active}${defeated}${targetable}" style="${style}">
-            ${image || `<div class="player-avatar-flower"><span>${escapeHtml(initial)}</span></div>`}
+        <div class="player-avatar${skinClass}${active}${defeated}${targetable}" style="${style}">
+            ${image || skinHtml || `<div class="player-avatar-flower"><span>${escapeHtml(initial)}</span></div>`}
         </div>
     `;
+}
+
+function renderMiniPlayerSkin(containerId, playerData = {}, id = null) {
+    const el = $(containerId);
+    if (!el) return;
+    const data = playerData || {};
+    const pid = normalizePlayerId(id != null ? id : data.player_id);
+    el.innerHTML = renderSkinAvatar(data.skin || DEFAULT_SKIN_CONFIG, {
+        playerId: pid,
+        look: resolveSkinLookForPlayer(pid, data.skin_look),
+    });
 }
 
 function renderClassicStatusList(player) {
@@ -9253,7 +11092,22 @@ function attachClassicEquipmentPreviews(container, player) {
             return Number(cardInst && cardInst.instance_id) === instanceId;
         });
         const cardInst = eq && (eq.card_instance || eq.card || eq);
-        if (cardInst && cardInst.def_id) attachFloatingCardPreview(chip, cardInst);
+        if (cardInst && cardInst.def_id) {
+            attachFloatingCardPreview(chip, cardInst);
+            attachTermIntroToCard(chip, cardInst);
+        }
+    });
+}
+
+function attachClassicStatusIntros(container) {
+    if (!container) return;
+    container.querySelectorAll('.classic-status-ring .status-tag').forEach(tag => {
+        attachTermIntroToStatus(tag, {
+            key: tag.dataset.statusKey || '',
+            name: tag.dataset.statusName || tag.textContent || '',
+            val: tag.dataset.statusValue || '',
+            fg: tag.style.color || '',
+        });
     });
 }
 
@@ -9445,6 +11299,7 @@ function renderClassicFighter(container, player, side, selectedCard = null) {
         <div class="classic-equipment-ring">${renderClassicEquipmentList(player)}</div>
     `;
     attachClassicEquipmentPreviews(container, player);
+    attachClassicStatusIntros(container);
 }
 
 function renderClassicHand(vm) {
@@ -9557,7 +11412,7 @@ function renderClassicBattle(gs) {
         root.classList.toggle('is-target-aim', !!selected && !selectedSelfOnly);
         root.dataset.selectedRole = selected ? selectedRole : '';
         $('classic-mode').textContent = vm.turn.modeText || '1v1';
-        $('classic-round').textContent = `R${vm.turn.round || 0}`;
+        $('classic-round').textContent = formatCompactRoundStatus(gs, vm.turn.phaseText);
         $('classic-phase').textContent = vm.turn.phaseText || '';
         $('classic-action-hint').textContent = selected ? getClassicPlayHint(selected) : (vm.turn.isMyTurn ? UI.your_turn : UI.opponent_turn);
         renderClassicResourceOrbs($('classic-e-orbs'), vm.self.e, vm.self.maxE, resourcePreviewCard ? resourcePreviewCard.cost_e : 0, 'e');
@@ -9669,6 +11524,14 @@ function renderGame(data) {
         if (oppLabel) oppLabel.textContent = `${localizeCanonicalPlayerName(gs.opponent_name || UI.opponent)} - ${oppResult}`;
     }
 
+    const yourPlayerId = normalizePlayerId(gs.your_id);
+    const enemyIdsForSkin = Array.isArray(gs.enemy_ids) ? gs.enemy_ids.map(normalizePlayerId) : [];
+    const opponentSkinId = is2v2 ? enemyIdsForSkin[0] : (yourPlayerId === 1 ? 0 : 1);
+    renderMiniPlayerSkin('opp-skin', opp, opponentSkinId);
+    renderMiniPlayerSkin('you-skin', you, yourPlayerId);
+    renderMiniPlayerSkin('opp2-skin', opp2, enemyIdsForSkin[1]);
+    renderMiniPlayerSkin('teammate-skin', teammate, gs.teammate_id);
+
     renderPlayerBars('opp-bars', opp);
     renderPlayerBars('you-bars', getOptimisticPlayerBarsData(you));
     renderStatusTags('opp-status', opp);
@@ -9708,8 +11571,8 @@ function renderGame(data) {
             : gs.phase === 'draw' ? UI.draw_phase
             : gs.phase === 'game_over' ? UI.game_over : '';
     }
-    const fullRoundStatus = UI.round_status.replace('{0}', gs.round_num || 0).replace('{1}', phaseText);
-    updateStatus(isMinimalUiStyle() ? `R${gs.round_num || 0} · ${phaseText}` : fullRoundStatus);
+    const fullRoundStatus = formatRoundStatus(gs, phaseText);
+    updateStatus(isMinimalUiStyle() ? formatCompactRoundStatus(gs, phaseText) : fullRoundStatus);
     const statusTextEl = $('status-text');
     if (statusTextEl) statusTextEl.title = isMinimalUiStyle() ? fullRoundStatus : '';
 
@@ -9810,36 +11673,48 @@ function renderStatusTags(containerId, playerData) {
     container.innerHTML = '';
     const tags = [];
     const p = playerData;
-    if (p.poison > 0) tags.push({ name: UI.status_poison, abbr: 'P', val: p.poison, fg: COLORS.poison, bg: COLORS.poison_bg });
-    if (p.fire > 0) tags.push({ name: UI.status_fire, abbr: 'F', val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
-    if (p.toxic > 0) tags.push({ name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
-    if (p.triangle_stacks > 0) tags.push({ name: UI.status_triangle, abbr: '△', val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
-    if (p.dodge > 0) tags.push({ name: UI.status_dodge, abbr: 'Dg', val: p.dodge, fg: COLORS.guard, bg: COLORS.guard_bg });
-    if (p.nazar_active) tags.push({ name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
-    if (p.equipment_protection > 0) tags.push({ name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
-    if (p.invincible) tags.push({ name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
-    if (p.skip_turn) tags.push({ name: UI.status_stunned, abbr: 'Stn', val: '', fg: COLORS.damage, bg: COLORS.damage_bg });
-    if (p.attack_blocked > 0) tags.push({ name: UI.status_attack_blocked, abbr: 'NoT', val: p.attack_blocked, fg: '#C0392B', bg: '#FDEDEC' });
-    if (p.attack_only > 0) tags.push({ name: UI.status_attack_only, abbr: 'TOnly', val: p.attack_only, fg: '#D35400', bg: '#FEF5E7' });
-    if (p.untargetable) tags.push({ name: UI.status_untargetable, abbr: 'Unt', val: '', fg: '#1A5276', bg: '#EBF5FB' });
-    if (p.bandage_active) tags.push({ name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
-    if (p.sponge_active) tags.push({ name: UI.status_sponge, abbr: 'Spg', val: '', fg: '#6C3483', bg: '#F4ECF7' });
-    if (p.shovel_active) tags.push({ name: UI.status_shovel, abbr: 'Shv', val: '', fg: '#5D4037', bg: '#EFEBE9' });
+    if (p.poison > 0) tags.push({ key: 'poison', name: UI.status_poison, abbr: 'P', val: p.poison, fg: COLORS.poison, bg: COLORS.poison_bg });
+    if (p.fire > 0) tags.push({ key: 'fire', name: UI.status_fire, abbr: 'F', val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
+    if (p.toxic > 0) tags.push({ key: 'toxic', name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
+    if (p.triangle_stacks > 0) tags.push({ key: 'triangle', name: UI.status_triangle, abbr: '△', val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
+    if (p.dodge > 0) tags.push({ key: 'dodge', name: UI.status_dodge, abbr: 'Dg', val: p.dodge, fg: COLORS.guard, bg: COLORS.guard_bg });
+    if (p.nazar_active) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
+    if (p.equipment_protection > 0) tags.push({ key: 'equip_protect', name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
+    if (p.invincible) tags.push({ key: 'invincible', name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
+    if (p.skip_turn > 0) tags.push({ key: 'stunned', name: UI.status_stunned, abbr: 'Stn', val: p.skip_turn, fg: COLORS.damage, bg: COLORS.damage_bg });
+    if (p.attack_blocked > 0) tags.push({ key: 'attack_blocked', name: UI.status_attack_blocked, abbr: 'NoT', val: p.attack_blocked, fg: '#C0392B', bg: '#FDEDEC' });
+    if (p.attack_only > 0) tags.push({ key: 'attack_only', name: UI.status_attack_only, abbr: 'TOnly', val: p.attack_only, fg: '#D35400', bg: '#FEF5E7' });
+    if (p.untargetable) tags.push({ key: 'untargetable', name: UI.status_untargetable, abbr: 'Unt', val: '', fg: '#1A5276', bg: '#EBF5FB' });
+    if (p.bandage_active) tags.push({ key: 'bandage', name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
+    if (p.sponge_active) tags.push({ key: 'sponge', name: UI.status_sponge, abbr: 'Spg', val: '', fg: '#6C3483', bg: '#F4ECF7' });
+    if (p.shovel_active) tags.push({ key: 'shovel', name: UI.status_shovel, abbr: 'Shv', val: '', fg: '#5D4037', bg: '#EFEBE9' });
+    if (p.sluggish > 0) tags.push({ key: 'sluggish', name: UI.status_sluggish, abbr: 'Slg', val: p.sluggish, fg: '#E67E22', bg: '#FEF5E7' });
+    if (p.overload > 0) tags.push({ key: 'overload', name: UI.status_overload, abbr: 'Ovl', val: p.overload, fg: '#C0392B', bg: '#FDEDEC' });
+    if (p.foresight > 0) tags.push({ key: 'foresight', name: UI.status_foresight, abbr: 'Fsi', val: p.foresight, fg: '#2980B9', bg: '#EBF5FB' });
+    if (p.fracture > 0) tags.push({ key: 'fracture', name: UI.status_fracture, abbr: 'Frc', val: p.fracture, fg: '#7F8C8D', bg: '#F2F3F4' });
+    if (p.heal_block > 0) tags.push({ key: 'heal_block', name: UI.status_heal_block, abbr: 'HB', val: p.heal_block, fg: '#E84393', bg: '#FDEDF2' });
+    if (p.weakness > 0) tags.push({ key: 'weakness', name: UI.status_weakness, abbr: 'Wk', val: p.weakness, fg: '#8E44AD', bg: '#F4ECF7' });
+    if (p.bleed > 0) tags.push({ key: 'bleed', name: UI.status_bleed, abbr: 'Bld', val: p.bleed, fg: '#922B21', bg: '#FDEDEC' });
+    if (p.fragment_stacks > 0) tags.push({ key: 'fragment', name: UI.status_fragment, abbr: 'Frg', val: p.fragment_stacks, fg: '#795548', bg: '#EFEBE9' });
     if (p.custom_statuses && typeof p.custom_statuses === 'object') {
+        const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','sluggish','overload','foresight','fracture','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn']);
         Object.entries(p.custom_statuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;
+            if (builtinKeys.has(name)) return;
             const def = getCustomStatusDef(name);
             if (def && def.visible === false) return;
             const label = def ? getRegistryText(def, 'name', name) : name;
             const icon = def && def.icon ? `${def.icon} ` : '';
             const color = safeRegistryColor(def && def.color, '#1F618D');
             tags.push({
+                key: name,
                 name: `${icon}${label}`,
                 abbr: String(label).slice(0, 3),
                 val: count,
                 fg: color,
                 bg: '#EAF2F8',
+                customDef: def,
                 title: def ? getRegistryText(def, 'description', '') : '',
             });
         });
@@ -9856,9 +11731,13 @@ function renderStatusTags(containerId, playerData) {
         nextItems.push(fullText);
         el.textContent = fullText;
         el.title = t.title || '';
+        el.dataset.statusKey = t.key || '';
+        el.dataset.statusName = t.name || '';
+        el.dataset.statusValue = t.val == null ? '' : String(t.val);
         if (previousSignature !== undefined && !previousItems.has(fullText)) {
             el.classList.add('status-tag-changed');
         }
+        attachTermIntroToStatus(el, t);
         container.appendChild(el);
     });
     lastStatusSignatures.set(containerId, nextItems.join('\u0001'));
@@ -9870,6 +11749,7 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
     removeFloatingCardPreview();
     container.innerHTML = '';
     const revealedHand = oppData.revealed_hand || oppData.hand;
+    const revealedTagCards = oppData.revealed_tag_cards || [];
     if (revealedHand && revealedHand.length > 0) {
         revealedHand.forEach(cd => {
             const prediction = getCardPredictionOptionsForOwner(cd, oppData);
@@ -9880,6 +11760,24 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
             if (isSpectating) attachFloatingCardPreview(el, cd, { prediction, ownerState: oppData });
             container.appendChild(el);
         });
+    } else if (revealedTagCards.length > 0) {
+        const count = oppData.hand_count || 0;
+        const sortedRevealed = [...revealedTagCards].sort((a, b) => (a.instance_id || 0) - (b.instance_id || 0));
+        const hiddenCount = Math.max(0, count - sortedRevealed.length);
+        // Show revealed cards as chips (hide 'revealed' tag on chip, but keep in preview)
+        sortedRevealed.forEach(cd => {
+            const prediction = getCardPredictionOptionsForOwner(cd, oppData);
+            const el = isSpectating
+                ? createCardElement(cd, { small: true, prediction, ownerState: oppData })
+                : createCardChoiceChip(cd, { hideFlags: ['revealed'], previewOptions: { prediction, ownerState: oppData } });
+            el.classList.add(isSpectating ? 'opp-hand-card' : 'opp-hand-chip');
+            if (isSpectating) attachFloatingCardPreview(el, cd, { prediction, ownerState: oppData });
+            container.appendChild(el);
+        });
+        for (let i = 0; i < hiddenCount; i++) {
+            const card = createCardElement({}, { faceDown: true, small: true });
+            container.appendChild(card);
+        }
     } else {
         const count = oppData.hand_count || 0;
         for (let i = 0; i < count; i++) {
@@ -9916,6 +11814,10 @@ function createTeammateHandChip(cardDict, ownerState = null) {
     el.style.borderColor = typeColor;
     el.style.color = typeColor;
     attachFloatingCardPreview(el, cardDict, {
+        ownerState,
+        prediction: getCardPredictionOptionsForOwner(cardDict, ownerState),
+    });
+    attachTermIntroToCard(el, cardDict, {
         ownerState,
         prediction: getCardPredictionOptionsForOwner(cardDict, ownerState),
     });
@@ -10083,6 +11985,7 @@ function syncPlayerRegionTargets(gs) {
         });
     clear();
     if (!gs) return;
+    const useClassicRefs = shouldUseClassicBattle(gs);
     const assign = (selector, id) => {
         const el = document.querySelector(selector);
         const pid = normalizePlayerId(id);
@@ -10090,49 +11993,75 @@ function syncPlayerRegionTargets(gs) {
         el.dataset.playerTargetRegion = '1';
         el.dataset.playerId = String(pid);
     };
+    if (useClassicRefs) {
+        assign('#classic-fighter-self', gs.your_id);
+        assign('#classic-fighter-enemy', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
+        return;
+    }
     assign('.player-section', gs.your_id);
     assign('.opp-half.opp-left', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
-    assign('#opp2-half', (gs.enemy_ids || [])[1]);
-    assign('#teammate-sidebar', gs.teammate_id);
-    assign('#classic-fighter-self', gs.your_id);
-    assign('#classic-fighter-enemy', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
+    if (gs.mode === '2v2') {
+        assign('#opp2-half', (gs.enemy_ids || [])[1]);
+        assign('#teammate-sidebar', gs.teammate_id);
+    }
+}
+
+function isVisibleTargetRegion(el) {
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    if (!rect || rect.width <= 2 || rect.height <= 2) return false;
+    const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+    return !style || (style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0);
 }
 
 function getPlayerRegionById(id) {
     const pid = normalizePlayerId(id);
     if (pid == null) return null;
-    return document.querySelector(`[data-player-target-region][data-player-id="${pid}"]`);
+    const regions = Array.from(document.querySelectorAll(`[data-player-target-region][data-player-id="${pid}"]`));
+    return regions.find(isVisibleTargetRegion) || regions[0] || null;
 }
 
 function choosePlayerTargetOnBoard(title, targets) {
     if (!Array.isArray(targets) || !targets.length) return Promise.resolve(null);
-    const regions = targets.map(target => ({ target, el: getPlayerRegionById(target.id) })).filter(item => item.el);
-    if (!regions.length) return Promise.resolve(null);
+    const regions = targets
+        .map(target => ({ target, el: getPlayerRegionById(target.id) }))
+        .filter(item => item.el && isVisibleTargetRegion(item.el));
+    if (!regions.length || regions.length < targets.length) return Promise.resolve(null);
     return new Promise(resolve => {
         if (targetPickCleanup) targetPickCleanup();
-        const overlay = document.createElement('div');
-        overlay.className = 'target-picker-overlay';
-        overlay.innerHTML = `
-            <div class="target-picker-panel">
-                <div class="target-picker-title">${escapeHtml(title || UI.choose_target || UI.select_target || 'Choose target')}</div>
-                <div class="target-picker-subtitle">${escapeHtml(UI.target_pick_hint || '')}</div>
-                <div class="target-picker-buttons"></div>
-                <button type="button" class="target-picker-cancel">${escapeHtml(UI.cancel || 'Cancel')}</button>
-            </div>
-        `;
-        document.body.appendChild(overlay);
+        let settled = false;
+        let outsideEnabled = false;
+        const handlers = new Map();
         const finish = (value) => {
+            if (settled) return;
+            settled = true;
             regions.forEach(({ el }) => {
                 el.classList.remove('target-pickable', 'target-picked');
                 el.removeEventListener('click', handlers.get(el), true);
             });
             handlers.clear();
-            overlay.remove();
+            document.removeEventListener('pointerdown', outsideHandler, true);
+            document.removeEventListener('keydown', keyHandler, true);
+            document.removeEventListener('contextmenu', contextHandler, true);
             if (targetPickCleanup === finishCancel) targetPickCleanup = null;
             resolve(value);
         };
         const finishCancel = () => finish(-1);
-        const handlers = new Map();
+        const isPickableNode = (node) => !!(node && node.closest && node.closest('[data-player-target-region].target-pickable'));
+        const outsideHandler = (event) => {
+            if (!outsideEnabled || isPickableNode(event.target)) return;
+            event.preventDefault();
+            finishCancel();
+        };
+        const keyHandler = (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            finishCancel();
+        };
+        const contextHandler = (event) => {
+            event.preventDefault();
+            finishCancel();
+        };
         regions.forEach(({ target, el }) => {
             const handler = (event) => {
                 event.preventDefault();
@@ -10145,26 +12074,10 @@ function choosePlayerTargetOnBoard(title, targets) {
             el.classList.add('target-pickable');
             el.addEventListener('click', handler, true);
         });
-        const buttonWrap = overlay.querySelector('.target-picker-buttons');
-        if (buttonWrap) {
-            targets.forEach(target => {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'target-picker-button';
-                btn.textContent = target.label;
-                btn.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const region = getPlayerRegionById(target.id);
-                    if (region) region.classList.add('target-picked');
-                    flashTargetRegion(target.id);
-                    setTimeout(() => finish(target.id), 80);
-                });
-                buttonWrap.appendChild(btn);
-            });
-        }
-        const cancel = overlay.querySelector('.target-picker-cancel');
-        if (cancel) cancel.addEventListener('click', finishCancel);
+        document.addEventListener('pointerdown', outsideHandler, true);
+        document.addEventListener('keydown', keyHandler, true);
+        document.addEventListener('contextmenu', contextHandler, true);
+        setTimeout(() => { outsideEnabled = true; }, 0);
         targetPickCleanup = finishCancel;
     });
 }
@@ -10191,12 +12104,22 @@ function getStatePlayerRefs(gs) {
     return refs;
 }
 
-function areSequentialGameStates(previous, next) {
+function areSequentialGameStates(previous, next, options = {}) {
     if (!previous || !next || previous === next) return false;
     if (!previous.phase || !next.phase) return false;
     if ((previous.mode || '') !== (next.mode || '')) return false;
     if (!!previous.solo !== !!next.solo) return false;
-    if (normalizePlayerId(previous.your_id) !== normalizePlayerId(next.your_id)) return false;
+    if (!!previous.spectating !== !!next.spectating) return false;
+    if (previous.spectating && next.spectating) {
+        if (Number(previous.room_id) !== Number(next.room_id)) return false;
+        if (normalizePlayerId(previous.spectate_perspective) !== normalizePlayerId(next.spectate_perspective)) return false;
+    }
+    const previousYourId = normalizePlayerId(previous.your_id);
+    const nextYourId = normalizePlayerId(next.your_id);
+    if (previousYourId !== nextYourId) {
+        const allowSoloPerspectiveShift = !!options.allowSoloPerspectiveShift && previous.solo && next.solo;
+        if (!allowSoloPerspectiveShift) return false;
+    }
     const prevTotal = Number(previous.log_total);
     const nextTotal = Number(next.log_total);
     if (Number.isFinite(prevTotal) && Number.isFinite(nextTotal) && nextTotal < prevTotal) return false;
@@ -10299,6 +12222,13 @@ function showCombatFloatSequence(selector, events, interval = 200) {
         }, Math.max(0, event.delay));
     });
     return timeline.events;
+}
+
+function scheduleSkinDamageMoods(playerId, events) {
+    (events || []).forEach(event => {
+        if (!event) return;
+        triggerSkinDamageMood(playerId, event.kind || 'damage', event.delay || 0);
+    });
 }
 
 function getBarMaxForKey(data, key) {
@@ -10472,18 +12402,81 @@ function getNewBattleLogLines(previous, next) {
     return nextLog.slice(startIndex);
 }
 
+function splitDamageLogTarget(before) {
+    const text = String(before || '');
+    const comma = Math.max(text.lastIndexOf('，'), text.lastIndexOf(','));
+    return (comma >= 0 ? text.slice(comma + 1) : text).trim();
+}
+
+function parseDamagePartsText(raw, repeatRaw = null) {
+    const text = String(raw || '').trim();
+    if (!text) return [];
+    let parts = [];
+    if (/^\d+(?:\+\d+)+$/.test(text)) {
+        parts = text.split('+').map(v => Number(v));
+    } else if (/^\d+$/.test(text)) {
+        const amount = Number(text);
+        const repeat = repeatRaw == null || repeatRaw === '' ? 1 : Number(repeatRaw);
+        const count = Number.isFinite(repeat) ? Math.max(1, Math.floor(repeat)) : 1;
+        parts = Array.from({ length: count }, () => amount);
+    }
+    return parts.filter(v => Number.isFinite(v) && v > 0);
+}
+
+function damageVisualKindFromSource(source, rawLine = '') {
+    const text = `${source || ''} ${rawLine || ''}`;
+    if (/(中毒|毒伤|poison|\bP\b|P伤害)/i.test(text)) return 'poison';
+    if (/(灼烧|火伤|burn|fire|\bF\b|F伤害)/i.test(text)) return 'fire';
+    return 'damage';
+}
+
+function expandDamageLogHits(name, parts, hpText, source = '', rawLine = '') {
+    const cleanParts = (Array.isArray(parts) ? parts : [])
+        .map(v => Math.max(0, Math.ceil(Number(v || 0))))
+        .filter(v => Number.isFinite(v) && v > 0);
+    if (!name || !cleanParts.length) return [];
+    const hpRaw = String(hpText || '').trim();
+    const hpParts = hpRaw.split('→');
+    const startHp = hpParts.length === 2 ? Number(hpParts[0]) : null;
+    const endHp = hpParts.length === 2 ? Number(hpParts[1]) : Number(hpRaw);
+    let staged = Number.isFinite(startHp) ? startHp : null;
+    const visualKind = damageVisualKindFromSource(source, rawLine);
+    return cleanParts.map((amount, index) => {
+        let health = null;
+        if (Number.isFinite(staged)) {
+            staged -= amount;
+            health = staged;
+        } else if (index === cleanParts.length - 1 && Number.isFinite(endHp)) {
+            health = endHp;
+        }
+        return { name, amount, health, source, visualKind };
+    });
+}
+
 function parseDamageLogLine(line) {
     const text = String(line || '');
-    const match = text.match(/^(.+?)受到(\d+)(?:点)?(?:.*?伤害)?（H=(-?\d+)）$/);
-    if (!match) return null;
-    const amount = Number(match[2]);
-    if (!Number.isFinite(amount) || amount <= 0) return null;
-    const health = Number(match[3]);
-    return {
-        name: match[1],
-        amount,
-        health: Number.isFinite(health) ? health : null,
-    };
+    const hpSuffix = '[（(]H=([^）)]+)[）)]$';
+    let match = text.match(new RegExp(`^(.+?)受到[（(](\\d+(?:\\+\\d+)*)[）)]D${hpSuffix}`));
+    if (match) {
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[3], 'D', text);
+    }
+    match = text.match(new RegExp(`^(.+?)受到(\\d+)D(?:[×x](\\d+))?${hpSuffix}`));
+    if (match) {
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2], match[3]), match[4], 'D', text);
+    }
+    match = text.match(new RegExp(`^(.+?)受到(\\d+(?:\\+\\d+)*)(中毒|毒伤|灼烧|火伤|P|F|Poison|Burn|Fire)伤害${hpSuffix}`, 'i'));
+    if (match) {
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[4], match[3], text);
+    }
+    match = text.match(new RegExp(`^(.+?)受到(\\d+(?:\\+\\d+)*)点([^（）()]*?)伤害${hpSuffix}`));
+    if (match) {
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[4], match[3], text);
+    }
+    match = text.match(new RegExp(`^(.+?)受到(\\d+)点([^（）()]*?)${hpSuffix}`));
+    if (match) {
+        return expandDamageLogHits(splitDamageLogTarget(match[1]), parseDamagePartsText(match[2]), match[4], match[3], text);
+    }
+    return [];
 }
 
 function getStatePlayerDisplayNames(gs, ref) {
@@ -10521,18 +12514,45 @@ function getDamageLogEventsByPlayer(previous, next) {
     });
     const out = new Map();
     getNewBattleLogLines(previous, next).forEach(line => {
-        const parsed = parseDamageLogLine(line);
-        if (!parsed) return;
-        const id = nameToId.get(parsed.name);
-        if (id == null) return;
-        if (!out.has(id)) out.set(id, []);
-        out.get(id).push(parsed);
+        const parsedHits = parseDamageLogLine(line);
+        if (!parsedHits.length) return;
+        parsedHits.forEach(parsed => {
+            const id = nameToId.get(parsed.name);
+            if (id == null) return;
+            if (!out.has(id)) out.set(id, []);
+            out.get(id).push(parsed);
+        });
     });
     return out;
 }
 
+function inferStatusDamageKindForRef(previous, next, ref, oldData, newData, healthDelta, damageHits) {
+    if (Number(healthDelta || 0) >= 0) return null;
+    if ((damageHits || []).some(hit => hit && (hit.visualKind === 'poison' || hit.visualKind === 'fire'))) return null;
+    const names = getStatePlayerDisplayNames(next, ref);
+    const lines = getNewBattleLogLines(previous, next);
+    for (const line of lines) {
+        const kind = damageVisualKindFromSource('', line);
+        if (kind !== 'poison' && kind !== 'fire') continue;
+        const parsed = parseDamageLogLine(line);
+        const matchedByParsedTarget = parsed.some(hit => hit && names.has(hit.name));
+        const matchedByText = [...names].some(name => name && String(line).includes(name));
+        if (matchedByParsedTarget || matchedByText) return kind;
+    }
+    if ((damageHits || []).length) return null;
+    const refId = normalizePlayerId(ref && ref.id);
+    const currentId = normalizePlayerId(next && next.current_player);
+    if (refId == null || currentId !== refId) return null;
+    const oldPoison = Number(oldData && oldData.poison || 0);
+    const newPoison = Number(newData && newData.poison || 0);
+    const oldFire = Number(oldData && oldData.fire || 0);
+    if (oldPoison > 0 && newPoison < oldPoison) return 'poison';
+    if (oldFire > 0) return 'fire';
+    return null;
+}
+
 function showStateDeltas(previous, next) {
-    if (!areSequentialGameStates(previous, next)) return;
+    if (!areSequentialGameStates(previous, next, { allowSoloPerspectiveShift: true })) return;
     if (!next.phase || next.phase === 'draft' || next.phase === 'event_select') return;
     const prev = new Map(getStatePlayerRefs(previous).map(ref => [ref.id, ref]));
     const damageLogEvents = getDamageLogEventsByPlayer(previous, next);
@@ -10565,6 +12585,8 @@ function showStateDeltas(previous, next) {
         const newMagic = getBarValueForKey(newData, 'magic');
         let stagedHealth = oldHealth;
         let lastHealthDelay = 0;
+        const skinDamageEvents = [];
+        const inferredStatusDamageKind = inferStatusDamageKindForRef(previous, next, ref, oldData, newData, healthDelta, damageHits);
         if (damageHits.length) {
             damageHits.forEach((hit, hitIndex) => {
                 const amount = Number(hit && hit.amount);
@@ -10572,6 +12594,7 @@ function showStateDeltas(previous, next) {
                 const delay = hitIndex * 200;
                 stagedHealth = Number.isFinite(Number(hit.health)) ? Number(hit.health) : stagedHealth - amount;
                 lastHealthDelay = delay;
+                skinDamageEvents.push({ delay, kind: hit.visualKind || 'damage' });
                 events.push({
                     text: `-${amount}H`,
                     kind: 'damage',
@@ -10596,6 +12619,7 @@ function showStateDeltas(previous, next) {
             }
         } else if (healthDelta < 0) {
             events.push({ text: `${healthDelta}H`, kind: 'damage', barKey: 'health', barValue: newHealth, barMax: healthMax });
+            skinDamageEvents.push({ delay: 0, kind: 'damage' });
         } else if (healthDelta > 0) {
             events.push({ text: `+${healthDelta}H`, kind: 'heal', barKey: 'health', barValue: newHealth, barMax: healthMax });
         }
@@ -10652,7 +12676,12 @@ function showStateDeltas(previous, next) {
         } else if (magicDelta < 0) {
             events.push({ text: `${magicDelta}M`, kind: 'magic', delay: resourceDelay, stackIndex: resourceCost ? 2 : undefined, barKey: 'magic', barValue: newMagic, barMax: magicMax });
         }
+        if (inferredStatusDamageKind && !skinDamageEvents.some(event => event.kind === 'poison' || event.kind === 'fire')) {
+            if (skinDamageEvents.length) skinDamageEvents[0].kind = inferredStatusDamageKind;
+            else skinDamageEvents.push({ delay: 0, kind: inferredStatusDamageKind });
+        }
         const scheduledEvents = showCombatFloatSequence(ref.selector, events);
+        scheduleSkinDamageMoods(ref.id, skinDamageEvents);
         animateBarEventSequence(ref.selector, scheduledEvents, oldData, newData, { startValues: barStartValues });
         if (newEquipCount > oldEquipCount) {
             setTimeout(() => animateEquipmentForRegion(ref.selector), 30);
@@ -10669,10 +12698,9 @@ function clearScheduledGameOver() {
 }
 
 function estimateGameOverAnimationDelay(previous, next) {
-    if (!previous || !next || !areSequentialGameStates(previous, next)) return 0;
+    if (!previous || !next || !areSequentialGameStates(previous, next, { allowSoloPerspectiveShift: true })) return 0;
     const damageCount = getNewBattleLogLines(previous, next)
-        .filter(line => !!parseDamageLogLine(line))
-        .length;
+        .reduce((count, line) => count + parseDamageLogLine(line).length, 0);
     if (damageCount <= 0) return 650;
     const rawLastDelay = Math.max(0, damageCount - 1) * 200;
     const lastDelay = Math.min(rawLastDelay, Math.max(0, COMBAT_FLOAT_MAX_LAST_DELAY_MS));
@@ -10687,7 +12715,7 @@ function renderGameOverAfterFinalAnimation(previous, next, options = {}) {
         && next
         && previous.phase !== 'game_over'
         && next.phase === 'game_over'
-        && areSequentialGameStates(previous, next);
+        && areSequentialGameStates(previous, next, { allowSoloPerspectiveShift: true });
     if (!shouldAnimate) {
         if (options.tutorial) stopTutorialUiForGameOver();
         if (options.fullScreen === false) renderGame(next);
@@ -10738,12 +12766,13 @@ function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true, candida
         const targetId = normalizePlayerId(id);
         if (targetId == null || (!includeSelf && targetId === normalizePlayerId(gameState.your_id))) return;
         if (!targetCandidateAllows(role, candidates)) return;
-        const alive = (data && Number(data.health || 0) > 0);
+        const stateData = getPlayerDataById(targetId) || data || {};
+        const alive = (stateData && Number(stateData.health || 0) > 0);
         if (aliveOnly && !alive) return;
         out.push({
             id: targetId,
             group,
-            label: `${group} ${getPlayerNameById(targetId)} H:${data ? (data.health || 0) : 0}/${data ? (data.max_health || 0) : 0}`,
+            label: `${group} ${getPlayerNameById(targetId)} H:${stateData ? (stateData.health || 0) : 0}/${stateData ? (stateData.max_health || 0) : 0}`,
             alive
         });
     };
@@ -10775,20 +12804,13 @@ async function choosePlayerTarget(title, opts = {}) {
     if (boardTarget !== null) {
         return boardTarget;
     }
+    if (gameState && gameState.mode === '2v2') {
+        return -1;
+    }
     const sel = await simpleChoice(title || UI.choose_target || UI.select_target || 'Choose target', targets.map(t => t.label));
     const selectedId = sel >= 0 ? targets[sel].id : -1;
     if (selectedId >= 0) flashTargetRegion(selectedId);
     return selectedId;
-}
-
-async function choosePlayerTargetFromDialog(title, opts = {}) {
-    const targets = getPlayerTargetOptions(opts);
-    if (!targets.length) {
-        gameAlert(UI.notice, UI.no_valid_target || 'No valid target');
-        return -1;
-    }
-    const sel = await simpleChoice(title || UI.choose_target || UI.select_target || 'Choose target', targets.map(t => t.label));
-    return sel >= 0 ? targets[sel].id : -1;
 }
 
 function getCardTargetPickOptions(cardDef) {
@@ -10838,7 +12860,7 @@ function equipmentChoosesTargetOnTrigger(cardDef) {
     if (!cardDef || cardDef.card_type !== 'root') return false;
     const triggerCost = Number(cardDef.trigger_cost_e);
     if (!Number.isFinite(triggerCost) || triggerCost < 0) return false;
-    return getEquipmentTriggerPayloads(cardDef).some(effectTreeUsesEventTarget);
+    return true;
 }
 
 async function chooseEnemyTarget(title) {
@@ -10928,7 +12950,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
                 if (gameState && gameState.mode === '2v2' && equipmentChoosesTargetOnTrigger(cardDef)) {
                     const targetId = cardHasSelfOnlyFlag(cardInst, cardDef)
                         ? normalizePlayerId(gameState && gameState.your_id)
-                        : await choosePlayerTargetFromDialog(
+                        : await choosePlayerTarget(
                             UI.choose_target || UI.select_target || 'Choose target',
                             { includeSelf: true, candidates: 'all', aliveOnly: true },
                         );
@@ -10990,6 +13012,13 @@ function createBattleLogElement(entry) {
             repeatSpan.className = 'chat-repeat-count';
             repeatSpan.textContent = ` ×${repeatCount}`;
             el.appendChild(repeatSpan);
+        }
+        if (isReportableChatEntry(entry)) {
+            el.appendChild(createReportButton(chatEntryReportMeta(entry), {
+                className: 'report-inline-btn chat-report-btn',
+                text: UI.report,
+                title: UI.report_chat,
+            }));
         }
         return el;
     }
@@ -11090,6 +13119,9 @@ function appendLobbyChat(nick, text, meta = {}) {
         type: 'chat',
         nickname: meta.nickname || nick,
         display_nick: nick,
+        message_id: meta.message_id || meta.messageId || '',
+        sender_user_id: meta.sender_user_id || meta.senderUserId || meta.user_id || '',
+        sender_name: meta.sender_name || meta.senderName || meta.nickname || nick,
         text,
         repeat_count: meta.repeat_count || 1,
         ...meta,
@@ -11126,6 +13158,13 @@ function appendLobbyChatEntry(entry = {}) {
         repeatSpan.textContent = ` ×${repeatCount}`;
         el.appendChild(repeatSpan);
     }
+    if (isReportableChatEntry(entry)) {
+        el.appendChild(createReportButton(chatEntryReportMeta(entry), {
+            className: 'report-inline-btn chat-report-btn',
+            text: UI.report,
+            title: UI.report_chat,
+        }));
+    }
     container.appendChild(el);
     container.scrollTop = container.scrollHeight;
 }
@@ -11157,6 +13196,10 @@ function appendGameChat(nick, text, meta = {}, channelMeta = {}) {
         type: 'chat',
         nick,
         text,
+        message_id: meta.message_id || meta.messageId || '',
+        sender_user_id: meta.sender_user_id || meta.senderUserId || meta.user_id || '',
+        sender_name: meta.sender_name || meta.senderName || meta.nickname || nick,
+        nickname: meta.nickname || nick,
         system: !!meta.system,
         isAdmin: isAdminPlayer(meta),
         specialRoleColor: getSpecialRoleColor(meta),
@@ -11567,10 +13610,7 @@ async function onPlayCard(cardInstanceId, options = {}) {
     if (!soloMode && gameState.mode === '2v2' && cardHasSelfOnlyFlag(cardDict, cardDef) && (!cardDef || cardDef.card_type !== 'thorn')) {
         targetPlayerId = normalizePlayerId(gameState.your_id);
     } else if (!soloMode && gameState.mode === '2v2' && cardNeedsPlayerTarget(cardDef, cardDict)) {
-        const chooseTarget = cardDef && cardDef.card_type === 'root'
-            ? choosePlayerTargetFromDialog
-            : choosePlayerTarget;
-        targetPlayerId = await chooseTarget(
+        targetPlayerId = await choosePlayerTarget(
             UI.choose_target || UI.select_target || 'Choose target',
             getCardTargetPickOptions(cardDef),
         );
@@ -11705,13 +13745,13 @@ function multiChoice(title, options, config = {}) {
         msgEl.classList.toggle('hidden', !message);
         optsEl.innerHTML = '';
         const selected = new Set();
-        const confirm = document.createElement('div');
-        confirm.className = 'game-prompt-option game-prompt-confirm disabled';
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'btn btn-primary';
         const updateConfirm = () => {
             const count = selected.size;
             const ok = count >= min && count <= max;
-            confirm.classList.toggle('disabled', !ok);
-            confirm.textContent = `${UI.ok || '确定'} (${count}/${min}-${max})`;
+            confirmBtn.classList.toggle('disabled', !ok);
+            confirmBtn.textContent = `${config.confirmText || UI.ok || '确定'} (${count}/${min}-${max})`;
         };
         options.forEach((opt, i) => {
             const div = document.createElement('div');
@@ -11729,20 +13769,30 @@ function multiChoice(title, options, config = {}) {
             };
             optsEl.appendChild(div);
         });
-        confirm.onclick = () => {
-            if (confirm.classList.contains('disabled')) return;
+        confirmBtn.onclick = () => {
+            if (confirmBtn.classList.contains('disabled')) return;
             removeFloatingCardPreview();
             el.classList.remove('active');
             resolve(Array.from(selected).sort((a, b) => a - b));
         };
-        optsEl.appendChild(confirm);
+        // Place confirm button next to cancel button in the buttons row
         const cancelBtn = $('game-prompt-cancel');
         cancelBtn.textContent = UI.cancel;
         cancelBtn.classList.toggle('hidden', !cancellable);
         cancelBtn.style.display = cancellable ? '' : 'none';
         cancelBtn.onclick = () => { removeFloatingCardPreview(); el.classList.remove('active'); resolve([]); };
+        // Insert confirm after cancel in the buttons row
+        const buttonsRow = cancelBtn.parentNode;
+        if (confirmBtn.parentNode) confirmBtn.parentNode.removeChild(confirmBtn);
+        buttonsRow.appendChild(confirmBtn);
+        const cleanup = () => {
+            if (confirmBtn.parentNode) confirmBtn.parentNode.removeChild(confirmBtn);
+        };
         updateConfirm();
         el.classList.add('active');
+        // Cleanup on resolve
+        const origResolve = resolve;
+        resolve = (val) => { cleanup(); origResolve(val); };
     });
 }
 
@@ -12021,6 +14071,176 @@ function respondSurrenderConsent(accepted) {
     if (socket) socket.emit('surrender_consent_response', { accepted: !!accepted });
 }
 
+async function showReorderDeckUI(deckCards, titleText) {
+    const modal = $('modal');
+    const content = $('modal-content');
+    if (!modal || !content) return null;
+    removeFloatingCardPreview();
+    const order = deckCards.map(c => c.instance_id);
+    content.className = 'modal-inner view-deck-modal';
+    content.innerHTML = '';
+    const title = document.createElement('h3');
+    title.textContent = titleText;
+    content.appendChild(title);
+    const hint = document.createElement('p');
+    hint.className = 'deck-total';
+    hint.textContent = '拖拽三横线调整顺序（最上方先抽到）';
+    content.appendChild(hint);
+    const list = document.createElement('div');
+    list.className = 'deck-list reorder-deck-list';
+
+    // Build rows
+    const rows = [];
+    deckCards.forEach((c, idx) => {
+        const row = document.createElement('div');
+        row.className = 'reorder-deck-entry';
+        row.dataset.idx = idx;
+        // Drag handle (hamburger icon)
+        const handle = document.createElement('span');
+        handle.className = 'reorder-handle';
+        handle.innerHTML = '&#9776;';
+        handle.setAttribute('aria-label', '拖拽排序');
+        row.appendChild(handle);
+        row.appendChild(createCardChoiceChip(c));
+        const numEl = document.createElement('span');
+        numEl.className = 'choice-option-detail deck-entry-count reorder-deck-num';
+        numEl.textContent = `#${idx + 1}`;
+        row.appendChild(numEl);
+        list.appendChild(row);
+        rows.push(row);
+    });
+
+    // Pointer-based smooth drag reorder
+    let dragRow = null;
+    let dragOffsetY = 0;
+    let placeholder = null;
+    let dragClone = null;
+
+    function moveDrag(e) {
+        if (!dragRow || !dragClone) return;
+        dragClone.style.top = (e.clientY - dragOffsetY) + 'px';
+
+        // Find insertion point among current visible rows (skip placeholder & dragging row)
+        let insertBefore = null;
+        const children = list.children;
+        for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            if (child === placeholder || child === dragRow) continue;
+            const rect = child.getBoundingClientRect();
+            if (rect.top + rect.height / 2 > e.clientY) {
+                insertBefore = child;
+                break;
+            }
+        }
+
+        if (insertBefore) {
+            list.insertBefore(placeholder, insertBefore);
+        } else {
+            list.appendChild(placeholder);
+        }
+    }
+
+    function endDrag() {
+        if (!dragRow) return;
+
+        // Insert drag row at placeholder position
+        list.insertBefore(dragRow, placeholder);
+        placeholder.remove();
+        dragClone.remove();
+
+        dragRow.classList.remove('reorder-dragging');
+        dragRow = null;
+        dragClone = null;
+        placeholder = null;
+
+        // Rebuild order from current DOM order
+        const currentRows = list.querySelectorAll('.reorder-deck-entry');
+        order.length = 0;
+        currentRows.forEach((el, i) => {
+            el.dataset.idx = i;
+            const num = el.querySelector('.reorder-deck-num');
+            if (num) num.textContent = `#${i + 1}`;
+            const origIdx = rows.indexOf(el);
+            if (origIdx >= 0) order.push(deckCards[origIdx].instance_id);
+        });
+
+        document.removeEventListener('pointermove', moveDrag);
+        document.removeEventListener('pointerup', endDrag);
+    }
+
+    rows.forEach(row => {
+        const handle = row.querySelector('.reorder-handle');
+        handle.addEventListener('pointerdown', e => {
+            e.preventDefault();
+            const rect = row.getBoundingClientRect();
+            dragRow = row;
+            dragOffsetY = e.clientY - rect.top;
+
+            // Create placeholder at current position
+            placeholder = document.createElement('div');
+            placeholder.className = 'reorder-placeholder';
+            placeholder.style.height = rect.height + 'px';
+            list.insertBefore(placeholder, row);
+
+            // Hide original row (remove from flow)
+            row.classList.add('reorder-dragging');
+
+            // Create floating clone
+            dragClone = row.cloneNode(true);
+            dragClone.className = 'reorder-deck-entry reorder-clone';
+            dragClone.style.position = 'fixed';
+            dragClone.style.left = rect.left + 'px';
+            dragClone.style.top = rect.top + 'px';
+            dragClone.style.width = rect.width + 'px';
+            dragClone.style.zIndex = '10000';
+            dragClone.style.pointerEvents = 'none';
+            document.body.appendChild(dragClone);
+
+            document.addEventListener('pointermove', moveDrag);
+            document.addEventListener('pointerup', endDrag);
+        });
+    });
+
+    content.appendChild(list);
+    const buttons = document.createElement('div');
+    buttons.className = 'modal-buttons';
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'btn btn-primary';
+    confirmBtn.textContent = UI.ok || '确定';
+    confirmBtn.onclick = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('active');
+    };
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-danger';
+    cancelBtn.textContent = UI.cancel || '取消';
+    cancelBtn.onclick = () => {
+        order.length = 0;
+        modal.classList.add('hidden');
+        modal.classList.remove('active');
+    };
+    buttons.appendChild(cancelBtn);
+    buttons.appendChild(confirmBtn);
+    content.appendChild(buttons);
+    modal.classList.remove('hidden');
+    modal.classList.add('active');
+    return new Promise(resolve => {
+        const checkClosed = () => {
+            if (modal.classList.contains('hidden') || !modal.classList.contains('active')) {
+                if (order.length > 0) {
+                    resolve({ new_order: order });
+                } else {
+                    resolve(null);
+                }
+            } else {
+                requestAnimationFrame(checkClosed);
+            }
+        };
+        confirmBtn.addEventListener('click', () => setTimeout(checkClosed, 50));
+        cancelBtn.addEventListener('click', () => setTimeout(checkClosed, 50));
+    });
+}
+
 async function showChoiceUI(data) {
     if (isSpectating) return;
     removeFloatingCardPreview();
@@ -12148,9 +14368,20 @@ async function showChoiceUI(data) {
         }
     } else if (choiceType === 'choose_card_from_hand') {
         const isMimicChoice = isMimicCardDict(cardDict);
-        const otherCards = (choiceTargetData().hand || []).filter(c => (
+        const filter = choiceParams.filter || {};
+        let otherCards = (choiceTargetData().hand || []).filter(c => (
             !isMimicChoice || c.instance_id !== cardDict.instance_id
         ));
+        if (filter.card_type) {
+            const allowedTypes = Array.isArray(filter.card_type) ? filter.card_type : [filter.card_type];
+            otherCards = otherCards.filter(c => {
+                const def = getCardDef(c.def_id);
+                return def && allowedTypes.includes(def.card_type);
+            });
+        }
+        if (filter.exclude_current && cardDict.instance_id) {
+            otherCards = otherCards.filter(c => c.instance_id !== cardDict.instance_id);
+        }
         if (otherCards.length) {
             const options = otherCards.map(c => (
                 isMimicChoice
@@ -12159,6 +14390,9 @@ async function showChoiceUI(data) {
             ));
             const sel = await simpleChoice(choiceTitle(UI.choose_hand_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < otherCards.length) choiceResult = { target_instance_id: otherCards[sel].instance_id };
+        } else {
+            const noMatchMsg = filter.card_type ? UI.no_matching_cards || '没有符合条件的牌' : (UI.no_cards_in_hand || '手牌为空');
+            gameAlert(UI.notice, noMatchMsg);
         }
     } else if (choiceType === 'choose_from_deck') {
         const deck = choiceTargetData().deck || [];
@@ -12214,12 +14448,38 @@ async function showChoiceUI(data) {
             candidates,
         });
         if (targetId >= 0) choiceResult = { target_player: targetId, target_player_id: targetId };
+    } else if (choiceType === 'foresight_replace') {
+        const deckCards = data.deck_cards || [];
+        const maxReplace = Number(choiceParams.max_count || choiceParams.count || 1);
+        if (!deckCards.length) { gameAlert(UI.notice, UI.no_valid_target || '没有可选择的卡牌'); }
+        else {
+            const options = deckCards.map(c => cardChoiceOption(c));
+            const selected = await multiChoice(
+                choiceTitle(UI.foresight_replace_title || 'Foresight'),
+                options,
+                {
+                    ...choicePromptConfig,
+                    min: 0,
+                    max: maxReplace,
+                    message: (UI.foresight_replace_desc || 'Select up to {0} cards to draw').replace('{0}', maxReplace),
+                    confirmText: UI.foresight_replace_confirm || 'Draw',
+                }
+            );
+            if (selected.length > 0) choiceResult = { selected_instance_ids: selected.map(i => deckCards[i].instance_id) };
+            else choiceResult = { selected_instance_ids: [] };
+        }
     } else if (choiceType === 'confirm') {
         const sel = await simpleChoice(choiceTitle(UI.notice || 'Confirm'), [
             choiceParams.ok_text || UI.ok || 'OK',
             choiceParams.cancel_text || UI.cancel || 'Cancel',
         ], choicePromptConfig);
         if (sel >= 0) choiceResult = { confirmed: sel === 0, accepted: sel === 0 };
+    } else if (choiceType === 'reorder_deck') {
+        const deckCards = data.deck_cards || [];
+        if (!deckCards.length) { gameAlert(UI.notice, UI.deck_empty); }
+        else {
+            choiceResult = await showReorderDeckUI(deckCards, data.message || '调整牌堆顺序');
+        }
     }
     if (!choiceResult && choiceParams.continue_on_cancel) {
         choiceResult = { cancelled: true };
@@ -12393,6 +14653,19 @@ function renderGameOver(data) {
             updateGameOverRematchButton(gs);
         }
     }
+    const reportMatchBtn = $('btn-report-match');
+    if (reportMatchBtn) {
+        const matchObjectId = getReportMatchObjectId(gs);
+        const showReportMatch = !!matchObjectId && !isTutorialGameOver && !soloMode && gs.mode !== 'solo';
+        reportMatchBtn.textContent = UI.report_match || UI.report || 'Report';
+        reportMatchBtn.classList.toggle('hidden', !showReportMatch);
+        reportMatchBtn.style.display = showReportMatch ? '' : 'none';
+        reportMatchBtn.onclick = showReportMatch ? (() => openReportDialog({
+            objectType: 'match',
+            objectId: matchObjectId,
+            title: UI.report_match,
+        })) : null;
+    }
     const returnLobbyBtn = $('btn-return-lobby');
     if (returnLobbyBtn) {
         if (isTutorialGameOver) {
@@ -12413,6 +14686,7 @@ function renderGameOver(data) {
             returnLobbyBtn.onclick = () => {
                 if (!socket) return;
                 socket.emit('return_lobby');
+                clearNetworkMatchStateForLobby();
                 showView('view-lobby');
                 phase = 'lobby';
             };
@@ -12519,18 +14793,12 @@ function onViewDeck() {
         setTimeout(updateTutorialOverlay, 80);
     }
     const deckPlayer = getDeckViewerPlayer();
-    const deck = deckPlayer.deck || [];
+    const hasOrderedDeck = !!deckPlayer.deck_ordered;
+    const deck = deckPlayer.deck_ordered || deckPlayer.deck || [];
     const modal = $('modal');
     const content = $('modal-content');
     if (!modal || !content) return;
     removeFloatingCardPreview();
-    const groups = new Map();
-    deck.forEach(c => {
-        const key = cardChoiceIdentity(c);
-        const group = groups.get(key) || { card: c, count: 0 };
-        group.count += 1;
-        groups.set(key, group);
-    });
     content.className = 'modal-inner view-deck-modal';
     content.innerHTML = '';
     const title = document.createElement('h3');
@@ -12545,21 +14813,42 @@ function onViewDeck() {
     content.appendChild(total);
     const list = document.createElement('div');
     list.className = 'deck-list';
-    Array.from(groups.values()).sort((a, b) => {
-        const ad = getCardDef(a.card.def_id);
-        const bd = getCardDef(b.card.def_id);
-        if (ad && bd) return compareGalleryCards(a.card.def_id, b.card.def_id);
-        return (ad ? getCardName(ad) : a.card.def_id || '').localeCompare(bd ? getCardName(bd) : b.card.def_id || '');
-    }).forEach(({ card, count }) => {
-        const row = document.createElement('div');
-        row.className = 'deck-entry';
-        row.appendChild(createCardChoiceChip(card));
-        const countEl = document.createElement('span');
-        countEl.className = 'choice-option-detail deck-entry-count';
-        countEl.textContent = `x${count}`;
-        row.appendChild(countEl);
-        list.appendChild(row);
-    });
+    if (hasOrderedDeck) {
+        // Goggles: show deck in order (top to bottom)
+        deck.forEach((c, idx) => {
+            const row = document.createElement('div');
+            row.className = 'deck-entry';
+            const numEl = document.createElement('span');
+            numEl.className = 'choice-option-detail deck-entry-count';
+            numEl.textContent = `#${idx + 1}`;
+            row.appendChild(createCardChoiceChip(c));
+            row.appendChild(numEl);
+            list.appendChild(row);
+        });
+    } else {
+        const groups = new Map();
+        deck.forEach(c => {
+            const key = cardChoiceIdentity(c);
+            const group = groups.get(key) || { card: c, count: 0 };
+            group.count += 1;
+            groups.set(key, group);
+        });
+        Array.from(groups.values()).sort((a, b) => {
+            const ad = getCardDef(a.card.def_id);
+            const bd = getCardDef(b.card.def_id);
+            if (ad && bd) return compareGalleryCards(a.card.def_id, b.card.def_id);
+            return (ad ? getCardName(ad) : a.card.def_id || '').localeCompare(bd ? getCardName(bd) : b.card.def_id || '');
+        }).forEach(({ card, count }) => {
+            const row = document.createElement('div');
+            row.className = 'deck-entry';
+            row.appendChild(createCardChoiceChip(card));
+            const countEl = document.createElement('span');
+            countEl.className = 'choice-option-detail deck-entry-count';
+            countEl.textContent = `x${count}`;
+            row.appendChild(countEl);
+            list.appendChild(row);
+        });
+    }
     content.appendChild(list);
     const buttons = document.createElement('div');
     buttons.className = 'modal-buttons';
@@ -12644,6 +14933,7 @@ const VANILLA_MOD_FILENAME = 'VanillaCards.gtnmod';
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 const COMMUNITY_JSON_MAX_BYTES = 150 * 1024;
 const COMMUNITY_GTNMOD_MAX_BYTES = 1024 * 1024;
+let communityUploadInProgress = false;
 
 function getCommunityModSelection() {
     let mods = [];
@@ -12710,8 +15000,9 @@ function openSettings(options = {}) {
     loadSettingsMods();
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
-        const custom = localStorage.getItem('gtn_server') || '';
-        serverInput.value = LEGACY_DEFAULT_SERVER_KEYS.has(canonicalServerKey(custom)) ? '' : custom;
+        localStorage.removeItem('gtn_server');
+        serverInput.value = '';
+        serverInput.placeholder = DEFAULT_SERVER;
     }
     const serverHint = $('settings-server-hint');
     if (serverHint && settingsAllowServerEdit) {
@@ -12987,10 +15278,89 @@ function renderCommunityCurrent() {
     if (disableBtn) disableBtn.disabled = false;
 }
 
+function formatCommunityUploadBytes(bytes) {
+    const value = Math.max(0, Number(bytes) || 0);
+    if (value < 1024) return `${Math.round(value)} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(value < 100 * 1024 ? 1 : 0)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function formatCommunityUploadDuration(seconds) {
+    const value = Number(seconds);
+    if (!Number.isFinite(value) || value < 0) return '--';
+    if (value < 1) return '<1s';
+    if (value < 60) return `${Math.ceil(value)}s`;
+    const minutes = Math.floor(value / 60);
+    const rest = Math.ceil(value % 60);
+    return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
+}
+
+function setCommunityUploadProgress(loaded, total, text) {
+    const box = $('community-upload-progress');
+    const fill = $('community-upload-progress-fill');
+    const textEl = $('community-upload-progress-text');
+    if (!box) return;
+    box.classList.remove('hidden');
+    const safeTotal = Math.max(0, Number(total) || 0);
+    const safeLoaded = Math.max(0, Number(loaded) || 0);
+    const percent = safeTotal > 0 ? Math.max(0, Math.min(100, (safeLoaded / safeTotal) * 100)) : 0;
+    if (fill) fill.style.width = `${percent}%`;
+    if (textEl) textEl.textContent = text || '';
+}
+
+function hideCommunityUploadProgress() {
+    const box = $('community-upload-progress');
+    const fill = $('community-upload-progress-fill');
+    const textEl = $('community-upload-progress-text');
+    if (fill) fill.style.width = '0%';
+    if (textEl) textEl.textContent = '';
+    if (box) box.classList.add('hidden');
+}
+
+function buildCommunityUploadProgressText(loaded, total, startedAt) {
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const elapsed = Math.max(0.1, (now - startedAt) / 1000);
+    const safeTotal = Math.max(Number(total) || 0, Number(loaded) || 0);
+    const safeLoaded = Math.max(0, Number(loaded) || 0);
+    const speed = safeLoaded / elapsed;
+    const eta = speed > 0 && safeTotal > safeLoaded
+        ? (safeTotal - safeLoaded) / speed
+        : (safeTotal > safeLoaded ? NaN : 0);
+    return tf(
+        'community_upload_progress',
+        formatCommunityUploadBytes(safeLoaded),
+        formatCommunityUploadBytes(safeTotal),
+        formatCommunityUploadBytes(speed),
+        formatCommunityUploadDuration(eta)
+    );
+}
+
+function uploadCommunityFileToR2(url, file, contentType, onProgress) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url, true);
+        xhr.setRequestHeader('Content-Type', contentType);
+        xhr.upload.onprogress = event => {
+            const total = event.lengthComputable ? event.total : (file?.size || event.loaded || 0);
+            onProgress?.(event.loaded || 0, total);
+        };
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(xhr);
+            } else {
+                reject(new Error(tf('community_r2_upload_failed', xhr.status || 0)));
+            }
+        };
+        xhr.onerror = () => reject(new Error(tf('community_r2_upload_failed', xhr.status || 0)));
+        xhr.onabort = () => reject(new Error(tf('community_r2_upload_failed', xhr.status || 0)));
+        xhr.send(file);
+    });
+}
+
 function updateCommunityUploadState() {
     const btn = $('btn-community-upload');
     if (!btn) return;
-    btn.disabled = !currentAccount;
+    btn.disabled = !currentAccount || communityUploadInProgress;
     btn.title = currentAccount ? '' : (UI.community_upload_hint || '');
 }
 
@@ -13008,11 +15378,16 @@ function validateCommunityUploadFile(file) {
 async function uploadCommunityModFile(file) {
     const statusEl = $('settings-community-status');
     const setStatus = text => { if (statusEl) statusEl.textContent = text || ''; };
+    if (communityUploadInProgress) return;
     if (!currentAccount) {
+        hideCommunityUploadProgress();
         setStatus(UI.account_need_login || UI.community_upload_hint || '');
         return;
     }
+    communityUploadInProgress = true;
+    updateCommunityUploadState();
     try {
+        hideCommunityUploadProgress();
         validateCommunityUploadFile(file);
         const lowerName = String(file.name || '').toLowerCase();
         if (lowerName.endsWith('.json')) {
@@ -13022,7 +15397,10 @@ async function uploadCommunityModFile(file) {
                 throw new Error(tf('community_json_parse_failed', e.message || String(e)));
             }
         }
+        const uploadTotal = file.size || 0;
+        const uploadStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         setStatus(UI.community_uploading);
+        setCommunityUploadProgress(0, uploadTotal, buildCommunityUploadProgressText(0, uploadTotal, uploadStartedAt));
         const urlResp = await fetch('/api/community-mods/upload-url', {
             method: 'POST',
             credentials: 'same-origin',
@@ -13031,12 +15409,12 @@ async function uploadCommunityModFile(file) {
         });
         const urlData = await urlResp.json().catch(() => ({}));
         if (!urlResp.ok || !urlData.success) throw new Error(urlData.error || UI.community_upload_url_failed);
-        const putResp = await fetch(urlData.put_url, {
-            method: 'PUT',
-            headers: { 'Content-Type': urlData.content_type || (lowerName.endsWith('.gtnmod') ? 'application/zip' : 'application/json') },
-            body: file,
+        const contentType = urlData.content_type || (lowerName.endsWith('.gtnmod') ? 'application/zip' : 'application/json');
+        await uploadCommunityFileToR2(urlData.put_url, file, contentType, (loaded, total) => {
+            const safeTotal = total || uploadTotal || loaded;
+            setCommunityUploadProgress(loaded, safeTotal, buildCommunityUploadProgressText(loaded, safeTotal, uploadStartedAt));
         });
-        if (!putResp.ok) throw new Error(tf('community_r2_upload_failed', putResp.status));
+        setCommunityUploadProgress(uploadTotal, uploadTotal, UI.community_upload_registering);
         const registerResp = await fetch('/api/community-mods/register', {
             method: 'POST',
             credentials: 'same-origin',
@@ -13049,10 +15427,17 @@ async function uploadCommunityModFile(file) {
             throw new Error(errorText);
         }
         const mod = registerData.mod || {};
-        setStatus(tf('community_upload_success', mod.name || file.name));
+        const uploadSuccess = tf('community_upload_success', mod.name || file.name);
+        const warnings = Array.isArray(registerData.warnings) ? registerData.warnings.filter(Boolean) : [];
+        const warningSuffix = warnings.length ? ` · ${warnings[0]}` : '';
+        setStatus(`${uploadSuccess}${warningSuffix}`);
+        setCommunityUploadProgress(uploadTotal, uploadTotal, `${uploadSuccess}${warningSuffix}`);
         await loadSettingsCommunityMods();
     } catch (e) {
         setStatus(e.message || String(e));
+    } finally {
+        communityUploadInProgress = false;
+        updateCommunityUploadState();
     }
 }
 
@@ -13147,6 +15532,14 @@ function renderCommunityModList() {
             desc.textContent = mod.description;
             details.appendChild(desc);
         }
+        const warnings = Array.isArray(mod.warnings) ? mod.warnings.filter(Boolean) : [];
+        if (warnings.length) {
+            const warning = document.createElement('div');
+            warning.className = 'community-card-warning';
+            warning.textContent = warnings.slice(0, 3).join('；');
+            warning.title = warnings.join('\n');
+            details.appendChild(warning);
+        }
         const actions = document.createElement('div');
         actions.className = 'community-card-actions';
         const selectBtn = document.createElement('button');
@@ -13198,7 +15591,12 @@ async function deleteCommunityMod(mod) {
 function getDisabledMods() {
     try {
         const raw = localStorage.getItem('gtn_disabled_mods');
-        const disabled = raw ? JSON.parse(raw) : getDefaultDisabledMods();
+        let disabled = raw ? JSON.parse(raw) : getDefaultDisabledMods();
+        if (shouldMigrateLegacyOfficialModDefault(disabled)) {
+            disabled = getDefaultDisabledMods();
+            localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
+            localStorage.setItem('gtn_official_mod_default_v2', '1');
+        }
         return coerceValidDisabledMods(disabled).disabled;
     } catch (e) {
         return coerceValidDisabledMods(getDefaultDisabledMods()).disabled;
@@ -13206,10 +15604,23 @@ function getDisabledMods() {
 }
 
 function getDefaultDisabledMods() {
+    return [];
+}
+
+function getLegacyDefaultDisabledMods() {
     if (!Array.isArray(settingsMods) || settingsMods.length === 0) return [];
     return settingsMods
         .map(mod => mod.filename || '')
         .filter(filename => filename && filename !== VANILLA_MOD_FILENAME);
+}
+
+function shouldMigrateLegacyOfficialModDefault(disabled) {
+    if (localStorage.getItem('gtn_official_mod_default_v2') === '1') return false;
+    if (!Array.isArray(disabled) || !Array.isArray(settingsMods) || settingsMods.length === 0) return false;
+    const legacy = getLegacyDefaultDisabledMods();
+    if (!legacy.length || disabled.length !== legacy.length) return false;
+    const currentSet = new Set(disabled.map(String));
+    return legacy.every(filename => currentSet.has(filename));
 }
 
 function getModCardTypeCounts(mod) {
@@ -13279,14 +15690,8 @@ function saveDisabledMods() {
     localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
-        const serverValue = serverInput.value.trim();
-        const serverKey = canonicalServerKey(serverValue);
-        const defaultKey = canonicalServerKey(DEFAULT_SERVER);
-        if (!serverValue || serverKey === defaultKey || LEGACY_DEFAULT_SERVER_KEYS.has(serverKey)) {
-            localStorage.removeItem('gtn_server');
-        } else {
-            localStorage.setItem('gtn_server', serverValue);
-        }
+        localStorage.removeItem('gtn_server');
+        serverInput.value = '';
     }
     if (socket && socket.connected && phase === 'lobby') {
         socket.emit('update_mod_settings', { disabled_mods: disabled, ...getCommunityModSelection() });
@@ -13401,6 +15806,13 @@ async function init() {
     if ($('btn-account-mode-register')) $('btn-account-mode-register').addEventListener('click', () => setAccountMode('register'));
     if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());
     if ($('btn-friends-top')) $('btn-friends-top').addEventListener('click', () => toggleFriendsPopover());
+    if ($('btn-skin-top')) $('btn-skin-top').addEventListener('click', openSkinEditor);
+    if ($('btn-skin-back')) $('btn-skin-back').addEventListener('click', () => showView('view-login'));
+    if ($('btn-skin-save')) $('btn-skin-save').addEventListener('click', saveSkinFromEditor);
+    if ($('btn-skin-reset')) $('btn-skin-reset').addEventListener('click', resetSkinEditor);
+    if ($('skin-primary-color')) $('skin-primary-color').addEventListener('input', renderSkinEditorPreview);
+    if ($('skin-eye-shape')) $('skin-eye-shape').addEventListener('change', renderSkinEditorPreview);
+    document.addEventListener('pointermove', updateSkinEyeTracking, { passive: true });
     if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
     if ($('btn-friends-popover-close')) $('btn-friends-popover-close').addEventListener('click', () => toggleFriendsPopover(false));
     if ($('btn-account-popover-logout')) $('btn-account-popover-logout').addEventListener('click', onAccountLogout);

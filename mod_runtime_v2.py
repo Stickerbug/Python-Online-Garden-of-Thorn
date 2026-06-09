@@ -38,7 +38,7 @@ ADVANCED_ATOMIC_OPS = {
     "set_health",
     "force_end_turn", "mark_self_damage_source", "fission", "fusion",
     "multiply_next_damage", "reduce_next_cost", "increase_next_cost",
-    "add_tag", "remove_tag", "tag_add_named", "tag_remove_named", "clear_tags",
+    "add_tag", "add_tag_to_zone", "remove_tag", "tag_add_named", "tag_remove_named", "clear_tags",
     "transform_card", "gain_durability", "lose_durability", "set_durability",
     "record_play_count", "record_equip_turns", "reset_counter", "create_counter",
     "exile_this", "global_damage_mult", "global_heal_mult", "global_cost_mult",
@@ -54,6 +54,11 @@ ADVANCED_ATOMIC_OPS = {
     "on_enemy_turn_start", "on_owner_turn_start", "on_hand_owner_turn_start",
     "on_discard_owner_turn_start", "on_equipment_trigger", "on_equipment_destroy",
     "on_damage_taken", "on_fatal_set_health_exile", "equip_reduce_own_draw",
+    "cogwheel_mark",
+    "goggles_enable",
+    "reveal_tag_hand",
+    "assembler_effect",
+    "request_reorder_deck",
 }
 
 ATOMIC_OP_ALIASES = {
@@ -411,7 +416,17 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
     if op in ("zone_count", "hand_count", "deck_count", "discard_count", "exile_count", "equipment_count"):
         zone = str(expr.get("zone") or op.replace("_count", ""))
         target = resolve_v2_target(engine, context, expr.get("target", "source"))
-        return len(_zone(engine, _player_id(engine, target), zone))
+        pid = _player_id(engine, target)
+        cards = _zone(engine, pid, zone)
+        card_type = expr.get("card_type")
+        if card_type:
+            return sum(1 for c in cards if getattr(c, "card_type", "") == card_type)
+        if op == "equipment_count":
+            eq_id = expr.get("equipment_id", expr.get("id", ""))
+            if eq_id:
+                eq_id = str(eval_v2_value(engine, context, eq_id))
+                return sum(1 for c in cards if getattr(c, "def_id", "") == eq_id)
+        return len(cards)
     if op == "hand_full":
         target = resolve_v2_target(engine, context, expr.get("target", "source"))
         player_id = _player_id(engine, target)
@@ -840,6 +855,7 @@ def _consume_budget(context: Dict[str, Any]) -> None:
 def _log_runtime_error(engine, context: Dict[str, Any], effect_type: str, exc: Exception) -> None:
     card = context.get("card")
     player_id = context.get("source_player")
+    import traceback; traceback.print_exc()
     if hasattr(engine, "_log_mod_runtime_error"):
         engine._log_mod_runtime_error(effect_type, exc, player_id, card)
     elif hasattr(engine, "log_msg"):
@@ -1202,6 +1218,17 @@ def _builtin_status_attr(status_id: str) -> str:
         "vulnerable": "vulnerable",
         "armor": "armor",
         "dodge": "dodge",
+        "sluggish": "sluggish",
+        "overload": "overload",
+        "foresight": "foresight",
+        "fracture": "fracture",
+        "heal_block": "heal_block",
+        "weakness": "weakness",
+        "bleed": "bleed",
+        "fragment": "fragment_stacks",
+        "fragment_stacks": "fragment_stacks",
+        "stunned": "skip_turn",
+        "skip_turn": "skip_turn",
     }.get(text, "")
 
 
@@ -1217,6 +1244,17 @@ def _status_label(status_id: str) -> str:
         "vulnerable": "易伤",
         "armor": "护甲",
         "dodge": "闪避",
+        "sluggish": "迟缓",
+        "overload": "超载",
+        "foresight": "预知",
+        "fracture": "破损",
+        "heal_block": "禁疗",
+        "weakness": "虚弱",
+        "bleed": "流血",
+        "fragment": "碎片",
+        "fragment_stacks": "碎片",
+        "stunned": "眩晕",
+        "skip_turn": "眩晕",
     }.get(text, status_id or "状态")
 
 
