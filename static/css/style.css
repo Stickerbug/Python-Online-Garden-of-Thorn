@@ -62,6 +62,22 @@
   --color-sprout-bg: #E8F8F5;
   --color-symbiosis: #1A5276;
   --color-symbiosis-bg: #EBF5FB;
+  --color-copy: #e17055;
+  --color-copy-bg: rgba(225, 112, 85, 0.1);
+  --color-unique: #fdcb6e;
+  --color-unique-bg: rgba(253, 203, 110, 0.1);
+  --color-swift: #0984e3;
+  --color-swift-bg: rgba(9, 132, 227, 0.1);
+  --color-sluggish: #e67e22;
+  --color-overload: #c0392b;
+  --color-foresight: #3498db;
+  --color-fracture: #7f8c8d;
+  --color-heal-block: #e84393;
+  --color-weakness: #8e44ad;
+  --color-bleed: #922B21;
+  --color-stealth: #2C3E50;
+  --color-revealed: #E74C3C;
+  --color-fragment: #795548;
   --bg-page: #F5F5F0;
   --bg-card: #FFFFFF;
   --text-primary: #2C3E50;
@@ -4000,8 +4016,8 @@ body {
 }
 
 .card {
-  --card-english-font: clamp(5.6px, 5.8cqi, 8.4px);
-  --card-english-margin-top: -1.7cqi;
+  --card-english-font: clamp(6px, 6.2cqi, 9px);
+  --card-english-margin-top: -1.75cqi;
   --card-english-padding-x: 1.6cqi;
   position: relative;
   background: var(--bg-card);
@@ -4373,15 +4389,17 @@ body {
 }
 
 .card-english-name {
-  margin-top: var(--card-english-margin-top);
+  position: relative;
+  top: var(--card-english-margin-top);
+  margin-top: 0;
   margin-bottom: 0.2cqi;
-  padding: 0 var(--card-english-padding-x) 0.4cqi;
+  padding: 0 var(--card-english-padding-x) 0.8cqi;
   font-family: var(--font-main);
   font-size: var(--card-english-font);
   font-weight: 600;
-  line-height: 1.05;
+  line-height: 1.2;
   text-align: center;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -5008,6 +5026,24 @@ body {
   border-color: rgba(155, 89, 182, 0.3);
 }
 
+.card-flag.copy {
+  color: #e17055;
+  background: rgba(225, 112, 85, 0.15);
+  border-color: rgba(225, 112, 85, 0.3);
+}
+
+.card-flag.unique {
+  color: #fdcb6e;
+  background: rgba(253, 203, 110, 0.15);
+  border-color: rgba(253, 203, 110, 0.3);
+}
+
+.card-flag.swift {
+  color: #0984e3;
+  background: rgba(9, 132, 227, 0.15);
+  border-color: rgba(9, 132, 227, 0.3);
+}
+
 .card-flag.fusion-layer {
   color: var(--color-poison);
   background: var(--color-poison-bg);
@@ -5024,6 +5060,18 @@ body {
   color: #b42318;
   background: rgba(244, 143, 177, 0.16);
   border-color: rgba(180, 35, 24, 0.28);
+}
+
+.card-flag.stealth {
+  color: var(--color-stealth);
+  background: #EBF5FB;
+  border-color: rgba(44, 62, 80, 0.28);
+}
+
+.card-flag.revealed {
+  color: var(--color-revealed);
+  background: #FDEDEC;
+  border-color: rgba(231, 76, 60, 0.28);
 }
 
 .equip-item {
@@ -7163,6 +7211,62 @@ body {
   flex: 0 0 auto;
 }
 
+/* Reorder deck drag UI */
+.reorder-deck-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-primary, #1a1a2e);
+  border: 1px solid var(--border-color, #333);
+  transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+  user-select: none;
+}
+
+.reorder-deck-entry:hover {
+  filter: brightness(0.92);
+}
+
+.reorder-handle {
+  cursor: grab;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-muted, #888);
+  flex-shrink: 0;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.reorder-handle:hover {
+  color: var(--text-primary, #eee);
+  background: var(--border-color, #444);
+}
+
+.reorder-handle:active {
+  cursor: grabbing;
+}
+
+.reorder-deck-entry.reorder-dragging {
+  display: none;
+}
+
+.reorder-placeholder {
+  border: 2px dashed var(--bloom, #f0c040);
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(240, 192, 64, 0.08);
+  transition: height 0.15s ease;
+  margin: 2px 0;
+}
+
+.reorder-clone {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), 0 0 0 2px var(--bloom, #f0c040);
+  transform: scale(1.03);
+  transition: none;
+  border-radius: var(--radius-sm, 6px);
+}
+
 #spectate-controls {
   display: none;
 }
@@ -8962,8 +9066,8 @@ body {
 }
 
 .card-small {
-    --card-english-font: clamp(4.6px, 5.8cqi, 6.2px);
-    --card-english-margin-top: -1.7cqi;
+    --card-english-font: clamp(5px, 6.2cqi, 6.8px);
+    --card-english-margin-top: -1.65cqi;
     --card-english-padding-x: 1.2cqi;
     width: 52px;
     min-height: 0;
@@ -9038,8 +9142,8 @@ body {
 }
 
 .teammate-hand-row .card {
-    --card-english-font: clamp(4.4px, 5.6cqi, 5.9px);
-    --card-english-margin-top: -1.7cqi;
+    --card-english-font: clamp(4.8px, 6cqi, 6.5px);
+    --card-english-margin-top: -1.65cqi;
     --card-english-padding-x: 1.1cqi;
 }
 
@@ -9081,8 +9185,8 @@ body {
 
 @media (max-width: 768px), (max-aspect-ratio: 1/1), (hover: none) and (pointer: coarse) {
     .card-english-name {
-        --card-english-font: clamp(4.8px, 5.4cqi, 6px);
-        --card-english-margin-top: -1.55cqi;
+        --card-english-font: clamp(5.2px, 5.8cqi, 6.6px);
+        --card-english-margin-top: -1.75cqi;
         font-size: var(--card-english-font);
         margin-top: var(--card-english-margin-top);
         margin-bottom: 0;
@@ -9092,8 +9196,8 @@ body {
 
     .card-small .card-english-name,
     .teammate-hand-row .card .card-english-name {
-        --card-english-font: clamp(4.2px, 5.2cqi, 5.1px);
-        --card-english-margin-top: -1.55cqi;
+        --card-english-font: clamp(4.6px, 5.6cqi, 5.7px);
+        --card-english-margin-top: -1.65cqi;
         font-size: var(--card-english-font);
         margin-top: var(--card-english-margin-top);
         padding-bottom: 0;
@@ -9102,8 +9206,8 @@ body {
 
 @media (max-aspect-ratio: 1/1) {
     .card-english-name {
-        --card-english-font: clamp(4.4px, 5cqi, 5.6px);
-        --card-english-margin-top: -1.15cqi;
+        --card-english-font: clamp(4.8px, 5.4cqi, 6.2px);
+        --card-english-margin-top: -1.35cqi;
         font-size: var(--card-english-font);
         margin-top: var(--card-english-margin-top);
     }

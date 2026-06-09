@@ -231,6 +231,22 @@ class GameEngineInfiniteFire(GameEngine):
             if i == self.first_player:
                 ps.elixir = FIRST_PLAYER_ELIXIR
             self._deal_starting_hand(ps)
+        # Unique: exile duplicate unique cards from hand (URF has no deck)
+        for pid in range(2):
+            ps = self.players[pid]
+            unique_ids = set()
+            new_hand = []
+            for card in ps.hand:
+                if 'unique' in card.flags:
+                    if card.def_id in unique_ids:
+                        ps.exile.append(card)
+                        self.log_msg(f"{self.pn(pid)}的唯一牌{card.name_cn}多余副本被放逐")
+                    else:
+                        unique_ids.add(card.def_id)
+                        new_hand.append(card)
+                else:
+                    new_hand.append(card)
+            ps.hand = new_hand
         self.round_num = 1
         self.log_msg(f"无限火力开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
@@ -276,6 +292,20 @@ class GameEngineInfiniteFire(GameEngine):
             return
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
+        # Cogwheel: return cards from last turn (if marked by v2 event)
+        if ps.cogwheel_pending_return:
+            returned = []
+            for iid in ps.cogwheel_pending_return:
+                for c in list(ps.discard):
+                    if c.instance_id == iid:
+                        ps.discard.remove(c)
+                        c.mimic_discount = 0
+                        ps.add_to_hand(c)
+                        returned.append(c.name_cn)
+                        break
+            if returned:
+                self.log_msg(f"{self.pn(player_id)}的齿轮效果：{', '.join(returned)}回到手中")
+            ps.cogwheel_pending_return = []
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False
@@ -311,10 +341,17 @@ class GameEngineInfiniteFire(GameEngine):
                             elixir_recovery += self._eval_int(opp_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
                     continue
                 if eq.def_id == 'Pincer':
-                    elixir_recovery -= 1
+                    ps.overload += 1
+                    self.log_msg(f"{self.pn(player_id)}被螫针施加1层超载")
             elixir_recovery = max(0, elixir_recovery - ps.enemy_e_reduction)
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
+        # Overload: deduct E at turn start, then clear
+        if ps.overload > 0:
+            deduct = min(ps.overload, ps.elixir)
+            ps.elixir -= deduct
+            self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
+            ps.overload = 0
         for eq in list(ps.equipment):
             eq.turns_equipped += 1
             if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
@@ -338,6 +375,17 @@ class GameEngineInfiniteFire(GameEngine):
             elif eq.def_id == 'GoldenLeaf':
                 self._draw_cards_with_v2_hooks(player_id, DRAW_PER_TURN, 'golden_leaf')
                 self.log_msg(f"{self.pn(player_id)}的黄金叶效果：补充手牌")
+        # Foresight: allow replacing cards from hand
+        if ps.foresight > 0 and ps.hand:
+            max_replace = min(ps.foresight, len(ps.hand))
+            self._pending_foresight = {'player_id': player_id, 'max_replace': max_replace}
+            self.pending_choice = {
+                'player_id': player_id,
+                'choice_type': 'foresight_replace',
+                'card': None,
+                'max_replace': max_replace,
+                'message': f'预知：选择最多{max_replace}张手牌替换',
+            }
 
     def can_play_card(self, player_id: int, card: CardInstance):
         ok, reason = super().can_play_card(player_id, card)

@@ -185,8 +185,8 @@ CARD_I18N = {
     },
     'Pincer': {
         'name': _t('螫针', 'Pincer', 'Pince', 'Pinça', 'Клешня', '毒針'),
-        'desc': _t('毒素可以减缓对手行动，但小心别划伤自己。', 'Toxin can slow the opponent, but be careful not to scratch yourself.', 'La toxine peut ralentir l’adversaire, mais attention à ne pas vous égratigner.', 'A toxina pode atrasar o oponente, mas cuidado para não se arranhar.', 'Токсин замедляет противника, но не поцарапайтесь сами.', '毒素は相手の行動を遅らせるが、自分を傷つけないよう注意。'),
-        'effect': _t('目标回合开始时E回复-1', 'At the target’s turn start, E recovery -1', 'Au début du tour de la cible, récupération de E -1', 'No início do turno do alvo, recuperação de E -1', 'В начале хода цели восстановление E -1', '対象のターン開始時、E回復-1'),
+        'desc': _t('毒素可以减缓对手行动，但小心别划伤自己。', 'Toxin can slow the opponent, but be careful not to scratch yourself.', 'La toxine peut ralentir l\'adversaire, mais attention à ne pas vous égratigner.', 'A toxina pode atrasar o oponente, mas cuidado para não se arranhar.', 'Токсин замедляет противника, но не поцарапайтесь сами.', '毒素は相手の行動を遅らせるが、自分を傷つけないよう注意。'),
+        'effect': _t('装备时，每回合对目标施加1层超载', 'When equipped, apply 1 Overload to the target each turn', 'Quand équipé, applique 1 Surcharge à la cible chaque tour', 'Quando equipado, aplica 1 Sobrecarga ao alvo a cada turno', 'При снаряжении накладывает на цель 1 Перегрузку каждый ход', '装備時、毎ターン対象に過負荷1を付与'),
     },
     'Cancer': {
         'name': _t('癌细胞', 'Cancer', 'Cellule cancéreuse', 'Célula cancerosa', 'Раковая клетка', 'がん細胞'),
@@ -281,13 +281,13 @@ def card_text(card_id, fallback):
         out = dict(fallback)
         name = _fill({
             'zh': fallback.get('name_cn') or fallback.get('name_en') or card_id_to_english(card_id),
-            'en': card_id_to_english(card_id),
+            'en': fallback.get('name_en') or card_id_to_english(card_id),
         })
         out['name_en'] = name['en']
         out['name_i18n'] = name
         return out
     name = _fill(data.get('name', {}))
-    name['en'] = card_id_to_english(card_id)
+    name['en'] = fallback.get('name_en') or name.get('en') or card_id_to_english(card_id)
     return {
         'name_i18n': name,
         'description_i18n': _fill(data.get('desc', {})),
@@ -327,4 +327,5 @@ def apply_card_i18n_defaults(card_defs):
         if trigger.get('zh'):
             card.trigger_effect_text = trigger['zh']
     for card_id, card in card_defs.items():
-        card.name_en = card_id_to_english(card_id)
+        if not getattr(card, 'name_en', ''):
+            card.name_en = card_id_to_english(card_id)

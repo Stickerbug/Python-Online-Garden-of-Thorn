@@ -1945,7 +1945,7 @@ def validate_choice_payload(choice, *, depth=0):
     if isinstance(choice, str):
         return validate_str(choice, max_len=120, name='choice')
     if isinstance(choice, list):
-        if len(choice) > 30:
+        if len(choice) > 60:
             raise ValueError('choice list too long')
         return [validate_choice_payload(item, depth=depth + 1) for item in choice]
     if isinstance(choice, dict):
@@ -4670,6 +4670,22 @@ def send_solo_state(sid, perspective=None):
     inject_solo_skins(state, owner_skin=owner_skin, perspective=perspective)
     state['solo'] = True
     socketio.emit('solo_state', state, room=sid)
+    # Check if engine has a pending choice (e.g. foresight_replace) and send choice_request
+    pending = getattr(engine, 'pending_choice', None)
+    if pending and not engine.game_over:
+        choice_payload = {
+            'choice_type': pending.get('choice_type', ''),
+            'card': pending.get('card', {}),
+            'choice_params': pending.get('choice_params', {}),
+            'target_player_id': pending.get('target_player_id'),
+        }
+        if pending.get('deck_cards'):
+            choice_payload['deck_cards'] = pending['deck_cards']
+        if pending.get('message'):
+            choice_payload['message'] = pending['message']
+        if pending.get('top_cards'):
+            choice_payload['top_cards'] = pending['top_cards']
+        socketio.emit('choice_request', choice_payload, room=sid)
 
 
 def build_response_request_payload(engine, responder_id, played_card, player_id, counter_cards, target_player_id=None):
@@ -5900,6 +5916,8 @@ def api_cards():
             'effects': card_def.effects,
             'scripts': getattr(card_def, 'scripts', {}) or {},
             'v2_events': getattr(card_def, 'v2_events', {}) or {},
+            'damage': getattr(card_def, 'damage', 0),
+            'hits': getattr(card_def, 'hits', 1),
             'image': image_url,
             'image_url': image_url,
         }
@@ -7764,12 +7782,17 @@ def on_solo_play_card(data):
             emit_solo_response_request(sid, engine, pidx, result['card'])
         elif result.get('needs_choice'):
             send_solo_state(sid)
-            socketio.emit('choice_request', {
+            choice_payload = {
                 'choice_type': result['choice_type'],
                 'card': result['card'],
                 'choice_params': result.get('choice_params', {}),
                 'target_player_id': result.get('target_player_id'),
-            }, room=sid)
+            }
+            if result.get('deck_cards'):
+                choice_payload['deck_cards'] = result['deck_cards']
+            if result.get('message'):
+                choice_payload['message'] = result['message']
+            socketio.emit('choice_request', choice_payload, room=sid)
         elif result.get('needs_v2_ui'):
             send_solo_state(sid)
             emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
@@ -8019,12 +8042,17 @@ def on_play_card(data):
             emit_pending_response_requests(room)
         elif result.get('needs_choice'):
             broadcast_game_state(room)
-            emit('choice_request', {
+            choice_payload = {
                 'choice_type': result['choice_type'],
                 'card': result['card'],
                 'choice_params': result.get('choice_params', {}),
                 'target_player_id': result.get('target_player_id'),
-            })
+            }
+            if result.get('deck_cards'):
+                choice_payload['deck_cards'] = result['deck_cards']
+            if result.get('message'):
+                choice_payload['message'] = result['message']
+            emit('choice_request', choice_payload)
         elif result.get('needs_v2_ui'):
             broadcast_game_state(room)
             emit_room_v2_ui_request(room)
@@ -8107,12 +8135,17 @@ def on_ally_consent_response(data):
         elif result.get('needs_choice'):
             broadcast_game_state(room)
             requester_sid = room.player_sids[result.get('player_id', room.engine.current_player)] if result.get('player_id') is not None else sid
-            socketio.emit('choice_request', {
+            choice_payload = {
                 'choice_type': result['choice_type'],
                 'card': result['card'],
                 'choice_params': result.get('choice_params', {}),
                 'target_player_id': result.get('target_player_id'),
-            }, room=requester_sid)
+            }
+            if result.get('deck_cards'):
+                choice_payload['deck_cards'] = result['deck_cards']
+            if result.get('message'):
+                choice_payload['message'] = result['message']
+            socketio.emit('choice_request', choice_payload, room=requester_sid)
         elif result.get('needs_v2_ui'):
             broadcast_game_state(room)
             emit_room_v2_ui_request(room)

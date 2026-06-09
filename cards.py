@@ -14,6 +14,19 @@ CARD_FLAG_ALIASES = {
     'thorn_cards_supplement_1:sticky': 'sticky',
     'tag_thorn_cards_supplement_1_sticky': 'sticky',
     'thorn_cards_supplement_1_sticky': 'sticky',
+    'copy': 'copy',
+    'unique': 'unique',
+    'swift': 'swift',
+    'stealth': 'stealth',
+    'revealed': 'revealed',
+}
+
+# Known vanilla flags that can be referenced by namespace-prefixed tags
+_VANILLA_FLAGS = {
+    'precision', 'exile', 'non_stackable', 'indestructible', 'sprout',
+    'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
+    'infinite_exclude', 'sticky', 'copy', 'unique',
+    'swift', 'stealth', 'revealed',
 }
 
 
@@ -21,7 +34,15 @@ def normalize_card_flag(flag: Any) -> str:
     text = str(flag or '').strip()
     if not text:
         return ''
-    return CARD_FLAG_ALIASES.get(text.lower(), text)
+    lower = text.lower()
+    if lower in CARD_FLAG_ALIASES:
+        return CARD_FLAG_ALIASES[lower]
+    # Auto-strip namespace prefix for known vanilla flags (e.g. "factory:sticky" -> "sticky")
+    if ':' in lower:
+        _, local = lower.split(':', 1)
+        if local in _VANILLA_FLAGS:
+            return local
+    return text
 
 
 def normalize_card_flags(flags) -> Set[str]:
@@ -61,6 +82,10 @@ class CardDef:
     v2_mod_id: str = ''
     image: str = ''
     image_url: str = ''
+    copy_count: int = 0
+    swift_value: int = 0
+    damage: int = 0
+    hits: int = 1
 
     @property
     def display_name(self) -> str:
@@ -97,6 +122,7 @@ class CardInstance:
     return_to_hand_turns: int = 0
     instance_flags: Set[str] = field(default_factory=set)
     disabled_flags: Set[str] = field(default_factory=set)
+    swift_value: int = 0
 
     def __post_init__(self):
         if not self.def_id:
@@ -121,7 +147,8 @@ class CardInstance:
     @property
     def cost_e(self) -> int:
         base = self.cost_e_override if self.cost_e_override is not None else self.card_def.cost_e
-        return max(0, base - self.mimic_discount)
+        swift = self.swift_value if self.swift_value > 0 else self.card_def.swift_value
+        return max(0, base - self.mimic_discount - swift)
 
     @property
     def cost_m(self) -> int:
@@ -154,6 +181,7 @@ class CardInstance:
             'return_to_hand_turns': self.return_to_hand_turns,
             'instance_flags': list(self.instance_flags) if self.instance_flags else [],
             'disabled_flags': list(self.disabled_flags) if self.disabled_flags else [],
+            'swift_value': self.swift_value,
         }
 
     @staticmethod
@@ -173,6 +201,7 @@ class CardInstance:
             return_to_hand_turns=max(0, int(d.get('return_to_hand_turns', 0))),
             instance_flags=normalize_card_flags(d.get('instance_flags', [])),
             disabled_flags=normalize_card_flags(d.get('disabled_flags', [])),
+            swift_value=max(0, int(d.get('swift_value', 0))),
         )
 
     def copy(self) -> 'CardInstance':
@@ -191,6 +220,7 @@ class CardInstance:
             return_to_hand_turns=self.return_to_hand_turns,
             instance_flags=set(self.instance_flags),
             disabled_flags=set(self.disabled_flags),
+            swift_value=self.swift_value,
         )
         return c
 
@@ -312,7 +342,7 @@ _reg(CardDef('GoldenLeaf', 'Golden Leaf', '黄金叶', 3, 0, 'root', 5, 'Common'
              '这闪亮的叶子能为你带来额外的抽牌机会。', '手牌爆牌上限+1；自己回合开始时多抽一张牌'))
 
 _reg(CardDef('Pincer', 'Pincer', '螫针', 4, 0, 'root', 3, 'Common',
-             '毒素可以减缓对手行动。', '目标回合开始时E回复-1'))
+             '毒素可以减缓对手行动，但小心别划伤自己。', '装备时，每回合对目标施加1层超载'))
 
 _reg(CardDef('Cancer', 'Cancer', '癌细胞', 4, 0, 'root', 2, 'Common',
              '无法根除的恶性细胞。', '对目标施加1层淬毒', flags={'indestructible'}))
@@ -321,8 +351,8 @@ _reg(CardDef('Corruption', 'Corruption', '腐化', 0, 0, 'root', 2, 'Common',
              '伤敌一千，自损八百。', '自下个敌方回合开始，全场所有伤害变为1.5倍（向上取整）', flags={'indestructible', 'self_only'}))
 
 _reg(CardDef('Mark', 'Mark', '标记', 4, 0, 'root', 3, 'Common',
-             '你被标记了！', '禁止目标行动一回合',
-             trigger_cost_e=0, trigger_effect_text='若已装备一回合则可摧毁此装备，直到目标下回合结束目标禁止行动'))
+             '你被标记了！', '使目标+1层眩晕',
+             trigger_cost_e=0, trigger_effect_text='装备1回合后可触发，0E，使目标+1层眩晕'))
 
 _reg(CardDef('Mine', 'Mine', '地雷', 3, 0, 'root', 3, 'Common',
              '它很危险，但需要一回合准备。', '下回合造成20D',

@@ -74,6 +74,7 @@ const I18N = {
         choose_discard_for: 'Choose a discard for {0}', choose_from_deck_for: 'Choose from deck', choose_from_discard_for: 'Choose from discard for {0}',
         choose_hand_for: 'Choose from hand for {0}', choose_from_enemy_hand_for: 'Choose from enemy hand', choose_attack_group_for: 'Choose attack group for {0}',
         no_attack_cards: 'No attack cards', no_enemy_equipment: 'No enemy equipment', no_enemy_hand: 'No enemy hand', deck_empty: 'Deck empty',
+        no_matching_cards: 'No matching cards', no_cards_in_hand: 'No cards in hand',
         discard_empty: 'Discard pile empty', no_same_attack: 'No matching attack cards', confirm_surrender: 'Surrender?', request_rematch: 'Request Rematch',
         opponent_rematch: 'Opponent requests rematch', rematch_sent: 'Rematch request sent', rematch_waiting: 'Waiting for opponent', rematch_agreed: 'Rematch accepted',
         rematch_progress: 'Rematch ({0}/{1})',
@@ -83,13 +84,14 @@ const I18N = {
         switch_perspective: 'Switch Perspective', leave_spectate: 'Leave Spectate', switch_to_perspective: 'Switch to {0}', battle_log: 'Battle Log',
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_stunned: 'Stunned',
-        status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_sticky: 'Sticky',
-        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_sticky: 'Sticky',
+        status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_sticky: 'Sticky', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_stealth: 'Stealth', flag_revealed: 'Revealed',
+        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_sticky: 'Sticky', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_stealth: 'Stealth', tag_revealed: 'Revealed',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
+        foresight_replace_title: 'Foresight', foresight_replace_desc: 'Select up to {0} cards to draw from deck', foresight_replace_confirm: 'Draw',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
         lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
         card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard', fusion_layer: 'Fusion', fission_layer: 'Fission',
@@ -182,7 +184,7 @@ I18N.zh = { ...I18N.en,
     use_card: '使用', insufficient_resources: '资源不足', choose_attack_for: '为 {0} 选择攻击牌', choose_equip_for: '选择装备牌',
     choose_discard_for: '为 {0} 选择弃牌', choose_from_deck_for: '从牌堆选择', choose_from_discard_for: '为 {0} 从弃牌堆选择', choose_hand_for: '为 {0} 从手牌选择',
     choose_from_enemy_hand_for: '从敌方手牌选择', choose_attack_group_for: '为 {0} 选择攻击组', no_attack_cards: '没有攻击牌', no_enemy_equipment: '对方没有装备',
-    no_enemy_hand: '对方没有手牌', deck_empty: '牌堆为空', discard_empty: '弃牌堆为空', no_same_attack: '没有同名攻击牌',
+    no_enemy_hand: '对方没有手牌', deck_empty: '牌堆为空', no_matching_cards: '没有符合条件的牌', no_cards_in_hand: '手牌为空', discard_empty: '弃牌堆为空', no_same_attack: '没有同名攻击牌',
     confirm_surrender: '确认投降？', request_rematch: '请求再来一局', opponent_rematch: '对方请求再来一局', rematch_sent: '已发送再来一局请求',
     rematch_waiting: '等待对方', rematch_agreed: '对方已接受', agree_rematch: '接受再来一局', rematch_progress: '再来一局({0}/{1})', you_win: '你赢了！', you_lose: '你输了！', you_draw: '平局！',
     send: '发送', cancel: '取消', confirm: '确认', ok: '确定', close: '关闭', notice: '提示', opponent_disconnected: '对手已断开连接', opponent_reconnected: '对手已重新连接',
@@ -192,9 +194,11 @@ I18N.zh = { ...I18N.en,
     status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼',
     status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_sticky: '粘滞',
+    status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_sticky: '粘滞', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隐匿', flag_revealed: '被揭示',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
+    foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张牌堆顶的牌抽取', foresight_replace_confirm: '抽取',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
     round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
     select_event_desc: '选择一个开局事件', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
@@ -233,7 +237,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_sticky: '粘滞',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_sticky: '粘滞', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隐匿', tag_revealed: '被揭示',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '开局事件', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
@@ -297,7 +301,8 @@ I18N.fr = { ...I18N.en,
     status_poison: 'Poison', status_fire: 'Brûlure', status_toxic: 'Toxique', status_triangle: 'Triangle', status_dodge: 'Esquive',
     status_nazar: 'Nazar', status_equip_protect: 'Prot. Équip.', status_invincible: 'Invincible', status_stunned: 'Étourdi', status_attack_blocked: 'Atq bloquée', status_attack_only: 'Atq seule',
     status_untargetable: 'Non ciblable', status_bandage: 'Bandage', status_sponge: 'Éponge', status_shovel: 'Pelle',
-    flag_precision: 'Précision', flag_exile: 'Exil', flag_non_stackable: 'Non-cumul', flag_indestructible: 'Indestructible', flag_sprout: 'Pousse', flag_symbiosis: 'Symbiose',
+    status_sluggish: 'Lenteur', status_overload: 'Surcharge', status_foresight: 'Prévoyance', status_fracture: 'Fracture', status_heal_block: 'Anti-soin', status_weakness: 'Faiblesse', status_bleed: 'Saignement', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
+    flag_precision: 'Précision', flag_exile: 'Exil', flag_non_stackable: 'Non-cumul', flag_indestructible: 'Indestructible', flag_sprout: 'Pousse', flag_symbiosis: 'Symbiose', flag_copy: 'Copie', flag_unique: 'Unique', flag_swift: 'Rapidité', flag_stealth: 'Furtif', flag_revealed: 'Révélé',
     choose_convert_count: 'Nombre de conversions', choose_magic_card_n: 'Carte magie n°{0}', choose_source_card_n: 'Carte source n°{0}',
     choose_light_cards: 'Cartes de conversion Lumière', choose_yggdrasil_card: 'Carte Arbre-Monde', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
     selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
@@ -315,7 +320,7 @@ I18N.fr = { ...I18N.en,
     set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks doivent avoir exactement 15 cartes',
     solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
     edit_tags: 'Modifier tags', tag_precision: 'Précision', tag_exile: 'Exil', tag_non_stackable: 'Non-cumul',
-    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Soi uniquement', tag_uncancellable: 'Non annulable', tag_infinite_exclude: 'Retiré d’Infinite Fire', tag_sticky: 'Collant',
+    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Soi uniquement', tag_uncancellable: 'Non annulable', tag_sticky: 'Collant', tag_copy: 'Copie', tag_unique: 'Unique', tag_swift: 'Rapidité', tag_stealth: 'Furtif', tag_revealed: 'Révélé', tag_infinite_exclude: 'Retiré d’Infinite Fire',
     fusion_layer: 'Fusion', fission_layer: 'Fission',
     app_subtitle: 'Combat de cartes en réseau local',
     nickname_placeholder: 'Saisir un pseudo',
@@ -365,7 +370,8 @@ I18N.pt = { ...I18N.en,
     status_poison: 'Veneno', status_fire: 'Queima', status_toxic: 'Tóxico', status_triangle: 'Triângulo', status_dodge: 'Esquiva',
     status_nazar: 'Nazar', status_equip_protect: 'Prot. Equip.', status_invincible: 'Invencível', status_stunned: 'Atordoado', status_attack_blocked: 'Atq Bloqueado', status_attack_only: 'Só Atq',
     status_untargetable: 'Inalvejável', status_bandage: 'Bandagem', status_sponge: 'Esponja', status_shovel: 'Pá',
-    flag_precision: 'Precisão', flag_exile: 'Exílio', flag_non_stackable: 'Não-acumulável', flag_indestructible: 'Indestrutível', flag_sprout: 'Brotar', flag_symbiosis: 'Simbiose',
+    status_sluggish: 'Letargia', status_overload: 'Sobrecarga', status_foresight: 'Previsão', status_fracture: 'Fratura', status_heal_block: 'Anti-cura', status_weakness: 'Fraqueza', status_bleed: 'Sangramento', status_fragment: 'Fragmento', status_fragment_stacks: 'Fragmento',
+    flag_precision: 'Precisão', flag_exile: 'Exílio', flag_non_stackable: 'Não-acumulável', flag_indestructible: 'Indestrutível', flag_sprout: 'Brotar', flag_symbiosis: 'Simbiose', flag_copy: 'Cópia', flag_unique: 'Único', flag_swift: 'Rapidez', flag_stealth: 'Furtivo', flag_revealed: 'Revelado',
     choose_convert_count: 'Escolher quantidade de conversão', choose_magic_card_n: 'Carta mágica n°{0}', choose_source_card_n: 'Carta fonte n°{0}',
     choose_light_cards: 'Cartas de conversão Luz', choose_yggdrasil_card: 'Carta Árvore-Mundo', convert_label: 'Converter', convert_per_type: 'Máx {0} por tipo',
     selected_count: 'Selecionado {0}/{1}', max_selection_warning: 'Não pode exceder {0}', deck_total: 'Deck: {0} cartas', view_deck_title: 'Ver Deck',
@@ -383,7 +389,7 @@ I18N.pt = { ...I18N.en,
     set_next_draw: 'Definir Próxima Compra', solo_saved: 'Decks salvos', solo_need_15: 'Ambos os decks devem ter exatamente 15 cartas',
     solo_event_a: 'Evento inicial', solo_event_b: 'Evento do oponente', no_event: 'Nenhum',
     edit_tags: 'Editar tags', tag_precision: 'Precisão', tag_exile: 'Exílio', tag_non_stackable: 'Não acumula',
-    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Somente si', tag_uncancellable: 'Não cancelável', tag_infinite_exclude: 'Removido do Infinite Fire', tag_sticky: 'Pegajoso',
+    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Somente si', tag_uncancellable: 'Não cancelável', tag_copy: 'Cópia', tag_unique: 'Único', tag_swift: 'Rapidez', tag_stealth: 'Furtivo', tag_revealed: 'Revelado', tag_infinite_exclude: 'Removido do Infinite Fire', tag_sticky: 'Pegajoso',
     fusion_layer: 'Fusão', fission_layer: 'Fissão',
     app_subtitle: 'Batalha de cartas em rede local',
     nickname_placeholder: 'Digite um apelido',
@@ -433,7 +439,8 @@ I18N.ru = { ...I18N.en,
     status_poison: 'Яд', status_fire: 'Горение', status_toxic: 'Токсичность', status_triangle: 'Треугольник', status_dodge: 'Уклонение',
     status_nazar: 'Назар', status_equip_protect: 'Защита Снар.', status_invincible: 'Неуязвимость', status_stunned: 'Оглушение', status_attack_blocked: 'Атк Заблок.', status_attack_only: 'Только Атк',
     status_untargetable: 'Недоступен', status_bandage: 'Бинт', status_sponge: 'Губка', status_shovel: 'Лопата',
-    flag_precision: 'Точность', flag_exile: 'Изгнание', flag_non_stackable: 'Нескладываемый', flag_indestructible: 'Неразрушимый', flag_sprout: 'Росток', flag_symbiosis: 'Симбиоз',
+    status_sluggish: 'Замедление', status_overload: 'Перегрузка', status_foresight: 'Предвидение', status_fracture: 'Излом', status_heal_block: 'Блок исцеления', status_weakness: 'Слабость', status_bleed: 'Кровотечение', status_fragment: 'Осколок', status_fragment_stacks: 'Осколок',
+    flag_precision: 'Точность', flag_exile: 'Изгнание', flag_non_stackable: 'Нескладываемый', flag_indestructible: 'Неразрушимый', flag_sprout: 'Росток', flag_symbiosis: 'Симбиоз', flag_copy: 'Копия', flag_unique: 'Уникальный', flag_swift: 'Стремительность', flag_stealth: 'Скрытность', flag_revealed: 'Раскрыто',
     choose_convert_count: 'Количество конвертации', choose_magic_card_n: 'Магическая карта №{0}', choose_source_card_n: 'Исходная карта №{0}',
     choose_light_cards: 'Карты конвертации Света', choose_yggdrasil_card: 'Карта Мирового древа', convert_label: 'Конвертировать', convert_per_type: 'Макс {0} на тип',
     selected_count: 'Выбрано {0}/{1}', max_selection_warning: 'Нельзя превышать {0}', deck_total: 'Колода: {0} карт', view_deck_title: 'Посмотреть Колоду',
@@ -451,7 +458,7 @@ I18N.ru = { ...I18N.en,
     set_next_draw: 'Задать следующую карту', solo_saved: 'Колоды сохранены', solo_need_15: 'В обеих колодах должно быть ровно 15 карт',
     solo_event_a: 'Ваше стартовое событие', solo_event_b: 'Событие соперника', no_event: 'Нет',
     edit_tags: 'Изменить теги', tag_precision: 'Точность', tag_exile: 'Изгнание', tag_non_stackable: 'Не складывается',
-    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота', tag_self_only: 'Только на себя', tag_uncancellable: 'Нельзя отменить', tag_infinite_exclude: 'Удалено из Infinite Fire', tag_sticky: 'Липкость',
+    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота', tag_self_only: 'Только на себя', tag_uncancellable: 'Нельзя отменить', tag_copy: 'Копия', tag_unique: 'Уникальный', tag_swift: 'Стремительность', tag_stealth: 'Скрытность', tag_revealed: 'Раскрыто', tag_infinite_exclude: 'Удалено из Infinite Fire', tag_sticky: 'Липкость',
     fusion_layer: 'Слияние', fission_layer: 'Деление',
     app_subtitle: 'Карточная дуэль по локальной сети',
     nickname_placeholder: 'Введите никнейм',
@@ -501,7 +508,8 @@ I18N.ja = { ...I18N.en,
     status_poison: '毒', status_fire: '火傷', status_toxic: '猛毒', status_triangle: '三角形', status_dodge: '回避',
     status_nazar: 'ナザール', status_equip_protect: '装備保護', status_invincible: '無敵', status_stunned: 'スタン', status_attack_blocked: '攻撃封印', status_attack_only: '攻撃のみ',
     status_untargetable: '対象不可', status_bandage: '包帯', status_sponge: 'スポンジ', status_shovel: 'シャベル',
-    flag_precision: '精密', flag_exile: '追放', flag_non_stackable: '非スタック', flag_indestructible: '破壊不可', flag_sprout: '発芽', flag_symbiosis: '共生',
+    status_sluggish: '遅鈍', status_overload: '過負荷', status_foresight: '予知', status_fracture: '破損', status_heal_block: '治療封じ', status_weakness: '虚弱', status_bleed: '出血', status_fragment: '破片', status_fragment_stacks: '破片',
+    flag_precision: '精密', flag_exile: '追放', flag_non_stackable: '非スタック', flag_indestructible: '破壊不可', flag_sprout: '発芽', flag_symbiosis: '共生', flag_copy: '複製', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隠密', flag_revealed: '公開',
     choose_convert_count: '変換回数を選択', choose_magic_card_n: 'マジックカード第{0}枚', choose_source_card_n: 'ソースカード第{0}枚',
     choose_light_cards: '光変換カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
     selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
@@ -519,7 +527,7 @@ I18N.ja = { ...I18N.en,
     set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '両方のデッキは15枚ちょうど必要です',
     solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
     edit_tags: 'タグ編集', tag_precision: '精密', tag_exile: '追放', tag_non_stackable: '非重複',
-    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '自分専用', tag_uncancellable: 'キャンセル不可', tag_infinite_exclude: 'Infinite Fireから削除', tag_sticky: '粘着',
+    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '自分専用', tag_uncancellable: 'キャンセル不可', tag_copy: '複製', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隠密', tag_revealed: '公開', tag_infinite_exclude: 'Infinite Fireから削除', tag_sticky: '粘着',
     fusion_layer: '融合', fission_layer: '分裂',
     app_subtitle: 'LANカード対戦',
     nickname_placeholder: 'ニックネームを入力',
@@ -661,7 +669,12 @@ Object.assign(I18N.zh, {
     tag_desc_self_only: '目标限制关键词。2v2 中表示该牌只能对自己使用；1v1 中该限制没有额外显示意义。',
     tag_desc_uncancellable: '选择限制关键词。该牌弹出选择窗口时不显示取消按钮，玩家必须完成选择。用于避免通过0消耗选择牌窗口查看隐藏信息后取消，例如磁铁查看敌方手牌。',
     tag_desc_infinite_exclude: '模式限制关键词。该牌不会进入无限火力的随机牌库，用于排除与该模式机制冲突的牌。',
+    tag_desc_copy: '抽牌关键词。当此牌进入手中时，将层数张放逐复制加入手中。',
+    tag_desc_unique: '牌库关键词。整场对局自己总牌库中仅允许出现一张，多余的将被放逐。',
+    tag_desc_swift: '费用关键词。此牌的E消耗减少X（最低0E）。',
     tag_desc_sticky: '结算去向关键词。带有粘滞的牌打出并结算后，会在本局内回到使用者手牌；具体回手时机由卡牌效果决定。',
+    tag_desc_stealth: '响应关键词。此牌不会触发对手的响应窗口。',
+    tag_desc_revealed: '可见性关键词。此牌在手中时永久对对手展示。',
     tag_desc_default: '模组或扩展标签。该标签的具体含义由对应模组或卡牌效果定义。'
 });
 
@@ -711,8 +724,13 @@ Object.assign(I18N.en, {
     tag_desc_self_only: 'Targeting keyword. In 2v2, this card can only target yourself; in 1v1, it has no extra display meaning.',
     tag_desc_uncancellable: 'Choice keyword. Selection windows from this card do not show a cancel button; the player must complete the choice. This prevents checking hidden information for 0 cost and canceling, such as with Magnet.',
     tag_desc_infinite_exclude: 'Mode keyword. This card is excluded from Infinite Fire random pools because it conflicts with that mode.',
+    tag_desc_copy: 'Draw keyword. When this card enters your hand, add N exile copies to your hand.',
+    tag_desc_unique: 'Deck keyword. Only one copy of this card is allowed in your deck; extras are exiled.',
+    tag_desc_swift: 'Cost keyword. This card\'s E cost is reduced by X (minimum 0E).',
     tag_desc_sticky: 'Resolution keyword. After being played and resolved, this card can return to its user’s hand during this match. The exact timing is defined by the card effect.',
-    tag_desc_default: 'Mod or extension tag. Its exact meaning is defined by the relevant mod or card effect.'
+    tag_desc_default: 'Mod or extension tag. Its exact meaning is defined by the relevant mod or card effect.',
+    tag_desc_stealth: 'Response keyword. This card does not trigger opponent response windows.',
+    tag_desc_revealed: 'Visibility keyword. This card is permanently visible to the opponent while in hand.'
 });
 
 Object.assign(I18N.fr, {
@@ -891,8 +909,13 @@ Object.assign(I18N.fr, {
     tag_desc_self_only: 'Mot-clé de ciblage. En 2v2, cette carte ne peut cibler que vous-même ; en 1v1, il n’a pas d’effet d’affichage supplémentaire.',
     tag_desc_uncancellable: 'Mot-clé de choix. Les fenêtres de choix de cette carte n’affichent pas de bouton Annuler ; le joueur doit terminer le choix. Cela évite de consulter une information cachée gratuitement puis d’annuler, par exemple avec Aimant.',
     tag_desc_infinite_exclude: 'Mot-clé de mode. Cette carte est exclue de la réserve aléatoire d’Infinite Fire car elle entre en conflit avec ce mode.',
+    tag_desc_copy: 'Mot-clé de pioche. Quand cette carte entre en main, ajoute N copies exilées.',
+    tag_desc_unique: 'Mot-clé de deck. Une seule copie autorisée; les excédentaires sont exilées.',
+    tag_desc_swift: 'Mot-clé de coût. Le coût E de cette carte est réduit de X (minimum 0E).',
     tag_desc_sticky: 'Mot-clé de résolution. Après avoir été jouée et résolue, cette carte peut revenir dans la main de son utilisateur pendant cette partie. Le moment exact est défini par l’effet de carte.',
-    tag_desc_default: 'Tag de mod ou d’extension. Son sens exact est défini par le mod ou l’effet de carte correspondant.'
+    tag_desc_default: 'Tag de mod ou d\'extension. Son sens exact est défini par le mod ou l\'effet de carte correspondant.',
+    tag_desc_stealth: 'Mot-clé de réponse. Cette carte ne déclenche pas la fenêtre de réponse adverse.',
+    tag_desc_revealed: 'Mot-clé de visibilité. Cette carte est visible en permanence pour l\'adversaire en main.'
 });
 
 Object.assign(I18N.pt, {
@@ -907,8 +930,13 @@ Object.assign(I18N.pt, {
     tag_desc_self_only: 'Palavra-chave de alvo. No 2v2, esta carta só pode mirar você mesmo; no 1v1, não tem significado visual extra.',
     tag_desc_uncancellable: 'Palavra-chave de escolha. Janelas de escolha desta carta não mostram botão de cancelar; o jogador deve concluir a escolha. Isso evita ver informação oculta de graça e cancelar, como com Magnet.',
     tag_desc_infinite_exclude: 'Palavra-chave de modo. Esta carta não entra no conjunto aleatório de Infinite Fire por conflitar com esse modo.',
+    tag_desc_copy: 'Palavra-chave de compra. Quando esta carta entra na mão, adicione N cópias exiladas.',
+    tag_desc_unique: 'Palavra-chave de deck. Apenas uma cópia permitida; extras são exiladas.',
+    tag_desc_swift: 'Palavra-chave de custo. O custo E desta carta é reduzido em X (mínimo 0E).',
     tag_desc_sticky: 'Palavra-chave de resolução. Depois de jogada e resolvida, esta carta pode voltar para a mão do usuário durante a partida. O momento exato é definido pelo efeito da carta.',
-    tag_desc_default: 'Tag de mod ou extensão. O significado exato é definido pelo mod ou pelo efeito da carta.'
+    tag_desc_default: 'Tag de mod ou extensão. O significado exato é definido pelo mod ou pelo efeito da carta.',
+    tag_desc_stealth: 'Palavra-chave de resposta. Esta carta não aciona a janela de resposta do oponente.',
+    tag_desc_revealed: 'Palavra-chave de visibilidade. Esta carta é visível permanentemente para o oponente na mão.'
 });
 
 Object.assign(I18N.ru, {
@@ -923,8 +951,13 @@ Object.assign(I18N.ru, {
     tag_desc_self_only: 'Ключевое слово цели. В 2v2 эту карту можно применять только к себе; в 1v1 оно не имеет дополнительного значения.',
     tag_desc_uncancellable: 'Ключевое слово выбора. Окна выбора этой карты не показывают кнопку отмены; игрок обязан завершить выбор. Это не дает бесплатно посмотреть скрытую информацию и отменить, например с Magnet.',
     tag_desc_infinite_exclude: 'Ключевое слово режима. Эта карта исключена из случайного пула Infinite Fire, потому что конфликтует с режимом.',
+    tag_desc_copy: 'Ключевое слово добора. Когда карта попадает в руку, добавьте N изгнанных копий.',
+    tag_desc_unique: 'Ключевое слово колоды. Допускается только одна копия; лишние изгоняются.',
+    tag_desc_swift: 'Ключевое слово стоимости. Стоимость E снижается на X (минимум 0E).',
     tag_desc_sticky: 'Ключевое слово разрешения. После розыгрыша и разрешения эта карта может вернуться в руку пользователя в этой партии. Точный момент задается эффектом карты.',
-    tag_desc_default: 'Тег мода или расширения. Точное значение задается соответствующим модом или эффектом карты.'
+    tag_desc_default: 'Тег мода или расширения. Точное значение задается соответствующим модом или эффектом карты.',
+    tag_desc_stealth: 'Ключевое слово ответа. Эта карта не вызывает окно ответа противника.',
+    tag_desc_revealed: 'Ключевое слово видимости. Эта карта постоянно видна противнику в руке.'
 });
 
 Object.assign(I18N.ja, {
@@ -939,8 +972,13 @@ Object.assign(I18N.ja, {
     tag_desc_self_only: '対象制限キーワード。2v2 では自分だけを対象にできます。1v1 では追加の表示上の意味はありません。',
     tag_desc_uncancellable: '選択制限キーワード。このカードの選択画面にはキャンセルボタンが表示されず、必ず選択を完了します。Magnet のように0コストで非公開情報を見てからキャンセルすることを防ぎます。',
     tag_desc_infinite_exclude: 'モード制限キーワード。このカードは Infinite Fire のランダムカードプールに入りません。',
+    tag_desc_copy: 'ドローキーワード。このカードが手札に入った時、追放コピーをN枚手札に加える。',
+    tag_desc_unique: 'デッキキーワード。デッキに1枚のみ許可され、超過分は追放される。',
+    tag_desc_swift: 'コストキーワード。このカードのE消費がX減少（最低0E）。',
     tag_desc_sticky: '解決先キーワード。打ち出して解決した後、この対局中に使用者の手札へ戻ることがあります。具体的なタイミングはカード効果で決まります。',
-    tag_desc_default: 'Mod または拡張タグです。具体的な意味は対応する Mod またはカード効果で定義されます。'
+    tag_desc_default: 'Mod または拡張タグです。具体的な意味は対応する Mod またはカード効果で定義されます。',
+    tag_desc_stealth: '応答キーワード。このカードは相手の応答ウィンドウをトリガーしません。',
+    tag_desc_revealed: '可視性キーワード。このカードは手札にある間、相手に永久に表示されます。'
 });
 
 Object.assign(I18N.zh, {
@@ -2051,8 +2089,13 @@ const CARD_FLAG_STYLES = {
     uncancellable: { label: '', fg: '#7f1d1d', bg: 'rgba(127,29,29,0.12)', cls: 'uncancellable' },
     infinite_exclude: { label: '', fg: '#455A64', bg: 'rgba(69,90,100,0.12)', cls: 'infinite-exclude' },
     sticky: { label: '', fg: '#9B59B6', bg: 'rgba(155,89,182,0.14)', cls: 'sticky' },
+    copy: { label: '', fg: '#e17055', bg: 'rgba(225,112,85,0.15)', cls: 'copy' },
+    unique: { label: '', fg: '#fdcb6e', bg: 'rgba(253,203,110,0.15)', cls: 'unique' },
+    swift: { label: '', fg: '#0984e3', bg: 'rgba(9,132,227,0.15)', cls: 'swift' },
     fusion_layer: { label: '', fg: '#8e44ad', bg: 'rgba(142,68,173,0.15)', cls: 'fusion-layer' },
     fission_layer: { label: '', fg: '#0f766e', bg: 'rgba(15,118,110,0.14)', cls: 'fission-layer' },
+    stealth: { label: '', fg: '#2C3E50', bg: '#EBF5FB', cls: 'stealth' },
+    revealed: { label: '', fg: '#E74C3C', bg: '#FDEDEC', cls: 'revealed' },
 };
 
 const CARD_FLAG_TERM_COLORS = {
@@ -2068,9 +2111,14 @@ const CARD_FLAG_TERM_COLORS = {
     uncancellable: '#7f1d1d',
     infinite_exclude: '#455A64',
     sticky: '#9B59B6',
+    copy: '#e17055',
+    unique: '#fdcb6e',
+    swift: '#0984e3',
     fusion_layer: 'var(--color-poison)',
     fission_layer: '#0f766e',
     tomato_layer: '#b42318',
+    stealth: '#2C3E50',
+    revealed: '#E74C3C',
 };
 
 const CARD_FLAG_ALIASES = {
@@ -2082,12 +2130,34 @@ const CARD_FLAG_ALIASES = {
     'thorn_cards_supplement_1:sticky': 'sticky',
     'tag_thorn_cards_supplement_1_sticky': 'sticky',
     'thorn_cards_supplement_1_sticky': 'sticky',
+    'tag_troll_cards:copy': 'copy',
+    'troll_cards:copy': 'copy',
+    'tag_troll_cards:unique': 'unique',
+    'troll_cards:unique': 'unique',
+    'tag_troll_cards:swift': 'swift',
+    'troll_cards:swift': 'swift',
+    stealth: 'stealth',
+    revealed: 'revealed',
 };
+
+const _VANILLA_FLAGS = new Set([
+    'precision', 'exile', 'non_stackable', 'indestructible', 'sprout',
+    'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
+    'infinite_exclude', 'sticky', 'copy', 'unique',
+    'swift', 'stealth', 'revealed',
+]);
 
 function normalizeCardFlag(flag) {
     const text = String(flag == null ? '' : flag).trim();
     if (!text) return '';
-    return CARD_FLAG_ALIASES[text.toLowerCase()] || text;
+    const lower = text.toLowerCase();
+    if (CARD_FLAG_ALIASES[lower]) return CARD_FLAG_ALIASES[lower];
+    // Auto-strip namespace prefix for known vanilla flags (e.g. "factory:sticky" -> "sticky")
+    if (lower.includes(':')) {
+        const local = lower.split(':').pop();
+        if (_VANILLA_FLAGS.has(local)) return local;
+    }
+    return text;
 }
 
 function getCardName(cardDef) {
@@ -2106,7 +2176,9 @@ function formatCardIdForDisplay(cardId) {
 
 function getEnglishCardName(cardDef) {
     if (!cardDef) return '';
-    return formatCardIdForDisplay(cardDef.id || cardDef.def_id || '');
+    if (cardDef.name_en) return cardDef.name_en;
+    const i18n = cardDef.name_i18n || {};
+    return i18n.en || formatCardIdForDisplay(cardDef.id || cardDef.def_id || '');
 }
 
 function shouldShowEnglishCardName(cardDef, localizedName = '') {
@@ -2737,6 +2809,7 @@ const LOCAL_SOLO_SUPPORTED_V2_OPS = new Set([
     'compare', 'and', 'or', 'not', 'has_status_named', 'has_status',
     'hand_full', 'selected_cards_count', 'selected_card_index',
     'selected_card_at', 'selected_card', 'last_created_card',
+    'goggles_enable', 'request_reorder_deck',
 ]);
 const COMBAT_FLOAT_TOTAL_LIMIT_MS = 5000;
 const COMBAT_FLOAT_BASE_DURATION_MS = 1700;
@@ -4812,7 +4885,8 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
     const dup = ownerState && ownerState.cards_played_this_turn
         ? Number(ownerState.cards_played_this_turn[cardDict.def_id] || 0)
         : 0;
-    const effectiveBaseE = Math.max(0, baseE - mimicDiscount);
+    const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
+    const effectiveBaseE = Math.max(0, baseE - mimicDiscount - swiftValue);
     const totalE = effectiveBaseE + (flags.has('symbiosis') ? 0 : dup);
     return { totalE, totalM: baseM, flags };
 }
@@ -4905,6 +4979,14 @@ function createCardElement(cardDict, options = {}) {
     if (!showAllFlags && defId === 'Tomato' && cardDict.instance_id != null) {
         const tomatoLayer = Math.min(6, Math.max(0, Number(cardDict.held_turns || 0)));
         flagsHtml += `<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || '层数')}: ${tomatoLayer}</span>`;
+    }
+    const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
+    if (swiftValue > 0) {
+        flagsHtml += `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}: ${swiftValue}</span>`;
+    }
+    const copyCount = Number(cardDef.copy_count || 0);
+    if (copyCount > 0) {
+        flagsHtml += `<span class="card-flag copy">${escapeHtml(UI.tag_copy || 'Copy')}: ${copyCount}</span>`;
     }
     const predictionHtml = getCardPlayEffectPredictionHtml(cardDict, {
         ...predictionOptions,
@@ -5017,13 +5099,15 @@ function cardFlagHtml(flag, text = null) {
 }
 
 function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
-    const { includeLayers = true, includeTomato = true } = options;
+    const { includeLayers = true, includeTomato = true, hideFlags = null } = options;
     if (!cardDict || !cardDef) return '';
+    const hideSet = hideFlags ? new Set(hideFlags.map(f => normalizeCardFlag(f))) : null;
     const { base, effective } = getEffectiveCardFlagSets(cardDict, cardDef);
     const parts = [];
     effective.forEach(flag => {
         if (base.has(flag)) return;
         if (!shouldDisplayCardFlag(flag)) return;
+        if (hideSet && hideSet.has(normalizeCardFlag(flag))) return;
         parts.push(cardFlagHtml(flag));
     });
     if (includeLayers) {
@@ -5037,6 +5121,14 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
         if (tomatoLayer > 0) {
             parts.push(`<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || 'Layer')}: ${tomatoLayer}</span>`);
         }
+    }
+    const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
+    if (swiftValue > 0) {
+        parts.push(cardFlagHtml('swift', `${UI.tag_swift || 'Swift'}: ${swiftValue}`));
+    }
+    const copyCount = Number(cardDef.copy_count || 0);
+    if (copyCount > 0) {
+        parts.push(cardFlagHtml('copy', `${UI.tag_copy || 'Copy'}: ${copyCount}`));
     }
     return parts.join('');
 }
@@ -5906,6 +5998,7 @@ function getTermIntroLibrary() {
         equipment: { label: '装备栏', desc: '装备牌所在区域。装备有些持续生效，也有些在满足触发条件时让你主动使用。', color: CARD_TYPE_COLORS.root },
         response: { label: UI.counter || '反制', desc: '对方行动满足条件时会出现响应机会。反制能改变对方行动的结果。', color: CARD_TYPE_COLORS.guard },
         same_name_penalty: { label: '同名卡惩罚', desc: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', color: COLORS.elixir },
+        revealed: { label: UI.tag_revealed || '被揭示', desc: '在手中时永久对对手展示。', color: '#E74C3C' },
         fusion_layer: { label: UI.fusion_layer || '聚变', desc: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#8E44AD' },
         fission_layer: { label: UI.fission_layer || '裂变', desc: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#2874A6' },
         tomato_layer: { label: UI.tomato_layer || '层数', desc: '番茄在手中每保留一回合增加层数，最多 6 层；打出后层数重置。', color: '#C0392B' },
@@ -5931,7 +6024,7 @@ function getIntroFlagDescription(flag, custom = null) {
     const normalized = normalizeCardFlag(flag);
     if (custom) return getRegistryText(custom, 'description', '') || '自定义标签。具体效果由对应模组或卡牌说明决定。';
     const desc = {
-        precision: '攻击被闪避时不会完全失效，而是把实际伤害改为一半，向上取整。',
+        precision: '攻击被闪避时不会完全失效，而是把实际伤害变为原来的一半，向上取整。',
         exile: '结算后进入放逐区，而不是弃牌堆；不会再被抽到。',
         non_stackable: '可以装备多张，但同类效果只算一份；一张被摧毁后，剩下的还能继续发挥作用。',
         indestructible: '作为装备时不会被摧毁效果破坏；玩家死亡时也不会被清除。',
@@ -5942,6 +6035,12 @@ function getIntroFlagDescription(flag, custom = null) {
         self_only: '只能对自己使用；2v2 中不能选择队友或敌人。',
         uncancellable: '相关选择窗口不能取消，避免免费查看隐藏信息后退出选择。',
         infinite_exclude: '不会进入无限火力随机牌池。',
+        sticky: '打出并结算后回到手中。',
+        copy: '进入手中时，将层数张放逐复制加入手中。',
+        unique: '整场对局自己总牌库中仅允许出现一张，多余的将被放逐。',
+        swift: 'E花费减少X，最少为0。',
+        stealth: '不会触发对手的响应窗口。',
+        revealed: '在手中时永久对对手展示。',
         fusion_layer: getTermIntroLibrary().fusion_layer.desc,
         fission_layer: getTermIntroLibrary().fission_layer.desc,
     };
@@ -6015,6 +6114,7 @@ function collectCardIntroTerms(cardDict) {
         [/(手牌上限|hand limit)/i, 'hand_limit'],
         [/(爆费|上限)/i, 'overcap'],
         [/(同名|共生|same-name)/i, 'same_name_penalty'],
+        [/(被揭示|revealed)/i, 'revealed'],
     ];
     probes.forEach(([re, key]) => {
         if (re.test(rawText)) addTermIntroItem(items, seen, key);
@@ -6048,13 +6148,21 @@ function getStatusIntroItem(statusInfo) {
         nazar: { label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
-        stunned: { label: UI.status_stunned, desc: '跳过主动行动，但装备的被动回合效果仍会正常处理。', color: COLORS.damage },
+        stunned: { label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         attack_blocked: { label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。', color: '#1A5276' },
         bandage: { label: UI.status_bandage, desc: '绷带提供临时保护，回合开始时会按规则结束。', color: '#1E8449' },
         sponge: { label: UI.status_sponge, desc: '海绵相关的临时状态，会影响下一次结算。', color: '#6C3483' },
         shovel: { label: UI.status_shovel, desc: '铲子相关的临时状态，会限制或改变当前回合行动。', color: '#5D4037' },
+        sluggish: { label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
+        overload: { label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
+        foresight: { label: UI.status_foresight, desc: '每回合可以最多从抽牌堆替换层数张手牌。', color: '#2980B9' },
+        fracture: { label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
+        heal_block: { label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数-1。', color: '#E84393' },
+        weakness: { label: UI.status_weakness, desc: '造成物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
+        bleed: { label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
+        fragment: { label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
     };
     return builtIns[key] || {
         label: (statusInfo && statusInfo.name) || key || '状态',
@@ -8899,7 +9007,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=13');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=14');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;
@@ -9543,7 +9651,7 @@ async function editSoloCardFlags(which, idx) {
     const card = deck[idx];
     if (!card) return;
     const cd = getCardDef(card.def_id);
-    const allFlags = ['precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis', 'attract', 'void', 'self_only', 'uncancellable'];
+    const allFlags = ['precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis', 'attract', 'void', 'self_only', 'uncancellable', 'copy', 'unique', 'swift', 'stealth', 'revealed'];
     const base = new Set((cd && cd.flags) || []);
     const added = new Set(card.instance_flags || []);
     const disabled = new Set(card.disabled_flags || []);
@@ -11573,17 +11681,27 @@ function renderStatusTags(containerId, playerData) {
     if (p.nazar_active) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
     if (p.equipment_protection > 0) tags.push({ key: 'equip_protect', name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
     if (p.invincible) tags.push({ key: 'invincible', name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
-    if (p.skip_turn) tags.push({ key: 'stunned', name: UI.status_stunned, abbr: 'Stn', val: '', fg: COLORS.damage, bg: COLORS.damage_bg });
+    if (p.skip_turn > 0) tags.push({ key: 'stunned', name: UI.status_stunned, abbr: 'Stn', val: p.skip_turn, fg: COLORS.damage, bg: COLORS.damage_bg });
     if (p.attack_blocked > 0) tags.push({ key: 'attack_blocked', name: UI.status_attack_blocked, abbr: 'NoT', val: p.attack_blocked, fg: '#C0392B', bg: '#FDEDEC' });
     if (p.attack_only > 0) tags.push({ key: 'attack_only', name: UI.status_attack_only, abbr: 'TOnly', val: p.attack_only, fg: '#D35400', bg: '#FEF5E7' });
     if (p.untargetable) tags.push({ key: 'untargetable', name: UI.status_untargetable, abbr: 'Unt', val: '', fg: '#1A5276', bg: '#EBF5FB' });
     if (p.bandage_active) tags.push({ key: 'bandage', name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
     if (p.sponge_active) tags.push({ key: 'sponge', name: UI.status_sponge, abbr: 'Spg', val: '', fg: '#6C3483', bg: '#F4ECF7' });
     if (p.shovel_active) tags.push({ key: 'shovel', name: UI.status_shovel, abbr: 'Shv', val: '', fg: '#5D4037', bg: '#EFEBE9' });
+    if (p.sluggish > 0) tags.push({ key: 'sluggish', name: UI.status_sluggish, abbr: 'Slg', val: p.sluggish, fg: '#E67E22', bg: '#FEF5E7' });
+    if (p.overload > 0) tags.push({ key: 'overload', name: UI.status_overload, abbr: 'Ovl', val: p.overload, fg: '#C0392B', bg: '#FDEDEC' });
+    if (p.foresight > 0) tags.push({ key: 'foresight', name: UI.status_foresight, abbr: 'Fsi', val: p.foresight, fg: '#2980B9', bg: '#EBF5FB' });
+    if (p.fracture > 0) tags.push({ key: 'fracture', name: UI.status_fracture, abbr: 'Frc', val: p.fracture, fg: '#7F8C8D', bg: '#F2F3F4' });
+    if (p.heal_block > 0) tags.push({ key: 'heal_block', name: UI.status_heal_block, abbr: 'HB', val: p.heal_block, fg: '#E84393', bg: '#FDEDF2' });
+    if (p.weakness > 0) tags.push({ key: 'weakness', name: UI.status_weakness, abbr: 'Wk', val: p.weakness, fg: '#8E44AD', bg: '#F4ECF7' });
+    if (p.bleed > 0) tags.push({ key: 'bleed', name: UI.status_bleed, abbr: 'Bld', val: p.bleed, fg: '#922B21', bg: '#FDEDEC' });
+    if (p.fragment_stacks > 0) tags.push({ key: 'fragment', name: UI.status_fragment, abbr: 'Frg', val: p.fragment_stacks, fg: '#795548', bg: '#EFEBE9' });
     if (p.custom_statuses && typeof p.custom_statuses === 'object') {
+        const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','sluggish','overload','foresight','fracture','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn']);
         Object.entries(p.custom_statuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;
+            if (builtinKeys.has(name)) return;
             const def = getCustomStatusDef(name);
             if (def && def.visible === false) return;
             const label = def ? getRegistryText(def, 'name', name) : name;
@@ -11631,6 +11749,7 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
     removeFloatingCardPreview();
     container.innerHTML = '';
     const revealedHand = oppData.revealed_hand || oppData.hand;
+    const revealedTagCards = oppData.revealed_tag_cards || [];
     if (revealedHand && revealedHand.length > 0) {
         revealedHand.forEach(cd => {
             const prediction = getCardPredictionOptionsForOwner(cd, oppData);
@@ -11641,6 +11760,24 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
             if (isSpectating) attachFloatingCardPreview(el, cd, { prediction, ownerState: oppData });
             container.appendChild(el);
         });
+    } else if (revealedTagCards.length > 0) {
+        const count = oppData.hand_count || 0;
+        const sortedRevealed = [...revealedTagCards].sort((a, b) => (a.instance_id || 0) - (b.instance_id || 0));
+        const hiddenCount = Math.max(0, count - sortedRevealed.length);
+        // Show revealed cards as chips (hide 'revealed' tag on chip, but keep in preview)
+        sortedRevealed.forEach(cd => {
+            const prediction = getCardPredictionOptionsForOwner(cd, oppData);
+            const el = isSpectating
+                ? createCardElement(cd, { small: true, prediction, ownerState: oppData })
+                : createCardChoiceChip(cd, { hideFlags: ['revealed'], previewOptions: { prediction, ownerState: oppData } });
+            el.classList.add(isSpectating ? 'opp-hand-card' : 'opp-hand-chip');
+            if (isSpectating) attachFloatingCardPreview(el, cd, { prediction, ownerState: oppData });
+            container.appendChild(el);
+        });
+        for (let i = 0; i < hiddenCount; i++) {
+            const card = createCardElement({}, { faceDown: true, small: true });
+            container.appendChild(card);
+        }
     } else {
         const count = oppData.hand_count || 0;
         for (let i = 0; i < count; i++) {
@@ -13608,13 +13745,13 @@ function multiChoice(title, options, config = {}) {
         msgEl.classList.toggle('hidden', !message);
         optsEl.innerHTML = '';
         const selected = new Set();
-        const confirm = document.createElement('div');
-        confirm.className = 'game-prompt-option game-prompt-confirm disabled';
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'btn btn-primary';
         const updateConfirm = () => {
             const count = selected.size;
             const ok = count >= min && count <= max;
-            confirm.classList.toggle('disabled', !ok);
-            confirm.textContent = `${UI.ok || '确定'} (${count}/${min}-${max})`;
+            confirmBtn.classList.toggle('disabled', !ok);
+            confirmBtn.textContent = `${config.confirmText || UI.ok || '确定'} (${count}/${min}-${max})`;
         };
         options.forEach((opt, i) => {
             const div = document.createElement('div');
@@ -13632,20 +13769,30 @@ function multiChoice(title, options, config = {}) {
             };
             optsEl.appendChild(div);
         });
-        confirm.onclick = () => {
-            if (confirm.classList.contains('disabled')) return;
+        confirmBtn.onclick = () => {
+            if (confirmBtn.classList.contains('disabled')) return;
             removeFloatingCardPreview();
             el.classList.remove('active');
             resolve(Array.from(selected).sort((a, b) => a - b));
         };
-        optsEl.appendChild(confirm);
+        // Place confirm button next to cancel button in the buttons row
         const cancelBtn = $('game-prompt-cancel');
         cancelBtn.textContent = UI.cancel;
         cancelBtn.classList.toggle('hidden', !cancellable);
         cancelBtn.style.display = cancellable ? '' : 'none';
         cancelBtn.onclick = () => { removeFloatingCardPreview(); el.classList.remove('active'); resolve([]); };
+        // Insert confirm after cancel in the buttons row
+        const buttonsRow = cancelBtn.parentNode;
+        if (confirmBtn.parentNode) confirmBtn.parentNode.removeChild(confirmBtn);
+        buttonsRow.appendChild(confirmBtn);
+        const cleanup = () => {
+            if (confirmBtn.parentNode) confirmBtn.parentNode.removeChild(confirmBtn);
+        };
         updateConfirm();
         el.classList.add('active');
+        // Cleanup on resolve
+        const origResolve = resolve;
+        resolve = (val) => { cleanup(); origResolve(val); };
     });
 }
 
@@ -13924,6 +14071,176 @@ function respondSurrenderConsent(accepted) {
     if (socket) socket.emit('surrender_consent_response', { accepted: !!accepted });
 }
 
+async function showReorderDeckUI(deckCards, titleText) {
+    const modal = $('modal');
+    const content = $('modal-content');
+    if (!modal || !content) return null;
+    removeFloatingCardPreview();
+    const order = deckCards.map(c => c.instance_id);
+    content.className = 'modal-inner view-deck-modal';
+    content.innerHTML = '';
+    const title = document.createElement('h3');
+    title.textContent = titleText;
+    content.appendChild(title);
+    const hint = document.createElement('p');
+    hint.className = 'deck-total';
+    hint.textContent = '拖拽三横线调整顺序（最上方先抽到）';
+    content.appendChild(hint);
+    const list = document.createElement('div');
+    list.className = 'deck-list reorder-deck-list';
+
+    // Build rows
+    const rows = [];
+    deckCards.forEach((c, idx) => {
+        const row = document.createElement('div');
+        row.className = 'reorder-deck-entry';
+        row.dataset.idx = idx;
+        // Drag handle (hamburger icon)
+        const handle = document.createElement('span');
+        handle.className = 'reorder-handle';
+        handle.innerHTML = '&#9776;';
+        handle.setAttribute('aria-label', '拖拽排序');
+        row.appendChild(handle);
+        row.appendChild(createCardChoiceChip(c));
+        const numEl = document.createElement('span');
+        numEl.className = 'choice-option-detail deck-entry-count reorder-deck-num';
+        numEl.textContent = `#${idx + 1}`;
+        row.appendChild(numEl);
+        list.appendChild(row);
+        rows.push(row);
+    });
+
+    // Pointer-based smooth drag reorder
+    let dragRow = null;
+    let dragOffsetY = 0;
+    let placeholder = null;
+    let dragClone = null;
+
+    function moveDrag(e) {
+        if (!dragRow || !dragClone) return;
+        dragClone.style.top = (e.clientY - dragOffsetY) + 'px';
+
+        // Find insertion point among current visible rows (skip placeholder & dragging row)
+        let insertBefore = null;
+        const children = list.children;
+        for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            if (child === placeholder || child === dragRow) continue;
+            const rect = child.getBoundingClientRect();
+            if (rect.top + rect.height / 2 > e.clientY) {
+                insertBefore = child;
+                break;
+            }
+        }
+
+        if (insertBefore) {
+            list.insertBefore(placeholder, insertBefore);
+        } else {
+            list.appendChild(placeholder);
+        }
+    }
+
+    function endDrag() {
+        if (!dragRow) return;
+
+        // Insert drag row at placeholder position
+        list.insertBefore(dragRow, placeholder);
+        placeholder.remove();
+        dragClone.remove();
+
+        dragRow.classList.remove('reorder-dragging');
+        dragRow = null;
+        dragClone = null;
+        placeholder = null;
+
+        // Rebuild order from current DOM order
+        const currentRows = list.querySelectorAll('.reorder-deck-entry');
+        order.length = 0;
+        currentRows.forEach((el, i) => {
+            el.dataset.idx = i;
+            const num = el.querySelector('.reorder-deck-num');
+            if (num) num.textContent = `#${i + 1}`;
+            const origIdx = rows.indexOf(el);
+            if (origIdx >= 0) order.push(deckCards[origIdx].instance_id);
+        });
+
+        document.removeEventListener('pointermove', moveDrag);
+        document.removeEventListener('pointerup', endDrag);
+    }
+
+    rows.forEach(row => {
+        const handle = row.querySelector('.reorder-handle');
+        handle.addEventListener('pointerdown', e => {
+            e.preventDefault();
+            const rect = row.getBoundingClientRect();
+            dragRow = row;
+            dragOffsetY = e.clientY - rect.top;
+
+            // Create placeholder at current position
+            placeholder = document.createElement('div');
+            placeholder.className = 'reorder-placeholder';
+            placeholder.style.height = rect.height + 'px';
+            list.insertBefore(placeholder, row);
+
+            // Hide original row (remove from flow)
+            row.classList.add('reorder-dragging');
+
+            // Create floating clone
+            dragClone = row.cloneNode(true);
+            dragClone.className = 'reorder-deck-entry reorder-clone';
+            dragClone.style.position = 'fixed';
+            dragClone.style.left = rect.left + 'px';
+            dragClone.style.top = rect.top + 'px';
+            dragClone.style.width = rect.width + 'px';
+            dragClone.style.zIndex = '10000';
+            dragClone.style.pointerEvents = 'none';
+            document.body.appendChild(dragClone);
+
+            document.addEventListener('pointermove', moveDrag);
+            document.addEventListener('pointerup', endDrag);
+        });
+    });
+
+    content.appendChild(list);
+    const buttons = document.createElement('div');
+    buttons.className = 'modal-buttons';
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'btn btn-primary';
+    confirmBtn.textContent = UI.ok || '确定';
+    confirmBtn.onclick = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('active');
+    };
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-danger';
+    cancelBtn.textContent = UI.cancel || '取消';
+    cancelBtn.onclick = () => {
+        order.length = 0;
+        modal.classList.add('hidden');
+        modal.classList.remove('active');
+    };
+    buttons.appendChild(cancelBtn);
+    buttons.appendChild(confirmBtn);
+    content.appendChild(buttons);
+    modal.classList.remove('hidden');
+    modal.classList.add('active');
+    return new Promise(resolve => {
+        const checkClosed = () => {
+            if (modal.classList.contains('hidden') || !modal.classList.contains('active')) {
+                if (order.length > 0) {
+                    resolve({ new_order: order });
+                } else {
+                    resolve(null);
+                }
+            } else {
+                requestAnimationFrame(checkClosed);
+            }
+        };
+        confirmBtn.addEventListener('click', () => setTimeout(checkClosed, 50));
+        cancelBtn.addEventListener('click', () => setTimeout(checkClosed, 50));
+    });
+}
+
 async function showChoiceUI(data) {
     if (isSpectating) return;
     removeFloatingCardPreview();
@@ -14051,9 +14368,20 @@ async function showChoiceUI(data) {
         }
     } else if (choiceType === 'choose_card_from_hand') {
         const isMimicChoice = isMimicCardDict(cardDict);
-        const otherCards = (choiceTargetData().hand || []).filter(c => (
+        const filter = choiceParams.filter || {};
+        let otherCards = (choiceTargetData().hand || []).filter(c => (
             !isMimicChoice || c.instance_id !== cardDict.instance_id
         ));
+        if (filter.card_type) {
+            const allowedTypes = Array.isArray(filter.card_type) ? filter.card_type : [filter.card_type];
+            otherCards = otherCards.filter(c => {
+                const def = getCardDef(c.def_id);
+                return def && allowedTypes.includes(def.card_type);
+            });
+        }
+        if (filter.exclude_current && cardDict.instance_id) {
+            otherCards = otherCards.filter(c => c.instance_id !== cardDict.instance_id);
+        }
         if (otherCards.length) {
             const options = otherCards.map(c => (
                 isMimicChoice
@@ -14062,6 +14390,9 @@ async function showChoiceUI(data) {
             ));
             const sel = await simpleChoice(choiceTitle(UI.choose_hand_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < otherCards.length) choiceResult = { target_instance_id: otherCards[sel].instance_id };
+        } else {
+            const noMatchMsg = filter.card_type ? UI.no_matching_cards || '没有符合条件的牌' : (UI.no_cards_in_hand || '手牌为空');
+            gameAlert(UI.notice, noMatchMsg);
         }
     } else if (choiceType === 'choose_from_deck') {
         const deck = choiceTargetData().deck || [];
@@ -14117,12 +14448,38 @@ async function showChoiceUI(data) {
             candidates,
         });
         if (targetId >= 0) choiceResult = { target_player: targetId, target_player_id: targetId };
+    } else if (choiceType === 'foresight_replace') {
+        const deckCards = data.deck_cards || [];
+        const maxReplace = Number(choiceParams.max_count || choiceParams.count || 1);
+        if (!deckCards.length) { gameAlert(UI.notice, UI.no_valid_target || '没有可选择的卡牌'); }
+        else {
+            const options = deckCards.map(c => cardChoiceOption(c));
+            const selected = await multiChoice(
+                choiceTitle(UI.foresight_replace_title || 'Foresight'),
+                options,
+                {
+                    ...choicePromptConfig,
+                    min: 0,
+                    max: maxReplace,
+                    message: (UI.foresight_replace_desc || 'Select up to {0} cards to draw').replace('{0}', maxReplace),
+                    confirmText: UI.foresight_replace_confirm || 'Draw',
+                }
+            );
+            if (selected.length > 0) choiceResult = { selected_instance_ids: selected.map(i => deckCards[i].instance_id) };
+            else choiceResult = { selected_instance_ids: [] };
+        }
     } else if (choiceType === 'confirm') {
         const sel = await simpleChoice(choiceTitle(UI.notice || 'Confirm'), [
             choiceParams.ok_text || UI.ok || 'OK',
             choiceParams.cancel_text || UI.cancel || 'Cancel',
         ], choicePromptConfig);
         if (sel >= 0) choiceResult = { confirmed: sel === 0, accepted: sel === 0 };
+    } else if (choiceType === 'reorder_deck') {
+        const deckCards = data.deck_cards || [];
+        if (!deckCards.length) { gameAlert(UI.notice, UI.deck_empty); }
+        else {
+            choiceResult = await showReorderDeckUI(deckCards, data.message || '调整牌堆顺序');
+        }
     }
     if (!choiceResult && choiceParams.continue_on_cancel) {
         choiceResult = { cancelled: true };
@@ -14436,18 +14793,12 @@ function onViewDeck() {
         setTimeout(updateTutorialOverlay, 80);
     }
     const deckPlayer = getDeckViewerPlayer();
-    const deck = deckPlayer.deck || [];
+    const hasOrderedDeck = !!deckPlayer.deck_ordered;
+    const deck = deckPlayer.deck_ordered || deckPlayer.deck || [];
     const modal = $('modal');
     const content = $('modal-content');
     if (!modal || !content) return;
     removeFloatingCardPreview();
-    const groups = new Map();
-    deck.forEach(c => {
-        const key = cardChoiceIdentity(c);
-        const group = groups.get(key) || { card: c, count: 0 };
-        group.count += 1;
-        groups.set(key, group);
-    });
     content.className = 'modal-inner view-deck-modal';
     content.innerHTML = '';
     const title = document.createElement('h3');
@@ -14462,21 +14813,42 @@ function onViewDeck() {
     content.appendChild(total);
     const list = document.createElement('div');
     list.className = 'deck-list';
-    Array.from(groups.values()).sort((a, b) => {
-        const ad = getCardDef(a.card.def_id);
-        const bd = getCardDef(b.card.def_id);
-        if (ad && bd) return compareGalleryCards(a.card.def_id, b.card.def_id);
-        return (ad ? getCardName(ad) : a.card.def_id || '').localeCompare(bd ? getCardName(bd) : b.card.def_id || '');
-    }).forEach(({ card, count }) => {
-        const row = document.createElement('div');
-        row.className = 'deck-entry';
-        row.appendChild(createCardChoiceChip(card));
-        const countEl = document.createElement('span');
-        countEl.className = 'choice-option-detail deck-entry-count';
-        countEl.textContent = `x${count}`;
-        row.appendChild(countEl);
-        list.appendChild(row);
-    });
+    if (hasOrderedDeck) {
+        // Goggles: show deck in order (top to bottom)
+        deck.forEach((c, idx) => {
+            const row = document.createElement('div');
+            row.className = 'deck-entry';
+            const numEl = document.createElement('span');
+            numEl.className = 'choice-option-detail deck-entry-count';
+            numEl.textContent = `#${idx + 1}`;
+            row.appendChild(createCardChoiceChip(c));
+            row.appendChild(numEl);
+            list.appendChild(row);
+        });
+    } else {
+        const groups = new Map();
+        deck.forEach(c => {
+            const key = cardChoiceIdentity(c);
+            const group = groups.get(key) || { card: c, count: 0 };
+            group.count += 1;
+            groups.set(key, group);
+        });
+        Array.from(groups.values()).sort((a, b) => {
+            const ad = getCardDef(a.card.def_id);
+            const bd = getCardDef(b.card.def_id);
+            if (ad && bd) return compareGalleryCards(a.card.def_id, b.card.def_id);
+            return (ad ? getCardName(ad) : a.card.def_id || '').localeCompare(bd ? getCardName(bd) : b.card.def_id || '');
+        }).forEach(({ card, count }) => {
+            const row = document.createElement('div');
+            row.className = 'deck-entry';
+            row.appendChild(createCardChoiceChip(card));
+            const countEl = document.createElement('span');
+            countEl.className = 'choice-option-detail deck-entry-count';
+            countEl.textContent = `x${count}`;
+            row.appendChild(countEl);
+            list.appendChild(row);
+        });
+    }
     content.appendChild(list);
     const buttons = document.createElement('div');
     buttons.className = 'modal-buttons';

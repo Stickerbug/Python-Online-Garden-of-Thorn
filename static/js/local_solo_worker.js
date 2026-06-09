@@ -458,7 +458,7 @@ class LocalPlayer {
         this.magic_battery_m_this_turn = 0;
         this.coffee_first_use = true;
         this.invincible = false;
-        this.skip_turn = false;
+        this.skip_turn = 0;
         this.damage_multiplier = 1.0;
         this.bandage_active = false;
         this.bandage_death_pending = false;
@@ -1213,8 +1213,8 @@ class LocalSoloEngine {
         this.applyTurnStartEffects(playerId);
         if (this.game_over) return;
         const ps = this.players[playerId];
-        if (ps.skip_turn) {
-            ps.skip_turn = false;
+        if (ps.skip_turn > 0) {
+            ps.skip_turn -= 1;
             this.logMsg(`${this.pn(playerId)}被眩晕，跳过本回合！`);
             this.endPlayerTurn(playerId);
             return;
@@ -3051,7 +3051,8 @@ class LocalSoloEngine {
 
     effect_skip_turn(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
-        this.players[targetId].skip_turn = true;
+        const amount = toInt(params.amount, 1);
+        this.players[targetId].skip_turn += amount;
     }
 
     effect_reveal_enemy_hand(playerId, card, params, log) {
