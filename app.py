@@ -250,6 +250,7 @@ _COMMUNITY_API_RATE: dict = {}
 SERVER_STARTED_AT = time.time()
 RECONNECT_TIMEOUT_SECONDS = int(os.environ.get('RECONNECT_TIMEOUT_SECONDS', '120'))
 BOTH_DISCONNECTED_CLEANUP_SECONDS = int(os.environ.get('BOTH_DISCONNECTED_CLEANUP_SECONDS', '60'))
+GAME_OVER_CLEANUP_SECONDS = int(os.environ.get('GAME_OVER_CLEANUP_SECONDS', '300'))
 DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2:sha256:260000$82e7gAIa0D6034Qq$a0c9a5ad6028ce6c8798abc1314bc74b099b2441c3f39c3b3e6255ea2156f06b'
 ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', DEFAULT_ADMIN_PASSWORD_HASH)
 DEFAULT_BETA_ACCESS_KEY_HASH = 'scrypt:32768:8:1$GIMYfhSs9RpKMGUK$6f592ac96112ce2f7323012956fc2624890779b9f540c4b7601aff88e3635b3aea26157143eb26874b11cbe30f7da33b25e46285f1f547a846a3f12dc740eb0b'
@@ -3553,7 +3554,7 @@ def zh_phase(value):
         'choice': '选择',
         'playing': '进行中',
         'draft': '选牌',
-        'event_select': '开局事件',
+        'event_select': '配装倾向',
         'game_over': '结束',
     }.get(value, value)
 
@@ -4086,6 +4087,7 @@ def remove_player_by_admin(sid):
                 socketio.emit('spectate_leave', {}, room=spid)
         for t in room.reconnect_timers.values():
             t.cancel()
+        _cancel_game_over_cleanup_timer(room)
         del rooms[room_id]
     elif spectating_room is not None and spectating_room in rooms:
         room = rooms[spectating_room]
@@ -4298,25 +4300,31 @@ def _build_lobby_update_payloads_locked():
 
 def _broadcast_lobby_worker():
     global _LOBBY_BROADCAST_PENDING, _LOBBY_BROADCAST_DIRTY
-    while True:
-        if _LOBBY_BROADCAST_DELAY_SECONDS > 0:
+    try:
+        while True:
+            if _LOBBY_BROADCAST_DELAY_SECONDS > 0:
+                try:
+                    socketio.sleep(_LOBBY_BROADCAST_DELAY_SECONDS)
+                except Exception:
+                    time.sleep(_LOBBY_BROADCAST_DELAY_SECONDS)
             try:
-                socketio.sleep(_LOBBY_BROADCAST_DELAY_SECONDS)
-            except Exception:
-                time.sleep(_LOBBY_BROADCAST_DELAY_SECONDS)
-        try:
-            with _lock:
-                payloads = _build_lobby_update_payloads_locked()
-            for sid, payload in payloads:
-                socketio.emit('lobby_update', payload, room=sid)
-        except Exception as exc:
-            admin_event('error', f'lobby broadcast failed: {exc}')
+                with _lock:
+                    payloads = _build_lobby_update_payloads_locked()
+                for sid, payload in payloads:
+                    socketio.emit('lobby_update', payload, room=sid)
+            except Exception as exc:
+                admin_event('error', f'lobby broadcast failed: {exc}')
+            with _LOBBY_BROADCAST_LOCK:
+                if _LOBBY_BROADCAST_DIRTY:
+                    _LOBBY_BROADCAST_DIRTY = False
+                    continue
+                _LOBBY_BROADCAST_PENDING = False
+                break
+    except Exception as exc:
+        # Ensure _LOBBY_BROADCAST_PENDING is reset even on unexpected errors
+        admin_event('error', f'lobby broadcast worker crashed: {exc}')
         with _LOBBY_BROADCAST_LOCK:
-            if _LOBBY_BROADCAST_DIRTY:
-                _LOBBY_BROADCAST_DIRTY = False
-                continue
             _LOBBY_BROADCAST_PENDING = False
-            break
 
 
 def broadcast_lobby():
@@ -4342,13 +4350,16 @@ def send_draft_state(room, pidx):
     picks = engine.draft_picks[pidx]
     rerolls = engine.draft_rerolls[pidx]
     others_picks_count = {}
+    others_status = {}
     if room.mode == '2v2':
         for i in range(4):
             if i != pidx:
                 others_picks_count[i] = len(engine.draft_picks[i])
+                others_status[i] = engine.get_player_status(i)
     else:
         opp_pidx = 1 - pidx
         others_picks_count[opp_pidx] = len(engine.draft_picks[opp_pidx])
+        others_status[opp_pidx] = engine.get_player_status(opp_pidx)
     payload = {
         'options': [c.to_dict() for c in options],
         'picks': picks,
@@ -4356,6 +4367,7 @@ def send_draft_state(room, pidx):
         'round': len(picks) + 1,
         'total_rounds': DECK_SIZE,
         'others_picks_count': others_picks_count,
+        'others_status': others_status,
         'opponent_picks_count': next(iter(others_picks_count.values()), 0) if room.mode != '2v2' else 0,
         'mode': room.mode,
         'player_names': engine.player_names,
@@ -4389,6 +4401,7 @@ def send_event_state(room, pidx):
         'others_selected': others_selected,
         'my_pick': engine.opening_event_picks[pidx],
         'magic_options': engine.opening_event_magic_options[pidx],
+        'rerolls': engine.draft_rerolls[pidx],
         'draft_picks': engine.draft_picks[pidx],
         'mode': room.mode,
         'player_names': engine.player_names,
@@ -4464,6 +4477,50 @@ def broadcast_game_state(room):
         admin_match_record(room)
         room._history_recorded = True
         admin_event('game', f'room {room.room_id} finished')
+        _schedule_game_over_cleanup(room)
+
+
+def _schedule_game_over_cleanup(room):
+    if getattr(room, '_game_over_cleanup_timer', None) is not None:
+        return
+    def _cleanup():
+        pending_emits = []
+        try:
+            with _lock:
+                rid = room.room_id
+                if rid not in rooms:
+                    return
+                for psid in room.player_sids:
+                    if psid in players:
+                        players[psid]['room_id'] = None
+                        players[psid]['status'] = 'lobby'
+                        pending_emits.append(('game_phase', {'phase': 'lobby'}, psid))
+                for spid in list(room.spectators):
+                    if spid in players:
+                        players[spid]['spectating_room'] = None
+                        players[spid]['spectate_perspective'] = 0
+                        pending_emits.append(('spectate_leave', {}, spid))
+                rooms.pop(rid, None)
+                admin_event('game', f'room {rid} auto-cleaned after game_over timeout')
+        except Exception as exc:
+            admin_event('error', f'game_over_cleanup error: {exc}')
+        for emit_item in pending_emits:
+            try:
+                socketio.emit(emit_item[0], emit_item[1], room=emit_item[2])
+            except Exception as exc:
+                admin_event('error', f'game_over_cleanup emit error: {exc}')
+        broadcast_lobby()
+    timer = threading.Timer(float(GAME_OVER_CLEANUP_SECONDS), _cleanup)
+    timer.daemon = True
+    timer.start()
+    room._game_over_cleanup_timer = timer
+
+
+def _cancel_game_over_cleanup_timer(room):
+    timer = getattr(room, '_game_over_cleanup_timer', None)
+    if timer is not None:
+        timer.cancel()
+        room._game_over_cleanup_timer = None
 
 
 def send_game_state_to(room, pidx):
@@ -4539,6 +4596,38 @@ def emit_rematch_state(room):
 def start_event_select(room):
     for pi in range(len(room.player_sids)):
         send_event_state(room, pi)
+
+
+def send_event_sub_choice_state(room, pidx):
+    """Send sub-choice state for opening events after draft."""
+    sid = room.player_sids[pidx]
+    if sid not in players:
+        return
+    engine = room.engine
+    event_id = engine.opening_event_picks[pidx]
+    needs_sub = engine.needs_sub_choice(pidx)
+    # Find the slot index of the selected event to get its magic_options
+    selected_slot = None
+    magic_options_for_event = []
+    if event_id is not None:
+        for j, ev in enumerate(engine.opening_event_options[pidx]):
+            if ev and str(ev.get('id')) == str(event_id):
+                selected_slot = j
+                break
+        if selected_slot is not None:
+            magic_options_for_event = engine.opening_event_magic_options[pidx][selected_slot]
+    payload = {
+        'event_id': event_id,
+        'needs_sub_choice': needs_sub,
+        'draft_picks': engine.draft_picks[pidx],
+        'magic_options': magic_options_for_event,
+        'mode': room.mode,
+        'player_names': engine.player_names,
+        'room_id': room.room_id,
+        'your_id': pidx,
+    }
+    payload.update(room_mod_payload(room))
+    socketio.emit('event_sub_choice', payload, room=sid)
 
 
 def start_game(room):
@@ -5027,76 +5116,106 @@ def _mark_disconnect_timeout_loss(room, player_index, nickname):
 
 def reconnect_timeout(room_id, old_sid):
     global _next_room_id
-    with _lock:
-        if room_id not in rooms:
-            return
-        room = rooms[room_id]
-        if old_sid not in room.disconnected_players:
-            return
-        dc_info = room.disconnected_players[old_sid]
-        timed_out_timer = room.reconnect_timers.pop(old_sid, None)
-        if timed_out_timer:
-            timed_out_timer.cancel()
-        ended = _mark_disconnect_timeout_loss(
-            room,
-            int(dc_info.get('player_index', -1)),
-            dc_info.get('nickname', '?'),
-        )
-        record_room_replay_action(room, 'disconnect_timeout', int(dc_info.get('player_index', -1)), {
-            'nickname': dc_info.get('nickname', '?'),
-            'game_over': ended,
-        })
-        if room.mode == '2v2':
-            if ended:
-                _cancel_room_reconnect_timers(room)
-                for other_sid in room.player_sids:
-                    if other_sid in players:
-                        socketio.emit('opponent_disconnected', {'timeout': True, 'game_over': True}, room=other_sid)
-                        socketio.emit('game_phase', {'phase': 'game_over'}, room=other_sid)
+    pending_emits = []
+    try:
+        with _lock:
+            if room_id not in rooms:
+                return
+            room = rooms[room_id]
+            if old_sid not in room.disconnected_players:
+                return
+            dc_info = room.disconnected_players[old_sid]
+            timed_out_timer = room.reconnect_timers.pop(old_sid, None)
+            if timed_out_timer:
+                timed_out_timer.cancel()
+            ended = _mark_disconnect_timeout_loss(
+                room,
+                int(dc_info.get('player_index', -1)),
+                dc_info.get('nickname', '?'),
+            )
+            record_room_replay_action(room, 'disconnect_timeout', int(dc_info.get('player_index', -1)), {
+                'nickname': dc_info.get('nickname', '?'),
+                'game_over': ended,
+            })
+            if room.mode == '2v2':
+                if ended:
+                    _cancel_room_reconnect_timers(room)
+                    for other_sid in room.player_sids:
+                        if other_sid in players:
+                            pending_emits.append(('opponent_disconnected', {'timeout': True, 'game_over': True}, other_sid))
+                            pending_emits.append(('game_phase', {'phase': 'game_over'}, other_sid))
+                else:
+                    for other_sid in room.player_sids:
+                        if other_sid in players:
+                            pending_emits.append(('opponent_disconnected', {
+                                'timeout': True,
+                                'game_over': False,
+                                'stay': True,
+                                'player_defeated': True,
+                                'opponent_nickname': dc_info.get('nickname', '?'),
+                            }, other_sid))
+                admin_event('game', f'room {room_id} disconnect timeout result: {dc_info.get("nickname", "?")}')
+                pending_emits.append(('broadcast_game_state', room, None))
+                pending_emits.append(('broadcast_lobby', None, None))
             else:
-                for other_sid in room.player_sids:
-                    if other_sid in players:
-                        socketio.emit('opponent_disconnected', {
-                            'timeout': True,
-                            'game_over': False,
-                            'stay': True,
-                            'player_defeated': True,
-                            'opponent_nickname': dc_info.get('nickname', '?'),
-                        }, room=other_sid)
-            admin_event('game', f'room {room_id} disconnect timeout result: {dc_info.get("nickname", "?")}')
-            broadcast_game_state(room)
-            broadcast_lobby()
-            return
-
-        _cancel_room_reconnect_timers(room)
-        if ended:
-            for other_sid in room.player_sids:
-                if other_sid in players:
-                    socketio.emit('opponent_disconnected', {'timeout': True, 'game_over': True}, room=other_sid)
-                    socketio.emit('game_phase', {'phase': 'game_over'}, room=other_sid)
-            admin_event('game', f'room {room_id} disconnect timeout result: {dc_info.get("nickname", "?")}')
-            broadcast_game_state(room)
-        for sid, p in players.items():
-            if p['status'] == 'reconnecting' and p['nickname'] == dc_info['nickname']:
-                p['status'] = 'lobby'
-                socketio.emit('reconnect_timeout', {}, room=sid)
-    broadcast_lobby()
+                _cancel_room_reconnect_timers(room)
+                if ended:
+                    for other_sid in room.player_sids:
+                        if other_sid in players:
+                            pending_emits.append(('opponent_disconnected', {'timeout': True, 'game_over': True}, other_sid))
+                            pending_emits.append(('game_phase', {'phase': 'game_over'}, other_sid))
+                    admin_event('game', f'room {room_id} disconnect timeout result: {dc_info.get("nickname", "?")}')
+                    pending_emits.append(('broadcast_game_state', room, None))
+                for sid, p in players.items():
+                    if p['status'] == 'reconnecting' and p['nickname'] == dc_info['nickname']:
+                        p['status'] = 'lobby'
+                        pending_emits.append(('reconnect_timeout', {}, sid))
+    except Exception as exc:
+        admin_event('error', f'reconnect_timeout error: {exc}')
+    # Perform all emits outside the lock
+    for emit_item in pending_emits:
+        try:
+            if emit_item[0] == 'opponent_disconnected':
+                socketio.emit('opponent_disconnected', emit_item[1], room=emit_item[2])
+            elif emit_item[0] == 'game_phase':
+                socketio.emit('game_phase', emit_item[1], room=emit_item[2])
+            elif emit_item[0] == 'reconnect_timeout':
+                socketio.emit('reconnect_timeout', emit_item[1], room=emit_item[2])
+            elif emit_item[0] == 'broadcast_game_state':
+                broadcast_game_state(emit_item[1])
+            elif emit_item[0] == 'broadcast_lobby':
+                broadcast_lobby()
+        except Exception as exc:
+            admin_event('error', f'reconnect_timeout emit error: {exc}')
+    if not pending_emits:
+        broadcast_lobby()
 
 
 def both_disconnected_cleanup(room_id):
     global _next_room_id
-    with _lock:
-        if room_id not in rooms:
-            return
-        room = rooms[room_id]
-        _cancel_room_reconnect_timers(room)
-        ended = _finish_room_by_health_tiebreak(room, '双方中途退出')
-        if ended:
-            record_room_replay_action(room, 'both_disconnected_result', None, {'game_over': True})
-            admin_event('game', f'room {room_id} both disconnected: health tiebreak')
-            broadcast_game_state(room)
-        if not any(psid in players for psid in room.player_sids) and not getattr(room, 'spectators', []):
-            rooms.pop(room_id, None)
+    pending_emits = []
+    try:
+        with _lock:
+            if room_id not in rooms:
+                return
+            room = rooms[room_id]
+            _cancel_room_reconnect_timers(room)
+            ended = _finish_room_by_health_tiebreak(room, '双方中途退出')
+            if ended:
+                record_room_replay_action(room, 'both_disconnected_result', None, {'game_over': True})
+                admin_event('game', f'room {room_id} both disconnected: health tiebreak')
+                pending_emits.append(('broadcast_game_state', room, None))
+            if not any(psid in players for psid in room.player_sids) and not getattr(room, 'spectators', []):
+                _cancel_game_over_cleanup_timer(room)
+                rooms.pop(room_id, None)
+    except Exception as exc:
+        admin_event('error', f'both_disconnected_cleanup error: {exc}')
+    for emit_item in pending_emits:
+        try:
+            if emit_item[0] == 'broadcast_game_state':
+                broadcast_game_state(emit_item[1])
+        except Exception as exc:
+            admin_event('error', f'both_disconnected_cleanup emit error: {exc}')
     broadcast_lobby()
 
 
@@ -6352,7 +6471,6 @@ def on_connect():
         socketio.server.disconnect(sid)
         return
     join_room(sid)
-    print("[server] debug")
 
 
 @socketio.on('latency_ping')
@@ -6446,9 +6564,8 @@ def on_draft_reroll(data=None):
                 for pi in range(len(room.player_sids)):
                     send_draft_state(room, pi)
             else:
-                emit('server_error', {'message': '无法重抽：当前不是选牌阶段或重抽次数已用完'})
+                emit('server_error', {'message': '无法刷新：当前不是选牌阶段或刷新次数已用完'})
     except Exception as e:
-        print("[server] debug")
         import traceback
         traceback.print_exc()
 
@@ -6625,7 +6742,6 @@ def on_login(data):
         login_payload['user'] = auth_user_payload(account_user)
     login_payload.update(special_public_fields(players.get(sid, {})))
     emit('login_ok', login_payload)
-    print("[server] debug")
     broadcast_lobby()
 
 
@@ -6951,10 +7067,11 @@ def on_accept_team_match(data):
             if s in teams:
                 del teams[s]
         room.engine.player_names = [players[s]['nickname'] for s in all_sids]
-        room.engine.start_draft()
-        record_room_replay_keyframe(room, 'draft_start')
+        room.engine.start_event_select_first()
+        record_room_replay_keyframe(room, 'event_select_start')
         for i, s in enumerate(all_sids):
-            send_draft_state(room, i)
+            emit_room_game_phase(room, s, 'event_select')
+            send_event_state(room, i)
         broadcast_lobby()
 
 
@@ -6987,92 +7104,108 @@ def on_decline_team_match(data):
 def on_disconnect():
     global _next_room_id
     sid = request.sid
-    with _lock:
-        if sid not in players:
-            return
-        player = players[sid]
-        mark_player_session_last_seen(player)
-        solo_sessions.pop(sid, None)
-        tutorial_sessions.discard(sid)
-        room_id = player.get('room_id')
-        nickname = player['nickname']
-        admin_event('player', f'{nickname} disconnected', sid=sid, room_id=room_id)
-        if room_id is not None and room_id in rooms:
-            room = rooms[room_id]
-            pidx = room.player_index(sid)
-            if pidx >= 0 and room.engine.phase not in ('game_over',):
-                room.disconnected_players[sid] = {
-                    'nickname': nickname,
-                    'player_index': pidx,
-                    'disconnect_time': time.time(),
-                    'user_id': player.get('user_id'),
-                    'account_player_id': player.get('account_player_id') or '',
-                    'is_registered_user': bool(player.get('is_registered_user')),
-                    'mod_source': player.get('mod_source', 'official'),
-                    'community_mod_hash': player.get('community_mod_hash', ''),
-                    'community_mods': player.get('community_mods', []),
-                    'mods_hash': player.get('mods_hash', ''),
-                    'loadout_hash': player_loadout_hash(player),
-                    'v2_loadout_hash': player.get('v2_loadout_hash', ''),
-                    'skin': public_skin_config(player.get('skin')),
-                    'skin_look': normalize_skin_look(player.get('skin_look')),
-                }
-                room.disconnected_players[sid].update(special_public_fields(player))
-                dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)
-                if not dead_2v2_player:
+    pending_emits = []  # Collect emits to perform outside the lock
+    try:
+        with _lock:
+            if sid not in players:
+                return
+            player = players[sid]
+            mark_player_session_last_seen(player)
+            solo_sessions.pop(sid, None)
+            tutorial_sessions.discard(sid)
+            room_id = player.get('room_id')
+            nickname = player['nickname']
+            admin_event('player', f'{nickname} disconnected', sid=sid, room_id=room_id)
+            if room_id is not None and room_id in rooms:
+                room = rooms[room_id]
+                pidx = room.player_index(sid)
+                if pidx >= 0 and room.engine.phase not in ('game_over',):
+                    room.disconnected_players[sid] = {
+                        'nickname': nickname,
+                        'player_index': pidx,
+                        'disconnect_time': time.time(),
+                        'user_id': player.get('user_id'),
+                        'account_player_id': player.get('account_player_id') or '',
+                        'is_registered_user': bool(player.get('is_registered_user')),
+                        'mod_source': player.get('mod_source', 'official'),
+                        'community_mod_hash': player.get('community_mod_hash', ''),
+                        'community_mods': player.get('community_mods', []),
+                        'mods_hash': player.get('mods_hash', ''),
+                        'loadout_hash': player_loadout_hash(player),
+                        'v2_loadout_hash': player.get('v2_loadout_hash', ''),
+                        'skin': public_skin_config(player.get('skin')),
+                        'skin_look': normalize_skin_look(player.get('skin_look')),
+                    }
+                    room.disconnected_players[sid].update(special_public_fields(player))
+                    dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)
+                    if not dead_2v2_player:
+                        for other_sid in room.player_sids:
+                            if other_sid != sid and other_sid in players:
+                                pending_emits.append(('opponent_disconnected', {
+                                    'reconnect_timeout': RECONNECT_TIMEOUT_SECONDS,
+                                    'opponent_nickname': nickname,
+                                }, other_sid))
+                        timer = threading.Timer(float(RECONNECT_TIMEOUT_SECONDS), reconnect_timeout, args=[room_id, sid])
+                        room.reconnect_timers[sid] = timer
+                        timer.daemon = True
+                        timer.start()
+                        both_dc = _room_all_blocking_players_disconnected(room)
+                        if both_dc:
+                            for t in room.reconnect_timers.values():
+                                t.cancel()
+                            room.reconnect_timers.clear()
+                            room.both_dc_timer = threading.Timer(float(BOTH_DISCONNECTED_CLEANUP_SECONDS), both_disconnected_cleanup, args=[room_id])
+                            room.both_dc_timer.daemon = True
+                            room.both_dc_timer.start()
+                    del players[sid]
+                    if dead_2v2_player:
+                        pending_emits.append(('broadcast_game_state', room, None))
+                    pending_emits.append(('broadcast_lobby', None, None))
+                elif pidx >= 0 and room.engine.phase == 'game_over':
+                    room._rematch_votes.discard(sid)
                     for other_sid in room.player_sids:
                         if other_sid != sid and other_sid in players:
-                            socketio.emit('opponent_disconnected', {
-                                'reconnect_timeout': RECONNECT_TIMEOUT_SECONDS,
-                                'opponent_nickname': nickname,
-                            }, room=other_sid)
-                    timer = threading.Timer(float(RECONNECT_TIMEOUT_SECONDS), reconnect_timeout, args=[room_id, sid])
-                    room.reconnect_timers[sid] = timer
-                    timer.daemon = True
-                    timer.start()
-                    both_dc = _room_all_blocking_players_disconnected(room)
-                    if both_dc and room.mode != '2v2':
+                            pending_emits.append(('opponent_disconnected', {'timeout': True}, other_sid))
+                    if not any(s in room.disconnected_players for s in room.player_sids if s != sid):
                         for t in room.reconnect_timers.values():
                             t.cancel()
-                        room.reconnect_timers.clear()
-                        room.both_dc_timer = threading.Timer(float(BOTH_DISCONNECTED_CLEANUP_SECONDS), both_disconnected_cleanup, args=[room_id])
-                        room.both_dc_timer.daemon = True
-                        room.both_dc_timer.start()
+                        _cancel_game_over_cleanup_timer(room)
+                        del rooms[room_id]
+                    else:
+                        for other_sid in room.player_sids:
+                            if other_sid != sid and other_sid in players:
+                                players[other_sid]['room_id'] = None
+                                players[other_sid]['status'] = 'lobby'
+                        for t in room.reconnect_timers.values():
+                            t.cancel()
+                        _cancel_game_over_cleanup_timer(room)
+                        del rooms[room_id]
+                if pidx < 0 and player.get('spectating_room') is not None:
+                    spec_room_id = player['spectating_room']
+                    if spec_room_id is not None and spec_room_id in rooms:
+                        spec_room = rooms[spec_room_id]
+                        if sid in spec_room.spectators:
+                            spec_room.spectators.remove(sid)
+                    player['spectating_room'] = None
+                    player['spectate_perspective'] = 0
+            for inv_sid, target_sid in list(invites.items()):
+                if inv_sid == sid or target_sid == sid:
+                    del invites[inv_sid]
+            if sid in players:
                 del players[sid]
-                if dead_2v2_player:
-                    broadcast_game_state(room)
+    except Exception as exc:
+        admin_event('error', f'on_disconnect error: {exc}')
+    # Perform all emits outside the lock
+    for emit_item in pending_emits:
+        try:
+            if emit_item[0] == 'opponent_disconnected':
+                socketio.emit('opponent_disconnected', emit_item[1], room=emit_item[2])
+            elif emit_item[0] == 'broadcast_game_state':
+                broadcast_game_state(emit_item[1])
+            elif emit_item[0] == 'broadcast_lobby':
                 broadcast_lobby()
-                return
-            if pidx >= 0 and room.engine.phase == 'game_over':
-                room._rematch_votes.discard(sid)
-                for other_sid in room.player_sids:
-                    if other_sid != sid and other_sid in players:
-                        socketio.emit('opponent_disconnected', {'timeout': True}, room=other_sid)
-                if not any(s in room.disconnected_players for s in room.player_sids if s != sid):
-                    for t in room.reconnect_timers.values():
-                        t.cancel()
-                    del rooms[room_id]
-                else:
-                    for other_sid in room.player_sids:
-                        if other_sid != sid and other_sid in players:
-                            players[other_sid]['room_id'] = None
-                            players[other_sid]['status'] = 'lobby'
-                    for t in room.reconnect_timers.values():
-                        t.cancel()
-                    del rooms[room_id]
-            if pidx < 0 and player.get('spectating_room') is not None:
-                spec_room_id = player['spectating_room']
-                if spec_room_id is not None and spec_room_id in rooms:
-                    spec_room = rooms[spec_room_id]
-                    if sid in spec_room.spectators:
-                        spec_room.spectators.remove(sid)
-                player['spectating_room'] = None
-                player['spectate_perspective'] = 0
-        for inv_sid, target_sid in list(invites.items()):
-            if inv_sid == sid or target_sid == sid:
-                del invites[inv_sid]
-        del players[sid]
-    broadcast_lobby()
+        except Exception as exc:
+            admin_event('error', f'on_disconnect emit error: {exc}')
 
 
 @socketio.on('reconnect_accept')
@@ -7267,11 +7400,9 @@ def on_accept_invite(data):
         return
     with _lock:
         if inviter_sid not in players or sid not in players:
-            print("[server] debug")
-            return
+                    return
         if inviter_sid not in invites or invites[inviter_sid] != sid:
-            print("[server] debug")
-            return
+                    return
         del invites[inviter_sid]
         inviter = players[inviter_sid]
         accepter = players[sid]
@@ -7300,18 +7431,16 @@ def on_accept_invite(data):
             room.started_at = time.time()
             record_room_replay_keyframe(room, 'game_start')
             admin_event('game', f'room {room_id} started mode={room.mode}')
-            print("[server] debug")
             for psid in room.player_sids:
                 emit_room_game_phase(room, psid, 'playing')
             broadcast_game_state(room)
         else:
-            room.engine.start_draft()
-            record_room_replay_keyframe(room, 'draft_start')
-            print("[server] debug")
+            room.engine.start_event_select_first()
+            record_room_replay_keyframe(room, 'event_select_start')
             for pidx in range(len(room.player_sids)):
                 psid = room.player_sids[pidx]
-                emit_room_game_phase(room, psid, 'draft')
-                send_draft_state(room, pidx)
+                emit_room_game_phase(room, psid, 'event_select')
+                send_event_state(room, pidx)
     broadcast_lobby()
 
 
@@ -7569,10 +7698,20 @@ def on_draft_pick(data):
                 except Exception as exc:
                     admin_event('error', f'draft stats record failed: {exc}')
             record_room_replay_action(room, 'draft_pick', pidx, {'def_id': def_id})
+            # Check if THIS player finished drafting
+            if len(engine.draft_picks[pidx]) >= DECK_SIZE:
+                if engine.needs_sub_choice(pidx):
+                    # This player needs sub-choice, send it immediately
+                    send_event_sub_choice_state(room, pidx)
+                else:
+                    # No sub-choice needed, mark as ready
+                    engine.player_ready[pidx] = True
+            # Send updated draft state to all players
             for pi in range(len(room.player_sids)):
                 send_draft_state(room, pi)
-            if engine.phase == 'event_select':
-                start_event_select(room)
+            # Check if all players are ready
+            if all(engine.player_ready[pi] for pi in range(len(room.player_sids))):
+                start_game(room)
         else:
             emit('server_error', {'message': '无法选择这张牌'})
 
@@ -7612,11 +7751,75 @@ def on_select_opening_event(data):
                 'event_id': event_id,
                 'sub_choice': sub_choice,
             })
-            if engine.both_events_selected():
-                start_game(room)
-            else:
-                for pi in range(len(room.player_sids)):
+            # Player selected their event, immediately start draft for them
+            engine.start_draft_for_player(pidx)
+            record_room_replay_keyframe(room, 'draft_start')
+            psid = room.player_sids[pidx]
+            emit_room_game_phase(room, psid, 'draft')
+            send_draft_state(room, pidx)
+            # Notify other players about this player's event selection
+            for pi in range(len(room.player_sids)):
+                if pi != pidx:
                     send_event_state(room, pi)
+
+
+@socketio.on('reroll_opening_event')
+@measure_socket_action('reroll_opening_event')
+def on_reroll_opening_event(data=None):
+    sid = request.sid
+    data = socket_guard('reroll_opening_event', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
+    with _lock:
+        if sid not in players:
+            return
+        player = players[sid]
+        room_id = player.get('room_id')
+        if room_id is None or room_id not in rooms:
+            return
+        room = rooms[room_id]
+        pidx = room.player_index(sid)
+        if pidx < 0:
+            return
+        engine = room.engine
+        success = engine.reroll_opening_event(pidx)
+        if success:
+            send_event_state(room, pidx)
+
+
+@socketio.on('submit_event_sub_choice')
+@measure_socket_action('submit_event_sub_choice')
+def on_submit_event_sub_choice(data):
+    sid = request.sid
+    data = socket_guard('submit_event_sub_choice', data, require_player=True)
+    if data is None:
+        return
+    sub_choice = validate_choice_payload(data.get('sub_choice'))
+    with _lock:
+        if sid not in players:
+            return
+        player = players[sid]
+        room_id = player.get('room_id')
+        if room_id is None or room_id not in rooms:
+            return
+        room = rooms[room_id]
+        pidx = room.player_index(sid)
+        if pidx < 0:
+            return
+        engine = room.engine
+        if sub_choice:
+            engine.opening_event_sub_choices[pidx] = sub_choice
+        else:
+            # Mark as completed even with no sub_choice (for events that don't need one)
+            engine.opening_event_sub_choices[pidx] = {}
+        # Mark this player as ready
+        engine.player_ready[pidx] = True
+        # Send updated draft state to all players
+        for pi in range(len(room.player_sids)):
+            send_draft_state(room, pi)
+        # Check if all players are ready
+        if all(engine.player_ready[pi] for pi in range(len(room.player_sids))):
+            start_game(room)
 
 
 @socketio.on('solo_start')
@@ -8469,7 +8672,6 @@ def on_surrender(data):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print("[server] debug")
         emit('server_error', {'message': '投降失败，请稍后重试'})
 
 
@@ -8536,7 +8738,6 @@ def on_surrender_consent_response(data):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print("[server] debug")
         emit('server_error', {'message': 'Surrender failed'})
 
 
@@ -8550,19 +8751,16 @@ def on_rematch(data=None):
     try:
         with _lock:
             if sid not in players:
-                print("[server] debug")
                 return
             player = players[sid]
             room_id = player.get('room_id')
             if room_id is None or room_id not in rooms:
-                print("[server] debug")
                 return
             room = rooms[room_id]
             if room.engine.phase != 'game_over':
                 return
             already_voted = sid in room._rematch_votes
             room._rematch_votes.add(sid)
-            print("[server] debug")
             emit_rematch_state(room)
             if not already_voted and room.mode != '2v2':
                 for other_sid in room.player_sids:
@@ -8574,9 +8772,9 @@ def on_rematch(data=None):
                             'total': len(room.player_sids),
                         }, room=other_sid)
             if len(room._rematch_votes) == len(room.player_sids):
-                print("")
                 room._rematch_votes = set()
                 room.pending_surrender_request = None
+                _cancel_game_over_cleanup_timer(room)
                 if room.mode == '2v2':
                     room.engine = GameEngine2v2()
                 elif room.mode == 'urf':
@@ -8618,12 +8816,9 @@ def on_rematch(data=None):
                         if psid in players:
                             emit_room_game_phase(room, psid, 'draft')
                             send_draft_state(room, pidx)
-                print("[server] debug")
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print("[server] debug")
-
 
 @socketio.on('return_lobby')
 def on_return_lobby(data=None):
@@ -8667,7 +8862,8 @@ def on_return_lobby(data=None):
                     broadcast_game_state(room)
             elif pidx >= 0 and getattr(room.engine, 'game_over', False):
                 room._rematch_votes.discard(sid)
-            if not any(psid != sid and psid in players for psid in room.player_sids) and not getattr(room, 'spectators', []):
+            if not any(psid != sid and psid in players and players[psid].get('room_id') == room_id for psid in room.player_sids) and not getattr(room, 'spectators', []):
+                _cancel_game_over_cleanup_timer(room)
                 rooms.pop(room_id, None)
         player['room_id'] = None
         player['status'] = 'lobby'
@@ -8704,7 +8900,7 @@ def on_spectate(data):
             return
         phase = room.engine.phase
         if phase in ('draft', 'event_select'):
-            emit('server_error', {'message': '选牌或开局事件阶段暂不能观战'})
+            emit('server_error', {'message': '选牌或配装倾向阶段暂不能观战'})
             return
         if phase not in ('action', 'draw', 'playing', 'response', 'choice'):
             emit('server_error', {'message': '该对局当前不能观战'})
@@ -8712,7 +8908,8 @@ def on_spectate(data):
         player['status'] = 'spectating'
         player['spectating_room'] = room_id
         player['spectate_perspective'] = 0
-        room.spectators.append(sid)
+        if sid not in room.spectators:
+            room.spectators.append(sid)
         p1 = '?'
         p2 = '?'
         if len(room.player_sids) > 0:

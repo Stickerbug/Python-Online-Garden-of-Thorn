@@ -48,7 +48,7 @@ const PHASE_LABELS = {
   choice: '选择',
   playing: '进行中',
   draft: '选牌',
-  event_select: '开局事件',
+  event_select: '配装倾向',
   game_over: '结束',
 };
 

@@ -252,11 +252,11 @@
   </div>
   <div class="solo-events">
     <div class="solo-event-panel">
-      <label for="solo-event-a" id="solo-event-a-label">我方开局事件</label>
+      <label for="solo-event-a" id="solo-event-a-label">我方配装倾向</label>
       <select id="solo-event-a"></select>
     </div>
     <div class="solo-event-panel">
-      <label for="solo-event-b" id="solo-event-b-label">对方开局事件</label>
+      <label for="solo-event-b" id="solo-event-b-label">对方配装倾向</label>
       <select id="solo-event-b"></select>
     </div>
   </div>
@@ -335,15 +335,16 @@
 <p id="draft-info" class="info-text"></p>
 <div id="draft-options" class="draft-options"></div>
 <div id="draft-picks" class="draft-picks"></div>
-<button id="btn-draft-reroll" class="btn btn-magic">重选</button>
+<button id="btn-draft-reroll" class="btn btn-magic">刷新</button>
 </div>
 </div>
 
 <div id="view-event-select" class="view hidden">
 <div class="event-container">
-<h2>选择开局事件</h2>
+<h2>选择配装倾向</h2>
 <p class="event-desc">选择一个事件影响本局游戏</p>
 <div id="event-options" class="event-options"></div>
+<button id="btn-event-reroll" class="btn btn-magic">刷新</button>
 </div>
 </div>
 
@@ -656,7 +657,7 @@
 <h4>卡牌类型</h4>
 <p><span class="rules-type thorn">Thorn</span> 是攻击牌，用于造成直接伤害，例如 <a class="rules-card-link thorn" data-card="Basic">基本</a>、<a class="rules-card-link thorn" data-card="Bone">骨头</a>。<span class="rules-type bloom">Bloom</span> 是技能牌，用于回复、施加状态、调整资源或改变局面，例如 <a class="rules-card-link bloom" data-card="Fire">火</a>。<span class="rules-type root">Root</span> 是装备牌，打出后会留在装备栏中，提供持续效果或可触发效果，例如 <a class="rules-card-link root" data-card="Leaf">叶子</a>。<span class="rules-type guard">Guard</span> 是反制牌，不能像普通手牌一样主动打出，需要在对方行动满足条件时响应。</p>
 <h4>回合流程</h4>
-<p>正常模式通常先进行选牌，再选择开局事件，然后进入对局。轮到你时，系统会处理回合开始效果、抽牌和资源回复。之后你可以打出手牌，或触发已经装备至少一回合且满足条件的装备。完成行动后，点击结束回合，将行动权交给下一位玩家。2v2 中回合顺序会在两队之间交替；玩家阵亡不会改变既定顺序，但阵亡玩家的回合会被跳过。</p>
+<p>正常模式通常先进行选牌，再选择配装倾向，然后进入对局。轮到你时，系统会处理回合开始效果、抽牌和资源回复。之后你可以打出手牌，或触发已经装备至少一回合且满足条件的装备。完成行动后，点击结束回合，将行动权交给下一位玩家。2v2 中回合顺序会在两队之间交替；玩家阵亡不会改变既定顺序，但阵亡玩家的回合会被跳过。</p>
 <h4>常见关键词</h4>
 <p><b>放逐</b>表示卡牌打出或结算后进入放逐区，通常不会再回到牌堆或弃牌堆。<b>精准</b>表示攻击更难被普通闪避完全规避。<b>不可摧毁</b>表示装备不能被摧毁效果破坏。<b>萌芽</b>表示抽到该牌时会额外抽牌。<b>共生</b>表示该牌不受同名卡连续使用费用惩罚。部分模式或模组可能加入额外关键词，以实际卡牌显示为准。</p>
 <h4>示例</h4>
@@ -743,9 +744,9 @@
     zh: {
       bootSub: '加载中...', bootStep: '准备加载...', subtitle: '局域网联机卡牌对战', nickname: '昵称', nicknamePlaceholder: '输入昵称',
       enterLobby: '进入大厅', soloTraining: '单人训练场', settings: '设置', loadLast: '载入上次', saveDecks: '保存牌组', startTraining: '开始训练', back: '返回',
-      searchCards: '搜索卡牌', soloDeckA: '你的牌组', soloDeckB: '对方牌组', soloEventA: '你的开局事件', soloEventB: '对方开局事件',
+      searchCards: '搜索卡牌', soloDeckA: '你的牌组', soloDeckB: '对方牌组', soloEventA: '你的配装倾向', soloEventB: '对方配装倾向',
       lobby: '大厅', onlinePlayers: '在线玩家', onlineCount: '在线：0', ongoingGames: '进行中的对局', chat: '聊天', messagePlaceholder: '输入消息...', send: '发送', backHome: '返回主页',
-      draft: '选牌阶段', reroll: '重抽', selectEvent: '选择开局事件', selectEventDesc: '选择一个开局事件', opponent: '对手', oppInfo: '手牌:0 牌堆:0', battleLog: '战斗日志', you: '你', youInfo: '手牌:0 牌堆:0 弃牌:0', dragToPlay: '拖动打出',
+      draft: '选牌阶段', reroll: '刷新', selectEvent: '选择配装倾向', selectEventDesc: '选择一个配装倾向', opponent: '对手', oppInfo: '手牌:0 牌堆:0', battleLog: '战斗日志', you: '你', youInfo: '手牌:0 牌堆:0 弃牌:0', dragToPlay: '拖动打出',
       endTurn: '结束回合', viewDeck: '查看牌堆', setNextDraw: '设置下次抽牌', pauseEdit: '暂停并编辑', surrender: '投降', switchPerspective: '切换视角', leaveSpectate: '退出观战', rematch: '再来一局', returnLobby: '返回大厅',
       modEditor: '模组编辑器', modPlaceholder: '在此粘贴或编辑模组 JSON...', loadMod: '加载模组', save: '保存', validateJson: '验证 JSON',
       appearance: '外观', theme: '主题', light: '明亮', dark: '黑暗', uiStyle: '界面风格', minimal: '简约', classic: '经典', language: '语言', server: '服务器', address: '地址', serverPlaceholder: '留空使用默认服务器', mods: '模组', noMods: '未找到模组文件', ok: '确定', cancel: '取消',

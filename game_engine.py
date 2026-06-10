@@ -407,10 +407,13 @@ class PlayerState:
         return drawn
 
     def heal(self, amount: int):
-        if self.heal_block > 0:
+        if self.heal_block > 0 and not self._is_status_immune_internal():
             reduction = min(1.0, 0.5 * self.heal_block)
             amount = max(1, int(amount * (1.0 - reduction))) if amount > 0 else amount
         self.health = min(self.health + amount, self.base_max_health)
+
+    def _is_status_immune_internal(self) -> bool:
+        return int(getattr(self, 'custom_statuses', {}).get('status_immune', 0) or 0) > 0
 
     def gain_elixir(self, amount: int):
         self.elixir = min(self.elixir + amount, self.max_elixir)
@@ -1329,6 +1332,8 @@ class GameEngine:
         self.opening_event_picks: List[Optional[int]] = [None, None]
         self.opening_event_sub_choices: List[Optional[dict]] = [None, None]
         self.opening_event_magic_options: List[List[List[str]]] = [[[], [], []], [[], [], []]]
+        # Per-player ready state: True when draft done AND sub-choice done (if any)
+        self.player_ready: List[bool] = [False, False]
         self.player_names: List[str] = ['玩家1', '玩家2']
         self.debug_selector_log: bool = False
         self._last_damage_value: List[int] = [0, 0]
@@ -1791,24 +1796,33 @@ class GameEngine:
             'antennae_reveal': self._antennae_reveal[for_player],
         }
 
-    def start_draft(self):
-        self.phase = 'draft'
-        self.draft_pool = build_draft_pool(self.allowed_card_ids)
-        self.draft_picks = [[], []]
+    def start_event_select_first(self):
+        """Start event_select phase before draft. Called after matching."""
+        self.phase = 'event_select'
         self.draft_rerolls = [DRAFT_REROLLS, DRAFT_REROLLS]
-        self.draft_round = 0
-        self.draft_type_order = []
-        for card_type, count in DRAFT_RATIO.items():
-            self.draft_type_order.extend([card_type] * count)
-        random.shuffle(self.draft_type_order)
-        self._generate_draft_options_for_player(0)
-        self._generate_draft_options_for_player(1)
+        self.player_ready = [False, False]
+        self._generate_opening_events()
+
+    def start_draft_for_player(self, player_id: int):
+        """Initialize draft for a specific player after they select their event.
+        Called independently per player - no need to wait for opponent."""
+        # Initialize draft pool and type order on first call
+        if not self.draft_pool:
+            self.draft_pool = build_draft_pool(self.allowed_card_ids)
+            self.draft_type_order = []
+            for card_type, count in DRAFT_RATIO.items():
+                self.draft_type_order.extend([card_type] * count)
+            random.shuffle(self.draft_type_order)
+        # Ensure draft_picks is initialized
+        if not self.draft_picks[player_id]:
+            self.draft_picks[player_id] = []
+        # Generate draft options for this player
+        self._generate_draft_options_for_player(player_id)
+        # Update global phase
+        self.phase = 'draft'
 
     def _generate_draft_options_for_player(self, player_id: int):
         if len(self.draft_picks[player_id]) >= DECK_SIZE:
-            if len(self.draft_picks[0]) >= DECK_SIZE and len(self.draft_picks[1]) >= DECK_SIZE:
-                self.phase = 'event_select'
-                self._generate_opening_events()
             return
         card_type = self.draft_type_order[len(self.draft_picks[player_id])]
         self.draft_options[player_id] = generate_draft_options(self.draft_pool, card_type, 3)
@@ -1913,8 +1927,12 @@ class GameEngine:
             slot3 = self._choose_opening_event(pos3)
             self.opening_event_options[i] = [slot1, slot2, slot3]
             for j in range(3):
-                self.opening_event_magic_options[i][j] = random.sample(
-                    magic_pool, min(3, len(magic_pool)))
+                ev = self.opening_event_options[i][j]
+                if ev and str(ev.get('id')) in ('2', '5', '6', '7'):
+                    self.opening_event_magic_options[i][j] = random.sample(
+                        magic_pool, min(3, len(magic_pool)))
+                else:
+                    self.opening_event_magic_options[i][j] = []
 
     def _card_allowed(self, def_id: str) -> bool:
         return self.allowed_card_ids is None or def_id in self.allowed_card_ids
@@ -1923,7 +1941,7 @@ class GameEngine:
         return str(left) == str(right)
 
     def select_opening_event(self, player_id: int, event_id: int) -> bool:
-        if self.phase != 'event_select':
+        if self.opening_event_picks[player_id] is not None:
             return False
         for event in self.opening_event_options[player_id]:
             if event and self._opening_event_ids_equal(event.get('id'), event_id):
@@ -1931,8 +1949,90 @@ class GameEngine:
                 return True
         return False
 
+    def reroll_opening_event(self, player_id: int) -> bool:
+        """Reroll opening event options, guaranteeing at least 1 different option.
+        Uses draft_rerolls (shared with draft phase)."""
+        if self.opening_event_picks[player_id] is not None:
+            return False
+        if self.draft_rerolls[player_id] <= 0:
+            return False
+        old_ids = set()
+        for event in self.opening_event_options[player_id]:
+            if event:
+                old_ids.add(str(event.get('id')))
+        # Generate new options, retrying until at least 1 is different
+        max_attempts = 20
+        for _ in range(max_attempts):
+            pos1 = self._opening_events_for_position(1)
+            pos2 = self._opening_events_for_position(2)
+            pos3 = self._opening_events_for_position(3)
+            slot1 = self._choose_opening_event(pos1)
+            slot2 = self._choose_opening_event(pos2)
+            slot3 = self._choose_opening_event(pos3)
+            new_options = [slot1, slot2, slot3]
+            new_ids = set()
+            for event in new_options:
+                if event:
+                    new_ids.add(str(event.get('id')))
+            if new_ids != old_ids:
+                self.opening_event_options[player_id] = new_options
+                for j, event in enumerate(new_options):
+                    if event and str(event.get('id')) in ('2', '5', '6', '7'):
+                        pool = list(self.MAGIC_CARD_POOL)
+                        self.opening_event_magic_options[player_id][j] = random.sample(pool, min(3, len(pool)))
+                    else:
+                        self.opening_event_magic_options[player_id][j] = []
+                self.draft_rerolls[player_id] -= 1
+                return True
+        # Fallback: just regenerate even if all same (shouldn't happen with enough events)
+        self.opening_event_options[player_id] = new_options
+        for j, event in enumerate(new_options):
+            if event and event.get('id') in (2, 5, 6, 7):
+                pool = list(self.MAGIC_CARD_POOL)
+                self.opening_event_magic_options[player_id][j] = random.sample(pool, min(3, len(pool)))
+            else:
+                self.opening_event_magic_options[player_id][j] = []
+        self.draft_rerolls[player_id] -= 1
+        return True
+
     def both_events_selected(self) -> bool:
         return self.opening_event_picks[0] is not None and self.opening_event_picks[1] is not None
+
+    def get_player_status(self, player_id: int) -> str:
+        """Get per-player status: 'event_select', 'drafting', 'sub_choice', or 'ready'."""
+        if self.player_ready[player_id]:
+            return 'ready'
+        if self.opening_event_picks[player_id] is None:
+            return 'event_select'
+        if len(self.draft_picks[player_id]) < DECK_SIZE:
+            return 'drafting'
+        if self.needs_sub_choice(player_id):
+            return 'sub_choice'
+        # Draft done, no sub-choice needed
+        self.player_ready[player_id] = True
+        return 'ready'
+
+    def needs_sub_choice(self, player_id: int) -> bool:
+        """Check if the player's opening event needs a sub-choice after draft."""
+        event_id = self.opening_event_picks[player_id]
+        if event_id is None:
+            return False
+        sub = self.opening_event_sub_choices[player_id]
+        # Events 2 (magic conversion), 3 (light conversion), 8 (yggdrasil) need sub-choices
+        if str(event_id) in ('2', '3', '8') and not sub:
+            return True
+        # Check v2 events that need sub-choices
+        resource = (getattr(self, 'v2_opening_event_defs', {}) or {}).get(str(event_id))
+        if isinstance(resource, dict):
+            events = resource.get('events', {})
+            if isinstance(events, dict) and events.get('on_apply'):
+                # Check if the v2 event has choose operations
+                on_apply = events.get('on_apply', [])
+                if isinstance(on_apply, list):
+                    for step in on_apply:
+                        if isinstance(step, dict) and step.get('type') in ('choose_from_deck', 'choose_card_from_hand', 'choose_from_discard'):
+                            return True
+        return False
 
     def start_game(self):
         self.phase = 'playing'
@@ -1976,8 +2076,8 @@ class GameEngine:
                 ps.health = SECOND_PLAYER_HEALTH
                 ps.max_health = SECOND_PLAYER_HEALTH
                 ps.base_max_health = SECOND_PLAYER_HEALTH
-        for i in range(2):
-            self._apply_opening_event(i)
+        # Draw initial hands BEFORE applying opening events
+        # so that events that need to choose from hand can work
         for i in range(2):
             ps = self.players[i]
             if i == self.first_player:
@@ -1989,6 +2089,9 @@ class GameEngine:
                 ps.draw_cards(hand_size)
             else:
                 ps.draw_cards(INITIAL_HAND_SIZE)
+        # Apply opening events after drawing initial hands
+        for i in range(2):
+            self._apply_opening_event(i)
         self.round_num = 1
         self.log_msg(f"游戏开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
@@ -2121,7 +2224,7 @@ class GameEngine:
         self._apply_turn_start_effects(player_id)
         if self.game_over:
             return
-        if ps.skip_turn > 0:
+        if ps.skip_turn > 0 and not self._is_status_immune(player_id):
             ps.skip_turn -= 1
             self.log_msg(f"{self.pn(player_id)}被眩晕，跳过本回合！")
             self._end_player_turn(player_id)
@@ -2159,7 +2262,8 @@ class GameEngine:
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
         if self.round_num > 1:
-            draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - ps.sluggish)
+            sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
+            draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - sluggish_reduction)
             ps.draw_cards(draw_count)
             self.log_msg(f"{self.pn(player_id)}抽{draw_count}张牌")
             if ps.sluggish > 0:
@@ -2168,7 +2272,7 @@ class GameEngine:
             if eq.def_id == 'Corruption' and not eq.corruption_active:
                 eq.corruption_active = True
                 self.log_msg(f"{self.pn(1 - player_id)}的腐化效果激活！全场伤害x1.5！")
-        if ps.poison > 0:
+        if ps.poison > 0 and not self._is_status_immune(player_id):
             dmg = ps.poison
             self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             if self.game_over or ps.health <= 0:
@@ -2176,7 +2280,7 @@ class GameEngine:
             ps.poison = ps.poison // 2
             if ps.poison > 0:
                 self.log_msg(f"{self.pn(player_id)}中毒减半为{ps.poison}层")
-        if ps.fire > 0:
+        if ps.fire > 0 and not self._is_status_immune(player_id):
             dmg = ps.fire
             self._deal_direct_damage(player_id, dmg, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
@@ -2192,7 +2296,7 @@ class GameEngine:
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
         # Overload: deduct E at turn start, then clear
-        if ps.overload > 0:
+        if ps.overload > 0 and not self._is_status_immune(player_id):
             deduct = min(ps.overload, ps.elixir)
             ps.elixir -= deduct
             self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
@@ -2225,7 +2329,7 @@ class GameEngine:
                 ps.draw_cards(1)
                 self.log_msg(f"{self.pn(player_id)}的黄金叶效果：多抽1张牌")
         # Foresight: look at top of deck and choose which to draw
-        if ps.foresight > 0 and ps.deck:
+        if ps.foresight > 0 and ps.deck and not self._is_status_immune(player_id):
             peek_count = min(ps.foresight, len(ps.deck))
             top_cards = [c.to_dict() for c in ps.deck[:peek_count]]
             self._pending_foresight = {'player_id': player_id, 'peek_count': peek_count}
@@ -2273,13 +2377,14 @@ class GameEngine:
         ps = self.players[target_id]
         opp_id = 1 - target_id
         opp = self.players[opp_id]
+        immune = self._is_status_immune(target_id)
         if ps.untargetable and not is_battery:
             self.log_msg(f"{self.pn(target_id)}无法被攻击选中！")
             return 0
         total_dealt = 0
         for h in range(hits):
             precision_dodged = False
-            if ps.dodge > 0:
+            if ps.dodge > 0 and not immune:
                 ps.dodge -= 1
                 if is_precision:
                     precision_dodged = True
@@ -2308,7 +2413,7 @@ class GameEngine:
             elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
             dmg = self._apply_corruption_multiplier_to_damage(dmg)
-            if ps.nazar_active:
+            if ps.nazar_active and not immune:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
                 self.log_msg(f"邪眼护符效果：伤害{original_dmg}->{dmg}")
@@ -2319,11 +2424,12 @@ class GameEngine:
                         ps.nazar_big_hits = 0
                         self.log_msg(f"{self.pn(target_id)}的邪眼护符被击破！")
             # Weakness: reduce physical damage
-            if ps.weakness > 0:
+            if ps.weakness > 0 and not immune:
                 reduction = min(0.6, 0.2 * ps.weakness)
                 dmg = max(1, int(dmg * (1.0 - reduction)))
-            dmg = max(0, dmg - ps.armor)
-            if ps.sponge_active and dmg > 0:
+            if not immune:
+                dmg = max(0, dmg - ps.armor)
+            if ps.sponge_active and dmg > 0 and not immune:
                 poison_add = dmg // 2
                 ps.poison += poison_add
                 self.log_msg(f"海绵效果：{self.pn(target_id)}将{dmg}伤害转为{poison_add}层中毒")
@@ -2331,7 +2437,7 @@ class GameEngine:
             ps.health -= dmg
             total_dealt += dmg
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
-            if dmg > 0 and ps.toxic > 0:
+            if dmg > 0 and ps.toxic > 0 and not immune:
                 ps.poison += ps.toxic
                 self.log_msg(f"淬毒效果：{self.pn(target_id)}+{ps.toxic}层中毒")
             self._game_over_defer_depth += 1
@@ -2483,6 +2589,8 @@ class GameEngine:
     def can_play_card(self, player_id: int, card: CardInstance) -> Tuple[bool, str]:
         ps = self.players[player_id]
         card_def = card.card_def
+        if 'void' in card.flags:
+            return False, "此牌已被虚无，无法使用"
         if card_def.card_type == 'guard' and not self._has_script_entry(card_def, 'play') and not card_def.effects and not self._card_has_v2_event(card_def, 'on_play'):
             return False, "反制牌只能通过响应机制使用"
         if self.phase != 'action' or self.current_player != player_id:
@@ -2822,8 +2930,9 @@ class GameEngine:
             ps.nazar_big_hits = 0
             self.log_msg(f"{self.pn(responder_id)}获得邪眼护符效果")
         elif counter_card.def_id == 'MagicNazar':
-            ps.equipment_protection += 1
-            self.log_msg(f"{self.pn(responder_id)}获得1层装备保护")
+            magic_nazar_stacks = int(ps.custom_statuses.get('magic_nazar', 0) or 0) + 2
+            ps.custom_statuses['magic_nazar'] = magic_nazar_stacks
+            self.log_msg(f"{self.pn(responder_id)}获得2层魔法邪眼（共{magic_nazar_stacks}层）")
         elif counter_card.def_id == 'MagicBubble':
             ps.negate_next_skill = True
             self.log_msg(f"{self.pn(responder_id)}的魔法泡泡：敌方下次技能牌失效")
@@ -2871,6 +2980,23 @@ class GameEngine:
             else:
                 self._discard_card(ps, card)
             return result
+        # Magic Nazar: check for magic_nazar status on opponent
+        if card.card_type == 'bloom':
+            opp_id = 1 - player_id
+            opp = self.players[opp_id]
+            magic_nazar_stacks = int(opp.custom_statuses.get('magic_nazar', 0) or 0)
+            if magic_nazar_stacks > 0:
+                card_cost_e = getattr(card, 'cost_e', 0)
+                if card_cost_e <= 1:
+                    self.log_msg(f"{self.pn(player_id)}的{card.name_cn}被魔法邪眼反制，失效！")
+                    if 'exile' in card.flags:
+                        ps.exile.append(card)
+                    else:
+                        self._discard_card(ps, card)
+                    return result
+                else:
+                    opp.custom_statuses['magic_nazar'] = magic_nazar_stacks - 1
+                    self.log_msg(f"{self.pn(opp_id)}的魔法邪眼消耗1层（剩余{magic_nazar_stacks - 1}层）")
         self.negated_card = False
         needs_choice = self._card_needs_choice(card)
         if needs_choice and choice is None:
@@ -2893,13 +3019,13 @@ class GameEngine:
         else:
             self._apply_card_effect(player_id, card, choice)
         # Fracture: take damage when playing a card
-        if ps.fracture > 0:
+        if ps.fracture > 0 and not self._is_status_immune(player_id):
             frac_dmg = ps.fracture
             ps.health -= frac_dmg
             self.log_msg(f"{self.pn(player_id)}因破损受到{frac_dmg}点伤害")
             self._check_game_over()
         # Bleed: take damage when playing attack card
-        if ps.bleed > 0 and card.card_type == 'thorn':
+        if ps.bleed > 0 and card.card_type == 'thorn' and not self._is_status_immune(player_id):
             bleed_dmg = ps.bleed
             ps.health -= bleed_dmg
             self.log_msg(f"{self.pn(player_id)}因流血受到{bleed_dmg}点伤害")
@@ -2911,10 +3037,11 @@ class GameEngine:
                 self.log_msg(f"{self.pn(player_id)}获得2点护甲")
             ps.equipment.append(eq)
             self.log_msg(f"{self.pn(player_id)}装备了{card.name_cn}")
-        elif 'sticky' in card.flags:
+        elif 'sticky' in card.flags or 'rebound' in card.flags:
             card.mimic_discount = 0
             ps.add_to_hand(card)
-            self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因粘滞回到手中")
+            label = '粘滞' if 'sticky' in card.flags else '回转'
+            self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因{label}回到手中")
         elif 'exile' in card.flags:
             ps.exile.append(card)
             self.log_msg(f"{self.pn(player_id)}的{card.name_cn}被放逐")
@@ -3799,10 +3926,11 @@ class GameEngine:
             self.log_msg(log or f"{target_card.name_cn}获得标签{tag}")
 
     def _atomic_add_tag_to_zone(self, player_id, card, params, log, choice, context):
-        """Add a tag to all cards in a zone. Used for MechaAntennae revealed tag."""
+        """Add a tag to all cards in a zone, optionally filtered by card_type."""
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         zone = str(params.get('zone', 'hand')).lower()
         tag = str(params.get('tag', '')).strip()
+        card_type_filter = str(params.get('card_type', '')).strip().lower()
         if not tag:
             return
         tag = normalize_card_flag(tag)
@@ -3813,13 +3941,18 @@ class GameEngine:
             'discard': ps.discard,
             'exile': ps.exile,
         }.get(zone, [])
+        count = 0
         for c in zone_cards:
+            if card_type_filter and getattr(c, 'card_type', '') != card_type_filter:
+                continue
             if tag not in c.flags:
                 c.instance_flags.add(tag)
+                count += 1
         if log:
             self.log_msg(log)
         else:
-            self.log_msg(f"{self.pn(player_id)}给{self.pn(target_id)}的{zone}区所有牌添加了{tag}标签")
+            type_desc = f"{card_type_filter}牌" if card_type_filter else "牌"
+            self.log_msg(f"{self.pn(player_id)}给{self.pn(target_id)}的{zone}区{count}张{type_desc}添加了{tag}标签")
 
     def _atomic_cogwheel_mark(self, player_id, card, params, log, choice, context):
         """Mark current turn's played cards for return next turn (Cogwheel)."""
@@ -4559,6 +4692,10 @@ class GameEngine:
     def _atomic_batch_tag_remove(self, player_id, card, params, log, choice, context):
         self._atomic_tag_remove_named(player_id, card, {'tag': params.get('tag', '')}, log, choice, context)
 
+    def _is_status_immune(self, player_id: int) -> bool:
+        ps = self.players[player_id]
+        return int(getattr(ps, 'custom_statuses', {}).get('status_immune', 0) or 0) > 0
+
     def _modified_attack_damage(self, base: int, card: CardInstance) -> int:
         bonus_damage = max(0, int(getattr(card, 'bonus_damage', 0)))
         if getattr(card, 'def_id', '') == 'Tomato':
@@ -4960,22 +5097,22 @@ class GameEngine:
             ps.bandage_active = False
             ps.bandage_death_pending = True
             self.log_msg(f"{self.pn(player_id)}的绷带无敌将持续到下个友方回合结束")
-        # Fracture: clear at end of own turn
-        if ps.fracture > 0:
+        # Fracture: clear at end of own turn (frozen if status_immune)
+        if ps.fracture > 0 and not self._is_status_immune(player_id):
             ps.fracture = 0
             self.log_msg(f"{self.pn(player_id)}的破损效果消失")
-        # Heal block: decrement at end of own turn
-        if ps.heal_block > 0:
+        # Heal block: decrement at end of own turn (frozen if status_immune)
+        if ps.heal_block > 0 and not self._is_status_immune(player_id):
             ps.heal_block = max(0, ps.heal_block - 1)
             if ps.heal_block == 0:
                 self.log_msg(f"{self.pn(player_id)}的禁疗效果消失")
-        # Weakness: decrement at end of own turn
-        if ps.weakness > 0:
+        # Weakness: decrement at end of own turn (frozen if status_immune)
+        if ps.weakness > 0 and not self._is_status_immune(player_id):
             ps.weakness = max(0, ps.weakness - 1)
             if ps.weakness == 0:
                 self.log_msg(f"{self.pn(player_id)}的虚弱效果消失")
-        # Bleed: halve at end of turn
-        if ps.bleed > 0:
+        # Bleed: halve at end of turn (frozen if status_immune)
+        if ps.bleed > 0 and not self._is_status_immune(player_id):
             ps.bleed = max(0, ps.bleed // 2)
             if ps.bleed == 0:
                 self.log_msg(f"{self.pn(player_id)}的流血效果消失")
@@ -6007,10 +6144,12 @@ class GameEngine:
         self._active_v2_card = card
         try:
             # For thorn cards with damage/hits but no dedicated effect handler,
-            # apply attack damage first (from card_def damage/hits attributes)
+            # apply attack damage only if the card has no v2 on_play event
+            # (v2 events handle their own damage logic)
             card_damage = getattr(card.card_def, 'damage', 0)
             card_hits_val = max(1, getattr(card.card_def, 'hits', 1))
-            if card.card_type == 'thorn' and card_damage > 0:
+            has_v2_play = self._card_has_v2_event(card.card_def, 'on_play')
+            if card.card_type == 'thorn' and card_damage > 0 and not has_v2_play:
                 method_name = f'_effect_{card.def_id.lower()}'
                 if not hasattr(self, method_name):
                     dmg = self._modified_attack_damage(card_damage, card)
@@ -6597,7 +6736,8 @@ class GameEngine:
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
         if self.round_num > 1:
-            draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - ps.sluggish)
+            sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
+            draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - sluggish_reduction)
             self._draw_cards_with_v2_hooks(player_id, draw_count, 'turn_start')
             self.log_msg(f"{self.pn(player_id)}抽{draw_count}张牌")
             if ps.sluggish > 0:
@@ -6643,7 +6783,7 @@ class GameEngine:
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
         # Overload: deduct E at turn start, then clear
-        if ps.overload > 0:
+        if ps.overload > 0 and not self._is_status_immune(player_id):
             deduct = min(ps.overload, ps.elixir)
             ps.elixir -= deduct
             self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
@@ -6687,7 +6827,7 @@ class GameEngine:
                 ps.draw_cards(1)
                 self.log_msg(f"{self.pn(player_id)}的黄金叶效果：多抽1张牌")
         # Foresight: look at top of deck and choose which to draw
-        if ps.foresight > 0 and ps.deck:
+        if ps.foresight > 0 and ps.deck and not self._is_status_immune(player_id):
             peek_count = min(ps.foresight, len(ps.deck))
             top_cards = [c.to_dict() for c in ps.deck[:peek_count]]
             self._pending_foresight = {'player_id': player_id, 'peek_count': peek_count}
@@ -6711,9 +6851,10 @@ class GameEngine:
             self.log_msg(f"{self.pn(target_id)}无法被攻击选中")
             return 0
         total_dealt = 0
+        immune = self._is_status_immune(target_id)
         for _ in range(hits):
             precision_dodged = False
-            if ps.dodge > 0:
+            if ps.dodge > 0 and not immune:
                 ps.dodge -= 1
                 if is_precision:
                     precision_dodged = True
@@ -6732,7 +6873,7 @@ class GameEngine:
             elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
             dmg = self._apply_corruption_multiplier_to_damage(dmg, log=False)
-            if ps.nazar_active:
+            if ps.nazar_active and not immune:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
                 if original_dmg >= 10:
@@ -6754,11 +6895,12 @@ class GameEngine:
             if getattr(self, 'pending_v2_ui', None):
                 break
             # Weakness: reduce physical damage
-            if ps.weakness > 0:
+            if ps.weakness > 0 and not immune:
                 reduction = min(0.6, 0.2 * ps.weakness)
                 dmg = max(1, int(dmg * (1.0 - reduction)))
-            dmg = max(0, dmg - ps.armor)
-            if ps.sponge_active and dmg > 0:
+            if not immune:
+                dmg = max(0, dmg - ps.armor)
+            if ps.sponge_active and dmg > 0 and not immune:
                 ps.poison += dmg // 2
                 dmg = 0
             ps.health -= dmg
@@ -6766,7 +6908,7 @@ class GameEngine:
             self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
             self._run_v2_after_damage_hooks(damage_context, dmg)
-            if dmg > 0 and ps.toxic > 0:
+            if dmg > 0 and ps.toxic > 0 and not immune:
                 ps.poison += ps.toxic
             self._check_yggdrasil(target_id)
             if self.game_over:
@@ -6810,6 +6952,26 @@ class GameEngine:
             self._dispatch_card_event('card_used', player_id, card, target_id=player_id, choice=choice)
             self._run_v2_play_hook('after_play_card', player_id, card, choice)
             return result
+        # Magic Nazar: check for magic_nazar status on opponent
+        if card.card_type == 'bloom':
+            opp_id = 1 - player_id
+            opp = self.players[opp_id]
+            magic_nazar_stacks = int(opp.custom_statuses.get('magic_nazar', 0) or 0)
+            if magic_nazar_stacks > 0:
+                card_cost_e = getattr(card, 'cost_e', 0)
+                if card_cost_e <= 1:
+                    self.log_msg(f"{self.pn(player_id)}的{card.name_cn}被魔法邪眼反制，失效！")
+                    self._log_card_play(player_id, card)
+                    if 'exile' in card.flags:
+                        ps.exile.append(card)
+                    else:
+                        self._discard_card(ps, card)
+                    self._dispatch_card_event('card_used', player_id, card, target_id=player_id, choice=choice)
+                    self._run_v2_play_hook('after_play_card', player_id, card, choice)
+                    return result
+                else:
+                    opp.custom_statuses['magic_nazar'] = magic_nazar_stacks - 1
+                    self.log_msg(f"{self.pn(opp_id)}的魔法邪眼消耗1层（剩余{magic_nazar_stacks - 1}层）")
         self.negated_card = False
         needs_choice = self._card_needs_choice(card)
         if needs_choice and not self._choice_satisfies_request(card, choice):
@@ -6907,10 +7069,11 @@ class GameEngine:
                 delattr(card, '_placed_as_equipment')
             if hasattr(card, '_placed_as_equipment_owner'):
                 delattr(card, '_placed_as_equipment_owner')
-        elif 'sticky' in card.flags:
+        elif 'sticky' in card.flags or 'rebound' in card.flags:
             card.mimic_discount = 0
             ps.add_to_hand(card)
-            self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因粘滞回到手中")
+            label = '粘滞' if 'sticky' in card.flags else '回转'
+            self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因{label}回到手中")
         elif 'exile' in card.flags:
             owner_id, zone_name, _ = self._find_card_location(card)
             if owner_id is None or zone_name is None:

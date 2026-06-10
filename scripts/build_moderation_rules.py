@@ -125,7 +125,7 @@ def card_allowlist() -> list[str]:
         "子瓣",
         "反制",
         "装备",
-        "开局事件",
+        "配装倾向",
     }
     sys.path.insert(0, str(ROOT))
     try:

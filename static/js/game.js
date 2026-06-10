@@ -52,7 +52,7 @@ const I18N = {
     en: {
         round: 'Round', your_turn: 'Your Turn', opponent_turn: "Opponent's Turn", you: 'You', opponent: 'Opponent',
         draw_phase: 'Draw Phase', game_over: 'Game Over', invite: 'Invite', accept: 'Accept', decline: 'Decline',
-        return_lobby: 'Return to Lobby', draft_phase: 'Draft Phase', draft_reroll: 'Reroll', draft_selected: 'Selected',
+        return_lobby: 'Return to Lobby', draft_phase: 'Draft Phase', draft_reroll: 'Refresh', draft_selected: 'Selected',
         select_event: 'Select Event', waiting_opponent: 'Waiting for opponent', play_card: 'Play', end_turn: 'End Turn',
         surrender: 'Surrender', view_deck: 'View Deck', counter: 'Counter', no_counter: 'Pass', waiting_response: 'Waiting for response',
         victory: 'Victory', defeat: 'Defeat', draw: 'Draw', rematch: 'Rematch', connecting: 'Connecting...', disconnected: 'Disconnected',
@@ -60,7 +60,7 @@ const I18N = {
         no_other_players: 'No other players', invite_sent: 'Invite sent', invite_received: 'Invite received', invite_message: 'invites you to a match',
         invite_declined: 'Invite declined', ongoing_games: 'Ongoing Games', spectate: 'Spectate', draft_info: 'Draft', draft_complete: 'Draft Complete',
         draft_waiting: 'Waiting for opponent to finish drafting', draft_cost: 'Cost', select_this_event: 'Select This Event',
-        event_selected: 'Event selected: {0}', event_waiting: 'Waiting for opponent to select an event', drag_to_play: 'Drag to Play',
+        event_selected: 'Event selected: {0}', event_waiting: 'Waiting for opponent to select an event', event_reroll: 'Refresh', status_event_select: 'Selecting Event', status_drafting: 'Drafting', status_sub_choice: 'Event Setup', status_ready: 'Ready', drag_to_play: 'Drag to Play',
         drag_to_play_full: 'Drag here to play', tap_play_hint: 'Tap a card, then confirm to play', confirm_play: 'Play {0}', cancel_play: 'Cancel',
         classic_select_card: 'Choose a card',
         prediction_target: 'Target',
@@ -165,13 +165,13 @@ const I18N = {
 I18N.zh = { ...I18N.en,
     round: '回合', your_turn: '你的回合', opponent_turn: '对方回合', you: '你', opponent: '对手',
     draw_phase: '抽牌阶段', game_over: '游戏结束', invite: '邀请', accept: '接受', decline: '拒绝', return_lobby: '返回大厅',
-    draft_phase: '选牌阶段', draft_reroll: '重抽', draft_selected: '已选择', select_event: '选择开局事件', waiting_opponent: '等待对方',
+    draft_phase: '选牌阶段', draft_reroll: '刷新', draft_selected: '已选择', select_event: '选择配装倾向', waiting_opponent: '等待对方',
     play_card: '打出', end_turn: '结束回合', surrender: '投降', view_deck: '查看牌堆', counter: '反制', no_counter: '不反制', waiting_response: '等待响应',
     victory: '胜利', defeat: '失败', draw: '平局', rematch: '再来一局', connecting: '连接中...', disconnected: '已断开连接',
     login_failed: '登录失败', nickname: '昵称', enter_lobby: '进入大厅', online_players: '在线玩家', no_other_players: '暂无其他玩家',
     invite_sent: '邀请已发送', invite_received: '收到邀请', invite_message: '邀请你进行对战', invite_declined: '邀请被拒绝',
     ongoing_games: '进行中的对局', spectate: '观战', draft_info: '选牌', draft_complete: '选牌完成', draft_waiting: '等待对方完成选牌',
-    draft_cost: '费用', select_this_event: '选择此事件', event_selected: '已选择事件：{0}', event_waiting: '等待对方选择事件',
+    draft_cost: '费用', select_this_event: '选择此事件', event_selected: '已选择事件：{0}', event_waiting: '等待对方选择事件', event_reroll: '刷新', status_event_select: '选择配装', status_drafting: '选牌中', status_sub_choice: '配装处理', status_ready: '已完成',
     drag_to_play: '拖动打出', cannot_play: '无法打出', enemy_attack: '敌方攻击', enemy_skill: '敌方技能', enemy_destroy_equip: '，摧毁装备',
     drag_to_play_full: '拖动到此处以出牌', tap_play_hint: '点击手牌后确认出牌', confirm_play: '打出 {0}', cancel_play: '取消出牌',
     classic_select_card: '选择一张手牌',
@@ -201,14 +201,14 @@ I18N.zh = { ...I18N.en,
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张牌堆顶的牌抽取', foresight_replace_confirm: '抽取',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
     round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
-    select_event_desc: '选择一个开局事件', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
+    select_event_desc: '选择一个配装倾向', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
     settings_title: '设置', settings_appearance: '外观', settings_theme: '主题', settings_lang: '语言', settings_mods: '模组', settings_theme_light: '明亮', settings_theme_dark: '黑暗',
     no_games: '暂无进行中的对局', back_to_home: '返回主页', settings_btn: '设置', settings_server: '服务器', settings_server_addr: '地址', not_your_turn: '还没轮到你',
     counter_insufficient: '提示：当前没有可支付的反制牌', default_status: 'Garden of Thorn', game_loading: '加载中...', server_no_response: '服务器没有响应，请检查连接或刷新页面。',
     spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线：{0}', chat_title: '聊天',
     solo_training: '单人训练场', load_last: '载入上次', save_decks: '保存牌组', start_training: '开始训练', solo_deck_a: '你的牌组', solo_deck_b: '对方牌组',
     search_cards: '搜索卡牌', pause_edit: '暂停并编辑', set_next_draw: '设置下次抽牌', solo_saved: '训练牌组已保存', solo_need_15: '双方牌组都必须正好为 15 张',
-    solo_event_a: '你的开局事件', solo_event_b: '对方开局事件', no_event: '无', edit_tags: '编辑标签',
+    solo_event_a: '你的配装倾向', solo_event_b: '对方配装倾向', no_event: '无', edit_tags: '编辑标签',
     login_need_nickname: '请输入昵称', login_name_too_long: '昵称过长（最多 8 个中文或 16 个拉丁字符）', login_name_not_numbers: '昵称不能全为数字', login_name_not_symbols: '昵称不能全为符号', login_name_no_repeat_symbols: '- 和 _ 不能连续出现',
         operation_failed: '操作失败', server_not_connected: '未连接到服务器', no_mod_files: '未找到模组文件', load_success: '加载成功', load_failed: '加载失败', save_success: '保存成功', save_failed: '保存失败：{0}',
         solo_invalid_card: '支持此卡的模组不存在或已失效',
@@ -238,7 +238,7 @@ I18N.zh = { ...I18N.en,
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
     tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_sticky: '粘滞', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隐匿', tag_revealed: '被揭示',
-    gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '开局事件', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
+    gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
     form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
@@ -261,7 +261,7 @@ I18N.zh = { ...I18N.en,
     server_placeholder: '留空使用默认服务器',
     server_hint: '默认服务器：{0}（留空则使用默认服务器）',
     init_cards_mods: '加载卡牌与模组（/api/cards）...',
-    init_opening_events: '加载开局事件（/api/opening-events）...',
+    init_opening_events: '加载配装倾向（/api/opening-events）...',
     mod_editor: '模组编辑器',
     mod_editor_placeholder: '在此粘贴或编辑模组 JSON...',
     load_mod: '加载模组',
@@ -650,7 +650,7 @@ Object.assign(I18N.zh, {
     rules_types_title: '卡牌类型',
     rules_types_text: '{thornRaw} 是攻击牌，用于造成直接伤害，例如 {basic}、{bone}。{bloomRaw} 是技能牌，用于回复、施加状态、调整资源或改变局面，例如 {fire}。{rootRaw} 是装备牌，打出后会留在装备栏中，提供持续效果或可触发效果，例如 {leaf}。{guardRaw} 是反制牌，不能像普通手牌一样主动打出，需要在对方行动满足条件时响应。',
     rules_flow_title: '回合流程',
-    rules_flow_text: '正常模式通常先进行选牌，再选择开局事件，然后进入对局。轮到你时，系统会处理回合开始效果、抽牌和资源回复。之后你可以打出手牌，或触发已经装备至少一回合且满足条件的装备。完成行动后，点击结束回合，将行动权交给下一位玩家。2v2 中回合顺序会在两队之间交替；玩家阵亡不会改变既定顺序，但阵亡玩家的回合会被跳过。',
+    rules_flow_text: '正常模式通常先进行选牌，再选择配装倾向，然后进入对局。轮到你时，系统会处理回合开始效果、抽牌和资源回复。之后你可以打出手牌，或触发已经装备至少一回合且满足条件的装备。完成行动后，点击结束回合，将行动权交给下一位玩家。2v2 中回合顺序会在两队之间交替；玩家阵亡不会改变既定顺序，但阵亡玩家的回合会被跳过。',
     rules_keywords_title: '常见关键词',
     rules_keywords_text: '<b>放逐</b>表示卡牌打出或结算后进入放逐区，通常不会再回到牌堆或弃牌堆。<b>精准</b>表示攻击被闪避响应时改为造成一半伤害。<b>不可摧毁</b>表示装备不能被摧毁效果破坏。<b>萌芽</b>表示抽到该牌时会额外抽牌。<b>共生</b>表示该牌不受同名卡连续使用费用惩罚。部分模式或模组可能加入额外关键词，以实际卡牌显示为准。',
     rules_examples_title: '示例',
@@ -3303,6 +3303,8 @@ function updateStaticText() {
     if (eventDesc) eventDesc.textContent = UI.select_event_desc;
     const btnDraftReroll = $('btn-draft-reroll');
     if (btnDraftReroll) btnDraftReroll.textContent = UI.draft_reroll;
+    const btnEventReroll = $('btn-event-reroll');
+    if (btnEventReroll) btnEventReroll.textContent = UI.event_reroll;
     const btnPhaseChatSend = $('btn-phase-chat-send');
     if (btnPhaseChatSend) btnPhaseChatSend.textContent = UI.send;
     const btnReturnLobby = $('btn-return-lobby');
@@ -7048,6 +7050,14 @@ function connectSocket(serverUrl) {
         mergeSkinLooksFromPayload(data);
         renderEventSelect(data);
     });
+    socket.on('event_sub_choice', (data) => {
+        debugLog('[client] event_sub_choice');
+        phase = 'event_sub_choice';
+        // Keep showing draft view so player can see their picks
+        showView('view-draft');
+        updateStatus(data.needs_sub_choice ? UI.select_event : UI.event_waiting);
+        handleEventSubChoice(data);
+    });
     socket.on('state_update', (data) => {
         debugLog('[client] state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null, 'spectating=', data.spectating);
         if (data && data.spectating && pendingSpectateRoomId != null && data.room_id != null && Number(data.room_id) !== Number(pendingSpectateRoomId)) {
@@ -8042,8 +8052,8 @@ function replayActionLabel(frame) {
         urf_sell_equipment: '售卖装备',
         surrender: '投降',
         draft_pick: '选择卡牌',
-        draft_reroll: '重抽',
-        select_opening_event: '选择开局事件',
+        draft_reroll: '刷新',
+        select_opening_event: '选择配装倾向',
         game_over: '对局结束',
         disconnect_timeout: '断线超时',
         admin_delete_card: '管理员删牌',
@@ -10083,6 +10093,7 @@ function renderDraft(data, isReroll, previousDraftState = null) {
     const oppPicksCount = Number.isFinite(Number(data.opponent_picks_count))
         ? Number(data.opponent_picks_count)
         : Number(Object.values(othersPicksCount)[0] || 0);
+    const othersStatus = data.others_status || {};
     const prevPicks = previousDraftState ? (previousDraftState.picks || []).length : -1;
     const iJustPicked = picks.length > prevPicks;
     const shouldAnimate = isReroll || iJustPicked;
@@ -10090,10 +10101,22 @@ function renderDraft(data, isReroll, previousDraftState = null) {
     if (info) {
         if (is2v2) {
             const pNames = data.player_names || [];
-            const othersInfo = Object.entries(othersPicksCount).map(([idx, cnt]) => {
+            const othersInfo = Object.entries(othersStatus).map(([idx, status]) => {
                 const pidx = parseInt(idx);
                 const name = pNames[pidx] || `P${pidx + 1}`;
-                return `${name}: ${cnt}/${totalRounds}`;
+                let statusStr = '';
+                if (status === 'drafting') {
+                    statusStr = `${UI.status_drafting || '选牌中'} ${othersPicksCount[idx] || 0}/${totalRounds}`;
+                } else if (status === 'sub_choice') {
+                    statusStr = UI.status_sub_choice || '配装处理';
+                } else if (status === 'ready') {
+                    statusStr = UI.status_ready || '已完成';
+                } else if (status === 'event_select') {
+                    statusStr = UI.status_event_select || '选择配装';
+                } else {
+                    statusStr = `${othersPicksCount[idx] || 0}/${totalRounds}`;
+                }
+                return `${name}: ${statusStr}`;
             }).join(' | ');
             if (picks.length >= totalRounds) {
                 info.textContent = `${UI.draft_complete} | ${othersInfo}`;
@@ -10101,10 +10124,25 @@ function renderDraft(data, isReroll, previousDraftState = null) {
                 info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${othersInfo}`;
             }
         } else {
-            if (picks.length >= totalRounds) {
-                info.textContent = `${UI.draft_complete} | ${UI.waiting_opponent}: ${oppPicksCount}`;
+            // 1v1: show opponent status
+            const oppIdx = 1 - (data.your_id || 0);
+            const oppStatus = othersStatus[oppIdx];
+            let oppStatusText = '';
+            if (oppStatus === 'drafting') {
+                oppStatusText = `${UI.status_drafting || '选牌中'} ${oppPicksCount}/${totalRounds}`;
+            } else if (oppStatus === 'sub_choice') {
+                oppStatusText = UI.status_sub_choice || '配装处理';
+            } else if (oppStatus === 'ready') {
+                oppStatusText = UI.status_ready || '已完成';
+            } else if (oppStatus === 'event_select') {
+                oppStatusText = UI.status_event_select || '选择配装';
             } else {
-                info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${UI.waiting_opponent}: ${oppPicksCount}`;
+                oppStatusText = `${oppPicksCount}/${totalRounds}`;
+            }
+            if (picks.length >= totalRounds) {
+                info.textContent = `${UI.draft_complete} | ${UI.waiting_opponent}: ${oppStatusText}`;
+            } else {
+                info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${UI.waiting_opponent}: ${oppStatusText}`;
             }
         }
     }
@@ -10132,7 +10170,11 @@ function renderDraft(data, isReroll, previousDraftState = null) {
             lastDraftOptionsSignature = optionsSignature;
             optionsEl.innerHTML = '';
             if (picks.length >= totalRounds) {
-                optionsEl.innerHTML = `<div class="empty-hint">${UI.draft_waiting}</div>`;
+                const myStatus = phase === 'event_sub_choice' ? 'sub_choice' : 'ready';
+                const hintText = myStatus === 'sub_choice'
+                    ? (UI.status_sub_choice || '配装处理')
+                    : (UI.draft_waiting || '等待对方完成选牌');
+                optionsEl.innerHTML = `<div class="empty-hint">${hintText}</div>`;
             } else {
                 options.forEach((opt, i) => {
                     const card = createCardElement(opt, {});
@@ -10180,6 +10222,7 @@ function renderDraft(data, isReroll, previousDraftState = null) {
     const rerollBtn = $('btn-draft-reroll');
     if (rerollBtn) {
         const canReroll = rerolls > 0 && picks.length < totalRounds;
+        rerollBtn.textContent = `${UI.draft_reroll || '刷新'} (${rerolls})`;
         rerollBtn.disabled = !canReroll;
         rerollBtn.style.opacity = canReroll ? '1' : '0.4';
         rerollBtn.style.cursor = canReroll ? 'pointer' : 'not-allowed';
@@ -10201,55 +10244,22 @@ function renderEventSelect(data) {
     syncPhaseChatMatch(data || {});
     updatePhaseChatChannelOptions(data || {});
     const events = data.events || [];
-    const oppSelected = data.opponent_selected;
     const myPick = data.my_pick;
-    const is2v2 = data.mode === '2v2';
-    const othersSelected = data.others_selected || {};
     const container = $('event-options');
     if (!container) return;
     container.innerHTML = '';
+    const rerollBtn = $('btn-event-reroll');
+    // If already selected, this render shouldn't happen (player should be in draft view)
+    // But just in case, show a simple message
     if (myPick != null) {
+        if (rerollBtn) rerollBtn.style.display = 'none';
         let eventName = '?';
         for (const ev of events) {
             if (ev && String(ev.id) === String(myPick)) { eventName = getLocalizedEventText(ev, 'name') || '?'; break; }
         }
-        let othersStatusHtml = '';
-        if (is2v2) {
-            const pNames = data.player_names || [];
-            othersStatusHtml = Object.entries(othersSelected).map(([idx, sel]) => {
-                const pidx = parseInt(idx);
-                const name = pNames[pidx] || `P${pidx + 1}`;
-                return `<div class="event-player-status${sel ? ' selected' : ''}">${name} ${sel ? '&#10003;' : '...'}</div>`;
-            }).join('');
-        } else {
-            othersStatusHtml = `<div class="event-player-status${oppSelected ? ' selected' : ''}">${oppSelected ? UI.opponent_selected : UI.waiting_opponent}</div>`;
-        }
-        container.innerHTML = `
-            <div class="event-selected-state">
-                <div class="event-player-status-list">${othersStatusHtml}</div>
-                <div class="event-selected">${UI.event_selected.replace('{0}', eventName)}</div>
-            </div>
-        `;
+        container.innerHTML = `<div class="event-selected">${UI.event_selected.replace('{0}', eventName)}</div>`;
         return;
     }
-    const oppStatus = document.createElement('div');
-    oppStatus.className = 'waiting-msg';
-    if (is2v2) {
-        const pNames = data.player_names || [];
-        const statusParts = Object.entries(othersSelected).map(([idx, sel]) => {
-            const pidx = parseInt(idx);
-            const name = pNames[pidx] || `P${pidx + 1}`;
-            return `<div class="event-player-status${sel ? ' selected' : ''}">${name} ${sel ? '&#10003;' : '...'}</div>`;
-        });
-        oppStatus.className = 'event-player-status-list';
-        oppStatus.innerHTML = statusParts.join('');
-    } else {
-        oppStatus.textContent = oppSelected ? UI.opponent_selected : UI.opponent_selecting;
-    }
-    oppStatus.style.width = '100%';
-    oppStatus.style.textAlign = 'center';
-    oppStatus.style.marginBottom = '8px';
-    container.appendChild(oppStatus);
     const eventsRow = document.createElement('div');
     eventsRow.className = 'event-options';
     events.forEach((ev, i) => {
@@ -10278,22 +10288,52 @@ function renderEventSelect(data) {
         eventsRow.appendChild(card);
     });
     container.appendChild(eventsRow);
+    // Use the HTML button for reroll (shared refresh count with draft)
+    const rerolls = Number(data.rerolls || 0);
+    if (rerollBtn) {
+        const canReroll = rerolls > 0;
+        rerollBtn.textContent = `${UI.event_reroll || '刷新'} (${rerolls})`;
+        rerollBtn.disabled = !canReroll;
+        rerollBtn.style.opacity = canReroll ? '1' : '0.4';
+        rerollBtn.style.cursor = canReroll ? 'pointer' : 'not-allowed';
+        rerollBtn.style.pointerEvents = canReroll ? 'auto' : 'none';
+        rerollBtn.style.display = '';
+        rerollBtn.onclick = () => {
+            socket.emit('reroll_opening_event');
+        };
+    }
 }
 
 async function onEventSelect(eventId) {
-    let subChoice = null;
-    if (eventId === 2) {
-        subChoice = await showMagicConversionFlow();
-        if (subChoice === false) return;
-    } else if (eventId === 3) {
-        subChoice = await showLightConversionChoice();
-        if (subChoice === false) return;
-    } else if (eventId === 8) {
-        subChoice = await showYggdrasilConversionChoice();
-        if (subChoice === false) return;
+    // Sub-choices (magic conversion, light conversion, etc.) are deferred
+    // until after draft, so we don't prompt for them here
+    socket.emit('select_opening_event', { event_id: eventId, sub_choice: null });
+    // Server will send draft phase immediately, no need to show waiting
+}
+
+async function handleEventSubChoice(data) {
+    const eventId = data.event_id;
+    const needsSubChoice = data.needs_sub_choice;
+    if (!needsSubChoice) {
+        // No sub-choice needed, just submit empty
+        socket.emit('submit_event_sub_choice', { sub_choice: null });
+        updateStatus(UI.event_waiting);
+        return;
     }
-    socket.emit('select_opening_event', { event_id: eventId, sub_choice: subChoice });
-    updateStatus(UI.event_waiting);
+    // Store data for sub-choice flows
+    eventSelectData = data;
+    let subChoice = null;
+    if (String(eventId) === '2') {
+        subChoice = await showMagicConversionFlow();
+        if (subChoice === false) subChoice = null;
+    } else if (String(eventId) === '3') {
+        subChoice = await showLightConversionChoice();
+        if (subChoice === false) subChoice = null;
+    } else if (String(eventId) === '8') {
+        subChoice = await showYggdrasilConversionChoice();
+        if (subChoice === false) subChoice = null;
+    }
+    socket.emit('submit_event_sub_choice', { sub_choice: subChoice });
 }
 
 async function showMagicConversionFlow() {
@@ -10312,8 +10352,8 @@ async function showMagicConversionFlow() {
     const conversions = [];
     const remainingCounts = { ...counts };
     for (let i = 0; i < convertCount; i++) {
-        const magicOptions = magicOptionsAll[i] || magicOptionsAll[magicOptionsAll.length - 1] || [];
-        const magicDisplay = magicOptions.map(did => {
+        // magic_options is now a flat list of magic card def_ids for the selected event
+        const magicDisplay = magicOptionsAll.map(did => {
             const cd = getCardDef(did);
             const detail = cd ? `${cd.cost_e || 0}E/${cd.cost_m || 0}M` : '';
             return cardDefChoiceOption(did, detail ? { detail } : {});
@@ -10325,7 +10365,7 @@ async function showMagicConversionFlow() {
         const sourceSel = await gamePrompt(UI.choose_source_card_n.replace('{0}', i + 1), availableDisplay);
         if (sourceSel < 0) return false;
         remainingCounts[availableTypes[sourceSel]] = (remainingCounts[availableTypes[sourceSel]] || 0) - 1;
-        conversions.push({ magic_def_id: magicOptions[magicSel], source_def_id: availableTypes[sourceSel] });
+        conversions.push({ magic_def_id: magicOptionsAll[magicSel], source_def_id: availableTypes[sourceSel] });
     }
     return conversions.length ? { conversions } : null;
 }

@@ -57,6 +57,8 @@ class GameEngine2v2(GameEngine):
         self.opening_event_picks: List[Optional[int]] = [None] * 4
         self.opening_event_sub_choices: List[Optional[dict]] = [None] * 4
         self.opening_event_magic_options: List[List[List[str]]] = [[[], [], []] for _ in range(4)]
+        # Per-player ready state: True when draft done AND sub-choice done (if any)
+        self.player_ready: List[bool] = [False] * 4
         self.player_names: List[str] = ['玩家1', '玩家2', '玩家3', '玩家4']
         self.debug_selector_log: bool = False
         self._last_damage_value: List[int] = [0] * 4
@@ -235,6 +237,31 @@ class GameEngine2v2(GameEngine):
             'mode': '2v2',
         }
 
+    def start_event_select_first(self):
+        """Start event_select phase before draft. Called after matching."""
+        self.phase = 'event_select'
+        self.draft_rerolls = [DRAFT_REROLLS] * 4
+        self.player_ready = [False] * 4
+        self._generate_opening_events()
+
+    def start_draft_for_player(self, player_id: int):
+        """Initialize draft for a specific player after they select their event.
+        Called independently per player - no need to wait for others."""
+        # Initialize draft pool and type order on first call
+        if not self.draft_pool:
+            self.draft_pool = build_draft_pool(self.allowed_card_ids)
+            self.draft_type_order = []
+            for card_type, count in DRAFT_RATIO.items():
+                self.draft_type_order.extend([card_type] * count)
+            random.shuffle(self.draft_type_order)
+        # Ensure draft_picks is initialized
+        if not self.draft_picks[player_id]:
+            self.draft_picks[player_id] = []
+        # Generate draft options for this player
+        self._generate_draft_options_for_player(player_id)
+        # Update global phase
+        self.phase = 'draft'
+
     def start_draft(self):
         self.phase = 'draft'
         self.draft_pool = build_draft_pool(self.allowed_card_ids)
@@ -267,9 +294,6 @@ class GameEngine2v2(GameEngine):
         else:
             self._generate_draft_options_for_player(player_id)
         all_done = all(len(p) >= DECK_SIZE for p in self.draft_picks)
-        if all_done:
-            self.phase = 'event_select'
-            self._generate_opening_events()
         return {'success': True, 'picks': self.draft_picks[player_id], 'all_done': all_done}
 
     def start_game(self):
@@ -869,8 +893,12 @@ class GameEngine2v2(GameEngine):
             slot3 = self._choose_opening_event(pos3)
             self.opening_event_options[i] = [slot1, slot2, slot3]
             for j in range(3):
-                self.opening_event_magic_options[i][j] = random.sample(
-                    magic_pool, min(3, len(magic_pool)))
+                ev = self.opening_event_options[i][j]
+                if ev and str(ev.get('id')) in ('2', '5', '6', '7'):
+                    self.opening_event_magic_options[i][j] = random.sample(
+                        magic_pool, min(3, len(magic_pool)))
+                else:
+                    self.opening_event_magic_options[i][j] = []
 
     def _is_valid_player_id(self, player_id) -> bool:
         return isinstance(player_id, int) and 0 <= player_id < self.num_players

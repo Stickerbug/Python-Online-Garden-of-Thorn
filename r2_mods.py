@@ -485,7 +485,7 @@ def _validate_community_mod_data(data: Dict[str, Any], source: str = ''):
     if len(cards) > MAX_COMMUNITY_CARDS:
         validation.errors.append(f'社区模组卡牌数量过多，最多 {MAX_COMMUNITY_CARDS} 张')
     if len(events) > MAX_COMMUNITY_EVENTS:
-        validation.errors.append(f'社区模组开局事件数量过多，最多 {MAX_COMMUNITY_EVENTS} 个')
+        validation.errors.append(f'社区模组配装倾向数量过多，最多 {MAX_COMMUNITY_EVENTS} 个')
     return validation
 
 

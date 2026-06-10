@@ -26,7 +26,7 @@ _VANILLA_FLAGS = {
     'precision', 'exile', 'non_stackable', 'indestructible', 'sprout',
     'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
     'infinite_exclude', 'sticky', 'copy', 'unique',
-    'swift', 'stealth', 'revealed',
+    'swift', 'stealth', 'revealed', 'rebound', 'nothingness',
 }
 
 
@@ -279,7 +279,8 @@ _reg(CardDef('Iris', 'Iris', '鸢尾', 3, 0, 'bloom', 3, 'Common',
              '美丽而致命。', '施加10层中毒'))
 
 _reg(CardDef('Fire', 'Fire', '火', 2, 0, 'bloom', 3, 'Common',
-             '缓慢但持久地灼烧对手。', '造成2层灼烧'))
+             '缓慢但持久地灼烧对手。', '造成2层灼烧',
+             flags={'rebound'}))
 
 _reg(CardDef('Fries', 'Fries', '薯条', 2, 0, 'bloom', 5, 'Common',
              '高热量食品，补充大量生命。', '+12H'))
@@ -366,9 +367,9 @@ _reg(CardDef('Nazar', 'Nazar', '邪眼护符', 5, 0, 'guard', 3, 'Common',
              '邪眼的力量似乎为你减免了大部分伤害。', '所有物理伤害减少9(最少减至1)，受到两次10点及以上物理伤害后效果消失（敌方使用攻击牌时）',
              response_trigger='thorn'))
 
-_reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 0, 3, 'guard', 3, 'Common',
-             '有魔力的护符，保护你的装备不被摧毁。', '获得一层装备保护（自己的装备即将被摧毁时）',
-             response_trigger='equipment_destroy'))
+_reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 0, 8, 'guard', 3, 'Common',
+             '有魔力的护符，让敌方的低耗技能化为虚无。', '响应：敌方使用技能牌；获得2层魔法邪眼（0-1E技能牌无效，>=2E去除一层，用完消失）',
+             response_trigger='bloom'))
 
 _reg(CardDef('MagicBubble', 'Magic Bubble', '魔法泡泡', 0, 4, 'guard', 3, 'Common',
              '泡泡的魔法版本。', '使敌方使用的技能牌失效（敌方使用技能牌时）',
