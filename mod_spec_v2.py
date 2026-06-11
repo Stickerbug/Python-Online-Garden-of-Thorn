@@ -144,6 +144,7 @@ VALID_LOGIC_OPS = {
     "equipment_property",
     "count",
     "zone_count",
+    "equipment_count_targeting",
     "hand_full",
     "floor",
     "ceil",

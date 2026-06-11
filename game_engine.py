@@ -83,6 +83,11 @@ def reset_card_for_discard(card: CardInstance):
         if card.def_id == 'Tomato':
             card.bonus_damage = 0
             card.held_turns = 0
+    if getattr(card, '_mimic_copy', False):
+        try:
+            delattr(card, '_mimic_copy')
+        except Exception:
+            pass
 
 
 class PlayerState:
@@ -336,9 +341,6 @@ class PlayerState:
         return max(0, self.hand_limit() - self.rule_hand_size())
 
     def add_to_hand(self, card: CardInstance):
-        if getattr(card, 'def_id', '') == 'Tomato':
-            card.bonus_damage = 0
-            card.held_turns = 0
         self.hand.append(card)
         callback = getattr(self, '_enter_hand_callback', None)
         if callback:
@@ -2102,6 +2104,36 @@ class GameEngine:
         target_id = 1 - player_id
         return [target_id] if 0 <= target_id < len(self.players) else []
 
+    def _replace_first_card_in_setup_zones(self, player_id: int, source_def_id: str, replacement: CardInstance) -> bool:
+        """Replace one matching setup card after initial draw.
+
+        Setup choices are made from the drafted deck list, but initial hands are
+        drawn before setup effects are applied. Search both hand and deck so a
+        chosen card still converts when it was drawn into the opening hand.
+        """
+        ps = self.players[player_id]
+        for zone_name in ('hand', 'deck'):
+            zone = getattr(ps, zone_name, None)
+            if not isinstance(zone, list):
+                continue
+            for idx, card in enumerate(zone):
+                if getattr(card, 'def_id', None) == source_def_id:
+                    zone[idx] = replacement
+                    return True
+        return False
+
+    def _replace_first_non_yggdrasil_setup_card(self, player_id: int) -> bool:
+        ps = self.players[player_id]
+        for zone_name in ('hand', 'deck'):
+            zone = getattr(ps, zone_name, None)
+            if not isinstance(zone, list):
+                continue
+            for idx in range(len(zone) - 1, -1, -1):
+                if getattr(zone[idx], 'def_id', None) != 'Yggdrasil':
+                    zone[idx] = CardInstance(def_id='Yggdrasil')
+                    return True
+        return False
+
     def _apply_opening_event(self, player_id: int):
         ps = self.players[player_id]
         event_id = self.opening_event_picks[player_id]
@@ -2123,27 +2155,23 @@ class GameEngine:
                     magic_def = conv.get('magic_def_id')
                     source_def = conv.get('source_def_id')
                     if magic_def and source_def and self._card_allowed(magic_def):
-                        for j in range(len(ps.deck)):
-                            if ps.deck[j].def_id == source_def:
-                                ps.deck[j] = CardInstance(def_id=magic_def)
-                                converted += 1
-                                magic_name = CARD_DEFS.get(magic_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
-                                source_name = CARD_DEFS.get(source_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
-                                self.log_msg(f"{self.pn(player_id)}【魔力转化】：{source_name}变为{magic_name}")
-                                break
+                        if self._replace_first_card_in_setup_zones(player_id, source_def, CardInstance(def_id=magic_def)):
+                            converted += 1
+                            magic_name = CARD_DEFS.get(magic_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
+                            source_name = CARD_DEFS.get(source_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
+                            self.log_msg(f"{self.pn(player_id)}【魔力转化】：{source_name}变为{magic_name}")
         elif event_id == 3:
             converted = 0
             if self._card_allowed('Light') and sub and 'convert_def_ids' in sub:
                 target_def_ids = list(sub['convert_def_ids'])
                 converted = 0
                 for target_def in target_def_ids:
-                    for j in range(len(ps.deck)):
-                        if ps.deck[j].def_id == target_def and converted < 5:
-                            light_card = CardInstance(def_id='Light')
-                            light_card.instance_flags = {'sprout', 'symbiosis'}
-                            ps.deck[j] = light_card
-                            converted += 1
-                            break
+                    if converted >= 5:
+                        break
+                    light_card = CardInstance(def_id='Light')
+                    light_card.instance_flags = {'sprout', 'symbiosis'}
+                    if self._replace_first_card_in_setup_zones(player_id, target_def, light_card):
+                        converted += 1
                 self.log_msg(f"{self.pn(player_id)}【光之洗礼】：{converted}张牌变为Light(萌芽+共生)")
         elif event_id == 4:
             target_ids = self._opening_event_enemy_targets(player_id)
@@ -2165,18 +2193,14 @@ class GameEngine:
                 return
             if sub and 'yggdrasil_convert_def_id' in sub:
                 target_def = sub['yggdrasil_convert_def_id']
-                for j in range(len(ps.deck)):
-                    if ps.deck[j].def_id == target_def:
-                        ps.deck[j] = CardInstance(def_id='Yggdrasil')
-                        target_name = CARD_DEFS.get(target_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
-                        self.log_msg(f"{self.pn(player_id)}【绝境求生】：最大生命值-20，{target_name}变为Yggdrasil")
-                        break
+                if self._replace_first_card_in_setup_zones(player_id, target_def, CardInstance(def_id='Yggdrasil')):
+                    target_name = CARD_DEFS.get(target_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
+                    self.log_msg(f"{self.pn(player_id)}【绝境求生】：最大生命值-20，{target_name}变为Yggdrasil")
+                elif self._replace_first_non_yggdrasil_setup_card(player_id):
+                    self.log_msg(f"{self.pn(player_id)}【绝境求生】：最大生命值-20，一张牌变为Yggdrasil")
             else:
-                for j in range(len(ps.deck) - 1, -1, -1):
-                    if ps.deck[j].def_id != 'Yggdrasil':
-                        ps.deck[j] = CardInstance(def_id='Yggdrasil')
-                        self.log_msg(f"{self.pn(player_id)}【绝境求生】：最大生命值-20，一张牌变为Yggdrasil")
-                        break
+                if self._replace_first_non_yggdrasil_setup_card(player_id):
+                    self.log_msg(f"{self.pn(player_id)}【绝境求生】：最大生命值-20，一张牌变为Yggdrasil")
 
     def _apply_v2_opening_event(self, player_id: int, event_id) -> bool:
         if event_id is None:
@@ -2364,6 +2388,8 @@ class GameEngine:
         )
         actual = self._run_v2_damage_modifiers(damage_context, actual)
         if getattr(self, 'pending_v2_ui', None):
+            return 0
+        if actual <= 0:
             return 0
         ps.health -= actual
         self._record_damage(player_id, actual, source_id)
@@ -2563,6 +2589,11 @@ class GameEngine:
     def _check_game_over(self):
         if self._game_over_defer_depth > 0:
             return
+        for i in range(2):
+            if self.players[i].health <= 0:
+                self._check_yggdrasil(i)
+                if self.game_over:
+                    return
         if self.players[0].health <= 0 and self.players[1].health <= 0:
             self.game_over = True
             self.winner = -1
@@ -2589,8 +2620,6 @@ class GameEngine:
     def can_play_card(self, player_id: int, card: CardInstance) -> Tuple[bool, str]:
         ps = self.players[player_id]
         card_def = card.card_def
-        if 'void' in card.flags:
-            return False, "此牌已被虚无，无法使用"
         if card_def.card_type == 'guard' and not self._has_script_entry(card_def, 'play') and not card_def.effects and not self._card_has_v2_event(card_def, 'on_play'):
             return False, "反制牌只能通过响应机制使用"
         if self.phase != 'action' or self.current_player != player_id:
@@ -2649,6 +2678,28 @@ class GameEngine:
             return False
         self._spend_resource(player_id, 'elixir', cost, source_card)
         return True
+
+    def _make_mimic_copy_card(self, target: CardInstance) -> CardInstance:
+        copy_card = target.copy()
+        copy_card._mimic_copy = True
+
+        def half_extra(value, base=1):
+            try:
+                extra = max(0, int(value or base) - base)
+            except Exception:
+                extra = 0
+            return base + int(math.ceil(extra / 2))
+
+        copy_card.fusion_level = half_extra(getattr(target, 'fusion_level', 1), 1)
+        copy_card.fusion_multiplier = float(copy_card.fusion_level)
+        copy_card.fission_level = half_extra(getattr(target, 'fission_level', 1), 1)
+        copy_card.fission_count = max(0, copy_card.fission_level - 1)
+        if getattr(target, 'def_id', '') == 'Tomato':
+            try:
+                copy_card.held_turns = int(math.ceil(max(0, int(getattr(target, 'held_turns', 0) or 0)) / 2))
+            except Exception:
+                copy_card.held_turns = 0
+        return copy_card
 
     def _refund_pending_choice_cost(self, player_id: int, card: CardInstance):
         ps = self.players[player_id]
@@ -3037,11 +3088,10 @@ class GameEngine:
                 self.log_msg(f"{self.pn(player_id)}获得2点护甲")
             ps.equipment.append(eq)
             self.log_msg(f"{self.pn(player_id)}装备了{card.name_cn}")
-        elif 'sticky' in card.flags or 'rebound' in card.flags:
+        elif 'rebound' in card.flags:
             card.mimic_discount = 0
             ps.add_to_hand(card)
-            label = '粘滞' if 'sticky' in card.flags else '回转'
-            self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因{label}回到手中")
+            self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因回转回到手中")
         elif 'exile' in card.flags:
             ps.exile.append(card)
             self.log_msg(f"{self.pn(player_id)}的{card.name_cn}被放逐")
@@ -3638,12 +3688,19 @@ class GameEngine:
     def _atomic_copy_card(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
         target = self._resolve_card_ref(player_id, params.get('card'), card)
+        if target is None and isinstance(context, dict):
+            context_target = context.get('chosen_card') or context.get('selected_card')
+            if isinstance(context_target, CardInstance):
+                target = context_target
         if choice and 'target_instance_id' in choice:
-            target = ps.find_hand_card(choice['target_instance_id'])
+            target = ps.find_hand_card(choice['target_instance_id']) or self._find_card_by_instance_id(choice['target_instance_id'])
         if target and ps.can_add_to_hand():
             if card is not None and card.def_id == 'Mimic' and not self._pay_mimic_special_cost(player_id, target, card):
                 return
-            new_card = target.copy()
+            if card is not None and card.def_id == 'Mimic':
+                new_card = self._make_mimic_copy_card(target)
+            else:
+                new_card = target.copy()
             ps.add_to_hand(new_card)
             self._remember_created_card(new_card, context)
             if log:
@@ -4137,14 +4194,24 @@ class GameEngine:
     def _atomic_move_to_hand(self, player_id, card, params, log, choice, context):
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'selected_card'}), card)
         if not target_card:
+            if getattr(card, 'def_id', '') == 'Magnet':
+                self._clear_hand_reveal_for_player(player_id)
             return
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         if not (0 <= target_id < len(self.players)):
+            if getattr(card, 'def_id', '') == 'Magnet':
+                self._clear_hand_reveal_for_player(player_id)
             return
         if not self.players[target_id].can_add_to_hand():
+            if getattr(card, 'def_id', '') == 'Magnet':
+                self._clear_hand_reveal_for_player(player_id)
             return
-        self._remove_card_from_current_zone(target_card)
+        owner_id, zone_name = self._remove_card_from_current_zone(target_card)
         self.players[target_id].add_to_hand(target_card)
+        if getattr(card, 'def_id', '') == 'Magnet':
+            if owner_id is not None and owner_id != target_id and zone_name == 'hand':
+                self.log_msg(log or f"{self.pn(player_id)}用磁铁从{self.pn(owner_id)}手牌中获得了{target_card.name_cn}")
+            self._clear_hand_reveal_for_player(player_id)
 
     def _atomic_move_to_deck(self, player_id, card, params, log, choice, context):
         position = params.get('position', 'top')
@@ -4921,7 +4988,7 @@ class GameEngine:
             if target:
                 if not self._pay_mimic_special_cost(player_id, target, card):
                     return
-                copy_card = target.copy()
+                copy_card = self._make_mimic_copy_card(target)
                 copy_card.mimic_discount = 1
                 if ps.can_add_to_hand():
                     ps.add_to_hand(copy_card)
@@ -5002,7 +5069,7 @@ class GameEngine:
                 physical_dmg = poison_layers * 2
                 ps.health -= physical_dmg
                 self.log_msg(f"海绵被摧毁！去除{poison_layers}层中毒，受到{physical_dmg}点物理伤害")
-                self._check_yggdrasil(player_id)
+                self._check_yggdrasil(owner_id)
             else:
                 self.log_msg("海绵被摧毁！无中毒层数")
         if not has_destroy_script and eq.def_id == 'Pill':
@@ -5400,6 +5467,11 @@ class GameEngine:
             if card_ref in ('current_card', 'this', 'this_card'):
                 return current_card
             if card_ref in ('selected_card', 'choice_card', 'chosen_card'):
+                context = getattr(self, '_active_effect_context', {}) or {}
+                if isinstance(context, dict):
+                    context_card = context.get('chosen_card') or context.get('selected_card')
+                    if isinstance(context_card, CardInstance):
+                        return context_card
                 return self._resolve_card_ref(player_id, {'ref': 'selected_card'}, current_card)
             if card_ref in ('last_created_card', 'created_card', 'last_copied_card'):
                 return self._resolve_card_ref(player_id, {'ref': 'last_created_card'}, current_card)
@@ -5429,6 +5501,11 @@ class GameEngine:
         if ref == 'list_item':
             return self._resolve_card_ref(player_id, self._list_item_raw(player_id, card_ref, current_card), current_card)
         if ref in ('selected_card', 'choice_card', 'chosen_card'):
+            context = getattr(self, '_active_effect_context', {}) or {}
+            if isinstance(context, dict):
+                context_card = context.get('chosen_card') or context.get('selected_card')
+                if isinstance(context_card, CardInstance):
+                    return context_card
             choice = getattr(self, '_active_choice', None) or {}
             if isinstance(choice, dict):
                 instance_id = choice.get('target_instance_id')
@@ -7069,11 +7146,10 @@ class GameEngine:
                 delattr(card, '_placed_as_equipment')
             if hasattr(card, '_placed_as_equipment_owner'):
                 delattr(card, '_placed_as_equipment_owner')
-        elif 'sticky' in card.flags or 'rebound' in card.flags:
+        elif 'rebound' in card.flags:
             card.mimic_discount = 0
             ps.add_to_hand(card)
-            label = '粘滞' if 'sticky' in card.flags else '回转'
-            self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因{label}回到手中")
+            self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因回转回到手中")
         elif 'exile' in card.flags:
             owner_id, zone_name, _ = self._find_card_location(card)
             if owner_id is None or zone_name is None:
@@ -7283,7 +7359,7 @@ class GameEngine:
             return
         if card is not None and card.def_id == 'Mimic' and not self._pay_mimic_special_cost(player_id, target, card):
             return
-        copy_card = target.copy()
+        copy_card = self._make_mimic_copy_card(target)
         copy_card.mimic_discount = self._eval_int(player_id, params.get('discount_e', 1), card, 1)
         ps.add_to_hand(copy_card)
         if log:

@@ -870,6 +870,226 @@ body {
   gap: 6px;
 }
 
+.dm-section {
+  border-top: 1px solid var(--border-light);
+  padding-top: 10px;
+}
+
+.dm-section .friend-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dm-layout {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.42fr) minmax(0, 1fr);
+  gap: 8px;
+  min-height: 240px;
+}
+
+.dm-thread-list {
+  min-height: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.dm-thread-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 6px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dm-thread-item.active {
+  border-color: var(--magic);
+  background: var(--magic-bg);
+}
+
+.dm-thread-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.dm-thread-preview {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.dm-unread {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--damage);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.dm-chat-panel {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+
+.dm-chat-title {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.dm-message-list {
+  min-height: 145px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dm-message {
+  display: flex;
+}
+
+.dm-message.self {
+  justify-content: flex-end;
+}
+
+.dm-message.other {
+  justify-content: flex-start;
+}
+
+.dm-bubble {
+  max-width: 82%;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.dm-message.self .dm-bubble {
+  background: var(--magic-bg);
+  border-color: color-mix(in srgb, var(--magic) 45%, var(--border-light));
+}
+
+.dm-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.dm-input-row input {
+  min-width: 0;
+  padding: 8px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.chat-mention-token {
+  display: inline-block;
+  padding: 0 3px;
+  border-radius: 4px;
+  color: #2E86DE;
+  background: rgba(46, 134, 222, 0.14);
+  font-weight: 900;
+}
+
+[data-theme="dark"] .chat-mention-token {
+  color: #74B9FF;
+  background: rgba(116, 185, 255, 0.2);
+}
+
+.chat-msg.mention-flash {
+  animation: mentionFlash 1.05s ease-in-out infinite;
+}
+
+@keyframes mentionFlash {
+  0%, 100% { background: transparent; }
+  50% { background: rgba(46, 134, 222, 0.18); }
+}
+
+.mention-menu {
+  position: fixed;
+  z-index: 2800;
+  display: grid;
+  gap: 4px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+}
+
+.mention-menu.hidden {
+  display: none;
+}
+
+.mention-menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mention-menu-item:hover {
+  background: var(--magic-bg);
+}
+
+.mention-menu-item span {
+  color: #2E86DE;
+  font-weight: 900;
+}
+
+.mention-menu-item small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
 .mini-btn {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
@@ -1149,6 +1369,114 @@ body {
   place-items: center;
   color: var(--text-secondary);
   font-weight: 800;
+}
+
+.account-replay-setup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2520;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 86px 18px 22px;
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.account-replay-setup-overlay.hidden {
+  display: none;
+}
+
+.account-replay-setup-panel {
+  width: min(1040px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 112px));
+  overflow: auto;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+}
+
+.account-replay-setup-head {
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+
+.account-replay-setup-title {
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.account-replay-setup-note {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.account-replay-setup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.account-replay-setup-player {
+  display: grid;
+  gap: 9px;
+  align-content: start;
+  padding: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+}
+
+.account-replay-setup-player-name {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.account-replay-setup-event,
+.account-replay-setup-hand-title {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.account-replay-setup-changes {
+  display: grid;
+  gap: 4px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--magic-bg) 72%, transparent);
+}
+
+.account-replay-setup-change {
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.account-replay-setup-hand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.replay-setup-card-chip.choice-card-token {
+  font-size: 11px;
+}
+
+.account-replay-setup-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 750;
 }
 
 .replay-board {
@@ -3076,6 +3404,24 @@ body {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.lobby-player-row .player-name.account-name,
+.lobby-team-row .player-name .account-name,
+.player-name-inline.account-name {
+  color: #2F80C8;
+}
+
+.lobby-player-row .player-name.guest-name,
+.lobby-team-row .player-name .guest-name,
+.player-name-inline.guest-name {
+  color: #202020;
+}
+
+[data-theme="dark"] .lobby-player-row .player-name.guest-name,
+[data-theme="dark"] .lobby-team-row .player-name .guest-name,
+[data-theme="dark"] .player-name-inline.guest-name {
+  color: #D8D8D8;
 }
 
 .admin-name,
@@ -5041,7 +5387,7 @@ body {
   border-color: rgba(69, 90, 100, 0.28);
 }
 
-.card-flag.sticky {
+.card-flag.rebound {
   color: #9B59B6;
   background: rgba(155, 89, 182, 0.14);
   border-color: rgba(155, 89, 182, 0.3);

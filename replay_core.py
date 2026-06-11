@@ -20,6 +20,24 @@ REPLAY_ITEM_COLUMNS = '''
 '''
 _TIMELINE_CACHE = OrderedDict()
 _TIMELINE_CACHE_MAX = 4
+_REPLAY_SETUP_ACTION_TYPES = {
+    'draft_pick',
+    'draft_reroll',
+    'select_opening_event',
+    'submit_event_sub_choice',
+    'reroll_opening_event',
+}
+_REPLAY_SETUP_PHASES = {'draft', 'event_select', 'event_sub_choice'}
+_OPENING_EVENT_NAMES_CN = {
+    '1': '生命强化',
+    '2': '魔力转化',
+    '3': '光之洗礼',
+    '4': '烈焰预兆',
+    '5': '命运抽签',
+    '6': '能量涌动',
+    '7': '先手压制',
+    '8': '绝境求生',
+}
 
 
 def _json_bytes(data):
@@ -569,12 +587,229 @@ def get_replay(replay_id):
     return _replay_row_to_item(row)
 
 
+def _safe_int(value, default=0):
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _replay_state_from_item(item):
+    if not isinstance(item, dict):
+        return {}
+    state = item.get('state')
+    return state if isinstance(state, dict) else {}
+
+
+def _find_replay_game_start_state(keyframes, actions):
+    candidates = []
+    for frame in keyframes:
+        if isinstance(frame, dict):
+            label = str(frame.get('label') or '')
+            phase = str(frame.get('phase') or '')
+            if label == 'game_start' or phase in ('playing', 'action', 'game_over'):
+                candidates.append(frame)
+    for action in actions:
+        if isinstance(action, dict):
+            phase = str(action.get('phase') or '')
+            if action.get('type') == 'game_start' or phase in ('playing', 'action', 'game_over'):
+                candidates.append(action)
+    if candidates:
+        candidates.sort(key=lambda item: _safe_int(item.get('t'), 0))
+        return _replay_state_from_item(candidates[0])
+    for action in actions:
+        if isinstance(action, dict) and str(action.get('type') or '') not in _REPLAY_SETUP_ACTION_TYPES:
+            state = _replay_state_from_item(action)
+            if state:
+                return state
+    for frame in reversed(keyframes):
+        state = _replay_state_from_item(frame)
+        if state:
+            return state
+    return {}
+
+
+def _perspective_for_player(state, player_index):
+    perspectives = state.get('perspectives') if isinstance(state, dict) else None
+    if not isinstance(perspectives, list):
+        return {}
+    if 0 <= player_index < len(perspectives) and isinstance(perspectives[player_index], dict):
+        return perspectives[player_index]
+    return {}
+
+
+def _player_state_from_perspective(perspective, player_index):
+    if not isinstance(perspective, dict):
+        return {}
+    if isinstance(perspective.get('you'), dict):
+        return perspective.get('you') or {}
+    players = perspective.get('spectate_players')
+    if isinstance(players, list) and 0 <= player_index < len(players) and isinstance(players[player_index], dict):
+        return players[player_index]
+    return {}
+
+
+def _card_summary(card):
+    if not isinstance(card, dict):
+        return {}
+    result = {
+        'def_id': card.get('def_id') or card.get('id') or '',
+        'instance_id': card.get('instance_id'),
+    }
+    for key in (
+        'instance_flags', 'disabled_flags', 'fission_level', 'fusion_level',
+        'held_turns', 'bonus_damage', 'cost_e_override', 'cost_m_override',
+        'mimic_discount', 'return_to_hand_turns', 'swift_value',
+    ):
+        if key in card:
+            result[key] = card.get(key)
+    return result
+
+
+def _format_setup_change_value(value):
+    if isinstance(value, dict):
+        parts = []
+        if value.get('source_def_id') or value.get('magic_def_id'):
+            parts.append(f"{value.get('source_def_id') or '?'} -> {value.get('magic_def_id') or '?'}")
+        elif value.get('target_def_id') or value.get('target_instance_id'):
+            parts.append(str(value.get('target_def_id') or value.get('target_instance_id') or ''))
+        else:
+            for key in sorted(value.keys()):
+                parts.append(f"{key}={value.get(key)}")
+        return ', '.join(parts)
+    if isinstance(value, list):
+        return '; '.join(_format_setup_change_value(item) for item in value if item is not None)
+    return str(value)
+
+
+def _extract_setup_actions(actions, player_count):
+    selected = [{} for _ in range(player_count)]
+    for action in actions:
+        if not isinstance(action, dict):
+            continue
+        actor = action.get('actor')
+        if actor is None:
+            continue
+        actor = _safe_int(actor, -1)
+        if actor < 0 or actor >= player_count:
+            continue
+        payload = action.get('payload') if isinstance(action.get('payload'), dict) else {}
+        if action.get('type') == 'select_opening_event':
+            event_id = payload.get('event_id')
+            selected[actor]['event_id'] = event_id
+            selected[actor]['event_name'] = _OPENING_EVENT_NAMES_CN.get(str(event_id), str(event_id or ''))
+            if isinstance(payload.get('sub_choice'), dict) and payload.get('sub_choice'):
+                selected[actor].setdefault('changes', []).append({
+                    'label': '配装变化',
+                    'text': _format_setup_change_value(payload.get('sub_choice')),
+                })
+        elif action.get('type') == 'submit_event_sub_choice':
+            sub_choice = payload.get('sub_choice')
+            if isinstance(sub_choice, dict) and sub_choice:
+                selected[actor].setdefault('changes', []).append({
+                    'label': '配装变化',
+                    'text': _format_setup_change_value(sub_choice),
+                })
+    return selected
+
+
+def _extract_setup_log_changes(state, player_count):
+    perspectives = state.get('perspectives') if isinstance(state, dict) else []
+    log_source = {}
+    if isinstance(perspectives, list):
+        log_source = next((p for p in perspectives if isinstance(p, dict) and isinstance(p.get('log'), list)), {}) or {}
+    logs = log_source.get('log') if isinstance(log_source, dict) else []
+    changes = [[] for _ in range(player_count)]
+    if not isinstance(logs, list):
+        return changes
+    player_names = state.get('player_names') if isinstance(state.get('player_names'), list) else []
+    for line in logs:
+        text = str(line or '')
+        if '【' not in text or '】' not in text:
+            continue
+        for idx in range(player_count):
+            name = str(player_names[idx]) if idx < len(player_names) else ''
+            if (
+                (name and (text.startswith(f'{name}【') or name in text))
+                or f'Player {chr(65 + idx)}' in text
+                or f'P{idx + 1}' in text
+            ):
+                changes[idx].append(text)
+                break
+    return changes
+
+
+def _build_setup_summary_frame(keyframes, actions):
+    state = _find_replay_game_start_state(keyframes, actions)
+    player_names = state.get('player_names') if isinstance(state.get('player_names'), list) else []
+    perspectives = state.get('perspectives') if isinstance(state.get('perspectives'), list) else []
+    player_count = max(len(player_names), len(perspectives), 2)
+    setup_actions = _extract_setup_actions(actions, player_count)
+    log_changes = _extract_setup_log_changes(state, player_count)
+    first_perspective = perspectives[0] if perspectives and isinstance(perspectives[0], dict) else {}
+    picks = first_perspective.get('opening_event_picks') if isinstance(first_perspective.get('opening_event_picks'), list) else state.get('opening_event_picks')
+    if not isinstance(picks, list):
+        picks = []
+    players = []
+    for idx in range(player_count):
+        perspective = _perspective_for_player(state, idx)
+        player_state = _player_state_from_perspective(perspective, idx)
+        hand = player_state.get('hand') if isinstance(player_state.get('hand'), list) else []
+        event_id = setup_actions[idx].get('event_id')
+        if event_id is None and idx < len(picks):
+            event_id = picks[idx]
+        event_name = setup_actions[idx].get('event_name') or _OPENING_EVENT_NAMES_CN.get(str(event_id), str(event_id or ''))
+        changes = list(setup_actions[idx].get('changes') or [])
+        for log_line in log_changes[idx]:
+            changes.append({'label': '配装结果', 'text': log_line})
+        players.append({
+            'index': idx,
+            'name': player_names[idx] if idx < len(player_names) else f'P{idx + 1}',
+            'event_id': event_id,
+            'event_name': event_name,
+            'hand': [_card_summary(card) for card in hand if isinstance(card, dict)],
+            'changes': changes,
+        })
+    return {
+        'i': 0,
+        't': 0,
+        'phase': 'setup_summary',
+        'round': 0,
+        'current_player': state.get('current_player'),
+        'label': '配装与起手',
+        'state': state,
+        'setup_summary': {
+            'players': players,
+            'note': '回放已跳过配装、选牌和开局抽牌过程。',
+        },
+        'log': [],
+    }
+
+
+def _is_replay_setup_noise_frame(frame):
+    if not isinstance(frame, dict):
+        return True
+    label = str(frame.get('label') or '')
+    phase = str(frame.get('phase') or '')
+    if label in ('initial', 'event_select_start', 'draft_start', 'game_start'):
+        return True
+    return phase in _REPLAY_SETUP_PHASES
+
+
+def _is_replay_setup_noise_action(action):
+    if not isinstance(action, dict):
+        return True
+    action_type = str(action.get('type') or '')
+    phase = str(action.get('phase') or '')
+    return action_type in _REPLAY_SETUP_ACTION_TYPES or phase in _REPLAY_SETUP_PHASES
+
+
 def _build_timeline_from_replay(replay):
     keyframes = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
     actions = replay.get('actions') if isinstance(replay.get('actions'), list) else []
-    timeline = []
+    timeline = [_build_setup_summary_frame(keyframes, actions)]
     for index, frame in enumerate(keyframes):
-        if isinstance(frame, dict):
+        if isinstance(frame, dict) and not _is_replay_setup_noise_frame(frame):
             timeline.append({
                 'i': len(timeline),
                 't': int(frame.get('t') or 0),
@@ -585,7 +820,7 @@ def _build_timeline_from_replay(replay):
                 'log': [],
             })
     for action in actions:
-        if isinstance(action, dict):
+        if isinstance(action, dict) and not _is_replay_setup_noise_action(action):
             timeline.append({
                 'i': len(timeline),
                 't': int(action.get('t') or 0),
@@ -596,7 +831,7 @@ def _build_timeline_from_replay(replay):
                 'state': action.get('state') or {},
                 'log': [],
             })
-    timeline.sort(key=lambda item: (item.get('t', 0), item.get('i', 0)))
+    timeline.sort(key=lambda item: (0 if item.get('phase') == 'setup_summary' else 1, item.get('t', 0), item.get('i', 0)))
     for index, item in enumerate(timeline):
         item['i'] = index
     return timeline

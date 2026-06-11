@@ -427,6 +427,27 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
                 eq_id = str(eval_v2_value(engine, context, eq_id))
                 return sum(1 for c in cards if getattr(c, "def_id", "") == eq_id)
         return len(cards)
+    if op == "equipment_count_targeting":
+        owners = resolve_v2_target(engine, context, expr.get("owners", expr.get("target", "source")))
+        if not isinstance(owners, list):
+            owners = [owners]
+        target_id = _player_id(engine, resolve_v2_target(engine, context, expr.get("effect_target", "source")))
+        eq_id = str(eval_v2_value(engine, context, expr.get("equipment_id", expr.get("id", ""))) or "")
+        total = 0
+        for owner in owners:
+            try:
+                owner_id = int(owner)
+            except Exception:
+                continue
+            if not _valid_player(engine, owner_id):
+                continue
+            for eq in getattr(engine.players[owner_id], "equipment", []):
+                if eq_id and getattr(eq, "def_id", "") != eq_id:
+                    continue
+                if int(getattr(eq, "effect_target", owner_id)) != target_id:
+                    continue
+                total += 1
+        return total
     if op == "hand_full":
         target = resolve_v2_target(engine, context, expr.get("target", "source"))
         player_id = _player_id(engine, target)
@@ -1370,6 +1391,7 @@ def _materialize_atomic_value(engine, context: Dict[str, Any], value: Any):
         "const", "literal", "var", "temp_var", "player_var", "global_var", "player_stat",
         "player_property", "card_prop", "card_property", "equipment_prop", "equipment_property",
         "zone_count", "hand_count", "deck_count", "discard_count", "exile_count",
+        "equipment_count_targeting",
         "equipment_count", "hand_full", "count", "add", "sub", "mul", "div", "+", "-",
         "*", "/", "min", "max", "clamp", "floor", "ceil", "last_damage", "event_value",
         "damage_amount", "current_damage", "damage_source", "source_player", "target_player",

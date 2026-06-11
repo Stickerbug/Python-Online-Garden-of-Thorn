@@ -20,6 +20,8 @@ PLAYER_ID_BLACKLIST_PATH = os.environ.get(
 _PLAYER_ID_BLACKLIST_CACHE = None
 FRIEND_REQUEST_TTL_DAYS = 30
 REMEMBER_TOKEN_DAYS = 60
+DM_RETENTION_DAYS = 60
+DM_THREAD_MAX_BYTES = 100 * 1024
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
 ROLE_TYPES = {'admin', 'staff', 'contributor', 'sponsor', 'none'}
 ROLE_COLOR_TOKENS = {'admin', 'bloom', 'guard', 'thorn', 'root', 'neutral'}
@@ -574,6 +576,43 @@ def init_db():
             '''
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_muted_users_until ON muted_users(muted_until)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS dm_threads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_low_id INTEGER NOT NULL,
+                user_high_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(user_low_id, user_high_id),
+                FOREIGN KEY(user_low_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_high_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_dm_threads_low ON dm_threads(user_low_id, updated_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_dm_threads_high ON dm_threads(user_high_id, updated_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS dm_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                thread_id INTEGER NOT NULL,
+                sender_user_id INTEGER NOT NULL,
+                recipient_user_id INTEGER NOT NULL,
+                message TEXT NOT NULL,
+                normalized_message TEXT,
+                risk_level INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                read_at TEXT,
+                hidden INTEGER DEFAULT 0,
+                FOREIGN KEY(thread_id) REFERENCES dm_threads(id) ON DELETE CASCADE,
+                FOREIGN KEY(sender_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(recipient_user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_dm_messages_thread ON dm_messages(thread_id, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_dm_messages_recipient ON dm_messages(recipient_user_id, read_at, created_at)')
         conn.commit()
 
 
@@ -2239,6 +2278,272 @@ def remove_friend(user_id, friend_user_id):
         )
         conn.commit()
     return list_friends(uid)[0], None
+
+
+def _friendship_status(conn, user_a, user_b):
+    row = conn.execute(
+        '''
+        SELECT * FROM friendships
+        WHERE ((requester_id = ? AND addressee_id = ?)
+            OR (requester_id = ? AND addressee_id = ?))
+        ORDER BY id DESC
+        LIMIT 1
+        ''',
+        (user_a, user_b, user_b, user_a),
+    ).fetchone()
+    return row['status'] if row is not None else ''
+
+
+def _dm_user_pair(user_a, user_b):
+    a = int(user_a)
+    b = int(user_b)
+    return (a, b) if a < b else (b, a)
+
+
+def _cleanup_old_dm_messages(conn):
+    cutoff = utc_iso(utc_now_dt() - timedelta(days=DM_RETENTION_DAYS))
+    conn.execute('DELETE FROM dm_messages WHERE created_at < ?', (cutoff,))
+
+
+def _trim_dm_thread_bytes(conn, thread_id):
+    try:
+        tid = int(thread_id)
+    except (TypeError, ValueError):
+        return
+    rows = conn.execute(
+        'SELECT id, message FROM dm_messages WHERE thread_id = ? ORDER BY id ASC',
+        (tid,),
+    ).fetchall()
+    total = sum(len(str(row['message'] or '').encode('utf-8')) for row in rows)
+    if total <= DM_THREAD_MAX_BYTES:
+        return
+    delete_ids = []
+    for row in rows:
+        if total <= DM_THREAD_MAX_BYTES or len(rows) - len(delete_ids) <= 1:
+            break
+        delete_ids.append(row['id'])
+        total -= len(str(row['message'] or '').encode('utf-8'))
+    if delete_ids:
+        placeholders = ','.join('?' for _ in delete_ids)
+        conn.execute(f'DELETE FROM dm_messages WHERE id IN ({placeholders})', delete_ids)
+
+
+def _dm_unread_count_conn(conn, user_id):
+    row = conn.execute(
+        'SELECT COUNT(*) AS count FROM dm_messages WHERE recipient_user_id = ? AND read_at IS NULL AND hidden = 0',
+        (int(user_id),),
+    ).fetchone()
+    return int(row['count'] or 0) if row else 0
+
+
+def _get_or_create_dm_thread(conn, user_a, user_b):
+    low, high = _dm_user_pair(user_a, user_b)
+    now = utc_now()
+    row = conn.execute(
+        'SELECT * FROM dm_threads WHERE user_low_id = ? AND user_high_id = ?',
+        (low, high),
+    ).fetchone()
+    if row is not None:
+        return row
+    cur = conn.execute(
+        '''
+        INSERT INTO dm_threads (user_low_id, user_high_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?)
+        ''',
+        (low, high, now, now),
+    )
+    return conn.execute('SELECT * FROM dm_threads WHERE id = ?', (cur.lastrowid,)).fetchone()
+
+
+def _dm_message_row_to_dict(row):
+    if row is None:
+        return None
+    return {
+        'id': row['id'],
+        'thread_id': row['thread_id'],
+        'sender_user_id': row['sender_user_id'],
+        'recipient_user_id': row['recipient_user_id'],
+        'message': row['message'],
+        'risk_level': row['risk_level'],
+        'created_at': row['created_at'],
+        'read_at': row['read_at'],
+        'hidden': bool(row['hidden']),
+    }
+
+
+def dm_unread_count(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return 0
+    with get_db_connection() as conn:
+        _cleanup_old_dm_messages(conn)
+        row = conn.execute(
+            'SELECT COUNT(*) AS count FROM dm_messages WHERE recipient_user_id = ? AND read_at IS NULL AND hidden = 0',
+            (uid,),
+        ).fetchone()
+        conn.commit()
+        return int(row['count'] or 0) if row else 0
+
+
+def list_dm_threads(user_id, limit=50):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    safe_limit = max(1, min(int(limit or 50), 100))
+    with get_db_connection() as conn:
+        self_row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if self_row is None:
+            return None, '请先登录账号'
+        _cleanup_old_dm_messages(conn)
+        rows = conn.execute(
+            '''
+            SELECT t.*,
+                   (
+                       SELECT message FROM dm_messages m
+                       WHERE m.thread_id = t.id AND m.hidden = 0
+                       ORDER BY m.id DESC LIMIT 1
+                   ) AS last_message,
+                   (
+                       SELECT created_at FROM dm_messages m
+                       WHERE m.thread_id = t.id AND m.hidden = 0
+                       ORDER BY m.id DESC LIMIT 1
+                   ) AS last_message_at,
+                   (
+                       SELECT COUNT(*) FROM dm_messages m
+                       WHERE m.thread_id = t.id AND m.recipient_user_id = ? AND m.read_at IS NULL AND m.hidden = 0
+                   ) AS unread_count
+            FROM dm_threads t
+            WHERE t.user_low_id = ? OR t.user_high_id = ?
+            ORDER BY COALESCE(last_message_at, t.updated_at) DESC, t.id DESC
+            LIMIT ?
+            ''',
+            (uid, uid, uid, safe_limit),
+        ).fetchall()
+        items = []
+        for row in rows:
+            other_id = row['user_high_id'] if row['user_low_id'] == uid else row['user_low_id']
+            other = conn.execute('SELECT * FROM users WHERE id = ?', (other_id,)).fetchone()
+            if other is None:
+                continue
+            items.append({
+                'thread_id': row['id'],
+                'user': _basic_social_user(other),
+                'last_message': row['last_message'] or '',
+                'last_message_at': row['last_message_at'] or row['updated_at'],
+                'unread_count': int(row['unread_count'] or 0),
+                'friend_status': _friendship_status(conn, uid, other_id),
+            })
+        total_unread = _dm_unread_count_conn(conn, uid)
+        conn.commit()
+        return {'threads': items, 'unread_count': total_unread}, None
+
+
+def get_dm_messages(user_id, thread_id, mark_read=True, limit=100):
+    try:
+        uid = int(user_id)
+        tid = int(thread_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    safe_limit = max(1, min(int(limit or 100), 200))
+    with get_db_connection() as conn:
+        _cleanup_old_dm_messages(conn)
+        thread = conn.execute(
+            'SELECT * FROM dm_threads WHERE id = ? AND (user_low_id = ? OR user_high_id = ?)',
+            (tid, uid, uid),
+        ).fetchone()
+        if thread is None:
+            return None, '会话不存在'
+        other_id = thread['user_high_id'] if thread['user_low_id'] == uid else thread['user_low_id']
+        other = conn.execute('SELECT * FROM users WHERE id = ?', (other_id,)).fetchone()
+        if mark_read:
+            conn.execute(
+                'UPDATE dm_messages SET read_at = COALESCE(read_at, ?) WHERE thread_id = ? AND recipient_user_id = ? AND read_at IS NULL',
+                (utc_now(), tid, uid),
+            )
+        rows = conn.execute(
+            '''
+            SELECT * FROM dm_messages
+            WHERE thread_id = ? AND hidden = 0
+            ORDER BY id DESC
+            LIMIT ?
+            ''',
+            (tid, safe_limit),
+        ).fetchall()
+        conn.commit()
+        unread_count = _dm_unread_count_conn(conn, uid)
+        return {
+            'thread_id': tid,
+            'user': _basic_social_user(other),
+            'friend_status': _friendship_status(conn, uid, other_id),
+            'messages': [_dm_message_row_to_dict(row) for row in reversed(rows)],
+            'unread_count': unread_count,
+        }, None
+
+
+def send_dm_message(sender_user_id, target_identifier=None, target_user_id=None, message='', normalized_message='', risk_level=0, hidden=False):
+    try:
+        sender_id = int(sender_user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    text = str(message or '').strip()
+    if not text:
+        return None, '消息不能为空'
+    with get_db_connection() as conn:
+        _cleanup_old_dm_messages(conn)
+        sender = conn.execute('SELECT * FROM users WHERE id = ?', (sender_id,)).fetchone()
+        if sender is None:
+            return None, '请先登录账号'
+        target = None
+        if target_user_id is not None:
+            try:
+                target = conn.execute('SELECT * FROM users WHERE id = ?', (int(target_user_id),)).fetchone()
+            except (TypeError, ValueError):
+                target = None
+        if target is None:
+            target = _find_social_target(conn, target_identifier)
+        if target is None:
+            return None, '账号不存在'
+        target_id = int(target['id'])
+        if target_id == sender_id:
+            return None, '不能给自己发私信'
+        friend_status = _friendship_status(conn, sender_id, target_id)
+        thread = _get_or_create_dm_thread(conn, sender_id, target_id)
+        if friend_status != 'accepted':
+            sent_row = conn.execute(
+                '''
+                SELECT id FROM dm_messages
+                WHERE thread_id = ? AND sender_user_id = ? AND hidden = 0
+                LIMIT 1
+                ''',
+                (thread['id'], sender_id),
+            ).fetchone()
+            if sent_row is not None:
+                return None, '对方尚未同意好友，只能发送一条私信'
+        now = utc_now()
+        cur = conn.execute(
+            '''
+            INSERT INTO dm_messages (
+                thread_id, sender_user_id, recipient_user_id, message,
+                normalized_message, risk_level, created_at, hidden
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                thread['id'], sender_id, target_id, text,
+                str(normalized_message or '')[:1000],
+                int(risk_level or 0), now, 1 if hidden else 0,
+            ),
+        )
+        conn.execute('UPDATE dm_threads SET updated_at = ? WHERE id = ?', (now, thread['id']))
+        _trim_dm_thread_bytes(conn, thread['id'])
+        conn.commit()
+        row = conn.execute('SELECT * FROM dm_messages WHERE id = ?', (cur.lastrowid,)).fetchone()
+        data, _ = get_dm_messages(sender_id, thread['id'], mark_read=False, limit=100)
+        data = data or {}
+        data['sent_message'] = _dm_message_row_to_dict(row)
+        return data, None
 
 
 def save_match_summary(summary):

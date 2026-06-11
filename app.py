@@ -65,8 +65,10 @@ from db import (
     create_report_entry,
     create_remember_token,
     create_user,
+    dm_unread_count,
     find_user_for_admin,
     format_duration_zh,
+    get_dm_messages,
     get_admin_user_detail,
     get_chat_message_with_context,
     get_user_ban_status,
@@ -76,6 +78,7 @@ from db import (
     get_user_by_username,
     is_user_muted_db,
     list_friends,
+    list_dm_threads,
     list_card_draft_stats,
     list_reports,
     list_user_roles,
@@ -92,6 +95,7 @@ from db import (
     init_db,
     list_admin_users,
     save_match_summary,
+    send_dm_message,
     set_user_mute,
     update_user_skin,
     update_user_social_settings,
@@ -230,7 +234,7 @@ socketio = SocketIO(
     cors_allowed_origins="*",
     async_mode='eventlet' if eventlet is not None else 'threading',
     ping_interval=int(os.environ.get('GTN_SOCKET_PING_INTERVAL', '25')),
-    ping_timeout=int(os.environ.get('GTN_SOCKET_PING_TIMEOUT', '35')),
+    ping_timeout=int(os.environ.get('GTN_SOCKET_PING_TIMEOUT', '60')),
 )
 
 DB_AVAILABLE = True
@@ -245,12 +249,16 @@ except Exception as exc:
 _lock = threading.Lock()
 _replay_cleanup_lock = threading.Lock()
 _replay_cleanup_started = False
+_lobby_idle_cleanup_started = False
+_event_loop_watchdog_started = False
 _next_room_id = 0
 _COMMUNITY_API_RATE: dict = {}
 SERVER_STARTED_AT = time.time()
 RECONNECT_TIMEOUT_SECONDS = int(os.environ.get('RECONNECT_TIMEOUT_SECONDS', '120'))
 BOTH_DISCONNECTED_CLEANUP_SECONDS = int(os.environ.get('BOTH_DISCONNECTED_CLEANUP_SECONDS', '60'))
 GAME_OVER_CLEANUP_SECONDS = int(os.environ.get('GAME_OVER_CLEANUP_SECONDS', '300'))
+LOBBY_IDLE_TIMEOUT_SECONDS = int(os.environ.get('LOBBY_IDLE_TIMEOUT_SECONDS', '600'))
+LOBBY_IDLE_CHECK_SECONDS = int(os.environ.get('LOBBY_IDLE_CHECK_SECONDS', '60'))
 DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2:sha256:260000$82e7gAIa0D6034Qq$a0c9a5ad6028ce6c8798abc1314bc74b099b2441c3f39c3b3e6255ea2156f06b'
 ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', DEFAULT_ADMIN_PASSWORD_HASH)
 DEFAULT_BETA_ACCESS_KEY_HASH = 'scrypt:32768:8:1$GIMYfhSs9RpKMGUK$6f592ac96112ce2f7323012956fc2624890779b9f540c4b7601aff88e3635b3aea26157143eb26874b11cbe30f7da33b25e46285f1f547a846a3f12dc740eb0b'
@@ -313,6 +321,7 @@ CHAT_RATE_WINDOW_SECONDS = 60
 CHAT_RATE_LIMIT = 10
 CHAT_DISPLAY_WIDTH_LIMIT = 200
 CHAT_IDLE_SEPARATOR_SECONDS = 300
+MENTION_RATE_LIMIT = 5
 CHAT_EXEMPT_NAMES = set()
 
 
@@ -345,6 +354,7 @@ _RESOURCE_HISTORY_LAST_TS = 0.0
 SOCKET_LATENCY_SAMPLES = deque(maxlen=2000)
 SOCKET_ACTION_SAMPLES = deque(maxlen=2000)
 SOCKET_BROADCAST_SAMPLES = deque(maxlen=1000)
+EVENT_LOOP_LAG_SAMPLES = deque(maxlen=1000)
 
 try:
     import psutil
@@ -1260,6 +1270,97 @@ def chat_mute_key(sid, player):
     return f"user:{player.get('user_id')}" if (player or {}).get('user_id') else f"sid:{sid}"
 
 
+def _chat_exempt_from_user_id(user_id):
+    if not DB_AVAILABLE or not user_id:
+        return False
+    try:
+        profile = get_user_role_profile(user_id)
+        return bool(profile and profile.get('chat_exempt'))
+    except Exception:
+        return False
+
+
+def _validate_chat_text_for_sender(raw_text, *, exempt=False):
+    raw = validate_str(raw_text, max_len=1000 if exempt else 200, name='chat text', truncate=True)
+    text = normalize_chat_text(raw, exempt=exempt)
+    if not text.strip():
+        return None, None
+    risk = check_message_risk(text)
+    risk_level = int(risk.get('risk_level') or 0)
+    risk_action = str(risk.get('action') or '')
+    normalized_message = risk.get('normalized_message') or normalize_message(text)
+    if risk_action == 'mask_flag' or risk_level >= 3:
+        text = risk.get('sanitized_text') or text
+    return text, {
+        'risk': risk,
+        'risk_level': risk_level,
+        'risk_action': risk_action,
+        'matched_rules': list(risk.get('matched_rules') or []),
+        'normalized_message': normalized_message,
+    }
+
+
+def _online_lobby_mention_candidates(beta_mode=False):
+    items = []
+    for target_sid, target in players.items():
+        if target.get('status') != 'lobby':
+            continue
+        if bool(target.get('beta_mode', False)) != bool(beta_mode):
+            continue
+        name = str(target.get('nickname') or '').strip()
+        if not name:
+            continue
+        items.append({
+            'sid': target_sid,
+            'user_id': target.get('user_id'),
+            'nickname': name,
+            'player_id': target.get('player_id') or '',
+            'key': normalize_username_key(name),
+        })
+    return items
+
+
+def _extract_lobby_mentions(text, beta_mode=False):
+    mentions = []
+    if not text or '@' not in text:
+        return mentions
+    candidates = _online_lobby_mention_candidates(beta_mode)
+    seen = set()
+    for candidate in candidates:
+        names = [candidate.get('nickname') or '', candidate.get('player_id') or '']
+        for raw_name in names:
+            token = str(raw_name or '').strip()
+            if not token:
+                continue
+            pattern = re.compile(r'(?<!\S)@' + re.escape(token) + r'(?![\w\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af-])', re.IGNORECASE)
+            if not pattern.search(text):
+                continue
+            key = candidate.get('user_id') or candidate.get('sid') or candidate.get('nickname')
+            if key in seen:
+                continue
+            seen.add(key)
+            mentions.append({
+                'sid': candidate.get('sid'),
+                'user_id': candidate.get('user_id'),
+                'nickname': candidate.get('nickname'),
+                'player_id': candidate.get('player_id'),
+            })
+            break
+    return mentions
+
+
+def _emit_dm_update_for_user(user_id):
+    if not user_id:
+        return
+    try:
+        unread = dm_unread_count(user_id) if DB_AVAILABLE else 0
+    except Exception:
+        unread = 0
+    for target_sid, target in list(players.items()):
+        if str(target.get('user_id') or '') == str(user_id or ''):
+            socketio.emit('dm_update', {'unread_count': unread}, room=target_sid)
+
+
 def _chat_entry_signature(entry):
     if not isinstance(entry, dict) or entry.get('type') != 'chat':
         return None
@@ -1650,11 +1751,60 @@ def public_player_info(sid, player=None):
         'sid': sid,
         'nickname': p.get('nickname', '?'),
         'mode': p.get('mode', '1v1'),
+        'user_id': p.get('user_id'),
+        'is_registered_user': bool(p.get('is_registered_user')),
         'skin': public_skin_config(p.get('skin')),
         'skin_look': normalize_skin_look(p.get('skin_look')),
     }
     info.update(special_public_fields(p))
     return info
+
+
+def mark_lobby_activity(sid, now=None):
+    player = players.get(sid)
+    if not player or player.get('status') != 'lobby':
+        return
+    player['last_lobby_activity_at'] = float(now or time.time())
+
+
+def _lobby_idle_cleanup_worker():
+    while True:
+        try:
+            try:
+                socketio.sleep(max(5, int(LOBBY_IDLE_CHECK_SECONDS)))
+            except Exception:
+                time.sleep(max(5, int(LOBBY_IDLE_CHECK_SECONDS)))
+            now = time.time()
+            stale_sids = []
+            with _lock:
+                for sid, player in list(players.items()):
+                    if player.get('status') != 'lobby':
+                        continue
+                    last_activity = float(player.get('last_lobby_activity_at') or player.get('login_at') or now)
+                    if now - last_activity >= LOBBY_IDLE_TIMEOUT_SECONDS:
+                        stale_sids.append(sid)
+            if not stale_sids:
+                continue
+            for sid in stale_sids:
+                try:
+                    socketio.emit('kicked', {'reason': '大厅空闲超过10分钟，已断开连接'}, room=sid)
+                    socketio.server.disconnect(sid)
+                except Exception as exc:
+                    admin_event('error', f'lobby idle disconnect failed for {sid}: {exc}')
+            admin_event('player', f'lobby idle cleanup kicked {len(stale_sids)} player(s)')
+        except Exception as exc:
+            admin_event('error', f'lobby idle cleanup worker error: {exc}')
+
+
+def ensure_lobby_idle_cleanup_started():
+    global _lobby_idle_cleanup_started
+    if _lobby_idle_cleanup_started:
+        return
+    _lobby_idle_cleanup_started = True
+    try:
+        socketio.start_background_task(_lobby_idle_cleanup_worker)
+    except Exception:
+        threading.Thread(target=_lobby_idle_cleanup_worker, name='lobby-idle-cleanup', daemon=True).start()
 
 
 def player_is_admin(sid, room=None):
@@ -1887,6 +2037,8 @@ def socket_guard(event_name, data=None, *, require_player=True, allow_empty=Fals
     if not _socket_rate_allowed(sid, event_name, exempt=exempt):
         _security_illegal(sid, event_name, '操作过于频繁', emit_error=emit_error, severity='high')
         return None
+    if player and player.get('status') == 'lobby':
+        mark_lobby_activity(sid)
     return payload
 
 
@@ -2871,6 +3023,53 @@ def record_socket_broadcast(room, duration_ms, recipients=0):
     })
 
 
+def record_event_loop_lag(lag_ms):
+    try:
+        value = float(lag_ms)
+    except (TypeError, ValueError):
+        return
+    if value < 0 or value > 10 * 60 * 1000:
+        return
+    EVENT_LOOP_LAG_SAMPLES.append({
+        'ts': time.time(),
+        'lag_ms': round(value, 2),
+    })
+
+
+def _event_loop_watchdog_worker():
+    interval = _env_float('GTN_EVENT_LOOP_WATCHDOG_INTERVAL', 1.0)
+    warn_ms = _env_float('GTN_EVENT_LOOP_LAG_WARN_MS', 3000)
+    last_warn = 0.0
+    expected = time.monotonic() + interval
+    while True:
+        try:
+            try:
+                socketio.sleep(interval)
+            except Exception:
+                time.sleep(interval)
+            now = time.monotonic()
+            lag_ms = max(0.0, (now - expected) * 1000.0)
+            record_event_loop_lag(lag_ms)
+            if lag_ms >= warn_ms and time.time() - last_warn >= 30:
+                last_warn = time.time()
+                admin_event('suspicious', f'event loop lag {lag_ms:.0f}ms; Socket.IO may disconnect clients')
+            expected = now + interval
+        except Exception as exc:
+            admin_event('error', f'event loop watchdog error: {exc}')
+            expected = time.monotonic() + interval
+
+
+def ensure_event_loop_watchdog_started():
+    global _event_loop_watchdog_started
+    if _event_loop_watchdog_started:
+        return
+    _event_loop_watchdog_started = True
+    try:
+        socketio.start_background_task(_event_loop_watchdog_worker)
+    except Exception:
+        threading.Thread(target=_event_loop_watchdog_worker, name='event-loop-watchdog', daemon=True).start()
+
+
 def _recent_samples(samples, seconds=300):
     cutoff = time.time() - seconds
     return [item for item in samples if item.get('ts', 0) >= cutoff]
@@ -2880,6 +3079,7 @@ def socket_metrics_payload():
     latency = _recent_samples(SOCKET_LATENCY_SAMPLES, 300)
     actions = _recent_samples(SOCKET_ACTION_SAMPLES, 300)
     broadcasts = _recent_samples(SOCKET_BROADCAST_SAMPLES, 300)
+    loop_lag = _recent_samples(EVENT_LOOP_LAG_SAMPLES, 300)
     action_by_name = {}
     for item in actions:
         bucket = action_by_name.setdefault(item.get('event') or '?', [])
@@ -2911,6 +3111,13 @@ def socket_metrics_payload():
             'avg_ms': _avg(item.get('duration_ms') for item in broadcasts),
             'p95_ms': _p95(item.get('duration_ms') for item in broadcasts),
             'latest_ms': broadcasts[-1].get('duration_ms') if broadcasts else None,
+        },
+        'event_loop': {
+            'lag_count': len(loop_lag),
+            'lag_avg_ms': _avg(item.get('lag_ms') for item in loop_lag),
+            'lag_p95_ms': _p95(item.get('lag_ms') for item in loop_lag),
+            'lag_latest_ms': loop_lag[-1].get('lag_ms') if loop_lag else None,
+            'lag_max_ms': max([float(item.get('lag_ms') or 0) for item in loop_lag] or [0]),
         },
     }
 
@@ -4528,12 +4735,10 @@ def send_game_state_to(room, pidx):
     if sid not in players:
         return
     phase = room.engine.phase
-    emit_room_game_phase(room, sid, phase)
-    if phase == 'event_select':
-        send_event_state(room, pidx)
-    elif phase == 'draft':
-        send_draft_state(room, pidx)
+    if phase in ('event_select', 'draft'):
+        send_pregame_state(room, pidx, allow_sub_choice=True)
     else:
+        emit_room_game_phase(room, sid, phase)
         state = room.engine.get_public_state(pidx)
         state['your_id'] = pidx
         state['mode'] = room.mode
@@ -4628,6 +4833,30 @@ def send_event_sub_choice_state(room, pidx):
     }
     payload.update(room_mod_payload(room))
     socketio.emit('event_sub_choice', payload, room=sid)
+
+
+def send_pregame_state(room, pidx, allow_sub_choice=False):
+    """Send the correct pre-game UI for one player.
+
+    Opening setup now allows players in the same room to be in different
+    states: one can still be choosing setup while another is already drafting.
+    Do not broadcast draft_state blindly, or the setup UI disappears.
+    """
+    sid = room.player_sids[pidx]
+    if sid not in players:
+        return
+    engine = room.engine
+    status = engine.get_player_status(pidx)
+    if status == 'event_select':
+        emit_room_game_phase(room, sid, 'event_select')
+        send_event_state(room, pidx)
+        return
+    if status == 'sub_choice' and allow_sub_choice:
+        emit_room_game_phase(room, sid, 'draft')
+        send_event_sub_choice_state(room, pidx)
+        return
+    emit_room_game_phase(room, sid, 'draft')
+    send_draft_state(room, pidx)
 
 
 def start_game(room):
@@ -5971,6 +6200,101 @@ def api_social_settings_update():
     return jsonify({'success': True, 'settings': settings, 'user': auth_user_payload(user)})
 
 
+@app.route('/api/social/dm/threads')
+def api_social_dm_threads():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    data, error = list_dm_threads(user_id, limit=request.args.get('limit', 50))
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, **(data or {})})
+
+
+@app.route('/api/social/dm/messages')
+def api_social_dm_messages():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    data, error = get_dm_messages(
+        user_id,
+        request.args.get('thread_id'),
+        mark_read=str(request.args.get('mark_read', '1')).lower() not in ('0', 'false', 'no'),
+        limit=request.args.get('limit', 100),
+    )
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    _emit_dm_update_for_user(user_id)
+    return jsonify({'success': True, **(data or {})})
+
+
+@app.route('/api/social/dm/send', methods=['POST'])
+def api_social_dm_send():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, user, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    muted, mute_info = is_user_muted_db(user_id)
+    if muted:
+        remaining = 0
+        try:
+            until_dt = datetime.fromisoformat(str(mute_info.get('muted_until') or '').replace('Z', '+00:00'))
+            remaining = max(0, int((until_dt - datetime.now(timezone.utc)).total_seconds()))
+        except Exception:
+            remaining = 0
+        return jsonify({'success': False, **muted_error_payload(remaining)}), 403
+    data = request.get_json(silent=True) or {}
+    exempt = _chat_exempt_from_user_id(user_id)
+    rate_key = f'dm:{user_id}'
+    if not exempt:
+        if not rate_limiter(f'{rate_key}:fast', limit=1, window=2):
+            return jsonify({'success': False, 'error': '聊天发送过快'}), 429
+        if not rate_limiter(f'{rate_key}:burst', limit=5, window=10):
+            return jsonify({'success': False, 'error': '聊天发送过快'}), 429
+        if not rate_limiter(f'{rate_key}:minute', limit=CHAT_RATE_LIMIT, window=CHAT_RATE_WINDOW_SECONDS):
+            return jsonify({'success': False, 'error': '聊天发送过快'}), 429
+    try:
+        text, chat_risk = _validate_chat_text_for_sender(data.get('text', ''), exempt=exempt)
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    if not text:
+        return jsonify({'success': False, 'error': '消息不能为空'}), 400
+    risk_level = int(chat_risk.get('risk_level') or 0)
+    risk_action = str(chat_risk.get('risk_action') or '')
+    normalized_message = chat_risk.get('normalized_message') or normalize_message(text)
+    if risk_action == 'reject_mute' or risk_level >= 4:
+        try:
+            set_user_mute(user_id, user or '', 300, 'severe private message risk', 'system')
+        except Exception as exc:
+            admin_event('error', f'failed to persist severe dm mute: {exc}')
+        return jsonify({'success': False, **muted_error_payload(300, message='消息包含高风险内容，已被拦截并临时禁言')}), 403
+    result, error = send_dm_message(
+        user_id,
+        target_identifier=data.get('identifier'),
+        target_user_id=data.get('target_user_id'),
+        message=text,
+        normalized_message=normalized_message,
+        risk_level=risk_level,
+        hidden=False,
+    )
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    recipient_id = None
+    sent = (result or {}).get('sent_message') or {}
+    try:
+        recipient_id = int(sent.get('recipient_user_id'))
+    except Exception:
+        recipient_id = None
+    _emit_dm_update_for_user(user_id)
+    _emit_dm_update_for_user(recipient_id)
+    return jsonify({'success': True, **(result or {})})
+
+
 @app.route('/api/cards')
 def api_cards():
     try:
@@ -6466,6 +6790,8 @@ def admin_set_attr(room_id):
 @socketio.on('connect')
 def on_connect():
     sid = request.sid
+    ensure_event_loop_watchdog_started()
+    ensure_lobby_idle_cleanup_started()
     if not rate_limiter(f'connect-ip:{_client_ip()}', limit=30, window=60):
         record_suspicious_event('connect_rate_ip', 'Socket connect IP rate limited', sid=sid, ip=_client_ip(), severity='high')
         socketio.server.disconnect(sid)
@@ -6558,11 +6884,12 @@ def on_draft_reroll(data=None):
             if pidx < 0:
                 return
             engine = room.engine
-            success = engine.draft_reroll(pidx)
+            result = engine.draft_reroll(pidx)
+            success = bool(result.get('success')) if isinstance(result, dict) else bool(result)
             if success:
                 record_room_replay_action(room, 'draft_reroll', pidx, {})
                 for pi in range(len(room.player_sids)):
-                    send_draft_state(room, pi)
+                    send_pregame_state(room, pi)
             else:
                 emit('server_error', {'message': '无法刷新：当前不是选牌阶段或刷新次数已用完'})
     except Exception as e:
@@ -6670,10 +6997,13 @@ def on_login(data):
             if reconnect_room:
                 break
         initial_status = 'reconnecting' if reconnect_room else 'lobby'
+        login_now = time.time()
         players[sid] = {
             'nickname': name,
             'room_id': None,
             'status': initial_status,
+            'login_at': login_now,
+            'last_lobby_activity_at': login_now,
             'mods_hash': loadout['mods_hash'],
             'loadout_hash': loadout['loadout_hash'],
             'v2_loadout_hash': loadout.get('v2_loadout_hash', ''),
@@ -7503,18 +7833,17 @@ def on_chat(data):
                 emit('server_error', {'message': '聊天发送过快'})
                 return
         try:
-            raw_text = validate_str(data.get('text', ''), max_len=1000 if exempt else 200, name='chat text', truncate=True)
+            text, chat_risk = _validate_chat_text_for_sender(data.get('text', ''), exempt=exempt)
         except ValueError as exc:
             _security_illegal(sid, 'chat', str(exc), severity='low')
             return
-        text = normalize_chat_text(raw_text, exempt=exempt)
-        if not text.strip():
+        if not text:
             return
-        risk = check_message_risk(text)
-        risk_level = int(risk.get('risk_level') or 0)
-        risk_action = str(risk.get('action') or '')
-        matched_rules = list(risk.get('matched_rules') or [])
-        normalized_message = risk.get('normalized_message') or normalize_message(text)
+        risk = chat_risk.get('risk') or {}
+        risk_level = int(chat_risk.get('risk_level') or 0)
+        risk_action = str(chat_risk.get('risk_action') or '')
+        matched_rules = list(chat_risk.get('matched_rules') or [])
+        normalized_message = chat_risk.get('normalized_message') or normalize_message(text)
         if risk_action == 'reject_mute' or risk_level >= 4:
             if DB_AVAILABLE:
                 try:
@@ -7643,6 +7972,24 @@ def on_chat(data):
             emit_chat_to(list(room.player_sids) + list(room.spectators), chat_data)
         else:
             beta_mode = bool(player.get('beta_mode', False))
+            mentions = _extract_lobby_mentions(text, beta_mode=beta_mode)
+            if mentions and not exempt:
+                mention_key = f"mention:{chat_rate_key(sid, player)}"
+                if not rate_limiter(mention_key, limit=MENTION_RATE_LIMIT, window=60):
+                    _security_record('mention_rate', 'lobby mention rate limited', sid=sid, severity='medium')
+                    emit('server_error', {'message': '@发送过快'})
+                    return
+            if mentions:
+                chat_data['mentions'] = [
+                    {
+                        'user_id': item.get('user_id'),
+                        'nickname': item.get('nickname'),
+                        'player_id': item.get('player_id'),
+                    }
+                    for item in mentions
+                ]
+                chat_data['mention_user_ids'] = [item.get('user_id') for item in mentions if item.get('user_id')]
+                chat_data['mention_names'] = [item.get('nickname') for item in mentions if item.get('nickname')]
             will_fold = lobby_chat_would_fold_locked(chat_data, now, beta_mode=beta_mode)
             if not will_fold and not check_chat_rate_locked(sid, player, now):
                 _security_record('chat_rate', 'lobby chat rate limited', sid=sid, severity='medium')
@@ -7685,12 +8032,14 @@ def on_draft_pick(data):
         if not def_id:
             return
         draft_options_before = [card.def_id for card in (engine.draft_options[pidx] or [])]
-        success = engine.draft_pick(pidx, def_id)
+        pick_result = engine.draft_pick(pidx, def_id)
+        success = bool(pick_result.get('success')) if isinstance(pick_result, dict) else bool(pick_result)
         if not success:
             if not engine.draft_options[pidx]:
                 engine._generate_draft_options_for_player(pidx)
             draft_options_before = [card.def_id for card in (engine.draft_options[pidx] or [])]
-            success = engine.draft_pick(pidx, def_id)
+            pick_result = engine.draft_pick(pidx, def_id)
+            success = bool(pick_result.get('success')) if isinstance(pick_result, dict) else bool(pick_result)
         if success:
             if DB_AVAILABLE and room.mode in ('1v1', '2v2'):
                 try:
@@ -7701,14 +8050,15 @@ def on_draft_pick(data):
             # Check if THIS player finished drafting
             if len(engine.draft_picks[pidx]) >= DECK_SIZE:
                 if engine.needs_sub_choice(pidx):
-                    # This player needs sub-choice, send it immediately
-                    send_event_sub_choice_state(room, pidx)
+                    # This player needs sub-choice; the per-player pregame
+                    # update below will send the correct prompt only to them.
+                    pass
                 else:
                     # No sub-choice needed, mark as ready
                     engine.player_ready[pidx] = True
             # Send updated draft state to all players
             for pi in range(len(room.player_sids)):
-                send_draft_state(room, pi)
+                send_pregame_state(room, pi, allow_sub_choice=(pi == pidx))
             # Check if all players are ready
             if all(engine.player_ready[pi] for pi in range(len(room.player_sids))):
                 start_game(room)
@@ -7755,12 +8105,11 @@ def on_select_opening_event(data):
             engine.start_draft_for_player(pidx)
             record_room_replay_keyframe(room, 'draft_start')
             psid = room.player_sids[pidx]
-            emit_room_game_phase(room, psid, 'draft')
-            send_draft_state(room, pidx)
+            send_pregame_state(room, pidx)
             # Notify other players about this player's event selection
             for pi in range(len(room.player_sids)):
                 if pi != pidx:
-                    send_event_state(room, pi)
+                    send_pregame_state(room, pi)
 
 
 @socketio.on('reroll_opening_event')
@@ -7812,11 +8161,15 @@ def on_submit_event_sub_choice(data):
         else:
             # Mark as completed even with no sub_choice (for events that don't need one)
             engine.opening_event_sub_choices[pidx] = {}
+        record_room_replay_action(room, 'submit_event_sub_choice', pidx, {
+            'event_id': engine.opening_event_picks[pidx],
+            'sub_choice': sub_choice or {},
+        })
         # Mark this player as ready
         engine.player_ready[pidx] = True
         # Send updated draft state to all players
         for pi in range(len(room.player_sids)):
-            send_draft_state(room, pi)
+            send_pregame_state(room, pi)
         # Check if all players are ready
         if all(engine.player_ready[pi] for pi in range(len(room.player_sids))):
             start_game(room)
@@ -8809,13 +9162,12 @@ def on_rematch(data=None):
                             emit_room_game_phase(room, psid, 'playing')
                     broadcast_game_state(room)
                 else:
-                    room.engine.start_draft()
-                    record_room_replay_keyframe(room, 'draft_start')
+                    room.engine.start_event_select_first()
+                    record_room_replay_keyframe(room, 'event_select_start')
                     for pidx in range(len(room.player_sids)):
                         psid = room.player_sids[pidx]
                         if psid in players:
-                            emit_room_game_phase(room, psid, 'draft')
-                            send_draft_state(room, pidx)
+                            send_pregame_state(room, pidx)
     except Exception as e:
         import traceback
         traceback.print_exc()

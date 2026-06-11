@@ -520,6 +520,11 @@ class GameEngine2v2(GameEngine):
     def _check_game_over(self):
         if self._game_over_defer_depth > 0:
             return
+        for i in range(self.num_players):
+            if self.players[i].health <= 0:
+                self._check_yggdrasil(i)
+                if self.game_over:
+                    return
         team0_alive = any(self.players[p].health > 0 for p in self.teams[0])
         team1_alive = any(self.players[p].health > 0 for p in self.teams[1])
         if not team0_alive and not team1_alive:
@@ -1253,6 +1258,8 @@ class GameEngine2v2(GameEngine):
         )
         actual = self._run_v2_damage_modifiers(damage_context, actual)
         if getattr(self, 'pending_v2_ui', None):
+            return 0
+        if actual <= 0:
             return 0
         ps.health -= actual
         self._record_damage(player_id, actual, source_id)

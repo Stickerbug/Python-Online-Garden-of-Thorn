@@ -7,7 +7,7 @@
 <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/static/css/style.css?v=212">
+    <link rel="stylesheet" href="/static/css/style.css?v=215">
 <script>
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
@@ -111,8 +111,26 @@
   <div class="friend-add-row">
     <input type="text" id="input-friend-identifier" maxlength="16" placeholder="输入昵称或ID">
     <button id="btn-friend-add" class="mini-btn" type="button">添加</button>
+    <button id="btn-dm-start" class="mini-btn" type="button">私信</button>
   </div>
   <p id="friends-error" class="error-text"></p>
+  <div class="friend-section dm-section">
+    <div class="friend-section-title">
+      <span id="dm-title">私信</span>
+      <button id="btn-dm-refresh" class="mini-btn" type="button">刷新</button>
+    </div>
+    <div class="dm-layout">
+      <div id="dm-thread-list" class="dm-thread-list"></div>
+      <div class="dm-chat-panel">
+        <div id="dm-chat-title" class="dm-chat-title">选择一个会话</div>
+        <div id="dm-message-list" class="dm-message-list"></div>
+        <div class="dm-input-row">
+          <input type="text" id="dm-message-input" maxlength="200" placeholder="输入私信...">
+          <button id="btn-dm-send" class="mini-btn" type="button">发送</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <div id="friend-incoming-section" class="friend-section">
     <div id="friend-incoming-title" class="friend-section-title">好友请求</div>
     <div id="friend-incoming-list" class="friend-list"></div>
@@ -790,6 +808,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-    <script src="/static/js/game.js?v=253"></script>
+    <script src="/static/js/game.js?v=257"></script>
 </body>
 </html>

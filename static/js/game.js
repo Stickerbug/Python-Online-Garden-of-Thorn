@@ -85,8 +85,8 @@ const I18N = {
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_sticky: 'Sticky', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_stealth: 'Stealth', flag_revealed: 'Revealed',
-        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_sticky: 'Sticky', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_stealth: 'Stealth', tag_revealed: 'Revealed',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_stealth: 'Stealth', flag_revealed: 'Revealed',
+        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_stealth: 'Stealth', tag_revealed: 'Revealed',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
@@ -195,7 +195,7 @@ I18N.zh = { ...I18N.en,
     status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_sticky: '粘滞', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隐匿', flag_revealed: '被揭示',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隐匿', flag_revealed: '被揭示',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张牌堆顶的牌抽取', foresight_replace_confirm: '抽取',
@@ -237,7 +237,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_sticky: '粘滞', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隐匿', tag_revealed: '被揭示',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隐匿', tag_revealed: '被揭示',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
@@ -320,7 +320,7 @@ I18N.fr = { ...I18N.en,
     set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks doivent avoir exactement 15 cartes',
     solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
     edit_tags: 'Modifier tags', tag_precision: 'Précision', tag_exile: 'Exil', tag_non_stackable: 'Non-cumul',
-    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Soi uniquement', tag_uncancellable: 'Non annulable', tag_sticky: 'Collant', tag_copy: 'Copie', tag_unique: 'Unique', tag_swift: 'Rapidité', tag_stealth: 'Furtif', tag_revealed: 'Révélé', tag_infinite_exclude: 'Retiré d’Infinite Fire',
+    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Soi uniquement', tag_uncancellable: 'Non annulable', tag_rebound: 'Retour', tag_copy: 'Copie', tag_unique: 'Unique', tag_swift: 'Rapidité', tag_stealth: 'Furtif', tag_revealed: 'Révélé', tag_infinite_exclude: 'Retiré d’Infinite Fire',
     fusion_layer: 'Fusion', fission_layer: 'Fission',
     app_subtitle: 'Combat de cartes en réseau local',
     nickname_placeholder: 'Saisir un pseudo',
@@ -389,7 +389,7 @@ I18N.pt = { ...I18N.en,
     set_next_draw: 'Definir Próxima Compra', solo_saved: 'Decks salvos', solo_need_15: 'Ambos os decks devem ter exatamente 15 cartas',
     solo_event_a: 'Evento inicial', solo_event_b: 'Evento do oponente', no_event: 'Nenhum',
     edit_tags: 'Editar tags', tag_precision: 'Precisão', tag_exile: 'Exílio', tag_non_stackable: 'Não acumula',
-    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Somente si', tag_uncancellable: 'Não cancelável', tag_copy: 'Cópia', tag_unique: 'Único', tag_swift: 'Rapidez', tag_stealth: 'Furtivo', tag_revealed: 'Revelado', tag_infinite_exclude: 'Removido do Infinite Fire', tag_sticky: 'Pegajoso',
+    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Somente si', tag_uncancellable: 'Não cancelável', tag_copy: 'Cópia', tag_unique: 'Único', tag_swift: 'Rapidez', tag_stealth: 'Furtivo', tag_revealed: 'Revelado', tag_infinite_exclude: 'Removido do Infinite Fire', tag_rebound: 'Retorno',
     fusion_layer: 'Fusão', fission_layer: 'Fissão',
     app_subtitle: 'Batalha de cartas em rede local',
     nickname_placeholder: 'Digite um apelido',
@@ -458,7 +458,7 @@ I18N.ru = { ...I18N.en,
     set_next_draw: 'Задать следующую карту', solo_saved: 'Колоды сохранены', solo_need_15: 'В обеих колодах должно быть ровно 15 карт',
     solo_event_a: 'Ваше стартовое событие', solo_event_b: 'Событие соперника', no_event: 'Нет',
     edit_tags: 'Изменить теги', tag_precision: 'Точность', tag_exile: 'Изгнание', tag_non_stackable: 'Не складывается',
-    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота', tag_self_only: 'Только на себя', tag_uncancellable: 'Нельзя отменить', tag_copy: 'Копия', tag_unique: 'Уникальный', tag_swift: 'Стремительность', tag_stealth: 'Скрытность', tag_revealed: 'Раскрыто', tag_infinite_exclude: 'Удалено из Infinite Fire', tag_sticky: 'Липкость',
+    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота', tag_self_only: 'Только на себя', tag_uncancellable: 'Нельзя отменить', tag_copy: 'Копия', tag_unique: 'Уникальный', tag_swift: 'Стремительность', tag_stealth: 'Скрытность', tag_revealed: 'Раскрыто', tag_infinite_exclude: 'Удалено из Infinite Fire', tag_rebound: 'Возврат',
     fusion_layer: 'Слияние', fission_layer: 'Деление',
     app_subtitle: 'Карточная дуэль по локальной сети',
     nickname_placeholder: 'Введите никнейм',
@@ -527,7 +527,7 @@ I18N.ja = { ...I18N.en,
     set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '両方のデッキは15枚ちょうど必要です',
     solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
     edit_tags: 'タグ編集', tag_precision: '精密', tag_exile: '追放', tag_non_stackable: '非重複',
-    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '自分専用', tag_uncancellable: 'キャンセル不可', tag_copy: '複製', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隠密', tag_revealed: '公開', tag_infinite_exclude: 'Infinite Fireから削除', tag_sticky: '粘着',
+    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '自分専用', tag_uncancellable: 'キャンセル不可', tag_copy: '複製', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隠密', tag_revealed: '公開', tag_infinite_exclude: 'Infinite Fireから削除', tag_rebound: '回転',
     fusion_layer: '融合', fission_layer: '分裂',
     app_subtitle: 'LANカード対戦',
     nickname_placeholder: 'ニックネームを入力',
@@ -672,7 +672,7 @@ Object.assign(I18N.zh, {
     tag_desc_copy: '抽牌关键词。当此牌进入手中时，将层数张放逐复制加入手中。',
     tag_desc_unique: '牌库关键词。整场对局自己总牌库中仅允许出现一张，多余的将被放逐。',
     tag_desc_swift: '费用关键词。此牌的E消耗减少X（最低0E）。',
-    tag_desc_sticky: '结算去向关键词。带有粘滞的牌打出并结算后，会在本局内回到使用者手牌；具体回手时机由卡牌效果决定。',
+    tag_desc_rebound: '结算去向关键词。带有回转的牌打出并结算后，会立即回到使用者手牌。',
     tag_desc_stealth: '响应关键词。此牌不会触发对手的响应窗口。',
     tag_desc_revealed: '可见性关键词。此牌在手中时永久对对手展示。',
     tag_desc_default: '模组或扩展标签。该标签的具体含义由对应模组或卡牌效果定义。'
@@ -727,7 +727,7 @@ Object.assign(I18N.en, {
     tag_desc_copy: 'Draw keyword. When this card enters your hand, add N exile copies to your hand.',
     tag_desc_unique: 'Deck keyword. Only one copy of this card is allowed in your deck; extras are exiled.',
     tag_desc_swift: 'Cost keyword. This card\'s E cost is reduced by X (minimum 0E).',
-    tag_desc_sticky: 'Resolution keyword. After being played and resolved, this card can return to its user’s hand during this match. The exact timing is defined by the card effect.',
+    tag_desc_rebound: 'Resolution keyword. After being played and resolved, this card immediately returns to its user’s hand.',
     tag_desc_default: 'Mod or extension tag. Its exact meaning is defined by the relevant mod or card effect.',
     tag_desc_stealth: 'Response keyword. This card does not trigger opponent response windows.',
     tag_desc_revealed: 'Visibility keyword. This card is permanently visible to the opponent while in hand.'
@@ -912,7 +912,7 @@ Object.assign(I18N.fr, {
     tag_desc_copy: 'Mot-clé de pioche. Quand cette carte entre en main, ajoute N copies exilées.',
     tag_desc_unique: 'Mot-clé de deck. Une seule copie autorisée; les excédentaires sont exilées.',
     tag_desc_swift: 'Mot-clé de coût. Le coût E de cette carte est réduit de X (minimum 0E).',
-    tag_desc_sticky: 'Mot-clé de résolution. Après avoir été jouée et résolue, cette carte peut revenir dans la main de son utilisateur pendant cette partie. Le moment exact est défini par l’effet de carte.',
+    tag_desc_rebound: 'Mot-clé de résolution. Après avoir été jouée et résolue, cette carte revient immédiatement dans la main de son utilisateur.',
     tag_desc_default: 'Tag de mod ou d\'extension. Son sens exact est défini par le mod ou l\'effet de carte correspondant.',
     tag_desc_stealth: 'Mot-clé de réponse. Cette carte ne déclenche pas la fenêtre de réponse adverse.',
     tag_desc_revealed: 'Mot-clé de visibilité. Cette carte est visible en permanence pour l\'adversaire en main.'
@@ -933,7 +933,7 @@ Object.assign(I18N.pt, {
     tag_desc_copy: 'Palavra-chave de compra. Quando esta carta entra na mão, adicione N cópias exiladas.',
     tag_desc_unique: 'Palavra-chave de deck. Apenas uma cópia permitida; extras são exiladas.',
     tag_desc_swift: 'Palavra-chave de custo. O custo E desta carta é reduzido em X (mínimo 0E).',
-    tag_desc_sticky: 'Palavra-chave de resolução. Depois de jogada e resolvida, esta carta pode voltar para a mão do usuário durante a partida. O momento exato é definido pelo efeito da carta.',
+    tag_desc_rebound: 'Palavra-chave de resolução. Depois de jogada e resolvida, esta carta volta imediatamente para a mão do usuário.',
     tag_desc_default: 'Tag de mod ou extensão. O significado exato é definido pelo mod ou pelo efeito da carta.',
     tag_desc_stealth: 'Palavra-chave de resposta. Esta carta não aciona a janela de resposta do oponente.',
     tag_desc_revealed: 'Palavra-chave de visibilidade. Esta carta é visível permanentemente para o oponente na mão.'
@@ -954,7 +954,7 @@ Object.assign(I18N.ru, {
     tag_desc_copy: 'Ключевое слово добора. Когда карта попадает в руку, добавьте N изгнанных копий.',
     tag_desc_unique: 'Ключевое слово колоды. Допускается только одна копия; лишние изгоняются.',
     tag_desc_swift: 'Ключевое слово стоимости. Стоимость E снижается на X (минимум 0E).',
-    tag_desc_sticky: 'Ключевое слово разрешения. После розыгрыша и разрешения эта карта может вернуться в руку пользователя в этой партии. Точный момент задается эффектом карты.',
+    tag_desc_rebound: 'Ключевое слово разрешения. После розыгрыша и разрешения эта карта сразу возвращается в руку пользователя.',
     tag_desc_default: 'Тег мода или расширения. Точное значение задается соответствующим модом или эффектом карты.',
     tag_desc_stealth: 'Ключевое слово ответа. Эта карта не вызывает окно ответа противника.',
     tag_desc_revealed: 'Ключевое слово видимости. Эта карта постоянно видна противнику в руке.'
@@ -975,7 +975,7 @@ Object.assign(I18N.ja, {
     tag_desc_copy: 'ドローキーワード。このカードが手札に入った時、追放コピーをN枚手札に加える。',
     tag_desc_unique: 'デッキキーワード。デッキに1枚のみ許可され、超過分は追放される。',
     tag_desc_swift: 'コストキーワード。このカードのE消費がX減少（最低0E）。',
-    tag_desc_sticky: '解決先キーワード。打ち出して解決した後、この対局中に使用者の手札へ戻ることがあります。具体的なタイミングはカード効果で決まります。',
+    tag_desc_rebound: '解決先キーワード。打ち出して解決した後、ただちに使用者の手札へ戻ります。',
     tag_desc_default: 'Mod または拡張タグです。具体的な意味は対応する Mod またはカード効果で定義されます。',
     tag_desc_stealth: '応答キーワード。このカードは相手の応答ウィンドウをトリガーしません。',
     tag_desc_revealed: '可視性キーワード。このカードは手札にある間、相手に永久に表示されます。'
@@ -1887,6 +1887,8 @@ function setPlayerNameContent(el, player, options = {}) {
     el.classList.toggle('admin-name', isAdminPlayer(player));
     el.classList.toggle('bloom-name', getSpecialRoleColor(player) === 'bloom');
     el.classList.toggle('guard-name', getSpecialRoleColor(player) === 'guard');
+    el.classList.toggle('account-name', !!(player && player.is_registered_user) && !isSpecialPlayer(player));
+    el.classList.toggle('guest-name', !!(player && !player.is_registered_user) && !isSpecialPlayer(player));
 }
 
 function appendPlayerNameNode(parent, player, options = {}) {
@@ -2088,7 +2090,7 @@ const CARD_FLAG_STYLES = {
     self_only: { label: '', fg: '#2f3542', bg: 'rgba(47,53,66,0.12)', cls: 'self-only' },
     uncancellable: { label: '', fg: '#7f1d1d', bg: 'rgba(127,29,29,0.12)', cls: 'uncancellable' },
     infinite_exclude: { label: '', fg: '#455A64', bg: 'rgba(69,90,100,0.12)', cls: 'infinite-exclude' },
-    sticky: { label: '', fg: '#9B59B6', bg: 'rgba(155,89,182,0.14)', cls: 'sticky' },
+    rebound: { label: '', fg: '#9B59B6', bg: 'rgba(155,89,182,0.14)', cls: 'rebound' },
     copy: { label: '', fg: '#e17055', bg: 'rgba(225,112,85,0.15)', cls: 'copy' },
     unique: { label: '', fg: '#fdcb6e', bg: 'rgba(253,203,110,0.15)', cls: 'unique' },
     swift: { label: '', fg: '#0984e3', bg: 'rgba(9,132,227,0.15)', cls: 'swift' },
@@ -2110,7 +2112,7 @@ const CARD_FLAG_TERM_COLORS = {
     self_only: '#2f3542',
     uncancellable: '#7f1d1d',
     infinite_exclude: '#455A64',
-    sticky: '#9B59B6',
+    rebound: '#9B59B6',
     copy: '#e17055',
     unique: '#fdcb6e',
     swift: '#0984e3',
@@ -2126,10 +2128,12 @@ const CARD_FLAG_ALIASES = {
     'troll_cards:exile': 'exile',
     'tag_troll_cards_exile': 'exile',
     'troll_cards_exile': 'exile',
-    'tag_thorn_cards_supplement_1:sticky': 'sticky',
-    'thorn_cards_supplement_1:sticky': 'sticky',
-    'tag_thorn_cards_supplement_1_sticky': 'sticky',
-    'thorn_cards_supplement_1_sticky': 'sticky',
+    sticky: 'rebound',
+    tag_sticky: 'rebound',
+    'tag_thorn_cards_supplement_1:sticky': 'rebound',
+    'thorn_cards_supplement_1:sticky': 'rebound',
+    'tag_thorn_cards_supplement_1_sticky': 'rebound',
+    'thorn_cards_supplement_1_sticky': 'rebound',
     'tag_troll_cards:copy': 'copy',
     'troll_cards:copy': 'copy',
     'tag_troll_cards:unique': 'unique',
@@ -2143,7 +2147,7 @@ const CARD_FLAG_ALIASES = {
 const _VANILLA_FLAGS = new Set([
     'precision', 'exile', 'non_stackable', 'indestructible', 'sprout',
     'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
-    'infinite_exclude', 'sticky', 'copy', 'unique',
+    'infinite_exclude', 'rebound', 'copy', 'unique',
     'swift', 'stealth', 'revealed',
 ]);
 
@@ -2152,7 +2156,7 @@ function normalizeCardFlag(flag) {
     if (!text) return '';
     const lower = text.toLowerCase();
     if (CARD_FLAG_ALIASES[lower]) return CARD_FLAG_ALIASES[lower];
-    // Auto-strip namespace prefix for known vanilla flags (e.g. "factory:sticky" -> "sticky")
+    // Auto-strip namespace prefix for known vanilla flags (e.g. "factory:rebound" -> "rebound")
     if (lower.includes(':')) {
         const local = lower.split(':').pop();
         if (_VANILLA_FLAGS.has(local)) return local;
@@ -2649,6 +2653,13 @@ let currentAccount = loadCachedAccount();
 let accountMode = 'login';
 let socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
 let friendsMessageTimer = null;
+let dmData = { threads: [], unread_count: 0 };
+let activeDmThreadId = null;
+let activeDmTargetUserId = null;
+let activeDmMessages = [];
+let lobbyMentionCandidates = [];
+let lobbyMentionMenu = null;
+let lobbyMentionActiveRange = null;
 let accountReplayItems = [];
 let accountReplayTimeline = [];
 let accountReplayFrameIndex = 0;
@@ -6124,7 +6135,7 @@ function getIntroFlagDescription(flag, custom = null) {
         self_only: '只能对自己使用；2v2 中不能选择队友或敌人。',
         uncancellable: '相关选择窗口不能取消，避免免费查看隐藏信息后退出选择。',
         infinite_exclude: '不会进入无限火力随机牌池。',
-        sticky: '打出并结算后回到手中。',
+        rebound: '打出并结算后立即回到手中。',
         copy: '进入手中时，将层数张放逐复制加入手中。',
         unique: '整场对局自己总牌库中仅允许出现一张，多余的将被放逐。',
         swift: 'E花费减少X，最少为0。',
@@ -6929,6 +6940,11 @@ function connectSocket(serverUrl) {
     });
     socket.on('lobby_chat_history', (data) => {
         renderLobbyChatHistory(data || {});
+    });
+    socket.on('dm_update', (data = {}) => {
+        dmData.unread_count = Number(data.unread_count || dmData.unread_count || 0);
+        updateFriendsBadge();
+        loadDmThreads(false);
     });
     socket.on('invite_received', (data) => {
         debugLog('[client] invite_received:', data);
@@ -8031,6 +8047,7 @@ function replayTimeText(ms) {
 
 function replayActionLabel(frame) {
     if (!frame) return '';
+    if (frame.phase === 'setup_summary' || frame.setup_summary) return '配装与起手';
     const action = frame.action || null;
     const snapshot = getReplaySnapshot(frame);
     const names = Array.isArray(snapshot.player_names) ? snapshot.player_names : [];
@@ -8060,6 +8077,94 @@ function replayActionLabel(frame) {
     };
     const label = typeMap[action.type] || action.type || '动作';
     return [actorName, label, cardName, targetName ? `→ ${targetName}` : ''].filter(Boolean).join(' ');
+}
+
+function ensureReplaySetupOverlay() {
+    let overlay = $('account-replay-setup-overlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'account-replay-setup-overlay';
+    overlay.className = 'account-replay-setup-overlay hidden';
+    document.body.appendChild(overlay);
+    return overlay;
+}
+
+function hideReplaySetupOverlay() {
+    const overlay = $('account-replay-setup-overlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+function replaySetupCardChip(cardDict) {
+    const chip = createCardChoiceChip(cardDict || {}, { hideInstanceOnlyFlags: false });
+    chip.classList.add('replay-setup-card-chip');
+    return chip;
+}
+
+function renderReplaySetupOverlay(frame) {
+    const overlay = ensureReplaySetupOverlay();
+    const summary = (frame && frame.setup_summary) || {};
+    const players = Array.isArray(summary.players) ? summary.players : [];
+    overlay.innerHTML = '';
+    const panel = document.createElement('div');
+    panel.className = 'account-replay-setup-panel';
+
+    const head = document.createElement('div');
+    head.className = 'account-replay-setup-head';
+    const title = document.createElement('div');
+    title.className = 'account-replay-setup-title';
+    title.textContent = '配装与起手';
+    const note = document.createElement('div');
+    note.className = 'account-replay-setup-note';
+    note.textContent = summary.note || '回放已跳过配装、选牌和开局抽牌过程。';
+    head.append(title, note);
+    panel.appendChild(head);
+
+    const grid = document.createElement('div');
+    grid.className = 'account-replay-setup-grid';
+    players.forEach((player, index) => {
+        const card = document.createElement('div');
+        card.className = 'account-replay-setup-player';
+        const name = document.createElement('div');
+        name.className = 'account-replay-setup-player-name';
+        name.textContent = localizeCanonicalPlayerName(player.name || `P${index + 1}`);
+        const event = document.createElement('div');
+        event.className = 'account-replay-setup-event';
+        event.textContent = player.event_name ? `配装：${player.event_name}` : '配装：未记录';
+        card.append(name, event);
+
+        const changes = Array.isArray(player.changes) ? player.changes.filter(item => item && item.text) : [];
+        if (changes.length) {
+            const changeBox = document.createElement('div');
+            changeBox.className = 'account-replay-setup-changes';
+            changes.slice(0, 8).forEach(item => {
+                const line = document.createElement('div');
+                line.className = 'account-replay-setup-change';
+                line.textContent = item.label ? `${item.label}：${item.text}` : String(item.text || '');
+                changeBox.appendChild(line);
+            });
+            card.appendChild(changeBox);
+        }
+
+        const handTitle = document.createElement('div');
+        handTitle.className = 'account-replay-setup-hand-title';
+        handTitle.textContent = '起手';
+        const hand = document.createElement('div');
+        hand.className = 'account-replay-setup-hand';
+        const handCards = Array.isArray(player.hand) ? player.hand : [];
+        if (handCards.length) {
+            handCards.forEach(cardDict => hand.appendChild(replaySetupCardChip(cardDict)));
+        } else {
+            const empty = document.createElement('span');
+            empty.className = 'account-replay-setup-empty';
+            empty.textContent = '未记录';
+            hand.appendChild(empty);
+        }
+        card.append(handTitle, hand);
+        grid.appendChild(card);
+    });
+    panel.appendChild(grid);
+    overlay.appendChild(panel);
+    overlay.classList.remove('hidden');
 }
 
 function ensureAccountReplayPlaybackBar() {
@@ -8297,6 +8402,11 @@ function renderAccountReplayFrame() {
     phase = replayState.phase || 'action';
     syncBattleLogMatch(replayState);
     renderGame(replayState);
+    if (frame.phase === 'setup_summary' || frame.setup_summary) {
+        renderReplaySetupOverlay(frame);
+    } else {
+        hideReplaySetupOverlay();
+    }
     renderAccountReplayPlaybackBar();
     const meta = $('account-replay-meta');
     if (meta) meta.textContent = replayActionLabel(frame);
@@ -8408,6 +8518,7 @@ function closeAccountReplayModal() {
     if (modal) modal.classList.add('hidden');
     const bar = $('account-replay-playback-bar');
     if (bar) bar.classList.add('hidden');
+    hideReplaySetupOverlay();
     replayMode = false;
     accountReplayData = null;
     accountReplayTimeline = [];
@@ -8649,6 +8760,10 @@ async function onAccountLogout() {
     } catch (_) {}
     currentAccount = null;
     socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
+    dmData = { threads: [], unread_count: 0 };
+    activeDmThreadId = null;
+    activeDmTargetUserId = null;
+    activeDmMessages = [];
     accountReplayItems = [];
     accountReplayTimeline = [];
     closeAccountReplayModal();
@@ -8719,7 +8834,11 @@ function friendCardHtml(item, type) {
           <button class="mini-btn" type="button" data-friend-respond="${escapeHtml(item.request_id)}" data-friend-action="decline">${escapeHtml(UI.friend_decline)}</button>
           <button class="mini-btn" type="button" data-friend-respond="${escapeHtml(item.request_id)}" data-friend-action="ignore">${escapeHtml(UI.friend_ignore)}</button>`;
     } else if (type === 'friend') {
-        actions = `<button class="mini-btn" type="button" data-friend-remove="${escapeHtml(user.id)}">${escapeHtml(UI.friend_remove)}</button>`;
+        actions = `
+          <button class="mini-btn" type="button" data-dm-open-user="${escapeHtml(user.id)}" data-dm-open-name="${escapeHtml(user.username || '')}">私信</button>
+          <button class="mini-btn" type="button" data-friend-remove="${escapeHtml(user.id)}">${escapeHtml(UI.friend_remove)}</button>`;
+    } else {
+        actions = `<button class="mini-btn" type="button" data-dm-open-user="${escapeHtml(user.id)}" data-dm-open-name="${escapeHtml(user.username || '')}">私信</button>`;
     }
     const noticeText = isNotice ? `<div class="friend-sub friend-notice">${escapeHtml(tf('friend_auto_added', user.username || '-'))}</div>` : '';
     return `
@@ -8751,6 +8870,7 @@ function renderFriendsState() {
     renderFriendSection('friend-incoming-list', socialData.incoming, UI.friend_request_empty, 'incoming');
     renderFriendSection('friend-outgoing-list', socialData.outgoing, UI.friend_sent_empty, 'outgoing');
     renderFriendSection('friends-list', socialData.friends, UI.friend_empty, 'friend');
+    renderDmThreads();
     updateFriendsBadge();
 }
 
@@ -8776,7 +8896,7 @@ function setFriendsError(message, tone = 'error', autoHideMs = 0) {
 function updateFriendsBadge() {
     const btn = $('btn-friends-top');
     if (!btn) return;
-    const count = Number(socialData.unread_count || 0);
+    const count = Number(socialData.unread_count || 0) + Number(dmData.unread_count || 0);
     if (count > 0) {
         btn.dataset.badge = count > 99 ? '99+' : String(count);
         btn.classList.add('has-badge');
@@ -8808,6 +8928,156 @@ async function loadFriends(markRead = false) {
             renderSocialSettings();
         }
         renderFriendsState();
+        loadDmThreads(false);
+    } catch (err) {
+        setFriendsError(err.message || UI.account_error);
+    }
+}
+
+function renderDmThreads() {
+    const list = $('dm-thread-list');
+    if (!list) return;
+    const threads = Array.isArray(dmData.threads) ? dmData.threads : [];
+    if (!threads.length) {
+        list.innerHTML = `<div class="friend-empty">暂无私信</div>`;
+    } else {
+        list.innerHTML = threads.map(thread => {
+            const user = thread.user || {};
+            const unread = Number(thread.unread_count || 0);
+            const active = String(thread.thread_id) === String(activeDmThreadId);
+            return `
+              <button class="dm-thread-item${active ? ' active' : ''}" type="button" data-dm-thread="${escapeHtml(thread.thread_id)}">
+                <span class="dm-thread-name">${escapeHtml(user.username || '-')}</span>
+                ${unread > 0 ? `<span class="dm-unread">${escapeHtml(unread > 99 ? '99+' : String(unread))}</span>` : ''}
+                <span class="dm-thread-preview">${escapeHtml(thread.last_message || '暂无消息')}</span>
+              </button>`;
+        }).join('');
+    }
+    const title = $('dm-title');
+    if (title) {
+        const unread = Number(dmData.unread_count || 0);
+        title.textContent = unread > 0 ? `私信 (${unread > 99 ? '99+' : unread})` : '私信';
+    }
+}
+
+function renderDmMessages() {
+    const list = $('dm-message-list');
+    if (!list) return;
+    if (!activeDmThreadId && !activeDmTargetUserId) {
+        list.innerHTML = `<div class="friend-empty">选择会话或输入昵称/ID后发送第一条私信</div>`;
+        const title = $('dm-chat-title');
+        if (title) title.textContent = '选择一个会话';
+        return;
+    }
+    const currentUserId = currentAccount && currentAccount.id;
+    list.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    (Array.isArray(activeDmMessages) ? activeDmMessages : []).forEach(msg => {
+        const row = document.createElement('div');
+        row.className = Number(msg.sender_user_id) === Number(currentUserId) ? 'dm-message self' : 'dm-message other';
+        const bubble = document.createElement('div');
+        bubble.className = 'dm-bubble';
+        bubble.textContent = msg.message || '';
+        row.appendChild(bubble);
+        fragment.appendChild(row);
+    });
+    list.appendChild(fragment);
+    list.scrollTop = list.scrollHeight;
+}
+
+async function loadDmThreads(renderOnly = true) {
+    if (!currentAccount) {
+        dmData = { threads: [], unread_count: 0 };
+        activeDmThreadId = null;
+        activeDmTargetUserId = null;
+        activeDmMessages = [];
+        renderDmThreads();
+        renderDmMessages();
+        updateFriendsBadge();
+        return;
+    }
+    try {
+        const data = await authRequest('/api/social/dm/threads?limit=80');
+        dmData = {
+            threads: Array.isArray(data.threads) ? data.threads : [],
+            unread_count: Number(data.unread_count || 0),
+        };
+        renderDmThreads();
+        updateFriendsBadge();
+        if (!renderOnly && activeDmThreadId) {
+            await openDmThread(activeDmThreadId);
+        }
+    } catch (err) {
+        setFriendsError(err.message || UI.account_error);
+    }
+}
+
+async function openDmThread(threadId) {
+    if (!threadId) return;
+    try {
+        const data = await authRequest(`/api/social/dm/messages?thread_id=${encodeURIComponent(threadId)}&limit=120&mark_read=1`);
+        activeDmThreadId = data.thread_id || threadId;
+        activeDmTargetUserId = data.user && data.user.id;
+        activeDmMessages = Array.isArray(data.messages) ? data.messages : [];
+        const title = $('dm-chat-title');
+        if (title) title.textContent = data.user && data.user.username ? `与 ${data.user.username} 的私信` : '私信';
+        dmData.unread_count = Number(data.unread_count || 0);
+        renderDmThreads();
+        renderDmMessages();
+        updateFriendsBadge();
+    } catch (err) {
+        setFriendsError(err.message || UI.account_error);
+    }
+}
+
+function startDmToUser(userId, username = '') {
+    activeDmThreadId = null;
+    activeDmTargetUserId = userId || null;
+    activeDmMessages = [];
+    const title = $('dm-chat-title');
+    if (title) title.textContent = username ? `给 ${username} 发私信` : '新私信';
+    renderDmThreads();
+    renderDmMessages();
+    const input = $('dm-message-input');
+    if (input) input.focus();
+}
+
+async function startDmFromIdentifier() {
+    const input = $('input-friend-identifier');
+    const identifier = (input?.value || '').trim();
+    if (!identifier) return;
+    activeDmThreadId = null;
+    activeDmTargetUserId = null;
+    activeDmMessages = [];
+    const title = $('dm-chat-title');
+    if (title) title.textContent = `给 ${identifier} 发私信`;
+    const msgInput = $('dm-message-input');
+    if (msgInput) msgInput.focus();
+}
+
+async function sendDmMessage() {
+    const input = $('dm-message-input');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    const identifier = ($('input-friend-identifier')?.value || '').trim();
+    const payload = { text };
+    if (activeDmTargetUserId) payload.target_user_id = activeDmTargetUserId;
+    else if (identifier) payload.identifier = identifier;
+    else {
+        setFriendsError('请选择私信对象或输入昵称/ID');
+        return;
+    }
+    try {
+        const data = await authRequest('/api/social/dm/send', payload);
+        input.value = '';
+        activeDmThreadId = data.thread_id || activeDmThreadId;
+        activeDmTargetUserId = data.user && data.user.id ? data.user.id : activeDmTargetUserId;
+        activeDmMessages = Array.isArray(data.messages) ? data.messages : activeDmMessages;
+        const title = $('dm-chat-title');
+        if (title && data.user && data.user.username) title.textContent = `与 ${data.user.username} 的私信`;
+        await loadDmThreads(true);
+        renderDmMessages();
     } catch (err) {
         setFriendsError(err.message || UI.account_error);
     }
@@ -13256,6 +13526,57 @@ function appendLobbyChat(nick, text, meta = {}) {
     });
 }
 
+function currentUserMentionKeys() {
+    const keys = new Set();
+    if (currentAccount) {
+        if (currentAccount.id != null) keys.add(`user:${currentAccount.id}`);
+        if (currentAccount.username) keys.add(`name:${String(currentAccount.username).toLowerCase()}`);
+        if (currentAccount.player_id) keys.add(`pid:${String(currentAccount.player_id).toUpperCase()}`);
+    }
+    if (nickname) keys.add(`name:${String(nickname).toLowerCase()}`);
+    return keys;
+}
+
+function entryMentionsCurrentUser(entry) {
+    const mentions = Array.isArray(entry.mentions) ? entry.mentions : [];
+    if (!mentions.length) return false;
+    const keys = currentUserMentionKeys();
+    return mentions.some(item => {
+        if (!item) return false;
+        if (item.user_id != null && keys.has(`user:${item.user_id}`)) return true;
+        if (item.nickname && keys.has(`name:${String(item.nickname).toLowerCase()}`)) return true;
+        if (item.player_id && keys.has(`pid:${String(item.player_id).toUpperCase()}`)) return true;
+        return false;
+    });
+}
+
+function appendChatTextWithMentions(parent, text, mentions = []) {
+    const raw = String(text || '');
+    const mentionNames = [];
+    (Array.isArray(mentions) ? mentions : []).forEach(item => {
+        if (!item) return;
+        if (item.nickname) mentionNames.push(String(item.nickname));
+        if (item.player_id) mentionNames.push(String(item.player_id));
+    });
+    const unique = [...new Set(mentionNames.filter(Boolean))].sort((a, b) => b.length - a.length);
+    if (!unique.length) {
+        parent.appendChild(document.createTextNode(raw));
+        return;
+    }
+    const pattern = new RegExp('(@(?:' + unique.map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + '))(?![\\w\\u4e00-\\u9fff\\u3040-\\u30ff\\uac00-\\ud7af-])', 'gi');
+    let last = 0;
+    raw.replace(pattern, (match, token, offset) => {
+        if (offset > last) parent.appendChild(document.createTextNode(raw.slice(last, offset)));
+        const span = document.createElement('span');
+        span.className = 'chat-mention-token';
+        span.textContent = match;
+        parent.appendChild(span);
+        last = offset + match.length;
+        return match;
+    });
+    if (last < raw.length) parent.appendChild(document.createTextNode(raw.slice(last)));
+}
+
 function appendLobbyChatEntry(entry = {}) {
     const container = $('lobby-chat-log');
     if (!container) return;
@@ -13278,7 +13599,8 @@ function appendLobbyChatEntry(entry = {}) {
     const nick = entry.display_nick || getChatDisplayName(entry);
     nameSpan.textContent = entry.system ? `${nick} ` : `${nick}: `;
     el.appendChild(nameSpan);
-    el.appendChild(document.createTextNode(entry.text || ''));
+    if (entryMentionsCurrentUser(entry)) el.classList.add('mention-flash');
+    appendChatTextWithMentions(el, entry.text || '', entry.mentions || []);
     const repeatCount = Number(entry.repeat_count || entry.repeatCount || 1);
     if (repeatCount > 1) {
         const repeatSpan = document.createElement('span');
@@ -13311,6 +13633,7 @@ function renderLobbyChatHistory(data = {}) {
         entry && entry.display_time,
         entry && entry.chat_channel,
         entry && entry.system,
+        entry && JSON.stringify(entry.mentions || []),
     ]));
     if (signature === lobbyChatHistorySignature) return;
     lobbyChatHistorySignature = signature;
@@ -13388,7 +13711,92 @@ function cardHasExileLikeExit(card) {
         ...((cardDef && cardDef.flags) || []),
         ...((card && card.instance_flags) || []),
     ]);
-    return flags.has('exile') || flags.has('void');
+    return flags.has('exile');
+}
+
+function ensureLobbyMentionMenu() {
+    if (lobbyMentionMenu) return lobbyMentionMenu;
+    lobbyMentionMenu = document.createElement('div');
+    lobbyMentionMenu.id = 'lobby-mention-menu';
+    lobbyMentionMenu.className = 'mention-menu hidden';
+    document.body.appendChild(lobbyMentionMenu);
+    lobbyMentionMenu.addEventListener('mousedown', (event) => {
+        const item = event.target.closest('[data-mention-index]');
+        if (!item) return;
+        event.preventDefault();
+        const idx = Number(item.dataset.mentionIndex);
+        const candidate = lobbyMentionCandidates[idx];
+        if (candidate) insertLobbyMention(candidate);
+    });
+    return lobbyMentionMenu;
+}
+
+function getLobbyMentionCandidates() {
+    const selfKeys = currentUserMentionKeys();
+    return (Array.isArray(lobbyPlayers) ? lobbyPlayers : [])
+        .map(player => ({
+            nickname: player.nickname || player.name || '',
+            player_id: player.player_id || '',
+            user_id: player.user_id || '',
+        }))
+        .filter(item => item.nickname && !selfKeys.has(`name:${String(item.nickname).toLowerCase()}`));
+}
+
+function findLobbyMentionRange(input) {
+    if (!input) return null;
+    const value = input.value || '';
+    const pos = input.selectionStart ?? value.length;
+    const before = value.slice(0, pos);
+    const match = before.match(/(^|\s)@([^\s@]*)$/);
+    if (!match) return null;
+    const start = before.length - match[0].length + match[1].length;
+    return { start, end: pos, query: match[2] || '' };
+}
+
+function updateLobbyMentionMenu() {
+    const input = $('lobby-chat-input');
+    const menu = ensureLobbyMentionMenu();
+    const range = findLobbyMentionRange(input);
+    lobbyMentionActiveRange = range;
+    if (!input || !range) {
+        menu.classList.add('hidden');
+        return;
+    }
+    const query = String(range.query || '').toLowerCase();
+    lobbyMentionCandidates = getLobbyMentionCandidates()
+        .filter(item => !query || String(item.nickname).toLowerCase().includes(query) || String(item.player_id).toLowerCase().includes(query))
+        .slice(0, 8);
+    if (!lobbyMentionCandidates.length) {
+        menu.classList.add('hidden');
+        return;
+    }
+    menu.innerHTML = lobbyMentionCandidates.map((item, index) => `
+        <button type="button" class="mention-menu-item" data-mention-index="${index}">
+          <span>@${escapeHtml(item.nickname)}</span>
+          ${item.player_id ? `<small>${escapeHtml(item.player_id)}</small>` : ''}
+        </button>
+    `).join('');
+    const rect = input.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, rect.left)}px`;
+    menu.style.top = `${Math.max(8, rect.top - Math.min(220, menu.offsetHeight || 180) - 6)}px`;
+    menu.style.width = `${Math.min(260, Math.max(180, rect.width))}px`;
+    menu.classList.remove('hidden');
+}
+
+function insertLobbyMention(candidate) {
+    const input = $('lobby-chat-input');
+    if (!input || !lobbyMentionActiveRange) return;
+    const value = input.value || '';
+    const token = `@${candidate.nickname} `;
+    input.value = value.slice(0, lobbyMentionActiveRange.start) + token + value.slice(lobbyMentionActiveRange.end);
+    const pos = lobbyMentionActiveRange.start + token.length;
+    input.focus();
+    input.setSelectionRange(pos, pos);
+    if (lobbyMentionMenu) lobbyMentionMenu.classList.add('hidden');
+}
+
+function clearLobbyMentionFlash() {
+    document.querySelectorAll('#lobby-chat-log .mention-flash').forEach(el => el.classList.remove('mention-flash'));
 }
 
 function markRecentlyPlayedExileCard(card) {
@@ -15945,6 +16353,15 @@ async function init() {
     if ($('btn-friends-popover-close')) $('btn-friends-popover-close').addEventListener('click', () => toggleFriendsPopover(false));
     if ($('btn-account-popover-logout')) $('btn-account-popover-logout').addEventListener('click', onAccountLogout);
     if ($('btn-friend-add')) $('btn-friend-add').addEventListener('click', addFriendFromInput);
+    if ($('btn-dm-start')) $('btn-dm-start').addEventListener('click', startDmFromIdentifier);
+    if ($('btn-dm-refresh')) $('btn-dm-refresh').addEventListener('click', () => loadDmThreads(false));
+    if ($('btn-dm-send')) $('btn-dm-send').addEventListener('click', sendDmMessage);
+    const dmMessageInput = $('dm-message-input');
+    if (dmMessageInput) {
+        dmMessageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendDmMessage();
+        });
+    }
     const friendIdentifierInput = $('input-friend-identifier');
     if (friendIdentifierInput) {
         friendIdentifierInput.addEventListener('keydown', (e) => {
@@ -15962,6 +16379,18 @@ async function init() {
         if (removeBtn) {
             event.preventDefault();
             removeFriend(removeBtn.dataset.friendRemove);
+            return;
+        }
+        const dmThreadBtn = event.target.closest('[data-dm-thread]');
+        if (dmThreadBtn) {
+            event.preventDefault();
+            openDmThread(dmThreadBtn.dataset.dmThread);
+            return;
+        }
+        const dmUserBtn = event.target.closest('[data-dm-open-user]');
+        if (dmUserBtn) {
+            event.preventDefault();
+            startDmToUser(dmUserBtn.dataset.dmOpenUser, dmUserBtn.dataset.dmOpenName || '');
         }
     });
     if ($('btn-account-replays-refresh')) $('btn-account-replays-refresh').addEventListener('click', loadAccountReplays);
@@ -16186,7 +16615,21 @@ async function init() {
     });
     $('btn-lobby-chat-send').addEventListener('click', onLobbyChatSend);
     $('lobby-chat-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && lobbyMentionMenu) lobbyMentionMenu.classList.add('hidden');
+        if (e.key === 'Enter' && lobbyMentionMenu && !lobbyMentionMenu.classList.contains('hidden') && lobbyMentionCandidates[0]) {
+            e.preventDefault();
+            insertLobbyMention(lobbyMentionCandidates[0]);
+            return;
+        }
         if (e.key === 'Enter') onLobbyChatSend();
+    });
+    $('lobby-chat-input').addEventListener('input', updateLobbyMentionMenu);
+    $('lobby-chat-input').addEventListener('focus', () => {
+        clearLobbyMentionFlash();
+        updateLobbyMentionMenu();
+    });
+    $('lobby-chat-input').addEventListener('blur', () => {
+        setTimeout(() => { if (lobbyMentionMenu) lobbyMentionMenu.classList.add('hidden'); }, 120);
     });
     $('btn-game-chat-send').addEventListener('click', onGameChatSend);
     $('game-chat-input').addEventListener('keydown', (e) => {

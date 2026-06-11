@@ -10,10 +10,12 @@ CARD_FLAG_ALIASES = {
     'troll_cards:exile': 'exile',
     'tag_troll_cards_exile': 'exile',
     'troll_cards_exile': 'exile',
-    'tag_thorn_cards_supplement_1:sticky': 'sticky',
-    'thorn_cards_supplement_1:sticky': 'sticky',
-    'tag_thorn_cards_supplement_1_sticky': 'sticky',
-    'thorn_cards_supplement_1_sticky': 'sticky',
+    'sticky': 'rebound',
+    'tag_sticky': 'rebound',
+    'tag_thorn_cards_supplement_1:sticky': 'rebound',
+    'thorn_cards_supplement_1:sticky': 'rebound',
+    'tag_thorn_cards_supplement_1_sticky': 'rebound',
+    'thorn_cards_supplement_1_sticky': 'rebound',
     'copy': 'copy',
     'unique': 'unique',
     'swift': 'swift',
@@ -25,7 +27,7 @@ CARD_FLAG_ALIASES = {
 _VANILLA_FLAGS = {
     'precision', 'exile', 'non_stackable', 'indestructible', 'sprout',
     'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
-    'infinite_exclude', 'sticky', 'copy', 'unique',
+    'infinite_exclude', 'rebound', 'copy', 'unique',
     'swift', 'stealth', 'revealed', 'rebound', 'nothingness',
 }
 
@@ -37,7 +39,7 @@ def normalize_card_flag(flag: Any) -> str:
     lower = text.lower()
     if lower in CARD_FLAG_ALIASES:
         return CARD_FLAG_ALIASES[lower]
-    # Auto-strip namespace prefix for known vanilla flags (e.g. "factory:sticky" -> "sticky")
+    # Auto-strip namespace prefix for known vanilla flags (e.g. "factory:rebound" -> "rebound")
     if ':' in lower:
         _, local = lower.split(':', 1)
         if local in _VANILLA_FLAGS:
