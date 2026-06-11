@@ -7,13 +7,18 @@
 <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/static/css/style.css?v=215">
+    <link rel="stylesheet" href="/static/css/style.css?v=217">
 <script>
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
   const betaExactKeys = new Set(['gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated']);
   const betaKey = (key) => window.__GTN_BETA_MODE__ && betaExactKeys.has(key) ? `gtn_beta_${key.slice(4)}` : key;
-  const lang = localStorage.getItem(betaKey('gtn_lang')) || 'zh';
+  const supportedLangs = new Set(['zh', 'en', 'fr', 'pt', 'ja']);
+  let lang = localStorage.getItem(betaKey('gtn_lang')) || 'zh';
+  if (!supportedLangs.has(lang)) {
+    lang = 'zh';
+    localStorage.setItem(betaKey('gtn_lang'), lang);
+  }
   const migrationKey = betaKey('gtn_ui_style_v2_migrated');
   const uiStyleKey = betaKey('gtn_ui_style');
   let uiStyle = localStorage.getItem(uiStyleKey) || 'minimal';
@@ -45,9 +50,11 @@
     </div>
   </div>
 </div>
+<div class="top-action-buttons">
 <button id="btn-account-top" class="account-top-btn">账号</button>
 <button id="btn-friends-top" class="friends-top-btn hidden">好友</button>
 <button id="btn-skin-top" class="skin-top-btn">皮肤</button>
+</div>
 <div id="account-popover" class="account-popover hidden">
   <div class="account-popover-head">
     <div id="account-popover-title" class="account-popover-title">账号</div>
@@ -114,34 +121,61 @@
     <button id="btn-dm-start" class="mini-btn" type="button">私信</button>
   </div>
   <p id="friends-error" class="error-text"></p>
-  <div class="friend-section dm-section">
-    <div class="friend-section-title">
-      <span id="dm-title">私信</span>
-      <button id="btn-dm-refresh" class="mini-btn" type="button">刷新</button>
-    </div>
-    <div class="dm-layout">
-      <div id="dm-thread-list" class="dm-thread-list"></div>
-      <div class="dm-chat-panel">
-        <div id="dm-chat-title" class="dm-chat-title">选择一个会话</div>
-        <div id="dm-message-list" class="dm-message-list"></div>
-        <div class="dm-input-row">
-          <input type="text" id="dm-message-input" maxlength="200" placeholder="输入私信...">
-          <button id="btn-dm-send" class="mini-btn" type="button">发送</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div id="friend-incoming-section" class="friend-section">
-    <div id="friend-incoming-title" class="friend-section-title">好友请求</div>
-    <div id="friend-incoming-list" class="friend-list"></div>
-  </div>
-  <div id="friend-outgoing-section" class="friend-section">
-    <div id="friend-outgoing-title" class="friend-section-title">已发送</div>
-    <div id="friend-outgoing-list" class="friend-list"></div>
-  </div>
   <div class="friend-section">
     <div id="friend-list-title" class="friend-section-title">我的好友</div>
     <div id="friends-list" class="friend-list"></div>
+  </div>
+</div>
+<div id="social-detail-modal" class="social-detail-modal hidden">
+  <div class="social-detail-inner">
+    <div class="account-popover-head">
+      <div id="social-detail-title" class="account-popover-title">社交</div>
+      <button id="btn-social-detail-close" class="account-close-btn" type="button">×</button>
+    </div>
+    <div class="social-detail-body">
+      <aside class="social-detail-nav">
+        <button class="social-detail-tab active" type="button" data-social-detail-tab="profile">资料</button>
+        <button class="social-detail-tab" type="button" data-social-detail-tab="dm">私信</button>
+        <button class="social-detail-tab" type="button" data-social-detail-tab="incoming">好友请求</button>
+        <button class="social-detail-tab" type="button" data-social-detail-tab="outgoing">已发送</button>
+      </aside>
+      <section class="social-detail-content">
+        <div id="social-detail-page-profile" class="social-detail-page">
+          <div id="friend-detail-profile" class="friend-detail-profile"></div>
+        </div>
+        <div id="social-detail-page-dm" class="social-detail-page hidden">
+          <div class="friend-section dm-section">
+            <div class="friend-section-title">
+              <span id="dm-title">私信</span>
+              <button id="btn-dm-refresh" class="mini-btn" type="button">刷新</button>
+            </div>
+            <div class="dm-layout">
+              <div id="dm-thread-list" class="dm-thread-list"></div>
+              <div class="dm-chat-panel">
+                <div id="dm-chat-title" class="dm-chat-title">选择一个会话</div>
+                <div id="dm-message-list" class="dm-message-list"></div>
+                <div class="dm-input-row">
+                  <input type="text" id="dm-message-input" maxlength="200" placeholder="输入私信...">
+                  <button id="btn-dm-send" class="mini-btn" type="button">发送</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="social-detail-page-incoming" class="social-detail-page hidden">
+          <div id="friend-incoming-section" class="friend-section">
+            <div id="friend-incoming-title" class="friend-section-title">好友请求</div>
+            <div id="friend-incoming-list" class="friend-list"></div>
+          </div>
+        </div>
+        <div id="social-detail-page-outgoing" class="social-detail-page hidden">
+          <div id="friend-outgoing-section" class="friend-section">
+            <div id="friend-outgoing-title" class="friend-section-title">已发送</div>
+            <div id="friend-outgoing-list" class="friend-list"></div>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
 </div>
 <div id="view-skin" class="view hidden">
@@ -233,7 +267,10 @@
 </div>
 </div>
 <p id="login-error" class="error-text"></p>
-<div class="home-copyright">©2026 Garden of Thorn Dev Team</div>
+<div class="home-footer">
+  <div class="home-copyright">©2026 Garden of Thorn Dev Team</div>
+  <div class="home-icp">皖ICP备2026016693号-1</div>
+</div>
 </div>
 </div>
 
@@ -580,7 +617,6 @@
 <option value="en">English (US)</option>
 <option value="fr">Français</option>
 <option value="pt">Português (Brasil)</option>
-<option value="ru">Русский</option>
 <option value="ja">日本語</option>
 </select>
 </div>
@@ -688,14 +724,14 @@
 <p>Stickerbug</p>
 </section>
 <section>
-<h4>联系方式</h4>
-<p>QQ: 2213167072</p>
+<p>Stickerbug 的 QQ: <button id="btn-copy-stickerbug-qq" class="copy-number-btn" type="button" data-copy-text="2213167072">2213167072</button></p>
+<p>QQ 交流群：<button id="btn-copy-qq-group" class="copy-number-btn" type="button" data-copy-text="1101610320">1101610320</button></p>
 <p>哔哩哔哩：<button id="btn-credit-bilibili" class="btn btn-secondary btn-small" type="button">@Stickerbug</button></p>
-<p>Github：<button id="btn-credit-github" class="btn btn-secondary btn-small" type="button">@Stickerbug</button></p>
+<p>GitHub：<button id="btn-credit-github" class="btn btn-secondary btn-small" type="button">@Stickerbug</button></p>
 </section>
 <section>
 <h4 id="credits-special-title">特别鸣谢</h4>
-<p>Nether_Dog</p>
+<p>NetherDog</p>
 <p>Eric</p>
 <p>CommonGoldIngot</p>
 <p>2EX7427</p>
@@ -773,7 +809,6 @@
   };
   T.fr = { ...T.en, subtitle: 'Combat de cartes en réseau local', nickname: 'Pseudo', nicknamePlaceholder: 'Saisir un pseudo', enterLobby: 'Entrer dans le salon', soloTraining: 'Entraînement solo', settings: 'Paramètres', loadLast: 'Charger', saveDecks: 'Sauver decks', startTraining: 'Commencer', back: 'Retour', searchCards: 'Chercher cartes', soloDeckA: 'Votre deck', soloDeckB: 'Deck adverse', soloEventA: 'Événement de départ', soloEventB: 'Événement adverse', lobby: 'Salon', onlinePlayers: 'Joueurs en ligne', onlineCount: 'En ligne: 0', ongoingGames: 'Parties en cours', messagePlaceholder: 'Saisir un message...', send: 'Envoyer', backHome: "Retour à l'accueil", draft: 'Phase de draft', reroll: 'Relancer', selectEvent: 'Choisir événement', selectEventDesc: 'Choisir un événement de départ', opponent: 'Adversaire', oppInfo: 'Main:0 Deck:0', battleLog: 'Journal de combat', you: 'Vous', youInfo: 'Main:0 Deck:0 Défausse:0', dragToPlay: 'Glisser pour jouer', endTurn: 'Fin du tour', viewDeck: 'Voir le deck', setNextDraw: 'Fixer prochaine pioche', pauseEdit: 'Pause édition', surrender: 'Abandonner', switchPerspective: 'Changer de perspective', leaveSpectate: "Quitter l'observation", rematch: 'Rejouer', returnLobby: 'Retour au salon', modEditor: 'Éditeur de mod', modPlaceholder: 'Collez ou modifiez le JSON du mod ici...', loadMod: 'Charger le mod', save: 'Enregistrer', validateJson: 'Valider le JSON', appearance: 'Apparence', theme: 'Thème', light: 'Clair', dark: 'Sombre', language: 'Langue', server: 'Serveur', address: 'Adresse', serverPlaceholder: 'Laisser vide pour le serveur par défaut', mods: 'Mods', noMods: 'Aucun fichier de mod', cancel: 'Annuler', rotatePrompt: 'Veuillez jouer en mode paysage', rotateSub: 'Passez en mode paysage', continueEnter: 'Continuer' };
   T.pt = { ...T.en, subtitle: 'Batalha de cartas em rede local', nickname: 'Apelido', nicknamePlaceholder: 'Digite um apelido', enterLobby: 'Entrar no Lobby', soloTraining: 'Treino Solo', settings: 'Configurações', loadLast: 'Carregar Último', saveDecks: 'Salvar Decks', startTraining: 'Iniciar Treino', back: 'Voltar', searchCards: 'Buscar cartas', soloDeckA: 'Seu Deck', soloDeckB: 'Deck Oponente', soloEventA: 'Evento inicial', soloEventB: 'Evento do oponente', onlinePlayers: 'Jogadores Online', onlineCount: 'Online: 0', ongoingGames: 'Partidas em andamento', messagePlaceholder: 'Digite uma mensagem...', send: 'Enviar', backHome: 'Voltar ao Início', draft: 'Fase de Draft', reroll: 'Rerrolar', selectEvent: 'Escolher Evento', selectEventDesc: 'Escolha um evento inicial', opponent: 'Oponente', oppInfo: 'Mão:0 Deck:0', battleLog: 'Registro de Batalha', you: 'Você', youInfo: 'Mão:0 Deck:0 Descarte:0', dragToPlay: 'Arraste para Jogar', endTurn: 'Finalizar Turno', viewDeck: 'Ver Deck', setNextDraw: 'Definir Próxima Compra', pauseEdit: 'Pausar e Editar', surrender: 'Render-se', switchPerspective: 'Trocar Perspectiva', leaveSpectate: 'Sair da Observação', rematch: 'Jogar Novamente', returnLobby: 'Voltar ao Lobby', modEditor: 'Editor de Mod', modPlaceholder: 'Cole ou edite o JSON do mod aqui...', loadMod: 'Carregar Mod', save: 'Salvar', validateJson: 'Validar JSON', appearance: 'Aparência', theme: 'Tema', light: 'Claro', dark: 'Escuro', language: 'Idioma', server: 'Servidor', address: 'Endereço', serverPlaceholder: 'Deixe vazio para o servidor padrão', mods: 'Mods', noMods: 'Nenhum arquivo de mod encontrado', rotatePrompt: 'Jogue no modo paisagem', rotateSub: 'Gire para o modo paisagem', continueEnter: 'Continuar' };
-  T.ru = { ...T.en, subtitle: 'Карточная дуэль по локальной сети', nickname: 'Никнейм', nicknamePlaceholder: 'Введите никнейм', enterLobby: 'Войти в лобби', soloTraining: 'Одиночная тренировка', settings: 'Настройки', loadLast: 'Загрузить', saveDecks: 'Сохранить колоды', startTraining: 'Начать', back: 'Назад', searchCards: 'Поиск карт', soloDeckA: 'Ваша колода', soloDeckB: 'Колода соперника', soloEventA: 'Ваше стартовое событие', soloEventB: 'Событие соперника', lobby: 'Лобби', onlinePlayers: 'Игроки онлайн', onlineCount: 'Онлайн: 0', ongoingGames: 'Идущие матчи', messagePlaceholder: 'Введите сообщение...', send: 'Отправить', backHome: 'На главную', draft: 'Фаза драфта', reroll: 'Повторить', selectEvent: 'Выбор события', selectEventDesc: 'Выберите стартовое событие', opponent: 'Соперник', oppInfo: 'Рука:0 Колода:0', battleLog: 'Журнал боя', you: 'Вы', youInfo: 'Рука:0 Колода:0 Сброс:0', dragToPlay: 'Перетащите для розыгрыша', endTurn: 'Завершить ход', viewDeck: 'Посмотреть колоду', setNextDraw: 'Задать следующую карту', pauseEdit: 'Пауза и правка', surrender: 'Сдаться', switchPerspective: 'Сменить ракурс', leaveSpectate: 'Выйти из наблюдения', rematch: 'Реванш', returnLobby: 'Вернуться в лобби', modEditor: 'Редактор модов', modPlaceholder: 'Вставьте или измените JSON мода...', loadMod: 'Загрузить мод', save: 'Сохранить', validateJson: 'Проверить JSON', appearance: 'Внешний вид', theme: 'Тема', light: 'Светлая', dark: 'Тёмная', language: 'Язык', server: 'Сервер', address: 'Адрес', serverPlaceholder: 'Оставьте пустым для сервера по умолчанию', mods: 'Моды', noMods: 'Файлы модов не найдены', rotatePrompt: 'Играйте в альбомной ориентации', rotateSub: 'Поверните экран в альбомный режим', continueEnter: 'Продолжить' };
   T.ja = { ...T.en, subtitle: 'LANカード対戦', nickname: 'ニックネーム', nicknamePlaceholder: 'ニックネームを入力', enterLobby: 'ロビーに入る', soloTraining: 'ソロ練習場', settings: '設定', loadLast: '前回を読み込む', saveDecks: 'デッキ保存', startTraining: '開始', searchCards: 'カード検索', soloDeckA: '自分のデッキ', soloDeckB: '相手デッキ', soloEventA: '自分の開局イベント', soloEventB: '相手の開局イベント', lobby: 'ロビー', onlinePlayers: 'オンラインプレイヤー', onlineCount: 'オンライン: 0', ongoingGames: '進行中の対戦', messagePlaceholder: 'メッセージを入力...', send: '送信', backHome: 'ホームに戻る', draft: 'ドラフトフェイズ', reroll: 'リロール', selectEvent: 'イベント選択', selectEventDesc: 'オープニングイベントを選択', opponent: '相手', oppInfo: '手札:0 デッキ:0', battleLog: 'バトルログ', you: 'あなた', youInfo: '手札:0 デッキ:0 捨て札:0', dragToPlay: 'ドラッグしてプレイ', endTurn: 'ターン終了', viewDeck: 'デッキ確認', setNextDraw: '次のドロー設定', pauseEdit: '中断して編集', surrender: '降参', switchPerspective: '視点切替', leaveSpectate: '観戦終了', rematch: '再戦', returnLobby: 'ロビーに戻る', modEditor: 'Modエディター', modPlaceholder: 'ここにMod JSONを貼り付けるか編集...', loadMod: 'Modを読み込む', validateJson: 'JSONを検証', appearance: '外観', theme: 'テーマ', light: 'ライト', dark: 'ダーク', language: '言語', server: 'サーバー', address: 'アドレス', serverPlaceholder: '空欄なら既定サーバーを使用', mods: 'Mod', noMods: 'Modファイルが見つかりません', cancel: 'キャンセル', rotatePrompt: '横向きでプレイしてください', rotateSub: '横向きにしてください', continueEnter: '続ける' };
   const t = T[window.__bootLang] || T.zh;
   const setText = (sel, value) => { const el = document.querySelector(sel); if (el) el.textContent = value; };
@@ -808,6 +843,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-    <script src="/static/js/game.js?v=257"></script>
+    <script src="/static/js/game.js?v=260"></script>
 </body>
 </html>

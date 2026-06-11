@@ -139,7 +139,12 @@ from security import (
 
 BASE_CARD_IDS = set(CARD_DEFS.keys())
 BASE_CARD_DEFS = copy.deepcopy(CARD_DEFS)
-VANILLA_MOD_FILENAME = 'VanillaCards.gtnmod'
+VANILLA_MOD_FILENAME = 'Vanilla Cards.gtnmod'
+DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = {
+    VANILLA_MOD_FILENAME,
+    'Troll Cards.gtnmod',
+    'Thorn Cards.gtnmod',
+}
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
 VANILLA_CARD_ART_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'assets', 'card-art', 'vanilla')
 VANILLA_CARD_ART_URL = '/static/assets/card-art/vanilla'
@@ -1831,6 +1836,21 @@ def normalize_disabled_mods(value):
     if isinstance(value, (list, tuple, set)):
         return [str(x).strip() for x in value if str(x).strip()]
     return []
+
+
+def default_disabled_mods():
+    disabled = []
+    for mod in load_all_mods():
+        filename = str(getattr(mod, 'filename', '') or '')
+        if filename and filename not in DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES:
+            disabled.append(filename)
+    return sorted(set(disabled))
+
+
+def normalize_disabled_mods_with_default(value):
+    if value is None:
+        return default_disabled_mods()
+    return normalize_disabled_mods(value)
 
 
 def normalize_mod_source(value):
@@ -6085,15 +6105,25 @@ def api_auth_skin():
         return jsonify({'success': False, 'error': '请先登录账号'}), 401
     data = request.get_json(silent=True) or {}
     skin = data.get('skin', data)
-    user, error = update_user_skin(user_id, skin)
+    try:
+        user, error = update_user_skin(user_id, skin)
+    except Exception as exc:
+        admin_event('error', f'update_user_skin failed: {exc}')
+        return jsonify({'success': False, 'error': '皮肤保存失败，请稍后重试'}), 503
     if error:
         return jsonify({'success': False, 'error': error}), 400
     _set_account_session(user)
     normalized_skin = public_skin_config(user.get('skin'))
-    with _lock:
-        for sid, player in players.items():
-            if player.get('user_id') == user_id:
-                player['skin'] = normalized_skin
+    acquired = _lock.acquire(timeout=0.05)
+    if acquired:
+        try:
+            for sid, player in players.items():
+                if player.get('user_id') == user_id:
+                    player['skin'] = normalized_skin
+        finally:
+            _lock.release()
+    else:
+        admin_event('warning', f'skip online skin cache update for user {user_id}: lobby lock busy')
     return jsonify({'success': True, 'user': auth_user_payload(user), 'skin': normalized_skin})
 
 
@@ -6965,7 +6995,7 @@ def on_login(data):
         user_id = None
         is_registered_user = False
         skin_config = public_skin_config(data.get('skin'))
-    disabled_mods = ensure_valid_disabled_mods(data.get('disabled_mods', []))
+    disabled_mods = ensure_valid_disabled_mods(normalize_disabled_mods_with_default(data.get('disabled_mods')))
     if preferred_mode not in ('1v1', '2v2', 'urf'):
         preferred_mode = '1v1'
     try:
@@ -7449,7 +7479,19 @@ def on_disconnect():
             if room_id is not None and room_id in rooms:
                 room = rooms[room_id]
                 pidx = room.player_index(sid)
-                if pidx >= 0 and room.engine.phase not in ('game_over',):
+                if pidx >= 0 and room.engine.phase in ('draft', 'event_select'):
+                    for other_sid in room.player_sids:
+                        if other_sid != sid and other_sid in players:
+                            players[other_sid]['room_id'] = None
+                            players[other_sid]['status'] = 'lobby'
+                            pending_emits.append(('server_error', {'message': '选牌阶段有玩家断线，对局已取消'}, other_sid))
+                            pending_emits.append(('game_phase', {'phase': 'lobby'}, other_sid))
+                    _cancel_room_reconnect_timers(room)
+                    _cancel_game_over_cleanup_timer(room)
+                    rooms.pop(room_id, None)
+                    del players[sid]
+                    pending_emits.append(('broadcast_lobby', None, None))
+                elif pidx >= 0 and room.engine.phase not in ('game_over',):
                     room.disconnected_players[sid] = {
                         'nickname': nickname,
                         'player_index': pidx,
@@ -7530,6 +7572,10 @@ def on_disconnect():
         try:
             if emit_item[0] == 'opponent_disconnected':
                 socketio.emit('opponent_disconnected', emit_item[1], room=emit_item[2])
+            elif emit_item[0] == 'server_error':
+                socketio.emit('server_error', emit_item[1], room=emit_item[2])
+            elif emit_item[0] == 'game_phase':
+                socketio.emit('game_phase', emit_item[1], room=emit_item[2])
             elif emit_item[0] == 'broadcast_game_state':
                 broadcast_game_state(emit_item[1])
             elif emit_item[0] == 'broadcast_lobby':
@@ -8192,7 +8238,7 @@ def on_solo_start(data):
         _security_illegal(sid, 'solo_start', str(exc))
         emit('server_error', {'message': '训练场牌组必须各为15张'})
         return
-    disabled_mods = ensure_valid_disabled_mods(data.get('disabled_mods', [])) if data else []
+    disabled_mods = ensure_valid_disabled_mods(normalize_disabled_mods_with_default(data.get('disabled_mods') if data else None))
     try:
         community_fields, community_mod = resolve_community_loadout(data or {})
         loadout = build_mod_loadout(

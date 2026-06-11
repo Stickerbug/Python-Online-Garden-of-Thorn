@@ -477,6 +477,7 @@ class GameEngine2v2(GameEngine):
             ps.bleed = max(0, ps.bleed // 2)
             if ps.bleed == 0:
                 self.log_msg(f"{self.pn(player_id)}的流血效果消失")
+        self._decay_end_turn_layer_statuses(player_id)
         # Track M gained this turn for next turn's check
         ps.m_gained_last_turn = ps.m_gained_this_turn
         ps.m_gained_this_turn = False
@@ -706,6 +707,7 @@ class GameEngine2v2(GameEngine):
         if self.pending_response is None:
             return {'success': False, 'error': '没有待响应的操作'}
         pending = self.pending_response
+        pending_damage_prediction = self._simulate_pending_response_damage(responder_id, None) if card_instance_id is not None else {'total': 0, 'parts': []}
         self.pending_response = None
         player_id = pending['player_id']
         card = CardInstance.from_dict(pending['card'])
@@ -726,7 +728,7 @@ class GameEngine2v2(GameEngine):
                 return self._execute_card_effect(player_id, card, choice)
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}进行反制！")
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
-            self._execute_counter_effect(responder_id, counter_removed, card, player_id)
+            self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
             is_precision = pending.get('is_precision', False)
             if counter_removed.def_id == 'Bubble':
                 if is_precision:
@@ -991,6 +993,7 @@ class GameEngine2v2(GameEngine):
 
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]
+        self._save_turn_start_snapshot(player_id)
         self._antennae_reveal[player_id] = None
         self._reset_turn_damage_counters()
         self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
@@ -1016,6 +1019,7 @@ class GameEngine2v2(GameEngine):
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
+        self._apply_blind_turn_start(player_id)
         if ps.skip_turn:
             ps.skip_turn = False
             self.log_msg(f"{self.pn(player_id)}被跳过本回合！")
@@ -1056,7 +1060,7 @@ class GameEngine2v2(GameEngine):
             self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             if self.game_over or ps.health <= 0:
                 return
-            ps.poison = ps.poison // 2
+            self._decay_poison_after_turn_start(player_id)
         if ps.fire > 0:
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
@@ -1245,6 +1249,7 @@ class GameEngine2v2(GameEngine):
             return 0
         actual = amount
         actual = self._apply_corruption_multiplier_to_damage(actual)
+        actual = self._apply_damage_dealt_equipment_multiplier(actual, source_id)
         resolved_damage_type = infer_damage_type(source, 'direct', damage_tag or '', damage_type)
         resolved_damage_tag = damage_tag or (status_damage_tag(source) if resolved_damage_type == DAMAGE_TYPE_MAGIC else DAMAGE_TAG_DIRECT)
         damage_context = self._v2_damage_context(
@@ -1420,11 +1425,12 @@ class GameEngine2v2(GameEngine):
     def _effect_triangle(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
         ps = self.players[player_id]
-        dmg = self._modified_attack_damage(6 + 3 * ps.triangle_stacks, card)
+        immune = self._is_status_immune(player_id) if hasattr(self, '_is_status_immune') else False
+        dmg = self._modified_attack_damage(6 + (0 if immune else 3 * ps.triangle_stacks), card)
         if int(getattr(card, 'fission_hit', 0) or 0) == 0:
             self._log_card_play(player_id, card)
         dealt = self.deal_attack_damage(target, dmg, attacker_id=player_id)
-        if dealt > 0 and ps.triangle_stacks < 4:
+        if dealt > 0 and not immune and ps.triangle_stacks < 4:
             ps.triangle_stacks += 1
 
     def _effect_magicbone(self, player_id: int, card: CardInstance, choice=None):
@@ -1478,6 +1484,7 @@ class GameEngine2v2(GameEngine):
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
+        self._apply_blind_turn_start(player_id)
         if ps.skip_turn:
             ps.skip_turn = False
             self.log_msg(f"{self.pn(player_id)}被跳过本回合！")
@@ -1516,7 +1523,7 @@ class GameEngine2v2(GameEngine):
             self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             if self.game_over or ps.health <= 0:
                 return
-            ps.poison = ps.poison // 2
+            self._decay_poison_after_turn_start(player_id)
         if ps.fire > 0:
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
@@ -1644,6 +1651,7 @@ class GameEngine2v2(GameEngine):
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
+        self._apply_blind_turn_start(player_id)
         turn_will_be_skipped = bool(ps.skip_turn)
         if turn_will_be_skipped:
             ps.skip_turn = False
@@ -1710,7 +1718,7 @@ class GameEngine2v2(GameEngine):
             self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             if self.game_over or ps.health <= 0:
                 return
-            ps.poison = ps.poison // 2
+            self._decay_poison_after_turn_start(player_id)
         if ps.fire > 0:
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
@@ -1729,7 +1737,7 @@ class GameEngine2v2(GameEngine):
                     continue
                 handled = False
                 if self._has_card_event(eq.card_def, 'owner_turn_start'):
-                    handled = self._run_card_event(player_id, eq.card_instance, 'owner_turn_start', None,
+                    handled = self._run_card_event(owner_id, eq.card_instance, 'owner_turn_start', None,
                                                    {'source_id': owner_id, 'target_id': player_id})
                 if handled or eq.card_def.effects:
                     continue
@@ -1799,6 +1807,7 @@ class GameEngine2v2(GameEngine):
             elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
             dmg = self._apply_corruption_multiplier_to_damage(dmg, log=False)
+            dmg = self._apply_damage_dealt_equipment_multiplier(dmg, attacker_id)
             if ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)

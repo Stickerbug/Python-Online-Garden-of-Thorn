@@ -123,9 +123,10 @@ def format_duration_zh(seconds):
 
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn = sqlite3.connect(DB_PATH, timeout=2)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys=ON;')
+    conn.execute('PRAGMA busy_timeout=2000;')
     return conn
 
 

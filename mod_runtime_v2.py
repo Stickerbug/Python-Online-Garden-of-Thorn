@@ -48,6 +48,7 @@ ADVANCED_ATOMIC_OPS = {
     "list_extend", "list_pop", "list_clear", "for_each_list", "timed_effect", "countdown_var",
     "player_prop_set", "player_prop_add", "card_prop_set", "card_prop_add",
     "card_prop_mul", "card_damage_multiply", "equipment_prop_set",
+    "discard_hand_by_paid_e", "restore_turn_start_stats", "counter_pending_attack_damage", "lose_health",
     "equipment_prop_add", "discard_choice_then_draw", "coffee_gain_e",
     "activate_corruption", "request_target", "request_card", "request_confirm",
     "response_declare", "aura_enemy_elixir_recovery", "on_any_turn_start",
@@ -378,6 +379,9 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
             target = resolve_v2_target(engine, context, expr.get("target", "source"))
             player_id = _player_id(engine, target)
             if _valid_player(engine, player_id):
+                suppressed = getattr(engine, "_is_suppressed_status_var", None)
+                if callable(suppressed) and suppressed(player_id, name):
+                    return 0
                 return getattr(engine.players[player_id], "custom_vars", {}).get(name, expr.get("default", 0))
             return expr.get("default", 0)
         return context.get("vars", {}).get(name, expr.get("default", 0))
@@ -388,6 +392,9 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         if op == "global_var":
             return getattr(engine, "global_vars", {}).get(name, expr.get("default", 0))
         if _valid_player(engine, player_id):
+            suppressed = getattr(engine, "_is_suppressed_status_var", None)
+            if callable(suppressed) and suppressed(player_id, name):
+                return 0
             return getattr(engine.players[player_id], "custom_vars", {}).get(name, expr.get("default", 0))
         return expr.get("default", 0)
     if op == "get":
@@ -499,7 +506,7 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
     if op == "event_value":
         return context.get("event_value", context.get("vars", {}).get("event_value", 0))
     if op in ("damage_amount", "current_damage"):
-        return context.get("damage_amount", context.get("event_value", 0))
+        return context.get("damage_amount", context.get("damage", context.get("event_value", 0)))
     if op in ("damage_source", "source_player"):
         return context.get("damage_source", context.get("source_player", 0))
     if op in ("target_player",):
@@ -516,10 +523,13 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         return resolve_v2_target(engine, context, op)
     if op == "selected_card_at":
         choice = _active_choice(context)
-        ids = choice.get("target_instance_ids")
+        ids = choice.get("_selected_card_ids_snapshot") or choice.get("target_instance_ids")
         if not isinstance(ids, list):
             ids = [choice.get("target_instance_id")] if choice.get("target_instance_id") is not None else []
         index = _to_int(eval_v2_value(engine, context, expr.get("index", 1))) - 1
+        chosen_cards = context.get("chosen_cards")
+        if isinstance(chosen_cards, list) and 0 <= index < len(chosen_cards):
+            return chosen_cards[index]
         if 0 <= index < len(ids):
             return _find_card_by_instance_id(engine, ids[index])
         return None
@@ -601,7 +611,7 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
         fallback = context.get("target_id", context.get("source_player", 0))
         return int(context.get("target_player", fallback))
     if text in ("chosen_card", "selected_card", "choice_card"):
-        chosen = context.get("chosen_card")
+        chosen = context.get("selected_card") or context.get("chosen_card")
         if chosen is not None:
             return chosen
         action = context.get("current_action") if isinstance(context.get("current_action"), dict) else {}
@@ -663,7 +673,18 @@ def check_v2_condition(engine, context: Dict[str, Any], cond: Any) -> bool:
         return bool(resolve_v2_target(engine, context, cond.get("zone", cond.get("selector", []))))
     if op == "var_compare":
         name = str(cond.get("name") or cond.get("var") or "")
-        a = context.get("vars", {}).get(name, 0)
+        if "target" in cond:
+            target = resolve_v2_target(engine, context, cond.get("target", "source"))
+            player_id = _player_id(engine, target)
+            suppressed = getattr(engine, "_is_suppressed_status_var", None)
+            if callable(suppressed) and suppressed(player_id, name):
+                a = 0
+            elif _valid_player(engine, player_id):
+                a = getattr(engine.players[player_id], "custom_vars", {}).get(name, 0)
+            else:
+                a = 0
+        else:
+            a = context.get("vars", {}).get(name, 0)
         b = eval_v2_value(engine, context, cond.get("value", cond.get("b", 0)))
         return _compare(a, b, cond.get("operator") or cond.get("op2") or "==")
     return bool(eval_v2_value(engine, context, cond))
@@ -1116,6 +1137,8 @@ def _equipment_prop(equipment: Any, prop: str):
     prop = str(prop or "")
     if hasattr(equipment, prop):
         return getattr(equipment, prop)
+    if isinstance(getattr(equipment, "custom_vars", None), dict) and prop in equipment.custom_vars:
+        return equipment.custom_vars.get(prop, 0)
     card = getattr(equipment, "card_instance", None)
     if prop in ("card", "card_instance"):
         return card
@@ -1220,6 +1243,9 @@ def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str) 
 def _status_stack(engine, player_id: int, status_id: str) -> int:
     if not _valid_player(engine, player_id):
         return 0
+    immune = getattr(engine, "_is_status_immune", None)
+    if callable(immune) and immune(player_id) and str(status_id) not in ("status_immune", "状态免疫"):
+        return 0
     ps = engine.players[player_id]
     attr = _builtin_status_attr(status_id)
     if attr:
@@ -1242,7 +1268,13 @@ def _builtin_status_attr(status_id: str) -> str:
         "sluggish": "sluggish",
         "overload": "overload",
         "foresight": "foresight",
+        "预知": "foresight",
         "fracture": "fracture",
+        "破损": "fracture",
+        "stagnation": "stagnation",
+        "滞留": "stagnation",
+        "blind": "blind",
+        "失明": "blind",
         "heal_block": "heal_block",
         "weakness": "weakness",
         "bleed": "bleed",
@@ -1269,6 +1301,8 @@ def _status_label(status_id: str) -> str:
         "overload": "超载",
         "foresight": "预知",
         "fracture": "破损",
+        "stagnation": "滞留",
+        "blind": "失明",
         "heal_block": "禁疗",
         "weakness": "虚弱",
         "bleed": "流血",
@@ -1325,7 +1359,8 @@ def _try_run_engine_atomic_op(engine, context: Dict[str, Any], op: str, params: 
     ):
         return None
 
-    source_id = _player_id(engine, resolve_v2_target(engine, context, step.get("source", params.get("source", "source"))))
+    source_selector = step.get("source_player", params.get("source_player", step.get("actor", params.get("actor", "source"))))
+    source_id = _player_id(engine, resolve_v2_target(engine, context, source_selector))
     card = context.get("card")
     choice = context.get("choice")
     action = context.get("current_action")
@@ -1432,9 +1467,9 @@ def _engine_target_selector(engine, context: Dict[str, Any], value: Any):
             return explicit_target
         return "enemy"
     if value == "all_friendlies":
-        return "friendly"
+        return "all_friendlies"
     if value == "all_enemies":
-        return "enemy"
+        return "all_enemies"
     return value
 
 

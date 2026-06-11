@@ -84,7 +84,7 @@ const I18N = {
         switch_perspective: 'Switch Perspective', leave_spectate: 'Leave Spectate', switch_to_perspective: 'Switch to {0}', battle_log: 'Battle Log',
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_stunned: 'Stunned',
-        status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
+        status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Blind', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
         flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_stealth: 'Stealth', flag_revealed: 'Revealed',
         tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_stealth: 'Stealth', tag_revealed: 'Revealed',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
@@ -194,7 +194,7 @@ I18N.zh = { ...I18N.en,
     status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼',
     status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
-    status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
+    status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
     flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隐匿', flag_revealed: '被揭示',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
@@ -301,7 +301,7 @@ I18N.fr = { ...I18N.en,
     status_poison: 'Poison', status_fire: 'Brûlure', status_toxic: 'Toxique', status_triangle: 'Triangle', status_dodge: 'Esquive',
     status_nazar: 'Nazar', status_equip_protect: 'Prot. Équip.', status_invincible: 'Invincible', status_stunned: 'Étourdi', status_attack_blocked: 'Atq bloquée', status_attack_only: 'Atq seule',
     status_untargetable: 'Non ciblable', status_bandage: 'Bandage', status_sponge: 'Éponge', status_shovel: 'Pelle',
-    status_sluggish: 'Lenteur', status_overload: 'Surcharge', status_foresight: 'Prévoyance', status_fracture: 'Fracture', status_heal_block: 'Anti-soin', status_weakness: 'Faiblesse', status_bleed: 'Saignement', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
+    status_sluggish: 'Lenteur', status_overload: 'Surcharge', status_foresight: 'Prévoyance', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Cécité', status_heal_block: 'Anti-soin', status_weakness: 'Faiblesse', status_bleed: 'Saignement', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
     flag_precision: 'Précision', flag_exile: 'Exil', flag_non_stackable: 'Non-cumul', flag_indestructible: 'Indestructible', flag_sprout: 'Pousse', flag_symbiosis: 'Symbiose', flag_copy: 'Copie', flag_unique: 'Unique', flag_swift: 'Rapidité', flag_stealth: 'Furtif', flag_revealed: 'Révélé',
     choose_convert_count: 'Nombre de conversions', choose_magic_card_n: 'Carte magie n°{0}', choose_source_card_n: 'Carte source n°{0}',
     choose_light_cards: 'Cartes de conversion Lumière', choose_yggdrasil_card: 'Carte Arbre-Monde', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
@@ -370,7 +370,7 @@ I18N.pt = { ...I18N.en,
     status_poison: 'Veneno', status_fire: 'Queima', status_toxic: 'Tóxico', status_triangle: 'Triângulo', status_dodge: 'Esquiva',
     status_nazar: 'Nazar', status_equip_protect: 'Prot. Equip.', status_invincible: 'Invencível', status_stunned: 'Atordoado', status_attack_blocked: 'Atq Bloqueado', status_attack_only: 'Só Atq',
     status_untargetable: 'Inalvejável', status_bandage: 'Bandagem', status_sponge: 'Esponja', status_shovel: 'Pá',
-    status_sluggish: 'Letargia', status_overload: 'Sobrecarga', status_foresight: 'Previsão', status_fracture: 'Fratura', status_heal_block: 'Anti-cura', status_weakness: 'Fraqueza', status_bleed: 'Sangramento', status_fragment: 'Fragmento', status_fragment_stacks: 'Fragmento',
+    status_sluggish: 'Letargia', status_overload: 'Sobrecarga', status_foresight: 'Previsão', status_fracture: 'Fratura', status_stagnation: 'Estagnação', status_blind: 'Cegueira', status_heal_block: 'Anti-cura', status_weakness: 'Fraqueza', status_bleed: 'Sangramento', status_fragment: 'Fragmento', status_fragment_stacks: 'Fragmento',
     flag_precision: 'Precisão', flag_exile: 'Exílio', flag_non_stackable: 'Não-acumulável', flag_indestructible: 'Indestrutível', flag_sprout: 'Brotar', flag_symbiosis: 'Simbiose', flag_copy: 'Cópia', flag_unique: 'Único', flag_swift: 'Rapidez', flag_stealth: 'Furtivo', flag_revealed: 'Revelado',
     choose_convert_count: 'Escolher quantidade de conversão', choose_magic_card_n: 'Carta mágica n°{0}', choose_source_card_n: 'Carta fonte n°{0}',
     choose_light_cards: 'Cartas de conversão Luz', choose_yggdrasil_card: 'Carta Árvore-Mundo', convert_label: 'Converter', convert_per_type: 'Máx {0} por tipo',
@@ -410,75 +410,6 @@ I18N.pt = { ...I18N.en,
     continue_enter: 'Continuar',
     mod_default_name: 'Mod {0}'
 };
-I18N.ru = { ...I18N.en,
-    round: 'Раунд', your_turn: 'Ваш Ход', opponent_turn: 'Ход Соперника', you: 'Вы', opponent: 'Соперник',
-    draw_phase: 'Фаза Розыгрыша', game_over: 'Конец Игры', invite: 'Пригласить', accept: 'Принять', decline: 'Отклонить', return_lobby: 'Вернуться в Лобби',
-    draft_phase: 'Фаза Драфта', draft_reroll: 'Перебрать', draft_selected: 'Выбрано', select_event: 'Выбрать Событие', waiting_opponent: 'Ожидание соперника',
-    play_card: 'Разыграть', end_turn: 'Конец Хода', surrender: 'Сдаться', view_deck: 'Посмотреть Колоду', counter: 'Контр-атака', no_counter: 'Без Контр-атаки', waiting_response: 'Ожидание ответа',
-    victory: 'Победа', defeat: 'Поражение', draw: 'Ничья', rematch: 'Реванш', connecting: 'Подключение...', disconnected: 'Отключено',
-    login_failed: 'Ошибка входа', nickname: 'Псевдоним', enter_lobby: 'Войти в Лобби', online_players: 'Игроки Онлайн', no_other_players: 'Нет других игроков',
-    invite_sent: 'Приглашение отправлено', invite_received: 'Приглашение получено', invite_message: 'приглашает вас на матч', invite_declined: 'Приглашение отклонено',
-    ongoing_games: 'Текущие Матчи', spectate: 'Наблюдать', draft_info: 'Драфт', draft_complete: 'Драфт Завершён', draft_waiting: 'Ожидание завершения драфта соперника',
-    draft_cost: 'Стоимость', select_this_event: 'Выбрать Это Событие', event_selected: 'Событие Выбрано', event_waiting: 'Ожидание выбора события соперником',
-    drag_to_play: 'Перетащите для игры', cannot_play: 'Нельзя Играть',
-    enemy_attack: 'Атака Врага', enemy_skill: 'Способность Врага', enemy_destroy_equip: 'Уничтожение Снаряжения Врага',
-    use_card: 'Использовать', insufficient_resources: 'Недостаточно ресурсов', choose_attack_for: 'Выбрать атаку для', choose_equip_for: 'Выбрать снаряжение',
-    choose_discard_for: 'Выбрать сброс', choose_from_deck_for: 'Выбрать из колоды', choose_from_discard_for: 'Выбрать из сброса', choose_hand_for: 'Выбрать из руки',
-    choose_from_enemy_hand_for: 'Выбрать из руки врага', choose_attack_group_for: 'Выбрать группу атаки',
-    no_attack_cards: 'Нет карт атаки', no_enemy_equipment: 'Нет снаряжения врага', no_enemy_hand: 'Нет руки врага', deck_empty: 'Колода пуста', discard_empty: 'Сброс пуст',
-    no_same_attack: 'Нет одинаковых карт атаки', confirm_surrender: 'Подтвердить сдачу?', request_rematch: 'Запросить реванш',
-    opponent_rematch: 'Соперник запрашивает реванш', rematch_sent: 'Запрос реванша отправлен', rematch_waiting: 'Ожидание соперника', rematch_agreed: 'Реванш принят',
-    rematch_progress: 'Реванш ({0}/{1})',
-    agree_rematch: 'Принять реванш', you_win: 'Победа!', you_lose: 'Поражение!', you_draw: 'Ничья!',
-    send: 'Отправить', cancel: 'Отмена', ok: 'ОК', close: 'Закрыть', notice: 'Уведомление',
-    opponent_disconnected: 'Соперник отключился', opponent_reconnected: 'Соперник переподключился',
-    reconnect_title: 'Переподключение', reconnect_prompt: 'Переподключиться к предыдущему матчу?', reconnecting: 'Переподключение...', reconnect_timeout: 'Тайм-аут переподключения',
-    mod_mismatch_title: 'Несовместимость модов', mod_mismatch_msg: 'Моды не совпадают, невозможно начать матч',
-    switch_perspective: 'Сменить Перспективу', leave_spectate: 'Покинуть Наблюдение', switch_to_perspective: 'Переключиться на перспективу {0}',
-    battle_log: 'Журнал Боя', equip_info: '{0}({1} ходов)', equip_corruption: '[Осквернено]', equip_trigger_cost: '{0} Активировать:{1}E',
-    status_poison: 'Яд', status_fire: 'Горение', status_toxic: 'Токсичность', status_triangle: 'Треугольник', status_dodge: 'Уклонение',
-    status_nazar: 'Назар', status_equip_protect: 'Защита Снар.', status_invincible: 'Неуязвимость', status_stunned: 'Оглушение', status_attack_blocked: 'Атк Заблок.', status_attack_only: 'Только Атк',
-    status_untargetable: 'Недоступен', status_bandage: 'Бинт', status_sponge: 'Губка', status_shovel: 'Лопата',
-    status_sluggish: 'Замедление', status_overload: 'Перегрузка', status_foresight: 'Предвидение', status_fracture: 'Излом', status_heal_block: 'Блок исцеления', status_weakness: 'Слабость', status_bleed: 'Кровотечение', status_fragment: 'Осколок', status_fragment_stacks: 'Осколок',
-    flag_precision: 'Точность', flag_exile: 'Изгнание', flag_non_stackable: 'Нескладываемый', flag_indestructible: 'Неразрушимый', flag_sprout: 'Росток', flag_symbiosis: 'Симбиоз', flag_copy: 'Копия', flag_unique: 'Уникальный', flag_swift: 'Стремительность', flag_stealth: 'Скрытность', flag_revealed: 'Раскрыто',
-    choose_convert_count: 'Количество конвертации', choose_magic_card_n: 'Магическая карта №{0}', choose_source_card_n: 'Исходная карта №{0}',
-    choose_light_cards: 'Карты конвертации Света', choose_yggdrasil_card: 'Карта Мирового древа', convert_label: 'Конвертировать', convert_per_type: 'Макс {0} на тип',
-    selected_count: 'Выбрано {0}/{1}', max_selection_warning: 'Нельзя превышать {0}', deck_total: 'Колода: {0} карт', view_deck_title: 'Посмотреть Колоду',
-    hand_deck_info_opp: 'Рука:{0} Колода:{1}', hand_deck_discard_info: 'Рука:{0} Колода:{1} Сброс:{2}', round_status: 'Раунд {0} - {1}',
-    server_broadcast: 'Сервер: {0}', error_msg: 'Ошибка: {0}', lobby_status: 'Лобби - {0}', no_counter_countdown: 'Без контр-атаки({0})',
-    select_event_desc: 'Выберите начальное событие', opponent_selected: 'Соперник выбрал', opponent_selecting: 'Соперник выбирает...',
-    card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard',
-    settings_title: 'Настройки', settings_appearance: 'Внешний вид', settings_theme: 'Тема', settings_lang: 'Язык', settings_mods: 'Моды', settings_theme_light: 'Светлая', settings_theme_dark: 'Тёмная',
-    no_games: 'Нет текущих матчей', back_to_home: 'Вернуться на главную', settings_btn: 'Настройки', settings_server: 'Сервер', settings_server_addr: 'Адрес',
-    not_your_turn: 'Не ваш ход', counter_insufficient: 'Подсказка: Недостаточно ресурсов для контр-атаки', default_status: 'Garden of Thorn',
-    game_loading: 'Загрузка...', server_no_response: 'Сервер не отвечает. Проверьте подключение.',
-    spectator_prefix: 'Наблюдатель', lobby_title: 'Лобби', online_count: 'Онлайн: {0}', chat_title: 'Чат',
-    solo_training: 'Одиночная тренировка', load_last: 'Загрузить', save_decks: 'Сохранить колоды', start_training: 'Начать',
-    solo_deck_a: 'Ваша колода', solo_deck_b: 'Колода соперника', search_cards: 'Поиск карт', pause_edit: 'Пауза и правка',
-    set_next_draw: 'Задать следующую карту', solo_saved: 'Колоды сохранены', solo_need_15: 'В обеих колодах должно быть ровно 15 карт',
-    solo_event_a: 'Ваше стартовое событие', solo_event_b: 'Событие соперника', no_event: 'Нет',
-    edit_tags: 'Изменить теги', tag_precision: 'Точность', tag_exile: 'Изгнание', tag_non_stackable: 'Не складывается',
-    tag_indestructible: 'Неразрушимый', tag_sprout: 'Росток', tag_symbiosis: 'Симбиоз', tag_attract: 'Притяжение', tag_void: 'Пустота', tag_self_only: 'Только на себя', tag_uncancellable: 'Нельзя отменить', tag_copy: 'Копия', tag_unique: 'Уникальный', tag_swift: 'Стремительность', tag_stealth: 'Скрытность', tag_revealed: 'Раскрыто', tag_infinite_exclude: 'Удалено из Infinite Fire', tag_rebound: 'Возврат',
-    fusion_layer: 'Слияние', fission_layer: 'Деление',
-    app_subtitle: 'Карточная дуэль по локальной сети',
-    nickname_placeholder: 'Введите никнейм',
-    message_placeholder: 'Введите сообщение...',
-    hand_deck_zero_opp: 'Рука:0 Колода:0',
-    hand_deck_zero_you: 'Рука:0 Колода:0 Сброс:0',
-    rotate_hint_sub: 'Поверните экран в альбомный режим',
-    server_placeholder: 'Оставьте пустым для сервера по умолчанию',
-    server_hint: 'Сервер по умолчанию: {0} (оставьте пустым, чтобы использовать его)',
-    init_cards_mods: 'Загрузка карт и модов (/api/cards)...',
-    init_opening_events: 'Загрузка начальных событий (/api/opening-events)...',
-    mod_editor: 'Редактор модов',
-    mod_editor_placeholder: 'Вставьте или измените JSON мода здесь...',
-    load_mod: 'Загрузить мод',
-    save: 'Сохранить',
-    validate_json: 'Проверить JSON',
-    rotate_prompt: 'Играйте в альбомной ориентации',
-    continue_enter: 'Продолжить',
-    mod_default_name: 'Мод {0}'
-};
 I18N.ja = { ...I18N.en,
     round: 'ターン', your_turn: 'あなたのターン', opponent_turn: '相手のターン', you: 'あなた', opponent: '相手',
     draw_phase: 'ドローフェイズ', game_over: 'ゲーム終了', invite: '招待', accept: '承諾', decline: '拒否', return_lobby: 'ロビーに戻る',
@@ -508,7 +439,7 @@ I18N.ja = { ...I18N.en,
     status_poison: '毒', status_fire: '火傷', status_toxic: '猛毒', status_triangle: '三角形', status_dodge: '回避',
     status_nazar: 'ナザール', status_equip_protect: '装備保護', status_invincible: '無敵', status_stunned: 'スタン', status_attack_blocked: '攻撃封印', status_attack_only: '攻撃のみ',
     status_untargetable: '対象不可', status_bandage: '包帯', status_sponge: 'スポンジ', status_shovel: 'シャベル',
-    status_sluggish: '遅鈍', status_overload: '過負荷', status_foresight: '予知', status_fracture: '破損', status_heal_block: '治療封じ', status_weakness: '虚弱', status_bleed: '出血', status_fragment: '破片', status_fragment_stacks: '破片',
+    status_sluggish: '遅鈍', status_overload: '過負荷', status_foresight: '予知', status_fracture: '破損', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '治療封じ', status_weakness: '虚弱', status_bleed: '出血', status_fragment: '破片', status_fragment_stacks: '破片',
     flag_precision: '精密', flag_exile: '追放', flag_non_stackable: '非スタック', flag_indestructible: '破壊不可', flag_sprout: '発芽', flag_symbiosis: '共生', flag_copy: '複製', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隠密', flag_revealed: '公開',
     choose_convert_count: '変換回数を選択', choose_magic_card_n: 'マジックカード第{0}枚', choose_source_card_n: 'ソースカード第{0}枚',
     choose_light_cards: '光変換カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
@@ -590,11 +521,6 @@ I18N.pt.tutorial_victory_message = 'Parabéns, você concluiu o tutorial!\nDivir
 I18N.pt.tutorial_defeat_message = 'A partida do tutorial foi perdida. Tudo bem; a próxima será mais tranquila.';
 I18N.pt.tutorial_retry = 'Tentar tutorial de novo';
 I18N.pt.target_pick_hint = 'Clique na área de jogador destacada.';
-I18N.ru.tutorial_hint_play_fusioned = 'Слитая атака готова. У вас хватает E; сыграйте ее и посмотрите усиленный урон.';
-I18N.ru.tutorial_victory_message = 'Поздравляем, вы прошли обучение!\nУдачной игры в Garden of Thorn!';
-I18N.ru.tutorial_defeat_message = 'Обучающий матч проигран. Ничего страшного: следующий пройдет увереннее.';
-I18N.ru.tutorial_retry = 'Повторить обучение';
-I18N.ru.target_pick_hint = 'Нажмите подсвеченную область игрока.';
 I18N.ja.tutorial_hint_play_fusioned = '融合した攻撃カードの準備ができました。Eは足りています。打ち出して強化後のダメージを見てみましょう。';
 I18N.ja.tutorial_victory_message = 'おめでとうございます。チュートリアルを完了しました！\nGarden of Thorn を楽しんでください！';
 I18N.ja.tutorial_defeat_message = 'チュートリアルの対局に敗北しました。大丈夫です。次の対局ではもっと動きが見えてきます。';
@@ -631,12 +557,10 @@ Object.assign(I18N.en, { tutorial_hint_free: 'You have seen the core actions. No
 Object.assign(I18N.zh, { tutorial_hint_free: '核心操作已经看过了。现在可以自己判断：打出合适的牌，观察 H/E/M，然后结束回合。' });
 Object.assign(I18N.fr, { tutorial_hint_free: 'Vous avez vu les actions principales. Essayez maintenant votre propre ligne : jouez les bonnes cartes, observez H/E/M, puis terminez le tour.' });
 Object.assign(I18N.pt, { tutorial_hint_free: 'Você já viu as ações principais. Agora jogue por conta própria: use cartas úteis, observe H/E/M e termine o turno.' });
-Object.assign(I18N.ru, { tutorial_hint_free: 'Основные действия показаны. Теперь выберите ход сами: сыграйте полезные карты, следите за H/E/M и завершите ход.' });
 Object.assign(I18N.ja, { tutorial_hint_free: '基本操作は確認できました。ここからは自分で判断して、有効なカードを使い、H/E/Mを見てターンを終了しましょう。' });
 Object.assign(I18N.zh, { waiting_opponent_counter: '等待对方反制' });
 Object.assign(I18N.fr, { waiting_opponent_counter: 'En attente du contre adverse' });
 Object.assign(I18N.pt, { waiting_opponent_counter: 'Aguardando resposta do oponente' });
-Object.assign(I18N.ru, { waiting_opponent_counter: 'Waiting for opponent counter' });
 Object.assign(I18N.ja, { waiting_opponent_counter: 'Waiting for opponent counter' });
 
 Object.assign(I18N.zh, {
@@ -815,46 +739,6 @@ Object.assign(I18N.pt, {
     tutorial_retry: 'Tentar de novo',
 });
 
-Object.assign(I18N.ru, {
-    about_title: 'О игре', about_gameplay: 'Правила', about_credits: 'Благодарности', about_contact: 'Контакты',
-    credits_developer: 'Разработчик', credits_special: 'Особая благодарность',
-    rules_intro_title: 'Введение в игру', rules_type_thorn: 'атаки Thorn', rules_type_bloom: 'умения Bloom', rules_type_root: 'снаряжение Root', rules_type_guard: 'ответы Guard',
-    rules_goal_title: 'Цель',
-    rules_goal_text: 'Garden of Thorn 荆棘花园 — многопользовательская карточная дуэль. В большинстве режимов ваша цель — использовать четыре типа карт: {thorn}, {bloom}, {root} и {guard}, опустить H вражеской стороны до 0 и защитить свою сторону.',
-    rules_resources_title: 'Ресурсы',
-    rules_resources_text: 'H(Health) — здоровье. При 0 H игрок обычно теряет возможность действовать; в 2v2 сторона проигрывает только когда побеждены все ее игроки. E(Elixir) оплачивает большинство карт. M(Magic) оплачивает некоторые магические карты. Обычно игрок берет карты и восстанавливает ресурсы только в начале своего хода.',
-    rules_types_title: 'Типы карт',
-    rules_types_text: 'Карты {thornRaw} наносят прямой урон, например {basic} и {bone}. Карты {bloomRaw} лечат, накладывают состояния, меняют ресурсы или ситуацию, например {fire}. Карты {rootRaw} остаются в зоне снаряжения и дают постоянные или активируемые эффекты, например {leaf}. Карты {guardRaw} — ответы на действия противника, если выполнено условие.',
-    rules_flow_title: 'Ход игры',
-    rules_flow_text: 'Обычный матч начинается с выбора карт, затем стартовых событий, затем боя. В ваш ход сначала срабатывают эффекты начала хода, добор и восстановление ресурсов. Затем можно играть карты или активировать снаряжение, которое было надето хотя бы один ход. Завершите ход, чтобы передать действие следующему игроку. В 2v2 ходы чередуются между командами; побежденные игроки не меняют порядок, но их ход пропускается.',
-    rules_keywords_title: 'Ключевые слова',
-    rules_keywords_text: '<b>Изгнание</b> отправляет карту в изгнание после розыгрыша или разрешения. <b>Точность</b> означает, что при уклонении атака наносит половину урона. <b>Неразрушимый</b> означает, что снаряжение нельзя уничтожить эффектами уничтожения. <b>Росток</b> добирает дополнительные карты при доборе. <b>Симбиоз</b> игнорирует штраф стоимости за карты с тем же именем. Окончательным считается текст карты.',
-    rules_examples_title: 'Примеры',
-    rules_examples_text: '{stinger} — мощная точная атака; {sewage} может уничтожить снаряжение; {bubble} отвечает на атаки и дает Уклонение. Нажмите имя карты, чтобы открыть ее в справочнике.',
-    rules_skip_confirm_title: 'Подсказка',
-    rules_skip_confirm_msg: 'Пропустить введение?\nЕго можно открыть снова в О игре > Правила.',
-    gallery_title: 'Справочник', gallery_cards: 'Карты', gallery_tags: 'Теги', gallery_events: 'Стартовые события',
-    gallery_search: 'Поиск', gallery_no_items: 'Нет записей.', gallery_cards_with_tag: 'Карты с этим тегом',
-    gallery_card_count: 'Карт: {0}', gallery_type: 'Тип', gallery_cost: 'Стоимость', gallery_tags_label: 'Теги',
-    gallery_description: 'Описание', gallery_effect: 'Эффект', gallery_trigger: 'Активация',
-    gallery_back_rules: 'К введению', gallery_explanation: 'Описание',
-    tutorial_start: 'Обучение', tutorial_skip: 'Пропустить', tutorial_intro: 'Теперь начнем обучение.',
-    tutorial_hint_play: 'Сначала сыграйте атаку Thorn и посмотрите, как меняется H противника.',
-    tutorial_hint_end: 'После действия нажмите Завершить ход.',
-    tutorial_hint_enemy: 'Теперь наблюдайте за противником. Следите за журналом и H/E/M.',
-    tutorial_hint_deck: 'Посмотрите колоду добора: нажмите Посмотреть колоду.',
-    tutorial_hint_continue: 'Продолжайте играть карты и завершайте ход. Позже вы доберете Guard и сможете ответить на атаку.',
-    tutorial_hint_counter: 'Это окно ответа. Выберите доступную карту Guard или дождитесь окончания отсчета.',
-    tutorial_hint_bloom: 'Карты Bloom лечат, накладывают состояния или меняют ресурсы. Сыграйте одну и посмотрите эффект.',
-    tutorial_hint_root: 'Карты Root остаются в зоне снаряжения. Наденьте одну и посмотрите ее эффект на следующем ходу.',
-    tutorial_hint_fission: 'Посмотрим разные типы. Fission — карта Bloom: простая атака может сохранить похожий общий урон, но Triangle растет после каждого удара. Используйте Fission на Triangle.',
-    tutorial_hint_play_fissioned: 'Triangle теперь имеет Fission. Сыграйте его и посмотрите, как разрешаются удары и слои.',
-    tutorial_hint_fusion: 'Fusion тоже карта Bloom. Она объединяет 2-3 атаки с одинаковым именем в одну более сильную карту.',
-    tutorial_hint_play_fusioned: 'Слитая атака готова. У вас хватает E; сыграйте ее и посмотрите усиленный урон.',
-    tutorial_victory_message: 'Поздравляем, вы прошли обучение!\nУдачной игры в Garden of Thorn!',
-    tutorial_defeat_message: 'Обучающий матч проигран. Ничего страшного: следующий пройдет увереннее.',
-    tutorial_retry: 'Повторить',
-});
 
 Object.assign(I18N.ja, {
     about_title: '概要', about_gameplay: '遊び方', about_credits: 'クレジット', about_contact: '連絡先',
@@ -939,26 +823,6 @@ Object.assign(I18N.pt, {
     tag_desc_revealed: 'Palavra-chave de visibilidade. Esta carta é visível permanentemente para o oponente na mão.'
 });
 
-Object.assign(I18N.ru, {
-    tag_desc_precision: 'Ключевое слово атаки. При уклонении точная атака наносит половину урона, а не проваливается полностью.',
-    tag_desc_exile: 'Ключевое слово разрешения. После розыгрыша или разрешения эта карта отправляется в изгнание, а не в сброс.',
-    tag_desc_non_stackable: 'Ключевое слово снаряжения. Несколько копий можно надеть, но одинаковый эффект не складывается; запасные копии полезны, если одна будет уничтожена.',
-    tag_desc_indestructible: 'Ключевое слово снаряжения. Это снаряжение нельзя уничтожить эффектами уничтожения, и оно остается при поражении владельца.',
-    tag_desc_sprout: 'Ключевое слово добора. Когда эта карта берется, она добирает дополнительные карты; лимит руки продолжает действовать.',
-    tag_desc_symbiosis: 'Ключевое слово стоимости. Эта карта игнорирует штраф стоимости за карты с тем же именем.',
-    tag_desc_attract: 'Ключевое слово лимита руки. Когда рука полна, карты с Притяжением сначала вытесняют карты без Притяжения.',
-    tag_desc_void: 'Ключевое слово конца хода. Если эта карта остается в руке в конце хода, она изгоняется.',
-    tag_desc_self_only: 'Ключевое слово цели. В 2v2 эту карту можно применять только к себе; в 1v1 оно не имеет дополнительного значения.',
-    tag_desc_uncancellable: 'Ключевое слово выбора. Окна выбора этой карты не показывают кнопку отмены; игрок обязан завершить выбор. Это не дает бесплатно посмотреть скрытую информацию и отменить, например с Magnet.',
-    tag_desc_infinite_exclude: 'Ключевое слово режима. Эта карта исключена из случайного пула Infinite Fire, потому что конфликтует с режимом.',
-    tag_desc_copy: 'Ключевое слово добора. Когда карта попадает в руку, добавьте N изгнанных копий.',
-    tag_desc_unique: 'Ключевое слово колоды. Допускается только одна копия; лишние изгоняются.',
-    tag_desc_swift: 'Ключевое слово стоимости. Стоимость E снижается на X (минимум 0E).',
-    tag_desc_rebound: 'Ключевое слово разрешения. После розыгрыша и разрешения эта карта сразу возвращается в руку пользователя.',
-    tag_desc_default: 'Тег мода или расширения. Точное значение задается соответствующим модом или эффектом карты.',
-    tag_desc_stealth: 'Ключевое слово ответа. Эта карта не вызывает окно ответа противника.',
-    tag_desc_revealed: 'Ключевое слово видимости. Эта карта постоянно видна противнику в руке.'
-});
 
 Object.assign(I18N.ja, {
     tag_desc_precision: '攻撃キーワード。精密攻撃が回避された場合、完全に失敗せず半分のダメージを与えます。',
@@ -1001,11 +865,6 @@ Object.assign(I18N.pt, {
     tag_desc_fusion_layer: 'Mecânica especial, não é uma tag normal. Fusão e Fissão funcionam juntas quando um ataque é jogado: o dano total primeiro é multiplicado pela Fusão e depois dividido em golpes de Fissão. Cada golpe causa ceil(dano base × Fusão / Fissão). Jogar Fusão escolhe 2-3 ataques de mesmo nome, soma seus níveis de Fusão, mantém o maior nível de Fissão e une tudo em uma carta. Quando a carta entra no descarte, Fusão volta ao padrão 1.',
     tag_desc_fission_layer: 'Mecânica especial, não é uma tag normal. Fissão é o número de golpes em que um ataque é dividido, e funciona junto com Fusão: cada golpe causa ceil(dano base × Fusão / Fissão). Se uma carta muda o dano posterior a cada acerto, como Triângulo, cada golpe de Fissão recalcula com as camadas atuais. Quando a carta entra no descarte, Fissão volta ao padrão 1.'
 });
-Object.assign(I18N.ru, {
-    gallery_related_cards: 'Связанные карты',
-    tag_desc_fusion_layer: 'Особая механика, а не обычный тег. Слияние и Деление работают вместе при следующем розыгрыше атаки: общий урон сначала масштабируется Слиянием, затем делится на удары Деления. Каждый удар наносит ceil(базовый урон × Слияние / Деление). Розыгрыш Слияния выбирает 2-3 одноименные атаки, складывает их уровни Слияния, берет максимальный уровень Деления и объединяет их в одну карту. Когда карта попадает в сброс, Слияние сбрасывается к 1.',
-    tag_desc_fission_layer: 'Особая механика, а не обычный тег. Деление показывает, на сколько ударов делится атака, и работает вместе со Слиянием: каждый удар наносит ceil(базовый урон × Слияние / Деление). Если карта меняет последующий урон после каждого попадания, например Triangle, каждый удар Деления пересчитывается по текущим слоям. Когда карта попадает в сброс, Деление сбрасывается к 1.'
-});
 Object.assign(I18N.ja, {
     gallery_related_cards: '関連カード',
     tag_desc_fusion_layer: '通常のタグではなく特殊な仕組みです。融合と分裂は攻撃カードを次に打ち出す時に共同で作用します。総ダメージはまず融合層で拡大され、その後分裂層の回数に分けられます。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。融合を使うと同名攻撃カード2-3枚を選び、融合層を合計し、分裂層は最大値を取り、1枚のカードにします。カードが捨て札に入ると融合は既定値1に戻ります。',
@@ -1016,7 +875,6 @@ Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card na
 Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称', settings_show_card_images: '显示卡牌图片' });
 Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes', settings_show_card_images: 'Afficher les images des cartes' });
 Object.assign(I18N.pt, { settings_show_english_card_names: 'Mostrar nomes ingleses das cartas', settings_show_card_images: 'Mostrar imagens das cartas' });
-Object.assign(I18N.ru, { settings_show_english_card_names: 'Показывать английские названия карт', settings_show_card_images: 'Показывать изображения карт' });
 Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示', settings_show_card_images: 'カード画像を表示' });
 Object.assign(I18N.en, { official_mods: 'Official Mods', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found' });
 Object.assign(I18N.zh, { official_mods: '官方模组', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组' });
@@ -1056,15 +914,6 @@ Object.assign(I18N.pt, {
     community_uploading: 'Enviando...', community_upload_success: 'Enviado: {0}', community_update_success: 'Atualizado: {0}',
     community_delete_success: 'Mod excluído', community_file_summary: '{0} · v{1} · {2} cartas', community_cards_count: '{0} cartas'
 });
-Object.assign(I18N.ru, {
-    community_current: 'Текущий мод сообщества', community_disabled: 'Отключено', community_disable: 'Отключить',
-    community_upload_hint: 'Войдите, чтобы загрузить. Файл отправляется прямо в хранилище модов.',
-    community_login_required: 'Войдите в аккаунт перед загрузкой мода.',
-    community_select: 'Использовать', community_selected: 'Выбрано', community_update: 'Обновить', community_delete: 'Удалить',
-    community_owned_by_you: 'Ваш', community_uploaded_at: 'Загружено {0}', community_delete_confirm: 'Удалить этот мод?',
-    community_uploading: 'Загрузка...', community_upload_success: 'Загружено: {0}', community_update_success: 'Обновлено: {0}',
-    community_delete_success: 'Мод удален', community_file_summary: '{0} · v{1} · {2} карт', community_cards_count: '{0} карт'
-});
 Object.assign(I18N.ja, {
     community_current: '現在のコミュニティMod', community_disabled: '未使用', community_disable: 'コミュニティModを無効化',
     community_upload_hint: 'アップロードにはログインが必要です。ファイルは直接コミュニティMod保存先へ送信されます。',
@@ -1078,31 +927,26 @@ Object.assign(I18N.en, { community_upload: 'Upload mod', community_json_only: 'O
 Object.assign(I18N.zh, { community_upload: '上传模组', community_json_only: '只允许上传 .json 或 .gtnmod 文件', community_file_too_large: '文件过大，JSON 最大 150KB，GTNMOD 最大 1MB', community_json_parse_failed: 'JSON 解析失败：{0}', community_upload_url_failed: '无法创建上传地址', community_r2_upload_failed: 'R2 上传失败 HTTP {0}', community_register_failed: '登记失败', community_delete_failed: '删除失败' });
 Object.assign(I18N.fr, { community_upload: 'Téléverser', community_json_only: 'Seuls les fichiers .json ou .gtnmod sont autorisés', community_file_too_large: 'Fichier trop volumineux. JSON 300 Ko, GTNMOD 5 Mo', community_json_parse_failed: 'Échec d’analyse JSON : {0}', community_upload_url_failed: 'Impossible de créer l’URL de téléversement', community_r2_upload_failed: 'Échec R2 : HTTP {0}', community_register_failed: 'Échec d’enregistrement', community_delete_failed: 'Échec de suppression' });
 Object.assign(I18N.pt, { community_upload: 'Enviar mod', community_json_only: 'Somente arquivos .json ou .gtnmod são permitidos', community_file_too_large: 'Arquivo grande demais. JSON 150KB, GTNMOD 1MB', community_json_parse_failed: 'Falha ao ler JSON: {0}', community_upload_url_failed: 'Não foi possível criar URL de envio', community_r2_upload_failed: 'Falha no R2: HTTP {0}', community_register_failed: 'Falha ao registrar', community_delete_failed: 'Falha ao excluir' });
-Object.assign(I18N.ru, { community_upload: 'Загрузить мод', community_json_only: 'Разрешены только .json или .gtnmod', community_file_too_large: 'Файл слишком большой. JSON 300 КБ, GTNMOD 5 МБ', community_json_parse_failed: 'Ошибка разбора JSON: {0}', community_upload_url_failed: 'Не удалось создать URL загрузки', community_r2_upload_failed: 'Ошибка R2: HTTP {0}', community_register_failed: 'Ошибка регистрации', community_delete_failed: 'Ошибка удаления' });
 Object.assign(I18N.ja, { community_upload: 'Modをアップロード', community_json_only: '.json または .gtnmod のみアップロードできます', community_file_too_large: 'ファイルが大きすぎます。JSON 最大150KB、GTNMOD 最大1MB', community_json_parse_failed: 'JSON 解析失敗：{0}', community_upload_url_failed: 'アップロードURLを作成できません', community_r2_upload_failed: 'R2 アップロード失敗 HTTP {0}', community_register_failed: '登録失敗', community_delete_failed: '削除失敗' });
 Object.assign(I18N.en, { community_upload_progress: '{0}/{1} · {2}/s · ETA {3}', community_upload_registering: 'Registering and validating...' });
 Object.assign(I18N.zh, { community_upload_progress: '{0}/{1} · {2}/秒 · 预计剩余 {3}', community_upload_registering: '正在登记并校验...' });
 Object.assign(I18N.fr, { community_upload_progress: '{0}/{1} · {2}/s · reste {3}', community_upload_registering: 'Enregistrement et validation...' });
 Object.assign(I18N.pt, { community_upload_progress: '{0}/{1} · {2}/s · restante {3}', community_upload_registering: 'Registrando e validando...' });
-Object.assign(I18N.ru, { community_upload_progress: '{0}/{1} · {2}/с · осталось {3}', community_upload_registering: 'Регистрация и проверка...' });
 Object.assign(I18N.ja, { community_upload_progress: '{0}/{1} · {2}/秒 · 残り {3}', community_upload_registering: '登録と検証中...' });
 Object.assign(I18N.en, { mod_validation_error: 'Format error' });
 Object.assign(I18N.zh, { mod_validation_error: '格式错误' });
 Object.assign(I18N.fr, { mod_validation_error: 'Erreur de format' });
 Object.assign(I18N.pt, { mod_validation_error: 'Erro de formato' });
-Object.assign(I18N.ru, { mod_validation_error: 'Ошибка формата' });
 Object.assign(I18N.ja, { mod_validation_error: '形式エラー' });
 Object.assign(I18N.en, { admin_prefix: 'Admin', login_admin_reserved: 'This nickname is occupied by the administrator' });
 Object.assign(I18N.zh, { admin_prefix: '管理员', login_admin_reserved: '此昵称被管理员占用' });
 Object.assign(I18N.fr, { admin_prefix: 'Admin', login_admin_reserved: 'Ce pseudo est occupé par l’administrateur' });
 Object.assign(I18N.pt, { admin_prefix: 'Administrador', login_admin_reserved: 'Este apelido está ocupado pelo administrador' });
-Object.assign(I18N.ru, { admin_prefix: 'Администратор', login_admin_reserved: 'Этот псевдоним занят администратором' });
 Object.assign(I18N.ja, { admin_prefix: '管理者', login_admin_reserved: 'このニックネームは管理者が使用しています' });
 Object.assign(I18N.en, { chat_rate_limited: 'Chat rate limit reached. Please wait.' });
 Object.assign(I18N.zh, { chat_rate_limited: '聊天发送过快，请稍后再试。' });
 Object.assign(I18N.fr, { chat_rate_limited: 'Messages trop fréquents. Veuillez patienter.' });
 Object.assign(I18N.pt, { chat_rate_limited: 'Mensagens muito frequentes. Aguarde um pouco.' });
-Object.assign(I18N.ru, { chat_rate_limited: 'Сообщения отправляются слишком часто. Подождите.' });
 Object.assign(I18N.ja, { chat_rate_limited: 'チャットの送信が速すぎます。少し待ってください。' });
 Object.assign(I18N.en, {
     account: 'Account', account_guest: 'Guest Mode', account_username: 'Username', account_password: 'Password',
@@ -1139,15 +983,6 @@ Object.assign(I18N.pt, {
     account_not_logged_in: 'Não conectado', account_logged_in_as: 'Conectado: {0}', account_stats: 'Jogos {0} / V {1} / D {2} / E {3}',
     account_need_login: 'Entre ou registre-se primeiro', account_error: 'Erro da conta', account_password_mismatch: 'As senhas não coincidem', guest_enter: 'Entrar como convidado',
     login_registered_reserved: 'Este nome pertence a uma conta'
-});
-Object.assign(I18N.ru, {
-    account: 'Аккаунт', account_guest: 'Гость', account_username: 'Имя', account_password: 'Пароль',
-    account_password_confirm: 'Повтор пароля', account_old_password: 'Текущий пароль', account_new_password: 'Новый пароль',
-    account_new_password_confirm: 'Повтор нового', account_change_password: 'Сменить пароль', account_password_changed: 'Пароль изменён',
-    account_login: 'Войти', account_register: 'Регистрация', account_enter: 'Войти аккаунтом', account_logout: 'Выйти',
-    account_not_logged_in: 'Не выполнен вход', account_logged_in_as: 'Вход: {0}', account_stats: 'Игры {0} / Победы {1} / Поражения {2} / Ничьи {3}',
-    account_need_login: 'Сначала войдите или зарегистрируйтесь', account_error: 'Ошибка аккаунта', account_password_mismatch: 'Пароли не совпадают', guest_enter: 'Войти гостем',
-    login_registered_reserved: 'Это имя принадлежит аккаунту'
 });
 Object.assign(I18N.ja, {
     account: 'アカウント', account_guest: 'ゲスト', account_username: 'ユーザー名', account_password: 'パスワード',
@@ -1186,13 +1021,6 @@ Object.assign(I18N.pt, {
     skin_sync_guest: 'Convidado: local. Conta: servidor.',
     skin_save: 'Salvar', skin_reset: 'Redefinir', skin_saved: 'Visual salvo'
 });
-Object.assign(I18N.ru, {
-    skin: 'Скин', skin_title: 'Скин', skin_primary_color: 'Цвет', skin_eye_shape: 'Глаза',
-    skin_eye_oval: 'Овал', skin_eye_rectangle: 'Прямоугольник', skin_eye_diamond: 'Ромб', skin_eye_hexagon: 'Шестиугольник',
-    skin_face_layout_placeholder: 'Расположение лица: скоро', skin_face_shape_placeholder: 'Форма лица: скоро',
-    skin_sync_guest: 'Гость: локально. Аккаунт: сервер.',
-    skin_save: 'Сохранить', skin_reset: 'Сброс', skin_saved: 'Скин сохранён'
-});
 Object.assign(I18N.ja, {
     skin: 'スキン', skin_title: 'スキン', skin_primary_color: 'メイン色', skin_eye_shape: '目の形',
     skin_eye_oval: '楕円', skin_eye_rectangle: '長方形', skin_eye_diamond: 'ひし形', skin_eye_hexagon: '六角形',
@@ -1210,7 +1038,8 @@ Object.assign(I18N.en, {
     social: 'Social', social_login_hint: 'Sign in to use social settings.',
     social_accept_requests: 'Accept friend requests', social_search_nickname: 'Allow adding me by nickname',
     social_search_id: 'Allow adding me by ID', social_settings_saved: 'Social settings saved',
-    last_login: 'Last seen: {0}', win_rate: 'Win rate: {0}%', recent_matches: 'Recent matches'
+    last_login: 'Last seen: {0}', win_rate: 'Win rate: {0}%', recent_matches: 'Recent matches',
+    friend_profile: 'Profile', direct_messages: 'Direct Messages'
 });
 Object.assign(I18N.zh, {
     friends: '好友', player_id: 'ID', friend_add_placeholder: '输入昵称或ID', friend_add: '添加',
@@ -1222,7 +1051,8 @@ Object.assign(I18N.zh, {
     social: '社交', social_login_hint: '登录账号后可以使用社交设置。',
     social_accept_requests: '接受好友请求', social_search_nickname: '允许通过昵称添加我',
     social_search_id: '允许通过ID添加我', social_settings_saved: '社交设置已保存',
-    last_login: '上次下线：{0}', win_rate: '胜率：{0}%', recent_matches: '最近对局'
+    last_login: '上次下线：{0}', win_rate: '胜率：{0}%', recent_matches: '最近对局',
+    friend_profile: '资料', direct_messages: '私信'
 });
 Object.assign(I18N.fr, {
     friends: 'Amis', player_id: 'ID', friend_add_placeholder: 'Pseudo ou ID', friend_add: 'Ajouter',
@@ -1234,7 +1064,8 @@ Object.assign(I18N.fr, {
     social: 'Social', social_login_hint: 'Connectez-vous pour utiliser les réglages sociaux.',
     social_accept_requests: 'Accepter les demandes', social_search_nickname: 'Autoriser par pseudo',
     social_search_id: 'Autoriser par ID', social_settings_saved: 'Réglages enregistrés',
-    last_login: 'Dernière activité : {0}', win_rate: 'Taux de victoire : {0}%', recent_matches: 'Parties récentes'
+    last_login: 'Dernière activité : {0}', win_rate: 'Taux de victoire : {0}%', recent_matches: 'Parties récentes',
+    friend_profile: 'Profil', direct_messages: 'Messages'
 });
 Object.assign(I18N.pt, {
     friends: 'Amigos', player_id: 'ID', friend_add_placeholder: 'Apelido ou ID', friend_add: 'Adicionar',
@@ -1246,19 +1077,8 @@ Object.assign(I18N.pt, {
     social: 'Social', social_login_hint: 'Entre para usar configurações sociais.',
     social_accept_requests: 'Aceitar pedidos', social_search_nickname: 'Permitir por apelido',
     social_search_id: 'Permitir por ID', social_settings_saved: 'Configurações salvas',
-    last_login: 'Visto por último: {0}', win_rate: 'Vitórias: {0}%', recent_matches: 'Partidas recentes'
-});
-Object.assign(I18N.ru, {
-    friends: 'Друзья', player_id: 'ID', friend_add_placeholder: 'Имя или ID', friend_add: 'Добавить',
-    friend_requests: 'Запросы', friend_sent: 'Отправлено', friend_list: 'Мои друзья',
-    friend_accept: 'Принять', friend_decline: 'Отклонить', friend_ignore: 'Игнорировать', friend_remove: 'Удалить',
-    friend_empty: 'Друзей нет.', friend_request_empty: 'Запросов нет.', friend_sent_empty: 'Нет отправленных запросов.',
-    friend_added: 'Запрос отправлен', friend_added_direct: 'Друг добавлен', friend_removed: 'Друг удалён', friend_updated: 'Обновлено', friend_remove_confirm: 'Удалить этого друга?',
-    friend_auto_added: '{0} добавил вас в друзья',
-    social: 'Соц.', social_login_hint: 'Войдите, чтобы использовать социальные настройки.',
-    social_accept_requests: 'Принимать запросы', social_search_nickname: 'Разрешить по имени',
-    social_search_id: 'Разрешить по ID', social_settings_saved: 'Настройки сохранены',
-    last_login: 'Последний выход: {0}', win_rate: 'Победы: {0}%', recent_matches: 'Последние матчи'
+    last_login: 'Visto por último: {0}', win_rate: 'Vitórias: {0}%', recent_matches: 'Partidas recentes',
+    friend_profile: 'Perfil', direct_messages: 'Mensagens'
 });
 Object.assign(I18N.ja, {
     friends: 'フレンド', player_id: 'ID', friend_add_placeholder: '名前またはID', friend_add: '追加',
@@ -1270,7 +1090,8 @@ Object.assign(I18N.ja, {
     social: 'ソーシャル', social_login_hint: 'ログインするとソーシャル設定を使えます。',
     social_accept_requests: 'フレンド申請を受け取る', social_search_nickname: '名前で追加を許可',
     social_search_id: 'IDで追加を許可', social_settings_saved: '設定を保存しました',
-    last_login: '最終退出: {0}', win_rate: '勝率: {0}%', recent_matches: '最近の対戦'
+    last_login: '最終退出: {0}', win_rate: '勝率: {0}%', recent_matches: '最近の対戦',
+    friend_profile: 'プロフィール', direct_messages: 'DM'
 });
 Object.assign(I18N.en, {
     account_replays: 'Recent Replays', replay_viewer: 'Replay Viewer', replay_view: 'View',
@@ -1304,14 +1125,6 @@ Object.assign(I18N.pt, {
     replay_winner: 'Vencedor: {0}', replay_round: 'Rodada {0}', replay_frame_empty: 'Sem timeline.',
     replay_loading_progress: '{0}/{1} quadros carregados', replay_prepare: 'Preparando replay...'
 });
-Object.assign(I18N.ru, {
-    account_replays: 'Последние повторы', replay_viewer: 'Просмотр повтора', replay_view: 'Открыть',
-    replay_empty: 'Нет повторов за 90 дней.', replay_loading: 'Загрузка...',
-    replay_load_failed: 'Не удалось загрузить повтор', replay_prev: 'Назад', replay_play: 'Пуск',
-    replay_pause: 'Пауза', replay_next: 'Далее', replay_instant: 'Сразу',
-    replay_winner: 'Победитель: {0}', replay_round: 'Раунд {0}', replay_frame_empty: 'Нет timeline.',
-    replay_loading_progress: 'Загружено {0}/{1} кадров', replay_prepare: 'Подготовка повтора...'
-});
 Object.assign(I18N.ja, {
     account_replays: '最近のリプレイ', replay_viewer: 'リプレイビューア', replay_view: '表示',
     replay_empty: '90日以内のリプレイはありません。', replay_loading: '読み込み中...',
@@ -1326,36 +1139,30 @@ Object.assign(I18N.en, { console_prefix: 'Console' });
 Object.assign(I18N.zh, { console_prefix: '\u63a7\u5236\u53f0' });
 Object.assign(I18N.fr, { console_prefix: 'Console' });
 Object.assign(I18N.pt, { console_prefix: 'Console' });
-Object.assign(I18N.ru, { console_prefix: 'Console' });
 Object.assign(I18N.ja, { console_prefix: 'Console' });
 Object.assign(I18N.zh, { chief_designer_prefix: '\u603b\u8bbe\u8ba1\u5e08' });
 Object.assign(I18N.fr, { chief_designer_prefix: 'Concepteur en chef' });
 Object.assign(I18N.pt, { chief_designer_prefix: 'Designer-chefe' });
-Object.assign(I18N.ru, { chief_designer_prefix: 'Chief Designer' });
 Object.assign(I18N.ja, { chief_designer_prefix: 'Chief Designer' });
 Object.assign(I18N.en, { right_angle_person_prefix: 'Right-Angle Person' });
 Object.assign(I18N.zh, { right_angle_person_prefix: '\u76f4\u89d2\u4eba' });
 Object.assign(I18N.fr, { right_angle_person_prefix: 'Personne angle droit' });
 Object.assign(I18N.pt, { right_angle_person_prefix: 'Pessoa de ângulo reto' });
-Object.assign(I18N.ru, { right_angle_person_prefix: 'Right-Angle Person' });
 Object.assign(I18N.ja, { right_angle_person_prefix: '直角人' });
 Object.assign(I18N.en, { settings_ui_style: 'UI Style', ui_style_minimal: 'Minimal', ui_style_classic: 'Classic' });
 Object.assign(I18N.zh, { settings_ui_style: '界面风格', ui_style_minimal: '简约', ui_style_classic: '经典' });
 Object.assign(I18N.fr, { settings_ui_style: 'Style UI', ui_style_minimal: 'Minimal', ui_style_classic: 'Classique' });
 Object.assign(I18N.pt, { settings_ui_style: 'Estilo da UI', ui_style_minimal: 'Minimalista', ui_style_classic: 'Clássico' });
-Object.assign(I18N.ru, { settings_ui_style: 'Стиль интерфейса', ui_style_minimal: 'Минимализм', ui_style_classic: 'Классика' });
 Object.assign(I18N.ja, { settings_ui_style: 'UIスタイル', ui_style_minimal: 'ミニマル', ui_style_classic: 'クラシック' });
 Object.assign(I18N.en, { mimic_extra_cost: 'Cost {0}E' });
 Object.assign(I18N.zh, { mimic_extra_cost: '\u6d88\u8017 {0}E' });
 Object.assign(I18N.fr, { mimic_extra_cost: 'Co\u00fbt {0}E' });
 Object.assign(I18N.pt, { mimic_extra_cost: 'Custo {0}E' });
-Object.assign(I18N.ru, { mimic_extra_cost: '\u0426\u0435\u043d\u0430 {0}E' });
 Object.assign(I18N.ja, { mimic_extra_cost: '\u6d88\u8cbb {0}E' });
 Object.assign(I18N.en, { spectate_unavailable: 'Not spectatable yet' });
 Object.assign(I18N.zh, { spectate_unavailable: '\u6682\u4e0d\u80fd\u89c2\u6218' });
 Object.assign(I18N.fr, { spectate_unavailable: 'Observation indisponible' });
 Object.assign(I18N.pt, { spectate_unavailable: 'Ainda indispon\u00edvel' });
-Object.assign(I18N.ru, { spectate_unavailable: '\u041d\u0430\u0431\u043b\u044e\u0434\u0435\u043d\u0438\u0435 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e' });
 Object.assign(I18N.ja, { spectate_unavailable: '\u307e\u3060\u89b3\u6226\u3067\u304d\u307e\u305b\u3093' });
 Object.assign(I18N.en, {
     tutorial_player_you: 'You', tutorial_player_opponent: 'Practice Opponent',
@@ -1424,23 +1231,6 @@ Object.assign(I18N.pt, {
     error_target_alive_required: 'Escolha um jogador vivo',
     error_equipment_friendly_turn_only: 'Equipamentos só podem ser acionados em turno aliado',
     error_game_already_over: 'A partida já terminou',
-});
-Object.assign(I18N.ru, {
-    tutorial_player_you: 'Вы', tutorial_player_opponent: 'Тренировочный соперник',
-    error_urf_equip_limit: 'Лимит снаряжения Infinite Fire: {0}. Сначала продайте снаряжение.',
-    error_urf_replace_used: 'Вы уже заменяли карту в этом ходу',
-    error_urf_sell_used: 'Вы уже продавали снаряжение в этом ходу',
-    error_indestructible_sell: 'Неразрушимое снаряжение нельзя продать',
-    error_invalid_player: 'Недопустимый игрок',
-    error_not_draft_phase: 'Сейчас не фаза выбора',
-    error_no_reroll: 'Перебросов не осталось',
-    error_no_pending_ally_consent: 'Нет ожидающего запроса союзника',
-    error_card_not_in_options: 'Этой карты нет среди вариантов',
-    error_card_not_in_hand_alt: 'Этой карты нет в руке',
-    error_target_self_forbidden: 'Нельзя выбрать себя целью',
-    error_target_alive_required: 'Выберите живого игрока',
-    error_equipment_friendly_turn_only: 'Снаряжение можно активировать только в ход союзника',
-    error_game_already_over: 'Игра уже закончена',
 });
 Object.assign(I18N.ja, {
     tutorial_player_you: 'あなた', tutorial_player_opponent: '練習相手',
@@ -1532,24 +1322,6 @@ Object.assign(I18N.pt, {
     compact_log_first: '1o',
     compact_log_order: 'Ordem',
 });
-Object.assign(I18N.ru, {
-    compact_end_turn: 'Ход',
-    compact_view_deck: 'Колода',
-    compact_urf_replace: 'Замена',
-    compact_urf_sell: 'Продать',
-    compact_set_next_draw: 'След.',
-    compact_pause_edit: 'Правка',
-    compact_surrender: 'Сдаться',
-    compact_leave_spectate: 'Выйти',
-    compact_send: 'Отпр.',
-    compact_battle_log: 'Лог',
-    compact_hand: 'Рука',
-    compact_equipment: 'Снар.',
-    compact_corrupted: 'Порча',
-    compact_log_start: 'Старт',
-    compact_log_first: 'перв.',
-    compact_log_order: 'Порядок',
-});
 Object.assign(I18N.ja, {
     compact_end_turn: '終了',
     compact_view_deck: '山札',
@@ -1621,19 +1393,6 @@ Object.assign(I18N.pt, {
     surrender_no_pending: 'Nao ha pedido de rendicao pendente',
     tomato_layer: 'Camadas',
 });
-Object.assign(I18N.ru, {
-    confirm_team_surrender: 'Запросить согласие союзника на сдачу?',
-    surrender_consent_title: 'Запрос сдачи',
-    surrender_consent_msg: '{0} хочет сдаться. Согласиться?',
-    surrender_accept_countdown: 'Согласиться ({0})',
-    surrender_waiting_teammate: 'Ожидание согласия союзника',
-    surrender_declined: 'Союзник отказал в сдаче',
-    surrender_confirmed: 'Союзник согласился на сдачу',
-    surrender_teammate_offline: 'Союзник не в сети',
-    surrender_pending: 'Запрос сдачи уже ожидает ответа',
-    surrender_no_pending: 'Нет ожидающего запроса сдачи',
-    tomato_layer: 'Слои',
-});
 Object.assign(I18N.ja, {
     confirm_team_surrender: '味方の同意を得て降参しますか？',
     surrender_consent_title: '降参確認',
@@ -1675,13 +1434,6 @@ Object.assign(I18N.pt, {
     chat_channel_team: 'Equipe',
     chat_channel_enemy: 'Inimigos',
     chat_channel_private_to: 'Privado -> {0}',
-});
-Object.assign(I18N.ru, {
-    chat_channel_label: 'Chat channel',
-    chat_channel_public: 'Public',
-    chat_channel_team: 'Team',
-    chat_channel_enemy: 'Enemy',
-    chat_channel_private_to: 'Private -> {0}',
 });
 Object.assign(I18N.ja, {
     chat_channel_label: 'Chat channel',
@@ -1776,21 +1528,6 @@ Object.assign(I18N.pt, {
     report_login_required: 'Entre com uma conta para denunciar.',
     report_error: 'Falha ao denunciar: {0}',
 });
-Object.assign(I18N.ru, {
-    report: 'Report',
-    report_chat: 'Report message',
-    report_player: 'Report player',
-    report_match: 'Report match',
-    report_title: 'Submit Report',
-    report_object: 'Object',
-    report_category: 'Category',
-    report_reason: 'Reason',
-    report_reason_placeholder: 'Optional details, up to 300 characters',
-    report_submit: 'Submit',
-    report_success: 'Report submitted',
-    report_login_required: 'Log in to an account before reporting.',
-    report_error: 'Report failed: {0}',
-});
 Object.assign(I18N.ja, {
     report: '通報',
     report_chat: 'メッセージを通報',
@@ -1807,7 +1544,12 @@ Object.assign(I18N.ja, {
     report_error: '通報失敗: {0}',
 });
 
-let currentLang = localStorage.getItem('gtn_lang') || 'zh';
+const SUPPORTED_LANGS = new Set(['zh', 'en', 'fr', 'pt', 'ja']);
+function normalizeLang(lang) {
+    return SUPPORTED_LANGS.has(lang) ? lang : 'zh';
+}
+let currentLang = normalizeLang(localStorage.getItem('gtn_lang') || 'zh');
+if (localStorage.getItem('gtn_lang') !== currentLang) localStorage.setItem('gtn_lang', currentLang);
 let showEnglishCardNames = localStorage.getItem('gtn_show_english_card_names') !== '0';
 let showCardImages = localStorage.getItem('gtn_show_card_images') !== '0';
 const UI_STYLE_MIGRATION_KEY = 'gtn_ui_style_v2_migrated';
@@ -2266,6 +2008,19 @@ function colorizeCardText(value) {
     let i = 0;
     while (i < text.length) {
         const rest = text.slice(i);
+        const cardMarker = rest.match(/^\[\[card:([a-z0-9_:/-]+)\]\]/i);
+        if (cardMarker && cardMarker[1]) {
+            const defId = cardMarker[1];
+            const cardDef = getCardDef(defId);
+            if (cardDef) {
+                const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
+                html += `<span class="choice-card-token inline-card-chip"><span class="choice-card-name" style="border-color:${escapeHtml(typeColor)};color:${escapeHtml(typeColor)}">${escapeHtml(getCardName(cardDef))}</span></span>`;
+            } else {
+                html += escapeHtml(defId);
+            }
+            i += cardMarker[0].length;
+            continue;
+        }
         let matched = null;
         for (const rule of CARD_TEXT_TOKEN_RULES) {
             const m = rest.match(rule.re);
@@ -2298,13 +2053,6 @@ const LOG_TEXT = {
     pt: { game_start: 'Partida iniciada. {p} comeca.', round: 'Turno {n}', draw_cards: '{p} compra {n} cartas', recover_e: '{p} recupera {n}E', take_damage: '{p} sofre {n} de dano {source} (H={h})', use_deal: '{p} usa {card}: causa {n} de dano', use_multi: '{p} usa {card}: causa {n} x {times} de dano', use_simple: '{p} usa {card}', equip: '{p} equipa {card}', exile: '{card} e exilado', counter: '{p} responde com {card}', win: '{loser} chegou a 0H. {winner} vence.', draw: 'Ambos chegaram a 0H. Empate.', surrender: '{p} desistiu. {winner} vence.', poison: 'Veneno', burn: 'Queima', physical: 'fisico' },
     ru: { game_start: 'Game start. {p} goes first.', round: 'Round {n}', draw_cards: '{p} draws {n} cards', recover_e: '{p} recovers {n}E', take_damage: '{p} takes {n} {source} damage (H={h})', use_deal: '{p} uses {card}: deals {n} damage', use_multi: '{p} uses {card}: deals {n} x {times} damage', use_simple: '{p} uses {card}', equip: '{p} equips {card}', exile: '{card} is exiled', counter: '{p} counters with {card}', win: '{loser} reaches 0H. {winner} wins.', draw: 'Both players reached 0H. Draw.', surrender: '{p} surrenders. {winner} wins.', poison: 'Poison', burn: 'Burn', physical: 'physical' },
     ja: { game_start: 'Game start. {p} goes first.', round: 'Round {n}', draw_cards: '{p} draws {n} cards', recover_e: '{p} recovers {n}E', take_damage: '{p} takes {n} {source} damage (H={h})', use_deal: '{p} uses {card}: deals {n} damage', use_multi: '{p} uses {card}: deals {n} x {times} damage', use_simple: '{p} uses {card}', equip: '{p} equips {card}', exile: '{card} is exiled', counter: '{p} counters with {card}', win: '{loser} reaches 0H. {winner} wins.', draw: 'Both players reached 0H. Draw.', surrender: '{p} surrenders. {winner} wins.', poison: 'Poison', burn: 'Burn', physical: 'physical' },
-};
-LOG_TEXT.ru = {
-    game_start: 'Начало игры. {p} ходит первым.', round: 'Раунд {n}', draw_cards: '{p} берет карт: {n}', recover_e: '{p} восстанавливает {n}E',
-    take_damage: '{p} получает {n} {source} урона (H={h})', use_deal: '{p} использует {card}: наносит {n} урона',
-    use_multi: '{p} использует {card}: наносит {n} x {times} урона', use_simple: '{p} использует {card}', equip: '{p} экипирует {card}',
-    exile: '{card} изгнана', counter: '{p} контратакует картой {card}', win: '{loser} падает до 0H. {winner} побеждает.',
-    draw: 'Оба игрока достигли 0H. Ничья.', surrender: '{p} сдается. {winner} побеждает.', poison: 'яд', burn: 'ожог', physical: 'физический'
 };
 LOG_TEXT.ja = {
     game_start: 'ゲーム開始。{p}が先攻。', round: 'ラウンド {n}', draw_cards: '{p}が{n}枚ドロー', recover_e: '{p}が{n}E回復',
@@ -2364,23 +2112,6 @@ Object.assign(LOG_TEXT.pt, {
     disconnect_loss: '{p} ficou desconectado tempo demais. {winner} vence.',
     team_disconnect_loss: '{p} ficou desconectado tempo demais. Equipe {team} vence.',
 });
-Object.assign(LOG_TEXT.ru, {
-    solo_start: 'Начинается одиночная тренировка. {p} ходит первым.',
-    tutorial_start: 'Начинается обучение. {p} ходит первым.',
-    urf_start: 'Infinite Fire начинается. {p} ходит первым.',
-    team_start: '2v2 начинается. {p} ходит первым.',
-    turn_order: 'Порядок ходов: {order}',
-    replenish_card: '{p} добирает 1 карту {type}: {card}',
-    hand_full_discard: 'Рука {p} заполнена. {card} уходит в сброс.',
-    replace_card: '{p} заменяет {old} и получает {card}',
-    chilli_discard_draw: '{p} использует Chilli, сбрасывает 1 карту и берет 1 карту',
-    chilli_draw: '{p} использует Chilli и берет 1 карту',
-    sell_equipment: '{p} продает {card} и восстанавливает {e}E/{m}M',
-    team_draw: 'Обе команды побеждены. Ничья.',
-    team_win: 'Команда {team} побеждает.',
-    disconnect_loss: '{p} слишком долго был не в сети. {winner} побеждает.',
-    team_disconnect_loss: '{p} слишком долго был не в сети. Команда {team} побеждает.',
-});
 Object.assign(LOG_TEXT.ja, {
     solo_start: '単人訓練開始。{p}が先攻。',
     tutorial_start: 'チュートリアル開始。{p}が先攻。',
@@ -2403,7 +2134,6 @@ Object.assign(LOG_TEXT.en, { battery_counter: 'Battery counter' });
 Object.assign(LOG_TEXT.zh || (LOG_TEXT.zh = {}), { battery_counter: '\u7535\u6c60\u53cd\u4f24' });
 Object.assign(LOG_TEXT.fr, { battery_counter: 'contre de Batterie' });
 Object.assign(LOG_TEXT.pt, { battery_counter: 'contra-ataque da Bateria' });
-Object.assign(LOG_TEXT.ru, { battery_counter: 'Battery counter' });
 Object.assign(LOG_TEXT.ja, { battery_counter: '\u96fb\u6c60\u53cd\u6483' });
 
 const LOG_FALLBACK_REPLACE = {
@@ -2657,6 +2387,7 @@ let dmData = { threads: [], unread_count: 0 };
 let activeDmThreadId = null;
 let activeDmTargetUserId = null;
 let activeDmMessages = [];
+let activeSocialFriendId = null;
 let lobbyMentionCandidates = [];
 let lobbyMentionMenu = null;
 let lobbyMentionActiveRange = null;
@@ -2687,8 +2418,11 @@ const skinLookByPlayerId = new Map();
 const skinDamageMoodByPlayerId = new Map();
 const skinMouthTByPlayerId = new Map();
 let socket = null;
+let socketConnectUrl = '';
+let socketCreateSeq = 0;
 let manualDisconnect = false;
 let latencyPingTimer = null;
+let skinSaveInFlight = false;
 let CARD_DEFS = {};
 let gameState = {};
 let activeV2UiRequestId = null;
@@ -3002,6 +2736,7 @@ function updateCompactUiText() {
 }
 
 function applyLang(lang) {
+    lang = normalizeLang(lang);
     currentLang = lang;
     localStorage.setItem('gtn_lang', lang);
     document.documentElement.setAttribute('lang', lang);
@@ -3129,12 +2864,17 @@ function updateStaticText() {
     }
     const langSelect = $('settings-lang-select');
     if (langSelect) {
-        langSelect.options[0].textContent = '\u7b80\u4f53\u4e2d\u6587';
-        langSelect.options[1].textContent = 'English (US)';
-        langSelect.options[2].textContent = 'Francais';
-        langSelect.options[3].textContent = 'Portugues (Brasil)';
-        langSelect.options[4].textContent = '\u0420\u0443\u0441\u0441\u043a\u0438\u0439';
-        langSelect.options[5].textContent = '\u65e5\u672c\u8a9e';
+        const langLabels = {
+            zh: '\u7b80\u4f53\u4e2d\u6587',
+            en: 'English (US)',
+            fr: 'Francais',
+            pt: 'Portugues (Brasil)',
+            ja: '\u65e5\u672c\u8a9e',
+        };
+        Object.entries(langLabels).forEach(([value, label]) => {
+            const option = langSelect.querySelector(`option[value="${value}"]`);
+            if (option) option.textContent = label;
+        });
     }
     const btnSettings = $('btn-open-settings');
     if (btnSettings) btnSettings.textContent = UI.settings_btn;
@@ -3211,6 +2951,15 @@ function updateStaticText() {
     if (skinReset) skinReset.textContent = UI.skin_reset;
     const friendsTitle = $('friends-popover-title');
     if (friendsTitle) friendsTitle.textContent = UI.friends;
+    const socialDetailTitle = $('social-detail-title');
+    if (socialDetailTitle) socialDetailTitle.textContent = UI.social;
+    document.querySelectorAll('[data-social-detail-tab]').forEach(btn => {
+        const tab = btn.dataset.socialDetailTab;
+        if (tab === 'profile') btn.textContent = UI.friend_profile || '资料';
+        if (tab === 'dm') btn.textContent = UI.direct_messages || '私信';
+        if (tab === 'incoming') btn.textContent = UI.friend_requests;
+        if (tab === 'outgoing') btn.textContent = UI.friend_sent;
+    });
     const friendIdentifier = $('input-friend-identifier');
     if (friendIdentifier) friendIdentifier.placeholder = UI.friend_add_placeholder;
     const friendAddBtn = $('btn-friend-add');
@@ -3923,6 +3672,8 @@ function getAllStatusDefs() {
         { key: 'overload', label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
         { key: 'foresight', label: UI.status_foresight, desc: '每回合可以最多从抽牌堆替换层数张手牌。', color: '#2980B9' },
         { key: 'fracture', label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
+        { key: 'stagnation', label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
+        { key: 'blind', label: UI.status_blind, desc: '只能看到自己手牌的类型。名称、费用、图片、描述、标签和长按说明都会被隐藏为问号；自己回合开始时手牌会被打乱。自己回合结束时失明层数-1。', color: '#2C3E50' },
         { key: 'heal_block', label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数-1。', color: '#E84393' },
         { key: 'weakness', label: UI.status_weakness, desc: '造成物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
@@ -4105,6 +3856,35 @@ function showActionToast(text, duration, type) {
             actionToastTimer = null;
         }, 180);
     }, Math.max(900, duration || 1800));
+}
+
+async function copyPlainText(text) {
+    const value = String(text || '').trim();
+    if (!value) return false;
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(value);
+            return true;
+        }
+    } catch (err) {
+        console.warn('clipboard write failed', err);
+    }
+    try {
+        const input = document.createElement('textarea');
+        input.value = value;
+        input.setAttribute('readonly', 'readonly');
+        input.style.position = 'fixed';
+        input.style.left = '-9999px';
+        input.style.top = '0';
+        document.body.appendChild(input);
+        input.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(input);
+        return ok;
+    } catch (err) {
+        console.warn('fallback copy failed', err);
+        return false;
+    }
 }
 
 function isTouchPlayMode() {
@@ -4522,8 +4302,12 @@ function selectClassicPlayCard(cardInstanceId, event = null) {
     const hand = (gameState.you || {}).hand || [];
     const cardDict = hand.find(c => c.instance_id === cardInstanceId);
     const cardDef = cardDict ? getCardDef(cardDict.def_id) : null;
-    if (!cardDict || !cardDef || !canPlayCard(cardDict)) {
-        if (cardDict) flashStatus(getCannotPlayReason(cardDict), 2200, 'error');
+    const blindSelf = isOwnBlindActive();
+    const canSelect = blindSelf
+        ? !!(cardDict && cardDef && cardDef.card_type !== 'guard' && isMyTurn() && !isActionBusy({ includeAnimation: false }))
+        : !!(cardDict && cardDef && canPlayCard(cardDict));
+    if (!canSelect) {
+        if (cardDict) flashStatus(blindSelf ? '这张牌当前无法打出' : getCannotPlayReason(cardDict), 2200, 'error');
         return false;
     }
     if (event && typeof event.clientX === 'number') classicAimPointer = { x: event.clientX, y: event.clientY };
@@ -4991,6 +4775,22 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
     return { totalE, totalM: baseM, flags };
 }
 
+function isOwnBlindActive() {
+    return !!(gameState && gameState.you && Number(gameState.you.blind || 0) > 0 && !isSpectating);
+}
+
+function isOwnHandCardInstance(cardDict) {
+    if (!cardDict || cardDict.instance_id == null || !gameState || !gameState.you) return false;
+    const iid = String(cardDict.instance_id);
+    return Array.isArray(gameState.you.hand) && gameState.you.hand.some(card => String(card.instance_id) === iid);
+}
+
+function shouldBlindCardForSelf(cardDict, options = {}) {
+    if (options.blindForSelf || cardDict && cardDict.__blind_for_self) return true;
+    if (options.autoBlindSelf === false) return false;
+    return isOwnBlindActive() && isOwnHandCardInstance(cardDict);
+}
+
 function getCardLayerLabel(cardDict) {
     const fusionLevel = Number(cardDict.fusion_level || 1);
     const fissionLevel = Number(cardDict.fission_level || 1);
@@ -5038,11 +4838,13 @@ function createCardElement(cardDict, options = {}) {
     }
     const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
     const typeLabel = getCardTypeLabel(cardDef.card_type) || cardDef.card_type;
-    const cardName = getCardName(cardDef);
-    const englishName = shouldShowEnglishCardName(cardDef, cardName) ? getEnglishCardName(cardDef) : '';
-    const effectText = getCardEffectText(cardDef);
-    const descriptionText = getCardDescriptionText(cardDef);
-    const imageUrl = showCardImages ? getCardArtUrl(cardDict, cardDef) : '';
+    const blinded = shouldBlindCardForSelf(cardDict, options);
+    const cardName = blinded ? '?' : getCardName(cardDef);
+    const englishName = (!blinded && shouldShowEnglishCardName(cardDef, cardName)) ? getEnglishCardName(cardDef) : '';
+    const effectText = blinded ? '?' : getCardEffectText(cardDef);
+    const descriptionText = blinded ? '?' : getCardDescriptionText(cardDef);
+    const imageUrl = (!blinded && showCardImages) ? getCardArtUrl(cardDict, cardDef) : '';
+    if (blinded) el.classList.add('card-blinded');
     el.classList.add(englishName ? 'card-has-english' : 'card-no-english');
     el.classList.add(imageUrl ? 'card-has-art' : 'card-no-art');
     const cardArtHtml = imageUrl
@@ -5055,7 +4857,7 @@ function createCardElement(cardDict, options = {}) {
     el.dataset.instanceId = cardDict.instance_id;
     el.dataset.defId = defId;
     let flagsHtml = '';
-    for (const flag of flags) {
+    if (!blinded) for (const flag of flags) {
         if (!shouldDisplayCardFlag(flag, { showSystemFlags: showAllFlags })) continue;
         const custom = getCustomTagDef(flag);
         if (custom) {
@@ -5070,25 +4872,25 @@ function createCardElement(cardDict, options = {}) {
     }
     const fusionLevel = Number(cardDict.fusion_level || 1);
     const fissionLevel = Number(cardDict.fission_level || 1);
-    if (fusionLevel > 1) {
+    if (!blinded && fusionLevel > 1) {
         flagsHtml += `<span class="card-flag fusion-layer">${escapeHtml(UI.fusion_layer || 'Fusion')}: ${fusionLevel}</span>`;
     }
-    if (fissionLevel > 1) {
+    if (!blinded && fissionLevel > 1) {
         flagsHtml += `<span class="card-flag fission-layer">${escapeHtml(UI.fission_layer || 'Fission')}: ${fissionLevel}</span>`;
     }
-    if (!showAllFlags && defId === 'Tomato' && cardDict.instance_id != null) {
+    if (!blinded && !showAllFlags && defId === 'Tomato' && cardDict.instance_id != null) {
         const tomatoLayer = Math.min(6, Math.max(0, Number(cardDict.held_turns || 0)));
         flagsHtml += `<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || '层数')}: ${tomatoLayer}</span>`;
     }
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
-    if (swiftValue > 0) {
+    if (!blinded && swiftValue > 0) {
         flagsHtml += `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}: ${swiftValue}</span>`;
     }
     const copyCount = Number(cardDef.copy_count || 0);
-    if (copyCount > 0) {
+    if (!blinded && copyCount > 0) {
         flagsHtml += `<span class="card-flag copy">${escapeHtml(UI.tag_copy || 'Copy')}: ${copyCount}</span>`;
     }
-    const predictionHtml = getCardPlayEffectPredictionHtml(cardDict, {
+    const predictionHtml = blinded ? '' : getCardPlayEffectPredictionHtml(cardDict, {
         ...predictionOptions,
         ownerState: predictionOptions.ownerState || cardOwnerState,
         attackerState: predictionOptions.attackerState || cardOwnerState,
@@ -5101,9 +4903,9 @@ function createCardElement(cardDict, options = {}) {
         : '';
     el.innerHTML = `
         <div class="card-costs">
-            <span class="cost-e">${totalE}</span>
+            <span class="cost-e">${blinded ? '?' : totalE}</span>
             <span class="card-name" style="color:${typeColor}">${escapeHtml(cardName)}</span>
-            <span class="cost-m">${totalM}</span>
+            <span class="cost-m">${blinded ? '?' : totalM}</span>
         </div>
         ${englishName ? `<div class="card-english-name" style="color:${typeColor}">${escapeHtml(englishName)}</div>` : ''}
         ${cardArtHtml}
@@ -5125,6 +4927,7 @@ function createCardElement(cardDict, options = {}) {
         attachTermIntroToCard(el, cardDict, {
             ownerState: cardOwnerState,
             prediction: predictionOptions,
+            blindForSelf: blinded,
         });
     }
     return el;
@@ -5242,19 +5045,21 @@ function createCardChoiceChip(cardDict, options = {}) {
         return chip;
     }
     const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
+    const blinded = shouldBlindCardForSelf(cardDict, options);
+    if (blinded) chip.classList.add('choice-card-blinded');
     const name = document.createElement('span');
     name.className = 'choice-card-name';
     name.style.borderColor = typeColor;
     name.style.color = typeColor;
-    name.textContent = getCardName(cardDef);
+    name.textContent = blinded ? getCardTypeLabel(cardDef.card_type) || '?' : getCardName(cardDef);
     chip.appendChild(name);
-    if (options.extraCostText) {
+    if (!blinded && options.extraCostText) {
         const cost = document.createElement('span');
         cost.className = 'choice-card-extra-cost';
         cost.textContent = options.extraCostText;
         chip.appendChild(cost);
     }
-    const flagsHtml = buildInstanceOnlyFlagHtml(cardDict, cardDef, options);
+    const flagsHtml = blinded ? '' : buildInstanceOnlyFlagHtml(cardDict, cardDef, options);
     if (flagsHtml) {
         const flags = document.createElement('span');
         flags.className = 'choice-card-flags';
@@ -5262,8 +5067,9 @@ function createCardChoiceChip(cardDict, options = {}) {
         chip.appendChild(flags);
     }
     const previewOptions = options.previewOptions || options.cardOptions || null;
-    attachFloatingCardPreview(chip, cardDict, previewOptions || {});
-    attachTermIntroToCard(chip, cardDict, previewOptions || {});
+    const previewCard = blinded ? { ...cardDict, __blind_for_self: true } : cardDict;
+    attachFloatingCardPreview(chip, previewCard, { ...(previewOptions || {}), blindForSelf: blinded });
+    attachTermIntroToCard(chip, previewCard, { ...(previewOptions || {}), blindForSelf: blinded });
     return chip;
 }
 
@@ -6177,6 +5983,18 @@ function buildCardIntroSummaryHtml(cardDef) {
 }
 
 function buildCardIntroTermsHtml(cardDict) {
+    if (cardDict && cardDict.__blind_for_self) {
+        return `
+            <section class="term-intro-summary">
+                <div class="term-intro-flavor">?</div>
+                <div class="term-intro-summary-block">
+                    <div class="term-intro-summary-label">?</div>
+                    <div class="term-intro-summary-text">?</div>
+                </div>
+            </section>
+            ${renderTermIntroItems([{ key: 'blind_unknown', label: '?', desc: '?', color: COLORS.text_primary }])}
+        `;
+    }
     const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
     return `${buildCardIntroSummaryHtml(cardDef)}${renderTermIntroItems(collectCardIntroTerms(cardDict))}`;
 }
@@ -6219,6 +6037,8 @@ function collectCardIntroTerms(cardDict) {
     probes.forEach(([re, key]) => {
         if (re.test(rawText)) addTermIntroItem(items, seen, key);
     });
+    if (/(虚无|Void)/i.test(rawText)) addFlagIntroItem(items, seen, 'void');
+    if (/(回转|Rebound)/i.test(rawText)) addFlagIntroItem(items, seen, 'rebound');
     const fusionLevel = Math.max(1, Number(cardDict && cardDict.fusion_level || 1));
     const fissionLevel = Math.max(1, Number(cardDict && cardDict.fission_level || 1));
     if (fusionLevel > 1 || cardDef.id === 'Fusion') addTermIntroItem(items, seen, 'fusion_layer');
@@ -6253,13 +6073,15 @@ function getStatusIntroItem(statusInfo) {
         attack_blocked: { label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。', color: '#1A5276' },
-        bandage: { label: UI.status_bandage, desc: '绷带提供临时保护，回合开始时会按规则结束。', color: '#1E8449' },
-        sponge: { label: UI.status_sponge, desc: '海绵相关的临时状态，会影响下一次结算。', color: '#6C3483' },
-        shovel: { label: UI.status_shovel, desc: '铲子相关的临时状态，会限制或改变当前回合行动。', color: '#5D4037' },
+        bandage: { label: UI.status_bandage, desc: '绷带的保护，若状态存在，玩家死亡时会先无敌一回合，下回合死亡。', color: '#1E8449' },
+        sponge: { label: UI.status_sponge, desc: '表示海绵的存在。', color: '#6C3483' },
+        shovel: { label: UI.status_shovel, desc: '表示已使用铲子，此时不能使用卡牌。', color: '#5D4037' },
         sluggish: { label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         overload: { label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
         foresight: { label: UI.status_foresight, desc: '每回合可以最多从抽牌堆替换层数张手牌。', color: '#2980B9' },
         fracture: { label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
+        stagnation: { label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
+        blind: { label: UI.status_blind, desc: '只能看到自己手牌的类型。名称、费用、图片、描述、标签和长按说明都会被隐藏为问号；自己回合开始时手牌会被打乱。自己回合结束时失明层数-1。', color: '#2C3E50' },
         heal_block: { label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数-1。', color: '#E84393' },
         weakness: { label: UI.status_weakness, desc: '造成物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         bleed: { label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
@@ -6428,6 +6250,8 @@ function renderTermIntroItems(items) {
 function showTermIntroForCard(cardDict, cardOptions = {}) {
     const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
     if (!cardDef) return;
+    const blinded = shouldBlindCardForSelf(cardDict, cardOptions);
+    const introCardDict = blinded ? { ...cardDict, __blind_for_self: true } : cardDict;
     const sourceRect = cardOptions.sourceRect || null;
     removeFloatingCardPreview();
     removeCardHoldPreview();
@@ -6437,17 +6261,18 @@ function showTermIntroForCard(cardDict, cardOptions = {}) {
     const title = overlay.querySelector('#term-intro-title');
     const list = overlay.querySelector('#term-intro-list');
     cardSlot.innerHTML = '';
-    const card = createCardElement(cardDict, {
+    const card = createCardElement(introCardDict, {
         showAllFlags: true,
         disableIntro: true,
+        blindForSelf: blinded,
         ownerState: cardOptions.ownerState || getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you),
         prediction: cardOptions.prediction || getCardPredictionOptionsForOwner(cardDict, cardOptions.ownerState),
     });
     card.classList.add('term-intro-card');
     if (isUsableRect(sourceRect)) card.classList.add('term-intro-card-hidden');
     cardSlot.appendChild(card);
-    title.textContent = `${getCardName(cardDef)} · 术语说明`;
-    list.innerHTML = buildCardIntroTermsHtml(cardDict);
+    title.textContent = blinded ? '? · ?' : `${getCardName(cardDef)} · 术语说明`;
+    list.innerHTML = buildCardIntroTermsHtml(introCardDict);
     overlay.classList.remove('visible');
     overlay.classList.toggle('card-flying', isUsableRect(sourceRect));
     overlay.classList.remove('hidden');
@@ -6835,18 +6660,54 @@ function startLatencyMonitor() {
     latencyPingTimer = setInterval(sendLatencyPing, 10000);
 }
 
+function emitSocketLogin() {
+    if (!socket || !socket.connected) return false;
+    const preferredMode = localStorage.getItem('preferred_mode') || '1v1';
+    socket.emit('login', {
+        nickname: loginCredential || nickname,
+        mode: preferredMode,
+        account_login: !!currentAccount,
+        beta_mode: GTN_BETA_MODE,
+        skin: getCurrentSkinConfig(),
+        ...getModLoginPayload(),
+    });
+    return true;
+}
+
+function bindSocketEvent(eventName, handler) {
+    if (!socket) return;
+    try {
+        socket.off(eventName);
+    } catch (_) {}
+    socket.on(eventName, handler);
+}
+
 function connectSocket(serverUrl) {
     stopLocalSoloRuntime();
+    let url = normalizeServerUrl(serverUrl);
+    const readyState = socket && socket.io ? socket.io._readyState : '';
+    const sameEndpoint = socket && socketConnectUrl === url;
+    if (sameEndpoint && socket.connected) {
+        debugLog('[client] socket reuse connected id=', socket.id, 'url=', url);
+        emitSocketLogin();
+        return;
+    }
+    if (sameEndpoint && (readyState === 'opening' || readyState === 'open')) {
+        debugLog('[client] socket reuse connecting id=', socket.id, 'url=', url, 'state=', readyState);
+        return;
+    }
     stopLatencyMonitor();
     if (socket) {
         manualDisconnect = true;
+        try {
+            socket.removeAllListeners();
+        } catch (_) {}
         socket.disconnect();
         socket = null;
     }
     manualDisconnect = false;
-    let url = normalizeServerUrl(serverUrl);
     let opts = {
-        transports: ['polling', 'websocket'],
+        transports: ['websocket', 'polling'],
         timeout: SOCKET_CONNECT_TIMEOUT_MS,
         reconnectionAttempts: 5,
         reconnectionDelay: 400,
@@ -6854,21 +6715,17 @@ function connectSocket(serverUrl) {
         withCredentials: true,
     };
     socket = io(url, opts);
+    window.gtnSocket = socket;
+    socketConnectUrl = url;
+    socketCreateSeq += 1;
+    debugLog('[client] socket created #', socketCreateSeq, 'url=', url);
 
-    socket.on('connect', () => {
-        debugLog('[client] socket connected, login nickname=', nickname);
+    bindSocketEvent('connect', () => {
+        debugLog('[client] socket connected id=', socket.id, 'login nickname=', nickname);
         startLatencyMonitor();
-        const preferredMode = localStorage.getItem('preferred_mode') || '1v1';
-        socket.emit('login', {
-            nickname: loginCredential || nickname,
-            mode: preferredMode,
-            account_login: !!currentAccount,
-            beta_mode: GTN_BETA_MODE,
-            skin: getCurrentSkinConfig(),
-            ...getModLoginPayload(),
-        });
+        emitSocketLogin();
     });
-    socket.on('disconnect', () => {
+    bindSocketEvent('disconnect', () => {
         debugLog('[client] socket disconnected');
         stopLatencyMonitor();
         if (manualDisconnect || phase === 'login') {
@@ -6878,7 +6735,13 @@ function connectSocket(serverUrl) {
         flashStatus(UI.disconnected, 3000, 'error');
         phase = 'connecting';
     });
-    socket.on('latency_pong', (data = {}) => {
+    bindSocketEvent('connect_error', (err) => {
+        debugLog('[client] socket connect_error', err && err.message ? err.message : err);
+        if (phase === 'connecting') {
+            flashStatus(UI.server_no_response, 3000, 'error');
+        }
+    });
+    bindSocketEvent('latency_pong', (data = {}) => {
         if (typeof performance === 'undefined' || data.t == null) return;
         const rtt = Math.max(0, performance.now() - Number(data.t));
         if (!Number.isFinite(rtt)) return;
@@ -6887,7 +6750,7 @@ function connectSocket(serverUrl) {
             transport: socket.io && socket.io.engine && socket.io.engine.transport ? socket.io.engine.transport.name : '',
         });
     });
-    socket.on('skin_look_update', (data = {}) => {
+    bindSocketEvent('skin_look_update', (data = {}) => {
         const pid = normalizePlayerId(data.player_id);
         if (pid == null) return;
         if (!isSpectating && pid === normalizePlayerId(playerId)) return;
@@ -6895,7 +6758,7 @@ function connectSocket(serverUrl) {
         skinLookByPlayerId.set(pid, look);
         applySkinLookToRenderedAvatars(pid, look);
     });
-    socket.on('login_ok', (data) => {
+    bindSocketEvent('login_ok', (data) => {
         debugLog('[client] login ok: sid=', data.sid, 'nickname=', data.nickname);
         mySid = data.sid || '';
         nickname = data.nickname || nickname;
@@ -6923,12 +6786,12 @@ function connectSocket(serverUrl) {
         phase = 'lobby';
         updateStatus(UI.lobby_status.replace('{0}', nickname));
     });
-    socket.on('login_fail', (data) => {
+    bindSocketEvent('login_fail', (data) => {
         showView('view-login');
         const err = $('login-error');
         if (err) err.textContent = moderationMessageFromPayload(data, translateLoginReason(data.reason));
     });
-    socket.on('lobby_update', (data) => {
+    bindSocketEvent('lobby_update', (data) => {
         debugLog('[client] lobby_update players=', (data.players || []).length);
         lobbyPlayers = data.players || [];
         lobbyOngoingGames = data.ongoing_games || [];
@@ -6938,15 +6801,15 @@ function connectSocket(serverUrl) {
         renderLobby(data);
         if (data.chat_history) renderLobbyChatHistory(data.chat_history);
     });
-    socket.on('lobby_chat_history', (data) => {
+    bindSocketEvent('lobby_chat_history', (data) => {
         renderLobbyChatHistory(data || {});
     });
-    socket.on('dm_update', (data = {}) => {
+    bindSocketEvent('dm_update', (data = {}) => {
         dmData.unread_count = Number(data.unread_count || dmData.unread_count || 0);
         updateFriendsBadge();
         loadDmThreads(false);
     });
-    socket.on('invite_received', (data) => {
+    bindSocketEvent('invite_received', (data) => {
         debugLog('[client] invite_received:', data);
         showModal(`
             <h3>${UI.invite_received}</h3>
@@ -6967,10 +6830,10 @@ function connectSocket(serverUrl) {
             hideModal();
         };
     });
-    socket.on('invite_declined', () => {
+    bindSocketEvent('invite_declined', () => {
         flashStatus(UI.invite_declined, 2000);
     });
-    socket.on('team_invite', (data) => {
+    bindSocketEvent('team_invite', (data) => {
         showModal(`
             <h3>${UI.form_team}</h3>
             <p>${tf('team_invite_msg', data.from_name)}</p>
@@ -6988,16 +6851,16 @@ function connectSocket(serverUrl) {
             hideModal();
         };
     });
-    socket.on('team_formed', (data) => {
+    bindSocketEvent('team_formed', (data) => {
         flashStatus(tf('team_formed_msg', data.members.join(', ')), 3000);
     });
-    socket.on('team_disbanded', () => {
+    bindSocketEvent('team_disbanded', () => {
         flashStatus(UI.team_disbanded_msg, 3000);
     });
-    socket.on('team_declined', (data) => {
+    bindSocketEvent('team_declined', (data) => {
         flashStatus(UI.team_declined_msg, 2000);
     });
-    socket.on('team_match_invite', (data) => {
+    bindSocketEvent('team_match_invite', (data) => {
         showModal(`
             <h3>${UI.invite_team}</h3>
             <p>${tf('team_match_invite_msg', data.from_team.join(' & '))}</p>
@@ -7015,13 +6878,13 @@ function connectSocket(serverUrl) {
             hideModal();
         };
     });
-    socket.on('team_match_declined', () => {
+    bindSocketEvent('team_match_declined', () => {
         flashStatus(UI.team_match_declined_msg, 2000);
     });
-    socket.on('team_match_accepted', () => {
+    bindSocketEvent('team_match_accepted', () => {
         hideModal();
     });
-    socket.on('game_phase', (data) => {
+    bindSocketEvent('game_phase', (data) => {
         debugLog('[client] game_phase:', data.phase);
         phase = data.phase;
         if (!data.solo) soloMode = false;
@@ -7040,13 +6903,16 @@ function connectSocket(serverUrl) {
             updateStatus(UI.game_loading || 'Loading...');
         } else if (phase === 'game_over') {
             updateStatus(UI.game_over);
+        } else if (phase === 'lobby') {
+            showView('view-lobby');
+            updateStatus(getViewStatusText('view-lobby'));
         } else if (phase === 'action' || phase === 'draw' || phase === 'response' || phase === 'choice') {
             showView('view-game');
         }
         syncBattleLogMatch(data || {});
         syncPhaseChatMatch(data || {});
     });
-    socket.on('draft_state', (data) => {
+    bindSocketEvent('draft_state', (data) => {
         const previousDraftState = draftState;
         const oldOptIds = draftState && draftState.options ? draftState.options.map(o => o.def_id) : [];
         const newOptIds = data.options ? data.options.map(o => o.def_id) : [];
@@ -7057,7 +6923,7 @@ function connectSocket(serverUrl) {
         mergeSkinLooksFromPayload(data);
         renderDraft(data, isReroll, previousDraftState);
     });
-    socket.on('event_select', (data) => {
+    bindSocketEvent('event_select', (data) => {
         debugLog('[client] event_select');
         phase = 'event_select';
         eventSelectData = data;
@@ -7066,7 +6932,7 @@ function connectSocket(serverUrl) {
         mergeSkinLooksFromPayload(data);
         renderEventSelect(data);
     });
-    socket.on('event_sub_choice', (data) => {
+    bindSocketEvent('event_sub_choice', (data) => {
         debugLog('[client] event_sub_choice');
         phase = 'event_sub_choice';
         // Keep showing draft view so player can see their picks
@@ -7074,7 +6940,7 @@ function connectSocket(serverUrl) {
         updateStatus(data.needs_sub_choice ? UI.select_event : UI.event_waiting);
         handleEventSubChoice(data);
     });
-    socket.on('state_update', (data) => {
+    bindSocketEvent('state_update', (data) => {
         debugLog('[client] state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null, 'spectating=', data.spectating);
         if (data && data.spectating && pendingSpectateRoomId != null && data.room_id != null && Number(data.room_id) !== Number(pendingSpectateRoomId)) {
             debugLog('[client] ignored stale spectate state for room=', data.room_id, 'pending=', pendingSpectateRoomId);
@@ -7137,7 +7003,7 @@ function connectSocket(serverUrl) {
             optimisticResourceOverride = null;
         }
     });
-    socket.on('solo_state', (data) => {
+    bindSocketEvent('solo_state', (data) => {
         const previousGameState = gameState;
         soloMode = true;
         tutorialMode = !!data.tutorial || tutorialMode;
@@ -7185,40 +7051,40 @@ function connectSocket(serverUrl) {
         setTimeout(updateTutorialOverlay, 80);
     }
     });
-    socket.on('response_request', (data) => {
+    bindSocketEvent('response_request', (data) => {
         debugLog('[RESPONSE] response_request, counter_cards:', (data.counter_cards || []).length);
         clearPendingServerAction({ keepOptimistic: true });
         responsePending = true;
         responseData = data;
         showResponseUI(data);
     });
-    socket.on('ally_consent_request', (data) => {
+    bindSocketEvent('ally_consent_request', (data) => {
         showAllyConsentUI(data);
     });
-    socket.on('surrender_consent_request', (data) => {
+    bindSocketEvent('surrender_consent_request', (data) => {
         showSurrenderConsentUI(data);
     });
-    socket.on('surrender_consent_waiting', () => {
+    bindSocketEvent('surrender_consent_waiting', () => {
         flashStatus(UI.surrender_waiting_teammate, 3000);
     });
-    socket.on('surrender_consent_result', (data) => {
+    bindSocketEvent('surrender_consent_result', (data) => {
         const accepted = !!(data && data.accepted);
         flashStatus(accepted ? UI.surrender_confirmed : UI.surrender_declined, 2600, accepted ? undefined : 'error');
     });
-    socket.on('choice_request', (data) => {
+    bindSocketEvent('choice_request', (data) => {
         clearPendingServerAction({ keepOptimistic: true });
         choicePending = true;
         choiceData = data;
         pendingPlayCard = null;
         showChoiceUI(data);
     });
-    socket.on('v2_ui_request', (data) => {
+    bindSocketEvent('v2_ui_request', (data) => {
         clearPendingServerAction({ keepOptimistic: true });
         pendingPlayCard = null;
         clearSelectedPlayCard();
         showV2UiRequest(data);
     });
-    socket.on('chat', (data) => {
+    bindSocketEvent('chat', (data) => {
         debugLog('[client] chat:', data.nickname, data.text, 'spectator=', data.is_spectator);
         const nick = getChatDisplayName(data);
         if (phase === 'lobby') {
@@ -7229,14 +7095,14 @@ function connectSocket(serverUrl) {
             appendGameChat(nick, data.text, data, data);
         }
     });
-    socket.on('mod_settings_updated', (data) => {
+    bindSocketEvent('mod_settings_updated', (data) => {
         if (data && data.ok) {
             showActionToast(UI.save_success, 1600, 'success');
             return;
         }
         flashStatus(UI.save_failed.replace('{0}', (data && data.reason) || UI.operation_failed), 3200, 'error');
     });
-    socket.on('server_error', (data) => {
+    bindSocketEvent('server_error', (data) => {
         debugLog('[client] server_error:', data.message);
         flashStatus(moderationMessageFromPayload(data, translateServerMessage(data.message)), 3600, 'error');
         pendingSpectateRoomId = null;
@@ -7247,7 +7113,7 @@ function connectSocket(serverUrl) {
             renderGame(gameState);
         }
     });
-    socket.on('match_start_failed', (data = {}) => {
+    bindSocketEvent('match_start_failed', (data = {}) => {
         const message = data.message || UI.mod_mismatch_msg || UI.operation_failed;
         debugLog('[client] match_start_failed:', message);
         hideModal();
@@ -7256,7 +7122,7 @@ function connectSocket(serverUrl) {
         showView('view-lobby');
         flashStatus(translateServerMessage(message), 4200, 'error');
     });
-    socket.on('opponent_disconnected', (data) => {
+    bindSocketEvent('opponent_disconnected', (data) => {
         if (data && data.timeout) {
             if (data.stay) {
                 hideModal();
@@ -7283,11 +7149,11 @@ function connectSocket(serverUrl) {
             phase = 'lobby';
         }
     });
-    socket.on('opponent_reconnected', () => {
+    bindSocketEvent('opponent_reconnected', () => {
         flashStatus(UI.opponent_reconnected, 2000);
         hideModal();
     });
-    socket.on('reconnect_available', (data) => {
+    bindSocketEvent('reconnect_available', (data) => {
         showModal(`
             <h3>${UI.reconnect_title}</h3>
             <p>${UI.reconnect_prompt}</p>
@@ -7305,11 +7171,11 @@ function connectSocket(serverUrl) {
             hideModal();
         };
     });
-    socket.on('reconnect_timeout', () => {
+    bindSocketEvent('reconnect_timeout', () => {
         flashStatus(UI.reconnect_timeout, 3000, 'error');
         phase = 'lobby';
     });
-    socket.on('rematch_requested', (data = {}) => {
+    bindSocketEvent('rematch_requested', (data = {}) => {
         debugLog('[client] rematch_requested');
         if (data.mode === '2v2' || (gameState && gameState.mode === '2v2')) {
             if (phase === 'game_over') updateGameOverRematchButton(gameState);
@@ -7320,12 +7186,12 @@ function connectSocket(serverUrl) {
         updateGameOverRematchButton(gameState);
         updateStatus(UI.opponent_rematch);
     });
-    socket.on('rematch_state', (data = {}) => {
+    bindSocketEvent('rematch_state', (data = {}) => {
         updateRematchState(data);
         if (data.mode === '2v2') rematchRequestedByOpponent = false;
         if (phase === 'game_over') updateGameOverRematchButton(gameState);
     });
-    socket.on('spectate_enter', (data) => {
+    bindSocketEvent('spectate_enter', (data) => {
         if (data && pendingSpectateRoomId != null && data.room_id != null && Number(data.room_id) !== Number(pendingSpectateRoomId)) {
             debugLog('[client] ignored stale spectate_enter for room=', data.room_id, 'pending=', pendingSpectateRoomId);
             return;
@@ -7337,7 +7203,7 @@ function connectSocket(serverUrl) {
         phase = 'playing';
         showView('view-game');
     });
-    socket.on('spectate_leave', () => {
+    bindSocketEvent('spectate_leave', () => {
         clearNetworkMatchStateForLobby();
         pendingSpectateRoomId = null;
         activeSpectateRoomId = null;
@@ -7346,10 +7212,10 @@ function connectSocket(serverUrl) {
         phase = 'lobby';
         showView('view-lobby');
     });
-    socket.on('server_broadcast', (data) => {
+    bindSocketEvent('server_broadcast', (data) => {
         flashStatus(data.message || '', 4000);
     });
-    socket.on('solo_paused', () => {
+    bindSocketEvent('solo_paused', () => {
         if (suppressSoloPausedHandler) {
             suppressSoloPausedHandler = false;
             return;
@@ -7767,17 +7633,21 @@ function syncSkinFormFromCurrent() {
 }
 
 async function saveSkinFromEditor() {
+    if (skinSaveInFlight) return;
     setSkinError('');
     const skin = readSkinFormConfig();
     saveLocalSkinConfig(skin);
     if (currentAccount) {
+        skinSaveInFlight = true;
         try {
-            const data = await authRequest('/api/auth/skin', { skin });
+            const data = await authRequest('/api/auth/skin', { skin }, { timeoutMs: 4000 });
             currentAccount = data.user || { ...currentAccount, skin };
             cacheAccount(currentAccount);
         } catch (err) {
             setSkinError(err.message || UI.account_error);
             return;
+        } finally {
+            skinSaveInFlight = false;
         }
     }
     renderSkinEditorPreview();
@@ -8664,18 +8534,31 @@ function setAccountMode(mode) {
     renderAccountMode();
 }
 
-async function authRequest(path, body) {
-    const res = await fetch(path, {
-        method: body === undefined ? 'GET' : 'POST',
-        headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data.success === false) {
-        throw new Error(moderationMessageFromPayload(data, data.error || UI.account_error));
+async function authRequest(path, body, options = {}) {
+    const timeoutMs = Math.max(0, Number(options.timeoutMs) || 0);
+    const controller = timeoutMs > 0 && typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
+        const res = await fetch(path, {
+            method: body === undefined ? 'GET' : 'POST',
+            headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: body === undefined ? undefined : JSON.stringify(body),
+            signal: controller ? controller.signal : undefined,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.success === false) {
+            throw new Error(moderationMessageFromPayload(data, data.error || UI.account_error));
+        }
+        return data;
+    } catch (err) {
+        if (err && err.name === 'AbortError') {
+            throw new Error(UI.server_no_response || '服务器响应超时');
+        }
+        throw err;
+    } finally {
+        if (timer) clearTimeout(timer);
     }
-    return data;
 }
 
 async function refreshAuthMe() {
@@ -8819,11 +8702,34 @@ function friendMatchResultText(result) {
     return result || '';
 }
 
+function friendItemUserId(item) {
+    const user = item && item.user ? item.user : {};
+    return user.id == null ? '' : String(user.id);
+}
+
+function findFriendItemByUserId(userId) {
+    const id = String(userId || '');
+    return (Array.isArray(socialData.friends) ? socialData.friends : []).find(item => friendItemUserId(item) === id) || null;
+}
+
 function friendCardHtml(item, type) {
     const user = item?.user || {};
     const matches = Array.isArray(item?.matches) ? item.matches : [];
     const isNotice = item?.notice_type === 'auto_add' || item?.status === 'notice';
     const showPrivateInfo = type === 'friend';
+    if (type === 'friend') {
+        const unreadThread = (Array.isArray(dmData.threads) ? dmData.threads : []).find(thread => {
+            const threadUser = thread.user || {};
+            return String(threadUser.id || '') === String(user.id || '');
+        });
+        const unread = Number(unreadThread?.unread_count || 0);
+        const active = String(activeSocialFriendId || '') === String(user.id || '');
+        return `
+          <button class="friend-name-row${active ? ' active' : ''}" type="button" data-friend-open="${escapeHtml(user.id)}">
+            <span class="friend-name">${escapeHtml(user.username || '-')}</span>
+            ${unread > 0 ? `<span class="dm-unread">${escapeHtml(unread > 99 ? '99+' : String(unread))}</span>` : ''}
+          </button>`;
+    }
     const matchText = matches.length
         ? matches.slice(0, 3).map(match => escapeHtml(`${match.mode || '-'} ${friendMatchResultText(match.result)} ${friendDateText(match.ended_at || match.started_at)}`)).join('<br>')
         : escapeHtml(`${UI.recent_matches}: -`);
@@ -8870,8 +8776,77 @@ function renderFriendsState() {
     renderFriendSection('friend-incoming-list', socialData.incoming, UI.friend_request_empty, 'incoming');
     renderFriendSection('friend-outgoing-list', socialData.outgoing, UI.friend_sent_empty, 'outgoing');
     renderFriendSection('friends-list', socialData.friends, UI.friend_empty, 'friend');
+    renderFriendDetailProfile();
     renderDmThreads();
     updateFriendsBadge();
+}
+
+function showSocialDetailTab(tabName = 'profile') {
+    const tab = String(tabName || 'profile');
+    document.querySelectorAll('[data-social-detail-tab]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.socialDetailTab === tab);
+    });
+    ['profile', 'dm', 'incoming', 'outgoing'].forEach(name => {
+        const page = $(`social-detail-page-${name}`);
+        if (page) page.classList.toggle('hidden', name !== tab);
+    });
+}
+
+function toggleSocialDetailModal(force, tabName = 'profile') {
+    const modal = $('social-detail-modal');
+    if (!modal) return;
+    const show = typeof force === 'boolean' ? force : modal.classList.contains('hidden');
+    modal.classList.toggle('hidden', !show);
+    if (show) {
+        toggleFriendsPopover(false);
+        toggleAccountPopover(false);
+        showSocialDetailTab(tabName);
+        renderFriendDetailProfile();
+    }
+}
+
+function openFriendDetail(userId, tabName = 'profile') {
+    if (userId != null && userId !== '') {
+        activeSocialFriendId = String(userId);
+    }
+    toggleSocialDetailModal(true, tabName);
+}
+
+function renderFriendDetailProfile() {
+    const el = $('friend-detail-profile');
+    if (!el) return;
+    const item = findFriendItemByUserId(activeSocialFriendId) || (Array.isArray(socialData.friends) ? socialData.friends[0] : null);
+    if (!item) {
+        activeSocialFriendId = null;
+        el.innerHTML = `<div class="friend-empty">${escapeHtml(UI.friend_empty)}</div>`;
+        return;
+    }
+    const user = item.user || {};
+    activeSocialFriendId = String(user.id || '');
+    const matches = Array.isArray(item.matches) ? item.matches : [];
+    const matchHtml = matches.length
+        ? matches.slice(0, 8).map(match => `
+            <div class="friend-detail-match">${escapeHtml(`${match.mode || '-'} · ${friendMatchResultText(match.result)} · ${friendDateText(match.ended_at || match.started_at)}`)}</div>
+          `).join('')
+        : `<div class="friend-empty">${escapeHtml(`${UI.recent_matches}: -`)}</div>`;
+    const lastSeenLabel = String(UI.last_login || '上次下线').replace(/\{0\}/g, '').replace(/[：:]\s*$/, '').trim() || '上次下线';
+    el.innerHTML = `
+      <div class="friend-detail-name">
+        <span>${escapeHtml(user.username || '-')}</span>
+        <span class="friend-id">${escapeHtml(user.player_id || '')}</span>
+      </div>
+      <div class="friend-detail-grid">
+        <div class="friend-detail-stat"><b>${escapeHtml(UI.stats || '统计信息')}</b>${escapeHtml(friendStatsLine(user))}</div>
+        <div class="friend-detail-stat"><b>${escapeHtml(lastSeenLabel)}</b>${escapeHtml(friendDateText(user.last_login_at))}</div>
+      </div>
+      <div class="friend-detail-actions">
+        <button class="mini-btn" type="button" data-dm-open-user="${escapeHtml(user.id)}" data-dm-open-name="${escapeHtml(user.username || '')}">私信</button>
+        <button class="mini-btn" type="button" data-friend-remove="${escapeHtml(user.id)}">${escapeHtml(UI.friend_remove)}</button>
+      </div>
+      <div>
+        <div class="friend-section-title">${escapeHtml(UI.recent_matches)}</div>
+        <div class="friend-detail-matches">${matchHtml}</div>
+      </div>`;
 }
 
 function setFriendsError(message, tone = 'error', autoHideMs = 0) {
@@ -9018,12 +8993,14 @@ async function openDmThread(threadId) {
         const data = await authRequest(`/api/social/dm/messages?thread_id=${encodeURIComponent(threadId)}&limit=120&mark_read=1`);
         activeDmThreadId = data.thread_id || threadId;
         activeDmTargetUserId = data.user && data.user.id;
+        if (activeDmTargetUserId) activeSocialFriendId = String(activeDmTargetUserId);
         activeDmMessages = Array.isArray(data.messages) ? data.messages : [];
         const title = $('dm-chat-title');
         if (title) title.textContent = data.user && data.user.username ? `与 ${data.user.username} 的私信` : '私信';
         dmData.unread_count = Number(data.unread_count || 0);
         renderDmThreads();
         renderDmMessages();
+        renderFriendDetailProfile();
         updateFriendsBadge();
     } catch (err) {
         setFriendsError(err.message || UI.account_error);
@@ -9033,11 +9010,14 @@ async function openDmThread(threadId) {
 function startDmToUser(userId, username = '') {
     activeDmThreadId = null;
     activeDmTargetUserId = userId || null;
+    if (userId) activeSocialFriendId = String(userId);
     activeDmMessages = [];
     const title = $('dm-chat-title');
     if (title) title.textContent = username ? `给 ${username} 发私信` : '新私信';
     renderDmThreads();
     renderDmMessages();
+    renderFriendDetailProfile();
+    toggleSocialDetailModal(true, 'dm');
     const input = $('dm-message-input');
     if (input) input.focus();
 }
@@ -9051,6 +9031,7 @@ async function startDmFromIdentifier() {
     activeDmMessages = [];
     const title = $('dm-chat-title');
     if (title) title.textContent = `给 ${identifier} 发私信`;
+    toggleSocialDetailModal(true, 'dm');
     const msgInput = $('dm-message-input');
     if (msgInput) msgInput.focus();
 }
@@ -11711,8 +11692,13 @@ function renderClassicHand(vm) {
     container.innerHTML = '';
     const hand = vm.hand || [];
     const count = hand.length;
+    const blindSelf = Number((vm.self && vm.self.raw && vm.self.raw.blind) || (gameState && gameState.you && gameState.you.blind) || 0) > 0 && !isSpectating;
     hand.forEach((card, index) => {
-        const playable = vm.playableCards.has(card.instance_id);
+        const rawCard = card.raw || card;
+        const cardDef = getCardDef(rawCard.def_id || '');
+        const playable = blindSelf
+            ? !!(isMyTurn() && !isActionBusy({ includeAnimation: false }) && cardDef && cardDef.card_type !== 'guard')
+            : vm.playableCards.has(card.instance_id);
         const offset = index - (count - 1) / 2;
         const rotate = Math.max(-13, Math.min(13, offset * 4.2));
         const lift = Math.max(0, 18 - Math.abs(offset) * 4);
@@ -11726,20 +11712,20 @@ function renderClassicHand(vm) {
         wrap.style.setProperty('--fan-z', String(100 + Math.round(20 - Math.abs(offset))));
         if (!playable) wrap.classList.add('card-disabled');
         if (selectedPlayCardId === card.instance_id) wrap.classList.add('is-selected');
-        const cardEl = createCardElement(card.raw || card, {
+        const cardEl = createCardElement(rawCard, {
             draggable: false,
             onClick: playable
                 ? (event) => selectClassicPlayCard(card.instance_id, event)
-                : () => flashStatus(getCannotPlayReason(card.raw || card), 2200, 'error'),
+                : () => flashStatus(blindSelf ? '这张牌当前无法打出' : getCannotPlayReason(rawCard), 2200, 'error'),
             ownerState: vm.self.raw || gameState.you || {},
-            prediction: getCardPredictionOptionsForOwner(card.raw || card, vm.self.raw || gameState.you || {}),
+            prediction: getCardPredictionOptionsForOwner(rawCard, vm.self.raw || gameState.you || {}),
         });
         cardEl.classList.add('classic-fan-card-inner');
         wrap.appendChild(cardEl);
         wrap.addEventListener('mouseenter', () => {
             removeClassicHoverInfo();
             classicHoveredCardId = card.instance_id;
-            if (!selectedPlayCardId) applyClassicResourcePreview(card, gameState && gameState.you);
+            if (!selectedPlayCardId && !blindSelf) applyClassicResourcePreview(card, gameState && gameState.you);
             classicHoverPreviewTimer = setTimeout(() => {
                 classicHoverPreviewTimer = null;
                 showClassicHoverInfo(card, wrap);
@@ -11753,7 +11739,7 @@ function renderClassicHand(vm) {
             removeClassicHoverInfo();
             if (leavingId === card.instance_id) {
                 classicHoveredCardId = null;
-                applyClassicResourcePreview(getSelectedClassicCard(), gameState && gameState.you);
+                if (!blindSelf) applyClassicResourcePreview(getSelectedClassicCard(), gameState && gameState.you);
             }
         });
         container.appendChild(wrap);
@@ -12090,12 +12076,14 @@ function renderStatusTags(containerId, playerData) {
     if (p.overload > 0) tags.push({ key: 'overload', name: UI.status_overload, abbr: 'Ovl', val: p.overload, fg: '#C0392B', bg: '#FDEDEC' });
     if (p.foresight > 0) tags.push({ key: 'foresight', name: UI.status_foresight, abbr: 'Fsi', val: p.foresight, fg: '#2980B9', bg: '#EBF5FB' });
     if (p.fracture > 0) tags.push({ key: 'fracture', name: UI.status_fracture, abbr: 'Frc', val: p.fracture, fg: '#7F8C8D', bg: '#F2F3F4' });
+    if (p.stagnation > 0) tags.push({ key: 'stagnation', name: UI.status_stagnation, abbr: 'Stg', val: p.stagnation, fg: '#9B59B6', bg: '#F4ECF7' });
+    if (p.blind > 0) tags.push({ key: 'blind', name: UI.status_blind, abbr: 'Bln', val: p.blind, fg: '#2C3E50', bg: '#EBEDEF' });
     if (p.heal_block > 0) tags.push({ key: 'heal_block', name: UI.status_heal_block, abbr: 'HB', val: p.heal_block, fg: '#E84393', bg: '#FDEDF2' });
     if (p.weakness > 0) tags.push({ key: 'weakness', name: UI.status_weakness, abbr: 'Wk', val: p.weakness, fg: '#8E44AD', bg: '#F4ECF7' });
     if (p.bleed > 0) tags.push({ key: 'bleed', name: UI.status_bleed, abbr: 'Bld', val: p.bleed, fg: '#922B21', bg: '#FDEDEC' });
     if (p.fragment_stacks > 0) tags.push({ key: 'fragment', name: UI.status_fragment, abbr: 'Frg', val: p.fragment_stacks, fg: '#795548', bg: '#EFEBE9' });
     if (p.custom_statuses && typeof p.custom_statuses === 'object') {
-        const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','sluggish','overload','foresight','fracture','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn']);
+        const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn']);
         Object.entries(p.custom_statuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;
@@ -12237,9 +12225,12 @@ function renderPlayerHand(playerData) {
         clearSelectedPlayCard();
     }
     const myTurn = isMyTurn();
+    const blindSelf = Number(playerData.blind || 0) > 0 && !isSpectating;
     hand.forEach(cardDict => {
         const cardDef = getCardDef(cardDict.def_id);
-        const canPlay = myTurn && !isActionBusy({ includeAnimation: false }) && canPlayCard(cardDict);
+        const canPlay = blindSelf
+            ? !!(myTurn && !isActionBusy({ includeAnimation: false }) && cardDef && cardDef.card_type !== 'guard')
+            : myTurn && !isActionBusy({ includeAnimation: false }) && canPlayCard(cardDict);
         const card = createCardElement(cardDict, {
             small: !!isSpectating,
             draggable: !isSpectating && canPlay && cardDef && cardDef.card_type !== 'guard',
@@ -15465,7 +15456,17 @@ let settingsActiveTab = 'appearance';
 let settingsActiveModTab = ['official', 'community'].includes(localStorage.getItem('gtn_settings_mod_tab'))
     ? localStorage.getItem('gtn_settings_mod_tab')
     : 'official';
-const VANILLA_MOD_FILENAME = 'VanillaCards.gtnmod';
+const VANILLA_MOD_FILENAME = 'Vanilla Cards.gtnmod';
+const DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = new Set([
+    VANILLA_MOD_FILENAME,
+    'Troll Cards.gtnmod',
+    'Thorn Cards.gtnmod',
+]);
+const FALLBACK_DEFAULT_DISABLED_MODS = [
+    'Desert Cards Addition.gtnmod',
+    'Factory Cards.gtnmod',
+    'Garden Cards Addition.gtnmod',
+];
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 const COMMUNITY_JSON_MAX_BYTES = 150 * 1024;
 const COMMUNITY_GTNMOD_MAX_BYTES = 1024 * 1024;
@@ -16128,10 +16129,11 @@ function getDisabledMods() {
     try {
         const raw = localStorage.getItem('gtn_disabled_mods');
         let disabled = raw ? JSON.parse(raw) : getDefaultDisabledMods();
-        if (shouldMigrateLegacyOfficialModDefault(disabled)) {
+        if (shouldMigrateLegacyOfficialModDefault(disabled) || shouldMigrateOfficialModDefaultV3(disabled)) {
             disabled = getDefaultDisabledMods();
             localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
             localStorage.setItem('gtn_official_mod_default_v2', '1');
+            localStorage.setItem('gtn_official_mod_default_v3', '1');
         }
         return coerceValidDisabledMods(disabled).disabled;
     } catch (e) {
@@ -16140,7 +16142,12 @@ function getDisabledMods() {
 }
 
 function getDefaultDisabledMods() {
-    return [];
+    if (!Array.isArray(settingsMods) || settingsMods.length === 0) {
+        return FALLBACK_DEFAULT_DISABLED_MODS.slice();
+    }
+    return settingsMods
+        .map(mod => mod.filename || '')
+        .filter(filename => filename && !DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES.has(filename));
 }
 
 function getLegacyDefaultDisabledMods() {
@@ -16157,6 +16164,12 @@ function shouldMigrateLegacyOfficialModDefault(disabled) {
     if (!legacy.length || disabled.length !== legacy.length) return false;
     const currentSet = new Set(disabled.map(String));
     return legacy.every(filename => currentSet.has(filename));
+}
+
+function shouldMigrateOfficialModDefaultV3(disabled) {
+    if (localStorage.getItem('gtn_official_mod_default_v3') === '1') return false;
+    if (!Array.isArray(disabled)) return false;
+    return disabled.length === 0;
 }
 
 function getModCardTypeCounts(mod) {
@@ -16319,7 +16332,7 @@ async function init() {
     const savedTheme = localStorage.getItem('gtn_theme') || 'light';
     applyTheme(savedTheme);
     applyUiStyle(migrateStoredUiStyle());
-    const savedLang = localStorage.getItem('gtn_lang') || 'zh';
+    const savedLang = normalizeLang(localStorage.getItem('gtn_lang') || 'zh');
     applyLang(savedLang);
     bootLoader.step(UI.init_theme_lang, 24);
     bootLoader.step(UI.init_fonts, 36);
@@ -16351,6 +16364,10 @@ async function init() {
     document.addEventListener('pointermove', updateSkinEyeTracking, { passive: true });
     if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
     if ($('btn-friends-popover-close')) $('btn-friends-popover-close').addEventListener('click', () => toggleFriendsPopover(false));
+    if ($('btn-social-detail-close')) $('btn-social-detail-close').addEventListener('click', () => toggleSocialDetailModal(false));
+    document.querySelectorAll('[data-social-detail-tab]').forEach(btn => {
+        btn.addEventListener('click', () => showSocialDetailTab(btn.dataset.socialDetailTab || 'profile'));
+    });
     if ($('btn-account-popover-logout')) $('btn-account-popover-logout').addEventListener('click', onAccountLogout);
     if ($('btn-friend-add')) $('btn-friend-add').addEventListener('click', addFriendFromInput);
     if ($('btn-dm-start')) $('btn-dm-start').addEventListener('click', startDmFromIdentifier);
@@ -16381,10 +16398,17 @@ async function init() {
             removeFriend(removeBtn.dataset.friendRemove);
             return;
         }
+        const friendOpenBtn = event.target.closest('[data-friend-open]');
+        if (friendOpenBtn) {
+            event.preventDefault();
+            openFriendDetail(friendOpenBtn.dataset.friendOpen, 'profile');
+            return;
+        }
         const dmThreadBtn = event.target.closest('[data-dm-thread]');
         if (dmThreadBtn) {
             event.preventDefault();
             openDmThread(dmThreadBtn.dataset.dmThread);
+            toggleSocialDetailModal(true, 'dm');
             return;
         }
         const dmUserBtn = event.target.closest('[data-dm-open-user]');
@@ -16493,6 +16517,12 @@ async function init() {
     if ($('btn-about-close')) $('btn-about-close').addEventListener('click', closeAbout);
     if ($('btn-credit-bilibili')) $('btn-credit-bilibili').addEventListener('click', () => window.open('https://space.bilibili.com/1490695733', '_blank', 'noopener'));
     if ($('btn-credit-github')) $('btn-credit-github').addEventListener('click', () => window.open('https://github.com/Stickerbug', '_blank', 'noopener'));
+    document.querySelectorAll('[data-copy-text]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const ok = await copyPlainText(btn.dataset.copyText || btn.textContent || '');
+            showActionToast(ok ? '已复制' : '复制失败', ok ? 1200 : 1600, ok ? 'info' : 'error');
+        });
+    });
     $('settings-theme-select').addEventListener('change', (e) => { applyTheme(e.target.value); });
     const uiStyleSelect = $('settings-ui-style-select');
     if (uiStyleSelect) uiStyleSelect.addEventListener('change', (e) => { applyUiStyle(e.target.value); });
@@ -16510,7 +16540,13 @@ async function init() {
     $('btn-lobby-back').addEventListener('click', () => {
         phase = 'login';
         manualDisconnect = true;
-        if (socket) { socket.disconnect(); socket = null; }
+        if (socket) {
+            try { socket.removeAllListeners(); } catch (_) {}
+            socket.disconnect();
+            socket = null;
+            socketConnectUrl = '';
+            window.gtnSocket = null;
+        }
         showView('view-login');
         updateStatus(UI.default_status);
     });
