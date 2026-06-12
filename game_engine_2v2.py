@@ -716,16 +716,16 @@ class GameEngine2v2(GameEngine):
             responder = self.players[responder_id]
             counter_card = responder.find_hand_card(card_instance_id)
             if counter_card is None:
-                return self._execute_card_effect(player_id, card, choice)
+                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             if counter_card.cost_e > responder.elixir or counter_card.cost_m > responder.magic:
-                return self._execute_card_effect(player_id, card, choice)
+                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             if not self._card_can_counter(counter_card, card):
-                return self._execute_card_effect(player_id, card, choice)
+                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             self._spend_resource(responder_id, 'elixir', counter_card.cost_e, counter_card)
             self._spend_resource(responder_id, 'magic', counter_card.cost_m, counter_card)
             counter_removed = responder.remove_hand_card(card_instance_id)
             if counter_removed is None:
-                return self._execute_card_effect(player_id, card, choice)
+                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}进行反制！")
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
             self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
@@ -734,14 +734,14 @@ class GameEngine2v2(GameEngine):
                 if is_precision:
                     self._execute_card_effect_half_damage(player_id, card, choice)
                     responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
-                    return {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()}
+                    return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
                 self._execute_card_effect(player_id, card, choice)
                 responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
-                return {'success': True, 'countered': True, 'card': card.to_dict()}
+                return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
             if counter_removed.def_id == 'MagicBubble':
                 self.negated_card = True
-            return self._execute_card_effect(player_id, card, choice)
-        return self._execute_card_effect(player_id, card, choice)
+            return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+        return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
 
     def use_trigger(self, player_id: int, equipment_instance_id: int, target_player_id: int = -1) -> dict:
         target_player_id = self._normalize_player_id(target_player_id)
@@ -990,6 +990,7 @@ class GameEngine2v2(GameEngine):
             return
         if not self.game_over:
             self.phase = 'action'
+            self._continue_honey_control_if_needed(player_id)
 
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]

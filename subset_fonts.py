@@ -6,6 +6,8 @@ import zipfile
 from fontTools.ttLib import TTFont
 from fontTools.subset import Subsetter, Options
 
+from common_zh_chars import get_common_zh_chars
+
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 FONTS_DIR = os.path.join(PROJECT_DIR, 'static', 'fonts')
@@ -109,6 +111,9 @@ def collect_chars_from_gtnmod(chars, fpath):
 
 def collect_chars_from_files():
     chars = set()
+    common_zh = get_common_zh_chars()
+    chars.update(common_zh)
+    print(f'  [+{len(common_zh)}] GB2312 一级常用汉字固定保留')
     for start, end, name in EXTRA_RANGES:
         for cp in range(start, end + 1):
             chars.add(chr(cp))

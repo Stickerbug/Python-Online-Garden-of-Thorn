@@ -98,7 +98,7 @@ const I18N = {
         settings_title: 'Settings', settings_appearance: 'Appearance', settings_theme: 'Theme', settings_lang: 'Language', settings_mods: 'Mods', settings_theme_light: 'Light', settings_theme_dark: 'Dark',
         no_games: 'No ongoing games', back_to_home: 'Back to Home', settings_btn: 'Settings', settings_server: 'Server', settings_server_addr: 'Address', not_your_turn: 'Not your turn',
         counter_insufficient: 'Tip: counter cards are not affordable', default_status: 'Garden of Thorn', game_loading: 'Loading...', server_no_response: 'Server is not responding. Check the connection or refresh.',
-        spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat', solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training',
+        spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat', solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training', clear_deck: 'Clear Deck',
         solo_deck_a: 'Your Deck', solo_deck_b: 'Opponent Deck', search_cards: 'Search cards', pause_edit: 'Pause & Edit', set_next_draw: 'Set Next Draw', solo_saved: 'Training decks saved',
         solo_need_15: 'Both decks must contain exactly 15 cards', solo_event_a: 'Your opening event', solo_event_b: 'Opponent opening event', no_event: 'None', edit_tags: 'Edit Tags',
         login_need_nickname: 'Please enter a nickname', login_name_too_long: 'Nickname too long (max 8 CJK or 16 Latin chars)', login_name_not_numbers: 'Nickname cannot be only numbers',
@@ -206,7 +206,7 @@ I18N.zh = { ...I18N.en,
     no_games: '暂无进行中的对局', back_to_home: '返回主页', settings_btn: '设置', settings_server: '服务器', settings_server_addr: '地址', not_your_turn: '还没轮到你',
     counter_insufficient: '提示：当前没有可支付的反制牌', default_status: 'Garden of Thorn', game_loading: '加载中...', server_no_response: '服务器没有响应，请检查连接或刷新页面。',
     spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线：{0}', chat_title: '聊天',
-    solo_training: '单人训练场', load_last: '载入上次', save_decks: '保存牌组', start_training: '开始训练', solo_deck_a: '你的牌组', solo_deck_b: '对方牌组',
+    solo_training: '单人训练场', load_last: '载入上次', save_decks: '保存牌组', start_training: '开始训练', clear_deck: '清空牌组', solo_deck_a: '你的牌组', solo_deck_b: '对方牌组',
     search_cards: '搜索卡牌', pause_edit: '暂停并编辑', set_next_draw: '设置下次抽牌', solo_saved: '训练牌组已保存', solo_need_15: '双方牌组都必须正好为 15 张',
     solo_event_a: '你的配装倾向', solo_event_b: '对方配装倾向', no_event: '无', edit_tags: '编辑标签',
     login_need_nickname: '请输入昵称', login_name_too_long: '昵称过长（最多 8 个中文或 16 个拉丁字符）', login_name_not_numbers: '昵称不能全为数字', login_name_not_symbols: '昵称不能全为符号', login_name_no_repeat_symbols: '- 和 _ 不能连续出现',
@@ -315,7 +315,7 @@ I18N.fr = { ...I18N.en,
     not_your_turn: "Ce n'est pas votre tour", counter_insufficient: 'Conseil : Ressources insuffisantes pour les cartes de contre', default_status: 'Garden of Thorn',
     game_loading: 'Chargement...', server_no_response: 'Le serveur ne répond pas. Vérifiez votre connexion.',
     spectator_prefix: 'Spectateur', lobby_title: 'Salon', online_count: 'En ligne: {0}', chat_title: 'Chat',
-    solo_training: 'Entraînement solo', load_last: 'Charger', save_decks: 'Sauver decks', start_training: 'Commencer',
+    solo_training: 'Entraînement solo', load_last: 'Charger', save_decks: 'Sauver decks', start_training: 'Commencer', clear_deck: 'Vider deck',
     solo_deck_a: 'Votre deck', solo_deck_b: 'Deck adverse', search_cards: 'Chercher cartes', pause_edit: 'Pause édition',
     set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks doivent avoir exactement 15 cartes',
     solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
@@ -384,7 +384,7 @@ I18N.pt = { ...I18N.en,
     not_your_turn: 'Não é seu turno', counter_insufficient: 'Dica: Recursos insuficientes para cartas de contra-ataque', default_status: 'Garden of Thorn',
     game_loading: 'Carregando...', server_no_response: 'Servidor sem resposta. Verifique sua conexão.',
     spectator_prefix: 'Espectar', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat',
-    solo_training: 'Treino Solo', load_last: 'Carregar Último', save_decks: 'Salvar Decks', start_training: 'Iniciar Treino',
+    solo_training: 'Treino Solo', load_last: 'Carregar Último', save_decks: 'Salvar Decks', start_training: 'Iniciar Treino', clear_deck: 'Limpar deck',
     solo_deck_a: 'Seu Deck', solo_deck_b: 'Deck Oponente', search_cards: 'Buscar cartas', pause_edit: 'Pausar e Editar',
     set_next_draw: 'Definir Próxima Compra', solo_saved: 'Decks salvos', solo_need_15: 'Ambos os decks devem ter exatamente 15 cartas',
     solo_event_a: 'Evento inicial', solo_event_b: 'Evento do oponente', no_event: 'Nenhum',
@@ -453,7 +453,7 @@ I18N.ja = { ...I18N.en,
     not_your_turn: 'あなたのターンではありません', counter_insufficient: 'ヒント：カウンターに必要なリソースが不足しています', default_status: 'Garden of Thorn',
     game_loading: '読み込み中...', server_no_response: 'サーバーが応答しません。接続を確認してください。',
     spectator_prefix: '観戦', lobby_title: 'ロビー', online_count: 'オンライン: {0}', chat_title: 'チャット',
-    solo_training: 'ソロ練習場', load_last: '前回を読み込む', save_decks: 'デッキ保存', start_training: '開始',
+    solo_training: 'ソロ練習場', load_last: '前回を読み込む', save_decks: 'デッキ保存', start_training: '開始', clear_deck: 'デッキを空にする',
     solo_deck_a: '自分のデッキ', solo_deck_b: '相手デッキ', search_cards: 'カード検索', pause_edit: '中断して編集',
     set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '両方のデッキは15枚ちょうど必要です',
     solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
@@ -2002,19 +2002,65 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'magic', re: /^[+-]?\d+M/i },
 ];
 
+function buildInlineCardDict(defId, modifierText = '') {
+    const cardDict = {
+        def_id: defId,
+        instance_flags: [],
+        disabled_flags: [],
+    };
+    String(modifierText || '')
+        .split('|')
+        .map(part => part.trim())
+        .filter(Boolean)
+        .forEach(part => {
+            const m = part.match(/^([^:=]+)\s*[:=]\s*(.+)$/);
+            const key = normalizeCardFlag(m ? m[1] : part);
+            const value = m ? m[2].trim() : '';
+            const numberValue = Math.max(0, Math.floor(Number(value || 0)));
+            if (key === 'swift') {
+                if (numberValue > 0) {
+                    cardDict.swift_value = numberValue;
+                    cardDict.instance_flags.push('swift');
+                }
+                return;
+            }
+            if (key === 'fusion') {
+                if (numberValue > 1) cardDict.fusion = numberValue;
+                return;
+            }
+            if (key === 'fission') {
+                if (numberValue > 1) cardDict.fission = numberValue;
+                return;
+            }
+            if (key === 'tomato' || key === 'held_turns') {
+                if (numberValue > 0) cardDict.held_turns = numberValue;
+                return;
+            }
+            if ((key === 'flag' || key === 'tag') && value) {
+                cardDict.instance_flags.push(normalizeCardFlag(value));
+            }
+        });
+    return cardDict;
+}
+
+function inlineCardChipHtml(cardDict) {
+    const chip = createCardChoiceChip(cardDict, { hideInstanceOnlyFlags: false });
+    chip.classList.add('inline-card-chip', 'inline-card-chip-compact');
+    return chip.outerHTML;
+}
+
 function colorizeCardText(value) {
     const text = String(value || '');
     let html = '';
     let i = 0;
     while (i < text.length) {
         const rest = text.slice(i);
-        const cardMarker = rest.match(/^\[\[card:([a-z0-9_:/-]+)\]\]/i);
+        const cardMarker = rest.match(/^\[\[card:([a-z0-9_:/-]+)((?:\|[^\]]+)*)\]\]/i);
         if (cardMarker && cardMarker[1]) {
             const defId = cardMarker[1];
             const cardDef = getCardDef(defId);
             if (cardDef) {
-                const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
-                html += `<span class="choice-card-token inline-card-chip"><span class="choice-card-name" style="border-color:${escapeHtml(typeColor)};color:${escapeHtml(typeColor)}">${escapeHtml(getCardName(cardDef))}</span></span>`;
+                html += inlineCardChipHtml(buildInlineCardDict(defId, cardMarker[2] || ''));
             } else {
                 html += escapeHtml(defId);
             }
@@ -3107,6 +3153,10 @@ function updateStaticText() {
     if (btnSoloStart) btnSoloStart.textContent = UI.start_training;
     const btnSoloBack = $('btn-solo-back');
     if (btnSoloBack) btnSoloBack.textContent = UI.back_to_home;
+    const btnSoloClearA = $('btn-solo-clear-a');
+    if (btnSoloClearA) btnSoloClearA.textContent = UI.clear_deck || '清空牌组';
+    const btnSoloClearB = $('btn-solo-clear-b');
+    if (btnSoloClearB) btnSoloClearB.textContent = UI.clear_deck || '清空牌组';
     const soloSearch = $('solo-card-search');
     if (soloSearch) soloSearch.placeholder = UI.search_cards;
     const soloDeckATitle = $('solo-deck-a-title');
@@ -3249,8 +3299,19 @@ function showView(viewId) {
 
 function isNetworkMatchPhase(value = phase) {
     return !soloMode && !replayMode && [
-        'draft', 'event_select', 'playing', 'action', 'draw', 'response', 'choice', 'game_over',
+        'draft', 'event_select', 'event_sub_choice', 'playing', 'action', 'draw', 'response', 'choice', 'game_over',
     ].includes(String(value || ''));
+}
+
+function shouldIgnoreLobbyUpdateWhileInMatch() {
+    if (soloMode || replayMode) return false;
+    if (isNetworkMatchPhase(phase)) return true;
+    return [
+        'view-draft',
+        'view-event-select',
+        'view-game',
+        'view-gameover',
+    ].includes(activeViewId || '');
 }
 
 function clearNetworkMatchStateForLobby() {
@@ -3673,7 +3734,7 @@ function getAllStatusDefs() {
         { key: 'foresight', label: UI.status_foresight, desc: '每回合可以最多从抽牌堆替换层数张手牌。', color: '#2980B9' },
         { key: 'fracture', label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         { key: 'stagnation', label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
-        { key: 'blind', label: UI.status_blind, desc: '只能看到自己手牌的类型。名称、费用、图片、描述、标签和长按说明都会被隐藏为问号；自己回合开始时手牌会被打乱。自己回合结束时失明层数-1。', color: '#2C3E50' },
+        { key: 'blind', label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始时手牌会被打乱，然后清空失明。', color: '#2C3E50' },
         { key: 'heal_block', label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数-1。', color: '#E84393' },
         { key: 'weakness', label: UI.status_weakness, desc: '造成物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
@@ -4302,12 +4363,9 @@ function selectClassicPlayCard(cardInstanceId, event = null) {
     const hand = (gameState.you || {}).hand || [];
     const cardDict = hand.find(c => c.instance_id === cardInstanceId);
     const cardDef = cardDict ? getCardDef(cardDict.def_id) : null;
-    const blindSelf = isOwnBlindActive();
-    const canSelect = blindSelf
-        ? !!(cardDict && cardDef && cardDef.card_type !== 'guard' && isMyTurn() && !isActionBusy({ includeAnimation: false }))
-        : !!(cardDict && cardDef && canPlayCard(cardDict));
+    const canSelect = !!(cardDict && cardDef && canPlayCard(cardDict));
     if (!canSelect) {
-        if (cardDict) flashStatus(blindSelf ? '这张牌当前无法打出' : getCannotPlayReason(cardDict), 2200, 'error');
+        if (cardDict) flashStatus(getCannotPlayReason(cardDict), 2200, 'error');
         return false;
     }
     if (event && typeof event.clientX === 'number') classicAimPointer = { x: event.clientX, y: event.clientY };
@@ -4776,7 +4834,30 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
 }
 
 function isOwnBlindActive() {
-    return !!(gameState && gameState.you && Number(gameState.you.blind || 0) > 0 && !isSpectating);
+    return getOwnBlindLevel() > 0;
+}
+
+function getOwnBlindLevel() {
+    if (!gameState || !gameState.you || isSpectating) return 0;
+    return Math.max(0, Math.floor(Number(gameState.you.blind || 0)));
+}
+
+function updateBlindVisualClasses(state = gameState) {
+    const level = state && state.you && !isSpectating ? Math.max(0, Math.floor(Number(state.you.blind || 0))) : 0;
+    const root = document.body;
+    if (!root || !root.classList) return;
+    for (let i = 1; i <= 4; i++) {
+        root.classList.toggle(`blind-level-${i}`, level >= i);
+    }
+    root.dataset.blindLevel = level > 0 ? String(level) : '';
+}
+
+function getCardBlindLevelForSelf(cardDict, options = {}) {
+    if (options.blindForSelf || cardDict && cardDict.__blind_for_self) {
+        return Math.max(1, Math.floor(Number(options.blindLevel || cardDict.__blind_level || getOwnBlindLevel() || 1)));
+    }
+    if (options.autoBlindSelf === false) return 0;
+    return isOwnHandCardInstance(cardDict) ? getOwnBlindLevel() : 0;
 }
 
 function isOwnHandCardInstance(cardDict) {
@@ -4786,9 +4867,7 @@ function isOwnHandCardInstance(cardDict) {
 }
 
 function shouldBlindCardForSelf(cardDict, options = {}) {
-    if (options.blindForSelf || cardDict && cardDict.__blind_for_self) return true;
-    if (options.autoBlindSelf === false) return false;
-    return isOwnBlindActive() && isOwnHandCardInstance(cardDict);
+    return getCardBlindLevelForSelf(cardDict, options) > 0;
 }
 
 function getCardLayerLabel(cardDict) {
@@ -4837,14 +4916,21 @@ function createCardElement(cardDict, options = {}) {
         el.classList.add(cardDef.card_type);
     }
     const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
-    const typeLabel = getCardTypeLabel(cardDef.card_type) || cardDef.card_type;
-    const blinded = shouldBlindCardForSelf(cardDict, options);
+    const rawTypeLabel = getCardTypeLabel(cardDef.card_type) || cardDef.card_type;
+    const blindLevel = getCardBlindLevelForSelf(cardDict, options);
+    const blinded = blindLevel > 0;
+    const hideTypeByBlind = blindLevel >= 2;
+    const typeLabel = hideTypeByBlind ? '?' : rawTypeLabel;
     const cardName = blinded ? '?' : getCardName(cardDef);
     const englishName = (!blinded && shouldShowEnglishCardName(cardDef, cardName)) ? getEnglishCardName(cardDef) : '';
     const effectText = blinded ? '?' : getCardEffectText(cardDef);
     const descriptionText = blinded ? '?' : getCardDescriptionText(cardDef);
     const imageUrl = (!blinded && showCardImages) ? getCardArtUrl(cardDict, cardDef) : '';
-    if (blinded) el.classList.add('card-blinded');
+    if (blinded) {
+        el.classList.add('card-blinded');
+        el.classList.toggle('card-blinded-deep', hideTypeByBlind);
+        el.dataset.blindLevel = String(blindLevel);
+    }
     el.classList.add(englishName ? 'card-has-english' : 'card-no-english');
     el.classList.add(imageUrl ? 'card-has-art' : 'card-no-art');
     const cardArtHtml = imageUrl
@@ -4853,11 +4939,13 @@ function createCardElement(cardDict, options = {}) {
     const predictionOptions = options.prediction || options.predictionOptions || {};
     const cardOwnerState = options.ownerState || options.attackerState || predictionOptions.attackerState || getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you);
     const { totalE, totalM, flags } = getCardDisplayCosts(cardDict, cardDef, cardOwnerState);
+    const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
     el.style.borderColor = typeColor;
     el.dataset.instanceId = cardDict.instance_id;
     el.dataset.defId = defId;
     let flagsHtml = '';
     if (!blinded) for (const flag of flags) {
+        if (flag === 'swift' && swiftValue > 0) continue;
         if (!shouldDisplayCardFlag(flag, { showSystemFlags: showAllFlags })) continue;
         const custom = getCustomTagDef(flag);
         if (custom) {
@@ -4882,7 +4970,6 @@ function createCardElement(cardDict, options = {}) {
         const tomatoLayer = Math.min(6, Math.max(0, Number(cardDict.held_turns || 0)));
         flagsHtml += `<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || '层数')}: ${tomatoLayer}</span>`;
     }
-    const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
     if (!blinded && swiftValue > 0) {
         flagsHtml += `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}: ${swiftValue}</span>`;
     }
@@ -4928,6 +5015,7 @@ function createCardElement(cardDict, options = {}) {
             ownerState: cardOwnerState,
             prediction: predictionOptions,
             blindForSelf: blinded,
+            blindLevel,
         });
     }
     return el;
@@ -5005,6 +5093,8 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     const { base, effective } = getEffectiveCardFlagSets(cardDict, cardDef);
     const parts = [];
     effective.forEach(flag => {
+        const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
+        if (flag === 'swift' && swiftValue > 0) return;
         if (base.has(flag)) return;
         if (!shouldDisplayCardFlag(flag)) return;
         if (hideSet && hideSet.has(normalizeCardFlag(flag))) return;
@@ -5042,13 +5132,15 @@ function createCardChoiceChip(cardDict, options = {}) {
         return chip;
     }
     const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
-    const blinded = shouldBlindCardForSelf(cardDict, options);
+    const blindLevel = getCardBlindLevelForSelf(cardDict, options);
+    const blinded = blindLevel > 0;
+    const hideTypeByBlind = blindLevel >= 2;
     if (blinded) chip.classList.add('choice-card-blinded');
     const name = document.createElement('span');
     name.className = 'choice-card-name';
     name.style.borderColor = typeColor;
     name.style.color = typeColor;
-    name.textContent = blinded ? getCardTypeLabel(cardDef.card_type) || '?' : getCardName(cardDef);
+    name.textContent = blinded ? (hideTypeByBlind ? '?' : (getCardTypeLabel(cardDef.card_type) || '?')) : getCardName(cardDef);
     chip.appendChild(name);
     if (!blinded && options.extraCostText) {
         const cost = document.createElement('span');
@@ -5064,9 +5156,9 @@ function createCardChoiceChip(cardDict, options = {}) {
         chip.appendChild(flags);
     }
     const previewOptions = options.previewOptions || options.cardOptions || null;
-    const previewCard = blinded ? { ...cardDict, __blind_for_self: true } : cardDict;
-    attachFloatingCardPreview(chip, previewCard, { ...(previewOptions || {}), blindForSelf: blinded });
-    attachTermIntroToCard(chip, previewCard, { ...(previewOptions || {}), blindForSelf: blinded });
+    const previewCard = blinded ? { ...cardDict, __blind_for_self: true, __blind_level: blindLevel } : cardDict;
+    attachFloatingCardPreview(chip, previewCard, { ...(previewOptions || {}), blindForSelf: blinded, blindLevel });
+    attachTermIntroToCard(chip, previewCard, { ...(previewOptions || {}), blindForSelf: blinded, blindLevel });
     return chip;
 }
 
@@ -5408,6 +5500,38 @@ function countActiveCorruptionEquipment() {
     return count;
 }
 
+function countDizzyEquipmentForPrediction(attackerState = {}) {
+    let count = 0;
+    const attackerId = normalizePlayerId(attackerState && attackerState.player_id);
+    const players = [gameState && gameState.you, gameState && gameState.teammate, gameState && gameState.opponent, gameState && gameState.opponent2].filter(Boolean);
+    players.forEach(player => {
+        (Array.isArray(player && player.equipment) ? player.equipment : []).forEach(eq => {
+            const card = eq && (eq.card_instance || eq.card || eq);
+            const id = String(card && card.def_id || '').toLowerCase();
+            const effectTarget = normalizePlayerId(eq && eq.effect_target);
+            if (effectTarget != null && attackerId != null && effectTarget !== attackerId) return;
+            if (id === 'dizzy' || id.endsWith(':dizzy')) count += 1;
+        });
+    });
+    return count;
+}
+
+function countCutterEquipmentForPrediction(attackerState = {}) {
+    let count = 0;
+    const attackerId = normalizePlayerId(attackerState && attackerState.player_id);
+    const players = [gameState && gameState.you, gameState && gameState.teammate, gameState && gameState.opponent, gameState && gameState.opponent2].filter(Boolean);
+    players.forEach(player => {
+        (Array.isArray(player && player.equipment) ? player.equipment : []).forEach(eq => {
+            const card = eq && (eq.card_instance || eq.card || eq);
+            const id = String(card && card.def_id || '').toLowerCase();
+            const effectTarget = normalizePlayerId(eq && eq.effect_target);
+            if (effectTarget != null && attackerId != null && effectTarget !== attackerId) return;
+            if (id === 'cutter' || id.endsWith(':cutter')) count += 1;
+        });
+    });
+    return count;
+}
+
 function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState = {}) {
     const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
     const rawHits = getActualAttackDamageHits(cardDict || {}, attackerState || {}, targetState || {});
@@ -5420,9 +5544,12 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
     let nazarActive = !!(targetState && targetState.nazar_active);
     let nazarBigHits = Math.max(0, Number(targetState && targetState.nazar_big_hits || 0));
     const corruptionMult = 1.5 ** countActiveCorruptionEquipment();
+    const dizzyMult = 1 + 0.5 * countDizzyEquipmentForPrediction(attackerState);
+    const cutterBonus = countCutterEquipmentForPrediction(attackerState);
     const precision = cardHasEffectiveFlagForPrediction(cardDict || {}, cardDef || {}, 'precision');
     rawHits.forEach(raw => {
         let dmg = Math.max(0, Math.ceil(Number(raw || 0)));
+        if (cutterBonus > 0) dmg += cutterBonus;
         let precisionDodged = false;
         if (dodge > 0) {
             dodge -= 1;
@@ -5438,6 +5565,7 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
             return;
         }
         if (precisionDodged) dmg = Math.ceil(dmg / 2);
+        if (dizzyMult > 1) dmg = Math.ceil(dmg * dizzyMult);
         if (corruptionMult > 1) dmg = Math.ceil(dmg * corruptionMult);
         if (nazarActive) {
             const original = dmg;
@@ -6078,7 +6206,7 @@ function getStatusIntroItem(statusInfo) {
         foresight: { label: UI.status_foresight, desc: '每回合可以最多从抽牌堆替换层数张手牌。', color: '#2980B9' },
         fracture: { label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         stagnation: { label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
-        blind: { label: UI.status_blind, desc: '只能看到自己手牌的类型。名称、费用、图片、描述、标签和长按说明都会被隐藏为问号；自己回合开始时手牌会被打乱。自己回合结束时失明层数-1。', color: '#2C3E50' },
+        blind: { label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始时手牌会被打乱，然后清空失明。', color: '#2C3E50' },
         heal_block: { label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数-1。', color: '#E84393' },
         weakness: { label: UI.status_weakness, desc: '造成物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         bleed: { label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
@@ -6381,6 +6509,7 @@ function attachTermIntroToCard(anchor, cardDict, cardOptions = {}) {
 
 function attachTermIntroToStatus(anchor, statusInfo) {
     if (!anchor || !statusInfo) return;
+    if (getOwnBlindLevel() >= 3) return;
     attachTermIntroLongPress(anchor, () => showTermIntroForStatus(statusInfo));
 }
 
@@ -6793,6 +6922,10 @@ function connectSocket(serverUrl) {
         lobbyPlayers = data.players || [];
         lobbyOngoingGames = data.ongoing_games || [];
         mySid = data.your_sid || mySid;
+        if (shouldIgnoreLobbyUpdateWhileInMatch()) {
+            debugLog('[client] ignored lobby_update while in match phase=', phase, 'view=', activeViewId);
+            return;
+        }
         clearNetworkMatchStateForLobby();
         phase = 'lobby';
         renderLobby(data);
@@ -7136,7 +7269,7 @@ function connectSocket(serverUrl) {
             clearNetworkMatchStateForLobby();
             showView('view-lobby');
             phase = 'lobby';
-        } else if (data && data.reconnect_timeout > 0) {
+        } else if (data && (data.reconnect_timeout > 0 || data.wait_forever)) {
             showOpponentDCWaiting(data);
         } else {
             updateStatus(UI.opponent_disconnected);
@@ -9947,9 +10080,25 @@ function renderSoloDeck(which, deck) {
     const count = $(which === 'a' ? 'solo-deck-a-count' : 'solo-deck-b-count');
     if (count) count.textContent = `${deck.length}/15`;
     if (!el) return;
+    const panel = el.closest('.solo-deck-panel');
     el.innerHTML = '';
-    el.classList.toggle('active', soloTargetDeck === which);
-    el.onclick = () => { soloTargetDeck = which; renderSoloBuilder(); };
+    const selected = soloTargetDeck === which;
+    el.classList.toggle('active', selected);
+    if (panel) {
+        panel.classList.toggle('active', selected);
+        panel.onclick = () => {
+            if (soloTargetDeck !== which) {
+                soloTargetDeck = which;
+                renderSoloBuilder();
+            }
+        };
+    }
+    el.onclick = () => {
+        if (soloTargetDeck !== which) {
+            soloTargetDeck = which;
+            renderSoloBuilder();
+        }
+    };
     deck.forEach((defId, idx) => {
         const card = deck[idx];
         const cd = getCardDef(card.def_id);
@@ -9984,6 +10133,16 @@ function renderSoloDeck(which, deck) {
         };
         el.appendChild(row);
     });
+}
+
+function clearSoloDeck(which) {
+    if (which === 'a') {
+        soloDeckA = [];
+    } else {
+        soloDeckB = [];
+    }
+    soloTargetDeck = which;
+    renderSoloBuilder();
 }
 
 function addSoloCard(defId) {
@@ -10024,7 +10183,7 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
     if (eventId === 2) {
         const conversions = [];
         const countOptions = ['1', '2', '3'];
-        const countSel = await gamePrompt(UI.choose_convert_count, countOptions);
+        const countSel = await gamePrompt(UI.choose_convert_count, countOptions, { cancellable: false });
         if (countSel < 0) return false;
         for (let i = 0; i <= countSel; i++) {
             const magicDisplay = openingEventMagicPool.map(defId => {
@@ -10032,10 +10191,10 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
                 const detail = cd ? `${cd.cost_e || 0}E/${cd.cost_m || 0}M` : '';
                 return cardDefChoiceOption(defId, detail ? { detail } : {});
             });
-            const magicSel = await gamePrompt(UI.choose_magic_card_n.replace('{0}', i + 1), magicDisplay);
+            const magicSel = await gamePrompt(UI.choose_magic_card_n.replace('{0}', i + 1), magicDisplay, { cancellable: false });
             if (magicSel < 0) return false;
             const sourceOptions = deck.map((entry, idx) => cardChoiceOption(entry, { detail: `#${idx + 1}` }));
-            const sourceSel = await gamePrompt(`${label} ${UI.choose_source_card_n.replace('{0}', i + 1)}`, sourceOptions);
+            const sourceSel = await gamePrompt(`${label} ${UI.choose_source_card_n.replace('{0}', i + 1)}`, sourceOptions, { cancellable: false });
             if (sourceSel < 0) return false;
             conversions.push({
                 magic_def_id: openingEventMagicPool[magicSel],
@@ -10047,11 +10206,11 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
     if (eventId === 3) {
         const convert_def_ids = [];
         const countOptions = ['1', '2', '3', '4', '5'];
-        const countSel = await gamePrompt(UI.choose_convert_count, countOptions);
+        const countSel = await gamePrompt(UI.choose_convert_count, countOptions, { cancellable: false });
         if (countSel < 0) return false;
         for (let i = 0; i <= countSel; i++) {
             const sourceOptions = deck.map((entry, idx) => cardChoiceOption(entry, { detail: `#${idx + 1}` }));
-            const sourceSel = await gamePrompt(`${label} ${UI.choose_source_card_n.replace('{0}', i + 1)}`, sourceOptions);
+            const sourceSel = await gamePrompt(`${label} ${UI.choose_source_card_n.replace('{0}', i + 1)}`, sourceOptions, { cancellable: false });
             if (sourceSel < 0) return false;
             convert_def_ids.push(deck[sourceSel].def_id);
         }
@@ -10059,7 +10218,7 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
     }
     if (eventId === 8) {
         const sourceOptions = deck.map((entry, idx) => cardChoiceOption(entry, { detail: `#${idx + 1}` }));
-        const sourceSel = await gamePrompt(`${label} ${UI.choose_yggdrasil_card}`, sourceOptions);
+        const sourceSel = await gamePrompt(`${label} ${UI.choose_yggdrasil_card}`, sourceOptions, { cancellable: false });
         if (sourceSel < 0) return false;
         return { yggdrasil_convert_def_id: deck[sourceSel].def_id };
     }
@@ -10450,18 +10609,24 @@ function renderDraft(data, isReroll, previousDraftState = null) {
     }
     const picksEl = $('draft-picks');
     if (picksEl) {
+        const setupPreviewCards = Array.isArray(data.setup_preview_cards) && data.setup_preview_cards.length
+            ? data.setup_preview_cards
+            : null;
         const picksSignature = JSON.stringify({
             match: phaseContextMatchKey(data),
             lang: currentLang,
             ui: currentUiStyle,
             picks,
+            setupPreviewCards,
         });
         if (picksSignature !== lastDraftPicksSignature) {
             lastDraftPicksSignature = picksSignature;
             picksEl.innerHTML = '';
-            picks.forEach(defId => {
+            const chipCards = setupPreviewCards || picks.map(defId => ({ def_id: defId }));
+            chipCards.forEach(cardDict => {
+                const defId = cardDict && cardDict.def_id;
                 const cardDef = getCardDef(defId);
-                const tag = createCardChoiceChip({ def_id: defId }, { includeLayers: false, includeTomato: false });
+                const tag = createCardChoiceChip(cardDict, { includeLayers: false, includeTomato: false });
                 tag.classList.add('draft-pick-token');
                 if (!cardDef) tag.textContent = defId;
                 picksEl.appendChild(tag);
@@ -10595,7 +10760,7 @@ async function showMagicConversionFlow() {
     const cardTypes = Object.keys(counts).sort((a, b) => (getCardName(getCardDef(a)) || a).localeCompare(getCardName(getCardDef(b)) || b));
     const countOptions = [];
     for (let i = 1; i < Math.min(4, cardTypes.length + 1); i++) countOptions.push(String(i));
-    const convertCountIdx = await gamePrompt(UI.choose_convert_count, countOptions);
+    const convertCountIdx = await gamePrompt(UI.choose_convert_count, countOptions, { cancellable: false });
     if (convertCountIdx < 0) return false;
     const convertCount = convertCountIdx + 1;
     const conversions = [];
@@ -10607,11 +10772,11 @@ async function showMagicConversionFlow() {
             const detail = cd ? `${cd.cost_e || 0}E/${cd.cost_m || 0}M` : '';
             return cardDefChoiceOption(did, detail ? { detail } : {});
         });
-        const magicSel = await gamePrompt(UI.choose_magic_card_n.replace('{0}', i + 1), magicDisplay);
+        const magicSel = await gamePrompt(UI.choose_magic_card_n.replace('{0}', i + 1), magicDisplay, { cancellable: false });
         if (magicSel < 0) return false;
         const availableTypes = cardTypes.filter(d => (remainingCounts[d] || 0) > 0);
         const availableDisplay = availableTypes.map(did => cardDefChoiceOption(did, { detail: `x${remainingCounts[did]}` }));
-        const sourceSel = await gamePrompt(UI.choose_source_card_n.replace('{0}', i + 1), availableDisplay);
+        const sourceSel = await gamePrompt(UI.choose_source_card_n.replace('{0}', i + 1), availableDisplay, { cancellable: false });
         if (sourceSel < 0) return false;
         remainingCounts[availableTypes[sourceSel]] = (remainingCounts[availableTypes[sourceSel]] || 0) - 1;
         conversions.push({ magic_def_id: magicOptionsAll[magicSel], source_def_id: availableTypes[sourceSel] });
@@ -10687,10 +10852,9 @@ async function showLightConversionChoice() {
         });
         const cancelBtn = $('game-prompt-cancel');
         cancelBtn.textContent = UI.cancel;
-        cancelBtn.onclick = () => {
-            el.classList.remove('active');
-            resolve(false);
-        };
+        cancelBtn.classList.add('hidden');
+        cancelBtn.style.display = 'none';
+        cancelBtn.onclick = null;
         const confirmBtn = document.createElement('button');
         confirmBtn.className = 'btn btn-primary';
         confirmBtn.textContent = UI.ok;
@@ -10710,9 +10874,9 @@ async function showLightConversionChoice() {
         cancelBtn.parentNode.appendChild(confirmBtn);
         const cleanup = () => {
             if (confirmBtn.parentNode) confirmBtn.parentNode.removeChild(confirmBtn);
+            cancelBtn.classList.remove('hidden');
+            cancelBtn.style.display = '';
         };
-        const origCancelClick = cancelBtn.onclick;
-        cancelBtn.onclick = () => { cleanup(); origCancelClick(); };
         confirmBtn.addEventListener('click', () => { cleanup(); }, { once: true });
         el.classList.add('active');
     });
@@ -10724,7 +10888,7 @@ async function showYggdrasilConversionChoice() {
     draftPicks.forEach(d => { if (d !== 'Yggdrasil') counts[d] = (counts[d] || 0) + 1; });
     const options = Object.keys(counts).sort((a, b) => (getCardName(getCardDef(a)) || a).localeCompare(getCardName(getCardDef(b)) || b));
     const display = options.map(did => cardDefChoiceOption(did, { detail: `x${counts[did]}` }));
-    const sel = await gamePrompt(UI.choose_yggdrasil_card, display);
+    const sel = await gamePrompt(UI.choose_yggdrasil_card, display, { cancellable: false });
     if (sel < 0 || sel >= options.length) return false;
     return { yggdrasil_convert_def_id: options[sel] };
 }
@@ -10993,6 +11157,7 @@ function resetMatchRuntimeState(options = {}) {
     if (options.clearGameState) {
         gameState = {};
     }
+    updateBlindVisualClasses({});
 }
 
 function syncBattleLogMatch(ctx) {
@@ -11240,6 +11405,14 @@ function updateClassicExtraControls(gs) {
 }
 
 function formatPlayerPileInfo(playerData, includeDiscard, opponentStyle = false) {
+    const blindLevel = getOwnBlindLevel();
+    const pid = normalizePlayerId(playerData && playerData.player_id);
+    const isSelf = pid != null && pid === normalizePlayerId(gameState && gameState.your_id);
+    if (blindLevel >= 3) {
+        const text = includeDiscard ? UI.hand_deck_discard_info.replace('{0}', '?').replace('{1}', '?').replace('{2}', '?')
+            : UI.hand_deck_info_opp.replace('{0}', '?').replace('{1}', '?');
+        return { text, title: '', opponentStyle };
+    }
     const hand = playerData.hand_count || 0;
     const deck = playerData.deck_count || 0;
     const discard = playerData.discard_count || 0;
@@ -11488,8 +11661,16 @@ function attachClassicStatusIntros(container) {
     });
 }
 
-function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e') {
+function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e', masked = false) {
     if (!container) return;
+    container.classList.toggle('blind-resource-masked', !!masked);
+    if (masked) {
+        container.dataset.current = '?';
+        container.dataset.max = '?';
+        container.dataset.spend = '0';
+        container.textContent = '?';
+        return;
+    }
     const cur = Math.max(0, Number(current) || 0);
     const total = Math.max(0, Math.min(16, Number(max) || 0));
     const cost = Math.max(0, Number(spend) || 0);
@@ -11690,13 +11871,10 @@ function renderClassicHand(vm) {
     container.innerHTML = '';
     const hand = vm.hand || [];
     const count = hand.length;
-    const blindSelf = Number((vm.self && vm.self.raw && vm.self.raw.blind) || (gameState && gameState.you && gameState.you.blind) || 0) > 0 && !isSpectating;
     hand.forEach((card, index) => {
         const rawCard = card.raw || card;
         const cardDef = getCardDef(rawCard.def_id || '');
-        const playable = blindSelf
-            ? !!(isMyTurn() && !isActionBusy({ includeAnimation: false }) && cardDef && cardDef.card_type !== 'guard')
-            : vm.playableCards.has(card.instance_id);
+        const playable = vm.playableCards.has(card.instance_id);
         const offset = index - (count - 1) / 2;
         const rotate = Math.max(-13, Math.min(13, offset * 4.2));
         const lift = Math.max(0, 18 - Math.abs(offset) * 4);
@@ -11714,7 +11892,7 @@ function renderClassicHand(vm) {
             draggable: false,
             onClick: playable
                 ? (event) => selectClassicPlayCard(card.instance_id, event)
-                : () => flashStatus(blindSelf ? '这张牌当前无法打出' : getCannotPlayReason(rawCard), 2200, 'error'),
+                : () => flashStatus(getCannotPlayReason(rawCard), 2200, 'error'),
             ownerState: vm.self.raw || gameState.you || {},
             prediction: getCardPredictionOptionsForOwner(rawCard, vm.self.raw || gameState.you || {}),
         });
@@ -11723,7 +11901,7 @@ function renderClassicHand(vm) {
         wrap.addEventListener('mouseenter', () => {
             removeClassicHoverInfo();
             classicHoveredCardId = card.instance_id;
-            if (!selectedPlayCardId && !blindSelf) applyClassicResourcePreview(card, gameState && gameState.you);
+            if (!selectedPlayCardId) applyClassicResourcePreview(card, gameState && gameState.you);
             classicHoverPreviewTimer = setTimeout(() => {
                 classicHoverPreviewTimer = null;
                 showClassicHoverInfo(card, wrap);
@@ -11737,7 +11915,7 @@ function renderClassicHand(vm) {
             removeClassicHoverInfo();
             if (leavingId === card.instance_id) {
                 classicHoveredCardId = null;
-                if (!blindSelf) applyClassicResourcePreview(getSelectedClassicCard(), gameState && gameState.you);
+                applyClassicResourcePreview(getSelectedClassicCard(), gameState && gameState.you);
             }
         });
         container.appendChild(wrap);
@@ -11747,6 +11925,8 @@ function renderClassicHand(vm) {
 function renderClassicLog(vm) {
     const content = $('classic-log-content');
     if (!content) return;
+    const drawer = $('classic-log-drawer') || content.closest('.classic-log-drawer');
+    if (drawer) drawer.classList.toggle('blind-log-masked', getOwnBlindLevel() >= 2);
     const entries = gameTimelineEntries.length
         ? gameTimelineEntries.slice(-80)
         : (vm.log || []).slice(-80).map(text => ({ type: 'battle', text }));
@@ -11797,11 +11977,14 @@ function renderClassicBattle(gs) {
         $('classic-round').textContent = formatCompactRoundStatus(gs, vm.turn.phaseText);
         $('classic-phase').textContent = vm.turn.phaseText || '';
         $('classic-action-hint').textContent = selected ? getClassicPlayHint(selected) : (vm.turn.isMyTurn ? UI.your_turn : UI.opponent_turn);
-        renderClassicResourceOrbs($('classic-e-orbs'), vm.self.e, vm.self.maxE, resourcePreviewCard ? resourcePreviewCard.cost_e : 0, 'e');
-        renderClassicResourceOrbs($('classic-m-orbs'), vm.self.m, vm.self.maxM, resourcePreviewCard ? resourcePreviewCard.cost_m : 0, 'm');
-        $('classic-deck-count').textContent = `▣${vm.deckCount}`;
-        $('classic-discard-count').textContent = `⟲${vm.discardCount}`;
-        $('classic-exile-count').textContent = `◇${vm.exileCount}`;
+        const blindLevel = getOwnBlindLevel();
+        const maskOwnResources = blindLevel >= 2;
+        const maskOwnPiles = blindLevel >= 3;
+        renderClassicResourceOrbs($('classic-e-orbs'), vm.self.e, vm.self.maxE, resourcePreviewCard ? resourcePreviewCard.cost_e : 0, 'e', maskOwnResources);
+        renderClassicResourceOrbs($('classic-m-orbs'), vm.self.m, vm.self.maxM, resourcePreviewCard ? resourcePreviewCard.cost_m : 0, 'm', maskOwnResources);
+        $('classic-deck-count').textContent = `▣${maskOwnPiles ? '?' : vm.deckCount}`;
+        $('classic-discard-count').textContent = `⟲${maskOwnPiles ? '?' : vm.discardCount}`;
+        $('classic-exile-count').textContent = `◇${maskOwnPiles ? '?' : vm.exileCount}`;
         renderClassicFighter($('classic-fighter-self'), vm.self, 'self', selected);
         renderClassicFighter($('classic-fighter-enemy'), vm.enemy, 'enemy', selected);
         renderClassicPlayLane(vm);
@@ -11913,6 +12096,7 @@ function renderGame(data) {
     renderMiniPlayerSkin('you-skin', you, yourPlayerId);
     renderMiniPlayerSkin('opp2-skin', opp2, enemyIdsForSkin[1]);
     renderMiniPlayerSkin('teammate-skin', teammate, gs.teammate_id);
+    updateBlindVisualClasses(gs);
 
     renderPlayerBars('opp-bars', opp);
     renderPlayerBars('you-bars', getOptimisticPlayerBarsData(you));
@@ -12016,6 +12200,11 @@ function renderPlayerBars(containerId, playerData) {
     const container = $(containerId);
     if (!container) return;
     container.dataset.playerBars = '1';
+    const blindLevel = getOwnBlindLevel();
+    const pid = normalizePlayerId(playerData && playerData.player_id);
+    const isSelf = pid != null && pid === normalizePlayerId(gameState && gameState.your_id);
+    const masked = (isSelf && blindLevel >= 2) || (!isSelf && blindLevel >= 3);
+    container.classList.toggle('blind-resource-masked', masked);
     const bars = [
         { key: 'health', cur: playerData.health || 0, max: playerData.max_health || 100, color: COLORS.health, bg: COLORS.health_bg, label: 'H' },
         { key: 'elixir', cur: playerData.elixir || 0, max: playerData.max_elixir || 10, color: COLORS.elixir, bg: COLORS.elixir_bg, label: 'E' },
@@ -12044,8 +12233,9 @@ function renderPlayerBars(containerId, playerData) {
         const fill = wrappers[i].querySelector('.bar-fill');
         const text = wrappers[i].querySelector('.bar-text');
         const pct = bar.max > 0 ? Math.max(0, Math.min(100, (bar.cur / bar.max) * 100)) : 0;
-        if (fill) fill.style.width = pct + '%';
-        if (text) text.textContent = `${bar.cur}/${bar.max}`;
+        if (fill) fill.style.width = masked ? '0%' : pct + '%';
+        if (text) text.textContent = masked ? '?' : `${bar.cur}/${bar.max}`;
+        wrappers[i].classList.toggle('blind-masked', masked);
     });
 }
 
@@ -12055,6 +12245,8 @@ function renderStatusTags(containerId, playerData) {
     container.innerHTML = '';
     const tags = [];
     const p = playerData;
+    const maskStatusValues = getOwnBlindLevel() >= 3;
+    const hideStatusIntro = getOwnBlindLevel() >= 3;
     if (p.poison > 0) tags.push({ key: 'poison', name: UI.status_poison, abbr: 'P', val: p.poison, fg: COLORS.poison, bg: COLORS.poison_bg });
     if (p.fire > 0) tags.push({ key: 'fire', name: UI.status_fire, abbr: 'F', val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
     if (p.toxic > 0) tags.push({ key: 'toxic', name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
@@ -12111,20 +12303,30 @@ function renderStatusTags(containerId, playerData) {
         el.className = 'status-tag';
         el.style.color = t.fg;
         el.style.background = t.bg;
-        const fullText = t.val ? `${t.name}:${t.val}` : t.name;
+        const shownVal = maskStatusValues && t.val ? '?' : t.val;
+        const fullText = shownVal ? `${t.name}:${shownVal}` : t.name;
         nextItems.push(fullText);
         el.textContent = fullText;
-        el.title = t.title || '';
+        el.title = hideStatusIntro ? '' : (t.title || '');
         el.dataset.statusKey = t.key || '';
         el.dataset.statusName = t.name || '';
-        el.dataset.statusValue = t.val == null ? '' : String(t.val);
+        el.dataset.statusValue = hideStatusIntro ? '' : (shownVal == null ? '' : String(shownVal));
         if (previousSignature !== undefined && !previousItems.has(fullText)) {
             el.classList.add('status-tag-changed');
         }
-        attachTermIntroToStatus(el, t);
+        if (!hideStatusIntro) attachTermIntroToStatus(el, t);
         container.appendChild(el);
     });
     lastStatusSignatures.set(containerId, nextItems.join('\u0001'));
+}
+
+function appendUnknownHandMarker(container) {
+    if (!container) return;
+    const marker = document.createElement('div');
+    marker.className = 'unknown-hand-marker';
+    marker.textContent = '?';
+    marker.setAttribute('aria-label', '?');
+    container.appendChild(marker);
 }
 
 function renderOppHand(oppData, containerId = 'opp-hand') {
@@ -12164,6 +12366,10 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
         }
     } else {
         const count = oppData.hand_count || 0;
+        if (getOwnBlindLevel() >= 3 && count > 0) {
+            appendUnknownHandMarker(container);
+            return;
+        }
         for (let i = 0; i < count; i++) {
             const card = createCardElement({}, { faceDown: true, small: true });
             container.appendChild(card);
@@ -12177,6 +12383,10 @@ function renderTeammateHand(teammateData) {
     removeFloatingCardPreview();
     container.innerHTML = '';
     const hand = teammateData.hand || [];
+    if (getOwnBlindLevel() >= 3 && hand.length > 0) {
+        appendUnknownHandMarker(container);
+        return;
+    }
     hand.forEach(card => {
         const prediction = getCardPredictionOptionsForOwner(card, teammateData);
         const el = isSpectating ? createCardElement(card, { small: true, prediction, ownerState: teammateData }) : createTeammateHandChip(card, teammateData);
@@ -12223,12 +12433,9 @@ function renderPlayerHand(playerData) {
         clearSelectedPlayCard();
     }
     const myTurn = isMyTurn();
-    const blindSelf = Number(playerData.blind || 0) > 0 && !isSpectating;
     hand.forEach(cardDict => {
         const cardDef = getCardDef(cardDict.def_id);
-        const canPlay = blindSelf
-            ? !!(myTurn && !isActionBusy({ includeAnimation: false }) && cardDef && cardDef.card_type !== 'guard')
-            : myTurn && !isActionBusy({ includeAnimation: false }) && canPlayCard(cardDict);
+        const canPlay = myTurn && !isActionBusy({ includeAnimation: false }) && canPlayCard(cardDict);
         const card = createCardElement(cardDict, {
             small: !!isSpectating,
             draggable: !isSpectating && canPlay && cardDef && cardDef.card_type !== 'guard',
@@ -13453,6 +13660,7 @@ function resetBattleLogState(content) {
 function renderLog(log, logStart = 0, logTotal = null) {
     const container = $('battle-log');
     if (!container) return;
+    container.classList.toggle('blind-log-masked', getOwnBlindLevel() >= 2);
     let content = container.querySelector('.log-content');
     if (!content) {
         content = document.createElement('div');
@@ -14389,6 +14597,8 @@ function showResponseUI(data) {
     container.classList.add('visible');
     const cardDict = data.card || {};
     const cardDef = getCardDef(cardDict.def_id);
+    const blindLevel = getOwnBlindLevel();
+    const hideResponsePrediction = blindLevel >= 2;
     let triggerDesc = '';
     if (cardDef) {
         if (cardDef.card_type === 'thorn') triggerDesc = UI.enemy_attack;
@@ -14408,11 +14618,11 @@ function showResponseUI(data) {
     prefix.className = 'response-trigger-prefix';
     prefix.textContent = triggerDesc ? `${triggerDesc}:` : '';
     if (prefix.textContent) label.appendChild(prefix);
-    label.appendChild(createCardChoiceChip(cardDict));
+    label.appendChild(createCardChoiceChip(cardDict, blindLevel > 0 ? { blindForSelf: true, blindLevel } : {}));
     const prediction = data.damage_prediction || {};
     const noCounterPrediction = prediction.no_counter || {};
     const baseEffectPrediction = getResponseBaseEffectPrediction(data, cardDict, noCounterPrediction);
-    appendResponseEffectPreview(label, baseEffectPrediction);
+    if (!hideResponsePrediction) appendResponseEffectPreview(label, baseEffectPrediction);
     container.appendChild(label);
     if (responseWindowDef && responseWindowDef.response_content) {
         const content = document.createElement('div');
@@ -14436,16 +14646,18 @@ function showResponseUI(data) {
         }
         const cost = document.createElement('span');
         cost.className = 'counter-card-cost';
-        cost.textContent = `[${costStr}]`;
+        cost.textContent = blindLevel > 0 ? '[?]' : `[${costStr}]`;
         btn.appendChild(cost);
-        const counterPrediction = prediction.counters && prediction.counters[String(cc.instance_id)];
-        const statusReduction = getResponseCounterStatusReduction(data, cardDict, baseEffectPrediction, counterPrediction, cc);
-        appendCounterEffectReductions(btn, {
-            damage: Math.max(0, Number(counterPrediction && counterPrediction.reduction || 0)),
-            damageText: counterPrediction && counterPrediction.reduction_display,
-            poison: statusReduction.poison,
-            fire: statusReduction.fire,
-        });
+        if (!hideResponsePrediction) {
+            const counterPrediction = prediction.counters && prediction.counters[String(cc.instance_id)];
+            const statusReduction = getResponseCounterStatusReduction(data, cardDict, baseEffectPrediction, counterPrediction, cc);
+            appendCounterEffectReductions(btn, {
+                damage: Math.max(0, Number(counterPrediction && counterPrediction.reduction || 0)),
+                damageText: counterPrediction && counterPrediction.reduction_display,
+                poison: statusReduction.poison,
+                fire: statusReduction.fire,
+            });
+        }
         btn.disabled = !canAffordAny;
         btn.onclick = () => onRespond(cc.instance_id);
         btnRow.appendChild(btn);
@@ -15230,6 +15442,15 @@ function renderGameOver(data) {
 function showOpponentDCWaiting(data) {
     const timeout = data.reconnect_timeout || 120;
     const oppName = data.opponent_nickname || '?';
+    if (data && data.wait_forever) {
+        showModal(`
+            <div class="disconnect-modal">
+                <h3>${UI.opponent_disconnected}</h3>
+                <p id="dc-countdown" class="disconnect-countdown">${oppName}</p>
+            </div>
+        `);
+        return;
+    }
     let remaining = timeout;
     showModal(`
         <div class="disconnect-modal">
@@ -15328,6 +15549,7 @@ function onViewDeck() {
     const deckPlayer = getDeckViewerPlayer();
     const hasOrderedDeck = !!deckPlayer.deck_ordered;
     const deck = deckPlayer.deck_ordered || deckPlayer.deck || [];
+    const blindDeck = getOwnBlindLevel() >= 3 && !isSpectating;
     const modal = $('modal');
     const content = $('modal-content');
     if (!modal || !content) return;
@@ -15342,11 +15564,22 @@ function onViewDeck() {
     content.appendChild(title);
     const total = document.createElement('p');
     total.className = 'deck-total';
-    total.textContent = UI.deck_total.replace('{0}', deck.length);
+    total.textContent = UI.deck_total.replace('{0}', blindDeck ? '?' : deck.length);
     content.appendChild(total);
     const list = document.createElement('div');
     list.className = 'deck-list';
-    if (hasOrderedDeck) {
+    if (blindDeck) {
+        const row = document.createElement('div');
+        row.className = 'deck-entry deck-entry-blinded';
+        const unknown = document.createElement('span');
+        unknown.className = 'choice-card-token choice-card-blinded';
+        const unknownName = document.createElement('span');
+        unknownName.className = 'choice-card-name';
+        unknownName.textContent = '?';
+        unknown.appendChild(unknownName);
+        row.appendChild(unknown);
+        list.appendChild(row);
+    } else if (hasOrderedDeck) {
         // Goggles: show deck in order (top to bottom)
         deck.forEach((c, idx) => {
             const row = document.createElement('div');
@@ -16622,6 +16855,8 @@ async function init() {
     $('btn-solo-edit').addEventListener('click', handleSoloPauseEdit);
     if ($('classic-solo-edit')) $('classic-solo-edit').addEventListener('click', handleSoloPauseEdit);
     $('solo-card-search').addEventListener('input', renderSoloBuilder);
+    $('btn-solo-clear-a').addEventListener('click', (e) => { e.stopPropagation(); clearSoloDeck('a'); });
+    $('btn-solo-clear-b').addEventListener('click', (e) => { e.stopPropagation(); clearSoloDeck('b'); });
     $('solo-event-a').addEventListener('change', (e) => { soloEventA = e.target.value; });
     $('solo-event-b').addEventListener('change', (e) => { soloEventB = e.target.value; });
     $('btn-solo-load').addEventListener('click', () => { loadSoloDecks(true); renderSoloBuilder(); });

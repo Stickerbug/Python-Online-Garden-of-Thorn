@@ -3506,14 +3506,33 @@ body {
 .solo-deck-panel {
   display: flex;
   flex-direction: column;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.solo-deck-panel.active {
+  border-color: var(--bloom);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bloom) 24%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 92%, var(--bloom) 8%);
 }
 
 .solo-deck-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border-color);
+}
+
+.solo-deck-head h3 {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.solo-clear-btn {
+  flex: 0 0 auto;
+  padding: 5px 8px;
 }
 
 .solo-deck-list {
@@ -3523,7 +3542,8 @@ body {
   gap: 6px;
 }
 
-.solo-deck-list.active {
+.solo-deck-list.active,
+.solo-deck-panel.active .solo-deck-list {
   outline: 2px solid var(--bloom);
   outline-offset: -2px;
 }
@@ -5047,6 +5067,16 @@ body {
   padding: 1cqi 4cqi;
 }
 
+.card.card-blinded-deep {
+  border-color: #7f8c8d !important;
+  filter: grayscale(0.8);
+}
+
+.card.card-blinded-deep .card-type-label {
+  color: #7f8c8d !important;
+  background: #eceff1 !important;
+}
+
 .card.card-blinded .card-effect {
   display: flex;
   align-items: center;
@@ -5067,6 +5097,74 @@ body {
   font-weight: 900;
 }
 
+.blind-resource-masked .bar-track {
+  background: rgba(120, 128, 136, 0.24) !important;
+}
+
+.blind-resource-masked .bar-fill {
+  opacity: 0;
+}
+
+.blind-resource-masked .bar-text {
+  font-weight: 900;
+  color: var(--text-primary) !important;
+}
+
+.battle-log.blind-log-masked,
+.classic-log-drawer.blind-log-masked {
+  position: relative;
+  background: rgba(105, 112, 120, 0.16) !important;
+  overflow: hidden;
+}
+
+.battle-log.blind-log-masked .log-content,
+.classic-log-drawer.blind-log-masked .classic-log-content {
+  color: transparent !important;
+  text-shadow: none !important;
+  user-select: none;
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.battle-log.blind-log-masked::before,
+.classic-log-drawer.blind-log-masked::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(138, 144, 150, 0.92);
+  pointer-events: none;
+}
+
+.battle-log.blind-log-masked::after,
+.classic-log-drawer.blind-log-masked::after {
+  content: "?";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: clamp(28px, 5vw, 54px);
+  font-weight: 900;
+  color: rgba(80, 86, 92, 0.75);
+  z-index: 11;
+  pointer-events: none;
+}
+
+.unknown-hand-marker {
+  display: inline-grid;
+  place-items: center;
+  min-width: 38px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px dashed rgba(90, 96, 104, 0.72);
+  border-radius: 6px;
+  background: rgba(235, 238, 241, 0.9);
+  color: rgba(60, 66, 74, 0.9);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .card-effect {
   padding: 6cqi 2.5cqi;
   font-size: 9cqi;
@@ -5083,6 +5181,27 @@ body {
   display: inline-flex;
   vertical-align: baseline;
   margin: 0 0.1em;
+  gap: 3px;
+  transform: translateY(-0.04em);
+}
+
+.inline-card-chip.inline-card-chip-compact .choice-card-name {
+  max-width: min(150px, 34vw);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.86em;
+  line-height: 1;
+}
+
+.inline-card-chip.inline-card-chip-compact .choice-card-flags {
+  gap: 2px;
+}
+
+.inline-card-chip.inline-card-chip-compact .choice-card-flags .card-flag {
+  padding: 0 3px;
+  border-radius: 2px;
+  font-size: 0.72em;
+  line-height: 1.05;
 }
 
 .card-description {
@@ -8064,6 +8183,11 @@ body {
 
   .solo-deck-head h3 {
     font-size: 13px;
+  }
+
+  .solo-clear-btn {
+    padding: 4px 6px;
+    font-size: 11px;
   }
 
   .solo-deck-list {

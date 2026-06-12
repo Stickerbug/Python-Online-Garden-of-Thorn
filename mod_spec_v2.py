@@ -292,6 +292,7 @@ VALID_LOGIC_OPS = {
     "add_tag_to_zone",
     "reveal_tag_hand",
     "cogwheel_mark",
+    "honey_control",
     "goggles_enable",
     "assembler_effect",
     "request_reorder_deck",

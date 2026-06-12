@@ -7,7 +7,7 @@
 <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/static/css/style.css?v=217">
+    <link rel="stylesheet" href="/static/css/style.css?v=220">
 <script>
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
@@ -294,6 +294,7 @@
       <div class="solo-deck-head">
         <h3 id="solo-deck-a-title">我方牌堆</h3>
         <span id="solo-deck-a-count">0/15</span>
+        <button id="btn-solo-clear-a" class="btn btn-small btn-danger solo-clear-btn" type="button">清空牌组</button>
       </div>
       <div id="solo-deck-a" class="solo-deck-list"></div>
     </section>
@@ -301,6 +302,7 @@
       <div class="solo-deck-head">
         <h3 id="solo-deck-b-title">对方牌堆</h3>
         <span id="solo-deck-b-count">0/15</span>
+        <button id="btn-solo-clear-b" class="btn btn-small btn-danger solo-clear-btn" type="button">清空牌组</button>
       </div>
       <div id="solo-deck-b" class="solo-deck-list"></div>
     </section>
@@ -786,7 +788,7 @@
   const T = {
     en: {
       bootSub: 'Loading...', bootStep: 'Preparing...', subtitle: 'LAN card battle', nickname: 'Nickname', nicknamePlaceholder: 'Enter nickname',
-      enterLobby: 'Enter Lobby', soloTraining: 'Solo Training', settings: 'Settings', loadLast: 'Load Last', saveDecks: 'Save Decks', startTraining: 'Start Training', back: 'Back',
+      enterLobby: 'Enter Lobby', soloTraining: 'Solo Training', settings: 'Settings', loadLast: 'Load Last', saveDecks: 'Save Decks', startTraining: 'Start Training', back: 'Back', clearDeck: 'Clear Deck',
       searchCards: 'Search cards', soloDeckA: 'Your Deck', soloDeckB: 'Opponent Deck', soloEventA: 'Your opening event', soloEventB: 'Opponent opening event',
       lobby: 'Lobby', onlinePlayers: 'Online Players', onlineCount: 'Online: 0', ongoingGames: 'Ongoing Games', chat: 'Chat', messagePlaceholder: 'Type a message...', send: 'Send', backHome: 'Back to Home',
       draft: 'Draft Phase', reroll: 'Reroll', selectEvent: 'Select Event', selectEventDesc: 'Select an opening event', opponent: 'Opponent', oppInfo: 'Hand:0 Deck:0', battleLog: 'Battle Log', you: 'You', youInfo: 'Hand:0 Deck:0 Discard:0', dragToPlay: 'Drag to Play',
@@ -797,7 +799,7 @@
     },
     zh: {
       bootSub: '加载中...', bootStep: '准备加载...', subtitle: '局域网联机卡牌对战', nickname: '昵称', nicknamePlaceholder: '输入昵称',
-      enterLobby: '进入大厅', soloTraining: '单人训练场', settings: '设置', loadLast: '载入上次', saveDecks: '保存牌组', startTraining: '开始训练', back: '返回',
+      enterLobby: '进入大厅', soloTraining: '单人训练场', settings: '设置', loadLast: '载入上次', saveDecks: '保存牌组', startTraining: '开始训练', back: '返回', clearDeck: '清空牌组',
       searchCards: '搜索卡牌', soloDeckA: '你的牌组', soloDeckB: '对方牌组', soloEventA: '你的配装倾向', soloEventB: '对方配装倾向',
       lobby: '大厅', onlinePlayers: '在线玩家', onlineCount: '在线：0', ongoingGames: '进行中的对局', chat: '聊天', messagePlaceholder: '输入消息...', send: '发送', backHome: '返回主页',
       draft: '选牌阶段', reroll: '刷新', selectEvent: '选择配装倾向', selectEventDesc: '选择一个配装倾向', opponent: '对手', oppInfo: '手牌:0 牌堆:0', battleLog: '战斗日志', you: '你', youInfo: '手牌:0 牌堆:0 弃牌:0', dragToPlay: '拖动打出',
@@ -843,6 +845,6 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-    <script src="/static/js/game.js?v=264"></script>
+    <script src="/static/js/game.js?v=271"></script>
 </body>
 </html>

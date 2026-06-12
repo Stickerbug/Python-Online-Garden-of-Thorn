@@ -29,7 +29,7 @@ let lastStatusErrorSignature = '';
 let lastStatusErrorAt = 0;
 let draftStatsState = { items: [], total: 0 };
 let reportState = { items: [], total: 0, selectedId: null };
-const ADMIN_STATUS_REFRESH_MS = 5000;
+const ADMIN_STATUS_REFRESH_MS = 10000;
 const ADMIN_GAME_CHAT_REFRESH_MS = 6000;
 
 const STATUS_LABELS = {
@@ -343,7 +343,7 @@ function showShell(authenticated) {
   if (authenticated) {
     activeAdminTab = document.querySelector('.admin-tab.active')?.dataset.tab || 'gui';
     loadStatus();
-    if (activeAdminTab === 'gui') loadRegisteredUsers();
+    if (activeAdminTab === 'gui' && !registeredUsersState) loadRegisteredUsers();
     if (activeAdminTab === 'draft-stats') loadDraftStats();
     if (activeAdminTab === 'storage') loadStorageSummary();
     if (activeAdminTab === 'replays') resetAndLoadReplays();
@@ -639,7 +639,7 @@ function registeredUsersQuery() {
   params.set('query', $('registered-users-search')?.value || '');
   params.set('sort', $('registered-users-sort')?.value || 'last_login_at');
   params.set('order', $('registered-users-order')?.value || 'desc');
-  params.set('limit', '120');
+  params.set('limit', '50');
   return params;
 }
 
@@ -1673,7 +1673,7 @@ function bindEvents() {
         if (panel) panel.classList.toggle('hidden', target !== name);
       });
       if (['gui', 'events', 'moderation', 'terminal'].includes(target)) loadStatus();
-      if (target === 'gui') loadRegisteredUsers();
+      if (target === 'gui' && !registeredUsersState) loadRegisteredUsers();
       if (target === 'events') {
         renderEvents(adminState?.events || []);
         renderHistory(adminState?.history || []);

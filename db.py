@@ -1778,14 +1778,14 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
     }
 
 
-def list_admin_users(query='', sort='last_login_at', order='desc', limit=100, offset=0):
+def list_admin_users(query='', sort='last_login_at', order='desc', limit=50, offset=0):
     sort_key = str(sort or 'last_login_at')
     sort_expr = ADMIN_USER_SORTS.get(sort_key, ADMIN_USER_SORTS['last_login_at'])
     direction = 'ASC' if str(order or '').lower() == 'asc' else 'DESC'
     try:
-        safe_limit = max(1, min(int(limit), 300))
+        safe_limit = max(1, min(int(limit), 100))
     except (TypeError, ValueError):
-        safe_limit = 100
+        safe_limit = 50
     try:
         safe_offset = max(0, int(offset))
     except (TypeError, ValueError):

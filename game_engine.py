@@ -138,6 +138,7 @@ class PlayerState:
         self.m_gained_last_turn: bool = False
         self.cogwheel_pending_return: list = []
         self.attack_only: int = 0
+        self.honey_control_turns: int = 0
         self.enemy_draw_reduction: int = 0
         self.enemy_e_reduction: int = 0
         self.hand: List[CardInstance] = []
@@ -210,6 +211,7 @@ class PlayerState:
             'fragment_stacks': self.fragment_stacks,
             'm_gained_last_turn': self.m_gained_last_turn,
             'attack_only': self.attack_only,
+            'honey_control_turns': self.honey_control_turns,
             'enemy_draw_reduction': self.enemy_draw_reduction,
             'enemy_e_reduction': self.enemy_e_reduction,
             'extra_hand_limit_bonus': self.extra_hand_limit_bonus,
@@ -281,6 +283,7 @@ class PlayerState:
         ps.fragment_stacks = d.get('fragment_stacks', 0)
         ps.m_gained_last_turn = d.get('m_gained_last_turn', False)
         ps.attack_only = d.get('attack_only', 0)
+        ps.honey_control_turns = int(d.get('honey_control_turns', 0) or 0)
         ps.enemy_draw_reduction = d.get('enemy_draw_reduction', 0)
         ps.enemy_e_reduction = d.get('enemy_e_reduction', 0)
         ps.extra_hand_limit_bonus = d.get('extra_hand_limit_bonus', 0)
@@ -2141,8 +2144,9 @@ class GameEngine:
                 ps.health = SECOND_PLAYER_HEALTH
                 ps.max_health = SECOND_PLAYER_HEALTH
                 ps.base_max_health = SECOND_PLAYER_HEALTH
-        # Draw initial hands BEFORE applying opening events
-        # so that events that need to choose from hand can work
+        # Built-in setup effects are applied before the opening draw. This lets
+        # deck conversions such as Light trigger normal draw-time rules.
+        self._apply_builtin_opening_events_before_initial_draw()
         for i in range(2):
             ps = self.players[i]
             if i == self.first_player:
@@ -2154,9 +2158,9 @@ class GameEngine:
                 ps.draw_cards(hand_size)
             else:
                 ps.draw_cards(INITIAL_HAND_SIZE)
-        # Apply opening events after drawing initial hands
-        for i in range(2):
-            self._apply_opening_event(i)
+        # Keep v2/custom opening events deferred for now because some may
+        # intentionally operate on the opening hand.
+        self._apply_deferred_opening_events_after_initial_draw()
         self.round_num = 1
         self.log_msg(f"游戏开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
@@ -2196,6 +2200,76 @@ class GameEngine:
                     zone[idx] = CardInstance(def_id='Yggdrasil')
                     return True
         return False
+
+    def _is_builtin_opening_event(self, event_id) -> bool:
+        return isinstance(event_id, int) or (isinstance(event_id, str) and event_id.isdigit())
+
+    def _apply_builtin_opening_events_before_initial_draw(self):
+        for i in range(len(self.players)):
+            if self._is_builtin_opening_event(self.opening_event_picks[i]):
+                self._apply_opening_event(i)
+
+    def _apply_deferred_opening_events_after_initial_draw(self):
+        for i in range(len(self.players)):
+            if not self._is_builtin_opening_event(self.opening_event_picks[i]):
+                self._apply_opening_event(i)
+
+    def preview_setup_cards(self, player_id: int) -> List[dict]:
+        if not (0 <= player_id < len(self.players)):
+            return []
+        cards = []
+        for def_id in self.draft_picks[player_id]:
+            if self.allowed_card_ids is not None and def_id not in self.allowed_card_ids:
+                continue
+            cards.append(CardInstance(def_id=def_id))
+
+        def replace_first(source_def_id: str, replacement: CardInstance) -> bool:
+            for idx, card in enumerate(cards):
+                if getattr(card, 'def_id', None) == source_def_id:
+                    cards[idx] = replacement
+                    return True
+            return False
+
+        def replace_first_non_yggdrasil() -> bool:
+            for idx in range(len(cards) - 1, -1, -1):
+                if getattr(cards[idx], 'def_id', None) != 'Yggdrasil':
+                    cards[idx] = CardInstance(def_id='Yggdrasil')
+                    return True
+            return False
+
+        event_id = self.opening_event_picks[player_id]
+        sub = self.opening_event_sub_choices[player_id]
+        if not self._is_builtin_opening_event(event_id):
+            return [c.to_dict() for c in cards]
+        try:
+            event_id = int(event_id)
+        except Exception:
+            return [c.to_dict() for c in cards]
+        if event_id == 2 and sub and 'conversions' in sub:
+            for conv in sub.get('conversions') or []:
+                magic_def = conv.get('magic_def_id')
+                source_def = conv.get('source_def_id')
+                if magic_def and source_def and self._card_allowed(magic_def):
+                    replace_first(source_def, CardInstance(def_id=magic_def))
+        elif event_id == 3 and self._card_allowed('Light') and sub and 'convert_def_ids' in sub:
+            converted = 0
+            for target_def in list(sub.get('convert_def_ids') or []):
+                if converted >= 5:
+                    break
+                light_card = CardInstance(def_id='Light')
+                light_card.instance_flags = {'sprout', 'symbiosis'}
+                if replace_first(target_def, light_card):
+                    converted += 1
+        elif event_id == 8:
+            if not self._card_allowed('Yggdrasil'):
+                return [c.to_dict() for c in cards]
+            target_def = sub.get('yggdrasil_convert_def_id') if isinstance(sub, dict) else None
+            if target_def:
+                if not replace_first(target_def, CardInstance(def_id='Yggdrasil')):
+                    replace_first_non_yggdrasil()
+            else:
+                replace_first_non_yggdrasil()
+        return [c.to_dict() for c in cards]
 
     def _apply_opening_event(self, player_id: int):
         ps = self.players[player_id]
@@ -2322,6 +2396,64 @@ class GameEngine:
                 self._check_game_over()
                 return
         self.phase = 'action'
+        self._continue_honey_control_if_needed(player_id)
+
+    def _first_auto_attack_target(self, player_id: int) -> int:
+        if hasattr(self, 'get_enemies'):
+            enemies = [eid for eid in self.get_enemies(player_id) if 0 <= eid < len(self.players) and self.players[eid].health > 0]
+            if enemies:
+                return enemies[0]
+        target = 1 - player_id
+        return target if 0 <= target < len(self.players) and self.players[target].health > 0 else -1
+
+    def _card_payable_now(self, player_id: int, card: CardInstance) -> bool:
+        ps = self.players[player_id]
+        extra_e = self._get_extra_e_for_card(player_id, card)
+        return card.cost_e + extra_e <= ps.elixir and card.cost_m <= ps.magic
+
+    def _continue_honey_control_if_needed(self, player_id: int):
+        if self.game_over or self.phase != 'action' or self.current_player != player_id:
+            return
+        if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
+        ps = self.players[player_id]
+        if int(getattr(ps, 'honey_control_turns', 0) or 0) <= 0:
+            return
+        if getattr(self, '_honey_control_running', False):
+            return
+        self._honey_control_running = True
+        try:
+            while (
+                not self.game_over
+                and self.phase == 'action'
+                and self.current_player == player_id
+                and self.pending_response is None
+                and self.pending_choice is None
+                and not getattr(self, 'pending_v2_ui', None)
+                and int(getattr(ps, 'honey_control_turns', 0) or 0) > 0
+            ):
+                target_id = self._first_auto_attack_target(player_id)
+                if target_id < 0:
+                    break
+                next_card = None
+                for hand_card in list(ps.hand):
+                    if hand_card.card_type == 'thorn' and self._card_payable_now(player_id, hand_card):
+                        next_card = hand_card
+                        break
+                if next_card is None:
+                    break
+                self.log_msg(f"蜂蜜控制：{self.pn(player_id)}自动打出{next_card.name_cn}")
+                result = self.play_card(player_id, next_card.instance_id, {'target_player_id': target_id})
+                if not result.get('success'):
+                    break
+                if result.get('needs_response') or self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+                    return
+            ps.honey_control_turns = 0
+            if not self.game_over and self.phase == 'action' and self.current_player == player_id:
+                self.log_msg(f"蜂蜜控制结束：{self.pn(player_id)}自动结束回合")
+                self._end_player_turn(player_id)
+        finally:
+            self._honey_control_running = False
 
     def _apply_turn_start_effects(self, player_id: int):
         ps = self.players[player_id]
@@ -2462,9 +2594,16 @@ class GameEngine:
         self._check_game_over()
         return actual
 
-    def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1, is_battery: bool = False, is_precision: bool = False) -> int:
+    def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1, is_battery: bool = False,
+                           is_precision: bool = False, attacker_id: Optional[int] = None) -> int:
         ps = self.players[target_id]
-        opp_id = 1 - target_id
+        if isinstance(attacker_id, int) and 0 <= attacker_id < len(self.players):
+            opp_id = attacker_id
+        elif hasattr(self, 'get_all_enemies'):
+            enemies = list(self.get_all_enemies(target_id) or [])
+            opp_id = enemies[0] if enemies else (1 - target_id)
+        else:
+            opp_id = 1 - target_id
         opp = self.players[opp_id]
         immune = self._is_status_immune(target_id)
         if ps.untargetable and not is_battery:
@@ -2489,7 +2628,7 @@ class GameEngine:
             dmg = amount
             # V2 modify_damage hook for equipment damage modifiers
             dmg_ctx = self._v2_damage_context(
-                target_id, dmg, None,
+                target_id, dmg, opp_id,
                 damage_kind='attack', damage_tag=DAMAGE_TAG_PHYSICAL,
                 source='', damage_type=DAMAGE_TYPE_PHYSICAL,
             )
@@ -2548,6 +2687,8 @@ class GameEngine:
                                 self.log_msg(f"{self.pn(target_id)}的魔法电池效果：+1M")
             finally:
                 self._game_over_defer_depth -= 1
+            if dmg > 0:
+                self._record_damage(target_id, dmg, opp_id)
             if ps.health <= 0 or opp.health <= 0:
                 self._check_game_over()
                 break
@@ -2585,16 +2726,39 @@ class GameEngine:
         if not (0 <= source_id < len(self.players)):
             return 1.0
         count = 0
-        for eq in getattr(self.players[source_id], 'equipment', []):
-            eq_id = str(getattr(eq, 'def_id', '') or '').lower()
-            if eq_id == 'dizzy' or eq_id.endswith(':dizzy'):
-                count += 1
-        return 1.5 ** count if count > 0 else 1.0
+        for owner_state in self.players:
+            for eq in getattr(owner_state, 'equipment', []):
+                eq_id = str(getattr(eq, 'def_id', '') or '').lower()
+                effect_target = int(getattr(eq, 'effect_target', getattr(eq, 'owner', source_id)))
+                if effect_target != source_id:
+                    continue
+                if eq_id == 'dizzy' or eq_id.endswith(':dizzy'):
+                    count += 1
+        return (1.0 + 0.5 * count) if count > 0 else 1.0
+
+    def _damage_dealt_equipment_flat_bonus(self, source_id: Optional[int]) -> int:
+        try:
+            source_id = int(source_id)
+        except Exception:
+            return 0
+        if not (0 <= source_id < len(self.players)):
+            return 0
+        bonus = 0
+        for owner_state in self.players:
+            for eq in getattr(owner_state, 'equipment', []):
+                eq_id = str(getattr(eq, 'def_id', '') or '').lower()
+                effect_target = int(getattr(eq, 'effect_target', getattr(eq, 'owner', source_id)))
+                if effect_target != source_id:
+                    continue
+                if eq_id == 'cutter' or eq_id.endswith(':cutter'):
+                    bonus += 1
+        return bonus
 
     def _apply_damage_dealt_equipment_multiplier(self, amount: int, source_id: Optional[int]) -> int:
         multiplier = self._damage_dealt_equipment_multiplier(source_id)
+        amount = max(0, int(amount or 0)) + self._damage_dealt_equipment_flat_bonus(source_id)
         if multiplier <= 1:
-            return max(0, int(amount or 0))
+            return amount
         return max(0, int(math.ceil(float(amount or 0) * multiplier)))
 
     def _apply_late_round_fire_pressure(self):
@@ -2917,9 +3081,9 @@ class GameEngine:
             responder = self.players[responder_id]
             counter_card = responder.find_hand_card(card_instance_id)
             if counter_card is None:
-                return self._execute_card_effect(player_id, card, choice)
+                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             if counter_card.cost_e > responder.elixir or counter_card.cost_m > responder.magic:
-                return self._execute_card_effect(player_id, card, choice)
+                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             can_respond = False
             played_card_def = card.card_def
             if played_card_def.card_type == 'thorn' and counter_card.card_def.response_trigger == 'thorn':
@@ -2935,12 +3099,12 @@ class GameEngine:
             elif self._would_destroy_equipment(card) and counter_card.card_def.response_trigger == 'equipment_destroy':
                 can_respond = True
             if not can_respond:
-                return self._execute_card_effect(player_id, card, choice)
+                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             self._spend_resource(responder_id, 'elixir', counter_card.cost_e, counter_card)
             self._spend_resource(responder_id, 'magic', counter_card.cost_m, counter_card)
             counter_removed = responder.remove_hand_card(card_instance_id)
             if counter_removed is None:
-                return self._execute_card_effect(player_id, card, choice)
+                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}进行反制！")
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
             self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
@@ -2949,14 +3113,26 @@ class GameEngine:
                 if is_precision:
                     self._execute_card_effect_half_damage(player_id, card, choice)
                     responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
-                    return {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()}
+                    return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
                 self._execute_card_effect(player_id, card, choice)
                 responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
-                return {'success': True, 'countered': True, 'card': card.to_dict()}
+                return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
             if counter_removed.def_id == 'MagicBubble':
                 self.negated_card = True
-            return self._execute_card_effect(player_id, card, choice)
-        return self._execute_card_effect(player_id, card, choice)
+            return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+        return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+
+    def _after_response_result(self, player_id: int, result: dict) -> dict:
+        if (
+            not self.game_over
+            and self.phase == 'action'
+            and self.current_player == player_id
+            and self.pending_response is None
+            and self.pending_choice is None
+            and not getattr(self, 'pending_v2_ui', None)
+        ):
+            self._continue_honey_control_if_needed(player_id)
+        return result
 
     def _response_prediction_target_id(self, responder_id: int) -> int:
         pending = self.pending_response or {}
@@ -3334,6 +3510,13 @@ class GameEngine:
             if ps.find_hand_card(card.instance_id) is None:
                 ps.hand.insert(0, card)
             return {'success': False, 'error': '选择已取消'}
+        if isinstance(choice, dict):
+            original_choice = pending.get('original_choice') if isinstance(pending.get('original_choice'), dict) else {}
+            for key in ('target_player', 'target_player_id', 'target_id'):
+                if key not in choice and key in original_choice:
+                    choice[key] = original_choice[key]
+            if 'target_player_id' not in choice and pending.get('target_player_id') is not None:
+                choice['target_player_id'] = pending.get('target_player_id')
         self._run_v2_play_hook('before_play_card', player_id, card, choice)
         if getattr(self, 'pending_v2_ui', None) is not None:
             return {'success': True, 'needs_v2_ui': True, 'card': card.to_dict()}
@@ -4111,20 +4294,35 @@ class GameEngine:
 
     def _atomic_cogwheel_mark(self, player_id, card, params, log, choice, context):
         """Mark current turn's played cards for return next turn (Cogwheel)."""
-        ps = self.players[player_id]
+        target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
         if not hasattr(self, '_cogwheel_active'):
             self._cogwheel_active = {}
-        self._cogwheel_active[player_id] = True
+        self._cogwheel_active[target_id] = True
         if log:
             self.log_msg(log)
         else:
-            self.log_msg(f"{self.pn(player_id)}标记了齿轮效果")
+            self.log_msg(f"{self.pn(player_id)}给{self.pn(target_id)}标记了齿轮效果")
+
+    def _atomic_honey_control(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
+        if not (0 <= target_id < len(self.players)):
+            return
+        duration = max(1, self._eval_int(player_id, params.get('duration', 1), card))
+        self.players[target_id].honey_control_turns = max(
+            int(getattr(self.players[target_id], 'honey_control_turns', 0) or 0),
+            duration,
+        )
+        self.log_msg(log or f"{self.pn(player_id)}用蜂蜜控制了{self.pn(target_id)}下回合的行动")
 
     def _atomic_assembler_effect(self, player_id, card, params, log, choice, context):
         """Assembler: choose a hand card to exile, then random effect."""
         ps = self.players[player_id]
+        target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
+        target_ps = self.players[target_id]
         if choice and isinstance(choice, dict) and 'target_instance_id' in choice:
             # Phase 2: choice resolved, apply effect
+            target_id = self._resolve_target(player_id, choice.get('target_player_id', choice.get('target_id', target_id)))
+            target_ps = self.players[target_id]
             target = ps.find_hand_card(choice['target_instance_id'])
             if target:
                 ps.hand.remove(target)
@@ -4137,19 +4335,19 @@ class GameEngine:
                 new_card = CardInstance(def_id='Laser')
                 new_card.swift_value = 2
                 new_card.instance_flags.add('swift')
-                ps.add_to_hand(new_card)
-                self.log_msg(f"{self.pn(player_id)}的重构机：获得迅捷2的激光器")
+                target_ps.add_to_hand(new_card)
+                self.log_msg(f"{self.pn(player_id)}的重构机：{self.pn(target_id)}获得迅捷2的激光器")
             elif roll == 2:
                 new_card = CardInstance(def_id='Sawblade')
                 new_card.swift_value = 2
                 new_card.instance_flags.add('swift')
-                ps.add_to_hand(new_card)
-                self.log_msg(f"{self.pn(player_id)}的重构机：获得迅捷2的锯片")
+                target_ps.add_to_hand(new_card)
+                self.log_msg(f"{self.pn(player_id)}的重构机：{self.pn(target_id)}获得迅捷2的锯片")
             else:
-                ps.fragment_stacks += 2
+                target_ps.fragment_stacks += 2
                 new_card = CardInstance(def_id='Fragment')
-                ps.add_to_hand(new_card)
-                self.log_msg(f"{self.pn(player_id)}的重构机：获得2层碎片和1张碎片")
+                target_ps.add_to_hand(new_card)
+                self.log_msg(f"{self.pn(player_id)}的重构机：{self.pn(target_id)}获得2层碎片和1张碎片")
         else:
             # Phase 1: show choice
             hand_cards = [c.to_dict() for c in ps.hand if c.instance_id != card.instance_id]
@@ -4160,6 +4358,8 @@ class GameEngine:
                     'card': card.to_dict(),
                     'hand_cards': hand_cards,
                     'message': '重构机：选择一张手牌放逐',
+                    'target_player_id': target_id,
+                    'original_choice': {'target_player_id': target_id},
                 }
                 ps.hand.insert(0, card)
                 self._refund_pending_choice_cost(player_id, card)
@@ -4185,13 +4385,14 @@ class GameEngine:
 
     def _atomic_goggles_enable(self, player_id, card, params, log, choice, context):
         """Enable deck+discard ordered viewing for player (Goggles)."""
+        target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
         if not hasattr(self, '_goggles_players'):
             self._goggles_players = set()
-        self._goggles_players.add(player_id)
+        self._goggles_players.add(target_id)
         if log:
             self.log_msg(log)
         else:
-            self.log_msg(f"{self.pn(player_id)}启用了牌堆查看")
+            self.log_msg(f"{self.pn(player_id)}给{self.pn(target_id)}启用了牌堆查看")
 
     def _atomic_reveal_tag_hand(self, player_id, card, params, log, choice, context):
         """Reveal opponent hand cards that have a specific tag. Also adds revealed_tag_cards to state."""
@@ -7041,7 +7242,7 @@ class GameEngine:
         if not (0 <= player_id < len(self.players)) or self._is_status_immune(player_id):
             return
         ps = self.players[player_id]
-        for attr, label in (('stagnation', '滞留'), ('blind', '失明')):
+        for attr, label in (('stagnation', '滞留'),):
             value = int(getattr(ps, attr, 0) or 0)
             if value <= 0:
                 continue
@@ -7054,10 +7255,13 @@ class GameEngine:
         if not (0 <= player_id < len(self.players)):
             return
         ps = self.players[player_id]
-        if getattr(ps, 'blind', 0) <= 0 or not ps.hand:
+        blind_level = int(getattr(ps, 'blind', 0) or 0)
+        if blind_level <= 0:
             return
-        random.shuffle(ps.hand)
-        self.log_msg(f"{self.pn(player_id)}因失明打乱手牌")
+        if ps.hand:
+            random.shuffle(ps.hand)
+            self.log_msg(f"{self.pn(player_id)}因失明打乱手牌")
+        ps.blind = 0
 
     def _run_owner_turn_start_healing_equipment(self, player_id: int) -> set:
         if not (0 <= player_id < len(self.players)):
@@ -7852,9 +8056,13 @@ class GameEngine:
             targets = list(self.get_all_enemies(player_id)) if hasattr(self, 'get_all_enemies') else [1 - player_id]
         else:
             targets = self._resolve_targets(player_id, target_ref)
+        mode = str(params.get('mode', params.get('damage_mode', 'attack')) or 'attack').lower()
         for tid in targets:
             if 0 <= tid < len(self.players):
-                self._deal_direct_damage(tid, amount, source, player_id, damage_type=damage_type, damage_tag=damage_tag)
+                if mode in ('direct', 'effect'):
+                    self._deal_direct_damage(tid, amount, source, player_id, damage_type=damage_type, damage_tag=damage_tag)
+                else:
+                    self.deal_attack_damage(tid, amount, 1, is_precision=False, attacker_id=player_id)
         if log:
             self.log_msg(log)
 
