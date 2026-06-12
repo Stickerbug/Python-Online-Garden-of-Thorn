@@ -5234,7 +5234,7 @@ class GameEngine:
                     'equipment': eq.to_dict(), 'owner_id': owner_id}
         return {'needs_response': False}
 
-    def use_trigger(self, player_id: int, equipment_instance_id: int) -> dict:
+    def use_trigger(self, player_id: int, equipment_instance_id: int, target_player_id: int = -1) -> dict:
         if self.current_player != player_id:
             return {'success': False, 'error': '不是你的回合'}
         ps = self.players[player_id]
@@ -6260,7 +6260,9 @@ class GameEngine:
     def _card_needs_choice(self, card: CardInstance) -> bool:
         if self._base_card_needs_choice(card):
             return True
-        return self._get_choice_request(card) is not None
+        if self._get_choice_request(card) is not None:
+            return True
+        return self._v2_play_requires_choice_target(card)
 
     def _get_choice_type(self, card: CardInstance) -> str:
         effect = self._get_choice_request(card)
@@ -6285,6 +6287,8 @@ class GameEngine:
                 return 'choose_from_discard'
             if effect_type == 'steal_enemy_card':
                 return 'choose_from_enemy_hand'
+        if self._v2_play_requires_choice_target(card):
+            return 'choose_target'
         base = self._base_get_choice_type(card)
         return base or ''
 
@@ -6425,11 +6429,20 @@ class GameEngine:
         events = getattr(card_def, 'v2_events', None)
         return isinstance(events, dict) and bool(events.get(event_name))
 
+    def _card_is_self_only(self, card: Optional[CardInstance]) -> bool:
+        if card is None:
+            return False
+        flags = set(getattr(card, 'flags', set()) or set())
+        card_def = getattr(card, 'card_def', None)
+        if card_def is not None:
+            flags.update(getattr(card_def, 'flags', []) or [])
+        return 'self_only' in flags or 'tag_self_only' in flags
+
     def _effect_tree_uses_target_selector(self, value, depth: int = 0) -> bool:
         if depth > 20:
             return False
         if isinstance(value, str):
-            return value in ('target', 'event_target', 'chosen_target', 'choice_target', 'selected_target')
+            return value in ('target', 'event_target')
         if isinstance(value, dict):
             for key, item in value.items():
                 if key in ('target', 'targets', 'target_player', 'effect_target') and self._effect_tree_uses_target_selector(item, depth + 1):
@@ -6440,6 +6453,28 @@ class GameEngine:
         if isinstance(value, (list, tuple)):
             return any(self._effect_tree_uses_target_selector(item, depth + 1) for item in value)
         return False
+
+    def _effect_tree_uses_choice_target(self, value, depth: int = 0) -> bool:
+        if depth > 20:
+            return False
+        if isinstance(value, str):
+            return value in ('choice_target', 'chosen_target', 'selected_target')
+        if isinstance(value, dict):
+            return any(self._effect_tree_uses_choice_target(item, depth + 1) for item in value.values())
+        if isinstance(value, (list, tuple)):
+            return any(self._effect_tree_uses_choice_target(item, depth + 1) for item in value)
+        return False
+
+    def _v2_play_requires_choice_target(self, card: Optional[CardInstance]) -> bool:
+        if card is None or not getattr(card, 'card_def', None):
+            return False
+        if card.card_type in ('thorn', 'guard'):
+            return False
+        if self._card_is_self_only(card):
+            return False
+        events = getattr(card.card_def, 'v2_events', None) or {}
+        event_def = events.get('on_play')
+        return self._effect_tree_uses_choice_target(event_def)
 
     def _default_enemy_target_for_event(self, player_id: int) -> int:
         if hasattr(self, 'get_enemies'):
@@ -6460,9 +6495,11 @@ class GameEngine:
             return -1
         events = getattr(card.card_def, 'v2_events', None) or {}
         event_def = events.get(event_name)
-        if not self._effect_tree_uses_target_selector(event_def):
+        uses_choice_target = self._effect_tree_uses_choice_target(event_def)
+        uses_implicit_target = self._effect_tree_uses_target_selector(event_def)
+        if not uses_choice_target and not uses_implicit_target:
             return -1
-        if 'self_only' in getattr(card, 'flags', set()) and card.card_type != 'thorn':
+        if self._card_is_self_only(card) and card.card_type != 'thorn':
             return player_id
         if card.card_type == 'guard':
             return player_id
@@ -6478,6 +6515,8 @@ class GameEngine:
                         selected = -1
                     if 0 <= selected < len(self.players):
                         return selected
+        if uses_choice_target and not uses_implicit_target and card.card_type not in ('thorn', 'guard'):
+            return -1
         selected = self._default_enemy_target_for_event(player_id)
         if selected >= 0:
             return selected
@@ -7137,9 +7176,12 @@ class GameEngine:
                 eq.turns_equipped += 1
             else:
                 continue
+            effect_target_id = int(getattr(eq, 'effect_target', player_id))
+            if not (0 <= effect_target_id < len(self.players)):
+                effect_target_id = player_id
             if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
                     player_id, eq.card_instance, 'owner_turn_start', None,
-                    {'source_id': player_id, 'target_id': player_id}):
+                    {'source_id': player_id, 'target_id': effect_target_id}):
                 continue
             if eq.def_id == 'Leaf':
                 ps.heal(2)
@@ -7311,6 +7353,8 @@ class GameEngine:
             choice_request = self._get_choice_request(card)
             choice_params = self._effect_params(choice_request) if isinstance(choice_request, dict) else {}
             choice_type = self._get_choice_type(card)
+            if choice_type == 'choose_target' and not choice_params and self._v2_play_requires_choice_target(card):
+                choice_params = {'target': 'all', 'include_self': True, 'alive_only': True}
             choice_target_id = None
             if isinstance(choice_request, dict):
                 request_type = self._effect_type(choice_request)
@@ -7391,6 +7435,16 @@ class GameEngine:
             eq = self._find_equipment_for_card(equip_owner_id, card)
             if eq is None:
                 eq = EquipmentInstance(card, equip_owner_id)
+                if isinstance(choice, dict):
+                    for key in ('target_player', 'target_player_id', 'target_id'):
+                        if key in choice:
+                            try:
+                                selected_effect_target = int(choice.get(key))
+                            except Exception:
+                                selected_effect_target = -1
+                            if 0 <= selected_effect_target < len(self.players):
+                                eq.effect_target = selected_effect_target
+                                break
                 if eq.def_id == 'Disc' and not card.card_def.effects:
                     effect_target = int(getattr(eq, 'effect_target', getattr(eq, 'owner', equip_owner_id)))
                     if not (0 <= effect_target < len(self.players)):
@@ -7644,6 +7698,11 @@ class GameEngine:
         if prop in ('fusion_level', 'fission_level', 'mimic_discount', 'cost_e_override', 'cost_m_override',
                     'bonus_damage', 'return_to_hand_turns', 'held_turns', 'swift_value'):
             setattr(target_card, prop, value)
+            if prop == 'swift_value':
+                if value > 0:
+                    target_card.instance_flags.add('swift')
+                else:
+                    target_card.disabled_flags.add('swift')
         return target_card
 
     def _get_card_property_numeric_value(self, target_card, prop):
@@ -8221,7 +8280,7 @@ class GameEngine:
         for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
             self._atomic_var_div(player_id, card, {'target': tid, 'name': params.get('name', 'var'), 'value': params.get('value', 1)}, log, choice, context)
 
-    def use_trigger(self, player_id: int, equipment_instance_id: int) -> dict:
+    def use_trigger(self, player_id: int, equipment_instance_id: int, target_player_id: int = -1) -> dict:
         if self.current_player != player_id:
             return {'success': False, 'error': '不是你的回合'}
         ps = self.players[player_id]
@@ -8243,13 +8302,20 @@ class GameEngine:
             return {'success': False, 'error': '装备保护会抵消摧毁，无法触发'}
         self._spend_resource(player_id, 'elixir', trigger_cost, eq.card_instance)
         eq.uses_this_turn = int(getattr(eq, 'uses_this_turn', 0)) + 1
-        if has_mod_trigger and self._run_card_event(player_id, eq.card_instance, 'equipment_trigger', None,
-                                                    {'source_id': player_id, 'target_id': 1 - player_id}):
+        try:
+            target_id = int(target_player_id)
+        except Exception:
+            target_id = -1
+        if not (0 <= target_id < len(self.players)):
+            target_id = 1 - player_id
+        choice = {'target_player': target_id, 'target_player_id': target_id, 'target_id': target_id}
+        if has_mod_trigger and self._run_card_event(player_id, eq.card_instance, 'equipment_trigger', choice,
+                                                    {'source_id': player_id, 'target_id': target_id}):
             self._dispatch_card_event('equipment_triggered', player_id, eq.card_instance,
-                                      target_id=1 - player_id, equipment=eq, equipment_owner_id=player_id)
+                                      target_id=target_id, equipment=eq, equipment_owner_id=player_id)
             self._check_game_over()
-            return {'success': True}
-        opp_id = 1 - player_id
+            return {'success': True, 'target_player_id': target_id}
+        opp_id = target_id
         if eq.def_id == 'Leaf':
             if self._destroy_equipment(player_id, eq):
                 self.deal_attack_damage(opp_id, 8)
@@ -8262,4 +8328,4 @@ class GameEngine:
         self._dispatch_card_event('equipment_triggered', player_id, eq.card_instance,
                                   target_id=opp_id, equipment=eq, equipment_owner_id=player_id)
         self._check_game_over()
-        return {'success': True}
+        return {'success': True, 'target_player_id': target_id}

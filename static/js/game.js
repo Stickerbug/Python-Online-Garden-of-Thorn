@@ -85,8 +85,8 @@ const I18N = {
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Blind', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'Self only', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_stealth: 'Stealth', flag_revealed: 'Revealed',
-        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'Self only', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_stealth: 'Stealth', tag_revealed: 'Revealed',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_stealth: 'Stealth', flag_revealed: 'Revealed',
+        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_stealth: 'Stealth', tag_revealed: 'Revealed',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
@@ -195,7 +195,7 @@ I18N.zh = { ...I18N.en,
     status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '仅自己可用', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隐匿', flag_revealed: '被揭示',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隐匿', flag_revealed: '被揭示',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张牌堆顶的牌抽取', foresight_replace_confirm: '抽取',
@@ -237,7 +237,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '仅自己可用', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隐匿', tag_revealed: '被揭示',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隐匿', tag_revealed: '被揭示',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
@@ -320,7 +320,7 @@ I18N.fr = { ...I18N.en,
     set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks doivent avoir exactement 15 cartes',
     solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
     edit_tags: 'Modifier tags', tag_precision: 'Précision', tag_exile: 'Exil', tag_non_stackable: 'Non-cumul',
-    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Soi uniquement', tag_uncancellable: 'Non annulable', tag_rebound: 'Retour', tag_copy: 'Copie', tag_unique: 'Unique', tag_swift: 'Rapidité', tag_stealth: 'Furtif', tag_revealed: 'Révélé', tag_infinite_exclude: 'Retiré d’Infinite Fire',
+    tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Sans cible', tag_uncancellable: 'Non annulable', tag_rebound: 'Retour', tag_copy: 'Copie', tag_unique: 'Unique', tag_swift: 'Rapidité', tag_stealth: 'Furtif', tag_revealed: 'Révélé', tag_infinite_exclude: 'Retiré d’Infinite Fire',
     fusion_layer: 'Fusion', fission_layer: 'Fission',
     app_subtitle: 'Combat de cartes en réseau local',
     nickname_placeholder: 'Saisir un pseudo',
@@ -389,7 +389,7 @@ I18N.pt = { ...I18N.en,
     set_next_draw: 'Definir Próxima Compra', solo_saved: 'Decks salvos', solo_need_15: 'Ambos os decks devem ter exatamente 15 cartas',
     solo_event_a: 'Evento inicial', solo_event_b: 'Evento do oponente', no_event: 'Nenhum',
     edit_tags: 'Editar tags', tag_precision: 'Precisão', tag_exile: 'Exílio', tag_non_stackable: 'Não acumula',
-    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Somente si', tag_uncancellable: 'Não cancelável', tag_copy: 'Cópia', tag_unique: 'Único', tag_swift: 'Rapidez', tag_stealth: 'Furtivo', tag_revealed: 'Revelado', tag_infinite_exclude: 'Removido do Infinite Fire', tag_rebound: 'Retorno',
+    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Sem alvo', tag_uncancellable: 'Não cancelável', tag_copy: 'Cópia', tag_unique: 'Único', tag_swift: 'Rapidez', tag_stealth: 'Furtivo', tag_revealed: 'Revelado', tag_infinite_exclude: 'Removido do Infinite Fire', tag_rebound: 'Retorno',
     fusion_layer: 'Fusão', fission_layer: 'Fissão',
     app_subtitle: 'Batalha de cartas em rede local',
     nickname_placeholder: 'Digite um apelido',
@@ -458,7 +458,7 @@ I18N.ja = { ...I18N.en,
     set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '両方のデッキは15枚ちょうど必要です',
     solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
     edit_tags: 'タグ編集', tag_precision: '精密', tag_exile: '追放', tag_non_stackable: '非重複',
-    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '自分専用', tag_uncancellable: 'キャンセル不可', tag_copy: '複製', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隠密', tag_revealed: '公開', tag_infinite_exclude: 'Infinite Fireから削除', tag_rebound: '回転',
+    tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '対象選択なし', tag_uncancellable: 'キャンセル不可', tag_copy: '複製', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隠密', tag_revealed: '公開', tag_infinite_exclude: 'Infinite Fireから削除', tag_rebound: '回転',
     fusion_layer: '融合', fission_layer: '分裂',
     app_subtitle: 'LANカード対戦',
     nickname_placeholder: 'ニックネームを入力',
@@ -590,7 +590,7 @@ Object.assign(I18N.zh, {
     tag_desc_symbiosis: '费用类关键词。该牌不受同名卡连续使用费用惩罚，适合在同一回合多次使用。',
     tag_desc_attract: '手牌上限关键词。手牌满时，带有吸引的牌会优先挤掉没有吸引的牌，减少关键牌爆掉的风险。',
     tag_desc_void: '回合结束关键词。带有虚无的牌如果留在手牌中，会在回合结束时被放逐。',
-    tag_desc_self_only: '目标限制关键词。2v2 中表示该牌只能对自己使用；1v1 中该限制没有额外显示意义。',
+    tag_desc_self_only: '目标选择关键词。打出这张牌时不弹出目标选择窗口，效果会按卡牌自身规则结算。',
     tag_desc_uncancellable: '选择限制关键词。该牌弹出选择窗口时不显示取消按钮，玩家必须完成选择。用于避免通过0消耗选择牌窗口查看隐藏信息后取消，例如磁铁查看敌方手牌。',
     tag_desc_infinite_exclude: '模式限制关键词。该牌不会进入无限火力的随机牌库，用于排除与该模式机制冲突的牌。',
     tag_desc_copy: '抽牌关键词。当此牌进入手中时，将层数张放逐复制加入手中。',
@@ -645,7 +645,7 @@ Object.assign(I18N.en, {
     tag_desc_symbiosis: 'Cost keyword. This card ignores same-name card cost penalties.',
     tag_desc_attract: 'Hand-limit keyword. When your hand is full, Attract cards push out non-Attract cards first.',
     tag_desc_void: 'End-turn keyword. If this card remains in hand at end of turn, it is exiled.',
-    tag_desc_self_only: 'Targeting keyword. In 2v2, this card can only target yourself; in 1v1, it has no extra display meaning.',
+    tag_desc_self_only: 'Targeting keyword. This card does not open a target picker when played; its effect resolves by its own rules.',
     tag_desc_uncancellable: 'Choice keyword. Selection windows from this card do not show a cancel button; the player must complete the choice. This prevents checking hidden information for 0 cost and canceling, such as with Magnet.',
     tag_desc_infinite_exclude: 'Mode keyword. This card is excluded from Infinite Fire random pools because it conflicts with that mode.',
     tag_desc_copy: 'Draw keyword. When this card enters your hand, add N exile copies to your hand.',
@@ -790,7 +790,7 @@ Object.assign(I18N.fr, {
     tag_desc_symbiosis: 'Mot-clé de coût. Cette carte ignore les pénalités de coût des cartes de même nom.',
     tag_desc_attract: 'Mot-clé de limite de main. Quand la main est pleine, les cartes Attraction repoussent d’abord les cartes sans Attraction.',
     tag_desc_void: 'Mot-clé de fin de tour. Si cette carte reste en main à la fin du tour, elle est exilée.',
-    tag_desc_self_only: 'Mot-clé de ciblage. En 2v2, cette carte ne peut cibler que vous-même ; en 1v1, il n’a pas d’effet d’affichage supplémentaire.',
+    tag_desc_self_only: 'Mot-clé de ciblage. Cette carte n’ouvre pas de sélection de cible et résout son effet selon ses propres règles.',
     tag_desc_uncancellable: 'Mot-clé de choix. Les fenêtres de choix de cette carte n’affichent pas de bouton Annuler ; le joueur doit terminer le choix. Cela évite de consulter une information cachée gratuitement puis d’annuler, par exemple avec Aimant.',
     tag_desc_infinite_exclude: 'Mot-clé de mode. Cette carte est exclue de la réserve aléatoire d’Infinite Fire car elle entre en conflit avec ce mode.',
     tag_desc_copy: 'Mot-clé de pioche. Quand cette carte entre en main, ajoute N copies exilées.',
@@ -811,7 +811,7 @@ Object.assign(I18N.pt, {
     tag_desc_symbiosis: 'Palavra-chave de custo. Esta carta ignora penalidades de custo por cartas de mesmo nome.',
     tag_desc_attract: 'Palavra-chave de limite de mão. Quando a mão está cheia, cartas com Atração empurram primeiro cartas sem Atração.',
     tag_desc_void: 'Palavra-chave de fim de turno. Se esta carta ficar na mão no fim do turno, ela é exilada.',
-    tag_desc_self_only: 'Palavra-chave de alvo. No 2v2, esta carta só pode mirar você mesmo; no 1v1, não tem significado visual extra.',
+    tag_desc_self_only: 'Palavra-chave de alvo. Esta carta não abre seleção de alvo; seu efeito resolve pelas próprias regras.',
     tag_desc_uncancellable: 'Palavra-chave de escolha. Janelas de escolha desta carta não mostram botão de cancelar; o jogador deve concluir a escolha. Isso evita ver informação oculta de graça e cancelar, como com Magnet.',
     tag_desc_infinite_exclude: 'Palavra-chave de modo. Esta carta não entra no conjunto aleatório de Infinite Fire por conflitar com esse modo.',
     tag_desc_copy: 'Palavra-chave de compra. Quando esta carta entra na mão, adicione N cópias exiladas.',
@@ -833,7 +833,7 @@ Object.assign(I18N.ja, {
     tag_desc_symbiosis: 'コストキーワード。同名カード連続使用による費用ペナルティを受けません。',
     tag_desc_attract: '手札上限キーワード。手札が満杯のとき、吸引カードは吸引を持たないカードを優先して押し出します。',
     tag_desc_void: 'ターン終了キーワード。このカードがターン終了時に手札に残っている場合、追放されます。',
-    tag_desc_self_only: '対象制限キーワード。2v2 では自分だけを対象にできます。1v1 では追加の表示上の意味はありません。',
+    tag_desc_self_only: '対象選択キーワード。このカードは使用時に対象選択を開かず、カード自身のルールで解決します。',
     tag_desc_uncancellable: '選択制限キーワード。このカードの選択画面にはキャンセルボタンが表示されず、必ず選択を完了します。Magnet のように0コストで非公開情報を見てからキャンセルすることを防ぎます。',
     tag_desc_infinite_exclude: 'モード制限キーワード。このカードは Infinite Fire のランダムカードプールに入りません。',
     tag_desc_copy: 'ドローキーワード。このカードが手札に入った時、追放コピーをN枚手札に加える。',
@@ -4978,9 +4978,6 @@ function shouldDisplayCardFlag(flag, options = {}) {
     const normalized = normalizeCardFlag(flag);
     if (!normalized) return false;
     if (normalized === 'infinite_exclude') return !!options.showSystemFlags;
-    if ((normalized === 'self_only' || normalized === 'tag_self_only') && (!gameState || gameState.mode !== '2v2')) {
-        return false;
-    }
     return true;
 }
 
@@ -5938,7 +5935,7 @@ function getIntroFlagDescription(flag, custom = null) {
         symbiosis: '同一回合重复使用同名卡时，不会受到同名卡费用惩罚。',
         attract: '爆牌时，会优先挤掉没有吸引的牌。',
         void: '回合结束仍留在手牌中时，会进入放逐区。',
-        self_only: '只能对自己使用；2v2 中不能选择队友或敌人。',
+        self_only: '打出时不选择目标；效果按这张牌自身规则结算。',
         uncancellable: '相关选择窗口不能取消，避免免费查看隐藏信息后退出选择。',
         infinite_exclude: '不会进入无限火力随机牌池。',
         rebound: '打出并结算后立即回到手中。',
@@ -9353,6 +9350,7 @@ function handleLocalSoloMessage(event) {
 }
 
 function startLocalSoloRuntime(kind, payload) {
+    if (kind === 'solo') return false;
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
@@ -13203,11 +13201,18 @@ async function choosePlayerTarget(title, opts = {}) {
 }
 
 function getCardTargetPickOptions(cardDef) {
-    if (!cardDef || !gameState || gameState.mode !== '2v2') {
+    if (!cardDef || !gameState) {
         return {};
     }
+    if (cardHasSelfOnlyFlag({}, cardDef) && cardDef.card_type !== 'thorn') {
+        return { includeSelf: true, candidates: 'self', aliveOnly: true };
+    }
     if (cardDef.card_type === 'thorn') {
-        return { includeSelf: false, candidates: 'all', aliveOnly: true };
+        return {
+            includeSelf: false,
+            candidates: gameState.mode === '2v2' ? 'all' : 'enemy',
+            aliveOnly: true,
+        };
     }
     return { includeSelf: true, candidates: 'all', aliveOnly: true };
 }
@@ -13270,11 +13275,12 @@ async function chooseEnemyTarget(title) {
 
 function cardNeedsPlayerTarget(cardDef, cardDict = null) {
     const gs = gameState || {};
-    if (!cardDef || gs.mode !== '2v2') return false;
+    if (!cardDef) return false;
     if (cardHasSelfOnlyFlag(cardDict || {}, cardDef) && cardDef.card_type !== 'thorn') return false;
     if (cardDef.card_type === 'guard') return false;
     if (equipmentChoosesTargetOnTrigger(cardDef)) return false;
-    if (['thorn', 'bloom', 'root'].includes(cardDef.card_type)) return true;
+    if (cardDef.card_type === 'thorn') return gs.mode === '2v2';
+    if (['bloom', 'root'].includes(cardDef.card_type)) return true;
     return false;
 }
 
@@ -13336,7 +13342,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             btn.onclick = async () => {
                 if (isActionBusy({ includeAnimation: false })) return;
                 const payload = { equipment_instance_id: cardInst.instance_id };
-                if (gameState && gameState.mode === '2v2' && equipmentChoosesTargetOnTrigger(cardDef)) {
+                if (equipmentChoosesTargetOnTrigger(cardDef)) {
                     const targetId = cardHasSelfOnlyFlag(cardInst, cardDef)
                         ? normalizePlayerId(gameState && gameState.your_id)
                         : await choosePlayerTarget(
@@ -14134,9 +14140,9 @@ async function onPlayCard(cardInstanceId, options = {}) {
     }
     const cardDef = getCardDef(cardDict.def_id);
     let targetPlayerId = -1;
-    if (!soloMode && gameState.mode === '2v2' && cardHasSelfOnlyFlag(cardDict, cardDef) && (!cardDef || cardDef.card_type !== 'thorn')) {
+    if (cardHasSelfOnlyFlag(cardDict, cardDef) && (!cardDef || cardDef.card_type !== 'thorn')) {
         targetPlayerId = normalizePlayerId(gameState.your_id);
-    } else if (!soloMode && gameState.mode === '2v2' && cardNeedsPlayerTarget(cardDef, cardDict)) {
+    } else if (cardNeedsPlayerTarget(cardDef, cardDict)) {
         targetPlayerId = await choosePlayerTarget(
             UI.choose_target || UI.select_target || 'Choose target',
             getCardTargetPickOptions(cardDef),

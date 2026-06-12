@@ -8367,6 +8367,7 @@ def on_solo_play_card(data):
     try:
         card_instance_id = validate_instance_id(data.get('card_instance_id'), name='card_instance_id')
         choice = validate_choice_payload(data.get('choice'))
+        target_player_id = validate_int(data.get('target_player_id', -1), default=-1, minimum=-1, maximum=16, name='target_player_id')
     except ValueError as exc:
         _security_illegal(sid, 'solo_play_card', str(exc))
         return
@@ -8376,6 +8377,11 @@ def on_solo_play_card(data):
             emit('server_error', {'message': '训练场尚未开始'})
             return
         pidx = engine.current_player
+        if target_player_id >= 0:
+            choice = dict(choice or {})
+            choice.setdefault('target_player', target_player_id)
+            choice.setdefault('target_player_id', target_player_id)
+            choice.setdefault('target_id', target_player_id)
         result = engine.play_card(pidx, card_instance_id, choice)
         if result.get('needs_response'):
             if sid in tutorial_sessions and pidx == 0:
@@ -8494,6 +8500,7 @@ def on_solo_use_trigger(data):
         return
     try:
         equipment_instance_id = validate_instance_id(data.get('equipment_instance_id'), name='equipment_instance_id')
+        target_player_id = validate_int(data.get('target_player_id', -1), default=-1, minimum=-1, maximum=16, name='target_player_id')
     except ValueError as exc:
         _security_illegal(sid, 'solo_use_trigger', str(exc))
         return
@@ -8501,7 +8508,7 @@ def on_solo_use_trigger(data):
         engine = solo_sessions.get(sid)
         if not engine:
             return
-        result = engine.use_trigger(engine.current_player, equipment_instance_id)
+        result = engine.use_trigger(engine.current_player, equipment_instance_id, target_player_id=target_player_id)
         if not result.get('success'):
             emit('server_error', {'message': result.get('error', 'Operation failed')})
         send_solo_state(sid)
@@ -8617,6 +8624,11 @@ def on_play_card(data):
         if room.mode == '2v2':
             result = engine.play_card(pidx, card_instance_id, target_player_id=target_player_id, choice=choice)
         else:
+            if target_player_id >= 0:
+                choice = dict(choice or {})
+                choice.setdefault('target_player', target_player_id)
+                choice.setdefault('target_player_id', target_player_id)
+                choice.setdefault('target_id', target_player_id)
             result = engine.play_card(pidx, card_instance_id, choice)
         if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui'):
             record_valid_player_action(room, pidx, 'play_card')
@@ -8867,10 +8879,7 @@ def on_use_trigger(data):
             replay_def_id = getattr(getattr(equipment, 'card_instance', None), 'def_id', '') or getattr(getattr(equipment, 'card_def', None), 'id', '') or ''
         except Exception:
             replay_def_id = ''
-        if room.mode == '2v2':
-            result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
-        else:
-            result = engine.use_trigger(pidx, equipment_instance_id)
+        result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
         if result.get('success') or result.get('needs_ally_consent') or result.get('needs_choice') or result.get('needs_response') or result.get('needs_v2_ui'):
             record_valid_player_action(room, pidx, 'use_trigger')
             record_room_replay_action(room, 'use_trigger', pidx, {
