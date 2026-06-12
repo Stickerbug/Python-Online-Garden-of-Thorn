@@ -240,11 +240,11 @@ OPENING_EVENT_I18N = {
     },
     2: {
         'name': _t('魔力转化', 'Magic Conversion', 'Conversion magique', 'Conversão Mágica', 'Преобразование магии', '魔力変換'),
-        'desc': _t('选择1-3张牌转化为魔法牌，开局回复5M', 'Choose 1-3 cards to transform into magic cards; start by recovering 5M', 'Choisissez 1-3 cartes à transformer en cartes magiques ; au début, récupérez 5M', 'Escolha 1-3 cartas para transformar em cartas mágicas; no início, recupere 5M', 'Выберите 1-3 карты для превращения в магические; в начале восстановите 5M', 'カード1-3枚を魔法カードに変化させる。開始時に5M回復'),
+        'desc': _t('将最多3张牌转化为[[card:ManaOrb|flag=sprout|flag=symbiosis]]', 'Convert up to 3 cards into [[card:ManaOrb|flag=sprout|flag=symbiosis]]', 'Transforme jusqu’à 3 cartes en [[card:ManaOrb|flag=sprout|flag=symbiosis]]', 'Transforma até 3 cartas em [[card:ManaOrb|flag=sprout|flag=symbiosis]]', 'Превратите до 3 карт в [[card:ManaOrb|flag=sprout|flag=symbiosis]]', '最大3枚のカードを[[card:ManaOrb|flag=sprout|flag=symbiosis]]に変化させる'),
     },
     3: {
         'name': _t('光之洗礼', 'Baptism of Light', 'Baptême de lumière', 'Batismo de Luz', 'Крещение светом', '光の洗礼'),
-        'desc': _t('将最多五张牌转化为Light（萌芽+共生）', 'Convert up to five cards into Light (Sprout + Symbiosis)', 'Transforme jusqu’à cinq cartes en Light (Germe + Symbiose)', 'Transforma até cinco cartas em Light (Broto + Simbiose)', 'Превратите до пяти карт в Light (Росток + Симбиоз)', '最大5枚のカードをLight（萌芽+共生）に変化させる'),
+        'desc': _t('将最多五张牌转化为Light：[[card:Light|flag=sprout|flag=symbiosis]]', 'Convert up to five cards into Light: [[card:Light|flag=sprout|flag=symbiosis]]', 'Transforme jusqu’à cinq cartes en Light : [[card:Light|flag=sprout|flag=symbiosis]]', 'Transforma até cinco cartas em Light: [[card:Light|flag=sprout|flag=symbiosis]]', 'Превратите до пяти карт в Light: [[card:Light|flag=sprout|flag=symbiosis]]', '最大5枚のカードをLight：[[card:Light|flag=sprout|flag=symbiosis]]に変化させる'),
     },
     8: {
         'name': _t('绝境求生', 'Last Stand', 'Dernier recours', 'Último Recurso', 'Последний шанс', '背水の生存'),
@@ -256,7 +256,7 @@ OPENING_EVENT_I18N = {
     },
     5: {
         'name': _t('命运抽签', 'Fated Draw', 'Pioche du destin', 'Compra do Destino', 'Жребий судьбы', '運命のドロー'),
-        'desc': _t('前二回合开始时抽牌至手牌已满', 'At the start of the first two turns, draw until your hand is full', 'Au début des deux premiers tours, piochez jusqu’à avoir la main pleine', 'No início dos dois primeiros turnos, compre até a mão ficar cheia', 'В начале первых двух ходов добирайте до полной руки', '最初の2ターン開始時、手札上限まで引く'),
+        'desc': _t('从总抽牌库选择最多3张牌洗入牌库', 'Choose up to 3 cards from the full draft pool and shuffle them into your deck', 'Choisissez jusqu’à 3 cartes dans la réserve complète et mélangez-les dans votre deck', 'Escolha até 3 cartas do conjunto completo e embaralhe-as no seu deck', 'Выберите до 3 карт из общего пула и замешайте их в колоду', '全体カードプールから最大3枚を選び、山札に混ぜる'),
     },
     6: {
         'name': _t('能量涌动', 'Energy Surge', 'Poussée d’énergie', 'Surto de Energia', 'Всплеск энергии', 'エネルギー奔流'),
@@ -265,6 +265,14 @@ OPENING_EVENT_I18N = {
     7: {
         'name': _t('先手压制', 'Opening Pressure', 'Pression initiale', 'Pressão Inicial', 'Стартовое давление', '先手圧制'),
         'desc': _t('必定先手(对面未选同事件时)，先手多回复3E抽4张牌', 'You go first unless the opponent chose the same event; the first player recovers 3E more and draws 4 cards', 'Vous commencez sauf si l’adversaire a choisi le même événement ; le premier joueur récupère 3E de plus et pioche 4 cartes', 'Você começa, a menos que o oponente tenha escolhido o mesmo evento; o primeiro jogador recupera 3E a mais e compra 4 cartas', 'Вы ходите первым, если противник не выбрал то же событие; первый игрок восстанавливает на 3E больше и берёт 4 карты', '相手が同じイベントを選んでいなければ必ず先手。先手は追加で3E回復し、4枚引く'),
+    },
+    9: {
+        'name': _t('多重瓣', 'Multi-Petal', 'Multi-pétale', 'Multi-Pétala', 'Много лепестков', '多重子弁'),
+        'desc': _t('所有有不少于2子瓣的卡牌+1子瓣，最大生命值+10', 'Cards with at least 2 petals gain +1 petal; max health +10', 'Les cartes avec au moins 2 pétales gagnent +1 pétale ; santé max +10', 'Cartas com pelo menos 2 pétalas ganham +1 pétala; vida máxima +10', 'Карты с минимум 2 лепестками получают +1 лепесток; макс. здоровье +10', '2子弁以上のカードは子弁+1。最大生命値+10'),
+    },
+    10: {
+        'name': _t('魔力加速', 'Magic Acceleration', 'Accélération magique', 'Aceleração Mágica', 'Ускорение магии', '魔力加速'),
+        'desc': _t('打出一张牌回复1M，最大生命值-10', 'After playing a card, recover 1M; max health -10', 'Après avoir joué une carte, récupérez 1M ; santé max -10', 'Depois de jogar uma carta, recupere 1M; vida máxima -10', 'После розыгрыша карты восстановите 1M; макс. здоровье -10', 'カードを1枚使用した後、1M回復。最大生命値-10'),
     },
 }
 

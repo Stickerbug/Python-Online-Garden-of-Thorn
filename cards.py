@@ -84,6 +84,8 @@ class CardDef:
     v2_mod_id: str = ''
     image: str = ''
     image_url: str = ''
+    upgraded_image: str = ''
+    upgraded_image_url: str = ''
     copy_count: int = 0
     swift_value: int = 0
     damage: int = 0
@@ -125,6 +127,7 @@ class CardInstance:
     instance_flags: Set[str] = field(default_factory=set)
     disabled_flags: Set[str] = field(default_factory=set)
     swift_value: int = 0
+    extra_hits: int = 0
 
     def __post_init__(self):
         if not self.def_id:
@@ -184,6 +187,7 @@ class CardInstance:
             'instance_flags': list(self.instance_flags) if self.instance_flags else [],
             'disabled_flags': list(self.disabled_flags) if self.disabled_flags else [],
             'swift_value': self.swift_value,
+            'extra_hits': self.extra_hits,
         }
 
     @staticmethod
@@ -204,6 +208,7 @@ class CardInstance:
             instance_flags=normalize_card_flags(d.get('instance_flags', [])),
             disabled_flags=normalize_card_flags(d.get('disabled_flags', [])),
             swift_value=max(0, int(d.get('swift_value', 0))),
+            extra_hits=max(0, int(d.get('extra_hits', 0))),
         )
 
     def copy(self) -> 'CardInstance':
@@ -223,6 +228,7 @@ class CardInstance:
             instance_flags=set(self.instance_flags),
             disabled_flags=set(self.disabled_flags),
             swift_value=self.swift_value,
+            extra_hits=self.extra_hits,
         )
         return c
 
@@ -386,6 +392,17 @@ FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS = {
     # The weight is adjusted when extra Bloom mod cards enter the draft pool.
     'Sewage': (14, 100),
 }
+SETUP_ONLY_CARD_IDS = {
+    # These cards are kept available for setup conversions, but should never be
+    # offered by normal draft/pool generation.
+    'Light',
+    'Yggdrasil',
+    'MagicBone',
+    'MagicStinger',
+    'MagicSewage',
+    'MagicNazar',
+    'MagicBubble',
+}
 HAND_LIMIT = 7
 DRAW_PER_TURN = 3
 ELIXIR_RECOVERY = 5
@@ -405,7 +422,7 @@ FIRST_PLAYER_HAND_SIZE = 4
 def _effective_draft_weights(allowed_def_ids: Optional[Set[str]] = None) -> Dict[str, float]:
     allowed = {}
     for def_id, card_def in CARD_DEFS.items():
-        if def_id == 'Yggdrasil':
+        if def_id in SETUP_ONLY_CARD_IDS:
             continue
         if allowed_def_ids is not None and def_id not in allowed_def_ids:
             continue

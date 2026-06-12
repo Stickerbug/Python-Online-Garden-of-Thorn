@@ -1117,6 +1117,14 @@ def _player_stat(engine, player_id: int, stat: str):
 def _card_prop(card: Optional[CardInstance], prop: str):
     if card is None:
         return 0
+    prop = str(prop or "")
+    if prop in ("base_hits", "base_petals", "base_petal_count"):
+        card_def = getattr(card, "card_def", None)
+        return max(1, int(getattr(card_def, "hits", 1) or 1))
+    if prop in ("total_hits", "petals", "petal_count", "子瓣"):
+        card_def = getattr(card, "card_def", None)
+        base = max(1, int(getattr(card_def, "hits", 1) or 1))
+        return max(1, base + max(0, int(getattr(card, "extra_hits", 0) or 0)))
     if hasattr(card, prop):
         return getattr(card, prop)
     card_def = getattr(card, "card_def", None)

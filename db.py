@@ -546,6 +546,19 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_moderation_actions_target ON moderation_actions(target_user_id, created_at)')
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS ip_bans (
+                ip TEXT PRIMARY KEY,
+                reason TEXT,
+                created_at TEXT NOT NULL,
+                banned_by TEXT,
+                expires_at TEXT,
+                active INTEGER DEFAULT 1
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_ip_bans_active ON ip_bans(active, expires_at)')
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS chat_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 room_id TEXT,
@@ -902,7 +915,7 @@ def admin_set_user_ban(identifier, banned=True, reason='', duration_seconds=None
         except (TypeError, ValueError):
             duration = 0
         if duration > 0:
-            duration = min(duration, 60 * 60 * 24 * 365)
+            duration = min(duration, 60 * 60 * 24 * 1000)
             ban_until = utc_iso(utc_now_dt() + timedelta(seconds=duration))
     with get_db_connection() as conn:
         conn.execute(
@@ -916,6 +929,108 @@ def admin_set_user_ban(identifier, banned=True, reason='', duration_seconds=None
         conn.commit()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
         return row_to_user(row), None
+
+
+def _row_to_ip_ban(row):
+    if row is None:
+        return None
+    return {
+        'ip': row['ip'],
+        'reason': row['reason'] or '',
+        'created_at': row['created_at'],
+        'banned_by': row['banned_by'] or '',
+        'expires_at': row['expires_at'],
+        'active': bool(row['active']),
+    }
+
+
+def _clear_expired_ip_ban(conn, row):
+    if row is None or not bool(row['active']):
+        return row
+    expires_at = row['expires_at'] if 'expires_at' in row.keys() else None
+    until_dt = _parse_utc(expires_at)
+    if until_dt is not None and until_dt <= utc_now_dt():
+        conn.execute('UPDATE ip_bans SET active = 0 WHERE ip = ?', (row['ip'],))
+        conn.commit()
+        return conn.execute('SELECT * FROM ip_bans WHERE ip = ?', (row['ip'],)).fetchone()
+    return row
+
+
+def set_ip_ban(ip, banned=True, reason='', duration_seconds=None, banned_by=''):
+    token = str(ip or '').strip()[:80]
+    if not token:
+        return None, 'IP 不能为空'
+    now = utc_now()
+    expires_at = None
+    if banned and duration_seconds is not None:
+        try:
+            duration = int(duration_seconds)
+        except (TypeError, ValueError):
+            duration = 0
+        if duration > 0:
+            duration = min(duration, 60 * 60 * 24 * 1000)
+            expires_at = utc_iso(utc_now_dt() + timedelta(seconds=duration))
+    with get_db_connection() as conn:
+        if banned:
+            conn.execute(
+                '''
+                INSERT INTO ip_bans (ip, reason, created_at, banned_by, expires_at, active)
+                VALUES (?, ?, ?, ?, ?, 1)
+                ON CONFLICT(ip) DO UPDATE SET
+                    reason=excluded.reason,
+                    created_at=excluded.created_at,
+                    banned_by=excluded.banned_by,
+                    expires_at=excluded.expires_at,
+                    active=1
+                ''',
+                (token, str(reason or '')[:300], now, str(banned_by or '')[:80], expires_at),
+            )
+        else:
+            conn.execute('UPDATE ip_bans SET active = 0 WHERE ip = ?', (token,))
+        conn.commit()
+        row = conn.execute('SELECT * FROM ip_bans WHERE ip = ?', (token,)).fetchone()
+        return _row_to_ip_ban(row), None
+
+
+def get_ip_ban_status(ip):
+    token = str(ip or '').strip()[:80]
+    if not token:
+        return {'banned': False}
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM ip_bans WHERE ip = ?', (token,)).fetchone()
+        row = _clear_expired_ip_ban(conn, row)
+        if row is None or not bool(row['active']):
+            return {'banned': False, 'ip': token}
+        remaining = _remaining_seconds_until(row['expires_at'])
+        return {
+            'banned': True,
+            'ip': token,
+            'reason': row['reason'] or '',
+            'banned_by': row['banned_by'] or '',
+            'created_at': row['created_at'],
+            'expires_at': row['expires_at'],
+            'remaining_seconds': remaining,
+            'permanent': remaining is None,
+        }
+
+
+def list_ip_bans(active_only=True, limit=100, offset=0):
+    limit = max(1, min(int(limit or 100), 300))
+    offset = max(0, int(offset or 0))
+    where = 'WHERE active = 1' if active_only else ''
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            f'SELECT * FROM ip_bans {where} ORDER BY active DESC, created_at DESC LIMIT ? OFFSET ?',
+            (limit, offset),
+        ).fetchall()
+        cleaned = []
+        for row in rows:
+            row = _clear_expired_ip_ban(conn, row)
+            if active_only and (row is None or not bool(row['active'])):
+                continue
+            cleaned.append(_row_to_ip_ban(row))
+        total = conn.execute(f'SELECT COUNT(*) FROM ip_bans {where}').fetchone()[0]
+        return {'items': cleaned, 'total': total, 'limit': limit, 'offset': offset}
 
 
 def _parse_utc(value):
@@ -1778,14 +1893,14 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
     }
 
 
-def list_admin_users(query='', sort='last_login_at', order='desc', limit=50, offset=0):
+def list_admin_users(query='', sort='last_login_at', order='desc', limit=30, offset=0):
     sort_key = str(sort or 'last_login_at')
     sort_expr = ADMIN_USER_SORTS.get(sort_key, ADMIN_USER_SORTS['last_login_at'])
     direction = 'ASC' if str(order or '').lower() == 'asc' else 'DESC'
     try:
-        safe_limit = max(1, min(int(limit), 100))
+        safe_limit = max(1, min(int(limit), 50))
     except (TypeError, ValueError):
-        safe_limit = 50
+        safe_limit = 30
     try:
         safe_offset = max(0, int(offset))
     except (TypeError, ValueError):

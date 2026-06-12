@@ -347,6 +347,7 @@ class LocalCard {
         this.bonus_damage = toInt(source.bonus_damage, 0);
         this.return_to_hand_turns = toInt(source.return_to_hand_turns, 0);
         this.held_turns = toInt(source.held_turns, 0);
+        this.extra_hits = Math.max(0, toInt(source.extra_hits, 0));
         if (this.def_id === 'Tomato') {
             this.bonus_damage = Math.min(18, Math.max(0, this.bonus_damage));
             this.held_turns = Math.min(6, Math.max(0, this.held_turns));
@@ -400,6 +401,7 @@ class LocalCard {
             bonus_damage: this.def_id === 'Tomato' ? Math.min(18, Math.max(0, this.bonus_damage)) : this.bonus_damage,
             return_to_hand_turns: this.return_to_hand_turns,
             held_turns: this.def_id === 'Tomato' ? Math.min(6, Math.max(0, this.held_turns)) : this.held_turns,
+            extra_hits: this.extra_hits,
             durability: this.durability,
         };
     }
@@ -469,6 +471,9 @@ class LocalPlayer {
         this.attack_only = 0;
         this.enemy_draw_reduction = 0;
         this.enemy_e_reduction = 0;
+        this.sluggish = 0;
+        this.foresight = 0;
+        this.blind = 0;
         this.extra_hand_limit_bonus = 0;
         this.negate_next_skill = false;
         this.is_first_player = false;
@@ -478,6 +483,7 @@ class LocalPlayer {
         this.exile = [];
         this.equipment = [];
         this.cards_played_this_turn = {};
+        this.cards_played_this_turn_instance_ids = [];
         this.turn_damage_taken = 0;
         this.turn_damage_dealt = 0;
         this.last_turn_damage_taken = 0;
@@ -640,6 +646,9 @@ class LocalPlayer {
             attack_only: this.attack_only,
             enemy_draw_reduction: this.enemy_draw_reduction,
             enemy_e_reduction: this.enemy_e_reduction,
+            sluggish: this.sluggish,
+            foresight: this.foresight,
+            blind: this.blind,
             extra_hand_limit_bonus: this.extra_hand_limit_bonus,
             negate_next_skill: this.negate_next_skill,
             is_first_player: this.is_first_player,
@@ -663,6 +672,7 @@ class LocalPlayer {
             data.discard = this.discard.map(card => card.toDict());
             data.exile = this.exile.map(card => card.toDict());
             data.cards_played_this_turn = { ...this.cards_played_this_turn };
+            data.cards_played_this_turn_instance_ids = [...(this.cards_played_this_turn_instance_ids || [])];
             data.custom_vars = { ...this.custom_vars };
         }
         return data;
@@ -761,6 +771,7 @@ class LocalSoloEngine {
                 return copy;
             });
             player.cards_played_this_turn = { ...(source.cards_played_this_turn || {}) };
+            player.cards_played_this_turn_instance_ids = [...(source.cards_played_this_turn_instance_ids || [])];
             player.custom_vars = { ...(source.custom_vars || {}) };
             return player;
         });
@@ -883,6 +894,7 @@ class LocalSoloEngine {
         ps.exile = [];
         ps.equipment = [];
         ps.cards_played_this_turn = {};
+        ps.cards_played_this_turn_instance_ids = [];
         ps.custom_vars = { '咖啡首次使用': 1, '三角形层数': 0, '魔法电池本回合回魔': 0 };
         deckEntries.forEach(entry => {
             const defId = typeof entry === 'string' ? entry : entry && entry.def_id;
@@ -1147,14 +1159,15 @@ class LocalSoloEngine {
             ps.health += 20;
             this.logMsg(`${this.pn(playerId)}【生命强化】：最大生命值+20`);
         } else if (eventId === 2) {
-            ps.gainMagic(5);
             (sub.conversions || []).slice(0, 3).forEach(conv => {
                 const sourceDef = conv.source_def_id;
-                const magicDef = conv.magic_def_id;
                 const idx = ps.deck.findIndex(card => card.def_id === sourceDef);
-                if (idx >= 0 && cardDef(magicDef)) {
-                    ps.deck[idx] = new LocalCard(magicDef);
-                    this.logMsg(`${this.pn(playerId)}【魔力转化】：${cardName(sourceDef)}变为${cardName(magicDef)}`);
+                if (idx >= 0 && cardDef('ManaOrb')) {
+                    const mana = new LocalCard('ManaOrb');
+                    mana.instance_flags.add('sprout');
+                    mana.instance_flags.add('symbiosis');
+                    ps.deck[idx] = mana;
+                    this.logMsg(`${this.pn(playerId)}【魔力转化】：${cardName(sourceDef)}变为魔法球(萌芽+共生)`);
                 }
             });
         } else if (eventId === 3) {
@@ -1174,7 +1187,16 @@ class LocalSoloEngine {
             opp.fire += 2;
             this.logMsg(`${this.pn(playerId)}【烈焰预兆】：敌方+2灼烧`);
         } else if (eventId === 5) {
-            this.logMsg(`${this.pn(playerId)}【命运抽签】：前二回合抽牌至手牌满`);
+            const picked = (sub.add_def_ids || sub.def_ids || []).slice(0, 3);
+            let added = 0;
+            picked.forEach(defId => {
+                if (this.cardAllowedForFatedDraw(defId)) {
+                    ps.deck.push(new LocalCard(defId));
+                    added += 1;
+                }
+            });
+            if (added > 0) shuffleInPlace(ps.deck);
+            this.logMsg(`${this.pn(playerId)}【命运抽签】：${added}张牌洗入牌库`);
         } else if (eventId === 6) {
             this.logMsg(`${this.pn(playerId)}【能量涌动】：前三回合额外回复2E`);
         } else if (eventId === 7) {
@@ -1191,13 +1213,38 @@ class LocalSoloEngine {
                 ps.deck[idx] = new LocalCard('Yggdrasil');
                 this.logMsg(`${this.pn(playerId)}【绝境求生】：最大生命值-20，${cardName(oldDef)}变为Yggdrasil`);
             }
+        } else if (eventId === 9) {
+            ps.max_health += 10;
+            ps.base_max_health += 10;
+            ps.health += 10;
+            let changed = 0;
+            ps.deck.forEach(card => {
+                if (this.cardBasePetalCount(card) >= 2) {
+                    card.extra_hits = Math.max(0, toInt(card.extra_hits, 0)) + 1;
+                    changed += 1;
+                }
+            });
+            this.logMsg(`${this.pn(playerId)}【多重瓣】：最大生命值+10，${changed}张多子瓣牌子瓣+1`);
+        } else if (eventId === 10) {
+            ps.max_health -= 10;
+            ps.base_max_health -= 10;
+            ps.health = Math.min(ps.health, ps.max_health);
+            ps.custom_vars.setup_magic_acceleration = 1;
+            this.logMsg(`${this.pn(playerId)}【魔力加速】：最大生命值-10，打出手牌后回复1M`);
         }
+    }
+
+    cardAllowedForFatedDraw(defId) {
+        const def = cardDef(defId);
+        if (!def || defId === ERROR_CARD_ID || def.setup_only) return false;
+        return toInt(def.count, 0) > 0;
     }
 
     startDrawPhase() {
         this.phase = 'draw';
         this.players.forEach(ps => {
             ps.cards_played_this_turn = {};
+            ps.cards_played_this_turn_instance_ids = [];
             ps.magic_battery_m_this_turn = 0;
             ps.custom_vars['魔法电池本回合回魔'] = 0;
         });
@@ -1264,10 +1311,13 @@ class LocalSoloEngine {
             ps.untargetable = false;
             this.logMsg(`${this.pn(playerId)}的铲子效果结束`);
         }
+        this.clearTurnStartActionStatuses(playerId);
+        const earlyEquipment = this.runOwnerTurnStartActionStatusEquipment(playerId);
         if (this.round_num > 1) {
-            const drawCount = Math.max(0, DRAW_PER_TURN - ps.enemy_draw_reduction);
+            const drawCount = Math.max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - ps.sluggish);
             ps.drawCards(drawCount);
             this.logMsg(`${this.pn(playerId)}抽${drawCount}张牌`);
+            if (ps.sluggish > 0) this.logMsg(`${this.pn(playerId)}的迟缓减少${Math.min(ps.sluggish, DRAW_PER_TURN)}张抽牌`);
         }
         this.players.forEach((owner, ownerId) => {
             [...owner.equipment].forEach(eq => {
@@ -1312,27 +1362,79 @@ class LocalSoloEngine {
             ps.gainElixir(recovery);
             this.logMsg(`${this.pn(playerId)}回复${recovery}E`);
         }
-        if (this.opening_event_picks[playerId] === 5 && this.round_num <= 2) {
-            const drawNeeded = ps.handSpace();
-            if (drawNeeded > 0) {
-                ps.drawCards(drawNeeded);
-                this.logMsg(`${this.pn(playerId)}抽${drawNeeded}张至手牌满`);
-            }
-        }
         if (this.opening_event_picks[playerId] === 6 && this.round_num <= 3) {
             ps.gainElixir(2);
             this.logMsg(`${this.pn(playerId)}额外+2E`);
         }
         [...ps.equipment].forEach(eq => {
+            const key = eq.card_instance && eq.card_instance.instance_id;
+            if (earlyEquipment.has(key)) return;
             eq.turns_equipped += 1;
             if (this.hasCardEvent(eq.card_def, 'owner_turn_start')) {
                 this.runCardEvent(playerId, eq.card_instance, 'owner_turn_start', null, {
                     event: 'owner_turn_start',
                     source_id: playerId,
-                    target_id: playerId,
+                    target_id: eq.effect_target ?? playerId,
                 });
             }
         });
+    }
+
+    effectTreeContainsActionStatus(value, depth = 0) {
+        if (depth > 30 || value == null) return false;
+        const actionStatuses = new Set(['sluggish', '迟缓', 'foresight', '预知', 'blind', '失明', 'stunned', 'skip_turn', '眩晕', 'attack_blocked', '禁攻', 'attack_only', '仅攻击']);
+        if (Array.isArray(value)) return value.some(v => this.effectTreeContainsActionStatus(v, depth + 1));
+        if (typeof value === 'object') {
+            const op = String(value.op || value.type || '');
+            const status = String(value.status || value.name || value.id || '');
+            if (['add_status', 'status_add_named', 'set_status', 'set_status_named'].includes(op) && actionStatuses.has(status)) return true;
+            return Object.values(value).some(v => this.effectTreeContainsActionStatus(v, depth + 1));
+        }
+        return false;
+    }
+
+    ownerTurnStartEquipmentActionStatuses(eq) {
+        const def = eq && eq.card_def;
+        if (!def) return false;
+        if (this.effectTreeContainsActionStatus((def.events || {}).on_owner_turn_start)) return true;
+        return ((def.effects || [])).some(effect => effect && effect.type === 'on_owner_turn_start' && this.effectTreeContainsActionStatus(effect));
+    }
+
+    runOwnerTurnStartActionStatusEquipment(playerId) {
+        const handled = new Set();
+        this.players.forEach((owner, ownerId) => {
+            owner.equipment.slice().forEach(eq => {
+                if ((eq.effect_target ?? ownerId) !== playerId) return;
+                if (!this.ownerTurnStartEquipmentActionStatuses(eq)) return;
+                const key = eq.card_instance && eq.card_instance.instance_id;
+                if (handled.has(key)) return;
+                handled.add(key);
+                eq.turns_equipped += 1;
+                if (this.hasCardEvent(eq.card_def, 'owner_turn_start')) {
+                    this.runCardEvent(ownerId, eq.card_instance, 'owner_turn_start', null, {
+                        event: 'owner_turn_start',
+                        source_id: ownerId,
+                        target_id: playerId,
+                    });
+                }
+            });
+        });
+        return handled;
+    }
+
+    clearTurnStartActionStatuses(playerId) {
+        const ps = this.players[playerId];
+        const cleared = [];
+        [['sluggish', '迟缓'], ['foresight', '预知'], ['blind', '失明']].forEach(([attr, label]) => {
+            if (toInt(ps[attr], 0) <= 0) return;
+            if (attr === 'blind' && ps.hand.length) {
+                shuffle(ps.hand);
+                this.logMsg(`${this.pn(playerId)}因失明打乱手牌`);
+            }
+            ps[attr] = 0;
+            cleared.push(label);
+        });
+        if (cleared.length) this.logMsg(`${this.pn(playerId)}的${cleared.join('、')}效果清除`);
     }
 
     hasCardEvent(def, eventName) {
@@ -1767,6 +1869,12 @@ class LocalSoloEngine {
             const card = this.resolveCardRef(playerId, expr.card || { ref: 'current_card' }, currentCard);
             if (!card) return fallbackValue;
             const prop = String(expr.property || expr.prop || 'cost_e');
+            if (prop === 'base_hits' || prop === 'base_petals' || prop === 'base_petal_count') {
+                return Math.max(1, toInt((card.def && card.def().hits) || 1, 1));
+            }
+            if (prop === 'total_hits' || prop === 'petals' || prop === 'petal_count' || prop === '子瓣') {
+                return this.cardTotalHits(card, Math.max(1, toInt((card.def && card.def().hits) || 1, 1)));
+            }
             if (prop === 'cost_e') return toInt(card.cost_e, 0);
             if (prop === 'cost_m') return toInt(card.cost_m, 0);
             if (prop === 'tag_count' || prop === 'tags_count') return card.flags.size;
@@ -2552,7 +2660,7 @@ class LocalSoloEngine {
     effect_deal_damage(playerId, card, params, log = '') {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         const amount = this.modifiedAttackDamage(this.evalInt(playerId, params.amount ?? 6, card, 6), card);
-        const hits = Math.max(1, this.evalInt(playerId, params.hits ?? 1, card, 1));
+        const hits = this.cardTotalHits(card, this.evalInt(playerId, params.hits ?? 1, card, 1));
         this._incoming_damage_hint[targetId] = amount;
         const dealt = this.dealAttackDamage(targetId, amount, hits, !!params.is_precision, playerId);
         this._last_damage_value[targetId] = dealt;
@@ -3129,7 +3237,10 @@ class LocalSoloEngine {
         const targetId = this.resolveTarget(playerId, params.target || 'self');
         const status = String(params.status || params.name || '');
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
-        if (status) this.players[targetId][status] = toInt(this.players[targetId][status], 0) + amount;
+        if (!status) return;
+        const aliases = { burn: 'fire', vulnus: 'vulnerable', stunned: 'skip_turn', '眩晕': 'skip_turn', '禁攻': 'attack_blocked' };
+        const prop = aliases[status] || status;
+        this.players[targetId][prop] = toInt(this.players[targetId][prop], 0) + amount;
     }
 
     effect_status_set_named(playerId, card, params) {
@@ -3141,6 +3252,14 @@ class LocalSoloEngine {
 
     effect_add_status(playerId, card, params, log, choice) {
         this.effect_status_add_named(playerId, card, { ...params, status: params.status || params.id || params.name }, log, choice);
+    }
+
+    effect_cogwheel_mark(playerId, card, params, log, choice) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const ps = this.players[targetId];
+        ps.cogwheel_active = true;
+        ps.cogwheel_exclude_instance_id = card ? card.instance_id : -1;
+        if (log) this.logMsg(log);
     }
 
     effect_remove_status(playerId, card, params, log, choice) {
@@ -3288,6 +3407,31 @@ class LocalSoloEngine {
         const fusion = Math.max(1, toInt(card && card.fusion_level, 1));
         const fission = Math.max(1, toInt(card && card.fission_level, 1));
         return Math.ceil((amount * fusion) / fission);
+    }
+
+    cardTotalHits(card, baseHits = 1) {
+        return Math.max(1, toInt(baseHits, 1) + Math.max(0, toInt(card && card.extra_hits, 0)));
+    }
+
+    cardBasePetalCount(card) {
+        const fallback = { Sand: 4, Wing: 2, Light: 2 };
+        let best = Math.max(1, toInt((card && card.def && card.def().hits) || 1, 1), toInt(fallback[card && card.def_id] || 1, 1));
+        playEffectsFor(card).forEach(effect => {
+            const type = effect && String(effect.type || '');
+            if (type !== 'deal_damage' && type !== 'damage') return;
+            const params = effect.params || {};
+            const hits = toInt(params.hits, 1);
+            if (Number.isFinite(hits)) best = Math.max(best, hits);
+        });
+        return best;
+    }
+
+    applyMagicAccelerationAfterPlay(playerId) {
+        const ps = this.players[playerId];
+        if (toInt(ps.custom_vars.setup_magic_acceleration, 0) <= 0) return;
+        const before = ps.magic;
+        ps.gainMagic(1);
+        if (ps.magic !== before) this.logMsg(`${this.pn(playerId)}【魔力加速】：+1M`);
     }
 
     getCorruptionCount() {
@@ -3598,6 +3742,8 @@ class LocalSoloEngine {
         ps.cards_played_this_turn[card.def_id] = toInt(ps.cards_played_this_turn[card.def_id], 0) + 1;
         const removed = ps.removeHandCard(instanceId);
         if (!removed) return { success: false, error: '移出手牌失败' };
+        ps.cards_played_this_turn_instance_ids.push(toInt(card.instance_id, instanceId));
+        this.applyMagicAccelerationAfterPlay(playerId);
         if (this.checkResponseNeeded(playerId, card) || this.checkPrecisionResponseNeeded(playerId, card)) {
             this.pending_response = {
                 card: card.toDict(),
@@ -3864,6 +4010,7 @@ class LocalSoloEngine {
             ps.bandage_active = false;
             ps.bandage_death_pending = true;
         }
+        this.returnCogwheelCardsNow(playerId);
         [...ps.hand].forEach(card => {
             if (card.flags.has('void')) {
                 ps.hand.splice(ps.hand.indexOf(card), 1);
@@ -3876,6 +4023,38 @@ class LocalSoloEngine {
         this.saveLastTurnDamageSnapshot(playerId);
         if (playerId === this.first_player) this.startPlayerTurn(1 - this.first_player);
         else this.endRound();
+    }
+
+    returnCogwheelCardsNow(playerId) {
+        const ps = this.players[playerId];
+        if (!ps.cogwheel_active) return;
+        const excludeId = toInt(ps.cogwheel_exclude_instance_id, -1);
+        const returned = [];
+        [...(ps.cards_played_this_turn_instance_ids || [])].forEach(instanceId => {
+            const iid = toInt(instanceId, -1);
+            if (iid === excludeId) return;
+            let found = null;
+            let zone = null;
+            ['discard', 'exile'].some(zoneName => {
+                const cards = ps[zoneName] || [];
+                const idx = cards.findIndex(c => c.instance_id === iid);
+                if (idx >= 0) {
+                    found = cards[idx];
+                    zone = cards;
+                    return true;
+                }
+                return false;
+            });
+            if (!found || !ps.canAddToHand()) return;
+            zone.splice(zone.indexOf(found), 1);
+            found.mimic_discount = 0;
+            found.instance_flags.add('symbiosis');
+            ps.addToHand(found);
+            returned.push(found);
+        });
+        ps.cogwheel_active = false;
+        ps.cogwheel_exclude_instance_id = -1;
+        if (returned.length) this.logMsg(`${this.pn(playerId)}的齿轮效果：${returned.length}张牌回到手中并获得共生`);
     }
 
     endRound() {

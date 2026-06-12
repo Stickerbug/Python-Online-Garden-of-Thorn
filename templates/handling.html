@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>举报处理</title>
+<link rel="stylesheet" href="/static/css/handling.css?v=1">
+</head>
+<body>
+<div id="login" class="login-view">
+  <form id="login-form" class="panel login-panel">
+    <h1>举报处理</h1>
+    <p>请输入处理页密码。</p>
+    <input id="password" type="password" autocomplete="current-password" placeholder="密码" autofocus>
+    <button type="submit" class="btn primary">进入</button>
+    <div id="login-error" class="error"></div>
+  </form>
+</div>
+
+<main id="app" class="app hidden">
+  <header class="topbar">
+    <div>
+      <h1>举报处理</h1>
+      <span id="summary" class="muted">未加载</span>
+    </div>
+    <div class="top-actions">
+      <button id="refresh" class="btn">刷新</button>
+      <button id="logout" class="btn danger">退出</button>
+    </div>
+  </header>
+
+  <section class="layout">
+    <aside class="left panel">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="reports">举报</button>
+        <button class="tab" data-tab="ip">IP封禁</button>
+      </div>
+      <div id="reports-tools" class="tools">
+        <select id="status-filter">
+          <option value="pending">待处理</option>
+          <option value="accepted">已接受</option>
+          <option value="rejected">已驳回</option>
+          <option value="abusive">恶意举报</option>
+          <option value="all">全部</option>
+        </select>
+      </div>
+      <div id="ip-tools" class="tools hidden">
+        <input id="ip-input" placeholder="IP">
+        <input id="ip-reason" placeholder="原因">
+        <button id="ip-duration" class="btn">时长</button>
+        <button id="ban-ip" class="btn danger">封禁IP</button>
+      </div>
+      <div id="list" class="list"></div>
+    </aside>
+
+    <section class="center panel">
+      <div id="empty" class="empty">选择一条举报或 IP 记录。</div>
+      <article id="detail" class="detail hidden"></article>
+    </section>
+
+    <aside class="right panel">
+      <h2>处理</h2>
+      <label>举报结论</label>
+      <select id="resolve-action">
+        <option value="accept">接受举报</option>
+        <option value="reject">驳回举报</option>
+        <option value="abusive">标记恶意举报</option>
+      </select>
+      <label>处罚动作</label>
+      <select id="moderation-action">
+        <option value="none">不处罚</option>
+        <option value="warn">警告</option>
+        <option value="mute">禁言</option>
+        <option value="ban">封禁账号</option>
+        <option value="invalidate_match">标记对局异常</option>
+      </select>
+      <div class="duration-row">
+        <label>处罚时长</label>
+        <button id="mod-duration" class="btn">选择时长</button>
+        <span id="duration-label" class="mono muted">0秒</span>
+      </div>
+      <div class="quick-row">
+        <button class="btn small quick" data-seconds="600">10分</button>
+        <button class="btn small quick" data-seconds="3600">1时</button>
+        <button class="btn small quick" data-seconds="86400">1天</button>
+        <button class="btn small quick" data-seconds="604800">7天</button>
+        <button class="btn small quick" data-seconds="0">永久</button>
+      </div>
+      <label>备注</label>
+      <textarea id="note" rows="6" placeholder="处理说明"></textarea>
+      <button id="resolve" class="btn primary">提交处理</button>
+      <div id="action-result" class="result"></div>
+    </aside>
+  </section>
+</main>
+
+<div id="duration-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-panel">
+    <header>
+      <h2>选择时长</h2>
+      <button id="duration-close" class="btn small">关闭</button>
+    </header>
+    <div class="seconds-line">
+      <label>秒数</label>
+      <input id="duration-seconds" type="number" min="0" max="86400000" value="0">
+      <button id="duration-permanent" class="btn">永久</button>
+    </div>
+    <div class="wheels">
+      <div class="wheel-block"><button data-wheel="days" data-delta="1">▲</button><select id="wheel-days" size="7"></select><button data-wheel="days" data-delta="-1">▼</button><span>天</span></div>
+      <div class="wheel-block"><button data-wheel="hours" data-delta="1">▲</button><select id="wheel-hours" size="7"></select><button data-wheel="hours" data-delta="-1">▼</button><span>时</span></div>
+      <div class="wheel-block"><button data-wheel="minutes" data-delta="1">▲</button><select id="wheel-minutes" size="7"></select><button data-wheel="minutes" data-delta="-1">▼</button><span>分</span></div>
+      <div class="wheel-block"><button data-wheel="seconds" data-delta="1">▲</button><select id="wheel-seconds" size="7"></select><button data-wheel="seconds" data-delta="-1">▼</button><span>秒</span></div>
+    </div>
+    <footer>
+      <button id="duration-apply" class="btn primary">确认</button>
+    </footer>
+  </div>
+</div>
+
+<script src="/static/js/handling.js?v=1"></script>
+</body>
+</html>

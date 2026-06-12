@@ -22,7 +22,7 @@ from functools import wraps
 from collections import deque
 from datetime import datetime, timedelta, timezone
 
-from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session
+from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session, g
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash
 from game_engine import GameEngine
@@ -32,7 +32,7 @@ from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
-    normalize_card_flag, normalize_card_flags,
+    SETUP_ONLY_CARD_IDS, normalize_card_flag, normalize_card_flags,
 )
 from mod_loader import GAME_VERSION, merge_mod_cards_to_card_defs, load_all_mods, get_mod_asset
 from mod_loadout_v2 import build_v2_loadout
@@ -72,6 +72,7 @@ from db import (
     get_admin_user_detail,
     get_chat_message_with_context,
     get_db_connection,
+    get_ip_ban_status,
     get_user_ban_status,
     get_report_detail,
     get_user_by_id,
@@ -81,6 +82,7 @@ from db import (
     list_friends,
     list_dm_threads,
     list_card_draft_stats,
+    list_ip_bans,
     list_reports,
     list_user_roles,
     mark_user_last_seen,
@@ -97,6 +99,7 @@ from db import (
     list_admin_users,
     save_match_summary,
     send_dm_message,
+    set_ip_ban,
     set_user_mute,
     update_user_skin,
     update_user_social_settings,
@@ -149,7 +152,6 @@ DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = {
 BUILTIN_SETUP_CARD_IDS = {
     'Light',
     'Yggdrasil',
-    *getattr(GameEngine, 'MAGIC_CARD_POOL', ()),
 }
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
 VANILLA_CARD_ART_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'assets', 'card-art', 'vanilla')
@@ -272,6 +274,8 @@ LOBBY_IDLE_TIMEOUT_SECONDS = int(os.environ.get('LOBBY_IDLE_TIMEOUT_SECONDS', '6
 LOBBY_IDLE_CHECK_SECONDS = int(os.environ.get('LOBBY_IDLE_CHECK_SECONDS', '60'))
 DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2:sha256:260000$82e7gAIa0D6034Qq$a0c9a5ad6028ce6c8798abc1314bc74b099b2441c3f39c3b3e6255ea2156f06b'
 ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', DEFAULT_ADMIN_PASSWORD_HASH)
+DEFAULT_HANDLING_PASSWORD_HASH = 'scrypt:32768:8:1$6XzIIWqGawFYwXIn$7edc14f2c68bde8881dfc98df724aaafa88f04236ff1fa461450d6010422ff0129b1cda604bde7d422b355bd2e5d6bb8126e740251cee2722c53a7443fc4f24a'
+HANDLING_PASSWORD_HASH = os.environ.get('HANDLING_PASSWORD_HASH', DEFAULT_HANDLING_PASSWORD_HASH)
 DEFAULT_BETA_ACCESS_KEY_HASH = 'scrypt:32768:8:1$GIMYfhSs9RpKMGUK$6f592ac96112ce2f7323012956fc2624890779b9f540c4b7601aff88e3635b3aea26157143eb26874b11cbe30f7da33b25e46285f1f547a846a3f12dc740eb0b'
 BETA_ACCESS_KEY_HASH = os.environ.get('BETA_ACCESS_KEY_HASH', DEFAULT_BETA_ACCESS_KEY_HASH)
 ADMIN_PLAYER_DISPLAY_NAME = 'Stickerbug'
@@ -359,7 +363,7 @@ _RUNTIME_METRICS_CACHE_SECONDS = _env_float('GTN_RUNTIME_METRICS_CACHE_SECONDS',
 _ADMIN_STATUS_CACHE = {'ts': 0.0, 'data': None}
 _ADMIN_STATUS_LOCK = threading.Lock()
 _ADMIN_STATUS_CACHE_SECONDS = _env_float('GTN_ADMIN_STATUS_CACHE_SECONDS', 2)
-_ADMIN_API_SLOW_MS = _env_float('GTN_ADMIN_API_SLOW_MS', 800)
+_ADMIN_API_SLOW_MS = _env_float('GTN_ADMIN_API_SLOW_MS', 1000)
 _SOCKET_ACTION_SLOW_MS = _env_float('GTN_SOCKET_ACTION_SLOW_MS', 500)
 _LOBBY_BROADCAST_LOCK = threading.Lock()
 _LOBBY_BROADCAST_PENDING = False
@@ -432,6 +436,10 @@ def _admin_identity_for_log():
 
 
 def log_admin_api_timing(endpoint, elapsed_ms, **extra):
+    try:
+        g._admin_api_timing_logged = True
+    except Exception:
+        pass
     user_id, username = _admin_identity_for_log()
     payload = {
         'endpoint': endpoint,
@@ -583,11 +591,19 @@ def is_admin_authenticated():
     return bool(session.get('admin_authenticated'))
 
 
+def is_handling_authenticated():
+    return bool(session.get('handling_authenticated')) or is_admin_authenticated()
+
+
 def is_beta_authenticated():
     return bool(session.get('beta_authenticated'))
 
 
 def admin_unauthorized():
+    return jsonify({'success': False, 'error': 'unauthorized'}), 401
+
+
+def handling_unauthorized():
     return jsonify({'success': False, 'error': 'unauthorized'}), 401
 
 
@@ -898,9 +914,53 @@ def build_community_replay_snapshots(community_mods):
 @app.before_request
 def protect_admin_api():
     path = request.path.rstrip('/')
+    if path.startswith('/api/admin/'):
+        g._admin_api_started = time.perf_counter()
+        g._admin_api_timing_logged = False
+    admin_surface = (
+        path.startswith('/api/admin/')
+        or path.startswith('/api/handling/')
+        or path in {'/admin', '/adminpage', '/handling'}
+    )
+    if DB_AVAILABLE and not admin_surface and not path.startswith('/static/') and not path.startswith('/fonts/') and path != '/favicon.ico':
+        try:
+            ip_status = get_ip_ban_status(_client_ip())
+        except Exception as exc:
+            admin_event('error', f'ip ban check failed: {exc}')
+            ip_status = {'banned': False}
+        if ip_status.get('banned'):
+            reason = ip_status.get('reason') or 'IP 已被封禁'
+            remaining = ip_status.get('remaining_seconds')
+            suffix = '永久' if ip_status.get('permanent') else f'剩余{format_duration_zh(remaining)}'
+            if path.startswith('/api/') or request.headers.get('Accept', '').find('application/json') >= 0:
+                return jsonify({'success': False, 'error': f'IP 已被封禁（{suffix}）：{reason}', 'ip_banned': True}), 403
+            return (f'IP 已被封禁（{suffix}）：{reason}', 403, {'Content-Type': 'text/plain; charset=utf-8'})
     public_paths = {'/api/admin/login', '/api/admin/me'}
     if path.startswith('/api/admin/') and path not in public_paths and not is_admin_authenticated():
         return admin_unauthorized()
+    handling_public_paths = {'/api/handling/login', '/api/handling/me'}
+    if path.startswith('/api/handling/') and path not in handling_public_paths and not is_handling_authenticated():
+        return handling_unauthorized()
+
+
+@app.after_request
+def log_slow_admin_api(response):
+    try:
+        path = request.path.rstrip('/')
+        if path.startswith('/api/admin/') and not getattr(g, '_admin_api_timing_logged', False):
+            started = getattr(g, '_admin_api_started', None)
+            if started is not None:
+                elapsed = (time.perf_counter() - started) * 1000
+                if elapsed >= _ADMIN_API_SLOW_MS:
+                    log_admin_api_timing(
+                        path,
+                        elapsed,
+                        status=response.status_code,
+                        query_count=len(request.args or {}),
+                    )
+    except Exception:
+        pass
+    return response
 
 
 class GameRoom:
@@ -2381,7 +2441,7 @@ def _apply_report_moderation_action(report_detail, moderation_action, duration_s
     target_user_id = report_detail.get('target_user_id')
     target_username = report_detail.get('target_username') or ''
     if action == 'mute' and target_user_id:
-        seconds = max(60, min(int(duration_seconds or 600), 60 * 60 * 24 * 30))
+        seconds = max(60, min(int(duration_seconds or 600), 60 * 60 * 24 * 1000))
         set_user_mute(target_user_id, target_username, seconds, note, session.get('username') or ADMIN_PLAYER_DISPLAY_NAME)
         for sid in _online_sids_for_user(target_user_id, target_username):
             mute_user(chat_mute_key(sid, players.get(sid, {})), seconds, note)
@@ -2659,6 +2719,8 @@ def register_v2_loadout_cards(v2_loadout):
             v2_mod_id=str(resource.get('_mod_id') or ''),
             image=str(resource.get('image') or ''),
             image_url=str(resource.get('image_url') or resource.get('image') or ''),
+            upgraded_image=str(resource.get('upgraded_image') or ''),
+            upgraded_image_url=str(resource.get('upgraded_image_url') or resource.get('upgraded_image') or ''),
             damage=_v2_int(resource.get('damage', 0), 0),
             hits=_v2_int(resource.get('hits', 1), 1),
         )
@@ -2826,7 +2888,7 @@ def get_ongoing_games(beta_mode=None):
         if beta_mode is not None and bool(getattr(room, 'beta_mode', False)) != bool(beta_mode):
             continue
         phase = room.engine.phase
-        if phase in ('action', 'draw', 'response', 'choice', 'playing', 'draft', 'event_select'):
+        if phase in ('action', 'draw', 'response', 'choice', 'playing', 'draft', 'event_select', 'event_reveal'):
             player_names = []
             for s in room.player_sids:
                 if s in players:
@@ -4718,6 +4780,47 @@ def send_event_state(room, pidx):
     socketio.emit('event_select', payload, room=sid)
 
 
+def _opening_event_by_id(engine, event_id):
+    if event_id is None:
+        return None
+    text_id = str(event_id)
+    for options in getattr(engine, 'opening_event_options', []) or []:
+        for ev in options or []:
+            if ev and str(ev.get('id')) == text_id:
+                return ev
+    base = getattr(engine, 'OPENING_EVENTS', {}).get(int(event_id)) if str(event_id).isdigit() else None
+    return dict(base) if base else None
+
+
+def send_event_reveal_state(room, pidx):
+    sid = room.player_sids[pidx]
+    if sid not in players:
+        return
+    engine = room.engine
+    picks = []
+    for idx, picked_id in enumerate(engine.opening_event_picks):
+        ev = _opening_event_by_id(engine, picked_id)
+        picks.append({
+            'player_id': idx,
+            'player_name': engine.player_names[idx] if idx < len(engine.player_names) else f'P{idx + 1}',
+            'event': ev,
+            'ready': bool(getattr(engine, 'player_draft_started', [False] * len(engine.opening_event_picks))[idx]),
+        })
+    payload = {
+        'picks': picks,
+        'my_pick': engine.opening_event_picks[pidx],
+        'my_ready': bool(getattr(engine, 'player_draft_started', [False] * len(engine.opening_event_picks))[pidx]),
+        'mode': room.mode,
+        'player_names': engine.player_names,
+        'room_id': room.room_id,
+        'match_key': room_match_key(room),
+        'your_id': pidx,
+        'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
+    }
+    payload.update(room_mod_payload(room))
+    socketio.emit('event_reveal', payload, room=sid)
+
+
 def broadcast_game_state(room):
     _broadcast_started = time.perf_counter()
     _broadcast_recipients = 0
@@ -4830,7 +4933,7 @@ def send_game_state_to(room, pidx):
     if sid not in players:
         return
     phase = room.engine.phase
-    if phase in ('event_select', 'draft'):
+    if phase in ('event_select', 'event_reveal', 'draft'):
         send_pregame_state(room, pidx, allow_sub_choice=True)
     else:
         emit_room_game_phase(room, sid, phase)
@@ -4920,6 +5023,7 @@ def send_event_sub_choice_state(room, pidx):
         'event_id': event_id,
         'needs_sub_choice': needs_sub,
         'draft_picks': engine.draft_picks[pidx],
+        'fated_draw_pool': [CardInstance(def_id=def_id).to_dict() for def_id in engine.fated_draw_pool_defs()] if str(event_id) == '5' else [],
         'magic_options': magic_options_for_event,
         'mode': room.mode,
         'player_names': engine.player_names,
@@ -4945,6 +5049,14 @@ def send_pregame_state(room, pidx, allow_sub_choice=False):
     if status == 'event_select':
         emit_room_game_phase(room, sid, 'event_select')
         send_event_state(room, pidx)
+        return
+    if status == 'event_reveal':
+        if not all(pick is not None for pick in getattr(engine, 'opening_event_picks', [])):
+            emit_room_game_phase(room, sid, 'event_select')
+            send_event_state(room, pidx)
+            return
+        emit_room_game_phase(room, sid, 'event_reveal')
+        send_event_reveal_state(room, pidx)
         return
     if status == 'sub_choice' and allow_sub_choice:
         emit_room_game_phase(room, sid, 'draft')
@@ -5632,6 +5744,11 @@ def admin_page():
     return render_template('adminpage.html')
 
 
+@app.route('/handling')
+def handling_page():
+    return render_template('handling.html')
+
+
 @app.route('/api/admin/me')
 def admin_me():
     return jsonify({'authenticated': is_admin_authenticated()})
@@ -5662,6 +5779,153 @@ def admin_logout():
     session.pop('admin_login_time', None)
     admin_event('security', 'admin logout')
     return jsonify({'success': True})
+
+
+@app.route('/api/handling/me')
+def handling_me():
+    return jsonify({'authenticated': is_handling_authenticated(), 'admin': is_admin_authenticated()})
+
+
+@app.route('/api/handling/login', methods=['POST'])
+def handling_login():
+    data = request.get_json(silent=True) or {}
+    password = data.get('password', '')
+    ip = _client_ip()
+    if should_rate_limit_admin_login(f'handling:{ip}'):
+        admin_event('security', f'handling login rate limited from {ip}')
+        return jsonify({'success': False, 'error': 'too many attempts'}), 429
+    if password and check_password_hash(HANDLING_PASSWORD_HASH, password):
+        session['handling_authenticated'] = True
+        session['handling_login_time'] = time.time()
+        ADMIN_LOGIN_FAILURES.pop(f'handling:{ip}', None)
+        admin_event('security', f'handling login success from {ip}')
+        return jsonify({'success': True})
+    record_admin_login_failure(f'handling:{ip}')
+    admin_event('security', f'handling login failed from {ip}')
+    return jsonify({'success': False, 'error': 'invalid password'}), 401
+
+
+@app.route('/api/handling/logout', methods=['POST'])
+def handling_logout():
+    session.pop('handling_authenticated', None)
+    session.pop('handling_login_time', None)
+    admin_event('security', 'handling logout')
+    return jsonify({'success': True})
+
+
+@app.route('/api/handling/reports')
+def handling_reports():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        data = list_reports(
+            status=request.args.get('status', 'pending'),
+            limit=validate_int(request.args.get('limit', 50), default=50, minimum=1, maximum=100, name='limit'),
+            offset=validate_int(request.args.get('offset', 0), default=0, minimum=0, maximum=1000000, name='offset'),
+        )
+        return jsonify({'success': True, **data})
+    except Exception as exc:
+        admin_event('error', f'handling reports query failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/handling/reports/<int:report_id>')
+def handling_report_detail(report_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    detail = get_report_detail(report_id)
+    if not detail:
+        return jsonify({'success': False, 'error': '举报不存在'}), 404
+    return jsonify({'success': True, 'report': detail})
+
+
+@app.route('/api/handling/reports/<int:report_id>/resolve', methods=['POST'])
+def handling_report_resolve(report_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    data = request.get_json(silent=True) or {}
+    try:
+        action = validate_str(data.get('action', ''), min_len=1, max_len=20, pattern=r'[A-Za-z0-9_.:\-]+', name='action')
+        moderation_action = validate_str(data.get('moderation_action', 'none'), min_len=1, max_len=30, pattern=r'[A-Za-z0-9_.:\-]+', name='moderation_action')
+        duration_seconds = validate_int(data.get('duration_seconds', 0), default=0, minimum=0, maximum=60 * 60 * 24 * 1000, name='duration_seconds')
+        note = validate_str(data.get('note', ''), max_len=500, name='note', truncate=True)
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
+    if action not in VALID_REPORT_ACTIONS:
+        return _json_error('处理动作无效', 400)
+    if moderation_action not in VALID_MODERATION_ACTIONS:
+        return _json_error('处罚动作无效', 400)
+    detail, error = resolve_report_entry(
+        report_id,
+        action,
+        moderation_action=moderation_action,
+        admin_username=session.get('username') or 'handling',
+        note=note,
+        duration_seconds=duration_seconds,
+    )
+    if error:
+        return _json_error(error, 400)
+    _apply_report_moderation_action(detail, moderation_action, duration_seconds=duration_seconds, note=note)
+    admin_event('moderation', f'handling report #{report_id} resolved action={action} moderation={moderation_action}')
+    return jsonify({'success': True, 'report': detail})
+
+
+@app.route('/api/handling/ip-bans')
+def handling_ip_bans():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        active_only = str(request.args.get('active', '1')).strip().lower() not in {'0', 'false', 'no', 'all'}
+        data = list_ip_bans(
+            active_only=active_only,
+            limit=validate_int(request.args.get('limit', 100), default=100, minimum=1, maximum=300, name='limit'),
+            offset=validate_int(request.args.get('offset', 0), default=0, minimum=0, maximum=1000000, name='offset'),
+        )
+        return jsonify({'success': True, **data})
+    except Exception as exc:
+        admin_event('error', f'handling ip ban list failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/handling/ip-bans', methods=['POST'])
+def handling_set_ip_ban():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    data = request.get_json(silent=True) or {}
+    try:
+        ip = validate_str(data.get('ip', ''), min_len=1, max_len=80, pattern=r'[A-Za-z0-9_.:\-]+', name='ip')
+        reason = validate_str(data.get('reason', ''), max_len=300, name='reason', truncate=True)
+        duration_seconds = validate_int(data.get('duration_seconds', 0), default=0, minimum=0, maximum=60 * 60 * 24 * 1000, name='duration_seconds')
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
+    row, error = set_ip_ban(ip, True, reason, duration_seconds=duration_seconds or None, banned_by=session.get('username') or 'handling')
+    if error:
+        return _json_error(error, 400)
+    kicked = []
+    with _lock:
+        for sid, player in list(players.items()):
+            if str(player.get('ip') or '') == ip:
+                kicked.append(sid)
+                remove_player_by_admin(sid)
+    for sid in kicked:
+        socketio.emit('server_error', {'message': 'IP 已被封禁'}, room=sid)
+        socketio.emit('kicked', {'reason': 'ip banned'}, room=sid)
+        socketio.server.disconnect(sid)
+    if kicked:
+        broadcast_lobby()
+    admin_event('moderation', f'handling banned ip {ip}: {reason or "-"}')
+    return jsonify({'success': True, 'ip_ban': row, 'kicked': len(kicked)})
+
+
+@app.route('/api/handling/ip-bans/<path:ip>', methods=['DELETE'])
+def handling_unban_ip(ip):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    row, error = set_ip_ban(ip, False)
+    if error:
+        return _json_error(error, 400)
+    admin_event('moderation', f'handling unbanned ip {ip}')
+    return jsonify({'success': True, 'ip_ban': row})
 
 
 @app.route('/api/admin/status')
@@ -5899,7 +6163,7 @@ def _admin_online_user_map():
 @app.route('/api/admin/users')
 def admin_users():
     started = time.perf_counter()
-    limit = request.args.get('limit', 50)
+    limit = request.args.get('limit', 30)
     try:
         data = list_admin_users(
             query=request.args.get('query', ''),
@@ -5948,6 +6212,7 @@ def admin_user_detail(user_id):
 
 @app.route('/api/admin/draft-stats')
 def admin_draft_stats():
+    started = time.perf_counter()
     if not DB_AVAILABLE:
         return db_unavailable_response()
     try:
@@ -5960,6 +6225,7 @@ def admin_draft_stats():
         )
     except Exception as exc:
         admin_event('error', f'admin draft stats failed: {exc}')
+        log_admin_api_timing('/api/admin/draft-stats', (time.perf_counter() - started) * 1000, error=type(exc).__name__)
         return jsonify({'success': False, 'error': '抽牌统计数据库不可用'}), 500
     for item in data.get('items', []):
         card_def = CARD_DEFS.get(item.get('card_id'))
@@ -5967,17 +6233,28 @@ def admin_draft_stats():
         item['name_en'] = card_def.name_en if card_def else item.get('card_id')
         item['card_type'] = card_def.card_type if card_def else ''
         item['quality'] = card_def.quality if card_def else ''
+    log_admin_api_timing(
+        '/api/admin/draft-stats',
+        (time.perf_counter() - started) * 1000,
+        rows=len(data.get('items') or []),
+        total=data.get('total'),
+        limit=data.get('limit'),
+    )
     return jsonify({'success': True, **data})
 
 
 @app.route('/api/admin/storage/summary')
 def admin_storage_summary():
+    started = time.perf_counter()
     if not DB_AVAILABLE:
         return db_unavailable_response()
     try:
-        return jsonify({'success': True, **storage_summary()})
+        payload = storage_summary()
+        log_admin_api_timing('/api/admin/storage/summary', (time.perf_counter() - started) * 1000)
+        return jsonify({'success': True, **payload})
     except Exception as exc:
         admin_event('error', f'storage summary failed: {exc}')
+        log_admin_api_timing('/api/admin/storage/summary', (time.perf_counter() - started) * 1000, error=type(exc).__name__)
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
@@ -6498,6 +6775,7 @@ def api_cards():
             continue
         source = card_mod_sources.get(def_id, {})
         image_url = str(getattr(card_def, 'image_url', '') or getattr(card_def, 'image', '') or '')
+        upgraded_image_url = str(getattr(card_def, 'upgraded_image_url', '') or getattr(card_def, 'upgraded_image', '') or '')
         if bool(source.get('is_vanilla', False)):
             image_url = vanilla_card_art_url(def_id) or image_url
         card_payload = {
@@ -6529,6 +6807,9 @@ def api_cards():
             'hits': getattr(card_def, 'hits', 1),
             'image': image_url,
             'image_url': image_url,
+            'upgraded_image': upgraded_image_url,
+            'upgraded_image_url': upgraded_image_url,
+            'setup_only': def_id in BUILTIN_SETUP_CARD_IDS or def_id in SETUP_ONLY_CARD_IDS,
         }
         if getattr(card_def, 'v2_mod_id', ''):
             card_payload['v2_mod_id'] = getattr(card_def, 'v2_mod_id', '')
@@ -6565,7 +6846,7 @@ def api_opening_events():
     registry_payload = v2_registry_payload(loadout.get('v2_loadout'))
     return jsonify({
         'events': events,
-        'magic_pool': [def_id for def_id in GameEngine.MAGIC_CARD_POOL if def_id in allowed_card_ids],
+        'magic_pool': [],
         **registry_payload,
     })
 
@@ -6830,13 +7111,15 @@ def admin_broadcast():
 
 @app.route('/api/admin/game-chat')
 def admin_game_chat():
+    started = time.perf_counter()
     try:
-        limit = max(1, min(int(request.args.get('limit', 300)), 500))
+        limit = max(1, min(int(request.args.get('limit', 50)), 100))
     except (TypeError, ValueError):
-        limit = 300
+        limit = 50
     with _lock:
         items = admin_game_chat_recent_locked(limit)
         total_cached = len(ADMIN_GAME_CHAT_CACHE)
+    log_admin_api_timing('/api/admin/game-chat', (time.perf_counter() - started) * 1000, rows=len(items), total=total_cached, limit=limit)
     return jsonify({
         'success': True,
         'items': items,
@@ -6914,7 +7197,7 @@ def admin_draftfill(room_id):
             return jsonify({'success': False, 'error': 'room not found'}), 404
         room = rooms[room_id]
         e = room.engine
-        if e.phase not in ('draft', 'event_select'):
+        if e.phase not in ('draft', 'event_select', 'event_reveal'):
             return jsonify({'success': False, 'error': f'cannot fill draft during phase {e.phase}'}), 400
         filled = 0
         while e.phase == 'draft':
@@ -6959,6 +7242,18 @@ def on_connect():
     try:
         ensure_event_loop_watchdog_started()
         ensure_lobby_idle_cleanup_started()
+        ip = _client_ip()
+        if DB_AVAILABLE:
+            try:
+                ip_status = get_ip_ban_status(ip)
+            except Exception as exc:
+                admin_event('error', f'socket ip ban check failed: {exc}')
+                ip_status = {'banned': False}
+            if ip_status.get('banned'):
+                ok = False
+                record_suspicious_event('connect_ip_banned', 'banned IP tried to connect', sid=sid, ip=ip, severity='high')
+                socketio.server.disconnect(sid)
+                return
         if not rate_limiter(f'connect-ip:{_client_ip()}', limit=30, window=60):
             ok = False
             record_suspicious_event('connect_rate_ip', 'Socket connect IP rate limited', sid=sid, ip=_client_ip(), severity='high')
@@ -7174,6 +7469,7 @@ def on_login(data):
         login_now = time.time()
         players[sid] = {
             'nickname': name,
+            'ip': _client_ip(),
             'room_id': None,
             'status': initial_status,
             'login_at': login_now,
@@ -7642,7 +7938,7 @@ def on_disconnect():
                     }
                     room.disconnected_players[sid].update(special_public_fields(player))
                     dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)
-                    pregame_disconnect = room.engine.phase in ('draft', 'event_select')
+                    pregame_disconnect = room.engine.phase in ('draft', 'event_select', 'event_reveal')
                     if not dead_2v2_player:
                         for other_sid in room.player_sids:
                             if other_sid != sid and other_sid in players:
@@ -8313,15 +8609,43 @@ def on_select_opening_event(data):
                 'event_id': event_id,
                 'sub_choice': sub_choice,
             })
-            # Player selected their event, immediately start draft for them
-            engine.start_draft_for_player(pidx)
-            record_room_replay_keyframe(room, 'draft_start')
-            psid = room.player_sids[pidx]
-            send_pregame_state(room, pidx)
-            # Notify other players about this player's event selection
+            if all(pick is not None for pick in engine.opening_event_picks):
+                record_room_replay_keyframe(room, 'event_reveal')
             for pi in range(len(room.player_sids)):
-                if pi != pidx:
-                    send_pregame_state(room, pi)
+                send_pregame_state(room, pi)
+
+
+@socketio.on('confirm_opening_reveal')
+@measure_socket_action('confirm_opening_reveal')
+def on_confirm_opening_reveal(data=None):
+    sid = request.sid
+    data = socket_guard('confirm_opening_reveal', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
+    with _lock:
+        if sid not in players:
+            return
+        player = players[sid]
+        room_id = player.get('room_id')
+        if room_id is None or room_id not in rooms:
+            return
+        room = rooms[room_id]
+        pidx = room.player_index(sid)
+        if pidx < 0:
+            return
+        engine = room.engine
+        if engine.opening_event_picks[pidx] is None:
+            return
+        if not all(pick is not None for pick in engine.opening_event_picks):
+            send_pregame_state(room, pidx)
+            return
+        already_started = bool(getattr(engine, 'player_draft_started', [False] * len(room.player_sids))[pidx])
+        if not already_started:
+            engine.start_draft_for_player(pidx)
+            record_room_replay_action(room, 'confirm_opening_reveal', pidx, {})
+            record_room_replay_keyframe(room, 'draft_start')
+        for pi in range(len(room.player_sids)):
+            send_pregame_state(room, pi)
 
 
 @socketio.on('reroll_opening_event')
@@ -8368,6 +8692,15 @@ def on_submit_event_sub_choice(data):
         if pidx < 0:
             return
         engine = room.engine
+        if str(engine.opening_event_picks[pidx]) == '5':
+            raw_ids = []
+            if isinstance(sub_choice, dict):
+                raw_ids = list(sub_choice.get('add_def_ids') or sub_choice.get('def_ids') or [])
+            valid_ids = []
+            for def_id in raw_ids[:3]:
+                if engine._card_allowed_for_fated_draw(str(def_id)):
+                    valid_ids.append(str(def_id))
+            sub_choice = {'add_def_ids': valid_ids}
         if not sub_choice and engine.needs_sub_choice(pidx):
             send_pregame_state(room, pidx, allow_sub_choice=True)
             return
@@ -8420,7 +8753,7 @@ def on_solo_start(data):
         players[sid]['allowed_card_ids'] = allowed_card_ids
     def _valid_entry(entry):
         def_id = entry.get('def_id') if isinstance(entry, dict) else entry
-        return def_id in CARD_DEFS and def_id in allowed_card_ids
+        return def_id in CARD_DEFS and def_id in allowed_card_ids and def_id not in BUILTIN_SETUP_CARD_IDS and def_id not in SETUP_ONLY_CARD_IDS
     if any(not _valid_entry(entry) for entry in deck0 + deck1):
         emit('server_error', {'message': '训练场牌组中包含当前未启用的卡牌'})
         return
@@ -9471,7 +9804,7 @@ def on_spectate(data):
             emit('server_error', {'message': '请返回自己的对局，不能观战自己的对局'})
             return
         phase = room.engine.phase
-        if phase in ('draft', 'event_select'):
+        if phase in ('draft', 'event_select', 'event_reveal'):
             emit('server_error', {'message': '选牌或配装倾向阶段暂不能观战'})
             return
         if phase not in ('action', 'draw', 'playing', 'response', 'choice'):

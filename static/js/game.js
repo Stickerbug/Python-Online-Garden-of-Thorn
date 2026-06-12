@@ -2437,6 +2437,7 @@ let activeSocialFriendId = null;
 let lobbyMentionCandidates = [];
 let lobbyMentionMenu = null;
 let lobbyMentionActiveRange = null;
+const readLobbyMentionIds = new Set();
 let accountReplayItems = [];
 let accountReplayTimeline = [];
 let accountReplayFrameIndex = 0;
@@ -3299,7 +3300,7 @@ function showView(viewId) {
 
 function isNetworkMatchPhase(value = phase) {
     return !soloMode && !replayMode && [
-        'draft', 'event_select', 'event_sub_choice', 'playing', 'action', 'draw', 'response', 'choice', 'game_over',
+        'draft', 'event_select', 'event_reveal', 'event_sub_choice', 'playing', 'action', 'draw', 'response', 'choice', 'game_over',
     ].includes(String(value || ''));
 }
 
@@ -3476,8 +3477,8 @@ function showCardGallery(selectedId = null, mode = 'cards') {
     const backBtn = $('btn-gallery-back');
     if (backBtn) backBtn.textContent = galleryReturnToRules ? UI.gallery_back_rules : UI.back_to_home;
     if (selectedId) gallerySelectedId = selectedId;
-    if (!gallerySelectedId || !CARD_DEFS[gallerySelectedId] || gallerySelectedId === 'Error') {
-        gallerySelectedId = Object.keys(CARD_DEFS).filter(id => id !== 'Error').sort(compareGalleryCards)[0] || null;
+    if (!gallerySelectedId || !CARD_DEFS[gallerySelectedId] || gallerySelectedId === 'Error' || isSetupOnlyCardId(gallerySelectedId)) {
+        gallerySelectedId = Object.keys(CARD_DEFS).filter(id => id !== 'Error' && !isSetupOnlyCardId(id)).sort(compareGalleryCards)[0] || null;
     }
     renderCardGallery();
 }
@@ -3546,13 +3547,22 @@ function getGalleryFlagEnglishLabel(flag) {
 
 function getGalleryFlagUsers(flag) {
     const normalized = normalizeCardFlag(flag);
-    const defs = Object.values(CARD_DEFS).filter(cd => cd && cd.id !== 'Error');
+    const defs = Object.values(CARD_DEFS).filter(isPublicCardDef);
     if (normalized === 'fusion_layer') return defs.filter(cd => cd && cd.id === 'Fusion');
     if (normalized === 'fission_layer') return defs.filter(cd => cd && cd.id === 'Fission');
     return defs.filter(cd => normalizeFlagList(cd.flags || []).includes(normalized));
 }
 
 const GALLERY_CARD_TYPE_ORDER = { thorn: 0, bloom: 1, guard: 2, root: 3 };
+
+function isSetupOnlyCardId(id) {
+    const cd = CARD_DEFS ? CARD_DEFS[id] : null;
+    return !!(cd && cd.setup_only);
+}
+
+function isPublicCardDef(cd) {
+    return !!(cd && cd.id !== 'Error' && !cd.setup_only);
+}
 
 function compareGalleryCards(a, b) {
     const ca = typeof a === 'string' ? CARD_DEFS[a] : a;
@@ -3581,7 +3591,7 @@ function getAllGalleryFlags() {
         const normalized = normalizeCardFlag(flag);
         if (normalized) flags.add(normalized);
     });
-    Object.values(CARD_DEFS).filter(cd => cd && cd.id !== 'Error').forEach(cd => (cd.flags || []).forEach(flag => {
+    Object.values(CARD_DEFS).filter(isPublicCardDef).forEach(cd => (cd.flags || []).forEach(flag => {
         const normalized = normalizeCardFlag(flag);
         if (normalized) flags.add(normalized);
     }));
@@ -3606,7 +3616,7 @@ function renderCardGallery() {
         return;
     }
     const ids = Object.keys(CARD_DEFS)
-        .filter(id => id !== 'Error')
+        .filter(id => id !== 'Error' && !isSetupOnlyCardId(id))
         .filter(id => {
             const cd = CARD_DEFS[id];
             return !q || cardSearchText(id).includes(q);
@@ -3691,7 +3701,7 @@ function renderOpeningEventGallery(list, detail, q) {
         const id = `event:${ev.id}`;
         const row = document.createElement('div');
         row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
-        row.innerHTML = `<div class="gallery-row-title">${getLocalizedEventText(ev, 'name') || '?'}</div><div class="gallery-row-meta">${getLocalizedEventText(ev, 'desc') || ''}</div>`;
+        row.innerHTML = `<div class="gallery-row-title">${getLocalizedEventText(ev, 'name') || '?'}</div><div class="gallery-row-meta">${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</div>`;
         row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
         list.appendChild(row);
     });
@@ -3705,7 +3715,7 @@ function renderOpeningEventGallery(list, detail, q) {
     detail.innerHTML = `<div class="gallery-simple-detail">
         <h3>${getLocalizedEventText(ev, 'name') || '?'}</h3>
         <p><b>ID：</b>${ev.id}</p>
-        <p>${getLocalizedEventText(ev, 'desc') || ''}</p>
+        <p>${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</p>
     </div>`;
 }
 
@@ -4880,6 +4890,12 @@ function getCardLayerLabel(cardDict) {
 }
 
 function getCardArtUrl(cardDict, cardDef) {
+    const extraHits = Math.max(0, Number(cardDict && cardDict.extra_hits || 0));
+    if (extraHits > 0) {
+        const upgraded = (cardDict && (cardDict.upgraded_image_url || cardDict.upgraded_image))
+            || (cardDef && (cardDef.upgraded_image_url || cardDef.upgraded_image));
+        if (upgraded) return upgraded;
+    }
     return (cardDict && (cardDict.image_url || cardDict.image))
         || (cardDef && (cardDef.image_url || cardDef.image))
         || '';
@@ -4896,6 +4912,24 @@ function getEquipmentIconHtml(cardInst, cardDef) {
         ? `<img class="equip-icon-img" src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden')">`
         : '';
     return `<span class="equip-icon" style="${style}">${img}${fallback}</span>`;
+}
+
+function getCardEffectTextForInstance(cardDict, cardDef) {
+    let text = getCardEffectText(cardDef) || '';
+    const extraHits = Math.max(0, Number(cardDict && cardDict.extra_hits || 0));
+    if (!extraHits || !text || !cardDef) return text;
+    const info = getAttackDamageBaseInfo(cardDict || {}, cardDef);
+    const baseHits = Math.max(1, Math.round(Number((info && info.hits) || cardDef.hits || 1)));
+    const nextHits = baseHits + extraHits;
+    if (nextHits <= baseHits || baseHits < 2) return text;
+    if (info && !info.triangle) {
+        const times = '\u00d7';
+        const oldHitPattern = new RegExp(`(\\d+\\s*[DＤ]\\s*[x×${times}]\\s*)${baseHits}`, 'g');
+        text = text.replace(oldHitPattern, `$1${nextHits}`);
+    }
+    text = text.replace(new RegExp(`(破损\\s*[x×]\\s*)${baseHits}(\\s*层)`, 'g'), `$1${nextHits}$2`);
+    text = text.replace(new RegExp(`([（(])\\s*${baseHits}\\s*(子瓣|petals?|pétales?|pétalas|лепестка|лепестков|子弁)(\\s*[）)])`, 'gi'), `$1${nextHits}$2$3`);
+    return text;
 }
 
 function createCardElement(cardDict, options = {}) {
@@ -4923,7 +4957,7 @@ function createCardElement(cardDict, options = {}) {
     const typeLabel = hideTypeByBlind ? '?' : rawTypeLabel;
     const cardName = blinded ? '?' : getCardName(cardDef);
     const englishName = (!blinded && shouldShowEnglishCardName(cardDef, cardName)) ? getEnglishCardName(cardDef) : '';
-    const effectText = blinded ? '?' : getCardEffectText(cardDef);
+    const effectText = blinded ? '?' : getCardEffectTextForInstance(cardDict, cardDef);
     const descriptionText = blinded ? '?' : getCardDescriptionText(cardDef);
     const imageUrl = (!blinded && showCardImages) ? getCardArtUrl(cardDict, cardDef) : '';
     if (blinded) {
@@ -5348,7 +5382,7 @@ function readPlayerHealthValue(playerState, keys, fallback = 0) {
 function getClawDamageHits(cardDict, attackerState, targetState, info) {
     const fusion = Math.max(1, Number(cardDict.fusion_level || 1));
     const fission = Math.max(1, Number(cardDict.fission_level || 1));
-    const baseHits = Math.max(1, Math.round(Number((info && info.hits) || 1)));
+    const baseHits = Math.max(1, Math.round(Number((info && info.hits) || 1)) + Math.max(0, Number(cardDict.extra_hits || 0)));
     const bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
     const maxHealth = readPlayerHealthValue(targetState, ['max_health', 'maxHp', 'maxH', 'max_h'], 0);
     let health = readPlayerHealthValue(targetState, ['health', 'hp', 'h'], maxHealth);
@@ -5393,7 +5427,7 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
     }
     const amount = Number(info.amount || 0) + bonus;
     const perHit = Math.ceil(amount * fusion / fission);
-    const totalHits = Math.max(1, Math.round(Number(info.hits || 1))) * fission;
+    const totalHits = Math.max(1, Math.round(Number(info.hits || 1)) + Math.max(0, Number(cardDict.extra_hits || 0))) * fission;
     return Array.from({ length: totalHits }, () => perHit);
 }
 
@@ -7027,6 +7061,10 @@ function connectSocket(serverUrl) {
             resetRematchUiState();
             showView('view-event-select');
             updateStatus(UI.select_event);
+        } else if (phase === 'event_reveal') {
+            resetRematchUiState();
+            showView('view-event-select');
+            updateStatus(UI.event_selected || UI.select_event);
         } else if (phase === 'playing') {
             resetRematchUiState();
             showView('view-game');
@@ -7061,6 +7099,17 @@ function connectSocket(serverUrl) {
         if (data.your_id != null) playerId = data.your_id;
         mergeSkinLooksFromPayload(data);
         renderEventSelect(data);
+    });
+    bindSocketEvent('event_reveal', (data) => {
+        debugLog('[client] event_reveal');
+        phase = 'event_reveal';
+        eventSelectData = data;
+        syncBattleLogMatch(data || {});
+        syncPhaseChatMatch(data || {});
+        updatePhaseChatChannelOptions(data || {});
+        if (data.your_id != null) playerId = data.your_id;
+        mergeSkinLooksFromPayload(data);
+        renderEventReveal(data);
     });
     bindSocketEvent('event_sub_choice', (data) => {
         debugLog('[client] event_sub_choice');
@@ -7834,7 +7883,7 @@ function shouldEmitSkinLook() {
     if (!socket || !socket.connected) return false;
     if (soloMode || isSpectating) return false;
     if (normalizePlayerId(playerId) == null || normalizePlayerId(playerId) < 0) return false;
-    if (!['draft', 'event_select', 'playing', 'action', 'draw', 'response', 'choice', 'game_over'].includes(phase)) return false;
+    if (!['draft', 'event_select', 'event_reveal', 'playing', 'action', 'draw', 'response', 'choice', 'game_over'].includes(phase)) return false;
     return !!((gameState && gameState.room_id != null) || (draftState && draftState.room_id != null) || (eventSelectData && eventSelectData.room_id != null));
 }
 
@@ -9550,6 +9599,7 @@ function loadSoloDecks(showNotice = true) {
             .map(entry => typeof entry === 'string'
                 ? { def_id: entry, instance_flags: [], disabled_flags: [] }
                 : { def_id: entry.def_id, instance_flags: [...(entry.instance_flags || [])], disabled_flags: [...(entry.disabled_flags || [])] })
+            .filter(entry => entry && !isSetupOnlyCardId(entry.def_id))
             .slice(0, 15);
         soloDeckA = normalizeDeck(saved.deck0);
         soloDeckB = normalizeDeck(saved.deck1);
@@ -10059,7 +10109,7 @@ function renderSoloBuilder() {
     if (list) {
         list.innerHTML = '';
         Object.keys(CARD_DEFS)
-            .filter(defId => defId !== 'Error')
+            .filter(defId => defId !== 'Error' && !isSetupOnlyCardId(defId))
             .filter(defId => !q || cardSearchText(defId).includes(q))
             .sort(compareGalleryCards)
             .forEach(defId => {
@@ -10186,18 +10236,10 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
         const countSel = await gamePrompt(UI.choose_convert_count, countOptions, { cancellable: false });
         if (countSel < 0) return false;
         for (let i = 0; i <= countSel; i++) {
-            const magicDisplay = openingEventMagicPool.map(defId => {
-                const cd = getCardDef(defId);
-                const detail = cd ? `${cd.cost_e || 0}E/${cd.cost_m || 0}M` : '';
-                return cardDefChoiceOption(defId, detail ? { detail } : {});
-            });
-            const magicSel = await gamePrompt(UI.choose_magic_card_n.replace('{0}', i + 1), magicDisplay, { cancellable: false });
-            if (magicSel < 0) return false;
             const sourceOptions = deck.map((entry, idx) => cardChoiceOption(entry, { detail: `#${idx + 1}` }));
             const sourceSel = await gamePrompt(`${label} ${UI.choose_source_card_n.replace('{0}', i + 1)}`, sourceOptions, { cancellable: false });
             if (sourceSel < 0) return false;
             conversions.push({
-                magic_def_id: openingEventMagicPool[magicSel],
                 source_def_id: deck[sourceSel].def_id,
             });
         }
@@ -10216,6 +10258,9 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
         }
         return { convert_def_ids };
     }
+    if (eventId === 5) {
+        return await showFatedDrawChoice();
+    }
     if (eventId === 8) {
         const sourceOptions = deck.map((entry, idx) => cardChoiceOption(entry, { detail: `#${idx + 1}` }));
         const sourceSel = await gamePrompt(`${label} ${UI.choose_yggdrasil_card}`, sourceOptions, { cancellable: false });
@@ -10231,7 +10276,7 @@ async function startSoloTraining() {
         return;
     }
     await refreshCardDefsFromServer({ silent: true });
-    if (soloDeckA.concat(soloDeckB).some(card => !card || !getCardDef(card.def_id))) {
+    if (soloDeckA.concat(soloDeckB).some(card => !card || !getCardDef(card.def_id) || isSetupOnlyCardId(card.def_id))) {
         gameAlert(UI.notice, UI.solo_invalid_deck_cards);
         return;
     }
@@ -10679,14 +10724,14 @@ function renderEventSelect(data) {
     events.forEach((ev, i) => {
         if (!ev) return;
         const borderColors = { 1: COLORS.health, 2: COLORS.magic, 3: COLORS.magic, 4: COLORS.fire, 5: COLORS.fire, 6: COLORS.fire, 7: COLORS.fire, 8: COLORS.magic };
-        const bc = borderColors[ev.id] || COLORS.magic;
+        const bc = ev.color || borderColors[ev.id] || COLORS.magic;
         const card = document.createElement('div');
         card.className = 'event-card';
         card.style.borderColor = bc;
 
         card.innerHTML = `
             <div class="event-header" style="background:${bc}"><span>${i + 1}. ${getLocalizedEventText(ev, 'name') || '?'}</span></div>
-            <div class="event-desc">${getLocalizedEventText(ev, 'desc') || ''}</div>
+            <div class="event-desc">${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</div>
         `;
         card.onclick = () => onEventSelect(ev.id);
         card.style.cursor = 'pointer';
@@ -10718,6 +10763,48 @@ function renderEventSelect(data) {
     }
 }
 
+function renderEventReveal(data) {
+    showView('view-event-select');
+    syncPhaseChatMatch(data || {});
+    updatePhaseChatChannelOptions(data || {});
+    const container = $('event-options');
+    if (!container) return;
+    const rerollBtn = $('btn-event-reroll');
+    if (rerollBtn) rerollBtn.style.display = 'none';
+    const picks = data.picks || [];
+    container.innerHTML = '';
+    const title = document.createElement('div');
+    title.className = 'event-selected';
+    title.textContent = '配装已公开';
+    container.appendChild(title);
+    const eventsRow = document.createElement('div');
+    eventsRow.className = 'event-options';
+    picks.forEach((item) => {
+        const ev = item.event || {};
+        const bc = ev.color || COLORS.magic;
+        const card = document.createElement('div');
+        card.className = 'event-card';
+        card.style.borderColor = bc;
+        const playerName = item.player_name || `P${(item.player_id || 0) + 1}`;
+        card.innerHTML = `
+            <div class="event-header" style="background:${bc}"><span>${escapeHtml(playerName)}</span></div>
+            <div class="event-desc"><b>${escapeHtml(getLocalizedEventText(ev, 'name') || '?')}</b></div>
+            <div class="event-desc">${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</div>
+            <div class="event-desc">${item.ready ? (UI.status_drafting || '选牌中') : (UI.waiting_opponent || '等待')}</div>
+        `;
+        eventsRow.appendChild(card);
+    });
+    container.appendChild(eventsRow);
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary';
+    btn.textContent = data.my_ready ? (UI.status_drafting || '选牌中') : (UI.play_card || '开始') + '选牌';
+    btn.disabled = !!data.my_ready;
+    btn.onclick = () => {
+        if (socket && !data.my_ready) socket.emit('confirm_opening_reveal');
+    };
+    container.appendChild(btn);
+}
+
 async function onEventSelect(eventId) {
     // Sub-choices (magic conversion, light conversion, etc.) are deferred
     // until after draft, so we don't prompt for them here
@@ -10743,6 +10830,9 @@ async function handleEventSubChoice(data) {
     } else if (String(eventId) === '3') {
         subChoice = await showLightConversionChoice();
         if (subChoice === false) subChoice = null;
+    } else if (String(eventId) === '5') {
+        subChoice = await showFatedDrawChoice(eventSelectData.fated_draw_pool || []);
+        if (subChoice === false) subChoice = { add_def_ids: [] };
     } else if (String(eventId) === '8') {
         subChoice = await showYggdrasilConversionChoice();
         if (subChoice === false) subChoice = null;
@@ -10750,11 +10840,125 @@ async function handleEventSubChoice(data) {
     socket.emit('submit_event_sub_choice', { sub_choice: subChoice });
 }
 
+async function showFatedDrawChoice(poolCards) {
+    const sourcePool = (poolCards && poolCards.length)
+        ? poolCards
+        : Object.keys(CARD_DEFS || {}).filter(defId => {
+            const cd = getCardDef(defId);
+            return cd && defId !== 'Error' && !isSetupOnlyCardId(defId) && Number(cd.count || 0) > 0;
+        });
+    const normalizedPool = (sourcePool || [])
+        .map(card => typeof card === 'string' ? { def_id: card } : card)
+        .filter(card => {
+            const cd = getCardDef(card.def_id);
+            return cd && card.def_id !== 'Error' && !isSetupOnlyCardId(card.def_id) && Number(cd.count || 0) > 0;
+        })
+        .sort((a, b) => compareGalleryCards(a.def_id, b.def_id));
+    return new Promise((resolve) => {
+        const el = $('game-prompt');
+        if (!el) { resolve({ add_def_ids: [] }); return; }
+        $('game-prompt-title').textContent = '命运抽签：选择最多3张牌洗入牌库';
+        const optsEl = $('game-prompt-options');
+        optsEl.innerHTML = '';
+        const selected = [];
+        const selectedBox = document.createElement('div');
+        selectedBox.className = 'choice-selected-cards';
+        selectedBox.style.display = 'flex';
+        selectedBox.style.flexWrap = 'wrap';
+        selectedBox.style.gap = '6px';
+        selectedBox.style.marginBottom = '8px';
+        const search = document.createElement('input');
+        search.type = 'text';
+        search.placeholder = UI.search || '搜索';
+        search.style.width = '100%';
+        search.style.marginBottom = '8px';
+        search.style.padding = '7px 9px';
+        search.style.border = '1px solid var(--border-color)';
+        search.style.borderRadius = 'var(--radius-sm)';
+        search.style.background = 'var(--input-bg, #fff)';
+        search.style.color = 'var(--text-color)';
+        const list = document.createElement('div');
+        list.className = 'fated-draw-card-list';
+        list.style.display = 'grid';
+        list.style.gridTemplateColumns = 'repeat(auto-fill, minmax(132px, 1fr))';
+        list.style.gap = '6px';
+        list.style.maxHeight = '44vh';
+        list.style.overflow = 'auto';
+
+        function renderSelected() {
+            selectedBox.innerHTML = '';
+            if (!selected.length) {
+                const empty = document.createElement('span');
+                empty.className = 'choice-option-detail';
+                empty.textContent = '未选择，可直接确认';
+                selectedBox.appendChild(empty);
+                return;
+            }
+            selected.forEach((defId, idx) => {
+                const chip = createCardChoiceChip({ def_id: defId }, { includeLayers: false, includeTomato: false });
+                chip.style.cursor = 'pointer';
+                chip.title = UI.cancel || '移除';
+                chip.onclick = () => {
+                    selected.splice(idx, 1);
+                    renderSelected();
+                    renderList();
+                };
+                selectedBox.appendChild(chip);
+            });
+        }
+
+        function renderList() {
+            const q = search.value.trim().toLowerCase();
+            list.innerHTML = '';
+            normalizedPool
+                .filter(card => !q || cardSearchText(card.def_id).includes(q))
+                .forEach(card => {
+                    const row = document.createElement('button');
+                    row.type = 'button';
+                    row.className = 'game-prompt-option';
+                    row.style.justifyContent = 'flex-start';
+                    row.style.minHeight = '34px';
+                    row.disabled = selected.length >= 3;
+                    row.appendChild(createCardChoiceChip(card, { includeLayers: true, includeTomato: true }));
+                    row.onclick = () => {
+                        if (selected.length >= 3) return;
+                        selected.push(card.def_id);
+                        renderSelected();
+                        renderList();
+                    };
+                    list.appendChild(row);
+                });
+        }
+
+        optsEl.appendChild(selectedBox);
+        optsEl.appendChild(search);
+        optsEl.appendChild(list);
+        const cancelBtn = $('game-prompt-cancel');
+        cancelBtn.classList.add('hidden');
+        cancelBtn.style.display = 'none';
+        cancelBtn.onclick = null;
+        search.oninput = renderList;
+        renderSelected();
+        renderList();
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'btn btn-primary';
+        confirmBtn.textContent = UI.ok;
+        confirmBtn.style.marginTop = '10px';
+        confirmBtn.onclick = () => {
+            removeFloatingCardPreview();
+            el.classList.remove('active');
+            resolve({ add_def_ids: selected.slice(0, 3) });
+        };
+        optsEl.appendChild(confirmBtn);
+        el.classList.add('active');
+        setTimeout(() => search.focus(), 30);
+    });
+}
+
 async function showMagicConversionFlow() {
     const data = eventSelectData;
-    const magicOptionsAll = data.magic_options || [];
     const draftPicks = data.draft_picks || [];
-    if (!magicOptionsAll.length || !draftPicks.length) return null;
+    if (!draftPicks.length) return null;
     const counts = {};
     draftPicks.forEach(d => { counts[d] = (counts[d] || 0) + 1; });
     const cardTypes = Object.keys(counts).sort((a, b) => (getCardName(getCardDef(a)) || a).localeCompare(getCardName(getCardDef(b)) || b));
@@ -10766,20 +10970,12 @@ async function showMagicConversionFlow() {
     const conversions = [];
     const remainingCounts = { ...counts };
     for (let i = 0; i < convertCount; i++) {
-        // magic_options is now a flat list of magic card def_ids for the selected event
-        const magicDisplay = magicOptionsAll.map(did => {
-            const cd = getCardDef(did);
-            const detail = cd ? `${cd.cost_e || 0}E/${cd.cost_m || 0}M` : '';
-            return cardDefChoiceOption(did, detail ? { detail } : {});
-        });
-        const magicSel = await gamePrompt(UI.choose_magic_card_n.replace('{0}', i + 1), magicDisplay, { cancellable: false });
-        if (magicSel < 0) return false;
         const availableTypes = cardTypes.filter(d => (remainingCounts[d] || 0) > 0);
         const availableDisplay = availableTypes.map(did => cardDefChoiceOption(did, { detail: `x${remainingCounts[did]}` }));
         const sourceSel = await gamePrompt(UI.choose_source_card_n.replace('{0}', i + 1), availableDisplay, { cancellable: false });
         if (sourceSel < 0) return false;
         remainingCounts[availableTypes[sourceSel]] = (remainingCounts[availableTypes[sourceSel]] || 0) - 1;
-        conversions.push({ magic_def_id: magicOptionsAll[magicSel], source_def_id: availableTypes[sourceSel] });
+        conversions.push({ source_def_id: availableTypes[sourceSel] });
     }
     return conversions.length ? { conversions } : null;
 }
@@ -13755,7 +13951,27 @@ function entryMentionsCurrentUser(entry) {
     });
 }
 
-function appendChatTextWithMentions(parent, text, mentions = []) {
+function lobbyChatEntryKey(entry = {}) {
+    return String(entry.message_id || entry.messageId || entry.id || `${entry.time || ''}:${entry.nickname || ''}:${entry.text || ''}`);
+}
+
+function currentUserMentionTokens(entry = {}) {
+    const tokens = new Set();
+    const keys = currentUserMentionKeys();
+    (Array.isArray(entry.mentions) ? entry.mentions : []).forEach(item => {
+        if (!item) return;
+        const matches =
+            (item.user_id != null && keys.has(`user:${item.user_id}`))
+            || (item.nickname && keys.has(`name:${String(item.nickname).toLowerCase()}`))
+            || (item.player_id && keys.has(`pid:${String(item.player_id).toUpperCase()}`));
+        if (!matches) return;
+        if (item.nickname) tokens.add(String(item.nickname).toLowerCase());
+        if (item.player_id) tokens.add(String(item.player_id).toUpperCase());
+    });
+    return tokens;
+}
+
+function appendChatTextWithMentions(parent, text, mentions = [], ownMentionTokens = new Set(), shouldFlashOwnMention = false) {
     const raw = String(text || '');
     const mentionNames = [];
     (Array.isArray(mentions) ? mentions : []).forEach(item => {
@@ -13774,6 +13990,10 @@ function appendChatTextWithMentions(parent, text, mentions = []) {
         if (offset > last) parent.appendChild(document.createTextNode(raw.slice(last, offset)));
         const span = document.createElement('span');
         span.className = 'chat-mention-token';
+        const tokenName = String(match || '').replace(/^@/, '');
+        if (shouldFlashOwnMention && (ownMentionTokens.has(tokenName.toLowerCase()) || ownMentionTokens.has(tokenName.toUpperCase()))) {
+            span.classList.add('mention-flash');
+        }
         span.textContent = match;
         parent.appendChild(span);
         last = offset + match.length;
@@ -13804,8 +14024,13 @@ function appendLobbyChatEntry(entry = {}) {
     const nick = entry.display_nick || getChatDisplayName(entry);
     nameSpan.textContent = entry.system ? `${nick} ` : `${nick}: `;
     el.appendChild(nameSpan);
-    if (entryMentionsCurrentUser(entry)) el.classList.add('mention-flash');
-    appendChatTextWithMentions(el, entry.text || '', entry.mentions || []);
+    const mentionKey = lobbyChatEntryKey(entry);
+    const ownMentionTokens = currentUserMentionTokens(entry);
+    const shouldFlashOwnMention = ownMentionTokens.size > 0 && !readLobbyMentionIds.has(mentionKey);
+    if (shouldFlashOwnMention) {
+        el.dataset.mentionId = mentionKey;
+    }
+    appendChatTextWithMentions(el, entry.text || '', entry.mentions || [], ownMentionTokens, shouldFlashOwnMention);
     const repeatCount = Number(entry.repeat_count || entry.repeatCount || 1);
     if (repeatCount > 1) {
         const repeatSpan = document.createElement('span');
@@ -14001,6 +14226,10 @@ function insertLobbyMention(candidate) {
 }
 
 function clearLobbyMentionFlash() {
+    document.querySelectorAll('#lobby-chat-log [data-mention-id]').forEach(el => {
+        if (el.dataset.mentionId) readLobbyMentionIds.add(el.dataset.mentionId);
+        el.removeAttribute('data-mention-id');
+    });
     document.querySelectorAll('#lobby-chat-log .mention-flash').forEach(el => el.classList.remove('mention-flash'));
 }
 

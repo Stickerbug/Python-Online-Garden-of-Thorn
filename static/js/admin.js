@@ -29,8 +29,12 @@ let lastStatusErrorSignature = '';
 let lastStatusErrorAt = 0;
 let draftStatsState = { items: [], total: 0 };
 let reportState = { items: [], total: 0, selectedId: null };
-const ADMIN_STATUS_REFRESH_MS = 10000;
-const ADMIN_GAME_CHAT_REFRESH_MS = 6000;
+let statusRequestInFlight = false;
+let gameChatRequestInFlight = false;
+let registeredUsersRequestInFlight = false;
+const ADMIN_STATUS_REFRESH_MS = 30000;
+const ADMIN_GAME_CHAT_REFRESH_MS = 15000;
+const ADMIN_FETCH_TIMEOUT_MS = 5000;
 
 const STATUS_LABELS = {
   lobby: '大厅',
@@ -65,11 +69,28 @@ function labelFrom(map, value) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options,
-  });
+  const controller = new AbortController();
+  const timeoutMs = Number(options.timeoutMs || ADMIN_FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const { timeoutMs: _timeoutMs, headers = {}, ...fetchOptions } = options;
+  let response;
+  try {
+    response = await fetch(path, {
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      ...fetchOptions,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error && error.name === 'AbortError') {
+      const timeoutError = new Error('后台暂时不可用，请稍后手动刷新。');
+      timeoutError.status = 0;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   const text = await response.text();
   let data = {};
   try {
@@ -91,6 +112,16 @@ async function api(path, options = {}) {
     throw error;
   }
   return data;
+}
+
+function adminPageVisible() {
+  const shell = $('admin-shell');
+  return !document.hidden && shell && !shell.classList.contains('hidden');
+}
+
+function setBackendUnavailable(target, message = '后台暂时不可用，请稍后手动刷新。') {
+  if (!target) return;
+  target.innerHTML = `<div class="log-item error">${escapeHtml(message)}</div>`;
 }
 
 function formatBytes(value) {
@@ -316,13 +347,16 @@ function renderGameChat(data = {}) {
 }
 
 async function loadGameChat() {
-  if (!$('admin-game-chat-log')) return;
+  if (!$('admin-game-chat-log') || activeAdminTab !== 'game-chat' || !adminPageVisible() || gameChatRequestInFlight) return;
+  gameChatRequestInFlight = true;
   try {
-    const data = await api('/api/admin/game-chat?limit=300');
+    const data = await api('/api/admin/game-chat?limit=50');
     renderGameChat(data);
   } catch (err) {
     const log = $('admin-game-chat-log');
-    if (log) log.innerHTML = `<div class="empty-detail">聊天读取失败：${escapeHtml(err.message || '')}</div>`;
+    if (log) setBackendUnavailable(log, `聊天读取失败：${escapeHtml(err.message || '后台暂时不可用')}`);
+  } finally {
+    gameChatRequestInFlight = false;
   }
 }
 
@@ -337,27 +371,35 @@ async function sendGameChatMessage(text) {
   await loadGameChat();
 }
 
+function stopGameChatPolling() {
+  if (gameChatTimer) {
+    clearInterval(gameChatTimer);
+    gameChatTimer = null;
+  }
+}
+
+function startGameChatPolling() {
+  if (gameChatTimer || activeAdminTab !== 'game-chat' || !adminPageVisible()) return;
+  gameChatTimer = setInterval(loadGameChat, ADMIN_GAME_CHAT_REFRESH_MS);
+}
+
 function showShell(authenticated) {
   $('admin-login').classList.toggle('hidden', authenticated);
   $('admin-shell').classList.toggle('hidden', !authenticated);
   if (authenticated) {
     activeAdminTab = document.querySelector('.admin-tab.active')?.dataset.tab || 'gui';
-    loadStatus();
-    if (activeAdminTab === 'gui' && !registeredUsersState) loadRegisteredUsers();
-    if (activeAdminTab === 'draft-stats') loadDraftStats();
-    if (activeAdminTab === 'storage') loadStorageSummary();
-    if (activeAdminTab === 'replays') resetAndLoadReplays();
+    loadStatus({ manual: true });
+    const usersPanel = $('registered-users-panel');
+    if (usersPanel && !registeredUsersState) {
+      usersPanel.innerHTML = '<div class="log-item">账号列表不会自动刷新。需要查看时请点击“刷新账号”。</div>';
+    }
     if (activeAdminTab === 'game-chat') loadGameChat();
     if (!refreshTimer) {
       refreshTimer = setInterval(() => {
         if (['gui', 'events', 'moderation', 'terminal'].includes(activeAdminTab)) loadStatus();
       }, ADMIN_STATUS_REFRESH_MS);
     }
-    if (!gameChatTimer) {
-      gameChatTimer = setInterval(() => {
-        if (activeAdminTab === 'game-chat') loadGameChat();
-      }, ADMIN_GAME_CHAT_REFRESH_MS);
-    }
+    if (activeAdminTab === 'game-chat') startGameChatPolling();
   } else {
     if (refreshTimer) {
       clearInterval(refreshTimer);
@@ -367,10 +409,7 @@ function showShell(authenticated) {
       clearInterval(registeredRefreshTimer);
       registeredRefreshTimer = null;
     }
-    if (gameChatTimer) {
-      clearInterval(gameChatTimer);
-      gameChatTimer = null;
-    }
+    stopGameChatPolling();
   }
 }
 
@@ -402,6 +441,8 @@ async function logout() {
 }
 
 async function loadStatus() {
+  if (!adminPageVisible() || statusRequestInFlight) return;
+  statusRequestInFlight = true;
   try {
     adminState = await api('/api/admin/status');
     lastStatusErrorSignature = '';
@@ -419,6 +460,8 @@ async function loadStatus() {
       lastStatusErrorSignature = message;
       lastStatusErrorAt = now;
     }
+  } finally {
+    statusRequestInFlight = false;
   }
 }
 
@@ -577,7 +620,7 @@ function draftStatsQuery() {
   params.set('mode', $('draft-stats-mode')?.value || '');
   params.set('sort', $('draft-stats-sort')?.value || 'pick_rate');
   params.set('order', $('draft-stats-order')?.value || 'desc');
-  params.set('limit', '500');
+  params.set('limit', '100');
   return params;
 }
 
@@ -639,13 +682,14 @@ function registeredUsersQuery() {
   params.set('query', $('registered-users-search')?.value || '');
   params.set('sort', $('registered-users-sort')?.value || 'last_login_at');
   params.set('order', $('registered-users-order')?.value || 'desc');
-  params.set('limit', '50');
+  params.set('limit', '30');
   return params;
 }
 
 async function loadRegisteredUsers() {
   const panel = $('registered-users-panel');
-  if (!panel) return;
+  if (!panel || !adminPageVisible() || registeredUsersRequestInFlight) return;
+  registeredUsersRequestInFlight = true;
   try {
     if (!registeredUsersState) {
       panel.innerHTML = '<div class="log-item">正在读取账号列表。</div>';
@@ -653,13 +697,17 @@ async function loadRegisteredUsers() {
     registeredUsersState = await api(`/api/admin/users?${registeredUsersQuery().toString()}`);
     renderRegisteredUsers(registeredUsersState);
   } catch (error) {
-    panel.innerHTML = `<div class="log-item error">账号列表加载失败：${escapeHtml(error.message)}</div>`;
+    setBackendUnavailable(panel, `账号列表加载失败：${escapeHtml(error.message)}`);
+  } finally {
+    registeredUsersRequestInFlight = false;
   }
 }
 
 function queueRegisteredUsersLoad() {
-  clearTimeout(registeredUsersSearchTimer);
-  registeredUsersSearchTimer = setTimeout(loadRegisteredUsers, 180);
+  const panel = $('registered-users-panel');
+  if (panel) {
+    panel.innerHTML = '<div class="log-item">筛选条件已更改。点击“刷新账号”应用。</div>';
+  }
 }
 
 function renderRegisteredUsers(data) {
@@ -1645,11 +1693,11 @@ function bindEvents() {
     login($('admin-password').value);
   });
   $('admin-logout').addEventListener('click', logout);
-  $('admin-refresh').addEventListener('click', loadStatus);
+  $('admin-refresh').addEventListener('click', () => loadStatus({ manual: true }));
   $('registered-users-refresh')?.addEventListener('click', loadRegisteredUsers);
   $('registered-users-search')?.addEventListener('input', queueRegisteredUsersLoad);
-  $('registered-users-sort')?.addEventListener('change', loadRegisteredUsers);
-  $('registered-users-order')?.addEventListener('change', loadRegisteredUsers);
+  $('registered-users-sort')?.addEventListener('change', queueRegisteredUsersLoad);
+  $('registered-users-order')?.addEventListener('change', queueRegisteredUsersLoad);
   $('draft-stats-refresh')?.addEventListener('click', loadDraftStats);
   $('draft-stats-mode')?.addEventListener('change', loadDraftStats);
   $('draft-stats-sort')?.addEventListener('change', loadDraftStats);
@@ -1668,12 +1716,12 @@ function bindEvents() {
       tab.classList.add('active');
       const target = tab.dataset.tab;
       activeAdminTab = target || 'gui';
+      if (activeAdminTab !== 'game-chat') stopGameChatPolling();
       ['gui', 'events', 'moderation', 'draft-stats', 'storage', 'replays', 'game-chat', 'terminal'].forEach((name) => {
         const panel = $(`admin-${name}`);
         if (panel) panel.classList.toggle('hidden', target !== name);
       });
-      if (['gui', 'events', 'moderation', 'terminal'].includes(target)) loadStatus();
-      if (target === 'gui' && !registeredUsersState) loadRegisteredUsers();
+      if (['gui', 'events', 'moderation', 'terminal'].includes(target)) loadStatus({ manual: true });
       if (target === 'events') {
         renderEvents(adminState?.events || []);
         renderHistory(adminState?.history || []);
@@ -1687,6 +1735,7 @@ function bindEvents() {
       if (target === 'replays') resetAndLoadReplays();
       if (target === 'game-chat') {
         loadGameChat();
+        startGameChatPolling();
         $('admin-game-chat-input')?.focus();
       }
       if (target === 'terminal') $('terminal-input').focus();
@@ -1850,6 +1899,19 @@ function bindEvents() {
       if (input.selectionStart !== completionState.appliedCursor || input.selectionEnd !== completionState.appliedCursor) {
         hideSuggestions();
       }
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopGameChatPolling();
+      return;
+    }
+    if (!adminPageVisible()) return;
+    loadStatus({ manual: true });
+    if (activeAdminTab === 'game-chat') {
+      loadGameChat();
+      startGameChatPolling();
     }
   });
 }

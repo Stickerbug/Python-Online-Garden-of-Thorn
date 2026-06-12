@@ -11,6 +11,7 @@ from cards import (
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     DECK_SIZE, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, build_draft_pool, generate_draft_options,
     create_deck_from_draft, ERROR_CARD_ID, normalize_card_flag, normalize_card_flags,
+    SETUP_ONLY_CARD_IDS,
 )
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 from mod_runtime_v2 import run_v2_event, run_v2_steps, validate_v2_ui_response
@@ -148,6 +149,7 @@ class PlayerState:
         self.equipment: List[EquipmentInstance] = []
         self.extra_hand_limit_bonus: int = 0
         self.cards_played_this_turn: Dict[str, int] = {}
+        self.cards_played_this_turn_instance_ids: List[int] = []
         self.turn_damage_taken: int = 0
         self.turn_damage_dealt: int = 0
         self.last_turn_damage_taken: int = 0
@@ -239,6 +241,7 @@ class PlayerState:
             d['discard'] = [c.to_dict() for c in self.discard]
             d['exile'] = [c.to_dict() for c in self.exile]
             d['cards_played_this_turn'] = dict(self.cards_played_this_turn)
+            d['cards_played_this_turn_instance_ids'] = list(self.cards_played_this_turn_instance_ids)
             d['custom_vars'] = dict(self.custom_vars)
         return d
 
@@ -302,6 +305,8 @@ class PlayerState:
             ps.equipment = [EquipmentInstance.from_dict(e) for e in d['equipment']]
         if 'cards_played_this_turn' in d:
             ps.cards_played_this_turn = d['cards_played_this_turn']
+        if 'cards_played_this_turn_instance_ids' in d:
+            ps.cards_played_this_turn_instance_ids = list(d.get('cards_played_this_turn_instance_ids') or [])
         ps.turn_damage_taken = int(d.get('turn_damage_taken', 0))
         ps.turn_damage_dealt = int(d.get('turn_damage_dealt', 0))
         ps.last_turn_damage_taken = int(d.get('last_turn_damage_taken', 0))
@@ -452,13 +457,31 @@ class PlayerState:
 class GameEngine:
     OPENING_EVENTS = {
         1: {'id': 1, 'name': '生命强化', 'desc': '最大生命值+20', 'position': 1},
-        2: {'id': 2, 'name': '魔力转化', 'desc': '选择1-3张牌，分别选择魔法牌转化，开局回复5M', 'position': 2},
-        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多五张牌转化为Light（萌芽、共生）', 'position': 2},
+        2: {'id': 2, 'name': '魔力转化', 'desc': '将最多3张牌转化为魔法球（萌芽、共生）', 'position': 2},
+        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多五张牌转化为Light：轻（萌芽、共生）', 'position': 2},
         8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为世界树之叶', 'position': 2},
         4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对所有敌方玩家施加2层灼烧', 'position': 3},
-        5: {'id': 5, 'name': '命运抽签', 'desc': '前二回合开始时抽牌至手牌已满', 'position': 3},
+        5: {'id': 5, 'name': '命运抽签', 'desc': '从总抽牌库选择最多3张牌洗入牌库', 'position': 3},
         6: {'id': 6, 'name': '能量涌动', 'desc': '前三回合开始时额外回复2E', 'position': 3},
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手多回复3E并抽4张牌', 'position': 3},
+        9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，最大生命值+10', 'position': 1},
+        10: {'id': 10, 'name': '魔力加速', 'desc': '打出手牌后回复1M，最大生命值-10', 'position': 1},
+    }
+    OPENING_EVENT_ORDER = {
+        1: 10, 2: 20, 3: 30, 8: 40,
+        9: 45, 10: 48, 4: 50, 5: 60, 6: 70, 7: 80,
+    }
+    OPENING_EVENT_COLORS = {
+        1: '#3FA66B',
+        2: '#5B5FC7',
+        3: '#D7B84F',
+        4: '#D96B3A',
+        5: '#8B6FD8',
+        6: '#3A8F68',
+        7: '#C45151',
+        8: '#5A8FCF',
+        9: '#B86AA2',
+        10: '#4E8FCF',
     }
     MAGIC_CARD_POOL = ['MagicBone', 'MagicStinger', 'MagicSewage', 'MagicNazar', 'MagicBubble']
 
@@ -1402,6 +1425,7 @@ class GameEngine:
         self.opening_event_magic_options: List[List[List[str]]] = [[[], [], []], [[], [], []]]
         # Per-player ready state: True when draft done AND sub-choice done (if any)
         self.player_ready: List[bool] = [False, False]
+        self.player_draft_started: List[bool] = [False, False]
         self.player_names: List[str] = ['玩家1', '玩家2']
         self.debug_selector_log: bool = False
         self._last_damage_value: List[int] = [0, 0]
@@ -1869,6 +1893,7 @@ class GameEngine:
         self.phase = 'event_select'
         self.draft_rerolls = [DRAFT_REROLLS, DRAFT_REROLLS]
         self.player_ready = [False, False]
+        self.player_draft_started = [False, False]
         self._generate_opening_events()
 
     def start_draft_for_player(self, player_id: int):
@@ -1884,6 +1909,7 @@ class GameEngine:
         # Ensure draft_picks is initialized
         if not self.draft_picks[player_id]:
             self.draft_picks[player_id] = []
+        self.player_draft_started[player_id] = True
         # Generate draft options for this player
         self._generate_draft_options_for_player(player_id)
         # Update global phase
@@ -1970,6 +1996,28 @@ class GameEngine:
                 events.append(option)
         return events
 
+    def _all_opening_events(self) -> List[dict]:
+        events = [dict(e) for e in self.OPENING_EVENTS.values()]
+        for resource in (getattr(self, 'v2_opening_event_defs', {}) or {}).values():
+            option = self._v2_opening_event_option(resource)
+            if option:
+                events.append(option)
+        return events
+
+    def _opening_event_sort_key(self, event: dict):
+        event_id = event.get('id') if isinstance(event, dict) else ''
+        try:
+            order_key = self.OPENING_EVENT_ORDER.get(int(event_id), 500)
+        except Exception:
+            order_key = 500
+        return (order_key, str(event_id))
+
+    def _event_color(self, event_id) -> str:
+        try:
+            return self.OPENING_EVENT_COLORS.get(int(event_id), '#6B7280')
+        except Exception:
+            return '#6B7280'
+
     def _choose_opening_event(self, events: List[dict]):
         events = [event for event in events if event]
         if not events:
@@ -1985,22 +2033,22 @@ class GameEngine:
         return random.choice(events)
 
     def _generate_opening_events(self):
-        pos1 = self._opening_events_for_position(1)
-        pos2 = self._opening_events_for_position(2)
-        pos3 = self._opening_events_for_position(3)
-        magic_pool = [def_id for def_id in self.MAGIC_CARD_POOL if self._card_allowed(def_id)]
+        pool = self._all_opening_events()
         for i in range(2):
-            slot1 = self._choose_opening_event(pos1)
-            slot2 = self._choose_opening_event(pos2)
-            slot3 = self._choose_opening_event(pos3)
-            self.opening_event_options[i] = [slot1, slot2, slot3]
-            for j in range(3):
-                ev = self.opening_event_options[i][j]
-                if ev and str(ev.get('id')) in ('2', '5', '6', '7'):
-                    self.opening_event_magic_options[i][j] = random.sample(
-                        magic_pool, min(3, len(magic_pool)))
-                else:
-                    self.opening_event_magic_options[i][j] = []
+            options = []
+            available = list(pool)
+            for _ in range(min(3, len(available))):
+                picked = self._choose_opening_event(available)
+                if not picked:
+                    break
+                options.append(picked)
+                picked_id = str(picked.get('id'))
+                available = [ev for ev in available if str(ev.get('id')) != picked_id]
+            options.sort(key=self._opening_event_sort_key)
+            for ev in options:
+                ev['color'] = self._event_color(ev.get('id'))
+            self.opening_event_options[i] = options
+            self.opening_event_magic_options[i] = [[] for _ in self.opening_event_options[i]]
 
     def _card_allowed(self, def_id: str) -> bool:
         return self.allowed_card_ids is None or def_id in self.allowed_card_ids
@@ -2031,35 +2079,30 @@ class GameEngine:
         # Generate new options, retrying until at least 1 is different
         max_attempts = 20
         for _ in range(max_attempts):
-            pos1 = self._opening_events_for_position(1)
-            pos2 = self._opening_events_for_position(2)
-            pos3 = self._opening_events_for_position(3)
-            slot1 = self._choose_opening_event(pos1)
-            slot2 = self._choose_opening_event(pos2)
-            slot3 = self._choose_opening_event(pos3)
-            new_options = [slot1, slot2, slot3]
+            available = self._all_opening_events()
+            new_options = []
+            for _ in range(min(3, len(available))):
+                picked = self._choose_opening_event(available)
+                if not picked:
+                    break
+                new_options.append(picked)
+                picked_id = str(picked.get('id'))
+                available = [ev for ev in available if str(ev.get('id')) != picked_id]
+            new_options.sort(key=self._opening_event_sort_key)
+            for ev in new_options:
+                ev['color'] = self._event_color(ev.get('id'))
             new_ids = set()
             for event in new_options:
                 if event:
                     new_ids.add(str(event.get('id')))
             if new_ids != old_ids:
                 self.opening_event_options[player_id] = new_options
-                for j, event in enumerate(new_options):
-                    if event and str(event.get('id')) in ('2', '5', '6', '7'):
-                        pool = list(self.MAGIC_CARD_POOL)
-                        self.opening_event_magic_options[player_id][j] = random.sample(pool, min(3, len(pool)))
-                    else:
-                        self.opening_event_magic_options[player_id][j] = []
+                self.opening_event_magic_options[player_id] = [[] for _ in new_options]
                 self.draft_rerolls[player_id] -= 1
                 return True
         # Fallback: just regenerate even if all same (shouldn't happen with enough events)
         self.opening_event_options[player_id] = new_options
-        for j, event in enumerate(new_options):
-            if event and event.get('id') in (2, 5, 6, 7):
-                pool = list(self.MAGIC_CARD_POOL)
-                self.opening_event_magic_options[player_id][j] = random.sample(pool, min(3, len(pool)))
-            else:
-                self.opening_event_magic_options[player_id][j] = []
+        self.opening_event_magic_options[player_id] = [[] for _ in new_options]
         self.draft_rerolls[player_id] -= 1
         return True
 
@@ -2072,6 +2115,8 @@ class GameEngine:
             return 'ready'
         if self.opening_event_picks[player_id] is None:
             return 'event_select'
+        if not self.player_draft_started[player_id]:
+            return 'event_reveal'
         if len(self.draft_picks[player_id]) < DECK_SIZE:
             return 'drafting'
         if self.needs_sub_choice(player_id):
@@ -2086,8 +2131,8 @@ class GameEngine:
         if event_id is None:
             return False
         sub = self.opening_event_sub_choices[player_id]
-        # Events 2 (magic conversion), 3 (light conversion), 8 (yggdrasil) need sub-choices
-        if str(event_id) in ('2', '3', '8') and not sub:
+        # Events 2 (magic conversion), 3 (light conversion), 5 (fated draw), 8 (yggdrasil) need sub-choices
+        if str(event_id) in ('2', '3', '5', '8') and not sub:
             return True
         # Check v2 events that need sub-choices
         resource = (getattr(self, 'v2_opening_event_defs', {}) or {}).get(str(event_id))
@@ -2201,6 +2246,69 @@ class GameEngine:
                     return True
         return False
 
+    def _card_allowed_for_fated_draw(self, def_id: str) -> bool:
+        card_def = CARD_DEFS.get(def_id)
+        if not card_def:
+            return False
+        if def_id == ERROR_CARD_ID or def_id in SETUP_ONLY_CARD_IDS:
+            return False
+        if self.allowed_card_ids is not None and def_id not in self.allowed_card_ids:
+            return False
+        return int(getattr(card_def, 'count', 0) or 0) > 0
+
+    def fated_draw_pool_defs(self) -> List[str]:
+        return sorted(
+            [def_id for def_id in CARD_DEFS if self._card_allowed_for_fated_draw(def_id)],
+            key=lambda did: (
+                {'thorn': 0, 'bloom': 1, 'guard': 2, 'root': 3}.get(CARD_DEFS[did].card_type, 9),
+                str(CARD_DEFS[did].name_en or did).lower(),
+            )
+        )
+
+    def _card_total_hits(self, card: CardInstance, base_hits: Optional[int] = None) -> int:
+        base = int(base_hits if base_hits is not None else getattr(card.card_def, 'hits', 1) or 1)
+        return max(1, base + max(0, int(getattr(card, 'extra_hits', 0) or 0)))
+
+    def _card_base_petal_count(self, card: CardInstance) -> int:
+        vanilla_fallback = {'Sand': 4, 'Wing': 2, 'Light': 2}
+        best = max(
+            1,
+            int(getattr(card.card_def, 'hits', 1) or 1),
+            int(vanilla_fallback.get(getattr(card, 'def_id', ''), 1)),
+        )
+        try:
+            for effect in self._play_effects_for_card(card):
+                if not isinstance(effect, dict):
+                    continue
+                effect_type = str(effect.get('type') or '')
+                if self._EFFECT_ALIASES.get(effect_type, effect_type) != 'deal_damage':
+                    continue
+                params = effect.get('params') if isinstance(effect.get('params'), dict) else {}
+                hits = params.get('hits', 1)
+                if isinstance(hits, (int, float)) or (isinstance(hits, str) and hits.isdigit()):
+                    best = max(best, int(hits))
+        except Exception:
+            pass
+        return best
+
+    def _apply_multi_petal_to_player_deck(self, player_id: int):
+        ps = self.players[player_id]
+        changed = 0
+        for card in ps.deck:
+            if self._card_base_petal_count(card) >= 2:
+                card.extra_hits = max(0, int(getattr(card, 'extra_hits', 0) or 0)) + 1
+                changed += 1
+        self.log_msg(f"{self.pn(player_id)}【多重瓣】：最大生命值+10，{changed}张多子瓣牌子瓣+1")
+
+    def _apply_magic_acceleration_after_play(self, player_id: int):
+        ps = self.players[player_id]
+        if int(getattr(ps, 'custom_vars', {}).get('setup_magic_acceleration', 0) or 0) <= 0:
+            return
+        before = ps.magic
+        ps.gain_magic(1)
+        if ps.magic != before:
+            self.log_msg(f"{self.pn(player_id)}【魔力加速】：+1M")
+
     def _is_builtin_opening_event(self, event_id) -> bool:
         return isinstance(event_id, int) or (isinstance(event_id, str) and event_id.isdigit())
 
@@ -2247,10 +2355,11 @@ class GameEngine:
             return [c.to_dict() for c in cards]
         if event_id == 2 and sub and 'conversions' in sub:
             for conv in sub.get('conversions') or []:
-                magic_def = conv.get('magic_def_id')
                 source_def = conv.get('source_def_id')
-                if magic_def and source_def and self._card_allowed(magic_def):
-                    replace_first(source_def, CardInstance(def_id=magic_def))
+                if source_def and 'ManaOrb' in CARD_DEFS:
+                    mana_card = CardInstance(def_id='ManaOrb')
+                    mana_card.instance_flags = {'sprout', 'symbiosis'}
+                    replace_first(source_def, mana_card)
         elif event_id == 3 and self._card_allowed('Light') and sub and 'convert_def_ids' in sub:
             converted = 0
             for target_def in list(sub.get('convert_def_ids') or []):
@@ -2269,6 +2378,14 @@ class GameEngine:
                     replace_first_non_yggdrasil()
             else:
                 replace_first_non_yggdrasil()
+        elif event_id == 5 and isinstance(sub, dict):
+            for def_id in list(sub.get('add_def_ids') or sub.get('def_ids') or [])[:3]:
+                if self._card_allowed_for_fated_draw(str(def_id)):
+                    cards.append(CardInstance(def_id=str(def_id)))
+        elif event_id == 9:
+            for card in cards:
+                if self._card_base_petal_count(card) >= 2:
+                    card.extra_hits = max(0, int(getattr(card, 'extra_hits', 0) or 0)) + 1
         return [c.to_dict() for c in cards]
 
     def _apply_opening_event(self, player_id: int):
@@ -2283,20 +2400,18 @@ class GameEngine:
             ps.health += 20
             self.log_msg(f"{self.pn(player_id)}【生命强化】：最大生命值+20")
         elif event_id == 2:
-            ps.gain_magic(5)
-            self.log_msg(f"{self.pn(player_id)}【魔力转化】：+5M")
             if sub and 'conversions' in sub:
                 conversions = sub['conversions']
                 converted = 0
                 for conv in conversions:
-                    magic_def = conv.get('magic_def_id')
                     source_def = conv.get('source_def_id')
-                    if magic_def and source_def and self._card_allowed(magic_def):
-                        if self._replace_first_card_in_setup_zones(player_id, source_def, CardInstance(def_id=magic_def)):
+                    if source_def and 'ManaOrb' in CARD_DEFS:
+                        mana_card = CardInstance(def_id='ManaOrb')
+                        mana_card.instance_flags = {'sprout', 'symbiosis'}
+                        if self._replace_first_card_in_setup_zones(player_id, source_def, mana_card):
                             converted += 1
-                            magic_name = CARD_DEFS.get(magic_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
                             source_name = CARD_DEFS.get(source_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
-                            self.log_msg(f"{self.pn(player_id)}【魔力转化】：{source_name}变为{magic_name}")
+                            self.log_msg(f"{self.pn(player_id)}【魔力转化】：{source_name}变为魔法球(萌芽+共生)")
         elif event_id == 3:
             converted = 0
             if self._card_allowed('Light') and sub and 'convert_def_ids' in sub:
@@ -2317,7 +2432,17 @@ class GameEngine:
             target_label = "敌方全体" if len(target_ids) > 1 else "敌方"
             self.log_msg(f"{self.pn(player_id)}【烈焰预兆】：{target_label}+2灼烧")
         elif event_id == 5:
-            self.log_msg(f"{self.pn(player_id)}【命运抽签】：前二回合抽牌至手牌满")
+            picked = []
+            if isinstance(sub, dict):
+                picked = list(sub.get('add_def_ids') or sub.get('def_ids') or [])
+            added = 0
+            for def_id in picked[:3]:
+                if self._card_allowed_for_fated_draw(str(def_id)):
+                    ps.deck.append(CardInstance(def_id=str(def_id)))
+                    added += 1
+            if added:
+                random.shuffle(ps.deck)
+            self.log_msg(f"{self.pn(player_id)}【命运抽签】：{added}张牌洗入牌库")
         elif event_id == 6:
             self.log_msg(f"{self.pn(player_id)}【能量涌动】：前三回合额外回复2E")
         elif event_id == 7:
@@ -2338,6 +2463,17 @@ class GameEngine:
             else:
                 if self._replace_first_non_yggdrasil_setup_card(player_id):
                     self.log_msg(f"{self.pn(player_id)}【绝境求生】：最大生命值-20，一张牌变为Yggdrasil")
+        elif event_id == 9:
+            ps.max_health += 10
+            ps.base_max_health += 10
+            ps.health += 10
+            self._apply_multi_petal_to_player_deck(player_id)
+        elif event_id == 10:
+            ps.max_health -= 10
+            ps.base_max_health -= 10
+            ps.health = min(ps.health, ps.max_health)
+            ps.custom_vars['setup_magic_acceleration'] = 1
+            self.log_msg(f"{self.pn(player_id)}【魔力加速】：最大生命值-10，打出手牌后回复1M")
 
     def _apply_v2_opening_event(self, player_id: int, event_id) -> bool:
         if event_id is None:
@@ -2370,6 +2506,7 @@ class GameEngine:
         for i in range(2):
             ps = self.players[i]
             ps.cards_played_this_turn = {}
+            ps.cards_played_this_turn_instance_ids = []
             ps.magic_battery_m_this_turn = 0
             ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0
         self.log_msg(f"=== 第{self.round_num}回合 ===")
@@ -2480,7 +2617,10 @@ class GameEngine:
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
-        self._apply_blind_turn_start(player_id)
+        self._clear_turn_start_action_statuses(player_id)
+        early_owner_turn_start_equipment = self._run_owner_turn_start_action_status_equipment(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         if self.round_num > 1:
             sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
             draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - sluggish_reduction)
@@ -2519,11 +2659,6 @@ class GameEngine:
             ps.elixir -= deduct
             self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
             ps.overload = 0
-        if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
-            draw_needed = ps.hand_space()
-            if draw_needed > 0:
-                ps.draw_cards(draw_needed)
-                self.log_msg(f"{self.pn(player_id)}【命运抽签】：抽{draw_needed}张至手牌满")
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
             ps.gain_elixir(2)
             self.log_msg(f"{self.pn(player_id)}【能量涌动】：额外+2E")
@@ -2986,6 +3121,8 @@ class GameEngine:
         card_removed = ps.remove_hand_card(card_instance_id)
         if card_removed is None:
             return {'success': False, 'error': '移出手牌失败'}
+        ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', card_instance_id) or card_instance_id))
+        self._apply_magic_acceleration_after_play(player_id)
         needs_response = self._check_response_needed(player_id, card)
         if not needs_response:
             needs_response = self._check_precision_response_needed(player_id, card)
@@ -3582,7 +3719,7 @@ class GameEngine:
     def _atomic_deal_damage(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         amount = params.get('amount', 6)
-        hits = params.get('hits', 1)
+        hits = self._card_total_hits(card, int(params.get('hits', 1) or 1))
         is_precision = params.get('is_precision', False)
         amount = self._modified_attack_damage(amount, card)
         self._incoming_damage_hint[target_id] = int(amount)
@@ -4293,11 +4430,14 @@ class GameEngine:
             self.log_msg(f"{self.pn(player_id)}给{self.pn(target_id)}的{zone}区{count}张{type_desc}添加了{tag}标签")
 
     def _atomic_cogwheel_mark(self, player_id, card, params, log, choice, context):
-        """Mark current turn's played cards for return next turn (Cogwheel)."""
+        """Mark current turn's played cards for return at turn end (Cogwheel)."""
         target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
         if not hasattr(self, '_cogwheel_active'):
             self._cogwheel_active = {}
+        if not hasattr(self, '_cogwheel_exclude_instance_ids'):
+            self._cogwheel_exclude_instance_ids = {}
         self._cogwheel_active[target_id] = True
+        self._cogwheel_exclude_instance_ids[target_id] = int(getattr(card, 'instance_id', -1) or -1)
         if log:
             self.log_msg(log)
         else:
@@ -5012,6 +5152,8 @@ class GameEngine:
                 ps.blind += amount
             elif status in ('heal_block', '禁疗'):
                 ps.heal_block += amount
+            elif status in ('attack_blocked', '禁攻'):
+                ps.attack_blocked += amount
             elif status in ('weakness', '虚弱'):
                 ps.weakness += amount
             elif status in ('bleed', '流血'):
@@ -5132,19 +5274,19 @@ class GameEngine:
 
     def _effect_sand(self, player_id: int, card: CardInstance, choice=None):
         dmg = self._modified_attack_damage(3, card)
-        hits = 4
+        hits = self._card_total_hits(card, 4)
         self.log_msg(f"{self.pn(player_id)}使用沙子！造成{dmg}x{hits}伤害")
         self.deal_attack_damage(1 - player_id, dmg, hits)
 
     def _effect_wing(self, player_id: int, card: CardInstance, choice=None):
         dmg = self._modified_attack_damage(8, card)
-        hits = 2
+        hits = self._card_total_hits(card, 2)
         self.log_msg(f"{self.pn(player_id)}使用翅膀！造成{dmg}x{hits}伤害")
         self.deal_attack_damage(1 - player_id, dmg, hits)
 
     def _effect_light(self, player_id: int, card: CardInstance, choice=None):
         dmg = self._modified_attack_damage(2, card)
-        hits = 2
+        hits = self._card_total_hits(card, 2)
         self.log_msg(f"{self.pn(player_id)}使用轻！造成{dmg}x{hits}伤害")
         self.deal_attack_damage(1 - player_id, dmg, hits)
 
@@ -5528,11 +5670,7 @@ class GameEngine:
         # Track M gained this turn for next turn's check
         ps.m_gained_last_turn = ps.m_gained_this_turn
         ps.m_gained_this_turn = False
-        # Cogwheel: save cards played this turn for next turn return (if marked by v2 event)
-        if hasattr(self, '_cogwheel_active') and self._cogwheel_active.get(player_id):
-            played_ids = list(ps.cards_played_this_turn.keys()) if hasattr(ps, 'cards_played_this_turn') else []
-            ps.cogwheel_pending_return = played_ids
-            self._cogwheel_active[player_id] = False
+        self._return_cogwheel_cards_now(player_id)
         void_cards = [c for c in ps.hand if 'void' in c.flags]
         for c in void_cards:
             ps.hand.remove(c)
@@ -6582,7 +6720,7 @@ class GameEngine:
             # apply attack damage only if the card has no v2 on_play event
             # (v2 events handle their own damage logic)
             card_damage = getattr(card.card_def, 'damage', 0)
-            card_hits_val = max(1, getattr(card.card_def, 'hits', 1))
+            card_hits_val = self._card_total_hits(card)
             has_v2_play = self._card_has_v2_event(card.card_def, 'on_play')
             if card.card_type == 'thorn' and card_damage > 0 and not has_v2_play:
                 method_name = f'_effect_{card.def_id.lower()}'
@@ -7263,6 +7401,113 @@ class GameEngine:
             self.log_msg(f"{self.pn(player_id)}因失明打乱手牌")
         ps.blind = 0
 
+    def _clear_turn_start_action_statuses(self, player_id: int):
+        if not (0 <= player_id < len(self.players)) or self._is_status_immune(player_id):
+            return
+        ps = self.players[player_id]
+        cleared = []
+        for attr, label in (('sluggish', '迟缓'), ('foresight', '预知'), ('blind', '失明')):
+            value = int(getattr(ps, attr, 0) or 0)
+            if value <= 0:
+                continue
+            if attr == 'blind' and ps.hand:
+                random.shuffle(ps.hand)
+                self.log_msg(f"{self.pn(player_id)}因失明打乱手牌")
+            setattr(ps, attr, 0)
+            cleared.append(label)
+        if cleared:
+            self.log_msg(f"{self.pn(player_id)}的{ '、'.join(cleared) }效果清除")
+
+    def _return_cogwheel_cards_now(self, player_id: int):
+        if not (0 <= player_id < len(self.players)):
+            return
+        if not getattr(self, '_cogwheel_active', {}).get(player_id):
+            return
+        ps = self.players[player_id]
+        exclude_id = int(getattr(self, '_cogwheel_exclude_instance_ids', {}).get(player_id, -1) or -1)
+        played_ids = list(getattr(ps, 'cards_played_this_turn_instance_ids', []) or [])
+        returned = []
+        for instance_id in played_ids:
+            try:
+                iid = int(instance_id)
+            except Exception:
+                continue
+            if iid == exclude_id:
+                continue
+            found = None
+            source_zone = None
+            for zone_name in ('discard', 'exile'):
+                zone = getattr(ps, zone_name, [])
+                for c in list(zone):
+                    if int(getattr(c, 'instance_id', -1) or -1) == iid:
+                        found = c
+                        source_zone = zone
+                        break
+                if found is not None:
+                    break
+            if found is None:
+                continue
+            if not ps.can_add_to_hand():
+                continue
+            source_zone.remove(found)
+            found.mimic_discount = 0
+            found.instance_flags.add('symbiosis')
+            ps.add_to_hand(found)
+            returned.append(found.name_cn)
+        self._cogwheel_active[player_id] = False
+        if hasattr(self, '_cogwheel_exclude_instance_ids'):
+            self._cogwheel_exclude_instance_ids.pop(player_id, None)
+        if returned:
+            self.log_msg(f"{self.pn(player_id)}的齿轮效果：{len(returned)}张牌回到手中并获得共生")
+
+    def _effect_tree_contains_action_status(self, value, depth: int = 0) -> bool:
+        if depth > 30:
+            return False
+        action_statuses = {
+            'sluggish', '迟缓', 'foresight', '预知', 'blind', '失明',
+            'stunned', 'skip_turn', '眩晕', 'attack_blocked', '禁攻',
+            'attack_only', '仅攻击',
+        }
+        if isinstance(value, dict):
+            op = str(value.get('op') or value.get('type') or '')
+            status = value.get('status') or value.get('name') or value.get('id')
+            if op in ('add_status', 'status_add_named', 'set_status', 'set_status_named') and str(status) in action_statuses:
+                return True
+            return any(self._effect_tree_contains_action_status(v, depth + 1) for v in value.values())
+        if isinstance(value, list):
+            return any(self._effect_tree_contains_action_status(v, depth + 1) for v in value)
+        return False
+
+    def _owner_turn_start_equipment_action_statuses(self, eq) -> bool:
+        card_def = getattr(eq, 'card_def', None)
+        if card_def is None:
+            return False
+        events = getattr(card_def, 'v2_events', None)
+        if isinstance(events, dict) and self._effect_tree_contains_action_status(events.get('on_owner_turn_start')):
+            return True
+        for effect in getattr(card_def, 'effects', []) or []:
+            if isinstance(effect, dict) and effect.get('type') == 'on_owner_turn_start':
+                if self._effect_tree_contains_action_status(effect):
+                    return True
+        if self._has_script_entry(card_def, 'owner_turn_start'):
+            return self._effect_tree_contains_action_status(self._get_script_effects(card_def, 'owner_turn_start'))
+        return False
+
+    def _run_owner_turn_start_action_status_equipment(self, player_id: int) -> set:
+        handled = set()
+        for owner_id, eq in self._iter_equipment_targeting_player(player_id):
+            if not self._owner_turn_start_equipment_action_statuses(eq):
+                continue
+            key = self._equipment_turn_start_key(eq)
+            if key in handled:
+                continue
+            eq.turns_equipped += 1
+            handled.add(key)
+            if self._has_card_event(eq.card_def, 'owner_turn_start'):
+                self._run_card_event(owner_id, eq.card_instance, 'owner_turn_start', None,
+                                     {'source_id': owner_id, 'target_id': player_id})
+        return handled
+
     def _run_owner_turn_start_healing_equipment(self, player_id: int) -> set:
         if not (0 <= player_id < len(self.players)):
             return set()
@@ -7309,7 +7554,7 @@ class GameEngine:
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
-        self._apply_blind_turn_start(player_id)
+        self._clear_turn_start_action_statuses(player_id)
         if self.round_num > 1:
             sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
             draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - sluggish_reduction)
@@ -7330,7 +7575,7 @@ class GameEngine:
             if eq.def_id == 'Corruption' and not eq.corruption_active:
                 eq.corruption_active = True
                 self.log_msg(f"{self.pn(opp_id)}的腐化效果激活")
-        early_owner_turn_start_equipment = self._run_owner_turn_start_healing_equipment(player_id)
+        early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         if ps.poison > 0:
@@ -7363,11 +7608,6 @@ class GameEngine:
             ps.elixir -= deduct
             self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
             ps.overload = 0
-        if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
-            draw_needed = ps.hand_space()
-            if draw_needed > 0:
-                ps.draw_cards(draw_needed)
-                self.log_msg(f"{self.pn(player_id)}抽{draw_needed}张至手牌满")
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
             ps.gain_elixir(2)
             self.log_msg(f"{self.pn(player_id)}额外+2E")
@@ -7778,7 +8018,7 @@ class GameEngine:
     def _atomic_deal_damage(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         amount = self._eval_int(player_id, params.get('amount', 6), card, 6)
-        hits = max(1, self._eval_int(player_id, params.get('hits', 1), card, 1))
+        hits = self._card_total_hits(card, self._eval_int(player_id, params.get('hits', 1), card, 1))
         is_precision = bool(params.get('is_precision', False))
         amount = self._modified_attack_damage(amount, card)
         self._incoming_damage_hint[target_id] = int(amount)
@@ -8236,6 +8476,8 @@ class GameEngine:
                 ps.blind += amount
             elif status in ('heal_block', '禁疗'):
                 ps.heal_block += amount
+            elif status in ('attack_blocked', '禁攻'):
+                ps.attack_blocked += amount
             elif status in ('weakness', '虚弱'):
                 ps.weakness += amount
             elif status in ('bleed', '流血'):

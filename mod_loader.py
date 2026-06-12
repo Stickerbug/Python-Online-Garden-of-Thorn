@@ -213,6 +213,21 @@ def _candidate_asset_names(card: dict) -> List[str]:
     return candidates
 
 
+def _resolve_gtnmod_asset(filepath: str, member_lookup: Dict[str, str], package_key: str, value: str) -> str:
+    explicit = str(value or '').strip()
+    if explicit and _is_url_or_public_path(explicit):
+        return explicit
+    if not explicit or _is_stale_mod_asset_url(explicit):
+        return ''
+    safe = _safe_zip_member(explicit)
+    if not safe:
+        return ''
+    member = member_lookup.get(safe.lower())
+    if not member:
+        return ''
+    return _register_gtnmod_asset(filepath, member, package_key)
+
+
 def _attach_gtnmod_asset_urls(data: dict, filepath: str, zf: zipfile.ZipFile) -> dict:
     out = copy.deepcopy(data)
     package_key = _gtnmod_package_key(filepath)
@@ -225,6 +240,17 @@ def _attach_gtnmod_asset_urls(data: dict, filepath: str, zf: zipfile.ZipFile) ->
         assets = card.get('assets') if isinstance(card.get('assets'), dict) else {}
         if not explicit:
             explicit = str(assets.get('image') or assets.get('card_image') or '').strip()
+        upgraded_explicit = str(
+            card.get('upgraded_image_url')
+            or card.get('upgraded_image')
+            or assets.get('upgraded_image')
+            or assets.get('upgraded_card_image')
+            or ''
+        ).strip()
+        upgraded_url = _resolve_gtnmod_asset(filepath, member_lookup, package_key, upgraded_explicit)
+        if upgraded_url:
+            card['upgraded_image_url'] = upgraded_url
+            card.setdefault('upgraded_image', upgraded_url)
         if explicit and _is_url_or_public_path(explicit):
             card.setdefault('image_url', explicit)
             return
@@ -287,6 +313,8 @@ class ModCard:
         self.v2_mod_id = data.get('v2_mod_id', '')
         self.image = data.get('image', '')
         self.image_url = data.get('image_url', self.image)
+        self.upgraded_image = data.get('upgraded_image', '')
+        self.upgraded_image_url = data.get('upgraded_image_url', self.upgraded_image)
         self.copy_count = max(0, int(data.get('copy_count', 0)))
         self.swift_value = max(0, int(data.get('swift_value', 0)))
 
@@ -313,6 +341,8 @@ class ModCard:
             'v2_mod_id': self.v2_mod_id,
             'image': self.image,
             'image_url': self.image_url,
+            'upgraded_image': self.upgraded_image,
+            'upgraded_image_url': self.upgraded_image_url,
             'copy_count': self.copy_count,
             'swift_value': self.swift_value,
         }
@@ -343,6 +373,8 @@ class ModCard:
             v2_mod_id=self.v2_mod_id,
             image=self.image,
             image_url=self.image_url,
+            upgraded_image=self.upgraded_image,
+            upgraded_image_url=self.upgraded_image_url,
             copy_count=self.copy_count,
             swift_value=self.swift_value,
             damage=self.damage,

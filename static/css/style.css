@@ -1237,13 +1237,13 @@ body {
   background: rgba(116, 185, 255, 0.2);
 }
 
-.chat-msg.mention-flash {
+.chat-mention-token.mention-flash {
   animation: mentionFlash 1.05s ease-in-out infinite;
 }
 
 @keyframes mentionFlash {
-  0%, 100% { background: transparent; }
-  50% { background: rgba(46, 134, 222, 0.18); }
+  0%, 100% { box-shadow: 0 0 0 rgba(46, 134, 222, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(46, 134, 222, 0.22); }
 }
 
 .mention-menu {

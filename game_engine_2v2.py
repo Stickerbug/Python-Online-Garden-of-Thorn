@@ -59,6 +59,7 @@ class GameEngine2v2(GameEngine):
         self.opening_event_magic_options: List[List[List[str]]] = [[[], [], []] for _ in range(4)]
         # Per-player ready state: True when draft done AND sub-choice done (if any)
         self.player_ready: List[bool] = [False] * 4
+        self.player_draft_started: List[bool] = [False] * 4
         self.player_names: List[str] = ['玩家1', '玩家2', '玩家3', '玩家4']
         self.debug_selector_log: bool = False
         self._last_damage_value: List[int] = [0] * 4
@@ -242,6 +243,7 @@ class GameEngine2v2(GameEngine):
         self.phase = 'event_select'
         self.draft_rerolls = [DRAFT_REROLLS] * 4
         self.player_ready = [False] * 4
+        self.player_draft_started = [False] * 4
         self._generate_opening_events()
 
     def start_draft_for_player(self, player_id: int):
@@ -257,6 +259,7 @@ class GameEngine2v2(GameEngine):
         # Ensure draft_picks is initialized
         if not self.draft_picks[player_id]:
             self.draft_picks[player_id] = []
+        self.player_draft_started[player_id] = True
         # Generate draft options for this player
         self._generate_draft_options_for_player(player_id)
         # Update global phase
@@ -384,9 +387,10 @@ class GameEngine2v2(GameEngine):
         ps.gain_elixir(ELIXIR_RECOVERY)
         ps.gain_magic(1)
         ps.cards_played_this_turn = {}
+        ps.cards_played_this_turn_instance_ids = []
         ps.magic_battery_m_this_turn = 0
         if ps.skip_turn:
-            ps.skip_turn = False
+            ps.skip_turn = max(0, int(ps.skip_turn) - 1)
             self.log_msg(f"{self.pn(player_id)}被跳过本回合！")
             self._advance_turn()
             return
@@ -481,11 +485,7 @@ class GameEngine2v2(GameEngine):
         # Track M gained this turn for next turn's check
         ps.m_gained_last_turn = ps.m_gained_this_turn
         ps.m_gained_this_turn = False
-        # Cogwheel: save cards played this turn for next turn return (if marked by v2 event)
-        if hasattr(self, '_cogwheel_active') and self._cogwheel_active.get(player_id):
-            played_ids = list(ps.cards_played_this_turn.keys()) if hasattr(ps, 'cards_played_this_turn') else []
-            ps.cogwheel_pending_return = played_ids
-            self._cogwheel_active[player_id] = False
+        self._return_cogwheel_cards_now(player_id)
         void_cards = [c for c in ps.hand if 'void' in c.flags]
         for c in void_cards:
             ps.hand.remove(c)
@@ -658,6 +658,7 @@ class GameEngine2v2(GameEngine):
         self._spend_resource(player_id, 'magic', card.cost_m, card)
         ps.remove_hand_card(card_instance_id)
         ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
+        ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', card_instance_id) or card_instance_id))
         if target_player_id >= 0:
             if choice is None:
                 choice = {}
@@ -776,8 +777,8 @@ class GameEngine2v2(GameEngine):
                 self.log_msg(f"{self.pn(player_id)}触发叶子！对{self.pn(target_id)}造成8D")
         elif eq.def_id == 'Mark':
             if opp:
-                opp.skip_turn = True
-                self.log_msg(f"{self.pn(player_id)}触发标记！{self.pn(target_id)}下回合不能行动")
+                opp.skip_turn += 1
+                self.log_msg(f"{self.pn(player_id)}触发标记！{self.pn(target_id)}+1层眩晕")
         elif eq.def_id == 'Mine':
             if opp:
                 self.deal_attack_damage(target_id, 20)
@@ -890,22 +891,22 @@ class GameEngine2v2(GameEngine):
         self.draft_options[player_id] = generate_draft_options(self.draft_pool, card_type, 3)
 
     def _generate_opening_events(self):
-        pos1 = self._opening_events_for_position(1)
-        pos2 = self._opening_events_for_position(2)
-        pos3 = self._opening_events_for_position(3)
-        magic_pool = [def_id for def_id in self.MAGIC_CARD_POOL if self._card_allowed(def_id)]
+        pool = self._all_opening_events()
         for i in range(4):
-            slot1 = self._choose_opening_event(pos1)
-            slot2 = self._choose_opening_event(pos2)
-            slot3 = self._choose_opening_event(pos3)
-            self.opening_event_options[i] = [slot1, slot2, slot3]
-            for j in range(3):
-                ev = self.opening_event_options[i][j]
-                if ev and str(ev.get('id')) in ('2', '5', '6', '7'):
-                    self.opening_event_magic_options[i][j] = random.sample(
-                        magic_pool, min(3, len(magic_pool)))
-                else:
-                    self.opening_event_magic_options[i][j] = []
+            options = []
+            available = list(pool)
+            for _ in range(min(3, len(available))):
+                picked = self._choose_opening_event(available)
+                if not picked:
+                    break
+                options.append(picked)
+                picked_id = str(picked.get('id'))
+                available = [ev for ev in available if str(ev.get('id')) != picked_id]
+            options.sort(key=self._opening_event_sort_key)
+            for ev in options:
+                ev['color'] = self._event_color(ev.get('id'))
+            self.opening_event_options[i] = options
+            self.opening_event_magic_options[i] = [[] for _ in options]
 
     def _is_valid_player_id(self, player_id) -> bool:
         return isinstance(player_id, int) and 0 <= player_id < self.num_players
@@ -1000,29 +1001,17 @@ class GameEngine2v2(GameEngine):
         self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        self._return_cogwheel_cards_now(player_id)
         ps.cards_played_this_turn = {}
+        ps.cards_played_this_turn_instance_ids = []
         ps.magic_battery_m_this_turn = 0
-        # Cogwheel: return cards from last turn (if marked by v2 event)
-        if ps.cogwheel_pending_return:
-            returned = []
-            for iid in ps.cogwheel_pending_return:
-                for c in list(ps.discard):
-                    if c.instance_id == iid:
-                        ps.discard.remove(c)
-                        c.mimic_discount = 0
-                        ps.add_to_hand(c)
-                        returned.append(c.name_cn)
-                        break
-            if returned:
-                self.log_msg(f"{self.pn(player_id)}的齿轮效果：{', '.join(returned)}回到手中")
-            ps.cogwheel_pending_return = []
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
-        self._apply_blind_turn_start(player_id)
+        self._clear_turn_start_action_statuses(player_id)
         if ps.skip_turn:
-            ps.skip_turn = False
+            ps.skip_turn = max(0, int(ps.skip_turn) - 1)
             self.log_msg(f"{self.pn(player_id)}被跳过本回合！")
             self._skip_current_turn_after_start = True
             return
@@ -1043,11 +1032,6 @@ class GameEngine2v2(GameEngine):
             ps.gain_elixir(elixir_recovery)
             ps.gain_magic(1)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E，+1M")
-        if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
-            draw_needed = ps.hand_space()
-            if draw_needed > 0:
-                ps.draw_cards(draw_needed)
-                self.log_msg(f"{self.pn(player_id)}【命运抽签】：抽{draw_needed}张至手牌满")
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
             ps.gain_elixir(2)
             self.log_msg(f"{self.pn(player_id)}【能量涌动】：额外+2E")
@@ -1183,6 +1167,8 @@ class GameEngine2v2(GameEngine):
         self._spend_resource(player_id, 'magic', card.cost_m, card)
         ps.remove_hand_card(card_instance_id)
         ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
+        ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', card_instance_id) or card_instance_id))
+        self._apply_magic_acceleration_after_play(player_id)
         self._active_choice = choice if isinstance(choice, dict) else {}
         try:
             needs_response = self._check_response_needed(player_id, card)
@@ -1400,20 +1386,23 @@ class GameEngine2v2(GameEngine):
     def _effect_sand(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
         dmg = self._modified_attack_damage(3, card)
-        self.log_msg(f"{self.pn(player_id)}使用沙子！对{self.pn(target)}造成{dmg}x4伤害")
-        self.deal_attack_damage(target, dmg, 4, attacker_id=player_id)
+        hits = self._card_total_hits(card, 4)
+        self.log_msg(f"{self.pn(player_id)}使用沙子！对{self.pn(target)}造成{dmg}x{hits}伤害")
+        self.deal_attack_damage(target, dmg, hits, attacker_id=player_id)
 
     def _effect_wing(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
         dmg = self._modified_attack_damage(8, card)
-        self.log_msg(f"{self.pn(player_id)}使用翅膀！对{self.pn(target)}造成{dmg}x2伤害")
-        self.deal_attack_damage(target, dmg, 2, attacker_id=player_id)
+        hits = self._card_total_hits(card, 2)
+        self.log_msg(f"{self.pn(player_id)}使用翅膀！对{self.pn(target)}造成{dmg}x{hits}伤害")
+        self.deal_attack_damage(target, dmg, hits, attacker_id=player_id)
 
     def _effect_light(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
         dmg = self._modified_attack_damage(2, card)
-        self.log_msg(f"{self.pn(player_id)}使用轻！对{self.pn(target)}造成{dmg}x2伤害")
-        self.deal_attack_damage(target, dmg, 2, attacker_id=player_id)
+        hits = self._card_total_hits(card, 2)
+        self.log_msg(f"{self.pn(player_id)}使用轻！对{self.pn(target)}造成{dmg}x{hits}伤害")
+        self.deal_attack_damage(target, dmg, hits, attacker_id=player_id)
 
     def _effect_fang(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
@@ -1465,29 +1454,17 @@ class GameEngine2v2(GameEngine):
         ps = self.players[player_id]
         self._antennae_reveal[player_id] = None
         self._reset_turn_damage_counters()
+        self._return_cogwheel_cards_now(player_id)
         ps.cards_played_this_turn = {}
+        ps.cards_played_this_turn_instance_ids = []
         ps.magic_battery_m_this_turn = 0
-        # Cogwheel: return cards from last turn (if marked by v2 event)
-        if ps.cogwheel_pending_return:
-            returned = []
-            for iid in ps.cogwheel_pending_return:
-                for c in list(ps.discard):
-                    if c.instance_id == iid:
-                        ps.discard.remove(c)
-                        c.mimic_discount = 0
-                        ps.add_to_hand(c)
-                        returned.append(c.name_cn)
-                        break
-            if returned:
-                self.log_msg(f"{self.pn(player_id)}的齿轮效果：{', '.join(returned)}回到手中")
-            ps.cogwheel_pending_return = []
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
-        self._apply_blind_turn_start(player_id)
+        self._clear_turn_start_action_statuses(player_id)
         if ps.skip_turn:
-            ps.skip_turn = False
+            ps.skip_turn = max(0, int(ps.skip_turn) - 1)
             self.log_msg(f"{self.pn(player_id)}被跳过本回合！")
             self._skip_current_turn_after_start = True
             return
@@ -1507,11 +1484,6 @@ class GameEngine2v2(GameEngine):
             ps.gain_elixir(elixir_recovery)
             ps.gain_magic(1)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E，+1M")
-        if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
-            draw_needed = ps.hand_space()
-            if draw_needed > 0:
-                ps.draw_cards(draw_needed)
-                self.log_msg(f"{self.pn(player_id)}【命运抽签】：抽{draw_needed}张至手牌满")
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
             ps.gain_elixir(2)
             self.log_msg(f"{self.pn(player_id)}【能量涌动】：额外+2E")
@@ -1618,23 +1590,11 @@ class GameEngine2v2(GameEngine):
         self._antennae_reveal[player_id] = None
         if hasattr(self, '_antennae_reveal_targets'):
             self._antennae_reveal_targets[player_id] = None
+        self._return_cogwheel_cards_now(player_id)
         ps.cards_played_this_turn = {}
+        ps.cards_played_this_turn_instance_ids = []
         ps.magic_battery_m_this_turn = 0
         ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0
-        # Cogwheel: return cards from last turn (if marked by v2 event)
-        if ps.cogwheel_pending_return:
-            returned = []
-            for iid in ps.cogwheel_pending_return:
-                for c in list(ps.discard):
-                    if c.instance_id == iid:
-                        ps.discard.remove(c)
-                        c.mimic_discount = 0
-                        ps.add_to_hand(c)
-                        returned.append(c.name_cn)
-                        break
-            if returned:
-                self.log_msg(f"{self.pn(player_id)}的齿轮效果：{', '.join(returned)}回到手中")
-            ps.cogwheel_pending_return = []
         self._run_v2_event_hooks('turn_start', {
             'source_player': player_id,
             'target_player': player_id,
@@ -1652,10 +1612,13 @@ class GameEngine2v2(GameEngine):
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
-        self._apply_blind_turn_start(player_id)
+        self._clear_turn_start_action_statuses(player_id)
+        early_owner_turn_start_equipment = self._run_owner_turn_start_action_status_equipment(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         turn_will_be_skipped = bool(ps.skip_turn)
         if turn_will_be_skipped:
-            ps.skip_turn = False
+            ps.skip_turn = max(0, int(ps.skip_turn) - 1)
         if self.round_num > 1:
             draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - ps.sluggish)
             if ps.enemy_draw_reduction > 0:
@@ -1689,10 +1652,6 @@ class GameEngine2v2(GameEngine):
                 ps.elixir -= deduct
                 self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
                 ps.overload = 0
-        if self.opening_event_picks[player_id] == 5 and self.round_num <= 2:
-            draw_needed = ps.hand_space()
-            if draw_needed > 0:
-                ps.draw_cards(draw_needed)
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
             ps.gain_elixir(2)
         for owner_state in self.players:
@@ -1712,7 +1671,7 @@ class GameEngine2v2(GameEngine):
                 if eq.def_id == 'Corruption' and not eq.corruption_active:
                     eq.corruption_active = True
                     self.log_msg(f"{self.pn(eid)}的腐化效果激活")
-        early_owner_turn_start_equipment = self._run_owner_turn_start_healing_equipment(player_id)
+        early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         if ps.poison > 0:
@@ -1761,8 +1720,7 @@ class GameEngine2v2(GameEngine):
                 elif eq.def_id == 'GoldenLeaf':
                     ps.draw_cards(1)
                     self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}多抽1张牌")
-        if turn_will_be_skipped or ps.skip_turn:
-            ps.skip_turn = False
+        if turn_will_be_skipped:
             self.log_msg(f"{self.pn(player_id)}被跳过本回合")
             self._skip_current_turn_after_start = True
         # Foresight: allow replacing cards from hand
