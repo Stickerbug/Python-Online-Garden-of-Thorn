@@ -5815,17 +5815,20 @@ def handling_logout():
 
 @app.route('/api/handling/reports')
 def handling_reports():
+    started = time.perf_counter()
     if not DB_AVAILABLE:
         return db_unavailable_response()
     try:
         data = list_reports(
             status=request.args.get('status', 'pending'),
-            limit=validate_int(request.args.get('limit', 50), default=50, minimum=1, maximum=100, name='limit'),
+            limit=validate_int(request.args.get('limit', 30), default=30, minimum=1, maximum=50, name='limit'),
             offset=validate_int(request.args.get('offset', 0), default=0, minimum=0, maximum=1000000, name='offset'),
         )
+        log_admin_api_timing('/api/handling/reports', (time.perf_counter() - started) * 1000, rows=len(data.get('items') or []), total=data.get('total'), limit=data.get('limit'))
         return jsonify({'success': True, **data})
     except Exception as exc:
         admin_event('error', f'handling reports query failed: {exc}')
+        log_admin_api_timing('/api/handling/reports', (time.perf_counter() - started) * 1000, error=type(exc).__name__)
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
@@ -5872,18 +5875,21 @@ def handling_report_resolve(report_id):
 
 @app.route('/api/handling/ip-bans')
 def handling_ip_bans():
+    started = time.perf_counter()
     if not DB_AVAILABLE:
         return db_unavailable_response()
     try:
         active_only = str(request.args.get('active', '1')).strip().lower() not in {'0', 'false', 'no', 'all'}
         data = list_ip_bans(
             active_only=active_only,
-            limit=validate_int(request.args.get('limit', 100), default=100, minimum=1, maximum=300, name='limit'),
+            limit=validate_int(request.args.get('limit', 30), default=30, minimum=1, maximum=50, name='limit'),
             offset=validate_int(request.args.get('offset', 0), default=0, minimum=0, maximum=1000000, name='offset'),
         )
+        log_admin_api_timing('/api/handling/ip-bans', (time.perf_counter() - started) * 1000, rows=len(data.get('items') or []), total=data.get('total'), limit=data.get('limit'))
         return jsonify({'success': True, **data})
     except Exception as exc:
         admin_event('error', f'handling ip ban list failed: {exc}')
+        log_admin_api_timing('/api/handling/ip-bans', (time.perf_counter() - started) * 1000, error=type(exc).__name__)
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 

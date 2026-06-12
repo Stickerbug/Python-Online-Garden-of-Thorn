@@ -6,6 +6,9 @@ let ipBans = [];
 let selectedReportId = null;
 let selectedDuration = 0;
 let durationTarget = 'moderation';
+let reportsRequestInFlight = false;
+let ipBansRequestInFlight = false;
+const HANDLING_FETCH_TIMEOUT_MS = 5000;
 
 function text(value) {
   return value == null ? '' : String(value);
@@ -17,11 +20,26 @@ function setText(id, value) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options,
-  });
+  const controller = new AbortController();
+  const timeoutMs = Number(options.timeoutMs || HANDLING_FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const { timeoutMs: _timeoutMs, headers = {}, ...fetchOptions } = options;
+  let response;
+  try {
+    response = await fetch(path, {
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      ...fetchOptions,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error && error.name === 'AbortError') {
+      throw new Error('后台暂时不可用，请稍后手动刷新');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   const raw = await response.text();
   let data = {};
   try { data = raw ? JSON.parse(raw) : {}; }
@@ -30,6 +48,11 @@ async function api(path, options = {}) {
     throw new Error(data.error || response.statusText);
   }
   return data;
+}
+
+function handlingPageVisible() {
+  const app = $('app');
+  return !document.hidden && app && !app.classList.contains('hidden');
 }
 
 function fmtTime(value) {
@@ -65,6 +88,8 @@ function el(tag, className = '', content = '') {
 function showApp() {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
+  setText('summary', '未加载，点击刷新读取当前列表');
+  renderList();
 }
 
 function showLogin() {
@@ -77,7 +102,6 @@ async function checkAuth() {
     const data = await api('/api/handling/me');
     if (data.authenticated) {
       showApp();
-      await refreshAll();
     } else {
       showLogin();
     }
@@ -96,7 +120,6 @@ async function login(event) {
     });
     $('password').value = '';
     showApp();
-    await refreshAll();
   } catch (e) {
     setText('login-error', e.message || '登录失败');
   }
@@ -112,24 +135,42 @@ function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
   $('reports-tools').classList.toggle('hidden', tab !== 'reports');
   $('ip-tools').classList.toggle('hidden', tab !== 'ip');
+  setText('summary', tab === 'reports' ? `举报 ${reports.length}` : `IP封禁 ${ipBans.length}`);
   renderList();
 }
 
 async function loadReports() {
+  if (!handlingPageVisible() || reportsRequestInFlight) return;
+  reportsRequestInFlight = true;
   const status = $('status-filter').value || 'pending';
-  const data = await api(`/api/handling/reports?status=${encodeURIComponent(status)}&limit=80`);
-  reports = data.items || [];
-  setText('summary', `举报 ${reports.length}/${data.total || reports.length}`);
+  try {
+    const data = await api(`/api/handling/reports?status=${encodeURIComponent(status)}&limit=30`);
+    reports = data.items || [];
+    setText('summary', `举报 ${reports.length}/${data.total || reports.length}`);
+  } finally {
+    reportsRequestInFlight = false;
+  }
 }
 
 async function loadIpBans() {
-  const data = await api('/api/handling/ip-bans?active=1&limit=100');
-  ipBans = data.items || [];
+  if (!handlingPageVisible() || ipBansRequestInFlight) return;
+  ipBansRequestInFlight = true;
+  try {
+    const data = await api('/api/handling/ip-bans?active=1&limit=30');
+    ipBans = data.items || [];
+    setText('summary', `IP封禁 ${ipBans.length}/${data.total || ipBans.length}`);
+  } finally {
+    ipBansRequestInFlight = false;
+  }
 }
 
-async function refreshAll() {
+async function refreshCurrent() {
   try {
-    await Promise.all([loadReports(), loadIpBans()]);
+    if (currentTab === 'reports') {
+      await loadReports();
+    } else {
+      await loadIpBans();
+    }
     renderList();
   } catch (e) {
     setText('summary', `加载失败：${e.message}`);
@@ -431,8 +472,12 @@ function updateDurationLabel() {
 function bind() {
   $('login-form').addEventListener('submit', login);
   $('logout').addEventListener('click', logout);
-  $('refresh').addEventListener('click', refreshAll);
-  $('status-filter').addEventListener('change', async () => { await loadReports(); renderList(); });
+  $('refresh').addEventListener('click', refreshCurrent);
+  $('status-filter').addEventListener('change', () => {
+    setText('summary', '筛选已更改，点击刷新读取');
+    reports = [];
+    renderList();
+  });
   document.querySelectorAll('.tab').forEach((btn) => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   $('resolve').addEventListener('click', resolveReport);
   $('ban-ip').addEventListener('click', banIp);
@@ -445,6 +490,9 @@ function bind() {
     });
   });
   setupDurationPicker();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) setText('summary', '页面已恢复，点击刷新读取当前列表');
+  });
 }
 
 bind();
