@@ -1604,9 +1604,68 @@ class LocalSoloEngine {
         return out;
     }
 
-    getChoiceRequest(card) {
+    choiceTargetFromChoice(choice, fallback = -1) {
+        if (!choice || typeof choice !== 'object') return fallback;
+        return toInt(choice.target_player ?? choice.target_player_id ?? choice.target_id, fallback);
+    }
+
+    choiceTypeForEffect(effect) {
+        const params = (effect && effect.params) || {};
+        const type = (effect && effect.type) || '';
+        if (params.choice_type) return params.choice_type;
+        if (type === 'request_target') return 'choose_target';
+        if (type === 'request_confirm') return 'confirm';
+        if (type === 'request_card') {
+            const zone = params.zone || 'hand';
+            if (zone === 'equipment') return 'choose_equipment';
+            if (zone === 'deck') return 'choose_from_deck';
+            if (zone === 'discard') return 'choose_from_discard';
+            if (zone === 'exile') return 'choose_from_exile';
+            return params.multi ? 'choose_cards_from_hand' : 'choose_card_from_hand';
+        }
+        if (type === 'choose_from_deck') return 'choose_from_deck';
+        if (type === 'choose_from_discard') return 'choose_from_discard';
+        if (type === 'steal_enemy_card') return 'choose_from_enemy_hand';
+        if (type === 'discard_choice_then_draw') return 'choose_card_to_discard';
+        if (type === 'destroy_equipment_choice_or_first') return 'choose_equipment';
+        return '';
+    }
+
+    choiceRequestSatisfied(effect, choice) {
+        if (!effect) return true;
+        if (!choice || typeof choice !== 'object') return false;
+        const params = effect.params || {};
+        const type = effect.type || '';
+        const choiceType = this.choiceTypeForEffect(effect);
+        if (choice.cancelled && params.continue_on_cancel) return true;
+        if (type === 'request_target' || choiceType === 'choose_target') {
+            return this.choiceTargetFromChoice(choice) >= 0;
+        }
+        if (type === 'request_confirm' || choiceType === 'confirm') {
+            return choice.confirmed != null || choice.accepted != null;
+        }
+        if (choiceType === 'choose_cards_from_hand') {
+            return Array.isArray(choice.target_instance_ids) && choice.target_instance_ids.length > 0;
+        }
+        if (choiceType === 'choose_same_attacks_from_hand') {
+            return Array.isArray(choice.target_instance_ids) && choice.target_instance_ids.length > 0;
+        }
+        if ([
+            'choose_attack_from_hand', 'choose_card_from_hand', 'choose_card_to_discard',
+            'choose_from_deck', 'choose_from_discard', 'choose_from_exile',
+            'choose_equipment', 'choose_enemy_equipment', 'choose_from_enemy_hand',
+        ].includes(choiceType)) {
+            return choice.target_instance_id != null || choice.target_def_id != null;
+        }
+        return !!choice;
+    }
+
+    getChoiceRequest(card, choice = null) {
         for (const effect of this.walkChoiceEffects(playEffectsFor(card))) {
             const type = effect.type || '';
+            const isChoice = ['request_target', 'request_card', 'request_confirm', 'discard_choice_then_draw', 'destroy_equipment_choice_or_first', 'choose_from_deck', 'choose_from_discard', 'steal_enemy_card'].includes(type);
+            if (!isChoice) continue;
+            if (this.choiceRequestSatisfied(effect, choice)) continue;
             if (['request_target', 'request_card', 'request_confirm'].includes(type)) return effect;
             if (['discard_choice_then_draw', 'destroy_equipment_choice_or_first', 'choose_from_deck', 'choose_from_discard', 'steal_enemy_card'].includes(type)) {
                 return effect;
@@ -1617,28 +1676,70 @@ class LocalSoloEngine {
 
     getChoiceType(card) {
         const effect = this.getChoiceRequest(card);
-        const params = (effect && effect.params) || {};
-        if (params.choice_type) return params.choice_type;
         if (!effect) return '';
-        if (effect.type === 'request_target') return 'choose_target';
-        if (effect.type === 'request_confirm') return 'confirm';
-        if (effect.type === 'request_card') {
-            const zone = params.zone || 'hand';
-            if (zone === 'equipment') return 'choose_equipment';
-            if (zone === 'deck') return 'choose_from_deck';
-            if (zone === 'discard') return 'choose_from_discard';
-            if (zone === 'exile') return 'choose_from_exile';
-            return params.multi ? 'choose_cards_from_hand' : 'choose_card_from_hand';
-        }
-        if (effect.type === 'choose_from_deck') return 'choose_from_deck';
-        if (effect.type === 'choose_from_discard') return 'choose_from_discard';
-        if (effect.type === 'steal_enemy_card') return 'choose_from_enemy_hand';
-        if (effect.type === 'destroy_equipment_choice_or_first') return 'choose_equipment';
-        return '';
+        return this.choiceTypeForEffect(effect);
     }
 
     cardNeedsChoice(card) {
         return !!this.getChoiceRequest(card);
+    }
+
+    choiceSatisfiesRequest(card, choice) {
+        return !this.getChoiceRequest(card, choice);
+    }
+
+    queueCardChoice(playerId, card, choice = null, alreadyPaid = false) {
+        const choiceRequest = this.getChoiceRequest(card, choice);
+        if (!choiceRequest) return null;
+        const choiceParams = (choiceRequest && choiceRequest.params) || {};
+        const choiceType = this.choiceTypeForEffect(choiceRequest);
+        const oldChoice = this._active_choice;
+        if (choice && typeof choice === 'object') this._active_choice = choice;
+        let targetId = null;
+        try {
+            targetId = choiceRequest && choiceRequest.type === 'request_card'
+                ? this.resolveTarget(playerId, choiceParams.target || 'self')
+                : null;
+        } finally {
+            this._active_choice = oldChoice;
+        }
+        this.pending_choice = {
+            card: card.toDict(),
+            player_id: playerId,
+            choice_type: choiceType,
+            choice_params: choiceParams,
+            original_choice: choice && typeof choice === 'object' ? { ...choice } : null,
+        };
+        if (targetId != null) this.pending_choice.target_player_id = targetId;
+        if (alreadyPaid) {
+            const ps = this.players[playerId];
+            if (!ps.findHandCard(card.instance_id)) ps.hand.unshift(card);
+            ps.elixir += card.cost_e + Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
+            ps.magic += card.cost_m;
+            ps.cards_played_this_turn[card.def_id] = Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
+        }
+        return {
+            success: true,
+            needs_choice: true,
+            choice_type: choiceType,
+            choice_params: choiceParams,
+            target_player_id: targetId,
+            card: card.toDict(),
+        };
+    }
+
+    checkCardResponseAfterChoice(playerId, card, choice) {
+        const needsResponse = this.checkResponseNeeded(playerId, card) || this.checkPrecisionResponseNeeded(playerId, card);
+        if (!needsResponse) return null;
+        const targetId = this.choiceTargetFromChoice(choice, 1 - playerId);
+        this.pending_response = {
+            card: card.toDict(),
+            player_id: playerId,
+            target_player_id: targetId,
+            original_choice: choice,
+            is_precision: card.flags.has('precision'),
+        };
+        return { success: true, needs_response: true, card: card.toDict() };
     }
 
     resolveTarget(playerId, target) {
@@ -1658,7 +1759,14 @@ class LocalSoloEngine {
             return toInt(choice.target_player ?? choice.target_player_id ?? choice.target_id, playerId);
         }
         if (['event_source', 'source', 'last_actor', 'damage_source'].includes(target)) return toInt(context.source_id, playerId);
-        if (['event_target', 'target'].includes(target)) return toInt(context.target_id, 1 - playerId);
+        if (target === 'target') {
+            const choice = this._active_choice || {};
+            if (choice.target_player != null || choice.target_player_id != null || choice.target_id != null) {
+                return toInt(choice.target_player ?? choice.target_player_id ?? choice.target_id, 1 - playerId);
+            }
+            return toInt(context.target_id, 1 - playerId);
+        }
+        if (target === 'event_target') return toInt(context.target_id, 1 - playerId);
         return playerId;
     }
 
@@ -3244,9 +3352,19 @@ class LocalSoloEngine {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
         const targetId = this.resolveTarget(playerId, params.target || 'self');
         const targetPlayer = this.players[targetId];
-        if (!target || !targetPlayer || !targetPlayer.canAddToHand()) return;
+        const isMagnet = String(card && card.def_id || '').toLowerCase().endsWith('magnet');
+        if (!target || !targetPlayer || !targetPlayer.canAddToHand()) {
+            if (isMagnet) this._antennae_reveal[playerId] = null;
+            return;
+        }
         const loc = this.removeCardFromCurrentZone(target);
-        if (loc) targetPlayer.addToHand(target);
+        if (loc) {
+            targetPlayer.addToHand(target);
+            if (isMagnet) {
+                this.logMsg(`${this.pn(playerId)}用磁铁从${this.pn(loc.ownerId)}手牌中获得了${cardName(target.def_id)}`);
+                this._antennae_reveal[playerId] = null;
+            }
+        }
     }
 
     effect_move_to_deck(playerId, card, params) {
@@ -3262,6 +3380,52 @@ class LocalSoloEngine {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
         const loc = this.removeCardFromCurrentZone(target);
         if (loc) this.players[loc.ownerId].exile.push(target);
+    }
+
+    effect_assembler_effect(playerId, card, params, log, choice) {
+        const targetId = this.resolveTarget(playerId, params.target || 'choice_target');
+        const targetPlayer = this.players[targetId] || this.players[playerId];
+        const selectedId = choice && choice.target_instance_id;
+        if (selectedId != null) {
+            const targetCard = this.players[playerId].findHandCard(selectedId);
+            if (targetCard) {
+                this.players[playerId].hand = this.players[playerId].hand.filter(c => c.instance_id !== targetCard.instance_id);
+                this.players[playerId].exile.push(targetCard);
+                this.logMsg(`${this.pn(playerId)}放逐了${cardName(targetCard.def_id)}`);
+            }
+            const roll = Math.floor(Math.random() * 3);
+            if (roll === 0) {
+                const created = new LocalCard('Laser');
+                created.swift_value = 2;
+                created.flags.add('swift');
+                targetPlayer.addToHand(created);
+                this.logMsg(`${this.pn(playerId)}的重构机：${this.pn(targetId)}获得激光器`);
+            } else if (roll === 1) {
+                const created = new LocalCard('Sawblade');
+                created.swift_value = 2;
+                created.flags.add('swift');
+                targetPlayer.addToHand(created);
+                this.logMsg(`${this.pn(playerId)}的重构机：${this.pn(targetId)}获得锯片`);
+            } else {
+                targetPlayer.fragment_stacks = toInt(targetPlayer.fragment_stacks, 0) + 2;
+                targetPlayer.addToHand(new LocalCard('Fragment'));
+                this.logMsg(`${this.pn(playerId)}的重构机：${this.pn(targetId)}获得2层碎片和1张碎片`);
+            }
+            return;
+        }
+        const handCards = this.players[playerId].hand
+            .filter(c => c.instance_id !== card.instance_id)
+            .map(c => c.toDict());
+        if (!handCards.length) return;
+        this.pending_choice = {
+            player_id: playerId,
+            choice_type: 'choose_card_from_hand',
+            card: card.toDict(),
+            hand_cards: handCards,
+            message: '重构机：选择一张手牌放逐',
+            target_player_id: targetId,
+            original_choice: { target_player_id: targetId },
+        };
     }
 
     logDestroyedEquipment(actorId, ownerId, eq, customLog) {
@@ -4053,6 +4217,10 @@ class LocalSoloEngine {
         if (this.pending_response) return { success: false, error: '等待对手反制响应' };
         const [canPlay, reason] = this.canPlayCard(playerId, card);
         if (!canPlay) return { success: false, error: reason };
+        if (this.cardNeedsChoice(card) && !this.choiceSatisfiesRequest(card, choice)) {
+            const queued = this.queueCardChoice(playerId, card, choice, false);
+            if (queued) return queued;
+        }
         const totalE = card.cost_e + this.getExtraEForCard(playerId, card);
         this.spendResource(playerId, 'elixir', totalE, card);
         this.spendResource(playerId, 'magic', card.cost_m, card);
@@ -4061,15 +4229,8 @@ class LocalSoloEngine {
         if (!removed) return { success: false, error: '移出手牌失败' };
         ps.cards_played_this_turn_instance_ids.push(toInt(card.instance_id, instanceId));
         this.applyMagicAccelerationAfterPlay(playerId, card);
-        if (this.checkResponseNeeded(playerId, card) || this.checkPrecisionResponseNeeded(playerId, card)) {
-            this.pending_response = {
-                card: card.toDict(),
-                player_id: playerId,
-                original_choice: choice,
-                is_precision: card.flags.has('precision'),
-            };
-            return { success: true, needs_response: true, card: card.toDict() };
-        }
+        const responseResult = this.checkCardResponseAfterChoice(playerId, card, choice);
+        if (responseResult) return responseResult;
         return this.executeCardEffect(playerId, card, choice);
     }
 
@@ -4093,32 +4254,9 @@ class LocalSoloEngine {
             return result;
         }
         this.negated_card = false;
-        if (this.cardNeedsChoice(card) && choice == null) {
-            const choiceRequest = this.getChoiceRequest(card);
-            const choiceParams = (choiceRequest && choiceRequest.params) || {};
-            const choiceType = this.getChoiceType(card);
-            const targetId = choiceRequest && choiceRequest.type === 'request_card'
-                ? this.resolveTarget(playerId, choiceParams.target || 'self')
-                : null;
-            this.pending_choice = {
-                card: card.toDict(),
-                player_id: playerId,
-                choice_type: choiceType,
-                choice_params: choiceParams,
-            };
-            if (targetId != null) this.pending_choice.target_player_id = targetId;
-            ps.hand.unshift(card);
-            ps.elixir += card.cost_e + Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
-            ps.magic += card.cost_m;
-            ps.cards_played_this_turn[card.def_id] = Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
-            return {
-                success: true,
-                needs_choice: true,
-                choice_type: choiceType,
-                choice_params: choiceParams,
-                target_player_id: targetId,
-                card: card.toDict(),
-            };
+        if (this.cardNeedsChoice(card) && !this.choiceSatisfiesRequest(card, choice)) {
+            const queued = this.queueCardChoice(playerId, card, choice, true);
+            if (queued) return queued;
         }
         if (card.def_id === 'Mimic' && choice && choice.target_instance_id != null) {
             const target = ps.findHandCard(choice.target_instance_id);
@@ -4130,6 +4268,7 @@ class LocalSoloEngine {
                 return { success: false, error: '能量不足' };
             }
         }
+        const playLogMarker = this.log.length;
         if (playEffectsFor(card).length) {
             this.logCardPlay(playerId, card);
         }
@@ -4143,6 +4282,28 @@ class LocalSoloEngine {
             card.fission_hit = 0;
         } else {
             this.applyCardEffect(playerId, card, choice);
+        }
+        if (this.pending_choice) {
+            const expected = `${this.pn(playerId)}使用了${cardName(card.def_id)}`;
+            if (this.log[playLogMarker] === expected) this.log.splice(playLogMarker, 1);
+            if (!ps.findHandCard(card.instance_id)) {
+                ps.hand.unshift(card);
+                ps.elixir += card.cost_e + Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
+                ps.magic += card.cost_m;
+                ps.cards_played_this_turn[card.def_id] = Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
+            }
+            return {
+                success: true,
+                needs_choice: true,
+                choice_type: this.pending_choice.choice_type || '',
+                choice_params: this.pending_choice.choice_params || {},
+                target_player_id: this.pending_choice.target_player_id,
+                card: card.toDict(),
+                hand_cards: this.pending_choice.hand_cards || [],
+                deck_cards: this.pending_choice.deck_cards || [],
+                discard_cards: this.pending_choice.discard_cards || [],
+                message: this.pending_choice.message || '',
+            };
         }
         const equipOwnerId = card._placed_as_equipment_owner != null ? card._placed_as_equipment_owner : playerId;
         const playScripts = (card.def() && card.def().scripts) || {};
@@ -4202,6 +4363,11 @@ class LocalSoloEngine {
         if (!this.pending_choice) return { success: false, error: '没有待选择操作' };
         const pending = this.pending_choice;
         this.pending_choice = null;
+        if (pending.original_choice && typeof pending.original_choice === 'object') {
+            choice = choice && typeof choice === 'object'
+                ? { ...pending.original_choice, ...choice }
+                : { ...pending.original_choice };
+        }
         const card = new LocalCard(pending.card);
         const ps = this.players[playerId];
         if (choice == null) {
@@ -4214,6 +4380,11 @@ class LocalSoloEngine {
         ps.cards_played_this_turn[card.def_id] = dupCount + 1;
         const handCard = ps.findHandCard(card.instance_id);
         if (handCard) ps.removeHandCard(card.instance_id);
+        if (this.cardNeedsChoice(card) && !this.choiceSatisfiesRequest(card, choice)) {
+            return this.executeCardEffect(playerId, card, choice);
+        }
+        const responseResult = this.checkCardResponseAfterChoice(playerId, card, choice);
+        if (responseResult) return responseResult;
         return this.executeCardEffect(playerId, card, choice);
     }
 

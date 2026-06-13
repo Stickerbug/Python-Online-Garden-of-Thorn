@@ -3241,6 +3241,168 @@ class GameEngine:
         ps.magic += card.cost_m
         ps.cards_played_this_turn[card.def_id] = max(0, played_count - 1)
 
+    def _choice_target_from_choice(self, choice: Optional[dict], default: int = -1) -> int:
+        if not isinstance(choice, dict):
+            return default
+        for key in ('target_player', 'target_player_id', 'target_id'):
+            if key in choice:
+                try:
+                    return int(choice.get(key))
+                except Exception:
+                    return default
+        return default
+
+    def _choice_request_satisfied(self, effect: Optional[dict], choice: Optional[dict], card: Optional[CardInstance] = None) -> bool:
+        if not isinstance(effect, dict):
+            return True
+        if not isinstance(choice, dict):
+            return False
+        effect_type = self._effect_type(effect)
+        params = self._effect_params(effect)
+        choice_type = self._choice_type_for_effect(effect, card)
+        if choice.get('cancelled') and params.get('continue_on_cancel'):
+            return True
+        if effect_type == 'request_target' or choice_type == 'choose_target':
+            return self._choice_target_from_choice(choice) >= 0
+        if effect_type == 'request_confirm' or choice_type == 'confirm':
+            return any(key in choice for key in ('confirmed', 'accepted'))
+        if choice_type == 'choose_same_attacks_from_hand':
+            ids = choice.get('target_instance_ids')
+            return isinstance(ids, list) and bool(ids)
+        if choice_type == 'choose_cards_from_hand':
+            ids = choice.get('target_instance_ids')
+            if isinstance(ids, list) and bool(ids):
+                return True
+            min_count = self._eval_int(0, params.get('min_count', 1), card, 1) if params else 1
+            max_count = self._eval_int(0, params.get('max_count', min_count), card, min_count) if params else 1
+            if min_count <= 1 and max_count <= 1 and choice.get('target_instance_id') is not None:
+                return True
+            return False
+        if choice_type in ('choose_card_from_discard',):
+            return choice.get('target_def_id') is not None or choice.get('target_instance_id') is not None
+        if choice_type in (
+            'choose_attack_from_hand', 'choose_card_from_hand', 'choose_card_to_discard',
+            'choose_from_deck', 'choose_from_discard', 'choose_from_exile',
+            'choose_equipment', 'choose_enemy_equipment', 'choose_from_enemy_hand',
+        ):
+            return choice.get('target_instance_id') is not None or choice.get('target_def_id') is not None
+        return bool(choice)
+
+    def _choice_type_for_effect(self, effect: Optional[dict], card: Optional[CardInstance] = None) -> str:
+        if not isinstance(effect, dict):
+            return ''
+        effect_type = self._effect_type(effect)
+        params = self._effect_params(effect)
+        if params.get('choice_type'):
+            return str(params.get('choice_type'))
+        if effect_type == 'request_target':
+            return 'choose_target'
+        if effect_type == 'request_card':
+            if params.get('multi') or params.get('choice_type') == 'choose_cards_from_hand':
+                return 'choose_cards_from_hand'
+            zone = str(params.get('zone') or '').strip()
+            if zone == 'deck':
+                return 'choose_from_deck'
+            if zone == 'discard':
+                return 'choose_from_discard'
+            if zone == 'exile':
+                return 'choose_from_exile'
+            if zone == 'equipment':
+                return 'choose_equipment'
+            return 'choose_card_from_hand'
+        if effect_type == 'request_confirm':
+            return 'confirm'
+        if effect_type == 'discard_choice_then_draw':
+            return 'choose_card_to_discard'
+        if effect_type == 'destroy_equipment_choice_or_first':
+            return 'choose_enemy_equipment'
+        if effect_type == 'choose_from_deck':
+            return 'choose_from_deck'
+        if effect_type == 'choose_from_discard':
+            return 'choose_from_discard'
+        if effect_type == 'steal_enemy_card':
+            return 'choose_from_enemy_hand'
+        return ''
+
+    def _choice_target_id_for_request(self, player_id: int, effect: Optional[dict]) -> Optional[int]:
+        if not isinstance(effect, dict):
+            return None
+        request_type = self._effect_type(effect)
+        params = self._effect_params(effect)
+        target_defaults = {
+            'request_card': 'self',
+            'choose_from_deck': 'self',
+            'choose_from_discard': 'self',
+            'destroy_equipment_choice_or_first': 'enemy',
+            'steal_enemy_card': 'enemy',
+        }
+        if request_type not in target_defaults:
+            return None
+        return self._resolve_target(player_id, params.get('target', target_defaults[request_type]))
+
+    def _queue_card_choice(self, player_id: int, card: CardInstance, choice: Optional[dict] = None,
+                           already_paid: bool = False) -> Optional[dict]:
+        choice_request = self._get_choice_request(card, choice)
+        if choice_request is None:
+            return None
+        choice_params = self._effect_params(choice_request)
+        choice_type = self._choice_type_for_effect(choice_request, card)
+        if choice_type == 'choose_target' and not choice_params and self._v2_play_requires_choice_target(card):
+            choice_params = {'target': 'all', 'include_self': True, 'alive_only': True}
+        prev_choice = getattr(self, '_active_choice', None)
+        if isinstance(choice, dict):
+            self._active_choice = choice
+        try:
+            choice_target_id = self._choice_target_id_for_request(player_id, choice_request)
+        finally:
+            self._active_choice = prev_choice
+        self.pending_choice = {
+            'card': card.to_dict(),
+            'player_id': player_id,
+            'choice_type': choice_type,
+            'choice_params': choice_params,
+            'original_choice': dict(choice) if isinstance(choice, dict) else None,
+        }
+        if choice_target_id is not None:
+            self.pending_choice['target_player_id'] = choice_target_id
+        if already_paid:
+            ps = self.players[player_id]
+            if ps.find_hand_card(card.instance_id) is None:
+                ps.hand.insert(0, card)
+            self._refund_pending_choice_cost(player_id, card)
+        return {
+            'success': True,
+            'needs_choice': True,
+            'choice_type': choice_type,
+            'choice_params': choice_params,
+            'target_player_id': choice_target_id,
+            'card': card.to_dict(),
+        }
+
+    def _check_card_response_after_choice(self, player_id: int, card: CardInstance, choice: Optional[dict]) -> Optional[dict]:
+        prev_choice = getattr(self, '_active_choice', None)
+        if isinstance(choice, dict):
+            self._active_choice = choice
+        try:
+            needs_response = self._check_response_needed(player_id, card)
+            if not needs_response:
+                needs_response = self._check_precision_response_needed(player_id, card)
+        finally:
+            self._active_choice = prev_choice
+        if not needs_response:
+            return None
+        response_target_id = self._choice_target_from_choice(choice, 1 - player_id)
+        if not (0 <= response_target_id < len(self.players)):
+            response_target_id = 1 - player_id
+        self.pending_response = {
+            'card': card.to_dict(),
+            'player_id': player_id,
+            'target_player_id': response_target_id,
+            'original_choice': choice,
+            'is_precision': 'precision' in card.flags,
+        }
+        return {'success': True, 'needs_response': True, 'card': card.to_dict()}
+
     def play_card(self, player_id: int, card_instance_id: int, choice: Optional[dict] = None) -> dict:
         ps = self.players[player_id]
         card = ps.find_hand_card(card_instance_id)
@@ -3256,6 +3418,10 @@ class GameEngine:
         can_play, reason = self.can_play_card(player_id, card)
         if not can_play:
             return {'success': False, 'error': reason}
+        if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
+            queued = self._queue_card_choice(player_id, card, choice, already_paid=False)
+            if queued:
+                return queued
         if not self._defer_v2_before_play_until_choice(card, choice):
             self._run_v2_play_hook('before_play_card', player_id, card, choice)
             if getattr(self, 'pending_v2_ui', None) is not None:
@@ -3272,29 +3438,9 @@ class GameEngine:
             return {'success': False, 'error': '移出手牌失败'}
         ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', card_instance_id) or card_instance_id))
         self._apply_magic_acceleration_after_play(player_id, card)
-        needs_response = self._check_response_needed(player_id, card)
-        if not needs_response:
-            needs_response = self._check_precision_response_needed(player_id, card)
-        if needs_response:
-            response_target_id = 1 - player_id
-            if isinstance(choice, dict):
-                for key in ('target_player', 'target_player_id', 'target_id'):
-                    if key in choice:
-                        try:
-                            maybe_target = int(choice.get(key))
-                            if 0 <= maybe_target < len(self.players):
-                                response_target_id = maybe_target
-                                break
-                        except Exception:
-                            pass
-            self.pending_response = {
-                'card': card.to_dict(),
-                'player_id': player_id,
-                'target_player_id': response_target_id,
-                'original_choice': choice,
-                'is_precision': 'precision' in card.flags,
-            }
-            return {'success': True, 'needs_response': True, 'card': card.to_dict()}
+        response_result = self._check_card_response_after_choice(player_id, card, choice)
+        if response_result:
+            return response_result
         return self._execute_card_effect(player_id, card, choice)
 
     def _check_response_needed(self, player_id: int, card: CardInstance) -> bool:
@@ -3706,6 +3852,11 @@ class GameEngine:
         hand_card = ps.find_hand_card(card.instance_id)
         if hand_card:
             ps.remove_hand_card(card.instance_id)
+        if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
+            return self._execute_card_effect(player_id, card, choice)
+        response_result = self._check_card_response_after_choice(player_id, card, choice)
+        if response_result:
+            return response_result
         return self._execute_card_effect(player_id, card, choice)
 
 
@@ -4544,23 +4695,24 @@ class GameEngine:
         self.log_msg(log or f"{target_card.name_cn}移入弃牌堆")
 
     def _atomic_move_to_hand(self, player_id, card, params, log, choice, context):
+        is_magnet = str(getattr(card, 'def_id', '') or '').lower().endswith('magnet')
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'selected_card'}), card)
         if not target_card:
-            if getattr(card, 'def_id', '') == 'Magnet':
+            if is_magnet:
                 self._clear_hand_reveal_for_player(player_id)
             return
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         if not (0 <= target_id < len(self.players)):
-            if getattr(card, 'def_id', '') == 'Magnet':
+            if is_magnet:
                 self._clear_hand_reveal_for_player(player_id)
             return
         if not self.players[target_id].can_add_to_hand():
-            if getattr(card, 'def_id', '') == 'Magnet':
+            if is_magnet:
                 self._clear_hand_reveal_for_player(player_id)
             return
         owner_id, zone_name = self._remove_card_from_current_zone(target_card)
         self.players[target_id].add_to_hand(target_card)
-        if getattr(card, 'def_id', '') == 'Magnet':
+        if is_magnet:
             if owner_id is not None and owner_id != target_id and zone_name == 'hand':
                 self.log_msg(log or f"{self.pn(player_id)}用磁铁从{self.pn(owner_id)}手牌中获得了{target_card.name_cn}")
             self._clear_hand_reveal_for_player(player_id)
@@ -5224,8 +5376,15 @@ class GameEngine:
         return self.players[1 - player_id].equipment
 
     def _resolve_target(self, player_id, target_str):
+        if isinstance(target_str, int):
+            return target_str
         if not target_str or target_str == 'self':
             return player_id
+        elif target_str in ('target', 'choice_target', 'selected_target', 'chosen_target'):
+            selected = self._selected_choice_target(-1)
+            if 0 <= selected < len(self.players):
+                return selected
+            return 1 - player_id
         elif target_str == 'enemy':
             return 1 - player_id
         elif target_str == 'both':
@@ -5692,10 +5851,18 @@ class GameEngine:
                 if isinstance(direct_nested, list):
                     yield from self._walk_choice_effects(direct_nested)
 
-    def _get_choice_request(self, card: CardInstance):
+    def _get_choice_request(self, card: CardInstance, choice: Optional[dict] = None):
         effects = list(self._play_effects_for_card(card) or []) + list(self._v2_play_steps_for_card(card) or [])
         for effect in self._walk_choice_effects(effects):
             effect_type = self._effect_type(effect)
+            is_choice_effect = effect_type in self.CHOICE_EFFECT_TYPES or effect_type in (
+                'discard_choice_then_draw', 'destroy_equipment_choice_or_first',
+                'choose_from_deck', 'choose_from_discard', 'steal_enemy_card',
+            )
+            if not is_choice_effect:
+                continue
+            if self._choice_request_satisfied(effect, choice, card):
+                continue
             if effect_type in self.CHOICE_EFFECT_TYPES:
                 return effect
             if effect_type in ('discard_choice_then_draw', 'destroy_equipment_choice_or_first',
@@ -6036,7 +6203,12 @@ class GameEngine:
         if target_str in ('choice_target', 'selected_target', 'chosen_target'):
             target_id = self._selected_choice_target(player_id)
             return target_id if 0 <= target_id < len(self.players) else player_id
-        if target_str in ('event_target', 'target'):
+        if target_str == 'target':
+            target_id = self._selected_choice_target(-1)
+            if 0 <= target_id < len(self.players):
+                return target_id
+            return int(context.get('target_id', player_id))
+        if target_str == 'event_target':
             return int(context.get('target_id', player_id))
         if target_str in ('event_source', 'source', 'last_actor', 'damage_source'):
             return int(context.get('source_id', player_id))
@@ -6438,26 +6610,7 @@ class GameEngine:
     def _get_choice_type(self, card: CardInstance) -> str:
         effect = self._get_choice_request(card)
         if effect:
-            effect_type = self._effect_type(effect)
-            params = self._effect_params(effect)
-            if effect_type == 'request_target':
-                return 'choose_target'
-            if effect_type == 'request_card':
-                if params.get('multi') or params.get('choice_type') == 'choose_cards_from_hand':
-                    return 'choose_cards_from_hand'
-                return params.get('choice_type') or params.get('zone') or 'choose_card_from_hand'
-            if effect_type == 'request_confirm':
-                return 'confirm'
-            if effect_type == 'discard_choice_then_draw':
-                return 'choose_card_to_discard'
-            if effect_type == 'destroy_equipment_choice_or_first':
-                return 'choose_enemy_equipment'
-            if effect_type == 'choose_from_deck':
-                return 'choose_from_deck'
-            if effect_type == 'choose_from_discard':
-                return 'choose_from_discard'
-            if effect_type == 'steal_enemy_card':
-                return 'choose_from_enemy_hand'
+            return self._choice_type_for_effect(effect, card)
         if self._v2_play_requires_choice_target(card):
             return 'choose_target'
         base = self._base_get_choice_type(card)
@@ -6468,37 +6621,11 @@ class GameEngine:
             return True
         if not isinstance(choice, dict):
             return False
-        choice_request = self._get_choice_request(card)
-        choice_type = self._get_choice_type(card)
-        params = self._effect_params(choice_request) if isinstance(choice_request, dict) else {}
-        effect_type = self._effect_type(choice_request) if isinstance(choice_request, dict) else ''
-        if choice.get('cancelled') and params.get('continue_on_cancel'):
-            return True
-        if effect_type == 'request_target' or choice_type == 'choose_target':
-            return any(key in choice for key in ('target_player', 'target_player_id', 'target_id'))
-        if effect_type == 'request_confirm' or choice_type == 'confirm':
-            return any(key in choice for key in ('confirmed', 'accepted'))
-        if choice_type == 'choose_same_attacks_from_hand':
-            ids = choice.get('target_instance_ids')
-            return isinstance(ids, list) and bool(ids)
-        if choice_type == 'choose_cards_from_hand':
-            ids = choice.get('target_instance_ids')
-            if isinstance(ids, list) and bool(ids):
-                return True
-            min_count = self._eval_int(0, params.get('min_count', 1), card, 1) if params else 1
-            max_count = self._eval_int(0, params.get('max_count', min_count), card, min_count) if params else 1
-            if min_count <= 1 and max_count <= 1 and choice.get('target_instance_id') is not None:
-                return True
+        if self._get_choice_request(card, choice) is not None:
             return False
-        if choice_type in ('choose_card_from_discard',):
-            return choice.get('target_def_id') is not None or choice.get('target_instance_id') is not None
-        if choice_type in (
-            'choose_attack_from_hand', 'choose_card_from_hand', 'choose_card_to_discard',
-            'choose_from_deck', 'choose_from_discard', 'choose_from_exile',
-            'choose_equipment', 'choose_enemy_equipment', 'choose_from_enemy_hand',
-        ):
-            return choice.get('target_instance_id') is not None or choice.get('target_def_id') is not None
-        return bool(choice)
+        if self._v2_play_requires_choice_target(card):
+            return self._choice_target_from_choice(choice) >= 0
+        return True
 
     def _process_atomic_effects(self, player_id: int, card: CardInstance, choice: Optional[dict], context: str):
         context_name = context if isinstance(context, str) else str((context or {}).get('context', ''))
@@ -7795,48 +7922,16 @@ class GameEngine:
         self.negated_card = False
         needs_choice = self._card_needs_choice(card)
         if needs_choice and not self._choice_satisfies_request(card, choice):
-            choice_request = self._get_choice_request(card)
-            choice_params = self._effect_params(choice_request) if isinstance(choice_request, dict) else {}
-            choice_type = self._get_choice_type(card)
-            if choice_type == 'choose_target' and not choice_params and self._v2_play_requires_choice_target(card):
-                choice_params = {'target': 'all', 'include_self': True, 'alive_only': True}
-            choice_target_id = None
-            if isinstance(choice_request, dict):
-                request_type = self._effect_type(choice_request)
-                target_defaults = {
-                    'request_card': 'self',
-                    'choose_from_deck': 'self',
-                    'choose_from_discard': 'self',
-                    'destroy_equipment_choice_or_first': 'enemy',
-                    'steal_enemy_card': 'enemy',
-                }
-                if request_type in target_defaults:
-                    choice_target_id = self._resolve_target(player_id, choice_params.get('target', target_defaults[request_type]))
-            self.pending_choice = {
-                'card': card.to_dict(),
-                'player_id': player_id,
-                'choice_type': choice_type,
-                'choice_params': choice_params,
-                'original_choice': dict(choice) if isinstance(choice, dict) else None,
-            }
-            if choice_target_id is not None:
-                self.pending_choice['target_player_id'] = choice_target_id
-            ps.hand.insert(0, card)
-            self._refund_pending_choice_cost(player_id, card)
-            return {
-                'success': True,
-                'needs_choice': True,
-                'choice_type': choice_type,
-                'choice_params': choice_params,
-                'target_player_id': choice_target_id,
-                'card': card.to_dict(),
-            }
+            queued = self._queue_card_choice(player_id, card, choice, already_paid=True)
+            if queued:
+                return queued
         if card.def_id == 'Mimic' and isinstance(choice, dict) and choice.get('target_instance_id') is not None:
             target = ps.find_hand_card(choice.get('target_instance_id'))
             if target is not None and not self._can_pay_mimic_special_cost(player_id, target):
                 ps.hand.insert(0, card)
                 self._refund_pending_choice_cost(player_id, card)
                 return {'success': False, 'error': '\u80fd\u91cf\u4e0d\u8db3'}
+        play_log_marker = len(self.log)
         if self._uses_atomic_play_effects(card) and not self._is_chilli_card(card):
             self._log_card_play(player_id, card)
         if card.card_type == 'thorn':
@@ -7852,6 +7947,9 @@ class GameEngine:
         # Check if an effect (e.g. request_reorder_deck/assembler_effect) set pending_choice during execution
         # Must check BEFORE card disposition (discard/equip) to allow the choice to complete first
         if self.pending_choice is not None:
+            expected_play_log = f"{self.pn(player_id)}使用了{card.name_cn}"
+            if len(self.log) > play_log_marker and self.log[play_log_marker] == expected_play_log:
+                del self.log[play_log_marker]
             if ps.find_hand_card(card.instance_id) is None:
                 ps.hand.insert(0, card)
                 self._refund_pending_choice_cost(player_id, card)

@@ -730,6 +730,45 @@ class GameEngine2v2(GameEngine):
                 choice = merged
         return super().resolve_choice(player_id, choice)
 
+    def _check_card_response_after_choice(self, player_id: int, card: CardInstance, choice: Optional[dict]) -> Optional[dict]:
+        prev_choice = getattr(self, '_active_choice', None)
+        if isinstance(choice, dict):
+            self._active_choice = choice
+        try:
+            needs_response = self._check_response_needed(player_id, card)
+            needs_precision_response = self._check_precision_response_needed(player_id, card)
+        finally:
+            self._active_choice = prev_choice
+        if not (needs_response or needs_precision_response):
+            return None
+        target_id = self._selected_effect_target(player_id, choice)
+        if self._would_heal(card):
+            responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
+        elif self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0:
+            responder_ids = [target_id]
+        else:
+            responder_ids = []
+        counter_cards = []
+        for responder_id in responder_ids:
+            for c in self.players[responder_id].hand:
+                if self._card_can_counter(c, card):
+                    counter_cards.append({
+                        'instance_id': c.instance_id,
+                        'def_id': c.def_id,
+                        'cost_e_override': c.cost_e_override,
+                        'cost_m_override': c.cost_m_override,
+                        'responder_id': responder_id,
+                    })
+        self.pending_response = {
+            'player_id': player_id,
+            'target_player_id': target_id,
+            'card': card.to_dict(),
+            'original_choice': choice,
+            'counter_cards': counter_cards,
+            'is_precision': needs_precision_response and not needs_response,
+        }
+        return {'success': True, 'needs_response': True, 'card': card.to_dict()}
+
     def play_card(self, player_id: int, card_instance_id: int, target_player_id: int = -1, choice=None) -> dict:
         target_player_id = self._normalize_player_id(target_player_id)
         ps = self.players[player_id] if self._is_valid_player_id(player_id) else None
@@ -770,6 +809,10 @@ class GameEngine2v2(GameEngine):
                     'choice': dict(choice or {}),
                 }
                 return {'success': True, 'needs_ally_consent': True, 'card': card.to_dict(), 'target_player_id': target_player_id}
+        if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
+            queued = self._queue_card_choice(player_id, card, choice, already_paid=False)
+            if queued:
+                return queued
         if not self._defer_v2_before_play_until_choice(card, choice):
             self._run_v2_play_hook('before_play_card', player_id, card, choice)
             if getattr(self, 'pending_v2_ui', None) is not None:
@@ -783,6 +826,8 @@ class GameEngine2v2(GameEngine):
         self._apply_magic_acceleration_after_play(player_id, card)
         self._active_choice = choice if isinstance(choice, dict) else {}
         try:
+            if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
+                return self._execute_card_effect(player_id, card, choice)
             needs_response = self._check_response_needed(player_id, card)
             needs_precision_response = self._check_precision_response_needed(player_id, card)
             if needs_response or needs_precision_response:
@@ -1431,7 +1476,13 @@ class GameEngine2v2(GameEngine):
         if target_str in ('choice_target', 'selected_target', 'chosen_target'):
             target_id = self._selected_choice_target(player_id)
             return target_id if self._is_valid_effect_target(player_id, target_id) else player_id
-        if target_str in ('event_target', 'target'):
+        if target_str == 'target':
+            selected = self._selected_choice_target(-1)
+            if self._is_valid_effect_target(player_id, selected):
+                return selected
+            target_id = self._normalize_player_id(context.get('target_id', player_id))
+            return target_id if self._is_valid_effect_target(player_id, target_id) else -1
+        if target_str == 'event_target':
             target_id = self._normalize_player_id(context.get('target_id', player_id))
             return target_id if self._is_valid_effect_target(player_id, target_id) else -1
         if target_str in ('event_source', 'source', 'last_actor', 'damage_source'):
