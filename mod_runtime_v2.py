@@ -60,6 +60,11 @@ ADVANCED_ATOMIC_OPS = {
     "reveal_tag_hand",
     "assembler_effect",
     "request_reorder_deck",
+    "apply_jungle_status", "apply_turn_regen", "magic_grapes_damage",
+    "create_copies_to_deck_top", "consume_magic_for_status",
+    "jungle_root_gain", "jungle_root_remove_owned", "plank_immunity",
+    "magic_relic_trigger",
+    "yin_yang_effect", "flower_burst",
 }
 
 ATOMIC_OP_ALIASES = {
@@ -153,7 +158,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
             if not _valid_player(engine, target_id):
                 continue
             try:
-                dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision, attacker_id=source)
+                dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision, attacker_id=source, source_card=card)
             except TypeError:
                 dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
             total += int(dealt or 0)

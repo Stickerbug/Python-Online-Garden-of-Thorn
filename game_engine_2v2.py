@@ -327,6 +327,7 @@ class GameEngine2v2(GameEngine):
             ps.magic = INITIAL_MAGIC
         for pid in range(4):
             self._enforce_unique_cards_for_player(pid)
+        self._enforce_team_unique_cards()
         for i in range(4):
             self._apply_opening_event(i)
 
@@ -347,6 +348,27 @@ class GameEngine2v2(GameEngine):
         self.log_msg(f"回合顺序：{' → '.join(self.pn(p) for p in self.turn_order)}")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         self._start_player_turn(self.first_player)
+
+    def _enforce_team_unique_cards(self):
+        for team in self.teams:
+            grouped = {}
+            for pid in team:
+                ps = self.players[pid]
+                for zone in (ps.hand, ps.deck, ps.discard):
+                    for card in list(zone):
+                        if 'team_unique' in self._effective_card_flags(card):
+                            grouped.setdefault(card.def_id, []).append((pid, zone, card))
+            for _def_id, entries in grouped.items():
+                if len(entries) <= 1:
+                    continue
+                keep = random.choice(entries)
+                for pid, zone, card in entries:
+                    if (pid, zone, card) == keep:
+                        continue
+                    if card in zone:
+                        zone.remove(card)
+                        self.players[pid].exile.append(card)
+                        self.log_msg(f"{self.pn(pid)}的{card.name_cn}因队伍独一被放逐")
 
     def _build_turn_order(self, first_player: int) -> List[int]:
         first_team = self.team_of(first_player)
@@ -971,6 +993,8 @@ class GameEngine2v2(GameEngine):
         self._skip_current_turn_after_start = False
         self._apply_turn_start_effects_2v2(player_id)
         if self.game_over:
+            return
+        if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
         if getattr(self, '_skip_current_turn_after_start', False) or ps.health <= 0:
             self._advance_turn()
@@ -1627,7 +1651,15 @@ class GameEngine2v2(GameEngine):
             draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - ps.sluggish)
             if ps.enemy_draw_reduction > 0:
                 ps.enemy_draw_reduction -= 1
-            ps.draw_cards(draw_count)
+            if self._queue_foresight_replace_choice(player_id, draw_count, 'turn_start_2v2'):
+                self._pending_turn_start_2v2_state = {
+                    'turn_will_be_skipped': turn_will_be_skipped,
+                    'early_owner_turn_start_equipment': set(early_owner_turn_start_equipment),
+                }
+                if ps.sluggish > 0:
+                    self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
+                return
+            drawn = ps.draw_cards(draw_count)
             if ps.sluggish > 0:
                 self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
             pincer_overload = sum(
@@ -1649,7 +1681,7 @@ class GameEngine2v2(GameEngine):
                             aura_delta += self._eval_int(owner_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
             elixir_recovery = max(0, ELIXIR_RECOVERY - ps.enemy_e_reduction + aura_delta)
             ps.gain_elixir(elixir_recovery)
-            self.log_msg(f"{self.pn(player_id)}抽{draw_count}张牌，回复{elixir_recovery}E")
+            self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
             # Overload: deduct E at turn start, then clear
             if ps.overload > 0:
                 deduct = min(ps.overload, ps.elixir)
@@ -1727,24 +1759,92 @@ class GameEngine2v2(GameEngine):
         if turn_will_be_skipped:
             self.log_msg(f"{self.pn(player_id)}被跳过本回合")
             self._skip_current_turn_after_start = True
-        # Foresight: look at the top of deck and choose which cards to draw.
-        if ps.foresight > 0 and ps.deck and not self._is_status_immune(player_id):
-            peek_count = min(ps.foresight, len(ps.deck))
-            deck_cards = [c.to_dict() for c in ps.deck[:peek_count]]
-            self._pending_foresight = {'player_id': player_id, 'peek_count': peek_count}
-            self.pending_choice = {
-                'player_id': player_id,
-                'choice_type': 'foresight_replace',
-                'card': None,
-                'deck_cards': deck_cards,
-                'choice_params': {'max_count': peek_count},
-                'target_player_id': player_id,
-                'max_replace': peek_count,
-                'message': f'预知：查看牌堆顶{peek_count}张，选择要抽取的牌',
-            }
-        elif ps.foresight > 0:
-            ps.foresight = 0
-            self.log_msg(f"{self.pn(player_id)}的预知效果清除")
+        self._check_game_over()
+        if self.game_over:
+            return
+        if getattr(self, '_skip_current_turn_after_start', False) or ps.health <= 0:
+            self._advance_turn()
+            return
+        self.phase = 'action'
+        self._continue_honey_control_if_needed(player_id)
+
+    def _resume_turn_start_2v2(self, player_id: int, foresight_result: Optional[dict] = None):
+        state = getattr(self, '_pending_turn_start_2v2_state', None) or {}
+        self._pending_turn_start_2v2_state = None
+        ps = self.players[player_id]
+        early_owner_turn_start_equipment = set(state.get('early_owner_turn_start_equipment') or set())
+        turn_will_be_skipped = bool(state.get('turn_will_be_skipped'))
+        if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
+            ps.gain_elixir(2)
+        for owner_state in self.players:
+            for eq in getattr(owner_state, 'equipment', []):
+                eq.uses_this_turn = 0
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in list(owner_state.equipment):
+                if self._has_card_event(eq.card_def, 'any_turn_start'):
+                    self._run_card_event(owner_id, eq.card_instance, 'any_turn_start', None,
+                                         {'source_id': owner_id, 'target_id': player_id})
+        for eid in self.get_all_enemies(player_id):
+            for eq in list(self.players[eid].equipment):
+                if self._has_card_event(eq.card_def, 'enemy_turn_start') and self._run_card_event(
+                        eid, eq.card_instance, 'enemy_turn_start', None,
+                        {'source_id': eid, 'target_id': player_id}):
+                    continue
+                if eq.def_id == 'Corruption' and not eq.corruption_active:
+                    eq.corruption_active = True
+                    self.log_msg(f"{self.pn(eid)}的腐化效果激活")
+        early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
+        if ps.poison > 0:
+            self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
+            if self.game_over or ps.health <= 0:
+                return
+            self._decay_poison_after_turn_start(player_id)
+        if ps.fire > 0:
+            self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
+            if self.game_over or ps.health <= 0:
+                return
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in list(owner_state.equipment):
+                if getattr(eq, 'effect_target', owner_id) != player_id:
+                    continue
+                if self._equipment_turn_start_key(eq) not in early_owner_turn_start_equipment:
+                    eq.turns_equipped += 1
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in list(owner_state.equipment):
+                if getattr(eq, 'effect_target', owner_id) != player_id:
+                    continue
+                if self._equipment_turn_start_key(eq) in early_owner_turn_start_equipment:
+                    continue
+                handled = False
+                if self._has_card_event(eq.card_def, 'owner_turn_start'):
+                    handled = self._run_card_event(owner_id, eq.card_instance, 'owner_turn_start', None,
+                                                   {'source_id': owner_id, 'target_id': player_id})
+                if handled or eq.card_def.effects:
+                    continue
+                if eq.corruption_active:
+                    self._deal_direct_damage(player_id, 1, eq.card_def.name_cn)
+                if eq.def_id == 'Leaf':
+                    ps.heal(2)
+                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2H")
+                elif eq.def_id == 'Yucca':
+                    self._apply_yucca_turn_start_heal(player_id, eq.card_def.name_cn)
+                elif eq.def_id == 'MagicLeaf':
+                    ps.gain_magic(1)
+                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+1M")
+                elif eq.def_id == 'MagicYucca':
+                    ps.gain_magic(2)
+                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2M")
+                elif eq.def_id == 'Powder':
+                    ps.gain_elixir(2)
+                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2E")
+                elif eq.def_id == 'GoldenLeaf':
+                    ps.draw_cards(1)
+                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}多抽1张牌")
+        if turn_will_be_skipped:
+            self.log_msg(f"{self.pn(player_id)}被跳过本回合")
+            self._skip_current_turn_after_start = True
         self._check_game_over()
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,

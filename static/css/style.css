@@ -2102,23 +2102,35 @@ body {
 
 #about-panel .settings-inner {
   width: min(760px, calc(100vw - 32px));
-  max-height: min(86vh, 760px);
+  max-height: min(78vh, 680px);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-#about-page-rules {
+#about-panel .settings-inner > h3,
+#about-panel .settings-tabs,
+#about-panel .settings-footer {
+  flex: 0 0 auto;
+}
+
+#about-page-rules,
+#about-page-credits {
   min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
-#about-page-rules.hidden {
+#about-page-rules.hidden,
+#about-page-credits.hidden {
   display: none;
 }
 
 .about-rules-body {
-  max-height: min(58vh, 560px);
-  overflow-y: auto;
-  padding-right: 4px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
   line-height: 1.75;
 }
 

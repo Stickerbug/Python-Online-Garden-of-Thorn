@@ -296,6 +296,17 @@ VALID_LOGIC_OPS = {
     "goggles_enable",
     "assembler_effect",
     "request_reorder_deck",
+    "apply_jungle_status",
+    "apply_turn_regen",
+    "magic_grapes_damage",
+    "create_copies_to_deck_top",
+    "consume_magic_for_status",
+    "jungle_root_gain",
+    "jungle_root_remove_owned",
+    "plank_immunity",
+    "magic_relic_trigger",
+    "yin_yang_effect",
+    "flower_burst",
 }
 
 VALID_EVENT_HOOKS = {

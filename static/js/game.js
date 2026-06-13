@@ -87,13 +87,13 @@ const I18N = {
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_immune: 'Status Immune', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Blind', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_stealth: 'Stealth', flag_revealed: 'Revealed',
-        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_stealth: 'Stealth', tag_revealed: 'Revealed',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_stealth: 'Stealth', flag_revealed: 'Revealed', flag_team_limited: 'Team Limited', flag_team_unique: 'Team Unique', flag_power: 'Power', flag_magic_swift: 'Magic Swift',
+        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
-        foresight_replace_title: 'Foresight', foresight_replace_desc: 'Select up to {0} cards to draw from deck', foresight_replace_confirm: 'Draw',
+        foresight_replace_title: 'Foresight', foresight_replace_desc: 'Select up to {0} cards from the top of the deck to replace this draw', foresight_replace_confirm: 'Replace',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
         lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', start_draft: 'Start Draft', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
         card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard', fusion_layer: 'Fusion', fission_layer: 'Fission',
@@ -198,10 +198,10 @@ I18N.zh = { ...I18N.en,
     status_equip_protect: '装备保护', status_invincible: '无敌', status_immune: '状态免疫', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隐匿', flag_revealed: '被揭示',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
-    foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张牌堆顶的牌抽取', foresight_replace_confirm: '抽取',
+    foresight_replace_title: '预知', foresight_replace_desc: '从牌堆顶选择最多{0}张牌替换本次抽牌', foresight_replace_confirm: '替换',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
     round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
     select_event_desc: '选择一个配装倾向', start_draft: '开始选牌', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
@@ -240,7 +240,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隐匿', tag_revealed: '被揭示',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
@@ -568,7 +568,7 @@ Object.assign(I18N.ja, { waiting_opponent_counter: 'Waiting for opponent counter
 
 Object.assign(I18N.zh, {
     about_title: '关于', about_gameplay: '游戏玩法', about_credits: '致谢', about_contact: '联系方式',
-    credits_developer: '开发者', credits_special: '特别鸣谢',
+    credits_developer: '开发者', credits_design: '设计', credits_art: '美工', credits_special: '特别鸣谢',
     rules_intro_title: '游戏介绍', rules_type_thorn: '攻击(Thorn)', rules_type_bloom: '技能(Bloom)', rules_type_root: '装备(Root)', rules_type_guard: '反制(Guard)',
     rules_goal_title: '基本目标',
     rules_goal_text: 'Garden of Thorn 荆棘花园 是多人卡牌对战游戏。一般情况下，你的目标是通过使用四类牌：{thorn}、{bloom}、{root}和{guard}，让对方阵营的 H 降到 0，同时保护自己和队友的 H。',
@@ -607,7 +607,7 @@ Object.assign(I18N.zh, {
 
 Object.assign(I18N.en, {
     about_title: 'About', about_gameplay: 'How to Play', about_credits: 'Credits', about_contact: 'Contact',
-    credits_developer: 'Developer', credits_special: 'Special Thanks',
+    credits_developer: 'Developer', credits_design: 'Design', credits_art: 'Art', credits_special: 'Special Thanks',
     rules_intro_title: 'Game Introduction', rules_type_thorn: 'Thorn attacks', rules_type_bloom: 'Bloom skills', rules_type_root: 'Root equipment', rules_type_guard: 'Guard counters',
     rules_goal_title: 'Goal',
     rules_goal_text: 'Garden of Thorn 荆棘花园 is a multiplayer card battle game. In most modes, your goal is to use four card types: {thorn}, {bloom}, {root}, and {guard}, reduce the opposing side’s H to 0, and protect your own side’s H.',
@@ -662,7 +662,7 @@ Object.assign(I18N.en, {
 
 Object.assign(I18N.fr, {
     about_title: 'À propos', about_gameplay: 'Règles', about_credits: 'Crédits', about_contact: 'Contact',
-    credits_developer: 'Développeur', credits_special: 'Remerciements',
+    credits_developer: 'Développeur', credits_design: 'Design', credits_art: 'Art', credits_special: 'Remerciements',
     rules_intro_title: 'Présentation du jeu', rules_type_thorn: 'attaques Thorn', rules_type_bloom: 'compétences Bloom', rules_type_root: 'équipements Root', rules_type_guard: 'contres Guard',
     rules_goal_title: 'Objectif',
     rules_goal_text: 'Garden of Thorn 荆棘花园 est un jeu de cartes multijoueur. Dans la plupart des modes, votre objectif est d’utiliser quatre types de cartes : {thorn}, {bloom}, {root} et {guard}, afin de réduire le H du camp adverse à 0 tout en protégeant votre camp.',
@@ -703,7 +703,7 @@ Object.assign(I18N.fr, {
 
 Object.assign(I18N.pt, {
     about_title: 'Sobre', about_gameplay: 'Como jogar', about_credits: 'Créditos', about_contact: 'Contato',
-    credits_developer: 'Desenvolvedor', credits_special: 'Agradecimentos',
+    credits_developer: 'Desenvolvedor', credits_design: 'Design', credits_art: 'Arte', credits_special: 'Agradecimentos',
     rules_intro_title: 'Introdução do jogo', rules_type_thorn: 'ataques Thorn', rules_type_bloom: 'habilidades Bloom', rules_type_root: 'equipamentos Root', rules_type_guard: 'respostas Guard',
     rules_goal_title: 'Objetivo',
     rules_goal_text: 'Garden of Thorn 荆棘花园 é um jogo de cartas multijogador. Na maioria dos modos, seu objetivo é usar quatro tipos de cartas: {thorn}, {bloom}, {root} e {guard}, reduzir o H do lado inimigo a 0 e proteger seu lado.',
@@ -745,7 +745,7 @@ Object.assign(I18N.pt, {
 
 Object.assign(I18N.ja, {
     about_title: '概要', about_gameplay: '遊び方', about_credits: 'クレジット', about_contact: '連絡先',
-    credits_developer: '開発者', credits_special: 'Special Thanks',
+    credits_developer: '開発者', credits_design: 'デザイン', credits_art: '美術', credits_special: 'Special Thanks',
     rules_intro_title: 'ゲーム紹介', rules_type_thorn: '攻撃(Thorn)', rules_type_bloom: 'スキル(Bloom)', rules_type_root: '装備(Root)', rules_type_guard: 'カウンター(Guard)',
     rules_goal_title: '基本目標',
     rules_goal_text: 'Garden of Thorn 荆棘花园 はマルチプレイヤーカード対戦ゲームです。多くのモードでは、{thorn}、{bloom}、{root}、{guard}の4種類のカードを使い、相手側の H を 0 にしながら自分側の H を守ることが目標です。',
@@ -1839,6 +1839,10 @@ const CARD_FLAG_STYLES = {
     copy: { label: '', fg: '#e17055', bg: 'rgba(225,112,85,0.15)', cls: 'copy' },
     unique: { label: '', fg: '#fdcb6e', bg: 'rgba(253,203,110,0.15)', cls: 'unique' },
     swift: { label: '', fg: '#0984e3', bg: 'rgba(9,132,227,0.15)', cls: 'swift' },
+    magic_swift: { label: '', fg: '#6C5CE7', bg: 'rgba(108,92,231,0.15)', cls: 'magic-swift' },
+    power: { label: '', fg: '#C0392B', bg: 'rgba(192,57,43,0.14)', cls: 'power' },
+    team_limited: { label: '', fg: '#607D3B', bg: 'rgba(96,125,59,0.15)', cls: 'team-limited' },
+    team_unique: { label: '', fg: '#8D6E63', bg: 'rgba(141,110,99,0.15)', cls: 'team-unique' },
     fusion_layer: { label: '', fg: '#8e44ad', bg: 'rgba(142,68,173,0.15)', cls: 'fusion-layer' },
     fission_layer: { label: '', fg: '#0f766e', bg: 'rgba(15,118,110,0.14)', cls: 'fission-layer' },
     stealth: { label: '', fg: '#2C3E50', bg: '#EBF5FB', cls: 'stealth' },
@@ -1861,6 +1865,10 @@ const CARD_FLAG_TERM_COLORS = {
     copy: '#e17055',
     unique: '#fdcb6e',
     swift: '#0984e3',
+    magic_swift: '#6C5CE7',
+    power: '#C0392B',
+    team_limited: '#607D3B',
+    team_unique: '#8D6E63',
     fusion_layer: 'var(--color-poison)',
     fission_layer: '#0f766e',
     tomato_layer: '#b42318',
@@ -1893,7 +1901,8 @@ const _VANILLA_FLAGS = new Set([
     'precision', 'exile', 'non_stackable', 'indestructible', 'sprout',
     'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
     'infinite_exclude', 'rebound', 'copy', 'unique',
-    'swift', 'stealth', 'revealed',
+    'swift', 'stealth', 'revealed', 'team_limited', 'team_unique',
+    'power', 'magic_swift',
 ]);
 
 function normalizeCardFlag(flag) {
@@ -2024,6 +2033,20 @@ function buildInlineCardDict(defId, modifierText = '') {
                 if (numberValue > 0) {
                     cardDict.swift_value = numberValue;
                     cardDict.instance_flags.push('swift');
+                }
+                return;
+            }
+            if (key === 'magic_swift') {
+                if (numberValue > 0) {
+                    cardDict.magic_swift_value = numberValue;
+                    cardDict.instance_flags.push('magic_swift');
+                }
+                return;
+            }
+            if (key === 'power') {
+                if (numberValue > 0) {
+                    cardDict.power_value = numberValue;
+                    cardDict.instance_flags.push('power');
                 }
                 return;
             }
@@ -2975,8 +2998,10 @@ function updateStaticText() {
     if (aboutTabCredits) aboutTabCredits.textContent = UI.about_credits;
     const creditsDeveloper = $('credits-developer-title');
     if (creditsDeveloper) creditsDeveloper.textContent = UI.credits_developer;
-    const creditsContact = document.querySelector('#about-page-credits section:nth-child(2) h4');
-    if (creditsContact) creditsContact.textContent = UI.about_contact;
+    const creditsDesign = $('credits-design-title');
+    if (creditsDesign) creditsDesign.textContent = UI.credits_design || '设计';
+    const creditsArt = $('credits-art-title');
+    if (creditsArt) creditsArt.textContent = UI.credits_art || '美工';
     const creditsSpecial = $('credits-special-title');
     if (creditsSpecial) creditsSpecial.textContent = UI.credits_special;
     renderAboutRulesBody();
@@ -3818,7 +3843,7 @@ function getAllStatusDefs() {
         { key: 'shovel', label: UI.status_shovel, desc: '铲子相关的临时状态，会限制或改变当前回合行动。', color: '#5D4037' },
         { key: 'sluggish', label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         { key: 'overload', label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
-        { key: 'foresight', label: UI.status_foresight, desc: '每回合可以最多从抽牌堆替换层数张手牌。', color: '#2980B9' },
+        { key: 'foresight', label: UI.status_foresight, desc: '回合开始抽牌时，从牌堆顶选择最多层数张牌来替换本次抽牌。', color: '#2980B9' },
         { key: 'fracture', label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         { key: 'stagnation', label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
         { key: 'blind', label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始时手牌会被打乱，然后清空失明。', color: '#2C3E50' },
@@ -3834,10 +3859,9 @@ function getAllStatusDefs() {
             const label = getRegistryText(def, 'name', id);
             const desc = getRegistryText(def, 'description', '');
             const color = safeRegistryColor(def.color, existing ? existing.color : '#1F618D');
-            const icon = def.icon || '';
             result.set(id, {
                 key: id,
-                label: icon ? `${icon} ${label}` : label,
+                label,
                 desc: desc || (existing ? existing.desc : ''),
                 color,
                 source: def.v2_mod_id || def.source_mod || 'mod',
@@ -4906,7 +4930,19 @@ function setCustomRegistries(tags, statuses) {
 }
 
 function getCardDef(defId) {
-    return CARD_DEFS[defId] || null;
+    if (CARD_DEFS[defId]) return CARD_DEFS[defId];
+    const raw = String(defId || '');
+    if (raw.includes(':')) {
+        const local = raw.split(':').pop();
+        if (CARD_DEFS[local]) return CARD_DEFS[local];
+        const pascal = local
+            .split(/[_-]+/)
+            .filter(Boolean)
+            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+            .join('');
+        if (CARD_DEFS[pascal]) return CARD_DEFS[pascal];
+    }
+    return null;
 }
 
 function getFlagLabel(flag) {
@@ -5008,7 +5044,11 @@ function getCardEffectTextForInstance(cardDict, cardDef) {
     const extraHits = Math.max(0, Number(cardDict && cardDict.extra_hits || 0));
     if (!extraHits || !text || !cardDef) return text;
     const info = getAttackDamageBaseInfo(cardDict || {}, cardDef);
-    const baseHits = Math.max(1, Math.round(Number((info && info.hits) || cardDef.hits || 1)));
+    const baseHits = Math.max(
+        1,
+        Math.round(Number((info && info.hits) || 1)),
+        Math.round(Number(cardDef.hits || 1))
+    );
     const nextHits = baseHits + extraHits;
     if (nextHits <= baseHits || baseHits < 2) return text;
     if (info && !info.triangle) {
@@ -5016,8 +5056,17 @@ function getCardEffectTextForInstance(cardDict, cardDef) {
         const oldHitPattern = new RegExp(`(\\d+\\s*[DＤ]\\s*[x×${times}]\\s*)${baseHits}`, 'g');
         text = text.replace(oldHitPattern, `$1${nextHits}`);
     }
+    const baseCopyCount = Math.max(0, baseHits - 1);
+    const nextCopyCount = Math.max(0, nextHits - 1);
+    if (nextCopyCount > baseCopyCount && baseCopyCount > 0) {
+        text = text.replace(
+            new RegExp(`(将)${baseCopyCount}(张\\s*\\[\\[card:[^\\]]+\\]\\])`, 'g'),
+            `$1${nextCopyCount}$2`
+        );
+    }
     text = text.replace(new RegExp(`(破损\\s*[x×]\\s*)${baseHits}(\\s*层)`, 'g'), `$1${nextHits}$2`);
-    text = text.replace(new RegExp(`([（(])\\s*${baseHits}\\s*(子瓣|petals?|pétales?|pétalas|лепестка|лепестков|子弁)(\\s*[）)])`, 'gi'), `$1${nextHits}$2$3`);
+    text = text.replace(new RegExp(`${baseHits}(\\s*层\\s*\\d+\\s*级\\s*(?:回合回复|魔力回合回复))`, 'g'), `${nextHits}$1`);
+    text = text.replace(new RegExp(`([（(])\\s*${baseHits}\\s*(子瓣|petals?|pétales?|pétalas|лепестка|лепестков|子弁)([^）)]*[）)])`, 'gi'), `$1${nextHits}$2$3`);
     return text;
 }
 
@@ -6161,6 +6210,10 @@ function getTermIntroLibrary() {
         response: { label: UI.counter || '反制', desc: '对方行动满足条件时会出现响应机会。反制能改变对方行动的结果。', color: CARD_TYPE_COLORS.guard },
         same_name_penalty: { label: '同名卡惩罚', desc: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', color: COLORS.elixir },
         revealed: { label: UI.tag_revealed || '被揭示', desc: '在手中时永久对对手展示。', color: '#E74C3C' },
+        team_limited: { label: UI.tag_team_limited || '队伍限定', desc: '只会出现在一队至少 2 名玩家的模式；单人训练场可选，但通常没有实际意义。', color: '#607D3B' },
+        team_unique: { label: UI.tag_team_unique || '队伍独一', desc: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', color: '#8D6E63' },
+        power: { label: UI.tag_power || '威力', desc: '此牌造成的每段 D 增加。若是多段 D，会按段数把威力向上分配。', color: '#C0392B' },
+        magic_swift: { label: UI.tag_magic_swift || '魔力迅捷', desc: 'M 花费减少对应层数，最低为 0M。', color: '#6C5CE7' },
         fusion_layer: { label: UI.fusion_layer || '聚变', desc: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#8E44AD' },
         fission_layer: { label: UI.fission_layer || '裂变', desc: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#2874A6' },
         tomato_layer: { label: UI.tomato_layer || '层数', desc: '番茄在手中每保留一回合增加层数，最多 6 层；打出后层数重置。', color: '#C0392B' },
@@ -6201,6 +6254,10 @@ function getIntroFlagDescription(flag, custom = null) {
         copy: '进入手中时，将层数张放逐复制加入手中。',
         unique: '整场对局自己总牌库中仅允许出现一张，多余的将被放逐。',
         swift: 'E花费减少X，最少为0。',
+        magic_swift: 'M花费减少X，最少为0。',
+        power: '此牌造成的每段D增加。多段D会按段数把威力向上分配。',
+        team_limited: '只在一队至少2名玩家的模式出现；单人训练场可选，但通常没有实际意义。',
+        team_unique: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。',
         stealth: '不会触发对手的响应窗口。',
         revealed: '在手中时永久对对手展示。',
         fusion_layer: getTermIntroLibrary().fusion_layer.desc,
@@ -6336,7 +6393,7 @@ function getStatusIntroItem(statusInfo) {
         shovel: { label: UI.status_shovel, desc: '表示已使用铲子，此时不能使用卡牌。', color: '#5D4037' },
         sluggish: { label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         overload: { label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
-        foresight: { label: UI.status_foresight, desc: '每回合可以最多从抽牌堆替换层数张手牌。', color: '#2980B9' },
+        foresight: { label: UI.status_foresight, desc: '回合开始抽牌时，从牌堆顶选择最多层数张牌来替换本次抽牌。', color: '#2980B9' },
         fracture: { label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         stagnation: { label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
         blind: { label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始时手牌会被打乱，然后清空失明。', color: '#2C3E50' },
@@ -6350,6 +6407,12 @@ function getStatusIntroItem(statusInfo) {
         desc: '状态会暂时改变玩家的资源、行动或受伤规则。具体效果由卡牌定义。',
         color: (statusInfo && statusInfo.fg) || COLORS.text_primary,
     };
+}
+
+function getStatusDisplayText(statusInfo) {
+    const item = getStatusIntroItem(statusInfo || {});
+    const value = statusInfo && statusInfo.val != null && String(statusInfo.val) !== '' ? String(statusInfo.val) : '';
+    return value ? `${item.label}:${value}` : item.label;
 }
 
 function ensureTermIntroOverlay() {
@@ -6551,15 +6614,14 @@ function showTermIntroForStatus(statusInfo) {
     const cardSlot = overlay.querySelector('#term-intro-card');
     const title = overlay.querySelector('#term-intro-title');
     const list = overlay.querySelector('#term-intro-list');
-    const valueText = statusInfo && statusInfo.val ? `<span class="term-intro-status-value">${escapeHtml(String(statusInfo.val))}</span>` : '';
+    const displayText = getStatusDisplayText(statusInfo || {});
     cardSlot.innerHTML = `
         <div class="term-intro-status-card" style="--term-color:${escapeHtml(item.color || COLORS.text_primary)}">
-            <div class="term-intro-status-name">${escapeHtml(item.label)}</div>
-            ${valueText}
+            <div class="term-intro-status-name">${escapeHtml(displayText)}</div>
             <div class="term-intro-status-note">状态</div>
         </div>
     `;
-    title.textContent = `${item.label} · 状态说明`;
+    title.textContent = `${displayText} · 状态说明`;
     const terms = [item];
     if (statusInfo && statusInfo.val) {
         terms.push(getTermIntroLibrary().layers);
@@ -7418,19 +7480,19 @@ function connectSocket(serverUrl) {
                 updateStatus(UI.game_over);
                 return;
             }
+            hideModal();
             updateStatus(UI.opponent_disconnected);
-            socket.emit('return_lobby');
-            clearNetworkMatchStateForLobby();
-            showView('view-lobby');
-            phase = 'lobby';
+            flashStatus(UI.opponent_disconnected, 2400, 'warning');
+            return;
         } else if (data && (data.reconnect_timeout > 0 || data.wait_forever)) {
             showOpponentDCWaiting(data);
         } else {
-            updateStatus(UI.opponent_disconnected);
-            socket.emit('return_lobby');
-            clearNetworkMatchStateForLobby();
-            showView('view-lobby');
-            phase = 'lobby';
+            showOpponentDCWaiting({
+                reconnect_timeout: 0,
+                wait_forever: true,
+                opponent_nickname: (data && data.opponent_nickname) || UI.opponent || '?',
+            });
+            flashStatus(UI.opponent_disconnected, 2400, 'warning');
         }
     });
     bindSocketEvent('opponent_reconnected', () => {
@@ -12650,8 +12712,28 @@ function renderStatusTags(containerId, playerData) {
     if (p.weakness > 0) tags.push({ key: 'weakness', name: UI.status_weakness, abbr: 'Wk', val: p.weakness, fg: '#8E44AD', bg: '#F4ECF7' });
     if (p.bleed > 0) tags.push({ key: 'bleed', name: UI.status_bleed, abbr: 'Bld', val: p.bleed, fg: '#922B21', bg: '#FDEDEC' });
     if (p.fragment_stacks > 0) tags.push({ key: 'fragment', name: UI.status_fragment, abbr: 'Frg', val: p.fragment_stacks, fg: '#795548', bg: '#EFEBE9' });
+    const turnHealTurns = Number(customStatuses['jungle:turn_heal_turns'] || 0);
+    const turnHealPower = Number(customStatuses['jungle:turn_heal_power'] || 0);
+    if (turnHealTurns > 0 && turnHealPower > 0) {
+        tags.push({ key: 'jungle:turn_heal_turns', name: '回合回复', abbr: 'Reg', val: `${turnHealTurns};${turnHealPower}`, fg: '#F48FB1', bg: '#FDEDF2' });
+    }
+    const turnMagicTurns = Number(customStatuses['jungle:turn_magic_turns'] || 0);
+    const turnMagicPower = Number(customStatuses['jungle:turn_magic_power'] || 0);
+    if (turnMagicTurns > 0 && turnMagicPower > 0) {
+        tags.push({ key: 'jungle:turn_magic_turns', name: '魔力回合回复', abbr: 'MReg', val: `${turnMagicTurns};${turnMagicPower}`, fg: '#6C5CE7', bg: '#F0ECFF' });
+    }
+    const jungleStatusDisplay = {
+        'jungle:fragile': { name: '易损', abbr: '易损', fg: '#8E5A2A', bg: '#F7EFE8', title: '护甲降低对应层数；若降为负数，会使物理伤害增加。自己回合开始时清除。' },
+        'jungle:shield': { name: '护盾', abbr: '护盾', fg: '#2E7D7D', bg: '#E8F6F6', title: '消耗层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。' },
+        'jungle:root_status': { name: '树根', abbr: '树根', fg: '#6E8B3D', bg: '#EEF5E5', title: '增加护甲；受到物理伤害时减少1层。' },
+        'jungle:toxic_poison': { name: '剧毒', abbr: '剧毒', fg: '#5E8C31', bg: '#EEF6E7', title: '中毒结算后施加对应层数的中毒。' },
+    };
+    Object.entries(jungleStatusDisplay).forEach(([key, info]) => {
+        const count = Number(customStatuses[key] || 0);
+        if (count > 0) tags.push({ key, name: info.name, abbr: info.abbr, val: count, fg: info.fg, bg: info.bg, title: info.title });
+    });
     if (customStatuses && typeof customStatuses === 'object') {
-        const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','status_immune','immune','状态免疫']);
+        const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','status_immune','immune','状态免疫','jungle:turn_heal_turns','jungle:turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power', ...Object.keys(jungleStatusDisplay)]);
         Object.entries(customStatuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;
@@ -13919,7 +14001,8 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
         const fullText = UI.equip_info.replace('{0}', equipName).replace('{1}', turns) + layerSuffix + (corruption ? UI.equip_corruption : '');
         const compactTextValue = `${equipName}${turns ? ` · ${turns}` : ''}${layerSuffix}${corruption ? ` · ${UI.compact_corrupted}` : ''}`;
         const text = isMinimalUiStyle() ? compactTextValue : fullText;
-        if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && isFriendlyTurn() && !isSpectating) {
+        const triggerReady = !(cardInst.def_id === 'Flower' && turns < 2);
+        if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && triggerReady && isFriendlyTurn() && !isSpectating) {
             const btn = document.createElement('button');
             btn.className = 'btn btn-small btn-equip-trigger';
             const triggerText = UI.equip_trigger_cost.replace('{0}', fullText).replace('{1}', cardDef.trigger_cost_e);

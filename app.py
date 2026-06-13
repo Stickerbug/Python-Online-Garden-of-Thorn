@@ -7972,7 +7972,14 @@ def on_disconnect():
                     }
                     room.disconnected_players[sid].update(special_public_fields(player))
                     dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)
-                    pregame_disconnect = room.engine.phase in ('draft', 'event_select', 'event_reveal')
+                    current_phase = getattr(room.engine, 'phase', '')
+                    pregame_disconnect = current_phase in ('draft', 'event_select', 'event_reveal')
+                    admin_event(
+                        'player',
+                        f'{nickname} disconnect flow room={room_id} phase={current_phase} pregame={pregame_disconnect} dead_2v2={dead_2v2_player}',
+                        sid=sid,
+                        room_id=room_id,
+                    )
                     if not dead_2v2_player:
                         for other_sid in room.player_sids:
                             if other_sid != sid and other_sid in players:
@@ -9752,12 +9759,25 @@ def on_return_lobby(data=None):
         if sid not in players:
             return
         player = players[sid]
+        admin_event(
+            'player',
+            f'{player.get("nickname", "?")} requested return_lobby status={player.get("status")} room_id={player.get("room_id")}',
+            sid=sid,
+            room_id=player.get('room_id'),
+        )
         if player.get('spectating_room') is not None:
             _handle_leave_spectate_internal(sid)
             return
         room_id = player.get('room_id')
         if room_id is not None and room_id in rooms:
             room = rooms[room_id]
+            room_phase = getattr(room.engine, 'phase', '')
+            admin_event(
+                'player',
+                f'return_lobby handling room={room_id} room_phase={room_phase} game_over={getattr(room.engine, "game_over", False)}',
+                sid=sid,
+                room_id=room_id,
+            )
             pidx = room.player_index(sid)
             if pidx >= 0 and not getattr(room.engine, 'game_over', False):
                 current_team = _room_team_for_player(room, pidx)

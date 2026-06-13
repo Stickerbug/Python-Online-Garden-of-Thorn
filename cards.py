@@ -29,6 +29,7 @@ _VANILLA_FLAGS = {
     'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
     'infinite_exclude', 'rebound', 'copy', 'unique',
     'swift', 'stealth', 'revealed', 'rebound', 'nothingness',
+    'team_limited', 'team_unique', 'power', 'magic_swift',
 }
 
 
@@ -127,6 +128,8 @@ class CardInstance:
     instance_flags: Set[str] = field(default_factory=set)
     disabled_flags: Set[str] = field(default_factory=set)
     swift_value: int = 0
+    magic_swift_value: int = 0
+    power_value: int = 0
     extra_hits: int = 0
 
     def __post_init__(self):
@@ -157,7 +160,8 @@ class CardInstance:
 
     @property
     def cost_m(self) -> int:
-        return self.cost_m_override if self.cost_m_override is not None else self.card_def.cost_m
+        base = self.cost_m_override if self.cost_m_override is not None else self.card_def.cost_m
+        return max(0, base - max(0, int(self.magic_swift_value or 0)))
 
     @property
     def card_type(self) -> str:
@@ -187,6 +191,8 @@ class CardInstance:
             'instance_flags': list(self.instance_flags) if self.instance_flags else [],
             'disabled_flags': list(self.disabled_flags) if self.disabled_flags else [],
             'swift_value': self.swift_value,
+            'magic_swift_value': self.magic_swift_value,
+            'power_value': self.power_value,
             'extra_hits': self.extra_hits,
         }
 
@@ -208,6 +214,8 @@ class CardInstance:
             instance_flags=normalize_card_flags(d.get('instance_flags', [])),
             disabled_flags=normalize_card_flags(d.get('disabled_flags', [])),
             swift_value=max(0, int(d.get('swift_value', 0))),
+            magic_swift_value=max(0, int(d.get('magic_swift_value', 0))),
+            power_value=max(0, int(d.get('power_value', 0))),
             extra_hits=max(0, int(d.get('extra_hits', 0))),
         )
 
@@ -228,6 +236,8 @@ class CardInstance:
             instance_flags=set(self.instance_flags),
             disabled_flags=set(self.disabled_flags),
             swift_value=self.swift_value,
+            magic_swift_value=self.magic_swift_value,
+            power_value=self.power_value,
             extra_hits=self.extra_hits,
         )
         return c
