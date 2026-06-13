@@ -13924,6 +13924,12 @@ function equipmentChoosesTargetOnTrigger(cardDef) {
     return true;
 }
 
+function equipmentTriggerForbidsSelfTarget(cardDef) {
+    if (!cardDef || cardDef.card_type !== 'root') return false;
+    if (cardHasSelfOnlyFlag({}, cardDef)) return false;
+    return getEquipmentTriggerPayloads(cardDef).some(effectTreeUsesEventTarget);
+}
+
 async function chooseEnemyTarget(title) {
     const targets = getEnemyTargetOptions();
     if (!targets.length) {
@@ -14019,7 +14025,9 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
                         ? normalizePlayerId(gameState && gameState.your_id)
                         : await choosePlayerTarget(
                             UI.choose_target || UI.select_target || 'Choose target',
-                            { includeSelf: true, candidates: 'all', aliveOnly: true },
+                            equipmentTriggerForbidsSelfTarget(cardDef)
+                                ? { includeSelf: false, candidates: 'all', aliveOnly: true }
+                                : { includeSelf: true, candidates: 'all', aliveOnly: true },
                         );
                     if (targetId < 0) return;
                     payload.target_player_id = targetId;

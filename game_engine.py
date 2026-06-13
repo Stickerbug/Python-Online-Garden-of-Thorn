@@ -6439,6 +6439,22 @@ class GameEngine:
             return card is not None and card.def_id == a
         return a == b
 
+    def _effect_tree_uses_event_target(self, value):
+        if value in ('event_target', 'target', 'choice_target', 'selected_target', 'chosen_target'):
+            return True
+        if isinstance(value, list):
+            return any(self._effect_tree_uses_event_target(item) for item in value)
+        if isinstance(value, dict):
+            return any(self._effect_tree_uses_event_target(item) for item in value.values())
+        return False
+
+    def _equipment_trigger_forbids_self_target(self, card_def):
+        if not card_def or 'self_only' in getattr(card_def, 'flags', set()):
+            return False
+        events = getattr(card_def, 'v2_events', None) or {}
+        event_def = events.get('on_equipment_trigger')
+        return self._effect_tree_uses_event_target(event_def)
+
     def _resolve_target(self, player_id, target_str):
         context = getattr(self, '_active_effect_context', {}) or {}
         if isinstance(target_str, dict) and target_str.get('ref') == 'card_owner':
@@ -9341,6 +9357,8 @@ class GameEngine:
             target_id = -1
         if not (0 <= target_id < len(self.players)):
             target_id = 1 - player_id
+        if self._equipment_trigger_forbids_self_target(eq.card_def) and target_id == player_id:
+            return {'success': False, 'error': '不能选择自己作为目标'}
         choice = {'target_player': target_id, 'target_player_id': target_id, 'target_id': target_id}
         if has_mod_trigger and self._run_card_event(player_id, eq.card_instance, 'equipment_trigger', choice,
                                                     {'source_id': player_id, 'target_id': target_id}):

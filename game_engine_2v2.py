@@ -1983,6 +1983,8 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '能量不足'}
         if not self._is_valid_effect_target(player_id, target_player_id):
             return {'success': False, 'error': '必须选择一名存活玩家'}
+        if self._equipment_trigger_forbids_self_target(eq.card_def) and target_player_id == player_id:
+            return {'success': False, 'error': '不能选择自己作为目标'}
         if target_player_id != player_id and self.is_ally(player_id, target_player_id) and not ally_approved:
             self.pending_ally_request = {
                 'action': 'trigger',
@@ -2047,6 +2049,22 @@ class GameEngine2v2(GameEngine):
             teammate_id = self.get_teammate(player_id)
             return teammate_id if self._is_valid_effect_target(player_id, teammate_id) else -1
         return player_id if self._is_valid_effect_target(player_id, player_id) else -1
+
+    def _effect_tree_uses_event_target(self, value):
+        if value in ('event_target', 'target', 'choice_target', 'selected_target', 'chosen_target'):
+            return True
+        if isinstance(value, list):
+            return any(self._effect_tree_uses_event_target(item) for item in value)
+        if isinstance(value, dict):
+            return any(self._effect_tree_uses_event_target(item) for item in value.values())
+        return False
+
+    def _equipment_trigger_forbids_self_target(self, card_def):
+        if not card_def or 'self_only' in getattr(card_def, 'flags', set()):
+            return False
+        events = getattr(card_def, 'v2_events', None) or {}
+        event_def = events.get('on_equipment_trigger')
+        return self._effect_tree_uses_event_target(event_def)
 
     def _resolve_targets(self, player_id, target_str):
         if isinstance(target_str, dict) and target_str.get('ref') == 'card_owner':
