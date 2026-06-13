@@ -32,7 +32,7 @@ from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
-    SETUP_ONLY_CARD_IDS, normalize_card_flag, normalize_card_flags,
+    normalize_card_flag, normalize_card_flags,
 )
 from mod_loader import GAME_VERSION, merge_mod_cards_to_card_defs, load_all_mods, get_mod_asset
 from mod_loadout_v2 import build_v2_loadout
@@ -149,7 +149,7 @@ DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = {
     'Troll Cards.gtnmod',
     'Thorn Cards.gtnmod',
 }
-BUILTIN_SETUP_CARD_IDS = set()
+BUILTIN_SETUP_CARD_IDS = {'ManaOrb'}
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
 VANILLA_CARD_ART_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'assets', 'card-art', 'vanilla')
 VANILLA_CARD_ART_URL = '/static/assets/card-art/vanilla'
@@ -2637,7 +2637,9 @@ def ensure_valid_disabled_mods(disabled_mods=None):
 
 def get_allowed_card_ids(disabled_mods=None):
     disabled = set(ensure_valid_disabled_mods(disabled_mods))
-    allowed = {ERROR_CARD_ID, *BUILTIN_SETUP_CARD_IDS}
+    allowed = {ERROR_CARD_ID}
+    if VANILLA_MOD_FILENAME not in disabled:
+        allowed.update(BUILTIN_SETUP_CARD_IDS)
     for mod in load_all_mods():
         if mod.errors:
             continue
@@ -2771,7 +2773,9 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
     import hashlib as _hl
     _h = _hl.sha256()
     active_mods = []
-    allowed_card_ids = {ERROR_CARD_ID, *BUILTIN_SETUP_CARD_IDS}
+    allowed_card_ids = {ERROR_CARD_ID}
+    if VANILLA_MOD_FILENAME not in disabled_set:
+        allowed_card_ids.update(BUILTIN_SETUP_CARD_IDS)
     v2_mods = []
     for mod in sorted(mods, key=lambda m: m.filename):
         if mod.filename in disabled_set or mod.errors:
@@ -5115,6 +5119,7 @@ def start_game(room):
         if sid in players:
             emit_room_game_phase(room, sid, 'playing')
     broadcast_game_state(room)
+    broadcast_lobby()
 
 
 def _build_solo_card(entry):
@@ -6839,11 +6844,12 @@ def api_cards():
             'hits': getattr(card_def, 'hits', 1),
             'copy_count': getattr(card_def, 'copy_count', 0),
             'swift_value': getattr(card_def, 'swift_value', 0),
+            'magic_swift_value': getattr(card_def, 'magic_swift_value', 0),
+            'power_value': getattr(card_def, 'power_value', 0),
             'image': image_url,
             'image_url': image_url,
             'upgraded_image': upgraded_image_url,
             'upgraded_image_url': upgraded_image_url,
-            'setup_only': def_id in BUILTIN_SETUP_CARD_IDS or def_id in SETUP_ONLY_CARD_IDS,
         }
         if getattr(card_def, 'v2_mod_id', ''):
             card_payload['v2_mod_id'] = getattr(card_def, 'v2_mod_id', '')
@@ -8800,7 +8806,7 @@ def on_solo_start(data):
         players[sid]['allowed_card_ids'] = allowed_card_ids
     def _valid_entry(entry):
         def_id = entry.get('def_id') if isinstance(entry, dict) else entry
-        return def_id in CARD_DEFS and def_id in allowed_card_ids and def_id not in BUILTIN_SETUP_CARD_IDS and def_id not in SETUP_ONLY_CARD_IDS
+        return def_id in CARD_DEFS and def_id in allowed_card_ids
     if any(not _valid_entry(entry) for entry in deck0 + deck1):
         emit('server_error', {'message': '训练场牌组中包含当前未启用的卡牌'})
         return

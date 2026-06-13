@@ -633,6 +633,25 @@ class LocalPlayer {
         this.magic = Math.min(this.magic + amount, this.max_magic);
     }
 
+    customStatusesDict() {
+        const keys = [
+            'jungle:fragile', 'fragile',
+            'jungle:shield', 'shield',
+            'jungle:turn_heal_turns', 'turn_heal_turns',
+            'jungle:turn_heal_power', 'turn_heal_power',
+            'jungle:turn_magic_turns', 'turn_magic_turns',
+            'jungle:turn_magic_power', 'turn_magic_power',
+            'jungle:root_status', 'jungle:root', 'root_status',
+            'jungle:toxic_poison', 'toxic_poison',
+        ];
+        const result = {};
+        keys.forEach(key => {
+            const value = toInt(this[key], 0);
+            if (value > 0) result[key] = value;
+        });
+        return result;
+    }
+
     toDict(includePrivate = true) {
         const data = {
             player_id: this.player_id,
@@ -684,6 +703,7 @@ class LocalPlayer {
             last_turn_damage_dealt: this.last_turn_damage_dealt,
             total_damage_taken: this.total_damage_taken,
             total_damage_dealt: this.total_damage_dealt,
+            custom_statuses: this.customStatusesDict(),
         };
         if (includePrivate) {
             data.hand = this.hand.map(card => card.toDict());
@@ -1362,7 +1382,7 @@ class LocalSoloEngine {
 
     cardAllowedForFatedDraw(defId) {
         const def = cardDef(defId);
-        if (!def || defId === ERROR_CARD_ID || def.setup_only) return false;
+        if (!def || defId === ERROR_CARD_ID) return false;
         return toInt(def.count, 0) > 0;
     }
 
@@ -1429,6 +1449,7 @@ class LocalSoloEngine {
         this._antennae_reveal[playerId] = null;
         this.runZoneOwnerTurnStartEvents(playerId);
         this.runTimedEffectsForTurn(playerId);
+        this.applyJungleTurnStartStatuses(playerId);
         this.players.forEach(owner => {
             owner.equipment.forEach(eq => { eq.uses_this_turn = 0; });
         });
@@ -1926,7 +1947,62 @@ class LocalSoloEngine {
             '邪眼': ps.nazar_active ? ps.nazar_big_hits : 0,
             Nazar: ps.nazar_active ? ps.nazar_big_hits : 0,
         };
-        return toInt(map[key], 0);
+        if (Object.prototype.hasOwnProperty.call(map, key)) return toInt(map[key], 0);
+        return toInt(ps[key], 0);
+    }
+
+    customStatusValue(playerId, ...keys) {
+        const ps = this.players[playerId];
+        if (!ps) return 0;
+        const values = keys.map(key => toInt(ps[String(key || '')], 0));
+        return Math.max(0, ...values);
+    }
+
+    setCustomStatusAliasGroup(playerId, primaryKey, keys, value) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        const amount = Math.max(0, toInt(value, 0));
+        const allKeys = Array.from(new Set([primaryKey, ...(keys || [])].filter(Boolean).map(String)));
+        allKeys.forEach(key => { ps[key] = 0; });
+        if (amount > 0) ps[String(primaryKey)] = amount;
+    }
+
+    mergeTurnRegenStatus(playerId, kind, turns, power) {
+        const isMagic = String(kind || '') === 'magic';
+        const turnsKey = isMagic ? 'jungle:turn_magic_turns' : 'jungle:turn_heal_turns';
+        const powerKey = isMagic ? 'jungle:turn_magic_power' : 'jungle:turn_heal_power';
+        const turnAliases = isMagic ? ['jungle:turn_magic_turns', 'turn_magic_turns'] : ['jungle:turn_heal_turns', 'turn_heal_turns'];
+        const powerAliases = isMagic ? ['jungle:turn_magic_power', 'turn_magic_power'] : ['jungle:turn_heal_power', 'turn_heal_power'];
+        const mergedTurns = this.customStatusValue(playerId, ...turnAliases) + Math.max(0, toInt(turns, 0));
+        const mergedPower = Math.max(this.customStatusValue(playerId, ...powerAliases), Math.max(0, toInt(power, 0)));
+        this.setCustomStatusAliasGroup(playerId, turnsKey, turnAliases, mergedTurns);
+        this.setCustomStatusAliasGroup(playerId, powerKey, powerAliases, mergedPower);
+        return [mergedTurns, mergedPower];
+    }
+
+    applyJungleTurnStartStatuses(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        ps['jungle:fragile'] = 0;
+        ps.fragile = 0;
+        const shield = this.customStatusValue(playerId, 'jungle:shield', 'shield');
+        if (shield > 0) this.setCustomStatusAliasGroup(playerId, 'jungle:shield', ['jungle:shield', 'shield'], Math.floor(shield / 2));
+        const healTurns = this.customStatusValue(playerId, 'jungle:turn_heal_turns', 'turn_heal_turns');
+        const healPower = this.customStatusValue(playerId, 'jungle:turn_heal_power', 'turn_heal_power');
+        if (healTurns > 0 && healPower > 0) {
+            ps.heal(healPower);
+            this.logMsg(`${this.pn(playerId)}的回合回复：+${healPower}H`);
+            this.setCustomStatusAliasGroup(playerId, 'jungle:turn_heal_turns', ['jungle:turn_heal_turns', 'turn_heal_turns'], healTurns - 1);
+            if (healTurns - 1 <= 0) this.setCustomStatusAliasGroup(playerId, 'jungle:turn_heal_power', ['jungle:turn_heal_power', 'turn_heal_power'], 0);
+        }
+        const magicTurns = this.customStatusValue(playerId, 'jungle:turn_magic_turns', 'turn_magic_turns');
+        const magicPower = this.customStatusValue(playerId, 'jungle:turn_magic_power', 'turn_magic_power');
+        if (magicTurns > 0 && magicPower > 0) {
+            ps.gainMagic(magicPower);
+            this.logMsg(`${this.pn(playerId)}的魔力回合回复：+${magicPower}M`);
+            this.setCustomStatusAliasGroup(playerId, 'jungle:turn_magic_turns', ['jungle:turn_magic_turns', 'turn_magic_turns'], magicTurns - 1);
+            if (magicTurns - 1 <= 0) this.setCustomStatusAliasGroup(playerId, 'jungle:turn_magic_power', ['jungle:turn_magic_power', 'turn_magic_power'], 0);
+        }
     }
 
     zoneSize(targetId, zoneName) {
@@ -3394,6 +3470,21 @@ class LocalSoloEngine {
         if (status) this.players[targetId][status] = amount;
     }
 
+    effect_apply_turn_regen(playerId, card, params, log, choice) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self', choice);
+        const kind = String(params.kind || 'heal');
+        const turns = this.evalInt(playerId, params.turns ?? params.amount ?? 1, card, 1, choice);
+        const power = this.evalInt(playerId, params.power ?? params.level ?? 1, card, 1, choice);
+        const [mergedTurns, mergedPower] = this.mergeTurnRegenStatus(targetId, kind, turns, power);
+        if (kind === 'magic') {
+            this.players[targetId].gainMagic(power);
+            this.logMsg(log || `${this.pn(targetId)}获得魔力回合回复：${mergedTurns};${mergedPower}，+${power}M`);
+        } else {
+            this.players[targetId].heal(power);
+            this.logMsg(log || `${this.pn(targetId)}获得回合回复：${mergedTurns};${mergedPower}，+${power}H`);
+        }
+    }
+
     effect_add_status(playerId, card, params, log, choice) {
         this.effect_status_add_named(playerId, card, { ...params, status: params.status || params.id || params.name }, log, choice);
     }
@@ -3975,7 +4066,11 @@ class LocalSoloEngine {
             this.applyCardEffect(playerId, card, choice);
         }
         const equipOwnerId = card._placed_as_equipment_owner != null ? card._placed_as_equipment_owner : playerId;
-        const scriptControlsPlay = getScriptEffects(card.def(), 'play').length > 0;
+        const playScripts = (card.def() && card.def().scripts) || {};
+        const scriptControlsPlay = (SCRIPT_ENTRY_ALIASES.play || ['play']).some(key =>
+            Object.prototype.hasOwnProperty.call(playScripts, key)
+            && scriptEffectsFrom(playScripts[key]).length > 0
+        );
         if ((card.card_type === 'root' && !scriptControlsPlay) || card._placed_as_equipment) {
             if (!this.findEquipmentForCard(equipOwnerId, card)) {
                 const eq = new LocalEquipment(card, equipOwnerId);

@@ -6,7 +6,6 @@ from cards import (
     CardInstance, CARD_DEFS, INITIAL_HEALTH, INITIAL_ELIXIR,
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     BASE_MAX_HEALTH, DRAW_PER_TURN, ELIXIR_RECOVERY,
-    SETUP_ONLY_CARD_IDS,
 )
 
 
@@ -120,8 +119,6 @@ class GameEngineInfiniteFire(GameEngine):
         ids = []
         weights = []
         for def_id, card_def in CARD_DEFS.items():
-            if def_id in SETUP_ONLY_CARD_IDS:
-                continue
             if self.allowed_card_ids is not None and def_id not in self.allowed_card_ids:
                 continue
             if is_infinite_excluded(card_def):

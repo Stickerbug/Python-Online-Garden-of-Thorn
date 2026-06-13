@@ -403,15 +403,6 @@ FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS = {
     # The weight is adjusted when extra Bloom mod cards enter the draft pool.
     'Sewage': (14, 100),
 }
-SETUP_ONLY_CARD_IDS = {
-    # These cards are kept available for setup conversions, but should never be
-    # offered by normal draft/pool generation.
-    'MagicBone',
-    'MagicStinger',
-    'MagicSewage',
-    'MagicNazar',
-    'MagicBubble',
-}
 HAND_LIMIT = 7
 DRAW_PER_TURN = 3
 ELIXIR_RECOVERY = 5
@@ -431,8 +422,6 @@ FIRST_PLAYER_HAND_SIZE = 4
 def _effective_draft_weights(allowed_def_ids: Optional[Set[str]] = None) -> Dict[str, float]:
     allowed = {}
     for def_id, card_def in CARD_DEFS.items():
-        if def_id in SETUP_ONLY_CARD_IDS:
-            continue
         if allowed_def_ids is not None and def_id not in allowed_def_ids:
             continue
         count = max(0, int(getattr(card_def, 'count', 0) or 0))
