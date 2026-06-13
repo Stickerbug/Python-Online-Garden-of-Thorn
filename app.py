@@ -5058,7 +5058,7 @@ def send_pregame_state(room, pidx, allow_sub_choice=False):
         emit_room_game_phase(room, sid, 'event_reveal')
         send_event_reveal_state(room, pidx)
         return
-    if status == 'sub_choice' and allow_sub_choice:
+    if status == 'sub_choice':
         emit_room_game_phase(room, sid, 'draft')
         send_event_sub_choice_state(room, pidx)
         return
