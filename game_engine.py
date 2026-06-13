@@ -7555,6 +7555,9 @@ class GameEngine:
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
         self._clear_turn_start_action_statuses(player_id)
+        early_owner_turn_start_equipment = self._run_owner_turn_start_action_status_equipment(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         if self.round_num > 1:
             sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
             draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - sluggish_reduction)

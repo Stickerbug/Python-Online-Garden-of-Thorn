@@ -8707,7 +8707,13 @@ def on_submit_event_sub_choice(data):
                 if engine._card_allowed_for_fated_draw(str(def_id)):
                     valid_ids.append(str(def_id))
             sub_choice = {'add_def_ids': valid_ids}
-        if not sub_choice and engine.needs_sub_choice(pidx):
+        event_id_text = str(engine.opening_event_picks[pidx])
+        # Built-in setup sub-choices are "choose up to N" or have an engine fallback.
+        # An empty/null payload is therefore a valid confirmation for them, not a
+        # reason to keep the player stuck in the sub-choice UI.
+        if sub_choice is None and event_id_text in ('2', '3', '5', '8'):
+            sub_choice = {}
+        if sub_choice is None and engine.needs_sub_choice(pidx):
             send_pregame_state(room, pidx, allow_sub_choice=True)
             return
         engine.opening_event_sub_choices[pidx] = sub_choice or {}

@@ -2679,10 +2679,15 @@ function hideGameAlert() {
     if (el) el.classList.remove('active');
 }
 
+function cleanupGamePromptTransientButtons() {
+    document.querySelectorAll('#game-prompt .game-prompt-transient-btn').forEach(btn => btn.remove());
+}
+
 function gamePrompt(title, options, config = {}) {
     return new Promise((resolve) => {
         const el = $('game-prompt');
         if (!el) { resolve(-1); return; }
+        cleanupGamePromptTransientButtons();
         const cancellable = config.cancellable !== false;
         $('game-prompt-title').textContent = title || '';
         const optsEl = $('game-prompt-options');
@@ -2716,6 +2721,8 @@ function gamePrompt(title, options, config = {}) {
         });
         const cancelBtn = $('game-prompt-cancel');
         cancelBtn.textContent = UI.cancel;
+        cancelBtn.classList.remove('btn-primary');
+        cancelBtn.classList.add('btn-secondary');
         cancelBtn.classList.toggle('hidden', !cancellable);
         cancelBtn.style.display = cancellable ? '' : 'none';
         cancelBtn.onclick = () => { removeFloatingCardPreview(); el.classList.remove('active'); resolve(-1); };
@@ -10989,6 +10996,7 @@ async function showLightConversionChoice() {
     return new Promise((resolve) => {
         const el = $('game-prompt');
         if (!el) { resolve(null); return; }
+        cleanupGamePromptTransientButtons();
         $('game-prompt-title').textContent = UI.choose_light_cards + ` (${UI.convert_per_type.replace('{0}', 5)})`;
         const optsEl = $('game-prompt-options');
         optsEl.innerHTML = '';
@@ -11047,17 +11055,17 @@ async function showLightConversionChoice() {
             optsEl.appendChild(row);
         });
         const cancelBtn = $('game-prompt-cancel');
-        cancelBtn.textContent = UI.cancel;
-        cancelBtn.classList.add('hidden');
-        cancelBtn.style.display = 'none';
-        cancelBtn.onclick = null;
-        const confirmBtn = document.createElement('button');
-        confirmBtn.className = 'btn btn-primary';
-        confirmBtn.textContent = UI.ok;
-        confirmBtn.style.marginLeft = '8px';
-        confirmBtn.addEventListener('click', (e) => {
+        cancelBtn.textContent = UI.ok;
+        cancelBtn.classList.remove('hidden');
+        cancelBtn.style.display = '';
+        cancelBtn.classList.remove('btn-secondary');
+        cancelBtn.classList.add('btn-primary');
+        cancelBtn.onclick = (e) => {
             e.stopPropagation();
             el.classList.remove('active');
+            cancelBtn.textContent = UI.cancel;
+            cancelBtn.classList.remove('btn-primary');
+            cancelBtn.classList.add('btn-secondary');
             const convertDefIds = [];
             let total = 0;
             entries.forEach(([did, cnt]) => {
@@ -11066,14 +11074,7 @@ async function showLightConversionChoice() {
                 total += val;
             });
             resolve({ convert_def_ids: convertDefIds });
-        });
-        cancelBtn.parentNode.appendChild(confirmBtn);
-        const cleanup = () => {
-            if (confirmBtn.parentNode) confirmBtn.parentNode.removeChild(confirmBtn);
-            cancelBtn.classList.remove('hidden');
-            cancelBtn.style.display = '';
         };
-        confirmBtn.addEventListener('click', () => { cleanup(); }, { once: true });
         el.classList.add('active');
     });
 }
