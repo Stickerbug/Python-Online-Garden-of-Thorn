@@ -368,10 +368,10 @@ class PlayerState:
     def hand_space(self) -> int:
         return max(0, self.hand_limit() - self.rule_hand_size())
 
-    def add_to_hand(self, card: CardInstance):
+    def add_to_hand(self, card: CardInstance, trigger_enter_hand: bool = True):
         self.hand.append(card)
         callback = getattr(self, '_enter_hand_callback', None)
-        if callback:
+        if trigger_enter_hand and callback:
             callback(self.player_id, card)
 
     def draw_cards(self, count: int) -> List[CardInstance]:
@@ -457,8 +457,8 @@ class PlayerState:
 class GameEngine:
     OPENING_EVENTS = {
         1: {'id': 1, 'name': '生命强化', 'desc': '最大生命值+20', 'position': 1},
-        2: {'id': 2, 'name': '魔力转化', 'desc': '将最多3张牌转化为魔法球（萌芽、共生）', 'position': 2},
-        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多五张牌转化为Light：轻（萌芽、共生）', 'position': 2},
+        2: {'id': 2, 'name': '魔力转化', 'desc': '将最多3张牌转化为[[card:ManaOrb|flag=sprout|flag=symbiosis]]', 'position': 2},
+        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多五张牌转化为Light：[[card:Light|flag=sprout|flag=symbiosis]]', 'position': 2},
         8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为世界树之叶', 'position': 2},
         4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对所有敌方玩家施加2层灼烧', 'position': 3},
         5: {'id': 5, 'name': '命运抽签', 'desc': '从总抽牌库选择最多3张牌洗入牌库', 'position': 3},
@@ -1488,6 +1488,9 @@ class GameEngine:
             return False
         last = self.log[-1]
 
+        if self._merge_repeated_use_before_damage(text):
+            return True
+
         m = re.fullmatch(r'(.+)的电池效果：对(.+)造成(\d+)(?:D|电伤|点电击魔法伤害)', text)
         if m:
             owner, target, damage = m.group(1), m.group(2), int(m.group(3))
@@ -1553,50 +1556,103 @@ class GameEngine:
             return True
         return self._merge_counted_log(text, last)
 
+    def _parse_plain_use_count_log(self, text: str):
+        m = re.fullmatch(r'(.+)使用了?([^，]+?)(?: ×(\d+))?', text)
+        if not m:
+            return None
+        return {
+            'actor': m.group(1),
+            'card': m.group(2),
+            'count': int(m.group(3) or 1),
+        }
+
+    def _merge_repeated_use_before_damage(self, text: str) -> bool:
+        current = self._parse_plain_use_count_log(text)
+        if not current:
+            return False
+        if len(self.log) >= 1:
+            last_use = self._parse_plain_use_count_log(self.log[-1])
+            if last_use and last_use['actor'] == current['actor'] and last_use['card'] == current['card']:
+                count = last_use['count'] + current['count']
+                self.log[-1] = f"{current['actor']}使用了{current['card']} ×{count}"
+                return True
+        if len(self.log) < 2 or not self._parse_damage_taken_log(self.log[-1]):
+            if len(self.log) >= 1 and self._parse_damage_taken_log(self.log[-1]):
+                self.log.insert(len(self.log) - 1, f"{current['actor']}使用了{current['card']}")
+                return True
+            return False
+        previous_use = self._parse_plain_use_count_log(self.log[-2])
+        if not previous_use:
+            return False
+        if previous_use['actor'] != current['actor'] or previous_use['card'] != current['card']:
+            return False
+        count = previous_use['count'] + current['count']
+        self.log[-2] = f"{current['actor']}使用了{current['card']} ×{count}"
+        return True
+
     def _normalize_damage_log_text(self, text: str) -> str:
         parsed = self._parse_damage_taken_log(text)
         if not parsed:
             return text
         return (
             f"{parsed['prefix']}{parsed['target']}受到"
-            f"{self._format_damage_parts(parsed['parts'])}"
-            f"（H={parsed['start_hp']}→{parsed['end_hp']}）"
+            f"{self._format_damage_units(parsed['units'])}"
+            f"（H={'→'.join(parsed['hp_chain'])}）"
         )
 
     def _parse_damage_taken_log(self, text: str):
-        m = re.fullmatch(r'(.+)受到(\d+(?:\+\d+)*)点伤害（H=([^）]+)）', text)
+        m = re.fullmatch(r'(.+)受到(\d+(?:\+\d+)*)点伤害[（(]H=([^）)]+)[）)]', text)
         if m:
             before, raw_damage, hp_text = m.group(1), m.group(2), m.group(3)
             parts = [int(p) for p in raw_damage.split('+')]
+            unit_expr = self._format_damage_parts(parts)
         else:
-            m = re.fullmatch(r'(.+)受到(\d+)D(?:×(\d+))?（H=([^）]+)）', text)
+            m = re.fullmatch(r'(.+)受到(\d+)D(?:×(\d+))?(?:×(\d+))?[（(]H=([^）)]+)[）)]', text)
             if m:
-                before, raw_damage, raw_times, hp_text = m.group(1), m.group(2), m.group(3), m.group(4)
-                parts = [int(raw_damage)] * max(1, int(raw_times or 1))
+                before = m.group(1)
+                raw_damage = m.group(2)
+                inner_times = max(1, int(m.group(3) or 1))
+                outer_times = max(1, int(m.group(4) or 1))
+                hp_text = m.group(5)
+                parts = [int(raw_damage)] * inner_times
+                unit_expr = f'{raw_damage}D' + (f'×{inner_times}' if inner_times > 1 else '')
+                if outer_times > 1:
+                    return self._build_damage_parse_result(before, hp_text, [
+                        {'expr': unit_expr, 'parts': parts[:]} for _ in range(outer_times)
+                    ])
             else:
-                m = re.fullmatch(r'(.+)受到\((\d+(?:\+\d+)*)\)D（H=([^）]+)）', text)
+                m = re.fullmatch(r'(.+)受到[（(](\d+(?:\+\d+)*)[）)]D[（(]H=([^）)]+)[）)]', text)
                 if not m:
                     return None
                 before, raw_damage, hp_text = m.group(1), m.group(2), m.group(3)
                 parts = [int(p) for p in raw_damage.split('+')]
+                unit_expr = self._format_damage_parts(parts)
+        return self._build_damage_parse_result(before, hp_text, [{'expr': unit_expr, 'parts': parts}])
+
+    def _build_damage_parse_result(self, before: str, hp_text: str, units):
         comma_idx = before.rfind('，')
         prefix = before[:comma_idx + 1] if comma_idx >= 0 else ''
         target = before[comma_idx + 1:] if comma_idx >= 0 else before
-        hp_parts = hp_text.split('→', 1)
-        if len(hp_parts) == 2:
-            start_hp, end_hp = hp_parts[0], hp_parts[1]
+        hp_chain = [part for part in hp_text.split('→') if part != '']
+        if len(hp_chain) >= 2:
+            start_hp, end_hp = hp_chain[0], hp_chain[-1]
         else:
             end_hp = hp_text
             try:
-                start_hp = str(int(end_hp) + sum(parts))
+                total = sum(sum(int(p) for p in unit.get('parts', [])) for unit in units)
+                start_hp = str(int(end_hp) + total)
+                hp_chain = [start_hp, end_hp]
             except Exception:
                 start_hp = ''
+                hp_chain = [end_hp] if end_hp else []
         return {
             'prefix': prefix,
             'target': target,
-            'parts': parts,
+            'parts': [p for unit in units for p in unit.get('parts', [])],
+            'units': units,
             'start_hp': start_hp,
             'end_hp': end_hp,
+            'hp_chain': hp_chain,
         }
 
     def _format_damage_parts(self, parts) -> str:
@@ -1608,6 +1664,23 @@ class GameEngine:
         if all(v == values[0] for v in values):
             return f'{values[0]}D×{len(values)}'
         return f"({'+'.join(str(v) for v in values)})D"
+
+    def _format_damage_units(self, units) -> str:
+        clean_units = [
+            {
+                'expr': str(unit.get('expr') or self._format_damage_parts(unit.get('parts', []))),
+                'parts': [int(p) for p in unit.get('parts', [])],
+            }
+            for unit in (units or [])
+        ]
+        if not clean_units:
+            return '0D'
+        expressions = [unit['expr'] for unit in clean_units]
+        if len(set(expressions)) == 1:
+            expr = expressions[0]
+            return expr if len(expressions) == 1 else f'{expr}×{len(expressions)}'
+        flat_parts = [p for unit in clean_units for p in unit['parts']]
+        return self._format_damage_parts(flat_parts)
 
     def _parse_chinese_use_log(self, text: str):
         m = re.fullmatch(r'(.+)使用(?!并)(?:了)?([^，！!:：]+)(?:，(.+))?', text)
@@ -1665,10 +1738,19 @@ class GameEngine:
         start_hp = previous['start_hp']
         if not start_hp:
             return False
+        hp_chain = previous.get('hp_chain') or [previous['start_hp'], previous['end_hp']]
+        current_chain = current.get('hp_chain') or [current['start_hp'], current['end_hp']]
+        if hp_chain and current_chain and hp_chain[-1] == current_chain[0]:
+            hp_chain = hp_chain + current_chain[1:]
+        else:
+            hp_chain = hp_chain + [current['end_hp']]
+        units = (previous.get('units') or [{'expr': self._format_damage_parts(previous['parts']), 'parts': previous['parts']}]) + (
+            current.get('units') or [{'expr': self._format_damage_parts(current['parts']), 'parts': current['parts']}]
+        )
         self.log[-1] = (
             f"{previous['prefix']}{previous['target']}受到"
-            f"{self._format_damage_parts(previous['parts'] + current['parts'])}"
-            f"（H={start_hp}→{current['end_hp']}）"
+            f"{self._format_damage_units(units)}"
+            f"（H={'→'.join(hp_chain)}）"
         )
         return True
 
@@ -1695,9 +1777,9 @@ class GameEngine:
             '查看', '摧毁', '从',
         )
         if not detail.startswith(allowed_starts):
+            if self._parse_damage_taken_log(text):
+                return False
             result_patterns = (
-                r'.+受到\d+点.*（H=.+）',
-                r'.+受到(?:\d+D(?:×\d+)?|\(\d+(?:\+\d+)*\)D)（H=.+）',
                 r'.+回复\d+[HE]',
                 r'.+获得\d+(E|M|护甲|闪避)',
                 r'.+\+\d+(中毒|灼烧|淬毒|易伤)',
@@ -1748,6 +1830,7 @@ class GameEngine:
         # Copy: create exile copies when entering hand
         copy_count = getattr(card.card_def, 'copy_count', 0)
         if copy_count > 0 and 'copy' in card.flags:
+            added = 0
             for _ in range(copy_count):
                 if not ps.can_add_to_hand():
                     break
@@ -1755,8 +1838,10 @@ class GameEngine:
                 copy_card.instance_flags.add('exile')
                 # Remove copy tag from copies to prevent infinite loop
                 copy_card.disabled_flags.add('copy')
-                ps.add_to_hand(copy_card)
-            self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因副本效果加入{min(copy_count, ps.hand_limit() - len(ps.hand) + copy_count)}张放逐复制")
+                ps.add_to_hand(copy_card, trigger_enter_hand=False)
+                added += 1
+            if added > 0:
+                self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因副本效果加入{added}张放逐复制")
         if self._has_card_event(card.card_def, 'enter_hand'):
             self._run_card_event(player_id, card, 'enter_hand', None, {
                 'source_id': player_id,

@@ -530,13 +530,13 @@ class LocalPlayer {
         return Math.max(0, this.handLimit() - this.ruleHandSize());
     }
 
-    addToHand(card) {
+    addToHand(card, options = {}) {
         if (card && card.def_id === 'Tomato') {
             card.bonus_damage = 0;
             card.held_turns = 0;
         }
         this.hand.push(card);
-        if (typeof this.onEnterHand === 'function') {
+        if (options.triggerEnterHand !== false && typeof this.onEnterHand === 'function') {
             this.onEnterHand(this.player_id, card);
         }
     }
@@ -872,7 +872,24 @@ class LocalSoloEngine {
     }
 
     handleCardEnterHand(playerId, card) {
-        if (!card || !this.hasCardEvent(card.def(), 'enter_hand')) return;
+        if (!card || card.def_id === ERROR_CARD_ID) return;
+        const player = this.players[playerId];
+        const copyCount = Math.max(0, toInt(card.def().copy_count, 0));
+        if (player && copyCount > 0 && card.flags.has('copy')) {
+            let added = 0;
+            for (let i = 0; i < copyCount; i++) {
+                if (!player.canAddToHand()) break;
+                const copyCard = new LocalCard(card.def_id);
+                copyCard.instance_flags.add('exile');
+                copyCard.disabled_flags.add('copy');
+                player.addToHand(copyCard, { triggerEnterHand: false });
+                added += 1;
+            }
+            if (added > 0) {
+                this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}因副本效果加入${added}张放逐复制`);
+            }
+        }
+        if (!this.hasCardEvent(card.def(), 'enter_hand')) return;
         this.runCardEvent(playerId, card, 'enter_hand', null, {
             source_id: playerId,
             target_id: playerId,
@@ -910,6 +927,7 @@ class LocalSoloEngine {
         let text = String(message || '').trim();
         if (!text) return;
         text = this.normalizeDamageLogText(text);
+        if (this.mergeRepeatedUseBeforeDamage(text)) return;
         if (this.mergeBubbleLog(text)) return;
         if (this.mergeChineseUseEquipment(text)) return;
         if (this.mergeChineseUseDestination(text)) return;
@@ -923,48 +941,62 @@ class LocalSoloEngine {
     normalizeDamageLogText(text) {
         const parsed = this.parseDamageTakenLog(text);
         if (!parsed) return text;
-        return `${parsed.prefix}${parsed.target}受到${this.formatDamageParts(parsed.parts)}（H=${parsed.startHp}→${parsed.endHp}）`;
+        return `${parsed.prefix}${parsed.target}受到${this.formatDamageUnits(parsed.units)}（H=${parsed.hpChain.join('→')}）`;
     }
 
     parseDamageTakenLog(text) {
         const raw = String(text || '');
-        let match = raw.match(/^(.+)受到(\d+(?:\+\d+)*)点伤害（H=([^）]+)）$/);
+        let match = raw.match(/^(.+)受到(\d+(?:\+\d+)*)点伤害[（(]H=([^）)]+)[）)]$/);
         let before;
         let parts;
         let hpText;
         if (match) {
             before = match[1];
             parts = match[2].split('+').map(part => toInt(part, 0));
-            hpText = match[3];
+            return this.buildDamageParseResult(before, match[3], [{ expr: this.formatDamageParts(parts), parts }]);
         } else {
-            match = raw.match(/^(.+)受到(\d+)D(?:×(\d+))?（H=([^）]+)）$/);
+            match = raw.match(/^(.+)受到(\d+)D(?:×(\d+))?(?:×(\d+))?[（(]H=([^）)]+)[）)]$/);
             if (match) {
                 before = match[1];
-                parts = Array(Math.max(1, toInt(match[3] || 1, 1))).fill(toInt(match[2], 0));
-                hpText = match[4];
+                const innerTimes = Math.max(1, toInt(match[3] || 1, 1));
+                const outerTimes = Math.max(1, toInt(match[4] || 1, 1));
+                parts = Array(innerTimes).fill(toInt(match[2], 0));
+                const expr = `${match[2]}D${innerTimes > 1 ? `×${innerTimes}` : ''}`;
+                return this.buildDamageParseResult(before, match[5], Array.from({ length: outerTimes }, () => ({ expr, parts: parts.slice() })));
             } else {
-                match = raw.match(/^(.+)受到\((\d+(?:\+\d+)*)\)D（H=([^）]+)）$/);
+                match = raw.match(/^(.+)受到[（(](\d+(?:\+\d+)*)[）)]D[（(]H=([^）)]+)[）)]$/);
                 if (!match) return null;
                 before = match[1];
                 parts = match[2].split('+').map(part => toInt(part, 0));
-                hpText = match[3];
+                return this.buildDamageParseResult(before, match[3], [{ expr: this.formatDamageParts(parts), parts }]);
             }
         }
+    }
+
+    buildDamageParseResult(before, hpText, units) {
         const cut = before.lastIndexOf('，');
         const prefix = cut >= 0 ? before.slice(0, cut + 1) : '';
         const target = cut >= 0 ? before.slice(cut + 1) : before;
+        let hpChain = String(hpText || '').split('→').filter(Boolean);
         let startHp = '';
-        let endHp = hpText;
-        const arrow = hpText.indexOf('→');
-        if (arrow >= 0) {
-            startHp = hpText.slice(0, arrow);
-            endHp = hpText.slice(arrow + 1);
+        let endHp = hpChain.length ? hpChain[hpChain.length - 1] : String(hpText || '');
+        if (hpChain.length >= 2) {
+            startHp = hpChain[0];
         } else {
-            const hp = Number.parseInt(hpText, 10);
-            const total = parts.reduce((sum, part) => sum + toInt(part, 0), 0);
+            const hp = Number.parseInt(endHp, 10);
+            const total = (units || []).reduce((sum, unit) => sum + (unit.parts || []).reduce((s, p) => s + toInt(p, 0), 0), 0);
             if (Number.isFinite(hp)) startHp = String(hp + total);
+            hpChain = startHp ? [startHp, endHp] : (endHp ? [endHp] : []);
         }
-        return { prefix, target, parts, startHp, endHp };
+        return {
+            prefix,
+            target,
+            parts: (units || []).flatMap(unit => unit.parts || []),
+            units,
+            startHp,
+            endHp,
+            hpChain,
+        };
     }
 
     formatDamageParts(parts) {
@@ -975,6 +1007,48 @@ class LocalSoloEngine {
         return `(${values.join('+')})D`;
     }
 
+    formatDamageUnits(units) {
+        const clean = (units || []).map(unit => ({
+            expr: String(unit.expr || this.formatDamageParts(unit.parts || [])),
+            parts: (unit.parts || []).map(part => toInt(part, 0)),
+        }));
+        if (!clean.length) return '0D';
+        const exprs = clean.map(unit => unit.expr);
+        if (exprs.every(expr => expr === exprs[0])) {
+            return exprs.length === 1 ? exprs[0] : `${exprs[0]}×${exprs.length}`;
+        }
+        return this.formatDamageParts(clean.flatMap(unit => unit.parts));
+    }
+
+    parsePlainUseCountLog(text) {
+        const match = String(text || '').match(/^(.+)使用了?([^，]+?)(?: ×(\d+))?$/);
+        if (!match) return null;
+        return { actor: match[1], card: match[2], count: toInt(match[3] || 1, 1) };
+    }
+
+    mergeRepeatedUseBeforeDamage(text) {
+        const current = this.parsePlainUseCountLog(text);
+        if (!current) return false;
+        if (this.log.length >= 1) {
+            const lastUse = this.parsePlainUseCountLog(this.log[this.log.length - 1]);
+            if (lastUse && lastUse.actor === current.actor && lastUse.card === current.card) {
+                this.log[this.log.length - 1] = `${current.actor}使用了${current.card} ×${lastUse.count + current.count}`;
+                return true;
+            }
+        }
+        if (this.log.length < 2 || !this.parseDamageTakenLog(this.log[this.log.length - 1])) {
+            if (this.log.length >= 1 && this.parseDamageTakenLog(this.log[this.log.length - 1])) {
+                this.log.splice(this.log.length - 1, 0, `${current.actor}使用了${current.card}`);
+                return true;
+            }
+            return false;
+        }
+        const previousUse = this.parsePlainUseCountLog(this.log[this.log.length - 2]);
+        if (!previousUse || previousUse.actor !== current.actor || previousUse.card !== current.card) return false;
+        this.log[this.log.length - 2] = `${current.actor}使用了${current.card} ×${previousUse.count + current.count}`;
+        return true;
+    }
+
     mergeDamageTakenLog(text) {
         if (!this.log.length) return false;
         const current = this.parseDamageTakenLog(text);
@@ -982,7 +1056,14 @@ class LocalSoloEngine {
         if (!current || !previous || current.target !== previous.target || !previous.startHp) {
             return false;
         }
-        this.log[this.log.length - 1] = `${previous.prefix}${previous.target}受到${this.formatDamageParts([...previous.parts, ...current.parts])}（H=${previous.startHp}→${current.endHp}）`;
+        let hpChain = previous.hpChain || [previous.startHp, previous.endHp];
+        const currentChain = current.hpChain || [current.startHp, current.endHp];
+        if (hpChain.length && currentChain.length && hpChain[hpChain.length - 1] === currentChain[0]) {
+            hpChain = hpChain.concat(currentChain.slice(1));
+        } else {
+            hpChain = hpChain.concat([current.endHp]);
+        }
+        this.log[this.log.length - 1] = `${previous.prefix}${previous.target}受到${this.formatDamageUnits([...(previous.units || [{ expr: this.formatDamageParts(previous.parts), parts: previous.parts }]), ...(current.units || [{ expr: this.formatDamageParts(current.parts), parts: current.parts }])])}（H=${hpChain.join('→')}）`;
         return true;
     }
 
@@ -1005,11 +1086,7 @@ class LocalSoloEngine {
     }
 
     mergeSimpleUseDamageLog(text) {
-        if (!this.log.length || !this.parseDamageTakenLog(text)) return false;
-        const match = String(this.log[this.log.length - 1]).match(/^(.+)使用了(.+)$/);
-        if (!match) return false;
-        this.log[this.log.length - 1] = `${match[1]}使用${match[2]}，${text}`;
-        return true;
+        return false;
     }
 
     parseChineseUseLog(text) {
@@ -1066,8 +1143,8 @@ class LocalSoloEngine {
         if (String(text).startsWith(actor)) detail = String(text).slice(actor.length);
         const allowedStarts = ['对', '回复', '获得', '抽', '+', '血量', '无法', '仅可', '消耗', '每回合', '丢弃', '查看', '摧毁', '从'];
         if (!allowedStarts.some(prefix => detail.startsWith(prefix))) {
-            if (!this.parseDamageTakenLog(text)) return false;
-            detail = text;
+            if (this.parseDamageTakenLog(text)) return false;
+            return false;
         }
         this.log[this.log.length - 1] = `${actor}使用${cardNameText}，${detail}`;
         return true;

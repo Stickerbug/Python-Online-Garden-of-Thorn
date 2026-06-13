@@ -83,7 +83,7 @@ const I18N = {
         reconnecting: 'Reconnecting...', reconnect_timeout: 'Reconnect timed out', mod_mismatch_title: 'Mod Mismatch', mod_mismatch_msg: 'Mods do not match, cannot start the match',
         switch_perspective: 'Switch Perspective', leave_spectate: 'Leave Spectate', switch_to_perspective: 'Switch to {0}', battle_log: 'Battle Log',
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
-        status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_stunned: 'Stunned',
+        status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_immune: 'Status Immune', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Blind', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
         flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_stealth: 'Stealth', flag_revealed: 'Revealed',
         tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_stealth: 'Stealth', tag_revealed: 'Revealed',
@@ -93,7 +93,7 @@ const I18N = {
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
         foresight_replace_title: 'Foresight', foresight_replace_desc: 'Select up to {0} cards to draw from deck', foresight_replace_confirm: 'Draw',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
-        lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
+        lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', start_draft: 'Start Draft', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
         card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard', fusion_layer: 'Fusion', fission_layer: 'Fission',
         settings_title: 'Settings', settings_appearance: 'Appearance', settings_theme: 'Theme', settings_lang: 'Language', settings_mods: 'Mods', settings_theme_light: 'Light', settings_theme_dark: 'Dark',
         no_games: 'No ongoing games', back_to_home: 'Back to Home', settings_btn: 'Settings', settings_server: 'Server', settings_server_addr: 'Address', not_your_turn: 'Not your turn',
@@ -192,7 +192,7 @@ I18N.zh = { ...I18N.en,
     mod_mismatch_title: '模组不匹配', mod_mismatch_msg: '模组不一致，无法开始对局', switch_perspective: '切换视角', leave_spectate: '退出观战', switch_to_perspective: '切换到 {0}',
     battle_log: '战斗日志', equip_info: '{0}（{1}回合）', equip_corruption: '[已腐化]', equip_trigger_cost: '{0} 触发：{1}E',
     status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼',
-    status_equip_protect: '装备保护', status_invincible: '无敌', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
+    status_equip_protect: '装备保护', status_invincible: '无敌', status_immune: '状态免疫', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
     flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隐匿', flag_revealed: '被揭示',
@@ -201,7 +201,7 @@ I18N.zh = { ...I18N.en,
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张牌堆顶的牌抽取', foresight_replace_confirm: '抽取',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
     round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
-    select_event_desc: '选择一个配装倾向', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
+    select_event_desc: '选择一个配装倾向', start_draft: '开始选牌', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
     settings_title: '设置', settings_appearance: '外观', settings_theme: '主题', settings_lang: '语言', settings_mods: '模组', settings_theme_light: '明亮', settings_theme_dark: '黑暗',
     no_games: '暂无进行中的对局', back_to_home: '返回主页', settings_btn: '设置', settings_server: '服务器', settings_server_addr: '地址', not_your_turn: '还没轮到你',
     counter_insufficient: '提示：当前没有可支付的反制牌', default_status: 'Garden of Thorn', game_loading: '加载中...', server_no_response: '服务器没有响应，请检查连接或刷新页面。',
@@ -299,7 +299,7 @@ I18N.fr = { ...I18N.en,
     switch_perspective: 'Changer de perspective', leave_spectate: "Quitter l'observation", switch_to_perspective: 'Passer à la perspective de {0}',
     battle_log: 'Journal de combat', equip_info: '{0}({1} tours)', equip_corruption: '[Corrompu]', equip_trigger_cost: '{0} Déclencher:{1}E',
     status_poison: 'Poison', status_fire: 'Brûlure', status_toxic: 'Toxique', status_triangle: 'Triangle', status_dodge: 'Esquive',
-    status_nazar: 'Nazar', status_equip_protect: 'Prot. Équip.', status_invincible: 'Invincible', status_stunned: 'Étourdi', status_attack_blocked: 'Atq bloquée', status_attack_only: 'Atq seule',
+    status_nazar: 'Nazar', status_equip_protect: 'Prot. Équip.', status_invincible: 'Invincible', status_immune: 'Immunité statut', status_stunned: 'Étourdi', status_attack_blocked: 'Atq bloquée', status_attack_only: 'Atq seule',
     status_untargetable: 'Non ciblable', status_bandage: 'Bandage', status_sponge: 'Éponge', status_shovel: 'Pelle',
     status_sluggish: 'Lenteur', status_overload: 'Surcharge', status_foresight: 'Prévoyance', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Cécité', status_heal_block: 'Anti-soin', status_weakness: 'Faiblesse', status_bleed: 'Saignement', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
     flag_precision: 'Précision', flag_exile: 'Exil', flag_non_stackable: 'Non-cumul', flag_indestructible: 'Indestructible', flag_sprout: 'Pousse', flag_symbiosis: 'Symbiose', flag_copy: 'Copie', flag_unique: 'Unique', flag_swift: 'Rapidité', flag_stealth: 'Furtif', flag_revealed: 'Révélé',
@@ -368,7 +368,7 @@ I18N.pt = { ...I18N.en,
     switch_perspective: 'Trocar Perspectiva', leave_spectate: 'Sair da Observação', switch_to_perspective: 'Trocar para perspectiva de {0}',
     battle_log: 'Registro de Batalha', equip_info: '{0}({1} turnos)', equip_corruption: '[Corrompido]', equip_trigger_cost: '{0} Ativar:{1}E',
     status_poison: 'Veneno', status_fire: 'Queima', status_toxic: 'Tóxico', status_triangle: 'Triângulo', status_dodge: 'Esquiva',
-    status_nazar: 'Nazar', status_equip_protect: 'Prot. Equip.', status_invincible: 'Invencível', status_stunned: 'Atordoado', status_attack_blocked: 'Atq Bloqueado', status_attack_only: 'Só Atq',
+    status_nazar: 'Nazar', status_equip_protect: 'Prot. Equip.', status_invincible: 'Invencível', status_immune: 'Imune a status', status_stunned: 'Atordoado', status_attack_blocked: 'Atq Bloqueado', status_attack_only: 'Só Atq',
     status_untargetable: 'Inalvejável', status_bandage: 'Bandagem', status_sponge: 'Esponja', status_shovel: 'Pá',
     status_sluggish: 'Letargia', status_overload: 'Sobrecarga', status_foresight: 'Previsão', status_fracture: 'Fratura', status_stagnation: 'Estagnação', status_blind: 'Cegueira', status_heal_block: 'Anti-cura', status_weakness: 'Fraqueza', status_bleed: 'Sangramento', status_fragment: 'Fragmento', status_fragment_stacks: 'Fragmento',
     flag_precision: 'Precisão', flag_exile: 'Exílio', flag_non_stackable: 'Não-acumulável', flag_indestructible: 'Indestrutível', flag_sprout: 'Brotar', flag_symbiosis: 'Simbiose', flag_copy: 'Cópia', flag_unique: 'Único', flag_swift: 'Rapidez', flag_stealth: 'Furtivo', flag_revealed: 'Revelado',
@@ -437,7 +437,7 @@ I18N.ja = { ...I18N.en,
     switch_perspective: '視点切替', leave_spectate: '観戦終了', switch_to_perspective: '{0}の視点に切替',
     battle_log: 'バトルログ', equip_info: '{0}({1}ターン)', equip_corruption: '[腐敗]', equip_trigger_cost: '{0} 発動:{1}E',
     status_poison: '毒', status_fire: '火傷', status_toxic: '猛毒', status_triangle: '三角形', status_dodge: '回避',
-    status_nazar: 'ナザール', status_equip_protect: '装備保護', status_invincible: '無敵', status_stunned: 'スタン', status_attack_blocked: '攻撃封印', status_attack_only: '攻撃のみ',
+    status_nazar: 'ナザール', status_equip_protect: '装備保護', status_invincible: '無敵', status_immune: '状態免疫', status_stunned: 'スタン', status_attack_blocked: '攻撃封印', status_attack_only: '攻撃のみ',
     status_untargetable: '対象不可', status_bandage: '包帯', status_sponge: 'スポンジ', status_shovel: 'シャベル',
     status_sluggish: '遅鈍', status_overload: '過負荷', status_foresight: '予知', status_fracture: '破損', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '治療封じ', status_weakness: '虚弱', status_bleed: '出血', status_fragment: '破片', status_fragment_stacks: '破片',
     flag_precision: '精密', flag_exile: '追放', flag_non_stackable: '非スタック', flag_indestructible: '破壊不可', flag_sprout: '発芽', flag_symbiosis: '共生', flag_copy: '複製', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隠密', flag_revealed: '公開',
@@ -2050,7 +2050,9 @@ function inlineCardChipHtml(cardDict) {
 }
 
 function colorizeCardText(value) {
-    const text = String(value || '');
+    const text = String(value || '')
+        .replace(/魔法球（萌芽、共生）|魔法球\(萌芽\+共生\)/g, '[[card:ManaOrb|flag=sprout|flag=symbiosis]]')
+        .replace(/轻（萌芽、共生）|轻\(萌芽\+共生\)/g, '[[card:Light|flag=sprout|flag=symbiosis]]');
     let html = '';
     let i = 0;
     while (i < text.length) {
@@ -2615,6 +2617,7 @@ let gameTimelineEntries = [];
 let renderedBattleLogCount = 0;
 let renderedBattleLogTotal = 0;
 let renderedTimelineDomCount = 0;
+let renderedBattleLogSnapshot = [];
 let renderedBattleLogMatchKey = '';
 let renderedClassicLogSignature = '';
 let lastRenderedTurnKey = '';
@@ -3345,6 +3348,8 @@ let gallerySelectedId = null;
 let galleryMode = 'cards';
 let rulesScrollTop = 0;
 let galleryReturnToRules = false;
+let galleryMultiPetalPreviewId = null;
+let galleryShowMultiPetalPreview = false;
 
 function bindRulesCardLinks(root) {
     if (!root) return;
@@ -3571,6 +3576,22 @@ function isPublicCardDef(cd) {
     return !!(cd && cd.id !== 'Error' && !cd.setup_only);
 }
 
+function localizedModNameFromFields(obj, fallback = '') {
+    if (!obj) return fallback;
+    const zhName = obj.name_cn || obj.source_mod_name_cn;
+    const enName = obj.name_en || obj.source_mod_name_en || obj.name || obj.source_mod_name;
+    if (currentLang === 'zh' && zhName) return zhName;
+    return enName || zhName || fallback || obj.filename || '';
+}
+
+function localizedModDescriptionFromFields(obj, fallback = '') {
+    if (!obj) return fallback;
+    const zhText = obj.description_cn;
+    const enText = obj.description_en || obj.description;
+    if (currentLang === 'zh' && zhText) return zhText;
+    return enText || zhText || fallback || '';
+}
+
 function compareGalleryCards(a, b) {
     const ca = typeof a === 'string' ? CARD_DEFS[a] : a;
     const cb = typeof b === 'string' ? CARD_DEFS[b] : b;
@@ -3581,8 +3602,8 @@ function compareGalleryCards(a, b) {
     const vb = cb.source_mod_is_vanilla ? 0 : 1;
     if (va !== vb) return va - vb;
     if (va !== 0) {
-        const ma = String(ca.source_mod_sort_name || ca.source_mod_name || ca.source_mod_filename || '').toLowerCase();
-        const mb = String(cb.source_mod_sort_name || cb.source_mod_name || cb.source_mod_filename || '').toLowerCase();
+        const ma = String(ca.source_mod_name_en || ca.source_mod_sort_name || ca.source_mod_name || ca.source_mod_filename || '').toLowerCase();
+        const mb = String(cb.source_mod_name_en || cb.source_mod_sort_name || cb.source_mod_name || cb.source_mod_filename || '').toLowerCase();
         const modCmp = ma.localeCompare(mb, 'en');
         if (modCmp) return modCmp;
     }
@@ -3590,6 +3611,15 @@ function compareGalleryCards(a, b) {
     const tb = GALLERY_CARD_TYPE_ORDER[cb.card_type] ?? 99;
     if (ta !== tb) return ta - tb;
     return String(ca.id || '').localeCompare(String(cb.id || ''), 'en');
+}
+
+function hasGalleryMultiPetalPreview(cd) {
+    if (!cd) return false;
+    if (cd.upgraded_image_url || cd.upgraded_image) return true;
+    const hits = Number(cd.hits || 1);
+    if (Number.isFinite(hits) && hits >= 2) return true;
+    const text = `${getCardEffectText(cd) || ''} ${cd.effect_text || ''}`.toLowerCase();
+    return /[（(]\s*\d+\s*子瓣\s*[）)]|[x×]\s*\d+\s*层|子瓣/.test(text);
 }
 
 function getAllGalleryFlags() {
@@ -3646,14 +3676,38 @@ function renderCardGallery() {
         return;
     }
     gallerySelectedId = cd.id;
-    const cardEl = createCardElement({ def_id: cd.id, instance_flags: [], disabled_flags: [] }, { small: false, showAllFlags: true });
+    if (galleryMultiPetalPreviewId !== cd.id) {
+        galleryMultiPetalPreviewId = cd.id;
+        galleryShowMultiPetalPreview = false;
+    }
+    const canPreviewMultiPetal = hasGalleryMultiPetalPreview(cd);
+    const previewCardDict = {
+        def_id: cd.id,
+        instance_flags: [],
+        disabled_flags: [],
+        extra_hits: canPreviewMultiPetal && galleryShowMultiPetalPreview ? 1 : 0,
+    };
+    const cardEl = createCardElement(previewCardDict, { small: false, showAllFlags: true });
     detail.innerHTML = `<div class="gallery-detail-card"><div id="gallery-card-preview"></div><div class="gallery-detail-info">
         <h3>${escapeHtml(getCardName(cd))}</h3>
         ${buildCardIntroSummaryHtml(cd)}
-        <div class="term-intro-list gallery-term-intro-list">${renderTermIntroItems(collectCardIntroTerms({ def_id: cd.id, instance_flags: [], disabled_flags: [] }))}</div>
+        <div class="term-intro-list gallery-term-intro-list">${renderTermIntroItems(collectCardIntroTerms(previewCardDict))}</div>
     </div></div>`;
     const preview = $('gallery-card-preview');
-    if (preview) preview.appendChild(cardEl);
+    if (preview) {
+        preview.appendChild(cardEl);
+        if (canPreviewMultiPetal) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-secondary gallery-multipetal-toggle' + (galleryShowMultiPetalPreview ? ' active' : '');
+            btn.textContent = '重瓣';
+            btn.onclick = () => {
+                galleryShowMultiPetalPreview = !galleryShowMultiPetalPreview;
+                renderCardGallery();
+            };
+            preview.appendChild(btn);
+        }
+    }
 }
 
 function renderTagGallery(list, detail, q) {
@@ -3739,6 +3793,8 @@ function getAllStatusDefs() {
         { key: 'nazar', label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
         { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         { key: 'invincible', label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
+        { key: 'status_immune', label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效或不会消耗层数。', color: '#16A085' },
+        { key: 'immune', label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效或不会消耗层数。', color: '#16A085' },
         { key: 'stunned', label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         { key: 'attack_blocked', label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         { key: 'attack_only', label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
@@ -4632,7 +4688,7 @@ function escapeClassToken(value) {
     return String(value || 'default').replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
-const DATA_CACHE_VERSION = 'v7';
+const DATA_CACHE_VERSION = 'v8';
 const loadedCommunityFontSubsets = new Set();
 const communityFontFaceUrls = new Set();
 
@@ -4981,12 +5037,14 @@ function createCardElement(cardDict, options = {}) {
     const cardOwnerState = options.ownerState || options.attackerState || predictionOptions.attackerState || getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you);
     const { totalE, totalM, flags } = getCardDisplayCosts(cardDict, cardDef, cardOwnerState);
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
+    const copyCount = Number(cardDef.copy_count || 0);
     el.style.borderColor = typeColor;
     el.dataset.instanceId = cardDict.instance_id;
     el.dataset.defId = defId;
     let flagsHtml = '';
     if (!blinded) for (const flag of flags) {
         if (flag === 'swift' && swiftValue > 0) continue;
+        if (flag === 'copy' && copyCount > 0) continue;
         if (!shouldDisplayCardFlag(flag, { showSystemFlags: showAllFlags })) continue;
         const custom = getCustomTagDef(flag);
         if (custom) {
@@ -5014,7 +5072,6 @@ function createCardElement(cardDict, options = {}) {
     if (!blinded && swiftValue > 0) {
         flagsHtml += `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}: ${swiftValue}</span>`;
     }
-    const copyCount = Number(cardDef.copy_count || 0);
     if (!blinded && copyCount > 0) {
         flagsHtml += `<span class="card-flag copy">${escapeHtml(UI.tag_copy || 'Copy')}: ${copyCount}</span>`;
     }
@@ -5133,9 +5190,11 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     const hideSet = hideFlags ? new Set(hideFlags.map(f => normalizeCardFlag(f))) : null;
     const { base, effective } = getEffectiveCardFlagSets(cardDict, cardDef);
     const parts = [];
+    const copyCount = Number(cardDef.copy_count || 0);
     effective.forEach(flag => {
         const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
         if (flag === 'swift' && swiftValue > 0) return;
+        if (flag === 'copy' && copyCount > 0) return;
         if (base.has(flag)) return;
         if (!shouldDisplayCardFlag(flag)) return;
         if (hideSet && hideSet.has(normalizeCardFlag(flag))) return;
@@ -5157,7 +5216,6 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     if (swiftValue > 0) {
         parts.push(cardFlagHtml('swift', `${UI.tag_swift || 'Swift'}: ${swiftValue}`));
     }
-    const copyCount = Number(cardDef.copy_count || 0);
     if (copyCount > 0) {
         parts.push(cardFlagHtml('copy', `${UI.tag_copy || 'Copy'}: ${copyCount}`));
     }
@@ -6235,6 +6293,8 @@ function getStatusIntroItem(statusInfo) {
         nazar: { label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
+        status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效或不会消耗层数。', color: '#16A085' },
+        immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效或不会消耗层数。', color: '#16A085' },
         stunned: { label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         attack_blocked: { label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
@@ -10724,8 +10784,35 @@ function renderEventSelect(data) {
             if (ev && String(ev.id) === String(myPick)) { eventName = getLocalizedEventText(ev, 'name') || '?'; break; }
         }
         container.innerHTML = `<div class="event-selected">${UI.event_selected.replace('{0}', eventName)}</div>`;
+        container.dataset.eventSelectSignature = '';
         return;
     }
+    const eventSignature = JSON.stringify({
+        lang: currentLang,
+        events: events.map(ev => ev ? [
+            String(ev.id),
+            getLocalizedEventText(ev, 'name') || '',
+            getLocalizedEventText(ev, 'desc') || '',
+            ev.color || '',
+        ] : null),
+    });
+    if (container.dataset.eventSelectSignature === eventSignature && container.querySelector('.event-options')) {
+        const rerolls = Number(data.rerolls || 0);
+        if (rerollBtn) {
+            const canReroll = rerolls > 0;
+            rerollBtn.textContent = `${UI.event_reroll || '刷新'} (${rerolls})`;
+            rerollBtn.disabled = !canReroll;
+            rerollBtn.style.opacity = canReroll ? '1' : '0.4';
+            rerollBtn.style.cursor = canReroll ? 'pointer' : 'not-allowed';
+            rerollBtn.style.pointerEvents = canReroll ? 'auto' : 'none';
+            rerollBtn.style.display = '';
+            rerollBtn.onclick = () => {
+                socket.emit('reroll_opening_event');
+            };
+        }
+        return;
+    }
+    container.dataset.eventSelectSignature = eventSignature;
     const eventsRow = document.createElement('div');
     eventsRow.className = 'event-options';
     events.forEach((ev, i) => {
@@ -10780,6 +10867,7 @@ function renderEventReveal(data) {
     if (rerollBtn) rerollBtn.style.display = 'none';
     const picks = data.picks || [];
     container.innerHTML = '';
+    container.dataset.eventSelectSignature = '';
     const title = document.createElement('div');
     title.className = 'event-selected';
     title.textContent = '配装已公开';
@@ -10804,7 +10892,7 @@ function renderEventReveal(data) {
     container.appendChild(eventsRow);
     const btn = document.createElement('button');
     btn.className = 'btn btn-primary';
-    btn.textContent = data.my_ready ? (UI.status_drafting || '选牌中') : (UI.play_card || '开始') + '选牌';
+    btn.textContent = data.my_ready ? (UI.status_drafting || '选牌中') : (UI.start_draft || '开始选牌');
     btn.disabled = !!data.my_ready;
     btn.onclick = () => {
         if (socket && !data.my_ready) socket.emit('confirm_opening_reveal');
@@ -12444,6 +12532,14 @@ function renderStatusTags(containerId, playerData) {
     const p = playerData;
     const maskStatusValues = getOwnBlindLevel() >= 3;
     const hideStatusIntro = getOwnBlindLevel() >= 3;
+    const customStatuses = (p.custom_statuses && typeof p.custom_statuses === 'object') ? p.custom_statuses : {};
+    const customCount = (...keys) => {
+        for (const key of keys) {
+            const value = Number(customStatuses[key] || 0);
+            if (Number.isFinite(value) && value > 0) return value;
+        }
+        return 0;
+    };
     if (p.poison > 0) tags.push({ key: 'poison', name: UI.status_poison, abbr: 'P', val: p.poison, fg: COLORS.poison, bg: COLORS.poison_bg });
     if (p.fire > 0) tags.push({ key: 'fire', name: UI.status_fire, abbr: 'F', val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
     if (p.toxic > 0) tags.push({ key: 'toxic', name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
@@ -12452,9 +12548,13 @@ function renderStatusTags(containerId, playerData) {
     if (p.nazar_active) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
     if (p.equipment_protection > 0) tags.push({ key: 'equip_protect', name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
     if (p.invincible) tags.push({ key: 'invincible', name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
+    const statusImmune = customCount('status_immune', 'immune', '状态免疫');
+    if (statusImmune > 0) tags.push({ key: 'status_immune', name: UI.status_immune || '状态免疫', abbr: 'Imm', val: statusImmune, fg: '#16A085', bg: '#E8F8F5' });
     if (p.skip_turn > 0) tags.push({ key: 'stunned', name: UI.status_stunned, abbr: 'Stn', val: p.skip_turn, fg: COLORS.damage, bg: COLORS.damage_bg });
-    if (p.attack_blocked > 0) tags.push({ key: 'attack_blocked', name: UI.status_attack_blocked, abbr: 'NoT', val: p.attack_blocked, fg: '#C0392B', bg: '#FDEDEC' });
-    if (p.attack_only > 0) tags.push({ key: 'attack_only', name: UI.status_attack_only, abbr: 'TOnly', val: p.attack_only, fg: '#D35400', bg: '#FEF5E7' });
+    const attackBlocked = Math.max(Number(p.attack_blocked || 0), customCount('attack_blocked', '禁攻'));
+    const attackOnly = Math.max(Number(p.attack_only || 0), customCount('attack_only', '仅攻击'));
+    if (attackBlocked > 0) tags.push({ key: 'attack_blocked', name: UI.status_attack_blocked, abbr: 'NoT', val: attackBlocked, fg: '#C0392B', bg: '#FDEDEC' });
+    if (attackOnly > 0) tags.push({ key: 'attack_only', name: UI.status_attack_only, abbr: 'TOnly', val: attackOnly, fg: '#D35400', bg: '#FEF5E7' });
     if (p.untargetable) tags.push({ key: 'untargetable', name: UI.status_untargetable, abbr: 'Unt', val: '', fg: '#1A5276', bg: '#EBF5FB' });
     if (p.bandage_active) tags.push({ key: 'bandage', name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
     if (p.sponge_active) tags.push({ key: 'sponge', name: UI.status_sponge, abbr: 'Spg', val: '', fg: '#6C3483', bg: '#F4ECF7' });
@@ -12469,9 +12569,9 @@ function renderStatusTags(containerId, playerData) {
     if (p.weakness > 0) tags.push({ key: 'weakness', name: UI.status_weakness, abbr: 'Wk', val: p.weakness, fg: '#8E44AD', bg: '#F4ECF7' });
     if (p.bleed > 0) tags.push({ key: 'bleed', name: UI.status_bleed, abbr: 'Bld', val: p.bleed, fg: '#922B21', bg: '#FDEDEC' });
     if (p.fragment_stacks > 0) tags.push({ key: 'fragment', name: UI.status_fragment, abbr: 'Frg', val: p.fragment_stacks, fg: '#795548', bg: '#EFEBE9' });
-    if (p.custom_statuses && typeof p.custom_statuses === 'object') {
-        const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn']);
-        Object.entries(p.custom_statuses).forEach(([name, value]) => {
+    if (customStatuses && typeof customStatuses === 'object') {
+        const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','status_immune','immune','状态免疫']);
+        Object.entries(customStatuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;
             if (builtinKeys.has(name)) return;
@@ -13846,12 +13946,137 @@ function resetBattleLogState(content) {
     renderedBattleLogCount = 0;
     renderedBattleLogTotal = 0;
     renderedClassicLogSignature = '';
+    renderedBattleLogSnapshot = [];
     const classicContent = $('classic-log-content');
     if (classicContent) {
         classicContent.dataset.renderSignature = '';
         classicContent.innerHTML = '';
     }
     resetBattleLogDom(content);
+}
+
+function parseBattleDamageLogForCompact(line) {
+    const text = String(line || '');
+    let pointMatch = text.match(/^(.+?)受到(\d+(?:\+\d+)*)点(?:[^（）()]*?)伤害[（(]H=([^）)]+)[）)]$/);
+    if (pointMatch) {
+        const parts = pointMatch[2].split('+').map(v => Number(v || 0));
+        return {
+            target: pointMatch[1],
+            units: [{ expr: formatBattleDamagePartsForCompact(parts), parts }],
+            hp: String(pointMatch[3] || '').split('→').filter(Boolean),
+        };
+    }
+    let match = text.match(/^(.+?)受到(\d+)D(?:×(\d+))?(?:×(\d+))?[（(]H=([^）)]+)[）)]$/);
+    if (match) {
+        const inner = Math.max(1, Number(match[3] || 1));
+        const outer = Math.max(1, Number(match[4] || 1));
+        const expr = `${match[2]}D${inner > 1 ? `×${inner}` : ''}`;
+        return {
+            target: match[1],
+            units: Array.from({ length: outer }, () => ({ expr, parts: Array(inner).fill(Number(match[2])) })),
+            hp: String(match[5] || '').split('→').filter(Boolean),
+        };
+    }
+    match = text.match(/^(.+?)受到[（(](\d+(?:\+\d+)*)[）)]D[（(]H=([^）)]+)[）)]$/);
+    if (match) {
+        const parts = match[2].split('+').map(v => Number(v || 0));
+        return {
+            target: match[1],
+            units: [{ expr: `(${parts.join('+')})D`, parts }],
+            hp: String(match[3] || '').split('→').filter(Boolean),
+        };
+    }
+    return null;
+}
+
+function formatBattleDamagePartsForCompact(parts) {
+    const values = (parts || []).map(v => Number(v || 0));
+    if (!values.length) return '0D';
+    if (values.length === 1) return `${values[0]}D`;
+    if (values.every(v => v === values[0])) return `${values[0]}D×${values.length}`;
+    return `(${values.join('+')})D`;
+}
+
+function formatBattleDamageUnitsForCompact(units) {
+    const clean = (units || []).map(unit => ({
+        expr: String(unit && unit.expr || ''),
+        parts: Array.isArray(unit && unit.parts) ? unit.parts.map(v => Number(v || 0)) : [],
+    })).filter(unit => unit.expr);
+    if (!clean.length) return '0D';
+    if (clean.every(unit => unit.expr === clean[0].expr)) {
+        return clean.length === 1 ? clean[0].expr : `${clean[0].expr}×${clean.length}`;
+    }
+    const parts = clean.flatMap(unit => unit.parts);
+    if (parts.length && parts.every(v => v === parts[0])) return `${parts[0]}D×${parts.length}`;
+    return `(${parts.join('+')})D`;
+}
+
+function mergeBattleHpChainForCompact(a, b) {
+    const left = Array.isArray(a) ? a.slice() : [];
+    const right = Array.isArray(b) ? b.slice() : [];
+    if (!left.length) return right;
+    if (!right.length) return left;
+    if (left[left.length - 1] === right[0]) return left.concat(right.slice(1));
+    return left.concat(right);
+}
+
+function parseBattleUseLogForCompact(line) {
+    const match = String(line || '').match(/^(.+?)使用了?([^，]+?)(?: ×(\d+))?$/);
+    if (!match) return null;
+    return { actor: match[1], card: match[2], count: Math.max(1, Number(match[3] || 1)) };
+}
+
+function formatBattleUseLogForCompact(use) {
+    if (!use) return '';
+    return `${use.actor}使用了${use.card}${use.count > 1 ? ` ×${use.count}` : ''}`;
+}
+
+function formatBattleDamageLogForCompact(damage) {
+    if (!damage) return '';
+    return `${damage.target}受到${formatBattleDamageUnitsForCompact(damage.units)}（H=${(damage.hp || []).join('→')}）`;
+}
+
+function compactBattleLogLinesForDisplay(log) {
+    const output = [];
+    const rawLines = Array.isArray(log) ? log.map(line => String(line || '')) : [];
+    for (const line of rawLines) {
+        const use = parseBattleUseLogForCompact(line);
+        if (use) {
+            const last = output[output.length - 1];
+            const previous = output[output.length - 2];
+            if (last && last.kind === 'damage') {
+                if (previous && previous.kind === 'use' && previous.actor === use.actor && previous.card === use.card) {
+                    previous.count += use.count;
+                } else {
+                    output.splice(output.length - 1, 0, { kind: 'use', ...use });
+                }
+                continue;
+            }
+            if (last && last.kind === 'use' && last.actor === use.actor && last.card === use.card) {
+                last.count += use.count;
+                continue;
+            }
+            output.push({ kind: 'use', ...use });
+            continue;
+        }
+        const damage = parseBattleDamageLogForCompact(line);
+        if (damage) {
+            const last = output[output.length - 1];
+            if (last && last.kind === 'damage' && last.target === damage.target) {
+                last.units = (last.units || []).concat(damage.units || []);
+                last.hp = mergeBattleHpChainForCompact(last.hp, damage.hp);
+                continue;
+            }
+            output.push({ kind: 'damage', ...damage });
+            continue;
+        }
+        output.push({ kind: 'raw', text: line });
+    }
+    return output.map(entry => {
+        if (entry.kind === 'use') return formatBattleUseLogForCompact(entry);
+        if (entry.kind === 'damage') return formatBattleDamageLogForCompact(entry);
+        return entry.text || '';
+    });
 }
 
 function renderLog(log, logStart = 0, logTotal = null) {
@@ -13867,17 +14092,25 @@ function renderLog(log, logStart = 0, logTotal = null) {
     const wasAtBottom = content.scrollTop + content.clientHeight >= content.scrollHeight - 30;
     if (content.dataset.renderLang !== currentLang) {
         content.dataset.renderLang = currentLang;
-        resetBattleLogDom(content);
+        resetBattleLogState(content);
     }
     if (!Array.isArray(log)) log = [];
-    logStart = Number.isFinite(Number(logStart)) ? Number(logStart) : 0;
-    logTotal = Number.isFinite(Number(logTotal)) ? Number(logTotal) : logStart + log.length;
+    log = compactBattleLogLinesForDisplay(log);
+    logStart = 0;
+    logTotal = log.length;
     const matchKey = phaseContextMatchKey(gameState);
     if (matchKey && renderedBattleLogMatchKey && renderedBattleLogMatchKey !== String(matchKey)) {
         resetBattleLogState(content);
     }
     if (matchKey) renderedBattleLogMatchKey = String(matchKey);
     if (logTotal < renderedBattleLogTotal || logStart > renderedBattleLogTotal) {
+        resetBattleLogState(content);
+        renderedBattleLogTotal = logStart;
+    }
+    const nextBattleSnapshot = log.map(line => String(line || ''));
+    const canAppendBattleLog = renderedBattleLogSnapshot.length <= nextBattleSnapshot.length
+        && renderedBattleLogSnapshot.every((line, index) => line === nextBattleSnapshot[index]);
+    if (!canAppendBattleLog) {
         resetBattleLogState(content);
         renderedBattleLogTotal = logStart;
     }
@@ -13889,6 +14122,7 @@ function renderLog(log, logStart = 0, logTotal = null) {
     }
     renderedBattleLogCount = log.length;
     renderedBattleLogTotal = logTotal;
+    renderedBattleLogSnapshot = nextBattleSnapshot;
     if (renderedTimelineDomCount > gameTimelineEntries.length || content.children.length === 0) {
         resetBattleLogDom(content);
     }
@@ -16099,7 +16333,7 @@ function renderOfficialModList() {
     const disabled = getDisabledMods();
     settingsMods.forEach((mod, i) => {
         const info = mod.info || {};
-        const name = info.name || mod.filename || tf('mod_default_name', i + 1);
+        const name = localizedModNameFromFields(info, mod.filename || tf('mod_default_name', i + 1));
         const version = info.version || '';
         const filename = mod.filename || '';
         const errors = Array.isArray(mod.errors) ? mod.errors.filter(Boolean) : [];
@@ -16146,7 +16380,7 @@ function renderOfficialModList() {
             meta.textContent = metaParts.join(' · ');
             details.appendChild(meta);
         }
-        const descText = info.description || mod.description || '';
+        const descText = localizedModDescriptionFromFields(info, mod.description || '');
         if (descText) {
             const desc = document.createElement('div');
             desc.className = 'mod-description';
@@ -16222,7 +16456,7 @@ function formatCommunityTime(value) {
 }
 
 function communityModTitle(mod, index = 0) {
-    return mod.name || `Community Mod ${index + 1}`;
+    return localizedModNameFromFields(mod, mod.name || `Community Mod ${index + 1}`);
 }
 
 function setSelectedCommunityMods(mods) {
@@ -16532,10 +16766,11 @@ function renderCommunityModList() {
         if (mod.uploaded_at) metaParts.push(tf('community_uploaded_at', formatCommunityTime(mod.uploaded_at)));
         meta.textContent = metaParts.join(' · ');
         if (meta.textContent) details.appendChild(meta);
-        if (mod.description) {
+        const communityDescText = localizedModDescriptionFromFields(mod, mod.description || '');
+        if (communityDescText) {
             const desc = document.createElement('div');
             desc.className = 'community-card-desc';
-            desc.textContent = mod.description;
+            desc.textContent = communityDescText;
             details.appendChild(desc);
         }
         const warnings = Array.isArray(mod.warnings) ? mod.warnings.filter(Boolean) : [];

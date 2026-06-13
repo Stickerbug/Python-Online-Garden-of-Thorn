@@ -2266,6 +2266,19 @@ body {
   width: 171px;
 }
 
+.gallery-multipetal-toggle {
+  display: block;
+  margin: 8px auto 0;
+  min-width: 72px;
+  padding: 6px 14px;
+}
+
+.gallery-multipetal-toggle.active {
+  background: var(--bloom);
+  color: #fff;
+  border-color: var(--bloom);
+}
+
 .gallery-detail-info h3 { margin: 0 0 8px; }
 .gallery-detail-info p { color: var(--text-secondary); line-height: 1.7; }
 

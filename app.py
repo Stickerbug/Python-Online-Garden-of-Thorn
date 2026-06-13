@@ -149,10 +149,7 @@ DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = {
     'Troll Cards.gtnmod',
     'Thorn Cards.gtnmod',
 }
-BUILTIN_SETUP_CARD_IDS = {
-    'Light',
-    'Yggdrasil',
-}
+BUILTIN_SETUP_CARD_IDS = set()
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
 VANILLA_CARD_ART_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'assets', 'card-art', 'vanilla')
 VANILLA_CARD_ART_URL = '/static/assets/card-art/vanilla'
@@ -2640,12 +2637,16 @@ def get_card_mod_sources(disabled_mods=None):
             continue
         info = mod.info
         mod_name = info.name if info and info.name else mod.filename
+        mod_name_cn = info.name_cn if info and getattr(info, 'name_cn', '') else mod_name
+        mod_name_en = info.name_en if info and getattr(info, 'name_en', '') else mod_name
         mod_sort_name = mod_name or mod.filename
         for card in mod.cards:
             if card.id in CARD_DEFS:
                 sources[card.id] = {
                     'filename': mod.filename,
                     'name': mod_name,
+                    'name_cn': mod_name_cn,
+                    'name_en': mod_name_en,
                     'sort_name': mod_sort_name,
                     'is_vanilla': mod.filename == VANILLA_MOD_FILENAME,
                 }
@@ -2721,6 +2722,8 @@ def register_v2_loadout_cards(v2_loadout):
             image_url=str(resource.get('image_url') or resource.get('image') or ''),
             upgraded_image=str(resource.get('upgraded_image') or ''),
             upgraded_image_url=str(resource.get('upgraded_image_url') or resource.get('upgraded_image') or ''),
+            copy_count=_v2_int(resource.get('copy_count', 0), 0),
+            swift_value=_v2_int(resource.get('swift_value', 0), 0),
             damage=_v2_int(resource.get('damage', 0), 0),
             hits=_v2_int(resource.get('hits', 1), 1),
         )
@@ -6790,6 +6793,8 @@ def api_cards():
             'name_cn': card_def.name_cn,
             'source_mod_filename': source.get('filename', ''),
             'source_mod_name': source.get('name', ''),
+            'source_mod_name_cn': source.get('name_cn', ''),
+            'source_mod_name_en': source.get('name_en', ''),
             'source_mod_sort_name': source.get('sort_name', ''),
             'source_mod_is_vanilla': bool(source.get('is_vanilla', False)),
             'source_mod_is_community': bool(source.get('is_community', False)),
@@ -6811,6 +6816,8 @@ def api_cards():
             'v2_events': getattr(card_def, 'v2_events', {}) or {},
             'damage': getattr(card_def, 'damage', 0),
             'hits': getattr(card_def, 'hits', 1),
+            'copy_count': getattr(card_def, 'copy_count', 0),
+            'swift_value': getattr(card_def, 'swift_value', 0),
             'image': image_url,
             'image_url': image_url,
             'upgraded_image': upgraded_image_url,

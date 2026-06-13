@@ -303,7 +303,8 @@ _reg(CardDef('Coffee', 'Coffee', '咖啡', 0, 0, 'bloom', 5, 'Common',
              '可以用来提神，当然，小心耐药性。', '+1E，第一次使用额外+1E'))
 
 _reg(CardDef('Chilli', 'Chilli', '辣椒', 0, 0, 'bloom', 5, 'Common',
-             '太过辛辣，让你不得不用一张牌解辣。', '丢弃一张牌，然后抽一张牌'))
+             '太过辛辣，让你不得不用一张牌解辣。', '丢弃一张牌，然后抽一张牌',
+             flags={'self_only'}))
 
 _reg(CardDef('Chromosome', 'Chromosome', '染色体', 2, 0, 'bloom', 2, 'Common',
              '从基因中提取记忆，寻找所需之牌。', '从弃牌堆中选择一张牌将其加入手中'))
@@ -395,8 +396,6 @@ FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS = {
 SETUP_ONLY_CARD_IDS = {
     # These cards are kept available for setup conversions, but should never be
     # offered by normal draft/pool generation.
-    'Light',
-    'Yggdrasil',
     'MagicBone',
     'MagicStinger',
     'MagicSewage',

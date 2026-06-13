@@ -421,15 +421,21 @@ class ModVariable:
 class ModInfo:
     def __init__(self, data: dict):
         self.name = data.get('name', '')
+        self.name_cn = data.get('name_cn', '')
+        self.name_en = data.get('name_en', '') or data.get('name', '')
         self.version = data.get('version', '1.0.0')
         self.author = data.get('author', '')
         self.description = data.get('description', '')
+        self.description_cn = data.get('description_cn', '') or data.get('description', '')
+        self.description_en = data.get('description_en', '') or data.get('description', '')
         self.game_version = data.get('game_version', '')
 
     def to_dict(self) -> dict:
         return {
-            'name': self.name, 'version': self.version,
+            'name': self.name, 'name_cn': self.name_cn, 'name_en': self.name_en,
+            'version': self.version,
             'author': self.author, 'description': self.description,
+            'description_cn': self.description_cn, 'description_en': self.description_en,
             'game_version': self.game_version,
         }
 
@@ -615,9 +621,13 @@ def load_v2_mod_from_data(data: dict, source: str = "memory", allow_reserved_nam
     if manifest_data:
         mod.info = ModInfo({
             'name': manifest_data.get('name', ''),
+            'name_cn': manifest_data.get('name_cn', ''),
+            'name_en': manifest_data.get('name_en', '') or manifest_data.get('name', ''),
             'version': manifest_data.get('version', '1.0.0'),
             'author': manifest_data.get('author', ''),
             'description': manifest_data.get('description', ''),
+            'description_cn': manifest_data.get('description_cn', '') or manifest_data.get('description', ''),
+            'description_en': manifest_data.get('description_en', '') or manifest_data.get('description', ''),
             'game_version': manifest_data.get('api_version', ''),
         })
     registries = normalized.get('registries') if isinstance(normalized.get('registries'), dict) else {}
