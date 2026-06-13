@@ -1194,6 +1194,7 @@ class GameEngine:
         context['vars']['drawn'] = len(drawn)
         context['current_action']['drawn'] = len(drawn)
         self._run_v2_event_hooks('after_draw', context, len(drawn))
+        self._apply_electric_web_draw_damage(player_id, len(drawn))
         return drawn
 
     def _set_equipment_property_value(self, player_id, current_card, params, value):
@@ -2752,6 +2753,7 @@ class GameEngine:
         if not (0 <= player_id < len(self.players)):
             return
         ps = self.players[player_id]
+        ps.custom_vars['electric_web_draw_damage'] = 0
         if self._is_status_immune(player_id):
             return
         self._set_custom_status_value(player_id, 'jungle:fragile', 0)
@@ -2780,6 +2782,27 @@ class GameEngine:
             self._set_custom_status_alias_group(player_id, 'jungle:turn_magic_turns', magic_turn_keys, magic_turns - 1)
             if magic_turns - 1 <= 0:
                 self._set_custom_status_alias_group(player_id, 'jungle:turn_magic_power', magic_power_keys, 0)
+
+    def _apply_electric_web_draw_damage(self, player_id: int, drawn_count: int):
+        if not (0 <= player_id < len(self.players)):
+            return
+        per_card = int(self.players[player_id].custom_vars.get('electric_web_draw_damage', 0) or 0)
+        count = max(0, int(drawn_count or 0))
+        if per_card <= 0 or count <= 0:
+            return
+        total = per_card * count
+        self._deal_direct_damage(player_id, total, '电网', damage_type=DAMAGE_TYPE_MAGIC, damage_tag='factory:electric_web')
+        self.log_msg(f"{self.pn(player_id)}的电网效果：抽{count}张牌，受到{total}电伤")
+
+    def _atomic_electric_web_arm(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not (0 <= target_id < len(self.players)):
+            return
+        amount = self._eval_int(player_id, params.get('amount', 2), card, 2)
+        self.players[target_id].custom_vars['electric_web_draw_damage'] = max(
+            int(self.players[target_id].custom_vars.get('electric_web_draw_damage', 0) or 0),
+            max(0, amount),
+        )
 
     def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None,
                             damage_type: Optional[str] = None, damage_tag: Optional[str] = None):

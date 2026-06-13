@@ -63,7 +63,7 @@ ADVANCED_ATOMIC_OPS = {
     "apply_jungle_status", "apply_turn_regen", "magic_grapes_damage",
     "create_copies_to_deck_top", "consume_magic_for_status",
     "jungle_root_gain", "jungle_root_remove_owned", "plank_immunity",
-    "magic_relic_trigger",
+    "magic_relic_trigger", "electric_web_arm",
     "yin_yang_effect", "flower_burst",
 }
 

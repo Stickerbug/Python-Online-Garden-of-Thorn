@@ -7860,30 +7860,35 @@ function skinLookCssVars(rawLook) {
     return `--skin-look-x:${(look.x * SKIN_LOOK_OFFSET_X_PERCENT).toFixed(1)}%;--skin-look-y:${(look.y * SKIN_LOOK_OFFSET_Y_PERCENT).toFixed(1)}%`;
 }
 
+function isLocalSkinLookPlayerId(id) {
+    const pid = normalizePlayerId(id);
+    return pid != null && pid === normalizePlayerId(playerId) && !isSpectating && !replayMode;
+}
+
 function getSkinLookForPlayerId(id) {
     const pid = normalizePlayerId(id);
     if (pid == null) return { ...DEFAULT_SKIN_LOOK };
-    if (pid === normalizePlayerId(playerId)) return normalizeSkinLook(localSkinLook);
+    if (isLocalSkinLookPlayerId(pid)) return normalizeSkinLook(localSkinLook);
     return normalizeSkinLook(skinLookByPlayerId.get(pid));
 }
 
 function resolveSkinLookForPlayer(id, dataLook = null) {
     const pid = normalizePlayerId(id);
-    if (pid === normalizePlayerId(playerId)) return normalizeSkinLook(localSkinLook);
+    if (isLocalSkinLookPlayerId(pid)) return normalizeSkinLook(localSkinLook);
     return normalizeSkinLook(dataLook || getSkinLookForPlayerId(pid));
 }
 
 function setSkinLookForPlayerId(id, look, { local = false } = {}) {
     const pid = normalizePlayerId(id);
     const normalized = normalizeSkinLook(look);
-    if (local || pid === normalizePlayerId(playerId)) {
+    if (local || isLocalSkinLookPlayerId(pid)) {
         localSkinLook = normalized;
     }
     if (pid != null) {
         skinLookByPlayerId.set(pid, normalized);
         applySkinLookToRenderedAvatars(pid, normalized);
     }
-    if (local || pid === normalizePlayerId(playerId) || pid == null) {
+    if (local || isLocalSkinLookPlayerId(pid) || pid == null) {
         applySkinLookToLocalPreview(normalized);
     }
     return normalized;
@@ -7994,6 +7999,13 @@ function skinDamageMoodClasses(playerId) {
 
 function applySkinDamageMoodToAvatar(avatar, mood) {
     if (!avatar) return;
+    if (avatar.classList.contains('is-defeated')) {
+        avatar.classList.remove('skin-hit-poison', 'skin-hit-fire');
+        const playerAvatar = avatar.closest && avatar.closest('.player-avatar');
+        if (playerAvatar) playerAvatar.classList.remove('skin-hit-poison', 'skin-hit-fire');
+        setSkinMouthT(avatar, 1);
+        return;
+    }
     avatar.classList.remove('skin-mouth-hurt', 'skin-hit-poison', 'skin-hit-fire');
     const playerAvatar = avatar.closest && avatar.closest('.player-avatar');
     if (playerAvatar) playerAvatar.classList.remove('skin-hit-poison', 'skin-hit-fire');
@@ -8058,15 +8070,19 @@ function renderSkinAvatar(skinInput, options = {}) {
     const invertedClass = inverted ? ' is-inverted' : '';
     const pid = normalizePlayerId(options.playerId);
     const look = options.look || (pid != null ? getSkinLookForPlayerId(pid) : localSkinLook);
+    const defeated = !!options.defeated;
     const damageMood = skinDamageMoodClasses(pid);
     const storedMouthT = pid != null ? Number(skinMouthTByPlayerId.get(pid)) : NaN;
-    const mouthT = damageMood && Number.isFinite(storedMouthT) ? storedMouthT : 0;
-    const style = `--skin-main:${escapeHtml(skin.primary_color)};--skin-border:${escapeHtml(border)};${skinLookCssVars(look)}`;
+    const mouthT = defeated ? 1 : (damageMood && Number.isFinite(storedMouthT) ? storedMouthT : 0);
+    const defeatedClass = defeated ? ' is-defeated' : '';
+    const defeatedSeed = String(options.defeatedSeed || options.playerId || options.lookOwner || skin.primary_color || 'skin');
+    const defeatedRotate = 10 + (hashStringToHue(defeatedSeed) % 341);
+    const style = `--skin-main:${escapeHtml(skin.primary_color)};--skin-border:${escapeHtml(border)};--skin-defeat-rotate:${defeatedRotate}deg;${skinLookCssVars(look)}`;
     const ownerAttr = pid != null
         ? ` data-player-id="${pid}"`
         : ` data-look-owner="${escapeHtml(options.lookOwner || 'local')}"`;
     return `
-        <div class="skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${invertedClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr} style="${style}">
+        <div class="skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${invertedClass}${defeatedClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr} style="${style}">
             <div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>
             <div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>
             <svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">
@@ -8190,6 +8206,7 @@ function mergeSkinLooksFromPayload(data) {
 }
 
 function updateSkinEyeTracking(event) {
+    if ((isSpectating || replayMode) && activeViewId !== 'view-skin') return;
     const point = { x: Number(event.clientX || 0), y: Number(event.clientY || 0) };
     const localPid = normalizePlayerId(playerId);
     const targetAvatar = findLocalSkinLookAvatar(localPid);
@@ -12103,6 +12120,8 @@ function renderPlayerAvatar(player, options = {}) {
     const skinHtml = renderSkinAvatar(p.skin || DEFAULT_SKIN_CONFIG, {
         playerId: p.id,
         look: resolveSkinLookForPlayer(p.id, p.skin_look),
+        defeated: p.isDefeated,
+        defeatedSeed: `${p.id ?? ''}:${p.name || ''}`,
     });
     const skinClass = image ? '' : ' has-skin';
     return `
@@ -12120,6 +12139,8 @@ function renderMiniPlayerSkin(containerId, playerData = {}, id = null) {
     el.innerHTML = renderSkinAvatar(data.skin || DEFAULT_SKIN_CONFIG, {
         playerId: pid,
         look: resolveSkinLookForPlayer(pid, data.skin_look),
+        defeated: Number(data.health || 0) <= 0 || !!data.isDefeated || !!data.is_defeated,
+        defeatedSeed: `${pid ?? ''}:${data.name || data.player_name || ''}`,
     });
 }
 

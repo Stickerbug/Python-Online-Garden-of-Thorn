@@ -625,7 +625,7 @@ body {
 .mini-skin-avatar .skin-avatar {
   width: var(--skin-design-size);
   height: var(--skin-design-size);
-  --skin-border-width: 7.5cqi;
+  --skin-border-width: calc(7.5cqi / var(--skin-mini-scale));
   --skin-scale: var(--skin-mini-scale);
   transform: scale(var(--skin-scale));
   transform-origin: center;
@@ -11271,13 +11271,17 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 .player-avatar.has-skin .skin-avatar {
   --skin-design-size: 100cqi;
-  --skin-border-width: 7.5cqi;
   --skin-scale: 0.78;
+  --skin-border-width: calc(7.5cqi / var(--skin-scale));
   width: 100cqi;
   height: 100cqi;
   transform: scale(var(--skin-scale));
   transform-origin: center;
   margin: calc((1 - var(--skin-scale)) * var(--skin-design-size) / -2);
+}
+
+.skin-avatar.is-defeated {
+  animation: skinAvatarDefeatRotate 520ms cubic-bezier(.2, .85, .2, 1) both;
 }
 
 .player-avatar::before {
@@ -11449,6 +11453,33 @@ html[data-ui-style="minimal"] .btn-end-turn {
   z-index: 1;
 }
 
+.skin-avatar.is-defeated .skin-eye {
+  top: 28%;
+  background: transparent;
+  overflow: visible;
+}
+
+.skin-avatar.is-defeated .skin-eye::before,
+.skin-avatar.is-defeated .skin-eye::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 200%;
+  height: 20%;
+  border-radius: 999px;
+  background: var(--skin-feature);
+  transform-origin: center;
+}
+
+.skin-avatar.is-defeated .skin-eye::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.skin-avatar.is-defeated .skin-eye::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
 .skin-eye-left {
   left: 33%;
 }
@@ -11519,6 +11550,10 @@ html[data-ui-style="minimal"] .btn-end-turn {
   will-change: transform;
 }
 
+.skin-avatar.is-defeated .skin-pupil {
+  display: none;
+}
+
 .skin-mouth {
   position: absolute;
   z-index: 1;
@@ -11541,6 +11576,15 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 .player-avatar .skin-mouth-line {
   stroke-width: 6.7cqi;
+}
+
+@keyframes skinAvatarDefeatRotate {
+  from {
+    transform: scale(var(--skin-scale)) rotate(0deg);
+  }
+  to {
+    transform: scale(var(--skin-scale)) rotate(var(--skin-defeat-rotate));
+  }
 }
 
 @keyframes classicAvatarPulse {

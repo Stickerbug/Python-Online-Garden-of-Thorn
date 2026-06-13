@@ -1462,8 +1462,9 @@ class LocalSoloEngine {
         const earlyEquipment = this.runOwnerTurnStartActionStatusEquipment(playerId);
         if (this.round_num > 1) {
             const drawCount = Math.max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - ps.sluggish);
-            ps.drawCards(drawCount);
-            this.logMsg(`${this.pn(playerId)}抽${drawCount}张牌`);
+            const drawn = ps.drawCards(drawCount);
+            this.logMsg(`${this.pn(playerId)}抽${drawn.length}张牌`);
+            this.applyElectricWebDrawDamage(playerId, drawn.length);
             if (ps.sluggish > 0) this.logMsg(`${this.pn(playerId)}的迟缓减少${Math.min(ps.sluggish, DRAW_PER_TURN)}张抽牌`);
         }
         this.players.forEach((owner, ownerId) => {
@@ -1983,6 +1984,7 @@ class LocalSoloEngine {
     applyJungleTurnStartStatuses(playerId) {
         const ps = this.players[playerId];
         if (!ps) return;
+        ps.custom_vars.electric_web_draw_damage = 0;
         ps['jungle:fragile'] = 0;
         ps.fragile = 0;
         const shield = this.customStatusValue(playerId, 'jungle:shield', 'shield');
@@ -2898,8 +2900,9 @@ class LocalSoloEngine {
     effect_draw(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'self');
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
-        this.players[targetId].drawCards(amount);
-        this.logMsg(`${this.pn(targetId)}抽${amount}张牌`);
+        const drawn = this.players[targetId].drawCards(amount);
+        this.logMsg(`${this.pn(targetId)}抽${drawn.length}张牌`);
+        this.applyElectricWebDrawDamage(targetId, drawn.length);
     }
 
     effect_gain_e(playerId, card, params) {
@@ -3485,6 +3488,16 @@ class LocalSoloEngine {
         }
     }
 
+    effect_electric_web_arm(playerId, card, params, log, choice) {
+        const targetId = this.resolveTarget(playerId, params.target || 'target', choice);
+        const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 2, card, 2, choice));
+        if (!this.players[targetId]) return;
+        this.players[targetId].custom_vars.electric_web_draw_damage = Math.max(
+            toInt(this.players[targetId].custom_vars.electric_web_draw_damage, 0),
+            amount
+        );
+    }
+
     effect_add_status(playerId, card, params, log, choice) {
         this.effect_status_add_named(playerId, card, { ...params, status: params.status || params.id || params.name }, log, choice);
     }
@@ -3702,6 +3715,68 @@ class LocalSoloEngine {
         if (applied > 0) this.logMsg(`第${this.round_num}回合开始，所有存活玩家+1灼烧`);
     }
 
+    hasEquipment(playerId, defId) {
+        const ps = this.players[playerId];
+        if (!ps) return false;
+        const target = String(defId || '').toLowerCase();
+        return ps.equipment.some(eq => {
+            const id = String(eq.def_id || '').toLowerCase();
+            return id === target || id.endsWith(`:${target}`);
+        });
+    }
+
+    damageDealtEquipmentFlatBonus(sourceId) {
+        const sid = toInt(sourceId, -1);
+        if (sid < 0 || sid >= this.players.length) return 0;
+        let bonus = 0;
+        this.players.forEach((owner, ownerId) => {
+            owner.equipment.forEach(eq => {
+                const id = String(eq.def_id || '').toLowerCase();
+                const effectTarget = toInt(eq.effect_target ?? eq.owner ?? ownerId, ownerId);
+                if (effectTarget !== sid) return;
+                if (id === 'cutter' || id.endsWith(':cutter')) bonus += 1;
+            });
+        });
+        return bonus;
+    }
+
+    applyUniversalDamageShields(targetId, damage, sourceId = null, source = '') {
+        let actual = Math.max(0, toInt(damage, 0));
+        const ps = this.players[targetId];
+        if (!ps || actual <= 0) return actual;
+        const shield = this.customStatusValue(targetId, 'jungle:shield', 'shield');
+        if (shield > 0) {
+            const blocked = Math.min(shield, actual);
+            actual -= blocked;
+            this.setCustomStatusAliasGroup(targetId, 'jungle:shield', ['jungle:shield', 'shield'], shield - blocked);
+            this.logMsg(`${this.pn(targetId)}的护盾抵扣${blocked}点伤害`);
+        }
+        if (actual > 0 && this.hasEquipment(targetId, 'MagicCotton')) {
+            const spent = Math.min(Math.max(0, toInt(ps.magic, 0)), Math.ceil(actual / 4));
+            if (spent > 0) {
+                const blocked = Math.min(actual, spent * 4);
+                ps.magic -= spent;
+                actual -= blocked;
+                this.logMsg(`${this.pn(targetId)}的魔法棉花消耗${spent}M抵扣${blocked}点伤害`);
+            }
+        }
+        return actual;
+    }
+
+    applyElectricWebDrawDamage(playerId, drawnCount) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        const perCard = toInt(ps.custom_vars.electric_web_draw_damage, 0);
+        const count = Math.max(0, toInt(drawnCount, 0));
+        if (perCard <= 0 || count <= 0) return;
+        const total = perCard * count;
+        this.dealDirectDamage(playerId, total, '电网', playerId, {
+            damage_type: 'magic',
+            damage_tag: 'factory:electric_web',
+        });
+        this.logMsg(`${this.pn(playerId)}的电网效果：抽${count}张牌，受到${total}电伤`);
+    }
+
     dealDirectDamage(playerId, amount, source = '', sourceId = null, damageMeta = null) {
         const ps = this.players[playerId];
         if (!ps || ps.invincible) {
@@ -3709,6 +3784,7 @@ class LocalSoloEngine {
             return 0;
         }
         let actual = this.applyCorruptionMultiplier(amount);
+        actual = this.applyUniversalDamageShields(playerId, actual, sourceId, source);
         ps.health -= actual;
         this.recordDamage(playerId, actual, sourceId);
         this.logMsg(`${this.pn(playerId)}受到${actual}点${source}伤害（H=${ps.health}）`);
@@ -3739,7 +3815,7 @@ class LocalSoloEngine {
                 this.logMsg(`${this.pn(targetId)}无敌，免疫伤害`);
                 continue;
             }
-            let dmg = Math.max(0, toInt(amount, 0));
+            let dmg = Math.max(0, toInt(amount, 0)) + this.damageDealtEquipmentFlatBonus(attackerId);
             if (this.halve_next_attack) dmg = Math.ceil(dmg / 2);
             else if (precisionDodged) dmg = Math.ceil(dmg / 2);
             dmg = this.applyCorruptionMultiplier(dmg);
@@ -3754,11 +3830,14 @@ class LocalSoloEngine {
                     }
                 }
             }
-            dmg = Math.max(0, dmg - ps.armor);
+            const rootArmor = this.customStatusValue(targetId, 'jungle:root', 'jungle:root_status', 'root_status');
+            const fragile = this.customStatusValue(targetId, 'jungle:fragile', 'fragile');
+            dmg = Math.max(0, dmg - ps.armor - rootArmor + fragile);
             if (ps.sponge_active && dmg > 0) {
                 ps.poison += Math.floor(dmg / 2);
                 dmg = 0;
             }
+            dmg = this.applyUniversalDamageShields(targetId, dmg, attackerId, '攻击');
             ps.health -= dmg;
             total += dmg;
             this.recordDamage(targetId, dmg, attackerId);
@@ -4099,6 +4178,13 @@ class LocalSoloEngine {
                 source_id: playerId,
                 target_id: this.resolveTarget(playerId, choice && choice.target_player_id != null ? choice.target_player_id : 'enemy'),
             });
+            return;
+        }
+        if (card.card_type === 'thorn' && toInt(card.damage, 0) > 0) {
+            const targetId = this.resolveTarget(playerId, choice && choice.target_player_id != null ? choice.target_player_id : 'enemy');
+            const amount = this.modifiedAttackDamage(toInt(card.damage, 0), card);
+            const hits = Math.max(1, toInt(card.hits, 1));
+            this.dealAttackDamage(targetId, amount, hits, card.flags.has('precision'), playerId);
             return;
         }
         this.logMsg(`${this.pn(playerId)}使用了${cardName(card.def_id)}`);

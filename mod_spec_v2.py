@@ -305,6 +305,7 @@ VALID_LOGIC_OPS = {
     "jungle_root_remove_owned",
     "plank_immunity",
     "magic_relic_trigger",
+    "electric_web_arm",
     "yin_yang_effect",
     "flower_burst",
 }
