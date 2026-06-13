@@ -325,22 +325,8 @@ class GameEngine2v2(GameEngine):
             ps.base_max_health = BASE_MAX_HEALTH
             ps.elixir = INITIAL_ELIXIR
             ps.magic = INITIAL_MAGIC
-        # Unique: exile duplicate unique cards
         for pid in range(4):
-            ps = self.players[pid]
-            unique_ids = set()
-            new_deck = []
-            for card in ps.deck:
-                if 'unique' in card.flags:
-                    if card.def_id in unique_ids:
-                        ps.exile.append(card)
-                        self.log_msg(f"{self.pn(pid)}的唯一牌{card.name_cn}多余副本被放逐")
-                    else:
-                        unique_ids.add(card.def_id)
-                        new_deck.append(card)
-                else:
-                    new_deck.append(card)
-            ps.deck = new_deck
+            self._enforce_unique_cards_for_player(pid)
         for i in range(4):
             self._apply_opening_event(i)
 
@@ -1032,6 +1018,24 @@ class GameEngine2v2(GameEngine):
             ps.gain_elixir(elixir_recovery)
             ps.gain_magic(1)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E，+1M")
+            if ps.foresight > 0 and ps.deck and not self._is_status_immune(player_id):
+                peek_count = min(ps.foresight, len(ps.deck))
+                deck_cards = [c.to_dict() for c in ps.deck[:peek_count]]
+                self._pending_foresight = {'player_id': player_id, 'peek_count': peek_count}
+                self.pending_choice = {
+                    'player_id': player_id,
+                    'choice_type': 'foresight_replace',
+                    'card': None,
+                    'deck_cards': deck_cards,
+                    'choice_params': {'max_count': peek_count},
+                    'target_player_id': player_id,
+                    'max_replace': peek_count,
+                    'message': f'预知：查看牌堆顶{peek_count}张，选择要抽取的牌',
+                }
+                return
+            elif ps.foresight > 0:
+                ps.foresight = 0
+                self.log_msg(f"{self.pn(player_id)}的预知效果清除")
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
             ps.gain_elixir(2)
             self.log_msg(f"{self.pn(player_id)}【能量涌动】：额外+2E")
@@ -1168,7 +1172,7 @@ class GameEngine2v2(GameEngine):
         ps.remove_hand_card(card_instance_id)
         ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
         ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', card_instance_id) or card_instance_id))
-        self._apply_magic_acceleration_after_play(player_id)
+        self._apply_magic_acceleration_after_play(player_id, card)
         self._active_choice = choice if isinstance(choice, dict) else {}
         try:
             needs_response = self._check_response_needed(player_id, card)
@@ -1723,17 +1727,24 @@ class GameEngine2v2(GameEngine):
         if turn_will_be_skipped:
             self.log_msg(f"{self.pn(player_id)}被跳过本回合")
             self._skip_current_turn_after_start = True
-        # Foresight: allow replacing cards from hand
-        if ps.foresight > 0 and ps.hand:
-            max_replace = min(ps.foresight, len(ps.hand))
-            self._pending_foresight = {'player_id': player_id, 'max_replace': max_replace}
+        # Foresight: look at the top of deck and choose which cards to draw.
+        if ps.foresight > 0 and ps.deck and not self._is_status_immune(player_id):
+            peek_count = min(ps.foresight, len(ps.deck))
+            deck_cards = [c.to_dict() for c in ps.deck[:peek_count]]
+            self._pending_foresight = {'player_id': player_id, 'peek_count': peek_count}
             self.pending_choice = {
                 'player_id': player_id,
                 'choice_type': 'foresight_replace',
                 'card': None,
-                'max_replace': max_replace,
-                'message': f'预知：选择最多{max_replace}张手牌替换',
+                'deck_cards': deck_cards,
+                'choice_params': {'max_count': peek_count},
+                'target_player_id': player_id,
+                'max_replace': peek_count,
+                'message': f'预知：查看牌堆顶{peek_count}张，选择要抽取的牌',
             }
+        elif ps.foresight > 0:
+            ps.foresight = 0
+            self.log_msg(f"{self.pn(player_id)}的预知效果清除")
         self._check_game_over()
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,

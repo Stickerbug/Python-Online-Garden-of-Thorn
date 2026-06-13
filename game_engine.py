@@ -465,7 +465,7 @@ class GameEngine:
         6: {'id': 6, 'name': '能量涌动', 'desc': '前三回合开始时额外回复2E', 'position': 3},
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手多回复3E并抽4张牌', 'position': 3},
         9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，最大生命值+10', 'position': 1},
-        10: {'id': 10, 'name': '魔力加速', 'desc': '打出手牌后回复1M，最大生命值-10', 'position': 1},
+        10: {'id': 10, 'name': '魔力加速', 'desc': '最大生命值-10，打出一张不消耗M的牌回复1M', 'position': 1},
     }
     OPENING_EVENT_ORDER = {
         1: 10, 2: 20, 3: 30, 8: 40,
@@ -2252,22 +2252,8 @@ class GameEngine:
             ps.base_max_health = BASE_MAX_HEALTH
             ps.elixir = INITIAL_ELIXIR
             ps.magic = INITIAL_MAGIC
-        # Unique: exile duplicate unique cards
         for pid in range(len(self.players)):
-            ps = self.players[pid]
-            unique_ids = set()
-            new_deck = []
-            for card in ps.deck:
-                if 'unique' in card.flags:
-                    if card.def_id in unique_ids:
-                        ps.exile.append(card)
-                        self.log_msg(f"{self.pn(pid)}的唯一牌{card.name_cn}多余副本被放逐")
-                    else:
-                        unique_ids.add(card.def_id)
-                        new_deck.append(card)
-                else:
-                    new_deck.append(card)
-            ps.deck = new_deck
+            self._enforce_unique_cards_for_player(pid)
         for i in range(2):
             ps = self.players[i]
             if i != self.first_player:
@@ -2385,9 +2371,11 @@ class GameEngine:
                 changed += 1
         self.log_msg(f"{self.pn(player_id)}【多重瓣】：最大生命值+10，{changed}张多子瓣牌子瓣+1")
 
-    def _apply_magic_acceleration_after_play(self, player_id: int):
+    def _apply_magic_acceleration_after_play(self, player_id: int, card: Optional[CardInstance] = None):
         ps = self.players[player_id]
         if int(getattr(ps, 'custom_vars', {}).get('setup_magic_acceleration', 0) or 0) <= 0:
+            return
+        if card is not None and int(getattr(card, 'cost_m', 0) or 0) > 0:
             return
         before = ps.magic
         ps.gain_magic(1)
@@ -2558,7 +2546,7 @@ class GameEngine:
             ps.base_max_health -= 10
             ps.health = min(ps.health, ps.max_health)
             ps.custom_vars['setup_magic_acceleration'] = 1
-            self.log_msg(f"{self.pn(player_id)}【魔力加速】：最大生命值-10，打出手牌后回复1M")
+            self.log_msg(f"{self.pn(player_id)}【魔力加速】：最大生命值-10，打出不消耗M的牌后回复1M")
 
     def _apply_v2_opening_event(self, player_id: int, event_id) -> bool:
         if event_id is None:
@@ -2624,7 +2612,7 @@ class GameEngine:
         if hasattr(self, 'get_enemies'):
             enemies = [eid for eid in self.get_enemies(player_id) if 0 <= eid < len(self.players) and self.players[eid].health > 0]
             if enemies:
-                return enemies[0]
+                return min(enemies, key=lambda eid: (self.players[eid].health, eid))
         target = 1 - player_id
         return target if 0 <= target < len(self.players) and self.players[target].health > 0 else -1
 
@@ -2780,6 +2768,9 @@ class GameEngine:
                 'max_replace': peek_count,
                 'message': f'预知：查看牌堆顶{peek_count}张，选择要抽取的牌',
             }
+        elif ps.foresight > 0:
+            ps.foresight = 0
+            self.log_msg(f"{self.pn(player_id)}的预知效果清除")
 
     def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None,
                             damage_type: Optional[str] = None, damage_tag: Optional[str] = None):
@@ -3169,6 +3160,34 @@ class GameEngine:
                 copy_card.held_turns = 0
         return copy_card
 
+    def _enforce_unique_cards_for_player(self, player_id: int, preferred_card: Optional[CardInstance] = None):
+        if not (0 <= player_id < len(self.players)):
+            return
+        ps = self.players[player_id]
+        zones = (ps.hand, ps.deck, ps.discard)
+        grouped = {}
+        for zone in zones:
+            for card in list(zone):
+                if 'unique' in self._effective_card_flags(card):
+                    grouped.setdefault(card.def_id, []).append((zone, card))
+        for def_id, entries in grouped.items():
+            if len(entries) <= 1:
+                continue
+            preferred_entry = None
+            if preferred_card is not None:
+                for entry in entries:
+                    if entry[1] is preferred_card or entry[1].instance_id == preferred_card.instance_id:
+                        preferred_entry = entry
+                        break
+            keep_zone, keep_card = preferred_entry or random.choice(entries)
+            for zone, card in entries:
+                if card is keep_card or card.instance_id == keep_card.instance_id:
+                    continue
+                if card in zone:
+                    zone.remove(card)
+                ps.exile.append(card)
+                self.log_msg(f"{self.pn(player_id)}的唯一牌{card.name_cn}多余副本被放逐")
+
     def _refund_pending_choice_cost(self, player_id: int, card: CardInstance):
         ps = self.players[player_id]
         played_count = ps.cards_played_this_turn.get(card.def_id, 1)
@@ -3207,7 +3226,7 @@ class GameEngine:
         if card_removed is None:
             return {'success': False, 'error': '移出手牌失败'}
         ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', card_instance_id) or card_instance_id))
-        self._apply_magic_acceleration_after_play(player_id)
+        self._apply_magic_acceleration_after_play(player_id, card)
         needs_response = self._check_response_needed(player_id, card)
         if not needs_response:
             needs_response = self._check_precision_response_needed(player_id, card)
@@ -3681,6 +3700,7 @@ class GameEngine:
                 ps.deck = remaining
             if draw_count > 0:
                 self.log_msg(f"{self.pn(player_id)}因预知抽取了{draw_count}张牌")
+            ps.foresight = 0
             self._pending_foresight = None
             return {'success': True, 'foresight_drawn': draw_count}
         # Handle reorder_deck choice (e.g. Magic Goggles)
@@ -4205,6 +4225,7 @@ class GameEngine:
             else:
                 new_card = target.copy()
             ps.add_to_hand(new_card)
+            self._enforce_unique_cards_for_player(player_id, preferred_card=new_card)
             self._remember_created_card(new_card, context)
             if log:
                 self.log_msg(log)
@@ -4255,6 +4276,7 @@ class GameEngine:
                 return
             new_card = CardInstance(def_id=card_def.id)
             ts.add_to_hand(new_card)
+            self._enforce_unique_cards_for_player(target_id, preferred_card=new_card)
             self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
                 self.log_msg(log)
@@ -4561,13 +4583,13 @@ class GameEngine:
                 new_card.swift_value = 2
                 new_card.instance_flags.add('swift')
                 target_ps.add_to_hand(new_card)
-                self.log_msg(f"{self.pn(player_id)}的重构机：{self.pn(target_id)}获得迅捷2的激光器")
+                self.log_msg(f"{self.pn(player_id)}的重构机：{self.pn(target_id)}获得激光器")
             elif roll == 2:
                 new_card = CardInstance(def_id='Sawblade')
                 new_card.swift_value = 2
                 new_card.instance_flags.add('swift')
                 target_ps.add_to_hand(new_card)
-                self.log_msg(f"{self.pn(player_id)}的重构机：{self.pn(target_id)}获得迅捷2的锯片")
+                self.log_msg(f"{self.pn(player_id)}的重构机：{self.pn(target_id)}获得锯片")
             else:
                 target_ps.fragment_stacks += 2
                 new_card = CardInstance(def_id='Fragment')
@@ -4586,8 +4608,6 @@ class GameEngine:
                     'target_player_id': target_id,
                     'original_choice': {'target_player_id': target_id},
                 }
-                ps.hand.insert(0, card)
-                self._refund_pending_choice_cost(player_id, card)
 
     def _atomic_request_reorder_deck(self, player_id, card, params, log, choice, context):
         """Request reorder of opponent's deck (Magic Goggles)."""
@@ -5560,6 +5580,7 @@ class GameEngine:
                 copy_card.mimic_discount = 1
                 if ps.can_add_to_hand():
                     ps.add_to_hand(copy_card)
+                    self._enforce_unique_cards_for_player(player_id, preferred_card=copy_card)
                     self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
                 else:
                     self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}，但手牌已满")
@@ -6951,6 +6972,7 @@ class GameEngine:
         events = getattr(card.card_def, 'v2_events', None) or {}
         event_def = events.get(event_name)
         extra_context = extra_context if isinstance(extra_context, dict) else {}
+        current_eq = self._find_equipment_for_card(player_id, card) if event_name != 'on_play' else None
         target_id = -1
         target_explicit = False
         if isinstance(choice, dict):
@@ -6995,6 +7017,10 @@ class GameEngine:
             'current_event': event_name,
             'current_action': {'choice': choice or {}, **extra_context},
         }
+        if current_eq is not None:
+            context['current_equipment'] = current_eq
+            context['selected_equipment_instance_id'] = current_eq.card_instance.instance_id
+            context['selected_equipment_owner_id'] = player_id
         if event_name == 'on_play' and self._is_chilli_card(card):
             context['suppress_detail_logs'] = True
         if isinstance(choice, dict):
@@ -7210,7 +7236,12 @@ class GameEngine:
                 continue
             if not self._has_card_event(listener_card.card_def, event_name):
                 continue
-            self._run_card_event(owner_id, listener_card, event_name, choice, context)
+            listener_context = dict(context)
+            listener_eq = self._find_equipment_for_card(owner_id, listener_card)
+            if listener_eq is not None:
+                listener_context['selected_equipment_instance_id'] = listener_eq.card_instance.instance_id
+                listener_context['selected_equipment_owner_id'] = owner_id
+            self._run_card_event(owner_id, listener_card, event_name, choice, listener_context)
 
     def _has_fatal_prevention(self, player_id: int) -> bool:
         if not (0 <= player_id < len(self.players)):
@@ -7491,7 +7522,7 @@ class GameEngine:
             return
         ps = self.players[player_id]
         cleared = []
-        for attr, label in (('sluggish', '迟缓'), ('foresight', '预知'), ('blind', '失明')):
+        for attr, label in (('sluggish', '迟缓'), ('blind', '失明')):
             value = int(getattr(ps, attr, 0) or 0)
             if value <= 0:
                 continue
@@ -7746,6 +7777,9 @@ class GameEngine:
                 'max_replace': peek_count,
                 'message': f'预知：查看牌堆顶{peek_count}张，选择要抽取的牌',
             }
+        elif ps.foresight > 0:
+            ps.foresight = 0
+            self.log_msg(f"{self.pn(player_id)}的预知效果清除")
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
                            is_battery: bool = False, is_precision: bool = False,
@@ -7824,7 +7858,13 @@ class GameEngine:
                 for eq in list(ps.equipment):
                     if self._has_card_event(eq.card_def, 'damage_taken') and self._run_card_event(
                             target_id, eq.card_instance, 'damage_taken', None,
-                            {'source_id': attacker_id, 'target_id': target_id, 'damage': dmg}):
+                            {
+                                'source_id': attacker_id,
+                                'target_id': target_id,
+                                'damage': dmg,
+                                'selected_equipment_instance_id': eq.card_instance.instance_id,
+                                'selected_equipment_owner_id': target_id,
+                            }):
                         continue
                     if eq.def_id == 'Battery':
                         self._deal_direct_damage(
@@ -7936,15 +7976,26 @@ class GameEngine:
             card.fission_hit = 0
         else:
             self._apply_card_effect(player_id, card, choice)
-        # Check if an effect (e.g. request_reorder_deck) set pending_choice during execution
+        # Check if an effect (e.g. request_reorder_deck/assembler_effect) set pending_choice during execution
         # Must check BEFORE card disposition (discard/equip) to allow the choice to complete first
-        if self.pending_choice is not None and self.pending_choice.get('choice_type') == 'reorder_deck':
-            ps.hand.insert(0, card)
-            self._refund_pending_choice_cost(player_id, card)
-            return {'success': True, 'needs_choice': True, 'choice_type': 'reorder_deck',
-                    'card': card.to_dict(), 'deck_cards': self.pending_choice.get('deck_cards', []),
-                    'target_player_id': self.pending_choice.get('target_player_id'),
-                    'message': self.pending_choice.get('message', '')}
+        if self.pending_choice is not None:
+            if ps.find_hand_card(card.instance_id) is None:
+                ps.hand.insert(0, card)
+                self._refund_pending_choice_cost(player_id, card)
+            pending = self.pending_choice
+            return {
+                'success': True,
+                'needs_choice': True,
+                'choice_type': pending.get('choice_type', ''),
+                'choice_params': pending.get('choice_params', {}),
+                'card': card.to_dict(),
+                'hand_cards': pending.get('hand_cards', []),
+                'deck_cards': pending.get('deck_cards', []),
+                'discard_cards': pending.get('discard_cards', []),
+                'target_player_id': pending.get('target_player_id'),
+                'max_replace': pending.get('max_replace'),
+                'message': pending.get('message', ''),
+            }
         # Fracture: take damage when playing a card
         if ps.fracture > 0 and not self._is_status_immune(player_id):
             frac_dmg = ps.fracture
@@ -8205,6 +8256,7 @@ class GameEngine:
         copy_card = self._make_mimic_copy_card(target)
         copy_card.mimic_discount = self._eval_int(player_id, params.get('discount_e', 1), card, 1)
         ps.add_to_hand(copy_card)
+        self._enforce_unique_cards_for_player(player_id, preferred_card=copy_card)
         if log:
             self.log_msg(log)
 

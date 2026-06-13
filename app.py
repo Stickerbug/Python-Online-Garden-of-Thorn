@@ -977,6 +977,8 @@ class GameRoom:
         self.disconnected_players = {}
         self.reconnect_timers = {}
         self._rematch_votes = set()
+        self._returned_lobby_sids = set()
+        self._returned_lobby_names = {}
         self.pending_surrender_request = None
         self.team_assignments = None
         self._history_recorded = False
@@ -1085,6 +1087,24 @@ def emit_room_game_phase(room, sid, phase, **extra):
     payload.update(room_mod_payload(room))
     payload.update(extra)
     socketio.emit('game_phase', payload, room=sid)
+
+
+def build_choice_request_payload(source):
+    source = source or {}
+    payload = {
+        'choice_type': source.get('choice_type', ''),
+        'card': source.get('card', {}),
+        'choice_params': source.get('choice_params', {}),
+        'target_player_id': source.get('target_player_id'),
+    }
+    for key in (
+        'hand_cards', 'deck_cards', 'discard_cards', 'exile_cards',
+        'equipment_cards', 'top_cards', 'max_replace', 'message',
+    ):
+        value = source.get(key)
+        if value is not None and value != [] and value != '':
+            payload[key] = value
+    return payload
 
 
 def _room_player_dead(room, player_index):
@@ -3516,6 +3536,23 @@ def get_admin_status_payload():
     }
 
 
+def room_rematch_payload(room, sid=None):
+    returned_sids = set(getattr(room, '_returned_lobby_sids', set()) or set())
+    returned_names = dict(getattr(room, '_returned_lobby_names', {}) or {})
+    first_returned_name = ''
+    if returned_sids:
+        first_sid = next(iter(returned_sids))
+        first_returned_name = returned_names.get(first_sid, '')
+    return {
+        'rematch_votes': len(getattr(room, '_rematch_votes', set()) or set()),
+        'rematch_total': len(getattr(room, 'player_sids', []) or []),
+        'rematch_has_voted': bool(sid is not None and sid in (getattr(room, '_rematch_votes', set()) or set())),
+        'rematch_blocked': bool(returned_sids),
+        'rematch_blocked_reason': 'player_returned_lobby' if returned_sids else '',
+        'rematch_returned_player_name': first_returned_name,
+    }
+
+
 def get_admin_status_payload_cached():
     now = time.time()
     cached = _ADMIN_STATUS_CACHE.get('data')
@@ -4837,9 +4874,7 @@ def broadcast_game_state(room):
         state['match_key'] = room_match_key(room)
         state.update(room_mod_payload(room))
         if room.engine.phase == 'game_over':
-            state['rematch_votes'] = len(room._rematch_votes)
-            state['rematch_total'] = len(room.player_sids)
-            state['rematch_has_voted'] = sid in room._rematch_votes
+            state.update(room_rematch_payload(room, sid))
         _mark_player_defeated_state(room, pidx, state)
         if room.mode == '2v2':
             engine = room.engine
@@ -4947,9 +4982,7 @@ def send_game_state_to(room, pidx):
         state['match_key'] = room_match_key(room)
         state.update(room_mod_payload(room))
         if room.engine.phase == 'game_over':
-            state['rematch_votes'] = len(room._rematch_votes)
-            state['rematch_total'] = len(room.player_sids)
-            state['rematch_has_voted'] = sid in room._rematch_votes
+            state.update(room_rematch_payload(room, sid))
         _mark_player_defeated_state(room, pidx, state)
         if room.mode == '2v2':
             engine = room.engine
@@ -4986,17 +5019,17 @@ def send_game_state_to(room, pidx):
 
 
 def emit_rematch_state(room):
-    votes = len(room._rematch_votes)
-    total = len(room.player_sids)
     for psid in room.player_sids:
         if psid not in players:
             continue
-        socketio.emit('rematch_state', {
-            'votes': votes,
-            'total': total,
-            'has_voted': psid in room._rematch_votes,
+        payload = room_rematch_payload(room, psid)
+        payload.update({
+            'votes': payload['rematch_votes'],
+            'total': payload['rematch_total'],
+            'has_voted': payload['rematch_has_voted'],
             'mode': room.mode,
-        }, room=psid)
+        })
+        socketio.emit('rematch_state', payload, room=psid)
 
 
 def start_event_select(room):
@@ -5203,19 +5236,7 @@ def send_solo_state(sid, perspective=None):
     # Check if engine has a pending choice (e.g. foresight_replace) and send choice_request
     pending = getattr(engine, 'pending_choice', None)
     if pending and not engine.game_over:
-        choice_payload = {
-            'choice_type': pending.get('choice_type', ''),
-            'card': pending.get('card', {}),
-            'choice_params': pending.get('choice_params', {}),
-            'target_player_id': pending.get('target_player_id'),
-        }
-        if pending.get('deck_cards'):
-            choice_payload['deck_cards'] = pending['deck_cards']
-        if pending.get('message'):
-            choice_payload['message'] = pending['message']
-        if pending.get('top_cards'):
-            choice_payload['top_cards'] = pending['top_cards']
-        socketio.emit('choice_request', choice_payload, room=sid)
+        socketio.emit('choice_request', build_choice_request_payload(pending), room=sid)
 
 
 def build_response_request_payload(engine, responder_id, played_card, player_id, counter_cards, target_player_id=None):
@@ -8909,17 +8930,7 @@ def on_solo_play_card(data):
             emit_solo_response_request(sid, engine, pidx, result['card'])
         elif result.get('needs_choice'):
             send_solo_state(sid)
-            choice_payload = {
-                'choice_type': result['choice_type'],
-                'card': result['card'],
-                'choice_params': result.get('choice_params', {}),
-                'target_player_id': result.get('target_player_id'),
-            }
-            if result.get('deck_cards'):
-                choice_payload['deck_cards'] = result['deck_cards']
-            if result.get('message'):
-                choice_payload['message'] = result['message']
-            socketio.emit('choice_request', choice_payload, room=sid)
+            socketio.emit('choice_request', build_choice_request_payload(result), room=sid)
         elif result.get('needs_v2_ui'):
             send_solo_state(sid)
             emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
@@ -9175,17 +9186,7 @@ def on_play_card(data):
             emit_pending_response_requests(room)
         elif result.get('needs_choice'):
             broadcast_game_state(room)
-            choice_payload = {
-                'choice_type': result['choice_type'],
-                'card': result['card'],
-                'choice_params': result.get('choice_params', {}),
-                'target_player_id': result.get('target_player_id'),
-            }
-            if result.get('deck_cards'):
-                choice_payload['deck_cards'] = result['deck_cards']
-            if result.get('message'):
-                choice_payload['message'] = result['message']
-            emit('choice_request', choice_payload)
+            emit('choice_request', build_choice_request_payload(result))
         elif result.get('needs_v2_ui'):
             broadcast_game_state(room)
             emit_room_v2_ui_request(room)
@@ -9268,17 +9269,7 @@ def on_ally_consent_response(data):
         elif result.get('needs_choice'):
             broadcast_game_state(room)
             requester_sid = room.player_sids[result.get('player_id', room.engine.current_player)] if result.get('player_id') is not None else sid
-            choice_payload = {
-                'choice_type': result['choice_type'],
-                'card': result['card'],
-                'choice_params': result.get('choice_params', {}),
-                'target_player_id': result.get('target_player_id'),
-            }
-            if result.get('deck_cards'):
-                choice_payload['deck_cards'] = result['deck_cards']
-            if result.get('message'):
-                choice_payload['message'] = result['message']
-            socketio.emit('choice_request', choice_payload, room=requester_sid)
+            socketio.emit('choice_request', build_choice_request_payload(result), room=requester_sid)
         elif result.get('needs_v2_ui'):
             broadcast_game_state(room)
             emit_room_v2_ui_request(room)
@@ -9684,6 +9675,10 @@ def on_rematch(data=None):
             room = rooms[room_id]
             if room.engine.phase != 'game_over':
                 return
+            if getattr(room, '_returned_lobby_sids', set()):
+                socketio.emit('server_error', {'message': '有玩家已返回大厅'}, room=sid)
+                emit_rematch_state(room)
+                return
             already_voted = sid in room._rematch_votes
             room._rematch_votes.add(sid)
             emit_rematch_state(room)
@@ -9698,6 +9693,8 @@ def on_rematch(data=None):
                         }, room=other_sid)
             if len(room._rematch_votes) == len(room.player_sids):
                 room._rematch_votes = set()
+                room._returned_lobby_sids = set()
+                room._returned_lobby_names = {}
                 room.pending_surrender_request = None
                 _cancel_game_over_cleanup_timer(room)
                 if room.mode == '2v2':
@@ -9786,6 +9783,17 @@ def on_return_lobby(data=None):
                     broadcast_game_state(room)
             elif pidx >= 0 and getattr(room.engine, 'game_over', False):
                 room._rematch_votes.discard(sid)
+                if sid not in getattr(room, '_returned_lobby_sids', set()):
+                    room._returned_lobby_sids.add(sid)
+                    room._returned_lobby_names[sid] = player.get('nickname', '?')
+                    payload = {
+                        'player_name': player.get('nickname', '?'),
+                        'reason': 'player_returned_lobby',
+                    }
+                    for other_sid in room.player_sids:
+                        if other_sid != sid and other_sid in players and players[other_sid].get('room_id') == room_id:
+                            socketio.emit('player_returned_lobby', payload, room=other_sid)
+                    emit_rematch_state(room)
             if not any(psid != sid and psid in players and players[psid].get('room_id') == room_id for psid in room.player_sids) and not getattr(room, 'spectators', []):
                 _cancel_game_over_cleanup_timer(room)
                 rooms.pop(room_id, None)

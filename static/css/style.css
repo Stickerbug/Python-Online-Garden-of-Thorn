@@ -5217,6 +5217,56 @@ body {
   line-height: 1.05;
 }
 
+.card.card-assembler .card-effect {
+  font-size: 7.25cqi;
+  line-height: 1.16;
+  padding-top: 2.8cqi;
+  padding-bottom: 1.6cqi;
+}
+
+.card.card-assembler .inline-card-chip.choice-card-token {
+  gap: 1px;
+  margin: 0 0.04em;
+  transform: translateY(-0.02em);
+}
+
+.card.card-assembler .inline-card-chip.inline-card-chip-compact .choice-card-name {
+  max-width: 23cqi;
+  padding: 0 3px;
+  border-radius: 2px;
+  font-size: 0.72em;
+}
+
+.card.card-assembler .inline-card-chip.inline-card-chip-compact .choice-card-flags {
+  gap: 1px;
+}
+
+.card.card-assembler .inline-card-chip.inline-card-chip-compact .choice-card-flags .card-flag {
+  padding: 0 2px;
+  border-radius: 2px;
+  font-size: 0.58em;
+  line-height: 1;
+}
+
+.card.card-assembler .card-description {
+  font-size: 6.2cqi;
+  line-height: 1.12;
+  padding-top: 0.7cqi;
+}
+
+.card.card-honey .card-effect {
+  font-size: 7.75cqi;
+  line-height: 1.18;
+  padding-top: 3.4cqi;
+  padding-bottom: 2cqi;
+}
+
+.card.card-honey .card-description {
+  font-size: 6.4cqi;
+  line-height: 1.16;
+  padding-top: 0.8cqi;
+}
+
 .card-description {
   padding: 2cqi 2.5cqi 1cqi;
   font-size: 7cqi;

@@ -557,6 +557,8 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
             return _find_card_by_instance_id(engine, eval_v2_value(engine, context, selector.get("instance_id")))
         if ref == "equipment_by_instance_id":
             return _find_equipment_by_instance_id(engine, eval_v2_value(engine, context, selector.get("instance_id")))[1]
+        if ref == "current_equipment":
+            return resolve_v2_target(engine, context, "current_equipment")
         if ref == "var":
             return context.get("vars", {}).get(selector.get("name"))
         return eval_v2_value(engine, context, selector)
@@ -628,7 +630,23 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
     if text == "current_card":
         return context.get("card")
     if text == "current_equipment":
-        return context.get("current_equipment")
+        current = context.get("current_equipment")
+        if current is not None:
+            return current
+        instance_id = context.get("selected_equipment_instance_id")
+        owner_id = context.get("selected_equipment_owner_id", context.get("source_player", 0))
+        if instance_id is not None:
+            try:
+                owner_id = int(owner_id)
+            except Exception:
+                owner_id = int(context.get("source_player", 0))
+            if _valid_player(engine, owner_id):
+                for eq in getattr(engine.players[owner_id], "equipment", []):
+                    if getattr(getattr(eq, "card_instance", None), "instance_id", None) == instance_id:
+                        return eq
+            found_owner, found_eq = _find_equipment_by_instance_id(engine, instance_id)
+            return found_eq
+        return None
     if text in context.get("vars", {}):
         return context["vars"][text]
     return text

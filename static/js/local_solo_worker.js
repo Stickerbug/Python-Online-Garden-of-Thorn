@@ -29,6 +29,11 @@ const CARD_FLAG_ALIASES = {
     'tag_thorn_cards_supplement_1_sticky': 'sticky',
     'thorn_cards_supplement_1_sticky': 'sticky',
 };
+const VANILLA_FLAGS = new Set([
+    'precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis',
+    'attract', 'void', 'self_only', 'uncancellable', 'infinite_exclude', 'rebound',
+    'copy', 'unique', 'swift', 'stealth', 'revealed',
+]);
 
 class ModLoopBreak extends Error {}
 class ModLoopContinue extends Error {}
@@ -154,7 +159,18 @@ function escapeRegExp(value) {
 function normalizeCardFlag(flag) {
     const text = String(flag == null ? '' : flag).trim();
     if (!text) return '';
-    return CARD_FLAG_ALIASES[text.toLowerCase()] || text;
+    const lower = text.toLowerCase();
+    if (CARD_FLAG_ALIASES[lower]) return CARD_FLAG_ALIASES[lower];
+    if (lower.startsWith('tag_')) {
+        const local = lower.slice(4).split(':').pop().split('_').pop();
+        if (VANILLA_FLAGS.has(local)) return local;
+    }
+    if (lower.includes(':')) {
+        const local = lower.split(':').pop();
+        if (VANILLA_FLAGS.has(local)) return local;
+    }
+    if (VANILLA_FLAGS.has(lower)) return lower;
+    return text;
 }
 
 function normalizeCardFlags(flags) {
@@ -375,7 +391,8 @@ class LocalCard {
     }
 
     get flags() {
-        const flags = new Set(normalizeCardFlags(this.def().flags || []));
+        const def = this.def();
+        const flags = new Set(normalizeCardFlags([...(def.flags || []), ...(def.tags || [])]));
         this.instance_flags.forEach(flag => flags.add(flag));
         this.disabled_flags.forEach(flag => flags.delete(flag));
         return flags;
@@ -415,6 +432,7 @@ class LocalEquipment {
         this.turns_equipped = 0;
         this.uses_this_turn = 0;
         this.corruption_active = false;
+        this.custom_vars = {};
     }
 
     get def_id() {
@@ -433,6 +451,7 @@ class LocalEquipment {
             turns_equipped: this.turns_equipped,
             uses_this_turn: this.uses_this_turn,
             corruption_active: this.corruption_active,
+            custom_vars: { ...(this.custom_vars || {}) },
         };
     }
 }
@@ -721,6 +740,7 @@ class LocalSoloEngine {
                 this.players[i].elixir += 3;
             }
             this.players[i].drawCards(handSize);
+            this.enforceUniqueCardsForPlayer(i);
         }
         this.logMsg(`${options.startLabel || '单人训练场开始'}！${this.pn(this.first_player)}先手。`);
         this.logMsg(`=== 第${this.round_num}回合 ===`);
@@ -916,6 +936,35 @@ class LocalSoloEngine {
         deckEntries.forEach(entry => {
             const defId = typeof entry === 'string' ? entry : entry && entry.def_id;
             if (defId && cardDef(defId)) ps.deck.push(new LocalCard(entry));
+        });
+        this.enforceUniqueCardsForPlayer(playerId);
+    }
+
+    enforceUniqueCardsForPlayer(playerId, preferredCard = null) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        const groups = new Map();
+        [ps.hand, ps.deck, ps.discard].forEach(zone => {
+            zone.slice().forEach(card => {
+                if (!card || !card.flags || !card.flags.has('unique')) return;
+                if (!groups.has(card.def_id)) groups.set(card.def_id, []);
+                groups.get(card.def_id).push({ zone, card });
+            });
+        });
+        groups.forEach(entries => {
+            if (entries.length <= 1) return;
+            let keep = null;
+            if (preferredCard) {
+                keep = entries.find(entry => entry.card === preferredCard || entry.card.instance_id === preferredCard.instance_id);
+            }
+            if (!keep) keep = entries[Math.floor(Math.random() * entries.length)];
+            entries.forEach(entry => {
+                if (entry === keep || entry.card.instance_id === keep.card.instance_id) return;
+                const idx = entry.zone.indexOf(entry.card);
+                if (idx >= 0) entry.zone.splice(idx, 1);
+                ps.exile.push(entry.card);
+                this.logMsg(`${this.pn(playerId)}的唯一牌${cardName(entry.card.def_id)}多余副本被放逐`);
+            });
         });
     }
 
@@ -1307,7 +1356,7 @@ class LocalSoloEngine {
             ps.base_max_health -= 10;
             ps.health = Math.min(ps.health, ps.max_health);
             ps.custom_vars.setup_magic_acceleration = 1;
-            this.logMsg(`${this.pn(playerId)}【魔力加速】：最大生命值-10，打出手牌后回复1M`);
+            this.logMsg(`${this.pn(playerId)}【魔力加速】：最大生命值-10，打出不消耗M的牌后回复1M`);
         }
     }
 
@@ -3021,14 +3070,30 @@ class LocalSoloEngine {
 
     effect_equipment_prop_set(playerId, card, params) {
         const eq = this.resolveEquipmentRef(playerId, params.equipment || { ref: 'current_equipment' }, card);
-        if (eq) eq[String(params.property || 'turns_equipped')] = this.evalInt(playerId, params.value ?? 0, card, 0);
+        if (!eq) return;
+        const prop = String(params.property || 'turns_equipped');
+        const value = this.evalInt(playerId, params.value ?? 0, card, 0);
+        if (prop === 'turns_equipped' || prop === 'equip_turns' || prop === 'equipped_turns') eq.turns_equipped = Math.max(0, value);
+        else if (prop === 'effect_target' || prop === 'target_player') eq.effect_target = value;
+        else if (prop === 'corruption_active' || prop === 'is_corruption_active') eq.corruption_active = !!value;
+        else {
+            eq.custom_vars = eq.custom_vars || {};
+            eq.custom_vars[prop] = value;
+        }
     }
 
     effect_equipment_prop_add(playerId, card, params) {
         const eq = this.resolveEquipmentRef(playerId, params.equipment || { ref: 'current_equipment' }, card);
         if (eq) {
             const prop = String(params.property || 'turns_equipped');
-            eq[prop] = toInt(eq[prop], 0) + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+            const value = this.equipmentProperty(eq, prop) + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+            if (prop === 'turns_equipped' || prop === 'equip_turns' || prop === 'equipped_turns') eq.turns_equipped = Math.max(0, value);
+            else if (prop === 'effect_target' || prop === 'target_player') eq.effect_target = value;
+            else if (prop === 'corruption_active' || prop === 'is_corruption_active') eq.corruption_active = !!value;
+            else {
+                eq.custom_vars = eq.custom_vars || {};
+                eq.custom_vars[prop] = value;
+            }
         }
     }
 
@@ -3040,6 +3105,7 @@ class LocalSoloEngine {
         const copy = target.copy();
         copy.instance_id = randintId();
         this.players[playerId].addToHand(copy);
+        this.enforceUniqueCardsForPlayer(playerId, copy);
         this._last_created_card_instance_id = copy.instance_id;
         this._active_effect_context.last_created_card_instance_id = copy.instance_id;
         if (log) this.logMsg(log);
@@ -3054,6 +3120,7 @@ class LocalSoloEngine {
         if ((def.id || cardId) !== ERROR_CARD_ID && !target.canAddToHand()) return;
         const newCard = new LocalCard(def.id || cardId);
         target.addToHand(newCard);
+        this.enforceUniqueCardsForPlayer(targetId, newCard);
         this._last_created_card_instance_id = newCard.instance_id;
         this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
         if (log && newCard.def_id !== ERROR_CARD_ID) this.logMsg(log);
@@ -3474,7 +3541,7 @@ class LocalSoloEngine {
         if (prop === 'effect_target' || prop === 'target_player') return toInt(eq.effect_target ?? eq.owner, 0);
         if (prop === 'corruption_active' || prop === 'is_corruption_active') return eq.corruption_active ? 1 : 0;
         if (prop === 'owner') return toInt(eq.owner, 0);
-        return 0;
+        return toInt((eq.custom_vars || {})[prop], 0);
     }
 
     modifiedAttackDamage(base, card) {
@@ -3503,9 +3570,10 @@ class LocalSoloEngine {
         return best;
     }
 
-    applyMagicAccelerationAfterPlay(playerId) {
+    applyMagicAccelerationAfterPlay(playerId, card = null) {
         const ps = this.players[playerId];
         if (toInt(ps.custom_vars.setup_magic_acceleration, 0) <= 0) return;
+        if (card && toInt(card.cost_m, 0) > 0) return;
         const before = ps.magic;
         ps.gainMagic(1);
         if (ps.magic !== before) this.logMsg(`${this.pn(playerId)}【魔力加速】：+1M`);
@@ -3616,6 +3684,8 @@ class LocalSoloEngine {
                                 source_id: attackerId,
                                 target_id: targetId,
                                 damage: dmg,
+                                selected_equipment_instance_id: eq.card_instance && eq.card_instance.instance_id,
+                                selected_equipment_owner_id: targetId,
                             });
                         } else if (eq.def_id === 'Battery') {
                             this.dealDirectDamage(attackerId, 3, '电池电击', targetId, {
@@ -3820,7 +3890,7 @@ class LocalSoloEngine {
         const removed = ps.removeHandCard(instanceId);
         if (!removed) return { success: false, error: '移出手牌失败' };
         ps.cards_played_this_turn_instance_ids.push(toInt(card.instance_id, instanceId));
-        this.applyMagicAccelerationAfterPlay(playerId);
+        this.applyMagicAccelerationAfterPlay(playerId, card);
         if (this.checkResponseNeeded(playerId, card) || this.checkPrecisionResponseNeeded(playerId, card)) {
             this.pending_response = {
                 card: card.toDict(),
@@ -4029,7 +4099,7 @@ class LocalSoloEngine {
         this.dispatchCardEvent('card_used', responderId, counterCard, originalPlayerId == null ? responderId : originalPlayerId);
     }
 
-    useTrigger(playerId, equipmentInstanceId) {
+    useTrigger(playerId, equipmentInstanceId, targetPlayerId = null) {
         if (this.current_player !== playerId) return { success: false, error: '不是你的回合' };
         const ps = this.players[playerId];
         const eq = ps.findEquipment(equipmentInstanceId);
@@ -4045,13 +4115,20 @@ class LocalSoloEngine {
         }
         if (triggerCost > 0) this.spendResource(playerId, 'elixir', triggerCost, eq.card_instance);
         eq.uses_this_turn = toInt(eq.uses_this_turn, 0) + 1;
+        const targetId = Number.isInteger(Number(targetPlayerId)) ? toInt(targetPlayerId, 1 - playerId) : 1 - playerId;
         if (this.hasCardEvent(eq.card_def, 'equipment_trigger')) {
-            this.runCardEvent(playerId, eq.card_instance, 'equipment_trigger', null, {
+            this.runCardEvent(playerId, eq.card_instance, 'equipment_trigger', {
+                target_player: targetId,
+                target_player_id: targetId,
+                target_id: targetId,
+            }, {
                 event: 'equipment_trigger',
                 source_id: playerId,
-                target_id: 1 - playerId,
+                target_id: targetId,
+                selected_equipment_instance_id: eq.card_instance && eq.card_instance.instance_id,
+                selected_equipment_owner_id: playerId,
             });
-            this.dispatchCardEvent('equipment_triggered', playerId, eq.card_instance, 1 - playerId, eq, playerId);
+            this.dispatchCardEvent('equipment_triggered', playerId, eq.card_instance, targetId, eq, playerId);
         } else if (eq.def_id === 'Leaf') {
             if (this.destroyEquipment(playerId, eq)) this.dealAttackDamage(1 - playerId, 8, 1, false, playerId);
         } else if (eq.def_id === 'Mark') {
@@ -4060,7 +4137,7 @@ class LocalSoloEngine {
             if (this.destroyEquipment(playerId, eq)) this.dealAttackDamage(1 - playerId, 20, 1, false, playerId);
         }
         if (!this.hasCardEvent(eq.card_def, 'equipment_trigger')) {
-            this.dispatchCardEvent('equipment_triggered', playerId, eq.card_instance, 1 - playerId, eq, playerId);
+            this.dispatchCardEvent('equipment_triggered', playerId, eq.card_instance, targetId, eq, playerId);
         }
         this.checkGameOver();
         return { success: true };
@@ -4280,7 +4357,8 @@ onmessage = event => {
             return;
         }
         if (message.type === 'solo_use_trigger') {
-            const result = engine.useTrigger(engine.current_player, message.payload && message.payload.equipment_instance_id);
+            const payload = message.payload || {};
+            const result = engine.useTrigger(engine.current_player, payload.equipment_instance_id, payload.target_player_id);
             if (!result.success) emit('server_error', { message: result.error || 'Operation failed' });
             engine.sendState(engine.tutorial ? 0 : null);
             return;

@@ -78,6 +78,8 @@ const I18N = {
         discard_empty: 'Discard pile empty', no_same_attack: 'No matching attack cards', confirm_surrender: 'Surrender?', request_rematch: 'Request Rematch',
         opponent_rematch: 'Opponent requests rematch', rematch_sent: 'Rematch request sent', rematch_waiting: 'Waiting for opponent', rematch_agreed: 'Rematch accepted',
         rematch_progress: 'Rematch ({0}/{1})',
+        rematch_unavailable_returned: 'A player returned to lobby',
+        player_returned_lobby: '{0} returned to lobby',
         agree_rematch: 'Accept Rematch', you_win: 'You Win!', you_lose: 'You Lose!', you_draw: 'Draw!', send: 'Send', cancel: 'Cancel', confirm: 'Confirm', ok: 'OK', close: 'Close', notice: 'Notice',
         opponent_disconnected: 'Opponent disconnected', opponent_reconnected: 'Opponent reconnected', reconnect_title: 'Reconnect', reconnect_prompt: 'Reconnect to the previous match?',
         reconnecting: 'Reconnecting...', reconnect_timeout: 'Reconnect timed out', mod_mismatch_title: 'Mod Mismatch', mod_mismatch_msg: 'Mods do not match, cannot start the match',
@@ -187,6 +189,7 @@ I18N.zh = { ...I18N.en,
     no_enemy_hand: '对方没有手牌', deck_empty: '牌堆为空', no_matching_cards: '没有符合条件的牌', no_cards_in_hand: '手牌为空', discard_empty: '弃牌堆为空', no_same_attack: '没有同名攻击牌',
     confirm_surrender: '确认投降？', request_rematch: '请求再来一局', opponent_rematch: '对方请求再来一局', rematch_sent: '已发送再来一局请求',
     rematch_waiting: '等待对方', rematch_agreed: '对方已接受', agree_rematch: '接受再来一局', rematch_progress: '再来一局({0}/{1})', you_win: '你赢了！', you_lose: '你输了！', you_draw: '平局！',
+    rematch_unavailable_returned: '有玩家已返回大厅', player_returned_lobby: '{0}已返回大厅',
     send: '发送', cancel: '取消', confirm: '确认', ok: '确定', close: '关闭', notice: '提示', opponent_disconnected: '对手已断开连接', opponent_reconnected: '对手已重新连接',
     reconnect_title: '重连', reconnect_prompt: '是否重连到上一局对战？', reconnecting: '重连中...', reconnect_timeout: '重连超时',
     mod_mismatch_title: '模组不匹配', mod_mismatch_msg: '模组不一致，无法开始对局', switch_perspective: '切换视角', leave_spectate: '退出观战', switch_to_perspective: '切换到 {0}',
@@ -2345,6 +2348,7 @@ function translateServerMessage(message) {
     if (message === 'A surrender request is already pending') return UI.surrender_pending || message;
     if (message === 'No pending surrender request') return UI.surrender_no_pending || message;
     if (message === 'Surrender requires a teammate') return UI.surrender_teammate_offline || message;
+    if (message === '有玩家已返回大厅') return UI.rematch_unavailable_returned || message;
     if (message === '游戏已结束') return UI.error_game_over;
     if (message === '游戏已经结束') return UI.error_game_already_over || UI.error_game_over;
     if (message === '等待对手反制响应') return UI.error_waiting_counter;
@@ -2598,9 +2602,19 @@ const LOCAL_SOLO_SUPPORTED_V2_OPS = new Set([
     ...LOCAL_SOLO_SUPPORTED_EFFECTS,
     'draw_cards', 'add_status', 'remove_status', 'set_status', 'move_card',
     'create_card', 'destroy_equipment', 'log', 'set_health',
+    'add_tag', 'remove_tag', 'tag_add_named', 'tag_remove_named',
+    'for_each', 'repeat_until', 'for_each_list', 'for_each_equipment',
+    'break', 'continue', 'timed_effect', 'countdown_var',
+    'give_card_to_hand', 'give_card_to_deck', 'give_card_to_discard',
+    'move_to_exile', 'add_equipment_to_zone', 'cost_e', 'cost_m',
+    'invincible', 'mod_e_regen', 'mod_m_regen', 'mod_draw', 'equip_protection',
     'const', 'var', 'player_stat', 'card_prop', 'status_stack', 'count',
     'add', 'sub', 'mul', 'div', 'floor', 'ceil', 'min', 'max', 'last_damage',
     'compare', 'and', 'or', 'not', 'has_status_named', 'has_status',
+    'zone_count', 'hand_count', 'deck_count', 'discard_count', 'exile_count', 'equipment_count',
+    'equipment_prop', 'equipment_property', 'card_property', 'player_property',
+    'damage_amount', 'current_damage', 'event_value', 'source_player', 'target_player',
+    '<', '<=', '>', '>=', '==', '!=',
     'hand_full', 'selected_cards_count', 'selected_card_index',
     'selected_card_at', 'selected_card', 'last_created_card',
     'goggles_enable', 'request_reorder_deck',
@@ -3992,6 +4006,18 @@ function showActionToast(text, duration, type) {
     }, Math.max(900, duration || 1800));
 }
 
+function clearActionToast() {
+    const toast = $('action-toast');
+    if (actionToastTimer) {
+        clearTimeout(actionToastTimer);
+        actionToastTimer = null;
+    }
+    if (toast) {
+        toast.className = 'action-toast hidden';
+        toast.textContent = '';
+    }
+}
+
 async function copyPlainText(text) {
     const value = String(text || '').trim();
     if (!value) return false;
@@ -5011,6 +5037,12 @@ function createCardElement(cardDict, options = {}) {
     }
     if (cardDef.card_type) {
         el.classList.add(cardDef.card_type);
+    }
+    if (defId === 'Assembler' || cardDef.id === 'Assembler' || cardDef.legacy_id === 'Assembler' || cardDef.name_cn === '重构机') {
+        el.classList.add('card-assembler');
+    }
+    if (defId === 'Honey' || cardDef.id === 'Honey' || cardDef.legacy_id === 'Honey' || cardDef.name_cn === '蜂蜜') {
+        el.classList.add('card-honey');
     }
     const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
     const rawTypeLabel = getCardTypeLabel(cardDef.card_type) || cardDef.card_type;
@@ -7350,6 +7382,12 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('server_error', (data) => {
         debugLog('[client] server_error:', data.message);
+        if (activeViewId === 'view-solo' && phase === 'solo_edit') {
+            clearPendingServerAction();
+            pendingPlayCard = null;
+            clearSelectedPlayCard();
+            return;
+        }
         flashStatus(moderationMessageFromPayload(data, translateServerMessage(data.message)), 3600, 'error');
         pendingSpectateRoomId = null;
         clearPendingServerAction();
@@ -7435,6 +7473,23 @@ function connectSocket(serverUrl) {
     bindSocketEvent('rematch_state', (data = {}) => {
         updateRematchState(data);
         if (data.mode === '2v2') rematchRequestedByOpponent = false;
+        if (phase === 'game_over') updateGameOverRematchButton(gameState);
+    });
+    bindSocketEvent('player_returned_lobby', (data = {}) => {
+        const name = data.player_name || data.nickname || '';
+        updateRematchState({
+            ...(rematchState || {}),
+            rematch_blocked: true,
+            rematch_blocked_reason: 'player_returned_lobby',
+            rematch_returned_player_name: name,
+        });
+        rematchRequestedByOpponent = false;
+        if (gameState) {
+            gameState.rematch_blocked = true;
+            gameState.rematch_blocked_reason = 'player_returned_lobby';
+            gameState.rematch_returned_player_name = name;
+        }
+        flashStatus(tf('player_returned_lobby', name || UI.opponent), 3600, 'warning');
         if (phase === 'game_over') updateGameOverRematchButton(gameState);
     });
     bindSocketEvent('spectate_enter', (data) => {
@@ -9599,11 +9654,10 @@ function handleLocalSoloMessage(event) {
 }
 
 function startLocalSoloRuntime(kind, payload) {
-    if (kind === 'solo') return false;
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=14');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=15');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;
@@ -9652,15 +9706,36 @@ function emitModeEvent(soloEventName, onlineEventName, payload = {}) {
 function showSoloTraining() {
     soloMode = false;
     phase = 'solo_edit';
-    loadSoloDecks(false);
-    renderSoloEventSelects();
-    renderSoloBuilder();
+    clearActionToast();
     showView('view-solo');
     updateStatus(UI.solo_training);
+    try {
+        loadSoloDecks(false);
+    } catch (err) {
+        console.error('[solo] failed to load saved decks', err);
+        localStorage.removeItem('gtn_solo_decks');
+        soloDeckA = [];
+        soloDeckB = [];
+        soloEventA = '';
+        soloEventB = '';
+    }
+    try {
+        renderSoloEventSelects();
+        renderSoloBuilder();
+    } catch (err) {
+        console.error('[solo] failed to render builder', err);
+        flashStatus(UI.operation_failed || '操作失败', 2400, 'error');
+    }
 }
 
 function loadSoloDecks(showNotice = true) {
-    const saved = JSON.parse(localStorage.getItem('gtn_solo_decks') || 'null');
+    let saved = null;
+    try {
+        saved = JSON.parse(localStorage.getItem('gtn_solo_decks') || 'null');
+    } catch (err) {
+        localStorage.removeItem('gtn_solo_decks');
+        saved = null;
+    }
     if (saved && Array.isArray(saved.deck0) && Array.isArray(saved.deck1)) {
         const normalizeDeck = (deck) => deck
             .map(entry => typeof entry === 'string'
@@ -10129,7 +10204,7 @@ function getBuiltinCardPinyinSearchText(cd) {
 function cardSearchText(defId) {
     const cd = getCardDef(defId);
     if (!cd) return defId.toLowerCase();
-    const flagText = (cd.flags || []).map(flag => {
+    const flagText = normalizeFlagList([...(normalizeFlagList(cd.flags || [])), ...(normalizeFlagList(cd.tags || []))]).map(flag => {
         const current = getFlagLabel(flag);
         const en = I18N.en[`tag_${flag}`] || I18N.en[`flag_${flag}`] || flag;
         return `${current} ${en}`;
@@ -10220,10 +10295,13 @@ function renderSoloDeck(which, deck) {
         const card = deck[idx];
         const cd = getCardDef(card.def_id);
         const invalid = !cd;
-        const baseFlags = new Set((cd && cd.flags) || []);
+        const baseFlags = new Set([
+            ...normalizeFlagList(cd && cd.flags),
+            ...normalizeFlagList(cd && cd.tags),
+        ]);
         const disabledFlags = new Set(card.disabled_flags || []);
-        const effectiveFlags = new Set([...(card.instance_flags || []), ...baseFlags]);
-        disabledFlags.forEach(flag => effectiveFlags.delete(flag));
+        const effectiveFlags = new Set([...normalizeFlagList(card.instance_flags || []), ...baseFlags]);
+        normalizeFlagList(disabledFlags).forEach(flag => effectiveFlags.delete(flag));
         const flagText = [...effectiveFlags].map(getFlagLabel).join(', ');
         const row = document.createElement('div');
         row.className = `solo-deck-card${invalid ? ' invalid' : ''}`;
@@ -10275,9 +10353,12 @@ async function editSoloCardFlags(which, idx) {
     if (!card) return;
     const cd = getCardDef(card.def_id);
     const allFlags = ['precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis', 'attract', 'void', 'self_only', 'uncancellable', 'copy', 'unique', 'swift', 'stealth', 'revealed'];
-    const base = new Set((cd && cd.flags) || []);
-    const added = new Set(card.instance_flags || []);
-    const disabled = new Set(card.disabled_flags || []);
+    const base = new Set([
+        ...normalizeFlagList(cd && cd.flags),
+        ...normalizeFlagList(cd && cd.tags),
+    ]);
+    const added = new Set(normalizeFlagList(card.instance_flags || []));
+    const disabled = new Set(normalizeFlagList(card.disabled_flags || []));
     const effective = (flag) => (base.has(flag) || added.has(flag)) && !disabled.has(flag);
     const options = allFlags.map(flag => `${effective(flag) ? '[x]' : '[ ]'} ${getFlagLabel(flag)}`);
     const picked = await gamePrompt(UI.edit_tags, options);
@@ -10355,17 +10436,17 @@ async function startSoloTraining() {
     if (sub1 === false) return;
     saveSoloDecks();
     const payload = { deck0: soloDeckA, deck1: soloDeckB, event0, event1, sub0, sub1, ...getModLoginPayload() };
+    if (socket && socket.connected) {
+        emitSoloStart(payload);
+        return;
+    }
     if (startLocalSoloRuntime('solo', payload)) {
         return;
     }
-    if (!socket) {
-        nickname = ($('input-nickname').value || '').trim() || 'Solo';
-        pendingSoloStart = true;
-        window.__pendingSoloPayload = payload;
-        connectSocket(getServerAddress());
-        return;
-    }
-    emitSoloStart(payload);
+    nickname = (($('input-nickname') && $('input-nickname').value) || nickname || 'Solo').trim() || 'Solo';
+    pendingSoloStart = true;
+    window.__pendingSoloPayload = payload;
+    connectSocket(getServerAddress());
 }
 
 function emitSoloStart(payload = null) {
@@ -13830,15 +13911,19 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
         const targetSuffix = gameState && gameState.mode === '2v2' && targetId != null && targetId !== ownerId
             ? `→${getPlayerNameById(targetId)}`
             : '';
+        const customVars = eqDict.custom_vars || {};
+        const layerValue = Number(customVars.layers || customVars.layer || 0);
+        const layerSuffix = layerValue > 0 ? ` · 层数:${layerValue}` : '';
         const equipName = `${getCardName(cardDef)}${targetSuffix ? `(${targetSuffix})` : ''}`;
-        const fullText = UI.equip_info.replace('{0}', equipName).replace('{1}', turns) + (corruption ? UI.equip_corruption : '');
-        const compactTextValue = `${equipName}${turns ? ` · ${turns}` : ''}${corruption ? ` · ${UI.compact_corrupted}` : ''}`;
+        const equipDisplayName = `${equipName}${layerSuffix}`;
+        const fullText = UI.equip_info.replace('{0}', equipName).replace('{1}', turns) + layerSuffix + (corruption ? UI.equip_corruption : '');
+        const compactTextValue = `${equipName}${turns ? ` · ${turns}` : ''}${layerSuffix}${corruption ? ` · ${UI.compact_corrupted}` : ''}`;
         const text = isMinimalUiStyle() ? compactTextValue : fullText;
         if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && isFriendlyTurn() && !isSpectating) {
             const btn = document.createElement('button');
             btn.className = 'btn btn-small btn-equip-trigger';
             const triggerText = UI.equip_trigger_cost.replace('{0}', fullText).replace('{1}', cardDef.trigger_cost_e);
-            const visibleText = isMinimalUiStyle() ? `⚡ ${equipName} ${cardDef.trigger_cost_e}E` : triggerText;
+            const visibleText = isMinimalUiStyle() ? `⚡ ${equipDisplayName} ${cardDef.trigger_cost_e}E` : triggerText;
             btn.innerHTML = `${getEquipmentIconHtml(cardInst, cardDef)}<span class="equip-trigger-text">${escapeHtml(visibleText)}</span>`;
             btn.title = isMinimalUiStyle() ? triggerText : '';
             btn.disabled = isActionBusy({ includeAnimation: false });
@@ -15714,6 +15799,9 @@ function updateRematchState(data = {}) {
         total: Number.isFinite(total) ? Math.max(0, total) : 0,
         hasVoted: !!(data.has_voted ?? data.rematch_has_voted),
         mode: data.mode || (gameState && gameState.mode) || '',
+        blocked: !!(data.rematch_blocked || data.blocked),
+        blockedReason: data.rematch_blocked_reason || data.blocked_reason || '',
+        returnedPlayerName: data.rematch_returned_player_name || data.returned_player_name || data.player_name || '',
     };
 }
 
@@ -15724,6 +15812,9 @@ function syncRematchStateFromGameState(gs) {
         total: gs.rematch_total,
         has_voted: gs.rematch_has_voted,
         mode: gs.mode,
+        rematch_blocked: gs.rematch_blocked,
+        rematch_blocked_reason: gs.rematch_blocked_reason,
+        rematch_returned_player_name: gs.rematch_returned_player_name,
     });
 }
 
@@ -15738,10 +15829,12 @@ function getRematchProgress(gs) {
     const votes = Number((rematchState && rematchState.votes) ?? (gs && gs.rematch_votes) ?? 0);
     const total = Number((rematchState && rematchState.total) ?? (gs && gs.rematch_total) ?? fallbackTotal);
     const hasVoted = !!((rematchState && rematchState.hasVoted) ?? (gs && gs.rematch_has_voted));
+    const blocked = !!((rematchState && rematchState.blocked) ?? (gs && gs.rematch_blocked));
     return {
         votes: Number.isFinite(votes) ? Math.max(0, votes) : 0,
         total: Number.isFinite(total) && total > 0 ? total : fallbackTotal,
         hasVoted,
+        blocked,
     };
 }
 
@@ -15754,7 +15847,11 @@ function updateGameOverRematchButton(gs) {
     if (!rematchBtn) return;
     const progress = getRematchProgress(gs);
     const teamMode = isTeamRematchGame(gs);
-    if (teamMode) {
+    if (progress.blocked) {
+        rematchBtn.textContent = UI.rematch_unavailable_returned || 'A player returned to lobby';
+        rematchBtn.disabled = true;
+        rematchBtn.onclick = null;
+    } else if (teamMode) {
         rematchBtn.textContent = formatRematchProgress(progress.votes, progress.total);
         rematchBtn.disabled = progress.hasVoted;
         rematchBtn.onclick = () => {
@@ -17027,6 +17124,23 @@ async function init() {
     bootLoader.init();
     bootLoader.step(UI.init_scripts, 10);
     debugLog('[INIT] game init start');
+    window.addEventListener('error', (event) => {
+        console.error('[INIT/runtime-error]', event.message, event.filename, event.lineno, event.colno, event.error);
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+        console.error('[INIT/unhandled-rejection]', event.reason);
+    });
+    const bindClickOnce = (id, handler) => {
+        const el = $(id);
+        if (!el || el.dataset.gtnClickBound === '1') return;
+        el.dataset.gtnClickBound = '1';
+        el.addEventListener('click', handler);
+    };
+    bindClickOnce('btn-solo-training', showSoloTraining);
+    bindClickOnce('btn-connect', onLogin);
+    bindClickOnce('btn-open-settings', openSettings);
+    bindClickOnce('btn-card-gallery', () => showCardGallery());
+    bindClickOnce('btn-open-about', openAbout);
 
     document.addEventListener('contextmenu', (e) => {
         if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
@@ -17051,7 +17165,7 @@ async function init() {
     await refreshAuthMe();
     bootLoader.step(UI.init_bindings, 90);
     debugLog('[INIT] card definitions loaded, count=', Object.keys(CARD_DEFS).length);
-    $('btn-connect').addEventListener('click', onLogin);
+    bindClickOnce('btn-connect', onLogin);
     if ($('btn-account-login')) $('btn-account-login').addEventListener('click', onAccountLogin);
     if ($('btn-account-register')) $('btn-account-register').addEventListener('click', onAccountRegister);
     if ($('btn-account-change-password')) $('btn-account-change-password').addEventListener('click', onAccountChangePassword);
@@ -17178,9 +17292,9 @@ async function init() {
             if (e.key === 'Enter') (accountMode === 'register' ? onAccountRegister() : onAccountLogin());
         });
     }
-    $('btn-solo-training').addEventListener('click', showSoloTraining);
-    if ($('btn-card-gallery')) $('btn-card-gallery').addEventListener('click', () => showCardGallery());
-    if ($('btn-open-about')) $('btn-open-about').addEventListener('click', openAbout);
+    bindClickOnce('btn-solo-training', showSoloTraining);
+    bindClickOnce('btn-card-gallery', () => showCardGallery());
+    bindClickOnce('btn-open-about', openAbout);
     const savedNick = localStorage.getItem('gtn_nickname') || '';
     const nickInput = $('input-nickname');
     if (savedNick && displayWidth(savedNick) <= 16) nickInput.value = savedNick;
@@ -17195,7 +17309,7 @@ async function init() {
     nickInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') onLogin();
     });
-    $('btn-open-settings').addEventListener('click', openSettings);
+    bindClickOnce('btn-open-settings', openSettings);
     $('btn-settings-close').addEventListener('click', () => { saveDisabledMods(); closeSettings(); });
     if ($('btn-lobby-settings')) $('btn-lobby-settings').addEventListener('click', () => openSettings({ hideServer: true }));
     if ($('settings-tab-appearance')) $('settings-tab-appearance').addEventListener('click', () => setSettingsTab('appearance'));
