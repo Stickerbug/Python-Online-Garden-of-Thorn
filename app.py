@@ -9331,10 +9331,24 @@ def on_resolve_choice(data):
         if pidx < 0:
             return
         engine = room.engine
-        engine.resolve_choice(pidx, choice)
+        result = engine.resolve_choice(pidx, choice)
         record_valid_player_action(room, pidx, 'resolve_choice')
-        record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice})
-        broadcast_game_state(room)
+        record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice, 'result': result})
+        if result.get('needs_response'):
+            broadcast_game_state(room)
+            emit_pending_response_requests(room)
+        elif result.get('needs_choice'):
+            broadcast_game_state(room)
+            emit('choice_request', build_choice_request_payload(result))
+        elif result.get('needs_v2_ui'):
+            broadcast_game_state(room)
+            emit_room_v2_ui_request(room)
+        elif result.get('success'):
+            broadcast_game_state(room)
+        else:
+            _security_illegal(sid, 'resolve_choice', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
+            emit('server_error', {'message': result.get('error', 'Operation failed')})
+            broadcast_game_state(room)
 
 
 @socketio.on('v2_ui_response')

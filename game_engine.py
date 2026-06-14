@@ -7215,6 +7215,7 @@ class GameEngine:
                 self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
                 if ps.health > 0 and not self.game_over:
                     self._decay_poison_after_turn_start(player_id)
+                    self._apply_toxic_poison_after_poison_settlement(player_id)
             if ps.health > 0 and not self.game_over and ps.fire > 0:
                 self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
         finally:
@@ -7423,6 +7424,17 @@ class GameEngine:
         ps.poison = ps.poison // 2
         if ps.poison > 0:
             self.log_msg(f"{self.pn(player_id)}中毒减半为{ps.poison}层")
+
+    def _apply_toxic_poison_after_poison_settlement(self, player_id: int):
+        if not (0 <= player_id < len(self.players)) or self._is_status_immune(player_id):
+            return
+        amount = self._custom_status_value(player_id, 'jungle:toxic_poison', 'toxic_poison', '剧毒')
+        if amount <= 0:
+            return
+        ps = self.players[player_id]
+        ps.poison += amount
+        self._normalize_status_value(ps, 'poison')
+        self.log_msg(f"{self.pn(player_id)}的剧毒施加{amount}层中毒")
 
     def _decay_end_turn_layer_statuses(self, player_id: int):
         if not (0 <= player_id < len(self.players)) or self._is_status_immune(player_id):
@@ -7641,6 +7653,7 @@ class GameEngine:
             if self.game_over or ps.health <= 0:
                 return
             self._decay_poison_after_turn_start(player_id)
+            self._apply_toxic_poison_after_poison_settlement(player_id)
         if ps.fire > 0:
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
@@ -7762,6 +7775,7 @@ class GameEngine:
             if self.game_over or ps.health <= 0:
                 return
             self._decay_poison_after_turn_start(player_id)
+            self._apply_toxic_poison_after_poison_settlement(player_id)
         if ps.fire > 0:
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:

@@ -1179,6 +1179,7 @@ class GameEngine2v2(GameEngine):
             if self.game_over or ps.health <= 0:
                 return
             self._decay_poison_after_turn_start(player_id)
+            self._apply_toxic_poison_after_poison_settlement(player_id)
         if ps.fire > 0:
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
@@ -1265,6 +1266,7 @@ class GameEngine2v2(GameEngine):
             if self.game_over or ps.health <= 0:
                 return
             self._decay_poison_after_turn_start(player_id)
+            self._apply_toxic_poison_after_poison_settlement(player_id)
         if ps.fire > 0:
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:

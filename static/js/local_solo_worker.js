@@ -1533,6 +1533,7 @@ class LocalSoloEngine {
             this.dealDirectDamage(playerId, ps.poison, '中毒');
             if (this.game_over || ps.health <= 0) return;
             ps.poison = Math.floor(ps.poison / 2);
+            this.applyToxicPoisonAfterPoisonSettlement(playerId);
         }
         if (ps.fire > 0) {
             this.dealDirectDamage(playerId, ps.fire, '灼烧');
@@ -1565,6 +1566,22 @@ class LocalSoloEngine {
                 });
             }
         });
+    }
+
+    applyToxicPoisonAfterPoisonSettlement(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        const custom = ps.custom_statuses || {};
+        const immune = toInt(custom.status_immune, 0) > 0
+            || toInt(custom.immune, 0) > 0
+            || toInt(custom['状态免疫'], 0) > 0;
+        if (immune) return;
+        const amount = toInt(ps['jungle:toxic_poison'], 0)
+            + toInt(ps.toxic_poison, 0)
+            + toInt(ps['剧毒'], 0);
+        if (amount <= 0) return;
+        ps.poison += amount;
+        this.logMsg(`${this.pn(playerId)}的剧毒施加${amount}层中毒`);
     }
 
     effectTreeContainsActionStatus(value, depth = 0) {
