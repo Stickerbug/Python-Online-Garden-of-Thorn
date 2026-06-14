@@ -1171,6 +1171,120 @@ def _player_matches_room_participant(room, nickname):
     return False
 
 
+def _find_disconnected_sid_for_player(room, player):
+    """Find a disconnected room slot that belongs to this freshly connected player."""
+    if not room or not player:
+        return None
+    player_user_id = player.get('user_id')
+    player_account_id = str(player.get('account_player_id') or '')
+    player_name_key = normalize_username_key(player.get('nickname', ''))
+    for old_sid, dc_info in list(getattr(room, 'disconnected_players', {}).items()):
+        if player_user_id and dc_info.get('user_id') == player_user_id:
+            return old_sid
+        if player_account_id and player_account_id == str(dc_info.get('account_player_id') or ''):
+            return old_sid
+        if player_name_key and player_name_key == normalize_username_key(dc_info.get('nickname', '')):
+            return old_sid
+    return None
+
+
+def _online_room_player_indices(room):
+    online = set()
+    for idx, psid in enumerate(getattr(room, 'player_sids', []) or []):
+        if psid in players:
+            online.add(idx)
+    return online
+
+
+def _counter_card_responder_id(counter_card):
+    if not isinstance(counter_card, dict):
+        return -1
+    try:
+        return int(counter_card.get('responder_id', -1))
+    except Exception:
+        return -1
+
+
+def _resolve_pending_response_for_disconnect(room, player_index):
+    """Prevent a disconnected responder from leaving a card permanently pending."""
+    engine = getattr(room, 'engine', None)
+    pending = getattr(engine, 'pending_response', None) if engine is not None else None
+    if not pending:
+        return False
+    try:
+        disconnected_idx = int(player_index)
+    except Exception:
+        return False
+
+    if room.mode == '2v2':
+        counter_cards = [
+            c for c in (pending.get('counter_cards') or [])
+            if _counter_card_responder_id(c) != disconnected_idx
+        ]
+        if len(counter_cards) == len(pending.get('counter_cards') or []):
+            return False
+        pending['counter_cards'] = counter_cards
+        online_indices = _online_room_player_indices(room)
+        remaining_responders = {
+            _counter_card_responder_id(c)
+            for c in counter_cards
+            if _counter_card_responder_id(c) >= 0
+        }
+        if any(ridx in online_indices for ridx in remaining_responders):
+            return True
+        try:
+            engine.handle_response(disconnected_idx, None)
+        except Exception as exc:
+            admin_event('error', f'auto-resolve pending 2v2 response failed: {exc}', room_id=getattr(room, 'room_id', None))
+            engine.pending_response = None
+        return True
+
+    try:
+        player_id = int(pending.get('player_id', -1))
+    except Exception:
+        player_id = -1
+    responder_id = 1 - player_id
+    if disconnected_idx != responder_id:
+        return False
+    try:
+        engine.handle_response(responder_id, None)
+    except Exception as exc:
+        admin_event('error', f'auto-resolve pending response failed: {exc}', room_id=getattr(room, 'room_id', None))
+        engine.pending_response = None
+    return True
+
+
+def _resolve_pending_ally_request_for_disconnect(room, player_index):
+    engine = getattr(room, 'engine', None)
+    req = getattr(engine, 'pending_ally_request', None) if engine is not None else None
+    if not req:
+        return False
+    try:
+        disconnected_idx = int(player_index)
+    except Exception:
+        return False
+    if req.get('target_player_id') == disconnected_idx:
+        try:
+            engine.handle_ally_consent(disconnected_idx, False)
+        except Exception as exc:
+            admin_event('error', f'auto-decline ally request failed: {exc}', room_id=getattr(room, 'room_id', None))
+            engine.pending_ally_request = None
+        return True
+    if req.get('player_id') == disconnected_idx:
+        engine.pending_ally_request = None
+        return True
+    return False
+
+
+def _resolve_disconnect_blockers(room, player_index):
+    changed = False
+    if _resolve_pending_ally_request_for_disconnect(room, player_index):
+        changed = True
+    if _resolve_pending_response_for_disconnect(room, player_index):
+        changed = True
+    return changed
+
+
 def _force_2v2_disconnect_death(room, player_index, nickname, reason='断线超时'):
     e = room.engine
     if room.mode != '2v2' or player_index < 0 or player_index >= len(getattr(e, 'players', [])):
@@ -1728,6 +1842,14 @@ def room_player_nickname(room, sid, fallback='?'):
         return players[sid].get('nickname', fallback)
     if room is not None and sid in getattr(room, 'disconnected_players', {}):
         return room.disconnected_players[sid].get('nickname', fallback)
+    if room is not None:
+        try:
+            idx = list(getattr(room, 'player_sids', []) or []).index(sid)
+            names = list(getattr(room.engine, 'player_names', []) or [])
+            if 0 <= idx < len(names) and names[idx]:
+                return names[idx]
+        except Exception:
+            pass
     return fallback
 
 
@@ -5405,7 +5527,7 @@ def emit_pending_response_requests(room, only_player_index=None):
         for responder_id, counter_cards in by_responder.items():
             if 0 <= responder_id < len(room.player_sids):
                 responder_sid = room.player_sids[responder_id]
-                if responder_sid in players:
+                if responder_sid in players and responder_sid not in getattr(room, 'disconnected_players', {}):
                     socketio.emit('response_request', build_response_request_payload(
                         engine,
                         responder_id,
@@ -5433,7 +5555,7 @@ def emit_pending_response_requests(room, only_player_index=None):
             seen_instances.add(key)
             counter_cards.append(counter_card)
     responder_sid = room.player_sids[responder_id]
-    if responder_sid in players:
+    if responder_sid in players and responder_sid not in getattr(room, 'disconnected_players', {}):
         socketio.emit('response_request', build_response_request_payload(
             engine,
             responder_id,
@@ -5643,6 +5765,11 @@ def _mark_disconnect_timeout_loss(room, player_index, nickname):
     if getattr(e, 'game_over', False):
         return False
     if player_index < 0 or player_index >= len(getattr(e, 'players', [])):
+        return False
+    # In 2v2 a player who was already dead may leave without blocking or
+    # forfeiting the rest of the match. Alive players still use the normal
+    # reconnect timeout path in every phase, including draft/setup.
+    if getattr(room, 'mode', None) == '2v2' and _room_player_dead(room, player_index):
         return False
     disconnected_teams = _room_disconnected_teams(room)
     if len(disconnected_teams) >= 2:
@@ -7571,7 +7698,12 @@ def on_login(data):
             if bool(getattr(room, 'beta_mode', False)) != bool(is_beta_mode):
                 continue
             for dc_sid, dc_info in room.disconnected_players.items():
-                if normalize_username_key(dc_info.get('nickname', '')) == name_key:
+                same_disconnected_identity = (
+                    (user_id and dc_info.get('user_id') == user_id)
+                    or (account_user and account_user.get('player_id') and str(dc_info.get('account_player_id') or '') == str(account_user.get('player_id') or ''))
+                    or normalize_username_key(dc_info.get('nickname', '')) == name_key
+                )
+                if same_disconnected_identity:
                     reconnect_room = room
                     reconnect_old_sid = dc_sid
                     break
@@ -8052,6 +8184,9 @@ def on_disconnect():
                     dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)
                     current_phase = getattr(room.engine, 'phase', '')
                     pregame_disconnect = current_phase in ('draft', 'event_select', 'event_reveal')
+                    unblocked_pending = False
+                    if not dead_2v2_player:
+                        unblocked_pending = _resolve_disconnect_blockers(room, pidx)
                     admin_event(
                         'player',
                         f'{nickname} disconnect flow room={room_id} phase={current_phase} pregame={pregame_disconnect} dead_2v2={dead_2v2_player}',
@@ -8062,26 +8197,26 @@ def on_disconnect():
                         for other_sid in room.player_sids:
                             if other_sid != sid and other_sid in players:
                                 pending_emits.append(('opponent_disconnected', {
-                                    'reconnect_timeout': 0 if pregame_disconnect else RECONNECT_TIMEOUT_SECONDS,
-                                    'wait_forever': bool(pregame_disconnect),
+                                    'reconnect_timeout': RECONNECT_TIMEOUT_SECONDS,
+                                    'wait_forever': False,
                                     'opponent_nickname': nickname,
                                 }, other_sid))
-                        if not pregame_disconnect:
-                            timer = threading.Timer(float(RECONNECT_TIMEOUT_SECONDS), reconnect_timeout, args=[room_id, sid])
-                            room.reconnect_timers[sid] = timer
-                            timer.daemon = True
-                            timer.start()
-                            both_dc = _room_all_blocking_players_disconnected(room)
-                            if both_dc:
-                                for t in room.reconnect_timers.values():
-                                    t.cancel()
-                                room.reconnect_timers.clear()
-                                room.both_dc_timer = threading.Timer(float(BOTH_DISCONNECTED_CLEANUP_SECONDS), both_disconnected_cleanup, args=[room_id])
-                                room.both_dc_timer.daemon = True
-                                room.both_dc_timer.start()
+                        timer = threading.Timer(float(RECONNECT_TIMEOUT_SECONDS), reconnect_timeout, args=[room_id, sid])
+                        room.reconnect_timers[sid] = timer
+                        timer.daemon = True
+                        timer.start()
+                        both_dc = _room_all_blocking_players_disconnected(room)
+                        if both_dc:
+                            for t in room.reconnect_timers.values():
+                                t.cancel()
+                            room.reconnect_timers.clear()
+                            room.both_dc_timer = threading.Timer(float(RECONNECT_TIMEOUT_SECONDS), both_disconnected_cleanup, args=[room_id])
+                            room.both_dc_timer.daemon = True
+                            room.both_dc_timer.start()
                     del players[sid]
-                    if dead_2v2_player:
+                    if dead_2v2_player or unblocked_pending:
                         pending_emits.append(('broadcast_game_state', room, None))
+                        pending_emits.append(('emit_pending_response_requests', room, None))
                     pending_emits.append(('broadcast_lobby', None, None))
                 elif pidx >= 0 and room.engine.phase == 'game_over':
                     room._rematch_votes.discard(sid)
@@ -8128,6 +8263,8 @@ def on_disconnect():
                 socketio.emit('game_phase', emit_item[1], room=emit_item[2])
             elif emit_item[0] == 'broadcast_game_state':
                 broadcast_game_state(emit_item[1])
+            elif emit_item[0] == 'emit_pending_response_requests':
+                emit_pending_response_requests(emit_item[1])
             elif emit_item[0] == 'broadcast_lobby':
                 broadcast_lobby()
         except Exception as exc:
@@ -8159,10 +8296,19 @@ def on_reconnect_accept(data):
             player['status'] = 'lobby'
             return
         if old_sid not in room.disconnected_players:
+            fallback_old_sid = _find_disconnected_sid_for_player(room, player)
+            if fallback_old_sid:
+                old_sid = fallback_old_sid
+        if old_sid not in room.disconnected_players:
             player['status'] = 'lobby'
             return
         dc_info = room.disconnected_players[old_sid]
-        if dc_info['nickname'] != player['nickname']:
+        same_identity = (
+            (player.get('user_id') and dc_info.get('user_id') == player.get('user_id'))
+            or (player.get('account_player_id') and str(dc_info.get('account_player_id') or '') == str(player.get('account_player_id') or ''))
+            or normalize_username_key(dc_info.get('nickname', '')) == normalize_username_key(player.get('nickname', ''))
+        )
+        if not same_identity:
             player['status'] = 'lobby'
             return
         if old_sid in room.reconnect_timers:
