@@ -297,9 +297,14 @@ class GameEngine2v2(GameEngine):
                 if self.opening_event_picks[i] == 7 and len(force_first) == 1:
                     hand_size = 4
                     ps.elixir += 3
+                if self.opening_event_picks[i] == 5:
+                    hand_size = max(0, hand_size - 1)
                 ps.draw_cards(hand_size)
             else:
-                ps.draw_cards(INITIAL_HAND_SIZE)
+                hand_size = INITIAL_HAND_SIZE
+                if self.opening_event_picks[i] == 5:
+                    hand_size = max(0, hand_size - 1)
+                ps.draw_cards(hand_size)
 
         self.round_num = 1
         self.log_msg(f"2v2游戏开始！{self.pn(self.first_player)}先手。")
@@ -365,6 +370,9 @@ class GameEngine2v2(GameEngine):
         self._trigger_v2_status_events_for_player(player_id, 'on_turn_end', {'player_id': player_id})
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        self._run_owner_turn_end_equipment(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         if ps.bandage_death_pending:
             ps.health = 0
             ps.bandage_death_pending = False
@@ -406,10 +414,8 @@ class GameEngine2v2(GameEngine):
             ps.hand.remove(c)
             ps.exile.append(c)
             self.log_msg(f"{self.pn(player_id)}的{c.name_cn}因虚无被放逐")
-        if ps.attack_blocked > 0:
-            ps.attack_blocked -= 1
-        if ps.attack_only > 0:
-            ps.attack_only -= 1
+        self._decay_action_limit_status(player_id, 'attack_blocked', 'attack_blocked', '禁攻')
+        self._decay_action_limit_status(player_id, 'attack_only', 'attack_only', '仅攻击')
         self._save_last_turn_damage_snapshot(player_id)
         self._advance_turn()
 
@@ -759,9 +765,12 @@ class GameEngine2v2(GameEngine):
         else:
             responder_ids = []
         counter_cards = []
+        has_payable_counter = False
         for responder_id in responder_ids:
             for c in self.players[responder_id].hand:
                 if self._card_can_counter(c, card):
+                    if self._can_pay_counter_card(responder_id, c):
+                        has_payable_counter = True
                     counter_cards.append({
                         'instance_id': c.instance_id,
                         'def_id': c.def_id,
@@ -769,6 +778,8 @@ class GameEngine2v2(GameEngine):
                         'cost_m_override': c.cost_m_override,
                         'responder_id': responder_id,
                     })
+        if not has_payable_counter:
+            return None
         self.pending_response = {
             'player_id': player_id,
             'target_player_id': target_id,
@@ -843,6 +854,7 @@ class GameEngine2v2(GameEngine):
             if needs_response or needs_precision_response:
                 target_id = self._selected_effect_target(player_id, choice)
                 counter_cards = []
+                has_payable_counter = False
                 if self._would_heal(card):
                     responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
                 elif self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0:
@@ -852,6 +864,8 @@ class GameEngine2v2(GameEngine):
                 for responder_id in responder_ids:
                     for c in self.players[responder_id].hand:
                         if self._card_can_counter(c, card):
+                            if self._can_pay_counter_card(responder_id, c):
+                                has_payable_counter = True
                             counter_cards.append({
                                 'instance_id': c.instance_id,
                                 'def_id': c.def_id,
@@ -859,15 +873,16 @@ class GameEngine2v2(GameEngine):
                                 'cost_m_override': c.cost_m_override,
                                 'responder_id': responder_id,
                             })
-                self.pending_response = {
-                    'player_id': player_id,
-                    'target_player_id': target_id,
-                    'card': card.to_dict(),
-                    'original_choice': choice,
-                    'counter_cards': counter_cards,
-                    'is_precision': needs_precision_response and not needs_response,
-                }
-                return {'success': True, 'needs_response': True, 'card': card.to_dict()}
+                if has_payable_counter:
+                    self.pending_response = {
+                        'player_id': player_id,
+                        'target_player_id': target_id,
+                        'card': card.to_dict(),
+                        'original_choice': choice,
+                        'counter_cards': counter_cards,
+                        'is_precision': needs_precision_response and not needs_response,
+                    }
+                    return {'success': True, 'needs_response': True, 'card': card.to_dict()}
             return self._execute_card_effect(player_id, card, choice)
         finally:
             self._active_choice = None
@@ -1047,23 +1062,23 @@ class GameEngine2v2(GameEngine):
         target_id = self._selected_effect_target(player_id, getattr(self, '_active_choice', None))
         if self._would_heal(card):
             return any(
-                c.card_def.response_trigger in ('any', 'heal')
+                self._can_pay_counter_card(enemy_id, c) and c.card_def.response_trigger in ('any', 'heal')
                 for enemy_id in self.get_all_enemies(player_id)
                 for c in self.players[enemy_id].hand
             )
         if not self._is_valid_player_id(target_id) or not self.is_enemy(player_id, target_id):
             return False
         opp = self.players[target_id]
-        if any(c.card_def.response_trigger == 'any' for c in opp.hand):
+        if any(self._can_pay_counter_card(target_id, c) and c.card_def.response_trigger == 'any' for c in opp.hand):
             return True
         if card.card_type == 'thorn':
-            return any(c.card_def.response_trigger == 'thorn' for c in opp.hand)
+            return any(self._can_pay_counter_card(target_id, c) and c.card_def.response_trigger == 'thorn' for c in opp.hand)
         if card.card_type == 'bloom':
-            return any(c.card_def.response_trigger == 'bloom' for c in opp.hand)
+            return any(self._can_pay_counter_card(target_id, c) and c.card_def.response_trigger == 'bloom' for c in opp.hand)
         if card.card_type == 'root':
-            return any(c.card_def.response_trigger == 'root' for c in opp.hand)
+            return any(self._can_pay_counter_card(target_id, c) and c.card_def.response_trigger == 'root' for c in opp.hand)
         if self._would_destroy_equipment(card):
-            return any(c.card_def.response_trigger == 'equipment_destroy' for c in opp.hand)
+            return any(self._can_pay_counter_card(target_id, c) and c.card_def.response_trigger == 'equipment_destroy' for c in opp.hand)
         return False
 
     def _check_precision_response_needed(self, player_id: int, card: CardInstance) -> bool:
@@ -1072,7 +1087,7 @@ class GameEngine2v2(GameEngine):
         target_id = self._selected_effect_target(player_id, getattr(self, '_active_choice', None))
         if not self._is_valid_player_id(target_id) or not self.is_enemy(player_id, target_id):
             return False
-        return any(c.card_def.response_trigger == 'thorn' for c in self.players[target_id].hand)
+        return any(self._can_pay_counter_card(target_id, c) and c.card_def.response_trigger == 'thorn' for c in self.players[target_id].hand)
 
     def both_events_selected(self) -> bool:
         return all(p is not None for p in self.opening_event_picks)
@@ -1098,6 +1113,7 @@ class GameEngine2v2(GameEngine):
         self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        self._apply_jungle_turn_start_statuses(player_id)
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
         if ps.shovel_active:

@@ -256,7 +256,7 @@ OPENING_EVENT_I18N = {
     },
     5: {
         'name': _t('命运抽签', 'Fated Draw', 'Pioche du destin', 'Compra do Destino', 'Жребий судьбы', '運命のドロー'),
-        'desc': _t('从总抽牌库选择最多3张牌洗入牌库', 'Choose up to 3 cards from the full draft pool and shuffle them into your deck', 'Choisissez jusqu’à 3 cartes dans la réserve complète et mélangez-les dans votre deck', 'Escolha até 3 cartas do conjunto completo e embaralhe-as no seu deck', 'Выберите до 3 карт из общего пула и замешайте их в колоду', '全体カードプールから最大3枚を選び、山札に混ぜる'),
+        'desc': _t('少抽1张牌，然后从总抽牌库选择1张牌洗入牌库', 'Draw 1 fewer card, then choose 1 card from the full draft pool and shuffle it into your deck', 'Piochez 1 carte de moins, puis choisissez 1 carte dans la réserve complète et mélangez-la dans votre deck', 'Compre 1 carta a menos, depois escolha 1 carta do conjunto completo e embaralhe-a no seu deck', 'Возьмите на 1 карту меньше, затем выберите 1 карту из общего пула и замешайте её в колоду', '1枚少なく引き、その後全体カードプールから1枚を選んで山札に混ぜる'),
     },
     6: {
         'name': _t('能量涌动', 'Energy Surge', 'Poussée d’énergie', 'Surto de Energia', 'Всплеск энергии', 'エネルギー奔流'),

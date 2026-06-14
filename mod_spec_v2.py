@@ -288,6 +288,7 @@ VALID_LOGIC_OPS = {
     "on_fatal_set_health_exile",
     "on_hand_owner_turn_start",
     "on_owner_turn_start",
+    "on_owner_turn_end",
     "set_health",
     "add_tag_to_zone",
     "reveal_tag_hand",

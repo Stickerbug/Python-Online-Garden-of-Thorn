@@ -5209,9 +5209,14 @@ def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=N
             if engine.opening_event_picks[i] == 7 and len(force_first) == 1:
                 hand_size = 4
                 engine.players[i].elixir += 3
+            if engine.opening_event_picks[i] == 5:
+                hand_size = max(0, hand_size - 1)
             engine.players[i].draw_cards(hand_size)
         else:
-            engine.players[i].draw_cards(INITIAL_HAND_SIZE)
+            hand_size = INITIAL_HAND_SIZE
+            if engine.opening_event_picks[i] == 5:
+                hand_size = max(0, hand_size - 1)
+            engine.players[i].draw_cards(hand_size)
     engine.log_msg(f"{start_label}！{engine.pn(engine.first_player)}先手。")
     engine.log_msg(f"=== 第{engine.round_num}回合 ===")
     engine._start_player_turn(engine.first_player)
@@ -8745,9 +8750,12 @@ def on_submit_event_sub_choice(data):
             if isinstance(sub_choice, dict):
                 raw_ids = list(sub_choice.get('add_def_ids') or sub_choice.get('def_ids') or [])
             valid_ids = []
-            for def_id in raw_ids[:3]:
+            for def_id in raw_ids[:1]:
                 if engine._card_allowed_for_fated_draw(str(def_id)):
                     valid_ids.append(str(def_id))
+            if len(valid_ids) != 1:
+                send_pregame_state(room, pidx, allow_sub_choice=True)
+                return
             sub_choice = {'add_def_ids': valid_ids}
         event_id_text = str(engine.opening_event_picks[pidx])
         # Built-in setup sub-choices are "choose up to N" or have an engine fallback.
@@ -8974,7 +8982,17 @@ def on_solo_response(data):
         if sid in tutorial_sessions and responder != 0:
             card_instance_id = None
         engine.handle_response(responder, card_instance_id)
-        send_solo_state(sid)
+        pending = getattr(engine, 'pending_response', None)
+        if pending:
+            pending_player = int(pending.get('player_id', engine.current_player))
+            if sid in tutorial_sessions and (1 - pending_player) != 0:
+                engine.handle_response(1 - pending_player, None)
+                send_solo_state(sid)
+            else:
+                send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pending_player)
+                emit_solo_response_request(sid, engine, pending_player, pending.get('card') or {})
+        else:
+            send_solo_state(sid)
 
 
 @socketio.on('solo_resolve_choice')
@@ -9262,6 +9280,8 @@ def on_response(data):
             record_valid_player_action(room, pidx, 'response')
         record_room_replay_action(room, 'response', pidx, {'card_instance_id': card_instance_id, 'def_id': replay_def_id})
         broadcast_game_state(room)
+        if getattr(engine, 'pending_response', None):
+            emit_pending_response_requests(room)
 
 
 @socketio.on('ally_consent_response')

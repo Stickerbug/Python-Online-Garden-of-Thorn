@@ -53,6 +53,7 @@ const TUTORIAL_DECKS = [
 
 const EVENT_EFFECT_TYPES = new Set([
     'on_owner_turn_start',
+    'on_owner_turn_end',
     'on_enemy_turn_start',
     'on_any_turn_start',
     'on_damage_taken',
@@ -75,6 +76,7 @@ const SCRIPT_ENTRY_ALIASES = {
     play: ['onPlay', 'play', 'on_play'],
     response: ['onResponse', 'response', 'on_response'],
     owner_turn_start: ['onOwnerTurnStart', 'owner_turn_start', 'on_owner_turn_start'],
+    owner_turn_end: ['onOwnerTurnEnd', 'owner_turn_end', 'on_owner_turn_end'],
     enemy_turn_start: ['onEnemyTurnStart', 'enemy_turn_start', 'on_enemy_turn_start'],
     any_turn_start: ['onAnyTurnStart', 'any_turn_start', 'on_any_turn_start'],
     damage_taken: ['onDamageTaken', 'damage_taken', 'on_damage_taken'],
@@ -95,6 +97,7 @@ const V2_EVENT_ALIASES = {
     play: ['on_play'],
     response: ['on_response'],
     owner_turn_start: ['on_owner_turn_start', 'on_turn_start', 'on_turn_start_while_equipped'],
+    owner_turn_end: ['on_owner_turn_end', 'on_turn_end_while_equipped'],
     enemy_turn_start: ['on_enemy_turn_start'],
     any_turn_start: ['on_any_turn_start'],
     damage_taken: ['on_damage_taken'],
@@ -764,9 +767,12 @@ class LocalSoloEngine {
             if (this.opening_event_picks[i] != null) this.applyOpeningEvent(i);
         }
         for (let i = 0; i < 2; i++) {
-            const handSize = i === this.first_player ? FIRST_PLAYER_HAND_SIZE : INITIAL_HAND_SIZE;
+            let handSize = i === this.first_player ? FIRST_PLAYER_HAND_SIZE : INITIAL_HAND_SIZE;
             if (i === this.first_player && this.opening_event_picks[i] === 7) {
                 this.players[i].elixir += 3;
+            }
+            if (this.opening_event_picks[i] === 5) {
+                handSize = Math.max(0, handSize - 1);
             }
             this.players[i].drawCards(handSize);
             this.enforceUniqueCardsForPlayer(i);
@@ -1371,7 +1377,7 @@ class LocalSoloEngine {
             opp.fire += 2;
             this.logMsg(`${this.pn(playerId)}【烈焰预兆】：敌方+2灼烧`);
         } else if (eventId === 5) {
-            const picked = (sub.add_def_ids || sub.def_ids || []).slice(0, 3);
+            const picked = (sub.add_def_ids || sub.def_ids || []).slice(0, 1);
             let added = 0;
             picked.forEach(defId => {
                 if (this.cardAllowedForFatedDraw(defId)) {
@@ -1380,7 +1386,7 @@ class LocalSoloEngine {
                 }
             });
             if (added > 0) shuffleInPlace(ps.deck);
-            this.logMsg(`${this.pn(playerId)}【命运抽签】：${added}张牌洗入牌库`);
+            this.logMsg(`${this.pn(playerId)}【命运抽签】：少抽1张牌，${added}张牌洗入牌库`);
         } else if (eventId === 6) {
             this.logMsg(`${this.pn(playerId)}【能量涌动】：前三回合额外回复2E`);
         } else if (eventId === 7) {
@@ -2248,6 +2254,14 @@ class LocalSoloEngine {
             if (prop === 'tag_count' || prop === 'tags_count') return card.flags.size;
             return toInt(card[prop], fallbackValue);
         }
+        if (op === 'equipment_prop' || op === 'equipment_property') {
+            const eq = this.resolveEquipmentRef(playerId, expr.equipment || { ref: 'current_equipment' }, currentCard);
+            return this.equipmentProperty(eq, expr.property || expr.prop || 'turns_equipped');
+        }
+        if (op === 'current_damage' || op === 'damage_amount') {
+            const context = this._active_effect_context || {};
+            return toInt(context.damage ?? context.amount, 0);
+        }
         if (op === 'status_stack') {
             const tid = this.resolveTarget(playerId, expr.target || 'self');
             return this.statusCount(tid, expr.status || expr.name || expr.id || '');
@@ -2731,10 +2745,6 @@ class LocalSoloEngine {
         const def = card.def();
         const effects = getScriptEffects(def, eventName);
         if (effects.length) {
-            if (eventName === 'equipment_trigger' && cardEventRequiresSelfDestroy(def, eventName)) {
-                const eq = this.findEquipmentForCard(ownerId, card);
-                if (eq && !this.destroyEquipment(ownerId, eq)) return true;
-            }
             this.runEffectList(ownerId, card, effects, choice, { event: eventName, ...extraContext });
             return true;
         }
@@ -3256,6 +3266,31 @@ class LocalSoloEngine {
         const targetId = this.resolveTarget(playerId, params.target || 'self');
         const amount = this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
         this.spendResource(targetId, 'magic', amount, card);
+    }
+
+    effect_reduce_next_cost(playerId, card, params, log) {
+        this.modifyHandCardCost(playerId, card, params, log, -1);
+    }
+
+    effect_increase_next_cost(playerId, card, params, log) {
+        this.modifyHandCardCost(playerId, card, params, log, 1);
+    }
+
+    modifyHandCardCost(playerId, card, params, log, direction) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const target = this.players[targetId];
+        if (!target) return;
+        const amount = Math.abs(this.evalInt(playerId, params.amount ?? params.value ?? 1, card, 1));
+        if (amount <= 0) return;
+        const cardType = String(params.card_type || '').trim();
+        let changed = 0;
+        target.hand.forEach(handCard => {
+            if (cardType && handCard.card_type !== cardType) return;
+            const base = handCard.cost_e_override != null ? toInt(handCard.cost_e_override, 0) : toInt(handCard.def().cost_e, 0);
+            handCard.cost_e_override = Math.max(0, base + direction * amount);
+            changed += 1;
+        });
+        if (changed > 0 && log) this.logMsg(log);
     }
 
     clampCardProperty(target, prop, value) {
@@ -4278,6 +4313,8 @@ class LocalSoloEngine {
 
     discardCard(ps, card) {
         if (card.card_type === 'thorn') this.resetOneShotAttackAttrs(card);
+        card.cost_e_override = null;
+        card.cost_m_override = null;
         card.mimic_discount = 0;
         ps.discard.push(card);
     }
@@ -4314,6 +4351,30 @@ class LocalSoloEngine {
         return toInt(this.players[playerId].cards_played_this_turn[card.def_id], 0);
     }
 
+    customStatusValue(playerId, ...names) {
+        const ps = this.players[playerId];
+        const statuses = (ps && ps.custom_statuses) || {};
+        return names.reduce((sum, name) => sum + Math.max(0, toInt(statuses[name], 0)), 0);
+    }
+
+    actionLimitStatusValue(playerId, attr, ...aliases) {
+        const ps = this.players[playerId];
+        if (!ps) return 0;
+        return Math.max(Math.max(0, toInt(ps[attr], 0)), this.customStatusValue(playerId, ...aliases));
+    }
+
+    decayActionLimitStatus(playerId, attr, ...aliases) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        if (toInt(ps[attr], 0) > 0) ps[attr] = Math.max(0, toInt(ps[attr], 0) - 1);
+        ps.custom_statuses = ps.custom_statuses || {};
+        aliases.forEach(name => {
+            const value = toInt(ps.custom_statuses[name], 0);
+            if (value > 1) ps.custom_statuses[name] = value - 1;
+            else if (value > 0) delete ps.custom_statuses[name];
+        });
+    }
+
     canPlayCard(playerId, card) {
         const ps = this.players[playerId];
         const def = card.def();
@@ -4321,8 +4382,8 @@ class LocalSoloEngine {
             return [false, '反制牌只能通过响应机制使用'];
         }
         if (this.phase !== 'action' || this.current_player !== playerId) return [false, '不是你的回合'];
-        if (ps.attack_blocked > 0 && def.card_type === 'thorn') return [false, '本回合无法使用攻击牌'];
-        if (ps.attack_only > 0 && def.card_type !== 'thorn') return [false, '本回合只能使用攻击牌'];
+        if (this.actionLimitStatusValue(playerId, 'attack_blocked', 'attack_blocked', '禁攻') > 0 && def.card_type === 'thorn') return [false, '本回合无法使用攻击牌'];
+        if (this.actionLimitStatusValue(playerId, 'attack_only', 'attack_only', '仅攻击') > 0 && def.card_type !== 'thorn') return [false, '本回合只能使用攻击牌'];
         if (ps.shovel_active) return [false, '链子效果中，无法使用卡牌'];
         const totalE = card.cost_e + this.getExtraEForCard(playerId, card);
         if (totalE > ps.elixir) return [false, `能量不足（需要${totalE}E，当前${ps.elixir}E）`];
@@ -4355,16 +4416,21 @@ class LocalSoloEngine {
         if (card.flags.has('precision')) return false;
         const opp = this.players[1 - playerId];
         const trigger = card.card_type;
-        if (opp.hand.some(c => c.def().response_trigger === 'any')) return true;
-        if (opp.hand.some(c => c.def().response_trigger === trigger)) return true;
-        if (this.wouldDestroyEquipment(card) && opp.hand.some(c => c.def().response_trigger === 'equipment_destroy')) return true;
-        if (this.wouldHeal(card) && opp.hand.some(c => c.def().response_trigger === 'heal')) return true;
+        if (opp.hand.some(c => this.canPayCounterCard(1 - playerId, c) && c.def().response_trigger === 'any')) return true;
+        if (opp.hand.some(c => this.canPayCounterCard(1 - playerId, c) && c.def().response_trigger === trigger)) return true;
+        if (this.wouldDestroyEquipment(card) && opp.hand.some(c => this.canPayCounterCard(1 - playerId, c) && c.def().response_trigger === 'equipment_destroy')) return true;
+        if (this.wouldHeal(card) && opp.hand.some(c => this.canPayCounterCard(1 - playerId, c) && c.def().response_trigger === 'heal')) return true;
         return false;
     }
 
     checkPrecisionResponseNeeded(playerId, card) {
         if (!card.flags.has('precision')) return false;
-        return this.players[1 - playerId].hand.some(c => c.def().response_trigger === 'thorn');
+        return this.players[1 - playerId].hand.some(c => this.canPayCounterCard(1 - playerId, c) && c.def().response_trigger === 'thorn');
+    }
+
+    canPayCounterCard(playerId, card) {
+        const ps = this.players[playerId];
+        return !!ps && !!card && card.cost_e <= ps.elixir && card.cost_m <= ps.magic;
     }
 
     getCounterCards(playerId, playedCard) {
@@ -4606,7 +4672,19 @@ class LocalSoloEngine {
 
     executeCounterEffect(responderId, counterCard, originalCard, originalPlayerId) {
         const effects = getScriptEffects(counterCard.def(), 'response');
-        if (effects.length) {
+        if (this.hasCardEvent(counterCard.def(), 'response')) {
+            this.runCardEvent(responderId, counterCard, 'response', {
+                target_player: originalPlayerId,
+                target_player_id: originalPlayerId,
+                target_id: originalPlayerId,
+            }, {
+                event: 'response',
+                source_id: responderId,
+                target_id: originalPlayerId,
+                original_card_instance_id: originalCard && originalCard.instance_id,
+                original_card_def_id: originalCard && originalCard.def_id,
+            });
+        } else if (effects.length) {
             this.runEffectList(responderId, counterCard, effects, null, {
                 event: 'response',
                 source_id: responderId,
@@ -4680,6 +4758,8 @@ class LocalSoloEngine {
 
     endPlayerTurn(playerId) {
         const ps = this.players[playerId];
+        this.runOwnerTurnEndEquipment(playerId);
+        if (this.game_over) return;
         if (ps.bandage_death_pending) {
             ps.health = 0;
             ps.bandage_death_pending = false;
@@ -4700,11 +4780,27 @@ class LocalSoloEngine {
                 this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}因虚无被放逐`);
             }
         });
-        if (ps.attack_blocked > 0) ps.attack_blocked -= 1;
-        if (ps.attack_only > 0) ps.attack_only -= 1;
+        this.decayActionLimitStatus(playerId, 'attack_blocked', 'attack_blocked', '禁攻');
+        this.decayActionLimitStatus(playerId, 'attack_only', 'attack_only', '仅攻击');
         this.saveLastTurnDamageSnapshot(playerId);
         if (playerId === this.first_player) this.startPlayerTurn(1 - this.first_player);
         else this.endRound();
+    }
+
+    runOwnerTurnEndEquipment(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        [...ps.equipment].forEach(eq => {
+            if (!this.hasCardEvent(eq.card_def, 'owner_turn_end')) return;
+            const targetId = Number.isInteger(Number(eq.effect_target)) ? toInt(eq.effect_target, playerId) : playerId;
+            this.runCardEvent(playerId, eq.card_instance, 'owner_turn_end', null, {
+                event: 'owner_turn_end',
+                source_id: playerId,
+                target_id: targetId,
+                selected_equipment_instance_id: eq.card_instance && eq.card_instance.instance_id,
+                selected_equipment_owner_id: playerId,
+            });
+        });
     }
 
     returnCogwheelCardsNow(playerId) {

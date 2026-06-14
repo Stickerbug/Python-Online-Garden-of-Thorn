@@ -2517,6 +2517,7 @@ let lastSkinLookEmitKey = '';
 const skinLookByPlayerId = new Map();
 const skinDamageMoodByPlayerId = new Map();
 const skinMouthTByPlayerId = new Map();
+const skinCorruptionByPlayerId = new Map();
 let socket = null;
 let socketConnectUrl = '';
 let socketCreateSeq = 0;
@@ -8166,13 +8167,16 @@ function triggerSkinDamageMood(playerId, kind = 'damage', delay = 0) {
 
 function renderSkinAvatar(skinInput, options = {}) {
     const skin = normalizeSkinConfig(skinInput);
-    const border = deriveSkinBorderColor(skin.primary_color);
+    const corrupted = !!options.corrupted;
+    const corruptAnimateClass = options.animateCorruption ? ' skin-corruption-animate' : '';
+    const mainColor = skin.primary_color;
+    const border = deriveSkinBorderColor(mainColor);
     const inverted = skinLuminance(skin.primary_color) < 0.22;
     const invertedClass = inverted ? ' is-inverted' : '';
     const pid = normalizePlayerId(options.playerId);
     const look = options.look || (pid != null ? getSkinLookForPlayerId(pid) : localSkinLook);
     const defeated = !!options.defeated;
-    const damageMood = skinDamageMoodClasses(pid);
+    const damageMood = corrupted ? '' : skinDamageMoodClasses(pid);
     const storedMouthT = pid != null ? Number(skinMouthTByPlayerId.get(pid)) : NaN;
     const mouthT = defeated ? 1 : (damageMood && Number.isFinite(storedMouthT) ? storedMouthT : 0);
     const defeatedClass = defeated ? ' is-defeated' : '';
@@ -8183,7 +8187,7 @@ function renderSkinAvatar(skinInput, options = {}) {
         ? ` data-player-id="${pid}"`
         : ` data-look-owner="${escapeHtml(options.lookOwner || 'local')}"`;
     return `
-        <div class="skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${invertedClass}${defeatedClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr} style="${style}">
+        <div class="skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${invertedClass}${defeatedClass}${corrupted ? ' is-corrupted' : ''}${corruptAnimateClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr} style="${style}">
             <div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>
             <div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>
             <svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">
@@ -10748,6 +10752,24 @@ async function startSoloTraining() {
     scheduleSoloOfflineFallback('solo', payload);
 }
 
+function shouldAnimateSkinCorruption(playerId, corrupted, scope = 'default') {
+    const pid = normalizePlayerId(playerId);
+    if (pid == null) return false;
+    const key = `${scope}:${pid}`;
+    const was = skinCorruptionByPlayerId.get(key);
+    skinCorruptionByPlayerId.set(key, !!corrupted);
+    return !!corrupted && was === false;
+}
+
+function playerHasCorruptionEquipment(playerData) {
+    const equipment = Array.isArray(playerData && playerData.equipment) ? playerData.equipment : [];
+    return equipment.some(eq => {
+        const card = eq && (eq.card_instance || eq.card || eq);
+        const defId = String((card && card.def_id) || eq.def_id || '').trim();
+        return defId === 'Corruption' && !!eq.corruption_active;
+    });
+}
+
 function emitSoloStart(payload = null) {
     soloMode = true;
     const finalPayload = payload || window.__pendingSoloPayload || { deck0: soloDeckA, deck1: soloDeckB };
@@ -11345,10 +11367,11 @@ async function showFatedDrawChoice(poolCards) {
     return new Promise((resolve) => {
         const el = $('game-prompt');
         if (!el) { resolve({ add_def_ids: [] }); return; }
-        $('game-prompt-title').textContent = '命运抽签：选择最多3张牌洗入牌库';
+        $('game-prompt-title').textContent = '命运抽签：选择1张牌洗入牌库';
         const optsEl = $('game-prompt-options');
         optsEl.innerHTML = '';
         const selected = [];
+        let confirmBtn = null;
         const selectedBox = document.createElement('div');
         selectedBox.className = 'choice-selected-cards';
         selectedBox.style.display = 'flex';
@@ -11378,9 +11401,8 @@ async function showFatedDrawChoice(poolCards) {
             if (!selected.length) {
                 const empty = document.createElement('span');
                 empty.className = 'choice-option-detail';
-                empty.textContent = '未选择，可直接确认';
+                empty.textContent = '请选择1张牌';
                 selectedBox.appendChild(empty);
-                return;
             }
             selected.forEach((defId, idx) => {
                 const chip = createCardChoiceChip({ def_id: defId }, { includeLayers: false, includeTomato: false });
@@ -11393,6 +11415,9 @@ async function showFatedDrawChoice(poolCards) {
                 };
                 selectedBox.appendChild(chip);
             });
+            if (confirmBtn) {
+                confirmBtn.disabled = selected.length !== 1;
+            }
         }
 
         function renderList() {
@@ -11406,10 +11431,10 @@ async function showFatedDrawChoice(poolCards) {
                     row.className = 'game-prompt-option';
                     row.style.justifyContent = 'flex-start';
                     row.style.minHeight = '34px';
-                    row.disabled = selected.length >= 3;
+                    row.disabled = selected.length >= 1;
                     row.appendChild(createCardChoiceChip(card, { includeLayers: true, includeTomato: true }));
                     row.onclick = () => {
-                        if (selected.length >= 3) return;
+                        if (selected.length >= 1) return;
                         selected.push(card.def_id);
                         renderSelected();
                         renderList();
@@ -11428,14 +11453,16 @@ async function showFatedDrawChoice(poolCards) {
         search.oninput = renderList;
         renderSelected();
         renderList();
-        const confirmBtn = document.createElement('button');
+        confirmBtn = document.createElement('button');
         confirmBtn.className = 'btn btn-primary';
         confirmBtn.textContent = UI.ok;
         confirmBtn.style.marginTop = '10px';
+        confirmBtn.disabled = true;
         confirmBtn.onclick = () => {
+            if (selected.length !== 1) return;
             removeFloatingCardPreview();
             el.classList.remove('active');
-            resolve({ add_def_ids: selected.slice(0, 3) });
+            resolve({ add_def_ids: selected.slice(0, 1) });
         };
         optsEl.appendChild(confirmBtn);
         el.classList.add('active');
@@ -12143,6 +12170,7 @@ function normalizeBattlePlayer(gs, raw, slot) {
         armor: Number(data.armor || 0),
         statuses: data,
         equipment: Array.isArray(data.equipment) ? data.equipment : [],
+        hasCorruptionEquipment: playerHasCorruptionEquipment(data),
         handCount: Number(data.hand_count || 0),
         deckCount: Number(data.deck_count || 0),
         discardCount: Number(data.discard_count || 0),
@@ -12246,6 +12274,8 @@ function renderPlayerAvatar(player, options = {}) {
         look: resolveSkinLookForPlayer(p.id, p.skin_look),
         defeated: p.isDefeated,
         defeatedSeed: `${p.id ?? ''}:${p.name || ''}`,
+        corrupted: !!p.hasCorruptionEquipment,
+        animateCorruption: shouldAnimateSkinCorruption(p.id, !!p.hasCorruptionEquipment, 'classic'),
     });
     const skinClass = image ? '' : ' has-skin';
     return `
@@ -12260,11 +12290,14 @@ function renderMiniPlayerSkin(containerId, playerData = {}, id = null) {
     if (!el) return;
     const data = playerData || {};
     const pid = normalizePlayerId(id != null ? id : data.player_id);
+    const corrupted = playerHasCorruptionEquipment(data);
     el.innerHTML = renderSkinAvatar(data.skin || DEFAULT_SKIN_CONFIG, {
         playerId: pid,
         look: resolveSkinLookForPlayer(pid, data.skin_look),
         defeated: Number(data.health || 0) <= 0 || !!data.isDefeated || !!data.is_defeated,
         defeatedSeed: `${pid ?? ''}:${data.name || data.player_name || ''}`,
+        corrupted,
+        animateCorruption: shouldAnimateSkinCorruption(pid, corrupted, containerId || 'mini'),
     });
 }
 
