@@ -143,6 +143,15 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         amount = max(0, _to_int(eval_v2_value(engine, context, params.get("amount", 0))))
         hits = max(1, _to_int(eval_v2_value(engine, context, params.get("hits", 1))))
         card = context.get("card")
+        inherit_extra_hits = params.get("inherit_extra_hits", params.get("use_card_extra_hits", True)) is not False
+        if card is not None and inherit_extra_hits:
+            try:
+                if hasattr(engine, "_card_total_hits"):
+                    hits = max(1, int(engine._card_total_hits(card, hits)))
+                else:
+                    hits = max(1, hits + max(0, int(getattr(card, "extra_hits", 0) or 0)))
+            except Exception:
+                pass
         if (
             card is not None
             and context.get("current_event") == "on_play"
@@ -524,6 +533,8 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         return 1 if choice.get("target_instance_id") is not None or choice.get("target_def_id") is not None else 0
     if op == "selected_card_index":
         return _to_int(context.get("selected_card_index", context.get("vars", {}).get("selected_card_index", 0)))
+    if op in ("current_card", "this_card"):
+        return context.get("card")
     if op in ("selected_card", "choice_card", "chosen_card"):
         return resolve_v2_target(engine, context, op)
     if op == "selected_card_at":
@@ -1084,6 +1095,11 @@ def _move_card(engine, card: CardInstance, owner_id: int, zone: str, already_det
         return
     if not already_detached:
         _detach_card(engine, card)
+    elif hasattr(engine, "_apply_setup_modifiers_to_card"):
+        try:
+            engine._apply_setup_modifiers_to_card(owner_id, card)
+        except Exception:
+            pass
     ps = engine.players[owner_id]
     if zone == "hand":
         ps.add_to_hand(card) if ps.can_add_to_hand() or card.def_id == ERROR_CARD_ID else ps.discard.append(card)

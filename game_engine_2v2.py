@@ -647,13 +647,23 @@ class GameEngine2v2(GameEngine):
         return card.card_type in ('thorn', 'bloom', 'root')
 
     def _selected_effect_target(self, player_id: int, choice=None) -> int:
-        target_id = choice.get('target_player', -1) if isinstance(choice, dict) else -1
+        target_id = -1
+        if isinstance(choice, dict):
+            for key in ('target_player', 'target_player_id', 'target_id'):
+                if key in choice:
+                    target_id = choice.get(key)
+                    break
         if self._is_valid_effect_target(player_id, target_id):
             return target_id
         return player_id
 
     def _selected_enemy_target(self, player_id: int, choice=None) -> int:
-        target_id = choice.get('target_player', -1) if isinstance(choice, dict) else -1
+        target_id = -1
+        if isinstance(choice, dict):
+            for key in ('target_player', 'target_player_id', 'target_id'):
+                if key in choice:
+                    target_id = choice.get(key)
+                    break
         if self._is_valid_effect_target(player_id, target_id):
             return target_id
         enemies = self.get_enemies(player_id)

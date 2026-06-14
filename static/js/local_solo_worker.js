@@ -363,7 +363,11 @@ class LocalCard {
         this.bonus_damage = toInt(source.bonus_damage, 0);
         this.return_to_hand_turns = toInt(source.return_to_hand_turns, 0);
         this.held_turns = toInt(source.held_turns, 0);
+        this.swift_value = Math.max(0, toInt(source.swift_value, 0));
+        this.magic_swift_value = Math.max(0, toInt(source.magic_swift_value, 0));
+        this.power_value = Math.max(0, toInt(source.power_value, 0));
         this.extra_hits = Math.max(0, toInt(source.extra_hits, 0));
+        this.setup_modifiers = new Set(source.setup_modifiers || []);
         if (this.def_id === 'Tomato') {
             this.bonus_damage = Math.min(18, Math.max(0, this.bonus_damage));
             this.held_turns = Math.min(6, Math.max(0, this.held_turns));
@@ -387,7 +391,8 @@ class LocalCard {
     }
 
     get cost_m() {
-        return this.cost_m_override != null ? this.cost_m_override : toInt(this.def().cost_m, 0);
+        const base = this.cost_m_override != null ? this.cost_m_override : toInt(this.def().cost_m, 0);
+        return Math.max(0, base - Math.max(0, toInt(this.magic_swift_value, 0)));
     }
 
     get flags() {
@@ -418,7 +423,11 @@ class LocalCard {
             bonus_damage: this.def_id === 'Tomato' ? Math.min(18, Math.max(0, this.bonus_damage)) : this.bonus_damage,
             return_to_hand_turns: this.return_to_hand_turns,
             held_turns: this.def_id === 'Tomato' ? Math.min(6, Math.max(0, this.held_turns)) : this.held_turns,
+            swift_value: this.swift_value,
+            magic_swift_value: this.magic_swift_value,
+            power_value: this.power_value,
             extra_hits: this.extra_hits,
+            setup_modifiers: Array.from(this.setup_modifiers),
             durability: this.durability,
         };
     }
@@ -922,6 +931,7 @@ class LocalSoloEngine {
                 const copyCard = new LocalCard(card.def_id);
                 copyCard.instance_flags.add('exile');
                 copyCard.disabled_flags.add('copy');
+                this.applySetupModifiersToCard(playerId, copyCard);
                 player.addToHand(copyCard, { triggerEnterHand: false });
                 added += 1;
             }
@@ -1004,7 +1014,25 @@ class LocalSoloEngine {
         if (this.mergeSimpleUseDamageLog(text)) return;
         if (this.mergeLegacyUseDamageLog(text)) return;
         if (this.mergeDamageTakenLog(text)) return;
+        if (this.moveUseLogBeforeResponseDetail(text)) return;
         this.log.push(text);
+    }
+
+    isResponseDetailLog(text) {
+        return /^.+使用泡泡(?:进行反制！?|，.*)$/.test(text)
+            || /^.+精准牌被闪避反制.*$/.test(text)
+            || text === '精准牌被闪避反制，伤害减半！';
+    }
+
+    moveUseLogBeforeResponseDetail(text) {
+        if (!/^.+使用了.+$/.test(text) || !this.log.length) return false;
+        let insertAt = this.log.length;
+        while (insertAt > 0 && this.isResponseDetailLog(this.log[insertAt - 1])) {
+            insertAt -= 1;
+        }
+        if (insertAt === this.log.length) return false;
+        this.log.splice(insertAt, 0, text);
+        return true;
     }
 
     normalizeDamageLogText(text) {
@@ -1148,6 +1176,14 @@ class LocalSoloEngine {
             match = last.match(/^(.+)使用泡泡进行反制！?$/);
             if (match) {
                 this.log[this.log.length - 1] = `${match[1]}使用泡泡，精准攻击伤害减半`;
+                return true;
+            }
+        }
+        match = text.match(/^(.+)的精准牌被闪避反制，伤害减半！?$/);
+        if (match) {
+            const bubble = last.match(/^(.+)使用泡泡进行反制！?$/);
+            if (bubble) {
+                this.log[this.log.length - 1] = `${bubble[1]}使用泡泡，${match[1]}的精准攻击伤害减半`;
                 return true;
             }
         }
@@ -1312,6 +1348,7 @@ class LocalSoloEngine {
                     const mana = new LocalCard('ManaOrb');
                     mana.instance_flags.add('sprout');
                     mana.instance_flags.add('symbiosis');
+                    this.applySetupModifiersToCard(playerId, mana);
                     ps.deck[idx] = mana;
                     this.logMsg(`${this.pn(playerId)}【魔力转化】：${cardName(sourceDef)}变为魔法球(萌芽+共生)`);
                 }
@@ -1324,6 +1361,7 @@ class LocalSoloEngine {
                     const light = new LocalCard('Light');
                     light.instance_flags.add('sprout');
                     light.instance_flags.add('symbiosis');
+                    this.applySetupModifiersToCard(playerId, light);
                     ps.deck[idx] = light;
                     converted += 1;
                 }
@@ -1337,7 +1375,7 @@ class LocalSoloEngine {
             let added = 0;
             picked.forEach(defId => {
                 if (this.cardAllowedForFatedDraw(defId)) {
-                    ps.deck.push(new LocalCard(defId));
+                    ps.deck.push(this.applySetupModifiersToCard(playerId, new LocalCard(defId)));
                     added += 1;
                 }
             });
@@ -1356,7 +1394,7 @@ class LocalSoloEngine {
             if (idx < 0) idx = ps.deck.findIndex(card => card.def_id !== 'Yggdrasil');
             if (idx >= 0 && cardDef('Yggdrasil')) {
                 const oldDef = ps.deck[idx].def_id;
-                ps.deck[idx] = new LocalCard('Yggdrasil');
+                ps.deck[idx] = this.applySetupModifiersToCard(playerId, new LocalCard('Yggdrasil'));
                 this.logMsg(`${this.pn(playerId)}【绝境求生】：最大生命值-20，${cardName(oldDef)}变为Yggdrasil`);
             }
         } else if (eventId === 9) {
@@ -1365,8 +1403,9 @@ class LocalSoloEngine {
             ps.health += 10;
             let changed = 0;
             ps.deck.forEach(card => {
-                if (this.cardBasePetalCount(card) >= 2) {
-                    card.extra_hits = Math.max(0, toInt(card.extra_hits, 0)) + 1;
+                const before = Math.max(0, toInt(card.extra_hits, 0));
+                this.applySetupModifiersToCard(playerId, card);
+                if (Math.max(0, toInt(card.extra_hits, 0)) > before) {
                     changed += 1;
                 }
             });
@@ -2164,7 +2203,7 @@ class LocalSoloEngine {
         }
         if (typeof expr !== 'object') return fallbackValue;
         const ref = expr.ref;
-        const op = expr.op || expr.type || '';
+        const op = expr.op || expr.ref || expr.type || '';
         if (op === 'const') return expr.value ?? fallbackValue;
         if (op === 'var') {
             const store = this.varStoreForTarget(playerId, expr.target || 'self');
@@ -2201,17 +2240,35 @@ class LocalSoloEngine {
             if (expr.list) return this.evalList(playerId, expr.list, currentCard).length;
             return fallbackValue;
         }
-        if (op === 'add' || op === '+') return this.evalExpr(playerId, expr.a, currentCard, 0) + this.evalExpr(playerId, expr.b, currentCard, 0);
-        if (op === 'sub' || op === '-') return this.evalExpr(playerId, expr.a, currentCard, 0) - this.evalExpr(playerId, expr.b, currentCard, 0);
-        if (op === 'mul' || op === '*') return this.evalExpr(playerId, expr.a, currentCard, 0) * this.evalExpr(playerId, expr.b, currentCard, 0);
+        if (op === 'add' || op === '+') {
+            const values = Array.isArray(expr.values) ? expr.values : [expr.a, expr.b];
+            return values.reduce((sum, value) => sum + this.evalExpr(playerId, value, currentCard, 0), 0);
+        }
+        if (op === 'sub' || op === '-') {
+            const values = Array.isArray(expr.values) ? expr.values : [expr.a, expr.b];
+            if (!values.length) return 0;
+            return values.slice(1).reduce((out, value) => out - this.evalExpr(playerId, value, currentCard, 0), this.evalExpr(playerId, values[0], currentCard, 0));
+        }
+        if (op === 'mul' || op === '*') {
+            const values = Array.isArray(expr.values) ? expr.values : [expr.a, expr.b];
+            return values.reduce((out, value) => out * this.evalExpr(playerId, value, currentCard, 0), 1);
+        }
         if (op === 'div' || op === '/') {
-            const b = this.evalExpr(playerId, expr.b, currentCard, 0);
-            return b === 0 ? 0 : this.evalExpr(playerId, expr.a, currentCard, 0) / b;
+            const values = Array.isArray(expr.values) ? expr.values : [expr.a, expr.b];
+            if (values.length < 2) return 0;
+            const b = this.evalExpr(playerId, values[1], currentCard, 0);
+            return b === 0 ? 0 : this.evalExpr(playerId, values[0], currentCard, 0) / b;
         }
         if (op === 'floor') return Math.floor(this.evalExpr(playerId, expr.value ?? expr.a, currentCard, 0));
         if (op === 'ceil') return Math.ceil(this.evalExpr(playerId, expr.value ?? expr.a, currentCard, 0));
-        if (op === 'min') return Math.min(this.evalExpr(playerId, expr.a, currentCard, 0), this.evalExpr(playerId, expr.b, currentCard, 0));
-        if (op === 'max') return Math.max(this.evalExpr(playerId, expr.a, currentCard, 0), this.evalExpr(playerId, expr.b, currentCard, 0));
+        if (op === 'min') {
+            const values = Array.isArray(expr.values) ? expr.values : [expr.a, expr.b];
+            return values.length ? Math.min(...values.map(value => this.evalExpr(playerId, value, currentCard, 0))) : 0;
+        }
+        if (op === 'max') {
+            const values = Array.isArray(expr.values) ? expr.values : [expr.a, expr.b];
+            return values.length ? Math.max(...values.map(value => this.evalExpr(playerId, value, currentCard, 0))) : 0;
+        }
         if (op === 'last_damage') {
             const tid = this.resolveTarget(playerId, expr.target || 'enemy');
             return toInt(this._last_damage_value[tid], 0);
@@ -2972,9 +3029,11 @@ class LocalSoloEngine {
     effect_deal_damage(playerId, card, params, log = '') {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         const amount = this.modifiedAttackDamage(this.evalInt(playerId, params.amount ?? 6, card, 6), card);
-        const hits = this.cardTotalHits(card, this.evalInt(playerId, params.hits ?? 1, card, 1));
+        const baseHits = this.evalInt(playerId, params.hits ?? 1, card, 1);
+        const inheritExtraHits = params.inherit_extra_hits !== false && params.use_card_extra_hits !== false;
+        const hits = inheritExtraHits ? this.cardTotalHits(card, baseHits) : Math.max(1, baseHits);
         this._incoming_damage_hint[targetId] = amount;
-        const dealt = this.dealAttackDamage(targetId, amount, hits, !!params.is_precision, playerId);
+        const dealt = this.dealAttackDamage(targetId, amount, hits, !!(params.is_precision || params.precision), playerId);
         this._last_damage_value[targetId] = dealt;
         if (log) this.logMsg(log);
     }
@@ -3291,6 +3350,7 @@ class LocalSoloEngine {
         if (card && card.def_id === 'Mimic' && !this.payMimicSpecialCost(playerId, target, card)) return;
         const copy = target.copy();
         copy.instance_id = randintId();
+        if (!(card && card.def_id === 'Mimic')) this.applySetupModifiersToCard(playerId, copy);
         this.players[playerId].addToHand(copy);
         this.enforceUniqueCardsForPlayer(playerId, copy);
         this._last_created_card_instance_id = copy.instance_id;
@@ -3306,6 +3366,7 @@ class LocalSoloEngine {
         if (!def) return;
         if ((def.id || cardId) !== ERROR_CARD_ID && !target.canAddToHand()) return;
         const newCard = new LocalCard(def.id || cardId);
+        this.applySetupModifiersToCard(targetId, newCard);
         target.addToHand(newCard);
         this.enforceUniqueCardsForPlayer(targetId, newCard);
         this._last_created_card_instance_id = newCard.instance_id;
@@ -3320,6 +3381,7 @@ class LocalSoloEngine {
         const def = cardDef(cardId) || cardDef(ERROR_CARD_ID);
         if (!def) return;
         const newCard = new LocalCard(def.id || cardId);
+        this.applySetupModifiersToCard(targetId, newCard);
         const position = params.position || 'top';
         if (position === 'bottom') target.deck.push(newCard);
         else if (position === 'random') target.deck.splice(Math.floor(Math.random() * (target.deck.length + 1)), 0, newCard);
@@ -3336,10 +3398,51 @@ class LocalSoloEngine {
         const def = cardDef(cardId) || cardDef(ERROR_CARD_ID);
         if (!def) return;
         const newCard = new LocalCard(def.id || cardId);
+        this.applySetupModifiersToCard(targetId, newCard);
         this.discardCard(target, newCard);
         this._last_created_card_instance_id = newCard.instance_id;
         this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
         if (log && newCard.def_id !== ERROR_CARD_ID) this.logMsg(log);
+    }
+
+    effect_create_copies_to_deck_top(playerId, card, params, log) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const target = this.players[targetId] || this.players[playerId];
+        if (!target) return;
+        const cardId = this.resolveCardIdRef(playerId, params.def_id || params.card || params.card_id || params.id || card?.def_id || ERROR_CARD_ID, card);
+        const def = cardDef(cardId) || cardDef(ERROR_CARD_ID);
+        if (!def) return;
+        const count = Math.max(0, this.evalInt(playerId, params.count ?? 1, card, 1));
+        const flags = normalizeCardFlags(params.flags || []);
+        const swift = Math.max(0, this.evalInt(playerId, params.swift_value ?? 0, card, 0));
+        const magicSwift = Math.max(0, this.evalInt(playerId, params.magic_swift_value ?? 0, card, 0));
+        const power = Math.max(0, this.evalInt(playerId, params.power_value ?? 0, card, 0));
+        const extraHits = Math.max(0, this.evalInt(playerId, params.extra_hits ?? 0, card, 0));
+        for (let i = 0; i < count; i++) {
+            const newCard = new LocalCard(def.id || cardId);
+            flags.forEach(flag => newCard.instance_flags.add(flag));
+            if (swift > 0) {
+                newCard.swift_value = swift;
+                newCard.instance_flags.add('swift');
+            }
+            if (magicSwift > 0) {
+                newCard.magic_swift_value = magicSwift;
+                newCard.instance_flags.add('magic_swift');
+            }
+            if (power > 0) {
+                newCard.power_value = power;
+                newCard.instance_flags.add('power');
+            }
+            if (extraHits > 0) {
+                newCard.extra_hits = extraHits;
+                newCard.setup_modifiers.add('explicit_extra_hits');
+            }
+            this.applySetupModifiersToCard(targetId, newCard);
+            target.deck.unshift(newCard);
+            this._last_created_card_instance_id = newCard.instance_id;
+            this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
+        }
+        if (log) this.logMsg(log);
     }
 
     effect_move_to_discard(playerId, card, params) {
@@ -3398,17 +3501,19 @@ class LocalSoloEngine {
                 const created = new LocalCard('Laser');
                 created.swift_value = 2;
                 created.flags.add('swift');
+                this.applySetupModifiersToCard(targetId, created);
                 targetPlayer.addToHand(created);
                 this.logMsg(`${this.pn(playerId)}的重构机：${this.pn(targetId)}获得激光器`);
             } else if (roll === 1) {
                 const created = new LocalCard('Sawblade');
                 created.swift_value = 2;
                 created.flags.add('swift');
+                this.applySetupModifiersToCard(targetId, created);
                 targetPlayer.addToHand(created);
                 this.logMsg(`${this.pn(playerId)}的重构机：${this.pn(targetId)}获得锯片`);
             } else {
                 targetPlayer.fragment_stacks = toInt(targetPlayer.fragment_stacks, 0) + 2;
-                targetPlayer.addToHand(new LocalCard('Fragment'));
+                targetPlayer.addToHand(this.applySetupModifiersToCard(targetId, new LocalCard('Fragment')));
                 this.logMsg(`${this.pn(playerId)}的重构机：${this.pn(targetId)}获得2层碎片和1张碎片`);
             }
             return;
@@ -3529,6 +3634,7 @@ class LocalSoloEngine {
             const owner = this.players[ownerId];
             if (!owner) return;
             const newCard = new LocalCard(def.id || cardId);
+            this.applySetupModifiersToCard(ownerId, newCard);
             newCard.durability = toInt(def.durability, 0) > 0 ? toInt(def.durability, 0) : 3;
             const eq = new LocalEquipment(newCard, ownerId);
             if (params.effect_target != null) {
@@ -3615,6 +3721,15 @@ class LocalSoloEngine {
     effect_status_remove_named(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'self');
         const status = String(params.status || params.name || '');
+        if (['status_immune', 'immune', '状态免疫'].includes(status)) {
+            if (this.players[targetId]) {
+                this.players[targetId].custom_statuses = this.players[targetId].custom_statuses || {};
+                delete this.players[targetId].custom_statuses.status_immune;
+                delete this.players[targetId].custom_statuses.immune;
+                delete this.players[targetId].custom_statuses['状态免疫'];
+            }
+            return;
+        }
         if (status === 'poison') this.players[targetId].poison = 0;
         else if (status === 'fire') this.players[targetId].fire = 0;
         else if (status) this.players[targetId][status] = 0;
@@ -3625,6 +3740,13 @@ class LocalSoloEngine {
         const status = String(params.status || params.name || '');
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
         if (!status) return;
+        if (['status_immune', 'immune', '状态免疫'].includes(status)) {
+            this.players[targetId].custom_statuses = this.players[targetId].custom_statuses || {};
+            delete this.players[targetId].custom_statuses.immune;
+            delete this.players[targetId].custom_statuses['状态免疫'];
+            if (amount > 0) this.players[targetId].custom_statuses.status_immune = 1;
+            return;
+        }
         const aliases = { burn: 'fire', vulnus: 'vulnerable', stunned: 'skip_turn', '眩晕': 'skip_turn', '禁攻': 'attack_blocked' };
         const prop = aliases[status] || status;
         this.players[targetId][prop] = toInt(this.players[targetId][prop], 0) + amount;
@@ -3634,6 +3756,14 @@ class LocalSoloEngine {
         const targetId = this.resolveTarget(playerId, params.target || 'self');
         const status = String(params.status || params.name || '');
         const amount = this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+        if (['status_immune', 'immune', '状态免疫'].includes(status)) {
+            this.players[targetId].custom_statuses = this.players[targetId].custom_statuses || {};
+            delete this.players[targetId].custom_statuses.immune;
+            delete this.players[targetId].custom_statuses['状态免疫'];
+            if (amount > 0) this.players[targetId].custom_statuses.status_immune = 1;
+            else delete this.players[targetId].custom_statuses.status_immune;
+            return;
+        }
         if (status) this.players[targetId][status] = amount;
     }
 
@@ -3645,10 +3775,16 @@ class LocalSoloEngine {
         const [mergedTurns, mergedPower] = this.mergeTurnRegenStatus(targetId, kind, turns, power);
         if (kind === 'magic') {
             this.players[targetId].gainMagic(power);
-            this.logMsg(log || `${this.pn(targetId)}获得魔力回合回复：${mergedTurns};${mergedPower}，+${power}M`);
+            const remainingTurns = Math.max(0, mergedTurns - 1);
+            this.setCustomStatusAliasGroup(targetId, 'jungle:turn_magic_turns', ['jungle:turn_magic_turns', 'turn_magic_turns'], remainingTurns);
+            if (remainingTurns <= 0) this.setCustomStatusAliasGroup(targetId, 'jungle:turn_magic_power', ['jungle:turn_magic_power', 'turn_magic_power'], 0);
+            this.logMsg(log || `${this.pn(targetId)}获得魔力回合回复：${remainingTurns};${mergedPower}，+${power}M`);
         } else {
             this.players[targetId].heal(power);
-            this.logMsg(log || `${this.pn(targetId)}获得回合回复：${mergedTurns};${mergedPower}，+${power}H`);
+            const remainingTurns = Math.max(0, mergedTurns - 1);
+            this.setCustomStatusAliasGroup(targetId, 'jungle:turn_heal_turns', ['jungle:turn_heal_turns', 'turn_heal_turns'], remainingTurns);
+            if (remainingTurns <= 0) this.setCustomStatusAliasGroup(targetId, 'jungle:turn_heal_power', ['jungle:turn_heal_power', 'turn_heal_power'], 0);
+            this.logMsg(log || `${this.pn(targetId)}获得回合回复：${remainingTurns};${mergedPower}，+${power}H`);
         }
     }
 
@@ -3838,6 +3974,21 @@ class LocalSoloEngine {
         return best;
     }
 
+    applySetupModifiersToCard(playerId, card) {
+        if (!card || !this.players[playerId]) return card;
+        const eventId = toInt(this.opening_event_picks[playerId], -1);
+        if (eventId === 9 && this.cardBasePetalCount(card) >= 2) {
+            card.setup_modifiers = card.setup_modifiers instanceof Set
+                ? card.setup_modifiers
+                : new Set(card.setup_modifiers || []);
+            if (!card.setup_modifiers.has('multi_petal')) {
+                card.extra_hits = Math.max(0, toInt(card.extra_hits, 0)) + 1;
+                card.setup_modifiers.add('multi_petal');
+            }
+        }
+        return card;
+    }
+
     applyMagicAccelerationAfterPlay(playerId, card = null) {
         const ps = this.players[playerId];
         if (toInt(ps.custom_vars.setup_magic_acceleration, 0) <= 0) return;
@@ -3973,7 +4124,9 @@ class LocalSoloEngine {
                     continue;
                 }
                 precisionDodged = true;
-                this.logMsg(`${this.pn(targetId)}的闪避被精准消耗`);
+                if (!this.suppressPrecisionDodgeLog) {
+                    this.logMsg(`${this.pn(targetId)}的闪避被精准消耗`);
+                }
             }
             if (ps.invincible) {
                 this.logMsg(`${this.pn(targetId)}无敌，免疫伤害`);
@@ -4353,9 +4506,15 @@ class LocalSoloEngine {
 
     executeCardEffectHalfDamage(playerId, card, choice = null) {
         this.halve_next_attack = true;
+        this.suppressPrecisionDodgeLog = true;
         this.logMsg(`${this.pn(playerId)}的精准牌被闪避反制，伤害减半！`);
-        const result = this.executeCardEffect(playerId, card, choice);
-        this.halve_next_attack = false;
+        let result;
+        try {
+            result = this.executeCardEffect(playerId, card, choice);
+        } finally {
+            this.halve_next_attack = false;
+            this.suppressPrecisionDodgeLog = false;
+        }
         return result;
     }
 
@@ -4704,6 +4863,24 @@ onmessage = event => {
         if (message.type === 'solo_resolve_choice') {
             const pidx = engine.pending_choice ? engine.pending_choice.player_id : engine.current_player;
             const result = engine.resolveChoice(pidx, message.payload && message.payload.choice);
+            if (result.needs_response) {
+                if (engine.tutorial && pidx === 0) {
+                    engine.handleResponse(1, null);
+                    engine.sendState(0);
+                    return;
+                }
+                engine.sendState(engine.tutorial ? 0 : 1 - pidx);
+                const responder = 1 - pidx;
+                const counterCards = engine.getCounterCards(responder, new LocalCard(result.card));
+                emit('response_request', {
+                    card: result.card,
+                    player_id: pidx,
+                    target_player_id: engine.pending_response ? engine.pending_response.target_player_id : responder,
+                    counter_cards: counterCards.map(card => card.toDict()),
+                    damage_prediction: engine.buildResponseDamagePrediction(responder, counterCards),
+                });
+                return;
+            }
             if (!result.success && result.error) emit('server_error', { message: result.error });
             engine.sendState(engine.tutorial ? 0 : null);
             return;

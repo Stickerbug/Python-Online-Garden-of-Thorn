@@ -246,7 +246,7 @@
 <div id="beta-mode-badge" class="beta-mode-badge{% if not beta_mode|default(false) %} hidden{% endif %}">内测模式</div>
 <h1 class="title-main">Garden of Thorn</h1>
 <h2 class="title-sub">荆棘花园</h2>
-<p class="subtitle">局域网联机卡牌对战</p>
+<p class="subtitle">在线联机卡牌对战</p>
 <div class="login-form">
 <div class="login-divider"><span id="guest-divider-label">游客模式</span></div>
 <div id="login-nickname-row" class="form-row">
@@ -499,6 +499,9 @@
     </div>
   </div>
   <div class="middle-section">
+    <div id="minimal-play-cancel-zone" class="minimal-play-cancel-zone hidden" role="button" aria-label="取消打出">
+      <span>取消打出</span>
+    </div>
     <div id="battle-log" class="battle-log">
       <div class="log-header">战斗日志</div>
       <div class="log-content"></div>
@@ -805,7 +808,7 @@
       rotatePrompt: 'Please play in landscape mode', rotateSub: 'Rotate to Landscape', continueEnter: 'Continue'
     },
     zh: {
-      bootSub: '加载中...', bootStep: '准备加载...', subtitle: '局域网联机卡牌对战', nickname: '昵称', nicknamePlaceholder: '输入昵称',
+      bootSub: '加载中...', bootStep: '准备加载...', subtitle: '在线联机卡牌对战', nickname: '昵称', nicknamePlaceholder: '输入昵称',
       enterLobby: '进入大厅', soloTraining: '单人训练场', settings: '设置', loadLast: '载入上次', saveDecks: '保存牌组', startTraining: '开始训练', back: '返回', clearDeck: '清空牌组',
       searchCards: '搜索卡牌', soloDeckA: '你的牌组', soloDeckB: '对方牌组', soloEventA: '你的配装倾向', soloEventB: '对方配装倾向',
       lobby: '大厅', onlinePlayers: '在线玩家', onlineCount: '在线：0', ongoingGames: '进行中的对局', chat: '聊天', messagePlaceholder: '输入消息...', send: '发送', backHome: '返回主页',

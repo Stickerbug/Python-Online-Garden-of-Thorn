@@ -89,6 +89,7 @@ class CardDef:
     upgraded_image_url: str = ''
     copy_count: int = 0
     swift_value: int = 0
+    magic_swift_value: int = 0
     damage: int = 0
     hits: int = 1
 
@@ -131,6 +132,7 @@ class CardInstance:
     magic_swift_value: int = 0
     power_value: int = 0
     extra_hits: int = 0
+    setup_modifiers: Set[str] = field(default_factory=set)
 
     def __post_init__(self):
         if not self.def_id:
@@ -194,6 +196,7 @@ class CardInstance:
             'magic_swift_value': self.magic_swift_value,
             'power_value': self.power_value,
             'extra_hits': self.extra_hits,
+            'setup_modifiers': list(self.setup_modifiers) if self.setup_modifiers else [],
         }
 
     @staticmethod
@@ -217,6 +220,7 @@ class CardInstance:
             magic_swift_value=max(0, int(d.get('magic_swift_value', 0))),
             power_value=max(0, int(d.get('power_value', 0))),
             extra_hits=max(0, int(d.get('extra_hits', 0))),
+            setup_modifiers=set(str(x) for x in (d.get('setup_modifiers') or []) if x),
         )
 
     def copy(self) -> 'CardInstance':
@@ -239,6 +243,7 @@ class CardInstance:
             magic_swift_value=self.magic_swift_value,
             power_value=self.power_value,
             extra_hits=self.extra_hits,
+            setup_modifiers=set(self.setup_modifiers),
         )
         return c
 

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #ecc836;
+      }
+
+      .st0, .st1, .st2, .st3 {
+        stroke-miterlimit: 10;
+      }
+
+      .st0, .st2 {
+        stroke: #f5cf2c;
+        stroke-width: 4px;
+      }
+
+      .st1 {
+        fill: #bc9b12;
+        stroke: #f4de28;
+      }
+
+      .st1, .st3 {
+        stroke-width: 15px;
+      }
+
+      .st2 {
+        fill: #b6971a;
+      }
+
+      .st3 {
+        fill: #aa1f24;
+        opacity: .8;
+        stroke: #a01f24;
+      }
+    </style>
+  </defs>
+  <circle class="st1" cx="141.73" cy="141.73" r="85.04"/>
+  <path class="st0" d="M105.77,184.25h73.99l-15.18-36.04s20.71-9.01,20.71-24.82c0-18.18-15.41-24.17-45.76-24.17s-41.03,7.89-41.35,24.02,20.55,24.35,20.55,24.35l-12.96,36.68Z"/>
+  <circle class="st2" cx="126.61" cy="123.4" r="7.9"/>
+  <circle class="st2" cx="156.85" cy="123.4" r="7.9"/>
+  <path class="st3" d="M226.77,141.73c0,19.2-6.37,36.92-17.1,51.15-1.98-.82-3.4-1.52-4.05-1.84-18.41-9-25.76-26.47-26.97-29.46-7.5-18.59,2.08-26.4-7.05-40.24-8.58-12.99-22.4-19.35-29.05-22.41-16.26-7.48-22.91-4.32-30.39-12.49-4.92-5.37-7.91-13.16-7.74-21.14,11.27-5.52,23.93-8.61,37.31-8.61,46.97,0,85.04,38.07,85.04,85.04Z"/>
+</svg>

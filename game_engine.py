@@ -647,7 +647,9 @@ class GameEngine:
             return 0
         ps = self.players[target_id]
         status = str(status or '').strip()
-        if self._is_status_immune(target_id) and status not in ('status_immune', '状态免疫'):
+        if status in ('status_immune', 'immune', '状态免疫'):
+            return 1 if self._is_status_immune(target_id) else 0
+        if self._is_status_immune(target_id) and status not in ('status_immune', 'immune', '状态免疫'):
             return 0
         counts = {
             'poison': ps.poison,
@@ -765,6 +767,13 @@ class GameEngine:
             ps.bleed = max(0, int(ps.bleed))
         elif status in ('fragment', 'fragment_stacks', '碎片'):
             ps.fragment_stacks = max(0, int(ps.fragment_stacks))
+        elif status in ('status_immune', 'immune', '状态免疫'):
+            ps.custom_statuses = getattr(ps, 'custom_statuses', {})
+            value = 1 if any(int(ps.custom_statuses.get(key, 0) or 0) > 0 for key in ('status_immune', 'immune', '状态免疫')) else 0
+            for key in ('status_immune', 'immune', '状态免疫'):
+                ps.custom_statuses.pop(key, None)
+            if value > 0:
+                ps.custom_statuses['status_immune'] = 1
         elif status:
             ps.custom_statuses = getattr(ps, 'custom_statuses', {})
             value = int(ps.custom_statuses.get(status, 0) or 0)
@@ -1419,6 +1428,8 @@ class GameEngine:
             return
         if self._merge_log_text(text):
             return
+        if self._move_use_log_before_response_detail(text):
+            return
         self.log.append(text)
 
     def _clear_hand_reveal_for_player(self, player_id: int):
@@ -1433,6 +1444,25 @@ class GameEngine:
 
     def _can_merge_last_log(self) -> bool:
         return bool(self.log) and len(self.log) > int(getattr(self, '_log_compaction_floor', 0) or 0)
+
+    def _is_response_detail_log(self, text: str) -> bool:
+        return bool(
+            re.fullmatch(r'.+使用泡泡(?:进行反制！?|，.*)', text)
+            or re.fullmatch(r'.+精准牌被闪避反制.*', text)
+            or text == '精准牌被闪避反制，伤害减半！'
+        )
+
+    def _move_use_log_before_response_detail(self, text: str) -> bool:
+        if not re.fullmatch(r'.+使用了.+', text) or not self._can_merge_last_log():
+            return False
+        floor = int(getattr(self, '_log_compaction_floor', 0) or 0)
+        insert_at = len(self.log)
+        while insert_at > floor and self._is_response_detail_log(self.log[insert_at - 1]):
+            insert_at -= 1
+        if insert_at == len(self.log):
+            return False
+        self.log.insert(insert_at, text)
+        return True
 
     def _normalize_log_text(self, text: str) -> str:
         text = text.strip()
@@ -1485,6 +1515,12 @@ class GameEngine:
             m = re.fullmatch(r'(.+)使用泡泡进行反制！?', last)
             if m:
                 self.log[-1] = f'{m.group(1)}使用泡泡，精准攻击伤害减半'
+                return True
+        m = re.fullmatch(r'(.+)的精准牌被闪避反制，伤害减半！?', text)
+        if m:
+            bubble = re.fullmatch(r'(.+)使用泡泡进行反制！?', last)
+            if bubble:
+                self.log[-1] = f'{bubble.group(1)}使用泡泡，{m.group(1)}的精准攻击伤害减半'
                 return True
 
         m = re.fullmatch(r'(.+)装备了(.+)', text)
@@ -1915,6 +1951,7 @@ class GameEngine:
                 copy_card.instance_flags.add('exile')
                 # Remove copy tag from copies to prevent infinite loop
                 copy_card.disabled_flags.add('copy')
+                self._apply_setup_modifiers_to_card(player_id, copy_card)
                 ps.add_to_hand(copy_card, trigger_enter_hand=False)
                 added += 1
             if added > 0:
@@ -2394,7 +2431,7 @@ class GameEngine:
                 continue
             for idx in range(len(zone) - 1, -1, -1):
                 if getattr(zone[idx], 'def_id', None) != 'Yggdrasil':
-                    zone[idx] = CardInstance(def_id='Yggdrasil')
+                    zone[idx] = self._apply_setup_modifiers_to_card(player_id, CardInstance(def_id='Yggdrasil'))
                     return True
         return False
 
@@ -2443,12 +2480,30 @@ class GameEngine:
             pass
         return best
 
+    def _apply_setup_modifiers_to_card(self, player_id: int, card: Optional[CardInstance]) -> Optional[CardInstance]:
+        if card is None or not (0 <= player_id < len(self.players)):
+            return card
+        try:
+            event_id = int(self.opening_event_picks[player_id])
+        except Exception:
+            event_id = self.opening_event_picks[player_id]
+        if event_id == 9 and self._card_base_petal_count(card) >= 2:
+            modifiers = getattr(card, 'setup_modifiers', None)
+            if not isinstance(modifiers, set):
+                modifiers = set(modifiers or [])
+                card.setup_modifiers = modifiers
+            if 'multi_petal' not in modifiers:
+                card.extra_hits = max(0, int(getattr(card, 'extra_hits', 0) or 0)) + 1
+                modifiers.add('multi_petal')
+        return card
+
     def _apply_multi_petal_to_player_deck(self, player_id: int):
         ps = self.players[player_id]
         changed = 0
         for card in ps.deck:
-            if self._card_base_petal_count(card) >= 2:
-                card.extra_hits = max(0, int(getattr(card, 'extra_hits', 0) or 0)) + 1
+            before = max(0, int(getattr(card, 'extra_hits', 0) or 0))
+            self._apply_setup_modifiers_to_card(player_id, card)
+            if max(0, int(getattr(card, 'extra_hits', 0) or 0)) > before:
                 changed += 1
         self.log_msg(f"{self.pn(player_id)}【多重瓣】：最大生命值+10，{changed}张多子瓣牌子瓣+1")
 
@@ -2495,7 +2550,7 @@ class GameEngine:
         def replace_first_non_yggdrasil() -> bool:
             for idx in range(len(cards) - 1, -1, -1):
                 if getattr(cards[idx], 'def_id', None) != 'Yggdrasil':
-                    cards[idx] = CardInstance(def_id='Yggdrasil')
+                    cards[idx] = self._apply_setup_modifiers_to_card(player_id, CardInstance(def_id='Yggdrasil'))
                     return True
             return False
 
@@ -2513,6 +2568,7 @@ class GameEngine:
                 if source_def and 'ManaOrb' in CARD_DEFS:
                     mana_card = CardInstance(def_id='ManaOrb')
                     mana_card.instance_flags = {'sprout', 'symbiosis'}
+                    self._apply_setup_modifiers_to_card(player_id, mana_card)
                     replace_first(source_def, mana_card)
         elif event_id == 3 and self._card_allowed('Light') and sub and 'convert_def_ids' in sub:
             converted = 0
@@ -2521,6 +2577,7 @@ class GameEngine:
                     break
                 light_card = CardInstance(def_id='Light')
                 light_card.instance_flags = {'sprout', 'symbiosis'}
+                self._apply_setup_modifiers_to_card(player_id, light_card)
                 if replace_first(target_def, light_card):
                     converted += 1
         elif event_id == 8:
@@ -2528,18 +2585,17 @@ class GameEngine:
                 return [c.to_dict() for c in cards]
             target_def = sub.get('yggdrasil_convert_def_id') if isinstance(sub, dict) else None
             if target_def:
-                if not replace_first(target_def, CardInstance(def_id='Yggdrasil')):
+                if not replace_first(target_def, self._apply_setup_modifiers_to_card(player_id, CardInstance(def_id='Yggdrasil'))):
                     replace_first_non_yggdrasil()
             else:
                 replace_first_non_yggdrasil()
         elif event_id == 5 and isinstance(sub, dict):
             for def_id in list(sub.get('add_def_ids') or sub.get('def_ids') or [])[:3]:
                 if self._card_allowed_for_fated_draw(str(def_id)):
-                    cards.append(CardInstance(def_id=str(def_id)))
+                    cards.append(self._apply_setup_modifiers_to_card(player_id, CardInstance(def_id=str(def_id))))
         elif event_id == 9:
             for card in cards:
-                if self._card_base_petal_count(card) >= 2:
-                    card.extra_hits = max(0, int(getattr(card, 'extra_hits', 0) or 0)) + 1
+                self._apply_setup_modifiers_to_card(player_id, card)
         return [c.to_dict() for c in cards]
 
     def _apply_opening_event(self, player_id: int):
@@ -2562,6 +2618,7 @@ class GameEngine:
                     if source_def and 'ManaOrb' in CARD_DEFS:
                         mana_card = CardInstance(def_id='ManaOrb')
                         mana_card.instance_flags = {'sprout', 'symbiosis'}
+                        self._apply_setup_modifiers_to_card(player_id, mana_card)
                         if self._replace_first_card_in_setup_zones(player_id, source_def, mana_card):
                             converted += 1
                             source_name = CARD_DEFS.get(source_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
@@ -2576,6 +2633,7 @@ class GameEngine:
                         break
                     light_card = CardInstance(def_id='Light')
                     light_card.instance_flags = {'sprout', 'symbiosis'}
+                    self._apply_setup_modifiers_to_card(player_id, light_card)
                     if self._replace_first_card_in_setup_zones(player_id, target_def, light_card):
                         converted += 1
                 self.log_msg(f"{self.pn(player_id)}【光之洗礼】：{converted}张牌变为Light(萌芽+共生)")
@@ -2592,7 +2650,7 @@ class GameEngine:
             added = 0
             for def_id in picked[:3]:
                 if self._card_allowed_for_fated_draw(str(def_id)):
-                    ps.deck.append(CardInstance(def_id=str(def_id)))
+                    ps.deck.append(self._apply_setup_modifiers_to_card(player_id, CardInstance(def_id=str(def_id))))
                     added += 1
             if added:
                 random.shuffle(ps.deck)
@@ -2609,7 +2667,8 @@ class GameEngine:
                 return
             if sub and 'yggdrasil_convert_def_id' in sub:
                 target_def = sub['yggdrasil_convert_def_id']
-                if self._replace_first_card_in_setup_zones(player_id, target_def, CardInstance(def_id='Yggdrasil')):
+                yggdrasil_card = self._apply_setup_modifiers_to_card(player_id, CardInstance(def_id='Yggdrasil'))
+                if self._replace_first_card_in_setup_zones(player_id, target_def, yggdrasil_card):
                     target_name = CARD_DEFS.get(target_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
                     self.log_msg(f"{self.pn(player_id)}【绝境求生】：最大生命值-20，{target_name}变为Yggdrasil")
                 elif self._replace_first_non_yggdrasil_setup_card(player_id):
@@ -3720,8 +3779,12 @@ class GameEngine:
     def _execute_card_effect_half_damage(self, player_id: int, card: CardInstance, choice: Optional[dict] = None) -> dict:
         self.log_msg(f"{self.pn(player_id)}的精准牌被闪避反制，伤害减半！")
         self.halve_next_attack = True
-        result = self._execute_card_effect(player_id, card, choice)
-        self.halve_next_attack = False
+        self._suppress_next_precision_dodge_log = True
+        try:
+            result = self._execute_card_effect(player_id, card, choice)
+        finally:
+            self.halve_next_attack = False
+            self._suppress_next_precision_dodge_log = False
         return result
 
     def _get_card_base_damage(self, card: CardInstance) -> int:
@@ -4211,6 +4274,7 @@ class GameEngine:
                 new_card = self._make_mimic_copy_card(target)
             else:
                 new_card = target.copy()
+                self._apply_setup_modifiers_to_card(player_id, new_card)
             ps.add_to_hand(new_card)
             self._enforce_unique_cards_for_player(player_id, preferred_card=new_card)
             self._remember_created_card(new_card, context)
@@ -4262,6 +4326,7 @@ class GameEngine:
             if card_def.id != ERROR_CARD_ID and not ts.can_add_to_hand():
                 return
             new_card = CardInstance(def_id=card_def.id)
+            self._apply_setup_modifiers_to_card(target_id, new_card)
             ts.add_to_hand(new_card)
             self._enforce_unique_cards_for_player(target_id, preferred_card=new_card)
             self._remember_created_card(new_card, context)
@@ -4278,6 +4343,7 @@ class GameEngine:
             if not card_def:
                 return
             new_card = CardInstance(def_id=card_def.id)
+            self._apply_setup_modifiers_to_card(target_id, new_card)
             if position == 'bottom':
                 ts.deck.append(new_card)
             elif position == 'random':
@@ -4297,6 +4363,7 @@ class GameEngine:
             if not card_def:
                 return
             new_card = CardInstance(def_id=card_def.id)
+            self._apply_setup_modifiers_to_card(target_id, new_card)
             self._discard_card(ts, new_card)
             self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
@@ -4541,17 +4608,20 @@ class GameEngine:
                 new_card = CardInstance(def_id='Laser')
                 new_card.swift_value = 2
                 new_card.instance_flags.add('swift')
+                self._apply_setup_modifiers_to_card(target_id, new_card)
                 target_ps.add_to_hand(new_card)
                 self.log_msg(f"{self.pn(player_id)}的重构机：{self.pn(target_id)}获得激光器")
             elif roll == 2:
                 new_card = CardInstance(def_id='Sawblade')
                 new_card.swift_value = 2
                 new_card.instance_flags.add('swift')
+                self._apply_setup_modifiers_to_card(target_id, new_card)
                 target_ps.add_to_hand(new_card)
                 self.log_msg(f"{self.pn(player_id)}的重构机：{self.pn(target_id)}获得锯片")
             else:
                 target_ps.fragment_stacks += 2
                 new_card = CardInstance(def_id='Fragment')
+                self._apply_setup_modifiers_to_card(target_id, new_card)
                 target_ps.add_to_hand(new_card)
                 self.log_msg(f"{self.pn(player_id)}的重构机：{self.pn(target_id)}获得2层碎片和1张碎片")
         else:
@@ -5588,7 +5658,7 @@ class GameEngine:
         if op == 'has_status_named':
             tid = self._resolve_target(player_id, cond.get('target', 'self'))
             status = str(cond.get('status', '')).strip()
-            if self._is_status_immune(tid) and status not in ('status_immune', '状态免疫'):
+            if self._is_status_immune(tid) and status not in ('status_immune', 'immune', '状态免疫'):
                 return False
             if status == '邪眼':
                 return bool(self.players[tid].nazar_active)
@@ -5617,7 +5687,7 @@ class GameEngine:
         if op == 'has_status':
             tid = self._resolve_target(player_id, cond.get('target', 'self'))
             status = str(cond.get('status', '')).strip()
-            if self._is_status_immune(tid) and status not in ('status_immune', '状态免疫'):
+            if self._is_status_immune(tid) and status not in ('status_immune', 'immune', '状态免疫'):
                 return False
             ps = self.players[tid]
             status_map = {
@@ -6552,7 +6622,7 @@ class GameEngine:
         if isinstance(cond, dict) and cond.get('op') in ('has_status_named', 'has_status'):
             target_id = self._resolve_target(player_id, cond.get('target', 'self'))
             status_name = str(cond.get('name', cond.get('status', cond.get('id', ''))))
-            if self._is_status_immune(target_id) and status_name not in ('status_immune', '状态免疫'):
+            if self._is_status_immune(target_id) and status_name not in ('status_immune', 'immune', '状态免疫'):
                 return False
         if isinstance(cond, dict) and cond.get('op') == 'list_contains':
             values = self._eval_list(player_id, cond.get('list', []), card)
@@ -6852,11 +6922,20 @@ class GameEngine:
                 target_id = inferred_target
         if target_id < 0 or target_id >= len(self.players):
             target_id = player_id
+        context_target_id = extra_context.get('target_id', target_id)
+        if isinstance(choice, dict):
+            for key in ('target_player', 'target_player_id', 'target_id'):
+                if key in choice:
+                    try:
+                        context_target_id = int(choice.get(key))
+                        break
+                    except Exception:
+                        pass
         context = {
             'source_player': player_id,
             'target_player': target_id,
             'source_id': extra_context.get('source_id', player_id),
-            'target_id': extra_context.get('target_id', target_id),
+            'target_id': context_target_id,
             'damage_source': extra_context.get('damage_source', extra_context.get('source_id', player_id)),
             'target_player_explicit': target_explicit,
             'card': card,
@@ -7775,7 +7854,8 @@ class GameEngine:
                 ps.dodge -= 1
                 if is_precision:
                     precision_dodged = True
-                    self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗")
+                    if not getattr(self, '_suppress_next_precision_dodge_log', False):
+                        self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗")
                 else:
                     self.log_msg(f"{self.pn(target_id)}闪避了攻击")
                     continue
@@ -7970,15 +8050,13 @@ class GameEngine:
         # Fracture: take damage when playing a card
         if ps.fracture > 0 and not self._is_status_immune(player_id):
             frac_dmg = ps.fracture
-            ps.health -= frac_dmg
-            self.log_msg(f"{self.pn(player_id)}因破损受到{frac_dmg}点伤害")
-            self._check_game_over()
+            self._deal_direct_damage(player_id, frac_dmg, '破损', player_id,
+                                     damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_DIRECT)
         # Bleed: take damage when playing attack card
         if ps.bleed > 0 and card.card_type == 'thorn' and not self._is_status_immune(player_id):
             bleed_dmg = ps.bleed
-            ps.health -= bleed_dmg
-            self.log_msg(f"{self.pn(player_id)}因流血受到{bleed_dmg}点伤害")
-            self._check_game_over()
+            self._deal_direct_damage(player_id, bleed_dmg, '流血', player_id,
+                                     damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_DIRECT)
         placed_as_equipment = bool(getattr(card, '_placed_as_equipment', False))
         script_controls_play = self._card_has_script(card.card_def)
         equip_owner_id = int(getattr(card, '_placed_as_equipment_owner', player_id))
@@ -8057,10 +8135,20 @@ class GameEngine:
             eq = EquipmentInstance(target_card, owner_id)
             if 'effect_target' in params:
                 effect_target = self._resolve_target(player_id, params.get('effect_target'))
+                if not (0 <= effect_target < len(self.players)) and isinstance(context, dict):
+                    try:
+                        effect_target = int(context.get('target_id', -1))
+                    except Exception:
+                        effect_target = -1
                 if 0 <= effect_target < len(self.players):
                     eq.effect_target = effect_target
             else:
                 selected_target = self._selected_choice_target(-1)
+                if not (0 <= selected_target < len(self.players)) and isinstance(context, dict):
+                    try:
+                        selected_target = int(context.get('target_id', -1))
+                    except Exception:
+                        selected_target = -1
                 if 0 <= selected_target < len(self.players):
                     eq.effect_target = selected_target
             owner.equipment.append(eq)
@@ -8090,6 +8178,7 @@ class GameEngine:
             if owner_id < 0 or owner_id >= len(self.players):
                 continue
             new_card = CardInstance(def_id=card_def.id)
+            self._apply_setup_modifiers_to_card(owner_id, new_card)
             new_card.durability = card_def.durability if getattr(card_def, 'durability', 0) > 0 else 3
             eq = EquipmentInstance(new_card, owner_id)
             if 'effect_target' in params:
@@ -8584,11 +8673,19 @@ class GameEngine:
         if kind == 'magic':
             merged_turns, merged_power = self._merge_turn_regen_status(target_id, 'magic', turns, power)
             self.players[target_id].gain_magic(power)
-            self.log_msg(log or f"{self.pn(target_id)}获得魔力回合回复：{merged_turns};{merged_power}，+{power}M")
+            remaining_turns = max(0, merged_turns - 1)
+            self._set_custom_status_alias_group(target_id, 'jungle:turn_magic_turns', ('jungle:turn_magic_turns', 'turn_magic_turns'), remaining_turns)
+            if remaining_turns <= 0:
+                self._set_custom_status_alias_group(target_id, 'jungle:turn_magic_power', ('jungle:turn_magic_power', 'turn_magic_power'), 0)
+            self.log_msg(log or f"{self.pn(target_id)}获得魔力回合回复：{remaining_turns};{merged_power}，+{power}M")
         else:
             merged_turns, merged_power = self._merge_turn_regen_status(target_id, 'heal', turns, power)
             self.players[target_id].heal(power)
-            self.log_msg(log or f"{self.pn(target_id)}获得回合回复：{merged_turns};{merged_power}，+{power}H")
+            remaining_turns = max(0, merged_turns - 1)
+            self._set_custom_status_alias_group(target_id, 'jungle:turn_heal_turns', ('jungle:turn_heal_turns', 'turn_heal_turns'), remaining_turns)
+            if remaining_turns <= 0:
+                self._set_custom_status_alias_group(target_id, 'jungle:turn_heal_power', ('jungle:turn_heal_power', 'turn_heal_power'), 0)
+            self.log_msg(log or f"{self.pn(target_id)}获得回合回复：{remaining_turns};{merged_power}，+{power}H")
 
     def _atomic_magic_grapes_damage(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -8631,6 +8728,8 @@ class GameEngine:
                 new_card.instance_flags.add('power')
             if extra_hits > 0:
                 new_card.extra_hits = extra_hits
+                new_card.setup_modifiers.add('explicit_extra_hits')
+            self._apply_setup_modifiers_to_card(target_id, new_card)
             ps.deck.insert(0, new_card)
             made.append(new_card)
         if log:
@@ -8755,6 +8854,12 @@ class GameEngine:
             elif status in ('邪眼', 'Nazar'):
                 ps.nazar_active = True
                 ps.nazar_big_hits = max(0, ps.nazar_big_hits + amount)
+            elif status in ('status_immune', 'immune', '状态免疫'):
+                ps.custom_statuses = getattr(ps, 'custom_statuses', {})
+                for key in ('status_immune', 'immune', '状态免疫'):
+                    ps.custom_statuses.pop(key, None)
+                if amount > 0:
+                    ps.custom_statuses['status_immune'] = 1
             elif status:
                 ps.custom_statuses = getattr(ps, 'custom_statuses', {})
                 ps.custom_statuses[status] = int(ps.custom_statuses.get(status, 0) or 0) + amount
@@ -8801,6 +8906,10 @@ class GameEngine:
             elif status in ('邪眼', 'Nazar'):
                 ps.nazar_active = False
                 ps.nazar_big_hits = 0
+            elif status in ('status_immune', 'immune', '状态免疫'):
+                ps.custom_statuses = getattr(ps, 'custom_statuses', {})
+                for key in ('status_immune', 'immune', '状态免疫'):
+                    ps.custom_statuses.pop(key, None)
             elif status:
                 ps.custom_statuses = getattr(ps, 'custom_statuses', {})
                 ps.custom_statuses.pop(status, None)

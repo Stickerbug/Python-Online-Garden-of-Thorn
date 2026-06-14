@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        stroke: url(#_未命名的渐变_81);
+      }
+
+      .st0, .st1, .st2, .st3 {
+        fill: none;
+        stroke-miterlimit: 10;
+        stroke-width: 5px;
+      }
+
+      .st1 {
+        stroke: url(#_未命名的渐变_811);
+      }
+
+      .st2 {
+        stroke: url(#_未命名的渐变_812);
+      }
+
+      .st3 {
+        stroke: url(#_未命名的渐变_813);
+      }
+    </style>
+    <linearGradient id="_未命名的渐变_81" data-name="未命名的渐变 81" x1="-31.46" y1="129.43" x2="58.61" y2="129.43" gradientTransform="translate(153.09 309.02) rotate(-162.58)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#60c5e9"/>
+      <stop offset="1" stop-color="#01647b"/>
+    </linearGradient>
+    <linearGradient id="_未命名的渐变_811" data-name="未命名的渐变 81" x1="-42.68" y1="183.57" x2="56.44" y2="183.57" xlink:href="#_未命名的渐变_81"/>
+    <linearGradient id="_未命名的渐变_812" data-name="未命名的渐变 81" x1="24.42" y1="178.39" x2="141.76" y2="178.39" xlink:href="#_未命名的渐变_81"/>
+    <linearGradient id="_未命名的渐变_813" data-name="未命名的渐变 81" x1="-22.52" y1="113.87" x2="151.52" y2="113.87" xlink:href="#_未命名的渐变_81"/>
+  </defs>
+  <path class="st0" d="M229.32,169.93c-121.94-18.7-92.46,26.28-92.46,26.28"/>
+  <path class="st1" d="M247.18,149.59c-134.62-6.09-80.3-45.24-80.3-45.24"/>
+  <path class="st2" d="M177.95,146.24c-140.12-8.17-95-73.67-95-73.67"/>
+  <path class="st3" d="M223.37,158.42c-260.41-21.32-172.98,52.48-172.98,52.48"/>
+</svg>

@@ -2576,6 +2576,7 @@ let soloDeckA = [];
 let soloDeckB = [];
 let soloTargetDeck = 'a';
 let pendingSoloStart = false;
+let pendingSoloFallbackTimer = null;
 let openingEvents = [];
 let openingEventMagicPool = [];
 let CUSTOM_TAG_DEFS = {};
@@ -3852,7 +3853,7 @@ function getAllStatusDefs() {
         { key: 'nazar', label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
         { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         { key: 'invincible', label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
-        { key: 'status_immune', label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效或不会消耗层数。', color: '#16A085' },
+        { key: 'status_immune', label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效。', color: '#16A085' },
         { key: 'stunned', label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         { key: 'attack_blocked', label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         { key: 'attack_only', label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
@@ -4317,7 +4318,41 @@ function clearSelectedPlayCard(options = {}) {
     }
     const bar = $('mobile-play-confirm');
     if (bar) bar.classList.add('hidden');
+    updateMinimalPlayCancelZone();
     if (!options.skipRender && shouldUseClassicBattle(gameState)) renderClassicBattle(gameState);
+}
+
+function isMinimalTargetSelectionActive() {
+    if (!gameState || shouldUseClassicBattle(gameState)) return false;
+    if (selectedPlayCardId == null) return false;
+    if (isActionBusy({ includeAnimation: false })) return false;
+    const hand = (gameState.you || {}).hand || [];
+    const cardDict = hand.find(c => c.instance_id === selectedPlayCardId);
+    const cardDef = cardDict ? getCardDef(cardDict.def_id) : null;
+    if (!cardDict || !cardDef || !canPlayCard(cardDict)) return false;
+    return !cardHasSelfOnlyFlag(cardDict, cardDef);
+}
+
+function updateMinimalPlayCancelZone() {
+    const zone = $('minimal-play-cancel-zone');
+    if (!zone) return;
+    const label = zone.querySelector('span');
+    const text = UI.cancel_play || UI.cancel || '取消打出';
+    if (label) label.textContent = text;
+    zone.setAttribute('aria-label', text);
+    zone.classList.toggle('hidden', !isMinimalTargetSelectionActive());
+}
+
+function bindMinimalPlayCancelZone() {
+    const zone = $('minimal-play-cancel-zone');
+    if (!zone || zone.dataset.bound === '1') return;
+    zone.dataset.bound = '1';
+    zone.addEventListener('click', (event) => {
+        if (!isMinimalTargetSelectionActive()) return;
+        event.preventDefault();
+        event.stopPropagation();
+        clearSelectedPlayCard();
+    });
 }
 
 function getSelectedClassicCard() {
@@ -4502,6 +4537,7 @@ function selectPlayCardForConfirm(cardInstanceId) {
         cancel.onclick = clearSelectedPlayCard;
     }
     bar.classList.remove('hidden');
+    updateMinimalPlayCancelZone();
     if (shouldUseClassicBattle(gameState)) renderClassicBattle(gameState);
     return true;
 }
@@ -4970,6 +5006,34 @@ function getCardDef(defId) {
     return null;
 }
 
+function getCardLocalIds(cardDict, cardDef) {
+    const ids = [];
+    const push = value => {
+        if (value == null) return;
+        const raw = String(value).trim();
+        if (!raw) return;
+        ids.push(raw);
+        const local = raw.includes(':') ? raw.split(':').pop() : raw;
+        ids.push(local);
+        const pascal = local
+            .split(/[_-]+/)
+            .filter(Boolean)
+            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+            .join('');
+        if (pascal) ids.push(pascal);
+    };
+    push(cardDict && cardDict.def_id);
+    push(cardDict && cardDict.id);
+    push(cardDef && cardDef.id);
+    push(cardDef && cardDef.legacy_id);
+    return Array.from(new Set(ids));
+}
+
+function cardMatchesAnyLocalId(cardDict, cardDef, values) {
+    const wanted = new Set((Array.isArray(values) ? values : [values]).map(v => String(v)));
+    return getCardLocalIds(cardDict, cardDef).some(id => wanted.has(id));
+}
+
 function getFlagLabel(flag) {
     const normalized = normalizeCardFlag(flag);
     const custom = getCustomTagDef(normalized);
@@ -5118,9 +5182,7 @@ function createCardElement(cardDict, options = {}) {
     if (defId === 'Honey' || cardDef.id === 'Honey' || cardDef.legacy_id === 'Honey' || cardDef.name_cn === '蜂蜜') {
         el.classList.add('card-honey');
     }
-    if (['Grapes', 'MagicGrapes', 'Peas', 'MagicPeas'].includes(defId)
-        || ['Grapes', 'MagicGrapes', 'Peas', 'MagicPeas'].includes(cardDef.id)
-        || ['Grapes', 'MagicGrapes', 'Peas', 'MagicPeas'].includes(cardDef.legacy_id)
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['Grapes', 'MagicGrapes', 'Peas', 'MagicPeas'])
         || ['葡萄', '魔法葡萄', '豌豆', '魔法豌豆'].includes(cardDef.name_cn)) {
         el.classList.add('card-petal-copy');
     }
@@ -5314,9 +5376,13 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     const { base, effective } = getEffectiveCardFlagSets(cardDict, cardDef);
     const parts = [];
     const copyCount = Number(cardDef.copy_count || 0);
+    const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
+    const magicSwiftValue = Number(cardDef.magic_swift_value || cardDict.magic_swift_value || 0);
+    const powerValue = Number(cardDef.power_value || cardDict.power_value || 0);
     effective.forEach(flag => {
-        const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
         if (flag === 'swift' && swiftValue > 0) return;
+        if (flag === 'magic_swift' && magicSwiftValue > 0) return;
+        if (flag === 'power' && powerValue > 0) return;
         if (flag === 'copy' && copyCount > 0) return;
         if (base.has(flag)) return;
         if (!shouldDisplayCardFlag(flag)) return;
@@ -5335,9 +5401,14 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
             parts.push(`<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || 'Layer')}: ${tomatoLayer}</span>`);
         }
     }
-    const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
     if (swiftValue > 0) {
         parts.push(cardFlagHtml('swift', `${UI.tag_swift || 'Swift'}: ${swiftValue}`));
+    }
+    if (magicSwiftValue > 0) {
+        parts.push(cardFlagHtml('magic_swift', `${UI.tag_magic_swift || 'Magic Swift'}: ${magicSwiftValue}`));
+    }
+    if (powerValue > 0) {
+        parts.push(cardFlagHtml('power', `${UI.tag_power || 'Power'}: ${powerValue}`));
     }
     if (copyCount > 0) {
         parts.push(cardFlagHtml('copy', `${UI.tag_copy || 'Copy'}: ${copyCount}`));
@@ -5524,6 +5595,26 @@ function firstNumericEffectValue(value) {
 function getAttackDamageBaseInfo(cardDict, cardDef) {
     if (!cardDef || cardDef.card_type !== 'thorn') return null;
     const fallback = ATTACK_DAMAGE_FALLBACKS[cardDict.def_id || cardDef.id] || null;
+    const onPlay = cardDef.v2_events && cardDef.v2_events.on_play;
+    const v2Steps = onPlay && (Array.isArray(onPlay.steps) ? onPlay.steps : (Array.isArray(onPlay) ? onPlay : []));
+    const v2DamageStep = (Array.isArray(v2Steps) ? v2Steps : []).find(step => {
+        if (!step || typeof step !== 'object') return false;
+        const op = step.op || step.type;
+        return op === 'deal_damage' || op === 'damage';
+    });
+    if (v2DamageStep) {
+        const params = v2DamageStep.params || v2DamageStep;
+        const amount = firstNumericEffectValue(params.amount);
+        const hits = firstNumericEffectValue(params.hits);
+        if (amount != null) {
+            return {
+                amount,
+                hits: Math.max(1, Number(hits || 1)),
+                triangle: false,
+                inheritExtraHits: params.inherit_extra_hits !== false && params.use_card_extra_hits !== false,
+            };
+        }
+    }
     const effects = Array.isArray(cardDef.effects) ? cardDef.effects : [];
     const damageEffect = effects.find(effect => {
         const type = effect && effect.type;
@@ -5538,6 +5629,7 @@ function getAttackDamageBaseInfo(cardDict, cardDef) {
                 amount,
                 hits: Math.max(1, Number(hits || (cardDef.hits || (fallback && fallback.hits) || 1))),
                 triangle: damageEffect.type === 'triangle_damage' || cardDict.def_id === 'Triangle',
+                inheritExtraHits: true,
             };
         }
     }
@@ -5547,6 +5639,7 @@ function getAttackDamageBaseInfo(cardDict, cardDef) {
             amount,
             hits: Math.max(1, Number(cardDef.hits || (fallback && fallback.hits) || 1)),
             triangle: cardDict.def_id === 'Triangle',
+            inheritExtraHits: true,
         };
     }
     return fallback;
@@ -5637,7 +5730,9 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
     }
     const amount = Number(info.amount || 0) + bonus;
     const perHit = Math.ceil(amount * fusion / fission);
-    const totalHits = Math.max(1, Math.round(Number(info.hits || 1)) + Math.max(0, Number(cardDict.extra_hits || 0))) * fission;
+    const inheritExtraHits = info.inheritExtraHits !== false && !cardMatchesAnyLocalId(cardDict, cardDef, ['Peas', 'MagicPeas']);
+    const extraHits = inheritExtraHits ? Math.max(0, Number(cardDict.extra_hits || 0)) : 0;
+    const totalHits = Math.max(1, Math.round(Number(info.hits || 1)) + extraHits) * fission;
     return Array.from({ length: totalHits }, () => perHit);
 }
 
@@ -6465,8 +6560,8 @@ function getStatusIntroItem(statusInfo) {
         nazar: { label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
-        status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效或不会消耗层数。', color: '#16A085' },
-        immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效或不会消耗层数。', color: '#16A085' },
+        status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效。', color: '#16A085' },
+        immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效。', color: '#16A085' },
         stunned: { label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         attack_blocked: { label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
@@ -7440,6 +7535,7 @@ function connectSocket(serverUrl) {
         }
     });
     bindSocketEvent('solo_state', (data) => {
+        clearPendingSoloFallback();
         const previousGameState = gameState;
         soloMode = true;
         tutorialMode = !!data.tutorial || tutorialMode;
@@ -7540,10 +7636,14 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('server_error', (data) => {
         debugLog('[client] server_error:', data.message);
+        clearPendingSoloFallback();
         if (activeViewId === 'view-solo' && phase === 'solo_edit') {
+            pendingSoloStart = false;
+            window.__pendingSoloPayload = null;
             clearPendingServerAction();
             pendingPlayCard = null;
             clearSelectedPlayCard();
+            flashStatus(moderationMessageFromPayload(data, translateServerMessage(data.message)), 3600, 'error');
             return;
         }
         flashStatus(moderationMessageFromPayload(data, translateServerMessage(data.message)), 3600, 'error');
@@ -7675,6 +7775,7 @@ function connectSocket(serverUrl) {
         flashStatus(data.message || '', 4000);
     });
     bindSocketEvent('solo_paused', () => {
+        clearPendingSoloFallback();
         if (suppressSoloPausedHandler) {
             suppressSoloPausedHandler = false;
             return;
@@ -9657,6 +9758,30 @@ function isLocalSoloRuntimeActive() {
     return !!(localSoloRuntime.enabled && localSoloRuntime.worker);
 }
 
+function clearPendingSoloFallback() {
+    if (pendingSoloFallbackTimer) {
+        clearTimeout(pendingSoloFallbackTimer);
+        pendingSoloFallbackTimer = null;
+    }
+}
+
+function scheduleSoloOfflineFallback(kind, payload) {
+    clearPendingSoloFallback();
+    pendingSoloFallbackTimer = setTimeout(() => {
+        pendingSoloFallbackTimer = null;
+        if (soloMode || (gameState && gameState.solo)) return;
+        if (socket && socket.connected) return;
+        pendingSoloStart = false;
+        pendingTutorialStart = false;
+        window.__pendingSoloPayload = null;
+        if (startLocalSoloRuntime(kind, payload)) {
+            flashStatus('服务器未连接，已切换到本地训练', 2600, 'warning');
+        } else {
+            flashStatus(UI.server_no_response || UI.operation_failed, 3200, 'error');
+        }
+    }, 5000);
+}
+
 function effectsAreLocalSoloSupported(effects) {
     if (!Array.isArray(effects)) return true;
     for (const effect of effects) {
@@ -10612,16 +10737,15 @@ async function startSoloTraining() {
     saveSoloDecks();
     const payload = { deck0: soloDeckA, deck1: soloDeckB, event0, event1, sub0, sub1, ...getModLoginPayload() };
     if (socket && socket.connected) {
+        clearPendingSoloFallback();
         emitSoloStart(payload);
-        return;
-    }
-    if (startLocalSoloRuntime('solo', payload)) {
         return;
     }
     nickname = (($('input-nickname') && $('input-nickname').value) || nickname || 'Solo').trim() || 'Solo';
     pendingSoloStart = true;
     window.__pendingSoloPayload = payload;
     connectSocket(getServerAddress());
+    scheduleSoloOfflineFallback('solo', payload);
 }
 
 function emitSoloStart(payload = null) {
@@ -12752,6 +12876,7 @@ function renderGame(data) {
     }
     scheduleAdjust();
     renderClassicBattle(gs);
+    updateMinimalPlayCancelZone();
 }
 
 function renderPlayerBars(containerId, playerData) {
@@ -12822,7 +12947,7 @@ function renderStatusTags(containerId, playerData) {
     if (p.equipment_protection > 0) tags.push({ key: 'equip_protect', name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
     if (p.invincible) tags.push({ key: 'invincible', name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
     const statusImmune = customCount('status_immune', 'immune', '状态免疫');
-    if (statusImmune > 0) tags.push({ key: 'status_immune', name: UI.status_immune || '状态免疫', abbr: 'Imm', val: statusImmune, fg: '#16A085', bg: '#E8F8F5' });
+    if (statusImmune > 0) tags.push({ key: 'status_immune', name: UI.status_immune || '状态免疫', abbr: 'Imm', val: '', fg: '#16A085', bg: '#E8F8F5' });
     if (p.skip_turn > 0) tags.push({ key: 'stunned', name: UI.status_stunned, abbr: 'Stn', val: p.skip_turn, fg: COLORS.damage, bg: COLORS.damage_bg });
     const attackBlocked = Math.max(Number(p.attack_blocked || 0), customCount('attack_blocked', '禁攻'));
     const attackOnly = Math.max(Number(p.attack_only || 0), customCount('attack_only', '仅攻击'));
@@ -17773,6 +17898,7 @@ async function init() {
         if (e.key === 'Enter') onPhaseChatSend();
     });
     setupPlayZoneDrop();
+    bindMinimalPlayCancelZone();
     initModEditor();
     showView('view-login');
     setupFullscreenPrompt();

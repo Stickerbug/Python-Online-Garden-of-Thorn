@@ -2746,6 +2746,7 @@ def register_v2_loadout_cards(v2_loadout):
             upgraded_image_url=str(resource.get('upgraded_image_url') or resource.get('upgraded_image') or ''),
             copy_count=_v2_int(resource.get('copy_count', 0), 0),
             swift_value=_v2_int(resource.get('swift_value', 0), 0),
+            magic_swift_value=_v2_int(resource.get('magic_swift_value', 0), 0),
             damage=_v2_int(resource.get('damage', 0), 0),
             hits=_v2_int(resource.get('hits', 1), 1),
         )
@@ -8992,8 +8993,22 @@ def on_solo_resolve_choice(data):
         if not engine:
             return
         pidx = engine.pending_choice.get('player_id', engine.current_player) if engine.pending_choice else engine.current_player
-        engine.resolve_choice(pidx, choice)
-        send_solo_state(sid)
+        result = engine.resolve_choice(pidx, choice)
+        if result.get('needs_response'):
+            if sid in tutorial_sessions and pidx == 0:
+                engine.handle_response(1, None)
+                send_solo_state(sid, 0)
+                return
+            send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pidx)
+            emit_solo_response_request(sid, engine, pidx, result['card'])
+        elif result.get('needs_choice'):
+            send_solo_state(sid)
+            socketio.emit('choice_request', build_choice_request_payload(result), room=sid)
+        elif result.get('needs_v2_ui'):
+            send_solo_state(sid)
+            emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
+        else:
+            send_solo_state(sid)
 
 
 @socketio.on('solo_v2_ui_response')

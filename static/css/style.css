@@ -6722,6 +6722,48 @@ body {
   height: 100%;
 }
 
+.middle-section {
+  position: relative;
+}
+
+.minimal-play-cancel-zone {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #C0392B;
+  font-weight: 800;
+  font-size: clamp(18px, 2.4vw, 30px);
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background-color 120ms ease, opacity 120ms ease;
+}
+
+.minimal-play-cancel-zone.hidden {
+  display: none;
+}
+
+.minimal-play-cancel-zone span {
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  pointer-events: none;
+}
+
+.minimal-play-cancel-zone:hover {
+  opacity: 1;
+  background: rgba(192, 57, 43, 0.12);
+}
+
+.minimal-play-cancel-zone:hover span {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .battle-log .log-header {
   padding: 6px 12px;
   font-size: 13px;

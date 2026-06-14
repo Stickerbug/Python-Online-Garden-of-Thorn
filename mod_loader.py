@@ -317,6 +317,7 @@ class ModCard:
         self.upgraded_image_url = data.get('upgraded_image_url', self.upgraded_image)
         self.copy_count = max(0, int(data.get('copy_count', 0)))
         self.swift_value = max(0, int(data.get('swift_value', 0)))
+        self.magic_swift_value = max(0, int(data.get('magic_swift_value', 0)))
 
     def to_dict(self) -> dict:
         return {
@@ -345,6 +346,7 @@ class ModCard:
             'upgraded_image_url': self.upgraded_image_url,
             'copy_count': self.copy_count,
             'swift_value': self.swift_value,
+            'magic_swift_value': self.magic_swift_value,
         }
 
     def to_card_def(self):
@@ -377,6 +379,7 @@ class ModCard:
             upgraded_image_url=self.upgraded_image_url,
             copy_count=self.copy_count,
             swift_value=self.swift_value,
+            magic_swift_value=self.magic_swift_value,
             damage=self.damage,
             hits=self.hits,
         )
