@@ -250,11 +250,11 @@ class GameEngine2v2(GameEngine):
         if found is None:
             return {'success': False, 'error': '该牌不在选项中'}
         self.draft_picks[player_id].append(card_def_id)
-        if len(self.draft_picks[player_id]) >= DECK_SIZE:
+        if len(self.draft_picks[player_id]) >= self.draft_target_count(player_id):
             pass
         else:
             self._generate_draft_options_for_player(player_id)
-        all_done = all(len(p) >= DECK_SIZE for p in self.draft_picks)
+        all_done = all(len(self.draft_picks[i]) >= self.draft_target_count(i) for i in range(4))
         return {'success': True, 'picks': self.draft_picks[player_id], 'all_done': all_done}
 
     def start_game(self):
@@ -605,7 +605,7 @@ class GameEngine2v2(GameEngine):
         return {'success': True, 'rerolls_left': self.draft_rerolls[player_id]}
 
     def _generate_draft_options_for_player(self, player_id: int):
-        if len(self.draft_picks[player_id]) >= DECK_SIZE:
+        if len(self.draft_picks[player_id]) >= self.draft_target_count(player_id):
             return
         card_type = self.draft_type_order[len(self.draft_picks[player_id])]
         self.draft_options[player_id] = generate_draft_options(self.draft_pool, card_type, 3)
@@ -933,6 +933,9 @@ class GameEngine2v2(GameEngine):
         actual = self._run_v2_damage_modifiers(damage_context, actual)
         if getattr(self, 'pending_v2_ui', None):
             return 0
+        if actual <= 0:
+            return 0
+        actual = self._apply_universal_damage_shields(player_id, actual, source_id, source, resolved_damage_type)
         if actual <= 0:
             return 0
         ps.health -= actual
@@ -1331,7 +1334,7 @@ class GameEngine2v2(GameEngine):
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
                            is_battery: bool = False, is_precision: bool = False,
-                           attacker_id: int = -1) -> int:
+                           attacker_id: int = -1, source_card=None) -> int:
         if not self._is_valid_player_id(target_id):
             return 0
         ps = self.players[target_id]
@@ -1353,6 +1356,13 @@ class GameEngine2v2(GameEngine):
             if ps.invincible:
                 self.log_msg(f"{self.pn(target_id)}无敌，免疫伤害")
                 continue
+            if source_card is not None and self._has_equipment(target_id, 'Plank', 'jungle:plank'):
+                try:
+                    if int(getattr(source_card, 'cost_e', 0) or 0) <= 1:
+                        self.log_msg(f"{self.pn(target_id)}的木板吸收了攻击")
+                        continue
+                except Exception:
+                    pass
             dmg = amount
             if self.halve_next_attack:
                 dmg = math.ceil(dmg / 2)
@@ -1381,19 +1391,29 @@ class GameEngine2v2(GameEngine):
             dmg = self._run_v2_damage_modifiers(damage_context, dmg)
             if getattr(self, 'pending_v2_ui', None):
                 break
-            # Weakness: reduce physical damage
-            if ps.weakness > 0:
-                reduction = min(0.6, 0.2 * ps.weakness)
+            # Weakness belongs to the attacker: it reduces physical damage they deal to others.
+            attacker_state = self.players[attacker_id] if 0 <= attacker_id < len(self.players) else None
+            attacker_immune = self._is_status_immune(attacker_id) if attacker_state is not None else False
+            if attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
+                reduction = min(0.6, 0.2 * attacker_state.weakness)
                 dmg = max(1, int(dmg * (1.0 - reduction)))
-            dmg = max(0, dmg - ps.armor)
+            root_armor = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
+            fragile = self._custom_status_value(target_id, 'jungle:fragile', 'fragile')
+            effective_armor = int(ps.armor) + root_armor - fragile
+            dmg = max(0, dmg - effective_armor)
             if ps.sponge_active and dmg > 0:
                 ps.poison += dmg // 2
                 dmg = 0
+            dmg = self._apply_universal_damage_shields(target_id, dmg, attacker_id, '攻击', DAMAGE_TYPE_PHYSICAL)
             ps.health -= dmg
             total_dealt += dmg
             self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
             self._run_v2_after_damage_hooks(damage_context, dmg)
+            if dmg > 0:
+                root_layers = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
+                if root_layers > 0:
+                    self._set_custom_status_alias_group(target_id, 'jungle:root_status', ('jungle:root', 'jungle:root_status', 'root_status'), root_layers - 1)
             if dmg > 0 and ps.toxic > 0:
                 ps.poison += ps.toxic
             self._game_over_defer_depth += 1
@@ -1416,12 +1436,15 @@ class GameEngine2v2(GameEngine):
                         ):
                             continue
                         if eq.def_id == 'Battery' and attacker_id >= 0:
-                            self._deal_direct_damage(
+                            dealt = self._deal_direct_damage(
                                 attacker_id, 3, '电池电击', target_id,
                                 damage_type=DAMAGE_TYPE_MAGIC,
                                 damage_tag=DAMAGE_TAG_BATTERY,
                             )
-                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
+                            if dealt > 0:
+                                self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
+                            else:
+                                self.log_msg(f"{self.pn(target_id)}的电池触发，但{self.pn(attacker_id)}未受到电伤")
                         elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                             ps.gain_magic(1)
                             ps.magic_battery_m_this_turn += 1
@@ -1515,7 +1538,7 @@ class GameEngine2v2(GameEngine):
             return target_id if self._is_valid_effect_target(player_id, target_id) else -1
         if target_str in ('event_source', 'source', 'last_actor', 'damage_source'):
             source_id = self._normalize_player_id(context.get('source_id', player_id))
-            return source_id if self._is_valid_effect_target(player_id, source_id) else -1
+            return source_id if self._is_valid_player_id(source_id) and self.players[source_id].health > 0 else -1
         if getattr(self, '_active_choice', None):
             selected = self._active_choice.get('target_player')
             if self._is_valid_effect_target(player_id, selected):

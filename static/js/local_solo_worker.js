@@ -3060,7 +3060,7 @@ class LocalSoloEngine {
         const inheritExtraHits = params.inherit_extra_hits !== false && params.use_card_extra_hits !== false;
         const hits = inheritExtraHits ? this.cardTotalHits(card, baseHits) : Math.max(1, baseHits);
         this._incoming_damage_hint[targetId] = amount;
-        const dealt = this.dealAttackDamage(targetId, amount, hits, !!(params.is_precision || params.precision), playerId);
+        const dealt = this.dealAttackDamage(targetId, amount, hits, !!(params.is_precision || params.precision), playerId, card);
         this._last_damage_value[targetId] = dealt;
         if (log) this.logMsg(log);
     }
@@ -3078,7 +3078,7 @@ class LocalSoloEngine {
     effect_lifesteal_damage(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         const amount = this.modifiedAttackDamage(this.evalInt(playerId, params.amount ?? 8, card, 8), card);
-        const dealt = this.dealAttackDamage(targetId, amount, 1, !!params.is_precision, playerId);
+        const dealt = this.dealAttackDamage(targetId, amount, 1, !!params.is_precision, playerId, card);
         this._last_damage_value[targetId] = dealt;
         if (dealt > 0) this.players[playerId].heal(this.evalInt(playerId, params.heal ?? 4, card, 4));
     }
@@ -3855,11 +3855,38 @@ class LocalSoloEngine {
     }
 
     effect_cogwheel_mark(playerId, card, params, log, choice) {
-        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const targetId = this.resolveTarget(playerId, params.target || 'choice_target');
         const ps = this.players[targetId];
-        ps.cogwheel_active = true;
-        ps.cogwheel_exclude_instance_id = card ? card.instance_id : -1;
+        if (!ps) return;
+        const currentId = card ? toInt(card.instance_id, -1) : -1;
+        const played = [...(ps.cards_played_this_turn_instance_ids || [])].reverse();
+        let returned = null;
+        for (const instanceId of played) {
+            const iid = toInt(instanceId, -1);
+            if (iid === currentId) continue;
+            let found = null;
+            let zone = null;
+            ['discard', 'exile'].some(zoneName => {
+                const cards = ps[zoneName] || [];
+                const idx = cards.findIndex(c => toInt(c.instance_id, -2) === iid);
+                if (idx >= 0) {
+                    found = cards[idx];
+                    zone = cards;
+                    return true;
+                }
+                return false;
+            });
+            if (!found || (found.flags && found.flags.has && found.flags.has('rebound'))) continue;
+            if (!ps.canAddToHand()) break;
+            zone.splice(zone.indexOf(found), 1);
+            found.mimic_discount = 0;
+            found.instance_flags.add('symbiosis');
+            ps.addToHand(found);
+            returned = found;
+            break;
+        }
         if (log) this.logMsg(log);
+        else if (returned) this.logMsg(`${this.pn(playerId)}使用齿轮，${returned.name_cn}回到手中并获得共生`);
     }
 
     effect_remove_status(playerId, card, params, log, choice) {
@@ -4092,6 +4119,23 @@ class LocalSoloEngine {
         });
     }
 
+    cardIs(card, ...ids) {
+        if (!card) return false;
+        const wanted = new Set((ids || []).filter(Boolean).map(v => String(v).toLowerCase()));
+        const def = typeof card.def === 'function' ? card.def() : (card.card_def || card);
+        const candidates = [
+            card.def_id,
+            card.id,
+            def && def.id,
+            def && def.legacy_id,
+            def && def.runtime_id,
+            def && def.v2_resource && def.v2_resource.legacy_id,
+            def && def.v2_resource && def.v2_resource.id,
+            def && def.v2_resource && def.v2_resource.runtime_id,
+        ].filter(Boolean).map(v => String(v).toLowerCase());
+        return candidates.some(v => wanted.has(v));
+    }
+
     damageDealtEquipmentFlatBonus(sourceId) {
         const sid = toInt(sourceId, -1);
         if (sid < 0 || sid >= this.players.length) return 0;
@@ -4160,7 +4204,7 @@ class LocalSoloEngine {
         return actual;
     }
 
-    dealAttackDamage(targetId, amount, hits = 1, isPrecision = false, attackerId = 1 - targetId) {
+    dealAttackDamage(targetId, amount, hits = 1, isPrecision = false, attackerId = 1 - targetId, sourceCard = null) {
         const ps = this.players[targetId];
         if (!ps || ps.untargetable) {
             if (ps) this.logMsg(`${this.pn(targetId)}无法被攻击选中`);
@@ -4183,6 +4227,14 @@ class LocalSoloEngine {
             if (ps.invincible) {
                 this.logMsg(`${this.pn(targetId)}无敌，免疫伤害`);
                 continue;
+            }
+            if (sourceCard && this.hasEquipment(targetId, 'Plank')) {
+                try {
+                    if (toInt(sourceCard.cost_e, 0) <= 1) {
+                        this.logMsg(`${this.pn(targetId)}的木板吸收了攻击`);
+                        continue;
+                    }
+                } catch (e) {}
             }
             let dmg = Math.max(0, toInt(amount, 0)) + this.damageDealtEquipmentFlatBonus(attackerId);
             if (this.halve_next_attack) dmg = Math.ceil(dmg / 2);
@@ -4227,11 +4279,15 @@ class LocalSoloEngine {
                                 selected_equipment_owner_id: targetId,
                             });
                         } else if (eq.def_id === 'Battery') {
-                            this.dealDirectDamage(attackerId, 3, '电池电击', targetId, {
+                            const dealt = this.dealDirectDamage(attackerId, 3, '电池电击', targetId, {
                                 damage_type: 'magic',
                                 damage_tag: 'gtn:battery',
                             });
-                            this.logMsg(`${this.pn(targetId)}的电池效果：对${this.pn(attackerId)}造成3电伤`);
+                            if (dealt > 0) {
+                                this.logMsg(`${this.pn(targetId)}的电池效果：对${this.pn(attackerId)}造成3电伤`);
+                            } else {
+                                this.logMsg(`${this.pn(targetId)}的电池触发，但${this.pn(attackerId)}未受到电伤`);
+                            }
                         } else if (eq.def_id === 'MagicBattery' && ps.magic_battery_m_this_turn < 3) {
                             ps.gainMagic(1);
                             ps.magic_battery_m_this_turn += 1;
@@ -4347,8 +4403,12 @@ class LocalSoloEngine {
     }
 
     getExtraEForCard(playerId, card) {
-        if (card.flags.has('symbiosis')) return 0;
-        return toInt(this.players[playerId].cards_played_this_turn[card.def_id], 0);
+        let extra = card.flags.has('symbiosis') ? 0 : toInt(this.players[playerId].cards_played_this_turn[card.def_id], 0);
+        if (this.cardIs(card, 'Bamboo', 'jungle:bamboo')) {
+            const otherBamboo = this.players[playerId].hand.filter(c => c !== card && this.cardIs(c, 'Bamboo', 'jungle:bamboo')).length;
+            extra -= otherBamboo;
+        }
+        return extra;
     }
 
     customStatusValue(playerId, ...names) {

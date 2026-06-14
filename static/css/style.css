@@ -997,7 +997,7 @@ body {
   padding: 8px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
-  background: var(--bg-secondary);
+  background: var(--bg-secondary, #f5f1e8);
 }
 
 .dm-chat-title {
@@ -1083,7 +1083,7 @@ body {
   padding: 14px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  background: var(--bg-secondary);
+  background: var(--bg-secondary, #f5f1e8);
   box-shadow: var(--shadow-lg);
 }
 
@@ -1092,6 +1092,7 @@ body {
   display: grid;
   grid-template-columns: 148px minmax(0, 1fr);
   gap: 12px;
+  background: var(--bg-secondary, #f5f1e8);
 }
 
 .social-detail-nav {
@@ -1130,12 +1131,16 @@ body {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary, #fffaf0);
 }
 
 .social-detail-page {
   height: 100%;
   min-height: 0;
   overflow: auto;
+  background: var(--bg-primary, #fffaf0);
 }
 
 .social-detail-page.hidden {
@@ -11469,16 +11474,16 @@ html[data-ui-style="minimal"] .btn-end-turn {
 }
 
 .skin-avatar.skin-hit-poison {
-  --skin-main: #D8B4F0;
-  --skin-border: #A569BD;
+  --skin-main: var(--poison);
+  --skin-border: #6C3483;
   background: var(--skin-main);
   border-color: var(--skin-border);
   box-shadow: inset 0 4px 12px rgba(255,255,255,0.18), inset 0 -8px 20px rgba(0,0,0,0.08);
 }
 
 .skin-avatar.skin-hit-fire {
-  --skin-main: #F7B267;
-  --skin-border: #E67E22;
+  --skin-main: #FF7633;
+  --skin-border: #CC4F16;
   background: var(--skin-main);
   border-color: var(--skin-border);
   box-shadow: inset 0 4px 12px rgba(255,255,255,0.18), inset 0 -8px 20px rgba(0,0,0,0.08);

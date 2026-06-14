@@ -1107,6 +1107,21 @@ def build_choice_request_payload(source):
     return payload
 
 
+def emit_pending_choice_request(room):
+    pending = getattr(getattr(room, 'engine', None), 'pending_choice', None)
+    if not pending or getattr(room.engine, 'game_over', False):
+        return
+    try:
+        pidx = int(pending.get('player_id', -1))
+    except Exception:
+        return
+    if pidx < 0 or pidx >= len(getattr(room, 'player_sids', []) or []):
+        return
+    sid = room.player_sids[pidx]
+    if sid in players:
+        socketio.emit('choice_request', build_choice_request_payload(pending), room=sid)
+
+
 def _room_player_dead(room, player_index):
     try:
         if player_index < 0 or player_index >= len(getattr(room.engine, 'players', [])):
@@ -4757,26 +4772,31 @@ def send_draft_state(room, pidx):
     options = engine.draft_options[pidx]
     picks = engine.draft_picks[pidx]
     rerolls = engine.draft_rerolls[pidx]
+    total_rounds = engine.draft_target_count(pidx) if hasattr(engine, 'draft_target_count') else DECK_SIZE
     others_picks_count = {}
     others_status = {}
+    others_total_rounds = {}
     if room.mode == '2v2':
         for i in range(4):
             if i != pidx:
                 others_picks_count[i] = len(engine.draft_picks[i])
                 others_status[i] = engine.get_player_status(i)
+                others_total_rounds[i] = engine.draft_target_count(i) if hasattr(engine, 'draft_target_count') else DECK_SIZE
     else:
         opp_pidx = 1 - pidx
         others_picks_count[opp_pidx] = len(engine.draft_picks[opp_pidx])
         others_status[opp_pidx] = engine.get_player_status(opp_pidx)
+        others_total_rounds[opp_pidx] = engine.draft_target_count(opp_pidx) if hasattr(engine, 'draft_target_count') else DECK_SIZE
     payload = {
         'options': [c.to_dict() for c in options],
         'picks': picks,
         'setup_preview_cards': engine.preview_setup_cards(pidx) if hasattr(engine, 'preview_setup_cards') else [],
         'rerolls': rerolls,
         'round': len(picks) + 1,
-        'total_rounds': DECK_SIZE,
+        'total_rounds': total_rounds,
         'others_picks_count': others_picks_count,
         'others_status': others_status,
+        'others_total_rounds': others_total_rounds,
         'opponent_picks_count': next(iter(others_picks_count.values()), 0) if room.mode != '2v2' else 0,
         'mode': room.mode,
         'player_names': engine.player_names,
@@ -4789,6 +4809,49 @@ def send_draft_state(room, pidx):
     }
     payload.update(room_mod_payload(room))
     socketio.emit('draft_state', payload, room=sid)
+
+
+def send_pregame_status_update(room, targets=None):
+    """Update draft/setup progress without rebuilding another player's UI."""
+    engine = room.engine
+    if targets is None:
+        targets = range(len(room.player_sids))
+    for pidx in targets:
+        if pidx < 0 or pidx >= len(room.player_sids):
+            continue
+        sid = room.player_sids[pidx]
+        if sid not in players:
+            continue
+        total_rounds = engine.draft_target_count(pidx) if hasattr(engine, 'draft_target_count') else DECK_SIZE
+        others_picks_count = {}
+        others_status = {}
+        others_total_rounds = {}
+        if room.mode == '2v2':
+            for i in range(4):
+                if i != pidx:
+                    others_picks_count[i] = len(engine.draft_picks[i])
+                    others_status[i] = engine.get_player_status(i)
+                    others_total_rounds[i] = engine.draft_target_count(i) if hasattr(engine, 'draft_target_count') else DECK_SIZE
+        else:
+            opp_pidx = 1 - pidx
+            others_picks_count[opp_pidx] = len(engine.draft_picks[opp_pidx])
+            others_status[opp_pidx] = engine.get_player_status(opp_pidx)
+            others_total_rounds[opp_pidx] = engine.draft_target_count(opp_pidx) if hasattr(engine, 'draft_target_count') else DECK_SIZE
+        payload = {
+            'round': len(engine.draft_picks[pidx]) + 1,
+            'total_rounds': total_rounds,
+            'others_picks_count': others_picks_count,
+            'others_status': others_status,
+            'others_total_rounds': others_total_rounds,
+            'opponent_picks_count': next(iter(others_picks_count.values()), 0) if room.mode != '2v2' else 0,
+            'mode': room.mode,
+            'player_names': engine.player_names,
+            'room_id': room.room_id,
+            'match_key': room_match_key(room),
+            'your_id': pidx,
+            'your_status': engine.get_player_status(pidx),
+        }
+        socketio.emit('pregame_status_update', payload, room=sid)
 
 
 def send_event_state(room, pidx):
@@ -4918,6 +4981,7 @@ def broadcast_game_state(room):
         inject_player_skins(state, room, pidx)
         socketio.emit('state_update', state, room=sid)
         _broadcast_recipients += 1
+    emit_pending_choice_request(room)
     broadcast_spectate_state(room)
     _broadcast_recipients += len(getattr(room, 'spectators', []) or [])
     record_socket_broadcast(room, (time.perf_counter() - _broadcast_started) * 1000, _broadcast_recipients)
@@ -5021,6 +5085,7 @@ def send_game_state_to(room, pidx):
             state['your_special'] = player_special_fields(sid, room)
         inject_player_skins(state, room, pidx)
         socketio.emit('state_update', state, room=sid)
+        emit_pending_choice_request(room)
 
 
 def emit_rematch_state(room):
@@ -7249,7 +7314,8 @@ def admin_draftfill(room_id):
         while e.phase == 'draft':
             made_progress = False
             for pidx in range(2):
-                if len(e.draft_picks[pidx]) < DECK_SIZE:
+                target_count = e.draft_target_count(pidx) if hasattr(e, 'draft_target_count') else DECK_SIZE
+                if len(e.draft_picks[pidx]) < target_count:
                     options = e.draft_options[pidx]
                     if options:
                         pick = options[0]
@@ -8609,7 +8675,8 @@ def on_draft_pick(data):
                     admin_event('error', f'draft stats record failed: {exc}')
             record_room_replay_action(room, 'draft_pick', pidx, {'def_id': def_id})
             # Check if THIS player finished drafting
-            if len(engine.draft_picks[pidx]) >= DECK_SIZE:
+            target_count = engine.draft_target_count(pidx) if hasattr(engine, 'draft_target_count') else DECK_SIZE
+            if len(engine.draft_picks[pidx]) >= target_count:
                 if engine.needs_sub_choice(pidx):
                     # This player needs sub-choice; the per-player pregame
                     # update below will send the correct prompt only to them.
@@ -8617,12 +8684,15 @@ def on_draft_pick(data):
                 else:
                     # No sub-choice needed, mark as ready
                     engine.player_ready[pidx] = True
-            # Send updated draft state to all players
-            for pi in range(len(room.player_sids)):
-                send_pregame_state(room, pi, allow_sub_choice=(pi == pidx))
             # Check if all players are ready
             if all(engine.player_ready[pi] for pi in range(len(room.player_sids))):
                 start_game(room)
+            else:
+                # Only the actor needs their full draft/sub-choice UI rebuilt.
+                # Other players may still be drafting, so update their progress
+                # text without replacing their cards or current setup prompt.
+                send_pregame_state(room, pidx, allow_sub_choice=True)
+                send_pregame_status_update(room, targets=[pi for pi in range(len(room.player_sids)) if pi != pidx])
         else:
             emit('server_error', {'message': '无法选择这张牌'})
 
@@ -8773,12 +8843,12 @@ def on_submit_event_sub_choice(data):
         })
         # Mark this player as ready
         engine.player_ready[pidx] = True
-        # Send updated draft state to all players
-        for pi in range(len(room.player_sids)):
-            send_pregame_state(room, pi)
         # Check if all players are ready
         if all(engine.player_ready[pi] for pi in range(len(room.player_sids))):
             start_game(room)
+        else:
+            send_pregame_state(room, pidx)
+            send_pregame_status_update(room, targets=[pi for pi in range(len(room.player_sids)) if pi != pidx])
 
 
 @socketio.on('solo_start')

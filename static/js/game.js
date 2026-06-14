@@ -2485,6 +2485,7 @@ let friendsMessageTimer = null;
 let dmData = { threads: [], unread_count: 0 };
 let activeDmThreadId = null;
 let activeDmTargetUserId = null;
+let activeDmTargetIdentifier = '';
 let activeDmMessages = [];
 let activeSocialFriendId = null;
 let lobbyMentionCandidates = [];
@@ -2511,6 +2512,7 @@ const SKIN_LOOK_OFFSET_X_PERCENT = 38;
 const SKIN_LOOK_OFFSET_Y_PERCENT = 56;
 const SKIN_LOOK_EMIT_INTERVAL_MS = 160;
 const SKIN_DAMAGE_HOLD_MS = 3000;
+const SKIN_STATUS_DAMAGE_SPLIT_MS = 1500;
 let localSkinLook = { ...DEFAULT_SKIN_LOOK };
 let lastSkinLookEmitAt = 0;
 let lastSkinLookEmitKey = '';
@@ -3869,7 +3871,7 @@ function getAllStatusDefs() {
         { key: 'stagnation', label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
         { key: 'blind', label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始时手牌会被打乱，然后清空失明。', color: '#2C3E50' },
         { key: 'heal_block', label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数-1。', color: '#E84393' },
-        { key: 'weakness', label: UI.status_weakness, desc: '造成物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
+        { key: 'weakness', label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
         { key: 'fragment', label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
         { key: 'jungle:fragile', label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A' },
@@ -5054,7 +5056,12 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
         : 0;
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
     const effectiveBaseE = Math.max(0, baseE - mimicDiscount - swiftValue);
-    const totalE = effectiveBaseE + (flags.has('symbiosis') ? 0 : dup);
+    let extraE = flags.has('symbiosis') ? 0 : dup;
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['Bamboo', 'jungle:bamboo'])) {
+        const hand = Array.isArray(ownerState && ownerState.hand) ? ownerState.hand : [];
+        extraE -= hand.filter(c => c && c !== cardDict && cardMatchesAnyLocalId(c, getCardDef(c.def_id || ''), ['Bamboo', 'jungle:bamboo'])).length;
+    }
+    const totalE = Math.max(0, effectiveBaseE + extraE);
     return { totalE, totalM: baseM, flags };
 }
 
@@ -5260,6 +5267,9 @@ function createCardElement(cardDict, options = {}) {
     if (!blinded && copyCount > 0) {
         flagsHtml += `<span class="card-flag copy">${escapeHtml(UI.tag_copy || 'Copy')}: ${copyCount}</span>`;
     }
+    if (!blinded) {
+        flagsHtml += equipmentCounterFlagHtml(cardDict);
+    }
     const predictionHtml = blinded ? '' : getCardPlayEffectPredictionHtml(cardDict, {
         ...predictionOptions,
         ownerState: predictionOptions.ownerState || cardOwnerState,
@@ -5370,6 +5380,26 @@ function cardFlagHtml(flag, text = null) {
     return `<span class="card-flag ${cls}">${escapeHtml(label)}</span>`;
 }
 
+function equipmentCounterLabel(key) {
+    const normalized = String(key || '').trim();
+    if (!normalized) return '';
+    const lower = normalized.toLowerCase();
+    if (lower === 'layers' || lower === 'layer' || lower === 'stacks' || lower === 'stack') return UI.tomato_layer || '层数';
+    if (lower === 'durability') return UI.status_durability || '耐久';
+    if (lower === 'charges' || lower === 'charge') return UI.status_charges || '充能';
+    return normalized;
+}
+
+function equipmentCounterFlagHtml(cardDict) {
+    const counters = cardDict && cardDict.equipment_counters;
+    if (!counters || typeof counters !== 'object') return '';
+    return Object.entries(counters)
+        .map(([key, value]) => [equipmentCounterLabel(key), Math.floor(Number(value || 0))])
+        .filter(([label, value]) => label && value > 0)
+        .map(([label, value]) => `<span class="card-flag custom">${escapeHtml(label)}: ${value}</span>`)
+        .join('');
+}
+
 function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     const { includeLayers = true, includeTomato = true, hideFlags = null } = options;
     if (!cardDict || !cardDef) return '';
@@ -5414,6 +5444,8 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     if (copyCount > 0) {
         parts.push(cardFlagHtml('copy', `${UI.tag_copy || 'Copy'}: ${copyCount}`));
     }
+    const equipmentCountersHtml = equipmentCounterFlagHtml(cardDict);
+    if (equipmentCountersHtml) parts.push(equipmentCountersHtml);
     return parts.join('');
 }
 
@@ -5558,7 +5590,11 @@ function cardComboChoiceOption(cards, extra = {}) {
 
 function equipmentChoiceOption(equipment, extra = {}) {
     const card = equipment && (equipment.card_instance || equipment.card || equipment);
-    return cardChoiceOption(card, extra);
+    const cardDict = { ...(card || {}) };
+    if (equipment && equipment.custom_vars && typeof equipment.custom_vars === 'object') {
+        cardDict.equipment_counters = { ...(cardDict.equipment_counters || {}), ...equipment.custom_vars };
+    }
+    return cardChoiceOption(cardDict, extra);
 }
 
 function cardDefChoiceOption(defId, extra = {}) {
@@ -5889,7 +5925,7 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
     const precision = cardHasEffectiveFlagForPrediction(cardDict || {}, cardDef || {}, 'precision');
     rawHits.forEach(raw => {
         let dmg = Math.max(0, Math.ceil(Number(raw || 0)));
-        if (cutterBonus > 0) dmg += cutterBonus;
+        if (cutterBonus > 0) dmg += cutterBonus * 2;
         let precisionDodged = false;
         if (dodge > 0) {
             dodge -= 1;
@@ -6485,7 +6521,23 @@ function collectCardIntroTerms(cardDict) {
         getCardName(cardDef),
         getCardEffectText(cardDef),
         getCardDescriptionText(cardDef),
+        getCardTriggerText(cardDef),
+        getCardIntroTriggerText(cardDef),
+        cardDef.effect_text,
+        cardDef.effect_text_cn,
+        cardDef.effect_text_en,
+        cardDef.trigger_effect_text,
+        cardDef.trigger_effect_text_cn,
+        cardDef.trigger_effect_text_en,
+        cardDict && cardDict.effect_text,
+        cardDict && cardDict.description,
+        cardDict && cardDict.trigger_effect_text,
         (cardDef.flags || []).join(' '),
+        (cardDef.tags || []).join(' '),
+        (() => {
+            try { return JSON.stringify(cardDef.v2_events || cardDef.events || {}); }
+            catch (_) { return ''; }
+        })(),
     ].filter(Boolean).join(' ');
     const probes = [
         [/(\d+\s*D|物理伤害|physical damage|D\b)/i, 'D'],
@@ -6509,20 +6561,25 @@ function collectCardIntroTerms(cardDict) {
         if (re.test(rawText)) addTermIntroItem(items, seen, key);
     });
     const statusProbes = [
-        [/易损|Fragile/i, 'jungle:fragile'],
-        [/护盾|Shield/i, 'jungle:shield'],
-        [/魔力回合回复|Turn Magic Regen/i, 'jungle:turn_magic_turns'],
-        [/回合回复|Turn Heal/i, 'jungle:turn_heal_turns'],
-        [/树根|Root(?!牌| card)/i, 'jungle:root_status'],
-        [/剧毒|Toxic Poison/i, 'jungle:toxic_poison'],
-        [/滞留|Stagnation/i, 'stagnation'],
-        [/失明|Blind/i, 'blind'],
-        [/破损|Fracture/i, 'fracture'],
-        [/眩晕|Stun/i, 'stunned'],
+        [/易损|Fragile|jungle:fragile|fragile/i, 'jungle:fragile'],
+        [/护盾|Shield|jungle:shield/i, 'jungle:shield'],
+        [/魔力回合回复|Turn Magic Regen|jungle:turn_magic_turns|turn_magic/i, 'jungle:turn_magic_turns'],
+        [/回合回复|Turn Heal|jungle:turn_heal_turns|turn_heal/i, 'jungle:turn_heal_turns'],
+        [/树根|Root(?!牌| card)|jungle:root_status|root_status/i, 'jungle:root_status'],
+        [/剧毒|Toxic Poison|jungle:toxic_poison|toxic_poison/i, 'jungle:toxic_poison'],
+        [/滞留|Stagnation|stagnation/i, 'stagnation'],
+        [/失明|Blind|blind/i, 'blind'],
+        [/预知|Foresight|foresight/i, 'foresight'],
+        [/破损|Fracture|fracture/i, 'fracture'],
+        [/眩晕|Stun|stunned|skip_turn/i, 'stunned'],
         [/禁攻|禁止攻击|attack_blocked/i, 'attack_blocked'],
         [/仅攻击|attack_only/i, 'attack_only'],
-        [/状态免疫|immune/i, 'status_immune'],
-        [/流血|Bleed/i, 'bleed'],
+        [/状态免疫|status_immune|\bimmune\b/i, 'status_immune'],
+        [/流血|Bleed|bleed/i, 'bleed'],
+        [/禁疗|Heal Block|heal_block/i, 'heal_block'],
+        [/虚弱|Weakness|weakness/i, 'weakness'],
+        [/超载|Overload|overload/i, 'overload'],
+        [/迟缓|Sluggish|sluggish/i, 'sluggish'],
     ];
     statusProbes.forEach(([re, key]) => {
         if (!re.test(rawText) || seen.has(`status:${key}`)) return;
@@ -6589,7 +6646,7 @@ function getStatusIntroItem(statusInfo) {
         'jungle:toxic_poison': { label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31' },
         toxic_poison: { label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31' },
         heal_block: { label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数-1。', color: '#E84393' },
-        weakness: { label: UI.status_weakness, desc: '造成物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
+        weakness: { label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         bleed: { label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
         fragment: { label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
     };
@@ -7444,6 +7501,22 @@ function connectSocket(serverUrl) {
         mergeSkinLooksFromPayload(data);
         renderDraft(data, isReroll, previousDraftState);
     });
+    bindSocketEvent('pregame_status_update', (data) => {
+        if (!data || !draftState) return;
+        if (phaseContextMatchKey(data) && phaseContextMatchKey(draftState) && phaseContextMatchKey(data) !== phaseContextMatchKey(draftState)) return;
+        draftState = {
+            ...draftState,
+            others_picks_count: data.others_picks_count || draftState.others_picks_count || {},
+            others_status: data.others_status || draftState.others_status || {},
+            others_total_rounds: data.others_total_rounds || draftState.others_total_rounds || {},
+            opponent_picks_count: data.opponent_picks_count ?? draftState.opponent_picks_count,
+            player_names: data.player_names || draftState.player_names,
+            total_rounds: data.total_rounds || draftState.total_rounds,
+            round: data.round || draftState.round,
+        };
+        if (data.your_id != null) playerId = data.your_id;
+        updateDraftInfo(draftState);
+    });
     bindSocketEvent('event_select', (data) => {
         debugLog('[client] event_select');
         phase = 'event_select';
@@ -8137,7 +8210,7 @@ function applySkinDamageMoodToRenderedAvatars(playerId) {
     });
 }
 
-function triggerSkinDamageMood(playerId, kind = 'damage', delay = 0) {
+function triggerSkinDamageMood(playerId, kind = 'damage', delay = 0, holdMs = SKIN_DAMAGE_HOLD_MS) {
     const pid = normalizePlayerId(playerId);
     if (pid == null) return;
     const run = () => {
@@ -8148,7 +8221,7 @@ function triggerSkinDamageMood(playerId, kind = 'damage', delay = 0) {
         }
         const mood = {
             kind: kind === 'poison' || kind === 'fire' ? kind : 'damage',
-            until: Date.now() + SKIN_DAMAGE_HOLD_MS,
+            until: Date.now() + Math.max(1, Number(holdMs) || SKIN_DAMAGE_HOLD_MS),
             timer: null,
         };
         mood.timer = setTimeout(() => {
@@ -8156,7 +8229,7 @@ function triggerSkinDamageMood(playerId, kind = 'damage', delay = 0) {
             if (latest !== mood) return;
             skinDamageMoodByPlayerId.delete(pid);
             applySkinDamageMoodToRenderedAvatars(pid);
-        }, SKIN_DAMAGE_HOLD_MS);
+        }, Math.max(1, Number(holdMs) || SKIN_DAMAGE_HOLD_MS));
         skinDamageMoodByPlayerId.set(pid, mood);
         applySkinDamageMoodToRenderedAvatars(pid);
     };
@@ -9546,6 +9619,7 @@ async function loadDmThreads(renderOnly = true) {
         dmData = { threads: [], unread_count: 0 };
         activeDmThreadId = null;
         activeDmTargetUserId = null;
+        activeDmTargetIdentifier = '';
         activeDmMessages = [];
         renderDmThreads();
         renderDmMessages();
@@ -9574,6 +9648,7 @@ async function openDmThread(threadId) {
         const data = await authRequest(`/api/social/dm/messages?thread_id=${encodeURIComponent(threadId)}&limit=120&mark_read=1`);
         activeDmThreadId = data.thread_id || threadId;
         activeDmTargetUserId = data.user && data.user.id;
+        activeDmTargetIdentifier = '';
         if (activeDmTargetUserId) activeSocialFriendId = String(activeDmTargetUserId);
         activeDmMessages = Array.isArray(data.messages) ? data.messages : [];
         const title = $('dm-chat-title');
@@ -9591,6 +9666,7 @@ async function openDmThread(threadId) {
 function startDmToUser(userId, username = '') {
     activeDmThreadId = null;
     activeDmTargetUserId = userId || null;
+    activeDmTargetIdentifier = '';
     if (userId) activeSocialFriendId = String(userId);
     activeDmMessages = [];
     const title = $('dm-chat-title');
@@ -9609,6 +9685,7 @@ async function startDmFromIdentifier() {
     if (!identifier) return;
     activeDmThreadId = null;
     activeDmTargetUserId = null;
+    activeDmTargetIdentifier = identifier;
     activeDmMessages = [];
     const title = $('dm-chat-title');
     if (title) title.textContent = `给 ${identifier} 发私信`;
@@ -9622,7 +9699,7 @@ async function sendDmMessage() {
     if (!input) return;
     const text = input.value.trim();
     if (!text) return;
-    const identifier = ($('input-friend-identifier')?.value || '').trim();
+    const identifier = activeDmTargetIdentifier || ($('input-friend-identifier')?.value || '').trim();
     const payload = { text };
     if (activeDmTargetUserId) payload.target_user_id = activeDmTargetUserId;
     else if (identifier) payload.identifier = identifier;
@@ -9635,6 +9712,7 @@ async function sendDmMessage() {
         input.value = '';
         activeDmThreadId = data.thread_id || activeDmThreadId;
         activeDmTargetUserId = data.user && data.user.id ? data.user.id : activeDmTargetUserId;
+        activeDmTargetIdentifier = '';
         activeDmMessages = Array.isArray(data.messages) ? data.messages : activeDmMessages;
         const title = $('dm-chat-title');
         if (title && data.user && data.user.username) title.textContent = `与 ${data.user.username} 的私信`;
@@ -11007,24 +11085,19 @@ function renderLobby(data) {
     updateStatus(UI.lobby_status.replace('{0}', nickname));
 }
 
-function renderDraft(data, isReroll, previousDraftState = null) {
-    showView('view-draft');
-    syncPhaseChatMatch(data || {});
-    updatePhaseChatChannelOptions(data || {});
+function updateDraftInfo(data) {
+    if (!data) return;
     const picks = data.picks || [];
-    const options = data.options || [];
     const rerolls = data.rerolls || 0;
     const round = data.round || 0;
     const totalRounds = data.total_rounds || 15;
     const is2v2 = data.mode === '2v2';
     const othersPicksCount = data.others_picks_count || {};
+    const othersTotalRounds = data.others_total_rounds || {};
     const oppPicksCount = Number.isFinite(Number(data.opponent_picks_count))
         ? Number(data.opponent_picks_count)
         : Number(Object.values(othersPicksCount)[0] || 0);
     const othersStatus = data.others_status || {};
-    const prevPicks = previousDraftState ? (previousDraftState.picks || []).length : -1;
-    const iJustPicked = picks.length > prevPicks;
-    const shouldAnimate = isReroll || iJustPicked;
     const info = $('draft-info');
     if (info) {
         if (is2v2) {
@@ -11034,7 +11107,7 @@ function renderDraft(data, isReroll, previousDraftState = null) {
                 const name = pNames[pidx] || `P${pidx + 1}`;
                 let statusStr = '';
                 if (status === 'drafting') {
-                    statusStr = `${UI.status_drafting || '选牌中'} ${othersPicksCount[idx] || 0}/${totalRounds}`;
+                    statusStr = `${UI.status_drafting || '选牌中'} ${othersPicksCount[idx] || 0}/${othersTotalRounds[idx] || totalRounds}`;
                 } else if (status === 'sub_choice') {
                     statusStr = UI.status_sub_choice || '配装处理';
                 } else if (status === 'ready') {
@@ -11057,7 +11130,7 @@ function renderDraft(data, isReroll, previousDraftState = null) {
             const oppStatus = othersStatus[oppIdx];
             let oppStatusText = '';
             if (oppStatus === 'drafting') {
-                oppStatusText = `${UI.status_drafting || '选牌中'} ${oppPicksCount}/${totalRounds}`;
+                oppStatusText = `${UI.status_drafting || '选牌中'} ${oppPicksCount}/${othersTotalRounds[oppIdx] || totalRounds}`;
             } else if (oppStatus === 'sub_choice') {
                 oppStatusText = UI.status_sub_choice || '配装处理';
             } else if (oppStatus === 'ready') {
@@ -11074,6 +11147,20 @@ function renderDraft(data, isReroll, previousDraftState = null) {
             }
         }
     }
+}
+
+function renderDraft(data, isReroll, previousDraftState = null) {
+    showView('view-draft');
+    syncPhaseChatMatch(data || {});
+    updatePhaseChatChannelOptions(data || {});
+    const picks = data.picks || [];
+    const options = data.options || [];
+    const rerolls = data.rerolls || 0;
+    const totalRounds = data.total_rounds || 15;
+    const prevPicks = previousDraftState ? (previousDraftState.picks || []).length : -1;
+    const iJustPicked = picks.length > prevPicks;
+    const shouldAnimate = isReroll || iJustPicked;
+    updateDraftInfo(data);
     const optionsEl = $('draft-options');
     if (optionsEl) {
         const optionIds = options.map(opt => {
@@ -12918,6 +13005,11 @@ function renderPlayerBars(containerId, playerData) {
     container.dataset.playerBars = '1';
     const blindLevel = getOwnBlindLevel();
     const pid = normalizePlayerId(playerData && playerData.player_id);
+    const region = container.closest('[data-player-target-region], .player-section, .opp-half, #teammate-sidebar, #classic-fighter-self, #classic-fighter-enemy');
+    if (region && pid != null) {
+        region.dataset.playerTargetRegion = region.dataset.playerTargetRegion || '1';
+        region.dataset.playerId = String(pid);
+    }
     const isSelf = pid != null && pid === normalizePlayerId(gameState && gameState.your_id);
     const masked = (isSelf && blindLevel >= 2) || (!isSelf && blindLevel >= 3);
     container.classList.toggle('blind-resource-masked', masked);
@@ -13569,7 +13661,21 @@ function showCombatFloatSequence(selector, events, interval = 200) {
 }
 
 function scheduleSkinDamageMoods(playerId, events) {
-    (events || []).forEach(event => {
+    const list = (events || []).filter(Boolean);
+    const hasPoison = list.some(event => event.kind === 'poison');
+    const hasFire = list.some(event => event.kind === 'fire');
+    if (hasPoison && hasFire) {
+        const firstDelay = Math.min(...list
+            .filter(event => event.kind === 'poison' || event.kind === 'fire')
+            .map(event => Math.max(0, Number(event.delay) || 0)));
+        triggerSkinDamageMood(playerId, 'poison', firstDelay, SKIN_STATUS_DAMAGE_SPLIT_MS);
+        triggerSkinDamageMood(playerId, 'fire', firstDelay + SKIN_STATUS_DAMAGE_SPLIT_MS, SKIN_STATUS_DAMAGE_SPLIT_MS);
+        list.filter(event => event.kind !== 'poison' && event.kind !== 'fire').forEach(event => {
+            triggerSkinDamageMood(playerId, event.kind || 'damage', event.delay || 0);
+        });
+        return;
+    }
+    list.forEach(event => {
         if (!event) return;
         triggerSkinDamageMood(playerId, event.kind || 'damage', event.delay || 0);
     });
@@ -13592,6 +13698,16 @@ function getBarValueForKey(data, key) {
     return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
 
+function shouldMaskRenderedBarRegion(region) {
+    if (!region) return false;
+    const blindLevel = getOwnBlindLevel();
+    if (blindLevel < 2) return false;
+    const pid = normalizePlayerId(region.dataset && region.dataset.playerId);
+    const selfId = normalizePlayerId(gameState && gameState.your_id);
+    if (pid == null || selfId == null) return false;
+    return (pid === selfId && blindLevel >= 2) || (pid !== selfId && blindLevel >= 3);
+}
+
 function setRenderedBarValue(selector, key, value, max, immediate = false) {
     const region = document.querySelector(selector);
     let wrapper = region && region.querySelector(`[data-bar-key="${key}"]`);
@@ -13604,14 +13720,29 @@ function setRenderedBarValue(selector, key, value, max, immediate = false) {
     const text = wrapper.querySelector('.bar-text') || wrapper.querySelector('.classic-hp-text');
     const cur = Number.isFinite(Number(value)) ? Number(value) : 0;
     const maxValue = Number.isFinite(Number(max)) && Number(max) > 0 ? Number(max) : getBarMaxForKey({}, key);
+    const masked = shouldMaskRenderedBarRegion(region);
     if (wrapper.classList.contains('classic-resource-block')) {
-        renderClassicResourceOrbs(wrapper.querySelector('.classic-orbs'), cur, maxValue, 0, key === 'magic' ? 'm' : 'e');
+        renderClassicResourceOrbs(wrapper.querySelector('.classic-orbs'), cur, maxValue, 0, key === 'magic' ? 'm' : 'e', masked);
         if (!immediate) {
             wrapper.classList.remove('classic-resource-pop');
             wrapper.offsetHeight;
             wrapper.classList.add('classic-resource-pop');
             setTimeout(() => wrapper.classList.remove('classic-resource-pop'), 420);
         }
+        return;
+    }
+    wrapper.classList.toggle('blind-masked', masked);
+    if (masked) {
+        if (fill) {
+            if (immediate) fill.classList.add('bar-fill-instant');
+            fill.style.width = '0%';
+            if (immediate) {
+                fill.offsetHeight;
+                requestAnimationFrame(() => fill.classList.remove('bar-fill-instant'));
+            }
+        }
+        if (text) text.textContent = '?';
+        wrapper.dataset.renderedValue = '?';
         return;
     }
     const pct = Math.max(0, Math.min(100, (cur / maxValue) * 100));

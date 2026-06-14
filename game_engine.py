@@ -2121,7 +2121,7 @@ class GameEngine:
         self.phase = 'draft'
 
     def _generate_draft_options_for_player(self, player_id: int):
-        if len(self.draft_picks[player_id]) >= DECK_SIZE:
+        if len(self.draft_picks[player_id]) >= self.draft_target_count(player_id):
             return
         card_type = self.draft_type_order[len(self.draft_picks[player_id])]
         self.draft_options[player_id] = generate_draft_options(self.draft_pool, card_type, 3)
@@ -2131,7 +2131,7 @@ class GameEngine:
         self._generate_draft_options_for_player(1)
 
     def draft_pick(self, player_id: int, def_id: str) -> bool:
-        if len(self.draft_picks[player_id]) >= DECK_SIZE:
+        if len(self.draft_picks[player_id]) >= self.draft_target_count(player_id):
             return False
         if not self.draft_options[player_id]:
             self._generate_draft_options_for_player(player_id)
@@ -2150,7 +2150,7 @@ class GameEngine:
     def draft_reroll(self, player_id: int) -> bool:
         if self.draft_rerolls[player_id] <= 0:
             return False
-        if len(self.draft_picks[player_id]) >= DECK_SIZE:
+        if len(self.draft_picks[player_id]) >= self.draft_target_count(player_id):
             return False
         old_ids = [c.def_id for c in self.draft_options[player_id]]
         self.draft_rerolls[player_id] -= 1
@@ -2322,13 +2322,23 @@ class GameEngine:
             return 'event_select'
         if not self.player_draft_started[player_id]:
             return 'event_reveal'
-        if len(self.draft_picks[player_id]) < DECK_SIZE:
+        if len(self.draft_picks[player_id]) < self.draft_target_count(player_id):
             return 'drafting'
         if self.needs_sub_choice(player_id):
             return 'sub_choice'
         # Draft done, no sub-choice needed
         self.player_ready[player_id] = True
         return 'ready'
+
+    def draft_target_count(self, player_id: int) -> int:
+        """Number of cards this player needs to draft before setup sub-choices."""
+        try:
+            event_id = self.opening_event_picks[player_id]
+        except Exception:
+            event_id = None
+        if str(event_id) == '5':
+            return max(0, DECK_SIZE - 1)
+        return DECK_SIZE
 
     def needs_sub_choice(self, player_id: int) -> bool:
         """Check if the player's opening event needs a sub-choice after draft."""
@@ -3006,10 +3016,11 @@ class GameEngine:
                 self.log_msg(f"{self.pn(target_id)}的魔法棉花消耗{spent}M抵扣{blocked}点伤害")
         return max(0, int(damage))
 
-    def _has_equipment(self, player_id: int, def_id: str) -> bool:
+    def _has_equipment(self, player_id: int, *def_ids: str) -> bool:
         if not (0 <= player_id < len(self.players)):
             return False
-        return any(getattr(eq, 'def_id', '') == def_id for eq in getattr(self.players[player_id], 'equipment', []) or [])
+        return any(self._card_is(getattr(eq, 'card_instance', None), *def_ids) or self._card_is(getattr(eq, 'card_def', None), *def_ids)
+                   for eq in getattr(self.players[player_id], 'equipment', []) or [])
 
 
     def _get_corruption_count(self) -> int:
@@ -3069,7 +3080,7 @@ class GameEngine:
                 if effect_target != source_id:
                     continue
                 if eq_id == 'cutter' or eq_id.endswith(':cutter'):
-                    bonus += 1
+                    bonus += 2
         return bonus
 
     def _apply_damage_dealt_equipment_multiplier(self, amount: int, source_id: Optional[int]) -> int:
@@ -3208,13 +3219,29 @@ class GameEngine:
         ps = self.players[player_id]
         dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
         extra = 0 if 'symbiosis' in card.flags else dup_count
-        if getattr(card, 'def_id', '') == 'Bamboo':
+        if self._card_is(card, 'Bamboo', 'jungle:bamboo'):
             try:
-                other_bamboo = sum(1 for c in ps.hand if c is not card and getattr(c, 'def_id', '') == 'Bamboo')
+                other_bamboo = sum(1 for c in ps.hand if c is not card and self._card_is(c, 'Bamboo', 'jungle:bamboo'))
             except Exception:
                 other_bamboo = 0
             extra -= other_bamboo
         return extra
+
+    def _card_is(self, card_or_def, *ids: str) -> bool:
+        wanted = {str(item) for item in ids if item}
+        if not wanted or card_or_def is None:
+            return False
+        def_id = str(getattr(card_or_def, 'def_id', getattr(card_or_def, 'id', '')) or '')
+        if def_id in wanted:
+            return True
+        card_def = getattr(card_or_def, 'card_def', card_or_def)
+        if str(getattr(card_def, 'id', '') or '') in wanted:
+            return True
+        resource = getattr(card_def, 'v2_resource', {}) or {}
+        for key in ('legacy_id', 'id', 'runtime_id'):
+            if str(resource.get(key, '') or '') in wanted:
+                return True
+        return False
 
     def _mimic_special_cost_for_card(self, target: Optional[CardInstance]) -> int:
         if target is None:
@@ -4611,18 +4638,46 @@ class GameEngine:
             self.log_msg(f"{self.pn(player_id)}给{self.pn(target_id)}的{zone}区{count}张{type_desc}添加了{tag}标签")
 
     def _atomic_cogwheel_mark(self, player_id, card, params, log, choice, context):
-        """Mark current turn's played cards for return at turn end (Cogwheel)."""
+        """Return the most recent valid card played before Cogwheel to hand."""
         target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
-        if not hasattr(self, '_cogwheel_active'):
-            self._cogwheel_active = {}
-        if not hasattr(self, '_cogwheel_exclude_instance_ids'):
-            self._cogwheel_exclude_instance_ids = {}
-        self._cogwheel_active[target_id] = True
-        self._cogwheel_exclude_instance_ids[target_id] = int(getattr(card, 'instance_id', -1) or -1)
+        if not (0 <= target_id < len(self.players)):
+            return
+        ps = self.players[target_id]
+        current_id = int(getattr(card, 'instance_id', -1) or -1)
+        played_ids = list(getattr(ps, 'cards_played_this_turn_instance_ids', []) or [])
+        returned = None
+        for instance_id in reversed(played_ids):
+            try:
+                iid = int(instance_id)
+            except Exception:
+                continue
+            if iid == current_id:
+                continue
+            found = None
+            source_zone = None
+            for zone_name in ('discard', 'exile'):
+                zone = getattr(ps, zone_name, [])
+                for candidate in list(zone):
+                    if int(getattr(candidate, 'instance_id', -1) or -1) == iid:
+                        found = candidate
+                        source_zone = zone
+                        break
+                if found is not None:
+                    break
+            if found is None or 'rebound' in getattr(found, 'flags', set()):
+                continue
+            if not ps.can_add_to_hand():
+                break
+            source_zone.remove(found)
+            found.mimic_discount = 0
+            found.instance_flags.add('symbiosis')
+            ps.add_to_hand(found)
+            returned = found
+            break
         if log:
             self.log_msg(log)
-        else:
-            self.log_msg(f"{self.pn(player_id)}给{self.pn(target_id)}标记了齿轮效果")
+        elif returned is not None:
+            self.log_msg(f"{self.pn(player_id)}使用齿轮，{returned.name_cn}回到手中并获得共生")
 
     def _atomic_honey_control(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
@@ -7946,7 +8001,7 @@ class GameEngine:
                 continue
             if amount <= 0 and hits <= 1:
                 break
-            if source_card is not None and self._has_equipment(target_id, 'Plank'):
+            if source_card is not None and self._has_equipment(target_id, 'Plank', 'jungle:plank'):
                 try:
                     if int(getattr(source_card, 'cost_e', 0) or 0) <= 1:
                         self.log_msg(f"{self.pn(target_id)}的木板吸收了攻击")
@@ -7989,9 +8044,11 @@ class GameEngine:
             dmg = self._run_v2_damage_modifiers(damage_context, dmg)
             if getattr(self, 'pending_v2_ui', None):
                 break
-            # Weakness: reduce physical damage
-            if ps.weakness > 0 and not immune:
-                reduction = min(0.6, 0.2 * ps.weakness)
+            # Weakness belongs to the attacker: it reduces physical damage they deal to others.
+            attacker_state = self.players[attacker_id] if 0 <= attacker_id < len(self.players) else None
+            attacker_immune = self._is_status_immune(attacker_id) if attacker_state is not None else False
+            if attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
+                reduction = min(0.6, 0.2 * attacker_state.weakness)
                 dmg = max(1, int(dmg * (1.0 - reduction)))
             if not immune:
                 root_armor = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
@@ -8029,12 +8086,15 @@ class GameEngine:
                             }):
                         continue
                     if eq.def_id == 'Battery':
-                        self._deal_direct_damage(
+                        dealt = self._deal_direct_damage(
                             attacker_id, 3, '电池电击', target_id,
                             damage_type=DAMAGE_TYPE_MAGIC,
                             damage_tag=DAMAGE_TAG_BATTERY,
                         )
-                        self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
+                        if dealt > 0:
+                            self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
+                        else:
+                            self.log_msg(f"{self.pn(target_id)}的电池触发，但{self.pn(attacker_id)}未受到电伤")
                     elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
                         ps.gain_magic(1)
                         ps.magic_battery_m_this_turn += 1
@@ -8826,8 +8886,14 @@ class GameEngine:
             return
         self.players[source_id].magic = 0
         self._add_custom_status_value(target_id, status, amount)
+        if params.get('also_poison'):
+            self.players[target_id].poison += amount
+            self._normalize_status_value(self.players[target_id], 'poison')
         label = str(params.get('label') or '剧毒')
-        self.log_msg(log or f"{self.pn(target_id)}+{amount}层{label}")
+        if params.get('also_poison'):
+            self.log_msg(log or f"{self.pn(target_id)}+{amount}层{label}和{amount}P")
+        else:
+            self.log_msg(log or f"{self.pn(target_id)}+{amount}层{label}")
 
     def _atomic_jungle_root_gain(self, player_id, card, params, log, choice, context):
         owner_id = self._resolve_target(player_id, params.get('target', 'self'))
