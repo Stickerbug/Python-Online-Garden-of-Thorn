@@ -1511,6 +1511,7 @@ class LocalSoloEngine {
             this.logMsg(`${this.pn(playerId)}抽${drawn.length}张牌`);
             this.applyElectricWebDrawDamage(playerId, drawn.length);
             if (ps.sluggish > 0) this.logMsg(`${this.pn(playerId)}的迟缓减少${Math.min(ps.sluggish, DRAW_PER_TURN)}张抽牌`);
+            this.clearSluggishAfterDraw(playerId);
         }
         this.players.forEach((owner, ownerId) => {
             [...owner.equipment].forEach(eq => {
@@ -1635,7 +1636,7 @@ class LocalSoloEngine {
     clearTurnStartActionStatuses(playerId) {
         const ps = this.players[playerId];
         const cleared = [];
-        [['sluggish', '迟缓'], ['foresight', '预知'], ['blind', '失明']].forEach(([attr, label]) => {
+        [['foresight', '预知'], ['blind', '失明']].forEach(([attr, label]) => {
             if (toInt(ps[attr], 0) <= 0) return;
             if (attr === 'blind' && ps.hand.length) {
                 shuffle(ps.hand);
@@ -1645,6 +1646,13 @@ class LocalSoloEngine {
             cleared.push(label);
         });
         if (cleared.length) this.logMsg(`${this.pn(playerId)}的${cleared.join('、')}效果清除`);
+    }
+
+    clearSluggishAfterDraw(playerId) {
+        const ps = this.players[playerId];
+        if (!ps || toInt(ps.sluggish, 0) <= 0) return;
+        ps.sluggish = 0;
+        this.logMsg(`${this.pn(playerId)}的迟缓效果清除`);
     }
 
     hasCardEvent(def, eventName) {

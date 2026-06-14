@@ -141,6 +141,13 @@ class GameEngine2v2(GameEngine):
             reveal_target = getattr(self, '_antennae_reveal_targets', [None] * self.num_players)[for_player]
             if self._antennae_reveal[for_player] and reveal_target == eid:
                 ed['revealed_hand'] = self._visible_card_dicts(self.players[eid].hand, for_player, eid)
+            revealed_tag_cards = [
+                c.to_dict()
+                for c in self.players[eid].hand
+                if c.def_id != ERROR_CARD_ID and 'revealed' in getattr(c, 'flags', set())
+            ]
+            if revealed_tag_cards:
+                ed['revealed_tag_cards'] = revealed_tag_cards
             opp_data_list.append(ed)
 
         teammate_data = None
@@ -638,10 +645,19 @@ class GameEngine2v2(GameEngine):
             return default
 
     def _is_valid_enemy_target(self, player_id: int, target_id) -> bool:
-        return self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0
+        return (
+            self._is_valid_player_id(target_id)
+            and self.is_enemy(player_id, target_id)
+            and self.players[target_id].health > 0
+            and not bool(getattr(self.players[target_id], 'untargetable', False))
+        )
 
     def _is_valid_effect_target(self, player_id: int, target_id) -> bool:
-        return self._is_valid_player_id(target_id) and self.players[target_id].health > 0
+        return (
+            self._is_valid_player_id(target_id)
+            and self.players[target_id].health > 0
+            and (target_id == player_id or not bool(getattr(self.players[target_id], 'untargetable', False)))
+        )
 
     def _card_requires_target(self, card: CardInstance) -> bool:
         if card.card_type == 'guard':
@@ -670,10 +686,13 @@ class GameEngine2v2(GameEngine):
                 if key in choice:
                     target_id = choice.get(key)
                     break
-        if self._is_valid_effect_target(player_id, target_id):
+        if self._is_valid_enemy_target(player_id, target_id):
             return target_id
         enemies = self.get_enemies(player_id)
-        return enemies[0] if enemies else -1
+        for enemy_id in enemies:
+            if self._is_valid_enemy_target(player_id, enemy_id):
+                return enemy_id
+        return -1
 
 
     def _start_draw_phase(self):
@@ -807,8 +826,10 @@ class GameEngine2v2(GameEngine):
             target_player_id = player_id
         elif self._card_requires_target(card) and card.card_type == 'thorn' and target_player_id == player_id:
             return {'success': False, 'error': '攻击牌不能选择自己作为目标'}
+        elif self._card_requires_target(card) and card.card_type == 'thorn' and not self._is_valid_enemy_target(player_id, target_player_id):
+            return {'success': False, 'error': '对方无法被选中'}
         elif self._card_requires_target(card) and not self._is_valid_effect_target(player_id, target_player_id):
-            return {'success': False, 'error': '必须选择一名存活玩家'}
+            return {'success': False, 'error': '对方无法被选中'}
         if target_player_id >= 0:
             if choice is None:
                 choice = {}
@@ -1145,6 +1166,7 @@ class GameEngine2v2(GameEngine):
             drawn = ps.draw_cards(draw_count)
             if ps.sluggish > 0:
                 self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
+            self._clear_sluggish_after_draw(player_id)
             pincer_overload = sum(
                 1
                 for owner_id, owner_state in enumerate(self.players)
@@ -1487,7 +1509,7 @@ class GameEngine2v2(GameEngine):
         if trigger_cost > ps.elixir:
             return {'success': False, 'error': '能量不足'}
         if not self._is_valid_effect_target(player_id, target_player_id):
-            return {'success': False, 'error': '必须选择一名存活玩家'}
+            return {'success': False, 'error': '对方无法被选中'}
         if self._equipment_trigger_forbids_self_target(eq.card_def) and target_player_id == player_id:
             return {'success': False, 'error': '不能选择自己作为目标'}
         if target_player_id != player_id and self.is_ally(player_id, target_player_id) and not ally_approved:
@@ -1550,11 +1572,15 @@ class GameEngine2v2(GameEngine):
             return target_str if self._is_valid_effect_target(player_id, target_str) else -1
         if target_str == 'enemy':
             enemies = self.get_enemies(player_id)
-            return enemies[0] if enemies else -1
+            for enemy_id in enemies:
+                if self._is_valid_enemy_target(player_id, enemy_id):
+                    return enemy_id
+            return -1
         if target_str == 'both':
             return -1
         if target_str == 'random':
             enemies = self.get_enemies(player_id)
+            enemies = [enemy_id for enemy_id in enemies if self._is_valid_enemy_target(player_id, enemy_id)]
             return random.choice(enemies) if enemies else -1
         if target_str == 'teammate':
             teammate_id = self.get_teammate(player_id)
@@ -1596,15 +1622,15 @@ class GameEngine2v2(GameEngine):
             mate = self.get_teammate(player_id)
             return [mate] if self._is_valid_effect_target(player_id, mate) else []
         if target_str == 'enemy':
-            return self.get_enemies(player_id)
+            return [i for i in self.get_enemies(player_id) if self._is_valid_enemy_target(player_id, i)]
         if target_str == 'all_enemies':
-            return [i for i in self.get_all_enemies(player_id) if self.players[i].health > 0]
+            return [i for i in self.get_all_enemies(player_id) if self._is_valid_enemy_target(player_id, i)]
         if target_str == 'random_friendly':
             team = self.teams[self.team_of(player_id)]
             alive = [p for p in team if self.players[p].health > 0]
             return [random.choice(alive)] if alive else []
         if target_str == 'random_enemy':
-            enemies = self.get_enemies(player_id)
+            enemies = [i for i in self.get_enemies(player_id) if self._is_valid_enemy_target(player_id, i)]
             return [random.choice(enemies)] if enemies else []
         if target_str == 'random_player':
             alive = [i for i, p in enumerate(self.players) if p.health > 0]

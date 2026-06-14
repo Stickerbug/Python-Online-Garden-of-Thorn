@@ -13306,14 +13306,32 @@ function canPlayCard(cardDict) {
     const cardDef = getCardDef(cardDict.def_id);
     if (!cardDef) return false;
     if (cardDef.card_type === 'guard' && !cardHasPlayableScript(cardDef) && !(cardDef.effects || []).length) return false;
-    if ((you.attack_blocked || 0) > 0 && cardDef.card_type === 'thorn') return false;
-    if ((you.attack_only || 0) > 0 && cardDef.card_type !== 'thorn') return false;
+    if (getActionLimitStatusValue(you, 'attack_blocked', '禁攻') > 0 && cardDef.card_type === 'thorn') return false;
+    if (getActionLimitStatusValue(you, 'attack_only', '仅攻击') > 0 && cardDef.card_type !== 'thorn') return false;
     const elixir = you.elixir || 0;
     const magic = you.magic || 0;
     const { totalE, totalM } = getCardDisplayCosts(cardDict, cardDef, you);
     if (totalE > elixir) return false;
     if (totalM > magic) return false;
     return true;
+}
+
+function getActionLimitStatusValue(playerData, ...keys) {
+    const data = playerData || {};
+    let value = 0;
+    keys.forEach(key => {
+        value = Math.max(value, Number(data[key] || 0));
+    });
+    const custom = data.custom_statuses || {};
+    keys.forEach(key => {
+        const raw = custom[key];
+        if (raw && typeof raw === 'object') {
+            value = Math.max(value, Number(raw.stacks ?? raw.stack ?? raw.value ?? raw.layers ?? 0));
+        } else {
+            value = Math.max(value, Number(raw || 0));
+        }
+    });
+    return value;
 }
 
 function getCannotPlayReason(cardDict) {
@@ -13327,8 +13345,8 @@ function getCannotPlayReason(cardDict) {
     if (cardDef.card_type === 'guard' && !cardHasPlayableScript(cardDef) && !(cardDef.effects || []).length) {
         return UI.error_waiting_response_ui || UI.cannot_play;
     }
-    if ((you.attack_blocked || 0) > 0 && cardDef.card_type === 'thorn') return UI.error_attack_blocked || UI.cannot_play;
-    if ((you.attack_only || 0) > 0 && cardDef.card_type !== 'thorn') return UI.error_attack_only || UI.cannot_play;
+    if (getActionLimitStatusValue(you, 'attack_blocked', '禁攻') > 0 && cardDef.card_type === 'thorn') return UI.error_attack_blocked || UI.cannot_play;
+    if (getActionLimitStatusValue(you, 'attack_only', '仅攻击') > 0 && cardDef.card_type !== 'thorn') return UI.error_attack_only || UI.cannot_play;
     const { totalE, totalM } = getCardDisplayCosts(cardDict, cardDef, you);
     const reasons = [];
     if (totalE > (you.elixir || 0)) reasons.push(UI.error_not_enough_e || UI.insufficient_resources || UI.cannot_play);
@@ -14253,6 +14271,7 @@ function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true, candida
         const stateData = getPlayerDataById(targetId) || data || {};
         const alive = (stateData && Number(stateData.health || 0) > 0);
         if (aliveOnly && !alive) return;
+        if (targetId !== normalizePlayerId(gameState.your_id) && stateData && stateData.untargetable) return;
         out.push({
             id: targetId,
             group,
@@ -14360,6 +14379,34 @@ function equipmentTriggerForbidsSelfTarget(cardDef) {
     return getEquipmentTriggerPayloads(cardDef).some(effectTreeUsesEventTarget);
 }
 
+function getCardPlayPayloads(cardDef) {
+    if (!cardDef) return [];
+    const payloads = [];
+    const effects = Array.isArray(cardDef.effects) ? cardDef.effects : [];
+    effects.forEach(effect => {
+        if (effect && (effect.type === 'on_play' || effect.type === 'play')) {
+            payloads.push(effect.params || effect);
+        }
+    });
+    const scripts = cardDef.scripts && typeof cardDef.scripts === 'object' ? cardDef.scripts : {};
+    ['onPlay', 'on_play', 'play'].forEach(key => {
+        if (scripts[key]) payloads.push(scripts[key]);
+    });
+    const v2Events = (cardDef.v2_events && typeof cardDef.v2_events === 'object')
+        ? cardDef.v2_events
+        : ((cardDef.v2_resource && cardDef.v2_resource.events && typeof cardDef.v2_resource.events === 'object')
+            ? cardDef.v2_resource.events
+            : {});
+    ['on_play', 'play', 'onPlay'].forEach(key => {
+        if (v2Events[key]) payloads.push(v2Events[key]);
+    });
+    return payloads;
+}
+
+function cardPlayChoosesTarget(cardDef) {
+    return getCardPlayPayloads(cardDef).some(effectTreeUsesEventTarget);
+}
+
 async function chooseEnemyTarget(title) {
     const targets = getEnemyTargetOptions();
     if (!targets.length) {
@@ -14381,8 +14428,8 @@ function cardNeedsPlayerTarget(cardDef, cardDict = null) {
     if (!cardDef) return false;
     if (cardHasSelfOnlyFlag(cardDict || {}, cardDef) && cardDef.card_type !== 'thorn') return false;
     if (cardDef.card_type === 'guard') return false;
-    if (equipmentChoosesTargetOnTrigger(cardDef)) return false;
     if (cardDef.card_type === 'thorn') return gs.mode === '2v2';
+    if (cardDef.card_type === 'root') return cardPlayChoosesTarget(cardDef);
     if (['bloom', 'root'].includes(cardDef.card_type)) return true;
     return false;
 }
@@ -15417,6 +15464,13 @@ async function onPlayCard(cardInstanceId, options = {}) {
         return;
     }
     const cardDef = getCardDef(cardDict.def_id);
+    if (cardDef && cardDef.card_type === 'thorn' && gameState && gameState.mode !== '2v2') {
+        const opponent = gameState.opponent || {};
+        if (opponent.untargetable) {
+            flashStatus('对方无法被选中', 2200, 'error');
+            return;
+        }
+    }
     let targetPlayerId = -1;
     if (cardHasSelfOnlyFlag(cardDict, cardDef) && (!cardDef || cardDef.card_type !== 'thorn')) {
         targetPlayerId = normalizePlayerId(gameState.your_id);

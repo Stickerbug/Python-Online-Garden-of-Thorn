@@ -79,12 +79,8 @@ def reset_card_for_discard(card: CardInstance):
     card.cost_e_override = None
     card.cost_m_override = None
     card.mimic_discount = 0
-    card.magic_swift_value = 0
     card.power_value = 0
-    card.swift_value = 0
-    card.instance_flags.discard('magic_swift')
     card.instance_flags.discard('power')
-    card.instance_flags.discard('swift')
     if card.card_type == 'thorn':
         card.fission_level = 1
         card.fusion_level = 1
@@ -3363,6 +3359,14 @@ class GameEngine:
                     return default
         return default
 
+    def _target_can_be_selected(self, player_id: int, target_id: int, allow_self: bool = True) -> bool:
+        if not (0 <= target_id < len(self.players)):
+            return False
+        if target_id == player_id:
+            return bool(allow_self)
+        target = self.players[target_id]
+        return target.health > 0 and not bool(getattr(target, 'untargetable', False))
+
     def _choice_request_satisfied(self, effect: Optional[dict], choice: Optional[dict], card: Optional[CardInstance] = None) -> bool:
         if not isinstance(effect, dict):
             return True
@@ -3526,6 +3530,14 @@ class GameEngine:
             return {'success': False, 'error': '等待对手反制响应'}
         if getattr(self, 'pending_v2_ui', None) is not None:
             return {'success': False, 'error': 'Waiting for mod UI response'}
+        if card.card_type == 'thorn':
+            target_id = self._choice_target_from_choice(choice, 1 - player_id)
+            if not self._target_can_be_selected(player_id, target_id, allow_self=False):
+                return {'success': False, 'error': '对方无法被选中'}
+        elif self._v2_play_requires_choice_target(card):
+            target_id = self._choice_target_from_choice(choice, -1)
+            if target_id >= 0 and not self._target_can_be_selected(player_id, target_id, allow_self=True):
+                return {'success': False, 'error': '对方无法被选中'}
         can_play, reason = self.can_play_card(player_id, card)
         if not can_play:
             return {'success': False, 'error': reason}
@@ -5577,11 +5589,13 @@ class GameEngine:
             return player_id
         elif target_str in ('target', 'choice_target', 'selected_target', 'chosen_target'):
             selected = self._selected_choice_target(-1)
-            if 0 <= selected < len(self.players):
+            if self._target_can_be_selected(player_id, selected, allow_self=True):
                 return selected
-            return 1 - player_id
+            enemy_id = 1 - player_id
+            return enemy_id if self._target_can_be_selected(player_id, enemy_id, allow_self=False) else -1
         elif target_str == 'enemy':
-            return 1 - player_id
+            enemy_id = 1 - player_id
+            return enemy_id if self._target_can_be_selected(player_id, enemy_id, allow_self=False) else -1
         elif target_str == 'both':
             return -1
         elif target_str == 'random':
@@ -5597,13 +5611,16 @@ class GameEngine:
         if target_str == 'teammate':
             return [player_id]
         if target_str == 'enemy':
-            return [1 - player_id]
+            enemy_id = 1 - player_id
+            return [enemy_id] if self._target_can_be_selected(player_id, enemy_id, allow_self=False) else []
         if target_str == 'all_enemies':
-            return [1 - player_id]
+            enemy_id = 1 - player_id
+            return [enemy_id] if self._target_can_be_selected(player_id, enemy_id, allow_self=False) else []
         if target_str == 'random_friendly':
             return [player_id]
         if target_str == 'random_enemy':
-            return [1 - player_id]
+            enemy_id = 1 - player_id
+            return [enemy_id] if self._target_can_be_selected(player_id, enemy_id, allow_self=False) else []
         if target_str == 'random_player':
             return [random.choice([0, 1])]
         rid = self._resolve_target(player_id, target_str)
@@ -6399,10 +6416,10 @@ class GameEngine:
             return target_str
         if target_str in ('choice_target', 'selected_target', 'chosen_target'):
             target_id = self._selected_choice_target(player_id)
-            return target_id if 0 <= target_id < len(self.players) else player_id
+            return target_id if self._target_can_be_selected(player_id, target_id, allow_self=True) else player_id
         if target_str == 'target':
             target_id = self._selected_choice_target(-1)
-            if 0 <= target_id < len(self.players):
+            if self._target_can_be_selected(player_id, target_id, allow_self=True):
                 return target_id
             return int(context.get('target_id', player_id))
         if target_str == 'event_target':
@@ -6980,7 +6997,7 @@ class GameEngine:
         else:
             enemies = [1 - player_id] if len(self.players) == 2 else []
         for target_id in enemies:
-            if 0 <= target_id < len(self.players) and self.players[target_id].health > 0:
+            if self._target_can_be_selected(player_id, target_id, allow_self=False):
                 return target_id
         return -1
 
@@ -7589,7 +7606,7 @@ class GameEngine:
             return
         ps = self.players[player_id]
         cleared = []
-        for attr, label in (('sluggish', '迟缓'), ('blind', '失明')):
+        for attr, label in (('blind', '失明'),):
             value = int(getattr(ps, attr, 0) or 0)
             if value <= 0:
                 continue
@@ -7600,6 +7617,15 @@ class GameEngine:
             cleared.append(label)
         if cleared:
             self.log_msg(f"{self.pn(player_id)}的{ '、'.join(cleared) }效果清除")
+
+    def _clear_sluggish_after_draw(self, player_id: int):
+        if not (0 <= player_id < len(self.players)) or self._is_status_immune(player_id):
+            return
+        ps = self.players[player_id]
+        if int(getattr(ps, 'sluggish', 0) or 0) <= 0:
+            return
+        ps.sluggish = 0
+        self.log_msg(f"{self.pn(player_id)}的迟缓效果清除")
 
     def _return_cogwheel_cards_now(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
@@ -7754,6 +7780,7 @@ class GameEngine:
             self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌")
             if ps.sluggish > 0:
                 self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
+            self._clear_sluggish_after_draw(player_id)
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(owner_state.equipment):
                 if self._has_card_event(eq.card_def, 'any_turn_start'):
@@ -9281,6 +9308,8 @@ class GameEngine:
             target_id = -1
         if not (0 <= target_id < len(self.players)):
             target_id = 1 - player_id
+        if not self._target_can_be_selected(player_id, target_id, allow_self=True):
+            return {'success': False, 'error': '对方无法被选中'}
         if self._equipment_trigger_forbids_self_target(eq.card_def) and target_id == player_id:
             return {'success': False, 'error': '不能选择自己作为目标'}
         choice = {'target_player': target_id, 'target_player_id': target_id, 'target_id': target_id}
