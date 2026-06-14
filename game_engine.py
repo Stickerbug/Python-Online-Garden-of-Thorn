@@ -3462,7 +3462,9 @@ class GameEngine:
             return None
         choice_params = self._effect_params(choice_request)
         choice_type = self._choice_type_for_effect(choice_request, card)
-        if choice_type == 'choose_target' and not choice_params and self._v2_play_requires_choice_target(card):
+        if choice_type == 'choose_target' and not choice_params and (
+            self._v2_play_requires_choice_target(card) or self._root_play_requires_owner_target(card)
+        ):
             choice_params = {'target': 'all', 'include_self': True, 'alive_only': True}
         prev_choice = getattr(self, '_active_choice', None)
         if isinstance(choice, dict):
@@ -3534,7 +3536,7 @@ class GameEngine:
             target_id = self._choice_target_from_choice(choice, 1 - player_id)
             if not self._target_can_be_selected(player_id, target_id, allow_self=False):
                 return {'success': False, 'error': '对方无法被选中'}
-        elif self._v2_play_requires_choice_target(card):
+        elif self._v2_play_requires_choice_target(card) or self._root_play_requires_owner_target(card):
             target_id = self._choice_target_from_choice(choice, -1)
             if target_id >= 0 and not self._target_can_be_selected(player_id, target_id, allow_self=True):
                 return {'success': False, 'error': '对方无法被选中'}
@@ -3789,6 +3791,7 @@ class GameEngine:
                     'original_card_instance_id': getattr(original_card, 'instance_id', None),
                     'original_card_def_id': getattr(original_card, 'def_id', ''),
                     'incoming_damage': int((pending_damage_prediction or {}).get('total') or 0),
+                    'first_damage': int(((pending_damage_prediction or {}).get('parts') or [0])[0] or 0),
                     'damage_amount': int((pending_damage_prediction or {}).get('total') or 0),
                     'incoming_damage_parts': list((pending_damage_prediction or {}).get('parts') or []),
                 },
@@ -3985,6 +3988,8 @@ class GameEngine:
         hand_card = ps.find_hand_card(card.instance_id)
         if hand_card:
             ps.remove_hand_card(card.instance_id)
+        ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', 0) or 0))
+        self._apply_magic_acceleration_after_play(player_id, card)
         if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
             return self._execute_card_effect(player_id, card, choice)
         response_result = self._check_card_response_after_choice(player_id, card, choice)
@@ -6819,13 +6824,13 @@ class GameEngine:
             return True
         if self._get_choice_request(card) is not None:
             return True
-        return self._v2_play_requires_choice_target(card)
+        return self._v2_play_requires_choice_target(card) or self._root_play_requires_owner_target(card)
 
     def _get_choice_type(self, card: CardInstance) -> str:
         effect = self._get_choice_request(card)
         if effect:
             return self._choice_type_for_effect(effect, card)
-        if self._v2_play_requires_choice_target(card):
+        if self._v2_play_requires_choice_target(card) or self._root_play_requires_owner_target(card):
             return 'choose_target'
         base = self._base_get_choice_type(card)
         return base or ''
@@ -6837,7 +6842,7 @@ class GameEngine:
             return False
         if self._get_choice_request(card, choice) is not None:
             return False
-        if self._v2_play_requires_choice_target(card):
+        if self._v2_play_requires_choice_target(card) or self._root_play_requires_owner_target(card):
             return self._choice_target_from_choice(choice) >= 0
         return True
 
@@ -6987,6 +6992,11 @@ class GameEngine:
         events = getattr(card.card_def, 'v2_events', None) or {}
         event_def = events.get('on_play')
         return self._effect_tree_uses_choice_target(event_def)
+
+    def _root_play_requires_owner_target(self, card: Optional[CardInstance]) -> bool:
+        if card is None or not getattr(card, 'card_def', None):
+            return False
+        return card.card_type == 'root' and not self._card_is_self_only(card)
 
     def _default_enemy_target_for_event(self, player_id: int) -> int:
         if hasattr(self, 'get_enemies'):
@@ -8228,7 +8238,16 @@ class GameEngine:
                                      damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_DIRECT)
         placed_as_equipment = bool(getattr(card, '_placed_as_equipment', False))
         script_controls_play = self._card_has_script(card.card_def)
+        explicit_equip_owner = hasattr(card, '_placed_as_equipment_owner')
         equip_owner_id = int(getattr(card, '_placed_as_equipment_owner', player_id))
+        if (
+            not explicit_equip_owner
+            and card.card_type == 'root'
+            and not self._card_is_self_only(card)
+        ):
+            selected_owner_id = self._choice_target_from_choice(choice, -1)
+            if 0 <= selected_owner_id < len(self.players):
+                equip_owner_id = selected_owner_id
         if equip_owner_id < 0 or equip_owner_id >= len(self.players):
             equip_owner_id = player_id
         equip_owner = self.players[equip_owner_id]
@@ -8664,7 +8683,14 @@ class GameEngine:
         ratio = float(params.get('ratio', params.get('multiplier', 0.5)) or 0)
         incoming = 0
         if isinstance(context, dict):
-            incoming = int(context.get('damage_amount', context.get('incoming_damage', 0)) or 0)
+            parts = context.get('incoming_damage_parts')
+            if isinstance(parts, (list, tuple)) and parts:
+                try:
+                    incoming = int(parts[0] or 0)
+                except Exception:
+                    incoming = 0
+            if incoming <= 0:
+                incoming = int(context.get('first_damage', context.get('damage_amount', context.get('incoming_damage', 0))) or 0)
         amount = max(0, int(math.ceil(incoming * ratio)))
         if amount <= 0:
             return

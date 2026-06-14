@@ -4690,6 +4690,7 @@ class LocalSoloEngine {
         ps.cards_played_this_turn[card.def_id] = dupCount + 1;
         const handCard = ps.findHandCard(card.instance_id);
         if (handCard) ps.removeHandCard(card.instance_id);
+        this.applyMagicAccelerationAfterPlay(playerId, card);
         if (this.cardNeedsChoice(card) && !this.choiceSatisfiesRequest(card, choice)) {
             return this.executeCardEffect(playerId, card, choice);
         }

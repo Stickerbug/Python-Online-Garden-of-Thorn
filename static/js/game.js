@@ -3377,7 +3377,7 @@ function showView(viewId) {
 
 function isNetworkMatchPhase(value = phase) {
     return !soloMode && !replayMode && [
-        'draft', 'event_select', 'event_reveal', 'event_sub_choice', 'playing', 'action', 'draw', 'response', 'choice', 'game_over',
+        'draft', 'event_select', 'event_reveal', 'event_sub_choice', 'playing', 'action', 'draw', 'response', 'choice', 'game_over', 'reconnecting',
     ].includes(String(value || ''));
 }
 
@@ -7311,6 +7311,11 @@ function connectSocket(serverUrl) {
             flashStatus(UI.server_no_response, 3000, 'error');
         }
     });
+    bindSocketEvent('kicked', (data = {}) => {
+        const reason = data.reason || UI.disconnected || 'Disconnected';
+        debugLog('[client] kicked:', reason);
+        flashStatus(translateServerMessage(reason), 5000, 'error');
+    });
     bindSocketEvent('latency_pong', (data = {}) => {
         if (typeof performance === 'undefined' || data.t == null) return;
         const rtt = Math.max(0, performance.now() - Number(data.t));
@@ -7351,6 +7356,11 @@ function connectSocket(serverUrl) {
         if (pendingSoloStart) {
             pendingSoloStart = false;
             emitSoloStart();
+            return;
+        }
+        if (data.status === 'reconnecting') {
+            phase = 'reconnecting';
+            updateStatus(UI.reconnecting || UI.reconnect_title || 'Reconnecting...');
             return;
         }
         phase = 'lobby';
@@ -7770,6 +7780,7 @@ function connectSocket(serverUrl) {
         hideModal();
     });
     bindSocketEvent('reconnect_available', (data) => {
+        phase = 'reconnecting';
         showModal(`
             <h3>${UI.reconnect_title}</h3>
             <p>${UI.reconnect_prompt}</p>
@@ -14429,7 +14440,7 @@ function cardNeedsPlayerTarget(cardDef, cardDict = null) {
     if (cardHasSelfOnlyFlag(cardDict || {}, cardDef) && cardDef.card_type !== 'thorn') return false;
     if (cardDef.card_type === 'guard') return false;
     if (cardDef.card_type === 'thorn') return gs.mode === '2v2';
-    if (cardDef.card_type === 'root') return cardPlayChoosesTarget(cardDef);
+    if (cardDef.card_type === 'root') return true;
     if (['bloom', 'root'].includes(cardDef.card_type)) return true;
     return false;
 }
@@ -16352,6 +16363,11 @@ async function showChoiceUI(data) {
     }
     if (!choiceResult && choiceParams.continue_on_cancel) {
         choiceResult = { cancelled: true };
+    }
+    if (!choiceResult) {
+        choicePending = false;
+        clearPendingServerAction();
+        return;
     }
     choicePending = false;
     beginPendingServerAction('resolve_choice', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });

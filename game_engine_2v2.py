@@ -662,9 +662,7 @@ class GameEngine2v2(GameEngine):
     def _card_requires_target(self, card: CardInstance) -> bool:
         if card.card_type == 'guard':
             return False
-        if 'self_only' in card.flags and card.card_type != 'thorn':
-            return False
-        if card.card_type == 'root' and card.card_def.trigger_cost_e >= 0:
+        if self._card_is_self_only(card) and card.card_type != 'thorn':
             return False
         return card.card_type in ('thorn', 'bloom', 'root')
 
@@ -736,9 +734,14 @@ class GameEngine2v2(GameEngine):
                         result['target_player_id'] = self.pending_choice.get('target_player_id')
             if card.card_type == 'root':
                 target_id = self._selected_effect_target(player_id, choice)
-                for eq in self.players[player_id].equipment:
-                    if eq.card_instance.instance_id == card.instance_id:
-                        eq.effect_target = target_id
+                found = False
+                for owner in self.players:
+                    for eq in owner.equipment:
+                        if eq.card_instance.instance_id == card.instance_id:
+                            eq.effect_target = target_id
+                            found = True
+                            break
+                    if found:
                         break
             return result
         finally:

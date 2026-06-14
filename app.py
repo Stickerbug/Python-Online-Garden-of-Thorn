@@ -465,17 +465,9 @@ def admin_match_record(room, result='finished'):
         registered_usernames = []
         participant_meta = []
         for psid in room.player_sids:
-            if psid in players:
-                p = players[psid]
-                names.append(p['nickname'])
-                participant_meta.append(p)
-            elif psid in room.disconnected_players:
-                p = room.disconnected_players[psid]
-                names.append(p['nickname'])
-                participant_meta.append(p)
-            else:
-                names.append('?')
-                participant_meta.append({})
+            p = room_player_profile(room, psid)
+            names.append(p.get('nickname', '?'))
+            participant_meta.append(p)
         for meta in participant_meta:
             if meta.get('user_id') and meta.get('nickname'):
                 registered_usernames.append(meta['nickname'])
@@ -975,6 +967,10 @@ class GameRoom:
         self.engine.allowed_card_ids = set(allowed_card_ids) if allowed_card_ids is not None else None
         self.spectators = []
         self.disconnected_players = {}
+        # Durable per-slot metadata. Socket.IO sid changes on reconnect; this
+        # snapshot keeps lobby, spectate, replay, and reconnect matching from
+        # degrading to "?" / "P1" if the online player row is deleted first.
+        self.player_profiles = {}
         self.reconnect_timers = {}
         self._rematch_votes = set()
         self._returned_lobby_sids = set()
@@ -988,11 +984,31 @@ class GameRoom:
         reset_room_replay(self)
         if mode == '2v2' and len(player_sids) == 4:
             self.team_assignments = [[0, 1], [2, 3]]
+        for idx, psid in enumerate(self.player_sids):
+            self.store_player_profile(psid, idx)
 
     def player_index(self, sid):
         if sid in self.player_sids:
             return self.player_sids.index(sid)
         return -1
+
+    def store_player_profile(self, sid, player_index=None, source=None):
+        if player_index is None:
+            player_index = self.player_index(sid)
+        source = source or players.get(sid) or self.disconnected_players.get(sid) or {}
+        profile = make_room_player_profile(source, sid=sid, player_index=player_index, room=self)
+        self.player_profiles[sid] = profile
+        return profile
+
+    def get_player_profile(self, sid):
+        if sid in players:
+            return make_room_player_profile(players[sid], sid=sid, player_index=self.player_index(sid), room=self)
+        if sid in self.disconnected_players:
+            return make_room_player_profile(self.disconnected_players[sid], sid=sid, player_index=self.player_index(sid), room=self)
+        profile = self.player_profiles.get(sid)
+        if profile:
+            return profile
+        return make_room_player_profile({}, sid=sid, player_index=self.player_index(sid), room=self)
 
 
 def room_match_key(room):
@@ -1004,6 +1020,10 @@ def room_mod_payload(room):
     for psid in getattr(room, 'player_sids', []) or []:
         if psid in players:
             first = players[psid]
+            break
+        profile = room_player_profile(room, psid)
+        if profile and profile.get('nickname') not in ('?', ''):
+            first = profile
             break
     if not first:
         return {}
@@ -1161,9 +1181,7 @@ def _player_matches_room_participant(room, nickname):
     if not nickname:
         return False
     for psid in room.player_sids:
-        if psid in players and players[psid].get('nickname') == nickname:
-            return True
-        if psid in room.disconnected_players and room.disconnected_players[psid].get('nickname') == nickname:
+        if room_player_nickname(room, psid, '') == nickname:
             return True
     for name in getattr(room.engine, 'player_names', []) or []:
         if name == nickname:
@@ -1184,6 +1202,18 @@ def _find_disconnected_sid_for_player(room, player):
         if player_account_id and player_account_id == str(dc_info.get('account_player_id') or ''):
             return old_sid
         if player_name_key and player_name_key == normalize_username_key(dc_info.get('nickname', '')):
+            return old_sid
+    for old_sid, profile in list(getattr(room, 'player_profiles', {}).items()):
+        if old_sid in players:
+            continue
+        if player_user_id and profile.get('user_id') == player_user_id:
+            admin_event('player', f'reconnect matched by room profile user_id room={getattr(room, "room_id", "?")}', sid=old_sid)
+            return old_sid
+        if player_account_id and player_account_id == str(profile.get('account_player_id') or ''):
+            admin_event('player', f'reconnect matched by room profile account_id room={getattr(room, "room_id", "?")}', sid=old_sid)
+            return old_sid
+        if player_name_key and player_name_key == normalize_username_key(profile.get('nickname', '')):
+            admin_event('player', f'reconnect matched by room profile nickname room={getattr(room, "room_id", "?")}', sid=old_sid)
             return old_sid
     return None
 
@@ -1829,28 +1859,60 @@ def special_public_fields(player_or_profile):
     }
 
 
-def player_special_fields(sid, room=None):
+def make_room_player_profile(source=None, sid=None, player_index=-1, room=None):
+    source = source or {}
+    nickname = source.get('nickname') or source.get('name') or ''
+    if not nickname and room is not None:
+        try:
+            names = list(getattr(room.engine, 'player_names', []) or [])
+            if 0 <= int(player_index) < len(names):
+                nickname = names[int(player_index)]
+        except Exception:
+            pass
+    if not nickname:
+        nickname = f'P{int(player_index) + 1}' if isinstance(player_index, int) and player_index >= 0 else '?'
+    profile = {
+        'sid': sid or source.get('sid') or '',
+        'nickname': nickname,
+        'player_index': int(player_index) if isinstance(player_index, int) else source.get('player_index', -1),
+        'user_id': source.get('user_id'),
+        'account_player_id': source.get('account_player_id') or '',
+        'is_registered_user': bool(source.get('is_registered_user')),
+        'mod_source': source.get('mod_source', 'official'),
+        'disabled_mods': list(source.get('disabled_mods', []) or []),
+        'mods_list': list(source.get('mods_list', []) or []),
+        'community_mod_hash': source.get('community_mod_hash', ''),
+        'community_mod_url': source.get('community_mod_url', ''),
+        'community_mod_name': source.get('community_mod_name', ''),
+        'community_mods': list(source.get('community_mods', []) or []),
+        'mods_hash': source.get('mods_hash', ''),
+        'loadout_hash': source.get('loadout_hash', '') or source.get('mods_hash', ''),
+        'v2_loadout_hash': source.get('v2_loadout_hash', ''),
+        'v2_load_order': list(source.get('v2_load_order', []) or []),
+        'skin': public_skin_config(source.get('skin')),
+        'skin_look': normalize_skin_look(source.get('skin_look')),
+    }
+    profile.update(special_public_fields(source))
+    return profile
+
+
+def room_player_profile(room, sid):
+    if room is not None and hasattr(room, 'get_player_profile'):
+        return room.get_player_profile(sid)
     if sid in players:
-        return special_public_fields(players[sid])
+        return make_room_player_profile(players[sid], sid=sid, player_index=-1, room=room)
     if room is not None and sid in getattr(room, 'disconnected_players', {}):
-        return special_public_fields(room.disconnected_players[sid])
-    return special_public_fields({})
+        return make_room_player_profile(room.disconnected_players[sid], sid=sid, player_index=-1, room=room)
+    return make_room_player_profile({}, sid=sid, player_index=-1, room=room)
+
+
+def player_special_fields(sid, room=None):
+    return special_public_fields(room_player_profile(room, sid))
 
 
 def room_player_nickname(room, sid, fallback='?'):
-    if sid in players:
-        return players[sid].get('nickname', fallback)
-    if room is not None and sid in getattr(room, 'disconnected_players', {}):
-        return room.disconnected_players[sid].get('nickname', fallback)
-    if room is not None:
-        try:
-            idx = list(getattr(room, 'player_sids', []) or []).index(sid)
-            names = list(getattr(room.engine, 'player_names', []) or [])
-            if 0 <= idx < len(names) and names[idx]:
-                return names[idx]
-        except Exception:
-            pass
-    return fallback
+    profile = room_player_profile(room, sid)
+    return profile.get('nickname') or fallback
 
 
 def is_admin_player_secret(raw):
@@ -1911,19 +1973,11 @@ def normalize_skin_look(value=None):
 
 
 def player_skin_for_sid(sid, room=None):
-    if sid in players:
-        return public_skin_config(players[sid].get('skin'))
-    if room is not None and sid in getattr(room, 'disconnected_players', {}):
-        return public_skin_config(room.disconnected_players[sid].get('skin'))
-    return dict(DEFAULT_PUBLIC_SKIN)
+    return public_skin_config(room_player_profile(room, sid).get('skin'))
 
 
 def player_skin_look_for_sid(sid, room=None):
-    if sid in players:
-        return normalize_skin_look(players[sid].get('skin_look'))
-    if room is not None and sid in getattr(room, 'disconnected_players', {}):
-        return normalize_skin_look(room.disconnected_players[sid].get('skin_look'))
-    return dict(DEFAULT_SKIN_LOOK)
+    return normalize_skin_look(room_player_profile(room, sid).get('skin_look'))
 
 
 def inject_player_skins(state, room, perspective):
@@ -2264,6 +2318,7 @@ def _security_illegal(sid, event_name, message, *, severity='medium', emit_error
         def _kick_later(target_sid):
             try:
                 time.sleep(0.05)
+                socketio.emit('kicked', {'reason': f'非法操作过多：{event_name}'}, room=target_sid)
                 socketio.server.disconnect(target_sid)
             except Exception:
                 pass
@@ -2411,12 +2466,7 @@ def is_room_valid_for_ranking(room, result='finished'):
         return False, 'not_game_over'
     participant_meta = []
     for psid in getattr(room, 'player_sids', []):
-        if psid in players:
-            participant_meta.append(players[psid])
-        elif psid in getattr(room, 'disconnected_players', {}):
-            participant_meta.append(room.disconnected_players[psid])
-        else:
-            participant_meta.append({})
+        participant_meta.append(room_player_profile(room, psid))
     if not participant_meta or any(not meta.get('is_registered_user') for meta in participant_meta):
         return False, 'guest_match'
     started_ts = getattr(room, 'started_at', None) or getattr(room, 'created_at', time.time())
@@ -3056,12 +3106,10 @@ def get_ongoing_games(beta_mode=None):
         if phase in ('action', 'draw', 'response', 'choice', 'playing', 'draft', 'event_select', 'event_reveal'):
             player_names = []
             for s in room.player_sids:
-                if s in players:
-                    player_names.append(players[s]['nickname'])
-                elif s in room.disconnected_players:
-                    player_names.append(room.disconnected_players[s]['nickname'])
-                else:
-                    player_names.append('?')
+                name = room_player_nickname(room, s, '?')
+                if name == '?':
+                    admin_event('error', f'room {rid} missing player metadata for sid={s}', room_id=rid)
+                player_names.append(name)
             both_disconnected = _room_all_blocking_players_disconnected(room)
             game_info = {
                 'room_id': rid,
@@ -3114,15 +3162,8 @@ def build_admin_rooms(beta_mode=None):
         names = []
         disconnected = []
         for psid in room.player_sids:
-            if psid in players:
-                names.append(players[psid].get('nickname', '?'))
-                disconnected.append(False)
-            elif psid in room.disconnected_players:
-                names.append(room.disconnected_players[psid].get('nickname', '?'))
-                disconnected.append(True)
-            else:
-                names.append('?')
-                disconnected.append(True)
+            names.append(room_player_nickname(room, psid, '?'))
+            disconnected.append(psid not in players)
         result.append({
             'room_id': rid,
             'mode': room.mode,
@@ -5672,7 +5713,7 @@ def broadcast_spectate_state(room):
         state['your_id'] = -1
         state['spectating'] = True
         for i, psid in enumerate(room.player_sids):
-            state[f'player{i + 1}_name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', '?')
+            state[f'player{i + 1}_name'] = room_player_nickname(room, psid, '?')
         socketio.emit('state_update', state, room=spid)
 
 
@@ -5701,7 +5742,7 @@ def build_spectate_state(room, perspective=0):
         pdata = ps.to_dict(include_private=True)
         redact_error_cards_from_player_payload(pdata)
         pdata['player_id'] = i
-        pdata['name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', f'P{i + 1}')
+        pdata['name'] = room_player_nickname(room, psid, f'P{i + 1}')
         pdata['skin'] = player_skin_for_sid(psid, room)
         pdata['skin_look'] = player_skin_look_for_sid(psid, room)
         pdata['is_admin_player'] = player_is_admin(psid, room)
@@ -7305,10 +7346,8 @@ def admin_ls():
             e = room.engine
             p_names = []
             for psid in room.player_sids:
-                if psid in players:
-                    p_names.append(players[psid]['nickname'])
-                else:
-                    p_names.append('(离线玩家)')
+                name = room_player_nickname(room, psid, '?')
+                p_names.append(name if psid in players else f'{name}(离线)')
             room_list.append({
                 'room_id': rid,
                 'players': p_names,
@@ -7694,6 +7733,11 @@ def on_login(data):
                 return
         reconnect_room = None
         reconnect_old_sid = None
+        reconnect_probe = {
+            'nickname': name,
+            'user_id': user_id,
+            'account_player_id': account_user.get('player_id') if account_user else '',
+        }
         for room in rooms.values():
             if bool(getattr(room, 'beta_mode', False)) != bool(is_beta_mode):
                 continue
@@ -7707,6 +7751,16 @@ def on_login(data):
                     reconnect_room = room
                     reconnect_old_sid = dc_sid
                     break
+            if not reconnect_room:
+                profile_sid = _find_disconnected_sid_for_player(room, reconnect_probe)
+                if profile_sid and profile_sid not in players:
+                    reconnect_room = room
+                    reconnect_old_sid = profile_sid
+                    if profile_sid not in room.disconnected_players:
+                        profile = room_player_profile(room, profile_sid)
+                        profile['disconnect_time'] = time.time()
+                        room.disconnected_players[profile_sid] = dict(profile)
+                        admin_event('player', f'login restored reconnect metadata room={room.room_id}', sid=profile_sid, room_id=room.room_id)
             if reconnect_room:
                 break
         initial_status = 'reconnecting' if reconnect_room else 'lobby'
@@ -7746,7 +7800,11 @@ def on_login(data):
             players[sid].update(special_public_fields(special_profile))
         admin_event('player', f'{"[beta] " if is_beta_mode else ""}{name} joined as {initial_status}', sid=sid, mode=preferred_mode)
     if reconnect_room:
-        reconnect_info = reconnect_room.disconnected_players.get(reconnect_old_sid, {})
+        reconnect_info = (
+            reconnect_room.disconnected_players.get(reconnect_old_sid)
+            or room_player_profile(reconnect_room, reconnect_old_sid)
+            or {}
+        )
         reconnect_pidx = int(reconnect_info.get('player_index', -1))
         opponent_nickname = '?'
         if reconnect_room.mode == '2v2' and hasattr(reconnect_room.engine, 'get_all_enemies'):
@@ -7767,6 +7825,7 @@ def on_login(data):
     login_payload = {
         'sid': sid,
         'nickname': name,
+        'status': players.get(sid, {}).get('status', initial_status),
         'authenticated': bool(is_registered_user),
         'disabled_mods': players.get(sid, {}).get('disabled_mods', []),
         'mods_hash': players.get(sid, {}).get('mods_hash', ''),
@@ -8111,6 +8170,8 @@ def on_accept_team_match(data):
             if s in teams:
                 del teams[s]
         room.engine.player_names = [players[s]['nickname'] for s in all_sids]
+        for idx, psid in enumerate(all_sids):
+            room.store_player_profile(psid, idx, players.get(psid))
         room.engine.start_event_select_first()
         record_room_replay_keyframe(room, 'event_select_start')
         for i, s in enumerate(all_sids):
@@ -8164,23 +8225,9 @@ def on_disconnect():
                 room = rooms[room_id]
                 pidx = room.player_index(sid)
                 if pidx >= 0 and room.engine.phase not in ('game_over',):
-                    room.disconnected_players[sid] = {
-                        'nickname': nickname,
-                        'player_index': pidx,
-                        'disconnect_time': time.time(),
-                        'user_id': player.get('user_id'),
-                        'account_player_id': player.get('account_player_id') or '',
-                        'is_registered_user': bool(player.get('is_registered_user')),
-                        'mod_source': player.get('mod_source', 'official'),
-                        'community_mod_hash': player.get('community_mod_hash', ''),
-                        'community_mods': player.get('community_mods', []),
-                        'mods_hash': player.get('mods_hash', ''),
-                        'loadout_hash': player_loadout_hash(player),
-                        'v2_loadout_hash': player.get('v2_loadout_hash', ''),
-                        'skin': public_skin_config(player.get('skin')),
-                        'skin_look': normalize_skin_look(player.get('skin_look')),
-                    }
-                    room.disconnected_players[sid].update(special_public_fields(player))
+                    profile = room.store_player_profile(sid, pidx, player)
+                    profile['disconnect_time'] = time.time()
+                    room.disconnected_players[sid] = dict(profile)
                     dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)
                     current_phase = getattr(room.engine, 'phase', '')
                     pregame_disconnect = current_phase in ('draft', 'event_select', 'event_reveal')
@@ -8300,8 +8347,15 @@ def on_reconnect_accept(data):
             if fallback_old_sid:
                 old_sid = fallback_old_sid
         if old_sid not in room.disconnected_players:
-            player['status'] = 'lobby'
-            return
+            profile = room_player_profile(room, old_sid)
+            if old_sid in getattr(room, 'player_sids', []) and profile.get('nickname') not in ('?', ''):
+                room.disconnected_players[old_sid] = dict(profile)
+                room.disconnected_players[old_sid]['disconnect_time'] = time.time()
+                admin_event('player', f'restored missing disconnected profile for reconnect room={room_id}', sid=old_sid, room_id=room_id)
+            else:
+                player['status'] = 'lobby'
+                admin_event('error', f'reconnect_accept failed: no metadata for old_sid={old_sid} room={room_id}', sid=sid, room_id=room_id)
+                return
         dc_info = room.disconnected_players[old_sid]
         same_identity = (
             (player.get('user_id') and dc_info.get('user_id') == player.get('user_id'))
@@ -8319,6 +8373,8 @@ def on_reconnect_accept(data):
             room.both_dc_timer = None
         pidx = dc_info['player_index']
         room.player_sids[pidx] = sid
+        room.player_profiles.pop(old_sid, None)
+        room.store_player_profile(sid, pidx, player)
         del room.disconnected_players[old_sid]
         player['room_id'] = room_id
         player['status'] = 'in_game'
@@ -8529,6 +8585,8 @@ def on_accept_invite(data):
         accepter['room_id'] = room_id
         accepter['status'] = 'in_game'
         room.engine.player_names = [inviter['nickname'], accepter['nickname']]
+        room.store_player_profile(inviter_sid, 0, inviter)
+        room.store_player_profile(sid, 1, accepter)
         if room.mode == 'urf':
             room.engine.start_game()
             room.started_at = time.time()
@@ -8687,9 +8745,7 @@ def on_chat(data):
             if not isinstance(pidx, int) or pidx < 0 or pidx >= len(room.player_sids):
                 return '?'
             psid = room.player_sids[pidx]
-            if psid in players:
-                return players[psid]['nickname']
-            return room.disconnected_players.get(psid, {}).get('nickname', '?')
+            return room_player_nickname(room, psid, '?')
 
         if room_id is not None and room_id in rooms:
             room = rooms[room_id]
@@ -9226,6 +9282,9 @@ def on_solo_resolve_choice(data):
         engine = solo_sessions.get(sid)
         if not engine:
             return
+        if not getattr(engine, 'pending_choice', None):
+            send_solo_state(sid)
+            return
         pidx = engine.pending_choice.get('player_id', engine.current_player) if engine.pending_choice else engine.current_player
         result = engine.resolve_choice(pidx, choice)
         if result.get('needs_response'):
@@ -9567,6 +9626,19 @@ def on_resolve_choice(data):
         if pidx < 0:
             return
         engine = room.engine
+        pending = getattr(engine, 'pending_choice', None)
+        if not pending:
+            admin_event('player', f'ignored stale resolve_choice without pending choice room={room_id}', sid=sid, room_id=room_id)
+            broadcast_game_state(room)
+            return
+        try:
+            pending_player_id = int(pending.get('player_id', pidx))
+        except Exception:
+            pending_player_id = pidx
+        if pending_player_id != pidx:
+            admin_event('player', f'ignored resolve_choice from non-pending player room={room_id} pending={pending_player_id} got={pidx}', sid=sid, room_id=room_id)
+            send_game_state_to(room, pidx)
+            return
         result = engine.resolve_choice(pidx, choice)
         record_valid_player_action(room, pidx, 'resolve_choice')
         record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice, 'result': result})
@@ -9582,7 +9654,8 @@ def on_resolve_choice(data):
         elif result.get('success'):
             broadcast_game_state(room)
         else:
-            _security_illegal(sid, 'resolve_choice', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
+            if result.get('error') != '没有待选择操作':
+                _security_illegal(sid, 'resolve_choice', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
             emit('server_error', {'message': result.get('error', 'Operation failed')})
             broadcast_game_state(room)
 
@@ -9991,10 +10064,7 @@ def on_rematch(data=None):
                     apply_v2_loadout_to_engine(room.engine, players[room.player_sids[0]])
                 names = []
                 for pidx, psid in enumerate(room.player_sids):
-                    if psid in players:
-                        names.append(players[psid]['nickname'])
-                    else:
-                        names.append(f'Player {pidx + 1}')
+                    names.append(room_player_nickname(room, psid, f'Player {pidx + 1}'))
                 room.engine.player_names = names
                 if room.mode == 'urf':
                     if hasattr(room.engine, 'log'):
@@ -10136,17 +10206,9 @@ def on_spectate(data):
         p1 = '?'
         p2 = '?'
         if len(room.player_sids) > 0:
-            sid0 = room.player_sids[0]
-            if sid0 in players:
-                p1 = players[sid0]['nickname']
-            elif sid0 in room.disconnected_players:
-                p1 = room.disconnected_players[sid0]['nickname']
+            p1 = room_player_nickname(room, room.player_sids[0], '?')
         if len(room.player_sids) > 1:
-            sid1 = room.player_sids[1]
-            if sid1 in players:
-                p2 = players[sid1]['nickname']
-            elif sid1 in room.disconnected_players:
-                p2 = room.disconnected_players[sid1]['nickname']
+            p2 = room_player_nickname(room, room.player_sids[1], '?')
         emit('spectate_enter', {
             'room_id': room_id,
             'player1': p1,
@@ -10161,7 +10223,7 @@ def _send_spectate_state_internal(spid, room):
     state['your_id'] = -1
     state['spectating'] = True
     for i, psid in enumerate(room.player_sids):
-        state[f'player{i + 1}_name'] = players[psid]['nickname'] if psid in players else room.disconnected_players.get(psid, {}).get('nickname', '?')
+        state[f'player{i + 1}_name'] = room_player_nickname(room, psid, '?')
         state[f'player{i + 1}_is_admin_player'] = player_is_admin(psid, room)
         state[f'player{i + 1}_special'] = player_special_fields(psid, room)
     socketio.emit('state_update', state, room=spid)
