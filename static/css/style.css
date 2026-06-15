@@ -2599,21 +2599,6 @@ body {
     box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
   }
 
-  .btn-end-turn {
-    padding: 8px 16px;
-    font-size: 14px;
-  }
-
-  .btn {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
-
-  .btn-small {
-    padding: 3px 6px;
-    font-size: 10px;
-  }
-
   .controls-right input {
     width: clamp(60px, 20vw, 120px);
     padding: 3px 6px;
@@ -2837,16 +2822,6 @@ body {
   .controls-bar {
     gap: 3px;
     padding: 2px 6px;
-  }
-
-  .btn {
-    padding: 3px 6px;
-    font-size: 10px;
-  }
-
-  .btn-small {
-    padding: 2px 5px;
-    font-size: 9px;
   }
 
   .controls-right input {
@@ -5163,9 +5138,29 @@ body {
   filter: grayscale(0.8);
 }
 
+.card.card-blinded-deep::before,
+html[data-ui-style="minimal"] .card.card-blinded-deep::before,
+.battle-classic .card.card-blinded-deep::before,
+html[data-ui-style="minimal"] .card.card-blinded-deep.thorn::before,
+html[data-ui-style="minimal"] .card.card-blinded-deep.bloom::before,
+html[data-ui-style="minimal"] .card.card-blinded-deep.root::before,
+html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
+.battle-classic .card.card-blinded-deep.thorn::before,
+.battle-classic .card.card-blinded-deep.bloom::before,
+.battle-classic .card.card-blinded-deep.root::before,
+.battle-classic .card.card-blinded-deep.guard::before {
+  background: #7f8c8d !important;
+}
+
+.card.card-blinded-deep .card-name,
+.card.card-blinded-deep .card-english-name {
+  color: #7f8c8d !important;
+}
+
 .card.card-blinded-deep .card-type-label {
   color: #7f8c8d !important;
   background: #eceff1 !important;
+  border-color: #7f8c8d !important;
 }
 
 .card.card-blinded .card-effect {
@@ -5186,6 +5181,11 @@ body {
 
 .choice-card-blinded .choice-card-name {
   font-weight: 900;
+}
+
+.choice-card-blinded-deep .choice-card-name {
+  color: #7f8c8d !important;
+  border-color: #7f8c8d !important;
 }
 
 .blind-resource-masked .bar-track {
@@ -8601,10 +8601,6 @@ body {
     padding: 1px 4px;
   }
 
-  .btn-end-turn {
-    padding: 6px 14px;
-    font-size: 13px;
-  }
 }
 
 @media (max-aspect-ratio: 4/3) {
@@ -8670,11 +8666,6 @@ body {
   .controls-bar {
     gap: 3px;
     padding: 2px 6px;
-  }
-
-  .btn-end-turn {
-    padding: 6px 14px;
-    font-size: 13px;
   }
 
   .battle-log .log-content {
@@ -8774,21 +8765,6 @@ body {
   .controls-bar {
     gap: 2px;
     padding: 1px 4px;
-  }
-
-  .btn-end-turn {
-    padding: 5px 10px;
-    font-size: 12px;
-  }
-
-  .btn {
-    padding: 3px 6px;
-    font-size: 10px;
-  }
-
-  .btn-small {
-    padding: 2px 5px;
-    font-size: 9px;
   }
 
   .battle-log .log-content {
@@ -9698,16 +9674,6 @@ body {
     padding: 4px 6px;
   }
 
-  .btn-end-turn,
-  .btn-view-deck,
-  .btn-surrender,
-  .btn-switch-perspective,
-  .btn-leave-spectate {
-    flex: 1 1 auto;
-    min-width: 84px;
-    padding: 7px 10px;
-  }
-
   .settings-inner {
     max-height: calc(100vh - 32px);
     padding: 18px;
@@ -9765,15 +9731,6 @@ body {
     order: initial;
   }
 
-  .btn-end-turn,
-  .btn-view-deck,
-  .btn-surrender,
-  .btn-switch-perspective,
-  .btn-leave-spectate {
-    min-height: 30px;
-    padding: 5px 8px;
-    font-size: 11px;
-  }
 }
 
 .btn {
@@ -10092,16 +10049,6 @@ body {
     flex-shrink: 0;
     cursor: default;
     aspect-ratio: 63/88;
-}
-
-@media (max-width: 768px) {
-    .teammate-hand-chip {
-        min-width: 36px;
-        max-width: 78px;
-        min-height: 20px;
-        padding: 1px 6px;
-        font-size: 10px;
-    }
 }
 
 .teammate-sidebar .bars-row {
@@ -12279,4 +12226,149 @@ html[data-ui-style="minimal"] .btn-end-turn {
   color: #1f6f43;
   font-size: 13px;
   font-weight: 800;
+}
+
+/* Mobile normalization: keep controls proportional to the desktop baseline. */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  .btn,
+  .btn-primary,
+  .btn-magic,
+  .btn-bloom,
+  .btn-danger,
+  .btn-secondary,
+  .btn-small,
+  .mobile-play-confirm button,
+  .game-alert-buttons .btn,
+  .modal-buttons .btn,
+  .controls-bar .btn,
+  .controls-right .btn {
+    border-radius: 4px;
+    font-size: clamp(10px, 2.6vw, 13px);
+    padding: clamp(4px, 1.1vw, 8px) clamp(8px, 2.4vw, 16px);
+    min-height: 0;
+    line-height: 1.2;
+  }
+
+  .btn-end-turn,
+  .btn-view-deck,
+  .btn-surrender,
+  .btn-switch-perspective,
+  .btn-leave-spectate {
+    border-radius: 6px;
+    font-size: clamp(11px, 2.9vw, 14px);
+    padding: clamp(5px, 1.4vw, 8px) clamp(10px, 2.8vw, 18px);
+  }
+}
+
+@media (max-width: 700px), (max-height: 520px) {
+  .term-intro-status-card {
+    min-height: 96px;
+  }
+
+  .term-intro-status-tag {
+    font-size: clamp(17px, 5vw, 24px);
+    padding: 8px 12px;
+    border-radius: 8px;
+  }
+
+  .term-intro-status-note {
+    font-size: clamp(13px, 3.6vw, 16px);
+  }
+
+  .term-intro-item-title {
+    font-size: clamp(14px, 4vw, 18px);
+  }
+
+  .term-intro-item-desc,
+  .term-intro-summary-text,
+  .term-intro-flavor {
+    font-size: clamp(13px, 3.6vw, 16px);
+    line-height: 1.45;
+  }
+}
+
+@media (max-width: 900px), (max-height: 620px), (hover: none) and (pointer: coarse) {
+  .game-container.mode-2v2 .middle-section {
+    gap: 4px;
+  }
+
+  .game-container.mode-2v2 .battle-log {
+    flex: 0 1 38%;
+  }
+
+  .game-container.mode-2v2 .teammate-sidebar {
+    flex: 1 1 62%;
+    padding: 5px 7px;
+    gap: 3px;
+    border-radius: 6px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .teammate-sidebar-header,
+  .teammate-sidebar-section,
+  .teammate-sidebar .bars-row,
+  .teammate-sidebar .info-extra {
+    flex: 0 0 auto;
+  }
+
+  .teammate-sidebar .bars-row {
+    gap: 3px;
+  }
+
+  .teammate-sidebar .bar-track {
+    height: 12px;
+  }
+
+  .teammate-sidebar .bar-text {
+    font-size: 8px;
+  }
+
+  html[data-ui-style="minimal"] .teammate-sidebar .info-extra.compact-info,
+  .teammate-sidebar .info-extra.compact-info {
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 9px;
+    line-height: 1.15;
+    opacity: 0.78;
+  }
+
+  .teammate-sidebar .status-tag {
+    border-radius: 3px;
+    font-size: 8px;
+    padding: 0 3px;
+  }
+
+  .teammate-sidebar .equip-row {
+    flex: 0 1 auto;
+    max-height: 44px;
+    overflow-y: auto;
+    gap: 2px;
+    padding: 1px 0;
+  }
+
+  .teammate-sidebar .equip-row .equip-card,
+  .teammate-sidebar .btn-equip-trigger {
+    border-radius: 3px;
+    font-size: 8px;
+    padding: 1px 3px;
+  }
+
+  .teammate-hand-row {
+    flex: 1 1 auto;
+    min-height: 32px;
+    overflow-y: auto;
+    gap: 3px;
+  }
+
+  .teammate-hand-chip {
+    border-radius: 2px;
+    min-height: 18px;
+    padding: 1px 5px;
+    font-size: 9px;
+    line-height: 1.05;
+  }
 }

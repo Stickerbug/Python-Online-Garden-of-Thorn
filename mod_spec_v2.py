@@ -270,6 +270,7 @@ VALID_LOGIC_OPS = {
     "equipment_prop_add",
     "discard_hand_by_paid_e",
     "restore_turn_start_stats",
+    "restore_match_start_stats",
     "counter_pending_attack_damage",
     "lose_health",
     "discard_choice_then_draw",

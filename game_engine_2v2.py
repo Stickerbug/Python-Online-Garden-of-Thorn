@@ -313,6 +313,7 @@ class GameEngine2v2(GameEngine):
                     hand_size = max(0, hand_size - 1)
                 ps.draw_cards(hand_size)
 
+        self._save_all_match_start_snapshots()
         self.round_num = 1
         self.log_msg(f"2v2游戏开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"回合顺序：{' → '.join(self.pn(p) for p in self.turn_order)}")
@@ -941,10 +942,12 @@ class GameEngine2v2(GameEngine):
             self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
             return 0
         actual = amount
-        actual = self._apply_corruption_multiplier_to_damage(actual)
-        actual = self._apply_damage_dealt_equipment_multiplier(actual, source_id)
         resolved_damage_type = infer_damage_type(source, 'direct', damage_tag or '', damage_type)
         resolved_damage_tag = damage_tag or (status_damage_tag(source) if resolved_damage_type == DAMAGE_TYPE_MAGIC else DAMAGE_TAG_DIRECT)
+        if str(resolved_damage_tag).strip() in (DAMAGE_TAG_POISON, DAMAGE_TAG_FIRE, 'poison', '中毒', 'fire', 'burn', '灼烧') and self._is_status_immune(player_id):
+            return 0
+        actual = self._apply_corruption_multiplier_to_damage(actual)
+        actual = self._apply_damage_dealt_equipment_multiplier(actual, source_id)
         damage_context = self._v2_damage_context(
             player_id,
             actual,
@@ -1163,8 +1166,6 @@ class GameEngine2v2(GameEngine):
                     'turn_will_be_skipped': turn_will_be_skipped,
                     'early_owner_turn_start_equipment': set(early_owner_turn_start_equipment),
                 }
-                if ps.sluggish > 0:
-                    self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
                 return
             drawn = ps.draw_cards(draw_count)
             if ps.sluggish > 0:
@@ -1283,6 +1284,37 @@ class GameEngine2v2(GameEngine):
         ps = self.players[player_id]
         early_owner_turn_start_equipment = set(state.get('early_owner_turn_start_equipment') or set())
         turn_will_be_skipped = bool(state.get('turn_will_be_skipped'))
+        if self.round_num > 1:
+            draw_count = max(0, int((foresight_result or {}).get('draw_count', 0) or 0))
+            drawn = ps.draw_cards(draw_count)
+            if ps.sluggish > 0:
+                self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
+            self._clear_sluggish_after_draw(player_id)
+            pincer_overload = sum(
+                1
+                for owner_id, owner_state in enumerate(self.players)
+                for eq in owner_state.equipment
+                if not eq.card_def.effects and eq.def_id == 'Pincer' and getattr(eq, 'effect_target', owner_id) == player_id
+            )
+            if pincer_overload > 0:
+                ps.overload += pincer_overload
+                self.log_msg(f"{self.pn(player_id)}被螫针施加{pincer_overload}层超载")
+            aura_delta = 0
+            for owner_id, owner_state in enumerate(self.players):
+                for eq in owner_state.equipment:
+                    if getattr(eq, 'effect_target', owner_id) != player_id:
+                        continue
+                    for effect in eq.card_def.effects or []:
+                        if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
+                            aura_delta += self._eval_int(owner_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
+            elixir_recovery = max(0, ELIXIR_RECOVERY - ps.enemy_e_reduction + aura_delta)
+            ps.gain_elixir(elixir_recovery)
+            self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
+            if ps.overload > 0:
+                deduct = min(ps.overload, ps.elixir)
+                ps.elixir -= deduct
+                self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
+                ps.overload = 0
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
             ps.gain_elixir(2)
         for owner_state in self.players:
@@ -1492,6 +1524,7 @@ class GameEngine2v2(GameEngine):
             'target_player': player_id,
             'vars': {'player_id': player_id, 'drawn_card': card.def_id if card else ''},
         })
+        self._apply_electric_web_draw_damage(player_id, 1)
 
     def use_trigger(self, player_id: int, equipment_instance_id: int, target_player_id: int = -1, ally_approved: bool = False) -> dict:
         target_player_id = self._normalize_player_id(target_player_id)

@@ -164,6 +164,11 @@ class PlayerState:
             'elixir': self.elixir,
             'magic': self.magic,
         }
+        self.match_start_snapshot: Dict[str, int] = {
+            'health': self.health,
+            'elixir': self.elixir,
+            'magic': self.magic,
+        }
         self.custom_vars: Dict[str, int] = {
             '\u5496\u5561\u9996\u6b21\u4f7f\u7528': 1,
             '\u4e09\u89d2\u5f62\u5c42\u6570': 0,
@@ -236,6 +241,7 @@ class PlayerState:
             'total_damage_taken': self.total_damage_taken,
             'total_damage_dealt': self.total_damage_dealt,
             'turn_start_snapshot': dict(self.turn_start_snapshot),
+            'match_start_snapshot': dict(self.match_start_snapshot),
             'custom_statuses': dict(self.custom_statuses),
         }
         if include_private:
@@ -317,6 +323,11 @@ class PlayerState:
         ps.total_damage_taken = int(d.get('total_damage_taken', 0))
         ps.total_damage_dealt = int(d.get('total_damage_dealt', 0))
         ps.turn_start_snapshot = dict(d.get('turn_start_snapshot') or {
+            'health': ps.health,
+            'elixir': ps.elixir,
+            'magic': ps.magic,
+        })
+        ps.match_start_snapshot = dict(d.get('match_start_snapshot') or {
             'health': ps.health,
             'elixir': ps.elixir,
             'magic': ps.magic,
@@ -647,7 +658,7 @@ class GameEngine:
         status = str(status or '').strip()
         if status in ('status_immune', 'immune', '状态免疫'):
             return 1 if self._is_status_immune(target_id) else 0
-        if self._is_status_immune(target_id) and status not in ('status_immune', 'immune', '状态免疫'):
+        if self._is_status_immune(target_id) and status not in ('status_immune', 'immune', '状态免疫', 'dodge', '闪避'):
             return 0
         counts = {
             'poison': ps.poison,
@@ -817,11 +828,35 @@ class GameEngine:
                 'magic': int(getattr(ps, 'magic', 0) or 0),
             }
 
+    def _save_match_start_snapshot(self, player_id: int):
+        if 0 <= player_id < len(self.players):
+            ps = self.players[player_id]
+            ps.match_start_snapshot = {
+                'health': int(getattr(ps, 'health', 0) or 0),
+                'elixir': int(getattr(ps, 'elixir', 0) or 0),
+                'magic': int(getattr(ps, 'magic', 0) or 0),
+            }
+
+    def _save_all_match_start_snapshots(self):
+        for pid in range(len(self.players)):
+            self._save_match_start_snapshot(pid)
+
     def _restore_turn_start_snapshot(self, player_id: int, extra_elixir_loss: int = 0):
         if not (0 <= player_id < len(self.players)):
             return
         ps = self.players[player_id]
         snap = dict(getattr(ps, 'turn_start_snapshot', {}) or {})
+        if not snap:
+            snap = {'health': ps.health, 'elixir': ps.elixir, 'magic': ps.magic}
+        ps.health = max(0, min(int(snap.get('health', ps.health)), int(ps.max_health)))
+        ps.elixir = max(0, min(int(snap.get('elixir', ps.elixir)) - max(0, int(extra_elixir_loss or 0)), int(ps.max_elixir)))
+        ps.magic = max(0, min(int(snap.get('magic', ps.magic)), int(ps.max_magic)))
+
+    def _restore_match_start_snapshot(self, player_id: int, extra_elixir_loss: int = 0):
+        if not (0 <= player_id < len(self.players)):
+            return
+        ps = self.players[player_id]
+        snap = dict(getattr(ps, 'match_start_snapshot', {}) or {})
         if not snap:
             snap = {'health': ps.health, 'elixir': ps.elixir, 'magic': ps.magic}
         ps.health = max(0, min(int(snap.get('health', ps.health)), int(ps.max_health)))
@@ -1201,7 +1236,6 @@ class GameEngine:
         context['vars']['drawn'] = len(drawn)
         context['current_action']['drawn'] = len(drawn)
         self._run_v2_event_hooks('after_draw', context, len(drawn))
-        self._apply_electric_web_draw_damage(player_id, len(drawn))
         return drawn
 
     def _set_equipment_property_value(self, player_id, current_card, params, value):
@@ -1243,12 +1277,14 @@ class GameEngine:
             return int(ps.max_magic)
         if prop == 'armor':
             return int(ps.armor)
-        if prop in ('dodge', 'poison', 'fire', 'vulnerable', 'toxic', 'equipment_protection',
+        if prop in ('poison', 'fire', 'vulnerable', 'toxic', 'equipment_protection',
                     'attack_blocked', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
                     'nazar_big_hits', 'sluggish', 'overload', 'foresight', 'fracture',
                     'stagnation', 'blind', 'heal_block', 'weakness', 'bleed'):
             if self._is_status_immune(target_id):
                 return 0
+            return int(getattr(ps, prop, 0))
+        if prop == 'dodge':
             return int(getattr(ps, prop, 0))
         if prop in ('invincible', 'untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
                     'negate_next_skill', 'nazar_active'):
@@ -1429,6 +1465,7 @@ class GameEngine:
         if self._move_use_log_before_response_detail(text):
             return
         self.log.append(text)
+        self._compact_recent_repeated_action_block()
 
     def _clear_hand_reveal_for_player(self, player_id: int):
         if hasattr(self, '_antennae_reveal') and 0 <= player_id < len(self._antennae_reveal):
@@ -1566,7 +1603,7 @@ class GameEngine:
         return self._merge_counted_log(text, last)
 
     def _parse_plain_use_count_log(self, text: str):
-        m = re.fullmatch(r'(.+)使用了?([^，]+?)(?: ×(\d+))?', text)
+        m = re.fullmatch(r'(.+)使用了?([^，]+?)(?:\s*×(\d+))?', text)
         if not m:
             return None
         return {
@@ -1576,7 +1613,7 @@ class GameEngine:
         }
 
     def _format_plain_use_count_log(self, actor: str, card: str, count: int) -> str:
-        return f'{actor}使用了{card}' + (f' ×{count}' if int(count or 1) > 1 else '')
+        return f'{actor}使用了{card}' + (f'×{count}' if int(count or 1) > 1 else '')
 
     def _parse_post_use_detail_count_log(self, text: str):
         patterns = [
@@ -1672,27 +1709,9 @@ class GameEngine:
             last_use = self._parse_plain_use_count_log(self.log[-1])
             if last_use and last_use['actor'] == current['actor'] and last_use['card'] == current['card']:
                 count = last_use['count'] + current['count']
-                self.log[-1] = f"{current['actor']}使用了{current['card']} ×{count}"
+                self.log[-1] = f"{current['actor']}使用了{current['card']}×{count}"
                 return True
-        previous_group_use_index = self._find_previous_use_index_before_trailing_details(current['actor'], current['card'])
-        if previous_group_use_index is not None and previous_group_use_index != len(self.log) - 1:
-            previous_use = self._parse_plain_use_count_log(self.log[previous_group_use_index])
-            count = previous_use['count'] + current['count']
-            self.log[previous_group_use_index] = self._format_plain_use_count_log(current['actor'], current['card'], count)
-            return True
-        if len(self.log) < 2 or not self._parse_damage_taken_log(self.log[-1]):
-            if len(self.log) >= 1 and self._parse_damage_taken_log(self.log[-1]):
-                self.log.insert(len(self.log) - 1, f"{current['actor']}使用了{current['card']}")
-                return True
-            return False
-        previous_use = self._parse_plain_use_count_log(self.log[-2])
-        if not previous_use:
-            return False
-        if previous_use['actor'] != current['actor'] or previous_use['card'] != current['card']:
-            return False
-        count = previous_use['count'] + current['count']
-        self.log[-2] = f"{current['actor']}使用了{current['card']} ×{count}"
-        return True
+        return False
 
     def _normalize_damage_log_text(self, text: str) -> str:
         parsed = self._parse_damage_taken_log(text)
@@ -1927,6 +1946,311 @@ class GameEngine:
             return True
         return False
 
+    def _parse_use_for_action_block(self, text: str):
+        m = re.fullmatch(r'(.+)使用了([^，]+?)(?:\s*×(\d+))?', text)
+        if not m:
+            return None
+        return {'actor': m.group(1), 'card': m.group(2), 'count': int(m.group(3) or 1)}
+
+    def _parse_gain_for_action_block(self, text: str):
+        m = re.fullmatch(r'(.+)获得(\d+)(E|M|护甲|闪避)(?: ×(\d+))?', text)
+        if not m:
+            return None
+        return {
+            'target': m.group(1),
+            'amount': int(m.group(2)),
+            'kind': m.group(3),
+            'count': int(m.group(4) or 1),
+        }
+
+    def _format_use_action_block(self, uses) -> str:
+        actor = uses[0]['actor']
+        parts = []
+        for use in uses:
+            card = use['card']
+            count = int(use.get('count') or 1)
+            parts.append(f'{card}×{count}' if count > 1 else card)
+        return f"{actor}使用了{'、'.join(parts)}"
+
+    def _format_gain_action_block(self, gain) -> str:
+        count = int(gain.get('count') or 1)
+        text = f"{gain['target']}获得{gain['amount']}{gain.get('resource') or gain.get('kind')}"
+        return text + (f' ×{count}' if count > 1 else '')
+
+    def _parse_repeatable_effect_log(self, text: str):
+        if not text:
+            return None
+        if self._parse_use_for_action_block(text) or self._parse_damage_taken_log(text):
+            return None
+        if self._parse_post_use_detail_count_log(text):
+            return None
+        m = re.fullmatch(r'(.+?)(?:\s*×(\d+))?', text)
+        if not m:
+            return None
+        base = m.group(1).strip()
+        if not base:
+            return None
+        if re.fullmatch(r'.+使用了?.+', base):
+            return None
+        return {'base': base, 'count': int(m.group(2) or 1)}
+
+    def _format_repeatable_effect_log(self, effect) -> str:
+        count = int(effect.get('count') or 1)
+        text = str(effect.get('base') or '')
+        return text + (f' ×{count}' if count > 1 else '')
+
+    def _parse_log_block_item(self, text: str):
+        use = self._parse_use_for_action_block(text)
+        if use:
+            return {'kind': 'use', **use}
+        damage = self._parse_damage_taken_log(text)
+        if damage:
+            return {'kind': 'damage', **damage}
+        gain = self._parse_gain_for_action_block(text)
+        if gain:
+            return {
+                'kind': 'gain',
+                'target': gain.get('target'),
+                'amount': gain.get('amount'),
+                'resource': gain.get('kind'),
+                'count': gain.get('count', 1),
+            }
+        post = self._parse_post_use_detail_count_log(text)
+        if post:
+            return {'kind': 'post', **post}
+        repeat = self._parse_repeatable_effect_log(text)
+        if repeat:
+            return {'kind': 'repeat', **repeat}
+        return None
+
+    def _are_log_block_items_compatible(self, previous: dict, current: dict) -> bool:
+        if not previous or not current or previous.get('kind') != current.get('kind'):
+            return False
+        kind = previous.get('kind')
+        if kind == 'use':
+            return previous.get('actor') == current.get('actor') and previous.get('card') == current.get('card')
+        if kind == 'damage':
+            return previous.get('prefix') == current.get('prefix') and previous.get('target') == current.get('target')
+        if kind == 'gain':
+            return (
+                previous.get('target') == current.get('target')
+                and previous.get('amount') == current.get('amount')
+                and previous.get('resource') == current.get('resource')
+            )
+        if kind == 'post':
+            same_actor = (
+                not previous.get('actor')
+                or not current.get('actor')
+                or previous.get('actor') == current.get('actor')
+            )
+            return same_actor and previous.get('card') == current.get('card') and previous.get('action') == current.get('action')
+        if kind == 'repeat':
+            return previous.get('base') == current.get('base')
+        return False
+
+    def _merge_log_block_items(self, previous: dict, current: dict) -> dict:
+        kind = previous.get('kind')
+        merged = dict(previous)
+        if kind in ('use', 'gain', 'post', 'repeat'):
+            merged['count'] = int(previous.get('count') or 1) + int(current.get('count') or 1)
+            if kind == 'post' and not merged.get('actor'):
+                merged['actor'] = current.get('actor') or ''
+            return merged
+        if kind == 'damage':
+            hp_chain = list(previous.get('hp_chain') or [previous.get('start_hp'), previous.get('end_hp')])
+            hp_chain = [part for part in hp_chain if part not in (None, '')]
+            current_chain = list(current.get('hp_chain') or [current.get('start_hp'), current.get('end_hp')])
+            current_chain = [part for part in current_chain if part not in (None, '')]
+            if not hp_chain:
+                hp_chain = current_chain
+            elif current_chain:
+                hp_chain.extend(current_chain[1:] if hp_chain[-1] == current_chain[0] else current_chain)
+            units = (previous.get('units') or [{'expr': self._format_damage_parts(previous.get('parts', [])), 'parts': previous.get('parts', [])}])
+            units += (current.get('units') or [{'expr': self._format_damage_parts(current.get('parts', [])), 'parts': current.get('parts', [])}])
+            merged['units'] = units
+            merged['parts'] = [p for unit in units for p in unit.get('parts', [])]
+            merged['hp_chain'] = hp_chain
+            if hp_chain:
+                merged['start_hp'] = hp_chain[0]
+                merged['end_hp'] = hp_chain[-1]
+            return merged
+        return merged
+
+    def _format_log_block_item(self, item: dict) -> str:
+        kind = item.get('kind')
+        if kind == 'use':
+            return self._format_plain_use_count_log(item.get('actor') or '', item.get('card') or '', int(item.get('count') or 1))
+        if kind == 'damage':
+            return (
+                f"{item.get('prefix') or ''}{item.get('target') or ''}受到"
+                f"{self._format_damage_units(item.get('units') or [])}"
+                f"（H={'→'.join(item.get('hp_chain') or [])}）"
+            )
+        if kind == 'gain':
+            return self._format_gain_action_block(item)
+        if kind == 'post':
+            return self._format_post_use_detail_count_log(item)
+        if kind == 'repeat':
+            return self._format_repeatable_effect_log(item)
+        return ''
+
+    def _compact_recent_repeated_generic_block(self) -> bool:
+        if len(self.log) < 4:
+            return False
+        floor = int(getattr(self, '_log_compaction_floor', 0) or 0)
+        end = len(self.log)
+        use_indices = [
+            idx for idx in range(floor, end)
+            if self._parse_use_for_action_block(self.log[idx])
+        ]
+        if len(use_indices) < 2:
+            return False
+        last_start = use_indices[-1]
+        prev_start = use_indices[-2]
+        block_len = end - last_start
+        if block_len < 2 or prev_start + block_len != last_start:
+            return False
+        prev_items = [self._parse_log_block_item(self.log[idx]) for idx in range(prev_start, last_start)]
+        curr_items = [self._parse_log_block_item(self.log[idx]) for idx in range(last_start, end)]
+        if any(item is None for item in prev_items + curr_items):
+            return False
+        for prev_item, curr_item in zip(prev_items, curr_items):
+            if not self._are_log_block_items_compatible(prev_item, curr_item):
+                return False
+        merged_items = [
+            self._merge_log_block_items(prev_item, curr_item)
+            for prev_item, curr_item in zip(prev_items, curr_items)
+        ]
+        formatted = [self._format_log_block_item(item) for item in merged_items]
+        if not all(formatted):
+            return False
+        self.log[prev_start:end] = formatted
+        return True
+
+    def _compact_recent_repeated_use_effect_block(self) -> bool:
+        """Compact repeated two-line blocks: use card + identical non-damage effect line."""
+        if len(self.log) < 4:
+            return False
+        floor = int(getattr(self, '_log_compaction_floor', 0) or 0)
+        end = len(self.log)
+        pairs = []
+        idx = end - 2
+        while idx >= floor and len(pairs) < 12:
+            use = self._parse_use_for_action_block(self.log[idx])
+            effect = self._parse_repeatable_effect_log(self.log[idx + 1]) if idx + 1 < end else None
+            if not use or not effect:
+                break
+            pairs.append((idx, use, effect))
+            idx -= 2
+        if len(pairs) < 2:
+            return False
+        pairs.reverse()
+        actor = pairs[0][1]['actor']
+        card = pairs[0][1]['card']
+        effect_base = pairs[0][2]['base']
+        compatible = []
+        for pair in pairs:
+            _, use, effect = pair
+            if use['actor'] != actor or use['card'] != card or effect['base'] != effect_base:
+                break
+            compatible.append(pair)
+        if len(compatible) < 2:
+            return False
+        start = compatible[0][0]
+        if compatible[-1][0] + 2 != end:
+            return False
+        total_use = sum(int(use.get('count') or 1) for _, use, _ in compatible)
+        total_effect = sum(int(effect.get('count') or 1) for _, _, effect in compatible)
+        self.log[start:end] = [
+            f'{actor}使用了{card}' + (f' ×{total_use}' if total_use > 1 else ''),
+            self._format_repeatable_effect_log({'base': effect_base, 'count': total_effect}),
+        ]
+        return True
+
+    def _compact_recent_repeated_action_block(self):
+        """Compact repeated card-use blocks even when identical side-effect lines sit between them.
+
+        Example:
+          A使用了骨头 / B受到12D / B获得1M repeated
+        becomes:
+          A使用了骨头×2 / B受到12D×2 / B获得1M ×2
+        """
+        if self._compact_recent_repeated_generic_block():
+            return
+        if self._compact_recent_repeated_use_effect_block():
+            return
+        if len(self.log) < 6:
+            return
+        floor = int(getattr(self, '_log_compaction_floor', 0) or 0)
+        end = len(self.log)
+        triples = []
+        idx = end - 3
+        while idx >= floor and len(triples) < 8:
+            use = self._parse_use_for_action_block(self.log[idx])
+            damage = self._parse_damage_taken_log(self.log[idx + 1]) if idx + 1 < end else None
+            gain = self._parse_gain_for_action_block(self.log[idx + 2]) if idx + 2 < end else None
+            if not use or not damage or not gain:
+                break
+            triples.append((idx, use, damage, gain))
+            idx -= 3
+        if len(triples) < 2:
+            return
+        triples.reverse()
+        actor = triples[0][1]['actor']
+        damage_target = triples[0][2]['target']
+        damage_prefix = triples[0][2]['prefix']
+        gain_target = triples[0][3]['target']
+        gain_amount = triples[0][3]['amount']
+        gain_kind = triples[0][3]['kind']
+        compatible = []
+        for triple in triples:
+            _, use, damage, gain = triple
+            if use['actor'] != actor:
+                break
+            if damage['target'] != damage_target or damage['prefix'] != damage_prefix:
+                break
+            if gain['target'] != gain_target or gain['amount'] != gain_amount or gain['kind'] != gain_kind:
+                break
+            hp_chain = damage.get('hp_chain') or []
+            if compatible:
+                prev_hp = compatible[-1][2].get('hp_chain') or []
+                if prev_hp and hp_chain and prev_hp[-1] != hp_chain[0]:
+                    break
+            compatible.append(triple)
+        if len(compatible) < 2:
+            return
+        start = compatible[0][0]
+        if compatible[-1][0] + 3 != end:
+            return
+        uses = []
+        for _, use, _, _ in compatible:
+            if uses and uses[-1]['card'] == use['card']:
+                uses[-1]['count'] += int(use.get('count') or 1)
+            else:
+                uses.append(dict(use))
+        units = []
+        hp_chain = []
+        for _, _, damage, _ in compatible:
+            units.extend(damage.get('units') or [{'expr': self._format_damage_parts(damage['parts']), 'parts': damage['parts']}])
+            chain = damage.get('hp_chain') or [damage.get('start_hp'), damage.get('end_hp')]
+            chain = [part for part in chain if part not in (None, '')]
+            if not hp_chain:
+                hp_chain = chain
+            elif chain:
+                hp_chain.extend(chain[1:] if hp_chain[-1] == chain[0] else chain)
+        merged_gain = dict(compatible[0][3])
+        merged_gain['count'] = sum(int(gain.get('count') or 1) for _, _, _, gain in compatible)
+        damage_line = (
+            f"{damage_prefix}{damage_target}受到"
+            f"{self._format_damage_units(units)}"
+            f"（H={'→'.join(hp_chain)}）"
+        )
+        self.log[start:end] = [
+            self._format_use_action_block(uses),
+            damage_line,
+            self._format_gain_action_block(merged_gain),
+        ]
+
     def _bind_player_callbacks(self):
         for ps in getattr(self, 'players', []):
             ps._enter_hand_callback = self._handle_card_enter_hand
@@ -1970,6 +2294,7 @@ class GameEngine:
             'target_player': player_id,
             'vars': {'player_id': player_id, 'drawn_card': card.def_id if card else ''},
         })
+        self._apply_electric_web_draw_damage(player_id, 1)
 
     def _coerce_mod_var_initial(self, value) -> int:
         try:
@@ -2408,6 +2733,7 @@ class GameEngine:
         # Keep v2/custom opening events deferred for now because some may
         # intentionally operate on the opening hand.
         self._apply_deferred_opening_events_after_initial_draw()
+        self._save_all_match_start_snapshots()
         self.round_num = 1
         self.log_msg(f"游戏开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
@@ -2883,10 +3209,12 @@ class GameEngine:
             self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
             return 0
         actual = amount
-        actual = self._apply_corruption_multiplier_to_damage(actual)
-        actual = self._apply_damage_dealt_equipment_multiplier(actual, source_id)
         resolved_damage_type = infer_damage_type(source, 'direct', damage_tag or '', damage_type)
         resolved_damage_tag = damage_tag or (status_damage_tag(source) if resolved_damage_type == DAMAGE_TYPE_MAGIC else DAMAGE_TAG_DIRECT)
+        if str(resolved_damage_tag).strip() in (DAMAGE_TAG_POISON, DAMAGE_TAG_FIRE, 'poison', '中毒', 'fire', 'burn', '灼烧') and self._is_status_immune(player_id):
+            return 0
+        actual = self._apply_corruption_multiplier_to_damage(actual)
+        actual = self._apply_damage_dealt_equipment_multiplier(actual, source_id)
         damage_context = self._v2_damage_context(
             player_id,
             actual,
@@ -3881,43 +4209,31 @@ class GameEngine:
             self.pending_choice = None
             ps = self.players[player_id]
             foresight_info = getattr(self, '_pending_foresight', None) or {}
-            peek_count = foresight_info.get('peek_count', 0)
             draw_budget = max(0, int(foresight_info.get('draw_count', 0) or 0))
             select_limit = max(0, int(foresight_info.get('select_limit', 0) or 0))
             resume_handler = str(foresight_info.get('resume_handler') or '').strip()
             selected_ids = (choice or {}).get('selected_instance_ids', [])
-            draw_count = 0
-            if peek_count > 0 and ps.deck:
-                top_cards = ps.deck[:peek_count]
-                remaining = ps.deck[peek_count:]
-                draw_set = set(selected_ids[:select_limit or peek_count])
-                drawn_cards = []
-                stay_cards = []
-                for card in top_cards:
-                    if card.instance_id in draw_set and len(drawn_cards) < (select_limit or peek_count):
-                        drawn_cards.append(card)
-                    else:
-                        stay_cards.append(card)
-                ps.deck = stay_cards + remaining
-                for card in drawn_cards:
-                    if ps.can_add_to_hand():
-                        ps.add_to_hand(card)
-                        draw_count += 1
-                    else:
-                        ps.deck.insert(0, card)
-                remaining_draw = max(0, draw_budget - draw_count)
-                if remaining_draw > 0:
-                    extra_drawn = self._draw_cards_with_v2_hooks(player_id, remaining_draw, 'turn_start')
-                    draw_count += len(extra_drawn)
-            if draw_count > 0:
-                self.log_msg(f"{self.pn(player_id)}因预知替换抽取了{draw_count}张牌")
+            selected_set = set(selected_ids[:select_limit])
+            discarded = 0
+            for card in list(ps.hand):
+                if card.instance_id not in selected_set:
+                    continue
+                ps.hand.remove(card)
+                ps.discard.append(card)
+                discarded += 1
+                if discarded >= select_limit:
+                    break
+            replacement_drawn = 0
+            if discarded > 0:
+                replacement_drawn = len(self._draw_cards_with_v2_hooks(player_id, discarded, 'foresight_replace'))
+                self.log_msg(f"{self.pn(player_id)}因预知弃{discarded}张并抽{replacement_drawn}张牌")
             ps.foresight = 0
             self._pending_foresight = None
             if resume_handler:
                 handler = getattr(self, f'_resume_{resume_handler}', None)
                 if callable(handler):
-                    handler(player_id, {'drawn': draw_count})
-            return {'success': True, 'foresight_drawn': draw_count}
+                    handler(player_id, {'foresight_discarded': discarded, 'foresight_drawn': replacement_drawn, 'draw_count': draw_budget})
+            return {'success': True, 'foresight_discarded': discarded, 'foresight_drawn': replacement_drawn}
         # Handle reorder_deck choice (e.g. Magic Goggles)
         if choice_type == 'reorder_deck':
             self.pending_choice = None
@@ -3963,10 +4279,11 @@ class GameEngine:
         self.pending_choice = None
         card = CardInstance.from_dict(pending['card'])
         ps = self.players[player_id]
-        if choice is None:
+        choice_cancelled = choice is None or (isinstance(choice, dict) and bool(choice.get('cancelled')))
+        if choice_cancelled:
             if ps.find_hand_card(card.instance_id) is None:
                 ps.hand.insert(0, card)
-            return {'success': False, 'error': '选择已取消'}
+            return {'success': True, 'cancelled': True}
         if isinstance(choice, dict):
             original_choice = pending.get('original_choice') if isinstance(pending.get('original_choice'), dict) else {}
             for key in ('target_player', 'target_player_id', 'target_id'):
@@ -5805,7 +6122,7 @@ class GameEngine:
         if op == 'has_status_named':
             tid = self._resolve_target(player_id, cond.get('target', 'self'))
             status = str(cond.get('status', '')).strip()
-            if self._is_status_immune(tid) and status not in ('status_immune', 'immune', '状态免疫'):
+            if self._is_status_immune(tid) and status not in ('status_immune', 'immune', '状态免疫', 'dodge', '闪避'):
                 return False
             if status == '邪眼':
                 return bool(self.players[tid].nazar_active)
@@ -5834,7 +6151,7 @@ class GameEngine:
         if op == 'has_status':
             tid = self._resolve_target(player_id, cond.get('target', 'self'))
             status = str(cond.get('status', '')).strip()
-            if self._is_status_immune(tid) and status not in ('status_immune', 'immune', '状态免疫'):
+            if self._is_status_immune(tid) and status not in ('status_immune', 'immune', '状态免疫', 'dodge', '闪避'):
                 return False
             ps = self.players[tid]
             status_map = {
@@ -6771,7 +7088,7 @@ class GameEngine:
         if isinstance(cond, dict) and cond.get('op') in ('has_status_named', 'has_status'):
             target_id = self._resolve_target(player_id, cond.get('target', 'self'))
             status_name = str(cond.get('name', cond.get('status', cond.get('id', ''))))
-            if self._is_status_immune(target_id) and status_name not in ('status_immune', 'immune', '状态免疫'):
+            if self._is_status_immune(target_id) and status_name not in ('status_immune', 'immune', '状态免疫', 'dodge', '闪避'):
                 return False
         if isinstance(cond, dict) and cond.get('op') == 'list_contains':
             values = self._eval_list(player_id, cond.get('list', []), card)
@@ -7782,8 +8099,6 @@ class GameEngine:
             sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
             draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - sluggish_reduction)
             if self._queue_foresight_replace_choice(player_id, draw_count, 'turn_start_after_foresight'):
-                if ps.sluggish > 0:
-                    self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
                 self._pending_turn_start_early_owner_equipment = set(early_owner_turn_start_equipment)
                 return
             drawn = self._draw_cards_with_v2_hooks(player_id, draw_count, 'turn_start')
@@ -7879,19 +8194,17 @@ class GameEngine:
         ps = self.players[player_id]
         if ps.foresight <= 0:
             return False
-        if draw_count <= 0 or self._is_status_immune(player_id) or not ps.deck:
+        if draw_count <= 0 or self._is_status_immune(player_id) or not ps.deck or not ps.hand:
             ps.foresight = 0
             self.log_msg(f"{self.pn(player_id)}的预知效果清除")
             return False
-        peek_count = min(ps.foresight, len(ps.deck))
-        select_limit = min(peek_count, draw_count)
+        select_limit = min(ps.foresight, len(ps.hand), len(ps.deck))
         if select_limit <= 0:
             ps.foresight = 0
             self.log_msg(f"{self.pn(player_id)}的预知效果清除")
             return False
         self._pending_foresight = {
             'player_id': player_id,
-            'peek_count': peek_count,
             'draw_count': draw_count,
             'select_limit': select_limit,
             'resume_handler': resume_handler,
@@ -7901,9 +8214,9 @@ class GameEngine:
             'choice_type': 'foresight_replace',
             'card': None,
             'choice_params': {'max_count': select_limit},
-            'deck_cards': [c.to_dict() for c in ps.deck[:peek_count]],
+            'hand_cards': [c.to_dict() for c in ps.hand],
             'max_replace': select_limit,
-            'message': f'预知：查看牌堆顶{peek_count}张，选择要替换本次抽牌的牌',
+            'message': f'预知：选择最多{select_limit}张手牌丢弃，然后抽对应张牌',
         }
         return True
 
@@ -7929,6 +8242,13 @@ class GameEngine:
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        if self.round_num > 1:
+            draw_count = max(0, int((foresight_result or {}).get('draw_count', 0) or 0))
+            drawn = self._draw_cards_with_v2_hooks(player_id, draw_count, 'turn_start')
+            self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌")
+            if ps.sluggish > 0:
+                self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
+            self._clear_sluggish_after_draw(player_id)
         if ps.poison > 0:
             dmg = ps.poison
             self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
@@ -8024,7 +8344,7 @@ class GameEngine:
         immune = self._is_status_immune(target_id)
         for _ in range(hits):
             precision_dodged = False
-            if ps.dodge > 0 and not immune:
+            if ps.dodge > 0:
                 ps.dodge -= 1
                 if is_precision:
                     precision_dodged = True
@@ -8675,7 +8995,18 @@ class GameEngine:
     def _atomic_restore_turn_start_stats(self, player_id, card, params, log, choice, context):
         extra_self_e_loss = self._eval_int(player_id, params.get('extra_self_e_loss', 0), card)
         for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            if params.get('exclude_self') and tid == player_id:
+                continue
             self._restore_turn_start_snapshot(tid, extra_self_e_loss if tid == player_id else 0)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_restore_match_start_stats(self, player_id, card, params, log, choice, context):
+        extra_self_e_loss = self._eval_int(player_id, params.get('extra_self_e_loss', 0), card)
+        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            if params.get('exclude_self') and tid == player_id:
+                continue
+            self._restore_match_start_snapshot(tid, extra_self_e_loss if tid == player_id else 0)
         if log:
             self.log_msg(log)
 

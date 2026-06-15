@@ -1,4 +1,5 @@
 import random
+import re
 from typing import List, Optional
 
 from game_engine import GameEngine, PlayerState
@@ -7,6 +8,7 @@ from cards import (
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     BASE_MAX_HEALTH, DRAW_PER_TURN, ELIXIR_RECOVERY,
 )
+from damage_types import DAMAGE_TAG_FIRE, DAMAGE_TAG_POISON, DAMAGE_TYPE_MAGIC
 
 
 URF_HAND_LIMIT = 10
@@ -18,7 +20,8 @@ URF_STARTING_HAND_COUNTS = {
     'guard': 1,
 }
 URF_WEIGHT_OVERRIDES = {
-    'Sewage': 6,
+    'sewage': 6,
+    'vanilla:sewage': 6,
 }
 CARD_TYPE_CN = {
     'thorn': '攻击',
@@ -43,16 +46,36 @@ INFINITE_EXCLUDED_EFFECTS = {
 }
 
 
+def _compact_card_key(value) -> str:
+    return re.sub(r'[^a-z0-9]+', '', str(value or '').lower())
+
+
+def _card_identity_keys(card_def) -> set:
+    raw_id = str(getattr(card_def, 'id', '') or '')
+    tail_id = raw_id.split(':')[-1]
+    name_en = str(getattr(card_def, 'name_en', '') or '')
+    return {
+        raw_id.lower(),
+        tail_id.lower(),
+        _compact_card_key(raw_id),
+        _compact_card_key(tail_id),
+        _compact_card_key(name_en),
+    }
+
+
 def is_infinite_excluded(card_def) -> bool:
     if not card_def:
         return True
     if 'infinite_exclude' in getattr(card_def, 'flags', set()):
         return True
-    if card_def.id in INFINITE_EXCLUDED_IDS:
+    excluded_keys = {key.lower() for key in INFINITE_EXCLUDED_IDS}
+    excluded_keys.update(_compact_card_key(key) for key in INFINITE_EXCLUDED_IDS)
+    if _card_identity_keys(card_def) & excluded_keys:
         return True
     if card_def.cost_m > 0:
         return True
-    if card_def.id.startswith('Magic') or card_def.name_en.startswith('Magic '):
+    tail_id = str(getattr(card_def, 'id', '') or '').split(':')[-1]
+    if tail_id.startswith('Magic') or card_def.name_en.startswith('Magic '):
         return True
     effects = list(getattr(card_def, 'effects', []) or [])
     effects.extend(getattr(card_def, 'trigger_effects', []) or [])
@@ -65,10 +88,15 @@ def is_infinite_excluded(card_def) -> bool:
 
 def get_infinite_weight(card_def) -> int:
     if not card_def:
-        return 1
-    if card_def.id in URF_WEIGHT_OVERRIDES:
-        return max(1, int(URF_WEIGHT_OVERRIDES[card_def.id]))
-    return max(1, int(getattr(card_def, 'count', 1) or 1))
+        return 0
+    override_keys = _card_identity_keys(card_def)
+    for key, value in URF_WEIGHT_OVERRIDES.items():
+        if key.lower() in override_keys or _compact_card_key(key) in override_keys:
+            return max(0, int(value))
+    try:
+        return max(0, int(getattr(card_def, 'count', 0) or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 class InfinitePlayerState(PlayerState):
@@ -124,6 +152,8 @@ class GameEngineInfiniteFire(GameEngine):
             if is_infinite_excluded(card_def):
                 continue
             weight = get_infinite_weight(card_def)
+            if weight <= 0:
+                continue
             ids.append(def_id)
             weights.append(weight)
         self.infinite_card_pool = ids
@@ -245,6 +275,7 @@ class GameEngineInfiniteFire(GameEngine):
                 else:
                     new_hand.append(card)
             ps.hand = new_hand
+        self._save_all_match_start_snapshots()
         self.round_num = 1
         self.log_msg(f"无限火力开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
@@ -276,7 +307,9 @@ class GameEngineInfiniteFire(GameEngine):
         ps = self.players[player_id]
         opp_id = 1 - player_id
         opp = self.players[opp_id]
+        self._save_turn_start_snapshot(player_id)
         self._antennae_reveal[player_id] = None
+        self._reset_turn_damage_counters()
         self._run_v2_event_hooks('turn_start', {
             'source_player': player_id,
             'target_player': player_id,
@@ -288,6 +321,7 @@ class GameEngineInfiniteFire(GameEngine):
         self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        self._apply_jungle_turn_start_statuses(player_id)
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
         # Cogwheel: return cards from last turn (if marked by v2 event)
@@ -308,6 +342,10 @@ class GameEngineInfiniteFire(GameEngine):
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
+        self._clear_turn_start_action_statuses(player_id)
+        early_owner_turn_start_equipment = self._run_owner_turn_start_action_status_equipment(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(owner_state.equipment):
                 if self._has_card_event(eq.card_def, 'any_turn_start'):
@@ -321,13 +359,17 @@ class GameEngineInfiniteFire(GameEngine):
             if eq.def_id == 'Corruption' and not eq.corruption_active:
                 eq.corruption_active = True
                 self.log_msg(f"{self.pn(opp_id)}的腐化效果激活")
+        early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         if ps.poison > 0:
-            self._deal_direct_damage(player_id, ps.poison, '中毒')
+            self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             if self.game_over or ps.health <= 0:
                 return
-            ps.poison = ps.poison // 2
+            self._decay_poison_after_turn_start(player_id)
+            self._apply_toxic_poison_after_poison_settlement(player_id)
         if ps.fire > 0:
-            self._deal_direct_damage(player_id, ps.fire, '灼烧')
+            self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
                 return
         if self.round_num > 1:
@@ -350,11 +392,21 @@ class GameEngineInfiniteFire(GameEngine):
             ps.elixir -= deduct
             self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
             ps.overload = 0
+        for owner_state in self.players:
+            for eq in getattr(owner_state, 'equipment', []):
+                eq.uses_this_turn = 0
         for eq in list(ps.equipment):
-            eq.turns_equipped += 1
+            eq_key = self._equipment_turn_start_key(eq)
+            if eq_key not in early_owner_turn_start_equipment:
+                eq.turns_equipped += 1
+            else:
+                continue
+            effect_target_id = int(getattr(eq, 'effect_target', player_id))
+            if not (0 <= effect_target_id < len(self.players)):
+                effect_target_id = player_id
             if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
                     player_id, eq.card_instance, 'owner_turn_start', None,
-                    {'source_id': player_id, 'target_id': player_id}):
+                    {'source_id': player_id, 'target_id': effect_target_id}):
                 continue
             if eq.def_id == 'Leaf':
                 ps.heal(2)
@@ -417,7 +469,7 @@ class GameEngineInfiniteFire(GameEngine):
                 card_type = None
         extra_replenish_types = self._fusion_extra_replenish_types(player_id, pending_card, choice)
         result = super().resolve_choice(player_id, choice)
-        if result.get('success') and card_type:
+        if result.get('success') and not result.get('cancelled') and card_type:
             self._draw_to_hand_by_type(player_id, card_type)
             for extra_type in extra_replenish_types:
                 self._draw_to_hand_by_type(player_id, extra_type)

@@ -11,7 +11,7 @@
 <script>
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
-  const betaExactKeys = new Set(['gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated']);
+  const betaExactKeys = new Set(['gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated', 'gtn_hidden_features_enabled']);
   const betaKey = (key) => window.__GTN_BETA_MODE__ && betaExactKeys.has(key) ? `gtn_beta_${key.slice(4)}` : key;
   const supportedLangs = new Set(['zh', 'en', 'fr', 'pt', 'ja']);
   let lang = localStorage.getItem(betaKey('gtn_lang')) || 'zh';
@@ -21,13 +21,16 @@
   }
   const migrationKey = betaKey('gtn_ui_style_v2_migrated');
   const uiStyleKey = betaKey('gtn_ui_style');
+  const hiddenFeaturesKey = betaKey('gtn_hidden_features_enabled');
   let uiStyle = localStorage.getItem(uiStyleKey) || 'minimal';
   if (!localStorage.getItem(migrationKey) && uiStyle === 'classic') {
     uiStyle = 'minimal';
     localStorage.setItem(uiStyleKey, 'minimal');
     localStorage.setItem(migrationKey, '1');
   }
-  if (uiStyle !== 'classic') uiStyle = 'minimal';
+  const hiddenFeaturesEnabled = localStorage.getItem(hiddenFeaturesKey) === '1';
+  if (uiStyle !== 'classic' || !hiddenFeaturesEnabled) uiStyle = 'minimal';
+  if (!hiddenFeaturesEnabled && localStorage.getItem(uiStyleKey) === 'classic') localStorage.setItem(uiStyleKey, 'minimal');
   document.documentElement.setAttribute('lang', lang);
   document.documentElement.setAttribute('data-ui-style', uiStyle);
   if (window.__GTN_BETA_MODE__) document.documentElement.setAttribute('data-beta-mode', 'true');

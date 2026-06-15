@@ -8,6 +8,7 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_lang',
     'gtn_ui_style',
     'gtn_ui_style_v2_migrated',
+    'gtn_hidden_features_enabled',
     'gtn_show_english_card_names',
     'gtn_show_card_images',
     'gtn_skin_config',
@@ -93,7 +94,7 @@ const I18N = {
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
-        foresight_replace_title: 'Foresight', foresight_replace_desc: 'Select up to {0} cards from the top of the deck to replace this draw', foresight_replace_confirm: 'Replace',
+        foresight_replace_title: 'Foresight', foresight_replace_desc: 'Discard up to {0} cards from your hand, then draw that many cards', foresight_replace_confirm: 'Replace',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
         lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', start_draft: 'Start Draft', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
         card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard', fusion_layer: 'Fusion', fission_layer: 'Fission',
@@ -201,7 +202,7 @@ I18N.zh = { ...I18N.en,
     flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
-    foresight_replace_title: '预知', foresight_replace_desc: '从牌堆顶选择最多{0}张牌替换本次抽牌', foresight_replace_confirm: '替换',
+    foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张手牌丢弃，然后抽对应张牌', foresight_replace_confirm: '替换',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
     round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
     select_event_desc: '选择一个配装倾向', start_draft: '开始选牌', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
@@ -1560,6 +1561,10 @@ if (localStorage.getItem('gtn_lang') !== currentLang) localStorage.setItem('gtn_
 let showEnglishCardNames = localStorage.getItem('gtn_show_english_card_names') !== '0';
 let showCardImages = localStorage.getItem('gtn_show_card_images') !== '0';
 const UI_STYLE_MIGRATION_KEY = 'gtn_ui_style_v2_migrated';
+const HIDDEN_FEATURES_KEY = 'gtn_hidden_features_enabled';
+function hiddenFeaturesEnabled() {
+    return localStorage.getItem(HIDDEN_FEATURES_KEY) === '1';
+}
 function migrateStoredUiStyle() {
     let stored = localStorage.getItem('gtn_ui_style') || 'minimal';
     if (!localStorage.getItem(UI_STYLE_MIGRATION_KEY) && stored === 'classic') {
@@ -1567,7 +1572,10 @@ function migrateStoredUiStyle() {
         localStorage.setItem('gtn_ui_style', stored);
         localStorage.setItem(UI_STYLE_MIGRATION_KEY, '1');
     }
-    if (stored !== 'classic') stored = 'minimal';
+    if (stored !== 'classic' || !hiddenFeaturesEnabled()) stored = 'minimal';
+    if (!hiddenFeaturesEnabled() && localStorage.getItem('gtn_ui_style') === 'classic') {
+        localStorage.setItem('gtn_ui_style', 'minimal');
+    }
     return stored;
 }
 let currentUiStyle = migrateStoredUiStyle();
@@ -2806,13 +2814,26 @@ function applyTheme(theme) {
 }
 
 function applyUiStyle(style) {
-    currentUiStyle = style === 'classic' ? 'classic' : 'minimal';
+    currentUiStyle = style === 'classic' && hiddenFeaturesEnabled() ? 'classic' : 'minimal';
     document.documentElement.setAttribute('data-ui-style', currentUiStyle);
     localStorage.setItem('gtn_ui_style', currentUiStyle);
     const sel = $('settings-ui-style-select');
     if (sel) sel.value = currentUiStyle;
+    updateUiStyleAvailability();
     updateCompactUiText();
     refreshVisibleCardDisplays();
+}
+
+function updateUiStyleAvailability() {
+    const select = $('settings-ui-style-select');
+    if (!select) return;
+    const classicOpt = select.querySelector('option[value="classic"]');
+    const unlocked = hiddenFeaturesEnabled();
+    if (classicOpt) {
+        classicOpt.disabled = !unlocked;
+        classicOpt.hidden = !unlocked;
+    }
+    if (!unlocked && select.value === 'classic') select.value = 'minimal';
 }
 
 function compactText(normalKey, compactKey) {
@@ -2983,6 +3004,7 @@ function updateStaticText() {
         if (minimalOpt) minimalOpt.textContent = UI.ui_style_minimal;
         if (classicOpt) classicOpt.textContent = UI.ui_style_classic;
         uiStyleSelect.value = currentUiStyle;
+        updateUiStyleAvailability();
     }
     const langSelect = $('settings-lang-select');
     if (langSelect) {
@@ -3032,6 +3054,7 @@ function updateStaticText() {
     if (creditsArt) creditsArt.textContent = UI.credits_art || '美工';
     const creditsSpecial = $('credits-special-title');
     if (creditsSpecial) creditsSpecial.textContent = UI.credits_special;
+    bindHiddenFeatureLongPress();
     renderAboutRulesBody();
     const btnLobbyBack = $('btn-lobby-back');
     if (btnLobbyBack) btnLobbyBack.textContent = UI.back_to_home;
@@ -3539,6 +3562,100 @@ function closeAbout() {
     if (panel) panel.classList.add('hidden');
 }
 
+function setHiddenFeaturesEnabled(enabled) {
+    if (enabled) {
+        localStorage.setItem(HIDDEN_FEATURES_KEY, '1');
+    } else {
+        localStorage.removeItem(HIDDEN_FEATURES_KEY);
+        if (currentUiStyle === 'classic') applyUiStyle('minimal');
+        else updateUiStyleAvailability();
+    }
+    updateUiStyleAvailability();
+}
+
+function promptHiddenFeatureUnlock() {
+    showModal(`
+        <div class="hidden-feature-unlock">
+            <h3>隐藏功能</h3>
+            <label class="report-field">
+                <span>请输入内测秘钥：</span>
+                <input id="hidden-feature-key-input" type="password" autocomplete="current-password">
+            </label>
+            <div id="hidden-feature-error" class="report-error hidden"></div>
+            <div class="modal-buttons">
+                <button id="hidden-feature-cancel" class="btn btn-secondary" type="button">取消</button>
+                <button id="hidden-feature-confirm" class="btn btn-primary" type="button">确认</button>
+            </div>
+        </div>
+    `);
+    const input = $('hidden-feature-key-input');
+    const errorEl = $('hidden-feature-error');
+    const cancelBtn = $('hidden-feature-cancel');
+    const confirmBtn = $('hidden-feature-confirm');
+    if (input) input.focus();
+    if (cancelBtn) cancelBtn.onclick = hideModal;
+    const submit = async () => {
+        if (!confirmBtn || !input) return;
+        confirmBtn.disabled = true;
+        if (errorEl) errorEl.classList.add('hidden');
+        try {
+            const res = await fetch('/api/hidden-features/unlock', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: input.value || '' }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) throw new Error(data.error || '秘钥错误');
+            setHiddenFeaturesEnabled(true);
+            hideModal();
+            flashStatus('隐藏功能已开启', 1800);
+        } catch (err) {
+            if (errorEl) {
+                errorEl.textContent = err && err.message ? err.message : '解锁失败';
+                errorEl.classList.remove('hidden');
+            }
+        } finally {
+            confirmBtn.disabled = false;
+        }
+    };
+    if (confirmBtn) confirmBtn.onclick = submit;
+    if (input) input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') submit();
+    }, { once: false });
+}
+
+function bindHiddenFeatureLongPress() {
+    const title = $('credits-special-title');
+    if (!title || title.dataset.hiddenFeatureBound === '1') return;
+    title.dataset.hiddenFeatureBound = '1';
+    title.title = '长按';
+    let timer = null;
+    const clear = () => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+    };
+    const start = (event) => {
+        if (event && event.button != null && event.button !== 0) return;
+        clear();
+        const delay = hiddenFeaturesEnabled() ? 1000 : 2000;
+        timer = setTimeout(() => {
+            timer = null;
+            if (hiddenFeaturesEnabled()) {
+                setHiddenFeaturesEnabled(false);
+                flashStatus('隐藏功能已关闭', 1800);
+            } else {
+                promptHiddenFeatureUnlock();
+            }
+        }, delay);
+    };
+    title.addEventListener('pointerdown', start);
+    title.addEventListener('pointerup', clear);
+    title.addEventListener('pointerleave', clear);
+    title.addEventListener('pointercancel', clear);
+    title.addEventListener('contextmenu', (event) => event.preventDefault());
+}
+
 function setGalleryMode(mode) {
     galleryMode = mode || 'cards';
     ['cards', 'tags', 'events', 'statuses'].forEach(name => {
@@ -3852,7 +3969,6 @@ function getAllStatusDefs() {
         { key: 'fire', label: UI.status_fire, desc: termLib.F ? termLib.F.desc : '', color: COLORS.fire },
         { key: 'toxic', label: UI.status_toxic, desc: termLib.toxic ? termLib.toxic.desc : '', color: '#6C3483' },
         { key: 'triangle', label: UI.status_triangle || '三角形', desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
-        { key: 'dodge', label: UI.status_dodge, desc: '可响应攻击。普通攻击会被闪避，精准攻击被闪避时只造成一半伤害。', color: COLORS.guard },
         { key: 'nazar', label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
         { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         { key: 'invincible', label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
@@ -3863,10 +3979,9 @@ function getAllStatusDefs() {
         { key: 'untargetable', label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。', color: '#1A5276' },
         { key: 'bandage', label: UI.status_bandage, desc: '绷带提供临时保护，回合开始时会按规则结束。', color: '#1E8449' },
         { key: 'sponge', label: UI.status_sponge, desc: '海绵相关的临时状态，会影响下一次结算。', color: '#6C3483' },
-        { key: 'shovel', label: UI.status_shovel, desc: '铲子相关的临时状态，会限制或改变当前回合行动。', color: '#5D4037' },
         { key: 'sluggish', label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         { key: 'overload', label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
-        { key: 'foresight', label: UI.status_foresight, desc: '回合开始抽牌时，从牌堆顶选择最多层数张牌来替换本次抽牌。', color: '#2980B9' },
+        { key: 'foresight', label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
         { key: 'fracture', label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         { key: 'stagnation', label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
         { key: 'blind', label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始时手牌会被打乱，然后清空失明。', color: '#2C3E50' },
@@ -4525,7 +4640,7 @@ function selectPlayCardForConfirm(cardInstanceId) {
     const info = bar.querySelector('.mobile-play-info');
     const ok = bar.querySelector('#mobile-play-ok');
     const cancel = bar.querySelector('#mobile-play-cancel');
-    const name = getCardName(cardDef);
+    const name = getBlindedCardDisplayName(cardDict, cardDef);
     if (info) info.textContent = `${UI.tap_play_hint || 'Tap a card, then confirm to play'}：${name}`;
     if (ok) {
         ok.textContent = (UI.confirm_play || 'Play {0}').replace('{0}', name);
@@ -5102,6 +5217,16 @@ function shouldBlindCardForSelf(cardDict, options = {}) {
     return getCardBlindLevelForSelf(cardDict, options) > 0;
 }
 
+function getBlindedCardDisplayName(cardDict, cardDef, options = {}) {
+    const blindLevel = getCardBlindLevelForSelf(cardDict, options);
+    return blindLevel > 0 ? '?' : getCardName(cardDef);
+}
+
+function getCardBlindDisplayColor(cardDef, blindLevel = 0) {
+    if (blindLevel >= 2) return '#7f8c8d';
+    return CARD_TYPE_COLORS[(cardDef && cardDef.card_type) || ''] || COLORS.text_primary;
+}
+
 function getCardLayerLabel(cardDict) {
     const fusionLevel = Number(cardDict.fusion_level || 1);
     const fissionLevel = Number(cardDict.fission_level || 1);
@@ -5194,11 +5319,12 @@ function createCardElement(cardDict, options = {}) {
         || ['葡萄', '魔法葡萄', '豌豆', '魔法豌豆'].includes(cardDef.name_cn)) {
         el.classList.add('card-petal-copy');
     }
-    const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
     const rawTypeLabel = getCardTypeLabel(cardDef.card_type) || cardDef.card_type;
     const blindLevel = getCardBlindLevelForSelf(cardDict, options);
     const blinded = blindLevel > 0;
     const hideTypeByBlind = blindLevel >= 2;
+    const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
+    const displayTypeColor = getCardBlindDisplayColor(cardDef, blindLevel);
     const typeLabel = hideTypeByBlind ? '?' : rawTypeLabel;
     const cardName = blinded ? '?' : getCardName(cardDef);
     const englishName = (!blinded && shouldShowEnglishCardName(cardDef, cardName)) ? getEnglishCardName(cardDef) : '';
@@ -5222,7 +5348,7 @@ function createCardElement(cardDict, options = {}) {
     const magicSwiftValue = Number(cardDef.magic_swift_value || cardDict.magic_swift_value || 0);
     const powerValue = Number(cardDef.power_value || cardDict.power_value || 0);
     const copyCount = Number(cardDef.copy_count || 0);
-    el.style.borderColor = typeColor;
+    el.style.borderColor = displayTypeColor;
     el.dataset.instanceId = cardDict.instance_id;
     el.dataset.defId = defId;
     let flagsHtml = '';
@@ -5284,12 +5410,12 @@ function createCardElement(cardDict, options = {}) {
     el.innerHTML = `
         <div class="card-costs">
             <span class="cost-e">${blinded ? '?' : totalE}</span>
-            <span class="card-name" style="color:${typeColor}">${escapeHtml(cardName)}</span>
+            <span class="card-name" style="color:${displayTypeColor}">${escapeHtml(cardName)}</span>
             <span class="cost-m">${blinded ? '?' : totalM}</span>
         </div>
-        ${englishName ? `<div class="card-english-name" style="color:${typeColor}">${escapeHtml(englishName)}</div>` : ''}
+        ${englishName ? `<div class="card-english-name" style="color:${displayTypeColor}">${escapeHtml(englishName)}</div>` : ''}
         ${cardArtHtml}
-        <div class="card-type-label-wrap"><span class="card-type-label" style="color:${typeColor}">${escapeHtml(typeLabel)}</span></div>
+        <div class="card-type-label-wrap"><span class="card-type-label" style="color:${displayTypeColor}">${escapeHtml(typeLabel)}</span></div>
         <div class="card-effect">${colorizeCardText(effectText || '')}</div>
         ${descriptionText ? `<div class="card-description">${colorizeCardText(descriptionText)}</div>` : ''}
         ${bottomHtml}
@@ -5479,11 +5605,14 @@ function createCardChoiceChip(cardDict, options = {}) {
         }
         return chip;
     }
-    const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
     const blindLevel = getCardBlindLevelForSelf(cardDict, options);
     const blinded = blindLevel > 0;
     const hideTypeByBlind = blindLevel >= 2;
-    if (blinded) chip.classList.add('choice-card-blinded');
+    const typeColor = getCardBlindDisplayColor(cardDef, blindLevel);
+    if (blinded) {
+        chip.classList.add('choice-card-blinded');
+        chip.classList.toggle('choice-card-blinded-deep', hideTypeByBlind);
+    }
     const name = document.createElement('span');
     name.className = 'choice-card-name';
     name.style.borderColor = typeColor;
@@ -6614,7 +6743,6 @@ function getStatusIntroItem(statusInfo) {
         toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc, color: '#6C3483' },
         vulnerable: { label: '易伤', desc: '受到的物理伤害增加50%。', color: COLORS.damage },
         triangle: { label: UI.status_triangle, desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
-        dodge: { label: UI.status_dodge, desc: '可响应攻击。普通攻击会被闪避，精准攻击被闪避时只造成一半伤害。', color: COLORS.guard },
         nazar: { label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
@@ -6626,10 +6754,9 @@ function getStatusIntroItem(statusInfo) {
         untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。', color: '#1A5276' },
         bandage: { label: UI.status_bandage, desc: '绷带的保护，若状态存在，玩家死亡时会先无敌一回合，下回合死亡。', color: '#1E8449' },
         sponge: { label: UI.status_sponge, desc: '表示海绵的存在。', color: '#6C3483' },
-        shovel: { label: UI.status_shovel, desc: '表示已使用铲子，此时不能使用卡牌。', color: '#5D4037' },
         sluggish: { label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         overload: { label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
-        foresight: { label: UI.status_foresight, desc: '回合开始抽牌时，从牌堆顶选择最多层数张牌来替换本次抽牌。', color: '#2980B9' },
+        foresight: { label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
         fracture: { label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         stagnation: { label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
         blind: { label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始时手牌会被打乱，然后清空失明。', color: '#2C3E50' },
@@ -7047,8 +7174,15 @@ function updateCardHoldPreview(pos) {
     el.style.top = `${top}px`;
 }
 
-function buildCardHoldPreviewHtml(cardDef) {
+function buildCardHoldPreviewHtml(cardDef, blinded = false) {
     if (!cardDef) return '';
+    if (blinded) {
+        return `
+            <div class="card-hold-preview-title">?</div>
+            <div class="card-hold-preview-effect">?</div>
+            <div class="card-hold-preview-desc">?</div>
+        `;
+    }
     const effectText = getCardEffectText(cardDef) || '';
     const descriptionText = getCardDescriptionText(cardDef) || '';
     return `
@@ -7062,11 +7196,17 @@ function showCardHoldPreview(cardEl, pos) {
     if (!dragState || dragState.previewEl || !isMinimalUiStyle() || dragState.moved) return;
     const cardDef = getCardDef(cardEl.dataset.defId || '');
     if (!cardDef) return;
-    const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
+    const hand = (gameState && gameState.you && gameState.you.hand) || [];
+    const instanceId = cardEl.dataset.instanceId;
+    const cardDict = hand.find(card => String(card.instance_id) === String(instanceId)) || { def_id: cardEl.dataset.defId };
+    const blindLevel = getCardBlindLevelForSelf(cardDict);
+    const blinded = blindLevel > 0;
+    const typeColor = getCardBlindDisplayColor(cardDef, blindLevel);
     const preview = document.createElement('div');
     preview.className = 'card-hold-preview';
+    if (blinded) preview.classList.add('card-hold-preview-blinded');
     preview.style.setProperty('--preview-color', typeColor);
-    preview.innerHTML = buildCardHoldPreviewHtml(cardDef);
+    preview.innerHTML = buildCardHoldPreviewHtml(cardDef, blinded);
     bindInlineCardChips(preview);
     document.body.appendChild(preview);
     dragState.previewEl = preview;
@@ -12284,11 +12424,12 @@ function normalizeBattleCard(cardDict, ownerState) {
     const cardDef = getCardDef(card.def_id || '');
     const costs = cardDef ? getCardDisplayCosts(card, cardDef, ownerState) : { totalE: 0, totalM: 0, flags: new Set() };
     const image = card.image || card.image_url || (cardDef && (cardDef.image || cardDef.image_url)) || '';
+    const blindLevel = cardDef ? getCardBlindLevelForSelf(card) : 0;
     return {
         ...card,
         def_id: card.def_id || '',
         instance_id: card.instance_id,
-        name: cardDef ? getCardName(cardDef) : (card.def_id || '?'),
+        name: cardDef ? getBlindedCardDisplayName(card, cardDef) : (card.def_id || '?'),
         card_type: cardDef ? cardDef.card_type : '',
         cost_e: costs.totalE,
         cost_m: costs.totalM,
@@ -12297,6 +12438,7 @@ function normalizeBattleCard(cardDict, ownerState) {
         flags: Array.from(costs.flags || []),
         image,
         image_url: image,
+        blind_level: blindLevel,
         cardDef,
         raw: card,
     };
@@ -12628,11 +12770,13 @@ function showClassicHoverInfo(card, anchor) {
     const cardDef = card.cardDef || getCardDef(card.def_id || '');
     if (!cardDef) return;
     removeClassicHoverInfo();
-    const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
+    const blindLevel = getCardBlindLevelForSelf(card.raw || card);
+    const typeColor = getCardBlindDisplayColor(cardDef, blindLevel);
     const preview = document.createElement('div');
     preview.className = 'card-hold-preview classic-hover-info';
+    if (blindLevel > 0) preview.classList.add('card-hold-preview-blinded');
     preview.style.setProperty('--preview-color', typeColor);
-    preview.innerHTML = buildCardHoldPreviewHtml(cardDef);
+    preview.innerHTML = buildCardHoldPreviewHtml(cardDef, blindLevel > 0);
     document.body.appendChild(preview);
     classicHoverInfoEl = preview;
     positionClassicHoverInfo(anchor);
@@ -13078,7 +13222,6 @@ function renderStatusTags(containerId, playerData) {
     if (p.fire > 0) tags.push({ key: 'fire', name: UI.status_fire, abbr: 'F', val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
     if (p.toxic > 0) tags.push({ key: 'toxic', name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
     if (p.triangle_stacks > 0) tags.push({ key: 'triangle', name: UI.status_triangle, abbr: '△', val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
-    if (p.dodge > 0) tags.push({ key: 'dodge', name: UI.status_dodge, abbr: 'Dg', val: p.dodge, fg: COLORS.guard, bg: COLORS.guard_bg });
     if (p.nazar_active) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
     if (p.equipment_protection > 0) tags.push({ key: 'equip_protect', name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
     if (p.invincible) tags.push({ key: 'invincible', name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
@@ -13092,7 +13235,6 @@ function renderStatusTags(containerId, playerData) {
     if (p.untargetable) tags.push({ key: 'untargetable', name: UI.status_untargetable, abbr: 'Unt', val: '', fg: '#1A5276', bg: '#EBF5FB' });
     if (p.bandage_active) tags.push({ key: 'bandage', name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
     if (p.sponge_active) tags.push({ key: 'sponge', name: UI.status_sponge, abbr: 'Spg', val: '', fg: '#6C3483', bg: '#F4ECF7' });
-    if (p.shovel_active) tags.push({ key: 'shovel', name: UI.status_shovel, abbr: 'Shv', val: '', fg: '#5D4037', bg: '#EFEBE9' });
     if (p.sluggish > 0) tags.push({ key: 'sluggish', name: UI.status_sluggish, abbr: 'Slg', val: p.sluggish, fg: '#E67E22', bg: '#FEF5E7' });
     if (p.overload > 0) tags.push({ key: 'overload', name: UI.status_overload, abbr: 'Ovl', val: p.overload, fg: '#C0392B', bg: '#FDEDEC' });
     if (p.foresight > 0) tags.push({ key: 'foresight', name: UI.status_foresight, abbr: 'Fsi', val: p.foresight, fg: '#2980B9', bg: '#EBF5FB' });
@@ -15516,6 +15658,8 @@ async function onPlayCard(cardInstanceId, options = {}) {
 
 async function getCardChoice(cardDict, targetPlayerId = -1) {
     const defId = cardDict.def_id;
+    const sourceCardDef = getCardDef(defId);
+    const sourceCardName = sourceCardDef ? getBlindedCardDisplayName(cardDict, sourceCardDef) : '';
     const hand = (gameState.you || {}).hand || [];
     if (defId === 'Fission') {
         const attacks = hand.filter(c => {
@@ -15524,7 +15668,7 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
         });
         if (!attacks.length) { gameAlert(UI.notice, UI.no_attack_cards); return false; }
         const options = attacks.map(a => cardChoiceOption(a));
-        const sel = await simpleChoice(UI.choose_attack_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
+        const sel = await simpleChoice(UI.choose_attack_for.replace('{0}', sourceCardName), options);
         if (sel < 0) return false;
         return { target_instance_id: attacks[sel].instance_id, target_instance_ids: [attacks[sel].instance_id] };
     } else if (defId === 'Fusion') {
@@ -15542,27 +15686,27 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
         let group = validGroups[0][1];
         if (validGroups.length > 1) {
             const groupOptions = validGroups.map(([k, v]) => cardChoiceOption(v[0], { detail: `x${v.length}` }));
-            const sel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), groupOptions);
+            const sel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', sourceCardName), groupOptions);
             if (sel < 0) return false;
             group = validGroups[sel][1];
         }
         const uniqueCombos = buildFusionCombosForGroup(group);
         const comboOptions = uniqueCombos.map(combo => cardComboChoiceOption(combo));
-        const comboSel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), comboOptions);
+        const comboSel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', sourceCardName), comboOptions);
         if (comboSel < 0) return false;
         return { target_instance_ids: uniqueCombos[comboSel].map(c => c.instance_id) };
     } else if (isMimicCardDict(cardDict)) {
         const others = hand.filter(c => c.instance_id !== cardDict.instance_id);
         if (!others.length) { gameAlert(UI.notice, UI.no_attack_cards); return false; }
         const options = others.map(c => mimicCardChoiceOption(c, cardDict, gameState && gameState.you));
-        const sel = await simpleChoice(UI.choose_hand_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
+        const sel = await simpleChoice(UI.choose_hand_for.replace('{0}', sourceCardName), options);
         if (sel < 0) return false;
         return { target_instance_id: others[sel].instance_id };
     } else if (defId === 'Chromosome') {
         const discard = (gameState.you || {}).discard || [];
         if (!discard.length) { gameAlert(UI.notice, UI.discard_empty); return false; }
         const options = discard.map(c => cardChoiceOption(c));
-        const sel = await simpleChoice(UI.choose_from_discard_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
+        const sel = await simpleChoice(UI.choose_from_discard_for.replace('{0}', sourceCardName), options);
         if (sel < 0) return false;
         return { target_def_id: discard[sel].def_id };
     } else if (defId === 'Sewage') {
@@ -15578,14 +15722,14 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
         });
         if (!destroyable.length) { gameAlert(UI.notice, UI.no_enemy_equipment); return false; }
         const options = destroyable.map(e => equipmentChoiceOption(e));
-        const sel = await simpleChoice(UI.choose_equip_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
+        const sel = await simpleChoice(UI.choose_equip_for.replace('{0}', sourceCardName), options);
         if (sel < 0) return false;
         return { target_instance_id: destroyable[sel].card_instance.instance_id };
     } else if (defId === 'Chilli') {
         const others = hand.filter(c => c.instance_id !== cardDict.instance_id);
         if (others.length) {
             const options = others.map(c => cardChoiceOption(c));
-            const sel = await simpleChoice(UI.choose_discard_for.replace('{0}', getCardDef(defId) ? getCardName(getCardDef(defId)) : ''), options);
+            const sel = await simpleChoice(UI.choose_discard_for.replace('{0}', sourceCardName), options);
             if (sel < 0) return false;
             return { target_instance_id: others[sel].instance_id };
         }
@@ -15851,7 +15995,8 @@ function showAllyConsentUI(data) {
     if (allyConsentTimerId) clearInterval(allyConsentTimerId);
     const cardDict = data.card || {};
     const cardDef = getCardDef(cardDict.def_id);
-    const cardName = cardDef ? getCardName(cardDef) : (cardDict.def_id || '?');
+    const allyBlindLevel = getOwnBlindLevel();
+    const cardName = cardDef ? (allyBlindLevel > 0 ? '?' : getCardName(cardDef)) : (cardDict.def_id || '?');
     container.innerHTML = '';
     container.classList.remove('hidden');
     container.classList.add('visible');
@@ -16127,7 +16272,7 @@ async function showChoiceUI(data) {
     const choiceType = data.choice_type || '';
     const cardDict = data.card || {};
     const cardDef = getCardDef(cardDict.def_id);
-    const cardName = cardDef ? getCardName(cardDef) : '?';
+    const cardName = cardDef ? (getOwnBlindLevel() > 0 ? '?' : getCardName(cardDef)) : '?';
     const choiceParams = data.choice_params || {};
     const choicePromptConfig = {
         cancellable: choiceParams.cancellable !== false && !(cardDef && (cardDef.flags || []).includes('uncancellable')),
@@ -16165,7 +16310,10 @@ async function showChoiceUI(data) {
         }
     } else if (choiceType === 'choose_card_from_deck') {
         const deck = (gameState.you || {}).deck || [];
-        if (!deck.length) { gameAlert(UI.notice, UI.deck_empty); }
+        if (!deck.length) {
+            gameAlert(UI.notice, UI.deck_empty);
+            choiceResult = { cancelled: true };
+        }
         else {
             const options = deck.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_deck_for.replace('{0}', cardName)), options, choicePromptConfig);
@@ -16173,7 +16321,10 @@ async function showChoiceUI(data) {
         }
     } else if (choiceType === 'choose_card_from_discard') {
         const discard = (gameState.you || {}).discard || [];
-        if (!discard.length) { gameAlert(UI.notice, UI.discard_empty); }
+        if (!discard.length) {
+            gameAlert(UI.notice, UI.discard_empty);
+            choiceResult = { cancelled: true };
+        }
         else {
             const options = discard.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_discard_for.replace('{0}', cardName)), options, choicePromptConfig);
@@ -16276,7 +16427,10 @@ async function showChoiceUI(data) {
         }
     } else if (choiceType === 'choose_from_deck') {
         const deck = choiceTargetData().deck || [];
-        if (!deck.length) { gameAlert(UI.notice, UI.deck_empty); }
+        if (!deck.length) {
+            gameAlert(UI.notice, UI.deck_empty);
+            choiceResult = { cancelled: true };
+        }
         else {
             const options = deck.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_deck_for.replace('{0}', cardName)), options, choicePromptConfig);
@@ -16284,7 +16438,10 @@ async function showChoiceUI(data) {
         }
     } else if (choiceType === 'choose_from_discard') {
         const discard = choiceTargetData().discard || [];
-        if (!discard.length) { gameAlert(UI.notice, UI.discard_empty); }
+        if (!discard.length) {
+            gameAlert(UI.notice, UI.discard_empty);
+            choiceResult = { cancelled: true };
+        }
         else {
             const options = discard.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_discard_for.replace('{0}', cardName)), options, choicePromptConfig);
@@ -16292,7 +16449,10 @@ async function showChoiceUI(data) {
         }
     } else if (choiceType === 'choose_from_exile') {
         const exile = choiceTargetData().exile || [];
-        if (!exile.length) { gameAlert(UI.notice, UI.no_valid_target || '无可选卡牌'); }
+        if (!exile.length) {
+            gameAlert(UI.notice, UI.no_valid_target || '无可选卡牌');
+            choiceResult = { cancelled: true };
+        }
         else {
             const options = exile.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle('从放逐区选择'), options, choicePromptConfig);
@@ -16329,11 +16489,11 @@ async function showChoiceUI(data) {
         });
         if (targetId >= 0) choiceResult = { target_player: targetId, target_player_id: targetId };
     } else if (choiceType === 'foresight_replace') {
-        const deckCards = data.deck_cards || [];
+        const handCards = data.hand_cards || data.deck_cards || [];
         const maxReplace = Number(choiceParams.max_count || choiceParams.count || 1);
-        if (!deckCards.length) { gameAlert(UI.notice, UI.no_valid_target || '没有可选择的卡牌'); }
+        if (!handCards.length) { gameAlert(UI.notice, UI.no_valid_target || '没有可选择的卡牌'); }
         else {
-            const options = deckCards.map(c => cardChoiceOption(c));
+            const options = handCards.map(c => cardChoiceOption(c));
             const selected = await multiChoice(
                 choiceTitle(UI.foresight_replace_title || 'Foresight'),
                 options,
@@ -16345,7 +16505,7 @@ async function showChoiceUI(data) {
                     confirmText: UI.foresight_replace_confirm || 'Draw',
                 }
             );
-            if (selected.length > 0) choiceResult = { selected_instance_ids: selected.map(i => deckCards[i].instance_id) };
+            if (selected.length > 0) choiceResult = { selected_instance_ids: selected.map(i => handCards[i].instance_id) };
             else choiceResult = { selected_instance_ids: [] };
         }
     } else if (choiceType === 'confirm') {

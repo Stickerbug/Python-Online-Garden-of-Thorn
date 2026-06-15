@@ -5970,6 +5970,21 @@ def beta_logout():
     return jsonify({'success': True})
 
 
+@app.route('/api/hidden-features/unlock', methods=['POST'])
+def hidden_features_unlock():
+    try:
+        data = request.get_json(silent=True) or {}
+        key = str(data.get('key') or '')
+        if key and check_password_hash(BETA_ACCESS_KEY_HASH, key):
+            admin_event('security', f'hidden features unlocked from {_client_ip()}')
+            return jsonify({'success': True})
+        admin_event('security', f'hidden features unlock failed from {_client_ip()}')
+        return jsonify({'success': False, 'error': '秘钥错误'}), 401
+    except Exception as exc:
+        admin_event('error', f'hidden features unlock failed: {exc}')
+        return jsonify({'success': False, 'error': '解锁失败'}), 500
+
+
 @app.route('/favicon.ico')
 def favicon():
     icons_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'assets', 'icons')
@@ -7635,8 +7650,10 @@ def on_draft_reroll(data=None):
             success = bool(result.get('success')) if isinstance(result, dict) else bool(result)
             if success:
                 record_room_replay_action(room, 'draft_reroll', pidx, {})
-                for pi in range(len(room.player_sids)):
-                    send_pregame_state(room, pi)
+                send_pregame_state(room, pidx)
+                send_pregame_status_update(room, targets=[
+                    pi for pi in range(len(room.player_sids)) if pi != pidx
+                ])
             else:
                 emit('server_error', {'message': '无法刷新：当前不是选牌阶段或刷新次数已用完'})
     except Exception as e:
