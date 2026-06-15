@@ -112,7 +112,7 @@ input:focus, select:focus, textarea:focus {
 }
 .tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   margin-bottom: 10px;
 }
@@ -161,6 +161,18 @@ input:focus, select:focus, textarea:focus {
 .badge.risk-3, .badge.risk-4 { color: var(--danger); border-color: #f0b8b5; }
 .badge.pending { color: var(--warn); border-color: #f0d28a; }
 .badge.accepted { color: var(--ok); border-color: #a5d6be; }
+.badge.danger-badge { color: var(--danger); border-color: #f0b8b5; }
+.hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
 .detail {
   overflow: auto;
   max-height: calc(100vh - 112px);

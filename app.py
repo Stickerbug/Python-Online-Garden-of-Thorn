@@ -6156,6 +6156,68 @@ def handling_report_resolve(report_id):
     return jsonify({'success': True, 'report': detail})
 
 
+@app.route('/api/handling/users')
+def handling_users():
+    started = time.perf_counter()
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        data = list_admin_users(
+            query=request.args.get('query', ''),
+            sort=request.args.get('sort', 'last_login_at'),
+            order=request.args.get('order', 'desc'),
+            limit=validate_int(request.args.get('limit', 20), default=20, minimum=1, maximum=30, name='limit'),
+            offset=validate_int(request.args.get('offset', 0), default=0, minimum=0, maximum=1000000, name='offset'),
+        )
+    except Exception as exc:
+        admin_event('error', f'handling users query failed: {exc}')
+        log_admin_api_timing('/api/handling/users', (time.perf_counter() - started) * 1000, error=type(exc).__name__)
+        return jsonify({'success': False, 'error': '账号数据库不可用'}), 500
+    with _lock:
+        online = _admin_online_user_map()
+    for user in data.get('users', []):
+        user['online'] = online.get(str(user.get('username', '')).lower())
+        user.pop('skin', None)
+    log_admin_api_timing(
+        '/api/handling/users',
+        (time.perf_counter() - started) * 1000,
+        rows=len(data.get('users') or []),
+        total=data.get('total'),
+        limit=data.get('limit'),
+        offset=data.get('offset'),
+    )
+    return jsonify({'success': True, **data})
+
+
+@app.route('/api/handling/users/<int:user_id>/ban', methods=['POST'])
+def handling_user_ban(user_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    data = request.get_json(silent=True) or {}
+    try:
+        banned = bool(data.get('banned', True))
+        reason = validate_str(data.get('reason', ''), max_len=300, name='reason', truncate=True)
+        duration_seconds = validate_int(data.get('duration_seconds', 0), default=0, minimum=0, maximum=60 * 60 * 24 * 1000, name='duration_seconds')
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
+    user, error = admin_set_user_ban(user_id, banned, reason, duration_seconds=duration_seconds or None)
+    if error:
+        return _json_error(error, 400)
+    kicked = []
+    if banned:
+        status = get_user_ban_status(user_id=user.get('id'), username=user.get('username')) if user else {'banned': True}
+        with _lock:
+            kicked = list(_online_sids_for_user(user_id=user.get('id'), username=user.get('username') if user else ''))
+        for sid in kicked:
+            socketio.emit('server_error', {'message': ban_error_payload(status).get('reason', '账号已被封禁')}, room=sid)
+            socketio.emit('kicked', {'reason': 'account banned'}, room=sid)
+            socketio.server.disconnect(sid)
+        if kicked:
+            broadcast_lobby()
+    admin_event('moderation', f'handling {"banned" if banned else "unbanned"} user {user.get("username") if user else user_id}: {reason or "-"}')
+    return jsonify({'success': True, 'user': user, 'kicked': len(kicked)})
+
+
 @app.route('/api/handling/ip-bans')
 def handling_ip_bans():
     started = time.perf_counter()
@@ -9496,7 +9558,7 @@ def on_play_card(data):
                 choice.setdefault('target_player_id', target_player_id)
                 choice.setdefault('target_id', target_player_id)
             result = engine.play_card(pidx, card_instance_id, choice)
-        if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui'):
+        if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_v2_ui'):
             record_valid_player_action(room, pidx, 'play_card')
             record_room_replay_action(room, 'play_card', pidx, {
                 'card_instance_id': card_instance_id,
@@ -9657,7 +9719,8 @@ def on_resolve_choice(data):
             send_game_state_to(room, pidx)
             return
         result = engine.resolve_choice(pidx, choice)
-        record_valid_player_action(room, pidx, 'resolve_choice')
+        if not result.get('cancelled'):
+            record_valid_player_action(room, pidx, 'resolve_choice')
         record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice, 'result': result})
         if result.get('needs_response'):
             broadcast_game_state(room)
@@ -9670,8 +9733,10 @@ def on_resolve_choice(data):
             emit_room_v2_ui_request(room)
         elif result.get('success'):
             broadcast_game_state(room)
+        elif result.get('cancelled'):
+            broadcast_game_state(room)
         else:
-            if result.get('error') != '没有待选择操作':
+            if result.get('error') not in ('没有待选择操作', '选择已取消'):
                 _security_illegal(sid, 'resolve_choice', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
             emit('server_error', {'message': result.get('error', 'Operation failed')})
             broadcast_game_state(room)

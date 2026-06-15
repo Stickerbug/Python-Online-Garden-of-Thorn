@@ -4283,7 +4283,7 @@ class GameEngine:
         if choice_cancelled:
             if ps.find_hand_card(card.instance_id) is None:
                 ps.hand.insert(0, card)
-            return {'success': True, 'cancelled': True}
+            return {'success': False, 'cancelled': True, 'error': '选择已取消'}
         if isinstance(choice, dict):
             original_choice = pending.get('original_choice') if isinstance(pending.get('original_choice'), dict) else {}
             for key in ('target_player', 'target_player_id', 'target_id'):

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>举报处理</title>
-<link rel="stylesheet" href="/static/css/handling.css?v=2">
+<link rel="stylesheet" href="/static/css/handling.css?v=3">
 </head>
 <body>
 <div id="login" class="login-view">
@@ -33,16 +33,22 @@
     <aside class="left panel">
       <div class="tabs" role="tablist">
         <button class="tab active" data-tab="reports">举报</button>
+        <button class="tab" data-tab="users">玩家</button>
         <button class="tab" data-tab="ip">IP封禁</button>
       </div>
       <div id="reports-tools" class="tools">
         <select id="status-filter">
+          <option value="all">全部</option>
           <option value="pending">待处理</option>
           <option value="accepted">已接受</option>
           <option value="rejected">已驳回</option>
           <option value="abusive">恶意举报</option>
-          <option value="all">全部</option>
         </select>
+      </div>
+      <div id="users-tools" class="tools hidden">
+        <input id="user-query" placeholder="昵称 / ID / 注册顺序">
+        <button id="search-users" class="btn primary">搜索玩家</button>
+        <div class="hint">不自动刷新；默认最多返回 20 个。</div>
       </div>
       <div id="ip-tools" class="tools hidden">
         <input id="ip-input" placeholder="IP">
@@ -54,7 +60,7 @@
     </aside>
 
     <section class="center panel">
-      <div id="empty" class="empty">选择一条举报或 IP 记录。</div>
+      <div id="empty" class="empty">选择一条举报、玩家或 IP 记录。</div>
       <article id="detail" class="detail hidden"></article>
     </section>
 
@@ -117,6 +123,6 @@
   </div>
 </div>
 
-<script src="/static/js/handling.js?v=2"></script>
+<script src="/static/js/handling.js?v=3"></script>
 </body>
 </html>

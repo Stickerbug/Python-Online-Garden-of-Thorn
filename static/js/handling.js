@@ -2,11 +2,14 @@ const $ = (id) => document.getElementById(id);
 
 let currentTab = 'reports';
 let reports = [];
+let users = [];
 let ipBans = [];
 let selectedReportId = null;
+let selectedUserId = null;
 let selectedDuration = 0;
 let durationTarget = 'moderation';
 let reportsRequestInFlight = false;
+let usersRequestInFlight = false;
 let ipBansRequestInFlight = false;
 const HANDLING_FETCH_TIMEOUT_MS = 5000;
 
@@ -134,21 +137,36 @@ function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
   $('reports-tools').classList.toggle('hidden', tab !== 'reports');
+  $('users-tools').classList.toggle('hidden', tab !== 'users');
   $('ip-tools').classList.toggle('hidden', tab !== 'ip');
-  setText('summary', tab === 'reports' ? `举报 ${reports.length}` : `IP封禁 ${ipBans.length}`);
+  const summaryText = tab === 'reports' ? `举报 ${reports.length}` : (tab === 'users' ? `玩家 ${users.length}` : `IP封禁 ${ipBans.length}`);
+  setText('summary', `${summaryText}，点击刷新读取`);
   renderList();
 }
 
 async function loadReports() {
   if (!handlingPageVisible() || reportsRequestInFlight) return;
   reportsRequestInFlight = true;
-  const status = $('status-filter').value || 'pending';
+  const status = $('status-filter').value || 'all';
   try {
     const data = await api(`/api/handling/reports?status=${encodeURIComponent(status)}&limit=30`);
     reports = data.items || [];
     setText('summary', `举报 ${reports.length}/${data.total || reports.length}`);
   } finally {
     reportsRequestInFlight = false;
+  }
+}
+
+async function loadUsers() {
+  if (!handlingPageVisible() || usersRequestInFlight) return;
+  usersRequestInFlight = true;
+  const query = $('user-query').value.trim();
+  try {
+    const data = await api(`/api/handling/users?query=${encodeURIComponent(query)}&limit=20`);
+    users = data.users || [];
+    setText('summary', `玩家 ${users.length}/${data.total || users.length}`);
+  } finally {
+    usersRequestInFlight = false;
   }
 }
 
@@ -168,6 +186,8 @@ async function refreshCurrent() {
   try {
     if (currentTab === 'reports') {
       await loadReports();
+    } else if (currentTab === 'users') {
+      await loadUsers();
     } else {
       await loadIpBans();
     }
@@ -180,9 +200,10 @@ async function refreshCurrent() {
 function renderList() {
   const list = $('list');
   list.textContent = '';
-  const items = currentTab === 'reports' ? reports : ipBans;
+  const items = currentTab === 'reports' ? reports : (currentTab === 'users' ? users : ipBans);
   if (!items.length) {
-    list.appendChild(el('div', 'list-item muted', currentTab === 'reports' ? '暂无举报' : '暂无 IP 封禁'));
+    const emptyText = currentTab === 'reports' ? '暂无举报' : (currentTab === 'users' ? '暂无玩家，输入条件后点击搜索' : '暂无 IP 封禁');
+    list.appendChild(el('div', 'list-item muted', emptyText));
     return;
   }
   items.forEach((item) => {
@@ -198,6 +219,15 @@ function renderList() {
       const risk = el('span', `badge risk-${item.risk_level || 0}`, `risk ${item.risk_level || 0}`);
       row.appendChild(risk);
       row.addEventListener('click', () => selectReport(item.id));
+    } else if (currentTab === 'users') {
+      if (item.id === selectedUserId) row.classList.add('active');
+      const title = el('div', 'list-title');
+      title.appendChild(el('strong', '', item.username || `#${item.id}`));
+      title.appendChild(el('span', item.banned ? 'badge danger-badge' : 'badge accepted', item.banned ? '已封禁' : '正常'));
+      row.appendChild(title);
+      row.appendChild(el('div', 'mono muted', `ID:${item.player_id || '-'} 注册顺序:${item.id || '-'}`));
+      row.appendChild(el('div', 'muted', `${item.online ? '在线' : '离线'} · 上次 ${fmtTime(item.last_login_at)}`));
+      row.addEventListener('click', () => renderUserDetail(item));
     } else {
       const title = el('div', 'list-title');
       title.appendChild(el('strong', 'mono', item.ip));
@@ -256,6 +286,18 @@ function renderReportDetail(report) {
     addKv(detail, '处理人', report.resolved_by || '-');
     addKv(detail, '处理备注', report.resolution_note || '-');
   }
+  const reportUserActions = el('div', 'inline-actions');
+  if (report.reporter_user_id || report.reporter_username) {
+    const btn = el('button', 'btn small', '查看举报者');
+    btn.addEventListener('click', () => searchUser(report.reporter_user_id || report.reporter_username));
+    reportUserActions.appendChild(btn);
+  }
+  if (report.target_user_id || report.target_username) {
+    const btn = el('button', 'btn small danger', '查看目标账号');
+    btn.addEventListener('click', () => searchUser(report.target_user_id || report.target_username));
+    reportUserActions.appendChild(btn);
+  }
+  if (reportUserActions.childNodes.length) detail.appendChild(reportUserActions);
   const history = report.reporter_history || {};
   addKv(detail, '举报者历史', `属实 ${history.accepted || 0} / 驳回 ${history.rejected || 0} / 恶意 ${history.abusive || 0}`);
 
@@ -325,6 +367,64 @@ function renderIpDetail(item) {
   const btn = el('button', 'btn danger', '解除 IP 封禁');
   btn.addEventListener('click', () => unbanIp(item.ip));
   detail.appendChild(btn);
+}
+
+function renderUserDetail(user) {
+  selectedUserId = user.id;
+  renderList();
+  setText('action-result', '');
+  $('empty').classList.add('hidden');
+  const detail = $('detail');
+  detail.classList.remove('hidden');
+  detail.textContent = '';
+  detail.appendChild(el('h2', '', user.username || `玩家 #${user.id}`));
+  addKv(detail, '注册顺序', user.id, true);
+  addKv(detail, '玩家ID', user.player_id || '-', true);
+  addKv(detail, '状态', user.banned ? '已封禁' : '正常');
+  addKv(detail, '在线', user.online ? `${user.online.status || '在线'} ${user.online.mode || ''}` : '否');
+  addKv(detail, '创建时间', fmtTime(user.created_at), true);
+  addKv(detail, '上次游玩', fmtTime(user.last_login_at), true);
+  addKv(detail, '战绩', `${user.games_played || 0}局 / 胜${user.wins || 0} 负${user.losses || 0} 平${user.draws || 0}`);
+  addKv(detail, '胜率', `${user.win_rate || 0}%`, true);
+  if (user.banned) {
+    addKv(detail, '封禁原因', user.ban_reason || '-');
+    addKv(detail, '封禁到期', user.ban_until ? fmtTime(user.ban_until) : '永久', true);
+  }
+  const actions = el('div', 'inline-actions');
+  if (user.banned) {
+    const unban = el('button', 'btn primary', '解除账号封禁');
+    unban.addEventListener('click', () => setUserBan(user.id, false));
+    actions.appendChild(unban);
+  } else {
+    const ban = el('button', 'btn danger', '封禁账号');
+    ban.addEventListener('click', () => setUserBan(user.id, true));
+    actions.appendChild(ban);
+  }
+  detail.appendChild(actions);
+}
+
+async function setUserBan(userId, banned) {
+  if (!userId) return;
+  const reason = $('note').value || (banned ? '举报处理页封禁' : '');
+  try {
+    const data = await api(`/api/handling/users/${encodeURIComponent(userId)}/ban`, {
+      method: 'POST',
+      body: JSON.stringify({
+        banned,
+        reason,
+        duration_seconds: banned ? selectedDuration : 0,
+      }),
+    });
+    $('action-result').className = 'result ok';
+    setText('action-result', banned ? `已封禁账号，踢出 ${data.kicked || 0} 个在线会话` : '已解除账号封禁');
+    const idx = users.findIndex((item) => item.id === userId);
+    if (idx >= 0 && data.user) users[idx] = { ...users[idx], ...data.user };
+    renderList();
+    if (data.user) renderUserDetail(data.user);
+  } catch (e) {
+    $('action-result').className = 'result';
+    setText('action-result', e.message);
+  }
 }
 
 async function resolveReport() {
@@ -473,6 +573,10 @@ function bind() {
   $('login-form').addEventListener('submit', login);
   $('logout').addEventListener('click', logout);
   $('refresh').addEventListener('click', refreshCurrent);
+  $('search-users').addEventListener('click', loadUsersThenRender);
+  $('user-query').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') loadUsersThenRender();
+  });
   $('status-filter').addEventListener('change', () => {
     setText('summary', '筛选已更改，点击刷新读取');
     reports = [];
@@ -493,6 +597,25 @@ function bind() {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) setText('summary', '页面已恢复，点击刷新读取当前列表');
   });
+}
+
+async function loadUsersThenRender() {
+  try {
+    await loadUsers();
+    renderList();
+  } catch (e) {
+    setText('summary', `玩家搜索失败：${e.message}`);
+  }
+}
+
+async function searchUser(query) {
+  currentTab = 'users';
+  document.querySelectorAll('.tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === 'users'));
+  $('reports-tools').classList.add('hidden');
+  $('users-tools').classList.remove('hidden');
+  $('ip-tools').classList.add('hidden');
+  $('user-query').value = text(query);
+  await loadUsersThenRender();
 }
 
 bind();

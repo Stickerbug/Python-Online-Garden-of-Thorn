@@ -17024,6 +17024,10 @@ const COMMUNITY_GTNMOD_MAX_BYTES = 1024 * 1024;
 let communityUploadInProgress = false;
 
 function getCommunityModSelection() {
+    // Community mods require hidden features enabled
+    if (!hiddenFeaturesEnabled()) {
+        return { mod_source: 'official', community_mods: [], community_mod_url: '', community_mod_hash: '', community_mod_name: '' };
+    }
     let mods = [];
     try {
         const raw = localStorage.getItem('gtn_community_mods');
@@ -17107,6 +17111,7 @@ function setSettingsTab(tab) {
 }
 
 function renderSettingsTabs() {
+    const hidden = hiddenFeaturesEnabled();
     const tabs = ['appearance', 'server', 'mods', 'social'];
     tabs.forEach(tab => {
         const btn = $(`settings-tab-${tab}`);
@@ -17168,7 +17173,7 @@ function createSettingsModCaret(kind, key, expanded) {
     return btn;
 }
 
-const BETA_TESTING_MOD_IDS = new Set(['jungle', 'desert_cards_addition']);
+const BETA_TESTING_MOD_IDS = new Set(['jungle', 'desert_cards_addition', 'garden', 'factory']);
 
 function isBetaTestingMod(mod) {
     const info = mod?.info || {};
@@ -17184,8 +17189,12 @@ function isBetaTestingMod(mod) {
         BETA_TESTING_MOD_IDS.has(value)
         || value.includes('jungle cards addition')
         || value.includes('desert cards addition')
+        || value.includes('garden cards addition')
+        || value.includes('factory cards addition')
         || value.includes('丛林卡')
         || value.includes('沙漠卡')
+        || value.includes('花园卡')
+        || value.includes('工厂卡')
     );
 }
 
@@ -17291,27 +17300,34 @@ function renderOfficialModList() {
 }
 
 function setSettingsModSourceTab(tab) {
+    if (tab === 'community' && !hiddenFeaturesEnabled()) tab = 'official';
     settingsActiveModTab = tab === 'community' ? 'community' : 'official';
     localStorage.setItem('gtn_settings_mod_tab', settingsActiveModTab);
     renderModSourceControls();
 }
 
 function renderModSourceTabs() {
+    const hidden = hiddenFeaturesEnabled();
     ['official', 'community'].forEach(kind => {
         const btn = $(`settings-mod-tab-${kind}`);
         if (!btn) return;
         const active = settingsActiveModTab === kind;
         btn.classList.toggle('active', active);
         btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        // Hide community tab when hidden features disabled
+        if (kind === 'community') btn.classList.toggle('hidden', !hidden);
     });
 }
 
 function renderModSourceControls() {
     const officialBox = $('settings-official-mods');
     const communityBox = $('settings-community-mods');
+    const hidden = hiddenFeaturesEnabled();
+    // Force official tab when hidden features disabled
+    if (!hidden && settingsActiveModTab === 'community') settingsActiveModTab = 'official';
     renderModSourceTabs();
     if (officialBox) officialBox.classList.toggle('hidden', settingsActiveModTab !== 'official');
-    if (communityBox) communityBox.classList.toggle('hidden', settingsActiveModTab !== 'community');
+    if (communityBox) communityBox.classList.toggle('hidden', settingsActiveModTab !== 'community' || !hidden);
     renderCommunityCurrent();
 }
 
