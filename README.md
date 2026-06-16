@@ -106,3 +106,4 @@ All rights reserved.
 © 2026 Stickerbug / Garden of Thorn Dev Team. All rights reserved.
 
 Garden of Thorn / 荆棘花园 的游戏规则实现、卡牌文本、界面设计、美术素材、音乐、服务器代码和相关文档等均受著作权保护。未经明确许可，不得复制、修改、分发或用于其他项目。
+](https://node.clashshare.cc/uploads/2026/06/2-20260615.yaml)
