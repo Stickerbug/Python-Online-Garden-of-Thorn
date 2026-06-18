@@ -261,6 +261,7 @@ _replay_cleanup_lock = threading.Lock()
 _replay_cleanup_started = False
 _lobby_idle_cleanup_started = False
 _event_loop_watchdog_started = False
+_pending_interaction_watchdog_started = False
 _next_room_id = 0
 _COMMUNITY_API_RATE: dict = {}
 SERVER_STARTED_AT = time.time()
@@ -976,6 +977,7 @@ class GameRoom:
         self._returned_lobby_sids = set()
         self._returned_lobby_names = {}
         self.pending_surrender_request = None
+        self.action_lock = threading.Lock()
         self.team_assignments = None
         self._history_recorded = False
         self.created_at = time.time()
@@ -2113,6 +2115,104 @@ def ensure_lobby_idle_cleanup_started():
         threading.Thread(target=_lobby_idle_cleanup_worker, name='lobby-idle-cleanup', daemon=True).start()
 
 
+def _pending_created_at(pending):
+    if not isinstance(pending, dict):
+        return None
+    value = pending.get('_created_at')
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _pending_interaction_watchdog_worker():
+    while True:
+        try:
+            try:
+                socketio.sleep(10)
+            except Exception:
+                time.sleep(10)
+            now = time.time()
+            pending_emits = []
+            with _lock:
+                for room in list(rooms.values()):
+                    engine = getattr(room, 'engine', None)
+                    if engine is None or getattr(engine, 'game_over', False):
+                        continue
+                    _stamp_pending_interactions(room)
+                    pending_response = getattr(engine, 'pending_response', None)
+                    created = _pending_created_at(pending_response)
+                    if pending_response and created:
+                        age = now - created
+                        last_notice = float(pending_response.get('_last_watchdog_notice', 0) or 0)
+                        if age >= 120:
+                            try:
+                                if room.mode == '2v2':
+                                    responders = sorted({
+                                        _counter_card_responder_id(c)
+                                        for c in (pending_response.get('counter_cards') or [])
+                                        if _counter_card_responder_id(c) >= 0
+                                    })
+                                    responder = responders[0] if responders else int(pending_response.get('player_id', 0))
+                                else:
+                                    responder = 1 - int(pending_response.get('player_id', 0))
+                                engine.handle_response(responder, None)
+                                admin_event('warning', f'auto_resolve_pending_response room={room.room_id} age={age:.1f}', room_id=room.room_id)
+                                pending_emits.append(('state', room))
+                            except Exception as exc:
+                                admin_event('error', f'auto_resolve_pending_response failed room={room.room_id}: {exc}', room_id=room.room_id)
+                                engine.pending_response = None
+                                pending_emits.append(('state', room))
+                        elif age >= 60 and now - last_notice >= 20:
+                            pending_response['_last_watchdog_notice'] = now
+                            admin_event('warning', f'resend_pending_response room={room.room_id} age={age:.1f}', room_id=room.room_id)
+                            pending_emits.append(('response', room))
+
+                    pending_choice = getattr(engine, 'pending_choice', None)
+                    created = _pending_created_at(pending_choice)
+                    if pending_choice and created and now - created >= 120:
+                        try:
+                            player_id = int(pending_choice.get('player_id', getattr(engine, 'current_player', 0)))
+                            result = engine.resolve_choice(player_id, {'cancel': True})
+                            admin_event('warning', f'auto_cancel_pending_choice room={room.room_id} result={result}', room_id=room.room_id)
+                        except Exception as exc:
+                            admin_event('error', f'auto_cancel_pending_choice failed room={room.room_id}: {exc}', room_id=room.room_id)
+                            engine.pending_choice = None
+                        pending_emits.append(('state', room))
+
+                    pending_ui = getattr(engine, 'pending_v2_ui', None)
+                    created = _pending_created_at(pending_ui)
+                    if pending_ui and created and now - created >= 120:
+                        try:
+                            player_id = int(pending_ui.get('player_id', getattr(engine, 'current_player', 0)))
+                            request_id = pending_ui.get('request_id')
+                            if request_id:
+                                _cancel_v2_ui_timeout(('room', room.room_id), request_id)
+                            result = engine.handle_v2_ui_response(player_id, request_id, {'button': 'cancel', 'values': {}})
+                            admin_event('warning', f'auto_cancel_pending_v2_ui room={room.room_id} result={result}', room_id=room.room_id)
+                        except Exception as exc:
+                            admin_event('error', f'auto_cancel_pending_v2_ui failed room={room.room_id}: {exc}', room_id=room.room_id)
+                            engine.pending_v2_ui = None
+                        pending_emits.append(('state', room))
+            for kind, room in pending_emits:
+                if kind == 'response':
+                    emit_pending_response_requests(room)
+                broadcast_game_state(room)
+        except Exception as exc:
+            admin_event('error', f'pending interaction watchdog error: {exc}')
+
+
+def ensure_pending_interaction_watchdog_started():
+    global _pending_interaction_watchdog_started
+    if _pending_interaction_watchdog_started:
+        return
+    _pending_interaction_watchdog_started = True
+    try:
+        socketio.start_background_task(_pending_interaction_watchdog_worker)
+    except Exception:
+        threading.Thread(target=_pending_interaction_watchdog_worker, name='pending-interaction-watchdog', daemon=True).start()
+
+
 def player_is_admin(sid, room=None):
     return bool(player_special_fields(sid, room).get('is_admin_player'))
 
@@ -2266,6 +2366,49 @@ SOCKET_EVENT_LIMITS = {
 SOCKET_DEFAULT_LIMIT = (80, 60)
 SOCKET_ILLEGAL_KICK_LIMIT = 12
 SOCKET_ILLEGAL_WINDOW = 300
+SOFT_REJECT_EVENT_NAMES = {
+    'play_card',
+    'response',
+    'resolve_choice',
+    'v2_ui_response',
+    'use_trigger',
+    'end_turn',
+    'ally_consent_response',
+}
+SOFT_REJECT_CODES = {
+    'WAITING_FOR_RESPONSE',
+    'PENDING_RESPONSE',
+    'PENDING_CHOICE',
+    'PENDING_V2_UI',
+    'ACTION_BUSY',
+    'ACTION_TOO_FAST',
+    'NOT_YOUR_TURN',
+    'NOT_ACTION_PHASE',
+    'STATE_VERSION_OLD',
+    'NO_PENDING_CHOICE',
+    'CHOICE_CANCELLED',
+    'RESPONSE_NOT_EXPECTED',
+    'CARD_NOT_PLAYABLE_NOW',
+    'TRIGGER_NOT_PLAYABLE_NOW',
+    'END_TURN_NOT_ALLOWED_NOW',
+}
+SOFT_REJECT_MESSAGES = {
+    'WAITING_FOR_RESPONSE': '正在等待反制响应',
+    'PENDING_RESPONSE': '正在等待反制响应',
+    'PENDING_CHOICE': '正在等待选择操作',
+    'PENDING_V2_UI': '正在等待窗口操作',
+    'ACTION_BUSY': '对局正在处理上一个操作，请稍后',
+    'ACTION_TOO_FAST': '操作过于频繁，请稍后',
+    'NOT_YOUR_TURN': '还没轮到你',
+    'NOT_ACTION_PHASE': '当前阶段不能这样操作',
+    'STATE_VERSION_OLD': '状态已更新，请按当前界面操作',
+    'NO_PENDING_CHOICE': '没有待选择操作',
+    'CHOICE_CANCELLED': '选择已取消',
+    'RESPONSE_NOT_EXPECTED': '没有待响应的操作',
+    'CARD_NOT_PLAYABLE_NOW': '这张牌现在不能打出',
+    'TRIGGER_NOT_PLAYABLE_NOW': '这个装备现在不能触发',
+    'END_TURN_NOT_ALLOWED_NOW': '当前不能结束回合',
+}
 
 
 def _security_player_for_sid(sid):
@@ -2298,18 +2441,31 @@ def _security_record(kind, message, *, sid=None, severity='medium', extra=None):
 
 def _security_illegal(sid, event_name, message, *, severity='medium', emit_error=True, extra=None):
     user_id = _security_user_id_for_sid(sid)
+    player = _security_player_for_sid(sid)
+    room_id = player.get('room_id') if player else None
+    engine_phase = None
+    if room_id is not None and room_id in rooms:
+        engine_phase = getattr(getattr(rooms.get(room_id), 'engine', None), 'phase', None)
     key = f'user:{user_id}' if user_id else f'sid:{sid}'
     count, should_kick = record_illegal_operation(
         key,
         limit=SOCKET_ILLEGAL_KICK_LIMIT,
         window=SOCKET_ILLEGAL_WINDOW,
     )
+    extra_payload = dict(extra or {})
+    extra_payload.update({
+        'hard_illegal': True,
+        'illegal_count': count,
+        'event_name': event_name,
+        'room_id': room_id,
+        'engine_phase': engine_phase,
+    })
     _security_record(
         event_name,
         f'{message} (illegal={count})',
         sid=sid,
         severity=severity,
-        extra=extra,
+        extra=extra_payload,
     )
     if emit_error:
         emit('server_error', {'message': message})
@@ -2325,6 +2481,133 @@ def _security_illegal(sid, event_name, message, *, severity='medium', emit_error
         socketio.start_background_task(_kick_later, sid)
         return True
     return False
+
+
+def _soft_reject_context(room=None, pidx=None):
+    engine = getattr(room, 'engine', None) if room is not None else None
+    return {
+        'room_id': getattr(room, 'room_id', None),
+        'pidx': pidx,
+        'phase': getattr(engine, 'phase', None),
+        'current_player': getattr(engine, 'current_player', None),
+        'has_pending_response': bool(getattr(engine, 'pending_response', None)) if engine is not None else False,
+        'has_pending_choice': bool(getattr(engine, 'pending_choice', None)) if engine is not None else False,
+        'has_pending_v2_ui': bool(getattr(engine, 'pending_v2_ui', None)) if engine is not None else False,
+    }
+
+
+def soft_reject(sid, event_name, code, message=None, room=None, pidx=None, send_state=False):
+    code = str(code or 'ACTION_BUSY').strip().upper()
+    if code not in SOFT_REJECT_CODES:
+        code = 'ACTION_BUSY'
+    msg = message or SOFT_REJECT_MESSAGES.get(code, '当前操作暂不可用')
+    ctx = _soft_reject_context(room, pidx)
+    player = players.get(sid) or {}
+    user_id = player.get('user_id')
+    try:
+        admin_event(
+            'player',
+            (
+                f"soft_reject event={event_name} code={code} sid={sid} "
+                f"user_id={user_id or '-'} room={ctx.get('room_id')} pidx={pidx} "
+                f"phase={ctx.get('phase')} current={ctx.get('current_player')} "
+                f"pending_response={ctx.get('has_pending_response')} "
+                f"pending_choice={ctx.get('has_pending_choice')} "
+                f"pending_v2_ui={ctx.get('has_pending_v2_ui')}"
+            ),
+            sid=sid,
+            user_id=user_id,
+            room_id=ctx.get('room_id'),
+        )
+    except Exception:
+        pass
+    def _emit_later(target_sid, target_room, target_pidx):
+        try:
+            socketio.sleep(0)
+        except Exception:
+            time.sleep(0.01)
+        socketio.emit('action_rejected', {'event': event_name, 'code': code, 'message': msg}, room=target_sid)
+        socketio.emit('server_error', {'message': msg, 'code': code}, room=target_sid)
+        if send_state and target_room is not None:
+            if target_pidx is not None and isinstance(target_pidx, int) and target_pidx >= 0:
+                send_game_state_to(target_room, target_pidx)
+            else:
+                broadcast_game_state(target_room)
+
+    try:
+        socketio.start_background_task(_emit_later, sid, room, pidx)
+    except Exception:
+        threading.Thread(target=_emit_later, args=(sid, room, pidx), daemon=True).start()
+    return None
+
+
+def normalize_soft_reject_code(error):
+    text = str(error or '').strip()
+    if not text:
+        return 'ACTION_BUSY'
+    lowered = text.lower()
+    if text in ('没有待选择操作', 'No pending choice'):
+        return 'NO_PENDING_CHOICE'
+    if text in ('选择已取消', 'Choice cancelled'):
+        return 'CHOICE_CANCELLED'
+    if text in ('没有待响应的操作', 'No pending response'):
+        return 'RESPONSE_NOT_EXPECTED'
+    if '等待对手反制' in text or '等待反制' in text or 'pending response' in lowered or 'response' in lowered and 'waiting' in lowered:
+        return 'PENDING_RESPONSE'
+    if '待选择' in text or 'pending choice' in lowered:
+        return 'PENDING_CHOICE'
+    if '窗口' in text or 'pending ui' in lowered or 'v2' in lowered:
+        return 'PENDING_V2_UI'
+    if '不是你的回合' in text or 'not your turn' in lowered or '还没轮到' in text:
+        return 'NOT_YOUR_TURN'
+    if '当前阶段' in text or 'phase' in lowered:
+        return 'NOT_ACTION_PHASE'
+    if '不能打出' in text or '无法打出' in text or 'not playable' in lowered or 'cannot play' in lowered:
+        return 'CARD_NOT_PLAYABLE_NOW'
+    if '不能触发' in text or '无法触发' in text or 'trigger' in lowered:
+        return 'TRIGGER_NOT_PLAYABLE_NOW'
+    if '结束回合' in text or 'end turn' in lowered:
+        return 'END_TURN_NOT_ALLOWED_NOW'
+    return None
+
+
+def _try_acquire_room_action(room, sid, event_name, pidx=None):
+    lock = getattr(room, 'action_lock', None)
+    if lock is None:
+        lock = threading.Lock()
+        room.action_lock = lock
+    if not lock.acquire(blocking=False):
+        soft_reject(sid, event_name, 'ACTION_BUSY', room=room, pidx=pidx, send_state=True)
+        return None
+    return lock
+
+
+def _room_action_precheck(engine, pidx, *, event_name):
+    if getattr(engine, 'game_over', False):
+        return 'NOT_ACTION_PHASE'
+    if event_name not in ('response',) and getattr(engine, 'pending_response', None):
+        return 'PENDING_RESPONSE'
+    if event_name not in ('resolve_choice',) and getattr(engine, 'pending_choice', None):
+        return 'PENDING_CHOICE'
+    if event_name not in ('v2_ui_response',) and getattr(engine, 'pending_v2_ui', None):
+        return 'PENDING_V2_UI'
+    if event_name in ('play_card', 'use_trigger', 'end_turn'):
+        if getattr(engine, 'phase', None) != 'action':
+            return 'NOT_ACTION_PHASE'
+        if getattr(engine, 'current_player', None) != pidx:
+            return 'NOT_YOUR_TURN'
+    return None
+
+
+def _stamp_pending_interactions(room):
+    now = time.time()
+    engine = getattr(room, 'engine', None)
+    if engine is None:
+        return
+    for attr in ('pending_response', 'pending_choice', 'pending_v2_ui'):
+        pending = getattr(engine, attr, None)
+        if isinstance(pending, dict) and '_created_at' not in pending:
+            pending['_created_at'] = now
 
 
 def _socket_rate_allowed(sid, event_name, *, exempt=False):
@@ -2357,7 +2640,10 @@ def socket_guard(event_name, data=None, *, require_player=True, allow_empty=Fals
         return None
     exempt = is_chat_limit_exempt(player) if event_name == 'chat' else bool(player.get('is_admin_player'))
     if not _socket_rate_allowed(sid, event_name, exempt=exempt):
-        _security_illegal(sid, event_name, '操作过于频繁', emit_error=emit_error, severity='high')
+        if event_name in SOFT_REJECT_EVENT_NAMES:
+            soft_reject(sid, event_name, 'ACTION_TOO_FAST')
+        else:
+            _security_illegal(sid, event_name, '操作过于频繁', emit_error=emit_error, severity='high')
         return None
     if player and player.get('status') == 'lobby':
         mark_lobby_activity(sid)
@@ -7597,6 +7883,7 @@ def on_connect():
     try:
         ensure_event_loop_watchdog_started()
         ensure_lobby_idle_cleanup_started()
+        ensure_pending_interaction_watchdog_started()
         ip = _client_ip()
         if DB_AVAILABLE:
             try:
@@ -9543,21 +9830,37 @@ def on_play_card(data):
         if pidx < 0:
             return
         engine = room.engine
-        replay_def_id = ''
+        busy_lock = _try_acquire_room_action(room, sid, 'play_card', pidx)
+        if busy_lock is None:
+            return
         try:
-            replay_card = next((c for c in getattr(engine.players[pidx], 'hand', []) if str(getattr(c, 'instance_id', '')) == str(card_instance_id)), None)
-            replay_def_id = getattr(replay_card, 'def_id', '') or ''
-        except Exception:
+            reject_code = _room_action_precheck(engine, pidx, event_name='play_card')
+            if reject_code:
+                soft_reject(sid, 'play_card', reject_code, room=room, pidx=pidx, send_state=True)
+                return
+            hand = getattr(engine.players[pidx], 'hand', [])
+            if not any(str(getattr(c, 'instance_id', '')) == str(card_instance_id) for c in hand):
+                soft_reject(sid, 'play_card', 'STATE_VERSION_OLD', room=room, pidx=pidx, send_state=True)
+                return
+        
             replay_def_id = ''
-        if room.mode == '2v2':
-            result = engine.play_card(pidx, card_instance_id, target_player_id=target_player_id, choice=choice)
-        else:
-            if target_player_id >= 0:
-                choice = dict(choice or {})
-                choice.setdefault('target_player', target_player_id)
-                choice.setdefault('target_player_id', target_player_id)
-                choice.setdefault('target_id', target_player_id)
-            result = engine.play_card(pidx, card_instance_id, choice)
+            try:
+                replay_card = next((c for c in getattr(engine.players[pidx], 'hand', []) if str(getattr(c, 'instance_id', '')) == str(card_instance_id)), None)
+                replay_def_id = getattr(replay_card, 'def_id', '') or ''
+            except Exception:
+                replay_def_id = ''
+            if room.mode == '2v2':
+                result = engine.play_card(pidx, card_instance_id, target_player_id=target_player_id, choice=choice)
+            else:
+                if target_player_id >= 0:
+                    choice = dict(choice or {})
+                    choice.setdefault('target_player', target_player_id)
+                    choice.setdefault('target_player_id', target_player_id)
+                    choice.setdefault('target_id', target_player_id)
+                result = engine.play_card(pidx, card_instance_id, choice)
+            _stamp_pending_interactions(room)
+        finally:
+            busy_lock.release()
         if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_v2_ui'):
             record_valid_player_action(room, pidx, 'play_card')
             record_room_replay_action(room, 'play_card', pidx, {
@@ -9593,9 +9896,8 @@ def on_play_card(data):
         elif result.get('success'):
             broadcast_game_state(room)
         else:
-            _security_illegal(sid, 'play_card', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
-            emit('server_error', {'message': result.get('error', 'Operation failed')})
-            broadcast_game_state(room)
+            code = normalize_soft_reject_code(result.get('error')) or 'CARD_NOT_PLAYABLE_NOW'
+            soft_reject(sid, 'play_card', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
 
 
 @socketio.on('response')
@@ -9623,13 +9925,34 @@ def on_response(data):
         if pidx < 0:
             return
         engine = room.engine
-        replay_def_id = ''
+        busy_lock = _try_acquire_room_action(room, sid, 'response', pidx)
+        if busy_lock is None:
+            return
         try:
-            replay_card = next((c for c in getattr(engine.players[pidx], 'hand', []) if str(getattr(c, 'instance_id', '')) == str(card_instance_id)), None)
-            replay_def_id = getattr(replay_card, 'def_id', '') or ''
-        except Exception:
+            pending_response = getattr(engine, 'pending_response', None)
+            if not pending_response:
+                soft_reject(sid, 'response', 'RESPONSE_NOT_EXPECTED', room=room, pidx=pidx, send_state=True)
+                return
+            if room.mode == '2v2':
+                allowed = any(int(cc.get('responder_id', -1)) == pidx for cc in (pending_response.get('counter_cards') or []) if isinstance(cc, dict))
+            else:
+                try:
+                    allowed = pidx == 1 - int(pending_response.get('player_id', -1))
+                except Exception:
+                    allowed = False
+            if not allowed:
+                soft_reject(sid, 'response', 'RESPONSE_NOT_EXPECTED', room=room, pidx=pidx, send_state=True)
+                return
             replay_def_id = ''
-        engine.handle_response(pidx, card_instance_id)
+            try:
+                replay_card = next((c for c in getattr(engine.players[pidx], 'hand', []) if str(getattr(c, 'instance_id', '')) == str(card_instance_id)), None)
+                replay_def_id = getattr(replay_card, 'def_id', '') or ''
+            except Exception:
+                replay_def_id = ''
+            engine.handle_response(pidx, card_instance_id)
+            _stamp_pending_interactions(room)
+        finally:
+            busy_lock.release()
         if card_instance_id:
             record_valid_player_action(room, pidx, 'response')
         record_room_replay_action(room, 'response', pidx, {'card_instance_id': card_instance_id, 'def_id': replay_def_id})
@@ -9659,7 +9982,17 @@ def on_ally_consent_response(data):
         pidx = room.player_index(sid)
         if pidx < 0:
             return
-        result = room.engine.handle_ally_consent(pidx, accepted)
+        busy_lock = _try_acquire_room_action(room, sid, 'ally_consent_response', pidx)
+        if busy_lock is None:
+            return
+        try:
+            if not getattr(room.engine, 'pending_ally_request', None):
+                soft_reject(sid, 'ally_consent_response', 'NO_PENDING_CHOICE', '没有待同意的队友用牌', room=room, pidx=pidx, send_state=True)
+                return
+            result = room.engine.handle_ally_consent(pidx, accepted)
+            _stamp_pending_interactions(room)
+        finally:
+            busy_lock.release()
         if result.get('success') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui') or not accepted:
             record_room_replay_action(room, 'ally_consent_response', pidx, {
                 'accepted': accepted,
@@ -9705,10 +10038,14 @@ def on_resolve_choice(data):
         if pidx < 0:
             return
         engine = room.engine
+        busy_lock = _try_acquire_room_action(room, sid, 'resolve_choice', pidx)
+        if busy_lock is None:
+            return
         pending = getattr(engine, 'pending_choice', None)
         if not pending:
             admin_event('player', f'ignored stale resolve_choice without pending choice room={room_id}', sid=sid, room_id=room_id)
-            broadcast_game_state(room)
+            busy_lock.release()
+            soft_reject(sid, 'resolve_choice', 'NO_PENDING_CHOICE', room=room, pidx=pidx, send_state=True)
             return
         try:
             pending_player_id = int(pending.get('player_id', pidx))
@@ -9716,9 +10053,15 @@ def on_resolve_choice(data):
             pending_player_id = pidx
         if pending_player_id != pidx:
             admin_event('player', f'ignored resolve_choice from non-pending player room={room_id} pending={pending_player_id} got={pidx}', sid=sid, room_id=room_id)
+            busy_lock.release()
+            soft_reject(sid, 'resolve_choice', 'NO_PENDING_CHOICE', room=room, pidx=pidx, send_state=True)
             send_game_state_to(room, pidx)
             return
-        result = engine.resolve_choice(pidx, choice)
+        try:
+            result = engine.resolve_choice(pidx, choice)
+            _stamp_pending_interactions(room)
+        finally:
+            busy_lock.release()
         if not result.get('cancelled'):
             record_valid_player_action(room, pidx, 'resolve_choice')
         record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice, 'result': result})
@@ -9736,10 +10079,8 @@ def on_resolve_choice(data):
         elif result.get('cancelled'):
             broadcast_game_state(room)
         else:
-            if result.get('error') not in ('没有待选择操作', '选择已取消'):
-                _security_illegal(sid, 'resolve_choice', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
-            emit('server_error', {'message': result.get('error', 'Operation failed')})
-            broadcast_game_state(room)
+            code = normalize_soft_reject_code(result.get('error')) or 'NO_PENDING_CHOICE'
+            soft_reject(sid, 'resolve_choice', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
 
 
 @socketio.on('v2_ui_response')
@@ -9771,8 +10112,26 @@ def on_v2_ui_response(data):
         pidx = room.player_index(sid)
         if pidx < 0:
             return
-        _cancel_v2_ui_timeout(('room', room.room_id), request_id)
-        result = room.engine.handle_v2_ui_response(pidx, request_id, clean_data)
+        busy_lock = _try_acquire_room_action(room, sid, 'v2_ui_response', pidx)
+        if busy_lock is None:
+            return
+        try:
+            pending = getattr(room.engine, 'pending_v2_ui', None)
+            if not pending:
+                soft_reject(sid, 'v2_ui_response', 'PENDING_V2_UI', '没有待处理窗口', room=room, pidx=pidx, send_state=True)
+                return
+            try:
+                pending_player_id = int(pending.get('player_id', pidx))
+            except Exception:
+                pending_player_id = pidx
+            if pending_player_id != pidx or str(pending.get('request_id', '')) != str(request_id):
+                soft_reject(sid, 'v2_ui_response', 'PENDING_V2_UI', '窗口状态已更新', room=room, pidx=pidx, send_state=True)
+                return
+            _cancel_v2_ui_timeout(('room', room.room_id), request_id)
+            result = room.engine.handle_v2_ui_response(pidx, request_id, clean_data)
+            _stamp_pending_interactions(room)
+        finally:
+            busy_lock.release()
         record_room_replay_action(room, 'v2_ui_response', pidx, {
             'request_id': request_id,
             'button': button,
@@ -9785,8 +10144,8 @@ def on_v2_ui_response(data):
         elif result.get('success'):
             broadcast_game_state(room)
         else:
-            emit('server_error', {'message': result.get('error', 'Operation failed')})
-            broadcast_game_state(room)
+            code = normalize_soft_reject_code(result.get('error')) or 'PENDING_V2_UI'
+            soft_reject(sid, 'v2_ui_response', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
 
 
 @socketio.on('use_trigger')
@@ -9814,13 +10173,27 @@ def on_use_trigger(data):
         if pidx < 0:
             return
         engine = room.engine
-        replay_def_id = ''
+        busy_lock = _try_acquire_room_action(room, sid, 'use_trigger', pidx)
+        if busy_lock is None:
+            return
         try:
-            equipment = next((eq for eq in getattr(engine.players[pidx], 'equipment', []) if str(getattr(getattr(eq, 'card_instance', None), 'instance_id', '')) == str(equipment_instance_id)), None)
-            replay_def_id = getattr(getattr(equipment, 'card_instance', None), 'def_id', '') or getattr(getattr(equipment, 'card_def', None), 'id', '') or ''
-        except Exception:
+            reject_code = _room_action_precheck(engine, pidx, event_name='use_trigger')
+            if reject_code:
+                soft_reject(sid, 'use_trigger', reject_code, room=room, pidx=pidx, send_state=True)
+                return
             replay_def_id = ''
-        result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
+            try:
+                equipment = next((eq for eq in getattr(engine.players[pidx], 'equipment', []) if str(getattr(getattr(eq, 'card_instance', None), 'instance_id', '')) == str(equipment_instance_id)), None)
+                replay_def_id = getattr(getattr(equipment, 'card_instance', None), 'def_id', '') or getattr(getattr(equipment, 'card_def', None), 'id', '') or ''
+                if equipment is None:
+                    soft_reject(sid, 'use_trigger', 'STATE_VERSION_OLD', room=room, pidx=pidx, send_state=True)
+                    return
+            except Exception:
+                replay_def_id = ''
+            result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
+            _stamp_pending_interactions(room)
+        finally:
+            busy_lock.release()
         if result.get('success') or result.get('needs_ally_consent') or result.get('needs_choice') or result.get('needs_response') or result.get('needs_v2_ui'):
             record_valid_player_action(room, pidx, 'use_trigger')
             record_room_replay_action(room, 'use_trigger', pidx, {
@@ -9849,9 +10222,8 @@ def on_use_trigger(data):
         elif result.get('success'):
             broadcast_game_state(room)
         else:
-            _security_illegal(sid, 'use_trigger', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
-            emit('server_error', {'message': result.get('error', 'Operation failed')})
-            broadcast_game_state(room)
+            code = normalize_soft_reject_code(result.get('error')) or 'TRIGGER_NOT_PLAYABLE_NOW'
+            soft_reject(sid, 'use_trigger', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
 
 
 @socketio.on('urf_replace_card')
@@ -9945,14 +10317,25 @@ def on_end_turn(data):
                 emit('server_error', {'message': '你不是该对局的玩家'})
                 return
             engine = room.engine
-            result = engine.end_turn(pidx)
+            busy_lock = _try_acquire_room_action(room, sid, 'end_turn', pidx)
+            if busy_lock is None:
+                return
+            try:
+                reject_code = _room_action_precheck(engine, pidx, event_name='end_turn')
+                if reject_code:
+                    soft_reject(sid, 'end_turn', reject_code, room=room, pidx=pidx, send_state=True)
+                    return
+                result = engine.end_turn(pidx)
+                _stamp_pending_interactions(room)
+            finally:
+                busy_lock.release()
             if result.get('success'):
                 record_valid_player_action(room, pidx, 'end_turn')
                 record_room_replay_action(room, 'end_turn', pidx, {})
             broadcast_game_state(room)
             if not result.get('success'):
-                _security_illegal(sid, 'end_turn', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
-                emit('server_error', {'message': result.get('error', 'Operation failed')})
+                code = normalize_soft_reject_code(result.get('error')) or 'END_TURN_NOT_ALLOWED_NOW'
+                soft_reject(sid, 'end_turn', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=False)
     except Exception as e:
         import traceback
         traceback.print_exc()

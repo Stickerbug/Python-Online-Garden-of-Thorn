@@ -4245,6 +4245,43 @@ function isActionBusy(options = {}) {
         || (includeAnimation && isCardAnimationLocked());
 }
 
+let lastClientActionRejectToastAt = 0;
+function clientRejectAction(message) {
+    const now = Date.now();
+    if (now - lastClientActionRejectToastAt >= 800) {
+        flashStatus(message || UI.operation_failed || '操作失败', 1800, 'error');
+        lastClientActionRejectToastAt = now;
+    }
+}
+
+function hasBlockingPendingState(eventName = '') {
+    if (!gameState) return true;
+    if (gameState.pending_response || responsePending || pendingPlayCard) return eventName !== 'response';
+    if (gameState.pending_choice || choicePending) return eventName !== 'resolve_choice';
+    if (gameState.pending_v2_ui) return eventName !== 'v2_ui_response';
+    return false;
+}
+
+function canSendGameAction(eventName, options = {}) {
+    if (!isLocalSoloRuntimeActive() && (!socket || !socket.connected)) {
+        clientRejectAction(UI.server_not_connected || UI.server_no_response);
+        return false;
+    }
+    const animationBusy = options.includeAnimation !== false && isCardAnimationLocked();
+    const blockedByServerAction = !!pendingServerAction;
+    const blockedByChoice = !!choicePending && eventName !== 'resolve_choice';
+    const blockedByResponse = (!!responsePending || !!pendingPlayCard) && eventName !== 'response';
+    if (blockedByServerAction || blockedByChoice || blockedByResponse || animationBusy) {
+        clientRejectAction(UI.waiting_response || UI.operation_failed);
+        return false;
+    }
+    if (hasBlockingPendingState(eventName)) {
+        clientRejectAction(UI.waiting_response || UI.operation_failed);
+        return false;
+    }
+    return true;
+}
+
 function clearPendingServerAction(options = {}) {
     if (pendingServerActionTimer) {
         clearTimeout(pendingServerActionTimer);
@@ -4899,7 +4936,9 @@ function showV2UiRequest(data = {}) {
         btn.className = `btn ${button.role === 'cancel' || button.id === 'cancel' ? 'secondary' : 'primary'}`;
         btn.textContent = getV2Text(button, 'text', button.id || 'OK');
         btn.addEventListener('click', () => {
+            if (!canSendGameAction('v2_ui_response', { includeAnimation: false })) return;
             hideModal();
+            beginPendingServerAction('v2_ui_response', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
             emitModeEvent('solo_v2_ui_response', 'v2_ui_response', {
                 request_id: data.request_id,
                 button: button.id,
@@ -7839,6 +7878,13 @@ function connectSocket(serverUrl) {
         pendingPlayCard = null;
         clearSelectedPlayCard();
         showV2UiRequest(data);
+    });
+    bindSocketEvent('action_rejected', (data) => {
+        clearPendingServerAction();
+        pendingPlayCard = null;
+        clearSelectedPlayCard();
+        removeFloatingCardPreview();
+        clientRejectAction((data && data.message) || UI.operation_failed);
     });
     bindSocketEvent('chat', (data) => {
         debugLog('[client] chat:', data.nickname, data.text, 'spectator=', data.is_spectator);
@@ -14648,7 +14694,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             btn.disabled = isActionBusy({ includeAnimation: false });
             attachFloatingCardPreview(btn, cardInst);
             btn.onclick = async () => {
-                if (isActionBusy({ includeAnimation: false })) return;
+                if (!canSendGameAction('use_trigger', { includeAnimation: false })) return;
                 const payload = { equipment_instance_id: cardInst.instance_id };
                 if (equipmentChoosesTargetOnTrigger(cardDef)) {
                     const targetId = cardHasSelfOnlyFlag(cardInst, cardDef)
@@ -15604,7 +15650,7 @@ function buildFusionCombosForGroup(group) {
 
 async function onPlayCard(cardInstanceId, options = {}) {
     if (isSpectating) return;
-    if (isActionBusy()) return;
+    if (!canSendGameAction('play_card')) return;
     const hand = (gameState.you || {}).hand || [];
     const cardDict = hand.find(c => c.instance_id === cardInstanceId);
     if (!cardDict) return;
@@ -15962,6 +16008,7 @@ function showResponseUI(data) {
 }
 
 function onRespond(cardInstanceId) {
+    if (!canSendGameAction('response', { includeAnimation: false })) return;
     removeFloatingCardPreview();
     if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
     responsePending = false;
@@ -16530,6 +16577,10 @@ async function showChoiceUI(data) {
         return;
     }
     choicePending = false;
+    if (!canSendGameAction('resolve_choice', { includeAnimation: false })) {
+        choicePending = true;
+        return;
+    }
     beginPendingServerAction('resolve_choice', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
     emitModeEvent('solo_resolve_choice', 'resolve_choice', { choice: choiceResult });
 }
@@ -16779,7 +16830,7 @@ function showOpponentDCWaiting(data) {
 }
 
 function onEndTurn() {
-    if (isActionBusy({ includeAnimation: false })) return;
+    if (!canSendGameAction('end_turn', { includeAnimation: false })) return;
     if (!isMyTurn()) {
         flashStatus(UI.not_your_turn, 2000, 'error');
         return;
