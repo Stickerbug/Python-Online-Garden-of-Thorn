@@ -699,6 +699,8 @@ body {
 
 .account-auth-form.hidden,
 .account-password-change-form.hidden,
+.account-username-change-form.hidden,
+.account-delete-section.hidden,
 .account-popover-actions .hidden,
 .account-auth-form .hidden {
   display: none;
@@ -739,6 +741,31 @@ body {
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 900;
+}
+
+.account-rule-text {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.account-rule-text.danger,
+.account-delete-warning {
+  color: var(--thorn);
+}
+
+.account-delete-warning {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(192, 57, 43, 0.32);
+  border-radius: var(--radius-sm);
+  background: rgba(192, 57, 43, 0.08);
+  font-size: 13px;
+}
+
+.account-delete-warning.hidden {
+  display: none;
 }
 
 .account-popover .form-row {

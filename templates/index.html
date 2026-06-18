@@ -55,6 +55,7 @@
 </div>
 <div class="top-action-buttons">
 <button id="btn-account-top" class="account-top-btn">账号</button>
+<button id="btn-stats-top" class="account-top-btn hidden">统计</button>
 <button id="btn-friends-top" class="friends-top-btn hidden">好友</button>
 <button id="btn-skin-top" class="skin-top-btn">皮肤</button>
 </div>
@@ -64,14 +65,6 @@
     <button id="btn-account-popover-close" class="account-close-btn" type="button">×</button>
   </div>
   <div id="account-popover-name" class="account-popover-name">未登录</div>
-  <div id="account-popover-stats" class="account-stats compact"></div>
-  <div id="account-replays-section" class="account-replays hidden">
-    <div class="account-section-head">
-      <span id="account-replays-title">最近回放</span>
-      <button id="btn-account-replays-refresh" class="mini-btn" type="button">刷新</button>
-    </div>
-    <div id="account-replays-list" class="account-replays-list"></div>
-  </div>
   <div id="account-auth-form" class="account-auth-form">
     <div class="account-mode-tabs">
       <button id="btn-account-mode-login" class="account-mode-tab active" type="button">登录</button>
@@ -83,34 +76,69 @@
     </div>
     <div class="form-row">
       <label id="label-account-password" for="input-account-password">密码</label>
-      <input type="password" id="input-account-password" autocomplete="current-password" placeholder="输入密码">
+      <input type="password" id="input-account-password" maxlength="32" autocomplete="current-password" placeholder="输入密码">
     </div>
     <div id="account-confirm-row" class="form-row hidden" hidden aria-hidden="true">
       <label id="label-account-password-confirm" for="input-account-password-confirm">确认密码</label>
-      <input type="password" id="input-account-password-confirm" autocomplete="new-password" placeholder="再次输入密码" disabled>
+      <input type="password" id="input-account-password-confirm" maxlength="32" autocomplete="new-password" placeholder="再次输入密码" disabled>
+    </div>
+    <div id="account-password-rule" class="account-rule-text">密码要求：<br>- 8-32字符；<br>- 包含大写字母、小写字母、数字、特殊符号中至少两类；<br>- 不包含空格或不可见字符。</div>
+  </div>
+  <div id="account-username-change-form" class="account-auth-form hidden">
+    <div id="account-username-change-title" class="account-form-title">设置用户名</div>
+    <div class="account-rule-text">用户名可见宽度为3-16；不允许连续下划线或连字符；每14天只能更改一次。</div>
+    <div class="form-row">
+      <label id="label-account-new-username" for="input-account-new-username">输入新用户名</label>
+      <input type="text" id="input-account-new-username" autocomplete="username" placeholder="输入新用户名">
     </div>
   </div>
   <div id="account-password-change-form" class="account-auth-form account-password-change-form hidden">
     <div id="account-password-change-title" class="account-form-title">修改密码</div>
+    <div class="account-rule-text">密码要求：<br>- 8-32字符；<br>- 包含大写字母、小写字母、数字、特殊符号中至少两类；<br>- 不包含空格或不可见字符。</div>
     <div class="form-row">
       <label id="label-account-old-password" for="input-account-old-password">原密码</label>
-      <input type="password" id="input-account-old-password" autocomplete="current-password" placeholder="输入原密码">
+      <input type="password" id="input-account-old-password" maxlength="32" autocomplete="current-password" placeholder="输入原密码">
     </div>
     <div class="form-row">
       <label id="label-account-new-password" for="input-account-new-password">新密码</label>
-      <input type="password" id="input-account-new-password" autocomplete="new-password" placeholder="输入新密码">
+      <input type="password" id="input-account-new-password" maxlength="32" autocomplete="new-password" placeholder="输入新密码">
     </div>
     <div class="form-row">
       <label id="label-account-new-password-confirm" for="input-account-new-password-confirm">确认新密码</label>
-      <input type="password" id="input-account-new-password-confirm" autocomplete="new-password" placeholder="再次输入新密码">
+      <input type="password" id="input-account-new-password-confirm" maxlength="32" autocomplete="new-password" placeholder="再次输入新密码">
+    </div>
+  </div>
+  <div id="account-delete-section" class="account-auth-form hidden">
+    <div class="account-form-title">注销账户</div>
+    <div class="account-rule-text danger">注销后账号会被禁用，ID保留；如需恢复请联系管理员。</div>
+    <button id="btn-account-delete-start" class="btn btn-danger" type="button">注销账户</button>
+    <div id="account-delete-warning" class="account-delete-warning hidden">
+      <div>这是危险操作。确认后账号将被软注销，并退出当前登录。</div>
+      <div id="account-delete-countdown" class="account-rule-text">请等待15秒</div>
+      <button id="btn-account-delete-confirm" class="btn btn-danger" type="button" disabled>确认注销</button>
     </div>
   </div>
   <p id="account-error" class="error-text"></p>
   <div class="account-popover-actions">
     <button id="btn-account-login" class="btn btn-primary">登录</button>
     <button id="btn-account-register" class="btn btn-primary hidden">注册</button>
+    <button id="btn-account-change-username" class="btn btn-primary hidden">修改用户名</button>
     <button id="btn-account-change-password" class="btn btn-primary hidden">修改密码</button>
     <button id="btn-account-popover-logout" class="btn btn-secondary">退出登录</button>
+  </div>
+</div>
+<div id="stats-popover" class="account-popover hidden">
+  <div class="account-popover-head">
+    <div id="stats-popover-title" class="account-popover-title">统计</div>
+    <button id="btn-stats-popover-close" class="account-close-btn" type="button">×</button>
+  </div>
+  <div id="account-popover-stats" class="account-stats compact"></div>
+  <div id="account-replays-section" class="account-replays hidden">
+    <div class="account-section-head">
+      <span id="account-replays-title">最近回放</span>
+      <button id="btn-account-replays-refresh" class="mini-btn" type="button">刷新</button>
+    </div>
+    <div id="account-replays-list" class="account-replays-list"></div>
   </div>
 </div>
 <div id="friends-popover" class="account-popover friends-popover hidden">

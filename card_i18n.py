@@ -111,12 +111,12 @@ CARD_I18N = {
     'Bubble': {
         'name': _t('泡泡', 'Bubble', 'Bulle', 'Bolha', 'Пузырь', '泡'),
         'desc': _t('闪！', 'Dodge!', 'Esquive !', 'Desvie!', 'Уклонение!', '回避！'),
-        'effect': _t('获得一层闪避 响应：敌方使用攻击牌', 'Gain 1 Dodge. Response: enemy uses an attack card', 'Gagne 1 Esquive. Réponse : l’ennemi joue une carte d’attaque', 'Ganha 1 Esquiva. Resposta: inimigo usa uma carta de ataque', 'Получить 1 Уклонение. Ответ: враг использует карту атаки', '回避を1層得る。反応：敵が攻撃カードを使用'),
+        'effect': _t('获得一层闪避  响应：被作为攻击牌目标', 'Gain 1 Dodge. Response: you are targeted by an attack card', 'Gagne 1 Esquive. Réponse : vous êtes ciblé par une carte d’attaque', 'Ganha 1 Esquiva. Resposta: você é alvo de uma carta de ataque', 'Получить 1 Уклонение. Ответ: вы стали целью карты атаки', '回避を1層得る。反応：攻撃カードの対象になった時'),
     },
     'Nazar': {
         'name': _t('邪眼护符', 'Nazar', 'Nazar', 'Nazar', 'Назар', 'ナザール'),
         'desc': _t('邪眼的力量似乎为你减免了大部分伤害。', 'The power of the evil eye seems to reduce most of the damage for you.', 'Le pouvoir du mauvais œil semble réduire la majeure partie des dégâts.', 'O poder do mau-olhado parece reduzir a maior parte do dano.', 'Сила сглаза, кажется, снижает большую часть урона.', '邪眼の力が大半のダメージを軽減してくれるようだ。'),
-        'effect': _t('所有物理伤害减少9(最少减至1)，受到两次10点及以上物理伤害后效果消失 响应：敌方使用攻击牌', 'Reduce all physical damage by 9 (minimum 1); expires after taking two physical hits of 10 or more. Response: enemy uses an attack card', 'Réduit tous les dégâts physiques de 9 (minimum 1) ; expire après avoir subi deux coups physiques de 10 ou plus. Réponse : l’ennemi joue une carte d’attaque', 'Reduz todo dano físico em 9 (mínimo 1); expira após sofrer dois golpes físicos de 10 ou mais. Resposta: inimigo usa uma carta de ataque', 'Уменьшает весь физический урон на 9 (минимум до 1); исчезает после двух физических ударов по 10 или больше. Ответ: враг использует карту атаки', '全ての物理ダメージを9減らす（最低1）。10以上の物理ダメージを2回受けると効果消失。反応：敵が攻撃カードを使用'),
+        'effect': _t('所有物理伤害减少9(最少减至1)，受到两次10点及以上物理伤害后效果消失  响应：被作为攻击牌目标', 'Reduce all physical damage by 9 (minimum 1); expires after taking two physical hits of 10 or more. Response: you are targeted by an attack card', 'Réduit tous les dégâts physiques de 9 (minimum 1) ; expire après deux coups physiques de 10 ou plus. Réponse : vous êtes ciblé par une carte d’attaque', 'Reduz todo dano físico em 9 (mínimo 1); expira após dois golpes físicos de 10 ou mais. Resposta: você é alvo de uma carta de ataque', 'Уменьшает весь физический урон на 9 (минимум до 1); исчезает после двух физических ударов по 10 или больше. Ответ: вы стали целью карты атаки', '全ての物理ダメージを9減らす（最低1）。10以上の物理ダメージを2回受けると効果消失。反応：攻撃カードの対象になった時'),
     },
     'MagicLeaf': {
         'name': _t('魔法叶', 'Magic Leaf', 'Feuille magique', 'Folha Mágica', 'Магический лист', '魔法の葉'),
@@ -141,12 +141,12 @@ CARD_I18N = {
     'MagicNazar': {
         'name': _t('魔法邪眼', 'Magic Nazar', 'Nazar magique', 'Nazar Mágico', 'Магический назар', '魔法ナザール'),
         'desc': _t('有魔力的护符，让敌方的高耗技能化为虚无。', 'A magical amulet that turns costly enemy skills into nothing.', 'Une amulette magique qui réduit à néant les compétences coûteuses ennemies.', 'Um amuleto mágico que anula habilidades inimigas caras.', 'Магический амулет, обращающий дорогие навыки врага в ничто.', '敵の高コスト技能を無にする魔力の護符。'),
-        'effect': _t('响应：敌方使用技能牌；获得2层魔法邪眼。存在时，敌方使用3E及以上技能牌无效，然后减少1层', 'Response: enemy uses a Bloom card; gain 2 Magic Nazar. While present, enemy Bloom cards costing 3E or more become invalid, then lose 1 stack', 'Réponse : l’ennemi joue une carte Bloom ; gagne 2 Nazar magique. Tant qu’il existe, les Bloom ennemies coûtant 3E ou plus sont annulées, puis perdent 1 couche', 'Resposta: inimigo usa carta Bloom; ganha 2 Nazar Mágico. Enquanto existir, Bloom inimigas de 3E ou mais são anuladas, depois perde 1 camada', 'Ответ: враг использует Bloom; получите 2 Магического назара. Пока есть эффект, Bloom врага стоимостью 3E или больше отменяется, затем теряется 1 слой', '反応：敵がBloomカードを使用。魔法ナザールを2層得る。存在中、敵の3E以上のBloomは無効化され、その後1層減る'),
+        'effect': _t('获得2层魔法邪眼  响应：敌方使用技能牌', 'Gain 2 Magic Nazar. Response: enemy uses a Bloom card', 'Gagne 2 Nazar magique. Réponse : l’ennemi joue une carte Bloom', 'Ganha 2 Nazar Mágico. Resposta: inimigo usa carta Bloom', 'Получить 2 Магического назара. Ответ: враг использует Bloom', '魔法ナザールを2層得る。反応：敵がBloomカードを使用'),
     },
     'GoldenNazar': {
         'name': _t('黄金邪眼', 'Golden Nazar', 'Nazar doré', 'Nazar Dourado', 'Золотой назар', '黄金ナザール'),
         'desc': _t('镀金的护符会为装备留下最后一道防线。', 'A gilded amulet that leaves equipment one last defense.', 'Une amulette dorée qui laisse une dernière défense à l’équipement.', 'Um amuleto dourado que deixa uma última defesa ao equipamento.', 'Позолоченный амулет оставляет снаряжению последнюю защиту.', '金色の護符が装備に最後の守りを残す。'),
-        'effect': _t('响应：自身装备即将被摧毁；所有自身装备获得2层装备护甲。装备护甲：存在时，若装备将被摧毁，则使其不被摧毁并消耗1层装备护甲', 'Response: your equipment is about to be destroyed; all your equipment gains 2 Equipment Armor. Equipment Armor prevents destruction and consumes 1 stack', 'Réponse : votre équipement va être détruit ; tout votre équipement gagne 2 Armures d’équipement. Cette armure empêche une destruction et consomme 1 couche', 'Resposta: seu equipamento está prestes a ser destruído; todos seus equipamentos ganham 2 Armaduras de Equipamento. A armadura impede destruição e consome 1 camada', 'Ответ: ваше снаряжение вот-вот будет уничтожено; всё ваше снаряжение получает 2 Брони снаряжения. Броня предотвращает уничтожение и тратит 1 слой', '反応：自分の装備が破壊されそうな時。自分の全装備が装備護甲を2層得る。装備護甲は破壊を防ぎ1層消費する'),
+        'effect': _t('所有自身装备获得2层装备护甲  响应：自身装备即将被摧毁', 'All your equipment gains 2 Equipment Armor. Response: your equipment is about to be destroyed', 'Tout votre équipement gagne 2 Armures d’équipement. Réponse : votre équipement va être détruit', 'Todos seus equipamentos ganham 2 Armaduras de Equipamento. Resposta: seu equipamento está prestes a ser destruído', 'Всё ваше снаряжение получает 2 Брони снаряжения. Ответ: ваше снаряжение вот-вот будет уничтожено', '自分の全装備が装備護甲を2層得る。反応：自分の装備が破壊されそうな時'),
     },
     'MagicBone': {
         'name': _t('魔法骨头', 'Magic Bone', 'Os magique', 'Osso Mágico', 'Магическая кость', '魔法の骨'),
@@ -301,14 +301,25 @@ def card_text(card_id, fallback):
         return out
     name = _fill(data.get('name', {}))
     name['en'] = fallback.get('name_en') or name.get('en') or card_id_to_english(card_id)
+    if fallback.get('name_cn'):
+        name['zh'] = fallback.get('name_cn')
+    desc = _fill(data.get('desc', {}))
+    if fallback.get('description'):
+        desc['zh'] = fallback.get('description')
+    effect = _fill(data.get('effect', {}))
+    if fallback.get('effect_text'):
+        effect['zh'] = fallback.get('effect_text')
+    trigger = _fill(data.get('trigger', {
+        'zh': data.get('effect', {}).get('zh', fallback.get('trigger_effect_text', '')),
+        'en': data.get('effect', {}).get('en', fallback.get('trigger_effect_text', '')),
+    }))
+    if fallback.get('trigger_effect_text'):
+        trigger['zh'] = fallback.get('trigger_effect_text')
     return {
         'name_i18n': name,
-        'description_i18n': _fill(data.get('desc', {})),
-        'effect_text_i18n': _fill(data.get('effect', {})),
-        'trigger_effect_text_i18n': _fill(data.get('trigger', {
-            'zh': data.get('effect', {}).get('zh', fallback.get('trigger_effect_text', '')),
-            'en': data.get('effect', {}).get('en', fallback.get('trigger_effect_text', '')),
-        })),
+        'description_i18n': desc,
+        'effect_text_i18n': effect,
+        'trigger_effect_text_i18n': trigger,
     }
 
 
@@ -333,11 +344,15 @@ def apply_card_i18n_defaults(card_defs):
         desc = _fill(text.get('desc', {}))
         effect = _fill(text.get('effect', {}))
         trigger = _fill(text.get('trigger', {}))
-        card.name_cn = name['zh']
-        card.name_en = name['en']
-        card.description = desc['zh']
-        card.effect_text = effect['zh']
-        if trigger.get('zh'):
+        if not getattr(card, 'name_cn', ''):
+            card.name_cn = name['zh']
+        if not getattr(card, 'name_en', ''):
+            card.name_en = name['en']
+        if not getattr(card, 'description', ''):
+            card.description = desc['zh']
+        if not getattr(card, 'effect_text', ''):
+            card.effect_text = effect['zh']
+        if trigger.get('zh') and not getattr(card, 'trigger_effect_text', ''):
             card.trigger_effect_text = trigger['zh']
     for card_id, card in card_defs.items():
         if not getattr(card, 'name_en', ''):

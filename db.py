@@ -318,6 +318,10 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN false_report_count INTEGER DEFAULT 0')
         if 'skin_json' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN skin_json TEXT')
+        if 'last_username_change_at' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN last_username_change_at TEXT')
+        if 'deleted_at' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN deleted_at TEXT')
         _assign_missing_player_ids(conn)
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
         conn.execute(
@@ -392,6 +396,7 @@ def init_db():
                 ended_at TEXT,
                 duration_seconds INTEGER,
                 player_names_json TEXT,
+                player_ids_json TEXT,
                 winner_name TEXT,
                 winner_index INTEGER,
                 rounds INTEGER,
@@ -556,6 +561,9 @@ def init_db():
             )
             '''
         )
+        match_columns = {row['name'] for row in conn.execute('PRAGMA table_info(matches)').fetchall()}
+        if 'player_ids_json' not in match_columns:
+            conn.execute('ALTER TABLE matches ADD COLUMN player_ids_json TEXT')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_ip_bans_active ON ip_bans(active, expires_at)')
         conn.execute(
             '''
@@ -677,8 +685,11 @@ def validate_username(username):
     name = sanitize_username(username)
     if not name:
         return False, '用户名不能为空'
+    width = _display_width(name)
+    if width < 3:
+        return False, '用户名可见宽度至少为3'
     if _display_width(name) > 16:
-        return False, '用户名过长'
+        return False, '用户名可见宽度最多为16'
     if re.match(r'^[\d]+$', name):
         return False, '用户名不能全为数字'
     if not re.search(r'[\w\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]', name):
@@ -693,9 +704,9 @@ def validate_username(username):
 def validate_password(password):
     text = str(password or '')
     if len(text) < 8:
-        return False, '密码至少需要 8 位'
-    if len(text) > 72:
-        return False, '密码最多 72 位'
+        return False, '密码长度应至少为8个字符'
+    if len(text) > 32:
+        return False, '密码长度应最多为32个字符'
     if any(ord(ch) < 33 or ord(ch) > 126 for ch in text):
         return False, '密码只能使用可见 ASCII 字符，且不能包含空格'
     classes = 0
@@ -748,6 +759,9 @@ def row_to_user(row):
         'ban_reason': row['ban_reason'] if 'ban_reason' in row.keys() else None,
         'banned_at': row['banned_at'] if 'banned_at' in row.keys() else None,
         'ban_until': row['ban_until'] if 'ban_until' in row.keys() else None,
+        'last_username_change_at': row['last_username_change_at'] if 'last_username_change_at' in row.keys() else None,
+        'deleted_at': row['deleted_at'] if 'deleted_at' in row.keys() else None,
+        'deleted': bool(row['deleted_at']) if 'deleted_at' in row.keys() else False,
         'skin': normalize_skin_config(skin_raw),
     }
 
@@ -802,6 +816,8 @@ def verify_user(username, password):
         row = _find_user_row_by_username_key(conn, name)
         if row is None or not check_password_hash(row['password_hash'], str(password or '')):
             return None, '用户名或密码错误'
+        if 'deleted_at' in row.keys() and row['deleted_at']:
+            return None, '账号已注销，如需恢复请联系管理员'
         row = _clear_expired_user_ban(conn, row)
         ban_status = get_user_ban_status(user_id=row['id'])
         if ban_status.get('banned'):
@@ -844,6 +860,72 @@ def change_user_password(user_id, old_password, new_password):
             'UPDATE users SET password_hash = ? WHERE id = ?',
             (generate_password_hash(str(new_password)), uid),
         )
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        return row_to_user(row), None
+
+
+def change_username(user_id, new_username):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    name = sanitize_username(new_username)
+    ok, error = validate_username(name)
+    if not ok:
+        return None, error
+    now_dt = utc_now_dt()
+    now = utc_iso(now_dt)
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None or ('deleted_at' in row.keys() and row['deleted_at']):
+            return None, '请先登录账号'
+        last_change = row['last_username_change_at'] if 'last_username_change_at' in row.keys() else None
+        if last_change:
+            try:
+                last_dt = datetime.fromisoformat(str(last_change).replace('Z', '+00:00'))
+            except Exception:
+                last_dt = None
+            if last_dt is not None:
+                remaining = timedelta(days=14) - (now_dt - last_dt)
+                if remaining.total_seconds() > 0:
+                    return None, f'用户名每14天只能更改一次，还需等待{format_duration_zh(int(remaining.total_seconds()))}'
+        existing = _find_user_row_by_username_key(conn, name)
+        if existing is not None and int(existing['id']) != uid:
+            return None, '用户名已存在'
+        conn.execute(
+            'UPDATE users SET username = ?, username_lower = ?, last_username_change_at = ? WHERE id = ?',
+            (name, normalize_username_key(name), now, uid),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        _ensure_builtin_role_for_row(conn, row)
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        return row_to_user(row), None
+
+
+def soft_delete_user(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    now = utc_now()
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            return None, '请先登录账号'
+        if 'deleted_at' in row.keys() and row['deleted_at']:
+            return row_to_user(row), None
+        conn.execute(
+            '''
+            UPDATE users
+            SET deleted_at = ?, banned = 1, ban_reason = COALESCE(ban_reason, 'account deleted'), banned_at = ?, ban_until = NULL
+            WHERE id = ?
+            ''',
+            (now, now, uid),
+        )
+        conn.execute('DELETE FROM remember_tokens WHERE user_id = ?', (uid,))
         conn.commit()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         return row_to_user(row), None
@@ -1727,8 +1809,10 @@ def create_remember_token(user_id):
     now = utc_now()
     expires_at = utc_iso(utc_now_dt() + timedelta(days=REMEMBER_TOKEN_DAYS))
     with get_db_connection() as conn:
-        row = conn.execute('SELECT id FROM users WHERE id = ?', (uid,)).fetchone()
+        row = conn.execute('SELECT id, deleted_at FROM users WHERE id = ?', (uid,)).fetchone()
         if row is None:
+            return ''
+        if 'deleted_at' in row.keys() and row['deleted_at']:
             return ''
         conn.execute(
             '''
@@ -1761,7 +1845,8 @@ def verify_remember_token(cookie_value):
             conn.commit()
             return None
         is_banned = bool(row['banned']) if 'banned' in row.keys() else False
-        if is_banned:
+        is_deleted = bool(row['deleted_at']) if 'deleted_at' in row.keys() else False
+        if is_banned or is_deleted:
             conn.execute('DELETE FROM remember_tokens WHERE selector = ?', (selector,))
             conn.commit()
             return None
@@ -2000,13 +2085,56 @@ def _match_result_for_username(row, username, player_names, summary):
     return raw_result or 'finished'
 
 
-def _row_to_match_summary(row, perspective_username=None):
+def _match_result_for_user(row, perspective_user_id=None, perspective_username=None, player_names=None, player_ids=None, summary=None):
+    if perspective_user_id is not None:
+        try:
+            uid = int(perspective_user_id)
+        except (TypeError, ValueError):
+            uid = None
+        if uid is not None:
+            ids = []
+            for value in (player_ids or []):
+                try:
+                    ids.append(int(value))
+                except (TypeError, ValueError):
+                    ids.append(None)
+            if uid in ids:
+                raw_result = str(row['result'] or '').strip()
+                try:
+                    winner_index = int(row['winner_index']) if row['winner_index'] is not None else None
+                except (TypeError, ValueError):
+                    winner_index = None
+                if raw_result.lower() == 'draw' or winner_index == -1:
+                    return 'draw'
+                winner_ids = set()
+                for value in (summary or {}).get('winner_user_ids') or []:
+                    try:
+                        winner_ids.add(int(value))
+                    except (TypeError, ValueError):
+                        pass
+                if winner_ids:
+                    return 'win' if uid in winner_ids else 'loss'
+                if winner_index is not None and winner_index >= 0:
+                    mode = str(row['mode'] or (summary or {}).get('mode') or '').lower()
+                    if mode == '2v2':
+                        team_indices = {0: [0, 1], 1: [2, 3]}.get(winner_index, [])
+                        return 'win' if any(0 <= idx < len(ids) and ids[idx] == uid for idx in team_indices) else 'loss'
+                    if 0 <= winner_index < len(ids):
+                        return 'win' if ids[winner_index] == uid else 'loss'
+                return raw_result or 'finished'
+    if perspective_username:
+        return _match_result_for_username(row, perspective_username, player_names or [], summary or {})
+    return row['result']
+
+
+def _row_to_match_summary(row, perspective_username=None, perspective_user_id=None):
     if row is None:
         return None
     player_names = _safe_json_loads(row['player_names_json'], [])
+    player_ids = _safe_json_loads(row['player_ids_json'] if 'player_ids_json' in row.keys() else '[]', [])
     summary = _safe_json_loads(row['summary_json'], {})
     raw_result = row['result']
-    result = _match_result_for_username(row, perspective_username, player_names, summary) if perspective_username else raw_result
+    result = _match_result_for_user(row, perspective_user_id, perspective_username, player_names, player_ids, summary)
     return {
         'id': row['id'],
         'mode': row['mode'],
@@ -2014,6 +2142,7 @@ def _row_to_match_summary(row, perspective_username=None):
         'ended_at': row['ended_at'],
         'duration_seconds': row['duration_seconds'],
         'players': player_names,
+        'player_ids': player_ids,
         'winner_name': row['winner_name'],
         'winner_index': row['winner_index'],
         'rounds': row['rounds'],
@@ -2041,19 +2170,38 @@ def get_admin_user_detail(user_id, match_limit=30):
         if row is None:
             return None
         user = row_to_admin_user(row)
-        pattern = f'%"{user["username"]}"%'
-        matches = conn.execute(
+        id_pattern = f'%{uid}%'
+        name_pattern = f'%"{user["username"]}"%'
+        candidate_rows = conn.execute(
             '''
             SELECT * FROM matches
-            WHERE player_names_json LIKE ?
+            WHERE player_ids_json LIKE ? OR player_names_json LIKE ?
             ORDER BY id DESC
             LIMIT ?
             ''',
-            (pattern, safe_match_limit),
+            (id_pattern, name_pattern, safe_match_limit * 5),
         ).fetchall()
+        matches = []
+        user_key = normalize_username_key(user['username'])
+        for match in candidate_rows:
+            ids = _safe_json_loads(match['player_ids_json'] if 'player_ids_json' in match.keys() else '[]', [])
+            names = _safe_json_loads(match['player_names_json'], [])
+            has_id = False
+            for value in ids:
+                try:
+                    if int(value) == uid:
+                        has_id = True
+                        break
+                except (TypeError, ValueError):
+                    continue
+            has_name = any(normalize_username_key(name) == user_key for name in names)
+            if has_id or has_name:
+                matches.append(match)
+            if len(matches) >= safe_match_limit:
+                break
     return {
         'user': user,
-        'matches': [_row_to_match_summary(match) for match in matches],
+        'matches': [_row_to_match_summary(match, perspective_username=user['username'], perspective_user_id=uid) for match in matches],
     }
 
 
@@ -2148,18 +2296,48 @@ def _friend_unread_count(conn, user_id):
     return int(row['count'] or 0) if row else 0
 
 
+def _recent_matches_for_user(conn, user_id, username='', limit=5):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        uid = None
+    safe_limit = max(1, min(int(limit or 5), 20))
+    rows = []
+    if uid is not None:
+        candidates = conn.execute(
+            '''
+            SELECT * FROM matches
+            WHERE player_ids_json IS NOT NULL AND player_ids_json != ''
+            ORDER BY id DESC
+            LIMIT ?
+            ''',
+            (safe_limit * 8,),
+        ).fetchall()
+        for row in candidates:
+            ids = _safe_json_loads(row['player_ids_json'] if 'player_ids_json' in row.keys() else '[]', [])
+            try:
+                if uid in {int(value) for value in ids if value is not None}:
+                    rows.append(row)
+            except (TypeError, ValueError):
+                continue
+            if len(rows) >= safe_limit:
+                break
+    if not rows and username:
+        pattern = f'%"{username}"%'
+        rows = conn.execute(
+            '''
+            SELECT * FROM matches
+            WHERE player_names_json LIKE ?
+            ORDER BY id DESC
+            LIMIT ?
+            ''',
+            (pattern, safe_limit),
+        ).fetchall()
+    return [_row_to_match_summary(row, perspective_username=username, perspective_user_id=uid) for row in rows]
+
+
 def _recent_matches_for_username(conn, username, limit=5):
-    pattern = f'%"{username}"%'
-    rows = conn.execute(
-        '''
-        SELECT * FROM matches
-        WHERE player_names_json LIKE ?
-        ORDER BY id DESC
-        LIMIT ?
-        ''',
-        (pattern, max(1, min(int(limit or 5), 20))),
-    ).fetchall()
-    return [_row_to_match_summary(row, perspective_username=username) for row in rows]
+    return _recent_matches_for_user(conn, None, username, limit)
 
 
 def get_user_social_settings(user_id):
@@ -2257,7 +2435,7 @@ def list_friends(user_id, mark_read=False):
                 'is_unread': row['addressee_id'] == uid and not (row['addressee_read_at'] if 'addressee_read_at' in row.keys() else None),
                 'direction': 'incoming' if row['addressee_id'] == uid else 'outgoing',
                 'user': _public_social_user(other) if row['status'] == 'accepted' else _basic_social_user(other),
-                'matches': _recent_matches_for_username(conn, other['username'], 5) if row['status'] == 'accepted' else [],
+                'matches': _recent_matches_for_user(conn, other['id'], other['username'], 5) if row['status'] == 'accepted' else [],
                 'created_at': row['created_at'],
                 'updated_at': row['updated_at'],
                 'expires_at': row['expires_at'] if 'expires_at' in row.keys() else None,
@@ -2682,10 +2860,10 @@ def save_match_summary(summary):
         cur = conn.execute(
             '''
             INSERT INTO matches (
-                mode, started_at, ended_at, duration_seconds, player_names_json,
+                mode, started_at, ended_at, duration_seconds, player_names_json, player_ids_json,
                 winner_name, winner_index, rounds, mod_source, mod_hash, result, summary_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 data.get('mode'),
@@ -2693,6 +2871,7 @@ def save_match_summary(summary):
                 data.get('ended_at'),
                 data.get('duration_seconds'),
                 json.dumps(data.get('players') or [], ensure_ascii=False),
+                json.dumps(data.get('player_ids') or [], ensure_ascii=False),
                 data.get('winner_name'),
                 data.get('winner_index'),
                 data.get('rounds'),
@@ -2706,32 +2885,52 @@ def save_match_summary(summary):
         return cur.lastrowid
 
 
-def increment_user_stats(usernames, winner_name=None, result='finished'):
-    names = [sanitize_username(name) for name in (usernames or [])]
-    names = [name for name in names if name]
-    if not names:
+def _resolve_user_ids_for_stats(conn, values):
+    resolved = []
+    seen = set()
+    for value in values or []:
+        row = None
+        try:
+            uid = int(value)
+            row = conn.execute('SELECT id FROM users WHERE id = ?', (uid,)).fetchone()
+        except (TypeError, ValueError):
+            name = sanitize_username(value)
+            if name:
+                row = _find_user_row_by_username_key(conn, name)
+        if row is None:
+            continue
+        uid = int(row['id'])
+        if uid in seen:
+            continue
+        seen.add(uid)
+        resolved.append(uid)
+    return resolved
+
+
+def increment_user_stats(users, winners=None, result='finished'):
+    if not users:
         return
-    winners = winner_name if isinstance(winner_name, (list, tuple, set)) else [winner_name]
-    winner_keys = {normalize_username_key(name) for name in winners if sanitize_username(name)}
     is_draw = str(result or '').lower() == 'draw'
     with get_db_connection() as conn:
-        for name in names:
-            row = _find_user_row_by_username_key(conn, name)
-            if row is None:
-                continue
+        user_ids = _resolve_user_ids_for_stats(conn, users)
+        winner_values = winners if isinstance(winners, (list, tuple, set)) else [winners]
+        winner_ids = set(_resolve_user_ids_for_stats(conn, winner_values))
+        if not user_ids:
+            return
+        for uid in user_ids:
             if is_draw:
                 conn.execute(
                     'UPDATE users SET games_played = games_played + 1, draws = draws + 1 WHERE id = ?',
-                    (row['id'],),
+                    (uid,),
                 )
-            elif normalize_username_key(row['username']) in winner_keys:
+            elif uid in winner_ids:
                 conn.execute(
                     'UPDATE users SET games_played = games_played + 1, wins = wins + 1 WHERE id = ?',
-                    (row['id'],),
+                    (uid,),
                 )
             else:
                 conn.execute(
                     'UPDATE users SET games_played = games_played + 1, losses = losses + 1 WHERE id = ?',
-                    (row['id'],),
+                    (uid,),
                 )
         conn.commit()

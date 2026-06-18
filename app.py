@@ -62,6 +62,7 @@ from db import (
     admin_set_user_ban,
     admin_set_user_role,
     add_friend_request,
+    change_username,
     change_user_password,
     create_report_entry,
     create_remember_token,
@@ -102,6 +103,7 @@ from db import (
     send_dm_message,
     set_ip_ban,
     set_user_mute,
+    soft_delete_user,
     update_user_skin,
     update_user_social_settings,
     verify_remember_token,
@@ -465,18 +467,22 @@ def admin_match_record(room, result='finished'):
             return
         e = room.engine
         names = []
-        registered_usernames = []
+        player_user_ids = []
+        registered_user_ids = []
         participant_meta = []
         for psid in room.player_sids:
             p = room_player_profile(room, psid)
             names.append(p.get('nickname', '?'))
             participant_meta.append(p)
+            uid = p.get('user_id')
+            player_user_ids.append(uid if uid is not None else None)
         for meta in participant_meta:
-            if meta.get('user_id') and meta.get('nickname'):
-                registered_usernames.append(meta['nickname'])
+            if meta.get('user_id'):
+                registered_user_ids.append(meta['user_id'])
         winner = getattr(e, 'winner', None)
         winner_index = None
         stats_winners = []
+        stats_winner_user_ids = []
         stats_result = 'draw'
         if getattr(e, 'winning_team', None) is not None and int(getattr(e, 'winning_team', -1)) >= 0:
             winner_index = int(e.winning_team)
@@ -486,6 +492,7 @@ def admin_match_record(room, result='finished'):
             except Exception:
                 team_members = []
             stats_winners = [names[i] for i in team_members if 0 <= i < len(names)]
+            stats_winner_user_ids = [player_user_ids[i] for i in team_members if 0 <= i < len(player_user_ids) and player_user_ids[i] is not None]
             winner_label = ' / '.join(stats_winners) or f"team {winner_index + 1}"
             stats_result = 'win'
         elif winner is None or winner == -1:
@@ -495,6 +502,8 @@ def admin_match_record(room, result='finished'):
             winner_index = winner
             winner_label = names[winner]
             stats_winners = [winner_label]
+            if 0 <= winner < len(player_user_ids) and player_user_ids[winner] is not None:
+                stats_winner_user_ids = [player_user_ids[winner]]
             stats_result = 'win'
         else:
             winner_label = str(winner)
@@ -533,7 +542,9 @@ def admin_match_record(room, result='finished'):
             'room_id': room.room_id,
             'mode': room.mode,
             'players': names,
+            'player_ids': player_user_ids,
             'winner_name': winner_label,
+            'winner_user_ids': stats_winner_user_ids,
             'winner_index': winner_index,
             'rounds': getattr(e, 'round_num', 0),
             'phase': getattr(e, 'phase', ''),
@@ -571,7 +582,7 @@ def admin_match_record(room, result='finished'):
                     game_version=GAME_VERSION,
                 )
                 if valid_for_ranking and result == 'finished' and getattr(e, 'game_over', False):
-                    increment_user_stats(registered_usernames, stats_winners, stats_result)
+                    increment_user_stats(registered_user_ids, stats_winner_user_ids, stats_result)
             except Exception as db_exc:
                 admin_event('error', f'failed to persist match summary: {db_exc}')
         room._history_recorded = True
@@ -2812,6 +2823,9 @@ def _current_account_user(allow_remember=True):
         return None
     user = get_user_by_id(session.get('user_id'))
     if user:
+        if user.get('deleted'):
+            _clear_account_session()
+            return None
         _set_account_session(user)
         return user
     _clear_account_session()
@@ -2819,6 +2833,8 @@ def _current_account_user(allow_remember=True):
         return None
     user = verify_remember_token(request.cookies.get(REMEMBER_COOKIE_NAME, ''))
     if user:
+        if user.get('deleted'):
+            return None
         _set_account_session(user)
         return user
     return None
@@ -7258,7 +7274,7 @@ def api_auth_register():
         admin_event('security', f'auth register rate limited from {ip}')
         return jsonify({'success': False, 'error': '注册过于频繁，请稍后再试'}), 429
     data = request.get_json(silent=True) or {}
-    username = sanitize_nickname(data.get('username', ''))
+    username = data.get('username', '')
     password = data.get('password', '')
     if 'password_confirm' in data and str(password) != str(data.get('password_confirm', '')):
         return jsonify({'success': False, 'error': '两次输入的密码不一致'}), 400
@@ -7312,6 +7328,54 @@ def api_auth_change_password():
         return jsonify({'success': False, 'error': error}), 400
     _set_account_session(user)
     return jsonify({'success': True, 'user': auth_user_payload(user)})
+
+
+@app.route('/api/auth/change-username', methods=['POST'])
+def api_auth_change_username():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True) or {}
+    user, error = change_username(user_id, data.get('username', data.get('new_username', '')))
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    _set_account_session(user)
+    payload = auth_user_payload(user)
+    normalized_skin = public_skin_config(user.get('skin'))
+    updated_sids = []
+    acquired = _lock.acquire(timeout=0.05)
+    if acquired:
+        try:
+            for sid, player in players.items():
+                if player.get('user_id') == user.get('id'):
+                    player['nickname'] = user.get('username')
+                    player['display_name'] = payload.get('display_name') or user.get('username')
+                    player['skin'] = normalized_skin
+                    updated_sids.append(sid)
+        finally:
+            _lock.release()
+    else:
+        admin_event('warning', f'skip online username cache update for user {user_id}: lobby lock busy')
+    if updated_sids:
+        broadcast_lobby()
+    return jsonify({'success': True, 'user': payload})
+
+
+@app.route('/api/auth/delete-account', methods=['POST'])
+def api_auth_delete_account():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    user, error = soft_delete_user(user_id)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    _clear_account_session()
+    response = jsonify({'success': True, 'user': auth_user_payload(user)})
+    return _clear_remember_cookie(response)
 
 
 @app.route('/api/auth/skin', methods=['POST'])

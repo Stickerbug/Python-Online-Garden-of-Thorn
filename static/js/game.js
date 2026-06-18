@@ -960,6 +960,7 @@ Object.assign(I18N.en, {
     account: 'Account', account_guest: 'Guest Mode', account_username: 'Username', account_password: 'Password',
     account_password_confirm: 'Confirm Password', account_old_password: 'Current Password', account_new_password: 'New Password',
     account_new_password_confirm: 'Confirm New Password', account_change_password: 'Change Password', account_password_changed: 'Password changed',
+    account_change_username: 'Change Username', account_delete: 'Delete Account', stats: 'Stats',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
     account_need_login: 'Log in or register first', account_error: 'Account error', account_password_mismatch: 'Passwords do not match', guest_enter: 'Enter as Guest',
@@ -969,6 +970,7 @@ Object.assign(I18N.zh, {
     account: '账号', account_guest: '游客模式', account_username: '用户名', account_password: '密码',
     account_password_confirm: '确认密码', account_old_password: '原密码', account_new_password: '新密码',
     account_new_password_confirm: '确认新密码', account_change_password: '修改密码', account_password_changed: '密码已修改',
+    account_change_username: '修改用户名', account_delete: '注销账户', stats: '统计',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
     account_need_login: '请先登录或注册账号', account_error: '账号错误', account_password_mismatch: '两次输入的密码不一致', guest_enter: '游客进入',
@@ -2021,13 +2023,13 @@ function escapeHtml(value) {
 
 const CARD_TEXT_TOKEN_RULES = [
     { cls: 'toxic', re: /^(?:\d+层淬毒|\d+\s*(?:Toxic|Toxique|Tóxico|Токсин)|淬毒\d+)/i },
-    { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/i },
-    { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/i },
+    { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*F(?![A-Za-z])|F(?![A-Za-z])|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/i },
+    { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P(?![A-Za-z])|P(?![A-Za-z])|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/i },
     { cls: 'damage', re: /^(?:[+-]?\d+电伤|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/i },
     { cls: 'armor', re: /^[+-]?\d+A/i },
-    { cls: 'heal', re: /^\+\d+H/i },
-    { cls: 'elixir', re: /^[+-]?\d+E/i },
-    { cls: 'magic', re: /^[+-]?\d+M/i },
+    { cls: 'heal', re: /^[+]?(?:\d+H|H)(?![A-Za-z])/i },
+    { cls: 'elixir', re: /^[+-]?(?:\d+E|E)(?![A-Za-z])/i },
+    { cls: 'magic', re: /^[+-]?(?:\d+M|M)(?![A-Za-z])/i },
 ];
 
 function buildInlineCardDict(defId, modifierText = '') {
@@ -3125,6 +3127,10 @@ function updateStaticText() {
     if (friendListTitle) friendListTitle.textContent = UI.friend_list;
     const accountPopoverTitle = $('account-popover-title');
     if (accountPopoverTitle) accountPopoverTitle.textContent = UI.account;
+    const statsPopoverTitle = $('stats-popover-title');
+    if (statsPopoverTitle) statsPopoverTitle.textContent = UI.stats || '统计';
+    const statsTopBtn = $('btn-stats-top');
+    if (statsTopBtn) statsTopBtn.textContent = UI.stats || '统计';
     const accountModeLogin = $('btn-account-mode-login');
     if (accountModeLogin) accountModeLogin.textContent = UI.account_login;
     const accountModeRegister = $('btn-account-mode-register');
@@ -3137,6 +3143,10 @@ function updateStaticText() {
     if (accountPasswordConfirmLabel) accountPasswordConfirmLabel.textContent = UI.account_password_confirm;
     const accountPasswordChangeTitle = $('account-password-change-title');
     if (accountPasswordChangeTitle) accountPasswordChangeTitle.textContent = UI.account_change_password;
+    const accountUsernameChangeTitle = $('account-username-change-title');
+    if (accountUsernameChangeTitle) accountUsernameChangeTitle.textContent = UI.account_change_username || '修改用户名';
+    const accountNewUsernameLabel = $('label-account-new-username');
+    if (accountNewUsernameLabel) accountNewUsernameLabel.textContent = UI.account_username;
     const accountOldPasswordLabel = $('label-account-old-password');
     if (accountOldPasswordLabel) accountOldPasswordLabel.textContent = UI.account_old_password;
     const accountNewPasswordLabel = $('label-account-new-password');
@@ -3155,12 +3165,18 @@ function updateStaticText() {
     if (accountNewPasswordInput) accountNewPasswordInput.placeholder = UI.account_new_password;
     const accountNewPasswordConfirmInput = $('input-account-new-password-confirm');
     if (accountNewPasswordConfirmInput) accountNewPasswordConfirmInput.placeholder = UI.account_new_password_confirm;
+    const accountNewUsernameInput = $('input-account-new-username');
+    if (accountNewUsernameInput) accountNewUsernameInput.placeholder = UI.account_username;
     const accountLoginBtn = $('btn-account-login');
     if (accountLoginBtn) accountLoginBtn.textContent = UI.account_login;
     const accountRegisterBtn = $('btn-account-register');
     if (accountRegisterBtn) accountRegisterBtn.textContent = UI.account_register;
     const accountChangePasswordBtn = $('btn-account-change-password');
     if (accountChangePasswordBtn) accountChangePasswordBtn.textContent = UI.account_change_password;
+    const accountChangeUsernameBtn = $('btn-account-change-username');
+    if (accountChangeUsernameBtn) accountChangeUsernameBtn.textContent = UI.account_change_username || '修改用户名';
+    const accountDeleteStartBtn = $('btn-account-delete-start');
+    if (accountDeleteStartBtn) accountDeleteStartBtn.textContent = UI.account_delete || '注销账户';
     const accountPopoverLogout = $('btn-account-popover-logout');
     if (accountPopoverLogout) accountPopoverLogout.textContent = UI.account_logout;
     const accountReplaysTitle = $('account-replays-title');
@@ -3976,6 +3992,7 @@ function getAllStatusDefs() {
         { key: 'toxic', label: UI.status_toxic, desc: termLib.toxic ? termLib.toxic.desc : '', color: '#6C3483' },
         { key: 'triangle', label: UI.status_triangle || '三角形', desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
         { key: 'nazar', label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
+        { key: 'magic_nazar', label: '魔法邪眼', desc: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', color: COLORS.magic },
         { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         { key: 'invincible', label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
         { key: 'status_immune', label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效。', color: '#16A085' },
@@ -6619,6 +6636,8 @@ function getTermIntroLibrary() {
         magic_swift: { label: UI.tag_magic_swift || '魔力迅捷', desc: 'M 花费减少对应层数，最低为 0M。', color: '#6C5CE7' },
         temp_swift: { label: UI.tag_temp_swift || '暂时迅捷', desc: '本次打出时 E 花费减少对应层数，进入弃牌堆后清除。', color: '#0EA5E9' },
         temp_heavy: { label: UI.tag_temp_heavy || '暂时沉重', desc: '本次打出时 E 花费增加对应层数，进入弃牌堆后清除。', color: '#795548' },
+        magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', color: COLORS.magic },
+        equipment_armor: { label: '装备护甲', desc: '存在时，若装备将被摧毁，则使该装备不被摧毁，并消耗1层装备护甲。', color: COLORS.indestructible },
         fusion_layer: { label: UI.fusion_layer || '聚变', desc: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#8E44AD' },
         fission_layer: { label: UI.fission_layer || '裂变', desc: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#2874A6' },
         tomato_layer: { label: UI.tomato_layer || '层数', desc: '番茄在手中每保留一回合增加层数，最多 6 层；打出后层数重置。', color: '#C0392B' },
@@ -6763,6 +6782,7 @@ function collectCardIntroTerms(cardDict) {
         [/(弃牌|discard)/i, 'discard'],
         [/(放逐|exile)/i, 'exile_zone'],
         [/(反制|counter|Guard)/i, 'response'],
+        [/(装备护甲|equipment armor)/i, 'equipment_armor'],
         [/(爆牌|overflow)/i, 'overdraw'],
         [/(手牌上限|hand limit)/i, 'hand_limit'],
         [/(爆费|上限)/i, 'overcap'],
@@ -6792,6 +6812,7 @@ function collectCardIntroTerms(cardDict) {
         [/虚弱|Weakness|weakness/i, 'weakness'],
         [/超载|Overload|overload/i, 'overload'],
         [/迟缓|Sluggish|sluggish/i, 'sluggish'],
+        [/魔法邪眼|Magic Nazar|magic_nazar/i, 'magic_nazar'],
     ];
     statusProbes.forEach(([re, key]) => {
         if (!re.test(rawText) || seen.has(`status:${key}`)) return;
@@ -6827,6 +6848,7 @@ function getStatusIntroItem(statusInfo) {
         vulnerable: { label: '易伤', desc: '受到的物理伤害增加50%。', color: COLORS.damage },
         triangle: { label: UI.status_triangle, desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
         nazar: { label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
+        magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
         status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效。', color: '#16A085' },
@@ -8174,6 +8196,20 @@ function clearAccountPasswordInputs() {
     });
 }
 
+function resetAccountDeleteWarning() {
+    if (window.accountDeleteTimer) {
+        clearInterval(window.accountDeleteTimer);
+        window.accountDeleteTimer = null;
+    }
+    window.accountDeleteRemaining = 0;
+    const panel = $('account-delete-warning');
+    if (panel) panel.classList.add('hidden');
+    const confirmBtn = $('btn-account-delete-confirm');
+    if (confirmBtn) confirmBtn.disabled = true;
+    const countdown = $('account-delete-countdown');
+    if (countdown) countdown.textContent = '请等待15秒';
+}
+
 function accountStatsText(user) {
     if (!user) return '';
     return tf(
@@ -9334,6 +9370,7 @@ function cacheAccount(user) {
                 wins: user.wins || 0,
                 losses: user.losses || 0,
                 draws: user.draws || 0,
+                last_username_change_at: user.last_username_change_at || '',
                 accept_friend_requests: user.accept_friend_requests !== false,
                 searchable_by_nickname: user.searchable_by_nickname !== false,
                 searchable_by_player_id: user.searchable_by_player_id !== false,
@@ -9366,6 +9403,12 @@ function renderAccountState() {
     if (authForm) authForm.classList.toggle('hidden', !!currentAccount);
     const passwordChangeForm = $('account-password-change-form');
     if (passwordChangeForm) passwordChangeForm.classList.toggle('hidden', !currentAccount);
+    const usernameChangeForm = $('account-username-change-form');
+    if (usernameChangeForm) usernameChangeForm.classList.toggle('hidden', !currentAccount);
+    const deleteSection = $('account-delete-section');
+    if (deleteSection) deleteSection.classList.toggle('hidden', !currentAccount);
+    const newUsernameInput = $('input-account-new-username');
+    if (newUsernameInput && currentAccount) newUsernameInput.value = currentAccount.username || '';
     const popLogout = $('btn-account-popover-logout');
     if (popLogout) {
         popLogout.disabled = !currentAccount;
@@ -9376,6 +9419,8 @@ function renderAccountState() {
     const friendsTop = $('btn-friends-top');
     const loginVisible = !$('view-login')?.classList.contains('hidden');
     if (friendsTop) friendsTop.classList.toggle('hidden', !currentAccount || !loginVisible);
+    const statsTop = $('btn-stats-top');
+    if (statsTop) statsTop.classList.toggle('hidden', !currentAccount || !loginVisible);
     const skinTop = $('btn-skin-top');
     if (skinTop) skinTop.classList.toggle('hidden', !loginVisible);
     const guestDivider = $('guest-divider-label')?.closest('.login-divider');
@@ -9422,6 +9467,8 @@ function renderAccountMode() {
     if (registerBtn) registerBtn.classList.toggle('hidden', !isRegister || !!currentAccount);
     const changePasswordBtn = $('btn-account-change-password');
     if (changePasswordBtn) changePasswordBtn.classList.toggle('hidden', !currentAccount);
+    const changeUsernameBtn = $('btn-account-change-username');
+    if (changeUsernameBtn) changeUsernameBtn.classList.toggle('hidden', !currentAccount);
 }
 
 function setAccountMode(mode) {
@@ -9534,6 +9581,77 @@ async function onAccountChangePassword() {
     }
 }
 
+async function onAccountChangeUsername() {
+    setAccountError('');
+    if (!currentAccount) {
+        setAccountError(UI.account_need_login || '请先登录账号');
+        return;
+    }
+    const input = $('input-account-new-username');
+    const newUsername = (input?.value || '').trim();
+    if (!newUsername) {
+        setAccountError('请输入新用户名');
+        return;
+    }
+    const ok = await gameConfirm(
+        UI.notice || '提示',
+        `每14天只能更改一次用户名！\n你确认要更改自己的用户名为“${newUsername}”吗？`
+    );
+    if (!ok) return;
+    try {
+        const data = await authRequest('/api/auth/change-username', { username: newUsername });
+        currentAccount = data.user || currentAccount;
+        setAccountError('用户名已修改');
+        renderAccountState();
+    } catch (err) {
+        setAccountError(err.message || UI.account_error);
+    }
+}
+
+function startAccountDeleteWarning() {
+    setAccountError('');
+    const panel = $('account-delete-warning');
+    if (!panel) return;
+    panel.classList.remove('hidden');
+    const confirmBtn = $('btn-account-delete-confirm');
+    const countdown = $('account-delete-countdown');
+    let remaining = 15;
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (countdown) countdown.textContent = `请等待${remaining}秒`;
+    if (window.accountDeleteTimer) clearInterval(window.accountDeleteTimer);
+    window.accountDeleteTimer = setInterval(() => {
+        remaining -= 1;
+        if (remaining > 0) {
+            if (countdown) countdown.textContent = `请等待${remaining}秒`;
+            return;
+        }
+        clearInterval(window.accountDeleteTimer);
+        window.accountDeleteTimer = null;
+        if (countdown) countdown.textContent = '可以确认注销';
+        if (confirmBtn) confirmBtn.disabled = false;
+    }, 1000);
+}
+
+async function onAccountDeleteConfirm() {
+    setAccountError('');
+    const ok = await gameConfirm(UI.notice || '提示', '确认注销账户吗？\n账号会被禁用，ID将保留。如需恢复请联系管理员。');
+    if (!ok) return;
+    try {
+        await authRequest('/api/auth/delete-account', {});
+        currentAccount = null;
+        socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
+        dmData = { threads: [], unread_count: 0 };
+        resetAccountDeleteWarning();
+        cacheAccount(null);
+        renderAccountState();
+        toggleAccountPopover(false);
+        toggleStatsPopover(false);
+        flashStatus('账号已注销', 2200, 'info');
+    } catch (err) {
+        setAccountError(err.message || UI.account_error);
+    }
+}
+
 async function onAccountLogout() {
     try {
         await authRequest('/api/auth/logout', {});
@@ -9550,7 +9668,9 @@ async function onAccountLogout() {
     accountMode = 'login';
     cacheAccount(null);
     clearAccountPasswordInputs();
+    resetAccountDeleteWarning();
     renderAccountState();
+    toggleStatsPopover(false);
 }
 
 function onAccountEnter() {
@@ -9573,6 +9693,21 @@ function toggleAccountPopover(force) {
     const show = typeof force === 'boolean' ? force : pop.classList.contains('hidden');
     pop.classList.toggle('hidden', !show);
     if (show) {
+        toggleStatsPopover(false);
+        refreshAuthMe().then(() => {
+            if (currentAccount) loadAccountReplays();
+        });
+    }
+}
+
+function toggleStatsPopover(force) {
+    const pop = $('stats-popover');
+    if (!pop) return;
+    const show = typeof force === 'boolean' ? force : pop.classList.contains('hidden');
+    pop.classList.toggle('hidden', !show);
+    if (show) {
+        toggleAccountPopover(false);
+        toggleFriendsPopover(false);
         refreshAuthMe().then(() => {
             if (currentAccount) loadAccountReplays();
         });
@@ -13318,6 +13453,8 @@ function renderStatusTags(containerId, playerData) {
     if (p.toxic > 0) tags.push({ key: 'toxic', name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
     if (p.triangle_stacks > 0) tags.push({ key: 'triangle', name: UI.status_triangle, abbr: '△', val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
     if (p.nazar_active) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
+    const magicNazar = customCount('magic_nazar');
+    if (magicNazar > 0) tags.push({ key: 'magic_nazar', name: '魔法邪眼', abbr: '魔邪', val: magicNazar, fg: COLORS.magic_text, bg: COLORS.magic_bg });
     if (p.equipment_protection > 0) tags.push({ key: 'equip_protect', name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
     if (p.invincible) tags.push({ key: 'invincible', name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
     const statusImmune = customCount('status_immune', 'immune', '状态免疫');
@@ -13363,7 +13500,7 @@ function renderStatusTags(containerId, playerData) {
         if (count > 0) tags.push({ key: info.keys[0], name: info.name, abbr: info.abbr, val: count, fg: info.fg, bg: info.bg, title: info.title });
     });
     if (customStatuses && typeof customStatuses === 'object') {
-        const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','status_immune','immune','状态免疫','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
+            const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','status_immune','immune','状态免疫','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
         Object.entries(customStatuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;
@@ -18220,6 +18357,8 @@ async function init() {
         }
     });
     if ($('btn-account-replays-refresh')) $('btn-account-replays-refresh').addEventListener('click', loadAccountReplays);
+    if ($('btn-stats-top')) $('btn-stats-top').addEventListener('click', () => toggleStatsPopover());
+    if ($('btn-stats-popover-close')) $('btn-stats-popover-close').addEventListener('click', () => toggleStatsPopover(false));
     if ($('btn-account-replay-close')) $('btn-account-replay-close').addEventListener('click', closeAccountReplayModal);
     if ($('account-replay-progress')) {
         $('account-replay-progress').addEventListener('input', (event) => {
@@ -18270,6 +18409,15 @@ async function init() {
             });
         }
     });
+    const accountNewUsernameInput = $('input-account-new-username');
+    if (accountNewUsernameInput) {
+        accountNewUsernameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') onAccountChangeUsername();
+        });
+    }
+    if ($('btn-account-change-username')) $('btn-account-change-username').addEventListener('click', onAccountChangeUsername);
+    if ($('btn-account-delete-start')) $('btn-account-delete-start').addEventListener('click', startAccountDeleteWarning);
+    if ($('btn-account-delete-confirm')) $('btn-account-delete-confirm').addEventListener('click', onAccountDeleteConfirm);
     const accountUsernameInput = $('input-account-username');
     if (accountUsernameInput) {
         accountUsernameInput.addEventListener('keydown', (e) => {
