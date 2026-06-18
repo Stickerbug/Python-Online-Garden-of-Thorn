@@ -440,11 +440,12 @@ async function logout() {
   showShell(false);
 }
 
-async function loadStatus() {
+async function loadStatus(options = {}) {
   if (!adminPageVisible() || statusRequestInFlight) return;
   statusRequestInFlight = true;
   try {
-    adminState = await api('/api/admin/status');
+    const full = !!options.manual || ['events', 'moderation', 'terminal'].includes(activeAdminTab);
+    adminState = await api(`/api/admin/status${full ? '?full=1' : ''}`);
     lastStatusErrorSignature = '';
     lastStatusErrorAt = 0;
     renderStatus(adminState);
@@ -496,11 +497,11 @@ function renderStatus(data) {
   renderServerResources(metrics);
   renderResourceHistory(metrics.resource_history || {});
 
-  renderPlayers(data.players || []);
-  renderRooms(data.rooms || []);
-  renderEvents(data.events || []);
-  renderSuspiciousEvents(data.suspicious_events || []);
-  renderHistory(data.history || []);
+  if (Array.isArray(data.players)) renderPlayers(data.players);
+  if (Array.isArray(data.rooms)) renderRooms(data.rooms);
+  if (Array.isArray(data.events)) renderEvents(data.events);
+  if (Array.isArray(data.suspicious_events)) renderSuspiciousEvents(data.suspicious_events);
+  if (Array.isArray(data.history)) renderHistory(data.history);
 }
 
 function resourceCard(title, main, sub) {

@@ -18,6 +18,7 @@ import shlex
 import hashlib
 import platform
 import subprocess
+import sqlite3
 from functools import wraps
 from collections import deque
 from datetime import datetime, timedelta, timezone
@@ -360,13 +361,14 @@ _RUNTIME_METRICS_LOCK = threading.Lock()
 _RUNTIME_METRICS_CACHE_SECONDS = _env_float('GTN_RUNTIME_METRICS_CACHE_SECONDS', 2)
 _ADMIN_STATUS_CACHE = {'ts': 0.0, 'data': None}
 _ADMIN_STATUS_LOCK = threading.Lock()
-_ADMIN_STATUS_CACHE_SECONDS = _env_float('GTN_ADMIN_STATUS_CACHE_SECONDS', 2)
+_ADMIN_STATUS_CACHE_SECONDS = _env_float('GTN_ADMIN_STATUS_CACHE_SECONDS', 5)
 _ADMIN_API_SLOW_MS = _env_float('GTN_ADMIN_API_SLOW_MS', 1000)
 _SOCKET_ACTION_SLOW_MS = _env_float('GTN_SOCKET_ACTION_SLOW_MS', 500)
+_ROOM_ACTION_LOCK_WAIT_SECONDS = _env_float('GTN_ROOM_ACTION_LOCK_WAIT_SECONDS', 0.25)
 _LOBBY_BROADCAST_LOCK = threading.Lock()
 _LOBBY_BROADCAST_PENDING = False
 _LOBBY_BROADCAST_DIRTY = False
-_LOBBY_BROADCAST_DELAY_SECONDS = _env_float('GTN_LOBBY_BROADCAST_DELAY_SECONDS', 0.03)
+_LOBBY_BROADCAST_DELAY_SECONDS = _env_float('GTN_LOBBY_BROADCAST_DELAY_SECONDS', 0.12)
 LAST_LOBBY_UPDATE_AT = None
 RESOURCE_HISTORY = deque(maxlen=720)
 _RESOURCE_HISTORY_LAST_TS = 0.0
@@ -978,6 +980,9 @@ class GameRoom:
         self._returned_lobby_names = {}
         self.pending_surrender_request = None
         self.action_lock = threading.Lock()
+        self.state_broadcast_lock = threading.Lock()
+        self.state_broadcast_pending = False
+        self.state_broadcast_dirty = False
         self.team_assignments = None
         self._history_recorded = False
         self.created_at = time.time()
@@ -2576,7 +2581,7 @@ def _try_acquire_room_action(room, sid, event_name, pidx=None):
     if lock is None:
         lock = threading.Lock()
         room.action_lock = lock
-    if not lock.acquire(blocking=False):
+    if not lock.acquire(timeout=max(0.0, _ROOM_ACTION_LOCK_WAIT_SECONDS)):
         soft_reject(sid, event_name, 'ACTION_BUSY', room=room, pidx=pidx, send_state=True)
         return None
     return lock
@@ -3204,6 +3209,7 @@ def register_v2_loadout_cards(v2_loadout):
             effect_text=str(resource.get('effect_text') or resource.get('effect_text_cn') or ''),
             flags=flags,
             trigger_cost_e=_v2_int(resource.get('trigger_cost_e', -1), -1),
+            trigger_cost_m=_v2_int(resource.get('trigger_cost_m', 0), 0),
             trigger_effect_text=str(resource.get('trigger_effect_text') or ''),
             response_trigger=str(resource.get('response_trigger') or ''),
             effects=[],
@@ -3738,9 +3744,27 @@ def measure_socket_action(event_name):
             ok = True
             try:
                 return fn(*args, **kwargs)
-            except Exception:
+            except Exception as exc:
                 ok = False
-                raise
+                room_id = None
+                user_id = None
+                try:
+                    if sid in players:
+                        room_id = players[sid].get('room_id')
+                        user_id = players[sid].get('user_id')
+                except Exception:
+                    pass
+                admin_event(
+                    'error',
+                    f'socket_event_failed event={event_name} sid={sid} room={room_id} error={type(exc).__name__}: {exc}',
+                    user_id=user_id,
+                    room_id=room_id,
+                )
+                try:
+                    socketio.emit('server_error', {'message': '操作失败，请重试。'}, room=sid)
+                except Exception:
+                    pass
+                return None
             finally:
                 elapsed_ms = (time.perf_counter() - start) * 1000
                 room_id = None
@@ -4002,6 +4026,57 @@ def get_admin_status_payload():
         'events': events,
         'suspicious_events': suspicious,
         'history': history,
+    }
+
+
+def get_admin_status_payload_light():
+    status_errors = []
+    try:
+        metrics = get_runtime_metrics()
+    except Exception as exc:
+        status_errors.append(f'metrics: {exc}')
+        metrics = {
+            'time': now_iso_z(),
+            'uptime_seconds': int(time.time() - SERVER_START_TIME),
+            'process': {},
+            'system': {},
+            'disk': {},
+            'metrics_error': str(exc),
+        }
+    with _lock:
+        try:
+            online_players = len(players)
+            lobby_players = sum(1 for p in players.values() if p.get('status') == 'lobby')
+            spectator_count = sum(1 for p in players.values() if p.get('status') == 'spectating')
+            room_count = len(rooms)
+        except Exception as exc:
+            status_errors.append(f'summary: {exc}')
+            online_players = lobby_players = spectator_count = room_count = 0
+        try:
+            history_count = len(MATCH_HISTORY)
+        except Exception:
+            history_count = 0
+    if status_errors:
+        metrics['status_errors'] = status_errors
+    return {
+        'success': True,
+        'light': True,
+        'instance': {
+            'name': GTN_INSTANCE,
+            'port': GTN_PORT,
+            'bind_host': GTN_BIND_HOST,
+            'git_branch': os.environ.get('GTN_GIT_BRANCH', 'main').strip() or 'main',
+            'service_name': os.environ.get('GTN_SYSTEMD_SERVICE', '').strip(),
+            'base_dir': os.path.dirname(os.path.abspath(__file__)),
+        },
+        'metrics': metrics,
+        'summary': {
+            'online_players': online_players,
+            'lobby_players': lobby_players,
+            'rooms': room_count,
+            'spectators': spectator_count,
+            'history_count': history_count,
+        },
     }
 
 
@@ -5378,7 +5453,10 @@ def send_event_reveal_state(room, pidx):
     socketio.emit('event_reveal', payload, room=sid)
 
 
-def broadcast_game_state(room):
+ROOM_STATE_BROADCAST_DELAY_SECONDS = _env_float('GTN_ROOM_STATE_BROADCAST_DELAY_SECONDS', 0.06)
+
+
+def _broadcast_game_state_now(room):
     _broadcast_started = time.perf_counter()
     _broadcast_recipients = 0
     for pidx, sid in enumerate(room.player_sids):
@@ -5439,6 +5517,69 @@ def broadcast_game_state(room):
         room._history_recorded = True
         admin_event('game', f'room {room.room_id} finished')
         _schedule_game_over_cleanup(room)
+
+
+def _room_state_broadcast_worker(room):
+    try:
+        while True:
+            if ROOM_STATE_BROADCAST_DELAY_SECONDS > 0:
+                try:
+                    socketio.sleep(ROOM_STATE_BROADCAST_DELAY_SECONDS)
+                except Exception:
+                    time.sleep(ROOM_STATE_BROADCAST_DELAY_SECONDS)
+            try:
+                with _lock:
+                    if rooms.get(getattr(room, 'room_id', None)) is not room:
+                        return
+                action_lock = getattr(room, 'action_lock', None)
+                acquired_action_lock = False
+                if action_lock is not None:
+                    acquired_action_lock = action_lock.acquire(blocking=False)
+                    if not acquired_action_lock:
+                        with room.state_broadcast_lock:
+                            room.state_broadcast_dirty = True
+                        continue
+                try:
+                    _broadcast_game_state_now(room)
+                finally:
+                    if acquired_action_lock:
+                        action_lock.release()
+            except Exception as exc:
+                admin_event('error', f'room state broadcast failed room={getattr(room, "room_id", "?")}: {exc}', room_id=getattr(room, 'room_id', None))
+            with room.state_broadcast_lock:
+                if room.state_broadcast_dirty:
+                    room.state_broadcast_dirty = False
+                    continue
+                room.state_broadcast_pending = False
+                break
+    except Exception as exc:
+        admin_event('error', f'room state broadcast worker crashed room={getattr(room, "room_id", "?")}: {exc}', room_id=getattr(room, 'room_id', None))
+        try:
+            with room.state_broadcast_lock:
+                room.state_broadcast_pending = False
+        except Exception:
+            pass
+
+
+def broadcast_game_state(room):
+    if room is None:
+        return
+    lock = getattr(room, 'state_broadcast_lock', None)
+    if lock is None:
+        room.state_broadcast_lock = threading.Lock()
+        room.state_broadcast_pending = False
+        room.state_broadcast_dirty = False
+        lock = room.state_broadcast_lock
+    with lock:
+        if getattr(room, 'state_broadcast_pending', False):
+            room.state_broadcast_dirty = True
+            return
+        room.state_broadcast_pending = True
+        room.state_broadcast_dirty = False
+    try:
+        socketio.start_background_task(_room_state_broadcast_worker, room)
+    except Exception:
+        threading.Thread(target=_room_state_broadcast_worker, args=(room,), name=f'room-state-broadcast-{getattr(room, "room_id", "?")}', daemon=True).start()
 
 
 def _schedule_game_over_cleanup(room):
@@ -6568,10 +6709,11 @@ def handling_unban_ip(ip):
 @app.route('/api/admin/status')
 def admin_status():
     started = time.perf_counter()
+    full = str(request.args.get('full', '')).lower() in {'1', 'true', 'yes', 'full'}
     try:
-        payload = get_admin_status_payload_cached()
+        payload = get_admin_status_payload_cached() if full else get_admin_status_payload_light()
         log_admin_api_timing(
-            '/api/admin/status',
+            '/api/admin/status/full' if full else '/api/admin/status/light',
             (time.perf_counter() - started) * 1000,
             players=len(payload.get('players') or []),
             rooms=len(payload.get('rooms') or []),
@@ -6650,6 +6792,29 @@ def health_full():
         room_count = len(rooms)
         player_count = len(players)
         lobby_count = sum(1 for p in players.values() if p.get('status') == 'lobby')
+        room_action_busy_count = 0
+        pending_response_count = 0
+        pending_choice_count = 0
+        pending_v2_ui_count = 0
+        for room in rooms.values():
+            lock = getattr(room, 'action_lock', None)
+            if lock is not None:
+                acquired = lock.acquire(blocking=False)
+                if acquired:
+                    lock.release()
+                else:
+                    room_action_busy_count += 1
+            engine = getattr(room, 'engine', None)
+            if engine is not None:
+                pending_response_count += 1 if getattr(engine, 'pending_response', None) else 0
+                pending_choice_count += 1 if getattr(engine, 'pending_choice', None) else 0
+                pending_v2_ui_count += 1 if getattr(engine, 'pending_v2_ui', None) else 0
+    last_lobby_age_seconds = None
+    if LAST_LOBBY_UPDATE_AT:
+        try:
+            last_lobby_age_seconds = max(0, int(time.time() - datetime.fromisoformat(str(LAST_LOBBY_UPDATE_AT).replace('Z', '+00:00')).timestamp()))
+        except Exception:
+            last_lobby_age_seconds = None
     return jsonify({
         'success': True,
         'time': iso_now(),
@@ -6661,6 +6826,11 @@ def health_full():
         'player_count': player_count,
         'lobby_player_count': lobby_count,
         'last_lobby_update_at': LAST_LOBBY_UPDATE_AT,
+        'last_lobby_update_age_seconds': last_lobby_age_seconds,
+        'room_action_busy_count': room_action_busy_count,
+        'pending_response_count': pending_response_count,
+        'pending_choice_count': pending_choice_count,
+        'pending_v2_ui_count': pending_v2_ui_count,
         'uptime_seconds': max(0, int(time.time() - SERVER_STARTED_AT)),
     })
 
@@ -7207,6 +7377,11 @@ def api_auth_me():
     return response
 
 
+def _db_busy_response(exc):
+    admin_event('db', f'database busy: {exc}')
+    return jsonify({'success': False, 'error': '数据库正忙，请稍后再试'}), 503
+
+
 @app.route('/api/social/friends')
 def api_social_friends():
     if not DB_AVAILABLE:
@@ -7215,7 +7390,10 @@ def api_social_friends():
     if auth_error:
         return auth_error
     mark_read = str(request.args.get('mark_read') or '').lower() in ('1', 'true', 'yes')
-    data, error = list_friends(user_id, mark_read=mark_read)
+    try:
+        data, error = list_friends(user_id, mark_read=mark_read)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
     return jsonify({'success': True, **(data or {})})
@@ -7229,7 +7407,10 @@ def api_social_friend_add():
     if auth_error:
         return auth_error
     data = request.get_json(silent=True) or {}
-    result, error = add_friend_request(user_id, data.get('identifier', ''))
+    try:
+        result, error = add_friend_request(user_id, data.get('identifier', ''))
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
     return jsonify({'success': True, **(result or {})})
@@ -7243,7 +7424,10 @@ def api_social_friend_respond():
     if auth_error:
         return auth_error
     data = request.get_json(silent=True) or {}
-    result, error = respond_friend_request(user_id, data.get('request_id'), data.get('action'))
+    try:
+        result, error = respond_friend_request(user_id, data.get('request_id'), data.get('action'))
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
     return jsonify({'success': True, **(result or {})})
@@ -7257,7 +7441,10 @@ def api_social_friend_remove():
     if auth_error:
         return auth_error
     data = request.get_json(silent=True) or {}
-    result, error = remove_friend(user_id, data.get('user_id'))
+    try:
+        result, error = remove_friend(user_id, data.get('user_id'))
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
     return jsonify({'success': True, **(result or {})})
@@ -7435,6 +7622,7 @@ def api_cards():
             'effect_text': card_def.effect_text,
             'flags': list(card_def.flags) if card_def.flags else [],
             'trigger_cost_e': card_def.trigger_cost_e,
+            'trigger_cost_m': getattr(card_def, 'trigger_cost_m', 0),
             'trigger_effect_text': card_def.trigger_effect_text,
             'response_trigger': card_def.response_trigger,
             'response_title': getattr(card_def, 'response_title', ''),

@@ -88,8 +88,8 @@ const I18N = {
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_immune: 'Status Immune', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Blind', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_stealth: 'Stealth', flag_revealed: 'Revealed', flag_team_limited: 'Team Limited', flag_team_unique: 'Team Unique', flag_power: 'Power', flag_magic_swift: 'Magic Swift',
-        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_temp_swift: 'Temporary Swift', flag_temp_heavy: 'Temporary Heavy', flag_stealth: 'Stealth', flag_revealed: 'Revealed', flag_team_limited: 'Team Limited', flag_team_unique: 'Team Unique', flag_power: 'Power', flag_magic_swift: 'Magic Swift',
+        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_temp_swift: 'Temporary Swift', tag_temp_heavy: 'Temporary Heavy', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
@@ -199,7 +199,7 @@ I18N.zh = { ...I18N.en,
     status_equip_protect: '装备保护', status_invincible: '无敌', status_immune: '状态免疫', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张手牌丢弃，然后抽对应张牌', foresight_replace_confirm: '替换',
@@ -242,7 +242,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
@@ -1851,6 +1851,8 @@ const CARD_FLAG_STYLES = {
     copy: { label: '', fg: '#e17055', bg: 'rgba(225,112,85,0.15)', cls: 'copy' },
     unique: { label: '', fg: '#fdcb6e', bg: 'rgba(253,203,110,0.15)', cls: 'unique' },
     swift: { label: '', fg: '#0984e3', bg: 'rgba(9,132,227,0.15)', cls: 'swift' },
+    temp_swift: { label: '', fg: '#0EA5E9', bg: 'rgba(14,165,233,0.15)', cls: 'temp-swift' },
+    temp_heavy: { label: '', fg: '#795548', bg: 'rgba(121,85,72,0.15)', cls: 'temp-heavy' },
     magic_swift: { label: '', fg: '#6C5CE7', bg: 'rgba(108,92,231,0.15)', cls: 'magic-swift' },
     power: { label: '', fg: '#C0392B', bg: 'rgba(192,57,43,0.14)', cls: 'power' },
     team_limited: { label: '', fg: '#607D3B', bg: 'rgba(96,125,59,0.15)', cls: 'team-limited' },
@@ -1877,6 +1879,8 @@ const CARD_FLAG_TERM_COLORS = {
     copy: '#e17055',
     unique: '#fdcb6e',
     swift: '#0984e3',
+    temp_swift: '#0EA5E9',
+    temp_heavy: '#795548',
     magic_swift: '#6C5CE7',
     power: '#C0392B',
     team_limited: '#607D3B',
@@ -1913,7 +1917,7 @@ const _VANILLA_FLAGS = new Set([
     'precision', 'exile', 'non_stackable', 'indestructible', 'sprout',
     'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
     'infinite_exclude', 'rebound', 'copy', 'unique',
-    'swift', 'stealth', 'revealed', 'team_limited', 'team_unique',
+    'swift', 'temp_swift', 'temp_heavy', 'stealth', 'revealed', 'team_limited', 'team_unique',
     'power', 'magic_swift',
 ]);
 
@@ -2646,7 +2650,8 @@ const LOCAL_SOLO_SUPPORTED_EFFECTS = new Set([
     'player_prop_set', 'player_prop_add', 'var_set', 'var_add', 'var_sub', 'var_mul', 'var_div',
     'copy_card', 'move_to_discard', 'move_to_hand', 'move_to_deck', 'remove_specific_card',
     'destroy_equipment_choice_or_first', 'destroy_random_equip', 'destroy_all_equip',
-    'destroy_all_destroyable_equipment', 'destroy_self_equipment', 'place_as_equip', 'skip_turn',
+    'destroy_all_destroyable_equipment', 'destroy_self_equipment', 'destroy_current_equipment',
+    'add_equipment_armor', 'place_as_equip', 'skip_turn',
     'reveal_enemy_hand', 'choose_from_deck', 'choose_from_discard', 'steal_enemy_card',
     'status_remove_named', 'status_add_named', 'clear_status',
     'on_owner_turn_start', 'on_enemy_turn_start', 'on_any_turn_start', 'on_damage_taken',
@@ -2664,7 +2669,7 @@ const LOCAL_SOLO_SUPPORTED_V2_OPS = new Set([
     'add_tag', 'remove_tag', 'tag_add_named', 'tag_remove_named',
     'for_each', 'repeat_until', 'for_each_list', 'for_each_equipment',
     'break', 'continue', 'timed_effect', 'countdown_var',
-    'give_card_to_hand', 'give_card_to_deck', 'give_card_to_discard',
+    'give_card_to_hand', 'give_magic_orb_to_hand', 'give_card_to_deck', 'give_card_to_discard',
     'move_to_exile', 'add_equipment_to_zone', 'cost_e', 'cost_m',
     'invincible', 'mod_e_regen', 'mod_m_regen', 'mod_draw', 'equip_protection',
     'const', 'var', 'player_stat', 'card_prop', 'status_stack', 'count',
@@ -2687,6 +2692,7 @@ let targetPickCleanup = null;
 let gameOverRenderTimer = null;
 let scheduledGameOverState = null;
 let gameTimelineEntries = [];
+let battleChatEntries = [];
 let renderedBattleLogCount = 0;
 let renderedBattleLogTotal = 0;
 let renderedTimelineDomCount = 0;
@@ -5209,7 +5215,9 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
         ? Number(ownerState.cards_played_this_turn[cardDict.def_id] || 0)
         : 0;
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
-    const effectiveBaseE = Math.max(0, baseE - mimicDiscount - swiftValue);
+    const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
+    const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
+    const effectiveBaseE = Math.max(0, baseE + tempHeavyValue - mimicDiscount - swiftValue - tempSwiftValue);
     let extraE = flags.has('symbiosis') ? 0 : dup;
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Bamboo', 'jungle:bamboo'])) {
         const hand = Array.isArray(ownerState && ownerState.hand) ? ownerState.hand : [];
@@ -5386,6 +5394,8 @@ function createCardElement(cardDict, options = {}) {
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
     const magicSwiftValue = Number(cardDef.magic_swift_value || cardDict.magic_swift_value || 0);
     const powerValue = Number(cardDef.power_value || cardDict.power_value || 0);
+    const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
+    const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
     const copyCount = Number(cardDef.copy_count || 0);
     el.style.borderColor = displayTypeColor;
     el.dataset.instanceId = cardDict.instance_id;
@@ -5393,6 +5403,8 @@ function createCardElement(cardDict, options = {}) {
     let flagsHtml = '';
     if (!blinded) for (const flag of flags) {
         if (flag === 'swift' && swiftValue > 0) continue;
+        if (flag === 'temp_swift' && tempSwiftValue > 0) continue;
+        if (flag === 'temp_heavy' && tempHeavyValue > 0) continue;
         if (flag === 'magic_swift' && magicSwiftValue > 0) continue;
         if (flag === 'power' && powerValue > 0) continue;
         if (flag === 'copy' && copyCount > 0) continue;
@@ -5422,6 +5434,12 @@ function createCardElement(cardDict, options = {}) {
     }
     if (!blinded && swiftValue > 0) {
         flagsHtml += `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}: ${swiftValue}</span>`;
+    }
+    if (!blinded && tempSwiftValue > 0) {
+        flagsHtml += `<span class="card-flag temp-swift">${escapeHtml(UI.tag_temp_swift || '暂时迅捷')}: ${tempSwiftValue}</span>`;
+    }
+    if (!blinded && tempHeavyValue > 0) {
+        flagsHtml += `<span class="card-flag temp-heavy">${escapeHtml(UI.tag_temp_heavy || '暂时沉重')}: ${tempHeavyValue}</span>`;
     }
     if (!blinded && magicSwiftValue > 0) {
         flagsHtml += `<span class="card-flag magic-swift">${escapeHtml(UI.tag_magic_swift || 'Magic Swift')}: ${magicSwiftValue}</span>`;
@@ -5575,8 +5593,12 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
     const magicSwiftValue = Number(cardDef.magic_swift_value || cardDict.magic_swift_value || 0);
     const powerValue = Number(cardDef.power_value || cardDict.power_value || 0);
+    const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
+    const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
     effective.forEach(flag => {
         if (flag === 'swift' && swiftValue > 0) return;
+        if (flag === 'temp_swift' && tempSwiftValue > 0) return;
+        if (flag === 'temp_heavy' && tempHeavyValue > 0) return;
         if (flag === 'magic_swift' && magicSwiftValue > 0) return;
         if (flag === 'power' && powerValue > 0) return;
         if (flag === 'copy' && copyCount > 0) return;
@@ -5599,6 +5621,12 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     }
     if (swiftValue > 0) {
         parts.push(cardFlagHtml('swift', `${UI.tag_swift || 'Swift'}: ${swiftValue}`));
+    }
+    if (tempSwiftValue > 0) {
+        parts.push(cardFlagHtml('temp_swift', `${UI.tag_temp_swift || '暂时迅捷'}: ${tempSwiftValue}`));
+    }
+    if (tempHeavyValue > 0) {
+        parts.push(cardFlagHtml('temp_heavy', `${UI.tag_temp_heavy || '暂时沉重'}: ${tempHeavyValue}`));
     }
     if (magicSwiftValue > 0) {
         parts.push(cardFlagHtml('magic_swift', `${UI.tag_magic_swift || 'Magic Swift'}: ${magicSwiftValue}`));
@@ -5700,7 +5728,12 @@ function getMimicSpecialCostForCard(cardDict) {
     const tomatoLayer = cardDict.def_id === 'Tomato'
         ? Math.min(6, Math.max(0, Math.floor(Number(cardDict.held_turns || 0))))
         : 0;
-    return Math.ceil((fusionExtra + fissionExtra + tomatoLayer) / 2);
+    const power = Math.max(0, Math.floor(Number(cardDict.power_value || 0)));
+    const swift = Math.max(0, Math.floor(Number(cardDict.swift_value || 0)));
+    const magicSwift = Math.max(0, Math.floor(Number(cardDict.magic_swift_value || 0)));
+    const tempSwift = Math.max(0, Math.floor(Number(cardDict.temp_swift_value || 0)));
+    const tempHeavy = Math.max(0, Math.floor(Number(cardDict.temp_heavy_value || 0)));
+    return Math.ceil((fusionExtra + fissionExtra + tomatoLayer + power + swift + magicSwift + tempSwift + tempHeavy) / 2);
 }
 
 function getAvailableElixirForMimicChoice(sourceCard, ownerState = null) {
@@ -5762,6 +5795,13 @@ function equipmentChoiceOption(equipment, extra = {}) {
     if (equipment && equipment.custom_vars && typeof equipment.custom_vars === 'object') {
         cardDict.equipment_counters = { ...(cardDict.equipment_counters || {}), ...equipment.custom_vars };
     }
+    if (equipment && Number(equipment.armor || 0) > 0) {
+        cardDict.equipment_counters = {
+            ...(cardDict.equipment_counters || {}),
+            armor: Number(equipment.armor || 0),
+            '护甲': Number(equipment.armor || 0),
+        };
+    }
     return cardChoiceOption(cardDict, extra);
 }
 
@@ -5770,7 +5810,7 @@ function cardDefChoiceOption(defId, extra = {}) {
 }
 
 const ATTACK_DAMAGE_FALLBACKS = {
-    Basic: { amount: 6, hits: 1 },
+    Basic: { amount: 8, hits: 1 },
     Bone: { amount: 12, hits: 1 },
     Stinger: { amount: 20, hits: 1 },
     Sand: { amount: 3, hits: 4 },
@@ -6577,6 +6617,8 @@ function getTermIntroLibrary() {
         team_unique: { label: UI.tag_team_unique || '队伍独一', desc: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', color: '#8D6E63' },
         power: { label: UI.tag_power || '威力', desc: '此牌造成的每段 D 增加。若是多段 D，会按段数把威力向上分配。', color: '#C0392B' },
         magic_swift: { label: UI.tag_magic_swift || '魔力迅捷', desc: 'M 花费减少对应层数，最低为 0M。', color: '#6C5CE7' },
+        temp_swift: { label: UI.tag_temp_swift || '暂时迅捷', desc: '本次打出时 E 花费减少对应层数，进入弃牌堆后清除。', color: '#0EA5E9' },
+        temp_heavy: { label: UI.tag_temp_heavy || '暂时沉重', desc: '本次打出时 E 花费增加对应层数，进入弃牌堆后清除。', color: '#795548' },
         fusion_layer: { label: UI.fusion_layer || '聚变', desc: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#8E44AD' },
         fission_layer: { label: UI.fission_layer || '裂变', desc: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#2874A6' },
         tomato_layer: { label: UI.tomato_layer || '层数', desc: '番茄在手中每保留一回合增加层数，最多 6 层；打出后层数重置。', color: '#C0392B' },
@@ -6618,6 +6660,8 @@ function getIntroFlagDescription(flag, custom = null) {
         unique: '整场对局自己总牌库中仅允许出现一张，多余的将被放逐。',
         swift: 'E花费减少X，最少为0。',
         magic_swift: 'M花费减少X，最少为0。',
+        temp_swift: '本次打出时E花费减少X，进入弃牌堆后清除。',
+        temp_heavy: '本次打出时E花费增加X，进入弃牌堆后清除。',
         power: '此牌造成的每段D增加。多段D会按段数把威力向上分配。',
         team_limited: '只在一队至少2名玩家的模式出现；单人训练场可选，但没有实际意义。',
         team_unique: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。',
@@ -7686,6 +7730,7 @@ function connectSocket(serverUrl) {
         const isReroll = oldOptIds.length > 0 && JSON.stringify(oldOptIds) !== JSON.stringify(newOptIds) && (draftState ? draftState.rerolls : 0) > (data.rerolls || 0);
         draftState = data;
         syncBattleLogMatch(data || {});
+        syncPhaseChatMatch(data || {});
         if (data.your_id != null) playerId = data.your_id;
         mergeSkinLooksFromPayload(data);
         renderDraft(data, isReroll, previousDraftState);
@@ -7711,6 +7756,7 @@ function connectSocket(serverUrl) {
         phase = 'event_select';
         eventSelectData = data;
         syncBattleLogMatch(data || {});
+        syncPhaseChatMatch(data || {});
         if (data.your_id != null) playerId = data.your_id;
         mergeSkinLooksFromPayload(data);
         renderEventSelect(data);
@@ -12627,9 +12673,12 @@ function renderClassicEquipmentList(player) {
         const cardInst = eq.card_instance || {};
         const cardDef = getCardDef(cardInst.def_id || '');
         const name = cardDef ? getCardName(cardDef) : (cardInst.def_id || '?');
+        const targetId = normalizePlayerId(eq.effect_target);
+        const ownerId = normalizePlayerId((player && player.id) ?? (player && player.player_id) ?? eq.owner);
+        const targetSuffix = targetId != null && targetId !== ownerId ? `→${getPlayerNameById(targetId)}` : '';
         const typeColor = cardDef ? (CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary) : COLORS.text_primary;
         const instanceId = cardInst.instance_id != null ? String(cardInst.instance_id) : '';
-        return `<span class="classic-equip-chip" data-instance-id="${escapeHtml(instanceId)}" style="--chip-color:${typeColor}">${getEquipmentIconHtml(cardInst, cardDef)}<span class="classic-equip-name">${escapeHtml(name)}</span></span>`;
+        return `<span class="classic-equip-chip" data-instance-id="${escapeHtml(instanceId)}" style="--chip-color:${typeColor}">${getEquipmentIconHtml(cardInst, cardDef)}<span class="classic-equip-name">${escapeHtml(name + targetSuffix)}</span></span>`;
     }).join('');
 }
 
@@ -13272,11 +13321,11 @@ function renderStatusTags(containerId, playerData) {
     if (p.equipment_protection > 0) tags.push({ key: 'equip_protect', name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
     if (p.invincible) tags.push({ key: 'invincible', name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
     const statusImmune = customCount('status_immune', 'immune', '状态免疫');
-    if (statusImmune > 0) tags.push({ key: 'status_immune', name: UI.status_immune || '状态免疫', abbr: 'Imm', val: '', fg: '#16A085', bg: '#E8F8F5' });
+    if (statusImmune > 0) tags.push({ key: 'status_immune', name: UI.status_immune || '状态免疫', abbr: '免疫', val: '', fg: '#16A085', bg: '#E8F8F5' });
     if (p.skip_turn > 0) tags.push({ key: 'stunned', name: UI.status_stunned, abbr: 'Stn', val: p.skip_turn, fg: COLORS.damage, bg: COLORS.damage_bg });
     const attackBlocked = Math.max(Number(p.attack_blocked || 0), customCount('attack_blocked', '禁攻'));
     const attackOnly = Math.max(Number(p.attack_only || 0), customCount('attack_only', '仅攻击'));
-    if (attackBlocked > 0) tags.push({ key: 'attack_blocked', name: UI.status_attack_blocked, abbr: 'NoT', val: attackBlocked, fg: '#C0392B', bg: '#FDEDEC' });
+    if (attackBlocked > 0) tags.push({ key: 'attack_blocked', name: UI.status_attack_blocked, abbr: '禁攻', val: attackBlocked, fg: '#C0392B', bg: '#FDEDEC' });
     if (attackOnly > 0) tags.push({ key: 'attack_only', name: UI.status_attack_only, abbr: 'TOnly', val: attackOnly, fg: '#D35400', bg: '#FEF5E7' });
     if (p.untargetable) tags.push({ key: 'untargetable', name: UI.status_untargetable, abbr: 'Unt', val: '', fg: '#1A5276', bg: '#EBF5FB' });
     if (p.bandage_active) tags.push({ key: 'bandage', name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
@@ -13296,12 +13345,12 @@ function renderStatusTags(containerId, playerData) {
     const turnHealTurns = customStatusSum('jungle:turn_heal_turns', 'turn_heal_turns');
     const turnHealPower = customStatusMax('jungle:turn_heal_power', 'turn_heal_power');
     if (turnHealTurns > 0 && turnHealPower > 0) {
-        tags.push({ key: 'jungle:turn_heal_turns', name: '回合回复', abbr: 'Reg', val: `${turnHealTurns};${turnHealPower}`, fg: '#F48FB1', bg: '#FDEDF2' });
+        tags.push({ key: 'jungle:turn_heal_turns', name: '回合回复', abbr: '回合回复', val: `${turnHealTurns};${turnHealPower}`, fg: '#F48FB1', bg: '#FDEDF2' });
     }
     const turnMagicTurns = customStatusSum('jungle:turn_magic_turns', 'turn_magic_turns');
     const turnMagicPower = customStatusMax('jungle:turn_magic_power', 'turn_magic_power');
     if (turnMagicTurns > 0 && turnMagicPower > 0) {
-        tags.push({ key: 'jungle:turn_magic_turns', name: '魔力回合回复', abbr: 'MReg', val: `${turnMagicTurns};${turnMagicPower}`, fg: '#6C5CE7', bg: '#F0ECFF' });
+        tags.push({ key: 'jungle:turn_magic_turns', name: '魔力回合回复', abbr: '魔力回复', val: `${turnMagicTurns};${turnMagicPower}`, fg: '#6C5CE7', bg: '#F0ECFF' });
     }
     const jungleStatusDisplay = [
         { keys: ['jungle:fragile', 'fragile'], name: '易损', abbr: '易损', fg: '#8E5A2A', bg: '#F7EFE8', title: '护甲降低对应层数；若降为负数，会使物理伤害增加。自己回合开始时清除。' },
@@ -14672,23 +14721,31 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
         }
         const targetId = normalizePlayerId(eqDict.effect_target);
         const ownerId = normalizePlayerId(playerData.player_id ?? eqDict.owner);
-        const targetSuffix = gameState && gameState.mode === '2v2' && targetId != null && targetId !== ownerId
+        const targetSuffix = targetId != null && targetId !== ownerId
             ? `→${getPlayerNameById(targetId)}`
             : '';
         const customVars = eqDict.custom_vars || {};
         const layerValue = Number(customVars.layers || customVars.layer || 0);
         const layerSuffix = layerValue > 0 ? ` · 层数:${layerValue}` : '';
+        const equipArmor = Math.max(0, Number(eqDict.armor || 0));
+        const armorSuffix = equipArmor > 0 ? ` · 护甲:${equipArmor}` : '';
         const equipName = `${getCardName(cardDef)}${targetSuffix ? `(${targetSuffix})` : ''}`;
-        const equipDisplayName = `${equipName}${layerSuffix}`;
-        const fullText = UI.equip_info.replace('{0}', equipName).replace('{1}', turns) + layerSuffix + (corruption ? UI.equip_corruption : '');
-        const compactTextValue = `${equipName}${turns ? ` · ${turns}` : ''}${layerSuffix}${corruption ? ` · ${UI.compact_corrupted}` : ''}`;
+        const equipDisplayName = `${equipName}${layerSuffix}${armorSuffix}`;
+        const fullText = UI.equip_info.replace('{0}', equipName).replace('{1}', turns) + layerSuffix + armorSuffix + (corruption ? UI.equip_corruption : '');
+        const compactTextValue = `${equipName}${turns ? ` · ${turns}` : ''}${layerSuffix}${armorSuffix}${corruption ? ` · ${UI.compact_corrupted}` : ''}`;
         const text = isMinimalUiStyle() ? compactTextValue : fullText;
         const triggerReady = !(cardInst.def_id === 'Flower' && turns < 2);
         if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && triggerReady && isFriendlyTurn() && !isSpectating) {
             const btn = document.createElement('button');
             btn.className = 'btn btn-small btn-equip-trigger';
-            const triggerText = UI.equip_trigger_cost.replace('{0}', fullText).replace('{1}', cardDef.trigger_cost_e);
-            const visibleText = isMinimalUiStyle() ? `⚡ ${equipDisplayName} ${cardDef.trigger_cost_e}E` : triggerText;
+            const triggerCostE = Math.max(0, Number(cardDef.trigger_cost_e) || 0);
+            const triggerCostM = Math.max(0, Number(cardDef.trigger_cost_m) || 0);
+            const triggerCostText = [
+                triggerCostE > 0 ? `${triggerCostE}E` : '',
+                triggerCostM > 0 ? `${triggerCostM}M` : '',
+            ].filter(Boolean).join(' ') || '0E';
+            const triggerText = `${fullText} 触发：${triggerCostText}`;
+            const visibleText = isMinimalUiStyle() ? `⚡ ${equipDisplayName} ${triggerCostText}` : triggerText;
             btn.innerHTML = `${getEquipmentIconHtml(cardInst, cardDef)}<span class="equip-trigger-text">${escapeHtml(visibleText)}</span>`;
             btn.title = isMinimalUiStyle() ? triggerText : '';
             btn.disabled = isActionBusy({ includeAnimation: false });
@@ -14709,16 +14766,17 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
                     payload.target_player_id = targetId;
                 }
                 const triggerCost = Math.max(0, Number(cardDef.trigger_cost_e) || 0);
-                if (triggerCost > 0) {
-                    const optimisticCost = { totalE: triggerCost, totalM: 0 };
+                const triggerMagicCost = Math.max(0, Number(cardDef.trigger_cost_m) || 0);
+                if (triggerCost > 0 || triggerMagicCost > 0) {
+                    const optimisticCost = { totalE: triggerCost, totalM: triggerMagicCost };
                     const override = {
                         playerId: normalizePlayerId(gameState && gameState.your_id),
                         elixir: Math.max(0, getBarValueForKey(gameState && gameState.you, 'elixir') - triggerCost),
-                        magic: getBarValueForKey(gameState && gameState.you, 'magic'),
+                        magic: Math.max(0, getBarValueForKey(gameState && gameState.you, 'magic') - triggerMagicCost),
                         maxElixir: getBarMaxForKey(gameState && gameState.you, 'elixir'),
                         maxMagic: getBarMaxForKey(gameState && gameState.you, 'magic'),
                         totalE: triggerCost,
-                        totalM: 0,
+                        totalM: triggerMagicCost,
                     };
                     beginPendingServerAction('trigger', { optimisticResources: override, timeoutMs: SERVER_ACTION_TIMEOUT_MS });
                     queueOptimisticResourceCost(optimisticCost);
@@ -14795,6 +14853,7 @@ function resetBattleLogDom(content) {
 
 function resetBattleLogState(content) {
     gameTimelineEntries = [];
+    battleChatEntries = [];
     renderedBattleLogCount = 0;
     renderedBattleLogTotal = 0;
     renderedClassicLogSignature = '';
@@ -14880,7 +14939,7 @@ function parseBattleUseLogForCompact(line) {
 
 function formatBattleUseLogForCompact(use) {
     if (!use) return '';
-    return `${use.actor}使用了${use.card}${use.count > 1 ? ` ×${use.count}` : ''}`;
+    return `${use.actor}使用了${use.card}${use.count > 1 ? `×${use.count}` : ''}`;
 }
 
 function formatBattleDamageLogForCompact(damage) {
@@ -14891,7 +14950,7 @@ function formatBattleDamageLogForCompact(damage) {
 function compactBattleLogLinesForDisplay(log) {
     const output = [];
     const rawLines = Array.isArray(log) ? log.map(line => String(line || '')) : [];
-    for (const line of rawLines) {
+    rawLines.forEach((line, rawIndex) => {
         const use = parseBattleUseLogForCompact(line);
         if (use) {
             const last = output[output.length - 1];
@@ -14899,17 +14958,19 @@ function compactBattleLogLinesForDisplay(log) {
             if (last && last.kind === 'damage') {
                 if (previous && previous.kind === 'use' && previous.actor === use.actor && previous.card === use.card) {
                     previous.count += use.count;
+                    previous.rawEnd = rawIndex;
                 } else {
-                    output.splice(output.length - 1, 0, { kind: 'use', ...use });
+                    output.splice(output.length - 1, 0, { kind: 'use', ...use, rawStart: rawIndex, rawEnd: rawIndex });
                 }
-                continue;
+                return;
             }
             if (last && last.kind === 'use' && last.actor === use.actor && last.card === use.card) {
                 last.count += use.count;
-                continue;
+                last.rawEnd = rawIndex;
+                return;
             }
-            output.push({ kind: 'use', ...use });
-            continue;
+            output.push({ kind: 'use', ...use, rawStart: rawIndex, rawEnd: rawIndex });
+            return;
         }
         const damage = parseBattleDamageLogForCompact(line);
         if (damage) {
@@ -14917,18 +14978,86 @@ function compactBattleLogLinesForDisplay(log) {
             if (last && last.kind === 'damage' && last.target === damage.target) {
                 last.units = (last.units || []).concat(damage.units || []);
                 last.hp = mergeBattleHpChainForCompact(last.hp, damage.hp);
-                continue;
+                last.rawEnd = rawIndex;
+                return;
             }
-            output.push({ kind: 'damage', ...damage });
-            continue;
+            output.push({ kind: 'damage', ...damage, rawStart: rawIndex, rawEnd: rawIndex });
+            return;
         }
-        output.push({ kind: 'raw', text: line });
-    }
+        output.push({ kind: 'raw', text: line, rawStart: rawIndex, rawEnd: rawIndex });
+    });
     return output.map(entry => {
         if (entry.kind === 'use') return formatBattleUseLogForCompact(entry);
         if (entry.kind === 'damage') return formatBattleDamageLogForCompact(entry);
         return entry.text || '';
     });
+}
+
+function compactBattleLogEntriesForDisplay(log) {
+    const output = [];
+    const keyIndex = new Map();
+    const rawLines = Array.isArray(log) ? log.map(line => String(line || '')) : [];
+    const remember = (key, entry) => {
+        if (!keyIndex.has(key)) {
+            keyIndex.set(key, output.length);
+            output.push(entry);
+            return entry;
+        }
+        const existing = output[keyIndex.get(key)];
+        existing.rawEnd = entry.rawEnd;
+        return existing;
+    };
+    rawLines.forEach((line, rawIndex) => {
+        const use = parseBattleUseLogForCompact(line);
+        if (use) {
+            const entry = remember(`use:${use.actor}:${use.card}`, { kind: 'use', ...use, rawStart: rawIndex, rawEnd: rawIndex });
+            if (entry.rawStart !== rawIndex) entry.count += use.count;
+            return;
+        }
+        const damage = parseBattleDamageLogForCompact(line);
+        if (damage) {
+            const expr = formatBattleDamageUnitsForCompact(damage.units);
+            const entry = remember(`damage:${damage.target}:${expr}`, { kind: 'damage', ...damage, rawStart: rawIndex, rawEnd: rawIndex });
+            if (entry.rawStart !== rawIndex) {
+                entry.units = (entry.units || []).concat(damage.units || []);
+                entry.hp = mergeBattleHpChainForCompact(entry.hp, damage.hp);
+            }
+            return;
+        }
+        const entry = remember(`raw:${line}`, { kind: 'raw', text: line, count: 1, rawStart: rawIndex, rawEnd: rawIndex });
+        if (entry.rawStart !== rawIndex) entry.count = Number(entry.count || 1) + 1;
+    });
+    return output.map(entry => ({
+        type: 'battle',
+        text: entry.kind === 'use'
+            ? formatBattleUseLogForCompact(entry)
+            : (entry.kind === 'damage' ? formatBattleDamageLogForCompact(entry) : `${entry.text || ''}${Number(entry.count || 1) > 1 ? ` ×${Number(entry.count || 1)}` : ''}`),
+        rawStart: Number(entry.rawStart || 0),
+        rawEnd: Number(entry.rawEnd == null ? entry.rawStart || 0 : entry.rawEnd),
+    }));
+}
+
+function buildBattleTimelineEntries(log) {
+    const entries = [];
+    const chats = (battleChatEntries || []).slice().sort((a, b) => Number(a.logAnchor || 0) - Number(b.logAnchor || 0));
+    pregameChatEntries.forEach((entry, index) => {
+        entries.push({ ...entry, pregame: true, pregameChatSeed: index === 0 });
+    });
+    const compactEntries = compactBattleLogEntriesForDisplay(log);
+    let chatIndex = 0;
+    compactEntries.forEach(entry => {
+        const start = Number(entry.rawStart || 0);
+        const end = Number(entry.rawEnd == null ? start : entry.rawEnd);
+        while (chatIndex < chats.length && Number(chats[chatIndex].logAnchor || 0) <= start) {
+            entries.push(chats[chatIndex++]);
+        }
+        while (chatIndex < chats.length && Number(chats[chatIndex].logAnchor || 0) <= end + 1) {
+            entries.push(chats[chatIndex++]);
+        }
+        entries.push(entry);
+    });
+    while (chatIndex < chats.length) entries.push(chats[chatIndex++]);
+    return entries;
 }
 
 function renderLog(log, logStart = 0, logTotal = null) {
@@ -14947,42 +15076,33 @@ function renderLog(log, logStart = 0, logTotal = null) {
         resetBattleLogState(content);
     }
     if (!Array.isArray(log)) log = [];
-    log = compactBattleLogLinesForDisplay(log);
-    logStart = 0;
-    logTotal = log.length;
     const matchKey = phaseContextMatchKey(gameState);
     if (matchKey && renderedBattleLogMatchKey && renderedBattleLogMatchKey !== String(matchKey)) {
         resetBattleLogState(content);
     }
     if (matchKey) renderedBattleLogMatchKey = String(matchKey);
+    logStart = Number(logStart || 0);
+    const rawLog = log.map(line => String(line || ''));
+    logTotal = Number(logTotal == null ? logStart + rawLog.length : logTotal);
     if (logTotal < renderedBattleLogTotal || logStart > renderedBattleLogTotal) {
         resetBattleLogState(content);
         renderedBattleLogTotal = logStart;
     }
-    const nextBattleSnapshot = log.map(line => String(line || ''));
+    const nextBattleSnapshot = rawLog.map(line => String(line || ''));
     const canAppendBattleLog = renderedBattleLogSnapshot.length <= nextBattleSnapshot.length
         && renderedBattleLogSnapshot.every((line, index) => line === nextBattleSnapshot[index]);
     if (!canAppendBattleLog) {
         resetBattleLogState(content);
         renderedBattleLogTotal = logStart;
     }
-    seedPregameChatEntriesForBattleLog();
-    let startIndex = Math.max(0, renderedBattleLogTotal - logStart);
-    if (startIndex > log.length) startIndex = 0;
-    for (let i = startIndex; i < log.length; i++) {
-        gameTimelineEntries.push({ type: 'battle', text: log[i] });
-    }
-    renderedBattleLogCount = log.length;
+    gameTimelineEntries = buildBattleTimelineEntries(rawLog);
+    renderedBattleLogCount = rawLog.length;
     renderedBattleLogTotal = logTotal;
     renderedBattleLogSnapshot = nextBattleSnapshot;
-    if (renderedTimelineDomCount > gameTimelineEntries.length || content.children.length === 0) {
-        resetBattleLogDom(content);
-    }
-    if (renderedTimelineDomCount < gameTimelineEntries.length) {
+    resetBattleLogDom(content);
+    if (gameTimelineEntries.length) {
         const fragment = document.createDocumentFragment();
-        for (let i = renderedTimelineDomCount; i < gameTimelineEntries.length; i++) {
-            fragment.appendChild(createBattleLogElement(gameTimelineEntries[i]));
-        }
+        gameTimelineEntries.forEach(entry => fragment.appendChild(createBattleLogElement(entry)));
         content.appendChild(fragment);
         renderedTimelineDomCount = gameTimelineEntries.length;
     }
@@ -15160,7 +15280,7 @@ function renderLobbyChatHistory(data = {}) {
 }
 
 function appendGameChat(nick, text, meta = {}, channelMeta = {}) {
-    gameTimelineEntries.push({
+    const entry = {
         type: 'chat',
         nick,
         text,
@@ -15173,7 +15293,10 @@ function appendGameChat(nick, text, meta = {}, channelMeta = {}) {
         specialRoleColor: getSpecialRoleColor(meta),
         channel: channelMeta.chat_channel || channelMeta.channel || '',
         targetName: channelMeta.chat_target_name || channelMeta.targetName || '',
-    });
+        logAnchor: Number(gameState && gameState.log_total != null ? gameState.log_total : ((gameState && Array.isArray(gameState.log)) ? gameState.log.length : 0)),
+    };
+    battleChatEntries.push(entry);
+    if (battleChatEntries.length > 160) battleChatEntries.shift();
     renderLog((gameState && gameState.log) || [], (gameState && gameState.log_start) || 0, gameState && gameState.log_total);
 }
 

@@ -20,7 +20,7 @@ CARD_I18N = {
     'Basic': {
         'name': _t('基本', 'Basic', 'Base', 'Básico', 'База', '基本'),
         'desc': _t('最基本的卡牌。', 'The most basic card.', 'La carte la plus basique.', 'A carta mais básica.', 'Самая базовая карта.', '最も基本的なカード。'),
-        'effect': _t('造成6D', 'Deal 6D', 'Inflige 6D', 'Causa 6D', 'Наносит 6D', '6Dを与える'),
+        'effect': _t('造成8D', 'Deal 8D', 'Inflige 8D', 'Causa 8D', 'Наносит 8D', '8Dを与える'),
     },
     'Bone': {
         'name': _t('骨头', 'Bone', 'Os', 'Osso', 'Кость', '骨'),
@@ -60,7 +60,7 @@ CARD_I18N = {
     'Fang': {
         'name': _t('尖牙', 'Fang', 'Croc', 'Presa', 'Клык', '牙'),
         'desc': _t('吸取对手的生命来为你回复。', 'Drain the opponent’s life to heal yourself.', 'Draine la vie de l’adversaire pour vous soigner.', 'Drena a vida do oponente para curar você.', 'Высасывает жизнь противника, исцеляя вас.', '相手の生命を吸い取り、自分を回復する。'),
-        'effect': _t('造成8D; 造成伤害时+4H', 'Deal 8D; if damage is dealt, +4H', 'Inflige 8D ; si des dégâts sont infligés, +4H', 'Causa 8D; se causar dano, +4H', 'Наносит 8D; если урон нанесён, +4H', '8Dを与える。ダメージを与えた時+4H'),
+        'effect': _t('造成8D；造成伤害时回复造成伤害80%（向下取整）的H', 'Deal 8D; if damage is dealt, heal H equal to 80% of damage dealt, rounded down', 'Inflige 8D ; si des dégâts sont infligés, soigne H égal à 80% des dégâts, arrondi à l’inférieur', 'Causa 8D; se causar dano, cura H igual a 80% do dano, arredondado para baixo', 'Наносит 8D; при нанесении урона лечит H на 80% урона с округлением вниз', '8Dを与える。ダメージを与えた時、与えたダメージの80%（切り捨て）分Hを回復'),
     },
     'Iris': {
         'name': _t('鸢尾', 'Iris', 'Iris', 'Íris', 'Ирис', 'アイリス'),
@@ -121,7 +121,7 @@ CARD_I18N = {
     'MagicLeaf': {
         'name': _t('魔法叶', 'Magic Leaf', 'Feuille magique', 'Folha Mágica', 'Магический лист', '魔法の葉'),
         'desc': _t('不再能造成伤害了，但它可以回复魔力。', 'It can no longer deal damage, but it can restore magic.', 'Elle ne peut plus infliger de dégâts, mais elle peut restaurer de la magie.', 'Não causa mais dano, mas pode restaurar magia.', 'Больше не наносит урон, но восстанавливает магию.', 'もうダメージは与えられないが、魔力を回復できる。'),
-        'effect': _t('自己回合开始时+1M', 'At your turn start +1M', 'Au début de votre tour +1M', 'No início do seu turno +1M', 'В начале вашего хода +1M', '自分のターン開始時+1M'),
+        'effect': _t('自己回合开始时+1M；触发：4M，选择目标造成12D，然后摧毁自身', 'At your turn start +1M. Trigger: 4M; choose a target, deal 12D, then destroy itself', 'Au début de votre tour +1M. Déclenchement : 4M ; choisissez une cible, infligez 12D, puis détruisez cette carte', 'No início do seu turno +1M. Acionar: 4M; escolha um alvo, cause 12D e destrua este equipamento', 'В начале вашего хода +1M. Активация: 4M; выберите цель, нанесите 12D, затем уничтожьте это снаряжение', '自分のターン開始時+1M。発動：4M、対象を選び12Dを与え、その後自身を破壊'),
     },
     'ManaOrb': {
         'name': _t('魔法球', 'Mana Orb', 'Orbe de mana', 'Orbe de Mana', 'Сфера маны', 'マナオーブ'),
@@ -131,7 +131,7 @@ CARD_I18N = {
     'MagicYucca': {
         'name': _t('魔法丝兰', 'Magic Yucca', 'Yucca magique', 'Yucca Mágica', 'Магическая юкка', '魔法ユッカ'),
         'desc': _t('生成更多魔力。', 'Generates more magic.', 'Génère plus de magie.', 'Gera mais magia.', 'Создаёт больше магии.', 'より多くの魔力を生む。'),
-        'effect': _t('自己回合开始时+2M', 'At your turn start +2M', 'Au début de votre tour +2M', 'No início do seu turno +2M', 'В начале вашего хода +2M', '自分のターン開始時+2M'),
+        'effect': _t('魔力上限+5；装备时和自己回合开始时，将一张[魔法球][共生+放逐+虚无]加入手牌', 'Max M +5; when equipped and at your turn start, add one [Mana Orb][Symbiosis+Exile+Void] to your hand', 'M max +5 ; à l’équipement et au début de votre tour, ajoute une [Orbe de mana][Symbiose+Exil+Vide] à votre main', 'M máximo +5; ao equipar e no início do seu turno, adiciona uma [Orbe de Mana][Simbiose+Exílio+Vazio] à mão', 'Макс. M +5; при снаряжении и в начале вашего хода добавляет [Сфера маны][Симбиоз+Изгнание+Пустота] в руку', 'M上限+5。装備時と自分のターン開始時、[マナオーブ][共生+追放+虚無]を1枚手札に加える'),
     },
     'MagicBattery': {
         'name': _t('魔法电池', 'Magic Battery', 'Batterie magique', 'Bateria Mágica', 'Магическая батарея', '魔法電池'),
@@ -140,8 +140,13 @@ CARD_I18N = {
     },
     'MagicNazar': {
         'name': _t('魔法邪眼', 'Magic Nazar', 'Nazar magique', 'Nazar Mágico', 'Магический назар', '魔法ナザール'),
-        'desc': _t('有魔力的护符，保护你的装备不被摧毁。', 'A magical amulet that protects your equipment from destruction.', 'Une amulette magique qui protège votre équipement de la destruction.', 'Um amuleto mágico que protege seu equipamento da destruição.', 'Магический амулет, защищающий снаряжение от уничтожения.', '魔力を持つ護符。装備が破壊されるのを防ぐ。'),
-        'effect': _t('获得一层装备保护 响应：自己的装备即将被摧毁', 'Gain 1 Equip Protect. Response: your equipment is about to be destroyed', 'Gagne 1 Protection d’équipement. Réponse : votre équipement va être détruit', 'Ganha 1 Proteção de Equipamento. Resposta: seu equipamento está prestes a ser destruído', 'Получить 1 Защиту снаряжения. Ответ: ваше снаряжение вот-вот будет уничтожено', '装備保護を1層得る。反応：自分の装備が破壊されそうな時'),
+        'desc': _t('有魔力的护符，让敌方的高耗技能化为虚无。', 'A magical amulet that turns costly enemy skills into nothing.', 'Une amulette magique qui réduit à néant les compétences coûteuses ennemies.', 'Um amuleto mágico que anula habilidades inimigas caras.', 'Магический амулет, обращающий дорогие навыки врага в ничто.', '敵の高コスト技能を無にする魔力の護符。'),
+        'effect': _t('响应：敌方使用技能牌；获得2层魔法邪眼。存在时，敌方使用3E及以上技能牌无效，然后减少1层', 'Response: enemy uses a Bloom card; gain 2 Magic Nazar. While present, enemy Bloom cards costing 3E or more become invalid, then lose 1 stack', 'Réponse : l’ennemi joue une carte Bloom ; gagne 2 Nazar magique. Tant qu’il existe, les Bloom ennemies coûtant 3E ou plus sont annulées, puis perdent 1 couche', 'Resposta: inimigo usa carta Bloom; ganha 2 Nazar Mágico. Enquanto existir, Bloom inimigas de 3E ou mais são anuladas, depois perde 1 camada', 'Ответ: враг использует Bloom; получите 2 Магического назара. Пока есть эффект, Bloom врага стоимостью 3E или больше отменяется, затем теряется 1 слой', '反応：敵がBloomカードを使用。魔法ナザールを2層得る。存在中、敵の3E以上のBloomは無効化され、その後1層減る'),
+    },
+    'GoldenNazar': {
+        'name': _t('黄金邪眼', 'Golden Nazar', 'Nazar doré', 'Nazar Dourado', 'Золотой назар', '黄金ナザール'),
+        'desc': _t('镀金的护符会为装备留下最后一道防线。', 'A gilded amulet that leaves equipment one last defense.', 'Une amulette dorée qui laisse une dernière défense à l’équipement.', 'Um amuleto dourado que deixa uma última defesa ao equipamento.', 'Позолоченный амулет оставляет снаряжению последнюю защиту.', '金色の護符が装備に最後の守りを残す。'),
+        'effect': _t('响应：自身装备即将被摧毁；所有自身装备获得2层装备护甲。装备护甲：存在时，若装备将被摧毁，则使其不被摧毁并消耗1层装备护甲', 'Response: your equipment is about to be destroyed; all your equipment gains 2 Equipment Armor. Equipment Armor prevents destruction and consumes 1 stack', 'Réponse : votre équipement va être détruit ; tout votre équipement gagne 2 Armures d’équipement. Cette armure empêche une destruction et consomme 1 couche', 'Resposta: seu equipamento está prestes a ser destruído; todos seus equipamentos ganham 2 Armaduras de Equipamento. A armadura impede destruição e consome 1 camada', 'Ответ: ваше снаряжение вот-вот будет уничтожено; всё ваше снаряжение получает 2 Брони снаряжения. Броня предотвращает уничтожение и тратит 1 слой', '反応：自分の装備が破壊されそうな時。自分の全装備が装備護甲を2層得る。装備護甲は破壊を防ぎ1層消費する'),
     },
     'MagicBone': {
         'name': _t('魔法骨头', 'Magic Bone', 'Os magique', 'Osso Mágico', 'Магическая кость', '魔法の骨'),

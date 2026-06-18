@@ -123,10 +123,10 @@ def format_duration_zh(seconds):
 
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH, timeout=2)
+    conn = sqlite3.connect(DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys=ON;')
-    conn.execute('PRAGMA busy_timeout=2000;')
+    conn.execute('PRAGMA busy_timeout=15000;')
     return conn
 
 
@@ -2089,16 +2089,20 @@ def _basic_social_user(row):
 
 def _cleanup_expired_friend_requests(conn):
     cutoff = utc_iso(utc_now_dt() - timedelta(days=FRIEND_REQUEST_TTL_DAYS))
-    conn.execute(
-        '''
-        DELETE FROM friendships
-        WHERE status = ? AND (
-            (expires_at IS NOT NULL AND expires_at < ?)
-            OR (expires_at IS NULL AND created_at < ?)
+    try:
+        conn.execute(
+            '''
+            DELETE FROM friendships
+            WHERE status = ? AND (
+                (expires_at IS NOT NULL AND expires_at < ?)
+                OR (expires_at IS NULL AND created_at < ?)
+            )
+            ''',
+            ('pending', cutoff, cutoff),
         )
-        ''',
-        ('pending', cutoff, cutoff),
-    )
+    except sqlite3.OperationalError as exc:
+        if 'locked' not in str(exc).lower():
+            raise
 
 
 def _friend_request_expires_at():
@@ -2267,7 +2271,11 @@ def list_friends(user_id, mark_read=False):
             elif row['status'] == 'pending':
                 outgoing.append(item)
         return {
-            'settings': get_user_social_settings(uid),
+            'settings': {
+                'accept_friend_requests': bool(self_row['accept_friend_requests']),
+                'searchable_by_nickname': bool(self_row['searchable_by_nickname']),
+                'searchable_by_player_id': bool(self_row['searchable_by_player_id']),
+            },
             'friends': friends,
             'incoming': incoming,
             'outgoing': outgoing,
@@ -2281,6 +2289,7 @@ def add_friend_request(user_id, identifier):
     except (TypeError, ValueError):
         return None, '请先登录账号'
     now = utc_now()
+    return_friend_list = False
     with get_db_connection() as conn:
         _cleanup_expired_friend_requests(conn)
         requester = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
@@ -2306,15 +2315,15 @@ def add_friend_request(user_id, identifier):
         ).fetchone()
         if existing is not None:
             if existing['status'] == 'accepted':
-                return list_friends(uid)[0], None
-            if existing['status'] == 'pending' and existing['addressee_id'] == uid:
+                return_friend_list = True
+            elif existing['status'] == 'pending' and existing['addressee_id'] == uid:
                 conn.execute(
                     'UPDATE friendships SET status = ?, updated_at = ?, addressee_read_at = COALESCE(addressee_read_at, ?) WHERE id = ?',
                     ('accepted', now, now, existing['id']),
                 )
                 conn.commit()
-                return list_friends(uid)[0], None
-            if auto_add:
+                return_friend_list = True
+            elif auto_add:
                 conn.execute(
                     '''
                     UPDATE friendships
@@ -2324,23 +2333,28 @@ def add_friend_request(user_id, identifier):
                     ('accepted', now, 'auto_add', existing['id']),
                 )
                 conn.commit()
-                return list_friends(uid)[0], None
-            return list_friends(uid)[0], None
-        status = 'accepted' if auto_add else 'pending'
-        notice_type = 'auto_add' if auto_add else 'request'
-        expires_at = None if auto_add else _friend_request_expires_at()
-        conn.execute(
-            '''
-            INSERT INTO friendships (
-                requester_id, addressee_id, status, created_at, updated_at,
-                expires_at, addressee_read_at, notice_type
+                return_friend_list = True
+            else:
+                return_friend_list = True
+        else:
+            status = 'accepted' if auto_add else 'pending'
+            notice_type = 'auto_add' if auto_add else 'request'
+            expires_at = None if auto_add else _friend_request_expires_at()
+            conn.execute(
+                '''
+                INSERT INTO friendships (
+                    requester_id, addressee_id, status, created_at, updated_at,
+                    expires_at, addressee_read_at, notice_type
+                )
+                VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
+                ''',
+                (uid, target['id'], status, now, now, expires_at, notice_type),
             )
-            VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
-            ''',
-            (uid, target['id'], status, now, now, expires_at, notice_type),
-        )
-        conn.commit()
-    return list_friends(uid)[0], None
+            conn.commit()
+            return_friend_list = True
+    if return_friend_list:
+        return list_friends(uid)[0], None
+    return None, '添加好友失败'
 
 
 def respond_friend_request(user_id, request_id, action):

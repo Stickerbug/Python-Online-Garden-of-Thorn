@@ -30,6 +30,7 @@ _VANILLA_FLAGS = {
     'infinite_exclude', 'rebound', 'copy', 'unique',
     'swift', 'stealth', 'revealed', 'rebound', 'nothingness',
     'team_limited', 'team_unique', 'power', 'magic_swift',
+    'temp_swift', 'temp_heavy',
 }
 
 
@@ -92,6 +93,7 @@ class CardDef:
     magic_swift_value: int = 0
     damage: int = 0
     hits: int = 1
+    trigger_cost_m: int = 0
 
     @property
     def display_name(self) -> str:
@@ -131,6 +133,8 @@ class CardInstance:
     swift_value: int = 0
     magic_swift_value: int = 0
     power_value: int = 0
+    temp_swift_value: int = 0
+    temp_heavy_value: int = 0
     extra_hits: int = 0
     setup_modifiers: Set[str] = field(default_factory=set)
 
@@ -158,7 +162,9 @@ class CardInstance:
     def cost_e(self) -> int:
         base = self.cost_e_override if self.cost_e_override is not None else self.card_def.cost_e
         swift = self.swift_value if self.swift_value > 0 else self.card_def.swift_value
-        return max(0, base - self.mimic_discount - swift)
+        temp_swift = max(0, int(self.temp_swift_value or 0))
+        temp_heavy = max(0, int(self.temp_heavy_value or 0))
+        return max(0, base + temp_heavy - self.mimic_discount - swift - temp_swift)
 
     @property
     def cost_m(self) -> int:
@@ -195,6 +201,8 @@ class CardInstance:
             'swift_value': self.swift_value,
             'magic_swift_value': self.magic_swift_value,
             'power_value': self.power_value,
+            'temp_swift_value': self.temp_swift_value,
+            'temp_heavy_value': self.temp_heavy_value,
             'extra_hits': self.extra_hits,
             'setup_modifiers': list(self.setup_modifiers) if self.setup_modifiers else [],
         }
@@ -219,6 +227,8 @@ class CardInstance:
             swift_value=max(0, int(d.get('swift_value', 0))),
             magic_swift_value=max(0, int(d.get('magic_swift_value', 0))),
             power_value=max(0, int(d.get('power_value', 0))),
+            temp_swift_value=max(0, int(d.get('temp_swift_value', 0))),
+            temp_heavy_value=max(0, int(d.get('temp_heavy_value', 0))),
             extra_hits=max(0, int(d.get('extra_hits', 0))),
             setup_modifiers=set(str(x) for x in (d.get('setup_modifiers') or []) if x),
         )
@@ -242,6 +252,8 @@ class CardInstance:
             swift_value=self.swift_value,
             magic_swift_value=self.magic_swift_value,
             power_value=self.power_value,
+            temp_swift_value=self.temp_swift_value,
+            temp_heavy_value=self.temp_heavy_value,
             extra_hits=self.extra_hits,
             setup_modifiers=set(self.setup_modifiers),
         )
@@ -261,7 +273,7 @@ _reg(CardDef(ERROR_CARD_ID, 'Error', '错误', 0, 0, 'bloom', 0, 'Common',
 
 
 _reg(CardDef('Basic', 'Basic', '基本', 1, 0, 'thorn', 10, 'Common',
-             '最基本的卡牌。', '造成6D'))
+             '最基本的卡牌。', '造成8D'))
 
 _reg(CardDef('Bone', 'Bone', '骨头', 2, 0, 'thorn', 5, 'Common',
              '坚固且好用。', '造成12D'))
@@ -279,7 +291,7 @@ _reg(CardDef('Light', 'Light', '轻', 0, 0, 'thorn', 5, 'Common',
              '轻如鸿毛，却能伤人两次。', '造成2D×2（2子瓣）'))
 
 _reg(CardDef('Fang', 'Fang', '尖牙', 2, 0, 'thorn', 5, 'Common',
-             '吸取对手的生命来为你回复。', '造成8D; 造成伤害时+4H'))
+             '吸取对手的生命来为你回复。', '造成8D；造成伤害时回复造成伤害80%（向下取整）的H'))
 
 _reg(CardDef('Triangle', 'Triangle', '三角形', 2, 0, 'thorn', 8, 'Common',
              '量变引起质变。', '造成(6+3×三角形层数)D；造成伤害时获得一层三角形，上限4层'))
@@ -352,10 +364,12 @@ _reg(CardDef('Battery', 'Battery', '电池', 3, 0, 'root', 5, 'Common',
              '受击时会漏电。', '受到物理伤害时，对攻击者造成3电伤'))
 
 _reg(CardDef('MagicLeaf', 'Magic Leaf', '魔法叶', 1, 0, 'root', 5, 'Common',
-             '不再能造成伤害了，但它可以回复魔力。', '自己回合开始时+1M'))
+             '不再能造成伤害了，但它可以回复魔力。',
+             '自己回合开始时+1M；触发：4M，选择目标造成12D，然后摧毁自身',
+             trigger_cost_e=0, trigger_cost_m=4, trigger_effect_text='选择目标造成12D，然后摧毁自身'))
 
-_reg(CardDef('MagicYucca', 'Magic Yucca', '魔法丝兰', 3, 0, 'root', 5, 'Common',
-             '生成更多魔力。', '自己回合开始时+2M'))
+_reg(CardDef('MagicYucca', 'Magic Yucca', '魔法丝兰', 4, 0, 'root', 5, 'Common',
+             '生成更多魔力。', '魔力上限+5；装备时和自己回合开始时，将一张[魔法球][共生+放逐+虚无]加入手牌'))
 
 _reg(CardDef('MagicBattery', 'Magic Battery', '魔法电池', 3, 0, 'root', 3, 'Common',
              '每次受击都会激发魔力涌动。', '受到物理伤害时+1M(每回合上限3M)'))
@@ -391,9 +405,13 @@ _reg(CardDef('Nazar', 'Nazar', '邪眼护符', 5, 0, 'guard', 3, 'Common',
              '邪眼的力量似乎为你减免了大部分伤害。', '所有物理伤害减少9(最少减至1)，受到两次10点及以上物理伤害后效果消失（敌方使用攻击牌时）',
              response_trigger='thorn'))
 
-_reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 0, 8, 'guard', 3, 'Common',
-             '有魔力的护符，让敌方的低耗技能化为虚无。', '响应：敌方使用技能牌；获得2层魔法邪眼（0-1E技能牌无效，>=2E去除一层，用完消失）',
+_reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 0, 3, 'guard', 3, 'Common',
+             '有魔力的护符，让敌方的高耗技能化为虚无。', '响应：敌方使用技能牌；获得2层魔法邪眼。存在时，敌方使用3E及以上技能牌无效，然后减少1层',
              response_trigger='bloom'))
+
+_reg(CardDef('GoldenNazar', 'Golden Nazar', '黄金邪眼', 3, 0, 'guard', 5, 'Unusual',
+             '镀金的护符会为装备留下最后一道防线。', '响应：自身装备即将被摧毁；所有自身装备获得2层装备护甲。装备护甲：存在时，若装备将被摧毁，则使其不被摧毁并消耗1层装备护甲',
+             response_trigger='equipment_destroy'))
 
 _reg(CardDef('MagicBubble', 'Magic Bubble', '魔法泡泡', 0, 4, 'guard', 3, 'Common',
              '泡泡的魔法版本。', '使敌方使用的技能牌失效（敌方使用技能牌时）',

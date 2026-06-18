@@ -293,6 +293,7 @@ class ModCard:
         self.effects = data.get('effects', [])
         self.scripts = data.get('scripts', {}) if isinstance(data.get('scripts', {}), dict) else {}
         self.trigger_cost_e = data.get('trigger_cost_e', -1)
+        self.trigger_cost_m = data.get('trigger_cost_m', 0)
         self.trigger_effect_text = data.get('trigger_effect_text', '')
         self.trigger_effects = data.get('trigger_effects', [])
         self.damage = data.get('damage', 0)
@@ -332,6 +333,7 @@ class ModCard:
             'gain_m': self.gain_m, 'armor': self.armor, 'dodge': self.dodge,
             'poison': self.poison, 'burn': self.burn,
             'trigger_cost_e': self.trigger_cost_e,
+            'trigger_cost_m': self.trigger_cost_m,
             'trigger_effect_text': self.trigger_effect_text,
             'trigger_effects': self.trigger_effects,
             'response_trigger': self.response_trigger,
@@ -382,6 +384,7 @@ class ModCard:
             magic_swift_value=self.magic_swift_value,
             damage=self.damage,
             hits=self.hits,
+            trigger_cost_m=self.trigger_cost_m,
         )
 
 

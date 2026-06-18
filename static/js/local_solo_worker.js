@@ -333,7 +333,7 @@ function cardEventRequiresSelfDestroy(def, entry) {
     const walk = value => {
         if (Array.isArray(value)) return value.some(walk);
         if (!value || typeof value !== 'object') return false;
-        if (String(value.type || value.op || '') === 'destroy_self_equipment') return true;
+        if (['destroy_self_equipment', 'destroy_current_equipment'].includes(String(value.type || value.op || ''))) return true;
         const params = value.params && typeof value.params === 'object' ? value.params : {};
         return ['steps', 'effects', 'body', 'then', 'else', 'on_cancel'].some(key => walk(value[key]) || walk(params[key]));
     };
@@ -369,6 +369,8 @@ class LocalCard {
         this.swift_value = Math.max(0, toInt(source.swift_value, 0));
         this.magic_swift_value = Math.max(0, toInt(source.magic_swift_value, 0));
         this.power_value = Math.max(0, toInt(source.power_value, 0));
+        this.temp_swift_value = Math.max(0, toInt(source.temp_swift_value, 0));
+        this.temp_heavy_value = Math.max(0, toInt(source.temp_heavy_value, 0));
         this.extra_hits = Math.max(0, toInt(source.extra_hits, 0));
         this.setup_modifiers = new Set(source.setup_modifiers || []);
         if (this.def_id === 'Tomato') {
@@ -390,7 +392,7 @@ class LocalCard {
 
     get cost_e() {
         const base = this.cost_e_override != null ? this.cost_e_override : toInt(this.def().cost_e, 0);
-        return Math.max(0, base - this.mimic_discount);
+        return Math.max(0, base + this.temp_heavy_value - this.mimic_discount - this.swift_value - this.temp_swift_value);
     }
 
     get cost_m() {
@@ -429,6 +431,8 @@ class LocalCard {
             swift_value: this.swift_value,
             magic_swift_value: this.magic_swift_value,
             power_value: this.power_value,
+            temp_swift_value: this.temp_swift_value,
+            temp_heavy_value: this.temp_heavy_value,
             extra_hits: this.extra_hits,
             setup_modifiers: Array.from(this.setup_modifiers),
             durability: this.durability,
@@ -444,6 +448,7 @@ class LocalEquipment {
         this.turns_equipped = 0;
         this.uses_this_turn = 0;
         this.corruption_active = false;
+        this.armor = 0;
         this.custom_vars = {};
     }
 
@@ -463,6 +468,7 @@ class LocalEquipment {
             turns_equipped: this.turns_equipped,
             uses_this_turn: this.uses_this_turn,
             corruption_active: this.corruption_active,
+            armor: this.armor,
             custom_vars: { ...(this.custom_vars || {}) },
         };
     }
@@ -2683,7 +2689,9 @@ class LocalSoloEngine {
         const fusionExtra = Math.max(0, toInt(target.fusion_level, 1) - 1);
         const fissionExtra = Math.max(0, toInt(target.fission_level, 1) - 1);
         const tomatoLayer = target.def_id === 'Tomato' ? Math.min(6, Math.max(0, toInt(target.held_turns, 0))) : 0;
-        return Math.ceil((fusionExtra + fissionExtra + tomatoLayer) / 2);
+        const layered = ['swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value']
+            .reduce((sum, key) => sum + Math.max(0, toInt(target[key], 0)), 0);
+        return Math.ceil((fusionExtra + fissionExtra + tomatoLayer + layered) / 2);
     }
 
     canPayMimicSpecialCost(playerId, target) {
@@ -2782,6 +2790,11 @@ class LocalSoloEngine {
         this._active_effect_context = { ...(prevContext || {}), ...(context || {}) };
         try {
             for (const effect of (effects || [])) {
+                const type = effect && typeof effect === 'object' ? String(effect.type || '') : String(effect || '');
+                const params = effect && typeof effect === 'object' ? (effect.params || {}) : {};
+                if (choice && choice.cancelled && ['request_target', 'request_card', 'request_confirm'].includes(type) && !params.continue_on_cancel) {
+                    break;
+                }
                 this.runOneEffect(playerId, card, effect, choice);
             }
         } finally {
@@ -3264,6 +3277,49 @@ class LocalSoloEngine {
         });
     }
 
+    effect_add_equipment_armor(playerId, card, params, log) {
+        const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
+        this.resolveTargets(playerId, params.target || 'self').forEach(tid => {
+            const ps = this.players[tid];
+            if (!ps) return;
+            let changed = 0;
+            ps.equipment.forEach(eq => {
+                if (eq.card_instance && eq.card_instance.flags && eq.card_instance.flags.has('indestructible')) return;
+                eq.armor = Math.max(0, toInt(eq.armor, 0)) + amount;
+                changed += 1;
+            });
+            if (changed > 0 && log) this.logMsg(log);
+        });
+    }
+
+    effect_destroy_current_equipment(playerId, card, params, log) {
+        const instanceId = card && card.instance_id;
+        if (instanceId == null) return;
+        for (let ownerId = 0; ownerId < this.players.length; ownerId += 1) {
+            const eq = this.players[ownerId].equipment.find(item => item.card_instance && item.card_instance.instance_id === instanceId);
+            if (eq) {
+                const destroyed = this.destroyEquipment(ownerId, eq);
+                if (destroyed && log) this.logMsg(log);
+                return;
+            }
+        }
+    }
+
+    effect_give_magic_orb_to_hand(playerId, card, params, log) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const ps = this.players[targetId];
+        if (!ps || !ps.canAddToHand()) return;
+        const newCard = new LocalCard('ManaOrb');
+        ['symbiosis', 'exile', 'void'].forEach(flag => newCard.instance_flags.add(flag));
+        this.applySetupModifiersToCard(targetId, newCard);
+        ps.addToHand(newCard);
+        this._last_created_card_instance_id = newCard.instance_id;
+        if (this._active_effect_context) {
+            this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
+        }
+        if (log) this.logMsg(log);
+    }
+
     effect_cost_e(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'self');
         const amount = this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
@@ -3294,8 +3350,13 @@ class LocalSoloEngine {
         let changed = 0;
         target.hand.forEach(handCard => {
             if (cardType && handCard.card_type !== cardType) return;
-            const base = handCard.cost_e_override != null ? toInt(handCard.cost_e_override, 0) : toInt(handCard.def().cost_e, 0);
-            handCard.cost_e_override = Math.max(0, base + direction * amount);
+            if (direction < 0) {
+                handCard.temp_swift_value = Math.max(0, toInt(handCard.temp_swift_value, 0)) + amount;
+                handCard.instance_flags.add('temp_swift');
+            } else {
+                handCard.temp_heavy_value = Math.max(0, toInt(handCard.temp_heavy_value, 0)) + amount;
+                handCard.instance_flags.add('temp_heavy');
+            }
             changed += 1;
         });
         if (changed > 0 && log) this.logMsg(log);
@@ -3410,7 +3471,24 @@ class LocalSoloEngine {
         if (card && card.def_id === 'Mimic' && !this.payMimicSpecialCost(playerId, target, card)) return;
         const copy = target.copy();
         copy.instance_id = randintId();
-        if (!(card && card.def_id === 'Mimic')) this.applySetupModifiersToCard(playerId, copy);
+        if (card && card.def_id === 'Mimic') {
+            const halfExtra = (value, base = 0) => base + Math.ceil(Math.max(0, toInt(value, base) - base) / 2);
+            copy.fusion_level = halfExtra(target.fusion_level, 1);
+            copy.fusion_multiplier = copy.fusion_level;
+            copy.fission_level = halfExtra(target.fission_level, 1);
+            copy.fission_count = Math.max(0, copy.fission_level - 1);
+            ['swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value'].forEach(key => {
+                copy[key] = Math.ceil(Math.max(0, toInt(target[key], 0)) / 2);
+            });
+            copy.held_turns = target.def_id === 'Tomato' ? Math.ceil(Math.max(0, toInt(target.held_turns, 0)) / 2) : copy.held_turns;
+            if (copy.swift_value > 0) copy.instance_flags.add('swift');
+            if (copy.magic_swift_value > 0) copy.instance_flags.add('magic_swift');
+            if (copy.power_value > 0) copy.instance_flags.add('power');
+            if (copy.temp_swift_value > 0) copy.instance_flags.add('temp_swift');
+            if (copy.temp_heavy_value > 0) copy.instance_flags.add('temp_heavy');
+        } else {
+            this.applySetupModifiersToCard(playerId, copy);
+        }
         this.players[playerId].addToHand(copy);
         this.enforceUniqueCardsForPlayer(playerId, copy);
         this._last_created_card_instance_id = copy.instance_id;
@@ -3848,6 +3926,43 @@ class LocalSoloEngine {
         }
     }
 
+    effect_apply_jungle_status(playerId, card, params, log, choice) {
+        const targetId = this.resolveTarget(playerId, params.target || 'enemy', choice);
+        if (!this.players[targetId]) return;
+        const status = String(params.status || 'jungle:shield');
+        const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 1, card, 1, choice));
+        const current = this.customStatusValue(targetId, status);
+        this.setCustomStatusAliasGroup(targetId, status, [status], current + amount);
+        const label = String(params.label || status.split(':').pop() || status);
+        if (log !== false) this.logMsg(log || `${this.pn(targetId)}获得${amount}层${label}`);
+    }
+
+    effect_jungle_root_gain(playerId, card, params, log, choice) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self', choice);
+        if (!this.players[targetId]) return;
+        const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 2, card, 2, choice));
+        const current = this.customStatusValue(targetId, 'jungle:root_status', 'jungle:root', 'root_status');
+        this.setCustomStatusAliasGroup(targetId, 'jungle:root_status', ['jungle:root_status', 'jungle:root', 'root_status'], current + amount);
+        const { eq } = this.findEquipmentByCardInstanceId(card && card.instance_id);
+        if (eq) {
+            eq.custom_vars = eq.custom_vars || {};
+            eq.custom_vars.jungle_root_layers = toInt(eq.custom_vars.jungle_root_layers, 0) + amount;
+        }
+        this.logMsg(log || `${this.pn(targetId)}获得${amount}层树根`);
+    }
+
+    effect_jungle_root_remove_owned(playerId, card, params, log, choice) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self', choice);
+        if (!this.players[targetId]) return;
+        const { eq } = this.findEquipmentByCardInstanceId(card && card.instance_id);
+        const amount = eq ? toInt((eq.custom_vars || {}).jungle_root_layers, 0) : 0;
+        if (amount > 0) {
+            const current = this.customStatusValue(targetId, 'jungle:root_status', 'jungle:root', 'root_status');
+            this.setCustomStatusAliasGroup(targetId, 'jungle:root_status', ['jungle:root_status', 'jungle:root', 'root_status'], Math.max(0, current - amount));
+            eq.custom_vars.jungle_root_layers = 0;
+        }
+    }
+
     effect_electric_web_arm(playerId, card, params, log, choice) {
         const targetId = this.resolveTarget(playerId, params.target || 'target', choice);
         const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 2, card, 2, choice));
@@ -3866,35 +3981,10 @@ class LocalSoloEngine {
         const targetId = this.resolveTarget(playerId, params.target || 'choice_target');
         const ps = this.players[targetId];
         if (!ps) return;
-        const currentId = card ? toInt(card.instance_id, -1) : -1;
-        const played = [...(ps.cards_played_this_turn_instance_ids || [])].reverse();
-        let returned = null;
-        for (const instanceId of played) {
-            const iid = toInt(instanceId, -1);
-            if (iid === currentId) continue;
-            let found = null;
-            let zone = null;
-            ['discard', 'exile'].some(zoneName => {
-                const cards = ps[zoneName] || [];
-                const idx = cards.findIndex(c => toInt(c.instance_id, -2) === iid);
-                if (idx >= 0) {
-                    found = cards[idx];
-                    zone = cards;
-                    return true;
-                }
-                return false;
-            });
-            if (!found || (found.flags && found.flags.has && found.flags.has('rebound'))) continue;
-            if (!ps.canAddToHand()) break;
-            zone.splice(zone.indexOf(found), 1);
-            found.mimic_discount = 0;
-            found.instance_flags.add('symbiosis');
-            ps.addToHand(found);
-            returned = found;
-            break;
-        }
+        ps.cogwheel_active = true;
+        ps.cogwheel_exclude_instance_id = card ? toInt(card.instance_id, -1) : -1;
+        this.returnCogwheelCardsNow(targetId);
         if (log) this.logMsg(log);
-        else if (returned) this.logMsg(`${this.pn(playerId)}使用齿轮，${returned.name_cn}回到手中并获得共生`);
     }
 
     effect_remove_status(playerId, card, params, log, choice) {
@@ -4118,13 +4208,14 @@ class LocalSoloEngine {
     }
 
     hasEquipment(playerId, defId) {
-        const ps = this.players[playerId];
-        if (!ps) return false;
+        if (!this.players[playerId]) return false;
         const target = String(defId || '').toLowerCase();
-        return ps.equipment.some(eq => {
+        return this.players.some((ps, ownerId) => (ps.equipment || []).some(eq => {
+            const effectTarget = toInt(eq.effect_target ?? ownerId, ownerId);
+            if (effectTarget !== playerId) return false;
             const id = String(eq.def_id || '').toLowerCase();
             return id === target || id.endsWith(`:${target}`);
-        });
+        }));
     }
 
     cardIs(card, ...ids) {
@@ -4153,7 +4244,7 @@ class LocalSoloEngine {
                 const id = String(eq.def_id || '').toLowerCase();
                 const effectTarget = toInt(eq.effect_target ?? eq.owner ?? ownerId, ownerId);
                 if (effectTarget !== sid) return;
-                if (id === 'cutter' || id.endsWith(':cutter')) bonus += 1;
+                if (id === 'cutter' || id.endsWith(':cutter')) bonus += 2;
             });
         });
         return bonus;
@@ -4263,8 +4354,9 @@ class LocalSoloEngine {
             const fragile = this.customStatusValue(targetId, 'jungle:fragile', 'fragile');
             dmg = Math.max(0, dmg - ps.armor - rootArmor + fragile);
             if (ps.sponge_active && dmg > 0) {
-                ps.poison += Math.floor(dmg / 2);
-                dmg = 0;
+                const converted = Math.min(10, dmg);
+                ps.poison += Math.floor(converted / 2);
+                dmg = Math.max(0, dmg - converted);
             }
             dmg = this.applyUniversalDamageShields(targetId, dmg, attackerId, '攻击');
             ps.health -= dmg;
@@ -4380,12 +4472,24 @@ class LocalSoloEngine {
         card.cost_e_override = null;
         card.cost_m_override = null;
         card.mimic_discount = 0;
+        card.power_value = 0;
+        card.temp_swift_value = 0;
+        card.temp_heavy_value = 0;
+        card.instance_flags.delete('power');
+        card.instance_flags.delete('temp_swift');
+        card.instance_flags.delete('temp_heavy');
         ps.discard.push(card);
     }
 
     destroyEquipment(ownerId, eq) {
         const ps = this.players[ownerId];
         if (!eq || !ps.equipment.includes(eq)) return false;
+        if (eq.card_instance && eq.card_instance.flags && eq.card_instance.flags.has('indestructible')) return false;
+        if (toInt(eq.armor, 0) > 0) {
+            eq.armor = Math.max(0, toInt(eq.armor, 0) - 1);
+            this.logMsg(`${this.pn(ownerId)}的${cardName(eq.def_id)}装备护甲抵消了摧毁（剩余${eq.armor}）`);
+            return false;
+        }
         if (ps.equipment_protection > 0) {
             ps.equipment_protection -= 1;
             this.logMsg(`${this.pn(ownerId)}的装备保护抵消了摧毁！`);
@@ -4422,7 +4526,11 @@ class LocalSoloEngine {
     customStatusValue(playerId, ...names) {
         const ps = this.players[playerId];
         const statuses = (ps && ps.custom_statuses) || {};
-        return names.reduce((sum, name) => sum + Math.max(0, toInt(statuses[name], 0)), 0);
+        if (!ps) return 0;
+        return names.reduce((maxValue, name) => {
+            const key = String(name || '');
+            return Math.max(maxValue, Math.max(0, toInt(statuses[key], 0)), Math.max(0, toInt(ps[key], 0)));
+        }, 0);
     }
 
     actionLimitStatusValue(playerId, attr, ...aliases) {
@@ -4526,6 +4634,7 @@ class LocalSoloEngine {
             if (queued) return queued;
         }
         const totalE = card.cost_e + this.getExtraEForCard(playerId, card);
+        card._paid_e_this_play = totalE;
         this.spendResource(playerId, 'elixir', totalE, card);
         this.spendResource(playerId, 'magic', card.cost_m, card);
         ps.cards_played_this_turn[card.def_id] = toInt(ps.cards_played_this_turn[card.def_id], 0) + 1;
@@ -4558,6 +4667,22 @@ class LocalSoloEngine {
             return result;
         }
         this.negated_card = false;
+        if (card.card_type === 'bloom') {
+            const opponentId = 1 - playerId;
+            const opponent = this.players[opponentId];
+            const stacks = opponent ? toInt(opponent.custom_statuses.magic_nazar, 0) : 0;
+            const paidE = card._paid_e_this_play != null ? toInt(card._paid_e_this_play, 0) : Math.max(0, toInt(card.cost_e, 0));
+            if (opponent && stacks > 0 && paidE >= 3) {
+                this.logCardPlay(playerId, card);
+                opponent.custom_statuses.magic_nazar = stacks - 1;
+                if (opponent.custom_statuses.magic_nazar <= 0) delete opponent.custom_statuses.magic_nazar;
+                this.logMsg(`${this.pn(opponentId)}的魔法邪眼使${this.pn(playerId)}的${cardName(card.def_id)}失效`);
+                if (card.flags.has('exile')) ps.exile.push(card);
+                else this.discardCard(ps, card);
+                this.dispatchCardEvent('card_used', playerId, card, playerId, null, null, choice);
+                return result;
+            }
+        }
         if (this.cardNeedsChoice(card) && !this.choiceSatisfiesRequest(card, choice)) {
             const queued = this.queueCardChoice(playerId, card, choice, true);
             if (queued) return queued;
@@ -4685,7 +4810,8 @@ class LocalSoloEngine {
             return { success: false, error: '选择已取消' };
         }
         const dupCount = toInt(ps.cards_played_this_turn[card.def_id], 0);
-        this.spendResource(playerId, 'elixir', card.cost_e + dupCount, card);
+        card._paid_e_this_play = card.cost_e + dupCount;
+        this.spendResource(playerId, 'elixir', card._paid_e_this_play, card);
         this.spendResource(playerId, 'magic', card.cost_m, card);
         ps.cards_played_this_turn[card.def_id] = dupCount + 1;
         const handCard = ps.findHandCard(card.instance_id);
@@ -4765,7 +4891,7 @@ class LocalSoloEngine {
             this.players[responderId].nazar_active = true;
             this.players[responderId].nazar_big_hits = 0;
         } else if (counterCard.def_id === 'MagicNazar') {
-            this.players[responderId].equipment_protection += 1;
+            this.players[responderId].custom_statuses.magic_nazar = toInt(this.players[responderId].custom_statuses.magic_nazar, 0) + 2;
         } else if (counterCard.def_id === 'MagicBubble') {
             this.players[responderId].negate_next_skill = true;
         }
@@ -4780,15 +4906,18 @@ class LocalSoloEngine {
         const eq = ps.findEquipment(equipmentInstanceId);
         if (!eq) return { success: false, error: '装备不存在' };
         const triggerCost = toInt(eq.card_def.trigger_cost_e, -1);
+        const triggerCostM = Math.max(0, toInt(eq.card_def.trigger_cost_m ?? eq.card_def.v2_resource?.trigger_cost_m, 0));
         if (triggerCost < 0 && !this.hasCardEvent(eq.card_def, 'equipment_trigger')) return { success: false, error: '该装备没有触发效果' };
         if (eq.turns_equipped < 1) return { success: false, error: '装备需要装备一回合后才能触发' };
         if (triggerCost > ps.elixir) return { success: false, error: '能量不足' };
+        if (triggerCostM > ps.magic) return { success: false, error: '魔力不足' };
         const maxUses = this.equipmentTriggerMaxUses(eq);
         if (maxUses > 0 && toInt(eq.uses_this_turn, 0) >= maxUses) return { success: false, error: `该装备本回合最多触发${maxUses}次` };
         if (cardEventRequiresSelfDestroy(eq.card_def, 'equipment_trigger') && toInt(ps.equipment_protection, 0) > 0) {
             return { success: false, error: '装备保护会抵消摧毁，无法触发' };
         }
         if (triggerCost > 0) this.spendResource(playerId, 'elixir', triggerCost, eq.card_instance);
+        if (triggerCostM > 0) this.spendResource(playerId, 'magic', triggerCostM, eq.card_instance);
         eq.uses_this_turn = toInt(eq.uses_this_turn, 0) + 1;
         const targetId = Number.isInteger(Number(targetPlayerId)) ? toInt(targetPlayerId, 1 - playerId) : 1 - playerId;
         if (this.hasCardEvent(eq.card_def, 'equipment_trigger')) {

@@ -748,6 +748,10 @@ class GameEngine2v2(GameEngine):
         finally:
             self._active_choice = None
 
+    def _magic_nazar_counter_player_ids(self, player_id: int, card: Optional[CardInstance] = None,
+                                        choice: Optional[dict] = None) -> List[int]:
+        return [pid for pid in self.get_all_enemies(player_id) if self.players[pid].health > 0]
+
     def _atomic_reveal_enemy_hand(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         if not self._is_valid_player_id(target_id):
@@ -781,7 +785,9 @@ class GameEngine2v2(GameEngine):
         if not (needs_response or needs_precision_response):
             return None
         target_id = self._selected_effect_target(player_id, choice)
-        if self._would_heal(card):
+        if card.card_type == 'bloom':
+            responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
+        elif self._would_heal(card):
             responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
         elif self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0:
             responder_ids = [target_id]
@@ -864,6 +870,7 @@ class GameEngine2v2(GameEngine):
             if getattr(self, 'pending_v2_ui', None) is not None:
                 return {'success': True, 'needs_v2_ui': True, 'card': card.to_dict()}
         extra_e = self._get_extra_e_for_card(player_id, card)
+        card._paid_e_this_play = int(card.cost_e + extra_e)
         self._spend_resource(player_id, 'elixir', card.cost_e + extra_e, card)
         self._spend_resource(player_id, 'magic', card.cost_m, card)
         ps.remove_hand_card(card_instance_id)
@@ -880,7 +887,9 @@ class GameEngine2v2(GameEngine):
                 target_id = self._selected_effect_target(player_id, choice)
                 counter_cards = []
                 has_payable_counter = False
-                if self._would_heal(card):
+                if card.card_type == 'bloom':
+                    responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
+                elif self._would_heal(card):
                     responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
                 elif self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0:
                     responder_ids = [target_id]
@@ -1093,6 +1102,12 @@ class GameEngine2v2(GameEngine):
         if self._would_heal(card):
             return any(
                 self._can_pay_counter_card(enemy_id, c) and c.card_def.response_trigger in ('any', 'heal')
+                for enemy_id in self.get_all_enemies(player_id)
+                for c in self.players[enemy_id].hand
+            )
+        if card.card_type == 'bloom':
+            return any(
+                self._can_pay_counter_card(enemy_id, c) and c.card_def.response_trigger in ('any', 'bloom')
                 for enemy_id in self.get_all_enemies(player_id)
                 for c in self.players[enemy_id].hand
             )
@@ -1459,8 +1474,9 @@ class GameEngine2v2(GameEngine):
             effective_armor = int(ps.armor) + root_armor - fragile
             dmg = max(0, dmg - effective_armor)
             if ps.sponge_active and dmg > 0:
-                ps.poison += dmg // 2
-                dmg = 0
+                converted = min(10, dmg)
+                ps.poison += converted // 2
+                dmg = max(0, dmg - converted)
             dmg = self._apply_universal_damage_shields(target_id, dmg, attacker_id, '攻击', DAMAGE_TYPE_PHYSICAL)
             ps.health -= dmg
             total_dealt += dmg
@@ -1541,9 +1557,12 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '该装备没有触发效果'}
         if eq.turns_equipped < 1:
             return {'success': False, 'error': '装备需要装备一回合后才能触发'}
-        trigger_cost = max(0, eq.card_def.trigger_cost_e)
+        trigger_cost = max(0, int(eq.card_def.trigger_cost_e or 0))
+        trigger_cost_m = max(0, int(getattr(eq.card_def, 'trigger_cost_m', 0) or eq.card_def.v2_resource.get('trigger_cost_m', 0) or 0))
         if trigger_cost > ps.elixir:
             return {'success': False, 'error': '能量不足'}
+        if trigger_cost_m > ps.magic:
+            return {'success': False, 'error': '魔力不足'}
         if not self._is_valid_effect_target(player_id, target_player_id):
             return {'success': False, 'error': '对方无法被选中'}
         if self._equipment_trigger_forbids_self_target(eq.card_def) and target_player_id == player_id:
@@ -1563,6 +1582,7 @@ class GameEngine2v2(GameEngine):
         if self._card_event_requires_self_destroy(eq.card_def, 'equipment_trigger') and int(getattr(ps, 'equipment_protection', 0) or 0) > 0:
             return {'success': False, 'error': '装备保护会抵消摧毁，无法触发'}
         self._spend_resource(player_id, 'elixir', trigger_cost, eq.card_instance)
+        self._spend_resource(player_id, 'magic', trigger_cost_m, eq.card_instance)
         eq.uses_this_turn = int(getattr(eq, 'uses_this_turn', 0)) + 1
         if has_mod_trigger and self._run_card_event(player_id, eq.card_instance, 'equipment_trigger', None,
                                                     {'source_id': player_id, 'target_id': target_player_id}):
