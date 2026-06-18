@@ -11659,7 +11659,6 @@ function renderEventSelect(data) {
     const container = $('event-options');
     if (!container) return;
     container.classList.remove('event-reveal-container');
-    container.innerHTML = '';
     const rerollBtn = $('btn-event-reroll');
     // If already selected, this render shouldn't happen (player should be in draft view)
     // But just in case, show a simple message
@@ -11699,6 +11698,7 @@ function renderEventSelect(data) {
         return;
     }
     container.dataset.eventSelectSignature = eventSignature;
+    container.innerHTML = '';
     const eventsRow = document.createElement('div');
     eventsRow.className = 'event-options';
     events.forEach((ev, i) => {
