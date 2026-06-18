@@ -80,7 +80,7 @@ CARD_I18N = {
     'Fries': {
         'name': _t('薯条', 'Fries', 'Frites', 'Batatas fritas', 'Картофель фри', 'フライドポテト'),
         'desc': _t('高热量食品，补充大量生命。隐隐约约地写着“M”？', 'High-calorie food that restores a lot of health. Is there a faint “M” on it?', 'Un aliment très calorique qui restaure beaucoup de vie. Un “M” y est-il vaguement inscrit ?', 'Comida altamente calórica que restaura muita vida. Há um “M” meio apagado?', 'Калорийная еда, восстанавливающая много здоровья. Кажется, там написано «M»?', '高カロリー食品で大量に生命を回復する。うっすら“M”と書いてある？'),
-        'effect': _t('+12H', '+12H', '+12H', '+12H', '+12H', '+12H'),
+        'effect': _t('回复目标12H', '+12H', '+12H', '+12H', '+12H', '+12H'),
     },
     'Rose': {
         'name': _t('玫瑰', 'Rose', 'Rose', 'Rosa', 'Роза', 'バラ'),

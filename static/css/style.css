@@ -11301,7 +11301,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
   margin: calc((1 - var(--skin-scale)) * var(--skin-design-size) / -2);
 }
 
-.skin-avatar.is-defeated {
+.skin-avatar.is-defeat-enter {
   animation: skinAvatarDefeatRotate 520ms cubic-bezier(.2, .85, .2, 1) both;
 }
 

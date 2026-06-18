@@ -2095,8 +2095,10 @@ function inlineCardChipHtml(cardDict) {
     return chip.outerHTML;
 }
 
-function bindInlineCardChips(root) {
+function bindInlineCardChips(root, options = {}) {
     if (!root || !root.querySelectorAll) return;
+    const interactive = options.interactive === true;
+    if (!interactive) return;
     root.querySelectorAll('.inline-card-chip.choice-card-token[data-inline-card-chip="1"]').forEach(chip => {
         if (chip.dataset.inlineChipBound === '1') return;
         chip.dataset.inlineChipBound = '1';
@@ -2534,6 +2536,7 @@ const skinLookByPlayerId = new Map();
 const skinDamageMoodByPlayerId = new Map();
 const skinMouthTByPlayerId = new Map();
 const skinCorruptionByPlayerId = new Map();
+const skinDefeatAnimatedPlayerIds = new Set();
 let socket = null;
 let socketConnectUrl = '';
 let socketCreateSeq = 0;
@@ -3965,7 +3968,7 @@ function renderOpeningEventGallery(list, detail, q) {
         row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
         row.innerHTML = `<div class="gallery-row-title">${getLocalizedEventText(ev, 'name') || '?'}</div><div class="gallery-row-meta">${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</div>`;
         row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
-        bindInlineCardChips(row);
+        bindInlineCardChips(row, { interactive: true });
         list.appendChild(row);
     });
     const selectedEventId = gallerySelectedId ? String(gallerySelectedId).replace('event:', '') : null;
@@ -3980,7 +3983,7 @@ function renderOpeningEventGallery(list, detail, q) {
         <p><b>ID：</b>${ev.id}</p>
         <p>${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</p>
     </div>`;
-    bindInlineCardChips(detail);
+    bindInlineCardChips(detail, { interactive: true });
 }
 
 function getAllStatusDefs() {
@@ -7074,7 +7077,8 @@ function showTermIntroForCard(cardDict, cardOptions = {}) {
     cardSlot.appendChild(card);
     title.textContent = blinded ? '? · ?' : `${getCardName(cardDef)} · 术语说明`;
     list.innerHTML = buildCardIntroTermsHtml(introCardDict);
-    bindInlineCardChips(list);
+    bindInlineCardChips(cardSlot, { interactive: true });
+    bindInlineCardChips(list, { interactive: true });
     overlay.classList.remove('visible');
     overlay.classList.toggle('card-flying', isUsableRect(sourceRect));
     overlay.classList.remove('hidden');
@@ -8532,6 +8536,14 @@ function renderSkinAvatar(skinInput, options = {}) {
     const storedMouthT = pid != null ? Number(skinMouthTByPlayerId.get(pid)) : NaN;
     const mouthT = defeated ? 1 : (damageMood && Number.isFinite(storedMouthT) ? storedMouthT : 0);
     const defeatedClass = defeated ? ' is-defeated' : '';
+    let defeatEnterClass = '';
+    if (defeated) {
+        const defeatKey = pid != null ? `p:${pid}` : `o:${String(options.defeatedSeed || options.lookOwner || skin.primary_color || 'skin')}`;
+        if (!skinDefeatAnimatedPlayerIds.has(defeatKey)) {
+            skinDefeatAnimatedPlayerIds.add(defeatKey);
+            defeatEnterClass = ' is-defeat-enter';
+        }
+    }
     const defeatedSeed = String(options.defeatedSeed || options.playerId || options.lookOwner || skin.primary_color || 'skin');
     const defeatedRotate = 10 + (hashStringToHue(defeatedSeed) % 341);
     const style = `--skin-main:${escapeHtml(skin.primary_color)};--skin-border:${escapeHtml(border)};--skin-defeat-rotate:${defeatedRotate}deg;${skinLookCssVars(look)}`;
@@ -8539,7 +8551,7 @@ function renderSkinAvatar(skinInput, options = {}) {
         ? ` data-player-id="${pid}"`
         : ` data-look-owner="${escapeHtml(options.lookOwner || 'local')}"`;
     return `
-        <div class="skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${invertedClass}${defeatedClass}${corrupted ? ' is-corrupted' : ''}${corruptAnimateClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr} style="${style}">
+        <div class="skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${invertedClass}${defeatedClass}${defeatEnterClass}${corrupted ? ' is-corrupted' : ''}${corruptAnimateClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr} style="${style}">
             <div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>
             <div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>
             <svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">
@@ -12293,6 +12305,7 @@ function resetMatchRuntimeState(options = {}) {
     recentlyPlayedExileCards.clear();
     lastRenderedTurnKey = '';
     lastStatusSignatures.clear();
+    skinDefeatAnimatedPlayerIds.clear();
     if (responseTimerId) {
         clearInterval(responseTimerId);
         responseTimerId = null;
