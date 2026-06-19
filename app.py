@@ -65,6 +65,7 @@ from db import (
     change_username,
     change_user_password,
     cleanup_expired_friend_requests_once,
+    cleanup_old_dm_messages_once,
     create_report_entry,
     create_remember_token,
     create_user,
@@ -268,6 +269,7 @@ _replay_cleanup_lock = threading.Lock()
 _replay_cleanup_started = False
 _lobby_idle_cleanup_started = False
 _friend_request_cleanup_started = False
+_dm_cleanup_started = False
 _event_loop_watchdog_started = False
 _pending_interaction_watchdog_started = False
 _next_room_id = 0
@@ -332,6 +334,8 @@ LOBBY_CHAT_CACHE = {
     'beta': deque(maxlen=200),
 }
 ADMIN_GAME_CHAT_CACHE = deque(maxlen=500)
+SOCIAL_DM_THREADS_CACHE = {}
+AUTH_SKIN_SAVE_LAST_AT = {}
 LOBBY_CHAT_RATE = {}
 LOBBY_CHAT_SEQUENCE = {
     'release': 0,
@@ -2182,6 +2186,33 @@ def ensure_friend_request_cleanup_started():
         socketio.start_background_task(_friend_request_cleanup_worker)
     except Exception:
         threading.Thread(target=_friend_request_cleanup_worker, name='friend-request-cleanup', daemon=True).start()
+
+
+def _dm_cleanup_worker():
+    while True:
+        try:
+            try:
+                socketio.sleep(1800)
+            except Exception:
+                time.sleep(1800)
+            if not DB_AVAILABLE:
+                continue
+            ok, error = cleanup_old_dm_messages_once()
+            if not ok and error:
+                admin_event('db', f'dm cleanup skipped: {error}')
+        except Exception as exc:
+            admin_event('error', f'dm cleanup worker error: {exc}')
+
+
+def ensure_dm_cleanup_started():
+    global _dm_cleanup_started
+    if _dm_cleanup_started:
+        return
+    _dm_cleanup_started = True
+    try:
+        socketio.start_background_task(_dm_cleanup_worker)
+    except Exception:
+        threading.Thread(target=_dm_cleanup_worker, name='dm-cleanup', daemon=True).start()
 
 
 def _pending_created_at(pending):
@@ -7602,6 +7633,16 @@ def api_auth_skin():
     user_id = session.get('user_id')
     if not user_id:
         return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    try:
+        user_id_int = int(user_id)
+    except Exception:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    now_mono = time.monotonic()
+    last_save = float(AUTH_SKIN_SAVE_LAST_AT.get(user_id_int) or 0)
+    if now_mono - last_save < 2:
+        user = get_user_by_id(user_id)
+        return jsonify({'success': True, 'user': auth_user_payload(user), 'skin': public_skin_config((user or {}).get('skin'))})
+    AUTH_SKIN_SAVE_LAST_AT[user_id_int] = now_mono
     data = request.get_json(silent=True) or {}
     skin = data.get('skin', data)
     try:
@@ -7651,7 +7692,6 @@ def api_auth_me():
         payload = ban_error_payload(status, reason_key='error') if status.get('banned') else {'error': '账号已被封禁'}
         payload.update({'authenticated': False, 'db_available': True})
         return _clear_remember_cookie(jsonify(payload))
-    begin_user_online_session(user.get('id'))
     user = get_user_by_id(user.get('id')) or user
     _set_account_session(user)
     response = jsonify({'authenticated': True, 'db_available': True, 'user': auth_user_payload(user)})
@@ -7764,13 +7804,23 @@ def api_social_dm_threads():
     if auth_error:
         return auth_error
     try:
+        limit = max(1, min(int(request.args.get('limit', 50) or 50), 50))
+    except Exception:
+        limit = 50
+    cache_key = (int(user_id), limit)
+    now_mono = time.monotonic()
+    cached = SOCIAL_DM_THREADS_CACHE.get(cache_key)
+    if cached and now_mono - cached.get('at', 0) < 3:
+        return jsonify({'success': True, **(cached.get('data') or {})})
+    try:
         started = time.perf_counter()
-        data, error = list_dm_threads(user_id, limit=request.args.get('limit', 50))
+        data, error = list_dm_threads(user_id, limit=limit)
         db_slow_log('/api/social/dm/threads', (time.perf_counter() - started) * 1000, 'dm_threads')
     except sqlite3.OperationalError as exc:
         return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
+    SOCIAL_DM_THREADS_CACHE[cache_key] = {'at': now_mono, 'data': data or {}}
     return jsonify({'success': True, **(data or {})})
 
 
@@ -7781,15 +7831,30 @@ def api_social_dm_messages():
     user_id, _, auth_error = _require_account_json()
     if auth_error:
         return auth_error
-    data, error = get_dm_messages(
-        user_id,
-        request.args.get('thread_id'),
-        mark_read=str(request.args.get('mark_read', '1')).lower() not in ('0', 'false', 'no'),
-        limit=request.args.get('limit', 100),
-    )
+    try:
+        limit = max(1, min(int(request.args.get('limit', 50) or 50), 50))
+    except Exception:
+        limit = 50
+    mark_read = str(request.args.get('mark_read', '0')).lower() in ('1', 'true', 'yes')
+    try:
+        data, error = get_dm_messages(
+            user_id,
+            request.args.get('thread_id'),
+            mark_read=mark_read,
+            limit=limit,
+        )
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
-    _emit_dm_update_for_user(user_id)
+    if mark_read:
+        for key in list(SOCIAL_DM_THREADS_CACHE.keys()):
+            try:
+                if int(key[0]) == int(user_id):
+                    SOCIAL_DM_THREADS_CACHE.pop(key, None)
+            except Exception:
+                continue
+        _emit_dm_update_for_user(user_id)
     return jsonify({'success': True, **(data or {})})
 
 
@@ -7834,15 +7899,18 @@ def api_social_dm_send():
         except Exception as exc:
             admin_event('error', f'failed to persist severe dm mute: {exc}')
         return jsonify({'success': False, **muted_error_payload(300, message='消息包含高风险内容，已被拦截并临时禁言')}), 403
-    result, error = send_dm_message(
-        user_id,
-        target_identifier=data.get('identifier'),
-        target_user_id=data.get('target_user_id'),
-        message=text,
-        normalized_message=normalized_message,
-        risk_level=risk_level,
-        hidden=False,
-    )
+    try:
+        result, error = send_dm_message(
+            user_id,
+            target_identifier=data.get('identifier'),
+            target_user_id=data.get('target_user_id'),
+            message=text,
+            normalized_message=normalized_message,
+            risk_level=risk_level,
+            hidden=False,
+        )
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
     recipient_id = None
@@ -7851,6 +7919,12 @@ def api_social_dm_send():
         recipient_id = int(sent.get('recipient_user_id'))
     except Exception:
         recipient_id = None
+    for key in list(SOCIAL_DM_THREADS_CACHE.keys()):
+        try:
+            if int(key[0]) in (int(user_id), int(recipient_id or -1)):
+                SOCIAL_DM_THREADS_CACHE.pop(key, None)
+        except Exception:
+            continue
     _emit_dm_update_for_user(user_id)
     _emit_dm_update_for_user(recipient_id)
     return jsonify({'success': True, **(result or {})})
@@ -11281,6 +11355,7 @@ def start_replay_cleanup_thread():
 
 start_replay_cleanup_thread()
 ensure_friend_request_cleanup_started()
+ensure_dm_cleanup_started()
 
 
 if __name__ == '__main__':

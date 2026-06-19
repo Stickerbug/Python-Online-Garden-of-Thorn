@@ -13,7 +13,7 @@
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
   const betaExactKeys = new Set(['gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated', 'gtn_hidden_features_enabled']);
   const betaKey = (key) => window.__GTN_BETA_MODE__ && betaExactKeys.has(key) ? `gtn_beta_${key.slice(4)}` : key;
-  const supportedLangs = new Set(['zh', 'en', 'fr', 'pt', 'ja']);
+  const supportedLangs = new Set(['zh', 'en', 'fr', 'ja']);
   let lang = localStorage.getItem(betaKey('gtn_lang')) || 'zh';
   if (!supportedLangs.has(lang)) {
     lang = 'zh';
@@ -69,6 +69,7 @@
     <button class="account-mode-tab active" type="button" data-account-panel-tab="info">账号信息</button>
     <button class="account-mode-tab" type="button" data-account-panel-tab="username">修改用户名</button>
     <button class="account-mode-tab" type="button" data-account-panel-tab="password">修改密码</button>
+    <button class="account-mode-tab" type="button" data-account-panel-tab="delete">注销账户</button>
   </div>
   <div id="account-auth-form" class="account-auth-form">
     <div class="account-mode-tabs">
@@ -119,12 +120,15 @@
   </div>
   <div id="account-delete-section" class="account-auth-form hidden">
     <div class="account-form-title">注销账户</div>
-    <div class="account-rule-text danger">注销后账号会被禁用，ID保留；如需恢复请联系管理员。</div>
+    <div class="account-rule-text danger">注销后账号将被禁用。</div>
     <button id="btn-account-delete-start" class="btn btn-danger" type="button">注销账户</button>
     <div id="account-delete-warning" class="account-delete-warning hidden">
-      <div>这是危险操作。确认后账号将被软注销，并退出当前登录。</div>
+      <div>这是危险操作。确认后账号将被注销，并退出当前登录。</div>
       <div id="account-delete-countdown" class="account-rule-text">请等待15秒</div>
-      <button id="btn-account-delete-confirm" class="btn btn-danger" type="button" disabled>确认注销</button>
+      <div class="account-delete-actions">
+        <button id="btn-account-delete-cancel" class="btn btn-secondary" type="button">取消</button>
+        <button id="btn-account-delete-confirm" class="btn btn-danger" type="button" disabled>确认注销</button>
+      </div>
     </div>
   </div>
   <p id="account-error" class="error-text"></p>
@@ -661,7 +665,6 @@
 <option value="zh">简体中文</option>
 <option value="en">English (US)</option>
 <option value="fr">Français</option>
-<option value="pt">Português (Brasil)</option>
 <option value="ja">日本語</option>
 </select>
 </div>
@@ -860,7 +863,6 @@
     }
   };
   T.fr = { ...T.en, subtitle: 'Combat de cartes en réseau local', nickname: 'Pseudo', nicknamePlaceholder: 'Saisir un pseudo', enterLobby: 'Entrer dans le salon', soloTraining: 'Entraînement solo', settings: 'Paramètres', loadLast: 'Charger', saveDecks: 'Sauver decks', startTraining: 'Commencer', back: 'Retour', searchCards: 'Chercher cartes', soloDeckA: 'Votre deck', soloDeckB: 'Deck adverse', soloEventA: 'Événement de départ', soloEventB: 'Événement adverse', lobby: 'Salon', onlinePlayers: 'Joueurs en ligne', onlineCount: 'En ligne: 0', ongoingGames: 'Parties en cours', messagePlaceholder: 'Saisir un message...', send: 'Envoyer', backHome: "Retour à l'accueil", draft: 'Phase de draft', reroll: 'Relancer', selectEvent: 'Choisir événement', selectEventDesc: 'Choisir un événement de départ', opponent: 'Adversaire', oppInfo: 'Main:0 Deck:0', battleLog: 'Journal de combat', you: 'Vous', youInfo: 'Main:0 Deck:0 Défausse:0', dragToPlay: 'Glisser pour jouer', endTurn: 'Fin du tour', viewDeck: 'Voir le deck', setNextDraw: 'Fixer prochaine pioche', pauseEdit: 'Pause édition', surrender: 'Abandonner', switchPerspective: 'Changer de perspective', leaveSpectate: "Quitter l'observation", rematch: 'Rejouer', returnLobby: 'Retour au salon', modEditor: 'Éditeur de mod', modPlaceholder: 'Collez ou modifiez le JSON du mod ici...', loadMod: 'Charger le mod', save: 'Enregistrer', validateJson: 'Valider le JSON', appearance: 'Apparence', theme: 'Thème', light: 'Clair', dark: 'Sombre', language: 'Langue', server: 'Serveur', address: 'Adresse', serverPlaceholder: 'Laisser vide pour le serveur par défaut', mods: 'Mods', noMods: 'Aucun fichier de mod', cancel: 'Annuler', rotatePrompt: 'Veuillez jouer en mode paysage', rotateSub: 'Passez en mode paysage', continueEnter: 'Continuer' };
-  T.pt = { ...T.en, subtitle: 'Batalha de cartas em rede local', nickname: 'Apelido', nicknamePlaceholder: 'Digite um apelido', enterLobby: 'Entrar no Lobby', soloTraining: 'Treino Solo', settings: 'Configurações', loadLast: 'Carregar Último', saveDecks: 'Salvar Decks', startTraining: 'Iniciar Treino', back: 'Voltar', searchCards: 'Buscar cartas', soloDeckA: 'Seu Deck', soloDeckB: 'Deck Oponente', soloEventA: 'Evento inicial', soloEventB: 'Evento do oponente', onlinePlayers: 'Jogadores Online', onlineCount: 'Online: 0', ongoingGames: 'Partidas em andamento', messagePlaceholder: 'Digite uma mensagem...', send: 'Enviar', backHome: 'Voltar ao Início', draft: 'Fase de Draft', reroll: 'Rerrolar', selectEvent: 'Escolher Evento', selectEventDesc: 'Escolha um evento inicial', opponent: 'Oponente', oppInfo: 'Mão:0 Deck:0', battleLog: 'Registro de Batalha', you: 'Você', youInfo: 'Mão:0 Deck:0 Descarte:0', dragToPlay: 'Arraste para Jogar', endTurn: 'Finalizar Turno', viewDeck: 'Ver Deck', setNextDraw: 'Definir Próxima Compra', pauseEdit: 'Pausar e Editar', surrender: 'Render-se', switchPerspective: 'Trocar Perspectiva', leaveSpectate: 'Sair da Observação', rematch: 'Jogar Novamente', returnLobby: 'Voltar ao Lobby', modEditor: 'Editor de Mod', modPlaceholder: 'Cole ou edite o JSON do mod aqui...', loadMod: 'Carregar Mod', save: 'Salvar', validateJson: 'Validar JSON', appearance: 'Aparência', theme: 'Tema', light: 'Claro', dark: 'Escuro', language: 'Idioma', server: 'Servidor', address: 'Endereço', serverPlaceholder: 'Deixe vazio para o servidor padrão', mods: 'Mods', noMods: 'Nenhum arquivo de mod encontrado', rotatePrompt: 'Jogue no modo paisagem', rotateSub: 'Gire para o modo paisagem', continueEnter: 'Continuar' };
   T.ja = { ...T.en, subtitle: 'LANカード対戦', nickname: 'ニックネーム', nicknamePlaceholder: 'ニックネームを入力', enterLobby: 'ロビーに入る', soloTraining: 'ソロ練習場', settings: '設定', loadLast: '前回を読み込む', saveDecks: 'デッキ保存', startTraining: '開始', searchCards: 'カード検索', soloDeckA: '自分のデッキ', soloDeckB: '相手デッキ', soloEventA: '自分の開局イベント', soloEventB: '相手の開局イベント', lobby: 'ロビー', onlinePlayers: 'オンラインプレイヤー', onlineCount: 'オンライン: 0', ongoingGames: '進行中の対戦', messagePlaceholder: 'メッセージを入力...', send: '送信', backHome: 'ホームに戻る', draft: 'ドラフトフェイズ', reroll: 'リロール', selectEvent: 'イベント選択', selectEventDesc: 'オープニングイベントを選択', opponent: '相手', oppInfo: '手札:0 デッキ:0', battleLog: 'バトルログ', you: 'あなた', youInfo: '手札:0 デッキ:0 捨て札:0', dragToPlay: 'ドラッグしてプレイ', endTurn: 'ターン終了', viewDeck: 'デッキ確認', setNextDraw: '次のドロー設定', pauseEdit: '中断して編集', surrender: '降参', switchPerspective: '視点切替', leaveSpectate: '観戦終了', rematch: '再戦', returnLobby: 'ロビーに戻る', modEditor: 'Modエディター', modPlaceholder: 'ここにMod JSONを貼り付けるか編集...', loadMod: 'Modを読み込む', validateJson: 'JSONを検証', appearance: '外観', theme: 'テーマ', light: 'ライト', dark: 'ダーク', language: '言語', server: 'サーバー', address: 'アドレス', serverPlaceholder: '空欄なら既定サーバーを使用', mods: 'Mod', noMods: 'Modファイルが見つかりません', cancel: 'キャンセル', rotatePrompt: '横向きでプレイしてください', rotateSub: '横向きにしてください', continueEnter: '続ける' };
   const t = T[window.__bootLang] || T.zh;
   const setText = (sel, value) => { const el = document.querySelector(sel); if (el) el.textContent = value; };

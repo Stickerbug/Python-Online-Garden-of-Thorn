@@ -776,6 +776,12 @@ body {
   display: none;
 }
 
+.account-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .account-popover .form-row {
   display: flex;
   align-items: center;

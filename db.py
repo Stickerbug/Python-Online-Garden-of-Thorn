@@ -23,6 +23,7 @@ FRIEND_REQUEST_TTL_DAYS = 30
 REMEMBER_TOKEN_DAYS = 60
 DM_RETENTION_DAYS = 60
 DM_THREAD_MAX_BYTES = 100 * 1024
+_DM_MARK_READ_LAST_AT = {}
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
 ROLE_TYPES = {'admin', 'staff', 'contributor', 'sponsor', 'none'}
 ROLE_COLOR_TOKENS = {'admin', 'bloom', 'guard', 'thorn', 'root', 'neutral'}
@@ -851,7 +852,7 @@ def verify_user(username, password):
         if row is None or not check_password_hash(row['password_hash'], str(password or '')):
             return None, '用户名或密码错误'
         if 'deleted_at' in row.keys() and row['deleted_at']:
-            return None, '账号已注销，如需恢复请联系管理员'
+            return None, '账号已注销'
         row = _clear_expired_user_ban(conn, row)
         ban_status = get_user_ban_status(user_id=row['id'])
         if ban_status.get('banned'):
@@ -901,6 +902,9 @@ def begin_user_online_session(user_id):
     except (TypeError, ValueError):
         return False
     with get_db_connection() as conn:
+        row = conn.execute('SELECT online_session_started_at FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None or row['online_session_started_at']:
+            return bool(row is not None)
         conn.execute(
             '''
             UPDATE users
@@ -1904,7 +1908,12 @@ def verify_remember_token(cookie_value):
         return None
     now = utc_now()
     with get_db_connection() as conn:
-        conn.execute('DELETE FROM remember_tokens WHERE expires_at < ?', (now,))
+        cleanup_cutoff_key = '_last_expired_remember_cleanup'
+        last_cleanup = getattr(verify_remember_token, cleanup_cutoff_key, 0.0)
+        do_cleanup = time.monotonic() - float(last_cleanup or 0) >= 3600
+        if do_cleanup:
+            conn.execute('DELETE FROM remember_tokens WHERE expires_at < ?', (now,))
+            setattr(verify_remember_token, cleanup_cutoff_key, time.monotonic())
         row = conn.execute(
             '''
             SELECT rt.*, u.*
@@ -1923,8 +1932,16 @@ def verify_remember_token(cookie_value):
             conn.execute('DELETE FROM remember_tokens WHERE selector = ?', (selector,))
             conn.commit()
             return None
-        conn.execute('UPDATE remember_tokens SET last_used_at = ? WHERE selector = ?', (now, selector))
-        conn.commit()
+        try:
+            last_used = datetime.fromisoformat(str(row['last_used_at'] or '').replace('Z', '+00:00'))
+        except Exception:
+            last_used = None
+        should_touch = last_used is None or (utc_now_dt() - last_used).total_seconds() >= 3600
+        if should_touch:
+            conn.execute('UPDATE remember_tokens SET last_used_at = ? WHERE selector = ?', (now, selector))
+            conn.commit()
+        elif do_cleanup:
+            conn.commit()
         return row_to_user(row)
 
 
@@ -2764,6 +2781,18 @@ def _cleanup_old_dm_messages(conn):
     conn.execute('DELETE FROM dm_messages WHERE created_at < ?', (cutoff,))
 
 
+def cleanup_old_dm_messages_once():
+    try:
+        with get_db_connection() as conn:
+            started = time.perf_counter()
+            _cleanup_old_dm_messages(conn)
+            conn.commit()
+            db_slow_log('dm_cleanup', (time.perf_counter() - started) * 1000, 'dm_cleanup')
+            return True, None
+    except sqlite3.OperationalError as exc:
+        return False, str(exc)
+
+
 def _trim_dm_thread_bytes(conn, thread_id):
     try:
         tid = int(thread_id)
@@ -2848,7 +2877,7 @@ def list_dm_threads(user_id, limit=50):
         uid = int(user_id)
     except (TypeError, ValueError):
         return None, '请先登录账号'
-    safe_limit = max(1, min(int(limit or 50), 100))
+    safe_limit = max(1, min(int(limit or 50), 50))
     with get_db_connection() as conn:
         started = time.perf_counter()
         self_row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
@@ -2897,15 +2926,14 @@ def list_dm_threads(user_id, limit=50):
         return {'threads': items, 'unread_count': total_unread}, None
 
 
-def get_dm_messages(user_id, thread_id, mark_read=True, limit=100):
+def get_dm_messages(user_id, thread_id, mark_read=True, limit=50):
     try:
         uid = int(user_id)
         tid = int(thread_id)
     except (TypeError, ValueError):
         return None, '请先登录账号'
-    safe_limit = max(1, min(int(limit or 100), 200))
+    safe_limit = max(1, min(int(limit or 50), 50))
     with get_db_connection() as conn:
-        _cleanup_old_dm_messages(conn)
         thread = conn.execute(
             'SELECT * FROM dm_threads WHERE id = ? AND (user_low_id = ? OR user_high_id = ?)',
             (tid, uid, uid),
@@ -2915,10 +2943,24 @@ def get_dm_messages(user_id, thread_id, mark_read=True, limit=100):
         other_id = thread['user_high_id'] if thread['user_low_id'] == uid else thread['user_low_id']
         other = conn.execute('SELECT * FROM users WHERE id = ?', (other_id,)).fetchone()
         if mark_read:
-            conn.execute(
-                'UPDATE dm_messages SET read_at = COALESCE(read_at, ?) WHERE thread_id = ? AND recipient_user_id = ? AND read_at IS NULL',
-                (utc_now(), tid, uid),
-            )
+            mark_key = (uid, tid)
+            now_monotonic = time.monotonic()
+            last_mark = float(_DM_MARK_READ_LAST_AT.get(mark_key) or 0)
+            if now_monotonic - last_mark >= 5:
+                unread_row = conn.execute(
+                    '''
+                    SELECT 1 FROM dm_messages
+                    WHERE thread_id = ? AND recipient_user_id = ? AND read_at IS NULL AND hidden = 0
+                    LIMIT 1
+                    ''',
+                    (tid, uid),
+                ).fetchone()
+                if unread_row is not None:
+                    conn.execute(
+                        'UPDATE dm_messages SET read_at = ? WHERE thread_id = ? AND recipient_user_id = ? AND read_at IS NULL',
+                        (utc_now(), tid, uid),
+                    )
+                    _DM_MARK_READ_LAST_AT[mark_key] = now_monotonic
         rows = conn.execute(
             '''
             SELECT * FROM dm_messages
@@ -2948,7 +2990,6 @@ def send_dm_message(sender_user_id, target_identifier=None, target_user_id=None,
     if not text:
         return None, '消息不能为空'
     with get_db_connection() as conn:
-        _cleanup_old_dm_messages(conn)
         sender = conn.execute('SELECT * FROM users WHERE id = ?', (sender_id,)).fetchone()
         if sender is None:
             return None, '请先登录账号'

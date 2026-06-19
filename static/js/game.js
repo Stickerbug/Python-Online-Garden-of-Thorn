@@ -346,75 +346,6 @@ I18N.fr = { ...I18N.en,
     continue_enter: 'Continuer',
     mod_default_name: 'Mod {0}'
 };
-I18N.pt = { ...I18N.en,
-    round: 'Turno', your_turn: 'Seu Turno', opponent_turn: 'Turno do Oponente', you: 'Você', opponent: 'Oponente',
-    draw_phase: 'Fase de Compra', game_over: 'Fim de Jogo', invite: 'Convidar', accept: 'Aceitar', decline: 'Recusar', return_lobby: 'Voltar ao Lobby',
-    draft_phase: 'Fase de Draft', draft_reroll: 'Rerrolar', draft_selected: 'Selecionado', select_event: 'Escolher Evento', waiting_opponent: 'Aguardando Oponente',
-    play_card: 'Jogar', end_turn: 'Finalizar Turno', surrender: 'Render-se', view_deck: 'Ver Deck', counter: 'Contra-atacar', no_counter: 'Sem Contra', waiting_response: 'Aguardando resposta',
-    victory: 'Vitória', defeat: 'Derrota', draw: 'Empate', rematch: 'Jogar Novamente', connecting: 'Conectando...', disconnected: 'Desconectado',
-    login_failed: 'Falha no login', nickname: 'Apelido', enter_lobby: 'Entrar no Lobby', online_players: 'Jogadores Online', no_other_players: 'Nenhum outro jogador',
-    invite_sent: 'Convite Enviado', invite_received: 'Convite Recebido', invite_message: 'convida você para uma partida', invite_declined: 'Convite Recusado',
-    ongoing_games: 'Partidas em Andamento', spectate: 'Assistir', draft_info: 'Draft', draft_complete: 'Draft Completo', draft_waiting: 'Aguardando oponente terminar o draft',
-    draft_cost: 'Custo', select_this_event: 'Selecionar Este Evento', event_selected: 'Evento Selecionado', event_waiting: 'Aguardando oponente selecionar evento',
-    drag_to_play: 'Arraste para Jogar', cannot_play: 'Não Pode Jogar',
-    enemy_attack: 'Ataque Inimigo', enemy_skill: 'Habilidade Inimiga', enemy_destroy_equip: 'Destruir Equipamento Inimigo',
-    use_card: 'Usar', insufficient_resources: 'Recursos Insuficientes', choose_attack_for: 'Escolher ataque para', choose_equip_for: 'Escolher equipamento',
-    choose_discard_for: 'Escolher descarte', choose_from_deck_for: 'Escolher do deck', choose_from_discard_for: 'Escolher da pilha de descarte', choose_hand_for: 'Escolher da mão',
-    choose_from_enemy_hand_for: 'Escolher da mão inimiga', choose_attack_group_for: 'Escolher grupo de ataque',
-    no_attack_cards: 'Sem cartas de ataque', no_enemy_equipment: 'Sem equipamento inimigo', no_enemy_hand: 'Sem mão inimiga', deck_empty: 'Deck vazio', discard_empty: 'Pilha de descarte vazia',
-    no_same_attack: 'Sem cartas de ataque iguais', confirm_surrender: 'Confirmar rendição?', request_rematch: 'Pedir revanche',
-    opponent_rematch: 'Oponente pede revanche', rematch_sent: 'Pedido de revanche enviado', rematch_waiting: 'Aguardando oponente', rematch_agreed: 'Revanche aceita',
-    rematch_progress: 'Jogar novamente ({0}/{1})',
-    agree_rematch: 'Aceitar revanche', you_win: 'Vitória!', you_lose: 'Derrota!', you_draw: 'Empate!',
-    send: 'Enviar', cancel: 'Cancelar', ok: 'OK', close: 'Fechar', notice: 'Aviso',
-    opponent_disconnected: 'Oponente desconectou', opponent_reconnected: 'Oponente reconectou',
-    reconnect_title: 'Reconectar', reconnect_prompt: 'Reconectar à partida anterior?', reconnecting: 'Reconectando...', reconnect_timeout: 'Tempo de reconexão esgotado',
-    mod_mismatch_title: 'Mods incompatíveis', mod_mismatch_msg: 'Mods inconsistentes, não é possível iniciar a partida',
-    switch_perspective: 'Trocar Perspectiva', leave_spectate: 'Sair da Observação', switch_to_perspective: 'Trocar para perspectiva de {0}',
-    battle_log: 'Registro de Batalha', equip_info: '{0}({1} turnos)', equip_corruption: '[Corrompido]', equip_trigger_cost: '{0} Ativar:{1}E',
-    status_poison: 'Veneno', status_fire: 'Queima', status_toxic: 'Tóxico', status_triangle: 'Triângulo', status_dodge: 'Esquiva',
-    status_nazar: 'Nazar', status_equip_protect: 'Prot. Equip.', status_invincible: 'Invencível', status_immune: 'Imune a status', status_stunned: 'Atordoado', status_attack_blocked: 'Atq Bloqueado', status_attack_only: 'Só Atq',
-    status_untargetable: 'Inalvejável', status_bandage: 'Bandagem', status_sponge: 'Esponja', status_shovel: 'Pá',
-    status_sluggish: 'Letargia', status_overload: 'Sobrecarga', status_foresight: 'Previsão', status_fracture: 'Fratura', status_stagnation: 'Estagnação', status_blind: 'Cegueira', status_heal_block: 'Anti-cura', status_weakness: 'Fraqueza', status_bleed: 'Sangramento', status_fragment: 'Fragmento', status_fragment_stacks: 'Fragmento',
-    flag_precision: 'Precisão', flag_exile: 'Exílio', flag_non_stackable: 'Não-acumulável', flag_indestructible: 'Indestrutível', flag_sprout: 'Brotar', flag_symbiosis: 'Simbiose', flag_copy: 'Cópia', flag_unique: 'Único', flag_swift: 'Rapidez', flag_stealth: 'Furtivo', flag_revealed: 'Revelado',
-    choose_convert_count: 'Escolher quantidade de conversão', choose_magic_card_n: 'Carta mágica n°{0}', choose_source_card_n: 'Carta fonte n°{0}',
-    choose_light_cards: 'Cartas de conversão Luz', choose_yggdrasil_card: 'Carta Árvore-Mundo', convert_label: 'Converter', convert_per_type: 'Máx {0} por tipo',
-    selected_count: 'Selecionado {0}/{1}', max_selection_warning: 'Não pode exceder {0}', deck_total: 'Deck: {0} cartas', view_deck_title: 'Ver Deck',
-    hand_deck_info_opp: 'Mão:{0} Deck:{1}', hand_deck_discard_info: 'Mão:{0} Deck:{1} Descarte:{2}', round_status: 'Turno {0} - {1}',
-    server_broadcast: 'Servidor: {0}', error_msg: 'Erro: {0}', lobby_status: 'Lobby - {0}', no_counter_countdown: 'Sem Contra({0})',
-    select_event_desc: 'Escolha um evento inicial', opponent_selected: 'Oponente Selecionou', opponent_selecting: 'Oponente Selecionando...',
-    card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard',
-    settings_title: 'Configurações', settings_appearance: 'Aparência', settings_theme: 'Tema', settings_lang: 'Idioma', settings_mods: 'Mods', settings_theme_light: 'Claro', settings_theme_dark: 'Escuro',
-    no_games: 'Nenhuma partida em andamento', back_to_home: 'Voltar ao Início', settings_btn: 'Configurações', settings_server: 'Servidor', settings_server_addr: 'Endereço',
-    not_your_turn: 'Não é seu turno', counter_insufficient: 'Dica: Recursos insuficientes para cartas de contra-ataque', default_status: 'Garden of Thorn',
-    game_loading: 'Carregando...', server_no_response: 'Servidor sem resposta. Verifique sua conexão.',
-    spectator_prefix: 'Espectar', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat',
-    solo_training: 'Treino Solo', load_last: 'Carregar Último', save_decks: 'Salvar Decks', start_training: 'Iniciar Treino', clear_deck: 'Limpar deck',
-    solo_deck_a: 'Seu Deck', solo_deck_b: 'Deck Oponente', search_cards: 'Buscar cartas', pause_edit: 'Pausar e Editar',
-    set_next_draw: 'Definir Próxima Compra', solo_saved: 'Decks salvos', solo_need_15: 'Ambos os decks devem ter exatamente 15 cartas',
-    solo_event_a: 'Evento inicial', solo_event_b: 'Evento do oponente', no_event: 'Nenhum',
-    edit_tags: 'Editar tags', tag_precision: 'Precisão', tag_exile: 'Exílio', tag_non_stackable: 'Não acumula',
-    tag_indestructible: 'Indestrutível', tag_sprout: 'Broto', tag_symbiosis: 'Simbiose', tag_attract: 'Atrair', tag_void: 'Vazio', tag_self_only: 'Sem alvo', tag_uncancellable: 'Não cancelável', tag_copy: 'Cópia', tag_unique: 'Único', tag_swift: 'Rapidez', tag_stealth: 'Furtivo', tag_revealed: 'Revelado', tag_infinite_exclude: 'Removido do Infinite Fire', tag_rebound: 'Retorno',
-    fusion_layer: 'Fusão', fission_layer: 'Fissão',
-    app_subtitle: 'Batalha de cartas em rede local',
-    nickname_placeholder: 'Digite um apelido',
-    message_placeholder: 'Digite uma mensagem...',
-    hand_deck_zero_opp: 'Mão:0 Deck:0',
-    hand_deck_zero_you: 'Mão:0 Deck:0 Descarte:0',
-    rotate_hint_sub: 'Gire para o modo paisagem',
-    server_placeholder: 'Deixe vazio para o servidor padrão',
-    server_hint: 'Servidor padrão: {0} (deixe vazio para usar o padrão)',
-    init_cards_mods: 'Carregando cartas e mods (/api/cards)...',
-    init_opening_events: 'Carregando eventos iniciais (/api/opening-events)...',
-    mod_editor: 'Editor de Mod',
-    mod_editor_placeholder: 'Cole ou edite o JSON do mod aqui...',
-    load_mod: 'Carregar Mod',
-    save: 'Salvar',
-    validate_json: 'Validar JSON',
-    rotate_prompt: 'Jogue em modo paisagem',
-    continue_enter: 'Continuar',
-    mod_default_name: 'Mod {0}'
-};
 I18N.ja = { ...I18N.en,
     round: 'ターン', your_turn: 'あなたのターン', opponent_turn: '相手のターン', you: 'あなた', opponent: '相手',
     draw_phase: 'ドローフェイズ', game_over: 'ゲーム終了', invite: '招待', accept: '承諾', decline: '拒否', return_lobby: 'ロビーに戻る',
@@ -521,11 +452,6 @@ I18N.fr.tutorial_victory_message = 'Félicitations, vous avez terminé le tutori
 I18N.fr.tutorial_defeat_message = 'La partie du tutoriel est perdue. Ce n’est pas grave : la prochaine sera plus fluide.';
 I18N.fr.tutorial_retry = 'Réessayer le tutoriel';
 I18N.fr.target_pick_hint = 'Cliquez sur une zone de joueur surlignée.';
-I18N.pt.tutorial_hint_play_fusioned = 'O ataque fundido está pronto. Você tem E suficiente; jogue-o para ver o dano aumentado.';
-I18N.pt.tutorial_victory_message = 'Parabéns, você concluiu o tutorial!\nDivirta-se em Garden of Thorn!';
-I18N.pt.tutorial_defeat_message = 'A partida do tutorial foi perdida. Tudo bem; a próxima será mais tranquila.';
-I18N.pt.tutorial_retry = 'Tentar tutorial de novo';
-I18N.pt.target_pick_hint = 'Clique na área de jogador destacada.';
 I18N.ja.tutorial_hint_play_fusioned = '融合した攻撃カードの準備ができました。Eは足りています。打ち出して強化後のダメージを見てみましょう。';
 I18N.ja.tutorial_victory_message = 'おめでとうございます。チュートリアルを完了しました！\nGarden of Thorn を楽しんでください！';
 I18N.ja.tutorial_defeat_message = 'チュートリアルの対局に敗北しました。大丈夫です。次の対局ではもっと動きが見えてきます。';
@@ -561,11 +487,9 @@ I18N.zh.tutorial_hint_fusion = '聚变也是 Bloom 技能牌。它会选择2-3�
 Object.assign(I18N.en, { tutorial_hint_free: 'You have seen the core actions. Now try your own line: play useful cards, watch H/E/M, then end your turn.' });
 Object.assign(I18N.zh, { tutorial_hint_free: '核心操作已经看过了。现在可以自己判断：打出合适的牌，观察 H/E/M，然后结束回合。' });
 Object.assign(I18N.fr, { tutorial_hint_free: 'Vous avez vu les actions principales. Essayez maintenant votre propre ligne : jouez les bonnes cartes, observez H/E/M, puis terminez le tour.' });
-Object.assign(I18N.pt, { tutorial_hint_free: 'Você já viu as ações principais. Agora jogue por conta própria: use cartas úteis, observe H/E/M e termine o turno.' });
 Object.assign(I18N.ja, { tutorial_hint_free: '基本操作は確認できました。ここからは自分で判断して、有効なカードを使い、H/E/Mを見てターンを終了しましょう。' });
 Object.assign(I18N.zh, { waiting_opponent_counter: '等待对方反制' });
 Object.assign(I18N.fr, { waiting_opponent_counter: 'En attente du contre adverse' });
-Object.assign(I18N.pt, { waiting_opponent_counter: 'Aguardando resposta do oponente' });
 Object.assign(I18N.ja, { waiting_opponent_counter: 'Waiting for opponent counter' });
 
 Object.assign(I18N.zh, {
@@ -703,48 +627,6 @@ Object.assign(I18N.fr, {
     tutorial_retry: 'Réessayer',
 });
 
-Object.assign(I18N.pt, {
-    about_title: 'Sobre', about_gameplay: 'Como jogar', about_credits: 'Créditos', about_contact: 'Contato',
-    credits_developer: 'Desenvolvedor', credits_design: 'Design', credits_art: 'Arte', credits_special: 'Agradecimentos',
-    rules_intro_title: 'Introdução do jogo', rules_type_thorn: 'ataques Thorn', rules_type_bloom: 'habilidades Bloom', rules_type_root: 'equipamentos Root', rules_type_guard: 'respostas Guard',
-    rules_goal_title: 'Objetivo',
-    rules_goal_text: 'Garden of Thorn 荆棘花园 é um jogo de cartas multijogador. Na maioria dos modos, seu objetivo é usar quatro tipos de cartas: {thorn}, {bloom}, {root} e {guard}, reduzir o H do lado inimigo a 0 e proteger seu lado.',
-    rules_resources_title: 'Recursos',
-    rules_resources_text: 'H(Health) é vida. Ao chegar a 0 H, o jogador geralmente perde a capacidade de agir; no 2v2, um lado perde apenas quando todos os seus jogadores são derrotados. E(Elixir) paga a maioria das cartas. M(Magic) paga algumas cartas mágicas. Normalmente, um jogador compra cartas e recupera recursos apenas no começo do próprio turno.',
-    rules_types_title: 'Tipos de carta',
-    rules_types_text: 'Cartas {thornRaw} causam dano direto, como {basic} e {bone}. Cartas {bloomRaw} curam, aplicam estados, ajustam recursos ou mudam o campo, como {fire}. Cartas {rootRaw} dão efeitos contínuos ou acionáveis depois de jogadas, como {leaf}. Cartas {guardRaw} são respostas usadas quando uma ação inimiga satisfaz sua condição.',
-    rules_flow_title: 'Fluxo do turno',
-    rules_flow_text: 'Uma partida normal geralmente começa com escolha de cartas, eventos iniciais e depois combate. No seu turno, efeitos de início, compra e recuperação são resolvidos primeiro. Depois você pode jogar cartas ou acionar equipamentos equipados há pelo menos um turno. Termine o turno para passar ao próximo jogador. No 2v2, os turnos alternam entre equipes; jogadores derrotados não mudam a ordem, mas têm seus turnos pulados.',
-    rules_keywords_title: 'Palavras-chave',
-    rules_keywords_text: '<b>Exílio</b> envia a carta ao exílio após ser jogada ou resolvida. <b>Precisão</b> faz uma ataque esquivado causar metade do dano. <b>Indestrutível</b> impede que equipamento seja destruído por efeitos de destruição. <b>Broto</b> compra cartas extras quando comprado. <b>Simbiose</b> ignora penalidades de custo por cartas de mesmo nome. O texto da carta é a fonte final.',
-    rules_examples_title: 'Exemplos',
-    rules_examples_text: '{stinger} é um ataque de Precisão com alto dano; {sewage} pode destruir equipamento; {bubble} responde a ataques e concede Esquiva. Clique no nome de uma carta para abri-la no compêndio.',
-    rules_skip_confirm_title: 'Aviso',
-    rules_skip_confirm_msg: 'Pular a introdução do jogo?\nVocê pode reabri-la em Sobre > Como jogar.',
-    gallery_title: 'Compêndio', gallery_cards: 'Cartas', gallery_tags: 'Tags', gallery_events: 'Eventos iniciais',
-    gallery_search: 'Buscar', gallery_no_items: 'Nenhuma entrada.', gallery_cards_with_tag: 'Cartas com esta tag',
-    gallery_card_count: '{0} cartas', gallery_type: 'Tipo', gallery_cost: 'Custo', gallery_tags_label: 'Tags',
-    gallery_description: 'Descrição', gallery_effect: 'Efeito', gallery_trigger: 'Acionamento',
-    gallery_back_rules: 'Voltar à introdução', gallery_explanation: 'Explicação',
-    tutorial_start: 'Tutorial', tutorial_skip: 'Pular', tutorial_intro: 'Agora vamos começar o tutorial.',
-    tutorial_hint_play: 'Jogue primeiro um ataque Thorn e observe o H do oponente.',
-    tutorial_hint_end: 'Depois de agir, pressione Finalizar turno.',
-    tutorial_hint_enemy: 'Observe o oponente. Acompanhe o registro e as barras H/E/M.',
-    tutorial_hint_deck: 'Veja seu deck de compra: pressione Ver Deck.',
-    tutorial_hint_continue: 'Continue jogando e finalize o turno. Mais tarde você comprará uma carta Guard para responder a um ataque.',
-    tutorial_hint_counter: 'Esta é a janela de resposta. Escolha uma carta Guard pagável ou deixe a contagem passar.',
-    tutorial_hint_bloom: 'Cartas Bloom curam, aplicam estados ou mudam recursos. Jogue uma e observe.',
-    tutorial_hint_root: 'Cartas Root dão efeitos contínuos ou acionáveis. Jogue uma e veja seu efeito no próximo turno.',
-    tutorial_hint_fission: 'Vamos ver tipos diferentes. Fission é uma Bloom: em ataques simples o total pode ficar parecido, mas Triangle cresce após cada acerto. Use Fission em Triangle.',
-    tutorial_hint_play_fissioned: 'Triangle agora tem Fission. Jogue-o e observe cada acerto e camada.',
-    tutorial_hint_fusion: 'Fusion também é Bloom. Ela combina 2-3 ataques de mesmo nome em uma carta mais forte.',
-    tutorial_hint_play_fusioned: 'O ataque fundido está pronto. Você tem E suficiente; jogue-o para ver o dano aumentado.',
-    tutorial_victory_message: 'Parabéns, você concluiu o tutorial!\nDivirta-se em Garden of Thorn!',
-    tutorial_defeat_message: 'A partida do tutorial foi perdida. Tudo bem; a próxima será mais tranquila.',
-    tutorial_retry: 'Tentar de novo',
-});
-
-
 Object.assign(I18N.ja, {
     about_title: '概要', about_gameplay: '遊び方', about_credits: 'クレジット', about_contact: '連絡先',
     credits_developer: '開発者', credits_design: 'デザイン', credits_art: '美術', credits_special: 'Special Thanks',
@@ -807,28 +689,6 @@ Object.assign(I18N.fr, {
     tag_desc_revealed: 'Mot-clé de visibilité. Cette carte est visible en permanence pour l\'adversaire en main.'
 });
 
-Object.assign(I18N.pt, {
-    tag_desc_precision: 'Palavra-chave de ataque. Um ataque com Precisão, ao ser esquivado, causa metade do dano em vez de falhar por completo.',
-    tag_desc_exile: 'Palavra-chave de resolução. Esta carta vai para o exílio após ser jogada ou resolvida, em vez de ir para o descarte.',
-    tag_desc_non_stackable: 'Palavra-chave de equipamento. Várias cópias podem ser equipadas, mas o mesmo efeito não acumula; cópias extras servem quando uma é destruída.',
-    tag_desc_indestructible: 'Palavra-chave de equipamento. Este equipamento não pode ser destruído por efeitos de destruição e permanece quando o dono é derrotado.',
-    tag_desc_sprout: 'Palavra-chave de compra. Ao ser comprada, esta carta compra cartas extras; limites de mão ainda se aplicam.',
-    tag_desc_symbiosis: 'Palavra-chave de custo. Esta carta ignora penalidades de custo por cartas de mesmo nome.',
-    tag_desc_attract: 'Palavra-chave de limite de mão. Quando a mão está cheia, cartas com Atração empurram primeiro cartas sem Atração.',
-    tag_desc_void: 'Palavra-chave de fim de turno. Se esta carta ficar na mão no fim do turno, ela é exilada.',
-    tag_desc_self_only: 'Palavra-chave de alvo. Esta carta não abre seleção de alvo; seu efeito resolve pelas próprias regras.',
-    tag_desc_uncancellable: 'Palavra-chave de escolha. Janelas de escolha desta carta não mostram botão de cancelar; o jogador deve concluir a escolha. Isso evita ver informação oculta de graça e cancelar, como com Magnet.',
-    tag_desc_infinite_exclude: 'Palavra-chave de modo. Esta carta não entra no conjunto aleatório de Infinite Fire por conflitar com esse modo.',
-    tag_desc_copy: 'Palavra-chave de compra. Quando esta carta entra na mão, adicione N cópias exiladas.',
-    tag_desc_unique: 'Palavra-chave de deck. Apenas uma cópia permitida; extras são exiladas.',
-    tag_desc_swift: 'Palavra-chave de custo. O custo E desta carta é reduzido em X (mínimo 0E).',
-    tag_desc_rebound: 'Palavra-chave de resolução. Depois de jogada e resolvida, esta carta volta imediatamente para a mão do usuário.',
-    tag_desc_default: 'Tag de mod ou extensão. O significado exato é definido pelo mod ou pelo efeito da carta.',
-    tag_desc_stealth: 'Palavra-chave de resposta. Esta carta não aciona a janela de resposta do oponente.',
-    tag_desc_revealed: 'Palavra-chave de visibilidade. Esta carta é visível permanentemente para o oponente na mão.'
-});
-
-
 Object.assign(I18N.ja, {
     tag_desc_precision: '攻撃キーワード。精密攻撃が回避された場合、完全に失敗せず半分のダメージを与えます。',
     tag_desc_exile: '解決先キーワード。このカードはプレイまたは解決後、捨て札ではなく追放領域へ行きます。',
@@ -865,11 +725,6 @@ Object.assign(I18N.fr, {
     tag_desc_fusion_layer: 'Mécanique spéciale, pas un tag normal. Fusion et Fission agissent ensemble quand une attaque est jouée : les dégâts totaux sont d’abord multipliés par Fusion, puis divisés en plusieurs touches de Fission. Chaque touche inflige ceil(dégâts de base × Fusion / Fission). Jouer Fusion choisit 2-3 attaques de même nom, additionne leurs niveaux de Fusion, garde le plus haut niveau de Fission et les fusionne en une carte. Quand la carte va dans la défausse, Fusion revient à 1.',
     tag_desc_fission_layer: 'Mécanique spéciale, pas un tag normal. Fission indique en combien de touches une attaque est divisée, et agit avec Fusion : chaque touche inflige ceil(dégâts de base × Fusion / Fission). Si une carte modifie les dégâts suivants à chaque touche, comme Triangle, chaque touche de Fission recalcule avec les couches actuelles. Quand la carte va dans la défausse, Fission revient à 1.'
 });
-Object.assign(I18N.pt, {
-    gallery_related_cards: 'Cartas relacionadas',
-    tag_desc_fusion_layer: 'Mecânica especial, não é uma tag normal. Fusão e Fissão funcionam juntas quando um ataque é jogado: o dano total primeiro é multiplicado pela Fusão e depois dividido em golpes de Fissão. Cada golpe causa ceil(dano base × Fusão / Fissão). Jogar Fusão escolhe 2-3 ataques de mesmo nome, soma seus níveis de Fusão, mantém o maior nível de Fissão e une tudo em uma carta. Quando a carta entra no descarte, Fusão volta ao padrão 1.',
-    tag_desc_fission_layer: 'Mecânica especial, não é uma tag normal. Fissão é o número de golpes em que um ataque é dividido, e funciona junto com Fusão: cada golpe causa ceil(dano base × Fusão / Fissão). Se uma carta muda o dano posterior a cada acerto, como Triângulo, cada golpe de Fissão recalcula com as camadas atuais. Quando a carta entra no descarte, Fissão volta ao padrão 1.'
-});
 Object.assign(I18N.ja, {
     gallery_related_cards: '関連カード',
     tag_desc_fusion_layer: '通常のタグではなく特殊な仕組みです。融合と分裂は攻撃カードを次に打ち出す時に共同で作用します。総ダメージはまず融合層で拡大され、その後分裂層の回数に分けられます。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。融合を使うと同名攻撃カード2-3枚を選び、融合層を合計し、分裂層は最大値を取り、1枚のカードにします。カードが捨て札に入ると融合は既定値1に戻ります。',
@@ -879,12 +734,10 @@ Object.assign(I18N.ja, {
 Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card names', settings_show_card_images: 'Show card images' });
 Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称', settings_show_card_images: '显示卡牌图片' });
 Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes', settings_show_card_images: 'Afficher les images des cartes' });
-Object.assign(I18N.pt, { settings_show_english_card_names: 'Mostrar nomes ingleses das cartas', settings_show_card_images: 'Mostrar imagens das cartas' });
 Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示', settings_show_card_images: 'カード画像を表示' });
 Object.assign(I18N.en, { official_mods: 'Official Mods', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found', mod_beta_warning: 'In testing, not recommended' });
 Object.assign(I18N.zh, { official_mods: '官方模组', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组', mod_beta_warning: '测试中，不推荐使用' });
 Object.assign(I18N.fr, { mod_beta_warning: 'En test, déconseillé' });
-Object.assign(I18N.pt, { mod_beta_warning: 'Em teste, não recomendado' });
 Object.assign(I18N.ja, { mod_beta_warning: 'テスト中、非推奨' });
 Object.assign(I18N.en, {
     community_current: 'Current community mod', community_disabled: 'Disabled', community_disable: 'Disable community mod',
@@ -913,15 +766,6 @@ Object.assign(I18N.fr, {
     community_uploading: 'Téléversement...', community_upload_success: 'Téléversé : {0}', community_update_success: 'Mis à jour : {0}',
     community_delete_success: 'Mod supprimé', community_file_summary: '{0} · v{1} · {2} cartes', community_cards_count: '{0} cartes'
 });
-Object.assign(I18N.pt, {
-    community_current: 'Mod comunitário atual', community_disabled: 'Desativado', community_disable: 'Desativar',
-    community_upload_hint: 'Entre para enviar. O arquivo vai direto para o armazenamento da comunidade.',
-    community_login_required: 'Entre com uma conta antes de enviar mods comunitários.',
-    community_select: 'Usar', community_selected: 'Selecionado', community_update: 'Atualizar', community_delete: 'Excluir',
-    community_owned_by_you: 'Seu', community_uploaded_at: 'Enviado {0}', community_delete_confirm: 'Excluir este mod?',
-    community_uploading: 'Enviando...', community_upload_success: 'Enviado: {0}', community_update_success: 'Atualizado: {0}',
-    community_delete_success: 'Mod excluído', community_file_summary: '{0} · v{1} · {2} cartas', community_cards_count: '{0} cartas'
-});
 Object.assign(I18N.ja, {
     community_current: '現在のコミュニティMod', community_disabled: '未使用', community_disable: 'コミュニティModを無効化',
     community_upload_hint: 'アップロードにはログインが必要です。ファイルは直接コミュニティMod保存先へ送信されます。',
@@ -934,27 +778,22 @@ Object.assign(I18N.ja, {
 Object.assign(I18N.en, { community_upload: 'Upload mod', community_json_only: 'Only .json or .gtnmod files are allowed', community_file_too_large: 'File is too large. JSON max 150KB, GTNMOD max 1MB', community_json_parse_failed: 'JSON parse failed: {0}', community_upload_url_failed: 'Could not create upload URL', community_r2_upload_failed: 'R2 upload failed: HTTP {0}', community_register_failed: 'Registration failed', community_delete_failed: 'Delete failed' });
 Object.assign(I18N.zh, { community_upload: '上传模组', community_json_only: '只允许上传 .json 或 .gtnmod 文件', community_file_too_large: '文件过大，JSON 最大 150KB，GTNMOD 最大 1MB', community_json_parse_failed: 'JSON 解析失败：{0}', community_upload_url_failed: '无法创建上传地址', community_r2_upload_failed: 'R2 上传失败 HTTP {0}', community_register_failed: '登记失败', community_delete_failed: '删除失败' });
 Object.assign(I18N.fr, { community_upload: 'Téléverser', community_json_only: 'Seuls les fichiers .json ou .gtnmod sont autorisés', community_file_too_large: 'Fichier trop volumineux. JSON 300 Ko, GTNMOD 5 Mo', community_json_parse_failed: 'Échec d’analyse JSON : {0}', community_upload_url_failed: 'Impossible de créer l’URL de téléversement', community_r2_upload_failed: 'Échec R2 : HTTP {0}', community_register_failed: 'Échec d’enregistrement', community_delete_failed: 'Échec de suppression' });
-Object.assign(I18N.pt, { community_upload: 'Enviar mod', community_json_only: 'Somente arquivos .json ou .gtnmod são permitidos', community_file_too_large: 'Arquivo grande demais. JSON 150KB, GTNMOD 1MB', community_json_parse_failed: 'Falha ao ler JSON: {0}', community_upload_url_failed: 'Não foi possível criar URL de envio', community_r2_upload_failed: 'Falha no R2: HTTP {0}', community_register_failed: 'Falha ao registrar', community_delete_failed: 'Falha ao excluir' });
 Object.assign(I18N.ja, { community_upload: 'Modをアップロード', community_json_only: '.json または .gtnmod のみアップロードできます', community_file_too_large: 'ファイルが大きすぎます。JSON 最大150KB、GTNMOD 最大1MB', community_json_parse_failed: 'JSON 解析失敗：{0}', community_upload_url_failed: 'アップロードURLを作成できません', community_r2_upload_failed: 'R2 アップロード失敗 HTTP {0}', community_register_failed: '登録失敗', community_delete_failed: '削除失敗' });
 Object.assign(I18N.en, { community_upload_progress: '{0}/{1} · {2}/s · ETA {3}', community_upload_registering: 'Registering and validating...' });
 Object.assign(I18N.zh, { community_upload_progress: '{0}/{1} · {2}/秒 · 预计剩余 {3}', community_upload_registering: '正在登记并校验...' });
 Object.assign(I18N.fr, { community_upload_progress: '{0}/{1} · {2}/s · reste {3}', community_upload_registering: 'Enregistrement et validation...' });
-Object.assign(I18N.pt, { community_upload_progress: '{0}/{1} · {2}/s · restante {3}', community_upload_registering: 'Registrando e validando...' });
 Object.assign(I18N.ja, { community_upload_progress: '{0}/{1} · {2}/秒 · 残り {3}', community_upload_registering: '登録と検証中...' });
 Object.assign(I18N.en, { mod_validation_error: 'Format error' });
 Object.assign(I18N.zh, { mod_validation_error: '格式错误' });
 Object.assign(I18N.fr, { mod_validation_error: 'Erreur de format' });
-Object.assign(I18N.pt, { mod_validation_error: 'Erro de formato' });
 Object.assign(I18N.ja, { mod_validation_error: '形式エラー' });
 Object.assign(I18N.en, { admin_prefix: 'Admin', login_admin_reserved: 'This nickname is occupied by the administrator' });
 Object.assign(I18N.zh, { admin_prefix: '管理员', login_admin_reserved: '此昵称被管理员占用' });
 Object.assign(I18N.fr, { admin_prefix: 'Admin', login_admin_reserved: 'Ce pseudo est occupé par l’administrateur' });
-Object.assign(I18N.pt, { admin_prefix: 'Administrador', login_admin_reserved: 'Este apelido está ocupado pelo administrador' });
 Object.assign(I18N.ja, { admin_prefix: '管理者', login_admin_reserved: 'このニックネームは管理者が使用しています' });
 Object.assign(I18N.en, { chat_rate_limited: 'Chat rate limit reached. Please wait.' });
 Object.assign(I18N.zh, { chat_rate_limited: '聊天发送过快，请稍后再试。' });
 Object.assign(I18N.fr, { chat_rate_limited: 'Messages trop fréquents. Veuillez patienter.' });
-Object.assign(I18N.pt, { chat_rate_limited: 'Mensagens muito frequentes. Aguarde um pouco.' });
 Object.assign(I18N.ja, { chat_rate_limited: 'チャットの送信が速すぎます。少し待ってください。' });
 Object.assign(I18N.en, {
     account: 'Account', account_guest: 'Guest Mode', account_username: 'Username', account_password: 'Password',
@@ -987,17 +826,6 @@ Object.assign(I18N.fr, {
     account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', account_password_mismatch: 'Les mots de passe ne correspondent pas', guest_enter: 'Entrer en invité',
     login_registered_reserved: 'Ce pseudo appartient à un compte'
 });
-Object.assign(I18N.pt, {
-    account: 'Conta', account_guest: 'Modo convidado', account_username: 'Usuário', account_password: 'Senha',
-    account_password_confirm: 'Confirmar senha', account_old_password: 'Senha atual', account_new_password: 'Nova senha',
-    account_new_password_confirm: 'Confirmar nova senha', account_change_password: 'Alterar senha', account_password_changed: 'Senha alterada',
-    account_change_username: 'Alterar usuário', account_info: 'Conta', account_online_time: 'Tempo online',
-    account_delete: 'Excluir conta', stats: 'Estatísticas',
-    account_login: 'Entrar', account_register: 'Registrar', account_enter: 'Entrar com conta', account_logout: 'Sair',
-    account_not_logged_in: 'Não conectado', account_logged_in_as: 'Conectado: {0}', account_stats: 'Jogos {0} / V {1} / D {2} / E {3}',
-    account_need_login: 'Entre ou registre-se primeiro', account_error: 'Erro da conta', account_password_mismatch: 'As senhas não coincidem', guest_enter: 'Entrar como convidado',
-    login_registered_reserved: 'Este nome pertence a uma conta'
-});
 Object.assign(I18N.ja, {
     account: 'アカウント', account_guest: 'ゲスト', account_username: 'ユーザー名', account_password: 'パスワード',
     account_password_confirm: '確認', account_old_password: '現在のパスワード', account_new_password: '新しいパスワード',
@@ -1029,13 +857,6 @@ Object.assign(I18N.fr, {
     skin_face_layout_placeholder: 'Disposition du visage : bientôt', skin_face_shape_placeholder: 'Forme du visage : bientôt',
     skin_sync_guest: 'Invité : local. Compte : serveur.',
     skin_save: 'Enregistrer', skin_reset: 'Réinitialiser', skin_saved: 'Apparence enregistrée'
-});
-Object.assign(I18N.pt, {
-    skin: 'Visual', skin_title: 'Visual', skin_primary_color: 'Cor', skin_eye_shape: 'Olhos',
-    skin_eye_oval: 'Oval', skin_eye_rectangle: 'Retângulo', skin_eye_diamond: 'Diamante', skin_eye_hexagon: 'Hexágono',
-    skin_face_layout_placeholder: 'Layout do rosto: em breve', skin_face_shape_placeholder: 'Formato do rosto: em breve',
-    skin_sync_guest: 'Convidado: local. Conta: servidor.',
-    skin_save: 'Salvar', skin_reset: 'Redefinir', skin_saved: 'Visual salvo'
 });
 Object.assign(I18N.ja, {
     skin: 'スキン', skin_title: 'スキン', skin_primary_color: 'メイン色', skin_eye_shape: '目の形',
@@ -1083,19 +904,6 @@ Object.assign(I18N.fr, {
     last_login: 'Dernière activité : {0}', win_rate: 'Taux de victoire : {0}%', recent_matches: 'Parties récentes',
     friend_profile: 'Profil', direct_messages: 'Messages'
 });
-Object.assign(I18N.pt, {
-    friends: 'Amigos', player_id: 'ID', friend_add_placeholder: 'Apelido ou ID', friend_add: 'Adicionar',
-    friend_requests: 'Pedidos', friend_sent: 'Enviados', friend_list: 'Meus amigos',
-    friend_accept: 'Aceitar', friend_decline: 'Recusar', friend_ignore: 'Ignorar', friend_remove: 'Remover',
-    friend_empty: 'Sem amigos.', friend_request_empty: 'Sem pedidos.', friend_sent_empty: 'Sem pedidos enviados.',
-    friend_added: 'Pedido enviado', friend_added_direct: 'Amigo adicionado', friend_removed: 'Amigo removido', friend_updated: 'Atualizado', friend_remove_confirm: 'Remover este amigo?',
-    friend_auto_added: '{0} adicionou você como amigo',
-    social: 'Social', social_login_hint: 'Entre para usar configurações sociais.',
-    social_accept_requests: 'Aceitar pedidos', social_search_nickname: 'Permitir por apelido',
-    social_search_id: 'Permitir por ID', social_settings_saved: 'Configurações salvas',
-    last_login: 'Visto por último: {0}', win_rate: 'Vitórias: {0}%', recent_matches: 'Partidas recentes',
-    friend_profile: 'Perfil', direct_messages: 'Mensagens'
-});
 Object.assign(I18N.ja, {
     friends: 'フレンド', player_id: 'ID', friend_add_placeholder: '名前またはID', friend_add: '追加',
     friend_requests: '申請', friend_sent: '送信済み', friend_list: 'フレンド',
@@ -1133,14 +941,6 @@ Object.assign(I18N.fr, {
     replay_winner: 'Vainqueur : {0}', replay_round: 'Tour {0}', replay_frame_empty: 'Aucune timeline.',
     replay_loading_progress: '{0}/{1} frames chargées', replay_prepare: 'Préparation du replay...'
 });
-Object.assign(I18N.pt, {
-    account_replays: 'Replays recentes', replay_viewer: 'Visualizador', replay_view: 'Ver',
-    replay_empty: 'Nenhum replay em 90 dias.', replay_loading: 'Carregando...',
-    replay_load_failed: 'Falha ao carregar replay', replay_prev: 'Anterior', replay_play: 'Reproduzir',
-    replay_pause: 'Pausar', replay_next: 'Próximo', replay_instant: 'Instantâneo',
-    replay_winner: 'Vencedor: {0}', replay_round: 'Rodada {0}', replay_frame_empty: 'Sem timeline.',
-    replay_loading_progress: '{0}/{1} quadros carregados', replay_prepare: 'Preparando replay...'
-});
 Object.assign(I18N.ja, {
     account_replays: '最近のリプレイ', replay_viewer: 'リプレイビューア', replay_view: '表示',
     replay_empty: '90日以内のリプレイはありません。', replay_loading: '読み込み中...',
@@ -1154,31 +954,25 @@ Object.assign(I18N.zh, { admin_prefix: '\u7ba1\u7406\u5458', login_admin_reserve
 Object.assign(I18N.en, { console_prefix: 'Console' });
 Object.assign(I18N.zh, { console_prefix: '\u63a7\u5236\u53f0' });
 Object.assign(I18N.fr, { console_prefix: 'Console' });
-Object.assign(I18N.pt, { console_prefix: 'Console' });
 Object.assign(I18N.ja, { console_prefix: 'Console' });
 Object.assign(I18N.zh, { chief_designer_prefix: '\u603b\u8bbe\u8ba1\u5e08' });
 Object.assign(I18N.fr, { chief_designer_prefix: 'Concepteur en chef' });
-Object.assign(I18N.pt, { chief_designer_prefix: 'Designer-chefe' });
 Object.assign(I18N.ja, { chief_designer_prefix: 'Chief Designer' });
 Object.assign(I18N.en, { right_angle_person_prefix: 'Right-Angle Person' });
 Object.assign(I18N.zh, { right_angle_person_prefix: '\u76f4\u89d2\u4eba' });
 Object.assign(I18N.fr, { right_angle_person_prefix: 'Personne angle droit' });
-Object.assign(I18N.pt, { right_angle_person_prefix: 'Pessoa de ângulo reto' });
 Object.assign(I18N.ja, { right_angle_person_prefix: '直角人' });
 Object.assign(I18N.en, { settings_ui_style: 'UI Style', ui_style_minimal: 'Minimal', ui_style_classic: 'Classic' });
 Object.assign(I18N.zh, { settings_ui_style: '界面风格', ui_style_minimal: '简约', ui_style_classic: '经典' });
 Object.assign(I18N.fr, { settings_ui_style: 'Style UI', ui_style_minimal: 'Minimal', ui_style_classic: 'Classique' });
-Object.assign(I18N.pt, { settings_ui_style: 'Estilo da UI', ui_style_minimal: 'Minimalista', ui_style_classic: 'Clássico' });
 Object.assign(I18N.ja, { settings_ui_style: 'UIスタイル', ui_style_minimal: 'ミニマル', ui_style_classic: 'クラシック' });
 Object.assign(I18N.en, { mimic_extra_cost: 'Cost {0}E' });
 Object.assign(I18N.zh, { mimic_extra_cost: '\u6d88\u8017 {0}E' });
 Object.assign(I18N.fr, { mimic_extra_cost: 'Co\u00fbt {0}E' });
-Object.assign(I18N.pt, { mimic_extra_cost: 'Custo {0}E' });
 Object.assign(I18N.ja, { mimic_extra_cost: '\u6d88\u8cbb {0}E' });
 Object.assign(I18N.en, { spectate_unavailable: 'Not spectatable yet' });
 Object.assign(I18N.zh, { spectate_unavailable: '\u6682\u4e0d\u80fd\u89c2\u6218' });
 Object.assign(I18N.fr, { spectate_unavailable: 'Observation indisponible' });
-Object.assign(I18N.pt, { spectate_unavailable: 'Ainda indispon\u00edvel' });
 Object.assign(I18N.ja, { spectate_unavailable: '\u307e\u3060\u89b3\u6226\u3067\u304d\u307e\u305b\u3093' });
 Object.assign(I18N.en, {
     tutorial_player_you: 'You', tutorial_player_opponent: 'Practice Opponent',
@@ -1230,23 +1024,6 @@ Object.assign(I18N.fr, {
     error_target_alive_required: 'Choisissez un joueur vivant',
     error_equipment_friendly_turn_only: 'L’équipement ne peut être déclenché que pendant un tour allié',
     error_game_already_over: 'La partie est déjà terminée',
-});
-Object.assign(I18N.pt, {
-    tutorial_player_you: 'Você', tutorial_player_opponent: 'Oponente de treino',
-    error_urf_equip_limit: 'Limite de equipamentos do Infinite Fire: {0}. Venda um equipamento primeiro.',
-    error_urf_replace_used: 'Você já substituiu uma carta neste turno',
-    error_urf_sell_used: 'Você já vendeu um equipamento neste turno',
-    error_indestructible_sell: 'Equipamento indestrutível não pode ser vendido',
-    error_invalid_player: 'Jogador inválido',
-    error_not_draft_phase: 'Não está na fase de escolha',
-    error_no_reroll: 'Sem rerrolagens restantes',
-    error_no_pending_ally_consent: 'Nenhuma solicitação de aliado pendente',
-    error_card_not_in_options: 'Esta carta não está nas opções',
-    error_card_not_in_hand_alt: 'Esta carta não está na mão',
-    error_target_self_forbidden: 'Você não pode escolher a si mesmo como alvo',
-    error_target_alive_required: 'Escolha um jogador vivo',
-    error_equipment_friendly_turn_only: 'Equipamentos só podem ser acionados em turno aliado',
-    error_game_already_over: 'A partida já terminou',
 });
 Object.assign(I18N.ja, {
     tutorial_player_you: 'あなた', tutorial_player_opponent: '練習相手',
@@ -1320,24 +1097,6 @@ Object.assign(I18N.fr, {
     compact_log_first: 'prem.',
     compact_log_order: 'Ordre',
 });
-Object.assign(I18N.pt, {
-    compact_end_turn: 'Fim',
-    compact_view_deck: 'Deck',
-    compact_urf_replace: 'Trocar',
-    compact_urf_sell: 'Vender',
-    compact_set_next_draw: 'Prox.',
-    compact_pause_edit: 'Editar',
-    compact_surrender: 'Render',
-    compact_leave_spectate: 'Sair',
-    compact_send: 'Env.',
-    compact_battle_log: 'Log',
-    compact_hand: 'Mao',
-    compact_equipment: 'Equip.',
-    compact_corrupted: 'Corromp.',
-    compact_log_start: 'Inicio',
-    compact_log_first: '1o',
-    compact_log_order: 'Ordem',
-});
 Object.assign(I18N.ja, {
     compact_end_turn: '終了',
     compact_view_deck: '山札',
@@ -1396,19 +1155,6 @@ Object.assign(I18N.fr, {
     surrender_no_pending: 'Aucune demande d’abandon en attente',
     tomato_layer: 'Couches',
 });
-Object.assign(I18N.pt, {
-    confirm_team_surrender: 'Pedir aprovacao do aliado para render-se?',
-    surrender_consent_title: 'Pedido de rendicao',
-    surrender_consent_msg: '{0} quer render-se. Concordar?',
-    surrender_accept_countdown: 'Concordar ({0})',
-    surrender_waiting_teammate: 'Aguardando aprovacao do aliado',
-    surrender_declined: 'O aliado recusou a rendicao',
-    surrender_confirmed: 'O aliado aceitou a rendicao',
-    surrender_teammate_offline: 'O aliado nao esta online',
-    surrender_pending: 'Ja existe um pedido de rendicao pendente',
-    surrender_no_pending: 'Nao ha pedido de rendicao pendente',
-    tomato_layer: 'Camadas',
-});
 Object.assign(I18N.ja, {
     confirm_team_surrender: '味方の同意を得て降参しますか？',
     surrender_consent_title: '降参確認',
@@ -1443,13 +1189,6 @@ Object.assign(I18N.fr, {
     chat_channel_team: 'Equipe',
     chat_channel_enemy: 'Adversaires',
     chat_channel_private_to: 'Prive -> {0}',
-});
-Object.assign(I18N.pt, {
-    chat_channel_label: 'Canal de chat',
-    chat_channel_public: 'Publico',
-    chat_channel_team: 'Equipe',
-    chat_channel_enemy: 'Inimigos',
-    chat_channel_private_to: 'Privado -> {0}',
 });
 Object.assign(I18N.ja, {
     chat_channel_label: 'Chat channel',
@@ -1529,21 +1268,6 @@ Object.assign(I18N.fr, {
     report_login_required: 'Connectez-vous a un compte pour signaler.',
     report_error: 'Signalement echoue : {0}',
 });
-Object.assign(I18N.pt, {
-    report: 'Denunciar',
-    report_chat: 'Denunciar mensagem',
-    report_player: 'Denunciar jogador',
-    report_match: 'Denunciar partida',
-    report_title: 'Enviar denuncia',
-    report_object: 'Objeto',
-    report_category: 'Categoria',
-    report_reason: 'Motivo',
-    report_reason_placeholder: 'Detalhes opcionais, ate 300 caracteres',
-    report_submit: 'Enviar',
-    report_success: 'Denuncia enviada',
-    report_login_required: 'Entre com uma conta para denunciar.',
-    report_error: 'Falha ao denunciar: {0}',
-});
 Object.assign(I18N.ja, {
     report: '通報',
     report_chat: 'メッセージを通報',
@@ -1560,7 +1284,7 @@ Object.assign(I18N.ja, {
     report_error: '通報失敗: {0}',
 });
 
-const SUPPORTED_LANGS = new Set(['zh', 'en', 'fr', 'pt', 'ja']);
+const SUPPORTED_LANGS = new Set(['zh', 'en', 'fr', 'ja']);
 function normalizeLang(lang) {
     return SUPPORTED_LANGS.has(lang) ? lang : 'zh';
 }
@@ -2229,7 +1953,6 @@ function getLocalizedEventText(ev, field) {
 const LOG_TEXT = {
     en: { game_start: 'Game start. {p} goes first.', round: 'Round {n}', draw_cards: '{p} draws {n} cards', recover_e: '{p} recovers {n}E', take_damage: '{p} takes {n} {source} damage (H={h})', use_deal: '{p} uses {card}: deals {n} damage', use_multi: '{p} uses {card}: deals {n} x {times} damage', use_simple: '{p} uses {card}', equip: '{p} equips {card}', exile: '{card} is exiled', counter: '{p} counters with {card}', win: '{loser} reaches 0H. {winner} wins.', draw: 'Both players reached 0H. Draw.', surrender: '{p} surrenders. {winner} wins.', poison: 'Poison', burn: 'Burn', physical: 'physical' },
     fr: { game_start: 'Debut de partie. {p} commence.', round: 'Tour {n}', draw_cards: '{p} pioche {n} cartes', recover_e: '{p} recupere {n}E', take_damage: '{p} subit {n} degats {source} (H={h})', use_deal: '{p} joue {card}: inflige {n} degats', use_multi: '{p} joue {card}: inflige {n} x {times} degats', use_simple: '{p} joue {card}', equip: '{p} equipe {card}', exile: '{card} est exile', counter: '{p} contre avec {card}', win: '{loser} tombe a 0H. {winner} gagne.', draw: 'Les deux joueurs tombent a 0H. Egalite.', surrender: '{p} abandonne. {winner} gagne.', poison: 'Poison', burn: 'Brulure', physical: 'physiques' },
-    pt: { game_start: 'Partida iniciada. {p} comeca.', round: 'Turno {n}', draw_cards: '{p} compra {n} cartas', recover_e: '{p} recupera {n}E', take_damage: '{p} sofre {n} de dano {source} (H={h})', use_deal: '{p} usa {card}: causa {n} de dano', use_multi: '{p} usa {card}: causa {n} x {times} de dano', use_simple: '{p} usa {card}', equip: '{p} equipa {card}', exile: '{card} e exilado', counter: '{p} responde com {card}', win: '{loser} chegou a 0H. {winner} vence.', draw: 'Ambos chegaram a 0H. Empate.', surrender: '{p} desistiu. {winner} vence.', poison: 'Veneno', burn: 'Queima', physical: 'fisico' },
     ru: { game_start: 'Game start. {p} goes first.', round: 'Round {n}', draw_cards: '{p} draws {n} cards', recover_e: '{p} recovers {n}E', take_damage: '{p} takes {n} {source} damage (H={h})', use_deal: '{p} uses {card}: deals {n} damage', use_multi: '{p} uses {card}: deals {n} x {times} damage', use_simple: '{p} uses {card}', equip: '{p} equips {card}', exile: '{card} is exiled', counter: '{p} counters with {card}', win: '{loser} reaches 0H. {winner} wins.', draw: 'Both players reached 0H. Draw.', surrender: '{p} surrenders. {winner} wins.', poison: 'Poison', burn: 'Burn', physical: 'physical' },
     ja: { game_start: 'Game start. {p} goes first.', round: 'Round {n}', draw_cards: '{p} draws {n} cards', recover_e: '{p} recovers {n}E', take_damage: '{p} takes {n} {source} damage (H={h})', use_deal: '{p} uses {card}: deals {n} damage', use_multi: '{p} uses {card}: deals {n} x {times} damage', use_simple: '{p} uses {card}', equip: '{p} equips {card}', exile: '{card} is exiled', counter: '{p} counters with {card}', win: '{loser} reaches 0H. {winner} wins.', draw: 'Both players reached 0H. Draw.', surrender: '{p} surrenders. {winner} wins.', poison: 'Poison', burn: 'Burn', physical: 'physical' },
 };
@@ -2274,23 +1997,6 @@ Object.assign(LOG_TEXT.fr, {
     disconnect_loss: '{p} est resté déconnecté trop longtemps. {winner} gagne.',
     team_disconnect_loss: '{p} est resté déconnecté trop longtemps. Équipe {team} gagne.',
 });
-Object.assign(LOG_TEXT.pt, {
-    solo_start: 'Treino solo começa. {p} começa.',
-    tutorial_start: 'Tutorial começa. {p} começa.',
-    urf_start: 'Infinite Fire começa. {p} joga primeiro.',
-    team_start: '2v2 começa. {p} joga primeiro.',
-    turn_order: 'Ordem dos turnos: {order}',
-    replenish_card: '{p} repõe 1 carta {type}: {card}',
-    hand_full_discard: 'A mão de {p} está cheia. {card} vai para o descarte.',
-    replace_card: '{p} substitui {old} e recebe {card}',
-    chilli_discard_draw: '{p} usa Chilli, descarta 1 carta e compra 1 carta',
-    chilli_draw: '{p} usa Chilli e compra 1 carta',
-    sell_equipment: '{p} vende {card} e recupera {e}E/{m}M',
-    team_draw: 'As duas equipes foram derrotadas. Empate.',
-    team_win: 'Equipe {team} vence.',
-    disconnect_loss: '{p} ficou desconectado tempo demais. {winner} vence.',
-    team_disconnect_loss: '{p} ficou desconectado tempo demais. Equipe {team} vence.',
-});
 Object.assign(LOG_TEXT.ja, {
     solo_start: '単人訓練開始。{p}が先攻。',
     tutorial_start: 'チュートリアル開始。{p}が先攻。',
@@ -2312,7 +2018,6 @@ Object.assign(LOG_TEXT.ja, {
 Object.assign(LOG_TEXT.en, { battery_counter: 'Battery counter' });
 Object.assign(LOG_TEXT.zh || (LOG_TEXT.zh = {}), { battery_counter: '\u7535\u6c60\u53cd\u4f24' });
 Object.assign(LOG_TEXT.fr, { battery_counter: 'contre de Batterie' });
-Object.assign(LOG_TEXT.pt, { battery_counter: 'contra-ataque da Bateria' });
 Object.assign(LOG_TEXT.ja, { battery_counter: '\u96fb\u6c60\u53cd\u6483' });
 
 const LOG_FALLBACK_REPLACE = {
@@ -2340,16 +2045,6 @@ const LOG_FALLBACK_REPLACE = {
         ['敌方', 'adversaire'], ['己方', 'soi'], ['造成', 'inflige '], ['伤害', ' dégâts'], ['回复', 'récupère '], ['获得', 'gagne '],
         ['装备了', 'équipe '], ['使用了', 'joue '], ['使用', 'joue '], ['摧毁了', 'détruit '], ['但', ' mais '],
         ['层中毒', ' Poison'], ['层灼烧', ' Brûlure'], ['层闪避', ' Esquive'], ['层装备保护', ' Protection équipement'], ['回合', ' tours'], ['张牌', ' cartes']
-    ],
-    pt: [
-        ['受到螫针影响，能量回复-1', 'afetado por Stinger: recuperação E -1'], ['中毒减半为', 'Veneno reduzido para '],
-        ['获得邪眼护符效果', 'ganha Nazar'], ['获得1层装备保护', 'ganha 1 proteção de equipamento'], ['获得1层闪避', 'ganha 1 esquiva'],
-        ['获得2点护甲', 'ganha 2 armadura'], ['获得无敌', 'ganha invencível'], ['无法使用攻击牌', 'não pode usar cartas Thorn'],
-        ['仅可使用攻击牌', 'só pode usar cartas Thorn'], ['无法使用卡牌', 'não pode usar cartas'], ['被摧毁', 'é destruído'], ['被放逐', 'é exilado'],
-        ['因虚无被放逐', 'é exilado por Void'], ['装备保护抵消了摧毁', 'proteção de equipamento bloqueou destruição'],
-        ['敌方', 'oponente'], ['己方', 'si'], ['造成', 'causa '], ['伤害', ' dano'], ['回复', 'recupera '], ['获得', 'ganha '],
-        ['装备了', 'equipa '], ['使用了', 'usa '], ['使用', 'usa '], ['摧毁了', 'destrói '], ['但', ' mas '],
-        ['层中毒', ' Veneno'], ['层灼烧', ' Queima'], ['层闪避', ' Esquiva'], ['层装备保护', ' Proteção de equipamento'], ['回合', ' turnos'], ['张牌', ' cartas']
     ],
     ru: [
         ['受到螫针影响，能量回复-1', 'под действием Stinger: восстановление E -1'], ['中毒减半为', 'яд уменьшается до '],
@@ -2569,6 +2264,13 @@ let activeDmThreadId = null;
 let activeDmTargetUserId = null;
 let activeDmTargetIdentifier = '';
 let activeDmMessages = [];
+let dmThreadsRequestPromise = null;
+let dmThreadsAbortController = null;
+let dmMessagesAbortController = null;
+const dmMessageRequestPromises = new Map();
+const dmMessageLastFetchAt = new Map();
+const dmFailureBackoff = { threads: 0, messages: new Map() };
+const socialEndpointRequestTimes = new Map();
 let activeSocialFriendId = null;
 let lobbyMentionCandidates = [];
 let lobbyMentionMenu = null;
@@ -3089,7 +2791,6 @@ function updateStaticText() {
             zh: '\u7b80\u4f53\u4e2d\u6587',
             en: 'English (US)',
             fr: 'Francais',
-            pt: 'Portugues (Brasil)',
             ja: '\u65e5\u672c\u8a9e',
         };
         Object.entries(langLabels).forEach(([value, label]) => {
@@ -3209,6 +2910,7 @@ function updateStaticText() {
         if (tab === 'info') btn.textContent = UI.account_info || '账号信息';
         if (tab === 'username') btn.textContent = UI.account_change_username || '修改用户名';
         if (tab === 'password') btn.textContent = UI.account_change_password || '修改密码';
+        if (tab === 'delete') btn.textContent = UI.account_delete || '注销账户';
     });
     const accountInfoTitle = document.querySelector('#account-info-panel .account-form-title');
     if (accountInfoTitle) accountInfoTitle.textContent = UI.account_info || '账号信息';
@@ -3254,6 +2956,8 @@ function updateStaticText() {
     if (accountChangeUsernameBtn) accountChangeUsernameBtn.textContent = UI.account_change_username || '修改用户名';
     const accountDeleteStartBtn = $('btn-account-delete-start');
     if (accountDeleteStartBtn) accountDeleteStartBtn.textContent = UI.account_delete || '注销账户';
+    const accountDeleteCancelBtn = $('btn-account-delete-cancel');
+    if (accountDeleteCancelBtn) accountDeleteCancelBtn.textContent = UI.cancel || '取消';
     const accountPopoverLogout = $('btn-account-popover-logout');
     if (accountPopoverLogout) accountPopoverLogout.textContent = UI.account_logout;
     const accountReplaysTitle = $('account-replays-title');
@@ -9565,7 +9269,11 @@ function renderAccountState() {
     const usernameChangeForm = $('account-username-change-form');
     if (usernameChangeForm) usernameChangeForm.classList.toggle('hidden', !currentAccount || accountPanelTab !== 'username');
     const deleteSection = $('account-delete-section');
-    if (deleteSection) deleteSection.classList.toggle('hidden', !currentAccount || accountPanelTab !== 'info');
+    if (deleteSection) {
+        const hideDelete = !currentAccount || accountPanelTab !== 'delete';
+        deleteSection.classList.toggle('hidden', hideDelete);
+        if (hideDelete) resetAccountDeleteWarning();
+    }
     const newUsernameInput = $('input-account-new-username');
     if (newUsernameInput && currentAccount) newUsernameInput.value = currentAccount.username || '';
     const popLogout = $('btn-account-popover-logout');
@@ -9635,13 +9343,14 @@ async function authRequest(path, body, options = {}) {
     const timeoutMs = Math.max(0, Number(options.timeoutMs) || 0);
     const controller = timeoutMs > 0 && typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    const signal = options.signal || (controller ? controller.signal : undefined);
     try {
         const res = await fetch(path, {
             method: body === undefined ? 'GET' : 'POST',
             headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: body === undefined ? undefined : JSON.stringify(body),
-            signal: controller ? controller.signal : undefined,
+            signal,
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.success === false) {
@@ -9787,7 +9496,7 @@ function startAccountDeleteWarning() {
 
 async function onAccountDeleteConfirm() {
     setAccountError('');
-    const ok = await gameConfirm(UI.notice || '提示', '确认注销账户吗？\n账号会被禁用，ID将保留。如需恢复请联系管理员。');
+    const ok = await gameConfirm(UI.notice || '提示', '确认注销账户吗？\n账号将被注销。');
     if (!ok) return;
     try {
         await authRequest('/api/auth/delete-account', {});
@@ -9975,6 +9684,9 @@ function showSocialDetailTab(tabName = 'profile') {
         const page = $(`social-detail-page-${name}`);
         if (page) page.classList.toggle('hidden', name !== tab);
     });
+    if (tab === 'dm') {
+        loadDmThreads(true);
+    }
 }
 
 function toggleSocialDetailModal(force, tabName = 'profile') {
@@ -9987,6 +9699,8 @@ function toggleSocialDetailModal(force, tabName = 'profile') {
         toggleAccountPopover(false);
         showSocialDetailTab(tabName);
         renderFriendDetailProfile();
+    } else {
+        abortDmFetches();
     }
 }
 
@@ -10145,7 +9859,77 @@ function renderDmMessages() {
     list.scrollTop = list.scrollHeight;
 }
 
+function isFriendsPopoverOpen() {
+    const pop = $('friends-popover');
+    return !!pop && !pop.classList.contains('hidden');
+}
+
+function isSocialDetailOpen() {
+    const modal = $('social-detail-modal');
+    return !!modal && !modal.classList.contains('hidden');
+}
+
+function isDmPanelOpen() {
+    const page = $('social-detail-page-dm');
+    return isSocialDetailOpen() && !!page && !page.classList.contains('hidden');
+}
+
+function abortDmFetches() {
+    if (dmThreadsAbortController) {
+        try { dmThreadsAbortController.abort(); } catch (_) {}
+        dmThreadsAbortController = null;
+    }
+    if (dmMessagesAbortController) {
+        try { dmMessagesAbortController.abort(); } catch (_) {}
+        dmMessagesAbortController = null;
+    }
+    dmThreadsRequestPromise = null;
+    dmMessageRequestPromises.clear();
+}
+
+function warnSocialEndpointStorm(endpoint) {
+    const now = Date.now();
+    const key = String(endpoint || '').split('?')[0];
+    const times = (socialEndpointRequestTimes.get(key) || []).filter(ts => now - ts <= 10000);
+    times.push(now);
+    socialEndpointRequestTimes.set(key, times);
+    if (times.length > 5) {
+        console.warn(`[GTN social] endpoint request storm: ${key} ${times.length}/10s`);
+    }
+}
+
+function socialBackoffReady(kind, threadId = '') {
+    const now = Date.now();
+    const store = kind === 'messages' ? dmFailureBackoff.messages : null;
+    const item = store ? (store.get(String(threadId)) || { until: 0 }) : dmFailureBackoff;
+    return now >= Number(item.until || 0);
+}
+
+function recordSocialBackoff(kind, threadId = '', failed = false) {
+    const key = String(threadId || '');
+    const now = Date.now();
+    if (kind === 'messages') {
+        const prev = dmFailureBackoff.messages.get(key) || { delay: 0, until: 0 };
+        if (!failed) {
+            dmFailureBackoff.messages.delete(key);
+            return;
+        }
+        const delay = prev.delay ? Math.min(prev.delay * 2, 60000) : 5000;
+        dmFailureBackoff.messages.set(key, { delay, until: now + delay });
+        return;
+    }
+    if (!failed) {
+        dmFailureBackoff.threads = 0;
+        dmFailureBackoff.until = 0;
+        return;
+    }
+    const delay = dmFailureBackoff.threads ? Math.min(dmFailureBackoff.threads * 2, 60000) : 5000;
+    dmFailureBackoff.threads = delay;
+    dmFailureBackoff.until = now + delay;
+}
+
 async function loadDmThreads(renderOnly = true) {
+    if (document.hidden || (!isFriendsPopoverOpen() && !isSocialDetailOpen())) return;
     if (!currentAccount) {
         dmData = { threads: [], unread_count: 0 };
         activeDmThreadId = null;
@@ -10157,8 +9941,18 @@ async function loadDmThreads(renderOnly = true) {
         updateFriendsBadge();
         return;
     }
+    if (!socialBackoffReady('threads')) return;
+    if (dmThreadsRequestPromise) return dmThreadsRequestPromise;
+    if (dmThreadsAbortController) {
+        try { dmThreadsAbortController.abort(); } catch (_) {}
+    }
+    dmThreadsAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const signal = dmThreadsAbortController ? dmThreadsAbortController.signal : undefined;
+    const requestPath = '/api/social/dm/threads?limit=50';
+    warnSocialEndpointStorm(requestPath);
+    dmThreadsRequestPromise = (async () => {
     try {
-        const data = await authRequest('/api/social/dm/threads?limit=80');
+        const data = await authRequest(requestPath, undefined, { signal, timeoutMs: 7000 });
         dmData = {
             threads: Array.isArray(data.threads) ? data.threads : [],
             unread_count: Number(data.unread_count || 0),
@@ -10166,17 +9960,44 @@ async function loadDmThreads(renderOnly = true) {
         renderDmThreads();
         updateFriendsBadge();
         if (!renderOnly && activeDmThreadId) {
-            await openDmThread(activeDmThreadId);
+            await openDmThread(activeDmThreadId, { markRead: false, force: false });
         }
+        recordSocialBackoff('threads', '', false);
     } catch (err) {
-        setFriendsError(err.message || UI.account_error);
+        if (!(err && /abort|取消|超时|timeout/i.test(String(err.message || err.name || '')))) {
+            recordSocialBackoff('threads', '', true);
+            setFriendsError(err.message || UI.account_error);
+        }
+    } finally {
+        dmThreadsRequestPromise = null;
+        dmThreadsAbortController = null;
     }
+    })();
+    return dmThreadsRequestPromise;
 }
 
-async function openDmThread(threadId) {
+async function openDmThread(threadId, options = {}) {
     if (!threadId) return;
+    if (document.hidden || !isDmPanelOpen()) return;
+    const tid = String(threadId);
+    const force = options.force === true;
+    const markRead = options.markRead === true;
+    if (!force && !markRead) {
+        const last = Number(dmMessageLastFetchAt.get(tid) || 0);
+        if (Date.now() - last < 5000) return;
+    }
+    if (!socialBackoffReady('messages', tid)) return;
+    if (dmMessageRequestPromises.has(tid)) return dmMessageRequestPromises.get(tid);
+    if (dmMessagesAbortController) {
+        try { dmMessagesAbortController.abort(); } catch (_) {}
+    }
+    dmMessagesAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const signal = dmMessagesAbortController ? dmMessagesAbortController.signal : undefined;
+    const requestPath = `/api/social/dm/messages?thread_id=${encodeURIComponent(tid)}&limit=50&mark_read=${markRead ? '1' : '0'}`;
+    warnSocialEndpointStorm(requestPath);
+    const promise = (async () => {
     try {
-        const data = await authRequest(`/api/social/dm/messages?thread_id=${encodeURIComponent(threadId)}&limit=120&mark_read=1`);
+        const data = await authRequest(requestPath, undefined, { signal, timeoutMs: 7000 });
         activeDmThreadId = data.thread_id || threadId;
         activeDmTargetUserId = data.user && data.user.id;
         activeDmTargetIdentifier = '';
@@ -10189,9 +10010,20 @@ async function openDmThread(threadId) {
         renderDmMessages();
         renderFriendDetailProfile();
         updateFriendsBadge();
+        dmMessageLastFetchAt.set(tid, Date.now());
+        recordSocialBackoff('messages', tid, false);
     } catch (err) {
-        setFriendsError(err.message || UI.account_error);
+        if (!(err && /abort|取消|超时|timeout/i.test(String(err.message || err.name || '')))) {
+            recordSocialBackoff('messages', tid, true);
+            setFriendsError(err.message || UI.account_error);
+        }
+    } finally {
+        dmMessageRequestPromises.delete(tid);
+        dmMessagesAbortController = null;
     }
+    })();
+    dmMessageRequestPromises.set(tid, promise);
+    return promise;
 }
 
 function startDmToUser(userId, username = '') {
@@ -10321,6 +10153,8 @@ function toggleFriendsPopover(force) {
     if (show) {
         toggleAccountPopover(false);
         loadFriends(true);
+    } else {
+        abortDmFetches();
     }
 }
 
@@ -18435,6 +18269,9 @@ async function init() {
     if ($('skin-primary-color')) $('skin-primary-color').addEventListener('input', renderSkinEditorPreview);
     if ($('skin-eye-shape')) $('skin-eye-shape').addEventListener('change', renderSkinEditorPreview);
     document.addEventListener('pointermove', updateSkinEyeTracking, { passive: true });
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) abortDmFetches();
+    });
     if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
     if ($('btn-friends-popover-close')) $('btn-friends-popover-close').addEventListener('click', () => toggleFriendsPopover(false));
     if ($('btn-social-detail-close')) $('btn-social-detail-close').addEventListener('click', () => toggleSocialDetailModal(false));
@@ -18444,7 +18281,10 @@ async function init() {
     if ($('btn-account-popover-logout')) $('btn-account-popover-logout').addEventListener('click', onAccountLogout);
     if ($('btn-friend-add')) $('btn-friend-add').addEventListener('click', addFriendFromInput);
     if ($('btn-dm-start')) $('btn-dm-start').addEventListener('click', startDmFromIdentifier);
-    if ($('btn-dm-refresh')) $('btn-dm-refresh').addEventListener('click', () => loadDmThreads(false));
+    if ($('btn-dm-refresh')) $('btn-dm-refresh').addEventListener('click', async () => {
+        await loadDmThreads(true);
+        if (activeDmThreadId) await openDmThread(activeDmThreadId, { markRead: true, force: true });
+    });
     if ($('btn-dm-send')) $('btn-dm-send').addEventListener('click', sendDmMessage);
     const dmMessageInput = $('dm-message-input');
     if (dmMessageInput) {
@@ -18480,8 +18320,8 @@ async function init() {
         const dmThreadBtn = event.target.closest('[data-dm-thread]');
         if (dmThreadBtn) {
             event.preventDefault();
-            openDmThread(dmThreadBtn.dataset.dmThread);
             toggleSocialDetailModal(true, 'dm');
+            openDmThread(dmThreadBtn.dataset.dmThread, { markRead: true, force: true });
             return;
         }
         const dmUserBtn = event.target.closest('[data-dm-open-user]');
@@ -18551,6 +18391,7 @@ async function init() {
     }
     if ($('btn-account-change-username')) $('btn-account-change-username').addEventListener('click', onAccountChangeUsername);
     if ($('btn-account-delete-start')) $('btn-account-delete-start').addEventListener('click', startAccountDeleteWarning);
+    if ($('btn-account-delete-cancel')) $('btn-account-delete-cancel').addEventListener('click', resetAccountDeleteWarning);
     if ($('btn-account-delete-confirm')) $('btn-account-delete-confirm').addEventListener('click', onAccountDeleteConfirm);
     const accountUsernameInput = $('input-account-username');
     if (accountUsernameInput) {

@@ -1,7 +1,7 @@
 import re
 
 
-LANGS = ('zh', 'en', 'fr', 'pt', 'ru', 'ja')
+LANGS = ('zh', 'en', 'fr', 'ja')
 
 
 def card_id_to_english(card_id):
@@ -13,7 +13,9 @@ def card_id_to_english(card_id):
 
 
 def _t(zh, en, fr, pt, ru, ja):
-    return {'zh': zh, 'en': en, 'fr': fr, 'pt': pt, 'ru': ru, 'ja': ja}
+    # Keep the v1 call signature so existing card data remains stable, but
+    # only expose actively supported game languages.
+    return {'zh': zh, 'en': en, 'fr': fr, 'ja': ja}
 
 
 CARD_I18N = {
