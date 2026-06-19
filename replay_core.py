@@ -837,20 +837,127 @@ def _build_timeline_from_replay(replay):
     return timeline
 
 
+def _build_timeline_index(replay):
+    """Build a lightweight sorted frame index without copying full states."""
+    keyframes = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
+    actions = replay.get('actions') if isinstance(replay.get('actions'), list) else []
+    refs = [{
+        'kind': 'setup',
+        'source_index': -1,
+        't': 0,
+        'order': 0,
+        'sort_phase': 0,
+    }]
+    order = 1
+    for source_index, frame in enumerate(keyframes):
+        if isinstance(frame, dict) and not _is_replay_setup_noise_frame(frame):
+            refs.append({
+                'kind': 'frame',
+                'source_index': source_index,
+                't': int(frame.get('t') or 0),
+                'order': order,
+                'sort_phase': 1,
+            })
+            order += 1
+    for source_index, action in enumerate(actions):
+        if isinstance(action, dict) and not _is_replay_setup_noise_action(action):
+            refs.append({
+                'kind': 'action',
+                'source_index': source_index,
+                't': int(action.get('t') or 0),
+                'order': order,
+                'sort_phase': 1,
+            })
+            order += 1
+    refs.sort(key=lambda item: (item.get('sort_phase', 1), item.get('t', 0), item.get('order', 0)))
+    return refs
+
+
+def _materialize_timeline_ref(replay, ref, display_index):
+    kind = ref.get('kind')
+    if kind == 'setup':
+        keyframes = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
+        actions = replay.get('actions') if isinstance(replay.get('actions'), list) else []
+        item = _build_setup_summary_frame(keyframes, actions)
+    elif kind == 'frame':
+        keyframes = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
+        frame = keyframes[int(ref.get('source_index') or 0)]
+        item = {
+            't': int(frame.get('t') or 0),
+            'phase': frame.get('phase') or 'summary',
+            'round': frame.get('round') or 0,
+            'current_player': frame.get('current_player'),
+            'state': frame.get('state') or {},
+            'log': [],
+        }
+    else:
+        actions = replay.get('actions') if isinstance(replay.get('actions'), list) else []
+        action = actions[int(ref.get('source_index') or 0)]
+        item = {
+            't': int(action.get('t') or 0),
+            'phase': action.get('phase') or '',
+            'round': action.get('round') or 0,
+            'current_player': action.get('current_player'),
+            'action': action,
+            'state': action.get('state') or {},
+            'log': [],
+        }
+    item['i'] = display_index
+    return item
+
+
+def _materialize_timeline_slice(replay, refs, offset, limit):
+    end = min(len(refs), offset + limit)
+    return [
+        _materialize_timeline_ref(replay, refs[index], index)
+        for index in range(offset, end)
+    ]
+
+
+def _timeline_cache_store(replay_id, replay_sha, replay, **extra):
+    cached = _TIMELINE_CACHE.get(replay_id)
+    if cached and cached.get('sha') == replay_sha:
+        cached.update(extra)
+    else:
+        cached = {'sha': replay_sha, 'replay': replay}
+        cached.update(extra)
+        _TIMELINE_CACHE[replay_id] = cached
+    _TIMELINE_CACHE.move_to_end(replay_id)
+    while len(_TIMELINE_CACHE) > _TIMELINE_CACHE_MAX:
+        _TIMELINE_CACHE.popitem(last=False)
+    return cached
+
+
 def _timeline_cache_get(row):
     replay_id = int(row['id'])
     replay_sha = str(row['replay_sha256'] or '')
     cached = _TIMELINE_CACHE.get(replay_id)
     if cached and cached.get('sha') == replay_sha:
         _TIMELINE_CACHE.move_to_end(replay_id)
+        if 'timeline' not in cached:
+            cached['timeline'] = _build_timeline_from_replay(cached['replay'])
         return cached['replay'], cached['timeline']
     replay = _decode_replay_blob(row['replay_blob'])
     timeline = _build_timeline_from_replay(replay)
-    _TIMELINE_CACHE[replay_id] = {'sha': replay_sha, 'replay': replay, 'timeline': timeline}
-    _TIMELINE_CACHE.move_to_end(replay_id)
-    while len(_TIMELINE_CACHE) > _TIMELINE_CACHE_MAX:
-        _TIMELINE_CACHE.popitem(last=False)
+    _timeline_cache_store(replay_id, replay_sha, replay, timeline=timeline)
     return replay, timeline
+
+
+def _timeline_index_cache_get(row):
+    replay_id = int(row['id'])
+    replay_sha = str(row['replay_sha256'] or '')
+    cached = _TIMELINE_CACHE.get(replay_id)
+    if cached and cached.get('sha') == replay_sha:
+        _TIMELINE_CACHE.move_to_end(replay_id)
+        if 'timeline' in cached:
+            return cached['replay'], None, len(cached['timeline'])
+        if 'timeline_index' not in cached:
+            cached['timeline_index'] = _build_timeline_index(cached['replay'])
+        return cached['replay'], cached['timeline_index'], len(cached['timeline_index'])
+    replay = _decode_replay_blob(row['replay_blob'])
+    timeline_index = _build_timeline_index(replay)
+    _timeline_cache_store(replay_id, replay_sha, replay, timeline_index=timeline_index)
+    return replay, timeline_index, len(timeline_index)
 
 
 def replay_timeline(replay_id, offset=None, limit=None):
@@ -858,15 +965,21 @@ def replay_timeline(replay_id, offset=None, limit=None):
         row = conn.execute('SELECT * FROM match_replays WHERE id = ?', (int(replay_id),)).fetchone()
     if row is None:
         return None
-    replay, timeline = _timeline_cache_get(row)
-    total_frames = len(timeline)
     sliced = False
     if offset is not None or limit is not None:
         sliced = True
         safe_offset = max(0, int(offset or 0))
         safe_limit = max(1, min(int(limit or 50), 200))
-        response_timeline = timeline[safe_offset:safe_offset + safe_limit]
+        replay, timeline_index, total_frames = _timeline_index_cache_get(row)
+        if timeline_index is None:
+            cached = _TIMELINE_CACHE.get(int(row['id']))
+            timeline = cached.get('timeline') if cached else []
+            response_timeline = timeline[safe_offset:safe_offset + safe_limit]
+        else:
+            response_timeline = _materialize_timeline_slice(replay, timeline_index, safe_offset, safe_limit)
     else:
+        replay, timeline = _timeline_cache_get(row)
+        total_frames = len(timeline)
         safe_offset = 0
         safe_limit = total_frames
         response_timeline = timeline

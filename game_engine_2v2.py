@@ -375,6 +375,9 @@ class GameEngine2v2(GameEngine):
         })
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        self._run_hand_owner_turn_end_events(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         self._trigger_v2_status_events_for_player(player_id, 'on_turn_end', {'player_id': player_id})
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
@@ -1096,7 +1099,10 @@ class GameEngine2v2(GameEngine):
 
 
     def _check_response_needed(self, player_id: int, card: CardInstance) -> bool:
-        if 'precision' in card.flags:
+        flags = self._effective_card_flags(card)
+        if 'precision' in flags:
+            return False
+        if 'stealth' in flags:
             return False
         target_id = self._selected_effect_target(player_id, getattr(self, '_active_choice', None))
         if self._would_heal(card):
@@ -1127,7 +1133,10 @@ class GameEngine2v2(GameEngine):
         return False
 
     def _check_precision_response_needed(self, player_id: int, card: CardInstance) -> bool:
-        if 'precision' not in card.flags:
+        flags = self._effective_card_flags(card)
+        if 'precision' not in flags:
+            return False
+        if 'stealth' in flags:
             return False
         target_id = self._selected_effect_target(player_id, getattr(self, '_active_choice', None))
         if not self._is_valid_player_id(target_id) or not self.is_enemy(player_id, target_id):
@@ -1418,6 +1427,7 @@ class GameEngine2v2(GameEngine):
         total_dealt = 0
         for _ in range(hits):
             precision_dodged = False
+            plank_halves_attack = False
             if ps.dodge > 0:
                 ps.dodge -= 1
                 if not is_precision:
@@ -1431,17 +1441,24 @@ class GameEngine2v2(GameEngine):
             if source_card is not None and self._has_equipment(target_id, 'Plank', 'jungle:plank'):
                 try:
                     if int(getattr(source_card, 'cost_e', 0) or 0) <= 1:
-                        self.log_msg(f"{self.pn(target_id)}的木板吸收了攻击")
-                        continue
+                        plank_halves_attack = True
                 except Exception:
                     pass
-            dmg = amount
+            power = 0
+            if source_card is not None:
+                try:
+                    power = max(0, int(getattr(source_card, 'power_value', 0) or 0))
+                except Exception:
+                    power = 0
+            dmg = amount + int(math.ceil(power / max(1, int(hits or 1))))
             if self.halve_next_attack:
                 dmg = math.ceil(dmg / 2)
             elif precision_dodged:
                 dmg = math.ceil(dmg / 2)
             dmg = self._apply_corruption_multiplier_to_damage(dmg, log=False)
             dmg = self._apply_damage_dealt_equipment_multiplier(dmg, attacker_id)
+            if plank_halves_attack:
+                dmg = math.floor(dmg / 2)
             if ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
@@ -1487,6 +1504,7 @@ class GameEngine2v2(GameEngine):
                 root_layers = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
                 if root_layers > 0:
                     self._set_custom_status_alias_group(target_id, 'jungle:root_status', ('jungle:root', 'jungle:root_status', 'root_status'), root_layers - 1)
+                    self._consume_jungle_root_layer_from_equipment(target_id)
             if dmg > 0 and ps.toxic > 0:
                 ps.poison += ps.toxic
             self._game_over_defer_depth += 1

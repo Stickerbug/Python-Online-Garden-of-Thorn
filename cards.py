@@ -294,7 +294,7 @@ _reg(CardDef('Fang', 'Fang', '尖牙', 2, 0, 'thorn', 5, 'Common',
              '吸取对手的生命来为你回复。', '造成8D；造成伤害时回复造成伤害80%（向下取整）的H'))
 
 _reg(CardDef('Triangle', 'Triangle', '三角形', 2, 0, 'thorn', 8, 'Common',
-             '量变引起质变。', '造成(6+3×三角形层数)D；造成伤害时获得一层三角形，上限4层'))
+             '量变引起质变。', '造成(6+3×三角形层数)D；造成伤害时获得1层三角形，上限4层'))
 
 _reg(CardDef('MagicBone', 'Magic Bone', '魔法骨头', 0, 4, 'thorn', 5, 'Common',
              '魔力凝聚的骨头，穿透力更强。', '造成15D'))
@@ -398,7 +398,7 @@ _reg(CardDef('Mine', 'Mine', '地雷', 3, 0, 'root', 3, 'Common',
              trigger_cost_e=0, trigger_effect_text='若已装备一回合则可摧毁此装备，造成20D'))
 
 _reg(CardDef('Bubble', 'Bubble', '泡泡', 2, 0, 'guard', 10, 'Common',
-             '闪！', '获得一层闪避（敌方使用攻击牌时）',
+             '闪！', '获得1层闪避（敌方使用攻击牌时）',
              response_trigger='thorn'))
 
 _reg(CardDef('Nazar', 'Nazar', '邪眼护符', 5, 0, 'guard', 3, 'Common',
@@ -414,7 +414,7 @@ _reg(CardDef('GoldenNazar', 'Golden Nazar', '黄金邪眼', 3, 0, 'guard', 5, 'U
              response_trigger='equipment_destroy'))
 
 _reg(CardDef('MagicBubble', 'Magic Bubble', '魔法泡泡', 0, 4, 'guard', 3, 'Common',
-             '泡泡的魔法版本。', '使敌方使用的技能牌失效（敌方使用技能牌时）',
+             '泡泡的魔法版本。', '使目标使用的技能牌失效一次  响应：敌方使用技能牌',
              response_trigger='bloom'))
 
 

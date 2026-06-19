@@ -960,7 +960,7 @@ Object.assign(I18N.en, {
     account: 'Account', account_guest: 'Guest Mode', account_username: 'Username', account_password: 'Password',
     account_password_confirm: 'Confirm Password', account_old_password: 'Current Password', account_new_password: 'New Password',
     account_new_password_confirm: 'Confirm New Password', account_change_password: 'Change Password', account_password_changed: 'Password changed',
-    account_change_username: 'Change Username', account_delete: 'Delete Account', stats: 'Stats',
+    account_change_username: 'Change Username', account_info: 'Account Info', account_online_time: 'Online Time', account_delete: 'Delete Account', stats: 'Stats',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
     account_need_login: 'Log in or register first', account_error: 'Account error', account_password_mismatch: 'Passwords do not match', guest_enter: 'Enter as Guest',
@@ -970,7 +970,7 @@ Object.assign(I18N.zh, {
     account: '账号', account_guest: '游客模式', account_username: '用户名', account_password: '密码',
     account_password_confirm: '确认密码', account_old_password: '原密码', account_new_password: '新密码',
     account_new_password_confirm: '确认新密码', account_change_password: '修改密码', account_password_changed: '密码已修改',
-    account_change_username: '修改用户名', account_delete: '注销账户', stats: '统计',
+    account_change_username: '修改用户名', account_info: '账号信息', account_online_time: '在线时间', account_delete: '注销账户', stats: '统计',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
     account_need_login: '请先登录或注册账号', account_error: '账号错误', account_password_mismatch: '两次输入的密码不一致', guest_enter: '游客进入',
@@ -980,6 +980,8 @@ Object.assign(I18N.fr, {
     account: 'Compte', account_guest: 'Mode invité', account_username: 'Nom', account_password: 'Mot de passe',
     account_password_confirm: 'Confirmer', account_old_password: 'Mot de passe actuel', account_new_password: 'Nouveau mot de passe',
     account_new_password_confirm: 'Confirmer le nouveau', account_change_password: 'Changer le mot de passe', account_password_changed: 'Mot de passe changé',
+    account_change_username: 'Changer le nom', account_info: 'Compte', account_online_time: 'Temps en ligne',
+    account_delete: 'Supprimer le compte', stats: 'Stats',
     account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
     account_not_logged_in: 'Non connecté', account_logged_in_as: 'Connecté : {0}', account_stats: 'Parties {0} / V {1} / D {2} / N {3}',
     account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', account_password_mismatch: 'Les mots de passe ne correspondent pas', guest_enter: 'Entrer en invité',
@@ -989,6 +991,8 @@ Object.assign(I18N.pt, {
     account: 'Conta', account_guest: 'Modo convidado', account_username: 'Usuário', account_password: 'Senha',
     account_password_confirm: 'Confirmar senha', account_old_password: 'Senha atual', account_new_password: 'Nova senha',
     account_new_password_confirm: 'Confirmar nova senha', account_change_password: 'Alterar senha', account_password_changed: 'Senha alterada',
+    account_change_username: 'Alterar usuário', account_info: 'Conta', account_online_time: 'Tempo online',
+    account_delete: 'Excluir conta', stats: 'Estatísticas',
     account_login: 'Entrar', account_register: 'Registrar', account_enter: 'Entrar com conta', account_logout: 'Sair',
     account_not_logged_in: 'Não conectado', account_logged_in_as: 'Conectado: {0}', account_stats: 'Jogos {0} / V {1} / D {2} / E {3}',
     account_need_login: 'Entre ou registre-se primeiro', account_error: 'Erro da conta', account_password_mismatch: 'As senhas não coincidem', guest_enter: 'Entrar como convidado',
@@ -998,6 +1002,8 @@ Object.assign(I18N.ja, {
     account: 'アカウント', account_guest: 'ゲスト', account_username: 'ユーザー名', account_password: 'パスワード',
     account_password_confirm: '確認', account_old_password: '現在のパスワード', account_new_password: '新しいパスワード',
     account_new_password_confirm: '新しい確認', account_change_password: 'パスワード変更', account_password_changed: '変更しました',
+    account_change_username: 'ユーザー名変更', account_info: 'アカウント情報', account_online_time: 'オンライン時間',
+    account_delete: 'アカウント削除', stats: '統計',
     account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
     account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
@@ -2022,12 +2028,64 @@ function escapeHtml(value) {
 }
 
 const CARD_TEXT_TOKEN_RULES = [
+    { cls: 'tag-team-limited', re: /^(?:队伍限定|Team Limited)/i },
+    { cls: 'tag-team-unique', re: /^(?:队伍独一|Team Unique)/i },
+    { cls: 'tag-infinite-exclude', re: /^(?:无限火力移除|Removed from Infinite Fire)/i },
+    { cls: 'tag-non-stackable', re: /^(?:不可叠加|Non-stack(?:able)?)/i },
+    { cls: 'tag-indestructible', re: /^(?:不可摧毁|Indestructible)/i },
+    { cls: 'tag-uncancellable', re: /^(?:不可取消|Uncancellable)/i },
+    { cls: 'tag-self-only', re: /^(?:不选择目标|No target)/i },
+    { cls: 'tag-magic-swift', re: /^(?:魔力迅捷|Magic Swift)(?::[+-]?\d+)?/i },
+    { cls: 'tag-temp-swift', re: /^(?:暂时迅捷|Temporary Swift)(?::[+-]?\d+)?/i },
+    { cls: 'tag-temp-heavy', re: /^(?:暂时沉重|Temporary Heavy)(?::[+-]?\d+)?/i },
+    { cls: 'tag-precision', re: /^(?:精准|Precision)/i },
+    { cls: 'tag-exile', re: /^(?:放逐|Exile)/i },
+    { cls: 'tag-sprout', re: /^(?:萌芽|Sprout)/i },
+    { cls: 'tag-symbiosis', re: /^(?:共生|Symbiosis)/i },
+    { cls: 'tag-attract', re: /^(?:吸引|Attract)/i },
+    { cls: 'tag-void', re: /^(?:虚无|Void)/i },
+    { cls: 'tag-rebound', re: /^(?:回转|Rebound)/i },
+    { cls: 'tag-copy', re: /^(?:副本|Copy)(?::[+-]?\d+)?/i },
+    { cls: 'tag-unique', re: /^(?:唯一|Unique)/i },
+    { cls: 'tag-swift', re: /^(?:迅捷|Swift)(?::[+-]?\d+)?/i },
+    { cls: 'tag-stealth', re: /^(?:隐匿|Stealth)/i },
+    { cls: 'tag-revealed', re: /^(?:被揭示|Revealed)/i },
+    { cls: 'tag-power', re: /^(?:威力|Power)(?::[+-]?\d+)?/i },
+    { cls: 'status-toxic-poison', re: /^(?:[+-]?\d+层剧毒|剧毒[:：]?[+-]?\d+层?|剧毒[×x][+-]?\d+层?)/i },
+    { cls: 'status-sluggish', re: /^(?:[+-]?\d+层迟缓|迟缓[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-fragile', re: /^(?:(?:\([^)]*\)|（[^）]*）)层易损|[+-]?\d+层易损|易损[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-shield', re: /^(?:[+-]?\d+层护盾|护盾[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-turn-heal', re: /^(?:[+-]?\d+层[+-]?\d+级回合回复|回合回复[:：][+-]?\d+[;；][+-]?\d+|[+-]?\d+层回合回复)/i },
+    { cls: 'status-turn-magic', re: /^(?:[+-]?\d+层[+-]?\d+级魔力回合回复|魔力回合回复[:：][+-]?\d+[;；][+-]?\d+|[+-]?\d+层魔力回合回复)/i },
+    { cls: 'status-root', re: /^(?:[+-]?\d+层树根|树根[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-triangle', re: /^(?:[+-]?\d+层三角形|三角形[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-dodge', re: /^(?:[+-]?\d+层闪避|闪避[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-nazar', re: /^(?:[+-]?\d+层邪眼|邪眼[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-bleed', re: /^(?:[+-]?\d+层流血|流血[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-fracture', re: /^(?:[+-]?\d+层破损|破损[:：]?[+-]?\d+层?|破损[×x][+-]?\d+层?)/i },
+    { cls: 'status-stagnation', re: /^(?:[+-]?\d+层滞留|滞留[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-blind', re: /^(?:[+-]?\d+层失明|失明[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-foresight', re: /^(?:[+-]?\d+层预知|预知[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-overload', re: /^(?:[+-]?\d+层超载|超载[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-heal-block', re: /^(?:[+-]?\d+层禁疗|禁疗[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-weakness', re: /^(?:[+-]?\d+层虚弱|虚弱[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-fragment', re: /^(?:[+-]?\d+层碎片|碎片[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-immune', re: /^(?:状态免疫|免疫状态)/i },
+    { cls: 'status-stunned', re: /^(?:[+-]?\d+层眩晕|眩晕[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-invincible', re: /^(?:[+-]?\d+层无敌|无敌[:：]?[+-]?\d+层?|无敌)/i },
+    { cls: 'status-bandage', re: /^(?:[+-]?\d+层绷带|绷带[:：]?[+-]?\d+层?|绷带)/i },
+    { cls: 'status-sponge', re: /^(?:[+-]?\d+层海绵|海绵[:：]?[+-]?\d+层?|海绵)/i },
+    { cls: 'status-attack-blocked', re: /^(?:[+-]?\d+层(?:禁攻|禁止攻击)|(?:禁攻|禁止攻击)[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-attack-only', re: /^(?:[+-]?\d+层仅攻击|仅攻击[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-untargetable', re: /^(?:[+-]?\d+层无法选中|无法选中[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-magic-nazar', re: /^(?:[+-]?\d+层魔法邪眼|魔法邪眼[:：]?[+-]?\d+层?)/i },
     { cls: 'toxic', re: /^(?:\d+层淬毒|\d+\s*(?:Toxic|Toxique|Tóxico|Токсин)|淬毒\d+)/i },
     { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*F(?![A-Za-z])|F(?![A-Za-z])|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/i },
     { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P(?![A-Za-z])|P(?![A-Za-z])|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/i },
     { cls: 'damage', re: /^(?:[+-]?\d+电伤|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/i },
     { cls: 'armor', re: /^[+-]?\d+A/i },
-    { cls: 'heal', re: /^[+]?(?:\d+H|H)(?![A-Za-z])/i },
+    { cls: 'heal', re: /^[+]?\d+H(?![A-Za-z])/i },
+    { cls: 'health', re: /^H(?![A-Za-z])/i },
     { cls: 'elixir', re: /^[+-]?(?:\d+E|E)(?![A-Za-z])/i },
     { cls: 'magic', re: /^[+-]?(?:\d+M|M)(?![A-Za-z])/i },
 ];
@@ -2077,7 +2135,10 @@ function buildInlineCardDict(defId, modifierText = '') {
                 return;
             }
             if (key === 'tomato' || key === 'held_turns') {
-                if (numberValue > 0) cardDict.held_turns = numberValue;
+                if (numberValue > 0) {
+                    cardDict.power_value = numberValue * 3;
+                    cardDict.instance_flags.push('power');
+                }
                 return;
             }
             if ((key === 'flag' || key === 'tag') && value) {
@@ -2099,6 +2160,8 @@ function bindInlineCardChips(root, options = {}) {
     if (!root || !root.querySelectorAll) return;
     const interactive = options.interactive === true;
     if (!interactive) return;
+    const allowTermIntro = options.allowTermIntro !== false;
+    const termIntroDepth = Math.max(0, Number(options.termIntroDepth || 0) || 0);
     root.querySelectorAll('.inline-card-chip.choice-card-token[data-inline-card-chip="1"]').forEach(chip => {
         if (chip.dataset.inlineChipBound === '1') return;
         chip.dataset.inlineChipBound = '1';
@@ -2116,7 +2179,9 @@ function bindInlineCardChips(root, options = {}) {
             chip.addEventListener(type, stop, { passive: true });
         });
         attachFloatingCardPreview(chip, cardDict);
-        attachTermIntroToCard(chip, cardDict);
+        if (allowTermIntro) {
+            attachTermIntroToCard(chip, cardDict, { termIntroDepth });
+        }
     });
 }
 
@@ -2496,6 +2561,7 @@ let nickname = '';
 let loginCredential = '';
 let currentAccount = loadCachedAccount();
 let accountMode = 'login';
+let accountPanelTab = 'info';
 let socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
 let friendsMessageTimer = null;
 let dmData = { threads: [], unread_count: 0 };
@@ -3138,6 +3204,14 @@ function updateStaticText() {
     if (accountModeLogin) accountModeLogin.textContent = UI.account_login;
     const accountModeRegister = $('btn-account-mode-register');
     if (accountModeRegister) accountModeRegister.textContent = UI.account_register;
+    document.querySelectorAll('[data-account-panel-tab]').forEach((btn) => {
+        const tab = btn.dataset.accountPanelTab;
+        if (tab === 'info') btn.textContent = UI.account_info || '账号信息';
+        if (tab === 'username') btn.textContent = UI.account_change_username || '修改用户名';
+        if (tab === 'password') btn.textContent = UI.account_change_password || '修改密码';
+    });
+    const accountInfoTitle = document.querySelector('#account-info-panel .account-form-title');
+    if (accountInfoTitle) accountInfoTitle.textContent = UI.account_info || '账号信息';
     const accountUsernameLabel = $('label-account-username');
     if (accountUsernameLabel) accountUsernameLabel.textContent = UI.account_username;
     const accountPasswordLabel = $('label-account-password');
@@ -3391,6 +3465,18 @@ function formatCompactRoundStatus(gs, phaseText = '') {
     return `R${roundNum} · ${phaseText}`;
 }
 
+function updateTopActionButtons(viewId = activeViewId) {
+    const onHome = viewId === 'view-login';
+    const accountTop = $('btn-account-top');
+    if (accountTop) accountTop.classList.toggle('hidden', !onHome);
+    const friendsTop = $('btn-friends-top');
+    if (friendsTop) friendsTop.classList.toggle('hidden', !onHome || !currentAccount);
+    const statsTop = $('btn-stats-top');
+    if (statsTop) statsTop.classList.toggle('hidden', !onHome || !currentAccount);
+    const skinTop = $('btn-skin-top');
+    if (skinTop) skinTop.classList.toggle('hidden', !onHome);
+}
+
 function showView(viewId) {
     const el = $(viewId);
     const sameView = activeViewId === viewId && el && !el.classList.contains('hidden');
@@ -3401,15 +3487,11 @@ function showView(viewId) {
         activeViewId = viewId;
         updatePhaseChatPanelVisibility(viewId);
     }
-    const accountTop = $('btn-account-top');
-    if (accountTop) accountTop.classList.toggle('hidden', viewId !== 'view-login');
-    const friendsTop = $('btn-friends-top');
-    if (friendsTop) friendsTop.classList.toggle('hidden', viewId !== 'view-login' || !currentAccount);
-    const skinTop = $('btn-skin-top');
-    if (skinTop) skinTop.classList.toggle('hidden', viewId !== 'view-login');
+    updateTopActionButtons(viewId);
     if (viewId !== 'view-login') {
         toggleAccountPopover(false);
         toggleFriendsPopover(false);
+        toggleStatsPopover(false);
     }
     if (!sameView && viewId !== 'view-game') {
         const logContainer = $('battle-log');
@@ -4003,7 +4085,7 @@ function getAllStatusDefs() {
         { key: 'attack_blocked', label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         { key: 'attack_only', label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         { key: 'untargetable', label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。', color: '#1A5276' },
-        { key: 'bandage', label: UI.status_bandage, desc: '绷带提供临时保护，回合开始时会按规则结束。', color: '#1E8449' },
+        { key: 'bandage', label: UI.status_bandage, desc: '受到致命伤害后无敌直到自己下个回合结束，然后死亡。', color: '#1E8449' },
         { key: 'sponge', label: UI.status_sponge, desc: '海绵相关的临时状态，会影响下一次结算。', color: '#6C3483' },
         { key: 'sluggish', label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         { key: 'overload', label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
@@ -5382,9 +5464,21 @@ function createCardElement(cardDict, options = {}) {
     if (defId === 'Honey' || cardDef.id === 'Honey' || cardDef.legacy_id === 'Honey' || cardDef.name_cn === '蜂蜜') {
         el.classList.add('card-honey');
     }
+    if (defId === 'Fragment' || cardDef.id === 'Fragment' || cardDef.legacy_id === 'Fragment' || cardDef.name_cn === '碎片') {
+        el.classList.add('card-fragment');
+    }
+    if (defId === 'Coconut' || cardDef.id === 'Coconut' || cardDef.legacy_id === 'Coconut' || cardDef.name_cn === '椰子') {
+        el.classList.add('card-coconut');
+    }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Grapes', 'MagicGrapes', 'Peas', 'MagicPeas'])
         || ['葡萄', '魔法葡萄', '豌豆', '魔法豌豆'].includes(cardDef.name_cn)) {
         el.classList.add('card-petal-copy');
+    }
+    if (defId === 'MagicGrapes' || cardDef.id === 'MagicGrapes' || cardDef.legacy_id === 'MagicGrapes'
+        || cardDef.id === 'jungle:magic_grapes' || cardDef.name_cn === '魔法葡萄'
+        || defId === 'MagicPeas' || cardDef.id === 'MagicPeas' || cardDef.legacy_id === 'MagicPeas'
+        || cardDef.id === 'jungle:magic_peas' || cardDef.name_cn === '魔法豌豆') {
+        el.classList.add('card-magic-grapes');
     }
     const rawTypeLabel = getCardTypeLabel(cardDef.card_type) || cardDef.card_type;
     const blindLevel = getCardBlindLevelForSelf(cardDict, options);
@@ -5447,10 +5541,6 @@ function createCardElement(cardDict, options = {}) {
     }
     if (!blinded && fissionLevel > 1) {
         flagsHtml += `<span class="card-flag fission-layer">${escapeHtml(UI.fission_layer || 'Fission')}: ${fissionLevel}</span>`;
-    }
-    if (!blinded && !showAllFlags && defId === 'Tomato' && cardDict.instance_id != null) {
-        const tomatoLayer = Math.min(6, Math.max(0, Number(cardDict.held_turns || 0)));
-        flagsHtml += `<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || '层数')}: ${tomatoLayer}</span>`;
     }
     if (!blinded && swiftValue > 0) {
         flagsHtml += `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}: ${swiftValue}</span>`;
@@ -5633,12 +5723,6 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
         if (fusionLevel > 1) parts.push(cardFlagHtml('fusion_layer', `${UI.fusion_layer || 'Fusion'}: ${fusionLevel}`));
         if (fissionLevel > 1) parts.push(cardFlagHtml('fission_layer', `${UI.fission_layer || 'Fission'}: ${fissionLevel}`));
     }
-    if (includeTomato && cardDict.def_id === 'Tomato') {
-        const tomatoLayer = Math.min(6, Math.max(0, Number(cardDict.held_turns || 0)));
-        if (tomatoLayer > 0) {
-            parts.push(`<span class="card-flag tomato-layer">${escapeHtml(UI.tomato_layer || 'Layer')}: ${tomatoLayer}</span>`);
-        }
-    }
     if (swiftValue > 0) {
         parts.push(cardFlagHtml('swift', `${UI.tag_swift || 'Swift'}: ${swiftValue}`));
     }
@@ -5745,15 +5829,12 @@ function getMimicSpecialCostForCard(cardDict) {
     if (!cardDict) return 0;
     const fusionExtra = Math.max(0, Math.floor(Number(cardDict.fusion_level || 1)) - 1);
     const fissionExtra = Math.max(0, Math.floor(Number(cardDict.fission_level || 1)) - 1);
-    const tomatoLayer = cardDict.def_id === 'Tomato'
-        ? Math.min(6, Math.max(0, Math.floor(Number(cardDict.held_turns || 0))))
-        : 0;
     const power = Math.max(0, Math.floor(Number(cardDict.power_value || 0)));
     const swift = Math.max(0, Math.floor(Number(cardDict.swift_value || 0)));
     const magicSwift = Math.max(0, Math.floor(Number(cardDict.magic_swift_value || 0)));
     const tempSwift = Math.max(0, Math.floor(Number(cardDict.temp_swift_value || 0)));
     const tempHeavy = Math.max(0, Math.floor(Number(cardDict.temp_heavy_value || 0)));
-    return Math.ceil((fusionExtra + fissionExtra + tomatoLayer + power + swift + magicSwift + tempSwift + tempHeavy) / 2);
+    return Math.ceil((fusionExtra + fissionExtra + power + swift + magicSwift + tempSwift + tempHeavy) / 2);
 }
 
 function getAvailableElixirForMimicChoice(sourceCard, ownerState = null) {
@@ -5952,17 +6033,20 @@ function getClawDamageHits(cardDict, attackerState, targetState, info) {
     const fission = Math.max(1, Number(cardDict.fission_level || 1));
     const baseHits = Math.max(1, Math.round(Number((info && info.hits) || 1)) + Math.max(0, Number(cardDict.extra_hits || 0)));
     const bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
+    const power = Math.max(0, Number(cardDict.power_value || 0));
+    const totalSegments = Math.max(1, baseHits * fission);
+    const powerPerSegment = Math.ceil(power / totalSegments);
     const maxHealth = readPlayerHealthValue(targetState, ['max_health', 'maxHp', 'maxH', 'max_h'], 0);
     let health = readPlayerHealthValue(targetState, ['health', 'hp', 'h'], maxHealth);
     if (!maxHealth) {
         const amount = Number((info && info.amount) || 5) + bonus;
-        const perHit = Math.ceil(amount * fusion / fission);
+        const perHit = Math.ceil(amount * fusion / fission) + powerPerSegment;
         return Array.from({ length: baseHits * fission }, () => perHit);
     }
     const hits = [];
     for (let i = 0; i < baseHits * fission; i++) {
         const base = health >= maxHealth / 2 ? 10 : 5;
-        const dealt = Math.ceil((base + bonus) * fusion / fission);
+        const dealt = Math.ceil((base + bonus) * fusion / fission) + powerPerSegment;
         hits.push(dealt);
         health = Math.max(0, health - dealt);
     }
@@ -5978,27 +6062,25 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
     }
     const fusion = Math.max(1, Number(cardDict.fusion_level || 1));
     const fission = Math.max(1, Number(cardDict.fission_level || 1));
-    let bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
-    if ((cardDict.def_id || '') === 'Tomato') {
-        const tomatoLayer = Math.min(6, Math.max(0, Number(cardDict.held_turns || 0)));
-        bonus = bonus > 0 ? Math.min(18, bonus) : tomatoLayer * 3;
-    }
+    const bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
+    const power = Math.max(0, Number(cardDict.power_value || 0));
     if (info.triangle) {
         const startStacks = Math.max(0, Number(attackerState.triangle_stacks || 0));
         const hits = [];
         for (let i = 0; i < fission; i++) {
             const stack = Math.min(4, startStacks + i);
             const amount = Number(info.amount || 0) + 3 * stack + bonus;
-            hits.push(Math.ceil(amount * fusion / fission));
+            hits.push(Math.ceil(amount * fusion / fission) + Math.ceil(power / fission));
         }
         return hits;
     }
-    const amount = Number(info.amount || 0) + bonus;
-    const perHit = Math.ceil(amount * fusion / fission);
     const inheritExtraHits = info.inheritExtraHits !== false && !cardMatchesAnyLocalId(cardDict, cardDef, ['Peas', 'MagicPeas']);
     const extraHits = inheritExtraHits ? Math.max(0, Number(cardDict.extra_hits || 0)) : 0;
     const totalHits = Math.max(1, Math.round(Number(info.hits || 1)) + extraHits) * fission;
-    return Array.from({ length: totalHits }, () => perHit);
+    const amount = Number(info.amount || 0) + bonus;
+    const perHit = Math.ceil(amount * fusion / fission);
+    const powerPerSegment = Math.ceil(power / Math.max(1, totalHits));
+    return Array.from({ length: totalHits }, () => perHit + powerPerSegment);
 }
 
 function getActualAttackDamageText(cardDict, attackerState = {}, targetState = {}) {
@@ -6622,14 +6704,13 @@ function getTermIntroLibrary() {
         magic_damage: { label: '魔法伤害(Magic Damage)', desc: magicDamageDesc, color: COLORS.magic },
         A: { label: 'A：护甲(Armor)', desc: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。', color: COLORS.armor_text },
         P: { label: 'P：中毒(Poison)', desc: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', color: COLORS.poison },
-        F: { label: 'F：灼烧(Fire)', desc: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 20 回合及以上后，每回合开始时对所有玩家施加一层灼烧。', color: COLORS.fire },
+        F: { label: 'F：灼烧(Fire)', desc: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 20 回合及以上后，每回合开始时对所有玩家施加1层灼烧。', color: COLORS.fire },
         toxic: { label: `${UI.status_toxic || '淬毒'}(Toxic)`, desc: '造成实际 D 后，对目标施加与淬毒层数相同的 P 层数。伤害被完全挡住时不会触发。', color: '#6C3483' },
         hand_limit: { label: '手牌上限', desc: '你能保留在手中的最大牌数。抽牌、回手或创建牌时超过上限，就会发生爆牌。', color: COLORS.text_primary },
         overdraw: { label: '爆牌', desc: '手牌超过上限时，多出来的牌不能留在手中，会按规则被移出手牌。装备黄金叶等效果可以提高上限。', color: COLORS.damage },
         overcap: { label: '爆费', desc: 'E 或 M 回复超过上限时，超过部分直接丢失；提前规划资源可以避免浪费。', color: COLORS.elixir },
         deck: { label: '牌堆', desc: '未抽到的牌所在区域。抽牌通常从牌堆顶进入手牌；查看牌堆只能看到抽牌堆。', color: COLORS.text_primary },
         discard: { label: '弃牌堆', desc: '大多数打出后的牌会进入弃牌堆，之后会被重新洗回牌堆。', color: COLORS.text_secondary },
-        exile_zone: { label: '放逐区', desc: '被放逐的牌离开正常循环，不会再被抽到。', color: '#7F8C8D' },
         response: { label: UI.counter || '反制', desc: '对方行动满足条件时会出现响应机会。反制能改变对方行动的结果。', color: CARD_TYPE_COLORS.guard },
         same_name_penalty: { label: '同名卡惩罚', desc: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', color: COLORS.elixir },
         revealed: { label: UI.tag_revealed || '被揭示', desc: '在手中时永久对对手展示。', color: '#E74C3C' },
@@ -6643,7 +6724,6 @@ function getTermIntroLibrary() {
         equipment_armor: { label: '装备护甲', desc: '存在时，若装备将被摧毁，则使该装备不被摧毁，并消耗1层装备护甲。', color: COLORS.indestructible },
         fusion_layer: { label: UI.fusion_layer || '聚变', desc: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#8E44AD' },
         fission_layer: { label: UI.fission_layer || '裂变', desc: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#2874A6' },
-        tomato_layer: { label: UI.tomato_layer || '层数', desc: '番茄在手中每保留一回合增加层数，最多 6 层；打出后层数重置。', color: '#C0392B' },
         layers: { label: '层数', desc: '状态或特殊属性的数量。层数越高效果会越强，或持续越久。', color: COLORS.text_primary },
     };
 }
@@ -6780,10 +6860,9 @@ function collectCardIntroTerms(cardDict) {
         [/(\d+\s*(?:F|层F)|灼烧|Burn)/i, 'F'],
         [/(\d+\s*电伤|电击伤害|电伤|Electric Damage)/i, 'electric_damage'],
         [/(魔法伤害|Magic Damage)/i, 'magic_damage'],
-        [/(淬毒|Toxic)/i, 'toxic'],
+        [/(淬毒|(?:^|[^A-Za-z_])Toxic(?!\s*Poison|[A-Za-z_])|["'](?:toxic|apply_toxic)["'])/i, 'toxic'],
         [/(抽牌|牌堆|draw|deck)/i, 'deck'],
         [/(弃牌|discard)/i, 'discard'],
-        [/(放逐|exile)/i, 'exile_zone'],
         [/(反制|counter|Guard)/i, 'response'],
         [/(装备护甲|equipment armor)/i, 'equipment_armor'],
         [/(爆牌|overflow)/i, 'overdraw'],
@@ -6795,6 +6874,9 @@ function collectCardIntroTerms(cardDict) {
     probes.forEach(([re, key]) => {
         if (re.test(rawText)) addTermIntroItem(items, seen, key);
     });
+    if (/(放逐|exile)/i.test(rawText)) {
+        addFlagIntroItem(items, seen, 'exile');
+    }
     const statusProbes = [
         [/易损|Fragile|jungle:fragile|fragile/i, 'jungle:fragile'],
         [/护盾|Shield|jungle:shield/i, 'jungle:shield'],
@@ -6824,11 +6906,26 @@ function collectCardIntroTerms(cardDict) {
     });
     if (/(虚无|Void)/i.test(rawText)) addFlagIntroItem(items, seen, 'void');
     if (/(回转|Rebound)/i.test(rawText)) addFlagIntroItem(items, seen, 'rebound');
+    const effectFlagProbes = [
+        [/(精准|precision|add_tag["']?\s*[:=]\s*["']?precision|tag["']?\s*[:=]\s*["']?precision)/i, 'precision'],
+        [/(魔力迅捷|magic swift|magic_swift|magic_swift_value)/i, 'magic_swift'],
+        [/(暂时迅捷|temporary swift|temp_swift|temp_swift_value)/i, 'temp_swift'],
+        [/(暂时沉重|temporary heavy|temp_heavy|temp_heavy_value)/i, 'temp_heavy'],
+        [/(威力|power|power_value)/i, 'power'],
+        [/(隐匿|stealth|tag["']?\s*[:=]\s*["']?stealth)/i, 'stealth'],
+        [/(萌芽|sprout|tag["']?\s*[:=]\s*["']?sprout)/i, 'sprout'],
+        [/(共生|symbiosis|tag["']?\s*[:=]\s*["']?symbiosis)/i, 'symbiosis'],
+    ];
+    effectFlagProbes.forEach(([re, flag]) => {
+        if (re.test(rawText)) addFlagIntroItem(items, seen, flag);
+    });
+    if (/(迅捷(?![：:]?魔)|(^|[^a-z_])swift($|[^a-z_])|(^|[^a-z_])swift_value($|[^a-z_]))/i.test(rawText.replace(/魔力迅捷/g, ''))) {
+        addFlagIntroItem(items, seen, 'swift');
+    }
     const fusionLevel = Math.max(1, Number(cardDict && cardDict.fusion_level || 1));
     const fissionLevel = Math.max(1, Number(cardDict && cardDict.fission_level || 1));
     if (fusionLevel > 1 || cardDef.id === 'Fusion') addTermIntroItem(items, seen, 'fusion_layer');
     if (fissionLevel > 1 || cardDef.id === 'Fission') addTermIntroItem(items, seen, 'fission_layer');
-    if (cardDef.id === 'Tomato') addTermIntroItem(items, seen, 'tomato_layer');
     if (!items.some(item => item.key === 'D') && cardDef.card_type === 'thorn') addTermIntroItem(items, seen, 'D');
     if (seen.has('P') || seen.has('F')) addTermIntroItem(items, seen, 'magic_damage');
     return items;
@@ -6860,7 +6957,7 @@ function getStatusIntroItem(statusInfo) {
         attack_blocked: { label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。', color: '#1A5276' },
-        bandage: { label: UI.status_bandage, desc: '绷带的保护，若状态存在，玩家死亡时会先无敌一回合，下回合死亡。', color: '#1E8449' },
+        bandage: { label: UI.status_bandage, desc: '受到致命伤害后无敌直到自己下个回合结束，然后死亡。', color: '#1E8449' },
         sponge: { label: UI.status_sponge, desc: '表示海绵的存在。', color: '#6C3483' },
         sluggish: { label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         overload: { label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
@@ -7057,6 +7154,8 @@ function showTermIntroForCard(cardDict, cardOptions = {}) {
     const blinded = shouldBlindCardForSelf(cardDict, cardOptions);
     const introCardDict = blinded ? { ...cardDict, __blind_for_self: true } : cardDict;
     const sourceRect = cardOptions.sourceRect || null;
+    const termIntroDepth = Math.max(0, Number(cardOptions.termIntroDepth || 0) || 0);
+    const allowNestedTermIntro = termIntroDepth < 1;
     removeFloatingCardPreview();
     removeCardHoldPreview();
     if (typeof cleanupDragState === 'function') cleanupDragState();
@@ -7077,8 +7176,9 @@ function showTermIntroForCard(cardDict, cardOptions = {}) {
     cardSlot.appendChild(card);
     title.textContent = blinded ? '? · ?' : `${getCardName(cardDef)} · 术语说明`;
     list.innerHTML = buildCardIntroTermsHtml(introCardDict);
-    bindInlineCardChips(cardSlot, { interactive: true });
-    bindInlineCardChips(list, { interactive: true });
+    overlay.dataset.termIntroDepth = String(termIntroDepth);
+    bindInlineCardChips(cardSlot, { interactive: true, allowTermIntro: allowNestedTermIntro, termIntroDepth: termIntroDepth + 1 });
+    bindInlineCardChips(list, { interactive: true, allowTermIntro: allowNestedTermIntro, termIntroDepth: termIntroDepth + 1 });
     overlay.classList.remove('visible');
     overlay.classList.toggle('card-flying', isUsableRect(sourceRect));
     overlay.classList.remove('hidden');
@@ -8223,6 +8323,42 @@ function accountStatsText(user) {
         user.losses || 0,
         user.draws || 0
     );
+}
+
+function formatAccountOnlineTime(seconds) {
+    const totalMinutes = Math.max(0, Math.floor((Number(seconds) || 0) / 60));
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    if (days > 0) return `${days}天 ${hours}小时 ${minutes}分钟`;
+    if (hours > 0) return `${hours}小时 ${minutes}分钟`;
+    return `${minutes}分钟`;
+}
+
+function renderAccountInfoPanel(user) {
+    const grid = $('account-info-grid');
+    if (!grid) return;
+    if (!user) {
+        grid.innerHTML = '';
+        return;
+    }
+    const games = Number(user.games_played || 0) || 0;
+    const wins = Number(user.wins || 0) || 0;
+    const losses = Number(user.losses || 0) || 0;
+    const draws = Number(user.draws || 0) || 0;
+    const winRate = games > 0 ? `${(wins / games * 100).toFixed(1)}%` : '0.0%';
+    const items = [
+        [currentLang === 'zh' ? '对局数' : 'Games', games],
+        [currentLang === 'zh' ? '胜率' : 'Win Rate', winRate],
+        [currentLang === 'zh' ? '胜 / 负 / 平' : 'W / L / D', `${wins} / ${losses} / ${draws}`],
+        [UI.account_online_time || '在线时间', formatAccountOnlineTime(user.online_seconds_total ?? user.online_seconds ?? 0)],
+    ];
+    grid.innerHTML = items.map(([label, value]) => `
+        <div class="account-info-item">
+            <span class="account-info-label">${escapeHtml(label)}</span>
+            <span class="account-info-value">${escapeHtml(value)}</span>
+        </div>
+    `).join('');
 }
 
 function normalizeSkinConfig(raw) {
@@ -9382,6 +9518,8 @@ function cacheAccount(user) {
                 wins: user.wins || 0,
                 losses: user.losses || 0,
                 draws: user.draws || 0,
+                online_seconds: user.online_seconds || 0,
+                online_seconds_total: user.online_seconds_total || user.online_seconds || 0,
                 last_username_change_at: user.last_username_change_at || '',
                 accept_friend_requests: user.accept_friend_requests !== false,
                 searchable_by_nickname: user.searchable_by_nickname !== false,
@@ -9409,16 +9547,25 @@ function renderAccountState() {
     const stats = accountStatsText(currentAccount);
     const popStats = $('account-popover-stats');
     if (popStats) popStats.textContent = stats;
+    if (!currentAccount) accountPanelTab = 'info';
+    const accountTabs = $('account-panel-tabs');
+    if (accountTabs) accountTabs.classList.toggle('hidden', !currentAccount);
+    document.querySelectorAll('[data-account-panel-tab]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.accountPanelTab === accountPanelTab);
+    });
+    renderAccountInfoPanel(currentAccount);
     const replaySection = $('account-replays-section');
     if (replaySection) replaySection.classList.toggle('hidden', !currentAccount);
     const authForm = $('account-auth-form');
     if (authForm) authForm.classList.toggle('hidden', !!currentAccount);
+    const infoPanel = $('account-info-panel');
+    if (infoPanel) infoPanel.classList.toggle('hidden', !currentAccount || accountPanelTab !== 'info');
     const passwordChangeForm = $('account-password-change-form');
-    if (passwordChangeForm) passwordChangeForm.classList.toggle('hidden', !currentAccount);
+    if (passwordChangeForm) passwordChangeForm.classList.toggle('hidden', !currentAccount || accountPanelTab !== 'password');
     const usernameChangeForm = $('account-username-change-form');
-    if (usernameChangeForm) usernameChangeForm.classList.toggle('hidden', !currentAccount);
+    if (usernameChangeForm) usernameChangeForm.classList.toggle('hidden', !currentAccount || accountPanelTab !== 'username');
     const deleteSection = $('account-delete-section');
-    if (deleteSection) deleteSection.classList.toggle('hidden', !currentAccount);
+    if (deleteSection) deleteSection.classList.toggle('hidden', !currentAccount || accountPanelTab !== 'info');
     const newUsernameInput = $('input-account-new-username');
     if (newUsernameInput && currentAccount) newUsernameInput.value = currentAccount.username || '';
     const popLogout = $('btn-account-popover-logout');
@@ -9428,13 +9575,7 @@ function renderAccountState() {
     }
     const btnConnect = $('btn-connect');
     if (btnConnect) btnConnect.textContent = UI.enter_lobby;
-    const friendsTop = $('btn-friends-top');
-    const loginVisible = !$('view-login')?.classList.contains('hidden');
-    if (friendsTop) friendsTop.classList.toggle('hidden', !currentAccount || !loginVisible);
-    const statsTop = $('btn-stats-top');
-    if (statsTop) statsTop.classList.toggle('hidden', !currentAccount || !loginVisible);
-    const skinTop = $('btn-skin-top');
-    if (skinTop) skinTop.classList.toggle('hidden', !loginVisible);
+    updateTopActionButtons(activeViewId);
     const guestDivider = $('guest-divider-label')?.closest('.login-divider');
     if (guestDivider) guestDivider.classList.toggle('hidden', !!currentAccount);
     const nicknameInput = $('input-nickname');
@@ -9478,9 +9619,9 @@ function renderAccountMode() {
     const registerBtn = $('btn-account-register');
     if (registerBtn) registerBtn.classList.toggle('hidden', !isRegister || !!currentAccount);
     const changePasswordBtn = $('btn-account-change-password');
-    if (changePasswordBtn) changePasswordBtn.classList.toggle('hidden', !currentAccount);
+    if (changePasswordBtn) changePasswordBtn.classList.toggle('hidden', !currentAccount || accountPanelTab !== 'password');
     const changeUsernameBtn = $('btn-account-change-username');
-    if (changeUsernameBtn) changeUsernameBtn.classList.toggle('hidden', !currentAccount);
+    if (changeUsernameBtn) changeUsernameBtn.classList.toggle('hidden', !currentAccount || accountPanelTab !== 'username');
 }
 
 function setAccountMode(mode) {
@@ -10896,12 +11037,6 @@ function getSearchLocalizedText(source, i18nKey, fallbackKey) {
     return [...new Set(parts.filter(Boolean))].join(' ');
 }
 
-const BUILTIN_PINYIN_SEARCH_MODS = new Set([
-    'vanillacards.gtnmod',
-    'trollcards.gtnmod',
-    'thorncardssupplement1.gtnmod',
-]);
-
 const BUILTIN_CARD_PINYIN_ALIASES = {
     Basic: 'ji ben',
     Bone: 'gu tou',
@@ -10962,15 +11097,53 @@ const BUILTIN_CARD_PINYIN_ALIASES = {
     Tomato: 'fan qie',
 };
 
+const CARD_NAME_PINYIN_CHAR_MAP = {
+    三: 'san', 世: 'shi', 丝: 'si', 丸: 'wan', 丽: 'li', 之: 'zhi', 人: 'ren', 仙: 'xian',
+    体: 'ti', 便: 'bian', 光: 'guang', 公: 'gong', 兰: 'lan', 冻: 'dong', 刺: 'ci', 化: 'hua',
+    南: 'nan', 卡: 'ka', 变: 'bian', 只: 'zhi', 叶: 'ye', 咖: 'ka', 啡: 'fei', 器: 'qi',
+    圆: 'yuan', 土: 'tu', 地: 'di', 基: 'ji', 大: 'da', 头: 'tou', 女: 'nv', 子: 'zi',
+    安: 'an', 导: 'dao', 尖: 'jian', 尾: 'wei', 岩: 'yan', 带: 'dai', 弹: 'dan', 形: 'xing',
+    快: 'kuai', 态: 'tai', 护: 'hu', 拟: 'ni', 指: 'zhi', 掌: 'zhang', 晕: 'yun', 更: 'geng',
+    木: 'mu', 末: 'mo', 本: 'ben', 朵: 'duo', 机: 'ji', 条: 'tiao', 板: 'ban', 构: 'gou',
+    果: 'guo', 枣: 'zao', 染: 'ran', 标: 'biao', 树: 'shu', 根: 'gen', 械: 'xie', 棉: 'mian',
+    椒: 'jiao', 椰: 'ye', 橙: 'cheng', 橡: 'xiang', 毒: 'du', 氰: 'qing', 水: 'shui', 池: 'chi',
+    污: 'wu', 沙: 'sha', 法: 'fa', 泡: 'pao', 海: 'hai', 激: 'ji', 火: 'huo', 爪: 'zhua',
+    片: 'pian', 牙: 'ya', 物: 'wu', 玉: 'yu', 玫: 'mei', 玻: 'bo', 球: 'qiu', 瑰: 'gui',
+    璃: 'li', 电: 'dian', 界: 'jie', 番: 'fan', 癌: 'ai', 盐: 'yan', 盘: 'pan', 目: 'mu',
+    眩: 'xuan', 眼: 'yan', 石: 'shi', 碎: 'sui', 磁: 'ci', 神: 'shen', 种: 'zhong', 竹: 'zhu',
+    符: 'fu', 第: 'di', 米: 'mi', 粉: 'fen', 细: 'xi', 绵: 'mian', 绷: 'beng', 网: 'wang',
+    翅: 'chi', 聚: 'ju', 胞: 'bao', 胶: 'jiao', 腐: 'fu', 膀: 'bang', 色: 'se', 花: 'hua',
+    英: 'ying', 茄: 'qie', 药: 'yao', 萄: 'tao', 葡: 'pu', 蒲: 'pu', 薯: 'shu', 蜂: 'feng',
+    蜜: 'mi', 螫: 'zhe', 血: 'xue', 裂: 'lie', 角: 'jiao', 触: 'chu', 记: 'ji', 豆: 'dou',
+    豌: 'wan', 贞: 'zhen', 轮: 'lun', 轻: 'qing', 辣: 'la', 遗: 'yi', 邪: 'xie', 重: 'zhong',
+    金: 'jin', 针: 'zhen', 铀: 'you', 铁: 'tie', 铲: 'chan', 锤: 'chui', 锯: 'ju', 镜: 'jing',
+    阳: 'yang', 阴: 'yin', 雷: 'lei', 风: 'feng', 骨: 'gu', 魔: 'mo', 鸢: 'yuan', 黄: 'huang',
+    齿: 'chi',
+};
+
+function getChineseNamePinyinSearchText(name) {
+    if (currentLang !== 'zh') return '';
+    const chars = Array.from(String(name || '')).filter(ch => CARD_NAME_PINYIN_CHAR_MAP[ch]);
+    if (!chars.length) return '';
+    const syllables = chars.map(ch => CARD_NAME_PINYIN_CHAR_MAP[ch]);
+    const spaced = syllables.join(' ');
+    const compact = syllables.join('');
+    const initials = syllables.map(item => item[0]).join('');
+    return `${spaced} ${compact} ${initials}`;
+}
+
 function getBuiltinCardPinyinSearchText(cd) {
     if (currentLang !== 'zh' || !cd) return '';
-    const filename = String(cd.source_mod_filename || '').toLowerCase();
-    if (!cd.source_mod_is_vanilla && !BUILTIN_PINYIN_SEARCH_MODS.has(filename)) return '';
-    const alias = BUILTIN_CARD_PINYIN_ALIASES[cd.id];
-    if (!alias) return '';
-    const spaced = String(alias).toLowerCase().trim().replace(/\s+/g, ' ');
-    const compact = spaced.replace(/\s+/g, '');
-    return `${spaced} ${compact}`;
+    const alias = BUILTIN_CARD_PINYIN_ALIASES[cd.id] || BUILTIN_CARD_PINYIN_ALIASES[cd.name_en || ''];
+    const parts = [];
+    if (alias) {
+        const spaced = String(alias).toLowerCase().trim().replace(/\s+/g, ' ');
+        parts.push(spaced, spaced.replace(/\s+/g, ''), spaced.split(/\s+/).map(item => item[0]).join(''));
+    }
+    parts.push(getChineseNamePinyinSearchText(cd.name_cn));
+    const i18n = cd.name_i18n || {};
+    parts.push(getChineseNamePinyinSearchText(i18n.zh));
+    return [...new Set(parts.filter(Boolean))].join(' ');
 }
 
 function cardSearchText(defId) {
@@ -11149,34 +11322,161 @@ async function editSoloCardFlags(which, idx) {
     await editSoloCardFlags(which, idx);
 }
 
+function normalizeSetupCardChoiceEntry(entry, idx) {
+    const obj = typeof entry === 'string' ? { def_id: entry } : { ...(entry || {}) };
+    obj.def_id = String(obj.def_id || '');
+    obj._choiceIndex = idx;
+    return obj;
+}
+
+function showSetupCardMultiSelect(entries, maxCount, title, config = {}) {
+    return new Promise((resolve) => {
+        const el = $('game-prompt');
+        const optsEl = $('game-prompt-options');
+        if (!el || !optsEl) { resolve([]); return; }
+        cleanupGamePromptTransientButtons();
+
+        const excluded = new Set(config.excludeDefIds || config.exclude_def_ids || []);
+        const source = (entries || [])
+            .map((entry, idx) => normalizeSetupCardChoiceEntry(entry, idx))
+            .filter(entry => entry.def_id && !excluded.has(entry.def_id) && getCardDef(entry.def_id));
+        if (!source.length) { resolve([]); return; }
+
+        const min = Math.max(0, Number(config.min ?? 0));
+        const max = Math.max(min, Math.min(Number(maxCount || config.max || source.length), source.length));
+        const cancellable = config.cancellable !== false;
+        const selected = new Set();
+
+        $('game-prompt-title').textContent = title || '';
+        optsEl.innerHTML = '';
+
+        let msgEl = $('game-prompt-message');
+        if (!msgEl) {
+            msgEl = document.createElement('div');
+            msgEl.id = 'game-prompt-message';
+            msgEl.className = 'game-prompt-message';
+            optsEl.parentNode.insertBefore(msgEl, optsEl);
+        }
+        msgEl.classList.remove('hidden');
+
+        const search = document.createElement('input');
+        if (config.searchable) {
+            search.type = 'text';
+            search.placeholder = UI.search || '搜索';
+            search.style.width = '100%';
+            search.style.marginBottom = '8px';
+            search.style.padding = '7px 9px';
+            search.style.border = '1px solid var(--border-color)';
+            search.style.borderRadius = 'var(--radius-sm)';
+            search.style.background = 'var(--input-bg, #fff)';
+            search.style.color = 'var(--text-color)';
+            optsEl.appendChild(search);
+        }
+
+        const list = document.createElement('div');
+        list.className = 'setup-card-multi-list';
+        list.style.display = 'grid';
+        list.style.gridTemplateColumns = config.searchable ? 'repeat(auto-fill, minmax(132px, 1fr))' : '1fr';
+        list.style.gap = '6px';
+        list.style.maxHeight = config.maxHeight || (config.searchable ? '44vh' : '48vh');
+        list.style.overflow = 'auto';
+        optsEl.appendChild(list);
+
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'btn btn-primary game-prompt-transient-btn';
+        confirmBtn.style.marginTop = '10px';
+
+        function selectedEntries() {
+            return source.filter(entry => selected.has(entry._choiceIndex));
+        }
+
+        function updateConfirm() {
+            const count = selected.size;
+            const ok = count >= min && count <= max;
+            confirmBtn.disabled = !ok;
+            confirmBtn.classList.toggle('disabled', !ok);
+            const rangeText = min > 0 ? `${count}/${min}-${max}` : `${count}/${max}`;
+            confirmBtn.textContent = `${config.confirmText || UI.ok || '确定'} (${rangeText})`;
+            const selectedText = (UI.selected_count || '已选择 {0}/{1}')
+                .replace('{0}', count)
+                .replace('{1}', max);
+            msgEl.textContent = `${config.message ? `${config.message} ` : ''}${selectedText}`;
+        }
+
+        function renderList() {
+            const q = config.searchable ? search.value.trim().toLowerCase() : '';
+            list.innerHTML = '';
+            source
+                .filter(entry => !q || cardSearchText(entry.def_id).includes(q))
+                .forEach((entry) => {
+                    const row = document.createElement('button');
+                    row.type = 'button';
+                    row.className = 'game-prompt-option';
+                    row.classList.toggle('selected', selected.has(entry._choiceIndex));
+                    row.style.justifyContent = 'flex-start';
+                    row.style.minHeight = '34px';
+                    renderChoiceOptionContent(row, cardChoiceOption(entry, { detail: `#${entry._choiceIndex + 1}` }), entry._choiceIndex, { numbered: false });
+                    row.onclick = () => {
+                        if (selected.has(entry._choiceIndex)) {
+                            selected.delete(entry._choiceIndex);
+                        } else if (selected.size < max) {
+                            selected.add(entry._choiceIndex);
+                        }
+                        updateConfirm();
+                        renderList();
+                    };
+                    list.appendChild(row);
+                });
+        }
+
+        function finish(value) {
+            removeFloatingCardPreview();
+            el.classList.remove('active');
+            cleanupGamePromptTransientButtons();
+            resolve(value);
+        }
+
+        confirmBtn.onclick = () => {
+            if (confirmBtn.disabled) return;
+            finish(selectedEntries());
+        };
+
+        const cancelBtn = $('game-prompt-cancel');
+        cancelBtn.textContent = UI.cancel || '取消';
+        cancelBtn.classList.toggle('hidden', !cancellable);
+        cancelBtn.style.display = cancellable ? '' : 'none';
+        cancelBtn.onclick = () => finish(false);
+        cancelBtn.parentNode.appendChild(confirmBtn);
+
+        if (config.searchable) search.oninput = renderList;
+        updateConfirm();
+        renderList();
+        el.classList.add('active');
+        if (config.searchable) setTimeout(() => search.focus(), 30);
+    });
+}
+
 async function buildSoloEventSubChoice(eventId, deck, label) {
     if (eventId === 2) {
-        const conversions = [];
-        const countOptions = ['1', '2', '3'];
-        const countSel = await gamePrompt(UI.choose_convert_count, countOptions, { cancellable: false });
-        if (countSel < 0) return false;
-        for (let i = 0; i <= countSel; i++) {
-            const sourceOptions = deck.map((entry, idx) => cardChoiceOption(entry, { detail: `#${idx + 1}` }));
-            const sourceSel = await gamePrompt(`${label} ${UI.choose_source_card_n.replace('{0}', i + 1)}`, sourceOptions, { cancellable: false });
-            if (sourceSel < 0) return false;
-            conversions.push({
-                source_def_id: deck[sourceSel].def_id,
-            });
-        }
+        const selected = await showSetupCardMultiSelect(
+            deck,
+            3,
+            `${label} ${UI.choose_convert_count || '选择转化牌'}`,
+            { min: 0, excludeDefIds: [] }
+        );
+        if (!selected) return false;
+        const conversions = selected.map(item => ({ source_def_id: item.def_id }));
         return { conversions };
     }
     if (eventId === 3) {
-        const convert_def_ids = [];
-        const countOptions = ['1', '2', '3', '4', '5'];
-        const countSel = await gamePrompt(UI.choose_convert_count, countOptions, { cancellable: false });
-        if (countSel < 0) return false;
-        for (let i = 0; i <= countSel; i++) {
-            const sourceOptions = deck.map((entry, idx) => cardChoiceOption(entry, { detail: `#${idx + 1}` }));
-            const sourceSel = await gamePrompt(`${label} ${UI.choose_source_card_n.replace('{0}', i + 1)}`, sourceOptions, { cancellable: false });
-            if (sourceSel < 0) return false;
-            convert_def_ids.push(deck[sourceSel].def_id);
-        }
-        return { convert_def_ids };
+        const selected = await showSetupCardMultiSelect(
+            deck,
+            5,
+            `${label} ${UI.choose_light_cards || '选择光之洗礼牌'}`,
+            { min: 0, excludeDefIds: ['Light'] }
+        );
+        if (!selected) return false;
+        return { convert_def_ids: selected.map(item => item.def_id) };
     }
     if (eventId === 5) {
         return await showFatedDrawChoice();
@@ -11841,227 +12141,43 @@ async function showFatedDrawChoice(poolCards) {
             return cd && card.def_id !== 'Error' && Number(cd.count || 0) > 0;
         })
         .sort((a, b) => compareGalleryCards(a.def_id, b.def_id));
-    return new Promise((resolve) => {
-        const el = $('game-prompt');
-        if (!el) { resolve({ add_def_ids: [] }); return; }
-        $('game-prompt-title').textContent = '命运抽签：选择1张牌洗入牌库';
-        const optsEl = $('game-prompt-options');
-        optsEl.innerHTML = '';
-        const selected = [];
-        let confirmBtn = null;
-        const selectedBox = document.createElement('div');
-        selectedBox.className = 'choice-selected-cards';
-        selectedBox.style.display = 'flex';
-        selectedBox.style.flexWrap = 'wrap';
-        selectedBox.style.gap = '6px';
-        selectedBox.style.marginBottom = '8px';
-        const search = document.createElement('input');
-        search.type = 'text';
-        search.placeholder = UI.search || '搜索';
-        search.style.width = '100%';
-        search.style.marginBottom = '8px';
-        search.style.padding = '7px 9px';
-        search.style.border = '1px solid var(--border-color)';
-        search.style.borderRadius = 'var(--radius-sm)';
-        search.style.background = 'var(--input-bg, #fff)';
-        search.style.color = 'var(--text-color)';
-        const list = document.createElement('div');
-        list.className = 'fated-draw-card-list';
-        list.style.display = 'grid';
-        list.style.gridTemplateColumns = 'repeat(auto-fill, minmax(132px, 1fr))';
-        list.style.gap = '6px';
-        list.style.maxHeight = '44vh';
-        list.style.overflow = 'auto';
-
-        function renderSelected() {
-            selectedBox.innerHTML = '';
-            if (!selected.length) {
-                const empty = document.createElement('span');
-                empty.className = 'choice-option-detail';
-                empty.textContent = '请选择1张牌';
-                selectedBox.appendChild(empty);
-            }
-            selected.forEach((defId, idx) => {
-                const chip = createCardChoiceChip({ def_id: defId }, { includeLayers: false, includeTomato: false });
-                chip.style.cursor = 'pointer';
-                chip.title = UI.cancel || '移除';
-                chip.onclick = () => {
-                    selected.splice(idx, 1);
-                    renderSelected();
-                    renderList();
-                };
-                selectedBox.appendChild(chip);
-            });
-            if (confirmBtn) {
-                confirmBtn.disabled = selected.length !== 1;
-            }
-        }
-
-        function renderList() {
-            const q = search.value.trim().toLowerCase();
-            list.innerHTML = '';
-            normalizedPool
-                .filter(card => !q || cardSearchText(card.def_id).includes(q))
-                .forEach(card => {
-                    const row = document.createElement('button');
-                    row.type = 'button';
-                    row.className = 'game-prompt-option';
-                    row.style.justifyContent = 'flex-start';
-                    row.style.minHeight = '34px';
-                    row.disabled = selected.length >= 1;
-                    row.appendChild(createCardChoiceChip(card, { includeLayers: true, includeTomato: true }));
-                    row.onclick = () => {
-                        if (selected.length >= 1) return;
-                        selected.push(card.def_id);
-                        renderSelected();
-                        renderList();
-                    };
-                    list.appendChild(row);
-                });
-        }
-
-        optsEl.appendChild(selectedBox);
-        optsEl.appendChild(search);
-        optsEl.appendChild(list);
-        const cancelBtn = $('game-prompt-cancel');
-        cancelBtn.classList.add('hidden');
-        cancelBtn.style.display = 'none';
-        cancelBtn.onclick = null;
-        search.oninput = renderList;
-        renderSelected();
-        renderList();
-        confirmBtn = document.createElement('button');
-        confirmBtn.className = 'btn btn-primary';
-        confirmBtn.textContent = UI.ok;
-        confirmBtn.style.marginTop = '10px';
-        confirmBtn.disabled = true;
-        confirmBtn.onclick = () => {
-            if (selected.length !== 1) return;
-            removeFloatingCardPreview();
-            el.classList.remove('active');
-            resolve({ add_def_ids: selected.slice(0, 1) });
-        };
-        optsEl.appendChild(confirmBtn);
-        el.classList.add('active');
-        setTimeout(() => search.focus(), 30);
-    });
+    const selected = await showSetupCardMultiSelect(
+        normalizedPool,
+        1,
+        '命运抽签：选择1张牌洗入牌库',
+        { min: 1, searchable: true, cancellable: false }
+    );
+    if (!selected || selected === false) return { add_def_ids: [] };
+    return { add_def_ids: selected.map(card => card.def_id).slice(0, 1) };
 }
 
 async function showMagicConversionFlow() {
     const data = eventSelectData;
-    const draftPicks = data.draft_picks || [];
+    const draftPicks = (data.draft_picks || []).map(defId => ({ def_id: defId }));
     if (!draftPicks.length) return null;
-    const counts = {};
-    draftPicks.forEach(d => { counts[d] = (counts[d] || 0) + 1; });
-    const cardTypes = Object.keys(counts).sort((a, b) => (getCardName(getCardDef(a)) || a).localeCompare(getCardName(getCardDef(b)) || b));
-    const countOptions = [];
-    for (let i = 1; i < Math.min(4, cardTypes.length + 1); i++) countOptions.push(String(i));
-    const convertCountIdx = await gamePrompt(UI.choose_convert_count, countOptions, { cancellable: false });
-    if (convertCountIdx < 0) return false;
-    const convertCount = convertCountIdx + 1;
-    const conversions = [];
-    const remainingCounts = { ...counts };
-    for (let i = 0; i < convertCount; i++) {
-        const availableTypes = cardTypes.filter(d => (remainingCounts[d] || 0) > 0);
-        const availableDisplay = availableTypes.map(did => cardDefChoiceOption(did, { detail: `x${remainingCounts[did]}` }));
-        const sourceSel = await gamePrompt(UI.choose_source_card_n.replace('{0}', i + 1), availableDisplay, { cancellable: false });
-        if (sourceSel < 0) return false;
-        remainingCounts[availableTypes[sourceSel]] = (remainingCounts[availableTypes[sourceSel]] || 0) - 1;
-        conversions.push({ source_def_id: availableTypes[sourceSel] });
-    }
-    return conversions.length ? { conversions } : null;
+    const selected = await showSetupCardMultiSelect(
+        draftPicks,
+        3,
+        UI.choose_convert_count || '选择转化牌',
+        { min: 0, cancellable: false }
+    );
+    if (selected === false) return false;
+    return { conversions: (selected || []).map(card => ({ source_def_id: card.def_id })) };
 }
 
 async function showLightConversionChoice() {
-    const draftPicks = eventSelectData.draft_picks || [];
-    const counts = {};
-    draftPicks.forEach(d => { if (d !== 'Light') counts[d] = (counts[d] || 0) + 1; });
-    const entries = Object.entries(counts).sort((a, b) => (getCardName(getCardDef(a[0])) || a[0]).localeCompare(getCardName(getCardDef(b[0])) || b[0]));
-    if (!entries.length) return null;
-    return new Promise((resolve) => {
-        const el = $('game-prompt');
-        if (!el) { resolve(null); return; }
-        cleanupGamePromptTransientButtons();
-        $('game-prompt-title').textContent = UI.choose_light_cards + ` (${UI.convert_per_type.replace('{0}', 5)})`;
-        const optsEl = $('game-prompt-options');
-        optsEl.innerHTML = '';
-        const inputs = {};
-        const MAX_TOTAL = 5;
-        function getTotal(exclude) {
-            let t = 0;
-            entries.forEach(([did]) => {
-                if (did !== exclude) t += Math.max(0, parseInt(inputs[did]?.value) || 0);
-            });
-            return t;
-        }
-        entries.forEach(([did, cnt]) => {
-            const cd = getCardDef(did);
-            const row = document.createElement('div');
-            row.className = 'game-prompt-option';
-            row.style.cursor = 'default';
-            const label = document.createElement('span');
-            label.style.flex = '1';
-            label.style.display = 'flex';
-            label.style.alignItems = 'center';
-            label.style.gap = '6px';
-            label.textContent = '';
-            label.appendChild(createCardChoiceChip({ def_id: did }, { includeLayers: false, includeTomato: false }));
-            const count = document.createElement('span');
-            count.className = 'choice-option-detail';
-            count.textContent = `x${cnt}`;
-            label.appendChild(count);
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.min = '0';
-            input.max = String(Math.min(cnt, MAX_TOTAL));
-            input.value = '0';
-            input.style.width = '48px';
-            input.style.textAlign = 'center';
-            input.style.padding = '4px';
-            input.style.fontSize = '13px';
-            input.style.fontFamily = 'var(--font-main)';
-            input.style.border = '1px solid var(--border-color)';
-            input.style.borderRadius = 'var(--radius-sm)';
-            input.style.outline = 'none';
-            input.addEventListener('click', (e) => e.stopPropagation());
-            input.addEventListener('input', () => {
-                let val = parseInt(input.value);
-                if (isNaN(val) || val < 0) val = 0;
-                const othersTotal = getTotal(did);
-                const maxAllowed = Math.min(cnt, MAX_TOTAL - othersTotal);
-                if (val > maxAllowed) {
-                    val = Math.max(0, maxAllowed);
-                    input.value = val;
-                }
-            });
-            inputs[did] = input;
-            row.appendChild(label);
-            row.appendChild(input);
-            optsEl.appendChild(row);
-        });
-        const cancelBtn = $('game-prompt-cancel');
-        cancelBtn.textContent = UI.ok;
-        cancelBtn.classList.remove('hidden');
-        cancelBtn.style.display = '';
-        cancelBtn.classList.remove('btn-secondary');
-        cancelBtn.classList.add('btn-primary');
-        cancelBtn.onclick = (e) => {
-            e.stopPropagation();
-            el.classList.remove('active');
-            cancelBtn.textContent = UI.cancel;
-            cancelBtn.classList.remove('btn-primary');
-            cancelBtn.classList.add('btn-secondary');
-            const convertDefIds = [];
-            let total = 0;
-            entries.forEach(([did, cnt]) => {
-                const val = Math.min(parseInt(inputs[did].value) || 0, Math.min(cnt, MAX_TOTAL - total));
-                for (let i = 0; i < val; i++) convertDefIds.push(did);
-                total += val;
-            });
-            resolve({ convert_def_ids: convertDefIds });
-        };
-        el.classList.add('active');
-    });
+    const draftPicks = (eventSelectData.draft_picks || [])
+        .filter(defId => defId !== 'Light')
+        .map(defId => ({ def_id: defId }));
+    if (!draftPicks.length) return null;
+    const selected = await showSetupCardMultiSelect(
+        draftPicks,
+        5,
+        UI.choose_light_cards + ` (${UI.convert_per_type.replace('{0}', 5)})`,
+        { min: 0, cancellable: false }
+    );
+    if (selected === false) return false;
+    return { convert_def_ids: (selected || []).map(card => card.def_id) };
 }
 
 async function showYggdrasilConversionChoice() {
@@ -12073,19 +12189,6 @@ async function showYggdrasilConversionChoice() {
     const sel = await gamePrompt(UI.choose_yggdrasil_card, display, { cancellable: false });
     if (sel < 0 || sel >= options.length) return false;
     return { yggdrasil_convert_def_id: options[sel] };
-}
-
-async function showCardConversionChoice(draftPicks, maxCount, title) {
-    const counts = {};
-    draftPicks.forEach(d => {
-        if (d === 'Light' && maxCount === 5) return;
-        counts[d] = (counts[d] || 0) + 1;
-    });
-    const entries = Object.entries(counts).sort((a, b) => (getCardName(getCardDef(a[0])) || a[0]).localeCompare(getCardName(getCardDef(b[0])) || b[0]));
-    const display = entries.map(([did, cnt]) => cardDefChoiceOption(did, { detail: `x${cnt}` }));
-    const sel = await gamePrompt(title + ` (${UI.convert_per_type.replace('{0}', maxCount)})`, display);
-    if (sel < 0) return false;
-    return null;
 }
 
 function debugLayout() {
@@ -15145,37 +15248,48 @@ function compactBattleLogLinesForDisplay(log) {
 
 function compactBattleLogEntriesForDisplay(log) {
     const output = [];
-    const keyIndex = new Map();
     const rawLines = Array.isArray(log) ? log.map(line => String(line || '')) : [];
-    const remember = (key, entry) => {
-        if (!keyIndex.has(key)) {
-            keyIndex.set(key, output.length);
-            output.push(entry);
-            return entry;
-        }
-        const existing = output[keyIndex.get(key)];
-        existing.rawEnd = entry.rawEnd;
-        return existing;
-    };
     rawLines.forEach((line, rawIndex) => {
         const use = parseBattleUseLogForCompact(line);
         if (use) {
-            const entry = remember(`use:${use.actor}:${use.card}`, { kind: 'use', ...use, rawStart: rawIndex, rawEnd: rawIndex });
-            if (entry.rawStart !== rawIndex) entry.count += use.count;
+            const last = output[output.length - 1];
+            const previous = output[output.length - 2];
+            if (last && last.kind === 'damage') {
+                if (previous && previous.kind === 'use' && previous.actor === use.actor && previous.card === use.card) {
+                    previous.count += use.count;
+                    previous.rawEnd = rawIndex;
+                } else {
+                    output.splice(output.length - 1, 0, { kind: 'use', ...use, rawStart: rawIndex, rawEnd: rawIndex });
+                }
+                return;
+            }
+            if (last && last.kind === 'use' && last.actor === use.actor && last.card === use.card) {
+                last.count += use.count;
+                last.rawEnd = rawIndex;
+                return;
+            }
+            output.push({ kind: 'use', ...use, rawStart: rawIndex, rawEnd: rawIndex });
             return;
         }
         const damage = parseBattleDamageLogForCompact(line);
         if (damage) {
-            const expr = formatBattleDamageUnitsForCompact(damage.units);
-            const entry = remember(`damage:${damage.target}:${expr}`, { kind: 'damage', ...damage, rawStart: rawIndex, rawEnd: rawIndex });
-            if (entry.rawStart !== rawIndex) {
-                entry.units = (entry.units || []).concat(damage.units || []);
-                entry.hp = mergeBattleHpChainForCompact(entry.hp, damage.hp);
+            const last = output[output.length - 1];
+            if (last && last.kind === 'damage' && last.target === damage.target) {
+                last.units = (last.units || []).concat(damage.units || []);
+                last.hp = mergeBattleHpChainForCompact(last.hp, damage.hp);
+                last.rawEnd = rawIndex;
+                return;
             }
+            output.push({ kind: 'damage', ...damage, rawStart: rawIndex, rawEnd: rawIndex });
             return;
         }
-        const entry = remember(`raw:${line}`, { kind: 'raw', text: line, count: 1, rawStart: rawIndex, rawEnd: rawIndex });
-        if (entry.rawStart !== rawIndex) entry.count = Number(entry.count || 1) + 1;
+        const last = output[output.length - 1];
+        if (last && last.kind === 'raw' && last.text === line) {
+            last.count = Number(last.count || 1) + 1;
+            last.rawEnd = rawIndex;
+            return;
+        }
+        output.push({ kind: 'raw', text: line, count: 1, rawStart: rawIndex, rawEnd: rawIndex });
     });
     return output.map(entry => ({
         type: 'battle',
@@ -15201,10 +15315,10 @@ function buildBattleTimelineEntries(log) {
         while (chatIndex < chats.length && Number(chats[chatIndex].logAnchor || 0) <= start) {
             entries.push(chats[chatIndex++]);
         }
+        entries.push(entry);
         while (chatIndex < chats.length && Number(chats[chatIndex].logAnchor || 0) <= end + 1) {
             entries.push(chats[chatIndex++]);
         }
-        entries.push(entry);
     });
     while (chatIndex < chats.length) entries.push(chats[chatIndex++]);
     return entries;
@@ -18305,6 +18419,13 @@ async function init() {
     if ($('btn-account-change-password')) $('btn-account-change-password').addEventListener('click', onAccountChangePassword);
     if ($('btn-account-mode-login')) $('btn-account-mode-login').addEventListener('click', () => setAccountMode('login'));
     if ($('btn-account-mode-register')) $('btn-account-mode-register').addEventListener('click', () => setAccountMode('register'));
+    document.querySelectorAll('[data-account-panel-tab]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            accountPanelTab = btn.dataset.accountPanelTab || 'info';
+            setAccountError('');
+            renderAccountState();
+        });
+    });
     if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());
     if ($('btn-friends-top')) $('btn-friends-top').addEventListener('click', () => toggleFriendsPopover());
     if ($('btn-skin-top')) $('btn-skin-top').addEventListener('click', openSkinEditor);

@@ -128,13 +128,27 @@ _FRIEND_CLEANUP_INTERVAL_SECONDS = 600
 
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH, timeout=8)
+    conn = sqlite3.connect(DB_PATH, timeout=5)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys=ON;')
-    conn.execute('PRAGMA busy_timeout=8000;')
+    try:
+        conn.execute('PRAGMA journal_mode=WAL;')
+    except sqlite3.OperationalError:
+        pass
+    conn.execute('PRAGMA busy_timeout=5000;')
     conn.execute('PRAGMA synchronous=NORMAL;')
     conn.execute('PRAGMA temp_store=MEMORY;')
     return conn
+
+
+def db_slow_log(endpoint='', elapsed_ms=0, sql_tag=''):
+    try:
+        elapsed = float(elapsed_ms or 0)
+    except (TypeError, ValueError):
+        elapsed = 0
+    if elapsed < 500:
+        return
+    print(f'[db_slow] endpoint={endpoint or "-"} elapsed_ms={elapsed:.1f} sql_tag={sql_tag or "-"}', flush=True)
 
 
 def _load_player_id_blacklist():
@@ -329,6 +343,10 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN last_username_change_at TEXT')
         if 'deleted_at' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN deleted_at TEXT')
+        if 'online_seconds' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN online_seconds INTEGER DEFAULT 0')
+        if 'online_session_started_at' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN online_session_started_at TEXT')
         _assign_missing_player_ids(conn)
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_last_login ON users(last_login_at)')
@@ -776,6 +794,8 @@ def row_to_user(row):
         'last_username_change_at': row['last_username_change_at'] if 'last_username_change_at' in row.keys() else None,
         'deleted_at': row['deleted_at'] if 'deleted_at' in row.keys() else None,
         'deleted': bool(row['deleted_at']) if 'deleted_at' in row.keys() else False,
+        'online_seconds': int(row['online_seconds'] or 0) if 'online_seconds' in row.keys() else 0,
+        'online_session_started_at': row['online_session_started_at'] if 'online_session_started_at' in row.keys() else None,
         'skin': normalize_skin_config(skin_raw),
     }
 
@@ -851,7 +871,44 @@ def mark_user_last_seen(user_id):
     except (TypeError, ValueError):
         return False
     with get_db_connection() as conn:
-        conn.execute('UPDATE users SET last_login_at = ? WHERE id = ?', (utc_now(), uid))
+        now = utc_now()
+        row = conn.execute('SELECT online_session_started_at FROM users WHERE id = ?', (uid,)).fetchone()
+        add_seconds = 0
+        if row is not None and row['online_session_started_at']:
+            try:
+                start = datetime.fromisoformat(str(row['online_session_started_at']).replace('Z', '+00:00'))
+                end = datetime.fromisoformat(now.replace('Z', '+00:00'))
+                add_seconds = max(0, int((end - start).total_seconds()))
+            except Exception:
+                add_seconds = 0
+        conn.execute(
+            '''
+            UPDATE users
+            SET last_login_at = ?,
+                online_seconds = COALESCE(online_seconds, 0) + ?,
+                online_session_started_at = NULL
+            WHERE id = ?
+            ''',
+            (now, add_seconds, uid),
+        )
+        conn.commit()
+        return True
+
+
+def begin_user_online_session(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return False
+    with get_db_connection() as conn:
+        conn.execute(
+            '''
+            UPDATE users
+            SET online_session_started_at = ?
+            WHERE id = ? AND online_session_started_at IS NULL
+            ''',
+            (utc_now(), uid),
+        )
         conn.commit()
         return True
 
@@ -951,15 +1008,17 @@ def update_user_skin(user_id, skin_config):
     except (TypeError, ValueError):
         return None, '请先登录账号'
     skin = normalize_skin_config(skin_config)
+    skin_json = json.dumps(skin, ensure_ascii=False, separators=(',', ':'))
     with get_db_connection() as conn:
         row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         if row is None:
             return None, '请先登录账号'
-        conn.execute(
-            'UPDATE users SET skin_json = ? WHERE id = ?',
-            (json.dumps(skin, ensure_ascii=False, separators=(',', ':')), uid),
-        )
-        conn.commit()
+        if str(row['skin_json'] or '') != skin_json:
+            conn.execute(
+                'UPDATE users SET skin_json = ? WHERE id = ?',
+                (skin_json, uid),
+            )
+            conn.commit()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         return row_to_user(row), None
 
@@ -2314,6 +2373,38 @@ def _cleanup_expired_friend_requests(conn, force=False):
     except sqlite3.OperationalError as exc:
         if 'locked' not in str(exc).lower():
             raise
+        print(f'[db] skip expired friend request cleanup: {exc}', flush=True)
+
+
+def cleanup_expired_friend_requests_once(force=False):
+    started = time.perf_counter()
+    try:
+        with get_db_connection() as conn:
+            _cleanup_expired_friend_requests(conn, force=force)
+            conn.commit()
+        db_slow_log('background', (time.perf_counter() - started) * 1000, 'friend_cleanup')
+        return True, None
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            print(f'[db] skip expired friend request cleanup: {exc}', flush=True)
+            return False, str(exc)
+        raise
+
+
+def mark_friend_notifications_read_for_user(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return False, '请先登录账号'
+    started = time.perf_counter()
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT id FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            return False, '请先登录账号'
+        _mark_friend_notifications_read(conn, uid)
+        conn.commit()
+    db_slow_log('social', (time.perf_counter() - started) * 1000, 'friend_mark_read')
+    return True, None
 
 
 def _friend_request_expires_at():
@@ -2466,13 +2557,10 @@ def list_friends(user_id, mark_read=False):
     except (TypeError, ValueError):
         return None, '请先登录账号'
     with get_db_connection() as conn:
+        started = time.perf_counter()
         self_row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         if self_row is None:
             return None, '请先登录账号'
-        _cleanup_expired_friend_requests(conn)
-        if mark_read:
-            _mark_friend_notifications_read(conn, uid)
-        conn.commit()
         rows = conn.execute(
             '''
             SELECT f.*
@@ -2511,7 +2599,7 @@ def list_friends(user_id, mark_read=False):
                 incoming.append(item)
             elif row['status'] == 'pending':
                 outgoing.append(item)
-        return {
+        result = {
             'settings': {
                 'accept_friend_requests': bool(self_row['accept_friend_requests']),
                 'searchable_by_nickname': bool(self_row['searchable_by_nickname']),
@@ -2521,7 +2609,9 @@ def list_friends(user_id, mark_read=False):
             'incoming': incoming,
             'outgoing': outgoing,
             'unread_count': unread_count,
-        }, None
+        }
+        db_slow_log('social', (time.perf_counter() - started) * 1000, 'friend_list')
+        return result, None
 
 
 def add_friend_request(user_id, identifier):
@@ -2532,7 +2622,6 @@ def add_friend_request(user_id, identifier):
     now = utc_now()
     return_friend_list = False
     with get_db_connection() as conn:
-        _cleanup_expired_friend_requests(conn)
         requester = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         if requester is None:
             return None, '请先登录账号'
@@ -2607,7 +2696,6 @@ def respond_friend_request(user_id, request_id, action):
     action_text = str(action or '').lower()
     now = utc_now()
     with get_db_connection() as conn:
-        _cleanup_expired_friend_requests(conn)
         row = conn.execute(
             'SELECT * FROM friendships WHERE id = ? AND addressee_id = ? AND status = ?',
             (rid, uid, 'pending'),
@@ -2748,12 +2836,10 @@ def dm_unread_count(user_id):
     except (TypeError, ValueError):
         return 0
     with get_db_connection() as conn:
-        _cleanup_old_dm_messages(conn)
         row = conn.execute(
             'SELECT COUNT(*) AS count FROM dm_messages WHERE recipient_user_id = ? AND read_at IS NULL AND hidden = 0',
             (uid,),
         ).fetchone()
-        conn.commit()
         return int(row['count'] or 0) if row else 0
 
 
@@ -2764,10 +2850,10 @@ def list_dm_threads(user_id, limit=50):
         return None, '请先登录账号'
     safe_limit = max(1, min(int(limit or 50), 100))
     with get_db_connection() as conn:
+        started = time.perf_counter()
         self_row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         if self_row is None:
             return None, '请先登录账号'
-        _cleanup_old_dm_messages(conn)
         rows = conn.execute(
             '''
             SELECT t.*,
@@ -2807,7 +2893,7 @@ def list_dm_threads(user_id, limit=50):
                 'friend_status': _friendship_status(conn, uid, other_id),
             })
         total_unread = _dm_unread_count_conn(conn, uid)
-        conn.commit()
+        db_slow_log('social', (time.perf_counter() - started) * 1000, 'dm_threads')
         return {'threads': items, 'unread_count': total_unread}, None
 
 

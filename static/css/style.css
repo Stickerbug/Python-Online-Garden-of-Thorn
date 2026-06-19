@@ -719,6 +719,14 @@ body {
   background: var(--bg-primary);
 }
 
+.account-panel-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.account-panel-tabs.hidden {
+  display: none;
+}
+
 .account-mode-tab {
   border: 0;
   border-radius: var(--radius-sm);
@@ -807,6 +815,35 @@ body {
 
 .account-stats.compact {
   margin-top: 8px;
+}
+
+.account-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.account-info-item {
+  padding: 9px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+
+.account-info-label {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.account-info-value {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.2;
 }
 
 .account-section-head {
@@ -5372,6 +5409,21 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   padding-top: 0.8cqi;
 }
 
+.card.card-fragment .card-effect,
+.card.card-coconut .card-effect {
+  font-size: 7.75cqi;
+  line-height: 1.18;
+  padding-top: 3.2cqi;
+  padding-bottom: 1.8cqi;
+}
+
+.card.card-fragment .card-description,
+.card.card-coconut .card-description {
+  font-size: 6.35cqi;
+  line-height: 1.15;
+  padding-top: 0.75cqi;
+}
+
 .card.card-petal-copy .card-effect {
   font-size: 8.1cqi;
   line-height: 1.2;
@@ -5383,6 +5435,19 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   font-size: 6.4cqi;
   line-height: 1.16;
   padding-top: 0.8cqi;
+}
+
+.card.card-magic-grapes .card-effect {
+  font-size: 7.65cqi;
+  line-height: 1.17;
+  padding-top: 3cqi;
+  padding-bottom: 1.6cqi;
+}
+
+.card.card-magic-grapes .card-description {
+  font-size: 6.2cqi;
+  line-height: 1.14;
+  padding-top: 0.65cqi;
 }
 
 .card-description {
@@ -5409,6 +5474,10 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   color: #F48FB1;
 }
 
+.card-token.health {
+  color: #2ECC71;
+}
+
 .card-token.elixir {
   color: #E0B000;
 }
@@ -5419,6 +5488,95 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 
 .card-token.magic {
   color: var(--color-magic);
+}
+
+.card-token.tag-precision {
+  color: var(--color-precision);
+}
+
+.card-token.tag-exile {
+  color: var(--color-banish);
+}
+
+.card-token.tag-non-stackable {
+  color: var(--color-non-stack);
+}
+
+.card-token.tag-indestructible {
+  color: var(--color-indestructible);
+}
+
+.card-token.tag-sprout {
+  color: var(--color-sprout);
+}
+
+.card-token.tag-symbiosis {
+  color: var(--color-symbiosis);
+}
+
+.card-token.tag-attract {
+  color: var(--color-attract);
+}
+
+.card-token.tag-void {
+  color: var(--color-void);
+}
+
+.card-token.tag-self-only {
+  color: var(--color-self-only);
+}
+
+.card-token.tag-uncancellable {
+  color: var(--color-uncancellable);
+}
+
+.card-token.tag-infinite-exclude {
+  color: #616161;
+}
+
+.card-token.tag-rebound {
+  color: #C0392B;
+}
+
+.card-token.tag-copy {
+  color: #7D3C98;
+}
+
+.card-token.tag-unique {
+  color: #C0392B;
+}
+
+.card-token.tag-swift,
+.card-token.tag-temp-swift {
+  color: #0EA5E9;
+}
+
+.card-token.tag-temp-heavy {
+  color: #795548;
+}
+
+.card-token.tag-stealth {
+  color: #2C3E50;
+}
+
+.card-token.tag-revealed {
+  color: var(--color-revealed);
+}
+
+.card-token.tag-team-limited {
+  color: #607D3B;
+}
+
+.card-token.tag-team-unique {
+  color: #8D6E63;
+}
+
+.card-token.tag-power {
+  color: #C0392B;
+}
+
+.card-token.tag-magic-swift {
+  color: #6C5CE7;
 }
 
 .card-hold-preview {
@@ -5771,6 +5929,109 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 
 .card-token.toxic {
   color: var(--color-toxic);
+}
+
+.card-token.status-toxic-poison {
+  color: #5E8C31;
+}
+
+.card-token.status-sluggish {
+  color: #E67E22;
+}
+
+.card-token.status-fragile {
+  color: #8E5A2A;
+}
+
+.card-token.status-shield {
+  color: #2E7D7D;
+}
+
+.card-token.status-turn-heal {
+  color: #F48FB1;
+}
+
+.card-token.status-turn-magic {
+  color: #6C5CE7;
+}
+
+.card-token.status-root {
+  color: #6E8B3D;
+}
+
+.card-token.status-triangle {
+  color: var(--color-non-stack);
+}
+
+.card-token.status-dodge {
+  color: var(--color-guard);
+}
+
+.card-token.status-nazar,
+.card-token.status-magic-nazar {
+  color: var(--color-magic);
+}
+
+.card-token.status-bleed {
+  color: #922B21;
+}
+
+.card-token.status-fracture {
+  color: #7F8C8D;
+}
+
+.card-token.status-stagnation {
+  color: #9B59B6;
+}
+
+.card-token.status-blind {
+  color: #2C3E50;
+}
+
+.card-token.status-foresight {
+  color: #2980B9;
+}
+
+.card-token.status-overload,
+.card-token.status-stunned,
+.card-token.status-attack-blocked {
+  color: #C0392B;
+}
+
+.card-token.status-heal-block {
+  color: #E84393;
+}
+
+.card-token.status-weakness {
+  color: #8E44AD;
+}
+
+.card-token.status-fragment {
+  color: #795548;
+}
+
+.card-token.status-immune {
+  color: #16A085;
+}
+
+.card-token.status-invincible {
+  color: var(--color-elixir);
+}
+
+.card-token.status-bandage {
+  color: #1E8449;
+}
+
+.card-token.status-sponge {
+  color: #6C3483;
+}
+
+.card-token.status-attack-only {
+  color: #D35400;
+}
+
+.card-token.status-untargetable {
+  color: #1A5276;
 }
 
 .card-bottom-zone {

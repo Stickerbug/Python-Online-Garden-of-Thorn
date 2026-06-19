@@ -64,9 +64,11 @@ from db import (
     add_friend_request,
     change_username,
     change_user_password,
+    cleanup_expired_friend_requests_once,
     create_report_entry,
     create_remember_token,
     create_user,
+    db_slow_log,
     dm_unread_count,
     find_user_for_admin,
     format_duration_zh,
@@ -87,7 +89,9 @@ from db import (
     list_ip_bans,
     list_reports,
     list_user_roles,
+    begin_user_online_session,
     mark_user_last_seen,
+    mark_friend_notifications_read_for_user,
     normalize_skin_config,
     normalize_username_key,
     record_chat_message,
@@ -263,6 +267,7 @@ _lock = threading.Lock()
 _replay_cleanup_lock = threading.Lock()
 _replay_cleanup_started = False
 _lobby_idle_cleanup_started = False
+_friend_request_cleanup_started = False
 _event_loop_watchdog_started = False
 _pending_interaction_watchdog_started = False
 _next_room_id = 0
@@ -384,6 +389,11 @@ _DRAFT_STATS_LOCK = threading.Lock()
 _DRAFT_STATS_PENDING = {}
 _DRAFT_STATS_PENDING_EVENTS = 0
 _DRAFT_STATS_WORKER_STARTED = False
+LAST_SEEN_FLUSH_SECONDS = _env_float('GTN_LAST_SEEN_FLUSH_SECONDS', 10)
+LAST_SEEN_FLUSH_MAX_PENDING = _env_int('GTN_LAST_SEEN_FLUSH_MAX_PENDING', 100)
+_LAST_SEEN_LOCK = threading.Lock()
+_LAST_SEEN_PENDING = set()
+_LAST_SEEN_WORKER_STARTED = False
 
 try:
     import psutil
@@ -1959,6 +1969,16 @@ def auth_user_payload(user):
     if not user:
         return None
     payload = dict(user)
+    total_online = int(payload.get('online_seconds') or 0)
+    started_at = payload.get('online_session_started_at')
+    if started_at:
+        try:
+            start = datetime.fromisoformat(str(started_at).replace('Z', '+00:00'))
+            now = datetime.now(timezone.utc)
+            total_online += max(0, int((now - start).total_seconds()))
+        except Exception:
+            pass
+    payload['online_seconds_total'] = total_online
     profile = get_special_account_profile(payload.get('username', ''))
     if profile:
         payload['display_name'] = profile['display_name']
@@ -2070,9 +2090,9 @@ def mark_player_session_last_seen(player):
     if not player.get('is_registered_user') or not player.get('user_id'):
         return
     try:
-        mark_user_last_seen(player.get('user_id'))
+        enqueue_user_last_seen(player.get('user_id'))
     except Exception as exc:
-        admin_event('error', f"failed to update last seen for user {player.get('user_id')}: {exc}")
+        admin_event('error', f"failed to enqueue last seen for user {player.get('user_id')}: {exc}")
 
 
 def public_player_info(sid, player=None):
@@ -2135,6 +2155,33 @@ def ensure_lobby_idle_cleanup_started():
         socketio.start_background_task(_lobby_idle_cleanup_worker)
     except Exception:
         threading.Thread(target=_lobby_idle_cleanup_worker, name='lobby-idle-cleanup', daemon=True).start()
+
+
+def _friend_request_cleanup_worker():
+    while True:
+        try:
+            try:
+                socketio.sleep(600)
+            except Exception:
+                time.sleep(600)
+            if not DB_AVAILABLE:
+                continue
+            ok, error = cleanup_expired_friend_requests_once(force=True)
+            if not ok and error:
+                admin_event('db', f'friend request cleanup skipped: {error}')
+        except Exception as exc:
+            admin_event('error', f'friend request cleanup worker error: {exc}')
+
+
+def ensure_friend_request_cleanup_started():
+    global _friend_request_cleanup_started
+    if _friend_request_cleanup_started:
+        return
+    _friend_request_cleanup_started = True
+    try:
+        socketio.start_background_task(_friend_request_cleanup_worker)
+    except Exception:
+        threading.Thread(target=_friend_request_cleanup_worker, name='friend-request-cleanup', daemon=True).start()
 
 
 def _pending_created_at(pending):
@@ -3747,6 +3794,76 @@ def start_draft_stats_worker():
         socketio.start_background_task(_draft_stats_worker)
     except Exception:
         threading.Thread(target=_draft_stats_worker, name='draft-stats-worker', daemon=True).start()
+
+
+def enqueue_user_last_seen(user_id):
+    if not DB_AVAILABLE:
+        return False
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return False
+    with _LAST_SEEN_LOCK:
+        _LAST_SEEN_PENDING.add(uid)
+        pending_count = len(_LAST_SEEN_PENDING)
+    start_last_seen_worker()
+    if pending_count >= LAST_SEEN_FLUSH_MAX_PENDING:
+        flush_last_seen_async()
+    return True
+
+
+def _drain_last_seen_pending():
+    with _LAST_SEEN_LOCK:
+        pending = set(_LAST_SEEN_PENDING)
+        _LAST_SEEN_PENDING.clear()
+    return pending
+
+
+def flush_last_seen_once():
+    pending = _drain_last_seen_pending()
+    if not pending:
+        return 0
+    failed = set()
+    for uid in pending:
+        try:
+            mark_user_last_seen(uid)
+        except Exception as exc:
+            failed.add(uid)
+            admin_event('error', f'last seen flush failed user={uid}: {exc}')
+    if failed:
+        with _LAST_SEEN_LOCK:
+            _LAST_SEEN_PENDING.update(failed)
+    return len(pending) - len(failed)
+
+
+def flush_last_seen_async():
+    try:
+        socketio.start_background_task(flush_last_seen_once)
+    except Exception:
+        threading.Thread(target=flush_last_seen_once, name='last-seen-flush', daemon=True).start()
+
+
+def _last_seen_worker():
+    while True:
+        try:
+            try:
+                socketio.sleep(max(1, LAST_SEEN_FLUSH_SECONDS))
+            except Exception:
+                time.sleep(max(1, LAST_SEEN_FLUSH_SECONDS))
+            flush_last_seen_once()
+        except Exception as exc:
+            admin_event('error', f'last seen worker error: {exc}')
+
+
+def start_last_seen_worker():
+    global _LAST_SEEN_WORKER_STARTED
+    if _LAST_SEEN_WORKER_STARTED:
+        return
+    _LAST_SEEN_WORKER_STARTED = True
+    try:
+        socketio.start_background_task(_last_seen_worker)
+    except Exception:
+        threading.Thread(target=_last_seen_worker, name='last-seen-worker', daemon=True).start()
 
 
 def record_event_loop_lag(lag_ms):
@@ -7377,6 +7494,8 @@ def api_auth_register():
     user, error = create_user(username, password)
     if error:
         return jsonify({'success': False, 'error': error}), 400
+    begin_user_online_session(user.get('id'))
+    user = get_user_by_id(user.get('id')) or user
     _set_account_session(user)
     return _attach_remember_cookie(jsonify({'success': True, 'user': auth_user_payload(user)}), user)
 
@@ -7403,6 +7522,8 @@ def api_auth_login():
             return jsonify(payload), 401
         return jsonify({'success': False, 'error': error}), 401
     clear_auth_login_failures(ip)
+    begin_user_online_session(user.get('id'))
+    user = get_user_by_id(user.get('id')) or user
     _set_account_session(user)
     return _attach_remember_cookie(jsonify({'success': True, 'user': auth_user_payload(user)}), user)
 
@@ -7509,9 +7630,9 @@ def api_auth_skin():
 def api_auth_logout():
     if DB_AVAILABLE and session.get('user_id'):
         try:
-            mark_user_last_seen(session.get('user_id'))
+            enqueue_user_last_seen(session.get('user_id'))
         except Exception as exc:
-            admin_event('error', f"failed to update last seen on logout: {exc}")
+            admin_event('error', f"failed to enqueue last seen on logout: {exc}")
     _clear_account_session()
     return _clear_remember_cookie(jsonify({'success': True}))
 
@@ -7530,6 +7651,8 @@ def api_auth_me():
         payload = ban_error_payload(status, reason_key='error') if status.get('banned') else {'error': '账号已被封禁'}
         payload.update({'authenticated': False, 'db_available': True})
         return _clear_remember_cookie(jsonify(payload))
+    begin_user_online_session(user.get('id'))
+    user = get_user_by_id(user.get('id')) or user
     _set_account_session(user)
     response = jsonify({'authenticated': True, 'db_available': True, 'user': auth_user_payload(user)})
     if not request.cookies.get(REMEMBER_COOKIE_NAME):
@@ -7551,7 +7674,13 @@ def api_social_friends():
         return auth_error
     mark_read = str(request.args.get('mark_read') or '').lower() in ('1', 'true', 'yes')
     try:
-        data, error = list_friends(user_id, mark_read=mark_read)
+        if mark_read:
+            _, mark_error = mark_friend_notifications_read_for_user(user_id)
+            if mark_error:
+                return jsonify({'success': False, 'error': mark_error}), 400
+        started = time.perf_counter()
+        data, error = list_friends(user_id, mark_read=False)
+        db_slow_log('/api/social/friends', (time.perf_counter() - started) * 1000, 'friend_list')
     except sqlite3.OperationalError as exc:
         return _db_busy_response(exc)
     if error:
@@ -7568,7 +7697,9 @@ def api_social_friend_add():
         return auth_error
     data = request.get_json(silent=True) or {}
     try:
+        started = time.perf_counter()
         result, error = add_friend_request(user_id, data.get('identifier', ''))
+        db_slow_log('/api/social/friends/add', (time.perf_counter() - started) * 1000, 'friend_add')
     except sqlite3.OperationalError as exc:
         return _db_busy_response(exc)
     if error:
@@ -7632,7 +7763,12 @@ def api_social_dm_threads():
     user_id, _, auth_error = _require_account_json()
     if auth_error:
         return auth_error
-    data, error = list_dm_threads(user_id, limit=request.args.get('limit', 50))
+    try:
+        started = time.perf_counter()
+        data, error = list_dm_threads(user_id, limit=request.args.get('limit', 50))
+        db_slow_log('/api/social/dm/threads', (time.perf_counter() - started) * 1000, 'dm_threads')
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
     return jsonify({'success': True, **(data or {})})
@@ -11144,6 +11280,7 @@ def start_replay_cleanup_thread():
 
 
 start_replay_cleanup_thread()
+ensure_friend_request_cleanup_started()
 
 
 if __name__ == '__main__':

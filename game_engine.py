@@ -1472,7 +1472,24 @@ class GameEngine:
         if self._move_use_log_before_response_detail(text):
             return
         self.log.append(text)
+        if self._is_log_compaction_boundary(text):
+            self._mark_log_visible()
+            return
         self._compact_recent_repeated_action_block()
+
+    def _is_log_compaction_boundary(self, text: str) -> bool:
+        if not text:
+            return False
+        return bool(
+            re.fullmatch(r'=+\s*第\d+回合\s*=+', text)
+            or '游戏开始' in text
+            or '配装' in text and ('选择' in text or '公开' in text)
+            or '开始选牌' in text
+            or '抽牌阶段' in text
+            or '事件选择' in text
+            or '获胜' in text
+            or '平局' in text
+        )
 
     def _clear_hand_reveal_for_player(self, player_id: int):
         if hasattr(self, '_antennae_reveal') and 0 <= player_id < len(self._antennae_reveal):
@@ -3594,19 +3611,13 @@ class GameEngine:
             fission_extra = max(0, int(getattr(target, 'fission_level', 1) or 1) - 1)
         except Exception:
             fission_extra = 0
-        tomato_layer = 0
-        if getattr(target, 'def_id', '') == 'Tomato':
-            try:
-                tomato_layer = min(6, max(0, int(getattr(target, 'held_turns', 0) or 0)))
-            except Exception:
-                tomato_layer = 0
         layered_extra = 0
         for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value'):
             try:
                 layered_extra += max(0, int(getattr(target, attr, 0) or 0))
             except Exception:
                 pass
-        return int(math.ceil((fusion_extra + fission_extra + tomato_layer + layered_extra) / 2))
+        return int(math.ceil((fusion_extra + fission_extra + layered_extra) / 2))
 
     def _can_pay_mimic_special_cost(self, player_id: int, target: Optional[CardInstance]) -> bool:
         if not (0 <= player_id < len(self.players)):
@@ -3638,11 +3649,6 @@ class GameEngine:
         copy_card.fusion_multiplier = float(copy_card.fusion_level)
         copy_card.fission_level = half_extra(getattr(target, 'fission_level', 1), 1)
         copy_card.fission_count = max(0, copy_card.fission_level - 1)
-        if getattr(target, 'def_id', '') == 'Tomato':
-            try:
-                copy_card.held_turns = int(math.ceil(max(0, int(getattr(target, 'held_turns', 0) or 0)) / 2))
-            except Exception:
-                copy_card.held_turns = 0
         for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value'):
             try:
                 setattr(copy_card, attr, int(math.ceil(max(0, int(getattr(target, attr, 0) or 0)) / 2)))
@@ -3917,9 +3923,10 @@ class GameEngine:
         return self._execute_card_effect(player_id, card, choice)
 
     def _check_response_needed(self, player_id: int, card: CardInstance) -> bool:
-        if 'precision' in card.flags:
+        flags = self._effective_card_flags(card)
+        if 'precision' in flags:
             return False
-        if 'stealth' in card.flags:
+        if 'stealth' in flags:
             return False
         opp = self.players[1 - player_id]
         if any(self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'any' for c in opp.hand):
@@ -3947,9 +3954,10 @@ class GameEngine:
         return False
 
     def _check_precision_response_needed(self, player_id: int, card: CardInstance) -> bool:
-        if 'precision' not in card.flags:
+        flags = self._effective_card_flags(card)
+        if 'precision' not in flags:
             return False
-        if 'stealth' in card.flags:
+        if 'stealth' in flags:
             return False
         opp = self.players[1 - player_id]
         for c in opp.hand:
@@ -5839,6 +5847,9 @@ class GameEngine:
         })
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        self._run_hand_owner_turn_end_events(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         self._trigger_v2_status_events_for_player(player_id, 'on_turn_end', {'player_id': player_id})
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
@@ -6273,6 +6284,7 @@ class GameEngine:
         'on_equipment_trigger',
         'on_equipment_destroy',
         'on_hand_owner_turn_start',
+        'on_hand_owner_turn_end',
         'on_enter_hand',
         'on_discard_owner_turn_start',
         'on_deck_owner_turn_start',
@@ -6300,6 +6312,7 @@ class GameEngine:
         'equipment_trigger': ('onEquipmentTrigger', 'equipment_trigger', 'on_equipment_trigger'),
         'equipment_destroy': ('onEquipmentDestroy', 'equipment_destroy', 'on_equipment_destroy', 'onDestroy'),
         'hand_owner_turn_start': ('onHandOwnerTurnStart', 'hand_owner_turn_start', 'on_hand_owner_turn_start'),
+        'hand_owner_turn_end': ('onHandOwnerTurnEnd', 'hand_owner_turn_end', 'on_hand_owner_turn_end'),
         'enter_hand': ('onEnterHand', 'enter_hand', 'on_enter_hand'),
         'discard_owner_turn_start': ('onDiscardOwnerTurnStart', 'discard_owner_turn_start', 'on_discard_owner_turn_start'),
         'deck_owner_turn_start': ('onDeckOwnerTurnStart', 'deck_owner_turn_start', 'on_deck_owner_turn_start'),
@@ -7887,6 +7900,15 @@ class GameEngine:
                     self._run_card_event(player_id, zone_card, event_name, None,
                                          {'source_id': player_id, 'target_id': player_id, 'zone': zone_name})
 
+    def _run_hand_owner_turn_end_events(self, player_id: int):
+        if not (0 <= player_id < len(self.players)):
+            return
+        ps = self.players[player_id]
+        for zone_card in list(ps.hand):
+            if zone_card in ps.hand and self._has_card_event(zone_card.card_def, 'hand_owner_turn_end'):
+                self._run_card_event(player_id, zone_card, 'hand_owner_turn_end', None,
+                                     {'source_id': player_id, 'target_id': player_id, 'zone': 'hand'})
+
     def _equipment_turn_start_key(self, eq) -> int:
         return int(getattr(getattr(eq, 'card_instance', None), 'instance_id', id(eq)) or id(eq))
 
@@ -8392,6 +8414,7 @@ class GameEngine:
         immune = self._is_status_immune(target_id)
         for _ in range(hits):
             precision_dodged = False
+            plank_halves_attack = False
             if ps.dodge > 0:
                 ps.dodge -= 1
                 if is_precision:
@@ -8409,8 +8432,7 @@ class GameEngine:
             if source_card is not None and self._has_equipment(target_id, 'Plank', 'jungle:plank'):
                 try:
                     if int(getattr(source_card, 'cost_e', 0) or 0) <= 1:
-                        self.log_msg(f"{self.pn(target_id)}的木板吸收了攻击")
-                        continue
+                        plank_halves_attack = True
                 except Exception:
                     pass
             dmg = amount
@@ -8428,6 +8450,8 @@ class GameEngine:
                 dmg = math.ceil(dmg / 2)
             dmg = self._apply_corruption_multiplier_to_damage(dmg, log=False)
             dmg = self._apply_damage_dealt_equipment_multiplier(dmg, attacker_id)
+            if plank_halves_attack:
+                dmg = math.floor(dmg / 2)
             if ps.nazar_active and not immune:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
@@ -8474,6 +8498,7 @@ class GameEngine:
                 root_layers = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
                 if root_layers > 0:
                     self._set_custom_status_alias_group(target_id, 'jungle:root_status', ('jungle:root', 'jungle:root_status', 'root_status'), root_layers - 1)
+                    self._consume_jungle_root_layer_from_equipment(target_id)
             if dmg > 0 and ps.toxic > 0 and not immune:
                 ps.poison += ps.toxic
             self._check_yggdrasil(target_id)
@@ -8901,6 +8926,8 @@ class GameEngine:
                 value = min(6, value)
             elif prop == 'bonus_damage':
                 value = min(18, value)
+            elif prop == 'power_value':
+                value = min(18, value)
         if prop in ('fusion_level', 'fission_level', 'mimic_discount', 'cost_e_override', 'cost_m_override',
                     'bonus_damage', 'return_to_hand_turns', 'held_turns', 'swift_value', 'magic_swift_value',
                     'power_value', 'temp_swift_value', 'temp_heavy_value'):
@@ -8946,6 +8973,8 @@ class GameEngine:
             if prop == 'held_turns':
                 return min(6, max(0, value))
             if prop == 'bonus_damage':
+                return min(18, max(0, value))
+            if prop == 'power_value':
                 return min(18, max(0, value))
         return value
 
@@ -9360,6 +9389,18 @@ class GameEngine:
             self._set_custom_status_value(owner_id, 'jungle:root_status', max(0, self._custom_status_value(owner_id, 'jungle:root_status') - amount))
             if eq is not None:
                 eq.custom_vars['jungle_root_layers'] = 0
+
+    def _consume_jungle_root_layer_from_equipment(self, owner_id: int):
+        if not (0 <= owner_id < len(self.players)):
+            return
+        for eq in list(self.players[owner_id].equipment):
+            if not self._card_matches_any_id(eq.card_instance, eq.card_def, ['Root', 'jungle:root']):
+                continue
+            layers = int(eq.custom_vars.get('jungle_root_layers', 0) or 0)
+            if layers <= 0:
+                continue
+            eq.custom_vars['jungle_root_layers'] = layers - 1
+            return
 
     def _atomic_plank_immunity(self, player_id, card, params, log, choice, context):
         # Implemented through damage modifier hook; kept as an atomic no-op for readable mod data.

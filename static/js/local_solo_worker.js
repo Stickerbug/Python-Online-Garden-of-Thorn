@@ -60,6 +60,7 @@ const EVENT_EFFECT_TYPES = new Set([
     'on_equipment_trigger',
     'on_equipment_destroy',
     'on_hand_owner_turn_start',
+    'on_hand_owner_turn_end',
     'on_enter_hand',
     'on_discard_owner_turn_start',
     'on_deck_owner_turn_start',
@@ -83,6 +84,7 @@ const SCRIPT_ENTRY_ALIASES = {
     equipment_trigger: ['onEquipmentTrigger', 'equipment_trigger', 'on_equipment_trigger'],
     equipment_destroy: ['onEquipmentDestroy', 'equipment_destroy', 'on_equipment_destroy', 'onDestroy'],
     hand_owner_turn_start: ['onHandOwnerTurnStart', 'hand_owner_turn_start', 'on_hand_owner_turn_start'],
+    hand_owner_turn_end: ['onHandOwnerTurnEnd', 'hand_owner_turn_end', 'on_hand_owner_turn_end'],
     enter_hand: ['onEnterHand', 'enter_hand', 'on_enter_hand'],
     discard_owner_turn_start: ['onDiscardOwnerTurnStart', 'discard_owner_turn_start', 'on_discard_owner_turn_start'],
     deck_owner_turn_start: ['onDeckOwnerTurnStart', 'deck_owner_turn_start', 'on_deck_owner_turn_start'],
@@ -104,6 +106,7 @@ const V2_EVENT_ALIASES = {
     equipment_trigger: ['on_equipment_trigger'],
     equipment_destroy: ['on_equipment_destroy', 'on_before_destroyed'],
     hand_owner_turn_start: ['on_hand_owner_turn_start'],
+    hand_owner_turn_end: ['on_hand_owner_turn_end'],
     enter_hand: ['on_enter_hand'],
     discard_owner_turn_start: ['on_discard_owner_turn_start', 'on_discard'],
     deck_owner_turn_start: ['on_deck_owner_turn_start'],
@@ -374,8 +377,7 @@ class LocalCard {
         this.extra_hits = Math.max(0, toInt(source.extra_hits, 0));
         this.setup_modifiers = new Set(source.setup_modifiers || []);
         if (this.def_id === 'Tomato') {
-            this.bonus_damage = Math.min(18, Math.max(0, this.bonus_damage));
-            this.held_turns = Math.min(6, Math.max(0, this.held_turns));
+            this.power_value = Math.min(18, Math.max(0, this.power_value));
         }
         this.durability = toInt(source.durability, 0);
         this._placed_as_equipment = false;
@@ -425,9 +427,9 @@ class LocalCard {
             mimic_discount: this.mimic_discount,
             instance_flags: Array.from(this.instance_flags),
             disabled_flags: Array.from(this.disabled_flags),
-            bonus_damage: this.def_id === 'Tomato' ? Math.min(18, Math.max(0, this.bonus_damage)) : this.bonus_damage,
+            bonus_damage: this.bonus_damage,
             return_to_hand_turns: this.return_to_hand_turns,
-            held_turns: this.def_id === 'Tomato' ? Math.min(6, Math.max(0, this.held_turns)) : this.held_turns,
+            held_turns: this.held_turns,
             swift_value: this.swift_value,
             magic_swift_value: this.magic_swift_value,
             power_value: this.power_value,
@@ -568,10 +570,6 @@ class LocalPlayer {
     }
 
     addToHand(card, options = {}) {
-        if (card && card.def_id === 'Tomato') {
-            card.bonus_damage = 0;
-            card.held_turns = 0;
-        }
         this.hand.push(card);
         if (options.triggerEnterHand !== false && typeof this.onEnterHand === 'function') {
             this.onEnterHand(this.player_id, card);
@@ -1490,6 +1488,20 @@ class LocalSoloEngine {
                     });
                 }
             });
+        });
+    }
+
+    runHandOwnerTurnEndEvents(playerId) {
+        const ps = this.players[playerId];
+        [...ps.hand].forEach(card => {
+            if (ps.hand.includes(card) && this.hasCardEvent(card.def(), 'hand_owner_turn_end')) {
+                this.runCardEvent(playerId, card, 'hand_owner_turn_end', null, {
+                    event: 'hand_owner_turn_end',
+                    source_id: playerId,
+                    target_id: playerId,
+                    zone: 'hand',
+                });
+            }
         });
     }
 
@@ -2688,10 +2700,9 @@ class LocalSoloEngine {
         if (!target) return 0;
         const fusionExtra = Math.max(0, toInt(target.fusion_level, 1) - 1);
         const fissionExtra = Math.max(0, toInt(target.fission_level, 1) - 1);
-        const tomatoLayer = target.def_id === 'Tomato' ? Math.min(6, Math.max(0, toInt(target.held_turns, 0))) : 0;
         const layered = ['swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value']
             .reduce((sum, key) => sum + Math.max(0, toInt(target[key], 0)), 0);
-        return Math.ceil((fusionExtra + fissionExtra + tomatoLayer + layered) / 2);
+        return Math.ceil((fusionExtra + fissionExtra + layered) / 2);
     }
 
     canPayMimicSpecialCost(playerId, target) {
@@ -3372,6 +3383,7 @@ class LocalSoloEngine {
         if (target && target.def_id === 'Tomato') {
             if (prop === 'held_turns') next = Math.min(6, next);
             if (prop === 'bonus_damage') next = Math.min(18, next);
+            if (prop === 'power_value') next = Math.min(18, next);
         }
         return next;
     }
@@ -3480,7 +3492,6 @@ class LocalSoloEngine {
             ['swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value'].forEach(key => {
                 copy[key] = Math.ceil(Math.max(0, toInt(target[key], 0)) / 2);
             });
-            copy.held_turns = target.def_id === 'Tomato' ? Math.ceil(Math.max(0, toInt(target.held_turns, 0)) / 2) : copy.held_turns;
             if (copy.swift_value > 0) copy.instance_flags.add('swift');
             if (copy.magic_swift_value > 0) copy.instance_flags.add('magic_swift');
             if (copy.power_value > 0) copy.instance_flags.add('power');
@@ -4312,6 +4323,7 @@ class LocalSoloEngine {
         let total = 0;
         for (let h = 0; h < hits; h++) {
             let precisionDodged = false;
+            let plankHalvesAttack = false;
             if (ps.dodge > 0) {
                 ps.dodge -= 1;
                 if (!isPrecision) {
@@ -4330,15 +4342,19 @@ class LocalSoloEngine {
             if (sourceCard && this.hasEquipment(targetId, 'Plank')) {
                 try {
                     if (toInt(sourceCard.cost_e, 0) <= 1) {
-                        this.logMsg(`${this.pn(targetId)}的木板吸收了攻击`);
-                        continue;
+                        plankHalvesAttack = true;
                     }
                 } catch (e) {}
             }
-            let dmg = Math.max(0, toInt(amount, 0)) + this.damageDealtEquipmentFlatBonus(attackerId);
+            let power = 0;
+            if (sourceCard) {
+                power = Math.max(0, toInt(sourceCard.power_value, 0));
+            }
+            let dmg = Math.max(0, toInt(amount, 0)) + Math.ceil(power / Math.max(1, toInt(hits, 1))) + this.damageDealtEquipmentFlatBonus(attackerId);
             if (this.halve_next_attack) dmg = Math.ceil(dmg / 2);
             else if (precisionDodged) dmg = Math.ceil(dmg / 2);
             dmg = this.applyCorruptionMultiplier(dmg);
+            if (plankHalvesAttack) dmg = Math.floor(dmg / 2);
             if (ps.nazar_active) {
                 const original = dmg;
                 dmg = Math.max(1, dmg - 9);
@@ -4461,10 +4477,6 @@ class LocalSoloEngine {
         card.fission_count = 0;
         card.fusion_multiplier = 1.0;
         card.fission_hit = 0;
-        if (card.def_id === 'Tomato') {
-            card.bonus_damage = 0;
-            card.held_turns = 0;
-        }
     }
 
     discardCard(ps, card) {
@@ -4956,6 +4968,8 @@ class LocalSoloEngine {
 
     endPlayerTurn(playerId) {
         const ps = this.players[playerId];
+        this.runHandOwnerTurnEndEvents(playerId);
+        if (this.game_over) return;
         this.runOwnerTurnEndEquipment(playerId);
         if (this.game_over) return;
         if (ps.bandage_death_pending) {

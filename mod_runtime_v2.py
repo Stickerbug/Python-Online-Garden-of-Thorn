@@ -53,7 +53,7 @@ ADVANCED_ATOMIC_OPS = {
     "equipment_prop_add", "discard_choice_then_draw", "coffee_gain_e",
     "activate_corruption", "request_target", "request_card", "request_confirm",
     "response_declare", "aura_enemy_elixir_recovery", "on_any_turn_start",
-    "on_enemy_turn_start", "on_owner_turn_start", "on_owner_turn_end", "on_hand_owner_turn_start",
+    "on_enemy_turn_start", "on_owner_turn_start", "on_owner_turn_end", "on_hand_owner_turn_start", "on_hand_owner_turn_end",
     "on_discard_owner_turn_start", "on_equipment_trigger", "on_equipment_destroy",
     "on_damage_taken", "on_fatal_set_health_exile", "equip_reduce_own_draw",
     "cogwheel_mark",

@@ -75,7 +75,7 @@ CARD_I18N = {
     'Triangle': {
         'name': _t('三角形', 'Triangle', 'Triangle', 'Triângulo', 'Треугольник', '三角形'),
         'desc': _t('量变引起质变。', 'Quantitative change leads to qualitative change.', 'Le changement quantitatif mène au changement qualitatif.', 'Mudança quantitativa leva a mudança qualitativa.', 'Количество переходит в качество.', '量の変化が質の変化を生む。'),
-        'effect': _t('造成(6+3×三角形层数)D；造成伤害时获得一层三角形，上限4层', 'Deal (6+3×Triangle stacks)D; when damage is dealt, gain 1 Triangle stack, up to 4', 'Inflige (6+3×charges de Triangle)D ; si des dégâts sont infligés, gagne 1 charge de Triangle, max 4', 'Causa (6+3×camadas de Triângulo)D; ao causar dano, ganha 1 camada de Triângulo, máximo 4', 'Наносит (6+3×слои Треугольника)D; при нанесении урона получает 1 слой Треугольника, максимум 4', '(6+3×三角形層数)Dを与える。ダメージを与えた時、三角形を1層得る。上限4層'),
+        'effect': _t('造成(6+3×三角形层数)D；造成伤害时获得1层三角形，上限4层', 'Deal (6+3×Triangle stacks)D; when damage is dealt, gain 1 Triangle stack, up to 4', 'Inflige (6+3×charges de Triangle)D ; si des dégâts sont infligés, gagne 1 charge de Triangle, max 4', 'Causa (6+3×camadas de Triângulo)D; ao causar dano, ganha 1 camada de Triângulo, máximo 4', 'Наносит (6+3×слои Треугольника)D; при нанесении урона получает 1 слой Треугольника, максимум 4', '(6+3×三角形層数)Dを与える。ダメージを与えた時、三角形を1層得る。上限4層'),
     },
     'Fries': {
         'name': _t('薯条', 'Fries', 'Frites', 'Batatas fritas', 'Картофель фри', 'フライドポテト'),
@@ -111,7 +111,7 @@ CARD_I18N = {
     'Bubble': {
         'name': _t('泡泡', 'Bubble', 'Bulle', 'Bolha', 'Пузырь', '泡'),
         'desc': _t('闪！', 'Dodge!', 'Esquive !', 'Desvie!', 'Уклонение!', '回避！'),
-        'effect': _t('获得一层闪避  响应：被作为攻击牌目标', 'Gain 1 Dodge. Response: you are targeted by an attack card', 'Gagne 1 Esquive. Réponse : vous êtes ciblé par une carte d’attaque', 'Ganha 1 Esquiva. Resposta: você é alvo de uma carta de ataque', 'Получить 1 Уклонение. Ответ: вы стали целью карты атаки', '回避を1層得る。反応：攻撃カードの対象になった時'),
+        'effect': _t('获得1层闪避  响应：被作为攻击牌目标', 'Gain 1 Dodge. Response: you are targeted by an attack card', 'Gagne 1 Esquive. Réponse : vous êtes ciblé par une carte d’attaque', 'Ganha 1 Esquiva. Resposta: você é alvo de uma carta de ataque', 'Получить 1 Уклонение. Ответ: вы стали целью карты атаки', '回避を1層得る。反応：攻撃カードの対象になった時'),
     },
     'Nazar': {
         'name': _t('邪眼护符', 'Nazar', 'Nazar', 'Nazar', 'Назар', 'ナザール'),
@@ -221,7 +221,7 @@ CARD_I18N = {
     'MagicBubble': {
         'name': _t('魔法泡泡', 'Magic Bubble', 'Bulle magique', 'Bolha Mágica', 'Магический пузырь', '魔法の泡'),
         'desc': _t('泡泡的魔法版本。', 'The magical version of Bubble.', 'La version magique de Bulle.', 'A versão mágica de Bolha.', 'Магическая версия Пузыря.', '泡の魔法版。'),
-        'effect': _t('使敌方下次使用的技能牌失效 响应：敌方使用技能牌', 'Negate the next enemy skill card. Response: enemy uses a skill card', 'Annule la prochaine carte de compétence ennemie. Réponse : l’ennemi joue une carte de compétence', 'Anula a próxima carta de habilidade inimiga. Resposta: inimigo usa uma carta de habilidade', 'Отменяет следующую карту навыка врага. Ответ: враг использует карту навыка', '敵が次に使用する技能カードを無効化する。反応：敵が技能カードを使用'),
+        'effect': _t('使目标使用的技能牌失效一次  响应：敌方使用技能牌', 'Negate the target skill card once. Response: enemy uses a skill card', 'Annule une fois la carte de compétence de la cible. Réponse : l’ennemi joue une carte de compétence', 'Anula uma vez a carta de habilidade do alvo. Resposta: inimigo usa uma carta de habilidade', 'Отменяет карту навыка цели один раз. Ответ: враг использует карту навыка', '対象が使用する技能カードを1回無効化する。反応：敵が技能カードを使用'),
     },
     'Mark': {
         'name': _t('标记', 'Mark', 'Marque', 'Marca', 'Метка', '標記'),
