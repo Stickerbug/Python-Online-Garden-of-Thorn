@@ -91,7 +91,7 @@ from db import (
     normalize_skin_config,
     normalize_username_key,
     record_chat_message,
-    record_card_draft_pick,
+    record_card_draft_counts,
     remove_friend,
     revoke_remember_token,
     resolve_report_entry,
@@ -378,6 +378,12 @@ SOCKET_LATENCY_SAMPLES = deque(maxlen=2000)
 SOCKET_ACTION_SAMPLES = deque(maxlen=2000)
 SOCKET_BROADCAST_SAMPLES = deque(maxlen=1000)
 EVENT_LOOP_LAG_SAMPLES = deque(maxlen=1000)
+DRAFT_STATS_FLUSH_SECONDS = _env_float('GTN_DRAFT_STATS_FLUSH_SECONDS', 5)
+DRAFT_STATS_FLUSH_MAX_PENDING = _env_int('GTN_DRAFT_STATS_FLUSH_MAX_PENDING', 200)
+_DRAFT_STATS_LOCK = threading.Lock()
+_DRAFT_STATS_PENDING = {}
+_DRAFT_STATS_PENDING_EVENTS = 0
+_DRAFT_STATS_WORKER_STARTED = False
 
 try:
     import psutil
@@ -3650,6 +3656,97 @@ def record_socket_broadcast(room, duration_ms, recipients=0):
         'duration_ms': round(value, 2),
         'recipients': int(recipients or 0),
     })
+
+
+def enqueue_card_draft_pick(mode, option_ids, picked_id):
+    global _DRAFT_STATS_PENDING_EVENTS
+    if not DB_AVAILABLE:
+        return False
+    mode_key = str(mode or '').strip()
+    if mode_key not in ('1v1', '2v2'):
+        return False
+    picked = str(picked_id or '').strip()
+    if not picked:
+        return False
+    counts = {}
+    for raw_id in option_ids or []:
+        card_id = str(raw_id or '').strip()
+        if not card_id:
+            continue
+        counts[card_id] = counts.get(card_id, 0) + 1
+    if not counts:
+        return False
+    with _DRAFT_STATS_LOCK:
+        bucket = _DRAFT_STATS_PENDING.setdefault(mode_key, {})
+        for card_id, shown_inc in counts.items():
+            current = bucket.setdefault(card_id, [0, 0])
+            current[0] += int(shown_inc)
+            if card_id == picked:
+                current[1] += 1
+        _DRAFT_STATS_PENDING_EVENTS += 1
+    start_draft_stats_worker()
+    if _DRAFT_STATS_PENDING_EVENTS >= DRAFT_STATS_FLUSH_MAX_PENDING:
+        flush_draft_stats_async()
+    return True
+
+
+def _drain_draft_stats_pending():
+    global _DRAFT_STATS_PENDING_EVENTS
+    with _DRAFT_STATS_LOCK:
+        pending = {mode: {card_id: list(counts) for card_id, counts in cards.items()} for mode, cards in _DRAFT_STATS_PENDING.items()}
+        _DRAFT_STATS_PENDING.clear()
+        _DRAFT_STATS_PENDING_EVENTS = 0
+    return pending
+
+
+def flush_draft_stats_once():
+    pending = _drain_draft_stats_pending()
+    if not pending:
+        return 0
+    written = 0
+    for mode, card_counts in pending.items():
+        try:
+            if record_card_draft_counts(mode, card_counts):
+                written += len(card_counts)
+        except Exception as exc:
+            admin_event('error', f'draft stats flush failed: {exc}')
+            with _DRAFT_STATS_LOCK:
+                bucket = _DRAFT_STATS_PENDING.setdefault(mode, {})
+                for card_id, counts in card_counts.items():
+                    current = bucket.setdefault(card_id, [0, 0])
+                    current[0] += int((counts or [0, 0])[0] or 0)
+                    current[1] += int((counts or [0, 0])[1] or 0)
+    return written
+
+
+def flush_draft_stats_async():
+    try:
+        socketio.start_background_task(flush_draft_stats_once)
+    except Exception:
+        threading.Thread(target=flush_draft_stats_once, name='draft-stats-flush', daemon=True).start()
+
+
+def _draft_stats_worker():
+    while True:
+        try:
+            try:
+                socketio.sleep(max(1, DRAFT_STATS_FLUSH_SECONDS))
+            except Exception:
+                time.sleep(max(1, DRAFT_STATS_FLUSH_SECONDS))
+            flush_draft_stats_once()
+        except Exception as exc:
+            admin_event('error', f'draft stats worker error: {exc}')
+
+
+def start_draft_stats_worker():
+    global _DRAFT_STATS_WORKER_STARTED
+    if _DRAFT_STATS_WORKER_STARTED:
+        return
+    _DRAFT_STATS_WORKER_STARTED = True
+    try:
+        socketio.start_background_task(_draft_stats_worker)
+    except Exception:
+        threading.Thread(target=_draft_stats_worker, name='draft-stats-worker', daemon=True).start()
 
 
 def record_event_loop_lag(lag_ms):
@@ -6986,14 +7083,13 @@ def _admin_online_user_map():
 @app.route('/api/admin/users')
 def admin_users():
     started = time.perf_counter()
-    limit = request.args.get('limit', 30)
     try:
         data = list_admin_users(
             query=request.args.get('query', ''),
             sort=request.args.get('sort', 'last_login_at'),
             order=request.args.get('order', 'desc'),
-            limit=limit,
-            offset=request.args.get('offset', 0),
+            limit=validate_int(request.args.get('limit', 30), default=30, minimum=1, maximum=50, name='limit'),
+            offset=validate_int(request.args.get('offset', 0), default=0, minimum=0, maximum=1000000, name='offset'),
         )
     except Exception as exc:
         admin_event('error', f'admin users query failed: {exc}')
@@ -9490,9 +9586,9 @@ def on_draft_pick(data):
         if success:
             if DB_AVAILABLE and room.mode in ('1v1', '2v2'):
                 try:
-                    record_card_draft_pick(room.mode, draft_options_before, def_id)
+                    enqueue_card_draft_pick(room.mode, draft_options_before, def_id)
                 except Exception as exc:
-                    admin_event('error', f'draft stats record failed: {exc}')
+                    admin_event('error', f'draft stats enqueue failed: {exc}')
             record_room_replay_action(room, 'draft_pick', pidx, {'def_id': def_id})
             # Check if THIS player finished drafting
             target_count = engine.draft_target_count(pidx) if hasattr(engine, 'draft_target_count') else DECK_SIZE

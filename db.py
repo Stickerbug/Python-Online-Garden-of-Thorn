@@ -4,6 +4,7 @@ import os
 import secrets
 import re
 import sqlite3
+import time
 from datetime import datetime, timedelta, timezone
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -122,11 +123,17 @@ def format_duration_zh(seconds):
     return f'{secs}秒'
 
 
+_FRIEND_CLEANUP_LAST_TS = 0.0
+_FRIEND_CLEANUP_INTERVAL_SECONDS = 600
+
+
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH, timeout=15)
+    conn = sqlite3.connect(DB_PATH, timeout=8)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys=ON;')
-    conn.execute('PRAGMA busy_timeout=15000;')
+    conn.execute('PRAGMA busy_timeout=8000;')
+    conn.execute('PRAGMA synchronous=NORMAL;')
+    conn.execute('PRAGMA temp_store=MEMORY;')
     return conn
 
 
@@ -324,6 +331,9 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN deleted_at TEXT')
         _assign_missing_player_ids(conn)
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_users_last_login ON users(last_login_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_users_stats ON users(games_played, wins, losses, draws)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS user_roles (
@@ -387,6 +397,7 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships(requester_id, status)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id, status)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_unread ON friendships(addressee_id, status, addressee_read_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_updated ON friendships(updated_at)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS matches (
@@ -564,6 +575,9 @@ def init_db():
         match_columns = {row['name'] for row in conn.execute('PRAGMA table_info(matches)').fetchall()}
         if 'player_ids_json' not in match_columns:
             conn.execute('ALTER TABLE matches ADD COLUMN player_ids_json TEXT')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_matches_id_desc ON matches(id DESC)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_matches_started_at ON matches(started_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_matches_ended_at ON matches(ended_at)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_ip_bans_active ON ip_bans(active, expires_at)')
         conn.execute(
             '''
@@ -1921,6 +1935,50 @@ def record_card_draft_pick(mode, option_ids, picked_id):
     return True
 
 
+def record_card_draft_counts(mode, card_counts):
+    mode_key = str(mode or '').strip()
+    if mode_key not in ('1v1', '2v2') or not isinstance(card_counts, dict):
+        return False
+    rows = []
+    for raw_id, counts in card_counts.items():
+        card_id = str(raw_id or '').strip()
+        if not card_id:
+            continue
+        if isinstance(counts, dict):
+            shown_inc = counts.get('shown', 0)
+            picked_inc = counts.get('picked', 0)
+        else:
+            try:
+                shown_inc, picked_inc = counts
+            except Exception:
+                continue
+        try:
+            shown_inc = int(shown_inc or 0)
+            picked_inc = int(picked_inc or 0)
+        except (TypeError, ValueError):
+            continue
+        if shown_inc <= 0 and picked_inc <= 0:
+            continue
+        rows.append((card_id, shown_inc, picked_inc))
+    if not rows:
+        return False
+    now = utc_now()
+    with get_db_connection() as conn:
+        conn.executemany(
+            '''
+            INSERT INTO card_draft_stats (mode, card_id, shown_count, picked_count, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(mode, card_id) DO UPDATE SET
+                shown_count = shown_count + excluded.shown_count,
+                picked_count = picked_count + excluded.picked_count,
+                updated_at = excluded.updated_at
+            ''',
+            [(mode_key, card_id, shown_inc, picked_inc, now) for card_id, shown_inc, picked_inc in rows],
+        )
+        conn.commit()
+    return True
+
+
 def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0):
     mode_key = str(mode or '').strip()
     sort_key = str(sort or 'pick_rate')
@@ -2235,7 +2293,11 @@ def _basic_social_user(row):
     }
 
 
-def _cleanup_expired_friend_requests(conn):
+def _cleanup_expired_friend_requests(conn, force=False):
+    global _FRIEND_CLEANUP_LAST_TS
+    now_ts = time.time()
+    if not force and now_ts - _FRIEND_CLEANUP_LAST_TS < _FRIEND_CLEANUP_INTERVAL_SECONDS:
+        return
     cutoff = utc_iso(utc_now_dt() - timedelta(days=FRIEND_REQUEST_TTL_DAYS))
     try:
         conn.execute(
@@ -2248,6 +2310,7 @@ def _cleanup_expired_friend_requests(conn):
             ''',
             ('pending', cutoff, cutoff),
         )
+        _FRIEND_CLEANUP_LAST_TS = now_ts
     except sqlite3.OperationalError as exc:
         if 'locked' not in str(exc).lower():
             raise
