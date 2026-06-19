@@ -416,28 +416,29 @@ I18N.ja = { ...I18N.en,
     mod_default_name: 'Mod {0}'
 };
 const GAME_TITLE = 'Garden of Thorn 荆棘花园';
-Object.values(I18N).forEach(dict => {
+Object.entries(I18N).forEach(([lang, dict]) => {
+    const fallback = (zh, en) => lang === 'zh' ? zh : en;
     dict.default_status = GAME_TITLE;
-    dict.tutorial_hint_play_fusioned = dict.tutorial_hint_play_fusioned || '聚变后的攻击牌已经准备好了。当前能量足够，把它打出看看强化后的伤害。';
+    dict.tutorial_hint_play_fusioned = dict.tutorial_hint_play_fusioned || fallback('聚变后的攻击牌已经准备好了。当前能量足够，把它打出看看强化后的伤害。', 'The fused attack is ready. You have enough E now; play it to see the boosted damage.');
     dict.target_pick_hint = dict.target_pick_hint || 'Click a highlighted player area.';
     dict.waiting_opponent_counter = dict.waiting_opponent_counter || dict.waiting_response || 'Waiting for response';
-    dict.tutorial_victory_message = dict.tutorial_victory_message || '恭喜你，成功完成了新手教程！\n希望你能在 Garden of Thorn 中玩得开心！';
-    dict.tutorial_defeat_message = dict.tutorial_defeat_message || '哎呀，对局失败了。没关系，祝你在接下来的游戏中越打越顺！';
-    dict.tutorial_retry = dict.tutorial_retry || '重试教程';
-    dict.tutorial_start = dict.tutorial_start || '新手引导';
-    dict.tutorial_skip = dict.tutorial_skip || '跳过引导';
-    dict.tutorial_intro = dict.tutorial_intro || '现在，让我们开始新手教程吧！';
-    dict.tutorial_hint_play = dict.tutorial_hint_play || '先打出一张 Thorn 攻击牌，观察对手 H 的变化。';
-    dict.tutorial_hint_end = dict.tutorial_hint_end || '行动完成后，点击“结束回合”，把节奏交给对手。';
-    dict.tutorial_hint_enemy = dict.tutorial_hint_enemy || '现在观察对手行动。注意战斗日志和 H/E/M 的变化。';
-    dict.tutorial_hint_deck = dict.tutorial_hint_deck || '先看看抽牌堆：点击“查看牌堆”，了解接下来可能抽到什么。';
-    dict.tutorial_hint_continue = dict.tutorial_hint_continue || '继续出牌并结束回合。稍后你会抽到反制牌；等对手攻击时，使用反制响应。';
-    dict.tutorial_hint_counter = dict.tutorial_hint_counter || '这是反制窗口。对手打出攻击牌时，可以选择可支付的反制牌，或等待倒计时选择不反制。';
-    dict.tutorial_hint_bloom = dict.tutorial_hint_bloom || 'Bloom 技能牌用于回复、施加状态或改变资源。试着打出一张技能牌，观察效果和资源变化。';
-    dict.tutorial_hint_root = dict.tutorial_hint_root || 'Root 装备牌会持续生效或在满足条件后触发。先打出一张，下一回合再观察它的作用。';
-    dict.tutorial_hint_fission = dict.tutorial_hint_fission || '现在，让我们来看看不同类型的牌。裂变是一张 Bloom 技能牌。普通攻击被裂变后总伤害可能接近不变，但三角形会在每段伤害后成长。把裂变用于三角形。';
-    dict.tutorial_hint_play_fissioned = dict.tutorial_hint_play_fissioned || '三角形已经带有裂变层数。现在把它打出，观察每段伤害和三角形层数如何连续结算。';
-    dict.tutorial_hint_fusion = dict.tutorial_hint_fusion || '聚变也是 Bloom 技能牌。它会选择2-3张同名攻击牌，合成为一张更强的牌。选择同名攻击牌完成聚变。';
+    dict.tutorial_victory_message = dict.tutorial_victory_message || fallback('恭喜你，成功完成了新手教程！\n希望你能在 Garden of Thorn 中玩得开心！', 'Congratulations, you completed the tutorial!\nHave fun in Garden of Thorn!');
+    dict.tutorial_defeat_message = dict.tutorial_defeat_message || fallback('哎呀，对局失败了。没关系，祝你在接下来的游戏中越打越顺！', 'The tutorial match was lost. That is fine; the next match will be smoother.');
+    dict.tutorial_retry = dict.tutorial_retry || fallback('重试教程', 'Retry Tutorial');
+    dict.tutorial_start = dict.tutorial_start || fallback('新手引导', 'Tutorial');
+    dict.tutorial_skip = dict.tutorial_skip || fallback('跳过引导', 'Skip Tutorial');
+    dict.tutorial_intro = dict.tutorial_intro || fallback('现在，让我们开始新手教程吧！', 'Now, let’s begin the tutorial.');
+    dict.tutorial_hint_play = dict.tutorial_hint_play || fallback('先打出一张 Thorn 攻击牌，观察对手 H 的变化。', 'Play a Thorn attack first, then watch the opponent’s H change.');
+    dict.tutorial_hint_end = dict.tutorial_hint_end || fallback('行动完成后，点击“结束回合”，把节奏交给对手。', 'After acting, press End Turn to pass the pace to the opponent.');
+    dict.tutorial_hint_enemy = dict.tutorial_hint_enemy || fallback('现在观察对手行动。注意战斗日志和 H/E/M 的变化。', 'Now watch the opponent act. Track the battle log and H/E/M bars.');
+    dict.tutorial_hint_deck = dict.tutorial_hint_deck || fallback('先看看抽牌堆：点击“查看牌堆”，了解接下来可能抽到什么。', 'Check your draw deck: press View Deck to see what may come next.');
+    dict.tutorial_hint_continue = dict.tutorial_hint_continue || fallback('继续出牌并结束回合。稍后你会抽到反制牌；等对手攻击时，使用反制响应。', 'Keep playing cards and end your turn. Later you will draw a Guard card; use it to respond when the opponent attacks.');
+    dict.tutorial_hint_counter = dict.tutorial_hint_counter || fallback('这是反制窗口。对手打出攻击牌时，可以选择可支付的反制牌，或等待倒计时选择不反制。', 'This is the counter window. Choose an affordable Guard card or let the countdown pass.');
+    dict.tutorial_hint_bloom = dict.tutorial_hint_bloom || fallback('Bloom 技能牌用于回复、施加状态或改变资源。试着打出一张技能牌，观察效果和资源变化。', 'Bloom skill cards heal, apply states, or change resources. Play one and watch the effect and resource changes.');
+    dict.tutorial_hint_root = dict.tutorial_hint_root || fallback('Root 装备牌会持续生效或在满足条件后触发。先打出一张，下一回合再观察它的作用。', 'Root equipment cards provide ongoing or triggered effects. Play one now and observe it next turn.');
+    dict.tutorial_hint_fission = dict.tutorial_hint_fission || fallback('现在，让我们来看看不同类型的牌。裂变是一张 Bloom 技能牌。普通攻击被裂变后总伤害可能接近不变，但三角形会在每段伤害后成长。把裂变用于三角形。', 'Now let’s look at different card types. Fission is a Bloom skill card. Splitting a basic attack may keep total damage close, but Triangle grows after each hit. Use Fission on Triangle.');
+    dict.tutorial_hint_play_fissioned = dict.tutorial_hint_play_fissioned || fallback('三角形已经带有裂变层数。现在把它打出，观察每段伤害和三角形层数如何连续结算。', 'Triangle now has Fission. Play it and watch each hit resolve while Triangle stacks grow.');
+    dict.tutorial_hint_fusion = dict.tutorial_hint_fusion || fallback('聚变也是 Bloom 技能牌。它会选择2-3张同名攻击牌，合成为一张更强的牌。选择同名攻击牌完成聚变。', 'Fusion is also a Bloom skill card. It chooses 2-3 same-name attacks and combines them into one stronger card.');
 });
 I18N.en.tutorial_start = 'Tutorial';
 I18N.en.target_pick_hint = 'Click a highlighted player area.';
@@ -689,6 +690,25 @@ Object.assign(I18N.fr, {
     tag_desc_revealed: 'Mot-clé de visibilité. Cette carte est visible en permanence pour l\'adversaire en main.'
 });
 
+Object.assign(I18N.fr, {
+    flag_temp_swift: 'Rapidité temporaire', tag_temp_swift: 'Rapidité temporaire',
+    flag_temp_heavy: 'Lourdeur temporaire', tag_temp_heavy: 'Lourdeur temporaire',
+    flag_magic_swift: 'Rapidité magique', tag_magic_swift: 'Rapidité magique',
+    flag_team_limited: 'Limité à l’équipe', tag_team_limited: 'Limité à l’équipe',
+    flag_team_unique: 'Unique d’équipe', tag_team_unique: 'Unique d’équipe',
+    flag_power: 'Puissance', tag_power: 'Puissance',
+    flag_self_only: 'Sans cible', tag_self_only: 'Sans cible',
+    flag_uncancellable: 'Non annulable', tag_uncancellable: 'Non annulable',
+    flag_infinite_exclude: 'Retiré d’Infinite Fire', tag_infinite_exclude: 'Retiré d’Infinite Fire',
+    flag_rebound: 'Retour', tag_rebound: 'Retour',
+    flag_attract: 'Attraction', tag_attract: 'Attraction',
+    flag_void: 'Vide', tag_void: 'Vide',
+    flag_copy: 'Copie', tag_copy: 'Copie',
+    flag_unique: 'Unique', tag_unique: 'Unique',
+    flag_stealth: 'Furtif', tag_stealth: 'Furtif',
+    flag_revealed: 'Révélé', tag_revealed: 'Révélé',
+});
+
 Object.assign(I18N.ja, {
     tag_desc_precision: '攻撃キーワード。精密攻撃が回避された場合、完全に失敗せず半分のダメージを与えます。',
     tag_desc_exile: '解決先キーワード。このカードはプレイまたは解決後、捨て札ではなく追放領域へ行きます。',
@@ -708,6 +728,25 @@ Object.assign(I18N.ja, {
     tag_desc_default: 'Mod または拡張タグです。具体的な意味は対応する Mod またはカード効果で定義されます。',
     tag_desc_stealth: '応答キーワード。このカードは相手の応答ウィンドウをトリガーしません。',
     tag_desc_revealed: '可視性キーワード。このカードは手札にある間、相手に永久に表示されます。'
+});
+
+Object.assign(I18N.ja, {
+    flag_temp_swift: '一時迅捷', tag_temp_swift: '一時迅捷',
+    flag_temp_heavy: '一時重化', tag_temp_heavy: '一時重化',
+    flag_magic_swift: '魔力迅捷', tag_magic_swift: '魔力迅捷',
+    flag_team_limited: 'チーム限定', tag_team_limited: 'チーム限定',
+    flag_team_unique: 'チーム唯一', tag_team_unique: 'チーム唯一',
+    flag_power: '威力', tag_power: '威力',
+    flag_self_only: '対象選択なし', tag_self_only: '対象選択なし',
+    flag_uncancellable: 'キャンセル不可', tag_uncancellable: 'キャンセル不可',
+    flag_infinite_exclude: 'Infinite Fire除外', tag_infinite_exclude: 'Infinite Fire除外',
+    flag_rebound: '回転', tag_rebound: '回転',
+    flag_attract: '吸引', tag_attract: '吸引',
+    flag_void: '虚無', tag_void: '虚無',
+    flag_copy: '副本', tag_copy: '副本',
+    flag_unique: '唯一', tag_unique: '唯一',
+    flag_stealth: '隠匿', tag_stealth: '隠匿',
+    flag_revealed: '公開', tag_revealed: '公開',
 });
 
 Object.assign(I18N.zh, {
@@ -1804,14 +1843,14 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'status-untargetable', re: /^(?:[+-]?\d+层无法选中|无法选中[:：]?[+-]?\d+层?)/i },
     { cls: 'status-magic-nazar', re: /^(?:[+-]?\d+层魔法邪眼|魔法邪眼[:：]?[+-]?\d+层?)/i },
     { cls: 'toxic', re: /^(?:\d+层淬毒|\d+\s*(?:Toxic|Toxique|Tóxico|Токсин)|淬毒\d+)/i },
-    { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*F(?![A-Za-z])|F(?![A-Za-z])|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/i },
-    { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P(?![A-Za-z])|P(?![A-Za-z])|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/i },
-    { cls: 'damage', re: /^(?:[+-]?\d+电伤|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/i },
-    { cls: 'armor', re: /^[+-]?\d+A/i },
-    { cls: 'heal', re: /^[+]?\d+H(?![A-Za-z])/i },
-    { cls: 'health', re: /^H(?![A-Za-z])/i },
-    { cls: 'elixir', re: /^[+-]?(?:\d+E|E)(?![A-Za-z])/i },
-    { cls: 'magic', re: /^[+-]?(?:\d+M|M)(?![A-Za-z])/i },
+    { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*F(?![A-Za-z])|F(?![A-Za-z])|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/ },
+    { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P(?![A-Za-z])|P(?![A-Za-z])|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/ },
+    { cls: 'damage', re: /^(?:[+-]?\d+电伤|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/ },
+    { cls: 'armor', re: /^[+-]?\d+A/ },
+    { cls: 'heal', re: /^[+]?\d+H(?![A-Za-z])/ },
+    { cls: 'health', re: /^H(?![A-Za-z])/ },
+    { cls: 'elixir', re: /^[+-]?(?:\d+E|E)(?![A-Za-z])/ },
+    { cls: 'magic', re: /^[+-]?(?:\d+M|M)(?![A-Za-z])/ },
 ];
 
 function buildInlineCardDict(defId, modifierText = '') {
@@ -1952,7 +1991,7 @@ function getLocalizedEventText(ev, field) {
 
 const LOG_TEXT = {
     en: { game_start: 'Game start. {p} goes first.', round: 'Round {n}', draw_cards: '{p} draws {n} cards', recover_e: '{p} recovers {n}E', take_damage: '{p} takes {n} {source} damage (H={h})', use_deal: '{p} uses {card}: deals {n} damage', use_multi: '{p} uses {card}: deals {n} x {times} damage', use_simple: '{p} uses {card}', equip: '{p} equips {card}', exile: '{card} is exiled', counter: '{p} counters with {card}', win: '{loser} reaches 0H. {winner} wins.', draw: 'Both players reached 0H. Draw.', surrender: '{p} surrenders. {winner} wins.', poison: 'Poison', burn: 'Burn', physical: 'physical' },
-    fr: { game_start: 'Debut de partie. {p} commence.', round: 'Tour {n}', draw_cards: '{p} pioche {n} cartes', recover_e: '{p} recupere {n}E', take_damage: '{p} subit {n} degats {source} (H={h})', use_deal: '{p} joue {card}: inflige {n} degats', use_multi: '{p} joue {card}: inflige {n} x {times} degats', use_simple: '{p} joue {card}', equip: '{p} equipe {card}', exile: '{card} est exile', counter: '{p} contre avec {card}', win: '{loser} tombe a 0H. {winner} gagne.', draw: 'Les deux joueurs tombent a 0H. Egalite.', surrender: '{p} abandonne. {winner} gagne.', poison: 'Poison', burn: 'Brulure', physical: 'physiques' },
+    fr: { game_start: 'Début de partie. {p} commence.', round: 'Tour {n}', draw_cards: '{p} pioche {n} cartes', recover_e: '{p} récupère {n}E', take_damage: '{p} subit {n} dégâts {source} (H={h})', use_deal: '{p} joue {card} : inflige {n} dégâts', use_multi: '{p} joue {card} : inflige {n} × {times} dégâts', use_simple: '{p} joue {card}', equip: '{p} équipe {card}', exile: '{card} est exilé', counter: '{p} contre avec {card}', win: '{loser} tombe à 0H. {winner} gagne.', draw: 'Les deux joueurs tombent à 0H. Égalité.', surrender: '{p} abandonne. {winner} gagne.', poison: 'Poison', burn: 'Brûlure', physical: 'physiques' },
     ru: { game_start: 'Game start. {p} goes first.', round: 'Round {n}', draw_cards: '{p} draws {n} cards', recover_e: '{p} recovers {n}E', take_damage: '{p} takes {n} {source} damage (H={h})', use_deal: '{p} uses {card}: deals {n} damage', use_multi: '{p} uses {card}: deals {n} x {times} damage', use_simple: '{p} uses {card}', equip: '{p} equips {card}', exile: '{card} is exiled', counter: '{p} counters with {card}', win: '{loser} reaches 0H. {winner} wins.', draw: 'Both players reached 0H. Draw.', surrender: '{p} surrenders. {winner} wins.', poison: 'Poison', burn: 'Burn', physical: 'physical' },
     ja: { game_start: 'Game start. {p} goes first.', round: 'Round {n}', draw_cards: '{p} draws {n} cards', recover_e: '{p} recovers {n}E', take_damage: '{p} takes {n} {source} damage (H={h})', use_deal: '{p} uses {card}: deals {n} damage', use_multi: '{p} uses {card}: deals {n} x {times} damage', use_simple: '{p} uses {card}', equip: '{p} equips {card}', exile: '{card} is exiled', counter: '{p} counters with {card}', win: '{loser} reaches 0H. {winner} wins.', draw: 'Both players reached 0H. Draw.', surrender: '{p} surrenders. {winner} wins.', poison: 'Poison', burn: 'Burn', physical: 'physical' },
 };
@@ -2269,6 +2308,7 @@ let dmThreadsAbortController = null;
 let dmMessagesAbortController = null;
 const dmMessageRequestPromises = new Map();
 const dmMessageLastFetchAt = new Map();
+let dmThreadsLastFetchAt = 0;
 const dmFailureBackoff = { threads: 0, messages: new Map() };
 const socialEndpointRequestTimes = new Map();
 let activeSocialFriendId = null;
@@ -6396,39 +6436,49 @@ const TERM_INTRO_MOVE_CANCEL = 18;
 let termIntroOverlayEl = null;
 let termIntroCardGhostEl = null;
 
+function lt(texts, fallback = '') {
+    if (!texts || typeof texts !== 'object') return String(fallback || '');
+    return texts[currentLang] || texts.en || texts.zh || fallback || '';
+}
+
 function getTermIntroLibrary() {
-    const magicDamageDesc = '不能被护甲、圆盘、邪眼等减少。注意，不是“消耗魔力造成的伤害”。';
+    const magicDamageDesc = lt({
+        zh: '不能被护甲、圆盘、邪眼等减少。注意，不是“消耗魔力造成的伤害”。',
+        en: 'Cannot be reduced by armor, Disk, Nazar, or similar effects. It does not mean “damage paid with Magic”.',
+        fr: 'Ne peut pas être réduit par l’armure, Disque, Nazar ou les effets similaires. Cela ne veut pas dire « dégâts payés avec de la magie ».',
+        ja: '護甲、円盤、ナザールなどでは軽減できません。「魔力を消費して与えるダメージ」とは別です。',
+    });
     return {
-        card_type_thorn: { label: getCardTypeLabel('thorn') || 'Thorn', desc: '攻击牌。需要选择目标，主要用来压低对方 H；2v2 中也可以攻击队友。', color: CARD_TYPE_COLORS.thorn },
-        card_type_bloom: { label: getCardTypeLabel('bloom') || 'Bloom', desc: '技能牌。用于回血、抽牌、加状态、调整 E/M 或改变场面。', color: CARD_TYPE_COLORS.bloom },
-        card_type_root: { label: getCardTypeLabel('root') || 'Root', desc: '装备牌。有些过一回合后才能主动触发，有些能持续提供效果。', color: CARD_TYPE_COLORS.root },
-        card_type_guard: { label: getCardTypeLabel('guard') || 'Guard', desc: '反制牌。仅对方行动弹出反制窗口时可使用，用来闪避、保护装备或减少伤害。', color: CARD_TYPE_COLORS.guard },
-        D: { label: 'D：物理伤害(Damage)', desc: '会受护甲、装备、闪避和反制影响。只有实际造成伤害，才会触发淬毒、尖牙回血等效果。', color: COLORS.damage },
-        electric_damage: { label: '电伤：电击伤害(Electric Damage)', desc: `一种类似于物理伤害的魔法伤害。${magicDamageDesc}`, color: COLORS.damage },
-        magic_damage: { label: '魔法伤害(Magic Damage)', desc: magicDamageDesc, color: COLORS.magic },
-        A: { label: 'A：护甲(Armor)', desc: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。', color: COLORS.armor_text },
-        P: { label: 'P：中毒(Poison)', desc: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', color: COLORS.poison },
-        F: { label: 'F：灼烧(Fire)', desc: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 20 回合及以上后，每回合开始时对所有玩家施加1层灼烧。', color: COLORS.fire },
-        toxic: { label: `${UI.status_toxic || '淬毒'}(Toxic)`, desc: '造成实际 D 后，对目标施加与淬毒层数相同的 P 层数。伤害被完全挡住时不会触发。', color: '#6C3483' },
-        hand_limit: { label: '手牌上限', desc: '你能保留在手中的最大牌数。抽牌、回手或创建牌时超过上限，就会发生爆牌。', color: COLORS.text_primary },
-        overdraw: { label: '爆牌', desc: '手牌超过上限时，多出来的牌不能留在手中，会按规则被移出手牌。装备黄金叶等效果可以提高上限。', color: COLORS.damage },
-        overcap: { label: '爆费', desc: 'E 或 M 回复超过上限时，超过部分直接丢失；提前规划资源可以避免浪费。', color: COLORS.elixir },
-        deck: { label: '牌堆', desc: '未抽到的牌所在区域。抽牌通常从牌堆顶进入手牌；查看牌堆只能看到抽牌堆。', color: COLORS.text_primary },
-        discard: { label: '弃牌堆', desc: '大多数打出后的牌会进入弃牌堆，之后会被重新洗回牌堆。', color: COLORS.text_secondary },
-        response: { label: UI.counter || '反制', desc: '对方行动满足条件时会出现响应机会。反制能改变对方行动的结果。', color: CARD_TYPE_COLORS.guard },
-        same_name_penalty: { label: '同名卡惩罚', desc: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', color: COLORS.elixir },
-        revealed: { label: UI.tag_revealed || '被揭示', desc: '在手中时永久对对手展示。', color: '#E74C3C' },
-        team_limited: { label: UI.tag_team_limited || '队伍限定', desc: '只会出现在一队至少 2 名玩家的模式；单人训练场可选，但没有实际意义。', color: '#607D3B' },
-        team_unique: { label: UI.tag_team_unique || '队伍独一', desc: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', color: '#8D6E63' },
-        power: { label: UI.tag_power || '威力', desc: '此牌造成的每段 D 增加。若是多段 D，会按段数把威力向上分配。', color: '#C0392B' },
-        magic_swift: { label: UI.tag_magic_swift || '魔力迅捷', desc: 'M 花费减少对应层数，最低为 0M。', color: '#6C5CE7' },
-        temp_swift: { label: UI.tag_temp_swift || '暂时迅捷', desc: '本次打出时 E 花费减少对应层数，进入弃牌堆后清除。', color: '#0EA5E9' },
-        temp_heavy: { label: UI.tag_temp_heavy || '暂时沉重', desc: '本次打出时 E 花费增加对应层数，进入弃牌堆后清除。', color: '#795548' },
-        magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', color: COLORS.magic },
-        equipment_armor: { label: '装备护甲', desc: '存在时，若装备将被摧毁，则使该装备不被摧毁，并消耗1层装备护甲。', color: COLORS.indestructible },
-        fusion_layer: { label: UI.fusion_layer || '聚变', desc: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#8E44AD' },
-        fission_layer: { label: UI.fission_layer || '裂变', desc: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', color: '#2874A6' },
-        layers: { label: '层数', desc: '状态或特殊属性的数量。层数越高效果会越强，或持续越久。', color: COLORS.text_primary },
+        card_type_thorn: { label: getCardTypeLabel('thorn') || 'Thorn', desc: lt({ zh: '攻击牌。需要选择目标，主要用来压低对方 H；2v2 中也可以攻击队友。', en: 'Attack cards. They choose a target and mainly reduce the opposing side’s H; in 2v2 they can also target allies.', fr: 'Cartes d’attaque. Elles choisissent une cible et servent surtout à réduire le H adverse ; en 2v2 elles peuvent aussi cibler les alliés.', ja: '攻撃カード。対象を選び、主に相手側の H を下げます。2v2 では味方も対象にできます。' }), color: CARD_TYPE_COLORS.thorn },
+        card_type_bloom: { label: getCardTypeLabel('bloom') || 'Bloom', desc: lt({ zh: '技能牌。用于回血、抽牌、加状态、调整 E/M 或改变场面。', en: 'Skill cards. They heal, draw, apply states, adjust E/M, or change the board.', fr: 'Cartes de compétence. Elles soignent, piochent, appliquent des états, modifient E/M ou changent la situation.', ja: '技能カード。回復、ドロー、状態付与、E/M 調整、盤面変更に使います。' }), color: CARD_TYPE_COLORS.bloom },
+        card_type_root: { label: getCardTypeLabel('root') || 'Root', desc: lt({ zh: '装备牌。有些过一回合后才能主动触发，有些能持续提供效果。', en: 'Equipment cards. Some can be triggered after one turn; others provide continuous effects.', fr: 'Cartes d’équipement. Certaines se déclenchent après un tour ; d’autres donnent un effet continu.', ja: '装備カード。1ターン後に発動できるものや、継続効果を持つものがあります。' }), color: CARD_TYPE_COLORS.root },
+        card_type_guard: { label: getCardTypeLabel('guard') || 'Guard', desc: lt({ zh: '反制牌。仅对方行动弹出反制窗口时可使用，用来闪避、保护装备或减少伤害。', en: 'Counter cards. They are used only when the response window appears, often to dodge, protect equipment, or reduce damage.', fr: 'Cartes de contre. Elles ne s’utilisent que dans une fenêtre de réponse, pour esquiver, protéger un équipement ou réduire les dégâts.', ja: '反制カード。応答ウィンドウが出た時だけ使え、回避、装備保護、ダメージ軽減に使います。' }), color: CARD_TYPE_COLORS.guard },
+        D: { label: lt({ zh: 'D：物理伤害(Damage)', en: 'D: Physical Damage', fr: 'D : dégâts physiques', ja: 'D：物理ダメージ' }), desc: lt({ zh: '会受护甲、装备、闪避和反制影响。只有实际造成伤害，才会触发淬毒、尖牙回血等效果。', en: 'Affected by armor, equipment, dodges, and counters. Effects such as Toxic or Fang healing only trigger when damage is actually dealt.', fr: 'Affecté par l’armure, les équipements, l’esquive et les contres. Toxic ou le soin de Fang ne se déclenchent que si des dégâts sont réellement infligés.', ja: '護甲、装備、回避、反制の影響を受けます。実際にダメージを与えた時だけ淬毒や牙の回復などが発動します。' }), color: COLORS.damage },
+        electric_damage: { label: lt({ zh: '电伤：电击伤害(Electric Damage)', en: 'Electric Damage', fr: 'Dégâts électriques', ja: '電撃ダメージ' }), desc: `${lt({ zh: '一种类似于物理伤害的魔法伤害。', en: 'A kind of magic damage that behaves similarly to physical damage. ', fr: 'Un type de dégâts magiques qui se comporte comme des dégâts physiques. ', ja: '物理ダメージに近い挙動をする魔法ダメージです。' })}${magicDamageDesc}`, color: COLORS.damage },
+        magic_damage: { label: lt({ zh: '魔法伤害(Magic Damage)', en: 'Magic Damage', fr: 'Dégâts magiques', ja: '魔法ダメージ' }), desc: magicDamageDesc, color: COLORS.magic },
+        A: { label: lt({ zh: 'A：护甲(Armor)', en: 'A: Armor', fr: 'A : armure', ja: 'A：護甲' }), desc: lt({ zh: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。', en: 'Reduces D. It does not reduce magic damage from Poison, Burn, or similar states.', fr: 'Réduit D. Ne réduit pas les dégâts magiques du Poison, de la Brûlure ou des états similaires.', ja: 'D を軽減します。中毒、灼烧などの魔法ダメージは軽減しません。' }), color: COLORS.armor_text },
+        P: { label: lt({ zh: 'P：中毒(Poison)', en: 'P: Poison', fr: 'P : poison', ja: 'P：毒' }), desc: lt({ zh: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', en: 'At your turn start, take magic damage equal to current P. If you survive, P halves rounded down, e.g. 10P→5P, 5P→2P.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au P actuel. Si vous survivez, P est divisé par deux arrondi à l’inférieur, ex. 10P→5P, 5P→2P.', ja: '自分のターン開始時、現在の P と同じ魔法ダメージを受けます。生存していれば P は切り捨てで半減します。例：10P→5P、5P→2P。' }), color: COLORS.poison },
+        F: { label: lt({ zh: 'F：灼烧(Fire)', en: 'F: Burn', fr: 'F : brûlure', ja: 'F：火傷' }), desc: lt({ zh: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 20 回合及以上后，每回合开始时对所有玩家施加1层灼烧。', en: 'At your turn start, take magic damage equal to current F. Burn stacks do not decrease. From round 20 onward, all players gain 1 Burn at each turn start.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au F actuel. Les charges de Brûlure ne diminuent pas. À partir du tour 20, tous les joueurs gagnent 1 Brûlure au début de chaque tour.', ja: '自分のターン開始時、現在の F と同じ魔法ダメージを受けます。火傷は減少しません。20ラウンド以降、各ターン開始時に全員へ火傷1層を付与します。' }), color: COLORS.fire },
+        toxic: { label: `${UI.status_toxic || 'Toxic'}(Toxic)`, desc: lt({ zh: '造成实际 D 后，对目标施加与淬毒层数相同的 P 层数。伤害被完全挡住时不会触发。', en: 'After actually dealing D, apply P equal to Toxic stacks. It does not trigger if all damage is blocked.', fr: 'Après avoir réellement infligé D, applique P égal aux charges de Toxique. Ne se déclenche pas si tous les dégâts sont bloqués.', ja: '実際に D を与えた後、淬毒層数と同じ P を付与します。ダメージが完全に防がれた場合は発動しません。' }), color: '#6C3483' },
+        hand_limit: { label: lt({ zh: '手牌上限', en: 'Hand Limit', fr: 'Limite de main', ja: '手札上限' }), desc: lt({ zh: '你能保留在手中的最大牌数。抽牌、回手或创建牌时超过上限，就会发生爆牌。', en: 'The maximum number of cards you can keep in hand. Drawing, returning, or creating cards past this limit causes overflow.', fr: 'Nombre maximum de cartes que vous pouvez garder en main. Piocher, renvoyer ou créer au-delà de cette limite provoque un débordement.', ja: '手札に保持できる最大枚数です。ドロー、回手、生成で上限を超えると爆牌します。' }), color: COLORS.text_primary },
+        overdraw: { label: lt({ zh: '爆牌', en: 'Hand Overflow', fr: 'Débordement de main', ja: '手札超過' }), desc: lt({ zh: '手牌超过上限时，多出来的牌不能留在手中，会按规则被移出手牌。装备黄金叶等效果可以提高上限。', en: 'When hand size exceeds the limit, extra cards cannot stay in hand and are removed by rule. Effects like Golden Leaf can raise the limit.', fr: 'Quand la main dépasse la limite, les cartes en trop ne restent pas en main et sont retirées selon les règles. Golden Leaf peut augmenter cette limite.', ja: '手札が上限を超えると、余分なカードは手札に残らずルールに従って移動します。黄金叶などで上限を上げられます。' }), color: COLORS.damage },
+        overcap: { label: lt({ zh: '爆费', en: 'Resource Overflow', fr: 'Excès de ressource', ja: 'リソース超過' }), desc: lt({ zh: 'E 或 M 回复超过上限时，超过部分直接丢失；提前规划资源可以避免浪费。', en: 'Recovered E or M beyond the maximum is lost. Planning resource use prevents waste.', fr: 'Le E ou M récupéré au-delà du maximum est perdu. Planifier les ressources évite le gaspillage.', ja: '上限を超えて回復した E/M は失われます。事前に使うと無駄を防げます。' }), color: COLORS.elixir },
+        deck: { label: lt({ zh: '牌堆', en: 'Deck', fr: 'Deck', ja: 'デッキ' }), desc: lt({ zh: '未抽到的牌所在区域。抽牌通常从牌堆顶进入手牌；查看牌堆只能看到抽牌堆。', en: 'The zone for cards not yet drawn. Draw usually moves cards from the top of the deck into hand.', fr: 'Zone des cartes non piochées. La pioche déplace généralement la carte du dessus du deck vers la main.', ja: 'まだ引いていないカードの領域です。通常、デッキ上から手札へ移動します。' }), color: COLORS.text_primary },
+        discard: { label: lt({ zh: '弃牌堆', en: 'Discard', fr: 'Défausse', ja: '捨て札' }), desc: lt({ zh: '大多数打出后的牌会进入弃牌堆，之后会被重新洗回牌堆。', en: 'Most played cards go here and may later be shuffled back into the deck.', fr: 'La plupart des cartes jouées y vont, puis peuvent être remélangées dans le deck.', ja: '多くの使用済みカードが入り、後でデッキに戻ることがあります。' }), color: COLORS.text_secondary },
+        response: { label: UI.counter || lt({ zh: '反制', en: 'Counter', fr: 'Contre', ja: '反制' }), desc: lt({ zh: '对方行动满足条件时会出现响应机会。反制能改变对方行动的结果。', en: 'A response chance appears when an opponent action meets its condition. Counters can change that action’s result.', fr: 'Une fenêtre de réponse apparaît quand l’action adverse remplit la condition. Un contre peut modifier le résultat.', ja: '相手の行動が条件を満たすと応答機会が出ます。反制はその結果を変えます。' }), color: CARD_TYPE_COLORS.guard },
+        same_name_penalty: { label: lt({ zh: '同名卡惩罚', en: 'Same-name penalty', fr: 'Pénalité de même nom', ja: '同名カードペナルティ' }), desc: lt({ zh: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', en: 'Playing the same card name repeatedly in one turn costs extra E. Symbiosis ignores it.', fr: 'Jouer plusieurs fois le même nom pendant un tour coûte du E supplémentaire. Symbiose l’ignore.', ja: '同一ターンに同名カードを繰り返すと追加 E が必要です。共生は無視します。' }), color: COLORS.elixir },
+        revealed: { label: UI.tag_revealed || lt({ zh: '被揭示', en: 'Revealed', fr: 'Révélé', ja: '公開' }), desc: lt({ zh: '在手中时永久对对手展示。', en: 'While in hand, this card is always visible to opponents.', fr: 'Tant qu’elle est en main, cette carte reste visible pour les adversaires.', ja: '手札にある間、相手に常に見えます。' }), color: '#E74C3C' },
+        team_limited: { label: UI.tag_team_limited || 'Team Limited', desc: lt({ zh: '只会出现在一队至少 2 名玩家的模式；单人训练场可选，但没有实际意义。', en: 'Appears only in modes where a team has at least 2 players. It can be selected in training but has no practical effect there.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. Sélectionnable en entraînement, mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ意味があります。訓練場では選べますが実質効果はありません。' }), color: '#607D3B' },
+        team_unique: { label: UI.tag_team_unique || 'Team Unique', desc: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose this card, one copy is kept at random and the extras are exiled.', fr: 'Si plusieurs coéquipiers choisissent cette carte, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }), color: '#8D6E63' },
+        power: { label: UI.tag_power || 'Power', desc: lt({ zh: '此牌造成的每段 D 增加。若是多段 D，会按段数把威力向上分配。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }), color: '#C0392B' },
+        magic_swift: { label: UI.tag_magic_swift || 'Magic Swift', desc: lt({ zh: 'M 花费减少对应层数，最低为 0M。', en: 'Reduces M cost by its value, minimum 0M.', fr: 'Réduit le coût M de sa valeur, minimum 0M.', ja: 'M コストを値だけ減らします。最低0M。' }), color: '#6C5CE7' },
+        temp_swift: { label: UI.tag_temp_swift || 'Temporary Swift', desc: lt({ zh: '本次打出时 E 花费减少对应层数，进入弃牌堆后清除。', en: 'Reduces E cost for this play only, then clears when entering discard.', fr: 'Réduit le coût E pour ce jeu seulement, puis disparaît en entrant dans la défausse.', ja: '今回の使用時だけ E コストを減らし、弃牌堆に入ると消えます。' }), color: '#0EA5E9' },
+        temp_heavy: { label: UI.tag_temp_heavy || 'Temporary Heavy', desc: lt({ zh: '本次打出时 E 花费增加对应层数，进入弃牌堆后清除。', en: 'Increases E cost for this play only, then clears when entering discard.', fr: 'Augmente le coût E pour ce jeu seulement, puis disparaît en entrant dans la défausse.', ja: '今回の使用時だけ E コストを増やし、弃牌堆に入ると消えます。' }), color: '#795548' },
+        magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: lt({ zh: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', en: 'While present, an enemy skill card that actually costs at least 3E is negated, then this loses 1 stack.', fr: 'Tant qu’il existe, une compétence ennemie coûtant réellement au moins 3E est annulée, puis perd 1 charge.', ja: '存在中、敵が実際に3E以上消費する技能カードを無効にし、その後1層減ります。' }), color: COLORS.magic },
+        equipment_armor: { label: lt({ zh: '装备护甲', en: 'Equipment Armor', fr: 'Armure d’équipement', ja: '装備護甲' }), desc: lt({ zh: '存在时，若装备将被摧毁，则使该装备不被摧毁，并消耗1层装备护甲。', en: 'If the equipment would be destroyed, prevent that destruction and consume 1 Equipment Armor.', fr: 'Si l’équipement devait être détruit, empêche cette destruction et consomme 1 Armure d’équipement.', ja: '装備が破壊される時、それを防ぎ装備護甲を1層消費します。' }), color: COLORS.indestructible },
+        fusion_layer: { label: UI.fusion_layer || 'Fusion', desc: lt({ zh: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', en: 'Amplifies attack damage. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after entering discard.', fr: 'Amplifie les dégâts d’attaque. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 en entrant dans la défausse.', ja: '攻撃ダメージを増やします。各命中は切り上げ(基礎ダメージ×聚变/裂变)。弃牌堆に入ると1に戻ります。' }), color: '#8E44AD' },
+        fission_layer: { label: UI.fission_layer || 'Fission', desc: lt({ zh: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', en: 'Splits an attack into multiple hits. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after entering discard.', fr: 'Divise une attaque en plusieurs coups. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 en entrant dans la défausse.', ja: '攻撃を複数回命中に分けます。各命中は切り上げ(基礎ダメージ×聚变/裂变)。弃牌堆に入ると1に戻ります。' }), color: '#2874A6' },
+        layers: { label: lt({ zh: '层数', en: 'Stacks', fr: 'Charges', ja: '層数' }), desc: lt({ zh: '状态或特殊属性的数量。层数越高效果会越强，或持续越久。', en: 'The quantity of a state or special property. More stacks usually mean stronger or longer-lasting effects.', fr: 'Quantité d’un état ou d’une propriété spéciale. Plus de charges signifie souvent un effet plus fort ou plus long.', ja: '状態や特殊属性の数量です。多いほど効果が強い、または長く続きます。' }), color: COLORS.text_primary },
     };
 }
 
@@ -6448,35 +6498,35 @@ function addTermIntroItem(items, seen, key, override = null) {
 
 function getIntroFlagDescription(flag, custom = null) {
     const normalized = normalizeCardFlag(flag);
-    if (custom) return getRegistryText(custom, 'description', '') || '自定义标签。具体效果由对应模组或卡牌说明决定。';
+    if (custom) return getRegistryText(custom, 'description', '') || lt({ zh: '自定义标签。具体效果由对应模组或卡牌说明决定。', en: 'Custom tag. Its exact effect is defined by the mod or card text.', fr: 'Tag personnalisé. Son effet exact est défini par le mod ou le texte de la carte.', ja: 'カスタムタグです。具体効果はModまたはカード文で定義されます。' });
     const desc = {
-        precision: '攻击被闪避时不会完全失效，而是把实际伤害变为原来的一半，向上取整。',
-        exile: '结算后进入放逐区，而不是弃牌堆；不会再被抽到。',
-        non_stackable: '可以装备多张，但同类效果只算一份；一张被摧毁后，剩下的还能继续发挥作用。',
-        indestructible: '作为装备时不会被摧毁效果破坏；玩家死亡时也不会被清除。',
-        sprout: '抽到时会额外抽牌。手牌满时仍然会爆牌。',
-        symbiosis: '同一回合重复使用同名卡时，不会受到同名卡费用惩罚。',
-        attract: '爆牌时，会优先挤掉没有吸引的牌。',
-        void: '回合结束仍留在手牌中时，会进入放逐区。',
-        self_only: '打出时不选择目标；效果按这张牌自身规则结算。',
-        uncancellable: '相关选择窗口不能取消，避免免费查看隐藏信息后退出选择。',
-        infinite_exclude: '不会进入无限火力随机牌池。',
-        rebound: '打出并结算后立即回到手中。',
-        copy: '进入手中时，将层数张放逐复制加入手中。',
-        unique: '整场对局自己总牌库中仅允许出现一张，多余的将被放逐。',
-        swift: 'E花费减少X，最少为0。',
-        magic_swift: 'M花费减少X，最少为0。',
-        temp_swift: '本次打出时E花费减少X，进入弃牌堆后清除。',
-        temp_heavy: '本次打出时E花费增加X，进入弃牌堆后清除。',
-        power: '此牌造成的每段D增加。多段D会按段数把威力向上分配。',
-        team_limited: '只在一队至少2名玩家的模式出现；单人训练场可选，但没有实际意义。',
-        team_unique: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。',
-        stealth: '不会触发对手的响应窗口。',
-        revealed: '在手中时永久对对手展示。',
+        precision: lt({ zh: '攻击被闪避时不会完全失效，而是把实际伤害变为原来的一半，向上取整。', en: 'If dodged, the attack is not fully negated; actual damage becomes half, rounded up.', fr: 'Si l’attaque est esquivée, elle n’est pas annulée : les dégâts réels sont divisés par deux, arrondis au supérieur.', ja: '回避されても完全には無効化されず、実ダメージが半分（切り上げ）になります。' }),
+        exile: lt({ zh: '结算后进入放逐区，而不是弃牌堆；不会再被抽到。', en: 'After resolving, goes to exile instead of discard and cannot be drawn again.', fr: 'Après résolution, va en exil au lieu de la défausse et ne peut plus être piochée.', ja: '解決後、弃牌堆ではなく放逐へ行き、再び引けません。' }),
+        non_stackable: lt({ zh: '可以装备多张，但同类效果只算一份；一张被摧毁后，剩下的还能继续发挥作用。', en: 'Multiple copies can be equipped, but the same effect counts only once. If one is destroyed, another copy can continue working.', fr: 'Plusieurs copies peuvent être équipées, mais l’effet identique ne compte qu’une fois. Si l’une est détruite, une autre peut continuer à agir.', ja: '複数装備できますが同種効果は1つ分だけです。1つ破壊されても残りが働きます。' }),
+        indestructible: lt({ zh: '作为装备时不会被摧毁效果破坏；玩家死亡时也不会被清除。', en: 'As equipment, cannot be destroyed by destroy effects and is not cleared when the player dies.', fr: 'En tant qu’équipement, ne peut pas être détruit par les effets de destruction et n’est pas retiré à la mort du joueur.', ja: '装備中、破壊効果で破壊されず、プレイヤー死亡時にも消えません。' }),
+        sprout: lt({ zh: '抽到时会额外抽牌。手牌满时仍然会爆牌。', en: 'When drawn, draws extra cards. Hand overflow can still happen.', fr: 'Quand elle est piochée, pioche des cartes supplémentaires. La main peut quand même déborder.', ja: '引いた時、追加でカードを引きます。手札超過は起こります。' }),
+        symbiosis: lt({ zh: '同一回合重复使用同名卡时，不会受到同名卡费用惩罚。', en: 'Ignores the extra E cost from playing the same card name repeatedly in one turn.', fr: 'Ignore le coût E supplémentaire lié aux cartes de même nom jouées plusieurs fois dans le même tour.', ja: '同一ターンの同名カード追加Eコストを無視します。' }),
+        attract: lt({ zh: '爆牌时，会优先挤掉没有吸引的牌。', en: 'During hand overflow, cards without Attract are pushed out first.', fr: 'Lors d’un débordement de main, les cartes sans Attraction sont retirées en premier.', ja: '手札超過時、吸引を持たないカードが先に押し出されます。' }),
+        void: lt({ zh: '回合结束仍留在手牌中时，会进入放逐区。', en: 'If still in hand at turn end, it is exiled.', fr: 'Si elle reste en main à la fin du tour, elle est exilée.', ja: 'ターン終了時に手札に残っていると放逐されます。' }),
+        self_only: lt({ zh: '打出时不选择目标；效果按这张牌自身规则结算。', en: 'No target is selected when played; it resolves by its own rules.', fr: 'Aucune cible n’est choisie au jeu ; la carte se résout selon ses propres règles.', ja: '使用時に対象を選ばず、カード固有のルールで解決します。' }),
+        uncancellable: lt({ zh: '相关选择窗口不能取消，避免免费查看隐藏信息后退出选择。', en: 'Its choice window cannot be cancelled, preventing free hidden-information checks.', fr: 'La fenêtre de choix ne peut pas être annulée, pour éviter de consulter gratuitement des informations cachées.', ja: '選択ウィンドウをキャンセルできず、隠し情報の無料確認を防ぎます。' }),
+        infinite_exclude: lt({ zh: '不会进入无限火力随机牌池。', en: 'Excluded from the Infinite Fire random pool.', fr: 'Exclue de la réserve aléatoire Infinite Fire.', ja: 'Infinite Fire のランダムプールに入りません。' }),
+        rebound: lt({ zh: '打出并结算后立即回到手中。', en: 'Returns to hand immediately after being played and resolved.', fr: 'Revient en main immédiatement après avoir été jouée et résolue.', ja: '使用・解決後すぐ手札に戻ります。' }),
+        copy: lt({ zh: '进入手中时，将层数张放逐复制加入手中。', en: 'When entering hand, adds that many exiled copies to hand.', fr: 'En entrant en main, ajoute autant de copies exilées en main.', ja: '手札に入る時、その層数分の放逐コピーを手札に加えます。' }),
+        unique: lt({ zh: '整场对局自己总牌库中仅允许出现一张，多余的将被放逐。', en: 'Only one copy may exist in your total deck during the match; extras are exiled.', fr: 'Une seule copie peut exister dans votre deck total pendant la partie ; les autres sont exilées.', ja: '対局中、自分の総デッキに1枚だけ存在できます。余分は放逐されます。' }),
+        swift: lt({ zh: 'E花费减少X，最少为0。', en: 'E cost is reduced by X, minimum 0.', fr: 'Le coût E est réduit de X, minimum 0.', ja: 'E コストをX減らします。最低0。' }),
+        magic_swift: lt({ zh: 'M花费减少X，最少为0。', en: 'M cost is reduced by X, minimum 0.', fr: 'Le coût M est réduit de X, minimum 0.', ja: 'M コストをX減らします。最低0。' }),
+        temp_swift: lt({ zh: '本次打出时E花费减少X，进入弃牌堆后清除。', en: 'For this play only, E cost is reduced by X; clears when entering discard.', fr: 'Pour ce jeu seulement, le coût E est réduit de X ; disparaît en entrant dans la défausse.', ja: '今回の使用時だけ E コストをX減らし、弃牌堆に入ると消えます。' }),
+        temp_heavy: lt({ zh: '本次打出时E花费增加X，进入弃牌堆后清除。', en: 'For this play only, E cost is increased by X; clears when entering discard.', fr: 'Pour ce jeu seulement, le coût E augmente de X ; disparaît en entrant dans la défausse.', ja: '今回の使用時だけ E コストをX増やし、弃牌堆に入ると消えます。' }),
+        power: lt({ zh: '此牌造成的每段D增加。多段D会按段数把威力向上分配。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }),
+        team_limited: lt({ zh: '只在一队至少2名玩家的模式出现；单人训练场可选，但没有实际意义。', en: 'Appears only in modes where a team has at least 2 players. In training it can appear but has no practical effect.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. En entraînement, elle peut apparaître mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ出ます。訓練場では出ても実質効果はありません。' }),
+        team_unique: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose it, one copy is kept at random and extras are exiled.', fr: 'Si plusieurs coéquipiers la choisissent, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }),
+        stealth: lt({ zh: '不会触发对手的响应窗口。', en: 'Does not open the opponent’s response window.', fr: 'N’ouvre pas la fenêtre de réponse adverse.', ja: '相手の応答ウィンドウを開きません。' }),
+        revealed: lt({ zh: '在手中时永久对对手展示。', en: 'While in hand, it is always shown to opponents.', fr: 'Tant qu’elle est en main, elle est toujours visible pour les adversaires.', ja: '手札にある間、相手に常に表示されます。' }),
         fusion_layer: getTermIntroLibrary().fusion_layer.desc,
         fission_layer: getTermIntroLibrary().fission_layer.desc,
     };
-    return desc[normalized] || UI.tag_desc_default || '该标签的具体含义由对应卡牌或模组定义。';
+    return desc[normalized] || UI.tag_desc_default || lt({ zh: '该标签的具体含义由对应卡牌或模组定义。', en: 'This tag’s exact meaning is defined by the card or mod.', fr: 'Le sens exact de ce tag est défini par la carte ou le mod.', ja: 'このタグの具体的な意味はカードまたはModで定義されます。' });
 }
 
 function addFlagIntroItem(items, seen, flag) {
@@ -6686,9 +6736,53 @@ function getStatusIntroItem(statusInfo) {
         bleed: { label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
         fragment: { label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
     };
+    const localizedStatusTerms = {
+        poison: { label: UI.status_poison, desc: getTermIntroLibrary().P.desc },
+        fire: { label: UI.status_fire, desc: getTermIntroLibrary().F.desc },
+        toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc },
+        triangle: { label: UI.status_triangle, desc: lt({ zh: builtIns.triangle.desc, en: 'Each stack increases later Triangle damage, up to 4. With Fission, each hit recalculates using the current stack count.', fr: 'Chaque charge augmente les dégâts suivants de Triangle, jusqu’à 4. Avec Fission, chaque coup est recalculé avec les charges actuelles.', ja: '各層が以後の三角形ダメージを増やし、上限は4層です。裂变時は各命中ごとに現在層数で再計算します。' }) },
+        magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: getTermIntroLibrary().magic_nazar.desc },
+        equip_protect: { label: UI.status_equip_protect, desc: lt({ zh: builtIns.equip_protect.desc, en: 'Prevents equipment from being destroyed by destroy effects.', fr: 'Empêche un équipement d’être détruit par les effets de destruction.', ja: '装備が破壊効果で破壊されるのを防ぎます。' }) },
+        invincible: { label: UI.status_invincible, desc: lt({ zh: builtIns.invincible.desc, en: 'While invincible, damage does not cause defeat.', fr: 'Pendant l’invincibilité, les dégâts ne provoquent pas la défaite.', ja: '無敵中はダメージで敗北しません。' }) },
+        status_immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, harmful states do not take effect.', fr: 'Tant que cet effet existe, les états néfastes ne prennent pas effet.', ja: '存在中、悪性状態は効果を発揮しません。' }) },
+        immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, harmful states do not take effect.', fr: 'Tant que cet effet existe, les états néfastes ne prennent pas effet.', ja: '存在中、悪性状態は効果を発揮しません。' }) },
+        stunned: { label: UI.status_stunned, desc: lt({ zh: builtIns.stunned.desc, en: 'At your turn, lose 1 stack and skip active actions. Passive equipment still works.', fr: 'À votre tour, perdez 1 charge et sautez vos actions actives. Les équipements passifs fonctionnent encore.', ja: '自分のターンに1層減り、能動行動をスキップします。装備の受動効果は通常通りです。' }) },
+        attack_blocked: { label: UI.status_attack_blocked, desc: lt({ zh: builtIns.attack_blocked.desc, en: 'You cannot play Thorn cards while this effect lasts.', fr: 'Vous ne pouvez pas jouer de cartes Thorn tant que cet effet dure.', ja: '効果中、Thornカードを使用できません。' }) },
+        attack_only: { label: UI.status_attack_only, desc: lt({ zh: builtIns.attack_only.desc, en: 'You can only play Thorn cards while this effect lasts.', fr: 'Vous ne pouvez jouer que des cartes Thorn tant que cet effet dure.', ja: '効果中、Thornカードしか使用できません。' }) },
+        untargetable: { label: UI.status_untargetable, desc: lt({ zh: builtIns.untargetable.desc, en: 'Cannot be selected by some targeted effects.', fr: 'Ne peut pas être choisi par certains effets ciblés.', ja: '一部の対象指定効果で選べません。' }) },
+        bandage: { label: UI.status_bandage, desc: lt({ zh: builtIns.bandage.desc, en: 'After lethal damage, become invincible until your next turn ends, then die.', fr: 'Après des dégâts mortels, devient invincible jusqu’à la fin de votre prochain tour, puis meurt.', ja: '致命ダメージ後、次の自分ターン終了まで無敵になり、その後死亡します。' }) },
+        sluggish: { label: UI.status_sluggish, desc: lt({ zh: builtIns.sluggish.desc, en: 'Draw that many fewer cards each turn.', fr: 'Pioche autant de cartes en moins à chaque tour.', ja: '毎ターンその層数分だけドローが減ります。' }) },
+        overload: { label: UI.status_overload, desc: lt({ zh: builtIns.overload.desc, en: 'At turn start, lose E equal to its stacks down to 0, then clear it.', fr: 'Au début du tour, perdez E égal aux charges jusqu’à 0, puis l’état disparaît.', ja: 'ターン開始時、層数分のEを0まで失い、その後消えます。' }) },
+        foresight: { label: UI.status_foresight, desc: lt({ zh: builtIns.foresight.desc, en: 'At turn-start draw, you may discard up to that many hand cards, then draw the same number.', fr: 'Lors de la pioche de début de tour, vous pouvez défausser jusqu’à autant de cartes en main, puis en piocher autant.', ja: 'ターン開始ドロー時、層数まで手札を捨て、その枚数を引けます。' }) },
+        fracture: { label: UI.status_fracture, desc: lt({ zh: builtIns.fracture.desc, en: 'Whenever you play a card, lose H equal to its stacks. Clears at your turn end.', fr: 'Chaque fois que vous jouez une carte, perdez H égal aux charges. Disparaît à la fin de votre tour.', ja: 'カードを使うたび層数分Hを失います。自分ターン終了時に消えます。' }) },
+        stagnation: { label: UI.status_stagnation, desc: lt({ zh: builtIns.stagnation.desc, en: 'Poison still deals damage at turn start, but P does not halve afterward. Loses 1 stack at your turn end.', fr: 'Le poison inflige toujours ses dégâts au début du tour, mais P n’est pas réduit de moitié ensuite. Perd 1 charge à la fin de votre tour.', ja: 'ターン開始時に毒ダメージは受けますが、その後Pは半減しません。自分ターン終了時に1層減ります。' }) },
+        blind: { label: UI.status_blind, desc: lt({ zh: builtIns.blind.desc, en: 'Higher stacks hide more card and combat information from you. At your turn start, your hand is shuffled, then Blind is cleared.', fr: 'Plus les charges sont élevées, plus les informations de cartes et de combat vous sont cachées. Au début de votre tour, votre main est mélangée, puis Cécité disparaît.', ja: '層数が高いほどカードや戦闘情報が隠れます。自分ターン開始時、手札をシャッフルしてから失明は消えます。' }) },
+        fragile: { label: lt({ zh: '易损', en: 'Fragile', fr: 'Fragile', ja: '脆弱' }), desc: lt({ zh: builtIns.fragile.desc, en: 'Reduces armor by its stacks. Negative armor increases physical damage taken. Clears at your turn start.', fr: 'Réduit l’armure de ses charges. Une armure négative augmente les dégâts physiques reçus. Disparaît au début de votre tour.', ja: '護甲を層数分減らします。護甲が負なら受ける物理ダメージが増えます。自分ターン開始時に消えます。' }) },
+        shield: { label: lt({ zh: '护盾', en: 'Shield', fr: 'Bouclier', ja: 'シールド' }), desc: lt({ zh: builtIns.shield.desc, en: 'Consumes stacks to block that much damage, including magic damage. Halves at your turn start.', fr: 'Consomme ses charges pour bloquer autant de dégâts, y compris magiques. Est divisé par deux au début de votre tour.', ja: '層数を消費して同量のダメージを防ぎます。魔法ダメージも含みます。自分ターン開始時に半減します。' }) },
+        turn_heal: { label: lt({ zh: '回合回复', en: 'Turn Heal', fr: 'Soin de tour', ja: 'ターン回復' }), desc: lt({ zh: builtIns.turn_heal.desc, en: 'Shown as Turn Heal:X;Y. When applied and at turn start, heal Y H, then X decreases by 1. Removed at X=0.', fr: 'Affiché Soin de tour:X;Y. À l’application et au début du tour, soigne Y H, puis X diminue de 1. Retiré à X=0.', ja: '回合回复:X;Y と表示。付与時とターン開始時にY H回復し、Xが1減ります。X=0で消えます。' }) },
+        turn_magic: { label: lt({ zh: '魔力回合回复', en: 'Turn Magic Regen', fr: 'Régénération magique', ja: '魔力ターン回復' }), desc: lt({ zh: builtIns.turn_magic.desc, en: 'Shown as Turn Magic Regen:X;Y. When applied and at turn start, recover Y M, then X decreases by 1. Removed at X=0.', fr: 'Affiché Régénération magique:X;Y. À l’application et au début du tour, récupère Y M, puis X diminue de 1. Retiré à X=0.', ja: '魔力回合回复:X;Y と表示。付与時とターン開始時にY M回復し、Xが1減ります。X=0で消えます。' }) },
+        root_status: { label: lt({ zh: '树根', en: 'Root', fr: 'Racine', ja: '根' }), desc: lt({ zh: builtIns.root_status.desc, en: 'Increases armor. Loses 1 stack when physical damage is taken. The Root equipment that created it clears its own stacks when leaving play.', fr: 'Augmente l’armure. Perd 1 charge quand des dégâts physiques sont subis. L’équipement Racine qui l’a créé retire ses propres charges en quittant le jeu.', ja: '護甲を増やします。物理ダメージを受けると1層減ります。生成元のRoot装備が離場すると対応分を消します。' }) },
+        toxic_poison: { label: lt({ zh: '剧毒', en: 'Toxic Poison', fr: 'Poison virulent', ja: '劇毒' }), desc: lt({ zh: builtIns.toxic_poison.desc, en: 'After Poison resolves, applies that many additional P.', fr: 'Après la résolution du Poison, applique autant de P supplémentaires.', ja: '毒の解決後、同じ層数のPを追加付与します。' }) },
+        heal_block: { label: UI.status_heal_block, desc: lt({ zh: builtIns.heal_block.desc, en: 'Reduces life healing by 50% per stack, up to 100%. Loses 1 stack at your turn end.', fr: 'Réduit les soins de vie de 50% par charge, jusqu’à 100%. Perd 1 charge à la fin de votre tour.', ja: '生命回復を1層ごとに50%、最大100%減らします。自分ターン終了時に1層減ります。' }) },
+        weakness: { label: UI.status_weakness, desc: lt({ zh: builtIns.weakness.desc, en: 'Your physical damage dealt to others is reduced by 20% per stack, up to 60%. Loses 1 stack at your turn end.', fr: 'Vos dégâts physiques infligés aux autres sont réduits de 20% par charge, jusqu’à 60%. Perd 1 charge à la fin de votre tour.', ja: '自分が他人に与える物理ダメージを1層ごとに20%、最大60%減らします。自分ターン終了時に1層減ります。' }) },
+        bleed: { label: UI.status_bleed, desc: lt({ zh: builtIns.bleed.desc, en: 'When you play a Thorn card, take physical damage equal to its stacks. At turn end, stacks halve rounded down.', fr: 'Quand vous jouez une carte Thorn, subissez des dégâts physiques égaux aux charges. À la fin du tour, les charges sont divisées par deux arrondies à l’inférieur.', ja: 'Thornカードを使う時、層数分の物理ダメージを受けます。ターン終了時に切り捨てで半減します。' }) },
+        fragment: { label: UI.status_fragment, desc: lt({ zh: builtIns.fragment.desc, en: 'Gains Fragment stacks. At 4 stacks, you may spend 4 stacks to add Thor’s Hammer to hand.', fr: 'Gagne des fragments. À 4 charges, vous pouvez en dépenser 4 pour ajouter Thor’s Hammer à la main.', ja: '碎片層数を得ます。4層で4層消費し、雷神之锤を手札に加えられます。' }) },
+    };
+    ['jungle:fragile', 'jungle:shield', 'jungle:turn_heal_turns', 'jungle:turn_magic_turns', 'jungle:root_status', 'jungle:toxic_poison'].forEach(fullKey => {
+        const shortKey = fullKey.includes('fragile') ? 'fragile'
+            : fullKey.includes('shield') ? 'shield'
+            : fullKey.includes('turn_heal') ? 'turn_heal'
+            : fullKey.includes('turn_magic') ? 'turn_magic'
+            : fullKey.includes('root_status') ? 'root_status'
+            : 'toxic_poison';
+        localizedStatusTerms[fullKey] = localizedStatusTerms[shortKey];
+    });
+    if (localizedStatusTerms[key]) {
+        return { ...builtIns[key], ...localizedStatusTerms[key], color: (builtIns[key] && builtIns[key].color) || (localizedStatusTerms[key] && localizedStatusTerms[key].color) || COLORS.text_primary };
+    }
     return builtIns[key] || {
         label: (statusInfo && statusInfo.name) || key || '状态',
-        desc: '状态会暂时改变玩家的资源、行动或受伤规则。具体效果由卡牌定义。',
+        desc: lt({ zh: '状态会暂时改变玩家的资源、行动或受伤规则。具体效果由卡牌定义。', en: 'States temporarily change resources, actions, or damage rules. The exact effect is defined by the card.', fr: 'Les états modifient temporairement les ressources, les actions ou les règles de dégâts. L’effet exact est défini par la carte.', ja: '状態は一時的にリソース、行動、受傷ルールを変えます。具体効果はカードで定義されます。' }),
         color: (statusInfo && statusInfo.fg) || COLORS.text_primary,
     };
 }
@@ -6842,7 +6936,7 @@ function animateTermIntroCardFromSource(cardEl, sourceRect, overlay) {
 
 function renderTermIntroItems(items) {
     if (!items || !items.length) {
-        return '<div class="term-intro-empty">这张牌没有需要额外说明的术语。</div>';
+        return `<div class="term-intro-empty">${escapeHtml(lt({ zh: '这张牌没有需要额外说明的术语。', en: 'This card has no extra terms to explain.', fr: 'Cette carte n’a pas de terme supplémentaire à expliquer.', ja: 'このカードには追加説明が必要な用語はありません。' }))}</div>`;
     }
     return items.map(item => `
         <article class="term-intro-item" style="--term-color:${escapeHtml(item.color || COLORS.text_primary)}">
@@ -6878,7 +6972,7 @@ function showTermIntroForCard(cardDict, cardOptions = {}) {
     card.classList.add('term-intro-card');
     if (isUsableRect(sourceRect)) card.classList.add('term-intro-card-hidden');
     cardSlot.appendChild(card);
-    title.textContent = blinded ? '? · ?' : `${getCardName(cardDef)} · 术语说明`;
+    title.textContent = blinded ? '? · ?' : `${getCardName(cardDef)} · ${lt({ zh: '术语说明', en: 'Term Guide', fr: 'Guide des termes', ja: '用語説明' })}`;
     list.innerHTML = buildCardIntroTermsHtml(introCardDict);
     overlay.dataset.termIntroDepth = String(termIntroDepth);
     bindInlineCardChips(cardSlot, { interactive: true, allowTermIntro: allowNestedTermIntro, termIntroDepth: termIntroDepth + 1 });
@@ -6909,7 +7003,7 @@ function showTermIntroForStatus(statusInfo) {
             <span class="status-tag term-intro-status-tag" style="color:${escapeHtml(statusInfo?.fg || item.color || COLORS.text_primary)};background:${escapeHtml(statusInfo?.bg || COLORS.bg_card || '#fff')};border-color:${escapeHtml(statusInfo?.fg || item.color || COLORS.text_primary)}">${escapeHtml(displayText)}</span>
         </div>
     `;
-    title.textContent = `${displayText} · 状态说明`;
+    title.textContent = `${displayText} · ${lt({ zh: '状态说明', en: 'State Guide', fr: 'Guide d’état', ja: '状態説明' })}`;
     const terms = [item];
     if (statusInfo && statusInfo.val) {
         terms.push(getTermIntroLibrary().layers);
@@ -7444,7 +7538,9 @@ function connectSocket(serverUrl) {
     bindSocketEvent('dm_update', (data = {}) => {
         dmData.unread_count = Number(data.unread_count || dmData.unread_count || 0);
         updateFriendsBadge();
-        loadDmThreads(false);
+        if (!document.hidden && (isFriendsPopoverOpen() || isSocialDetailOpen())) {
+            loadDmThreads(true);
+        }
     });
     bindSocketEvent('invite_received', (data) => {
         debugLog('[client] invite_received:', data);
@@ -9685,7 +9781,7 @@ function showSocialDetailTab(tabName = 'profile') {
         if (page) page.classList.toggle('hidden', name !== tab);
     });
     if (tab === 'dm') {
-        loadDmThreads(true);
+        loadDmThreads(true, { force: true });
     }
 }
 
@@ -9700,7 +9796,7 @@ function toggleSocialDetailModal(force, tabName = 'profile') {
         showSocialDetailTab(tabName);
         renderFriendDetailProfile();
     } else {
-        abortDmFetches();
+        stopSocialNetworkActivity();
     }
 }
 
@@ -9802,7 +9898,7 @@ async function loadFriends(markRead = false) {
             renderSocialSettings();
         }
         renderFriendsState();
-        loadDmThreads(false);
+        loadDmThreads(true);
     } catch (err) {
         setFriendsError(err.message || UI.account_error);
     }
@@ -9887,6 +9983,10 @@ function abortDmFetches() {
     dmMessageRequestPromises.clear();
 }
 
+function stopSocialNetworkActivity() {
+    abortDmFetches();
+}
+
 function warnSocialEndpointStorm(endpoint) {
     const now = Date.now();
     const key = String(endpoint || '').split('?')[0];
@@ -9928,7 +10028,7 @@ function recordSocialBackoff(kind, threadId = '', failed = false) {
     dmFailureBackoff.until = now + delay;
 }
 
-async function loadDmThreads(renderOnly = true) {
+async function loadDmThreads(renderOnly = true, options = {}) {
     if (document.hidden || (!isFriendsPopoverOpen() && !isSocialDetailOpen())) return;
     if (!currentAccount) {
         dmData = { threads: [], unread_count: 0 };
@@ -9940,6 +10040,11 @@ async function loadDmThreads(renderOnly = true) {
         renderDmMessages();
         updateFriendsBadge();
         return;
+    }
+    const force = options.force === true;
+    if (!force) {
+        const now = Date.now();
+        if (now - Number(dmThreadsLastFetchAt || 0) < 10000) return;
     }
     if (!socialBackoffReady('threads')) return;
     if (dmThreadsRequestPromise) return dmThreadsRequestPromise;
@@ -9962,6 +10067,7 @@ async function loadDmThreads(renderOnly = true) {
         if (!renderOnly && activeDmThreadId) {
             await openDmThread(activeDmThreadId, { markRead: false, force: false });
         }
+        dmThreadsLastFetchAt = Date.now();
         recordSocialBackoff('threads', '', false);
     } catch (err) {
         if (!(err && /abort|取消|超时|timeout/i.test(String(err.message || err.name || '')))) {
@@ -10079,7 +10185,7 @@ async function sendDmMessage() {
         activeDmMessages = Array.isArray(data.messages) ? data.messages : activeDmMessages;
         const title = $('dm-chat-title');
         if (title && data.user && data.user.username) title.textContent = `与 ${data.user.username} 的私信`;
-        await loadDmThreads(true);
+        await loadDmThreads(true, { force: true });
         renderDmMessages();
     } catch (err) {
         setFriendsError(err.message || UI.account_error);
@@ -10154,7 +10260,7 @@ function toggleFriendsPopover(force) {
         toggleAccountPopover(false);
         loadFriends(true);
     } else {
-        abortDmFetches();
+        stopSocialNetworkActivity();
     }
 }
 
@@ -13404,7 +13510,10 @@ function renderStatusTags(containerId, playerData) {
     if (p.triangle_stacks > 0) tags.push({ key: 'triangle', name: UI.status_triangle, abbr: '△', val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
     if (p.nazar_active) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
     const magicNazar = customCount('magic_nazar');
-    if (magicNazar > 0) tags.push({ key: 'magic_nazar', name: '魔法邪眼', abbr: '魔邪', val: magicNazar, fg: COLORS.magic_text, bg: COLORS.magic_bg });
+    if (magicNazar > 0) {
+        const info = getStatusIntroItem({ key: 'magic_nazar' });
+        tags.push({ key: 'magic_nazar', name: info.label, abbr: currentLang === 'zh' ? '魔邪' : 'MNz', val: magicNazar, fg: COLORS.magic_text, bg: COLORS.magic_bg });
+    }
     if (p.equipment_protection > 0) tags.push({ key: 'equip_protect', name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
     if (p.invincible) tags.push({ key: 'invincible', name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
     const statusImmune = customCount('status_immune', 'immune', '状态免疫');
@@ -13432,12 +13541,14 @@ function renderStatusTags(containerId, playerData) {
     const turnHealTurns = customStatusSum('jungle:turn_heal_turns', 'turn_heal_turns');
     const turnHealPower = customStatusMax('jungle:turn_heal_power', 'turn_heal_power');
     if (turnHealTurns > 0 && turnHealPower > 0) {
-        tags.push({ key: 'jungle:turn_heal_turns', name: '回合回复', abbr: '回合回复', val: `${turnHealTurns};${turnHealPower}`, fg: '#F48FB1', bg: '#FDEDF2' });
+        const info = getStatusIntroItem({ key: 'turn_heal' });
+        tags.push({ key: 'jungle:turn_heal_turns', name: info.label, abbr: currentLang === 'zh' ? '回合回复' : 'Heal', val: `${turnHealTurns};${turnHealPower}`, fg: '#F48FB1', bg: '#FDEDF2' });
     }
     const turnMagicTurns = customStatusSum('jungle:turn_magic_turns', 'turn_magic_turns');
     const turnMagicPower = customStatusMax('jungle:turn_magic_power', 'turn_magic_power');
     if (turnMagicTurns > 0 && turnMagicPower > 0) {
-        tags.push({ key: 'jungle:turn_magic_turns', name: '魔力回合回复', abbr: '魔力回复', val: `${turnMagicTurns};${turnMagicPower}`, fg: '#6C5CE7', bg: '#F0ECFF' });
+        const info = getStatusIntroItem({ key: 'turn_magic' });
+        tags.push({ key: 'jungle:turn_magic_turns', name: info.label, abbr: currentLang === 'zh' ? '魔力回复' : 'M Regen', val: `${turnMagicTurns};${turnMagicPower}`, fg: '#6C5CE7', bg: '#F0ECFF' });
     }
     const jungleStatusDisplay = [
         { keys: ['jungle:fragile', 'fragile'], name: '易损', abbr: '易损', fg: '#8E5A2A', bg: '#F7EFE8', title: '护甲降低对应层数；若降为负数，会使物理伤害增加。自己回合开始时清除。' },
@@ -18270,8 +18381,10 @@ async function init() {
     if ($('skin-eye-shape')) $('skin-eye-shape').addEventListener('change', renderSkinEditorPreview);
     document.addEventListener('pointermove', updateSkinEyeTracking, { passive: true });
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) abortDmFetches();
+        if (document.hidden) stopSocialNetworkActivity();
     });
+    window.addEventListener('pagehide', stopSocialNetworkActivity);
+    window.addEventListener('beforeunload', stopSocialNetworkActivity);
     if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
     if ($('btn-friends-popover-close')) $('btn-friends-popover-close').addEventListener('click', () => toggleFriendsPopover(false));
     if ($('btn-social-detail-close')) $('btn-social-detail-close').addEventListener('click', () => toggleSocialDetailModal(false));
@@ -18282,7 +18395,7 @@ async function init() {
     if ($('btn-friend-add')) $('btn-friend-add').addEventListener('click', addFriendFromInput);
     if ($('btn-dm-start')) $('btn-dm-start').addEventListener('click', startDmFromIdentifier);
     if ($('btn-dm-refresh')) $('btn-dm-refresh').addEventListener('click', async () => {
-        await loadDmThreads(true);
+        await loadDmThreads(true, { force: true });
         if (activeDmThreadId) await openDmThread(activeDmThreadId, { markRead: true, force: true });
     });
     if ($('btn-dm-send')) $('btn-dm-send').addEventListener('click', sendDmMessage);

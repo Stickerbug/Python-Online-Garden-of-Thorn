@@ -19,6 +19,7 @@ import hashlib
 import platform
 import subprocess
 import sqlite3
+import traceback
 from functools import wraps
 from collections import deque
 from datetime import datetime, timedelta, timezone
@@ -4002,11 +4003,18 @@ def measure_socket_action(event_name):
         def wrapper(*args, **kwargs):
             start = time.perf_counter()
             sid = getattr(request, 'sid', '')
+            watched = event_name in {'login', 'play_card', 'end_turn', 'response', 'resolve_choice'}
             ok = True
+            if watched:
+                try:
+                    print(f'event_start event={event_name} sid={sid}', flush=True)
+                except Exception:
+                    pass
             try:
                 return fn(*args, **kwargs)
             except Exception as exc:
                 ok = False
+                traceback.print_exc()
                 room_id = None
                 user_id = None
                 try:
@@ -4015,16 +4023,19 @@ def measure_socket_action(event_name):
                         user_id = players[sid].get('user_id')
                 except Exception:
                     pass
-                admin_event(
-                    'error',
-                    f'socket_event_failed event={event_name} sid={sid} room={room_id} error={type(exc).__name__}: {exc}',
-                    user_id=user_id,
-                    room_id=room_id,
-                )
+                try:
+                    admin_event(
+                        'error',
+                        f'socket_event_failed event={event_name} sid={sid} room={room_id} error={type(exc).__name__}: {exc}',
+                        user_id=user_id,
+                        room_id=room_id,
+                    )
+                except Exception:
+                    traceback.print_exc()
                 try:
                     socketio.emit('server_error', {'message': '操作失败，请重试。'}, room=sid)
                 except Exception:
-                    pass
+                    traceback.print_exc()
                 return None
             finally:
                 elapsed_ms = (time.perf_counter() - start) * 1000
@@ -4034,10 +4045,18 @@ def measure_socket_action(event_name):
                         room_id = players[sid].get('room_id')
                 except Exception:
                     room_id = None
-                record_socket_action(event_name, elapsed_ms, sid=sid, room_id=room_id, ok=ok)
-                if elapsed_ms >= _SOCKET_ACTION_SLOW_MS:
-                    admin_event('perf', f'socket_event event={event_name} elapsed_ms={elapsed_ms:.1f} sid={sid} room={room_id} ok={ok}')
-                    print(f'socket_event event={event_name} elapsed_ms={elapsed_ms:.1f} sid={sid} room={room_id} ok={ok}', flush=True)
+                try:
+                    record_socket_action(event_name, elapsed_ms, sid=sid, room_id=room_id, ok=ok)
+                except Exception:
+                    traceback.print_exc()
+                try:
+                    if watched:
+                        print(f'event_done event={event_name} sid={sid} room={room_id} ok={ok} elapsed_ms={elapsed_ms:.1f}', flush=True)
+                    if elapsed_ms >= _SOCKET_ACTION_SLOW_MS:
+                        admin_event('perf', f'socket_event event={event_name} elapsed_ms={elapsed_ms:.1f} sid={sid} room={room_id} ok={ok}')
+                        print(f'socket_event event={event_name} elapsed_ms={elapsed_ms:.1f} sid={sid} room={room_id} ok={ok}', flush=True)
+                except Exception:
+                    traceback.print_exc()
         return wrapper
     return decorator
 
@@ -8573,7 +8592,9 @@ def on_draft_reroll(data=None):
 def on_login(data):
     global _next_room_id
     sid = request.sid
+    print(f'[LOGIN_TRACE] start sid={sid}', flush=True)
     data = socket_guard('login', data, require_player=False, allow_empty=True, emit_error=False)
+    print(f'[LOGIN_TRACE] after socket_guard sid={sid} data_ok={data is not None}', flush=True)
     if data is None:
         emit('login_fail', {'reason': '请求过于频繁或参数错误'})
         return
@@ -8581,7 +8602,9 @@ def on_login(data):
         _security_record('login_rate_ip', 'socket login IP rate limited', sid=sid, severity='high')
         emit('login_fail', {'reason': '登录过于频繁，请稍后再试'})
         return
+    print(f'[LOGIN_TRACE] before current_account_user sid={sid}', flush=True)
     account_user = _current_account_user() if DB_AVAILABLE else None
+    print(f'[LOGIN_TRACE] after current_account_user sid={sid} account={bool(account_user)}', flush=True)
     try:
         raw_name = validate_str(data.get('nickname', ''), max_len=64, name='nickname')
         preferred_mode = validate_str(data.get('mode', '1v1'), max_len=8, name='mode')
@@ -8640,16 +8663,21 @@ def on_login(data):
     if preferred_mode not in ('1v1', '2v2', 'urf'):
         preferred_mode = '1v1'
     try:
+        print(f'[LOGIN_TRACE] before resolve_community_loadout sid={sid}', flush=True)
         community_fields, community_mod = resolve_community_loadout(data)
+        print(f'[LOGIN_TRACE] before build_mod_loadout sid={sid}', flush=True)
         loadout = build_mod_loadout(
             disabled_mods,
             community_mod=community_mod,
             community_hash=community_fields.get('community_mod_hash', ''),
         )
+        print(f'[LOGIN_TRACE] after build_mod_loadout sid={sid}', flush=True)
     except Exception as exc:
         emit('login_fail', {'reason': f'社区模组加载失败: {exc}'})
         return
+    print(f'[LOGIN_TRACE] before lock sid={sid}', flush=True)
     with _lock:
+        print(f'[LOGIN_TRACE] inside lock sid={sid}', flush=True)
         name_key = normalize_username_key(name)
         for p in players.values():
             if bool(p.get('beta_mode', False)) == bool(is_beta_mode) and normalize_username_key(p.get('nickname', '')) == name_key:
@@ -8723,6 +8751,7 @@ def on_login(data):
         if special_profile:
             players[sid].update(special_public_fields(special_profile))
         admin_event('player', f'{"[beta] " if is_beta_mode else ""}{name} joined as {initial_status}', sid=sid, mode=preferred_mode)
+    print(f'[LOGIN_TRACE] after lock sid={sid}', flush=True)
     if reconnect_room:
         reconnect_info = (
             reconnect_room.disconnected_players.get(reconnect_old_sid)
@@ -8768,8 +8797,11 @@ def on_login(data):
     if is_registered_user:
         login_payload['user'] = auth_user_payload(account_user)
     login_payload.update(special_public_fields(players.get(sid, {})))
+    print(f'[LOGIN_TRACE] before emit login_ok sid={sid}', flush=True)
     emit('login_ok', login_payload)
+    print(f'[LOGIN_TRACE] after emit login_ok sid={sid}', flush=True)
     broadcast_lobby()
+    print(f'[LOGIN_TRACE] after broadcast_lobby sid={sid}', flush=True)
 
 
 @socketio.on('form_team')
