@@ -424,6 +424,8 @@ _ADMIN_STATUS_CACHE_SECONDS = _env_float('GTN_ADMIN_STATUS_CACHE_SECONDS', 5)
 _ADMIN_API_SLOW_MS = _env_float('GTN_ADMIN_API_SLOW_MS', 1000)
 _SOCKET_ACTION_SLOW_MS = _env_float('GTN_SOCKET_ACTION_SLOW_MS', 500)
 _ROOM_ACTION_LOCK_WAIT_SECONDS = _env_float('GTN_ROOM_ACTION_LOCK_WAIT_SECONDS', 0.25)
+RANKING_MIN_DURATION_SECONDS = _env_float('GTN_RANKING_MIN_DURATION_SECONDS', 20)
+RANKING_MIN_ACTIONS_PER_SIDE = _env_int('GTN_RANKING_MIN_ACTIONS_PER_SIDE', 1)
 ACTION_TURN_SECONDS = _env_float('GTN_ACTION_TURN_SECONDS', 60)
 ACTION_TURN_CARD_BONUS_SECONDS = _env_float('GTN_ACTION_TURN_CARD_BONUS_SECONDS', 5)
 DRAFT_TIMEOUT_SECONDS = _env_float('GTN_DRAFT_TIMEOUT_SECONDS', 240)
@@ -3348,10 +3350,10 @@ def is_room_valid_for_ranking(room, result='finished'):
     if not participant_meta or not any(meta.get('is_registered_user') for meta in participant_meta):
         return False, 'no_registered_player'
     started_ts = getattr(room, 'started_at', None) or getattr(room, 'created_at', time.time())
-    if time.time() - started_ts < 60:
+    if time.time() - started_ts < RANKING_MIN_DURATION_SECONDS:
         return False, 'too_short'
     side_counts = room_valid_actions_by_side(room)
-    if len(side_counts) < 2 or any(count < 3 for count in side_counts[:2]):
+    if len(side_counts) < 2 or any(count < RANKING_MIN_ACTIONS_PER_SIDE for count in side_counts[:2]):
         return False, 'not_enough_actions'
     return True, ''
 

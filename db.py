@@ -23,6 +23,8 @@ FRIEND_REQUEST_TTL_DAYS = 30
 REMEMBER_TOKEN_DAYS = 60
 DM_RETENTION_DAYS = 60
 DM_THREAD_MAX_BYTES = 100 * 1024
+RANKING_MIN_DURATION_SECONDS = int(os.environ.get('GTN_RANKING_MIN_DURATION_SECONDS', '20'))
+RANKING_MIN_ACTIONS_PER_SIDE = int(os.environ.get('GTN_RANKING_MIN_ACTIONS_PER_SIDE', '1'))
 _DM_MARK_READ_LAST_AT = {}
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
 ROLE_TYPES = {'admin', 'staff', 'contributor', 'sponsor', 'none'}
@@ -3528,11 +3530,11 @@ def rebuild_user_stats_from_matches():
                 duration = int(row['duration_seconds'] or summary.get('duration_seconds') or 0)
             except (TypeError, ValueError):
                 duration = 0
-            if duration < 60:
+            if duration < RANKING_MIN_DURATION_SECONDS:
                 skipped_matches += 1
                 continue
             side_counts = _match_side_action_counts_for_stats(summary, row['mode'])
-            if len(side_counts) < 2 or any(int(value or 0) < 3 for value in side_counts[:2]):
+            if len(side_counts) < 2 or any(int(value or 0) < RANKING_MIN_ACTIONS_PER_SIDE for value in side_counts[:2]):
                 skipped_matches += 1
                 continue
             normalized_player_ids, recovered = _match_player_ids_for_stats(conn, row, user_ids, username_key_to_id)
