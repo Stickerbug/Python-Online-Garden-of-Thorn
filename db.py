@@ -3433,6 +3433,14 @@ def _match_side_action_counts_for_stats(summary, mode=''):
     return [_count_for(0), _count_for(1)]
 
 
+def _match_has_action_counts_for_stats(summary):
+    side_counts = summary.get('valid_action_counts_by_side')
+    if isinstance(side_counts, list) and len(side_counts) >= 2:
+        return True
+    counts = summary.get('valid_action_counts')
+    return isinstance(counts, dict)
+
+
 def _match_winner_user_ids_for_stats(row, summary, player_ids):
     raw_result = str(row['result'] or summary.get('result') or '').lower()
     if raw_result == 'draw':
@@ -3533,10 +3541,11 @@ def rebuild_user_stats_from_matches():
             if duration < RANKING_MIN_DURATION_SECONDS:
                 skipped_matches += 1
                 continue
-            side_counts = _match_side_action_counts_for_stats(summary, row['mode'])
-            if len(side_counts) < 2 or any(int(value or 0) < RANKING_MIN_ACTIONS_PER_SIDE for value in side_counts[:2]):
-                skipped_matches += 1
-                continue
+            if _match_has_action_counts_for_stats(summary):
+                side_counts = _match_side_action_counts_for_stats(summary, row['mode'])
+                if len(side_counts) < 2 or any(int(value or 0) < RANKING_MIN_ACTIONS_PER_SIDE for value in side_counts[:2]):
+                    skipped_matches += 1
+                    continue
             normalized_player_ids, recovered = _match_player_ids_for_stats(conn, row, user_ids, username_key_to_id)
             recovered_player_refs += recovered
             participants = [uid for uid in normalized_player_ids if uid in user_ids]
