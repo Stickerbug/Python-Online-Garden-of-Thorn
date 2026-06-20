@@ -8189,6 +8189,12 @@ function connectSocket(serverUrl) {
         debugLog('[client] game_phase:', data.phase);
         phase = data.phase;
         if (!data.solo) soloMode = false;
+        if (!data.spectating) {
+            isSpectating = false;
+            pendingSpectateRoomId = null;
+            activeSpectateRoomId = null;
+            spectatePerspective = 0;
+        }
         if (phase === 'draft') {
             debugLog('[client] entering draft phase, reset rematch flag');
             resetRematchUiState();
@@ -8299,6 +8305,11 @@ function connectSocket(serverUrl) {
             isSpectating = true;
             if (data.room_id != null) activeSpectateRoomId = Number(data.room_id);
             if (data.spectate_perspective != null) spectatePerspective = data.spectate_perspective;
+        } else {
+            isSpectating = false;
+            pendingSpectateRoomId = null;
+            activeSpectateRoomId = null;
+            spectatePerspective = 0;
         }
         if (!isSpectating && data.your_id != null) playerId = data.your_id;
         mergeSkinLooksFromPayload(data);
