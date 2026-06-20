@@ -498,14 +498,8 @@ class GameEngine2v2(GameEngine):
                     continue
                 if 'indestructible' in eq.card_instance.flags:
                     continue
-                if eq.def_id == 'Disc':
-                    self.players[dead_player_id].armor = max(0, self.players[dead_player_id].armor - 2)
-                owner_state.equipment.remove(eq)
-                if 'exile' in eq.card_instance.flags:
-                    owner_state.exile.append(eq.card_instance)
-                else:
-                    self._discard_card(owner_state, eq.card_instance)
-                self.log_msg(f"{self.pn(owner_id)}的{eq.card_def.name_cn}因目标死亡移出装备区")
+                if self._destroy_equipment(owner_id, eq, check_protection=False):
+                    self.log_msg(f"{self.pn(owner_id)}的{eq.card_def.name_cn}因目标死亡移出装备区")
 
     def surrender(self, player_id: int):
         if self.game_over:
@@ -664,6 +658,14 @@ class GameEngine2v2(GameEngine):
             and not (bool(getattr(self.players[target_id], 'untargetable', False)) and not self._is_status_immune(target_id))
         )
 
+    def _is_valid_attack_target(self, player_id: int, target_id) -> bool:
+        return (
+            self._is_valid_player_id(target_id)
+            and target_id != player_id
+            and self.players[target_id].health > 0
+            and not (bool(getattr(self.players[target_id], 'untargetable', False)) and not self._is_status_immune(target_id))
+        )
+
     def _is_valid_effect_target(self, player_id: int, target_id) -> bool:
         return (
             self._is_valid_player_id(target_id)
@@ -704,6 +706,21 @@ class GameEngine2v2(GameEngine):
         enemies = self.get_enemies(player_id)
         for enemy_id in enemies:
             if self._is_valid_enemy_target(player_id, enemy_id):
+                return enemy_id
+        return -1
+
+    def _selected_attack_target(self, player_id: int, choice=None) -> int:
+        target_id = -1
+        if isinstance(choice, dict):
+            for key in ('target_player', 'target_player_id', 'target_id'):
+                if key in choice:
+                    target_id = choice.get(key)
+                    break
+        if self._is_valid_attack_target(player_id, target_id):
+            return target_id
+        enemies = self.get_enemies(player_id)
+        for enemy_id in enemies:
+            if self._is_valid_attack_target(player_id, enemy_id):
                 return enemy_id
         return -1
 
@@ -887,7 +904,7 @@ class GameEngine2v2(GameEngine):
             target_player_id = player_id
         elif self._card_requires_target(card) and card.card_type == 'thorn' and target_player_id == player_id:
             return {'success': False, 'error': '攻击牌不能选择自己作为目标'}
-        elif self._card_requires_target(card) and card.card_type == 'thorn' and not self._is_valid_enemy_target(player_id, target_player_id):
+        elif self._card_requires_target(card) and card.card_type == 'thorn' and not self._is_valid_attack_target(player_id, target_player_id):
             return {'success': False, 'error': '没有可选中的玩家'}
         elif self._card_requires_target(card):
             allow_dead_target = self._card_is(card, 'Yggdrasil', 'vanilla:yggdrasil')
@@ -1067,7 +1084,7 @@ class GameEngine2v2(GameEngine):
 
 
     def _attack_target(self, player_id: int, choice=None) -> int:
-        return self._selected_enemy_target(player_id, choice)
+        return self._selected_attack_target(player_id, choice)
 
     def _effect_basic(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
@@ -1530,7 +1547,7 @@ class GameEngine2v2(GameEngine):
             dmg = self._apply_damage_dealt_equipment_multiplier(dmg, attacker_id)
             if plank_blocks_attack:
                 dmg = 0
-            if ps.nazar_active:
+            if dmg > 0 and ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
                 if original_dmg >= 10:
@@ -1554,7 +1571,7 @@ class GameEngine2v2(GameEngine):
             # Weakness belongs to the attacker: it reduces physical damage they deal to others.
             attacker_state = self.players[attacker_id] if 0 <= attacker_id < len(self.players) else None
             attacker_immune = self._is_status_immune(attacker_id) if attacker_state is not None else False
-            if attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
+            if dmg > 0 and attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
                 reduction = min(0.6, 0.2 * attacker_state.weakness)
                 dmg = max(1, int(dmg * (1.0 - reduction)))
             if immune:

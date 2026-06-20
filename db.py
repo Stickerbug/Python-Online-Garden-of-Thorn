@@ -348,6 +348,8 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN online_seconds INTEGER DEFAULT 0')
         if 'online_session_started_at' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN online_session_started_at TEXT')
+        if 'play_seconds' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN play_seconds INTEGER DEFAULT 0')
         _assign_missing_player_ids(conn)
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_last_login ON users(last_login_at)')
@@ -522,6 +524,21 @@ def init_db():
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_stats_mode ON card_draft_stats(mode)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_stats_rate ON card_draft_stats(picked_count, shown_count)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS card_draft_win_stats (
+                mode TEXT NOT NULL,
+                card_id TEXT NOT NULL,
+                picked_games INTEGER NOT NULL DEFAULT 0,
+                win_games INTEGER NOT NULL DEFAULT 0,
+                draw_games INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (mode, card_id)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_mode ON card_draft_win_stats(mode)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_rate ON card_draft_win_stats(win_games, picked_games)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS reports (
@@ -797,6 +814,7 @@ def row_to_user(row):
         'deleted': bool(row['deleted_at']) if 'deleted_at' in row.keys() else False,
         'online_seconds': int(row['online_seconds'] or 0) if 'online_seconds' in row.keys() else 0,
         'online_session_started_at': row['online_session_started_at'] if 'online_session_started_at' in row.keys() else None,
+        'play_seconds': int(row['play_seconds'] or 0) if 'play_seconds' in row.keys() else 0,
         'skin': normalize_skin_config(skin_raw),
     }
 
@@ -1965,6 +1983,7 @@ ADMIN_USER_SORTS = {
     'wins': 'wins',
     'losses': 'losses',
     'draws': 'draws',
+    'play_seconds': 'play_seconds',
     'win_rate': 'CASE WHEN games_played > 0 THEN CAST(wins AS REAL) / games_played ELSE 0 END',
 }
 
@@ -1975,6 +1994,10 @@ CARD_DRAFT_STAT_SORTS = {
     'shown_count': 'shown_count',
     'picked_count': 'picked_count',
     'pick_rate': 'CASE WHEN shown_count > 0 THEN CAST(picked_count AS REAL) / shown_count ELSE 0 END',
+    'picked_games': 'picked_games',
+    'win_games': 'win_games',
+    'draw_games': 'draw_games',
+    'card_win_rate': 'CASE WHEN picked_games > 0 THEN CAST(win_games AS REAL) / picked_games ELSE 0 END',
     'updated_at': 'updated_at',
 }
 
@@ -2055,7 +2078,190 @@ def record_card_draft_counts(mode, card_counts):
     return True
 
 
-def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0):
+def record_card_draft_win_result(mode, player_card_ids, winner_indices=None, result='finished'):
+    mode_key = str(mode or '').strip()
+    if mode_key not in ('1v1', '2v2'):
+        return False
+    if not isinstance(player_card_ids, (list, tuple)):
+        return False
+    winner_set = set()
+    for raw_idx in winner_indices or []:
+        try:
+            winner_set.add(int(raw_idx))
+        except (TypeError, ValueError):
+            continue
+    is_draw = str(result or '').lower() == 'draw'
+    rows = {}
+    for pidx, raw_cards in enumerate(player_card_ids):
+        unique_cards = set()
+        for raw_id in raw_cards or []:
+            card_id = str(raw_id or '').strip()
+            if card_id:
+                unique_cards.add(card_id)
+        for card_id in unique_cards:
+            picked_inc, win_inc, draw_inc = rows.get(card_id, (0, 0, 0))
+            picked_inc += 1
+            if is_draw:
+                draw_inc += 1
+            elif pidx in winner_set:
+                win_inc += 1
+            rows[card_id] = (picked_inc, win_inc, draw_inc)
+    if not rows:
+        return False
+    now = utc_now()
+    with get_db_connection() as conn:
+        conn.executemany(
+            '''
+            INSERT INTO card_draft_win_stats (mode, card_id, picked_games, win_games, draw_games, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(mode, card_id) DO UPDATE SET
+                picked_games = picked_games + excluded.picked_games,
+                win_games = win_games + excluded.win_games,
+                draw_games = draw_games + excluded.draw_games,
+                updated_at = excluded.updated_at
+            ''',
+            [
+                (mode_key, card_id, picked_inc, win_inc, draw_inc, now)
+                for card_id, (picked_inc, win_inc, draw_inc) in rows.items()
+            ],
+        )
+        conn.commit()
+    return True
+
+
+def _match_draft_card_ids_by_player(summary):
+    if not isinstance(summary, dict):
+        return []
+    candidates = (
+        summary.get('draft_card_ids_by_player'),
+        summary.get('player_draft_cards'),
+        summary.get('draft_picks'),
+    )
+    for value in candidates:
+        if isinstance(value, list):
+            rows = []
+            for raw_cards in value:
+                if isinstance(raw_cards, (list, tuple, set)):
+                    rows.append([str(card_id).strip() for card_id in raw_cards if str(card_id or '').strip()])
+                else:
+                    rows.append([])
+            if rows:
+                return rows
+        if isinstance(value, dict):
+            rows = []
+            for idx in range(4):
+                raw_cards = value.get(idx, value.get(str(idx), []))
+                if isinstance(raw_cards, (list, tuple, set)):
+                    rows.append([str(card_id).strip() for card_id in raw_cards if str(card_id or '').strip()])
+                else:
+                    rows.append([])
+            while rows and not rows[-1]:
+                rows.pop()
+            if rows:
+                return rows
+    return []
+
+
+def _match_winner_player_indices_for_card_stats(row, summary):
+    raw_result = str(row['result'] or summary.get('result') or '').lower()
+    if raw_result == 'draw':
+        return [], True
+    explicit = summary.get('winner_player_indices')
+    if isinstance(explicit, list):
+        indices = []
+        for value in explicit:
+            try:
+                indices.append(int(value))
+            except (TypeError, ValueError):
+                pass
+        if indices:
+            return indices, False
+    try:
+        winner_index = int(row['winner_index']) if row['winner_index'] is not None else int(summary.get('winner_index'))
+    except (TypeError, ValueError):
+        winner_index = None
+    if winner_index is None or winner_index < 0:
+        return [], True
+    mode = str(row['mode'] or summary.get('mode') or '').lower()
+    if mode == '2v2':
+        return {0: [0, 1], 1: [2, 3]}.get(winner_index, []), False
+    return [winner_index], False
+
+
+def rebuild_card_draft_win_stats_from_matches():
+    """Rebuild card win-rate stats from persisted match summaries.
+
+    Only summaries that include draft_card_ids_by_player/player_draft_cards can
+    be reconstructed. This intentionally does not touch card_draft_stats, which
+    stores shown/picked counts.
+    """
+    now = utc_now()
+    totals = {}
+    with get_db_connection() as conn:
+        rows = conn.execute('SELECT * FROM matches ORDER BY id ASC').fetchall()
+        scanned_matches = len(rows)
+        counted_matches = 0
+        skipped_matches = 0
+        for row in rows:
+            mode = str(row['mode'] or '').strip()
+            if mode not in ('1v1', '2v2'):
+                skipped_matches += 1
+                continue
+            raw_result = str(row['result'] or '').lower()
+            if raw_result not in ('win', 'draw', 'finished'):
+                skipped_matches += 1
+                continue
+            summary = _safe_json_loads(row['summary_json'], {})
+            player_cards = _match_draft_card_ids_by_player(summary)
+            if not player_cards:
+                skipped_matches += 1
+                continue
+            winner_indices, is_draw = _match_winner_player_indices_for_card_stats(row, summary)
+            winner_set = set(winner_indices)
+            added = False
+            for pidx, raw_cards in enumerate(player_cards):
+                unique_cards = {str(card_id).strip() for card_id in raw_cards if str(card_id or '').strip()}
+                if not unique_cards:
+                    continue
+                added = True
+                for card_id in unique_cards:
+                    key = (mode, card_id)
+                    picked, wins, draws = totals.get(key, (0, 0, 0))
+                    picked += 1
+                    if is_draw:
+                        draws += 1
+                    elif pidx in winner_set:
+                        wins += 1
+                    totals[key] = (picked, wins, draws)
+            if added:
+                counted_matches += 1
+            else:
+                skipped_matches += 1
+        conn.execute('DELETE FROM card_draft_win_stats')
+        if totals:
+            conn.executemany(
+                '''
+                INSERT INTO card_draft_win_stats (mode, card_id, picked_games, win_games, draw_games, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ''',
+                [
+                    (mode, card_id, picked, wins, draws, now)
+                    for (mode, card_id), (picked, wins, draws) in totals.items()
+                ],
+            )
+        conn.commit()
+    return {
+        'matches': scanned_matches,
+        'counted_matches': counted_matches,
+        'skipped_matches': skipped_matches,
+        'cards': len(totals),
+        'picked_games': sum(value[0] for value in totals.values()),
+        'win_games': sum(value[1] for value in totals.values()),
+        'draw_games': sum(value[2] for value in totals.values()),
+    }
+
+
+def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0, merge_modes=False):
     mode_key = str(mode or '').strip()
     sort_key = str(sort or 'pick_rate')
     sort_expr = CARD_DRAFT_STAT_SORTS.get(sort_key, CARD_DRAFT_STAT_SORTS['pick_rate'])
@@ -2068,30 +2274,89 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
         safe_offset = max(0, int(offset))
     except (TypeError, ValueError):
         safe_offset = 0
-    where = ''
-    params = []
-    if mode_key in ('1v1', '2v2'):
-        where = 'WHERE mode = ?'
-        params.append(mode_key)
+    merge = bool(merge_modes)
+    mode_filter = mode_key if mode_key in ('1v1', '2v2') else ''
+    mode_where = 'WHERE mode = ?' if mode_filter else ''
+    mode_params = [mode_filter] if mode_filter else []
     order_clause = f'{sort_expr} {direction}, shown_count DESC, card_id ASC'
     with get_db_connection() as conn:
-        total = conn.execute(f'SELECT COUNT(*) FROM card_draft_stats {where}', params).fetchone()[0]
-        rows = conn.execute(
-            f'''
-            SELECT
-                mode,
-                card_id,
-                shown_count,
-                picked_count,
-                updated_at,
-                CASE WHEN shown_count > 0 THEN CAST(picked_count AS REAL) / shown_count * 100 ELSE 0 END AS pick_rate
-            FROM card_draft_stats
-            {where}
-            ORDER BY {order_clause}
-            LIMIT ? OFFSET ?
-            ''',
-            params + [safe_limit, safe_offset],
-        ).fetchall()
+        if merge:
+            base_query = f'''
+                WITH draft AS (
+                    SELECT
+                        'merged' AS mode,
+                        card_id,
+                        SUM(shown_count) AS shown_count,
+                        SUM(picked_count) AS picked_count,
+                        MAX(updated_at) AS updated_at
+                    FROM card_draft_stats
+                    {mode_where}
+                    GROUP BY card_id
+                ),
+                wins AS (
+                    SELECT
+                        'merged' AS mode,
+                        card_id,
+                        SUM(picked_games) AS picked_games,
+                        SUM(win_games) AS win_games,
+                        SUM(draw_games) AS draw_games,
+                        MAX(updated_at) AS win_updated_at
+                    FROM card_draft_win_stats
+                    {mode_where}
+                    GROUP BY card_id
+                )
+                SELECT
+                    draft.mode,
+                    draft.card_id,
+                    draft.shown_count,
+                    draft.picked_count,
+                    draft.updated_at,
+                    COALESCE(wins.picked_games, 0) AS picked_games,
+                    COALESCE(wins.win_games, 0) AS win_games,
+                    COALESCE(wins.draw_games, 0) AS draw_games,
+                    COALESCE(wins.win_updated_at, '') AS win_updated_at,
+                    CASE WHEN draft.shown_count > 0 THEN CAST(draft.picked_count AS REAL) / draft.shown_count * 100 ELSE 0 END AS pick_rate,
+                    CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS card_win_rate
+                FROM draft
+                LEFT JOIN wins ON wins.card_id = draft.card_id
+            '''
+            total = conn.execute(f'SELECT COUNT(*) FROM ({base_query})', mode_params + mode_params).fetchone()[0]
+            rows = conn.execute(
+                f'''
+                SELECT * FROM ({base_query})
+                ORDER BY {order_clause}
+                LIMIT ? OFFSET ?
+                ''',
+                mode_params + mode_params + [safe_limit, safe_offset],
+            ).fetchall()
+        else:
+            base_query = f'''
+                SELECT
+                    draft.mode,
+                    draft.card_id,
+                    draft.shown_count,
+                    draft.picked_count,
+                    draft.updated_at,
+                    COALESCE(wins.picked_games, 0) AS picked_games,
+                    COALESCE(wins.win_games, 0) AS win_games,
+                    COALESCE(wins.draw_games, 0) AS draw_games,
+                    COALESCE(wins.updated_at, '') AS win_updated_at,
+                    CASE WHEN draft.shown_count > 0 THEN CAST(draft.picked_count AS REAL) / draft.shown_count * 100 ELSE 0 END AS pick_rate,
+                    CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS card_win_rate
+                FROM card_draft_stats AS draft
+                LEFT JOIN card_draft_win_stats AS wins
+                    ON wins.mode = draft.mode AND wins.card_id = draft.card_id
+                {mode_where.replace('mode', 'draft.mode')}
+            '''
+            total = conn.execute(f'SELECT COUNT(*) FROM ({base_query})', mode_params).fetchone()[0]
+            rows = conn.execute(
+                f'''
+                SELECT * FROM ({base_query})
+                ORDER BY {order_clause}
+                LIMIT ? OFFSET ?
+                ''',
+                mode_params + [safe_limit, safe_offset],
+            ).fetchall()
     return {
         'items': [
             {
@@ -2100,7 +2365,12 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
                 'shown_count': row['shown_count'],
                 'picked_count': row['picked_count'],
                 'pick_rate': round(float(row['pick_rate'] or 0), 2),
+                'picked_games': row['picked_games'],
+                'win_games': row['win_games'],
+                'draw_games': row['draw_games'],
+                'card_win_rate': round(float(row['card_win_rate'] or 0), 2),
                 'updated_at': row['updated_at'],
+                'win_updated_at': row['win_updated_at'],
             }
             for row in rows
         ],
@@ -2109,6 +2379,7 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
         'offset': safe_offset,
         'sort': sort_key if sort_key in CARD_DRAFT_STAT_SORTS else 'pick_rate',
         'order': 'asc' if direction == 'ASC' else 'desc',
+        'merge_modes': merge,
     }
 
 
@@ -3124,3 +3395,175 @@ def increment_user_stats(users, winners=None, result='finished'):
                     (uid,),
                 )
         conn.commit()
+
+
+def add_user_play_seconds(users, seconds):
+    try:
+        delta = max(0, int(seconds or 0))
+    except (TypeError, ValueError):
+        delta = 0
+    if not users or delta <= 0:
+        return
+    with get_db_connection() as conn:
+        user_ids = _resolve_user_ids_for_stats(conn, users)
+        for uid in user_ids:
+            conn.execute(
+                'UPDATE users SET play_seconds = COALESCE(play_seconds, 0) + ? WHERE id = ?',
+                (delta, uid),
+            )
+        conn.commit()
+
+
+def _match_side_action_counts_for_stats(summary, mode=''):
+    side_counts = summary.get('valid_action_counts_by_side')
+    if isinstance(side_counts, list) and len(side_counts) >= 2:
+        try:
+            return [int(side_counts[0] or 0), int(side_counts[1] or 0)]
+        except (TypeError, ValueError):
+            pass
+    counts = summary.get('valid_action_counts')
+    if not isinstance(counts, dict):
+        return [0, 0]
+    def _count_for(index):
+        return int(counts.get(index, counts.get(str(index), 0)) or 0)
+    if str(mode or '').lower() == '2v2':
+        return [_count_for(0) + _count_for(1), _count_for(2) + _count_for(3)]
+    return [_count_for(0), _count_for(1)]
+
+
+def _match_winner_user_ids_for_stats(row, summary, player_ids):
+    raw_result = str(row['result'] or summary.get('result') or '').lower()
+    if raw_result == 'draw':
+        return set(), True
+    winner_values = summary.get('winner_user_ids')
+    winner_ids = set()
+    if isinstance(winner_values, list):
+        for value in winner_values:
+            try:
+                if value is not None:
+                    winner_ids.add(int(value))
+            except (TypeError, ValueError):
+                pass
+    if winner_ids:
+        return winner_ids, False
+    try:
+        winner_index = int(row['winner_index']) if row['winner_index'] is not None else None
+    except (TypeError, ValueError):
+        winner_index = None
+    if winner_index is None or winner_index < 0:
+        return set(), True
+    mode = str(row['mode'] or summary.get('mode') or '').lower()
+    indices = {0: [0, 1], 1: [2, 3]}.get(winner_index, []) if mode == '2v2' else [winner_index]
+    for idx in indices:
+        if 0 <= idx < len(player_ids):
+            try:
+                if player_ids[idx] is not None:
+                    winner_ids.add(int(player_ids[idx]))
+            except (TypeError, ValueError):
+                pass
+    return winner_ids, False
+
+
+def rebuild_user_stats_from_matches():
+    """Recompute account W/L/D from persisted match summaries.
+
+    This is intended for rule migrations, such as making guest-participant
+    matches count once they satisfy the normal duration/action thresholds.
+    """
+    with get_db_connection() as conn:
+        user_rows = conn.execute('SELECT id FROM users').fetchall()
+        user_ids = {int(row['id']) for row in user_rows}
+        totals = {uid: {'games_played': 0, 'wins': 0, 'losses': 0, 'draws': 0} for uid in user_ids}
+        rows = conn.execute('SELECT * FROM matches ORDER BY id ASC').fetchall()
+        counted_matches = 0
+        skipped_matches = 0
+        for row in rows:
+            summary = _safe_json_loads(row['summary_json'], {})
+            if str(row['result'] or summary.get('result') or '').lower() not in ('win', 'draw', 'finished'):
+                skipped_matches += 1
+                continue
+            try:
+                duration = int(row['duration_seconds'] or summary.get('duration_seconds') or 0)
+            except (TypeError, ValueError):
+                duration = 0
+            if duration < 60:
+                skipped_matches += 1
+                continue
+            side_counts = _match_side_action_counts_for_stats(summary, row['mode'])
+            if len(side_counts) < 2 or any(int(value or 0) < 3 for value in side_counts[:2]):
+                skipped_matches += 1
+                continue
+            player_ids = _safe_json_loads(row['player_ids_json'] if 'player_ids_json' in row.keys() else '[]', [])
+            normalized_player_ids = []
+            for value in player_ids:
+                try:
+                    uid = int(value) if value is not None else None
+                except (TypeError, ValueError):
+                    uid = None
+                normalized_player_ids.append(uid if uid in user_ids else None)
+            participants = [uid for uid in normalized_player_ids if uid in user_ids]
+            if not participants:
+                skipped_matches += 1
+                continue
+            winner_ids, is_draw = _match_winner_user_ids_for_stats(row, summary, normalized_player_ids)
+            counted_matches += 1
+            for uid in participants:
+                totals[uid]['games_played'] += 1
+                if is_draw:
+                    totals[uid]['draws'] += 1
+                elif uid in winner_ids:
+                    totals[uid]['wins'] += 1
+                else:
+                    totals[uid]['losses'] += 1
+        for uid, stats in totals.items():
+            conn.execute(
+                'UPDATE users SET games_played = ?, wins = ?, losses = ?, draws = ? WHERE id = ?',
+                (stats['games_played'], stats['wins'], stats['losses'], stats['draws'], uid),
+            )
+        conn.commit()
+        return {
+            'users': len(totals),
+            'matches': len(rows),
+            'counted_matches': counted_matches,
+            'skipped_matches': skipped_matches,
+        }
+
+
+def rebuild_user_play_seconds_from_matches():
+    with get_db_connection() as conn:
+        user_rows = conn.execute('SELECT id FROM users').fetchall()
+        user_ids = {int(row['id']) for row in user_rows}
+        totals = {uid: 0 for uid in user_ids}
+        rows = conn.execute('SELECT * FROM matches ORDER BY id ASC').fetchall()
+        counted_matches = 0
+        for row in rows:
+            try:
+                duration = max(0, int(row['duration_seconds'] or 0))
+            except (TypeError, ValueError):
+                duration = 0
+            if duration <= 0:
+                continue
+            player_ids = _safe_json_loads(row['player_ids_json'] if 'player_ids_json' in row.keys() else '[]', [])
+            added = False
+            for value in player_ids:
+                try:
+                    uid = int(value) if value is not None else None
+                except (TypeError, ValueError):
+                    uid = None
+                if uid in totals:
+                    totals[uid] += duration
+                    added = True
+            if added:
+                counted_matches += 1
+        for uid, seconds in totals.items():
+            conn.execute(
+                'UPDATE users SET play_seconds = ? WHERE id = ?',
+                (int(seconds), uid),
+            )
+        conn.commit()
+        return {
+            'users': len(totals),
+            'matches': len(rows),
+            'counted_matches': counted_matches,
+            'total_seconds': sum(totals.values()),
+        }

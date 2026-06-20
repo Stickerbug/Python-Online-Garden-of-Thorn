@@ -537,19 +537,13 @@ class GameEngineInfiniteFire(GameEngine):
             return {'success': False, 'error': '装备不存在'}
         if 'indestructible' in eq.card_instance.flags:
             return {'success': False, 'error': '不可摧毁装备不能被售卖'}
-        eq = ps.remove_equipment(equipment_instance_id)
-        if not eq:
-            return {'success': False, 'error': '装备不存在'}
-        if eq.def_id == 'Disc':
-            effect_target = int(getattr(eq, 'effect_target', getattr(eq, 'owner', player_id)))
-            if not (0 <= effect_target < len(self.players)):
-                effect_target = player_id
-            self.players[effect_target].armor = max(0, self.players[effect_target].armor - 2)
         refund_e = (eq.card_def.cost_e + 1) // 2
         refund_m = (eq.card_def.cost_m + 1) // 2
+        destroyed = self._destroy_equipment(player_id, eq, check_protection=False)
+        if not destroyed:
+            return {'success': False, 'error': '装备无法售卖'}
         ps.gain_elixir(refund_e)
         ps.gain_magic(refund_m)
-        ps.discard.append(eq.card_instance)
         ps.urf_sell_available = False
         self.log_msg(f"{self.pn(player_id)}售卖{eq.card_def.name_cn}，回复{refund_e}E/{refund_m}M")
         return {'success': True}

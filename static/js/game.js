@@ -201,7 +201,7 @@ I18N.zh = { ...I18N.en,
     rematch_unavailable_returned: '有玩家已返回大厅', player_returned_lobby: '{0}已返回大厅',
     send: '发送', cancel: '取消', confirm: '确认', ok: '确定', close: '关闭', notice: '提示', opponent_disconnected: '对手已断开连接', opponent_reconnected: '对手已重新连接',
     reconnect_title: '重连', reconnect_prompt: '是否重连到上一局对战？', reconnecting: '重连中...', reconnect_timeout: '重连超时',
-    mod_mismatch_title: '模组不匹配', mod_mismatch_msg: '模组不一致，无法开始对局', switch_perspective: '切换视角', leave_spectate: '退出观战', switch_to_perspective: '切换到 {0}',
+    mod_mismatch_title: '模组不匹配', mod_mismatch_msg: '模组不一致，无法开始对局', mod_match_peer: '匹配对方模组', switch_perspective: '切换视角', leave_spectate: '退出观战', switch_to_perspective: '切换到 {0}',
     battle_log: '战斗日志', equip_info: '{0}（{1}回合）', equip_corruption: '[已腐化]', equip_trigger_cost: '{0} 触发：{1}E',
     status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼',
     status_equip_protect: '装备保护', status_invincible: '无敌', status_immune: '状态免疫', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
@@ -855,7 +855,7 @@ Object.assign(I18N.en, {
     account: 'Account', account_guest: 'Guest Mode', account_username: 'Username', account_password: 'Password',
     account_password_confirm: 'Confirm Password', account_old_password: 'Current Password', account_new_password: 'New Password',
     account_new_password_confirm: 'Confirm New Password', account_change_password: 'Change Password', account_password_changed: 'Password changed',
-    account_change_username: 'Change Username', account_info: 'Account Info', account_online_time: 'Online Time', account_delete: 'Delete Account', stats: 'Stats',
+    account_change_username: 'Change Username', account_info: 'Account Info', account_online_time: 'Total Match Time', account_delete: 'Delete Account', stats: 'Stats',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
     account_need_login: 'Log in or register first', account_error: 'Account error', account_password_mismatch: 'Passwords do not match', guest_enter: 'Enter as Guest',
@@ -865,7 +865,7 @@ Object.assign(I18N.zh, {
     account: '账号', account_guest: '游客模式', account_username: '用户名', account_password: '密码',
     account_password_confirm: '确认密码', account_old_password: '原密码', account_new_password: '新密码',
     account_new_password_confirm: '确认新密码', account_change_password: '修改密码', account_password_changed: '密码已修改',
-    account_change_username: '修改用户名', account_info: '账号信息', account_online_time: '在线时间', account_delete: '注销账户', stats: '统计',
+    account_change_username: '修改用户名', account_info: '账号信息', account_online_time: '总对局时长', account_delete: '注销账户', stats: '统计',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
     account_need_login: '请先登录或注册账号', account_error: '账号错误', account_password_mismatch: '两次输入的密码不一致', guest_enter: '游客进入',
@@ -875,7 +875,7 @@ Object.assign(I18N.fr, {
     account: 'Compte', account_guest: 'Mode invité', account_username: 'Nom', account_password: 'Mot de passe',
     account_password_confirm: 'Confirmer', account_old_password: 'Mot de passe actuel', account_new_password: 'Nouveau mot de passe',
     account_new_password_confirm: 'Confirmer le nouveau', account_change_password: 'Changer le mot de passe', account_password_changed: 'Mot de passe changé',
-    account_change_username: 'Changer le nom', account_info: 'Compte', account_online_time: 'Temps en ligne',
+    account_change_username: 'Changer le nom', account_info: 'Compte', account_online_time: 'Temps total en match',
     account_delete: 'Supprimer le compte', stats: 'Stats',
     account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
     account_not_logged_in: 'Non connecté', account_logged_in_as: 'Connecté : {0}', account_stats: 'Parties {0} / V {1} / D {2} / N {3}',
@@ -886,7 +886,7 @@ Object.assign(I18N.ja, {
     account: 'アカウント', account_guest: 'ゲスト', account_username: 'ユーザー名', account_password: 'パスワード',
     account_password_confirm: '確認', account_old_password: '現在のパスワード', account_new_password: '新しいパスワード',
     account_new_password_confirm: '新しい確認', account_change_password: 'パスワード変更', account_password_changed: '変更しました',
-    account_change_username: 'ユーザー名変更', account_info: 'アカウント情報', account_online_time: 'オンライン時間',
+    account_change_username: 'ユーザー名変更', account_info: 'アカウント情報', account_online_time: '総対戦時間',
     account_delete: 'アカウント削除', stats: '統計',
     account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
@@ -1030,6 +1030,10 @@ Object.assign(I18N.en, { spectate_unavailable: 'Not spectatable yet' });
 Object.assign(I18N.zh, { spectate_unavailable: '\u6682\u4e0d\u80fd\u89c2\u6218' });
 Object.assign(I18N.fr, { spectate_unavailable: 'Observation indisponible' });
 Object.assign(I18N.ja, { spectate_unavailable: '\u307e\u3060\u89b3\u6226\u3067\u304d\u307e\u305b\u3093' });
+Object.assign(I18N.en, { spectator_count_status: 'Spectators: {0}' });
+Object.assign(I18N.zh, { spectator_count_status: '\u89c2\u6218\uff1a{0}' });
+Object.assign(I18N.fr, { spectator_count_status: 'Spectateurs : {0}' });
+Object.assign(I18N.ja, { spectator_count_status: '\u89b3\u6226\uff1a{0}' });
 Object.assign(I18N.en, {
     tutorial_player_you: 'You', tutorial_player_opponent: 'Practice Opponent',
     error_urf_equip_limit: 'Infinite Fire equipment limit is {0}. Sell equipment first.',
@@ -3406,6 +3410,14 @@ function formatCompactRoundStatus(gs, phaseText = '') {
     return `R${roundNum} · ${phaseText}`;
 }
 
+function appendSpectatorCountStatus(text, gs) {
+    if (!gs || gs.solo || gs.spectator_count == null) return text;
+    const count = Number(gs.spectator_count);
+    if (!Number.isFinite(count) || count <= 0) return text;
+    const label = (UI.spectator_count_status || 'Spectators: {0}').replace('{0}', String(Math.floor(count)));
+    return text ? `${text} · ${label}` : label;
+}
+
 function updateTopActionButtons(viewId = activeViewId) {
     const onHome = viewId === 'view-login';
     const accountTop = $('btn-account-top');
@@ -4015,49 +4027,42 @@ function renderCardGallery() {
         grid.innerHTML = `<p class="gallery-no-items">${escapeHtml(UI.gallery_no_items)}</p>`;
     } else {
         grid.textContent = '';
-        let index = 0;
-        const renderBatch = () => {
-            if (renderToken !== galleryCardRenderToken || !document.body.contains(grid)) return;
-            const fragment = document.createDocumentFragment();
-            const end = Math.min(index + 10, ids.length);
-            for (; index < end; index++) {
-                const cd = CARD_DEFS[ids[index]];
-                if (!cd) continue;
-                const cardDict = { def_id: cd.id, instance_flags: [], disabled_flags: [] };
-                const wrap = document.createElement('button');
-                wrap.type = 'button';
-                wrap.className = 'gallery-card-tile';
-                wrap.title = getCardName(cd);
-                const cardEl = createCardElement(cardDict, { small: false, disableIntro: true });
-                wrap.appendChild(cardEl);
-                const openIntro = (event) => {
-                    if (event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                    }
-                    showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(wrap) });
-                };
-                const toggleIntro = (event) => {
-                    if (event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                    }
-                    if (isTermIntroOverlayVisible()) {
-                        hideTermIntroOverlay();
-                        return;
-                    }
-                    showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(wrap) });
-                };
-                wrap.addEventListener('click', openIntro);
-                wrap.addEventListener('contextmenu', toggleIntro);
-                fragment.appendChild(wrap);
-            }
-            grid.appendChild(fragment);
-            if (index < ids.length) {
-                (window.requestIdleCallback || window.requestAnimationFrame || window.setTimeout)(renderBatch);
-            }
-        };
-        renderBatch();
+        const fragment = document.createDocumentFragment();
+        ids.forEach(id => {
+            if (renderToken !== galleryCardRenderToken) return;
+            const cd = CARD_DEFS[id];
+            if (!cd) return;
+            const cardDict = { def_id: cd.id, instance_flags: [], disabled_flags: [] };
+            const wrap = document.createElement('button');
+            wrap.type = 'button';
+            wrap.className = 'gallery-card-tile';
+            wrap.title = getCardName(cd);
+            const cardEl = createCardElement(cardDict, { small: false, disableIntro: true });
+            wrap.appendChild(cardEl);
+            const openIntro = (event) => {
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(wrap) });
+            };
+            const toggleIntro = (event) => {
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                if (isTermIntroOverlayVisible()) {
+                    hideTermIntroOverlay();
+                    return;
+                }
+                showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(wrap) });
+            };
+            wrap.addEventListener('click', openIntro);
+            wrap.addEventListener('contextmenu', toggleIntro);
+            fragment.appendChild(wrap);
+        });
+        grid.appendChild(fragment);
+        grid.scrollTop = 0;
     }
     detail.querySelectorAll('[data-gallery-type]').forEach(input => {
         input.addEventListener('change', () => {
@@ -5554,6 +5559,15 @@ function createCardElement(cardDict, options = {}) {
     }
     if (defId === 'Sponge' || cardDef.id === 'Sponge' || cardDef.legacy_id === 'Sponge' || cardDef.name_cn === '海绵') {
         el.classList.add('card-sponge');
+    }
+    if (defId === 'Relic' || cardDef.id === 'Relic' || cardDef.legacy_id === 'Relic' || cardDef.name_cn === '遗物') {
+        el.classList.add('card-relic');
+    }
+    if (defId === 'Root' || cardDef.id === 'Root' || cardDef.legacy_id === 'Root' || cardDef.name_cn === '树根') {
+        el.classList.add('card-jungle-root');
+    }
+    if (defId === 'Yggdrasil' || cardDef.id === 'Yggdrasil' || cardDef.legacy_id === 'Yggdrasil' || cardDef.name_cn === '世界树之叶') {
+        el.classList.add('card-yggdrasil');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Grapes', 'MagicGrapes', 'Peas', 'MagicPeas'])
         || ['葡萄', '魔法葡萄', '豌豆', '魔法豌豆'].includes(cardDef.name_cn)) {
@@ -8489,6 +8503,36 @@ function connectSocket(serverUrl) {
         }
         flashStatus(UI.save_failed.replace('{0}', (data && data.reason) || UI.operation_failed), 3200, 'error');
     });
+    bindSocketEvent('mod_mismatch', (data = {}) => {
+        const message = translateServerMessage(data.message || UI.mod_mismatch_msg || '模组不一致，无法开始对局');
+        const other = data.other_mods || {};
+        const otherNames = Array.isArray(other.mods_list) && other.mods_list.length
+            ? other.mods_list.join(' / ')
+            : (other.community_mod_name || other.loadout_hash || '-');
+        showModal(`
+            <h3>${escapeHtml(UI.mod_mismatch_title || '模组不匹配')}</h3>
+            <p>${escapeHtml(message)}</p>
+            <p class="muted">${escapeHtml(otherNames)}</p>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" id="mod-mismatch-cancel">${escapeHtml(UI.cancel || '取消')}</button>
+                <button class="btn btn-primary" id="mod-mismatch-apply">${escapeHtml(UI.mod_match_peer || '匹配对方模组')}</button>
+            </div>
+        `);
+        const cancelBtn = $('mod-mismatch-cancel');
+        const applyBtn = $('mod-mismatch-apply');
+        if (cancelBtn) cancelBtn.onclick = hideModal;
+        if (applyBtn) applyBtn.onclick = async () => {
+            applyBtn.disabled = true;
+            try {
+                await applyPeerModSettings(other);
+                hideModal();
+            } catch (err) {
+                console.warn('Failed to apply peer mod settings:', err);
+                applyBtn.disabled = false;
+                flashStatus(UI.save_failed.replace('{0}', err && err.message ? err.message : UI.operation_failed), 3200, 'error');
+            }
+        };
+    });
     bindSocketEvent('server_error', (data) => {
         debugLog('[client] server_error:', data.message);
         clearPendingSoloFallback();
@@ -8513,7 +8557,7 @@ function connectSocket(serverUrl) {
     bindSocketEvent('match_start_failed', (data = {}) => {
         const message = data.message || UI.mod_mismatch_msg || UI.operation_failed;
         debugLog('[client] match_start_failed:', message);
-        hideModal();
+        if (data.reason !== 'mod_mismatch') hideModal();
         clearNetworkMatchStateForLobby();
         phase = 'lobby';
         showView('view-lobby');
@@ -8764,7 +8808,7 @@ function renderAccountInfoPanel(user) {
         [currentLang === 'zh' ? '有效对局数' : 'Valid Games', games],
         [currentLang === 'zh' ? '胜率' : 'Win Rate', winRate],
         [currentLang === 'zh' ? '胜 / 负 / 平' : 'W / L / D', `${wins} / ${losses} / ${draws}`],
-        [UI.account_online_time || '在线时间', formatAccountOnlineTime(user.online_seconds_total ?? user.online_seconds ?? 0)],
+        [UI.account_online_time || '总对局时长', formatAccountOnlineTime(user.play_seconds ?? 0)],
     ];
     grid.innerHTML = items.map(([label, value]) => `
         <div class="account-info-item">
@@ -14080,6 +14124,12 @@ function renderGame(data) {
         gameContainer.classList.toggle('mode-urf', gs.mode === 'urf');
         gameContainer.classList.toggle('mode-replay', !!replayMode || !!gs.replay_mode);
     }
+    const classicContainer = $('battle-classic');
+    if (classicContainer) {
+        classicContainer.classList.toggle('mode-spectate', !!isSpectating);
+        classicContainer.classList.toggle('mode-2v2', !!is2v2);
+        classicContainer.classList.toggle('mode-urf', gs.mode === 'urf');
+    }
 
     const opp2Half = $('opp2-half');
     const oppDivider = $('opp-divider');
@@ -14181,9 +14231,10 @@ function renderGame(data) {
             : gs.phase === 'game_over' ? UI.game_over : '';
     }
     const fullRoundStatus = formatRoundStatus(gs, phaseText);
-    updateStatus(isMinimalUiStyle() ? formatCompactRoundStatus(gs, phaseText) : fullRoundStatus);
+    const bottomStatus = appendSpectatorCountStatus(isMinimalUiStyle() ? formatCompactRoundStatus(gs, phaseText) : fullRoundStatus, gs);
+    updateStatus(bottomStatus);
     const statusTextEl = $('status-text');
-    if (statusTextEl) statusTextEl.title = isMinimalUiStyle() ? fullRoundStatus : '';
+    if (statusTextEl) statusTextEl.title = isMinimalUiStyle() ? appendSpectatorCountStatus(fullRoundStatus, gs) : '';
 
     const endTurnBtn = $('btn-end-turn');
     if (endTurnBtn) {
@@ -14739,7 +14790,7 @@ function choosePlayerTargetOnBoard(title, targets) {
     const regions = targets
         .map(target => ({ target, el: getPlayerRegionById(target.id) }))
         .filter(item => item.el && isVisibleTargetRegion(item.el));
-    if (!regions.length || regions.length < targets.length) return Promise.resolve(null);
+    if (!regions.length) return Promise.resolve(null);
     return new Promise(resolve => {
         if (targetPickCleanup) targetPickCleanup();
         let settled = false;
@@ -15608,7 +15659,7 @@ function getCardTargetPickOptions(cardDef) {
     if (cardDef.card_type === 'thorn') {
         return {
             includeSelf: false,
-            candidates: gameState.mode === '2v2' ? 'all' : 'enemy',
+            candidates: gameState.mode === '2v2' ? 'enemy,teammate' : 'enemy',
             aliveOnly: true,
         };
     }
@@ -17023,6 +17074,8 @@ async function onPlayCard(cardInstanceId, options = {}) {
             getCardTargetPickOptions(cardDef),
         );
         if (targetPlayerId < 0) return;
+    } else if (gameState && gameState.mode === '2v2' && cardDef && cardDef.card_type === 'root') {
+        targetPlayerId = normalizePlayerId(gameState.your_id);
     }
     const choice = await getCardChoice(cardDict, targetPlayerId);
     if (choice === false) return;
@@ -18487,6 +18540,26 @@ function getModLoginPayload() {
     return { disabled_mods: getDisabledMods(), ...getCommunityModSelection() };
 }
 
+async function applyPeerModSettings(peerMods = {}) {
+    const disabled = Array.isArray(peerMods.disabled_mods)
+        ? peerMods.disabled_mods.map(item => String(item || '')).filter(Boolean)
+        : [];
+    localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
+    if (peerMods.mod_source === 'community' && Array.isArray(peerMods.community_mods)) {
+        setSelectedCommunityMods(peerMods.community_mods);
+    } else {
+        localStorage.setItem('gtn_community_mods', '[]');
+    }
+    renderModSourceControls();
+    renderOfficialModList();
+    renderCommunityModList();
+    await refreshCardsAfterModSettingsConfirmed();
+    if (socket && socket.connected && phase === 'lobby') {
+        socket.emit('update_mod_settings', { disabled_mods: getDisabledMods(), ...getCommunityModSelection() });
+    }
+    showActionToast(UI.save_success || '已保存', 1800, 'success');
+}
+
 function syncCurrentSettingsModSelectionToLocal() {
     const listEl = $('settings-mods-list');
     const checkboxes = listEl ? Array.from(listEl.querySelectorAll('input[type="checkbox"][data-filename]')) : [];
@@ -19630,6 +19703,7 @@ async function init() {
     if ($('about-tab-rules')) $('about-tab-rules').addEventListener('click', () => setAboutPage('rules'));
     if ($('about-tab-credits')) $('about-tab-credits').addEventListener('click', () => setAboutPage('credits'));
     if ($('btn-about-close')) $('btn-about-close').addEventListener('click', closeAbout);
+    if ($('btn-credit-discord')) $('btn-credit-discord').addEventListener('click', () => window.open('https://discord.gg/JgjnsAEXMC', '_blank', 'noopener'));
     if ($('btn-credit-bilibili')) $('btn-credit-bilibili').addEventListener('click', () => window.open('https://space.bilibili.com/1490695733', '_blank', 'noopener'));
     if ($('btn-credit-github')) $('btn-credit-github').addEventListener('click', () => window.open('https://github.com/Stickerbug', '_blank', 'noopener'));
     document.querySelectorAll('[data-copy-text]').forEach(btn => {

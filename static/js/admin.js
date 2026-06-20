@@ -622,6 +622,7 @@ function draftStatsQuery() {
   params.set('sort', $('draft-stats-sort')?.value || 'pick_rate');
   params.set('order', $('draft-stats-order')?.value || 'desc');
   params.set('limit', '100');
+  if ($('draft-stats-merge')?.checked) params.set('merge_modes', '1');
   return params;
 }
 
@@ -636,6 +637,26 @@ async function loadDraftStats() {
     renderDraftStats(draftStatsState);
   } catch (error) {
     table.innerHTML = `<div class="log-item error">抽牌统计加载失败：${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function rebuildDraftWinStats() {
+  const resultBox = $('draft-stats-rebuild-result');
+  const button = $('draft-stats-rebuild-wins');
+  if (!confirm('将按 matches 对局摘要覆盖重建卡牌抽到胜率统计，不影响抽取率。确认执行？')) return;
+  if (button) button.disabled = true;
+  if (resultBox) resultBox.textContent = '正在按对局摘要重算卡牌胜率。';
+  try {
+    const data = await api('/api/admin/draft-stats/rebuild-wins', { method: 'POST', body: '{}' });
+    const result = data.result || {};
+    if (resultBox) {
+      resultBox.textContent = `已重算胜率：历史对局 ${formatNumber(result.matches || 0)}，可用摘要 ${formatNumber(result.counted_matches || 0)}，跳过 ${formatNumber(result.skipped_matches || 0)}，卡牌 ${formatNumber(result.cards || 0)}。`;
+    }
+    await loadDraftStats();
+  } catch (error) {
+    if (resultBox) resultBox.textContent = `卡牌胜率重算失败：${error.message}`;
+  } finally {
+    if (button) button.disabled = false;
   }
 }
 
@@ -659,11 +680,11 @@ function renderDraftStats(data) {
   }
   table.innerHTML = `
     <table>
-      <thead><tr><th>模式</th><th>卡牌</th><th>类型</th><th>抽取</th><th>刷出</th><th>抽取率</th><th>最近更新</th></tr></thead>
+      <thead><tr><th>模式</th><th>卡牌</th><th>类型</th><th>抽取</th><th>刷出</th><th>抽取率</th><th>抽到胜利</th><th>抽到局数</th><th>抽到胜率</th><th>最近更新</th></tr></thead>
       <tbody>
         ${items.map((item) => `
           <tr>
-            <td>${escapeHtml(item.mode || '-')}</td>
+            <td>${escapeHtml(item.mode === 'merged' ? '合并' : (item.mode || '-'))}</td>
             <td>
               <strong>${escapeHtml(item.name_cn || item.card_id || '-')}</strong>
               <span class="muted"> ${escapeHtml(item.card_id || '')}</span>
@@ -672,6 +693,9 @@ function renderDraftStats(data) {
             <td class="admin-data">${escapeHtml(formatNumber(item.picked_count || 0))}</td>
             <td class="admin-data">${escapeHtml(formatNumber(item.shown_count || 0))}</td>
             <td class="admin-data">${escapeHtml(formatPercent(item.pick_rate || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatNumber(item.win_games || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatNumber(item.picked_games || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatPercent(item.card_win_rate || 0))}</td>
             <td class="admin-data">${escapeHtml(formatAdminTime(item.updated_at))}</td>
           </tr>`).join('')}
       </tbody>
@@ -733,6 +757,7 @@ function renderRegisteredUserCard(user) {
   const expanded = expandedRegisteredUsers.has(key);
   const detail = registeredUserDetails.get(key);
   const winRate = formatPercent(user.win_rate);
+  const playTime = formatUptime(user.play_seconds || 0);
   const detailsHtml = expanded ? renderRegisteredUserDetails(user, detail) : '';
   return `
     <article class="registered-user-card ${expanded ? 'expanded' : ''}">
@@ -756,6 +781,7 @@ function renderRegisteredUserCard(user) {
           <span><b>${escapeHtml(user.losses || 0)}</b> 败</span>
           <span><b>${escapeHtml(user.draws || 0)}</b> 平</span>
           <span><b>${escapeHtml(winRate)}</b> 胜率</span>
+          <span><b class="admin-data">${escapeHtml(playTime)}</b> 总对局时长</span>
         </div>
         <span class="expand-mark">${expanded ? '收起' : '详情'}</span>
       </button>
@@ -783,6 +809,7 @@ function renderRegisteredUserDetails(user, detail) {
             <div><dt>注册顺序</dt><dd>${escapeHtml(user.id)}</dd></div>
             <div><dt>注册时间</dt><dd class="admin-data">${escapeHtml(formatAdminTime(user.created_at))}</dd></div>
             <div><dt>上次下线</dt><dd class="admin-data">${escapeHtml(formatAdminTime(user.last_login_at))}</dd></div>
+            <div><dt>总对局时长</dt><dd class="admin-data">${escapeHtml(formatUptime(user.play_seconds || 0))}</dd></div>
             <div><dt>当前状态</dt><dd>${online ? `${escapeHtml(labelFrom(STATUS_LABELS, online.status))} ${online.room_id != null ? `#${escapeHtml(online.room_id)}` : ''}` : '离线'}</dd></div>
           </dl>
         </div>
@@ -1700,6 +1727,8 @@ function bindEvents() {
   $('registered-users-sort')?.addEventListener('change', queueRegisteredUsersLoad);
   $('registered-users-order')?.addEventListener('change', queueRegisteredUsersLoad);
   $('draft-stats-refresh')?.addEventListener('click', loadDraftStats);
+  $('draft-stats-rebuild-wins')?.addEventListener('click', rebuildDraftWinStats);
+  $('draft-stats-merge')?.addEventListener('change', loadDraftStats);
   $('draft-stats-mode')?.addEventListener('change', loadDraftStats);
   $('draft-stats-sort')?.addEventListener('change', loadDraftStats);
   $('draft-stats-order')?.addEventListener('change', loadDraftStats);

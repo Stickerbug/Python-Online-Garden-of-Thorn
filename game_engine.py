@@ -3660,6 +3660,28 @@ class GameEngine:
                 return True
         return False
 
+    def _equipment_is(self, eq, *ids: str) -> bool:
+        if eq is None:
+            return False
+        wanted = {str(item) for item in ids if item}
+        wanted_lower = {item.lower() for item in wanted}
+        values = [
+            getattr(eq, 'def_id', ''),
+            getattr(getattr(eq, 'card_instance', None), 'def_id', ''),
+            getattr(getattr(eq, 'card_def', None), 'id', ''),
+            getattr(getattr(eq, 'card_def', None), 'legacy_id', ''),
+        ]
+        resource = getattr(getattr(eq, 'card_def', None), 'v2_resource', {}) or {}
+        values.extend([resource.get('id', ''), resource.get('legacy_id', ''), resource.get('runtime_id', '')])
+        for value in values:
+            text = str(value or '')
+            if text in wanted or text.lower() in wanted_lower:
+                return True
+            tail = text.split(':')[-1]
+            if tail in wanted or tail.lower() in wanted_lower:
+                return True
+        return self._card_is(getattr(eq, 'card_instance', None), *ids) or self._card_is(getattr(eq, 'card_def', None), *ids)
+
     def _mimic_special_cost_for_card(self, target: Optional[CardInstance]) -> int:
         if target is None:
             return 0
@@ -5920,7 +5942,7 @@ class GameEngine:
             ps.equipment_protection -= 1
             self.log_msg(f"{self.pn(owner_id)}的装备保护抵消了摧毁！")
             return False
-        if eq.def_id == 'Disc':
+        if self._equipment_is(eq, 'Disc', 'vanilla:disc'):
             effect_target = int(getattr(eq, 'effect_target', getattr(eq, 'owner', owner_id)))
             if not (0 <= effect_target < len(self.players)):
                 effect_target = owner_id
@@ -5933,7 +5955,7 @@ class GameEngine:
             self._run_card_event(owner_id, eq.card_instance, 'equipment_destroy', None,
                                  {'source_id': owner_id, 'target_id': effect_target_id,
                                   'equipment_owner_id': owner_id})
-        elif eq.def_id == 'Sponge' and ps.sponge_active:
+        elif self._equipment_is(eq, 'Sponge', 'vanilla:sponge') and ps.sponge_active:
             poison_layers = ps.poison
             ps.sponge_active = False
             ps.poison = 0
@@ -5944,10 +5966,16 @@ class GameEngine:
                 self._check_yggdrasil(owner_id)
             else:
                 self.log_msg("海绵被摧毁！无中毒层数")
-        if not has_destroy_script and eq.def_id == 'Pill':
+        if self._equipment_is(eq, 'Pill', 'vanilla:pill'):
             ps.enemy_draw_reduction = max(0, ps.enemy_draw_reduction - 1)
             ps.enemy_e_reduction = max(0, ps.enemy_e_reduction - 1)
-            self.log_msg("药丸被摧毁！己方抽牌和回E恢复正常")
+            for key in ('status_immune', 'immune', '状态免疫'):
+                try:
+                    ps.custom_statuses.pop(key, None)
+                except Exception:
+                    pass
+            if not has_destroy_script:
+                self.log_msg("药丸被摧毁！己方抽牌和回E恢复正常")
         ps.equipment.remove(eq)
         if 'exile' in eq.card_instance.flags:
             ps.exile.append(eq.card_instance)
@@ -8216,6 +8244,17 @@ class GameEngine:
             return
         ps = self.players[player_id]
         exclude_id = int(getattr(self, '_cogwheel_exclude_instance_ids', {}).get(player_id, -1) or -1)
+        exclude_def_id = ''
+        for zone in (getattr(ps, 'hand', []), getattr(ps, 'discard', []), getattr(ps, 'exile', [])):
+            for c in list(zone or []):
+                try:
+                    if int(getattr(c, 'instance_id', -1) or -1) == exclude_id:
+                        exclude_def_id = str(getattr(c, 'def_id', '') or '')
+                        break
+                except Exception:
+                    continue
+            if exclude_def_id:
+                break
         played_ids = list(getattr(ps, 'cards_played_this_turn_instance_ids', []) or [])
         returned = []
         for instance_id in played_ids:
@@ -8227,13 +8266,19 @@ class GameEngine:
                 continue
             found = None
             source_zone = None
-            zone = getattr(ps, 'discard', [])
-            for c in list(zone):
-                if int(getattr(c, 'instance_id', -1) or -1) == iid:
-                    found = c
-                    source_zone = zone
+            for zone in (getattr(ps, 'deck', []), getattr(ps, 'discard', [])):
+                for c in list(zone):
+                    if int(getattr(c, 'instance_id', -1) or -1) == iid:
+                        found = c
+                        source_zone = zone
+                        break
+                if found is not None:
                     break
             if found is None:
+                continue
+            if str(getattr(found, 'def_id', '') or '') in ('factory:cogwheel', 'Cogwheel'):
+                continue
+            if exclude_def_id and str(getattr(found, 'def_id', '') or '') == exclude_def_id:
                 continue
             if not ps.can_add_to_hand():
                 continue
@@ -8633,7 +8678,7 @@ class GameEngine:
             dmg = self._apply_damage_dealt_equipment_multiplier(dmg, attacker_id)
             if plank_blocks_attack:
                 dmg = 0
-            if ps.nazar_active and not immune:
+            if dmg > 0 and ps.nazar_active and not immune:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
                 if original_dmg >= 10:
@@ -8657,7 +8702,7 @@ class GameEngine:
             # Weakness belongs to the attacker: it reduces physical damage they deal to others.
             attacker_state = self.players[attacker_id] if 0 <= attacker_id < len(self.players) else None
             attacker_immune = self._is_status_immune(attacker_id) if attacker_state is not None else False
-            if attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
+            if dmg > 0 and attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
                 reduction = min(0.6, 0.2 * attacker_state.weakness)
                 dmg = max(1, int(dmg * (1.0 - reduction)))
             if immune:
@@ -8841,7 +8886,7 @@ class GameEngine:
                             if 0 <= selected_effect_target < len(self.players):
                                 eq.effect_target = selected_effect_target
                                 break
-                if eq.def_id == 'Disc' and not card.card_def.effects:
+                if self._equipment_is(eq, 'Disc', 'vanilla:disc') and not card.card_def.effects:
                     effect_target = int(getattr(eq, 'effect_target', getattr(eq, 'owner', equip_owner_id)))
                     if not (0 <= effect_target < len(self.players)):
                         effect_target = equip_owner_id

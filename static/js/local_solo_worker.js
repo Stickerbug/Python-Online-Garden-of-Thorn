@@ -4468,7 +4468,7 @@ class LocalSoloEngine {
             dmg = this.applyCorruptionMultiplier(dmg);
             dmg += this.damageDealtEquipmentFlatBonus(attackerId);
             if (plankBlocksAttack) dmg = 0;
-            if (ps.nazar_active) {
+            if (dmg > 0 && ps.nazar_active) {
                 const original = dmg;
                 dmg = Math.max(1, dmg - 9);
                 if (original >= 10) {
@@ -5211,19 +5211,32 @@ class LocalSoloEngine {
         const ps = this.players[playerId];
         if (!ps.cogwheel_active) return;
         const excludeId = toInt(ps.cogwheel_exclude_instance_id, -1);
+        let excludeDefId = '';
+        [ps.hand || [], ps.discard || [], ps.exile || []].some(zone => {
+            const found = zone.find(c => toInt(c && c.instance_id, -1) === excludeId);
+            if (found) {
+                excludeDefId = String(found.def_id || '');
+                return true;
+            }
+            return false;
+        });
         const returned = [];
         [...(ps.cards_played_this_turn_instance_ids || [])].forEach(instanceId => {
             const iid = toInt(instanceId, -1);
             if (iid === excludeId) return;
             let found = null;
             let zone = null;
-            const cards = ps.discard || [];
-            const idx = cards.findIndex(c => c.instance_id === iid);
-            if (idx >= 0) {
-                found = cards[idx];
-                zone = cards;
+            for (const cards of [ps.deck || [], ps.discard || []]) {
+                const idx = cards.findIndex(c => c.instance_id === iid);
+                if (idx >= 0) {
+                    found = cards[idx];
+                    zone = cards;
+                    break;
+                }
             }
             if (!found || !ps.canAddToHand()) return;
+            if (['factory:cogwheel', 'Cogwheel'].includes(String(found.def_id || ''))) return;
+            if (excludeDefId && String(found.def_id || '') === excludeDefId) return;
             zone.splice(zone.indexOf(found), 1);
             found.mimic_discount = 0;
             found.instance_flags.add('symbiosis');

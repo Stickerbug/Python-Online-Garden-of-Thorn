@@ -124,6 +124,11 @@
   --font-card: 'Kreadon Demi', 'Kreadon', 'Microsoft YaHei', sans-serif;
   --gtn-card-border-width: 1.3cqi;
   --gtn-card-radius: 5.5% / 4%;
+  --scrollbar-size: 9px;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgba(127, 140, 141, 0.38);
+  --scrollbar-thumb-hover: rgba(127, 140, 141, 0.64);
+  --scrollbar-corner: transparent;
 }
 
 html {
@@ -169,6 +174,8 @@ html.fonts-loaded-main {
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
   --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --scrollbar-thumb: rgba(160, 160, 176, 0.34);
+  --scrollbar-thumb-hover: rgba(190, 190, 210, 0.62);
 }
 
 [data-theme="dark"] .settings-mod-item {
@@ -311,23 +318,41 @@ body {
   overflow: hidden;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-light);
-  border-radius: 3px;
+  min-height: 28px;
+  background: var(--scrollbar-thumb);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: var(--scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--scrollbar-corner);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  :root {
+    --scrollbar-size: 6px;
+  }
 }
 
 .view {
@@ -2456,12 +2481,12 @@ body {
 .gallery-card-grid {
   min-height: 0;
   overflow-y: auto;
-  padding: 12px;
+  padding: 8px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   align-content: start;
-  column-gap: 5px;
-  row-gap: 9px;
+  column-gap: 2px;
+  row-gap: 5px;
 }
 
 .gallery-card-tile {
@@ -2687,10 +2712,10 @@ body {
     overflow-y: visible;
   }
   .gallery-card-grid {
-    padding: 8px;
+    padding: 5px;
     grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-    column-gap: 4px;
-    row-gap: 7px;
+    column-gap: 2px;
+    row-gap: 4px;
   }
   .gallery-card-tile .card {
     --card-w: min(72px, 100%);
@@ -5618,10 +5643,19 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .card.card-sponge .card-effect {
-  font-size: 7.1cqi;
-  line-height: 1.12;
+  font-size: 7.35cqi;
+  line-height: 1.14;
   padding-top: 2.5cqi;
   padding-bottom: 1.2cqi;
+}
+
+.card.card-relic .card-effect,
+.card.card-jungle-root .card-effect,
+.card.card-yggdrasil .card-effect {
+  font-size: 8.25cqi;
+  line-height: 1.16;
+  padding-top: 3cqi;
+  padding-bottom: 1.7cqi;
 }
 
 .card.card-fragment .card-description,
@@ -13023,14 +13057,6 @@ html[data-ui-style="minimal"] .btn-end-turn {
     overflow-y: auto;
     gap: 3px;
   }
-
-  .teammate-hand-chip {
-    border-radius: 2px;
-    min-height: 18px;
-    padding: 1px 5px;
-    font-size: 9px;
-    line-height: 1.05;
-  }
 }
 
 /* Mobile browser normalization.
@@ -13275,5 +13301,257 @@ html[data-ui-style="minimal"] .btn-end-turn {
   .game-container.mode-2v2 .compact-info {
     font-size: 9px;
     line-height: 1.15;
+  }
+}
+
+/* Final proportional chip normalization.
+   Chips embedded inside cards must use the card container width (cqi), not
+   fixed px values, otherwise mobile browsers make them look oversized on
+   scaled-down cards. */
+.card .inline-card-chip.choice-card-token {
+  --chip-font-size: 6.15cqi;
+  --chip-gap: 1.05cqi;
+  --chip-name-pad-y: 0.75cqi;
+  --chip-name-pad-x: 1.8cqi;
+  --chip-border-width: max(0.35cqi, 1px);
+  --chip-radius: 1.05cqi;
+  --chip-shadow-y: 0.25cqi;
+  --chip-shadow-blur: 0.9cqi;
+  --chip-flag-gap: 0.7cqi;
+  --chip-flag-font-size: 4.75cqi;
+  --chip-flag-pad-y: 0.25cqi;
+  --chip-flag-pad-x: 0.9cqi;
+  --chip-flag-radius: 0.6cqi;
+}
+
+.card .inline-card-chip .choice-card-extra-cost {
+  font-size: 5.2cqi;
+  padding: 0.45cqi 1.2cqi;
+}
+
+.card.card-assembler .inline-card-chip.choice-card-token,
+.card.card-honey .inline-card-chip.choice-card-token,
+.card.card-sponge .inline-card-chip.choice-card-token,
+.card.card-fragment .inline-card-chip.choice-card-token {
+  --chip-font-size: 5.25cqi;
+  --chip-gap: 0.75cqi;
+  --chip-name-pad-y: 0.55cqi;
+  --chip-name-pad-x: 1.25cqi;
+  --chip-radius: 0.85cqi;
+  --chip-flag-font-size: 4.1cqi;
+  --chip-flag-pad-x: 0.7cqi;
+}
+
+.teammate-hand-chip {
+  --teammate-chip-scale: 1;
+  min-width: calc(42px * var(--teammate-chip-scale));
+  max-width: calc(96px * var(--teammate-chip-scale));
+  min-height: calc(22px * var(--teammate-chip-scale));
+  padding: calc(2px * var(--teammate-chip-scale)) calc(7px * var(--teammate-chip-scale));
+  border-width: max(1px, calc(1px * var(--teammate-chip-scale)));
+  border-radius: calc(2px * var(--teammate-chip-scale));
+  font-size: calc(11px * var(--teammate-chip-scale));
+}
+
+@media (max-width: 900px), (max-height: 620px), (hover: none) and (pointer: coarse) {
+  .teammate-hand-chip {
+    --teammate-chip-scale: 0.82;
+  }
+}
+
+/* Mobile density pass.
+   Keep browser zoom at 100% usable by reducing the non-card chrome. Cards and
+   chips still scale from their own design ratios above. */
+@media (max-width: 900px), (max-height: 620px), (hover: none) and (pointer: coarse) {
+  html,
+  body {
+    font-size: 12px;
+  }
+
+  .game-container {
+    gap: 2px;
+    padding: 2px;
+    font-size: 11px;
+  }
+
+  .game-container.mode-spectate {
+    gap: 2px;
+  }
+
+  .player-info-bar,
+  .opp-info,
+  .status-bar,
+  .controls-bar,
+  .opp-hand-equip,
+  .equip-row,
+  .hand-play-row {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .player-info-bar {
+    min-height: 24px;
+    gap: 3px;
+  }
+
+  .bars-row {
+    gap: 3px;
+  }
+
+  .bar-track {
+    height: 9px;
+  }
+
+  .bar-text {
+    font-size: 8.5px;
+  }
+
+  .status-tag,
+  .card-count-info,
+  .pile-count,
+  .info-extra,
+  .compact-info {
+    font-size: 9.5px;
+    line-height: 1.15;
+  }
+
+  .battle-log .log-header {
+    padding: 2px 5px;
+    font-size: 10px;
+  }
+
+  .battle-log .log-content {
+    padding: 3px 5px;
+    font-size: 10px;
+    line-height: 1.26;
+  }
+
+  .controls-bar {
+    min-height: 30px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    gap: 3px;
+    justify-content: flex-start;
+    align-items: center;
+  }
+
+  .controls-group {
+    gap: 3px;
+  }
+
+  .controls-right {
+    margin-left: 0;
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    gap: 3px;
+    order: 3;
+  }
+
+  .controls-right input {
+    font-size: 10px;
+    min-height: 24px;
+    padding: 3px 6px;
+  }
+
+  .controls-bar .btn,
+  .btn-end-turn,
+  .btn-view-deck,
+  .btn-view-discard,
+  .btn-surrender,
+  .btn-switch-perspective,
+  .btn-leave-spectate,
+  .btn-prediction-target {
+    min-height: 26px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-size: 10px;
+    line-height: 1.1;
+  }
+
+  .game-container.mode-spectate #spectate-controls:not(.hidden) {
+    order: 0;
+    flex: 0 0 100%;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    margin-left: 0;
+    gap: 4px;
+  }
+
+  .game-container.mode-spectate .controls-bar {
+    justify-content: flex-start;
+  }
+
+  .game-container.mode-spectate .controls-right {
+    order: 2;
+  }
+
+  .game-container.mode-spectate .card,
+  .game-container.mode-spectate .card-small {
+    width: min(var(--card-w, 76px), 18vw);
+  }
+
+  .battle-classic.mode-spectate .classic-command-panel {
+    align-items: stretch;
+  }
+
+  .battle-classic.mode-spectate .classic-extra-controls {
+    justify-content: flex-start;
+    align-self: stretch;
+    max-width: 100%;
+  }
+
+  .classic-mini-btn {
+    min-height: 24px;
+    padding: 3px 7px;
+    border-radius: 6px;
+    font-size: 10px;
+  }
+
+  .classic-end-turn {
+    min-height: 44px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape), (max-height: 560px) {
+  .game-container {
+    grid-template-rows: auto minmax(72px, 1fr) auto;
+  }
+
+  .game-container:not(.mode-urf) .hand-area .card {
+    width: var(--card-w, clamp(50px, min(calc((100% - 26px) / var(--hand-card-slots, 7.6)), calc((100dvh - 154px) * 63 / 88)), 112px));
+  }
+
+  .game-container .middle-section {
+    min-height: 78px !important;
+  }
+}
+
+@media (max-width: 768px) and (orientation: portrait), (max-aspect-ratio: 1/1) {
+  .game-container:not(.mode-urf) .hand-area .card {
+    width: var(--card-w, clamp(46px, min(calc((100vw - 24px) / 5.55), calc((100dvh - 286px) * 63 / 88)), 82px));
+  }
+
+  .bar-track {
+    width: clamp(42px, 16vw, 72px);
+  }
+
+  .battle-classic .classic-command-panel {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 6px;
+  }
+
+  .battle-classic .classic-extra-controls {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .battle-classic .classic-end-turn {
+    width: 100%;
   }
 }

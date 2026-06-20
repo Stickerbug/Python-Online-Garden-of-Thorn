@@ -59,6 +59,7 @@ from r2_mods import (
 )
 from db import (
     DB_PATH,
+    add_user_play_seconds,
     admin_clear_user_role,
     admin_change_user_password,
     admin_set_user_ban,
@@ -99,6 +100,10 @@ from db import (
     normalize_username_key,
     record_chat_message,
     record_card_draft_counts,
+    record_card_draft_win_result,
+    rebuild_card_draft_win_stats_from_matches,
+    rebuild_user_stats_from_matches,
+    rebuild_user_play_seconds_from_matches,
     remove_friend,
     revoke_remember_token,
     resolve_report_entry,
@@ -552,6 +557,7 @@ def admin_match_record(room, result='finished'):
         winner_index = None
         stats_winners = []
         stats_winner_user_ids = []
+        stats_winner_player_indices = []
         stats_result = 'draw'
         if getattr(e, 'winning_team', None) is not None and int(getattr(e, 'winning_team', -1)) >= 0:
             winner_index = int(e.winning_team)
@@ -561,6 +567,7 @@ def admin_match_record(room, result='finished'):
             except Exception:
                 team_members = []
             stats_winners = [names[i] for i in team_members if 0 <= i < len(names)]
+            stats_winner_player_indices = [i for i in team_members if 0 <= i < len(names)]
             stats_winner_user_ids = [player_user_ids[i] for i in team_members if 0 <= i < len(player_user_ids) and player_user_ids[i] is not None]
             winner_label = ' / '.join(stats_winners) or f"team {winner_index + 1}"
             stats_result = 'win'
@@ -571,6 +578,7 @@ def admin_match_record(room, result='finished'):
             winner_index = winner
             winner_label = names[winner]
             stats_winners = [winner_label]
+            stats_winner_player_indices = [winner]
             if 0 <= winner < len(player_user_ids) and player_user_ids[winner] is not None:
                 stats_winner_user_ids = [player_user_ids[winner]]
             stats_result = 'win'
@@ -631,6 +639,18 @@ def admin_match_record(room, result='finished'):
             'valid_action_counts': getattr(room, '_valid_action_counts', {}) or {},
             'valid_action_counts_by_side': room_valid_actions_by_side(room),
         }
+        raw_draft_picks = getattr(e, 'draft_picks', []) or []
+        player_draft_cards = []
+        for pidx in range(len(names)):
+            if isinstance(raw_draft_picks, dict):
+                cards = raw_draft_picks.get(pidx, raw_draft_picks.get(str(pidx), []))
+            elif pidx < len(raw_draft_picks):
+                cards = raw_draft_picks[pidx]
+            else:
+                cards = []
+            player_draft_cards.append(list(cards or []) if isinstance(cards, (list, tuple, set)) else [])
+        summary['draft_card_ids_by_player'] = player_draft_cards
+        summary['winner_player_indices'] = stats_winner_player_indices
         if getattr(e, 'game_over', False):
             replay_actions = getattr(room, '_replay_actions', []) or []
             if not replay_actions or replay_actions[-1].get('type') != 'game_over':
@@ -652,6 +672,15 @@ def admin_match_record(room, result='finished'):
                 )
                 if valid_for_ranking and result == 'finished' and getattr(e, 'game_over', False):
                     increment_user_stats(registered_user_ids, stats_winner_user_ids, stats_result)
+                if result == 'finished' and getattr(e, 'game_over', False):
+                    add_user_play_seconds(registered_user_ids, duration_seconds)
+                if result == 'finished' and getattr(e, 'game_over', False) and room.mode in ('1v1', '2v2'):
+                    record_card_draft_win_result(
+                        room.mode,
+                        player_draft_cards,
+                        stats_winner_player_indices,
+                        'draw' if stats_result == 'draw' else 'finished',
+                    )
             except Exception as db_exc:
                 admin_event('error', f'failed to persist match summary: {db_exc}')
         room._history_recorded = True
@@ -2410,6 +2439,24 @@ def _clear_room_action_timer(room):
     room.action_timer_last_tick = time.time()
 
 
+def _sync_room_action_timer_after_state_change(room, now=None):
+    """Reset the turn timer when engine-side auto flow changed the active player."""
+    now = now or time.time()
+    engine = getattr(room, 'engine', None)
+    if engine is None or getattr(engine, 'game_over', False) or getattr(engine, 'phase', None) != 'action':
+        _clear_room_action_timer(room)
+        return None
+    current = getattr(engine, 'current_player', None)
+    if current is None or current < 0:
+        _clear_room_action_timer(room)
+        return None
+    if getattr(room, 'action_timer_player', None) != current:
+        room.action_timer_player = current
+        room.action_timer_remaining = float(ACTION_TURN_SECONDS)
+        room.action_timer_last_tick = now
+    return current
+
+
 def _ensure_room_action_timer_locked(room, now=None):
     now = now or time.time()
     engine = getattr(room, 'engine', None)
@@ -2420,11 +2467,7 @@ def _ensure_room_action_timer_locked(room, now=None):
     if current is None or current < 0:
         _clear_room_action_timer(room)
         return None
-    if room.action_timer_player != current:
-        room.action_timer_player = current
-        room.action_timer_remaining = float(ACTION_TURN_SECONDS)
-        room.action_timer_last_tick = now
-    return current
+    return _sync_room_action_timer_after_state_change(room, now)
 
 
 def _tick_room_action_timer_locked(room, now=None):
@@ -2442,10 +2485,13 @@ def _tick_room_action_timer_locked(room, now=None):
     return room.action_timer_remaining <= 0
 
 
-def _add_room_action_timer_bonus(room, seconds=None):
+def _add_room_action_timer_bonus(room, seconds=None, expected_player=None):
     seconds = ACTION_TURN_CARD_BONUS_SECONDS if seconds is None else seconds
     with _lock:
-        if _ensure_room_action_timer_locked(room) is None:
+        current = _ensure_room_action_timer_locked(room)
+        if current is None:
+            return
+        if expected_player is not None and current != expected_player:
             return
         room.action_timer_remaining = max(0.0, float(room.action_timer_remaining or 0) + float(seconds))
 
@@ -2725,6 +2771,8 @@ def _room_timer_worker():
                         result = engine.end_turn(pidx)
                         _stamp_pending_interactions(room)
                         _clear_room_action_timer(room)
+                        if result.get('success'):
+                            _sync_room_action_timer_after_state_change(room)
                     if result.get('success'):
                         record_room_replay_action(room, 'end_turn', pidx, {'auto': True})
                         admin_event('game', f'auto_end_turn room={room.room_id} pidx={pidx}', room_id=room.room_id)
@@ -3913,6 +3961,33 @@ def player_loadout_hash(player):
     return player.get('loadout_hash') or player.get('mods_hash') or ''
 
 
+def player_mod_match_payload(player):
+    player = player or {}
+    return {
+        'disabled_mods': list(player.get('disabled_mods', []) or []),
+        'mod_source': player.get('mod_source', 'official') or 'official',
+        'community_mods': list(player.get('community_mods', []) or []),
+        'community_mod_url': player.get('community_mod_url', '') or '',
+        'community_mod_hash': player.get('community_mod_hash', '') or '',
+        'community_mod_name': player.get('community_mod_name', '') or '',
+        'loadout_hash': player_loadout_hash(player),
+        'mods_list': list(player.get('mods_list', []) or []),
+    }
+
+
+def emit_mod_mismatch(target_sid, other_player=None, message='模组组合不一致，无法开始对局'):
+    if target_sid not in players:
+        return
+    payload = {
+        'message': message,
+        'reason': 'mod_mismatch',
+        'your_mods': player_mod_match_payload(players.get(target_sid, {})),
+        'other_mods': player_mod_match_payload(other_player or {}),
+    }
+    socketio.emit('mod_mismatch', payload, room=target_sid)
+    socketio.emit('server_error', {'message': message, 'reason': 'mod_mismatch'}, room=target_sid)
+
+
 def runtime_scope_key(beta_mode=False):
     return 'beta' if bool(beta_mode) else 'release'
 
@@ -4912,6 +4987,7 @@ ADMIN_COMMANDS = {
     'lobbychat': 'lobbychat [数量] - 查看大厅聊天缓存',
     'history': 'history [数量] - 查看最近历史对局',
     'draftstats': 'draftstats [1v1|2v2] - 查看卡牌选牌抽取率统计',
+    'rebuildstats': 'rebuildstats confirm - 按永久 matches 摘要重算账号战绩和总对局时长',
     'broadcast': 'broadcast <内容> - 发送服务器广播',
     'kick': 'kick <sid|昵称> - 踢出玩家',
     'mutechat': 'mutechat <sid|昵称> [秒数] - 禁言在线玩家',
@@ -5448,6 +5524,31 @@ def execute_admin_command(line):
                 f"{item['picked_count']}/{item['shown_count']}  {item['pick_rate']:.1f}%"
             )
         return {'success': True, 'output': '\n'.join(lines)}
+    if cmd in ('rebuildstats', 'recalcstats', '重算战绩'):
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        if len(parts) < 2 or parts[1].lower() not in ('confirm', '确认'):
+            return {'success': False, 'output': (
+                '这是覆盖式重算，会用 matches 摘要表重建账号战绩和总对局时长。\n'
+                '它不依赖 3 个月回放，但如果未来删除了 matches 摘要，则不能再安全使用。\n'
+                '确认执行请输入：rebuildstats confirm'
+            )}
+        try:
+            result = rebuild_user_stats_from_matches()
+            play_result = rebuild_user_play_seconds_from_matches()
+            admin_event('admin', f"user stats rebuilt from matches: stats={result} play={play_result}")
+            return {'success': True, 'output': (
+                '已按永久 matches 摘要重算账号统计和总对局时长。\n'
+                f"账号数：{result.get('users', 0)}\n"
+                f"历史对局：{result.get('matches', 0)}\n"
+                f"计入有效对局：{result.get('counted_matches', 0)}\n"
+                f"跳过：{result.get('skipped_matches', 0)}\n"
+                f"回填对局时间的对局：{play_result.get('counted_matches', 0)}\n"
+                f"累计对局秒数：{play_result.get('total_seconds', 0)}"
+            )}
+        except Exception as exc:
+            admin_event('error', f'rebuild user stats failed: {exc}')
+            return {'success': False, 'output': f'重算失败：{exc}'}
     if cmd == 'broadcast':
         msg = raw[len(parts[0]):].strip()
         if not msg:
@@ -6255,9 +6356,17 @@ def send_event_reveal_state(room, pidx):
 ROOM_STATE_BROADCAST_DELAY_SECONDS = _env_float('GTN_ROOM_STATE_BROADCAST_DELAY_SECONDS', 0.06)
 
 
+def room_spectator_count(room):
+    try:
+        return sum(1 for sid in (getattr(room, 'spectators', []) or []) if sid in players)
+    except Exception:
+        return len(getattr(room, 'spectators', []) or [])
+
+
 def _broadcast_game_state_now(room):
     _broadcast_started = time.perf_counter()
     _broadcast_recipients = 0
+    _sync_room_action_timer_after_state_change(room)
     for pidx, sid in enumerate(room.player_sids):
         if sid not in players:
             continue
@@ -6266,6 +6375,7 @@ def _broadcast_game_state_now(room):
         state['mode'] = room.mode
         state['room_id'] = room.room_id
         state['match_key'] = room_match_key(room)
+        state['spectator_count'] = room_spectator_count(room)
         state.update(_room_timer_payload(room))
         state.update(room_mod_payload(room))
         if room.engine.phase == 'game_over':
@@ -6434,11 +6544,13 @@ def send_game_state_to(room, pidx):
         send_pregame_state(room, pidx, allow_sub_choice=True)
     else:
         emit_room_game_phase(room, sid, phase)
+        _sync_room_action_timer_after_state_change(room)
         state = room.engine.get_public_state(pidx)
         state['your_id'] = pidx
         state['mode'] = room.mode
         state['room_id'] = room.room_id
         state['match_key'] = room_match_key(room)
+        state['spectator_count'] = room_spectator_count(room)
         state.update(_room_timer_payload(room))
         state.update(room_mod_payload(room))
         if room.engine.phase == 'game_over':
@@ -6494,6 +6606,7 @@ def emit_rematch_state(room):
 
 
 def start_event_select(room):
+    room.pregame_deadlines = {}
     for pi in range(len(room.player_sids)):
         send_event_state(room, pi)
 
@@ -6987,6 +7100,7 @@ def build_spectate_state(room, perspective=0):
     base['mode'] = room.mode
     base['room_id'] = room.room_id
     base['match_key'] = room_match_key(room)
+    base['spectator_count'] = room_spectator_count(room)
     base.update(room_mod_payload(room))
     try:
         perspective = int(perspective or 0)
@@ -7843,6 +7957,7 @@ def admin_draft_stats():
             order=request.args.get('order', 'desc'),
             limit=request.args.get('limit', 300),
             offset=request.args.get('offset', 0),
+            merge_modes=str(request.args.get('merge_modes', '')).lower() in ('1', 'true', 'yes', 'on'),
         )
     except Exception as exc:
         admin_event('error', f'admin draft stats failed: {exc}')
@@ -7862,6 +7977,27 @@ def admin_draft_stats():
         limit=data.get('limit'),
     )
     return jsonify({'success': True, **data})
+
+
+@app.route('/api/admin/draft-stats/rebuild-wins', methods=['POST'])
+def admin_rebuild_draft_win_stats():
+    started = time.perf_counter()
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        result = rebuild_card_draft_win_stats_from_matches()
+        admin_event('admin', f"card draft win stats rebuilt from matches: {result}")
+    except Exception as exc:
+        admin_event('error', f'admin rebuild draft win stats failed: {exc}')
+        log_admin_api_timing('/api/admin/draft-stats/rebuild-wins', (time.perf_counter() - started) * 1000, error=type(exc).__name__)
+        return jsonify({'success': False, 'error': '卡牌胜率补齐失败'}), 500
+    log_admin_api_timing(
+        '/api/admin/draft-stats/rebuild-wins',
+        (time.perf_counter() - started) * 1000,
+        rows=result.get('cards'),
+        total=result.get('matches'),
+    )
+    return jsonify({'success': True, 'result': result})
 
 
 @app.route('/api/admin/storage/summary')
@@ -9507,7 +9643,7 @@ def on_accept_team(data):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
             return
         if player_loadout_hash(players[sid]) != player_loadout_hash(players[leader_sid]):
-            emit('server_error', {'message': '模组组合不一致，无法开始对局'})
+            emit_mod_mismatch(sid, players[leader_sid])
             return
         if sid in teams or leader_sid in teams:
             return
@@ -9590,7 +9726,12 @@ def on_invite_team(data):
             return
         all_match_sids = my_team['members'] + target_team['members']
         if not same_mod_loadout(all_match_sids):
-            emit('server_error', {'message': '模组组合不一致，无法开始对局'})
+            reference_sid = my_team['leader']
+            reference_player = players.get(reference_sid, {})
+            for msid in all_match_sids:
+                if msid in players and player_loadout_hash(players[msid]) != player_loadout_hash(reference_player):
+                    emit_mod_mismatch(msid, reference_player)
+            emit_mod_mismatch(sid, players.get(target_team['leader'], reference_player))
             return
         match_key = (min(my_team['leader'], target_team['leader']),
                      max(my_team['leader'], target_team['leader']))
@@ -9638,6 +9779,11 @@ def on_accept_team_match(data):
             emit_match_start_failed(all_sids, runtime_scope_mismatch_message(), reason='runtime_scope_mismatch')
             return
         if not same_mod_loadout(all_sids):
+            reference_sid = all_sids[0]
+            reference_player = players.get(reference_sid, {})
+            for msid in all_sids:
+                if msid in players and player_loadout_hash(players[msid]) != player_loadout_hash(reference_player):
+                    emit_mod_mismatch(msid, reference_player)
             emit_match_start_failed(all_sids, '模组组合不一致，无法开始对局')
             return
         for member_sid in my_team['members']:
@@ -10016,7 +10162,8 @@ def on_invite(data):
             target_mods = target.get('mods_list', [])
             inviter_label = ', '.join(inviter_mods) if inviter_mods else 'no mods'
             target_label = ', '.join(target_mods) if target_mods else 'no mods'
-            emit('server_error', {'message': f'模组组合不一致，无法开始对局。你：{inviter_label}；对方：{target_label}'})
+            message = f'模组组合不一致，无法开始对局。你：{inviter_label}；对方：{target_label}'
+            emit_mod_mismatch(sid, target, message)
             return
         invites[sid] = target_sid
         inviter_name = players[sid]['nickname']
@@ -10071,7 +10218,8 @@ def on_accept_invite(data):
             emit_match_start_failed([inviter_sid, sid], runtime_scope_mismatch_message(), reason='runtime_scope_mismatch')
             return
         if player_loadout_hash(inviter) != player_loadout_hash(accepter):
-            emit_match_start_failed([inviter_sid, sid], '模组组合不一致，无法开始对局')
+            emit_mod_mismatch(inviter_sid, accepter)
+            emit_mod_mismatch(sid, inviter)
             return
         room_id = _next_room_id
         _next_room_id += 1
@@ -10370,7 +10518,6 @@ def on_draft_pick(data):
             pick_result = engine.draft_pick(pidx, def_id)
             success = bool(pick_result.get('success')) if isinstance(pick_result, dict) else bool(pick_result)
         if success:
-            _reset_pregame_deadline(room, pidx, 'drafting')
             if DB_AVAILABLE and room.mode in ('1v1', '2v2'):
                 try:
                     enqueue_card_draft_pick(room.mode, draft_options_before, def_id)
@@ -10380,6 +10527,7 @@ def on_draft_pick(data):
             # Check if THIS player finished drafting
             target_count = engine.draft_target_count(pidx) if hasattr(engine, 'draft_target_count') else DECK_SIZE
             if len(engine.draft_picks[pidx]) >= target_count:
+                _reset_pregame_deadline(room, pidx, 'drafting')
                 if engine.needs_sub_choice(pidx):
                     # This player needs sub-choice; the per-player pregame
                     # update below will send the correct prompt only to them.
@@ -11000,7 +11148,10 @@ def on_play_card(data):
     finally:
         busy_lock.release()
     if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_v2_ui'):
-        _add_room_action_timer_bonus(room)
+        _add_room_action_timer_bonus(room, expected_player=pidx)
+        with _lock:
+            _sync_room_action_timer_after_state_change(room)
+        emit_turn_timer_update(room)
         record_valid_player_action(room, pidx, 'play_card')
         record_room_replay_action(room, 'play_card', pidx, {
             'card_instance_id': card_instance_id,
@@ -11095,6 +11246,9 @@ def on_response(data):
     if card_instance_id:
         record_valid_player_action(room, pidx, 'response')
     record_room_replay_action(room, 'response', pidx, {'card_instance_id': card_instance_id, 'def_id': replay_def_id})
+    with _lock:
+        _sync_room_action_timer_after_state_change(room)
+    emit_turn_timer_update(room)
     broadcast_game_state(room)
     if getattr(engine, 'pending_response', None):
         emit_pending_response_requests(room)
@@ -11138,8 +11292,11 @@ def on_ally_consent_response(data):
             'accepted': accepted,
             'result': result,
         })
+    with _lock:
+        _sync_room_action_timer_after_state_change(room)
+    emit_turn_timer_update(room)
     if result.get('needs_response'):
-        _add_room_action_timer_bonus(room)
+        _add_room_action_timer_bonus(room, expected_player=pidx)
         broadcast_game_state(room)
         emit_pending_response_requests(room)
     elif result.get('needs_choice'):
@@ -11204,8 +11361,11 @@ def on_resolve_choice(data):
     if not result.get('cancelled'):
         record_valid_player_action(room, pidx, 'resolve_choice')
     record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice, 'result': result})
+    with _lock:
+        _sync_room_action_timer_after_state_change(room)
     if result.get('needs_response'):
-        _add_room_action_timer_bonus(room)
+        _add_room_action_timer_bonus(room, expected_player=pidx)
+        emit_turn_timer_update(room)
         broadcast_game_state(room)
         emit_pending_response_requests(room)
     elif result.get('needs_choice'):
@@ -11215,7 +11375,8 @@ def on_resolve_choice(data):
         broadcast_game_state(room)
         emit_room_v2_ui_request(room)
     elif result.get('success'):
-        _add_room_action_timer_bonus(room)
+        _add_room_action_timer_bonus(room, expected_player=pidx)
+        emit_turn_timer_update(room)
         broadcast_game_state(room)
     elif result.get('cancelled'):
         broadcast_game_state(room)
@@ -11280,6 +11441,9 @@ def on_v2_ui_response(data):
         'values': values,
         'result': result,
     })
+    with _lock:
+        _sync_room_action_timer_after_state_change(room)
+    emit_turn_timer_update(room)
     if result.get('needs_v2_ui'):
         broadcast_game_state(room)
         emit_room_v2_ui_request(room)
@@ -11345,6 +11509,9 @@ def on_use_trigger(data):
             'target_player_id': target_player_id,
             'result': result,
         })
+        with _lock:
+            _sync_room_action_timer_after_state_change(room)
+        emit_turn_timer_update(room)
     if result.get('needs_ally_consent'):
         broadcast_game_state(room)
         target_pidx = result.get('target_player_id')
@@ -11492,7 +11659,12 @@ def on_end_turn(data):
         if result.get('success'):
             record_valid_player_action(room, pidx, 'end_turn')
             record_room_replay_action(room, 'end_turn', pidx, {})
+            with _lock:
+                _clear_room_action_timer(room)
+                _sync_room_action_timer_after_state_change(room)
         broadcast_game_state(room)
+        if result.get('success'):
+            emit_turn_timer_update(room)
         if not result.get('success'):
             code = normalize_soft_reject_code(result.get('error')) or 'END_TURN_NOT_ALLOWED_NOW'
             soft_reject(sid, 'end_turn', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=False)
@@ -11683,6 +11855,7 @@ def on_rematch(data=None):
                 room.match_seq = int(getattr(room, 'match_seq', 1) or 1) + 1
                 room.created_at = time.time()
                 room.started_at = None
+                room.pregame_deadlines = {}
                 reset_room_replay(room)
                 if room.player_sids and room.player_sids[0] in players:
                     room.engine.allowed_card_ids = set(players[room.player_sids[0]].get('allowed_card_ids', [])) or None
