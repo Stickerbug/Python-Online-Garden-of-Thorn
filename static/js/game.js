@@ -8248,9 +8248,28 @@ function connectSocket(serverUrl) {
             selected_opening_events: data.selected_opening_events || draftState.selected_opening_events || {},
             total_rounds: data.total_rounds || draftState.total_rounds,
             round: data.round || draftState.round,
+            pregame_timer_remaining: data.pregame_timer_remaining ?? draftState.pregame_timer_remaining,
+            pregame_timer_total: data.pregame_timer_total ?? draftState.pregame_timer_total,
+            pregame_timer_status: data.pregame_timer_status || draftState.pregame_timer_status,
         };
         if (data.your_id != null) playerId = data.your_id;
         updateDraftInfo(draftState);
+    });
+    bindSocketEvent('pregame_timer_update', (data) => {
+        if (!data) return;
+        if (draftState && phaseContextMatchKey(data) && phaseContextMatchKey(draftState) && phaseContextMatchKey(data) !== phaseContextMatchKey(draftState)) return;
+        if (eventSelectData && phaseContextMatchKey(data) && phaseContextMatchKey(eventSelectData) && phaseContextMatchKey(data) !== phaseContextMatchKey(eventSelectData)) return;
+        if (draftState) {
+            draftState.pregame_timer_remaining = data.pregame_timer_remaining;
+            draftState.pregame_timer_total = data.pregame_timer_total;
+            draftState.pregame_timer_status = data.pregame_timer_status;
+        }
+        if (eventSelectData) {
+            eventSelectData.pregame_timer_remaining = data.pregame_timer_remaining;
+            eventSelectData.pregame_timer_total = data.pregame_timer_total;
+            eventSelectData.pregame_timer_status = data.pregame_timer_status;
+        }
+        updatePregameTimerDisplay(data, data.pregame_timer_status === 'event_select' ? 'event' : 'draft');
     });
     bindSocketEvent('event_select', (data) => {
         debugLog('[client] event_select');
@@ -12348,16 +12367,9 @@ function updateDraftInfo(data) {
         : Number(Object.values(othersPicksCount)[0] || 0);
     const othersStatus = data.others_status || {};
     const info = $('draft-info');
+    updateSelectedEventsSummary(data);
+    updatePregameTimerDisplay(data, 'draft');
     if (info) {
-        const selectedEvents = data.selected_opening_events || {};
-        const selectedText = Object.entries(selectedEvents).map(([idx, ev]) => {
-            const pNames = data.player_names || [];
-            const pidx = parseInt(idx);
-            const name = pNames[pidx] || `P${pidx + 1}`;
-            const eventName = getLocalizedEventText(ev, 'name') || ev.name || '?';
-            return `${name}: ${eventName}`;
-        }).join(' | ');
-        const selectedSuffix = selectedText ? ` | ${currentLang === 'zh' ? '配装' : 'Setup'}: ${selectedText}` : '';
         if (is2v2) {
             const pNames = data.player_names || [];
             const othersInfo = Object.entries(othersStatus).map(([idx, status]) => {
@@ -12378,9 +12390,9 @@ function updateDraftInfo(data) {
                 return `${name}: ${statusStr}`;
             }).join(' | ');
             if (picks.length >= totalRounds) {
-                info.textContent = `${UI.draft_complete} | ${othersInfo}${selectedSuffix}`;
+                info.textContent = `${UI.draft_complete} | ${othersInfo}`;
             } else {
-                info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${othersInfo}${selectedSuffix}`;
+                info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${othersInfo}`;
             }
         } else {
             // 1v1: show opponent status
@@ -12399,12 +12411,58 @@ function updateDraftInfo(data) {
                 oppStatusText = `${oppPicksCount}/${totalRounds}`;
             }
             if (picks.length >= totalRounds) {
-                info.textContent = `${UI.draft_complete} | ${UI.waiting_opponent}: ${oppStatusText}${selectedSuffix}`;
+                info.textContent = `${UI.draft_complete} | ${UI.waiting_opponent}: ${oppStatusText}`;
             } else {
-                info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${UI.waiting_opponent}: ${oppStatusText}${selectedSuffix}`;
+                info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${UI.waiting_opponent}: ${oppStatusText}`;
             }
         }
     }
+}
+
+function formatPregameTimerText(data) {
+    const remaining = Number(data && data.pregame_timer_remaining);
+    if (!Number.isFinite(remaining) || remaining < 0) return '';
+    const safe = Math.max(0, Math.ceil(remaining));
+    const min = Math.floor(safe / 60);
+    const sec = safe % 60;
+    const clock = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    const status = data.pregame_timer_status || '';
+    let label = currentLang === 'zh' ? '剩余时间' : 'Time left';
+    if (currentLang === 'zh') {
+        if (status === 'event_select') label = '选择配装剩余';
+        else if (status === 'drafting') label = '选牌剩余';
+        else if (status === 'sub_choice') label = '配装处理剩余';
+    }
+    return `${label} ${clock}`;
+}
+
+function updatePregameTimerDisplay(data, target = '') {
+    const text = formatPregameTimerText(data);
+    const draftTimer = $('draft-timer');
+    const eventTimer = $('event-timer');
+    const status = data && data.pregame_timer_status;
+    const useEvent = target === 'event' || status === 'event_select';
+    if (draftTimer && (!useEvent || target === 'draft')) draftTimer.textContent = useEvent && target !== 'draft' ? '' : text;
+    if (eventTimer) eventTimer.textContent = useEvent ? text : '';
+}
+
+function updateSelectedEventsSummary(data) {
+    const el = $('draft-selected-events');
+    if (!el) return;
+    const selectedEvents = (data && data.selected_opening_events) || {};
+    const entries = Object.entries(selectedEvents);
+    if (!entries.length) {
+        el.textContent = '';
+        return;
+    }
+    const pNames = data.player_names || [];
+    const selectedText = entries.map(([idx, ev]) => {
+        const pidx = parseInt(idx);
+        const name = pNames[pidx] || `P${pidx + 1}`;
+        const eventName = getLocalizedEventText(ev, 'name') || ev.name || '?';
+        return `${name}: ${eventName}`;
+    }).join(' | ');
+    el.textContent = `${currentLang === 'zh' ? '已公开配装' : 'Setup'}: ${selectedText}`;
 }
 
 function formatEndTurnButtonText(gs) {
@@ -12541,6 +12599,7 @@ function renderEventSelect(data) {
     showView('view-event-select');
     syncPhaseChatMatch(data || {});
     updatePhaseChatChannelOptions(data || {});
+    updatePregameTimerDisplay(data, 'event');
     const events = data.events || [];
     const myPick = data.my_pick;
     const container = $('event-options');
@@ -12635,6 +12694,7 @@ function renderEventReveal(data) {
     showView('view-event-select');
     syncPhaseChatMatch(data || {});
     updatePhaseChatChannelOptions(data || {});
+    updatePregameTimerDisplay({}, 'event');
     const container = $('event-options');
     if (!container) return;
     const rerollBtn = $('btn-event-reroll');
@@ -12687,6 +12747,7 @@ async function onEventSelect(eventId) {
 }
 
 async function handleEventSubChoice(data) {
+    updatePregameTimerDisplay(data, 'draft');
     const eventId = data.event_id;
     const needsSubChoice = data.needs_sub_choice;
     if (!needsSubChoice) {

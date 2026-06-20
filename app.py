@@ -2509,6 +2509,57 @@ def _reset_pregame_deadline(room, pidx, status):
         room.pregame_deadlines.pop((pidx, status), None)
 
 
+def _pregame_timeout_for_status(status):
+    if status == 'event_select':
+        return EVENT_SELECT_TIMEOUT_SECONDS
+    if status == 'drafting':
+        return DRAFT_TIMEOUT_SECONDS
+    if status == 'sub_choice':
+        return EVENT_SUB_CHOICE_TIMEOUT_SECONDS
+    return None
+
+
+def _pregame_timer_payload(room, pidx, status=None, now=None):
+    engine = getattr(room, 'engine', None)
+    if engine is None:
+        return {'pregame_timer_remaining': None, 'pregame_timer_total': None, 'pregame_timer_status': None}
+    status = status or (engine.get_player_status(pidx) if hasattr(engine, 'get_player_status') else None)
+    timeout = _pregame_timeout_for_status(status)
+    if timeout is None:
+        return {'pregame_timer_remaining': None, 'pregame_timer_total': None, 'pregame_timer_status': status}
+    now = now or time.time()
+    if not hasattr(room, 'pregame_deadlines'):
+        room.pregame_deadlines = {}
+    key = (pidx, status)
+    deadline = room.pregame_deadlines.get(key)
+    if deadline is None:
+        deadline = now + float(timeout)
+        room.pregame_deadlines[key] = deadline
+    return {
+        'pregame_timer_remaining': int(math.ceil(max(0.0, float(deadline) - now))),
+        'pregame_timer_total': int(timeout),
+        'pregame_timer_status': status,
+    }
+
+
+def emit_pregame_timer_update(room, pidx, status=None):
+    try:
+        if pidx < 0 or pidx >= len(getattr(room, 'player_sids', []) or []):
+            return
+        sid = room.player_sids[pidx]
+        if not sid:
+            return
+        payload = {
+            'room_id': getattr(room, 'room_id', None),
+            'match_key': room_match_key(room),
+            'your_id': pidx,
+            **_pregame_timer_payload(room, pidx, status),
+        }
+        socketio.emit('pregame_timer_update', payload, room=sid)
+    except Exception as exc:
+        admin_event('error', f'pregame_timer_update failed room={getattr(room, "room_id", "?")} pidx={pidx}: {exc}', room_id=getattr(room, 'room_id', None))
+
+
 def _default_event_sub_choice(engine, pidx):
     event_id = str(getattr(engine, 'opening_event_picks', [None])[pidx])
     if event_id == '5':
@@ -2607,6 +2658,7 @@ def _room_timer_worker():
             now = time.time()
             expired_turns = []
             timer_broadcast_rooms = set()
+            pregame_timer_updates = set()
             pregame_updates = set()
             start_rooms = set()
             with _lock:
@@ -2635,7 +2687,9 @@ def _room_timer_worker():
                         deadline = room.pregame_deadlines.get(key) if hasattr(room, 'pregame_deadlines') else None
                         if deadline is None:
                             room.pregame_deadlines[key] = now + float(timeout)
+                            pregame_timer_updates.add((room, pidx, status))
                             continue
+                        pregame_timer_updates.add((room, pidx, status))
                         if now < deadline:
                             continue
                         changed = False
@@ -2683,6 +2737,8 @@ def _room_timer_worker():
             for room in timer_broadcast_rooms:
                 if room not in {item[0] for item in expired_turns}:
                     emit_turn_timer_update(room)
+            for room, pidx, status in pregame_timer_updates:
+                emit_pregame_timer_update(room, pidx, status)
             for room in start_rooms:
                 schedule_start_game(room)
             for room, pidx in pregame_updates:
@@ -6045,6 +6101,7 @@ def send_draft_state(room, pidx):
         'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
         'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
         'selected_opening_events': _selected_opening_event_names(engine),
+        **_pregame_timer_payload(room, pidx, 'drafting'),
     }
     payload.update(room_mod_payload(room))
     socketio.emit('draft_state', payload, room=sid)
@@ -6090,6 +6147,7 @@ def send_pregame_status_update(room, targets=None):
             'your_id': pidx,
             'your_status': engine.get_player_status(pidx),
             'selected_opening_events': _selected_opening_event_names(engine),
+            **_pregame_timer_payload(room, pidx, engine.get_player_status(pidx)),
         }
         socketio.emit('pregame_status_update', payload, room=sid)
 
@@ -6147,6 +6205,7 @@ def send_event_state(room, pidx):
         'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
         'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
         'selected_opening_events': _selected_opening_event_names(engine),
+        **_pregame_timer_payload(room, pidx, 'event_select'),
     }
     payload.update(room_mod_payload(room))
     socketio.emit('event_select', payload, room=sid)
@@ -6466,8 +6525,10 @@ def send_event_sub_choice_state(room, pidx):
         'mode': room.mode,
         'player_names': engine.player_names,
         'room_id': room.room_id,
+        'match_key': room_match_key(room),
         'your_id': pidx,
         'selected_opening_events': _selected_opening_event_names(engine),
+        **_pregame_timer_payload(room, pidx, 'sub_choice'),
     }
     payload.update(room_mod_payload(room))
     socketio.emit('event_sub_choice', payload, room=sid)

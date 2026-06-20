@@ -8413,6 +8413,33 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   color: var(--text-secondary);
 }
 
+.phase-timer {
+  min-height: 20px;
+  margin: 2px 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  color: var(--thorn);
+  text-align: center;
+}
+
+.phase-timer:empty {
+  display: none;
+}
+
+.selected-events-summary {
+  min-height: 20px;
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.selected-events-summary:empty {
+  display: none;
+}
+
 #btn-draft-reroll {
   padding: 10px 24px;
   font-size: 15px;
