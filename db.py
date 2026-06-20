@@ -3464,7 +3464,7 @@ def _match_winner_user_ids_for_stats(row, summary, player_ids):
     return winner_ids, False
 
 
-def _match_player_ids_for_stats(conn, row, user_ids):
+def _match_player_ids_for_stats(conn, row, user_ids, username_key_to_id=None):
     raw_ids = _safe_json_loads(row['player_ids_json'] if 'player_ids_json' in row.keys() else '[]', [])
     raw_names = _safe_json_loads(row['player_names_json'] if 'player_names_json' in row.keys() else '[]', [])
     max_len = max(len(raw_ids) if isinstance(raw_ids, list) else 0, len(raw_names) if isinstance(raw_names, list) else 0)
@@ -3482,13 +3482,20 @@ def _match_player_ids_for_stats(conn, row, user_ids):
         if uid is None and isinstance(raw_names, list) and idx < len(raw_names):
             name = sanitize_username(raw_names[idx])
             if name:
-                row_user = _find_user_row_by_username_key(conn, name)
-                if row_user is not None:
-                    uid = int(row_user['id'])
+                if isinstance(username_key_to_id, dict):
+                    uid = username_key_to_id.get(normalize_username_key(name))
                     if uid in user_ids:
                         recovered += 1
                     else:
                         uid = None
+                else:
+                    row_user = _find_user_row_by_username_key(conn, name)
+                    if row_user is not None:
+                        uid = int(row_user['id'])
+                        if uid in user_ids:
+                            recovered += 1
+                        else:
+                            uid = None
         normalized.append(uid)
     return normalized, recovered
 
@@ -3500,8 +3507,13 @@ def rebuild_user_stats_from_matches():
     matches count once they satisfy the normal duration/action thresholds.
     """
     with get_db_connection() as conn:
-        user_rows = conn.execute('SELECT id FROM users').fetchall()
+        user_rows = conn.execute('SELECT id, username FROM users').fetchall()
         user_ids = {int(row['id']) for row in user_rows}
+        username_key_to_id = {}
+        for row in user_rows:
+            key = normalize_username_key(row['username'])
+            if key and key not in username_key_to_id:
+                username_key_to_id[key] = int(row['id'])
         totals = {uid: {'games_played': 0, 'wins': 0, 'losses': 0, 'draws': 0} for uid in user_ids}
         rows = conn.execute('SELECT * FROM matches ORDER BY id ASC').fetchall()
         counted_matches = 0
@@ -3523,7 +3535,7 @@ def rebuild_user_stats_from_matches():
             if len(side_counts) < 2 or any(int(value or 0) < 3 for value in side_counts[:2]):
                 skipped_matches += 1
                 continue
-            normalized_player_ids, recovered = _match_player_ids_for_stats(conn, row, user_ids)
+            normalized_player_ids, recovered = _match_player_ids_for_stats(conn, row, user_ids, username_key_to_id)
             recovered_player_refs += recovered
             participants = [uid for uid in normalized_player_ids if uid in user_ids]
             if not participants:
@@ -3556,8 +3568,13 @@ def rebuild_user_stats_from_matches():
 
 def rebuild_user_play_seconds_from_matches():
     with get_db_connection() as conn:
-        user_rows = conn.execute('SELECT id FROM users').fetchall()
+        user_rows = conn.execute('SELECT id, username FROM users').fetchall()
         user_ids = {int(row['id']) for row in user_rows}
+        username_key_to_id = {}
+        for row in user_rows:
+            key = normalize_username_key(row['username'])
+            if key and key not in username_key_to_id:
+                username_key_to_id[key] = int(row['id'])
         totals = {uid: 0 for uid in user_ids}
         rows = conn.execute('SELECT * FROM matches ORDER BY id ASC').fetchall()
         counted_matches = 0
@@ -3569,7 +3586,7 @@ def rebuild_user_play_seconds_from_matches():
                 duration = 0
             if duration <= 0:
                 continue
-            player_ids, recovered = _match_player_ids_for_stats(conn, row, user_ids)
+            player_ids, recovered = _match_player_ids_for_stats(conn, row, user_ids, username_key_to_id)
             recovered_player_refs += recovered
             added = False
             for value in player_ids:
