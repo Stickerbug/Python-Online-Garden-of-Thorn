@@ -2057,16 +2057,9 @@ def auth_user_payload(user):
     if not user:
         return None
     payload = dict(user)
-    total_online = int(payload.get('online_seconds') or 0)
-    started_at = payload.get('online_session_started_at')
-    if started_at:
-        try:
-            start = datetime.fromisoformat(str(started_at).replace('Z', '+00:00'))
-            now = datetime.now(timezone.utc)
-            total_online += max(0, int((now - start).total_seconds()))
-        except Exception:
-            pass
-    payload['online_seconds_total'] = total_online
+    payload.pop('online_seconds', None)
+    payload.pop('online_session_started_at', None)
+    payload.pop('online_seconds_total', None)
     profile = get_special_account_profile(payload.get('username', ''))
     if profile:
         payload['display_name'] = profile['display_name']

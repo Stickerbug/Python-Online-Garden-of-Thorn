@@ -8782,7 +8782,7 @@ function accountStatsText(user) {
     );
 }
 
-function formatAccountOnlineTime(seconds) {
+function formatAccountPlayTime(seconds) {
     const totalMinutes = Math.max(0, Math.floor((Number(seconds) || 0) / 60));
     const days = Math.floor(totalMinutes / 1440);
     const hours = Math.floor((totalMinutes % 1440) / 60);
@@ -8808,7 +8808,7 @@ function renderAccountInfoPanel(user) {
         [currentLang === 'zh' ? '有效对局数' : 'Valid Games', games],
         [currentLang === 'zh' ? '胜率' : 'Win Rate', winRate],
         [currentLang === 'zh' ? '胜 / 负 / 平' : 'W / L / D', `${wins} / ${losses} / ${draws}`],
-        [UI.account_online_time || '总对局时长', formatAccountOnlineTime(user.play_seconds ?? 0)],
+        [UI.account_online_time || '总对局时长', formatAccountPlayTime(user.play_seconds ?? 0)],
     ];
     grid.innerHTML = items.map(([label, value]) => `
         <div class="account-info-item">
@@ -9975,8 +9975,7 @@ function cacheAccount(user) {
                 wins: user.wins || 0,
                 losses: user.losses || 0,
                 draws: user.draws || 0,
-                online_seconds: user.online_seconds || 0,
-                online_seconds_total: user.online_seconds_total || user.online_seconds || 0,
+                play_seconds: user.play_seconds || 0,
                 last_username_change_at: user.last_username_change_at || '',
                 accept_friend_requests: user.accept_friend_requests !== false,
                 searchable_by_nickname: user.searchable_by_nickname !== false,
