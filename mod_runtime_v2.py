@@ -164,6 +164,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         is_precision = bool(params.get("is_precision", params.get("precision", False))) or "precision" in card_flags
         targets = _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "target")))
         total = 0
+        positive_hits = 0
         for target_id in targets:
             if not _valid_player(engine, target_id):
                 continue
@@ -172,8 +173,16 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
             except TypeError:
                 dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
             total += int(dealt or 0)
+            try:
+                hit_values = getattr(engine, "_last_positive_damage_hits", [])
+                positive_hits += int(hit_values[target_id] if isinstance(hit_values, list) and target_id < len(hit_values) else 0)
+            except Exception:
+                if int(dealt or 0) > 0:
+                    positive_hits += 1
         context["last_damage"] = total
-        return {"success": True, "last_damage": total}
+        context["last_positive_hits"] = positive_hits
+        context.setdefault("vars", {})["last_positive_hits"] = positive_hits
+        return {"success": True, "last_damage": total, "last_positive_hits": positive_hits}
 
     if op in ("direct_damage", "deal_direct_damage"):
         raw_source = params.get("source", "source")
@@ -518,6 +527,8 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         return math.ceil(_to_number(eval_v2_value(engine, context, expr.get("value", 0))))
     if op == "last_damage":
         return context.get("last_damage", 0)
+    if op in ("last_positive_hits", "positive_hits"):
+        return context.get("last_positive_hits", context.get("vars", {}).get("last_positive_hits", 0))
     if op == "event_value":
         return context.get("event_value", context.get("vars", {}).get("event_value", 0))
     if op in ("damage_amount", "current_damage"):
@@ -1241,6 +1252,22 @@ def _v2_status_definition(engine, status_id: str) -> Dict[str, Any]:
 
 def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str) -> None:
     ps = engine.players[player_id]
+    status_key = str(status_id or "").split(":")[-1]
+    if status_key in ("status_immune", "immune", "状态免疫"):
+        ps.custom_statuses = getattr(ps, "custom_statuses", {})
+        before = 1 if any(int(ps.custom_statuses.get(key, 0) or 0) > 0 for key in ("status_immune", "immune", "状态免疫")) else 0
+        for key in ("status_immune", "immune", "状态免疫"):
+            ps.custom_statuses.pop(key, None)
+        if op != "remove_status" and amount > 0:
+            ps.custom_statuses["status_immune"] = 1
+        after = 1 if int(ps.custom_statuses.get("status_immune", 0) or 0) > 0 else 0
+        if op == "add_status" and before <= 0 < after:
+            engine.log_msg(f"{engine.pn(player_id)}获得状态免疫")
+        elif op == "remove_status" and before > 0 and after <= 0:
+            engine.log_msg(f"{engine.pn(player_id)}失去状态免疫")
+        elif op == "set_status":
+            engine.log_msg(f"{engine.pn(player_id)}{'获得' if after else '失去'}状态免疫")
+        return
     attr = _builtin_status_attr(status_id)
     before = _status_stack(engine, player_id, status_id)
     if attr:
@@ -1292,9 +1319,12 @@ def _status_stack(engine, player_id: int, status_id: str) -> int:
     if not _valid_player(engine, player_id):
         return 0
     immune = getattr(engine, "_is_status_immune", None)
-    if callable(immune) and immune(player_id) and str(status_id) not in ("status_immune", "状态免疫"):
+    status_key = str(status_id or "").split(":")[-1]
+    if callable(immune) and immune(player_id) and status_key not in ("status_immune", "immune", "状态免疫"):
         return 0
     ps = engine.players[player_id]
+    if status_key in ("status_immune", "immune", "状态免疫"):
+        return 1 if any(int(getattr(ps, "custom_statuses", {}).get(key, 0) or 0) > 0 for key in ("status_immune", "immune", "状态免疫")) else 0
     attr = _builtin_status_attr(status_id)
     if attr:
         return int(getattr(ps, attr, 0) or 0)
@@ -1330,6 +1360,12 @@ def _builtin_status_attr(status_id: str) -> str:
         "fragment_stacks": "fragment_stacks",
         "stunned": "skip_turn",
         "skip_turn": "skip_turn",
+        "attack_blocked": "attack_blocked",
+        "禁攻": "attack_blocked",
+        "attack_only": "attack_only",
+        "仅攻击": "attack_only",
+        "untargetable": "untargetable",
+        "无法选中": "untargetable",
     }.get(text, "")
 
 
@@ -1358,6 +1394,15 @@ def _status_label(status_id: str) -> str:
         "fragment_stacks": "碎片",
         "stunned": "眩晕",
         "skip_turn": "眩晕",
+        "attack_blocked": "禁攻",
+        "禁攻": "禁攻",
+        "attack_only": "仅攻击",
+        "仅攻击": "仅攻击",
+        "untargetable": "无法选中",
+        "无法选中": "无法选中",
+        "status_immune": "状态免疫",
+        "immune": "状态免疫",
+        "状态免疫": "状态免疫",
     }.get(text, status_id or "状态")
 
 

@@ -160,8 +160,6 @@ DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = {
 }
 BUILTIN_SETUP_CARD_IDS = {'ManaOrb'}
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
-VANILLA_CARD_ART_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'assets', 'card-art', 'vanilla')
-VANILLA_CARD_ART_URL = '/static/assets/card-art/vanilla'
 
 try:
     merged = merge_mod_cards_to_card_defs()
@@ -192,16 +190,6 @@ def current_mods_signature():
         except OSError:
             items.append((filename, 0, 0))
     return tuple(items)
-
-
-def vanilla_card_art_url(def_id):
-    safe_id = re.sub(r'[^A-Za-z0-9_-]', '', str(def_id or ''))
-    if not safe_id:
-        return ''
-    filename = f'{safe_id}.svg'
-    if os.path.exists(os.path.join(VANILLA_CARD_ART_DIR, filename)):
-        return f'{VANILLA_CARD_ART_URL}/{filename}'
-    return ''
 
 
 def reload_mod_card_defs(force=False):
@@ -256,6 +244,58 @@ socketio = SocketIO(
     ping_timeout=int(os.environ.get('GTN_SOCKET_PING_TIMEOUT', '60')),
 )
 
+class TrackedLock:
+    """Small wrapper around Lock that exposes non-blocking diagnostics."""
+
+    def __init__(self, name):
+        self.name = name
+        self._lock = threading.Lock()
+        self._meta_lock = threading.Lock()
+        self._owner = None
+        self._acquired_at = None
+        self._stack = None
+
+    def acquire(self, *args, **kwargs):
+        acquired = self._lock.acquire(*args, **kwargs)
+        if acquired:
+            try:
+                stack = traceback.format_stack(limit=10)
+            except Exception:
+                stack = []
+            with self._meta_lock:
+                self._owner = threading.get_ident()
+                self._acquired_at = time.time()
+                self._stack = stack
+        return acquired
+
+    def release(self):
+        with self._meta_lock:
+            self._owner = None
+            self._acquired_at = None
+            self._stack = None
+        return self._lock.release()
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.release()
+        return False
+
+    def snapshot(self):
+        with self._meta_lock:
+            acquired_at = self._acquired_at
+            stack = list(self._stack or [])
+            return {
+                'name': self.name,
+                'busy': acquired_at is not None,
+                'owner': self._owner,
+                'held_seconds': round(max(0, time.time() - acquired_at), 3) if acquired_at else 0,
+                'stack': stack[-8:],
+            }
+
+
 DB_AVAILABLE = True
 DB_INIT_ERROR = ''
 try:
@@ -265,7 +305,7 @@ except Exception as exc:
     DB_INIT_ERROR = str(exc)
     print(f'[startup] database init failed: {type(exc).__name__}: {exc}')
 
-_lock = threading.Lock()
+_lock = TrackedLock('global_state')
 _replay_cleanup_lock = threading.Lock()
 _replay_cleanup_started = False
 _lobby_idle_cleanup_started = False
@@ -3419,6 +3459,51 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
     }
 
 
+def apply_mod_loadout_to_player(player, loadout, community_fields=None):
+    community_fields = community_fields or {}
+    player['disabled_mods'] = loadout['disabled_mods']
+    player['mods_hash'] = loadout['mods_hash']
+    player['loadout_hash'] = loadout['loadout_hash']
+    player['v2_loadout_hash'] = loadout.get('v2_loadout_hash', '')
+    player['v2_load_order'] = loadout.get('v2_load_order', [])
+    player['v2_mod_hashes'] = loadout.get('v2_mod_hashes', {})
+    player['v2_ui_components'] = loadout.get('v2_ui_components', {})
+    player['v2_loadout'] = loadout.get('v2_loadout')
+    player['v2_tag_defs'] = loadout.get('v2_tag_defs', {})
+    player['v2_status_defs'] = loadout.get('v2_status_defs', {})
+    player['v2_opening_event_defs'] = loadout.get('v2_opening_event_defs', {})
+    player['mods_list'] = loadout['mods_list']
+    player['allowed_card_ids'] = loadout['allowed_card_ids']
+    player['mod_source'] = community_fields.get('mod_source', 'official')
+    player['community_mod_url'] = community_fields.get('community_mod_url', '')
+    player['community_mod_hash'] = community_fields.get('community_mod_hash', '')
+    player['community_mod_name'] = community_fields.get('community_mod_name', '')
+    player['community_mods'] = community_fields.get('community_mods', [])
+
+
+def has_mod_loadout_payload(data):
+    if not isinstance(data, dict):
+        return False
+    return any(key in data for key in (
+        'disabled_mods',
+        'mod_source',
+        'community_mod_url',
+        'community_mod_hash',
+        'community_mod_name',
+        'community_mods',
+    ))
+
+
+def resolve_mod_loadout_payload(data):
+    community_fields, community_mod = resolve_community_loadout(data or {})
+    loadout = build_mod_loadout(
+        (data or {}).get('disabled_mods', []),
+        community_mod=community_mod,
+        community_hash=community_fields.get('community_mod_hash', ''),
+    )
+    return community_fields, loadout
+
+
 def player_loadout_hash(player):
     if not player:
         return ''
@@ -5658,6 +5743,29 @@ def send_pregame_status_update(room, targets=None):
         socketio.emit('pregame_status_update', payload, room=sid)
 
 
+def _start_socket_background_task(fn, *args, **kwargs):
+    try:
+        socketio.start_background_task(fn, *args, **kwargs)
+    except Exception:
+        threading.Thread(target=fn, args=args, kwargs=kwargs, daemon=True).start()
+
+
+def schedule_pregame_state(room, pidx, allow_sub_choice=False):
+    _start_socket_background_task(send_pregame_state, room, pidx, allow_sub_choice=allow_sub_choice)
+
+
+def schedule_pregame_status_update(room, targets=None):
+    _start_socket_background_task(send_pregame_status_update, room, targets=targets)
+
+
+def schedule_event_state(room, pidx):
+    _start_socket_background_task(send_event_state, room, pidx)
+
+
+def schedule_start_game(room):
+    _start_socket_background_task(start_game, room)
+
+
 def send_event_state(room, pidx):
     sid = room.player_sids[pidx]
     if sid not in players:
@@ -7068,27 +7176,34 @@ def health_full():
             db_error = 'database unavailable'
     except Exception as exc:
         db_error = str(exc)
-    with _lock:
-        room_count = len(rooms)
-        player_count = len(players)
-        lobby_count = sum(1 for p in players.values() if p.get('status') == 'lobby')
-        room_action_busy_count = 0
-        pending_response_count = 0
-        pending_choice_count = 0
-        pending_v2_ui_count = 0
-        for room in rooms.values():
-            lock = getattr(room, 'action_lock', None)
-            if lock is not None:
-                acquired = lock.acquire(blocking=False)
-                if acquired:
-                    lock.release()
-                else:
-                    room_action_busy_count += 1
-            engine = getattr(room, 'engine', None)
-            if engine is not None:
-                pending_response_count += 1 if getattr(engine, 'pending_response', None) else 0
-                pending_choice_count += 1 if getattr(engine, 'pending_choice', None) else 0
-                pending_v2_ui_count += 1 if getattr(engine, 'pending_v2_ui', None) else 0
+    global_lock_busy = False
+    global_lock_snapshot = _lock.snapshot() if hasattr(_lock, 'snapshot') else {}
+    room_count = player_count = lobby_count = 0
+    room_action_busy_count = pending_response_count = pending_choice_count = pending_v2_ui_count = 0
+    acquired_global_lock = _lock.acquire(blocking=False)
+    if acquired_global_lock:
+        try:
+            room_count = len(rooms)
+            player_count = len(players)
+            lobby_count = sum(1 for p in players.values() if p.get('status') == 'lobby')
+            for room in list(rooms.values()):
+                lock = getattr(room, 'action_lock', None)
+                if lock is not None:
+                    acquired = lock.acquire(blocking=False)
+                    if acquired:
+                        lock.release()
+                    else:
+                        room_action_busy_count += 1
+                engine = getattr(room, 'engine', None)
+                if engine is not None:
+                    pending_response_count += 1 if getattr(engine, 'pending_response', None) else 0
+                    pending_choice_count += 1 if getattr(engine, 'pending_choice', None) else 0
+                    pending_v2_ui_count += 1 if getattr(engine, 'pending_v2_ui', None) else 0
+        finally:
+            _lock.release()
+    else:
+        global_lock_busy = True
+        global_lock_snapshot = _lock.snapshot() if hasattr(_lock, 'snapshot') else global_lock_snapshot
     last_lobby_age_seconds = None
     if LAST_LOBBY_UPDATE_AT:
         try:
@@ -7102,6 +7217,10 @@ def health_full():
         'db_ok': db_ok,
         'db_error': db_error,
         'socket_ok': True,
+        'global_lock_busy': global_lock_busy,
+        'global_lock_held_seconds': global_lock_snapshot.get('held_seconds', 0),
+        'global_lock_owner': global_lock_snapshot.get('owner'),
+        'global_lock_stack': global_lock_snapshot.get('stack', []),
         'room_count': room_count,
         'player_count': player_count,
         'lobby_player_count': lobby_count,
@@ -7989,8 +8108,6 @@ def api_cards():
         source = card_mod_sources.get(def_id, {})
         image_url = str(getattr(card_def, 'image_url', '') or getattr(card_def, 'image', '') or '')
         upgraded_image_url = str(getattr(card_def, 'upgraded_image_url', '') or getattr(card_def, 'upgraded_image', '') or '')
-        if bool(source.get('is_vanilla', False)):
-            image_url = vanilla_card_art_url(def_id) or image_url
         card_payload = {
             'id': card_def.id,
             'name_en': card_def.name_en,
@@ -8533,6 +8650,8 @@ def on_skin_look(data=None):
     if data is None:
         return
     look = normalize_skin_look(data)
+    targets = set()
+    payload = None
     with _lock:
         player = players.get(sid)
         if not player:
@@ -8548,8 +8667,8 @@ def on_skin_look(data=None):
         payload = {'player_id': pidx, 'look': look}
         targets = {tsid for tsid in room.player_sids if tsid in players}
         targets.update(tsid for tsid in getattr(room, 'spectators', []) if tsid in players)
-        for target_sid in targets:
-            socketio.emit('skin_look_update', payload, room=target_sid)
+    for target_sid in targets:
+        socketio.emit('skin_look_update', payload, room=target_sid)
 
 
 @socketio.on('draft_reroll')
@@ -8559,6 +8678,9 @@ def on_draft_reroll(data=None):
     data = socket_guard('draft_reroll', data, require_player=True, allow_empty=True)
     if data is None:
         return
+    pending_state = None
+    pending_status_targets = None
+    reject_message = None
     try:
         with _lock:
             if sid not in players:
@@ -8576,15 +8698,23 @@ def on_draft_reroll(data=None):
             success = bool(result.get('success')) if isinstance(result, dict) else bool(result)
             if success:
                 record_room_replay_action(room, 'draft_reroll', pidx, {})
-                send_pregame_state(room, pidx)
-                send_pregame_status_update(room, targets=[
-                    pi for pi in range(len(room.player_sids)) if pi != pidx
-                ])
+                pending_state = (room, pidx)
+                pending_status_targets = (
+                    room,
+                    [pi for pi in range(len(room.player_sids)) if pi != pidx],
+                )
             else:
-                emit('server_error', {'message': '无法刷新：当前不是选牌阶段或刷新次数已用完'})
+                reject_message = '无法刷新：当前不是选牌阶段或刷新次数已用完'
     except Exception as e:
         import traceback
         traceback.print_exc()
+        return
+    if pending_state:
+        send_pregame_state(pending_state[0], pending_state[1])
+    if pending_status_targets:
+        send_pregame_status_update(pending_status_targets[0], targets=pending_status_targets[1])
+    if reject_message:
+        emit('server_error', {'message': reject_message})
 
 
 @socketio.on('login')
@@ -8592,9 +8722,7 @@ def on_draft_reroll(data=None):
 def on_login(data):
     global _next_room_id
     sid = request.sid
-    print(f'[LOGIN_TRACE] start sid={sid}', flush=True)
     data = socket_guard('login', data, require_player=False, allow_empty=True, emit_error=False)
-    print(f'[LOGIN_TRACE] after socket_guard sid={sid} data_ok={data is not None}', flush=True)
     if data is None:
         emit('login_fail', {'reason': '请求过于频繁或参数错误'})
         return
@@ -8602,9 +8730,7 @@ def on_login(data):
         _security_record('login_rate_ip', 'socket login IP rate limited', sid=sid, severity='high')
         emit('login_fail', {'reason': '登录过于频繁，请稍后再试'})
         return
-    print(f'[LOGIN_TRACE] before current_account_user sid={sid}', flush=True)
     account_user = _current_account_user() if DB_AVAILABLE else None
-    print(f'[LOGIN_TRACE] after current_account_user sid={sid} account={bool(account_user)}', flush=True)
     try:
         raw_name = validate_str(data.get('nickname', ''), max_len=64, name='nickname')
         preferred_mode = validate_str(data.get('mode', '1v1'), max_len=8, name='mode')
@@ -8663,21 +8789,21 @@ def on_login(data):
     if preferred_mode not in ('1v1', '2v2', 'urf'):
         preferred_mode = '1v1'
     try:
-        print(f'[LOGIN_TRACE] before resolve_community_loadout sid={sid}', flush=True)
         community_fields, community_mod = resolve_community_loadout(data)
-        print(f'[LOGIN_TRACE] before build_mod_loadout sid={sid}', flush=True)
         loadout = build_mod_loadout(
             disabled_mods,
             community_mod=community_mod,
             community_hash=community_fields.get('community_mod_hash', ''),
         )
-        print(f'[LOGIN_TRACE] after build_mod_loadout sid={sid}', flush=True)
     except Exception as exc:
         emit('login_fail', {'reason': f'社区模组加载失败: {exc}'})
         return
-    print(f'[LOGIN_TRACE] before lock sid={sid}', flush=True)
-    with _lock:
-        print(f'[LOGIN_TRACE] inside lock sid={sid}', flush=True)
+    if not _lock.acquire(timeout=0.5):
+        snapshot = _lock.snapshot() if hasattr(_lock, 'snapshot') else {}
+        admin_event('warning', f'login skipped: global lock busy held={snapshot.get("held_seconds", 0)}s')
+        emit('login_fail', {'reason': '服务器正在处理上一项操作，请稍后重试'})
+        return
+    try:
         name_key = normalize_username_key(name)
         for p in players.values():
             if bool(p.get('beta_mode', False)) == bool(is_beta_mode) and normalize_username_key(p.get('nickname', '')) == name_key:
@@ -8751,7 +8877,8 @@ def on_login(data):
         if special_profile:
             players[sid].update(special_public_fields(special_profile))
         admin_event('player', f'{"[beta] " if is_beta_mode else ""}{name} joined as {initial_status}', sid=sid, mode=preferred_mode)
-    print(f'[LOGIN_TRACE] after lock sid={sid}', flush=True)
+    finally:
+        _lock.release()
     if reconnect_room:
         reconnect_info = (
             reconnect_room.disconnected_players.get(reconnect_old_sid)
@@ -8797,11 +8924,8 @@ def on_login(data):
     if is_registered_user:
         login_payload['user'] = auth_user_payload(account_user)
     login_payload.update(special_public_fields(players.get(sid, {})))
-    print(f'[LOGIN_TRACE] before emit login_ok sid={sid}', flush=True)
     emit('login_ok', login_payload)
-    print(f'[LOGIN_TRACE] after emit login_ok sid={sid}', flush=True)
     broadcast_lobby()
-    print(f'[LOGIN_TRACE] after broadcast_lobby sid={sid}', flush=True)
 
 
 @socketio.on('form_team')
@@ -8882,12 +9006,7 @@ def on_update_mod_settings(data):
             return
         current_disabled_mods = list(player.get('disabled_mods', []))
     try:
-        community_fields, community_mod = resolve_community_loadout(data)
-        loadout = build_mod_loadout(
-            data.get('disabled_mods', []),
-            community_mod=community_mod,
-            community_hash=community_fields.get('community_mod_hash', ''),
-        )
+        community_fields, loadout = resolve_mod_loadout_payload(data)
     except Exception as exc:
         emit('mod_settings_updated', {
             'ok': False,
@@ -8907,21 +9026,7 @@ def on_update_mod_settings(data):
             })
             return
         old_hash = player_loadout_hash(player)
-        player['disabled_mods'] = loadout['disabled_mods']
-        player['mods_hash'] = loadout['mods_hash']
-        player['loadout_hash'] = loadout['loadout_hash']
-        player['v2_loadout_hash'] = loadout.get('v2_loadout_hash', '')
-        player['v2_load_order'] = loadout.get('v2_load_order', [])
-        player['v2_mod_hashes'] = loadout.get('v2_mod_hashes', {})
-        player['v2_ui_components'] = loadout.get('v2_ui_components', {})
-        player['v2_loadout'] = loadout.get('v2_loadout')
-        player['mods_list'] = loadout['mods_list']
-        player['allowed_card_ids'] = loadout['allowed_card_ids']
-        player['mod_source'] = community_fields.get('mod_source', 'official')
-        player['community_mod_url'] = community_fields.get('community_mod_url', '')
-        player['community_mod_hash'] = community_fields.get('community_mod_hash', '')
-        player['community_mod_name'] = community_fields.get('community_mod_name', '')
-        player['community_mods'] = community_fields.get('community_mods', [])
+        apply_mod_loadout_to_player(player, loadout, community_fields)
         invites.pop(sid, None)
         for inviter_sid, target_sid in list(invites.items()):
             if target_sid == sid:
@@ -8964,11 +9069,21 @@ def on_accept_team(data):
     except ValueError as exc:
         _security_illegal(sid, 'accept_team', str(exc))
         return
+    pending_loadout = None
+    if has_mod_loadout_payload(data):
+        try:
+            pending_loadout = resolve_mod_loadout_payload(data)
+        except Exception as exc:
+            emit('server_error', {'message': f'模组设置保存失败：{exc}'})
+            return
     with _lock:
         if sid not in players or leader_sid not in players:
             return
         if players[sid]['status'] != 'lobby' or players[leader_sid]['status'] != 'lobby':
             return
+        if pending_loadout:
+            community_fields, loadout = pending_loadout
+            apply_mod_loadout_to_player(players[sid], loadout, community_fields)
         if not same_runtime_scope_players(sid, leader_sid):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
             return
@@ -9513,6 +9628,13 @@ def on_accept_invite(data):
     except ValueError as exc:
         _security_illegal(sid, 'accept_invite', str(exc))
         return
+    pending_loadout = None
+    if has_mod_loadout_payload(data):
+        try:
+            pending_loadout = resolve_mod_loadout_payload(data)
+        except Exception as exc:
+            emit('server_error', {'message': f'模组设置保存失败：{exc}'})
+            return
     with _lock:
         if inviter_sid not in players or sid not in players:
                     return
@@ -9523,6 +9645,9 @@ def on_accept_invite(data):
         accepter = players[sid]
         if inviter['status'] != 'lobby' or accepter['status'] != 'lobby':
             return
+        if pending_loadout:
+            community_fields, loadout = pending_loadout
+            apply_mod_loadout_to_player(accepter, loadout, community_fields)
         if not same_runtime_scope_players(inviter, accepter):
             emit_match_start_failed([inviter_sid, sid], runtime_scope_mismatch_message(), reason='runtime_scope_mismatch')
             return
@@ -9844,15 +9969,15 @@ def on_draft_pick(data):
                     engine.player_ready[pidx] = True
             # Check if all players are ready
             if all(engine.player_ready[pi] for pi in range(len(room.player_sids))):
-                start_game(room)
+                schedule_start_game(room)
             else:
                 # Only the actor needs their full draft/sub-choice UI rebuilt.
                 # Other players may still be drafting, so update their progress
                 # text without replacing their cards or current setup prompt.
-                send_pregame_state(room, pidx, allow_sub_choice=True)
-                send_pregame_status_update(room, targets=[pi for pi in range(len(room.player_sids)) if pi != pidx])
+                schedule_pregame_state(room, pidx, allow_sub_choice=True)
+                schedule_pregame_status_update(room, targets=[pi for pi in range(len(room.player_sids)) if pi != pidx])
         else:
-            emit('server_error', {'message': '无法选择这张牌'})
+            socketio.emit('server_error', {'message': '无法选择这张牌'}, room=sid)
 
 
 @socketio.on('select_opening_event')
@@ -9893,7 +10018,7 @@ def on_select_opening_event(data):
             if all(pick is not None for pick in engine.opening_event_picks):
                 record_room_replay_keyframe(room, 'event_reveal')
             for pi in range(len(room.player_sids)):
-                send_pregame_state(room, pi)
+                schedule_pregame_state(room, pi)
 
 
 @socketio.on('confirm_opening_reveal')
@@ -9918,7 +10043,7 @@ def on_confirm_opening_reveal(data=None):
         if engine.opening_event_picks[pidx] is None:
             return
         if not all(pick is not None for pick in engine.opening_event_picks):
-            send_pregame_state(room, pidx)
+            schedule_pregame_state(room, pidx)
             return
         already_started = bool(getattr(engine, 'player_draft_started', [False] * len(room.player_sids))[pidx])
         if not already_started:
@@ -9926,7 +10051,7 @@ def on_confirm_opening_reveal(data=None):
             record_room_replay_action(room, 'confirm_opening_reveal', pidx, {})
             record_room_replay_keyframe(room, 'draft_start')
         for pi in range(len(room.player_sids)):
-            send_pregame_state(room, pi)
+            schedule_pregame_state(room, pi)
 
 
 @socketio.on('reroll_opening_event')
@@ -9950,7 +10075,7 @@ def on_reroll_opening_event(data=None):
         engine = room.engine
         success = engine.reroll_opening_event(pidx)
         if success:
-            send_event_state(room, pidx)
+            schedule_event_state(room, pidx)
 
 
 @socketio.on('submit_event_sub_choice')
@@ -9982,7 +10107,7 @@ def on_submit_event_sub_choice(data):
                 if engine._card_allowed_for_fated_draw(str(def_id)):
                     valid_ids.append(str(def_id))
             if len(valid_ids) != 1:
-                send_pregame_state(room, pidx, allow_sub_choice=True)
+                schedule_pregame_state(room, pidx, allow_sub_choice=True)
                 return
             sub_choice = {'add_def_ids': valid_ids}
         event_id_text = str(engine.opening_event_picks[pidx])
@@ -9992,7 +10117,7 @@ def on_submit_event_sub_choice(data):
         if sub_choice is None and event_id_text in ('2', '3', '5', '8'):
             sub_choice = {}
         if sub_choice is None and engine.needs_sub_choice(pidx):
-            send_pregame_state(room, pidx, allow_sub_choice=True)
+            schedule_pregame_state(room, pidx, allow_sub_choice=True)
             return
         engine.opening_event_sub_choices[pidx] = sub_choice or {}
         record_room_replay_action(room, 'submit_event_sub_choice', pidx, {
@@ -10003,10 +10128,10 @@ def on_submit_event_sub_choice(data):
         engine.player_ready[pidx] = True
         # Check if all players are ready
         if all(engine.player_ready[pi] for pi in range(len(room.player_sids))):
-            start_game(room)
+            schedule_start_game(room)
         else:
-            send_pregame_state(room, pidx)
-            send_pregame_status_update(room, targets=[pi for pi in range(len(room.player_sids)) if pi != pidx])
+            schedule_pregame_state(room, pidx)
+            schedule_pregame_status_update(room, targets=[pi for pi in range(len(room.player_sids)) if pi != pidx])
 
 
 @socketio.on('solo_start')
@@ -10412,82 +10537,82 @@ def on_play_card(data):
         if sid not in players:
             return
         player = players[sid]
+        player_name = player.get('nickname', '?')
         room_id = player.get('room_id')
-        if room_id is None or room_id not in rooms:
+        room = rooms.get(room_id)
+        if room is None:
             return
-        room = rooms[room_id]
         pidx = room.player_index(sid)
         if pidx < 0:
             return
         engine = room.engine
-        busy_lock = _try_acquire_room_action(room, sid, 'play_card', pidx)
-        if busy_lock is None:
+    busy_lock = _try_acquire_room_action(room, sid, 'play_card', pidx)
+    if busy_lock is None:
+        return
+    try:
+        reject_code = _room_action_precheck(engine, pidx, event_name='play_card')
+        if reject_code:
+            soft_reject(sid, 'play_card', reject_code, room=room, pidx=pidx, send_state=True)
             return
+        hand = getattr(engine.players[pidx], 'hand', [])
+        if not any(str(getattr(c, 'instance_id', '')) == str(card_instance_id) for c in hand):
+            soft_reject(sid, 'play_card', 'STATE_VERSION_OLD', room=room, pidx=pidx, send_state=True)
+            return
+        replay_def_id = ''
         try:
-            reject_code = _room_action_precheck(engine, pidx, event_name='play_card')
-            if reject_code:
-                soft_reject(sid, 'play_card', reject_code, room=room, pidx=pidx, send_state=True)
-                return
-            hand = getattr(engine.players[pidx], 'hand', [])
-            if not any(str(getattr(c, 'instance_id', '')) == str(card_instance_id) for c in hand):
-                soft_reject(sid, 'play_card', 'STATE_VERSION_OLD', room=room, pidx=pidx, send_state=True)
-                return
-        
+            replay_card = next((c for c in getattr(engine.players[pidx], 'hand', []) if str(getattr(c, 'instance_id', '')) == str(card_instance_id)), None)
+            replay_def_id = getattr(replay_card, 'def_id', '') or ''
+        except Exception:
             replay_def_id = ''
-            try:
-                replay_card = next((c for c in getattr(engine.players[pidx], 'hand', []) if str(getattr(c, 'instance_id', '')) == str(card_instance_id)), None)
-                replay_def_id = getattr(replay_card, 'def_id', '') or ''
-            except Exception:
-                replay_def_id = ''
-            if room.mode == '2v2':
-                result = engine.play_card(pidx, card_instance_id, target_player_id=target_player_id, choice=choice)
-            else:
-                if target_player_id >= 0:
-                    choice = dict(choice or {})
-                    choice.setdefault('target_player', target_player_id)
-                    choice.setdefault('target_player_id', target_player_id)
-                    choice.setdefault('target_id', target_player_id)
-                result = engine.play_card(pidx, card_instance_id, choice)
-            _stamp_pending_interactions(room)
-        finally:
-            busy_lock.release()
-        if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_v2_ui'):
-            record_valid_player_action(room, pidx, 'play_card')
-            record_room_replay_action(room, 'play_card', pidx, {
-                'card_instance_id': card_instance_id,
-                'def_id': replay_def_id,
-                'target_player_id': target_player_id,
-                'choice': choice,
-                'result': result,
-            })
-        if result.get('needs_ally_consent'):
-            broadcast_game_state(room)
-            target_pidx = result.get('target_player_id')
-            if isinstance(target_pidx, int) and 0 <= target_pidx < len(room.player_sids):
-                target_sid = room.player_sids[target_pidx]
-                if target_sid in players:
-                    socketio.emit('ally_consent_request', {
-                        'card': result.get('card'),
-                        'from_player': pidx,
-                        'from_name': players[sid]['nickname'],
-                    }, room=target_sid)
-                else:
-                    room.engine.pending_ally_request = None
-                    emit('server_error', {'message': 'Teammate is not online'})
-        elif result.get('needs_response'):
-            broadcast_game_state(room)
-            emit_pending_response_requests(room)
-        elif result.get('needs_choice'):
-            broadcast_game_state(room)
-            emit('choice_request', build_choice_request_payload(result))
-        elif result.get('needs_v2_ui'):
-            broadcast_game_state(room)
-            emit_room_v2_ui_request(room)
-        elif result.get('success'):
-            broadcast_game_state(room)
+        if room.mode == '2v2':
+            result = engine.play_card(pidx, card_instance_id, target_player_id=target_player_id, choice=choice)
         else:
-            code = normalize_soft_reject_code(result.get('error')) or 'CARD_NOT_PLAYABLE_NOW'
-            soft_reject(sid, 'play_card', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
+            if target_player_id >= 0:
+                choice = dict(choice or {})
+                choice.setdefault('target_player', target_player_id)
+                choice.setdefault('target_player_id', target_player_id)
+                choice.setdefault('target_id', target_player_id)
+            result = engine.play_card(pidx, card_instance_id, choice)
+        _stamp_pending_interactions(room)
+    finally:
+        busy_lock.release()
+    if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_v2_ui'):
+        record_valid_player_action(room, pidx, 'play_card')
+        record_room_replay_action(room, 'play_card', pidx, {
+            'card_instance_id': card_instance_id,
+            'def_id': replay_def_id,
+            'target_player_id': target_player_id,
+            'choice': choice,
+            'result': result,
+        })
+    if result.get('needs_ally_consent'):
+        broadcast_game_state(room)
+        target_pidx = result.get('target_player_id')
+        if isinstance(target_pidx, int) and 0 <= target_pidx < len(room.player_sids):
+            target_sid = room.player_sids[target_pidx]
+            if target_sid in players:
+                socketio.emit('ally_consent_request', {
+                    'card': result.get('card'),
+                    'from_player': pidx,
+                    'from_name': player_name,
+                }, room=target_sid)
+            else:
+                room.engine.pending_ally_request = None
+                emit('server_error', {'message': 'Teammate is not online'})
+    elif result.get('needs_response'):
+        broadcast_game_state(room)
+        emit_pending_response_requests(room)
+    elif result.get('needs_choice'):
+        broadcast_game_state(room)
+        emit('choice_request', build_choice_request_payload(result))
+    elif result.get('needs_v2_ui'):
+        broadcast_game_state(room)
+        emit_room_v2_ui_request(room)
+    elif result.get('success'):
+        broadcast_game_state(room)
+    else:
+        code = normalize_soft_reject_code(result.get('error')) or 'CARD_NOT_PLAYABLE_NOW'
+        soft_reject(sid, 'play_card', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
 
 
 @socketio.on('response')
@@ -10508,47 +10633,47 @@ def on_response(data):
             return
         player = players[sid]
         room_id = player.get('room_id')
-        if room_id is None or room_id not in rooms:
+        room = rooms.get(room_id)
+        if room is None:
             return
-        room = rooms[room_id]
         pidx = room.player_index(sid)
         if pidx < 0:
             return
         engine = room.engine
-        busy_lock = _try_acquire_room_action(room, sid, 'response', pidx)
-        if busy_lock is None:
+    busy_lock = _try_acquire_room_action(room, sid, 'response', pidx)
+    if busy_lock is None:
+        return
+    try:
+        pending_response = getattr(engine, 'pending_response', None)
+        if not pending_response:
+            soft_reject(sid, 'response', 'RESPONSE_NOT_EXPECTED', room=room, pidx=pidx, send_state=True)
             return
-        try:
-            pending_response = getattr(engine, 'pending_response', None)
-            if not pending_response:
-                soft_reject(sid, 'response', 'RESPONSE_NOT_EXPECTED', room=room, pidx=pidx, send_state=True)
-                return
-            if room.mode == '2v2':
-                allowed = any(int(cc.get('responder_id', -1)) == pidx for cc in (pending_response.get('counter_cards') or []) if isinstance(cc, dict))
-            else:
-                try:
-                    allowed = pidx == 1 - int(pending_response.get('player_id', -1))
-                except Exception:
-                    allowed = False
-            if not allowed:
-                soft_reject(sid, 'response', 'RESPONSE_NOT_EXPECTED', room=room, pidx=pidx, send_state=True)
-                return
-            replay_def_id = ''
+        if room.mode == '2v2':
+            allowed = any(int(cc.get('responder_id', -1)) == pidx for cc in (pending_response.get('counter_cards') or []) if isinstance(cc, dict))
+        else:
             try:
-                replay_card = next((c for c in getattr(engine.players[pidx], 'hand', []) if str(getattr(c, 'instance_id', '')) == str(card_instance_id)), None)
-                replay_def_id = getattr(replay_card, 'def_id', '') or ''
+                allowed = pidx == 1 - int(pending_response.get('player_id', -1))
             except Exception:
-                replay_def_id = ''
-            engine.handle_response(pidx, card_instance_id)
-            _stamp_pending_interactions(room)
-        finally:
-            busy_lock.release()
-        if card_instance_id:
-            record_valid_player_action(room, pidx, 'response')
-        record_room_replay_action(room, 'response', pidx, {'card_instance_id': card_instance_id, 'def_id': replay_def_id})
-        broadcast_game_state(room)
-        if getattr(engine, 'pending_response', None):
-            emit_pending_response_requests(room)
+                allowed = False
+        if not allowed:
+            soft_reject(sid, 'response', 'RESPONSE_NOT_EXPECTED', room=room, pidx=pidx, send_state=True)
+            return
+        replay_def_id = ''
+        try:
+            replay_card = next((c for c in getattr(engine.players[pidx], 'hand', []) if str(getattr(c, 'instance_id', '')) == str(card_instance_id)), None)
+            replay_def_id = getattr(replay_card, 'def_id', '') or ''
+        except Exception:
+            replay_def_id = ''
+        engine.handle_response(pidx, card_instance_id)
+        _stamp_pending_interactions(room)
+    finally:
+        busy_lock.release()
+    if card_instance_id:
+        record_valid_player_action(room, pidx, 'response')
+    record_room_replay_action(room, 'response', pidx, {'card_instance_id': card_instance_id, 'def_id': replay_def_id})
+    broadcast_game_state(room)
+    if getattr(engine, 'pending_response', None):
+        emit_pending_response_requests(room)
 
 
 @socketio.on('ally_consent_response')
@@ -10564,44 +10689,45 @@ def on_ally_consent_response(data):
             return
         player = players[sid]
         room_id = player.get('room_id')
-        if room_id is None or room_id not in rooms:
+        room = rooms.get(room_id)
+        if room is None:
             return
-        room = rooms[room_id]
         if room.mode != '2v2':
             return
         pidx = room.player_index(sid)
         if pidx < 0:
             return
-        busy_lock = _try_acquire_room_action(room, sid, 'ally_consent_response', pidx)
-        if busy_lock is None:
+        engine = room.engine
+    busy_lock = _try_acquire_room_action(room, sid, 'ally_consent_response', pidx)
+    if busy_lock is None:
+        return
+    try:
+        if not getattr(engine, 'pending_ally_request', None):
+            soft_reject(sid, 'ally_consent_response', 'NO_PENDING_CHOICE', '没有待同意的队友用牌', room=room, pidx=pidx, send_state=True)
             return
-        try:
-            if not getattr(room.engine, 'pending_ally_request', None):
-                soft_reject(sid, 'ally_consent_response', 'NO_PENDING_CHOICE', '没有待同意的队友用牌', room=room, pidx=pidx, send_state=True)
-                return
-            result = room.engine.handle_ally_consent(pidx, accepted)
-            _stamp_pending_interactions(room)
-        finally:
-            busy_lock.release()
-        if result.get('success') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui') or not accepted:
-            record_room_replay_action(room, 'ally_consent_response', pidx, {
-                'accepted': accepted,
-                'result': result,
-            })
-        if result.get('needs_response'):
-            broadcast_game_state(room)
-            emit_pending_response_requests(room)
-        elif result.get('needs_choice'):
-            broadcast_game_state(room)
-            requester_sid = room.player_sids[result.get('player_id', room.engine.current_player)] if result.get('player_id') is not None else sid
-            socketio.emit('choice_request', build_choice_request_payload(result), room=requester_sid)
-        elif result.get('needs_v2_ui'):
-            broadcast_game_state(room)
-            emit_room_v2_ui_request(room)
-        elif not result.get('success'):
-            emit('server_error', {'message': result.get('error', 'Operation failed')})
-        else:
-            broadcast_game_state(room)
+        result = engine.handle_ally_consent(pidx, accepted)
+        _stamp_pending_interactions(room)
+    finally:
+        busy_lock.release()
+    if result.get('success') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui') or not accepted:
+        record_room_replay_action(room, 'ally_consent_response', pidx, {
+            'accepted': accepted,
+            'result': result,
+        })
+    if result.get('needs_response'):
+        broadcast_game_state(room)
+        emit_pending_response_requests(room)
+    elif result.get('needs_choice'):
+        broadcast_game_state(room)
+        requester_sid = room.player_sids[result.get('player_id', engine.current_player)] if result.get('player_id') is not None else sid
+        socketio.emit('choice_request', build_choice_request_payload(result), room=requester_sid)
+    elif result.get('needs_v2_ui'):
+        broadcast_game_state(room)
+        emit_room_v2_ui_request(room)
+    elif not result.get('success'):
+        emit('server_error', {'message': result.get('error', 'Operation failed')})
+    else:
+        broadcast_game_state(room)
 
 
 @socketio.on('resolve_choice')
@@ -10621,20 +10747,20 @@ def on_resolve_choice(data):
             return
         player = players[sid]
         room_id = player.get('room_id')
-        if room_id is None or room_id not in rooms:
+        room = rooms.get(room_id)
+        if room is None:
             return
-        room = rooms[room_id]
         pidx = room.player_index(sid)
         if pidx < 0:
             return
         engine = room.engine
-        busy_lock = _try_acquire_room_action(room, sid, 'resolve_choice', pidx)
-        if busy_lock is None:
-            return
+    busy_lock = _try_acquire_room_action(room, sid, 'resolve_choice', pidx)
+    if busy_lock is None:
+        return
+    try:
         pending = getattr(engine, 'pending_choice', None)
         if not pending:
             admin_event('player', f'ignored stale resolve_choice without pending choice room={room_id}', sid=sid, room_id=room_id)
-            busy_lock.release()
             soft_reject(sid, 'resolve_choice', 'NO_PENDING_CHOICE', room=room, pidx=pidx, send_state=True)
             return
         try:
@@ -10643,34 +10769,32 @@ def on_resolve_choice(data):
             pending_player_id = pidx
         if pending_player_id != pidx:
             admin_event('player', f'ignored resolve_choice from non-pending player room={room_id} pending={pending_player_id} got={pidx}', sid=sid, room_id=room_id)
-            busy_lock.release()
             soft_reject(sid, 'resolve_choice', 'NO_PENDING_CHOICE', room=room, pidx=pidx, send_state=True)
             send_game_state_to(room, pidx)
             return
-        try:
-            result = engine.resolve_choice(pidx, choice)
-            _stamp_pending_interactions(room)
-        finally:
-            busy_lock.release()
-        if not result.get('cancelled'):
-            record_valid_player_action(room, pidx, 'resolve_choice')
-        record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice, 'result': result})
-        if result.get('needs_response'):
-            broadcast_game_state(room)
-            emit_pending_response_requests(room)
-        elif result.get('needs_choice'):
-            broadcast_game_state(room)
-            emit('choice_request', build_choice_request_payload(result))
-        elif result.get('needs_v2_ui'):
-            broadcast_game_state(room)
-            emit_room_v2_ui_request(room)
-        elif result.get('success'):
-            broadcast_game_state(room)
-        elif result.get('cancelled'):
-            broadcast_game_state(room)
-        else:
-            code = normalize_soft_reject_code(result.get('error')) or 'NO_PENDING_CHOICE'
-            soft_reject(sid, 'resolve_choice', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
+        result = engine.resolve_choice(pidx, choice)
+        _stamp_pending_interactions(room)
+    finally:
+        busy_lock.release()
+    if not result.get('cancelled'):
+        record_valid_player_action(room, pidx, 'resolve_choice')
+    record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice, 'result': result})
+    if result.get('needs_response'):
+        broadcast_game_state(room)
+        emit_pending_response_requests(room)
+    elif result.get('needs_choice'):
+        broadcast_game_state(room)
+        emit('choice_request', build_choice_request_payload(result))
+    elif result.get('needs_v2_ui'):
+        broadcast_game_state(room)
+        emit_room_v2_ui_request(room)
+    elif result.get('success'):
+        broadcast_game_state(room)
+    elif result.get('cancelled'):
+        broadcast_game_state(room)
+    else:
+        code = normalize_soft_reject_code(result.get('error')) or 'NO_PENDING_CHOICE'
+        soft_reject(sid, 'resolve_choice', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
 
 
 @socketio.on('v2_ui_response')
@@ -10696,46 +10820,47 @@ def on_v2_ui_response(data):
             return
         player = players[sid]
         room_id = player.get('room_id')
-        if room_id is None or room_id not in rooms:
+        room = rooms.get(room_id)
+        if room is None:
             return
-        room = rooms[room_id]
         pidx = room.player_index(sid)
         if pidx < 0:
             return
-        busy_lock = _try_acquire_room_action(room, sid, 'v2_ui_response', pidx)
-        if busy_lock is None:
+        engine = room.engine
+    busy_lock = _try_acquire_room_action(room, sid, 'v2_ui_response', pidx)
+    if busy_lock is None:
+        return
+    try:
+        pending = getattr(engine, 'pending_v2_ui', None)
+        if not pending:
+            soft_reject(sid, 'v2_ui_response', 'PENDING_V2_UI', '没有待处理窗口', room=room, pidx=pidx, send_state=True)
             return
         try:
-            pending = getattr(room.engine, 'pending_v2_ui', None)
-            if not pending:
-                soft_reject(sid, 'v2_ui_response', 'PENDING_V2_UI', '没有待处理窗口', room=room, pidx=pidx, send_state=True)
-                return
-            try:
-                pending_player_id = int(pending.get('player_id', pidx))
-            except Exception:
-                pending_player_id = pidx
-            if pending_player_id != pidx or str(pending.get('request_id', '')) != str(request_id):
-                soft_reject(sid, 'v2_ui_response', 'PENDING_V2_UI', '窗口状态已更新', room=room, pidx=pidx, send_state=True)
-                return
-            _cancel_v2_ui_timeout(('room', room.room_id), request_id)
-            result = room.engine.handle_v2_ui_response(pidx, request_id, clean_data)
-            _stamp_pending_interactions(room)
-        finally:
-            busy_lock.release()
-        record_room_replay_action(room, 'v2_ui_response', pidx, {
-            'request_id': request_id,
-            'button': button,
-            'values': values,
-            'result': result,
-        })
-        if result.get('needs_v2_ui'):
-            broadcast_game_state(room)
-            emit_room_v2_ui_request(room)
-        elif result.get('success'):
-            broadcast_game_state(room)
-        else:
-            code = normalize_soft_reject_code(result.get('error')) or 'PENDING_V2_UI'
-            soft_reject(sid, 'v2_ui_response', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
+            pending_player_id = int(pending.get('player_id', pidx))
+        except Exception:
+            pending_player_id = pidx
+        if pending_player_id != pidx or str(pending.get('request_id', '')) != str(request_id):
+            soft_reject(sid, 'v2_ui_response', 'PENDING_V2_UI', '窗口状态已更新', room=room, pidx=pidx, send_state=True)
+            return
+        _cancel_v2_ui_timeout(('room', room.room_id), request_id)
+        result = engine.handle_v2_ui_response(pidx, request_id, clean_data)
+        _stamp_pending_interactions(room)
+    finally:
+        busy_lock.release()
+    record_room_replay_action(room, 'v2_ui_response', pidx, {
+        'request_id': request_id,
+        'button': button,
+        'values': values,
+        'result': result,
+    })
+    if result.get('needs_v2_ui'):
+        broadcast_game_state(room)
+        emit_room_v2_ui_request(room)
+    elif result.get('success'):
+        broadcast_game_state(room)
+    else:
+        code = normalize_soft_reject_code(result.get('error')) or 'PENDING_V2_UI'
+        soft_reject(sid, 'v2_ui_response', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
 
 
 @socketio.on('use_trigger')
@@ -10755,65 +10880,66 @@ def on_use_trigger(data):
         if sid not in players:
             return
         player = players[sid]
+        player_name = player.get('nickname', '?')
         room_id = player.get('room_id')
-        if room_id is None or room_id not in rooms:
+        room = rooms.get(room_id)
+        if room is None:
             return
-        room = rooms[room_id]
         pidx = room.player_index(sid)
         if pidx < 0:
             return
         engine = room.engine
-        busy_lock = _try_acquire_room_action(room, sid, 'use_trigger', pidx)
-        if busy_lock is None:
+    busy_lock = _try_acquire_room_action(room, sid, 'use_trigger', pidx)
+    if busy_lock is None:
+        return
+    try:
+        reject_code = _room_action_precheck(engine, pidx, event_name='use_trigger')
+        if reject_code:
+            soft_reject(sid, 'use_trigger', reject_code, room=room, pidx=pidx, send_state=True)
             return
+        replay_def_id = ''
         try:
-            reject_code = _room_action_precheck(engine, pidx, event_name='use_trigger')
-            if reject_code:
-                soft_reject(sid, 'use_trigger', reject_code, room=room, pidx=pidx, send_state=True)
+            equipment = next((eq for eq in getattr(engine.players[pidx], 'equipment', []) if str(getattr(getattr(eq, 'card_instance', None), 'instance_id', '')) == str(equipment_instance_id)), None)
+            replay_def_id = getattr(getattr(equipment, 'card_instance', None), 'def_id', '') or getattr(getattr(equipment, 'card_def', None), 'id', '') or ''
+            if equipment is None:
+                soft_reject(sid, 'use_trigger', 'STATE_VERSION_OLD', room=room, pidx=pidx, send_state=True)
                 return
+        except Exception:
             replay_def_id = ''
-            try:
-                equipment = next((eq for eq in getattr(engine.players[pidx], 'equipment', []) if str(getattr(getattr(eq, 'card_instance', None), 'instance_id', '')) == str(equipment_instance_id)), None)
-                replay_def_id = getattr(getattr(equipment, 'card_instance', None), 'def_id', '') or getattr(getattr(equipment, 'card_def', None), 'id', '') or ''
-                if equipment is None:
-                    soft_reject(sid, 'use_trigger', 'STATE_VERSION_OLD', room=room, pidx=pidx, send_state=True)
-                    return
-            except Exception:
-                replay_def_id = ''
-            result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
-            _stamp_pending_interactions(room)
-        finally:
-            busy_lock.release()
-        if result.get('success') or result.get('needs_ally_consent') or result.get('needs_choice') or result.get('needs_response') or result.get('needs_v2_ui'):
-            record_valid_player_action(room, pidx, 'use_trigger')
-            record_room_replay_action(room, 'use_trigger', pidx, {
-                'equipment_instance_id': equipment_instance_id,
-                'def_id': replay_def_id,
-                'target_player_id': target_player_id,
-                'result': result,
-            })
-        if result.get('needs_ally_consent'):
-            broadcast_game_state(room)
-            target_pidx = result.get('target_player_id')
-            if isinstance(target_pidx, int) and 0 <= target_pidx < len(room.player_sids):
-                target_sid = room.player_sids[target_pidx]
-                if target_sid in players:
-                    socketio.emit('ally_consent_request', {
-                        'card': result.get('card'),
-                        'from_player': pidx,
-                        'from_name': players[sid]['nickname'],
-                    }, room=target_sid)
-                else:
-                    room.engine.pending_ally_request = None
-                    emit('server_error', {'message': 'Teammate is not online'})
-        elif result.get('needs_v2_ui'):
-            broadcast_game_state(room)
-            emit_room_v2_ui_request(room)
-        elif result.get('success'):
-            broadcast_game_state(room)
-        else:
-            code = normalize_soft_reject_code(result.get('error')) or 'TRIGGER_NOT_PLAYABLE_NOW'
-            soft_reject(sid, 'use_trigger', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
+        result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
+        _stamp_pending_interactions(room)
+    finally:
+        busy_lock.release()
+    if result.get('success') or result.get('needs_ally_consent') or result.get('needs_choice') or result.get('needs_response') or result.get('needs_v2_ui'):
+        record_valid_player_action(room, pidx, 'use_trigger')
+        record_room_replay_action(room, 'use_trigger', pidx, {
+            'equipment_instance_id': equipment_instance_id,
+            'def_id': replay_def_id,
+            'target_player_id': target_player_id,
+            'result': result,
+        })
+    if result.get('needs_ally_consent'):
+        broadcast_game_state(room)
+        target_pidx = result.get('target_player_id')
+        if isinstance(target_pidx, int) and 0 <= target_pidx < len(room.player_sids):
+            target_sid = room.player_sids[target_pidx]
+            if target_sid in players:
+                socketio.emit('ally_consent_request', {
+                    'card': result.get('card'),
+                    'from_player': pidx,
+                    'from_name': player_name,
+                }, room=target_sid)
+            else:
+                engine.pending_ally_request = None
+                emit('server_error', {'message': 'Teammate is not online'})
+    elif result.get('needs_v2_ui'):
+        broadcast_game_state(room)
+        emit_room_v2_ui_request(room)
+    elif result.get('success'):
+        broadcast_game_state(room)
+    else:
+        code = normalize_soft_reject_code(result.get('error')) or 'TRIGGER_NOT_PLAYABLE_NOW'
+        soft_reject(sid, 'use_trigger', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
 
 
 @socketio.on('urf_replace_card')
@@ -10832,22 +10958,27 @@ def on_urf_replace_card(data):
         if sid not in players:
             return
         room_id = players[sid].get('room_id')
-        if room_id is None or room_id not in rooms:
-            return
-        room = rooms[room_id]
-        if room.mode != 'urf':
+        room = rooms.get(room_id)
+        if room is None or room.mode != 'urf':
             return
         pidx = room.player_index(sid)
         if pidx < 0:
             return
+    busy_lock = _try_acquire_room_action(room, sid, 'urf_replace_card', pidx)
+    if busy_lock is None:
+        return
+    try:
         result = room.engine.replace_hand_card(pidx, card_instance_id)
-        if result.get('success'):
-            record_valid_player_action(room, pidx, 'urf_replace_card')
-            record_room_replay_action(room, 'urf_replace_card', pidx, {'card_instance_id': card_instance_id})
-            broadcast_game_state(room)
-        else:
-            _security_illegal(sid, 'urf_replace_card', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
-            emit('server_error', {'message': result.get('error', 'Operation failed')})
+        _stamp_pending_interactions(room)
+    finally:
+        busy_lock.release()
+    if result.get('success'):
+        record_valid_player_action(room, pidx, 'urf_replace_card')
+        record_room_replay_action(room, 'urf_replace_card', pidx, {'card_instance_id': card_instance_id})
+        broadcast_game_state(room)
+    else:
+        code = normalize_soft_reject_code(result.get('error')) or 'CARD_NOT_PLAYABLE_NOW'
+        soft_reject(sid, 'urf_replace_card', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
 
 
 @socketio.on('urf_sell_equipment')
@@ -10866,22 +10997,27 @@ def on_urf_sell_equipment(data):
         if sid not in players:
             return
         room_id = players[sid].get('room_id')
-        if room_id is None or room_id not in rooms:
-            return
-        room = rooms[room_id]
-        if room.mode != 'urf':
+        room = rooms.get(room_id)
+        if room is None or room.mode != 'urf':
             return
         pidx = room.player_index(sid)
         if pidx < 0:
             return
+    busy_lock = _try_acquire_room_action(room, sid, 'urf_sell_equipment', pidx)
+    if busy_lock is None:
+        return
+    try:
         result = room.engine.sell_equipment(pidx, equipment_instance_id)
-        if result.get('success'):
-            record_valid_player_action(room, pidx, 'urf_sell_equipment')
-            record_room_replay_action(room, 'urf_sell_equipment', pidx, {'equipment_instance_id': equipment_instance_id})
-            broadcast_game_state(room)
-        else:
-            _security_illegal(sid, 'urf_sell_equipment', result.get('error', 'Operation failed'), severity='medium', emit_error=False)
-            emit('server_error', {'message': result.get('error', 'Operation failed')})
+        _stamp_pending_interactions(room)
+    finally:
+        busy_lock.release()
+    if result.get('success'):
+        record_valid_player_action(room, pidx, 'urf_sell_equipment')
+        record_room_replay_action(room, 'urf_sell_equipment', pidx, {'equipment_instance_id': equipment_instance_id})
+        broadcast_game_state(room)
+    else:
+        code = normalize_soft_reject_code(result.get('error')) or 'TRIGGER_NOT_PLAYABLE_NOW'
+        soft_reject(sid, 'urf_sell_equipment', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
 
 
 @socketio.on('end_turn')
@@ -10894,38 +11030,45 @@ def on_end_turn(data):
     try:
         with _lock:
             if sid not in players:
-                emit('server_error', {'message': '玩家不在对局中'})
-                return
-            player = players[sid]
+                player = None
+            else:
+                player = players[sid]
+        if player is None:
+            emit('server_error', {'message': '玩家不在对局中'})
+            return
+        with _lock:
             room_id = player.get('room_id')
-            if room_id is None or room_id not in rooms:
-                emit('server_error', {'message': '对局不存在'})
+            room = rooms.get(room_id)
+            if room is None:
+                room = None
+            else:
+                pidx = room.player_index(sid)
+                engine = room.engine if pidx >= 0 else None
+        if room is None:
+            emit('server_error', {'message': '对局不存在'})
+            return
+        if pidx < 0:
+            emit('server_error', {'message': '你不是该对局的玩家'})
+            return
+        busy_lock = _try_acquire_room_action(room, sid, 'end_turn', pidx)
+        if busy_lock is None:
+            return
+        try:
+            reject_code = _room_action_precheck(engine, pidx, event_name='end_turn')
+            if reject_code:
+                soft_reject(sid, 'end_turn', reject_code, room=room, pidx=pidx, send_state=True)
                 return
-            room = rooms[room_id]
-            pidx = room.player_index(sid)
-            if pidx < 0:
-                emit('server_error', {'message': '你不是该对局的玩家'})
-                return
-            engine = room.engine
-            busy_lock = _try_acquire_room_action(room, sid, 'end_turn', pidx)
-            if busy_lock is None:
-                return
-            try:
-                reject_code = _room_action_precheck(engine, pidx, event_name='end_turn')
-                if reject_code:
-                    soft_reject(sid, 'end_turn', reject_code, room=room, pidx=pidx, send_state=True)
-                    return
-                result = engine.end_turn(pidx)
-                _stamp_pending_interactions(room)
-            finally:
-                busy_lock.release()
-            if result.get('success'):
-                record_valid_player_action(room, pidx, 'end_turn')
-                record_room_replay_action(room, 'end_turn', pidx, {})
-            broadcast_game_state(room)
-            if not result.get('success'):
-                code = normalize_soft_reject_code(result.get('error')) or 'END_TURN_NOT_ALLOWED_NOW'
-                soft_reject(sid, 'end_turn', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=False)
+            result = engine.end_turn(pidx)
+            _stamp_pending_interactions(room)
+        finally:
+            busy_lock.release()
+        if result.get('success'):
+            record_valid_player_action(room, pidx, 'end_turn')
+            record_room_replay_action(room, 'end_turn', pidx, {})
+        broadcast_game_state(room)
+        if not result.get('success'):
+            code = normalize_soft_reject_code(result.get('error')) or 'END_TURN_NOT_ALLOWED_NOW'
+            soft_reject(sid, 'end_turn', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=False)
     except Exception as e:
         import traceback
         traceback.print_exc()

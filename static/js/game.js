@@ -66,6 +66,10 @@ const I18N = {
         classic_select_card: 'Choose a card',
         prediction_target: 'Target',
         prediction_self: 'Self',
+        prediction_target_button: 'Prediction Target',
+        prediction_target_title: 'Prediction target: {0}',
+        prediction_target_modal_title: 'Choose Prediction Target',
+        prediction_target_modal_desc: 'Damage and effect prediction will use this target locally. Actual play target is unchanged.',
         classic_play_center: 'Click the stage to play',
         classic_target_enemy: 'Click opponent to play',
         classic_target_self: 'Click yourself to play',
@@ -128,7 +132,7 @@ const I18N = {
         error_equipment_no_trigger: 'This equipment has no trigger effect',
         error_equipment_turn_needed: 'This equipment must stay equipped for one turn before triggering',
         error_not_enough_e: 'Not enough E',
-        error_target_invalid: 'Invalid target',
+        error_target_invalid: 'Invalid target', no_selectable_player: 'No selectable player',
         error_action_blocked: 'You cannot use cards right now',
         error_attack_blocked: 'You cannot use Thorn cards this turn',
         error_attack_only: 'Only Thorn cards can be used this turn',
@@ -180,6 +184,10 @@ I18N.zh = { ...I18N.en,
     classic_select_card: '选择一张手牌',
     prediction_target: '对目标',
     prediction_self: '对自己',
+    prediction_target_button: '修改预测目标',
+    prediction_target_title: '当前预测目标：{0}',
+    prediction_target_modal_title: '选择预测目标',
+    prediction_target_modal_desc: '只修改本地伤害预测，不会改变实际出牌目标。',
     classic_play_center: '点击战场打出',
     classic_target_enemy: '点击对手使用',
     classic_target_self: '点击自己使用',
@@ -237,7 +245,7 @@ I18N.zh = { ...I18N.en,
     error_equipment_no_trigger: '该装备没有触发效果',
     error_equipment_turn_needed: '装备需要装备一回合后才能触发',
     error_not_enough_e: '能量不足',
-    error_target_invalid: '目标无效',
+    error_target_invalid: '目标无效', no_selectable_player: '没有可选中的玩家',
     error_action_blocked: '当前无法使用卡牌',
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
@@ -770,10 +778,10 @@ Object.assign(I18N.ja, {
     tag_desc_fission_layer: '通常のタグではなく特殊な仕組みです。分裂層は攻撃カードが何回に分かれて解決されるかを表し、融合層と共同で作用します。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。三角形のようにヒットごとに以後のダメージが変わるカードは、各分裂ヒットでその時点の層数を使って再計算します。カードが捨て札に入ると分裂は既定値1に戻ります。'
 });
 
-Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card names', settings_show_card_images: 'Show card images' });
-Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称', settings_show_card_images: '显示卡牌图片' });
-Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes', settings_show_card_images: 'Afficher les images des cartes' });
-Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示', settings_show_card_images: 'カード画像を表示' });
+Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card names', settings_show_card_images: 'Show card images', no_selectable_player: 'No selectable player' });
+Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称', settings_show_card_images: '显示卡牌图片', no_selectable_player: '没有可选中的玩家' });
+Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes', settings_show_card_images: 'Afficher les images des cartes', no_selectable_player: 'Aucun joueur ciblable' });
+Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示', settings_show_card_images: 'カード画像を表示', no_selectable_player: '選択可能なプレイヤーがいません' });
 Object.assign(I18N.en, { official_mods: 'Official Mods', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found', mod_beta_warning: 'In testing, not recommended' });
 Object.assign(I18N.zh, { official_mods: '官方模组', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组', mod_beta_warning: '测试中，不推荐使用' });
 Object.assign(I18N.fr, { mod_beta_warning: 'En test, déconseillé' });
@@ -1084,7 +1092,9 @@ Object.assign(I18N.ja, {
 
 Object.assign(I18N.en, {
     compact_end_turn: 'End',
-    compact_view_deck: 'Deck',
+    compact_view_deck: 'Draw',
+    compact_view_draw_deck: 'Draw',
+    compact_view_discard: 'Discard',
     compact_urf_replace: 'Swap',
     compact_urf_sell: 'Sell',
     compact_set_next_draw: 'Next',
@@ -1102,7 +1112,9 @@ Object.assign(I18N.en, {
 });
 Object.assign(I18N.zh, {
     compact_end_turn: '结束',
-    compact_view_deck: '牌堆',
+    compact_view_deck: '抽牌',
+    compact_view_draw_deck: '抽牌',
+    compact_view_discard: '弃牌',
     compact_urf_replace: '换牌',
     compact_urf_sell: '售卖',
     compact_set_next_draw: '设抽',
@@ -1120,7 +1132,9 @@ Object.assign(I18N.zh, {
 });
 Object.assign(I18N.fr, {
     compact_end_turn: 'Fin',
-    compact_view_deck: 'Deck',
+    compact_view_deck: 'Pioche',
+    compact_view_draw_deck: 'Pioche',
+    compact_view_discard: 'Défausse',
     compact_urf_replace: 'Swap',
     compact_urf_sell: 'Vendre',
     compact_set_next_draw: 'Suiv.',
@@ -1139,6 +1153,8 @@ Object.assign(I18N.fr, {
 Object.assign(I18N.ja, {
     compact_end_turn: '終了',
     compact_view_deck: '山札',
+    compact_view_draw_deck: '山札',
+    compact_view_discard: '捨札',
     compact_urf_replace: '交換',
     compact_urf_sell: '売却',
     compact_set_next_draw: '次',
@@ -1153,6 +1169,55 @@ Object.assign(I18N.ja, {
     compact_log_start: '開始',
     compact_log_first: '先攻',
     compact_log_order: '順番',
+});
+
+Object.assign(I18N.en, {
+    view_deck: 'View Draw Deck',
+    view_draw_deck: 'View Draw Deck',
+    view_discard: 'View Discard',
+    deck_total: 'Draw deck: {0} cards',
+    draw_deck_total: 'Draw deck: {0} cards',
+    discard_total: 'Discard: {0} cards',
+    view_deck_title: 'Draw Deck',
+    view_draw_deck_title: 'Draw Deck',
+    view_discard_title: 'Discard Pile',
+    tutorial_hint_deck: 'Check your draw deck: press View Draw Deck to see what may come next.',
+});
+Object.assign(I18N.zh, {
+    view_deck: '查看抽牌堆',
+    view_draw_deck: '查看抽牌堆',
+    view_discard: '查看弃牌堆',
+    deck_total: '抽牌堆：{0} 张',
+    draw_deck_total: '抽牌堆：{0} 张',
+    discard_total: '弃牌堆：{0} 张',
+    view_deck_title: '抽牌堆',
+    view_draw_deck_title: '抽牌堆',
+    view_discard_title: '弃牌堆',
+    tutorial_hint_deck: '先看看抽牌堆：点击“查看抽牌堆”，了解接下来可能抽到什么。',
+});
+Object.assign(I18N.fr, {
+    view_deck: 'Voir la pioche',
+    view_draw_deck: 'Voir la pioche',
+    view_discard: 'Voir la défausse',
+    deck_total: 'Pioche : {0} cartes',
+    draw_deck_total: 'Pioche : {0} cartes',
+    discard_total: 'Défausse : {0} cartes',
+    view_deck_title: 'Pioche',
+    view_draw_deck_title: 'Pioche',
+    view_discard_title: 'Défausse',
+    tutorial_hint_deck: 'Regardez votre pioche : appuyez sur Voir la pioche.',
+});
+Object.assign(I18N.ja, {
+    view_deck: '山札を見る',
+    view_draw_deck: '山札を見る',
+    view_discard: '捨て札を見る',
+    deck_total: '山札: {0}枚',
+    draw_deck_total: '山札: {0}枚',
+    discard_total: '捨て札: {0}枚',
+    view_deck_title: '山札',
+    view_draw_deck_title: '山札',
+    view_discard_title: '捨て札',
+    tutorial_hint_deck: '山札を確認します。「山札を見る」を押しましょう。',
 });
 
 Object.assign(I18N.en, {
@@ -1833,12 +1898,12 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'status-heal-block', re: /^(?:[+-]?\d+层禁疗|禁疗[:：]?[+-]?\d+层?)/i },
     { cls: 'status-weakness', re: /^(?:[+-]?\d+层虚弱|虚弱[:：]?[+-]?\d+层?)/i },
     { cls: 'status-fragment', re: /^(?:[+-]?\d+层碎片|碎片[:：]?[+-]?\d+层?)/i },
-    { cls: 'status-immune', re: /^(?:状态免疫|免疫状态)/i },
+    { cls: 'status-immune', re: /^(?:状态免疫|免疫状态|status_immune|\bimmune\b)/i },
     { cls: 'status-stunned', re: /^(?:[+-]?\d+层眩晕|眩晕[:：]?[+-]?\d+层?)/i },
     { cls: 'status-invincible', re: /^(?:[+-]?\d+层无敌|无敌[:：]?[+-]?\d+层?|无敌)/i },
     { cls: 'status-bandage', re: /^(?:[+-]?\d+层绷带|绷带[:：]?[+-]?\d+层?|绷带)/i },
     { cls: 'status-sponge', re: /^(?:[+-]?\d+层海绵|海绵[:：]?[+-]?\d+层?|海绵)/i },
-    { cls: 'status-attack-blocked', re: /^(?:[+-]?\d+层(?:禁攻|禁止攻击)|(?:禁攻|禁止攻击)[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-attack-blocked', re: /^(?:[+-]?\d+层(?:禁攻|禁止攻击|attack_blocked)|(?:禁攻|禁止攻击|attack_blocked)[:：]?[+-]?\d+层?)/i },
     { cls: 'status-attack-only', re: /^(?:[+-]?\d+层仅攻击|仅攻击[:：]?[+-]?\d+层?)/i },
     { cls: 'status-untargetable', re: /^(?:[+-]?\d+层无法选中|无法选中[:：]?[+-]?\d+层?)/i },
     { cls: 'status-magic-nazar', re: /^(?:[+-]?\d+层魔法邪眼|魔法邪眼[:：]?[+-]?\d+层?)/i },
@@ -1846,6 +1911,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*F(?![A-Za-z])|F(?![A-Za-z])|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/ },
     { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P(?![A-Za-z])|P(?![A-Za-z])|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/ },
     { cls: 'damage', re: /^(?:[+-]?\d+电伤|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/ },
+    { cls: 'heal', re: /^造成伤害\d+%(?:\([^)]+\)|（[^）]+）)的H/ },
     { cls: 'armor', re: /^[+-]?\d+A/ },
     { cls: 'heal', re: /^[+]?\d+H(?![A-Za-z])/ },
     { cls: 'health', re: /^H(?![A-Za-z])/ },
@@ -2122,6 +2188,27 @@ function localizedCardNameFromAny(name) {
     return name;
 }
 
+function findCardDefIdByAnyName(name) {
+    const needle = String(name || '').trim();
+    if (!needle) return null;
+    if (CARD_DEFS[needle]) return needle;
+    const normalizedNeedle = needle.toLowerCase();
+    for (const [defId, cd] of Object.entries(CARD_DEFS || {})) {
+        if (!cd) continue;
+        const names = [
+            defId,
+            cd.id,
+            cd.def_id,
+            cd.name_cn,
+            cd.name_en,
+            ...Object.values(cd.name_i18n || {}),
+        ].filter(Boolean).map(value => String(value).trim());
+        if (names.includes(needle)) return defId;
+        if (names.some(value => value.toLowerCase() === normalizedNeedle)) return defId;
+    }
+    return null;
+}
+
 function localizedCardTypeFromCn(typeName) {
     const text = String(typeName || '');
     if (text === '攻击') return UI.card_type_thorn || 'Thorn';
@@ -2232,6 +2319,7 @@ function translateServerMessage(message) {
     if (message === '只能在己方回合触发装备') return UI.error_equipment_friendly_turn_only || UI.error_not_your_turn;
     if (message === '能量不足') return UI.error_not_enough_e;
     if (message === '目标无效') return UI.error_target_invalid;
+    if (message === '没有可选中的玩家') return UI.no_selectable_player || message;
     if (message === '不能选择自己作为目标') return UI.error_target_self_forbidden || UI.error_target_invalid;
     if (message === '必须选择一名存活玩家') return UI.error_target_alive_required || UI.error_target_invalid;
     if (message === '眩晕效果中，无法使用卡牌') return UI.error_action_blocked;
@@ -2353,6 +2441,7 @@ let latencyPingTimer = null;
 let skinSaveInFlight = false;
 let CARD_DEFS = {};
 let gameState = {};
+let predictionTargetOverrideId = null;
 let activeV2UiRequestId = null;
 let draftState = {};
 let activeViewId = '';
@@ -2671,13 +2760,17 @@ function setCompactButtonText(id, normalKey, compactKey) {
 
 function updateCompactUiText() {
     setCompactButtonText('btn-end-turn', 'end_turn', 'compact_end_turn');
-    setCompactButtonText('btn-view-deck', 'view_deck', 'compact_view_deck');
-    setCompactButtonText('btn-spectate-view-deck', 'view_deck', 'compact_view_deck');
+    setCompactButtonText('btn-view-deck', 'view_draw_deck', 'compact_view_draw_deck');
+    setCompactButtonText('btn-view-discard', 'view_discard', 'compact_view_discard');
+    setCompactButtonText('btn-spectate-view-deck', 'view_draw_deck', 'compact_view_draw_deck');
+    setCompactButtonText('btn-spectate-view-discard', 'view_discard', 'compact_view_discard');
     setCompactButtonText('btn-urf-replace', 'urf_replace', 'compact_urf_replace');
     setCompactButtonText('btn-urf-sell', 'urf_sell', 'compact_urf_sell');
     setCompactButtonText('btn-solo-next-draw', 'set_next_draw', 'compact_set_next_draw');
     setCompactButtonText('btn-solo-edit', 'pause_edit', 'compact_pause_edit');
-    setCompactButtonText('classic-view-deck', 'view_deck', 'compact_view_deck');
+    setCompactButtonText('btn-prediction-target', 'prediction_target_button', 'prediction_target_button');
+    setCompactButtonText('classic-view-deck', 'view_draw_deck', 'compact_view_draw_deck');
+    setCompactButtonText('classic-view-discard', 'view_discard', 'compact_view_discard');
     setCompactButtonText('classic-switch-perspective', 'switch_perspective', 'switch_perspective');
     setCompactButtonText('classic-urf-replace', 'urf_replace', 'compact_urf_replace');
     setCompactButtonText('classic-urf-sell', 'urf_sell', 'compact_urf_sell');
@@ -3066,11 +3159,17 @@ function updateStaticText() {
     const btnSurrender = $('btn-surrender');
     if (btnSurrender) btnSurrender.textContent = UI.surrender;
     const btnViewDeck = $('btn-view-deck');
-    if (btnViewDeck) btnViewDeck.textContent = UI.view_deck;
+    if (btnViewDeck) btnViewDeck.textContent = UI.view_draw_deck || UI.view_deck;
+    const btnViewDiscard = $('btn-view-discard');
+    if (btnViewDiscard) btnViewDiscard.textContent = UI.view_discard;
     const btnSpectateViewDeck = $('btn-spectate-view-deck');
-    if (btnSpectateViewDeck) btnSpectateViewDeck.textContent = UI.view_deck;
+    if (btnSpectateViewDeck) btnSpectateViewDeck.textContent = UI.view_draw_deck || UI.view_deck;
+    const btnSpectateViewDiscard = $('btn-spectate-view-discard');
+    if (btnSpectateViewDiscard) btnSpectateViewDiscard.textContent = UI.view_discard;
     const classicViewDeck = $('classic-view-deck');
-    if (classicViewDeck) classicViewDeck.textContent = UI.view_deck;
+    if (classicViewDeck) classicViewDeck.textContent = UI.view_draw_deck || UI.view_deck;
+    const classicViewDiscard = $('classic-view-discard');
+    if (classicViewDiscard) classicViewDiscard.textContent = UI.view_discard;
     const classicSwitchPerspective = $('classic-switch-perspective');
     if (classicSwitchPerspective && !classicSwitchPerspective.dataset.dynamic) classicSwitchPerspective.textContent = UI.switch_perspective;
     const btnEndTurn = $('btn-end-turn');
@@ -5061,6 +5160,7 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
         ? Number(ownerState.cards_played_this_turn[cardDict.def_id] || 0)
         : 0;
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
+    const magicSwiftValue = Number(cardDef.magic_swift_value || cardDict.magic_swift_value || 0);
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
     const effectiveBaseE = Math.max(0, baseE + tempHeavyValue - mimicDiscount - swiftValue - tempSwiftValue);
@@ -5070,7 +5170,8 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
         extraE -= hand.filter(c => c && c !== cardDict && cardMatchesAnyLocalId(c, getCardDef(c.def_id || ''), ['Bamboo', 'jungle:bamboo'])).length;
     }
     const totalE = Math.max(0, effectiveBaseE + extraE);
-    return { totalE, totalM: baseM, flags };
+    const totalM = Math.max(0, baseM - Math.max(0, magicSwiftValue));
+    return { totalE, totalM, flags };
 }
 
 function isOwnBlindActive() {
@@ -5219,10 +5320,12 @@ function createCardElement(cardDict, options = {}) {
         el.classList.add('card-petal-copy');
     }
     if (defId === 'MagicGrapes' || cardDef.id === 'MagicGrapes' || cardDef.legacy_id === 'MagicGrapes'
-        || cardDef.id === 'jungle:magic_grapes' || cardDef.name_cn === '魔法葡萄'
-        || defId === 'MagicPeas' || cardDef.id === 'MagicPeas' || cardDef.legacy_id === 'MagicPeas'
-        || cardDef.id === 'jungle:magic_peas' || cardDef.name_cn === '魔法豌豆') {
+        || cardDef.id === 'jungle:magic_grapes' || cardDef.name_cn === '魔法葡萄') {
         el.classList.add('card-magic-grapes');
+    }
+    if (defId === 'MagicPeas' || cardDef.id === 'MagicPeas' || cardDef.legacy_id === 'MagicPeas'
+        || cardDef.id === 'jungle:magic_peas' || cardDef.name_cn === '魔法豌豆') {
+        el.classList.add('card-magic-peas');
     }
     const rawTypeLabel = getCardTypeLabel(cardDef.card_type) || cardDef.card_type;
     const blindLevel = getCardBlindLevelForSelf(cardDict, options);
@@ -5255,7 +5358,7 @@ function createCardElement(cardDict, options = {}) {
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
     const copyCount = Number(cardDef.copy_count || 0);
-    el.style.borderColor = displayTypeColor;
+    el.style.setProperty('--card-frame-color', displayTypeColor);
     el.dataset.instanceId = cardDict.instance_id;
     el.dataset.defId = defId;
     let flagsHtml = '';
@@ -5894,10 +5997,23 @@ function getFirstPredictionEnemyState(ownerState) {
     return gameState && gameState.opponent ? gameState.opponent : {};
 }
 
+function getPredictionTargetOverrideId(ownerState = null) {
+    if (!gameState || gameState.mode !== '2v2') return null;
+    const id = normalizePlayerId(predictionTargetOverrideId);
+    if (id == null) return null;
+    const enemyIds = getDefaultEnemyIdsForPredictionOwner(ownerState);
+    if (!enemyIds.includes(id)) return null;
+    const target = getPredictionPlayerById(id);
+    if (Number(target && target.health || 0) <= 0) return null;
+    return id;
+}
+
 function getDefaultPredictionTargetState(cardDict, ownerState = null) {
     if (!gameState) return {};
     const targetId = normalizePlayerId(cardDict && (cardDict.target_player_id ?? cardDict.target_id));
     if (targetId != null) return getPredictionPlayerById(targetId);
+    const overrideId = getPredictionTargetOverrideId(ownerState);
+    if (overrideId != null) return getPredictionPlayerById(overrideId);
     return getFirstPredictionEnemyState(ownerState);
 }
 
@@ -5962,15 +6078,44 @@ function countCutterEquipmentForPrediction(attackerState = {}) {
     return count;
 }
 
+function getPredictionCustomStatusValue(playerState = {}, ...keys) {
+    const custom = (playerState && playerState.custom_statuses && typeof playerState.custom_statuses === 'object')
+        ? playerState.custom_statuses
+        : {};
+    return keys.reduce((sum, key) => sum + Math.max(0, Number(custom[key] || playerState[key] || 0)), 0);
+}
+
+function isPredictionStatusImmune(playerState = {}) {
+    return getPredictionCustomStatusValue(playerState, 'status_immune', 'immune', '状态免疫') > 0;
+}
+
+function predictionPlayerHasEquipment(playerState = {}, ...ids) {
+    const wanted = new Set(ids.map(id => String(id || '').toLowerCase()));
+    return (Array.isArray(playerState && playerState.equipment) ? playerState.equipment : []).some(eq => {
+        const card = eq && (eq.card_instance || eq.card || eq);
+        const id = String(card && card.def_id || '').toLowerCase();
+        return wanted.has(id) || Array.from(wanted).some(w => w && id.endsWith(`:${w}`));
+    });
+}
+
 function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState = {}) {
     const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
     const rawHits = getActualAttackDamageHits(cardDict || {}, attackerState || {}, targetState || {});
     if (!rawHits.length) return [];
     const hits = [];
+    let spongePoison = 0;
     let dodge = Math.max(0, Number(targetState && targetState.dodge || 0));
     const armor = Math.max(0, Number(targetState && targetState.armor || 0));
     const invincible = !!(targetState && targetState.invincible);
     const sponge = !!(targetState && targetState.sponge_active);
+    const immune = isPredictionStatusImmune(targetState);
+    const attackerImmune = isPredictionStatusImmune(attackerState);
+    const rootArmor = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:root', 'jungle:root_status', 'root_status');
+    const fragile = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:fragile', 'fragile');
+    let shield = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:shield', 'shield');
+    const weakness = attackerImmune ? 0 : Math.max(0, Number(attackerState && attackerState.weakness || 0));
+    const plankBlocks = predictionPlayerHasEquipment(targetState, 'Plank', 'jungle:plank')
+        && Number(cardDict && cardDict.cost_e || cardDef && cardDef.cost_e || 0) <= 1;
     let nazarActive = !!(targetState && targetState.nazar_active);
     let nazarBigHits = Math.max(0, Number(targetState && targetState.nazar_big_hits || 0));
     const corruptionMult = 1.5 ** countActiveCorruptionEquipment();
@@ -5979,7 +6124,6 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
     const precision = cardHasEffectiveFlagForPrediction(cardDict || {}, cardDef || {}, 'precision');
     rawHits.forEach(raw => {
         let dmg = Math.max(0, Math.ceil(Number(raw || 0)));
-        if (cutterBonus > 0) dmg += cutterBonus * 2;
         let precisionDodged = false;
         if (dodge > 0) {
             dodge -= 1;
@@ -5997,6 +6141,8 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
         if (precisionDodged) dmg = Math.ceil(dmg / 2);
         if (dizzyMult > 1) dmg = Math.ceil(dmg * dizzyMult);
         if (corruptionMult > 1) dmg = Math.ceil(dmg * corruptionMult);
+        if (cutterBonus > 0) dmg += cutterBonus * 2;
+        if (plankBlocks) dmg = 0;
         if (nazarActive) {
             const original = dmg;
             dmg = Math.max(1, dmg - 9);
@@ -6008,13 +6154,23 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
                 }
             }
         }
-        dmg = Math.max(0, dmg - armor);
+        if (weakness > 0) {
+            const reduction = Math.min(0.6, 0.2 * weakness);
+            dmg = Math.max(1, Math.floor(dmg * (1 - reduction)));
+        }
+        dmg = Math.max(0, dmg - armor - rootArmor + fragile);
         if (sponge && dmg > 0) {
-            hits.push(0);
-            return;
+            spongePoison += Math.min(10, dmg);
+            dmg = 0;
+        }
+        if (shield > 0 && dmg > 0) {
+            const blocked = Math.min(shield, dmg);
+            shield -= blocked;
+            dmg = Math.max(0, dmg - blocked);
         }
         hits.push(dmg);
     });
+    hits.spongePoison = spongePoison;
     return hits;
 }
 
@@ -6094,27 +6250,89 @@ function collectSelfPredictionFromEffects(prediction, cardDict, cardDef, selfSta
     });
 }
 
-function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positiveHitCount) {
+function evalPredictionNumberExpr(expr, context = {}) {
+    if (expr == null || expr === '') return 0;
+    if (typeof expr === 'number') return Number.isFinite(expr) ? expr : 0;
+    if (typeof expr === 'string') {
+        const n = Number(expr);
+        return Number.isFinite(n) ? n : 0;
+    }
+    if (!expr || typeof expr !== 'object') return 0;
+    const op = String(expr.op || expr.type || expr.ref || '').toLowerCase();
+    if (op === 'const' || op === 'number') return evalPredictionNumberExpr(expr.value ?? expr.amount ?? 0, context);
+    if (op === 'last_damage') return Number(context.lastDamage || 0);
+    if (op === 'last_positive_hits') return Number(context.lastPositiveHits || 0);
+    if (['add', 'sub', 'mul', 'div', '+', '-', '*', '/', 'min', 'max'].includes(op)) {
+        const mathOp = { '+': 'add', '-': 'sub', '*': 'mul', '/': 'div' }[op] || op;
+        const values = Array.isArray(expr.values) ? expr.values : [expr.a, expr.b];
+        const nums = values.map(value => evalPredictionNumberExpr(value, context));
+        if (mathOp === 'add') return nums.reduce((sum, value) => sum + value, 0);
+        if (mathOp === 'sub') return nums.length ? nums[0] - nums.slice(1).reduce((sum, value) => sum + value, 0) : 0;
+        if (mathOp === 'mul') return nums.reduce((out, value) => out * value, 1);
+        if (mathOp === 'div') return nums.length >= 2 && nums[1] !== 0 ? nums[0] / nums[1] : 0;
+        if (mathOp === 'min') return nums.length ? Math.min(...nums) : 0;
+        if (mathOp === 'max') return nums.length ? Math.max(...nums) : 0;
+    }
+    if (op === 'floor') return Math.floor(evalPredictionNumberExpr(expr.value, context));
+    if (op === 'ceil') return Math.ceil(evalPredictionNumberExpr(expr.value, context));
+    return firstNumericEffectValue(expr);
+}
+
+function predictionConditionLikelyTrue(cond, context = {}) {
+    if (!cond || typeof cond !== 'object') return false;
+    const op = String(cond.op || cond.type || '').toLowerCase();
+    if (op === 'compare' || op === 'comparison') {
+        const a = evalPredictionNumberExpr(cond.a ?? cond.left, context);
+        const b = evalPredictionNumberExpr(cond.b ?? cond.right, context);
+        const operator = String(cond.operator || cond.cmp || cond.compare || '==');
+        if (operator === '>' || operator === 'gt') return a > b;
+        if (operator === '>=' || operator === 'gte') return a >= b;
+        if (operator === '<' || operator === 'lt') return a < b;
+        if (operator === '<=' || operator === 'lte') return a <= b;
+        if (operator === '!=' || operator === 'ne') return a !== b;
+        return a === b;
+    }
+    if (op === 'last_damage') return Number(context.lastDamage || 0) > 0;
+    return false;
+}
+
+function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positiveHitCount, context = null) {
+    const localContext = context || {
+        lastDamage: prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0),
+        lastPositiveHits: positiveHitCount,
+    };
     (Array.isArray(steps) ? steps : []).forEach(step => {
         if (!step || typeof step !== 'object') return;
         const op = step.op || step.type;
         const params = step.params && typeof step.params === 'object' ? step.params : step;
+        if (op === 'deal_damage' || op === 'damage') {
+            localContext.lastDamage = prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+            localContext.lastPositiveHits = prediction.target.damageHits.filter(value => Number(value || 0) > 0).length;
+            return;
+        }
         if (op === 'if') {
+            const branch = predictionConditionLikelyTrue(step.condition || params.condition, localContext)
+                ? (step.then || params.then || [])
+                : (step.else || params.else || []);
+            collectSelfPredictionFromV2Steps(prediction, branch, selfState, positiveHitCount, localContext);
             return;
         }
         if (op === 'lifesteal_damage') {
-            pushPositiveValue(prediction.self.heal, firstNumericEffectValue(params.heal) || 4, positiveHitCount);
+            const heal = params.heal_percent != null || params.ratio != null
+                ? Math.floor(localContext.lastDamage * Number(params.heal_percent ?? params.ratio ?? 0))
+                : (firstNumericEffectValue(params.heal) || 4);
+            pushPositiveValue(prediction.self.heal, heal, params.heal_percent != null || params.ratio != null ? 1 : positiveHitCount);
             return;
         }
         if (!effectTargetIsSelf(params.target)) return;
         if (op === 'heal') {
-            pushPositiveValue(prediction.self.heal, firstNumericEffectValue(params.amount));
+            pushPositiveValue(prediction.self.heal, Math.floor(evalPredictionNumberExpr(params.amount, localContext)));
         } else if (op === 'gain_e') {
-            pushPositiveValue(prediction.self.elixir, firstNumericEffectValue(params.amount));
+            pushPositiveValue(prediction.self.elixir, evalPredictionNumberExpr(params.amount, localContext));
         } else if (op === 'gain_m') {
-            pushPositiveValue(prediction.self.magic, firstNumericEffectValue(params.amount));
+            pushPositiveValue(prediction.self.magic, evalPredictionNumberExpr(params.amount, localContext));
         } else if (op === 'add_armor' || op === 'gain_armor') {
-            pushPositiveValue(prediction.self.armor, firstNumericEffectValue(params.amount));
+            pushPositiveValue(prediction.self.armor, evalPredictionNumberExpr(params.amount, localContext));
         } else if (op === 'coffee_gain_e') {
             pushPositiveValue(prediction.self.elixir, getCoffeePredictionAmount(selfState));
         }
@@ -6170,16 +6388,20 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     const targetState = options.targetState || getDefaultPredictionTargetState(cardDict, attackerState);
     const hasDamageOverride = Object.prototype.hasOwnProperty.call(options, 'damageHits');
     if (cardDef.card_type === 'thorn') {
-        const hits = hasDamageOverride
+        const simulatedHits = hasDamageOverride
             ? (Array.isArray(options.damageHits) ? options.damageHits : [])
             : simulateNoCounterAttackHits(cardDict, attackerState, targetState);
-        result.target.damageHits = hits
+        result.target.damageHits = simulatedHits
             .map(v => Math.max(0, Math.ceil(Number(v || 0))))
             .filter(v => Number.isFinite(v));
+        if (!hasDamageOverride && Number(simulatedHits && simulatedHits.spongePoison || 0) > 0) {
+            result.target.poison += Math.ceil(Number(simulatedHits.spongePoison || 0));
+            result.target.damageHits = result.target.damageHits.filter(v => Number(v) > 0);
+        }
         const toxic = Math.max(0, Number(targetState && targetState.toxic || 0));
         const positiveHits = result.target.damageHits.filter(v => Number(v) > 0).length;
         if (toxic > 0 && positiveHits > 0) {
-            result.target.poison = toxic * positiveHits;
+            result.target.poison += toxic * positiveHits;
         }
     } else if (cardDict.def_id === 'Iris') {
         result.target.poison = 10;
@@ -6259,7 +6481,12 @@ function getResponseBaseEffectPrediction(data, cardDict, noCounterPrediction = {
     if (noCounterPrediction && Object.prototype.hasOwnProperty.call(noCounterPrediction, 'parts')) {
         options.damageHits = normalizePredictionHits(noCounterPrediction.parts);
     }
-    return getCardPlayEffectPredictionParts(cardDict, options);
+    const prediction = getCardPlayEffectPredictionParts(cardDict, options);
+    if (noCounterPrediction && Number(noCounterPrediction.poison || 0) > 0) {
+        prediction.target.poison += Math.ceil(Number(noCounterPrediction.poison || 0));
+        prediction.poison = prediction.target.poison;
+    }
+    return prediction;
 }
 
 function appendResponseEffectToken(parent, text, cls, extraClass = '') {
@@ -6475,7 +6702,7 @@ function getTermIntroLibrary() {
         temp_swift: { label: UI.tag_temp_swift || 'Temporary Swift', desc: lt({ zh: '本次打出时 E 花费减少对应层数，进入弃牌堆后清除。', en: 'Reduces E cost for this play only, then clears when entering discard.', fr: 'Réduit le coût E pour ce jeu seulement, puis disparaît en entrant dans la défausse.', ja: '今回の使用時だけ E コストを減らし、弃牌堆に入ると消えます。' }), color: '#0EA5E9' },
         temp_heavy: { label: UI.tag_temp_heavy || 'Temporary Heavy', desc: lt({ zh: '本次打出时 E 花费增加对应层数，进入弃牌堆后清除。', en: 'Increases E cost for this play only, then clears when entering discard.', fr: 'Augmente le coût E pour ce jeu seulement, puis disparaît en entrant dans la défausse.', ja: '今回の使用時だけ E コストを増やし、弃牌堆に入ると消えます。' }), color: '#795548' },
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: lt({ zh: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', en: 'While present, an enemy skill card that actually costs at least 3E is negated, then this loses 1 stack.', fr: 'Tant qu’il existe, une compétence ennemie coûtant réellement au moins 3E est annulée, puis perd 1 charge.', ja: '存在中、敵が実際に3E以上消費する技能カードを無効にし、その後1層減ります。' }), color: COLORS.magic },
-        equipment_armor: { label: lt({ zh: '装备护甲', en: 'Equipment Armor', fr: 'Armure d’équipement', ja: '装備護甲' }), desc: lt({ zh: '存在时，若装备将被摧毁，则使该装备不被摧毁，并消耗1层装备护甲。', en: 'If the equipment would be destroyed, prevent that destruction and consume 1 Equipment Armor.', fr: 'Si l’équipement devait être détruit, empêche cette destruction et consomme 1 Armure d’équipement.', ja: '装備が破壊される時、それを防ぎ装備護甲を1層消費します。' }), color: COLORS.indestructible },
+        equipment_armor: { label: lt({ zh: '装备护甲', en: 'Equipment Armor', fr: 'Armure d’équipement', ja: '装備護甲' }), desc: lt({ zh: '存在时，若装备将被摧毁，则使该装备不被摧毁，并消耗1层装备护甲。玩家回合结束时，该玩家所有装备的装备护甲-1。', en: 'If the equipment would be destroyed, prevent that destruction and consume 1 Equipment Armor. At the end of a player turn, all that player’s equipment loses 1 Equipment Armor.', fr: 'Si l’équipement devait être détruit, empêche cette destruction et consomme 1 Armure d’équipement. À la fin du tour d’un joueur, tout son équipement perd 1 Armure d’équipement.', ja: '装備が破壊される時、それを防ぎ装備護甲を1層消費します。プレイヤーのターン終了時、そのプレイヤーの全装備の装備護甲が1層減ります。' }), color: COLORS.indestructible },
         fusion_layer: { label: UI.fusion_layer || 'Fusion', desc: lt({ zh: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', en: 'Amplifies attack damage. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after entering discard.', fr: 'Amplifie les dégâts d’attaque. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 en entrant dans la défausse.', ja: '攻撃ダメージを増やします。各命中は切り上げ(基礎ダメージ×聚变/裂变)。弃牌堆に入ると1に戻ります。' }), color: '#8E44AD' },
         fission_layer: { label: UI.fission_layer || 'Fission', desc: lt({ zh: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', en: 'Splits an attack into multiple hits. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after entering discard.', fr: 'Divise une attaque en plusieurs coups. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 en entrant dans la défausse.', ja: '攻撃を複数回命中に分けます。各命中は切り上げ(基礎ダメージ×聚变/裂变)。弃牌堆に入ると1に戻ります。' }), color: '#2874A6' },
         layers: { label: lt({ zh: '层数', en: 'Stacks', fr: 'Charges', ja: '層数' }), desc: lt({ zh: '状态或特殊属性的数量。层数越高效果会越强，或持续越久。', en: 'The quantity of a state or special property. More stacks usually mean stronger or longer-lasting effects.', fr: 'Quantité d’un état ou d’une propriété spéciale. Plus de charges signifie souvent un effet plus fort ou plus long.', ja: '状態や特殊属性の数量です。多いほど効果が強い、または長く続きます。' }), color: COLORS.text_primary },
@@ -7061,9 +7288,22 @@ function attachTermIntroLongPress(anchor, onShow) {
             }
             docMove = null;
             docEnd = null;
+            anchor.dataset.termIntroSuppressClick = '1';
+            setTimeout(() => {
+                if (anchor.dataset.termIntroSuppressClick === '1') {
+                    delete anchor.dataset.termIntroSuppressClick;
+                }
+            }, 350);
             onShow();
         }, TERM_INTRO_DELAY);
     });
+    anchor.addEventListener('click', (event) => {
+        if (anchor.dataset.termIntroSuppressClick === '1') {
+            event.preventDefault();
+            event.stopPropagation();
+            delete anchor.dataset.termIntroSuppressClick;
+        }
+    }, true);
     anchor.addEventListener('pointermove', (event) => {
         if (!timer || !start) return;
         const dist = Math.hypot(event.clientX - start.x, event.clientY - start.y);
@@ -7552,10 +7792,11 @@ function connectSocket(serverUrl) {
                 <button class="btn btn-danger" id="invite-decline">${UI.decline}</button>
             </div>
         `);
-        $('invite-accept').onclick = () => {
+        $('invite-accept').onclick = async () => {
             debugLog('[client] accept_invite inviter_sid=', data.inviter_sid);
-            socket.emit('accept_invite', { inviter_sid: data.inviter_sid });
             hideModal();
+            await syncModSelectionBeforeInviteAccept();
+            socket.emit('accept_invite', { inviter_sid: data.inviter_sid, ...getModLoginPayload() });
         };
         $('invite-decline').onclick = () => {
             debugLog('[client] decline_invite inviter_sid=', data.inviter_sid);
@@ -7575,9 +7816,10 @@ function connectSocket(serverUrl) {
                 <button class="btn btn-danger" id="team-decline">${UI.decline}</button>
             </div>
         `);
-        $('team-accept').onclick = () => {
-            socket.emit('accept_team', { from_sid: data.from_sid });
+        $('team-accept').onclick = async () => {
             hideModal();
+            await syncModSelectionBeforeInviteAccept();
+            socket.emit('accept_team', { from_sid: data.from_sid, ...getModLoginPayload() });
         };
         $('team-decline').onclick = () => {
             socket.emit('decline_team', { from_sid: data.from_sid });
@@ -7872,6 +8114,7 @@ function connectSocket(serverUrl) {
     bindSocketEvent('mod_settings_updated', (data) => {
         if (data && data.ok) {
             showActionToast(UI.save_success, 1600, 'success');
+            refreshCardsAfterModSettingsConfirmed();
             return;
         }
         flashStatus(UI.save_failed.replace('{0}', (data && data.reason) || UI.operation_failed), 3200, 'error');
@@ -10510,7 +10753,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=18');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=19');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;
@@ -12481,6 +12724,80 @@ function applyChatChannelPayload(payload, selectId) {
     return payload;
 }
 
+function getPredictionTargetChoices() {
+    if (!gameState || gameState.mode !== '2v2') return [];
+    const ownerState = gameState.you || {};
+    return getDefaultEnemyIdsForPredictionOwner(ownerState)
+        .map(id => {
+            const player = getPredictionPlayerById(id);
+            return {
+                id,
+                name: getPlayerNameById(id),
+                health: Number(player && player.health || 0),
+                maxHealth: Number(player && player.max_health || player.base_max_health || 0),
+                alive: Number(player && player.health || 0) > 0,
+            };
+        })
+        .filter(choice => choice.alive);
+}
+
+function updatePredictionTargetButton(gs = gameState) {
+    const btn = $('btn-prediction-target');
+    if (!btn) return;
+    const show = isMinimalUiStyle()
+        && !!gs
+        && gs.mode === '2v2'
+        && !gs.solo
+        && !isSpectating
+        && !replayMode
+        && gs.phase !== 'game_over';
+    btn.classList.toggle('hidden', !show);
+    btn.style.display = show ? '' : 'none';
+    if (!show) return;
+    const validId = getPredictionTargetOverrideId(gs.you || {});
+    if (validId == null) predictionTargetOverrideId = null;
+    const name = validId != null
+        ? getPlayerNameById(validId)
+        : (getPredictionTargetChoices()[0] || {}).name || '';
+    btn.textContent = UI.prediction_target_button || '修改预测目标';
+    btn.title = name ? String(UI.prediction_target_title || '当前预测目标：{0}').replace('{0}', name) : btn.textContent;
+    btn.disabled = getPredictionTargetChoices().length <= 0;
+}
+
+function openPredictionTargetPicker() {
+    const choices = getPredictionTargetChoices();
+    if (!choices.length) {
+        gameAlert(UI.notice || '提示', UI.no_other_players || '暂无其他玩家');
+        return;
+    }
+    const currentId = getPredictionTargetOverrideId(gameState.you || {});
+    const rows = choices.map(choice => {
+        const active = currentId === choice.id || (currentId == null && choices[0] && choices[0].id === choice.id);
+        const hp = choice.maxHealth > 0 ? ` H:${choice.health}/${choice.maxHealth}` : '';
+        return `<button type="button" class="btn prediction-target-option${active ? ' active' : ''}" data-target-id="${choice.id}">
+            <span>${escapeHtml(choice.name)}</span><small>${escapeHtml(hp)}</small>
+        </button>`;
+    }).join('');
+    showModal(`
+        <h3>${escapeHtml(UI.prediction_target_modal_title || '选择预测目标')}</h3>
+        <p class="modal-desc">${escapeHtml(UI.prediction_target_modal_desc || '只修改本地伤害预测，不会改变实际出牌目标。')}</p>
+        <div class="prediction-target-options">${rows}</div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="prediction-target-cancel">${escapeHtml(UI.cancel || '取消')}</button>
+        </div>
+    `);
+    document.querySelectorAll('.prediction-target-option').forEach(btn => {
+        btn.addEventListener('click', () => {
+            predictionTargetOverrideId = normalizePlayerId(btn.dataset.targetId);
+            hideModal();
+            updatePredictionTargetButton(gameState);
+            refreshVisibleCardDisplays();
+        });
+    });
+    const cancelBtn = $('prediction-target-cancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', hideModal);
+}
+
 function updateModeSpecificControls(gs) {
     const inSoloGame = !!gs?.solo;
     const inTutorial = !!gs?.tutorial || tutorialMode;
@@ -12488,10 +12805,13 @@ function updateModeSpecificControls(gs) {
     const soloNextDrawBtn = $('btn-solo-next-draw');
     const soloEditBtn = $('btn-solo-edit');
     const viewDeckBtn = $('btn-view-deck');
+    const viewDiscardBtn = $('btn-view-discard');
     const spectateViewDeckBtn = $('btn-spectate-view-deck');
+    const spectateViewDiscardBtn = $('btn-spectate-view-discard');
     const urfReplaceBtn = $('btn-urf-replace');
     const urfSellBtn = $('btn-urf-sell');
     const surrenderBtn = $('btn-surrender');
+    const predictionTargetBtn = $('btn-prediction-target');
     const spectateControls = $('spectate-controls');
     const gameControls = $('game-controls');
     const playZone = $('play-zone');
@@ -12516,15 +12836,26 @@ function updateModeSpecificControls(gs) {
         surrenderBtn.classList.toggle('hidden', !showSurrender);
         surrenderBtn.style.display = showSurrender ? '' : 'none';
     }
+    if (predictionTargetBtn) updatePredictionTargetButton(gs);
     if (viewDeckBtn) {
         const showViewDeck = gs?.mode !== 'urf';
         viewDeckBtn.classList.toggle('hidden', !showViewDeck);
         viewDeckBtn.style.display = showViewDeck ? '' : 'none';
     }
+    if (viewDiscardBtn) {
+        const showViewDiscard = gs?.mode !== 'urf';
+        viewDiscardBtn.classList.toggle('hidden', !showViewDiscard);
+        viewDiscardBtn.style.display = showViewDiscard ? '' : 'none';
+    }
     if (spectateViewDeckBtn) {
         const showSpectateViewDeck = isSpectating && gs?.mode !== 'urf';
         spectateViewDeckBtn.classList.toggle('hidden', !showSpectateViewDeck);
         spectateViewDeckBtn.style.display = showSpectateViewDeck ? '' : 'none';
+    }
+    if (spectateViewDiscardBtn) {
+        const showSpectateViewDiscard = isSpectating && gs?.mode !== 'urf';
+        spectateViewDiscardBtn.classList.toggle('hidden', !showSpectateViewDiscard);
+        spectateViewDiscardBtn.style.display = showSpectateViewDiscard ? '' : 'none';
     }
     if (urfReplaceBtn) {
         const show = gs?.mode === 'urf' && !isSpectating && !gameOver;
@@ -12603,7 +12934,11 @@ function updateClassicExtraControls(gs) {
     if (classicSwitch) classicSwitch.dataset.dynamic = (isSpectating && spectatePlayerCount > 1) ? '1' : '';
 
     if (setClassicControlButton('classic-view-deck', !isUrf, {
-        text: UI.view_deck,
+        text: UI.view_draw_deck || UI.view_deck,
+        disabled: false,
+    })) visibleCount += 1;
+    if (setClassicControlButton('classic-view-discard', !isUrf, {
+        text: UI.view_discard,
         disabled: false,
     })) visibleCount += 1;
     if (setClassicControlButton('classic-solo-next-draw', inSoloGame && !inTutorial && !gameOver && !isSpectating, {
@@ -14742,7 +15077,7 @@ function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true, candida
 async function choosePlayerTarget(title, opts = {}) {
     const targets = getPlayerTargetOptions(opts);
     if (!targets.length) {
-        gameAlert(UI.notice, UI.no_valid_target || 'No valid target');
+        gameAlert(UI.notice, UI.no_selectable_player || UI.no_valid_target || 'No valid target');
         return -1;
     }
     if (targets.length === 1) {
@@ -14765,6 +15100,10 @@ async function choosePlayerTarget(title, opts = {}) {
 function getCardTargetPickOptions(cardDef) {
     if (!cardDef || !gameState) {
         return {};
+    }
+    const cardId = String(cardDef.id || cardDef.def_id || cardDef.legacy_id || '').toLowerCase();
+    if (['yggdrasil', 'vanilla:yggdrasil'].includes(cardId)) {
+        return { includeSelf: true, candidates: 'all', aliveOnly: false };
     }
     if (cardHasSelfOnlyFlag({}, cardDef) && cardDef.card_type !== 'thorn') {
         return { includeSelf: true, candidates: 'self', aliveOnly: true };
@@ -14856,7 +15195,7 @@ function cardPlayChoosesTarget(cardDef) {
 async function chooseEnemyTarget(title) {
     const targets = getEnemyTargetOptions();
     if (!targets.length) {
-        gameAlert(UI.notice, UI.no_valid_target || 'No valid target');
+        gameAlert(UI.notice, UI.no_selectable_player || UI.no_valid_target || 'No valid target');
         return -1;
     }
     if (targets.length === 1) {
@@ -14927,12 +15266,26 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
         const layerSuffix = layerValue > 0 ? ` · 层数:${layerValue}` : '';
         const equipArmor = Math.max(0, Number(eqDict.armor || 0));
         const armorSuffix = equipArmor > 0 ? ` · 护甲:${equipArmor}` : '';
+        const previewCardInst = { ...cardInst };
+        if (customVars && typeof customVars === 'object' && Object.keys(customVars).length) {
+            previewCardInst.equipment_counters = {
+                ...(previewCardInst.equipment_counters || {}),
+                ...customVars,
+            };
+        }
+        if (equipArmor > 0) {
+            previewCardInst.equipment_counters = {
+                ...(previewCardInst.equipment_counters || {}),
+                armor: equipArmor,
+                '护甲': equipArmor,
+            };
+        }
         const equipName = `${getCardName(cardDef)}${targetSuffix ? `(${targetSuffix})` : ''}`;
         const equipDisplayName = `${equipName}${layerSuffix}${armorSuffix}`;
         const fullText = UI.equip_info.replace('{0}', equipName).replace('{1}', turns) + layerSuffix + armorSuffix + (corruption ? UI.equip_corruption : '');
         const compactTextValue = `${equipName}${turns ? ` · ${turns}` : ''}${layerSuffix}${armorSuffix}${corruption ? ` · ${UI.compact_corrupted}` : ''}`;
         const text = isMinimalUiStyle() ? compactTextValue : fullText;
-        const triggerReady = !(cardInst.def_id === 'Flower' && turns < 2);
+        const triggerReady = !(cardInst.def_id === 'Flower' && turns < 1);
         if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && triggerReady && isFriendlyTurn() && !isSpectating) {
             const btn = document.createElement('button');
             btn.className = 'btn btn-small btn-equip-trigger';
@@ -14947,7 +15300,8 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             btn.innerHTML = `${getEquipmentIconHtml(cardInst, cardDef)}<span class="equip-trigger-text">${escapeHtml(visibleText)}</span>`;
             btn.title = isMinimalUiStyle() ? triggerText : '';
             btn.disabled = isActionBusy({ includeAnimation: false });
-            attachFloatingCardPreview(btn, cardInst);
+            attachFloatingCardPreview(btn, previewCardInst);
+            attachTermIntroToCard(btn, previewCardInst);
             btn.onclick = async () => {
                 if (!canSendGameAction('use_trigger', { includeAnimation: false })) return;
                 const payload = { equipment_instance_id: cardInst.instance_id };
@@ -14987,10 +15341,51 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
         } else {
             el.innerHTML = `${getEquipmentIconHtml(cardInst, cardDef)}<span class="equip-name">${escapeHtml(text)}</span>`;
             el.title = isMinimalUiStyle() ? fullText : '';
-            attachFloatingCardPreview(el, cardInst);
+            attachFloatingCardPreview(el, previewCardInst);
+            attachTermIntroToCard(el, previewCardInst);
             container.appendChild(el);
         }
     });
+}
+
+function getBattleUseTemplateParts(actorName) {
+    const table = currentLang === 'zh' ? null : (LOG_TEXT[currentLang] || LOG_TEXT.en);
+    const template = table && table.use_simple ? table.use_simple : '{p}使用了{card}';
+    const rendered = template.replace('{p}', actorName || '').replace('{card}', '\u0000');
+    const parts = rendered.split('\u0000');
+    return {
+        before: parts[0] == null ? `${actorName || ''}使用了` : parts[0],
+        after: parts.length > 1 ? parts.slice(1).join('') : '',
+    };
+}
+
+function renderBattleUseLogChipLine(el, entry) {
+    const cardDict = (entry && entry.cardDict && typeof entry.cardDict === 'object') ? entry.cardDict : null;
+    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(entry && entry.card);
+    if (!defId) {
+        el.innerHTML = colorizeCardText(stripBattleLogCardMarkers(entry && entry.text ? entry.text : ''));
+        return;
+    }
+    const parts = getBattleUseTemplateParts(localizePlayerNameInText(entry.actor || ''));
+    appendColorizedLogText(el, parts.before);
+    const chip = createCardChoiceChip({ ...(cardDict || {}), def_id: defId }, { hideInstanceOnlyFlags: false });
+    chip.classList.add('battle-log-card-chip');
+    el.appendChild(chip);
+    const count = Math.max(1, Number(entry.count || 1));
+    if (count > 1) {
+        const countSpan = document.createElement('span');
+        countSpan.className = 'battle-log-card-count';
+        countSpan.textContent = `×${count}`;
+        el.appendChild(countSpan);
+    }
+    if (parts.after) appendColorizedLogText(el, parts.after);
+}
+
+function appendColorizedLogText(parent, text) {
+    if (!parent || !text) return;
+    const span = document.createElement('span');
+    span.innerHTML = colorizeCardText(stripBattleLogCardMarkers(text));
+    parent.appendChild(span);
 }
 
 function createBattleLogElement(entry) {
@@ -15029,7 +15424,7 @@ function createBattleLogElement(entry) {
         }
         return el;
     }
-    const line = entry.text || '';
+    const line = stripBattleLogCardMarkers(entry.text || '');
     const displayLine = translateLogLine(line);
     const styleLine = String(displayLine || line).toLowerCase();
     el.className = 'log-entry';
@@ -15040,7 +15435,11 @@ function createBattleLogElement(entry) {
     else if (styleLine.includes('+e') || styleLine.includes('energy') || styleLine.includes('energia') || styleLine.includes('\u80fd\u91cf')) el.classList.add('log-elixir');
     else if (styleLine.includes('+m') || styleLine.includes('magic') || styleLine.includes('magie') || styleLine.includes('mana') || styleLine.includes('\u9b54\u529b')) el.classList.add('log-magic');
     else if (line.includes('===')) el.classList.add('log-round');
-    el.textContent = displayLine;
+    if (entry && entry.kind === 'use') {
+        renderBattleUseLogChipLine(el, entry);
+        return el;
+    }
+    el.innerHTML = colorizeCardText(displayLine);
     return el;
 }
 
@@ -15129,10 +15528,62 @@ function mergeBattleHpChainForCompact(a, b) {
     return left.concat(right);
 }
 
-function parseBattleUseLogForCompact(line) {
-    const match = String(line || '').match(/^(.+?)使用了?([^，]+?)(?: ×(\d+))?$/);
+const BATTLE_LOG_CARD_MARKER_RE = /\u2063CARD:([A-Za-z0-9_-]+)\u2063/g;
+
+function stripBattleLogCardMarkers(text) {
+    return String(text || '').replace(BATTLE_LOG_CARD_MARKER_RE, '');
+}
+
+function decodeBattleLogCardMarker(text) {
+    const source = String(text || '');
+    const match = source.match(/\u2063CARD:([A-Za-z0-9_-]+)\u2063/);
     if (!match) return null;
-    return { actor: match[1], card: match[2], count: Math.max(1, Number(match[3] || 1)) };
+    try {
+        const b64 = match[1].replace(/-/g, '+').replace(/_/g, '/');
+        const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+        const binary = atob(padded);
+        const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0));
+        const jsonText = new TextDecoder('utf-8').decode(bytes);
+        const data = JSON.parse(jsonText);
+        return data && typeof data === 'object' ? data : null;
+    } catch (err) {
+        return null;
+    }
+}
+
+function battleLogCardSignature(cardDict, fallbackName = '') {
+    if (!cardDict || typeof cardDict !== 'object') return String(fallbackName || '');
+    const keys = [
+        'def_id', 'cost_e_override', 'cost_m_override', 'fission_level', 'fusion_level',
+        'mimic_discount', 'bonus_damage', 'held_turns', 'return_to_hand_turns',
+        'swift_value', 'magic_swift_value', 'power_value', 'temp_swift_value',
+        'temp_heavy_value', 'extra_hits',
+    ];
+    const compact = {};
+    keys.forEach(key => {
+        const value = cardDict[key];
+        if (value !== undefined && value !== null && value !== 0 && value !== 1) compact[key] = value;
+    });
+    ['instance_flags', 'disabled_flags', 'setup_modifiers'].forEach(key => {
+        const arr = Array.isArray(cardDict[key]) ? cardDict[key].map(String).sort() : [];
+        if (arr.length) compact[key] = arr;
+    });
+    return JSON.stringify(compact);
+}
+
+function parseBattleUseLogForCompact(line) {
+    const rawLine = String(line || '');
+    const cardDict = decodeBattleLogCardMarker(rawLine);
+    const cleanLine = stripBattleLogCardMarkers(rawLine);
+    const match = cleanLine.match(/^(.+?)使用了?([^，]+?)(?: ×(\d+))?$/);
+    if (!match) return null;
+    return {
+        actor: match[1],
+        card: match[2],
+        cardDict,
+        cardSignature: battleLogCardSignature(cardDict, match[2]),
+        count: Math.max(1, Number(match[3] || 1)),
+    };
 }
 
 function formatBattleUseLogForCompact(use) {
@@ -15154,7 +15605,7 @@ function compactBattleLogLinesForDisplay(log) {
             const last = output[output.length - 1];
             const previous = output[output.length - 2];
             if (last && last.kind === 'damage') {
-                if (previous && previous.kind === 'use' && previous.actor === use.actor && previous.card === use.card) {
+                if (previous && previous.kind === 'use' && previous.actor === use.actor && previous.card === use.card && previous.cardSignature === use.cardSignature) {
                     previous.count += use.count;
                     previous.rawEnd = rawIndex;
                 } else {
@@ -15162,7 +15613,7 @@ function compactBattleLogLinesForDisplay(log) {
                 }
                 return;
             }
-            if (last && last.kind === 'use' && last.actor === use.actor && last.card === use.card) {
+            if (last && last.kind === 'use' && last.actor === use.actor && last.card === use.card && last.cardSignature === use.cardSignature) {
                 last.count += use.count;
                 last.rawEnd = rawIndex;
                 return;
@@ -15182,7 +15633,7 @@ function compactBattleLogLinesForDisplay(log) {
             output.push({ kind: 'damage', ...damage, rawStart: rawIndex, rawEnd: rawIndex });
             return;
         }
-        output.push({ kind: 'raw', text: line, rawStart: rawIndex, rawEnd: rawIndex });
+        output.push({ kind: 'raw', text: stripBattleLogCardMarkers(line), rawStart: rawIndex, rawEnd: rawIndex });
     });
     return output.map(entry => {
         if (entry.kind === 'use') return formatBattleUseLogForCompact(entry);
@@ -15200,7 +15651,7 @@ function compactBattleLogEntriesForDisplay(log) {
             const last = output[output.length - 1];
             const previous = output[output.length - 2];
             if (last && last.kind === 'damage') {
-                if (previous && previous.kind === 'use' && previous.actor === use.actor && previous.card === use.card) {
+                if (previous && previous.kind === 'use' && previous.actor === use.actor && previous.card === use.card && previous.cardSignature === use.cardSignature) {
                     previous.count += use.count;
                     previous.rawEnd = rawIndex;
                 } else {
@@ -15208,7 +15659,7 @@ function compactBattleLogEntriesForDisplay(log) {
                 }
                 return;
             }
-            if (last && last.kind === 'use' && last.actor === use.actor && last.card === use.card) {
+            if (last && last.kind === 'use' && last.actor === use.actor && last.card === use.card && last.cardSignature === use.cardSignature) {
                 last.count += use.count;
                 last.rawEnd = rawIndex;
                 return;
@@ -15234,13 +15685,19 @@ function compactBattleLogEntriesForDisplay(log) {
             last.rawEnd = rawIndex;
             return;
         }
-        output.push({ kind: 'raw', text: line, count: 1, rawStart: rawIndex, rawEnd: rawIndex });
+        output.push({ kind: 'raw', text: stripBattleLogCardMarkers(line), count: 1, rawStart: rawIndex, rawEnd: rawIndex });
     });
     return output.map(entry => ({
         type: 'battle',
         text: entry.kind === 'use'
             ? formatBattleUseLogForCompact(entry)
             : (entry.kind === 'damage' ? formatBattleDamageLogForCompact(entry) : `${entry.text || ''}${Number(entry.count || 1) > 1 ? ` ×${Number(entry.count || 1)}` : ''}`),
+        kind: entry.kind,
+        actor: entry.actor,
+        card: entry.card,
+        cardDict: entry.cardDict,
+        cardSignature: entry.cardSignature,
+        count: entry.count,
         rawStart: Number(entry.rawStart || 0),
         rawEnd: Number(entry.rawEnd == null ? entry.rawStart || 0 : entry.rawEnd),
     }));
@@ -15998,7 +16455,7 @@ async function onPlayCard(cardInstanceId, options = {}) {
     if (cardDef && cardDef.card_type === 'thorn' && gameState && gameState.mode !== '2v2') {
         const opponent = gameState.opponent || {};
         if (opponent.untargetable) {
-            flashStatus('对方无法被选中', 2200, 'error');
+            flashStatus(UI.no_selectable_player || '没有可选中的玩家', 2200, 'error');
             return;
         }
     }
@@ -16904,9 +17361,7 @@ async function showChoiceUI(data) {
         choiceResult = { cancelled: true };
     }
     if (!choiceResult) {
-        choicePending = false;
-        clearPendingServerAction();
-        return;
+        choiceResult = { cancelled: true };
     }
     choicePending = false;
     if (!canSendGameAction('resolve_choice', { includeAnimation: false })) {
@@ -17233,18 +17688,27 @@ function getDeckViewerPlayer() {
 }
 
 function onViewDeck() {
+    onViewPile('deck');
+}
+
+function onViewDiscard() {
+    onViewPile('discard');
+}
+
+function onViewPile(pileType = 'deck') {
     if (gameState && gameState.mode === 'urf') {
         return;
     }
-    if (tutorialMode) {
+    const isDeckPile = pileType === 'deck';
+    if (isDeckPile && tutorialMode) {
         tutorialDeckViewed = true;
         hideTutorialOverlay();
         setTimeout(updateTutorialOverlay, 80);
     }
     const deckPlayer = getDeckViewerPlayer();
-    const hasOrderedDeck = !!deckPlayer.deck_ordered;
-    const deck = deckPlayer.deck_ordered || deckPlayer.deck || [];
-    const blindDeck = getOwnBlindLevel() >= 3 && !isSpectating;
+    const hasOrderedDeck = isDeckPile && !!deckPlayer.deck_ordered;
+    const pile = isDeckPile ? (deckPlayer.deck_ordered || deckPlayer.deck || []) : (deckPlayer.discard || []);
+    const blindPile = getOwnBlindLevel() >= 3 && !isSpectating;
     const modal = $('modal');
     const content = $('modal-content');
     if (!modal || !content) return;
@@ -17255,15 +17719,21 @@ function onViewDeck() {
     const deckOwnerName = (isSpectating || (gameState && gameState.spectating)) && deckPlayer && deckPlayer.name
         ? localizeCanonicalPlayerName(deckPlayer.name)
         : '';
-    title.textContent = deckOwnerName ? `${UI.view_deck_title} - ${deckOwnerName}` : UI.view_deck_title;
+    const titleText = isDeckPile
+        ? (UI.view_draw_deck_title || UI.view_deck_title)
+        : (UI.view_discard_title || UI.discard_empty || 'Discard');
+    title.textContent = deckOwnerName ? `${titleText} - ${deckOwnerName}` : titleText;
     content.appendChild(title);
     const total = document.createElement('p');
     total.className = 'deck-total';
-    total.textContent = UI.deck_total.replace('{0}', blindDeck ? '?' : deck.length);
+    const totalTemplate = isDeckPile
+        ? (UI.draw_deck_total || UI.deck_total)
+        : (UI.discard_total || 'Discard: {0}');
+    total.textContent = totalTemplate.replace('{0}', blindPile ? '?' : pile.length);
     content.appendChild(total);
     const list = document.createElement('div');
     list.className = 'deck-list';
-    if (blindDeck) {
+    if (blindPile) {
         const row = document.createElement('div');
         row.className = 'deck-entry deck-entry-blinded';
         const unknown = document.createElement('span');
@@ -17274,9 +17744,17 @@ function onViewDeck() {
         unknown.appendChild(unknownName);
         row.appendChild(unknown);
         list.appendChild(row);
+    } else if (!pile.length) {
+        const row = document.createElement('div');
+        row.className = 'deck-entry deck-entry-empty';
+        const empty = document.createElement('span');
+        empty.className = 'choice-option-detail';
+        empty.textContent = isDeckPile ? (UI.deck_empty || 'Deck empty') : (UI.discard_empty || 'Discard pile empty');
+        row.appendChild(empty);
+        list.appendChild(row);
     } else if (hasOrderedDeck) {
         // Goggles: show deck in order (top to bottom)
-        deck.forEach((c, idx) => {
+        pile.forEach((c, idx) => {
             const row = document.createElement('div');
             row.className = 'deck-entry';
             const numEl = document.createElement('span');
@@ -17288,7 +17766,7 @@ function onViewDeck() {
         });
     } else {
         const groups = new Map();
-        deck.forEach(c => {
+        pile.forEach(c => {
             const key = cardChoiceIdentity(c);
             const group = groups.get(key) || { card: c, count: 0 };
             group.count += 1;
@@ -17453,6 +17931,38 @@ function getSettingsModSourceTab() {
 
 function getModLoginPayload() {
     return { disabled_mods: getDisabledMods(), ...getCommunityModSelection() };
+}
+
+function syncCurrentSettingsModSelectionToLocal() {
+    const listEl = $('settings-mods-list');
+    const checkboxes = listEl ? Array.from(listEl.querySelectorAll('input[type="checkbox"][data-filename]')) : [];
+    if (!checkboxes.length) return getDisabledMods();
+    let disabled = [];
+    checkboxes.forEach(cb => {
+        if (!cb.checked && cb.dataset.filename) disabled.push(cb.dataset.filename);
+    });
+    const coerced = coerceValidDisabledMods(disabled);
+    disabled = coerced.disabled;
+    if (coerced.forcedVanilla) {
+        checkboxes.forEach(cb => {
+            if (cb.dataset.filename === VANILLA_MOD_FILENAME) cb.checked = true;
+        });
+        showActionToast(tf('mod_selection_force_vanilla'), 2800, 'error');
+    }
+    localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
+    return disabled;
+}
+
+async function syncModSelectionBeforeInviteAccept() {
+    syncCurrentSettingsModSelectionToLocal();
+    try {
+        await fetchCardDefs({ useCache: false });
+        await fetchOpeningEvents({ useCache: false });
+        loadSoloDecks(false);
+        renderSoloBuilder();
+    } catch (e) {
+        console.warn('Failed to refresh card data before accepting invite:', e);
+    }
 }
 
 function buildModQueryString() {
@@ -17727,6 +18237,18 @@ function refreshCardsAfterCommunityChange() {
     });
     if (socket && socket.connected && phase === 'lobby') {
         socket.emit('update_mod_settings', { disabled_mods: getDisabledMods(), ...getCommunityModSelection() });
+    }
+}
+
+async function refreshCardsAfterModSettingsConfirmed() {
+    try {
+        await fetchCardDefs({ useCache: false });
+        await fetchOpeningEvents({ useCache: false });
+        loadSoloDecks(false);
+        renderSoloBuilder();
+        refreshCardDataViews();
+    } catch (e) {
+        console.warn('Failed to refresh card data after mod settings update:', e);
     }
 }
 
@@ -18590,6 +19112,7 @@ async function init() {
     });
     $('btn-surrender').addEventListener('click', onSurrender);
     $('btn-end-turn').addEventListener('click', onEndTurn);
+    if ($('btn-prediction-target')) $('btn-prediction-target').addEventListener('click', openPredictionTargetPicker);
     if ($('classic-end-turn')) $('classic-end-turn').addEventListener('click', onEndTurn);
     if ($('classic-settings')) $('classic-settings').addEventListener('click', () => openSettings({ hideServer: true }));
     document.addEventListener('mousemove', onClassicAimPointerMove);
@@ -18625,7 +19148,9 @@ async function init() {
     }
     const handleSoloPauseEdit = () => { if (socket || isLocalSoloRuntimeActive()) emitSoloEvent('solo_pause', {}); else showSoloTraining(); };
     $('btn-view-deck').addEventListener('click', onViewDeck);
+    if ($('btn-view-discard')) $('btn-view-discard').addEventListener('click', onViewDiscard);
     if ($('btn-spectate-view-deck')) $('btn-spectate-view-deck').addEventListener('click', onViewDeck);
+    if ($('btn-spectate-view-discard')) $('btn-spectate-view-discard').addEventListener('click', onViewDiscard);
     if ($('btn-switch-perspective')) {
         $('btn-switch-perspective').addEventListener('click', () => {
             if (replayMode) {
@@ -18636,6 +19161,7 @@ async function init() {
         });
     }
     if ($('classic-view-deck')) $('classic-view-deck').addEventListener('click', onViewDeck);
+    if ($('classic-view-discard')) $('classic-view-discard').addEventListener('click', onViewDiscard);
     if ($('classic-switch-perspective')) {
         $('classic-switch-perspective').addEventListener('click', () => {
             if (replayMode) {

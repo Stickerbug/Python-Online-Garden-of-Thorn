@@ -754,6 +754,7 @@ class LocalSoloEngine {
         this.opening_event_sub_choices = [payload.sub0 || null, payload.sub1 || null];
         this._antennae_reveal = [null, null];
         this._last_damage_value = [0, 0];
+        this._last_positive_damage_hits = [0, 0];
         this._incoming_damage_hint = [0, 0];
         this._game_over_defer_depth = 0;
         this.halve_next_attack = false;
@@ -848,6 +849,7 @@ class LocalSoloEngine {
         clone.opening_event_sub_choices = cloneJson(this.opening_event_sub_choices) || [null, null];
         clone._antennae_reveal = cloneJson(this._antennae_reveal) || [null, null];
         clone._last_damage_value = [...this._last_damage_value];
+        clone._last_positive_damage_hits = [...(this._last_positive_damage_hits || [0, 0])];
         clone._incoming_damage_hint = [...this._incoming_damage_hint];
         clone._game_over_defer_depth = this._game_over_defer_depth;
         clone.halve_next_attack = this.halve_next_attack;
@@ -1832,6 +1834,13 @@ class LocalSoloEngine {
 
     resolveTarget(playerId, target) {
         const context = this._active_effect_context || {};
+        const canTarget = (id, allowSelf = true) => {
+            id = toInt(id, -1);
+            if (id < 0 || id >= this.players.length) return false;
+            if (id === playerId) return !!allowSelf;
+            const ps = this.players[id];
+            return !!ps && toInt(ps.health, 0) > 0 && !ps.untargetable;
+        };
         if (typeof target === 'number') return target;
         if (target && typeof target === 'object' && target.ref === 'card_owner') {
             const card = this.resolveCardRef(playerId, target.card, null);
@@ -1839,29 +1848,38 @@ class LocalSoloEngine {
             return loc ? loc.ownerId : playerId;
         }
         if (!target || target === 'self' || target === 'friendly') return playerId;
-        if (target === 'enemy') return 1 - playerId;
+        if (target === 'enemy') {
+            const enemyId = 1 - playerId;
+            return canTarget(enemyId, false) ? enemyId : -1;
+        }
         if (target === 'both') return -1;
         if (target === 'random') return Math.random() < 0.5 ? playerId : 1 - playerId;
         if (['choice_target', 'selected_target', 'chosen_target'].includes(target)) {
             const choice = this._active_choice || {};
-            return toInt(choice.target_player ?? choice.target_player_id ?? choice.target_id, playerId);
+            const tid = toInt(choice.target_player ?? choice.target_player_id ?? choice.target_id, -1);
+            return canTarget(tid, true) ? tid : -1;
         }
         if (['event_source', 'source', 'last_actor', 'damage_source'].includes(target)) return toInt(context.source_id, playerId);
         if (target === 'target') {
             const choice = this._active_choice || {};
             if (choice.target_player != null || choice.target_player_id != null || choice.target_id != null) {
-                return toInt(choice.target_player ?? choice.target_player_id ?? choice.target_id, 1 - playerId);
+                const tid = toInt(choice.target_player ?? choice.target_player_id ?? choice.target_id, -1);
+                return canTarget(tid, true) ? tid : -1;
             }
-            return toInt(context.target_id, 1 - playerId);
+            const tid = toInt(context.target_id, -1);
+            return canTarget(tid, true) ? tid : -1;
         }
-        if (target === 'event_target') return toInt(context.target_id, 1 - playerId);
+        if (target === 'event_target') {
+            const tid = toInt(context.target_id, -1);
+            return canTarget(tid, true) ? tid : -1;
+        }
         return playerId;
     }
 
     resolveTargets(playerId, target) {
         if (target === 'both' || target === 'all') return [0, 1];
         const tid = this.resolveTarget(playerId, target);
-        return tid === -1 ? [0, 1] : [tid].filter(id => id >= 0 && id < this.players.length);
+        return tid === -1 ? [] : [tid].filter(id => id >= 0 && id < this.players.length);
     }
 
     findCardByInstanceId(instanceId) {
@@ -2255,8 +2273,11 @@ class LocalSoloEngine {
         const op = expr.op || expr.ref || expr.type || '';
         if (op === 'const') return expr.value ?? fallbackValue;
         if (op === 'var') {
+            const context = this._active_effect_context || {};
+            const key = String(expr.name || expr.id || 'var');
+            if (Object.prototype.hasOwnProperty.call(context, key)) return context[key];
             const store = this.varStoreForTarget(playerId, expr.target || 'self');
-            return this.scalarValue(store[String(expr.name || 'var')], 0);
+            return this.scalarValue(store[key], 0);
         }
         if (op === 'player_stat') {
             const tid = this.resolveTarget(playerId, expr.target || 'self');
@@ -2330,6 +2351,10 @@ class LocalSoloEngine {
             const tid = this.resolveTarget(playerId, expr.target || 'enemy');
             return toInt(this._last_damage_value[tid], 0);
         }
+        if (op === 'last_positive_hits' || op === 'positive_hits') {
+            const tid = this.resolveTarget(playerId, expr.target || 'enemy');
+            return toInt((this._last_positive_damage_hits || [])[tid], 0);
+        }
         if (op === 'selected_cards_count') {
             const choice = this._active_choice || {};
             if (Array.isArray(choice.target_instance_ids)) return choice.target_instance_ids.length;
@@ -2337,8 +2362,14 @@ class LocalSoloEngine {
         }
         if (op === 'selected_card_index') return toInt((this._active_effect_context || {}).selected_card_index, 0);
         if (ref === 'var') {
+            const context = this._active_effect_context || {};
+            const key = String(expr.name || expr.id || 'var');
+            if (Object.prototype.hasOwnProperty.call(context, key)) return context[key];
             const store = this.varStoreForTarget(playerId, expr.target || 'self');
-            return this.scalarValue(store[String(expr.name || 'var')], 0);
+            return this.scalarValue(store[key], 0);
+        }
+        if (ref === 'source_player' || op === 'source_player') {
+            return playerId;
         }
         if (ref === 'timer_remaining') {
             return toInt((this._active_effect_context || {}).timer_remaining, 0);
@@ -2420,6 +2451,10 @@ class LocalSoloEngine {
         if (ref === 'last_damage') {
             const tid = this.resolveTarget(playerId, expr.target || 'enemy');
             return toInt(this._last_damage_value[tid], 0);
+        }
+        if (ref === 'last_positive_hits' || ref === 'positive_hits') {
+            const tid = this.resolveTarget(playerId, expr.target || 'enemy');
+            return toInt((this._last_positive_damage_hits || [])[tid], 0);
         }
         if (ref === 'incoming_damage') {
             const tid = this.resolveTarget(playerId, expr.target || 'self');
@@ -2754,7 +2789,10 @@ class LocalSoloEngine {
             source_id: sourceId,
             target_id: targetId == null ? sourceId : targetId,
             event_card_instance_id: eventCardId,
+            event_card_def_id: eventCard ? eventCard.def_id : '',
             event_card_type: eventCard ? eventCard.card_type : '',
+            event_card_cost_e: eventCard ? toInt(eventCard._paid_e_this_play ?? eventCard.cost_e, 0) : 0,
+            event_card_cost_m: eventCard ? toInt(eventCard._paid_m_this_play ?? eventCard.cost_m, 0) : 0,
         };
         if (equipment) {
             context.selected_equipment_instance_id = equipment.card_instance && equipment.card_instance.instance_id;
@@ -2772,7 +2810,7 @@ class LocalSoloEngine {
         const def = card.def();
         const effects = getScriptEffects(def, eventName);
         if (effects.length) {
-            this.runEffectList(ownerId, card, effects, choice, { event: eventName, ...extraContext });
+            this.runEffectList(ownerId, card, effects, choice, { event: eventName, ...extraContext, listener_owner_id: ownerId });
             return true;
         }
         const eventType = `on_${eventName}`;
@@ -2787,6 +2825,7 @@ class LocalSoloEngine {
                     event: eventName,
                     repeat_index: repeatIndex + 1,
                     ...extraContext,
+                    listener_owner_id: ownerId,
                 });
             }
             ran = true;
@@ -3388,6 +3427,27 @@ class LocalSoloEngine {
         return next;
     }
 
+    syncCardSpecialPropertyFlag(target, prop, disableWhenZero = false) {
+        if (!target) return;
+        const mapping = {
+            swift_value: 'swift',
+            magic_swift_value: 'magic_swift',
+            power_value: 'power',
+            temp_swift_value: 'temp_swift',
+            temp_heavy_value: 'temp_heavy',
+        };
+        const flag = mapping[prop];
+        if (!flag) return;
+        const value = Math.max(0, toInt(target[prop], 0));
+        if (value > 0) {
+            target.instance_flags.add(flag);
+            target.disabled_flags.delete(flag);
+        } else {
+            target.instance_flags.delete(flag);
+            if (disableWhenZero) target.disabled_flags.add(flag);
+        }
+    }
+
     effect_card_prop_set(playerId, card, params) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'current_card' }, card);
         if (!target) return;
@@ -3397,6 +3457,7 @@ class LocalSoloEngine {
         target[prop] = this.clampCardProperty(target, prop, this.evalInt(playerId, params.value ?? 0, card, 0));
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
+        this.syncCardSpecialPropertyFlag(target, prop, true);
     }
 
     effect_card_prop_add(playerId, card, params) {
@@ -3413,6 +3474,7 @@ class LocalSoloEngine {
         target[prop] = this.clampCardProperty(target, prop, current + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0));
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
+        this.syncCardSpecialPropertyFlag(target, prop, false);
     }
 
     effect_card_prop_mul(playerId, card, params) {
@@ -3430,6 +3492,7 @@ class LocalSoloEngine {
         target[prop] = this.clampCardProperty(target, prop, current * multiplier);
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
+        this.syncCardSpecialPropertyFlag(target, prop, false);
     }
 
     effect_card_damage_multiply(playerId, card, params) {
@@ -4321,9 +4384,13 @@ class LocalSoloEngine {
             return 0;
         }
         let total = 0;
+        if (!Array.isArray(this._last_positive_damage_hits) || this._last_positive_damage_hits.length !== this.players.length) {
+            this._last_positive_damage_hits = Array(this.players.length).fill(0);
+        }
+        this._last_positive_damage_hits[targetId] = 0;
         for (let h = 0; h < hits; h++) {
             let precisionDodged = false;
-            let plankHalvesAttack = false;
+            let plankBlocksAttack = false;
             if (ps.dodge > 0) {
                 ps.dodge -= 1;
                 if (!isPrecision) {
@@ -4342,7 +4409,7 @@ class LocalSoloEngine {
             if (sourceCard && this.hasEquipment(targetId, 'Plank')) {
                 try {
                     if (toInt(sourceCard.cost_e, 0) <= 1) {
-                        plankHalvesAttack = true;
+                        plankBlocksAttack = true;
                     }
                 } catch (e) {}
             }
@@ -4350,11 +4417,12 @@ class LocalSoloEngine {
             if (sourceCard) {
                 power = Math.max(0, toInt(sourceCard.power_value, 0));
             }
-            let dmg = Math.max(0, toInt(amount, 0)) + Math.ceil(power / Math.max(1, toInt(hits, 1))) + this.damageDealtEquipmentFlatBonus(attackerId);
+            let dmg = Math.max(0, toInt(amount, 0)) + Math.ceil(power / Math.max(1, toInt(hits, 1)));
             if (this.halve_next_attack) dmg = Math.ceil(dmg / 2);
             else if (precisionDodged) dmg = Math.ceil(dmg / 2);
             dmg = this.applyCorruptionMultiplier(dmg);
-            if (plankHalvesAttack) dmg = Math.floor(dmg / 2);
+            dmg += this.damageDealtEquipmentFlatBonus(attackerId);
+            if (plankBlocksAttack) dmg = 0;
             if (ps.nazar_active) {
                 const original = dmg;
                 dmg = Math.max(1, dmg - 9);
@@ -4371,12 +4439,13 @@ class LocalSoloEngine {
             dmg = Math.max(0, dmg - ps.armor - rootArmor + fragile);
             if (ps.sponge_active && dmg > 0) {
                 const converted = Math.min(10, dmg);
-                ps.poison += Math.floor(converted / 2);
-                dmg = Math.max(0, dmg - converted);
+                ps.poison += converted;
+                dmg = 0;
             }
             dmg = this.applyUniversalDamageShields(targetId, dmg, attackerId, '攻击');
             ps.health -= dmg;
             total += dmg;
+            if (dmg > 0) this._last_positive_damage_hits[targetId] += 1;
             this.recordDamage(targetId, dmg, attackerId);
             this.logMsg(`${this.pn(targetId)}受到${dmg}点伤害（H=${ps.health}）`);
             if (dmg > 0 && ps.toxic > 0) ps.poison += ps.toxic;
@@ -4423,6 +4492,57 @@ class LocalSoloEngine {
         return total;
     }
 
+    clearYggdrasilEffects(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        ['poison', 'fire', 'vulnerable', 'toxic', 'triangle_stacks', 'dodge', 'armor', 'equipment_protection'].forEach(prop => { ps[prop] = 0; });
+        ps.nazar_active = false;
+        ps.nazar_big_hits = 0;
+        ps.negate_next_skill = false;
+        ps.skip_turn = false;
+        ps.damage_multiplier = 1.0;
+        ps.bandage_active = false;
+        ps.bandage_death_pending = false;
+        ps.custom_statuses = {};
+        ps.custom_vars['三角形层数'] = 0;
+    }
+
+    triggerYggdrasilEffect(targetId, card = null, sourcePlayerId = null, options = {}) {
+        const ps = this.players[targetId];
+        if (!ps) return false;
+        const wasDead = ps.health <= 0;
+        ps.health = 5;
+        this.clearYggdrasilEffects(targetId);
+        ps.invincible = true;
+        const drawn = ps.drawCards(3);
+        if (card) {
+            if (options.exileFromHand) {
+                const idx = ps.hand.findIndex(c => c.instance_id === card.instance_id);
+                if (idx >= 0) ps.hand.splice(idx, 1);
+                ps.exile.push(card);
+            } else if (options.exilePlayedCard) {
+                card.instance_flags.add('exile');
+            }
+        }
+        const actorText = sourcePlayerId != null && sourcePlayerId !== targetId
+            ? `${this.pn(sourcePlayerId)}的世界树之叶使`
+            : `${this.pn(targetId)}的世界树之叶`;
+        const reviveText = wasDead ? '复活，' : '';
+        this.logMsg(`${actorText}${this.pn(targetId)}${reviveText}生命值设为5，抽${drawn.length}张牌，清除所有效果，无敌直到下回合结束！`);
+        return true;
+    }
+
+    effectYggdrasil(playerId, card, choice = null) {
+        let targetId = this.choiceTargetFromChoice(choice, playerId);
+        if (!this.players[targetId]) targetId = playerId;
+        if (this.players[targetId].health <= 0) {
+            this.triggerYggdrasilEffect(targetId, card, playerId, { exilePlayedCard: true });
+        } else {
+            this.players[targetId].heal(20);
+            this.logMsg(`${this.pn(playerId)}使用世界树之叶！${this.pn(targetId)}回复20H`);
+        }
+    }
+
     checkYggdrasil(playerId) {
         const ps = this.players[playerId];
         if (!ps || ps.health > 0) return;
@@ -4436,18 +4556,7 @@ class LocalSoloEngine {
         }
         const idx = ps.hand.findIndex(card => card.def_id === 'Yggdrasil');
         if (idx >= 0) {
-            const card = ps.hand.splice(idx, 1)[0];
-            ps.exile.push(card);
-            ps.health = 5;
-            ps.invincible = true;
-            ['poison', 'fire', 'vulnerable', 'toxic', 'triangle_stacks', 'dodge', 'armor', 'equipment_protection'].forEach(prop => { ps[prop] = 0; });
-            ps.nazar_active = false;
-            ps.nazar_big_hits = 0;
-            ps.negate_next_skill = false;
-            ps.skip_turn = false;
-            ps.damage_multiplier = 1.0;
-            ps.custom_vars['三角形层数'] = 0;
-            this.logMsg(`${this.pn(playerId)}的世界树之叶发动！清除己方所有效果，生命值设为5，本回合无敌！`);
+            this.triggerYggdrasilEffect(playerId, ps.hand[idx], null, { exileFromHand: true });
         }
     }
 
@@ -4479,7 +4588,7 @@ class LocalSoloEngine {
         card.fission_hit = 0;
     }
 
-    discardCard(ps, card) {
+    resetCardForDiscard(card) {
         if (card.card_type === 'thorn') this.resetOneShotAttackAttrs(card);
         card.cost_e_override = null;
         card.cost_m_override = null;
@@ -4490,6 +4599,10 @@ class LocalSoloEngine {
         card.instance_flags.delete('power');
         card.instance_flags.delete('temp_swift');
         card.instance_flags.delete('temp_heavy');
+    }
+
+    discardCard(ps, card) {
+        this.resetCardForDiscard(card);
         ps.discard.push(card);
     }
 
@@ -4639,6 +4752,12 @@ class LocalSoloEngine {
             return { success: true, card: card.toDict(), ignored: true };
         }
         if (this.pending_response) return { success: false, error: '等待对手反制响应' };
+        if (card.def().card_type === 'thorn') {
+            const targetId = this.resolveTarget(playerId, choice && choice.target_player_id != null ? choice.target_player_id : 'enemy');
+            if (targetId < 0 || targetId >= this.players.length || targetId === playerId) {
+                return { success: false, error: '没有可选中的玩家' };
+            }
+        }
         const [canPlay, reason] = this.canPlayCard(playerId, card);
         if (!canPlay) return { success: false, error: reason };
         if (this.cardNeedsChoice(card) && !this.choiceSatisfiesRequest(card, choice)) {
@@ -4758,6 +4877,10 @@ class LocalSoloEngine {
                 this.players[equipOwnerId].equipment.push(eq);
                 this.logMsg(`${this.pn(equipOwnerId)}装备了${cardName(card.def_id)}`);
             }
+        } else if (card.flags.has('rebound')) {
+            this.resetCardForDiscard(card);
+            ps.addToHand(card);
+            this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}因回转回到手中`);
         } else if (card.flags.has('exile')) {
             const loc = this.findCardLocation(card);
             if (!loc) ps.exile.push(card);
@@ -4773,6 +4896,10 @@ class LocalSoloEngine {
     }
 
     applyCardEffect(playerId, card, choice = null) {
+        if (card && card.def_id === 'Yggdrasil') {
+            this.effectYggdrasil(playerId, card, choice);
+            return;
+        }
         const effects = playEffectsFor(card);
         if (effects.length) {
             this.runEffectList(playerId, card, effects, choice, {
@@ -4817,9 +4944,10 @@ class LocalSoloEngine {
         }
         const card = new LocalCard(pending.card);
         const ps = this.players[playerId];
-        if (choice == null) {
+        const choiceCancelled = choice == null || (typeof choice === 'object' && (choice.cancelled || choice.cancel));
+        if (choiceCancelled) {
             if (!ps.findHandCard(card.instance_id)) ps.hand.unshift(card);
-            return { success: false, error: '选择已取消' };
+            return { success: false, cancelled: true, error: '选择已取消' };
         }
         const dupCount = toInt(ps.cards_played_this_turn[card.def_id], 0);
         card._paid_e_this_play = card.cost_e + dupCount;
@@ -4972,6 +5100,7 @@ class LocalSoloEngine {
         if (this.game_over) return;
         this.runOwnerTurnEndEquipment(playerId);
         if (this.game_over) return;
+        this.decayEquipmentArmorEndTurn(playerId);
         if (ps.bandage_death_pending) {
             ps.health = 0;
             ps.bandage_death_pending = false;
@@ -5012,6 +5141,15 @@ class LocalSoloEngine {
                 selected_equipment_instance_id: eq.card_instance && eq.card_instance.instance_id,
                 selected_equipment_owner_id: playerId,
             });
+        });
+    }
+
+    decayEquipmentArmorEndTurn(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        [...ps.equipment].forEach(eq => {
+            const armor = toInt(eq.armor, 0);
+            if (armor > 0) eq.armor = Math.max(0, armor - 1);
         });
     }
 

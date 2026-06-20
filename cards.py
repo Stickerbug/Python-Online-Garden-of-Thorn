@@ -291,7 +291,7 @@ _reg(CardDef('Light', 'Light', '轻', 0, 0, 'thorn', 5, 'Common',
              '轻如鸿毛，却能伤人两次。', '造成2D×2（2子瓣）'))
 
 _reg(CardDef('Fang', 'Fang', '尖牙', 2, 0, 'thorn', 5, 'Common',
-             '吸取对手的生命来为你回复。', '造成8D；造成伤害时回复造成伤害80%（向下取整）的H'))
+             '吸取对手的生命来为你回复。', '对目标造成8D；造成伤害时，回复自己造成伤害80%(向下取整)的H'))
 
 _reg(CardDef('Triangle', 'Triangle', '三角形', 2, 0, 'thorn', 8, 'Common',
              '量变引起质变。', '造成(6+3×三角形层数)D；造成伤害时获得1层三角形，上限4层'))
@@ -347,7 +347,8 @@ _reg(CardDef('Mimic', 'Mimic', '拟态', 0, 0, 'bloom', 2, 'Common',
              flags={'exile', 'self_only'}))
 
 _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 0, 'Super',
-             '神奇的树叶。可以使人死而复生。', '+20H；受到致命伤害时，若在手牌中，则清除自己的所有效果，将生命值设为5，此回合无敌并放逐此牌'))
+             '神奇的树叶。可以使人死而复生。',
+             '回复目标20H；自身受到致命伤害时将H设为5，抽3张牌，清除所有效果，无敌直到下回合结束，放逐此牌；可以选择一个阵亡玩家复活，并触发此效果'))
 
 _reg(CardDef('Leaf', 'Leaf', '叶子', 1, 0, 'root', 5, 'Common',
              '基础的装备之一，可以回复生命亦可造成伤害。',
@@ -409,7 +410,7 @@ _reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 0, 3, 'guard', 3, 'Com
              '有魔力的护符，让敌方的高耗技能化为虚无。', '响应：敌方使用技能牌；获得2层魔法邪眼。存在时，敌方使用3E及以上技能牌无效，然后减少1层',
              response_trigger='bloom'))
 
-_reg(CardDef('GoldenNazar', 'Golden Nazar', '黄金邪眼', 3, 0, 'guard', 5, 'Unusual',
+_reg(CardDef('GoldenNazar', 'Golden Nazar', '黄金邪眼', 4, 0, 'guard', 5, 'Unusual',
              '镀金的护符会为装备留下最后一道防线。', '响应：自身装备即将被摧毁；所有自身装备获得2层装备护甲。装备护甲：存在时，若装备将被摧毁，则使其不被摧毁并消耗1层装备护甲',
              response_trigger='equipment_destroy'))
 

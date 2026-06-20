@@ -63,6 +63,7 @@ class GameEngine2v2(GameEngine):
         self.player_names: List[str] = ['玩家1', '玩家2', '玩家3', '玩家4']
         self.debug_selector_log: bool = False
         self._last_damage_value: List[int] = [0] * 4
+        self._last_positive_damage_hits: List[int] = [0] * 4
         self._incoming_damage_hint: List[int] = [0] * 4
         self._last_attacker: Dict[int, int] = {}
         self.custom_vars: Dict[str, int] = {}
@@ -384,6 +385,7 @@ class GameEngine2v2(GameEngine):
         self._run_owner_turn_end_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        self._decay_equipment_armor_end_turn(player_id)
         if ps.bandage_death_pending:
             ps.health = 0
             ps.bandage_death_pending = False
@@ -788,6 +790,7 @@ class GameEngine2v2(GameEngine):
         if not (needs_response or needs_precision_response):
             return None
         target_id = self._selected_effect_target(player_id, choice)
+        equipment_destroy_responders = self._equipment_destroy_response_player_ids(player_id, card, choice)
         if card.card_type == 'bloom':
             responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
         elif self._would_heal(card):
@@ -796,6 +799,7 @@ class GameEngine2v2(GameEngine):
             responder_ids = [target_id]
         else:
             responder_ids = []
+        responder_ids = list(dict.fromkeys([*responder_ids, *equipment_destroy_responders]))
         counter_cards = []
         has_payable_counter = False
         for responder_id in responder_ids:
@@ -822,6 +826,41 @@ class GameEngine2v2(GameEngine):
         }
         return {'success': True, 'needs_response': True, 'card': card.to_dict()}
 
+    def _equipment_destroy_response_player_ids(self, player_id: int, card: Optional[CardInstance], choice: Optional[dict] = None) -> List[int]:
+        if card is None or not self._would_destroy_equipment(card):
+            return []
+        owners: List[int] = []
+        def add_owner(owner_id: int):
+            if not self._is_valid_player_id(owner_id) or self.players[owner_id].health <= 0:
+                return
+            if owner_id not in owners:
+                owners.append(owner_id)
+
+        def has_destroyable_equipment(owner_id: int) -> bool:
+            if not self._is_valid_player_id(owner_id):
+                return False
+            return any('indestructible' not in eq.card_instance.flags for eq in self.players[owner_id].equipment)
+
+        card_id = str(getattr(card, 'def_id', '') or '').lower()
+        legacy_id = str(getattr(getattr(card, 'card_def', None), 'legacy_id', '') or '').lower()
+        if card_id in ('magicsewage', 'vanilla:magicsewage') or legacy_id == 'magicsewage':
+            for owner_id in range(len(self.players)):
+                if has_destroyable_equipment(owner_id):
+                    add_owner(owner_id)
+            return owners
+
+        target_id = self._selected_effect_target(player_id, choice)
+        if not self._is_valid_player_id(target_id):
+            return []
+        if isinstance(choice, dict) and choice.get('target_instance_id') is not None:
+            eq = self.players[target_id].find_equipment(choice.get('target_instance_id'))
+            if eq is not None and 'indestructible' not in eq.card_instance.flags:
+                add_owner(target_id)
+            return owners
+        if has_destroyable_equipment(target_id):
+            add_owner(target_id)
+        return owners
+
     def play_card(self, player_id: int, card_instance_id: int, target_player_id: int = -1, choice=None) -> dict:
         target_player_id = self._normalize_player_id(target_player_id)
         ps = self.players[player_id] if self._is_valid_player_id(player_id) else None
@@ -840,9 +879,15 @@ class GameEngine2v2(GameEngine):
         elif self._card_requires_target(card) and card.card_type == 'thorn' and target_player_id == player_id:
             return {'success': False, 'error': '攻击牌不能选择自己作为目标'}
         elif self._card_requires_target(card) and card.card_type == 'thorn' and not self._is_valid_enemy_target(player_id, target_player_id):
-            return {'success': False, 'error': '对方无法被选中'}
-        elif self._card_requires_target(card) and not self._is_valid_effect_target(player_id, target_player_id):
-            return {'success': False, 'error': '对方无法被选中'}
+            return {'success': False, 'error': '没有可选中的玩家'}
+        elif self._card_requires_target(card):
+            allow_dead_target = self._card_is(card, 'Yggdrasil', 'vanilla:yggdrasil')
+            if allow_dead_target:
+                if (not self._is_valid_player_id(target_player_id)
+                        or (target_player_id != player_id and bool(getattr(self.players[target_player_id], 'untargetable', False)))):
+                    return {'success': False, 'error': '没有可选中的玩家'}
+            elif not self._is_valid_effect_target(player_id, target_player_id):
+                return {'success': False, 'error': '没有可选中的玩家'}
         if target_player_id >= 0:
             if choice is None:
                 choice = {}
@@ -854,7 +899,7 @@ class GameEngine2v2(GameEngine):
         can, reason = self.can_play_card(player_id, card)
         if not can:
             return {'success': False, 'error': reason}
-        if target_player_id != player_id and self.is_ally(player_id, target_player_id):
+        if target_player_id != player_id and self.is_ally(player_id, target_player_id) and self.players[target_player_id].health > 0:
             if not (choice and choice.get('_ally_approved')):
                 self.pending_ally_request = {
                     'player_id': player_id,
@@ -890,6 +935,7 @@ class GameEngine2v2(GameEngine):
                 target_id = self._selected_effect_target(player_id, choice)
                 counter_cards = []
                 has_payable_counter = False
+                equipment_destroy_responders = self._equipment_destroy_response_player_ids(player_id, card, choice)
                 if card.card_type == 'bloom':
                     responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
                 elif self._would_heal(card):
@@ -898,6 +944,7 @@ class GameEngine2v2(GameEngine):
                     responder_ids = [target_id]
                 else:
                     responder_ids = []
+                responder_ids = list(dict.fromkeys([*responder_ids, *equipment_destroy_responders]))
                 for responder_id in responder_ids:
                     for c in self.players[responder_id].hand:
                         if self._card_can_counter(c, card):
@@ -1105,6 +1152,13 @@ class GameEngine2v2(GameEngine):
         if 'stealth' in flags:
             return False
         target_id = self._selected_effect_target(player_id, getattr(self, '_active_choice', None))
+        equipment_destroy_responders = self._equipment_destroy_response_player_ids(player_id, card, getattr(self, '_active_choice', None))
+        if equipment_destroy_responders and any(
+                self._can_pay_counter_card(responder_id, c) and c.card_def.response_trigger == 'equipment_destroy'
+                for responder_id in equipment_destroy_responders
+                for c in self.players[responder_id].hand
+        ):
+            return True
         if self._would_heal(card):
             return any(
                 self._can_pay_counter_card(enemy_id, c) and c.card_def.response_trigger in ('any', 'heal')
@@ -1425,9 +1479,12 @@ class GameEngine2v2(GameEngine):
             self.log_msg(f"{self.pn(target_id)}无法被攻击选中")
             return 0
         total_dealt = 0
+        if not isinstance(getattr(self, '_last_positive_damage_hits', None), list) or len(self._last_positive_damage_hits) != len(self.players):
+            self._last_positive_damage_hits = [0] * len(self.players)
+        self._last_positive_damage_hits[target_id] = 0
         for _ in range(hits):
             precision_dodged = False
-            plank_halves_attack = False
+            plank_blocks_attack = False
             if ps.dodge > 0:
                 ps.dodge -= 1
                 if not is_precision:
@@ -1441,7 +1498,7 @@ class GameEngine2v2(GameEngine):
             if source_card is not None and self._has_equipment(target_id, 'Plank', 'jungle:plank'):
                 try:
                     if int(getattr(source_card, 'cost_e', 0) or 0) <= 1:
-                        plank_halves_attack = True
+                        plank_blocks_attack = True
                 except Exception:
                     pass
             power = 0
@@ -1457,8 +1514,8 @@ class GameEngine2v2(GameEngine):
                 dmg = math.ceil(dmg / 2)
             dmg = self._apply_corruption_multiplier_to_damage(dmg, log=False)
             dmg = self._apply_damage_dealt_equipment_multiplier(dmg, attacker_id)
-            if plank_halves_attack:
-                dmg = math.floor(dmg / 2)
+            if plank_blocks_attack:
+                dmg = 0
             if ps.nazar_active:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
@@ -1492,11 +1549,13 @@ class GameEngine2v2(GameEngine):
             dmg = max(0, dmg - effective_armor)
             if ps.sponge_active and dmg > 0:
                 converted = min(10, dmg)
-                ps.poison += converted // 2
-                dmg = max(0, dmg - converted)
+                ps.poison += converted
+                dmg = 0
             dmg = self._apply_universal_damage_shields(target_id, dmg, attacker_id, '攻击', DAMAGE_TYPE_PHYSICAL)
             ps.health -= dmg
             total_dealt += dmg
+            if dmg > 0:
+                self._last_positive_damage_hits[target_id] += 1
             self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
             self._run_v2_after_damage_hooks(damage_context, dmg)
@@ -1582,7 +1641,7 @@ class GameEngine2v2(GameEngine):
         if trigger_cost_m > ps.magic:
             return {'success': False, 'error': '魔力不足'}
         if not self._is_valid_effect_target(player_id, target_player_id):
-            return {'success': False, 'error': '对方无法被选中'}
+            return {'success': False, 'error': '没有可选中的玩家'}
         if self._equipment_trigger_forbids_self_target(eq.card_def) and target_player_id == player_id:
             return {'success': False, 'error': '不能选择自己作为目标'}
         if target_player_id != player_id and self.is_ally(player_id, target_player_id) and not ally_approved:
@@ -1597,8 +1656,6 @@ class GameEngine2v2(GameEngine):
         max_uses = self._equipment_trigger_max_uses(eq)
         if max_uses > 0 and int(getattr(eq, 'uses_this_turn', 0)) >= max_uses:
             return {'success': False, 'error': f'该装备本回合最多触发{max_uses}次'}
-        if self._card_event_requires_self_destroy(eq.card_def, 'equipment_trigger') and int(getattr(ps, 'equipment_protection', 0) or 0) > 0:
-            return {'success': False, 'error': '装备保护会抵消摧毁，无法触发'}
         self._spend_resource(player_id, 'elixir', trigger_cost, eq.card_instance)
         self._spend_resource(player_id, 'magic', trigger_cost_m, eq.card_instance)
         eq.uses_this_turn = int(getattr(eq, 'uses_this_turn', 0)) + 1
@@ -1622,7 +1679,7 @@ class GameEngine2v2(GameEngine):
             return player_id if owner_id is None else owner_id
         if target_str in ('choice_target', 'selected_target', 'chosen_target'):
             target_id = self._selected_choice_target(player_id)
-            return target_id if self._is_valid_effect_target(player_id, target_id) else player_id
+            return target_id if self._is_valid_effect_target(player_id, target_id) else -1
         if target_str == 'target':
             selected = self._selected_choice_target(-1)
             if self._is_valid_effect_target(player_id, selected):
@@ -1688,6 +1745,8 @@ class GameEngine2v2(GameEngine):
             selected = self._active_choice.get('target_player')
             if self._is_valid_effect_target(player_id, selected):
                 return [selected]
+        if target_str in ('all_players', 'all'):
+            return list(range(len(self.players)))
         if target_str in ('both', 'random_side'):
             return [i for i, p in enumerate(self.players) if p.health > 0]
         if target_str in ('friendly', 'self', None, ''):
