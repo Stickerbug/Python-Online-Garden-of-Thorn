@@ -313,6 +313,7 @@ _friend_request_cleanup_started = False
 _dm_cleanup_started = False
 _event_loop_watchdog_started = False
 _pending_interaction_watchdog_started = False
+_room_timer_worker_started = False
 _next_room_id = 0
 _COMMUNITY_API_RATE: dict = {}
 SERVER_STARTED_AT = time.time()
@@ -417,6 +418,12 @@ _ADMIN_STATUS_CACHE_SECONDS = _env_float('GTN_ADMIN_STATUS_CACHE_SECONDS', 5)
 _ADMIN_API_SLOW_MS = _env_float('GTN_ADMIN_API_SLOW_MS', 1000)
 _SOCKET_ACTION_SLOW_MS = _env_float('GTN_SOCKET_ACTION_SLOW_MS', 500)
 _ROOM_ACTION_LOCK_WAIT_SECONDS = _env_float('GTN_ROOM_ACTION_LOCK_WAIT_SECONDS', 0.25)
+ACTION_TURN_SECONDS = _env_float('GTN_ACTION_TURN_SECONDS', 60)
+ACTION_TURN_CARD_BONUS_SECONDS = _env_float('GTN_ACTION_TURN_CARD_BONUS_SECONDS', 5)
+DRAFT_TIMEOUT_SECONDS = _env_float('GTN_DRAFT_TIMEOUT_SECONDS', 240)
+EVENT_SELECT_TIMEOUT_SECONDS = _env_float('GTN_EVENT_SELECT_TIMEOUT_SECONDS', 40)
+EVENT_SUB_CHOICE_TIMEOUT_SECONDS = _env_float('GTN_EVENT_SUB_CHOICE_TIMEOUT_SECONDS', 60)
+ROOM_TIMER_TICK_SECONDS = _env_float('GTN_ROOM_TIMER_TICK_SECONDS', 1)
 _LOBBY_BROADCAST_LOCK = threading.Lock()
 _LOBBY_BROADCAST_PENDING = False
 _LOBBY_BROADCAST_DIRTY = False
@@ -1055,6 +1062,10 @@ class GameRoom:
         self.state_broadcast_lock = threading.Lock()
         self.state_broadcast_pending = False
         self.state_broadcast_dirty = False
+        self.action_timer_player = None
+        self.action_timer_remaining = float(ACTION_TURN_SECONDS)
+        self.action_timer_last_tick = time.time()
+        self.pregame_deadlines = {}
         self.team_assignments = None
         self._history_recorded = False
         self.created_at = time.time()
@@ -2129,15 +2140,44 @@ def inject_solo_skins(state, owner_skin=None, perspective=0):
     return state
 
 
-def mark_player_session_last_seen(player):
+def _user_has_active_player_session_locked(user_id, exclude_sid=None):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return False
+    exclude_sid = str(exclude_sid or '')
+    for sid, player in players.items():
+        if exclude_sid and str(sid) == exclude_sid:
+            continue
+        try:
+            if int(player.get('user_id') or 0) == uid and player.get('is_registered_user'):
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+def _user_has_active_player_session(user_id, exclude_sid=None):
+    with _lock:
+        return _user_has_active_player_session_locked(user_id, exclude_sid=exclude_sid)
+
+
+def mark_player_session_last_seen_locked(player, exclude_sid=None):
     if not DB_AVAILABLE or not player:
         return
     if not player.get('is_registered_user') or not player.get('user_id'):
+        return
+    if _user_has_active_player_session_locked(player.get('user_id'), exclude_sid=exclude_sid):
         return
     try:
         enqueue_user_last_seen(player.get('user_id'))
     except Exception as exc:
         admin_event('error', f"failed to enqueue last seen for user {player.get('user_id')}: {exc}")
+
+
+def mark_player_session_last_seen(player, exclude_sid=None):
+    with _lock:
+        mark_player_session_last_seen_locked(player, exclude_sid=exclude_sid)
 
 
 def public_player_info(sid, player=None):
@@ -2352,6 +2392,294 @@ def ensure_pending_interaction_watchdog_started():
         socketio.start_background_task(_pending_interaction_watchdog_worker)
     except Exception:
         threading.Thread(target=_pending_interaction_watchdog_worker, name='pending-interaction-watchdog', daemon=True).start()
+
+
+def _room_action_timer_paused(engine):
+    return bool(
+        getattr(engine, 'pending_response', None)
+        or getattr(engine, 'pending_choice', None)
+        or getattr(engine, 'pending_v2_ui', None)
+        or getattr(engine, 'pending_ally_request', None)
+    )
+
+
+def _clear_room_action_timer(room):
+    room.action_timer_player = None
+    room.action_timer_remaining = float(ACTION_TURN_SECONDS)
+    room.action_timer_last_tick = time.time()
+
+
+def _ensure_room_action_timer_locked(room, now=None):
+    now = now or time.time()
+    engine = getattr(room, 'engine', None)
+    if engine is None or getattr(engine, 'game_over', False) or getattr(engine, 'phase', None) != 'action':
+        _clear_room_action_timer(room)
+        return None
+    current = getattr(engine, 'current_player', None)
+    if current is None or current < 0:
+        _clear_room_action_timer(room)
+        return None
+    if room.action_timer_player != current:
+        room.action_timer_player = current
+        room.action_timer_remaining = float(ACTION_TURN_SECONDS)
+        room.action_timer_last_tick = now
+    return current
+
+
+def _tick_room_action_timer_locked(room, now=None):
+    now = now or time.time()
+    engine = getattr(room, 'engine', None)
+    current = _ensure_room_action_timer_locked(room, now)
+    if current is None:
+        return False
+    if _room_action_timer_paused(engine):
+        room.action_timer_last_tick = now
+        return False
+    elapsed = max(0.0, now - float(getattr(room, 'action_timer_last_tick', now) or now))
+    room.action_timer_last_tick = now
+    room.action_timer_remaining = max(0.0, float(getattr(room, 'action_timer_remaining', ACTION_TURN_SECONDS) or 0) - elapsed)
+    return room.action_timer_remaining <= 0
+
+
+def _add_room_action_timer_bonus(room, seconds=None):
+    seconds = ACTION_TURN_CARD_BONUS_SECONDS if seconds is None else seconds
+    with _lock:
+        if _ensure_room_action_timer_locked(room) is None:
+            return
+        room.action_timer_remaining = max(0.0, float(room.action_timer_remaining or 0) + float(seconds))
+
+
+def _room_timer_payload(room):
+    engine = getattr(room, 'engine', None)
+    if engine is None or getattr(engine, 'game_over', False) or getattr(engine, 'phase', None) != 'action':
+        return {'turn_timer_remaining': None, 'turn_timer_total': int(ACTION_TURN_SECONDS)}
+    current = getattr(engine, 'current_player', None)
+    if getattr(room, 'action_timer_player', None) != current:
+        room.action_timer_player = current
+        room.action_timer_remaining = float(ACTION_TURN_SECONDS)
+        room.action_timer_last_tick = time.time()
+    remaining = int(math.ceil(max(0.0, float(getattr(room, 'action_timer_remaining', ACTION_TURN_SECONDS) or 0))))
+    return {
+        'turn_timer_remaining': remaining,
+        'turn_timer_total': int(ACTION_TURN_SECONDS),
+        'turn_timer_player': getattr(room, 'action_timer_player', None),
+        'turn_timer_paused': _room_action_timer_paused(engine),
+    }
+
+
+def _selected_opening_event_names(engine):
+    names = {}
+    for idx, picked_id in enumerate(getattr(engine, 'opening_event_picks', []) or []):
+        if picked_id is None:
+            continue
+        ev = _opening_event_by_id(engine, picked_id)
+        if ev:
+            names[idx] = {
+                'id': picked_id,
+                'name': ev.get('name') or ev.get('name_cn') or ev.get('name_en') or str(picked_id),
+                'name_cn': ev.get('name_cn') or ev.get('name') or str(picked_id),
+                'name_en': ev.get('name_en') or ev.get('name') or str(picked_id),
+            }
+    return names
+
+
+def _reset_pregame_deadline(room, pidx, status):
+    if hasattr(room, 'pregame_deadlines'):
+        room.pregame_deadlines.pop((pidx, status), None)
+
+
+def _default_event_sub_choice(engine, pidx):
+    event_id = str(getattr(engine, 'opening_event_picks', [None])[pidx])
+    if event_id == '5':
+        for def_id in list(engine.fated_draw_pool_defs() if hasattr(engine, 'fated_draw_pool_defs') else []):
+            if engine._card_allowed_for_fated_draw(str(def_id)):
+                return {'add_def_ids': [str(def_id)]}
+        return {}
+    if event_id == '8':
+        for def_id in list(getattr(engine, 'draft_picks', [[]])[pidx] or []):
+            if str(def_id) != 'Yggdrasil':
+                return {'yggdrasil_convert_def_id': str(def_id)}
+        return {}
+    return {}
+
+
+def _auto_complete_draft_locked(room, pidx):
+    engine = room.engine
+    changed = False
+    target_count = engine.draft_target_count(pidx) if hasattr(engine, 'draft_target_count') else DECK_SIZE
+    guard = 0
+    while len(engine.draft_picks[pidx]) < target_count and guard < max(1, target_count + 5):
+        guard += 1
+        if not engine.draft_options[pidx]:
+            engine._generate_draft_options_for_player(pidx)
+        options = engine.draft_options[pidx] or []
+        if not options:
+            break
+        def_id = getattr(options[0], 'def_id', None)
+        if not def_id:
+            break
+        options_before = [getattr(card, 'def_id', '') for card in options]
+        pick_result = engine.draft_pick(pidx, def_id)
+        success = bool(pick_result.get('success')) if isinstance(pick_result, dict) else bool(pick_result)
+        if not success:
+            break
+        changed = True
+        if DB_AVAILABLE and room.mode in ('1v1', '2v2'):
+            try:
+                enqueue_card_draft_pick(room.mode, options_before, def_id)
+            except Exception as exc:
+                admin_event('error', f'auto draft stats enqueue failed: {exc}', room_id=room.room_id)
+        record_room_replay_action(room, 'draft_pick', pidx, {'def_id': def_id, 'auto': True})
+    if changed:
+        if len(engine.draft_picks[pidx]) >= target_count and not engine.needs_sub_choice(pidx):
+            engine.player_ready[pidx] = True
+        _reset_pregame_deadline(room, pidx, 'drafting')
+        admin_event('game', f'auto_complete_draft room={room.room_id} pidx={pidx}', room_id=room.room_id)
+    return changed
+
+
+def _auto_select_opening_event_locked(room, pidx):
+    engine = room.engine
+    if getattr(engine, 'opening_event_picks', [None])[pidx] is not None:
+        return False
+    options = getattr(engine, 'opening_event_options', [[]])[pidx] or []
+    first = next((ev for ev in options if ev), None)
+    if not first:
+        return False
+    event_id = first.get('id')
+    if not engine.select_opening_event(pidx, event_id):
+        return False
+    record_room_replay_action(room, 'select_opening_event', pidx, {
+        'event_id': event_id,
+        'sub_choice': None,
+        'auto': True,
+    })
+    _reset_pregame_deadline(room, pidx, 'event_select')
+    admin_event('game', f'auto_select_opening_event room={room.room_id} pidx={pidx} event={event_id}', room_id=room.room_id)
+    return True
+
+
+def _auto_submit_event_sub_choice_locked(room, pidx):
+    engine = room.engine
+    if not engine.needs_sub_choice(pidx):
+        return False
+    sub_choice = _default_event_sub_choice(engine, pidx)
+    engine.opening_event_sub_choices[pidx] = sub_choice or {}
+    engine.player_ready[pidx] = True
+    record_room_replay_action(room, 'submit_event_sub_choice', pidx, {
+        'event_id': engine.opening_event_picks[pidx],
+        'sub_choice': sub_choice or {},
+        'auto': True,
+    })
+    _reset_pregame_deadline(room, pidx, 'sub_choice')
+    admin_event('game', f'auto_submit_event_sub_choice room={room.room_id} pidx={pidx}', room_id=room.room_id)
+    return True
+
+
+def _room_timer_worker():
+    while True:
+        try:
+            try:
+                socketio.sleep(max(0.25, ROOM_TIMER_TICK_SECONDS))
+            except Exception:
+                time.sleep(max(0.25, ROOM_TIMER_TICK_SECONDS))
+            now = time.time()
+            expired_turns = []
+            timer_broadcast_rooms = set()
+            pregame_updates = set()
+            start_rooms = set()
+            with _lock:
+                for room in list(rooms.values()):
+                    engine = getattr(room, 'engine', None)
+                    if engine is None or getattr(engine, 'game_over', False):
+                        continue
+                    was_action = getattr(engine, 'phase', None) == 'action'
+                    was_paused = _room_action_timer_paused(engine) if was_action else False
+                    if _tick_room_action_timer_locked(room, now):
+                        expired_turns.append((room, getattr(engine, 'current_player', None)))
+                    elif was_action and not was_paused:
+                        timer_broadcast_rooms.add(room)
+                    for pidx in range(len(getattr(room, 'player_sids', []) or [])):
+                        status = engine.get_player_status(pidx) if hasattr(engine, 'get_player_status') else None
+                        timeout = None
+                        if status == 'event_select':
+                            timeout = EVENT_SELECT_TIMEOUT_SECONDS
+                        elif status == 'drafting':
+                            timeout = DRAFT_TIMEOUT_SECONDS
+                        elif status == 'sub_choice':
+                            timeout = EVENT_SUB_CHOICE_TIMEOUT_SECONDS
+                        if timeout is None:
+                            continue
+                        key = (pidx, status)
+                        deadline = room.pregame_deadlines.get(key) if hasattr(room, 'pregame_deadlines') else None
+                        if deadline is None:
+                            room.pregame_deadlines[key] = now + float(timeout)
+                            continue
+                        if now < deadline:
+                            continue
+                        changed = False
+                        if status == 'event_select':
+                            changed = _auto_select_opening_event_locked(room, pidx)
+                        elif status == 'drafting':
+                            changed = _auto_complete_draft_locked(room, pidx)
+                        elif status == 'sub_choice':
+                            changed = _auto_submit_event_sub_choice_locked(room, pidx)
+                        if changed:
+                            for pi in range(len(room.player_sids)):
+                                pregame_updates.add((room, pi))
+                            if all(engine.player_ready[pi] for pi in range(len(room.player_sids))):
+                                start_rooms.add(room)
+            for room, pidx in expired_turns:
+                if pidx is None:
+                    continue
+                action_lock = getattr(room, 'action_lock', None)
+                acquired = action_lock.acquire(blocking=False) if action_lock is not None else True
+                if not acquired:
+                    continue
+                try:
+                    with _lock:
+                        engine = getattr(room, 'engine', None)
+                        if (
+                            engine is None
+                            or getattr(engine, 'game_over', False)
+                            or getattr(engine, 'phase', None) != 'action'
+                            or getattr(engine, 'current_player', None) != pidx
+                            or _room_action_timer_paused(engine)
+                        ):
+                            continue
+                        result = engine.end_turn(pidx)
+                        _stamp_pending_interactions(room)
+                        _clear_room_action_timer(room)
+                    if result.get('success'):
+                        record_room_replay_action(room, 'end_turn', pidx, {'auto': True})
+                        admin_event('game', f'auto_end_turn room={room.room_id} pidx={pidx}', room_id=room.room_id)
+                    broadcast_game_state(room)
+                except Exception as exc:
+                    admin_event('error', f'auto_end_turn failed room={getattr(room, "room_id", "?")}: {exc}', room_id=getattr(room, 'room_id', None))
+                finally:
+                    if action_lock is not None:
+                        action_lock.release()
+            for room in timer_broadcast_rooms:
+                if room not in {item[0] for item in expired_turns}:
+                    broadcast_game_state(room)
+            for room in start_rooms:
+                schedule_start_game(room)
+            for room, pidx in pregame_updates:
+                if room not in start_rooms:
+                    schedule_pregame_state(room, pidx, allow_sub_choice=True)
+        except Exception as exc:
+            admin_event('error', f'room timer worker error: {exc}')
+
+
+def ensure_room_timer_worker_started():
+    global _room_timer_worker_started
+    if _room_timer_worker_started:
+        return
+    _room_timer_worker_started = True
+    try:
+        socketio.start_background_task(_room_timer_worker)
+    except Exception:
+        threading.Thread(target=_room_timer_worker, name='room-timer-worker', daemon=True).start()
 
 
 def player_is_admin(sid, room=None):
@@ -2891,13 +3219,11 @@ def is_room_valid_for_ranking(room, result='finished'):
         return False, 'abnormal_result'
     if not getattr(getattr(room, 'engine', None), 'game_over', False):
         return False, 'not_game_over'
-    participant_meta = []
-    for psid in getattr(room, 'player_sids', []):
-        participant_meta.append(room_player_profile(room, psid))
-    if not participant_meta or any(not meta.get('is_registered_user') for meta in participant_meta):
-        return False, 'guest_match'
+    participant_meta = [room_player_profile(room, psid) for psid in getattr(room, 'player_sids', [])]
+    if not participant_meta or not any(meta.get('is_registered_user') for meta in participant_meta):
+        return False, 'no_registered_player'
     started_ts = getattr(room, 'started_at', None) or getattr(room, 'created_at', time.time())
-    if time.time() - started_ts < 120:
+    if time.time() - started_ts < 60:
         return False, 'too_short'
     side_counts = room_valid_actions_by_side(room)
     if len(side_counts) < 2 or any(count < 3 for count in side_counts[:2]):
@@ -3943,6 +4269,8 @@ def flush_last_seen_once():
     failed = set()
     for uid in pending:
         try:
+            if _user_has_active_player_session(uid):
+                continue
             mark_user_last_seen(uid)
         except Exception as exc:
             failed.add(uid)
@@ -5378,7 +5706,7 @@ def admin_completions(line):
 def remove_player_by_admin(sid):
     if sid not in players:
         return None
-    mark_player_session_last_seen(players[sid])
+    mark_player_session_last_seen_locked(players[sid], exclude_sid=sid)
     nickname = players[sid]['nickname']
     room_id = players[sid].get('room_id')
     spectating_room = players[sid].get('spectating_room')
@@ -5695,6 +6023,7 @@ def send_draft_state(room, pidx):
         'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
         'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
         'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
+        'selected_opening_events': _selected_opening_event_names(engine),
     }
     payload.update(room_mod_payload(room))
     socketio.emit('draft_state', payload, room=sid)
@@ -5739,6 +6068,7 @@ def send_pregame_status_update(room, targets=None):
             'match_key': room_match_key(room),
             'your_id': pidx,
             'your_status': engine.get_player_status(pidx),
+            'selected_opening_events': _selected_opening_event_names(engine),
         }
         socketio.emit('pregame_status_update', payload, room=sid)
 
@@ -5795,6 +6125,7 @@ def send_event_state(room, pidx):
         'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
         'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
         'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
+        'selected_opening_events': _selected_opening_event_names(engine),
     }
     payload.update(room_mod_payload(room))
     socketio.emit('event_select', payload, room=sid)
@@ -5855,6 +6186,7 @@ def _broadcast_game_state_now(room):
         state['mode'] = room.mode
         state['room_id'] = room.room_id
         state['match_key'] = room_match_key(room)
+        state.update(_room_timer_payload(room))
         state.update(room_mod_payload(room))
         if room.engine.phase == 'game_over':
             state.update(room_rematch_payload(room, sid))
@@ -6027,6 +6359,7 @@ def send_game_state_to(room, pidx):
         state['mode'] = room.mode
         state['room_id'] = room.room_id
         state['match_key'] = room_match_key(room)
+        state.update(_room_timer_payload(room))
         state.update(room_mod_payload(room))
         if room.engine.phase == 'game_over':
             state.update(room_rematch_payload(room, sid))
@@ -6113,6 +6446,7 @@ def send_event_sub_choice_state(room, pidx):
         'player_names': engine.player_names,
         'room_id': room.room_id,
         'your_id': pidx,
+        'selected_opening_events': _selected_opening_event_names(engine),
     }
     payload.update(room_mod_payload(room))
     socketio.emit('event_sub_choice', payload, room=sid)
@@ -7809,7 +8143,9 @@ def api_auth_skin():
 def api_auth_logout():
     if DB_AVAILABLE and session.get('user_id'):
         try:
-            enqueue_user_last_seen(session.get('user_id'))
+            user_id = session.get('user_id')
+            if not _user_has_active_player_session(user_id):
+                enqueue_user_last_seen(user_id)
         except Exception as exc:
             admin_event('error', f"failed to enqueue last seen on logout: {exc}")
     _clear_account_session()
@@ -8578,6 +8914,7 @@ def on_connect():
         ensure_event_loop_watchdog_started()
         ensure_lobby_idle_cleanup_started()
         ensure_pending_interaction_watchdog_started()
+        ensure_room_timer_worker_started()
         ip = _client_ip()
         if DB_AVAILABLE:
             try:
@@ -9286,7 +9623,7 @@ def on_disconnect():
             if sid not in players:
                 return
             player = players[sid]
-            mark_player_session_last_seen(player)
+            mark_player_session_last_seen_locked(player, exclude_sid=sid)
             solo_sessions.pop(sid, None)
             tutorial_sessions.discard(sid)
             room_id = player.get('room_id')
@@ -9951,6 +10288,7 @@ def on_draft_pick(data):
             pick_result = engine.draft_pick(pidx, def_id)
             success = bool(pick_result.get('success')) if isinstance(pick_result, dict) else bool(pick_result)
         if success:
+            _reset_pregame_deadline(room, pidx, 'drafting')
             if DB_AVAILABLE and room.mode in ('1v1', '2v2'):
                 try:
                     enqueue_card_draft_pick(room.mode, draft_options_before, def_id)
@@ -10009,6 +10347,7 @@ def on_select_opening_event(data):
             return
         success = engine.select_opening_event(pidx, event_id)
         if success:
+            _reset_pregame_deadline(room, pidx, 'event_select')
             if sub_choice:
                 engine.opening_event_sub_choices[pidx] = sub_choice
             record_room_replay_action(room, 'select_opening_event', pidx, {
@@ -10047,6 +10386,7 @@ def on_confirm_opening_reveal(data=None):
             return
         already_started = bool(getattr(engine, 'player_draft_started', [False] * len(room.player_sids))[pidx])
         if not already_started:
+            _reset_pregame_deadline(room, pidx, 'event_reveal')
             engine.start_draft_for_player(pidx)
             record_room_replay_action(room, 'confirm_opening_reveal', pidx, {})
             record_room_replay_keyframe(room, 'draft_start')
@@ -10120,6 +10460,7 @@ def on_submit_event_sub_choice(data):
             schedule_pregame_state(room, pidx, allow_sub_choice=True)
             return
         engine.opening_event_sub_choices[pidx] = sub_choice or {}
+        _reset_pregame_deadline(room, pidx, 'sub_choice')
         record_room_replay_action(room, 'submit_event_sub_choice', pidx, {
             'event_id': engine.opening_event_picks[pidx],
             'sub_choice': sub_choice or {},
@@ -10188,14 +10529,14 @@ def on_tutorial_start(data=None):
     if data is None:
         return
     deck0 = [
-        'Basic', 'Rose', 'Leaf', 'Coffee', 'Fission',
-        'Triangle', 'Bubble', 'Fusion', 'Basic', 'Basic',
-        'Bone', 'Battery', 'Stinger', 'Leaf', 'Bubble',
+        'Basic', 'Rose', 'Leaf', 'Bone', 'Bubble',
+        'Fission', 'Triangle', 'Sewage', 'Fusion', 'Basic',
+        'Basic', 'Fire', 'Yggdrasil', 'Yucca', 'MagicBubble',
     ]
     deck1 = [
-        'Basic', 'Rose', 'Coffee', 'Battery', 'Rose',
-        'Basic', 'Bone', 'Leaf', 'Bubble', 'Basic',
-        'Stinger', 'Battery', 'Bubble', 'Triangle', 'Fire',
+        'Basic', 'Battery', 'Leaf', 'Basic', 'Bone',
+        'Stinger', 'Fire', 'Disc', 'Bubble', 'Mine',
+        'Basic', 'Bone', 'Mark', 'Sewage', 'MagicBubble',
     ]
     with _lock:
         tutorial_sessions.add(sid)
@@ -10222,8 +10563,8 @@ def _pick_tutorial_bot_card(engine):
     ps = engine.players[1]
     if sum(ps.cards_played_this_turn.values()) >= 1:
         return None
-    safe_card_ids = {'Basic', 'Bone', 'Fire', 'Rose', 'Coffee', 'Battery'}
-    order = ('thorn', 'bloom', 'root')
+    safe_card_ids = {'Basic', 'Bone', 'Stinger', 'Battery'}
+    order = ('thorn', 'root')
     for card_type in order:
         for card in ps.hand:
             card_def = card.card_def
@@ -10577,6 +10918,7 @@ def on_play_card(data):
     finally:
         busy_lock.release()
     if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_v2_ui'):
+        _add_room_action_timer_bonus(room)
         record_valid_player_action(room, pidx, 'play_card')
         record_room_replay_action(room, 'play_card', pidx, {
             'card_instance_id': card_instance_id,
@@ -10715,6 +11057,7 @@ def on_ally_consent_response(data):
             'result': result,
         })
     if result.get('needs_response'):
+        _add_room_action_timer_bonus(room)
         broadcast_game_state(room)
         emit_pending_response_requests(room)
     elif result.get('needs_choice'):
@@ -10780,6 +11123,7 @@ def on_resolve_choice(data):
         record_valid_player_action(room, pidx, 'resolve_choice')
     record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice, 'result': result})
     if result.get('needs_response'):
+        _add_room_action_timer_bonus(room)
         broadcast_game_state(room)
         emit_pending_response_requests(room)
     elif result.get('needs_choice'):
@@ -10789,6 +11133,7 @@ def on_resolve_choice(data):
         broadcast_game_state(room)
         emit_room_v2_ui_request(room)
     elif result.get('success'):
+        _add_room_action_timer_bonus(room)
         broadcast_game_state(room)
     elif result.get('cancelled'):
         broadcast_game_state(room)

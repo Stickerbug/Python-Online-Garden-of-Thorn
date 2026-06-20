@@ -49,6 +49,7 @@ ADVANCED_ATOMIC_OPS = {
     "player_prop_set", "player_prop_add", "card_prop_set", "card_prop_add",
     "card_prop_mul", "card_damage_multiply", "equipment_prop_set",
     "discard_hand_by_paid_e", "restore_turn_start_stats", "restore_match_start_stats",
+    "shuffle_hand",
     "counter_pending_attack_damage", "lose_health",
     "equipment_prop_add", "discard_choice_then_draw", "coffee_gain_e",
     "activate_corruption", "request_target", "request_card", "request_confirm",
@@ -138,6 +139,22 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         raise V2RuntimeError("step must be an object")
     op = step.get("op") or step.get("type")
     params = step.get("params") if isinstance(step.get("params"), dict) else step
+
+    if op == "request_target":
+        choice = context.get("choice")
+        action = context.get("current_action")
+        if choice is None and isinstance(action, dict):
+            choice = action.get("choice", action)
+        target_id = _choice_target_id(choice)
+        if target_id is None:
+            target_id = _explicit_target_id(engine, context)
+        if target_id is None:
+            raise V2RuntimeError("target choice is required")
+        context["target_player"] = target_id
+        context.setdefault("vars", {})["target_player"] = target_id
+        if isinstance(action, dict):
+            action["target_player_id"] = target_id
+        return {"success": True, "target_player": target_id}
 
     if op == "deal_damage":
         source = _player_id(engine, resolve_v2_target(engine, context, params.get("source", "source")))
@@ -991,6 +1008,21 @@ def _as_player_list(engine, value: Any) -> List[int]:
     return out
 
 
+def _choice_target_id(choice: Any) -> Optional[int]:
+    if not isinstance(choice, dict):
+        return None
+    for key in ("target_player", "target_player_id", "target_id"):
+        if key not in choice:
+            continue
+        try:
+            target_id = int(choice.get(key))
+        except Exception:
+            continue
+        if target_id >= 0:
+            return target_id
+    return None
+
+
 def _explicit_target_id(engine, context: Dict[str, Any]) -> Optional[int]:
     if not isinstance(context, dict) or not context.get("target_player_explicit"):
         return None
@@ -1551,6 +1583,9 @@ def _engine_target_selector(engine, context: Dict[str, Any], value: Any):
     if value in ("source", "self"):
         return "self"
     if value in ("target", "event_target", "chosen_target", "choice_target"):
+        explicit_target = _explicit_target_id(engine, context)
+        if explicit_target is not None:
+            return explicit_target
         if player_count <= 2:
             return "self" if target == source else "enemy"
         return target

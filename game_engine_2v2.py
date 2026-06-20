@@ -429,6 +429,7 @@ class GameEngine2v2(GameEngine):
             self.log_msg(f"{self.pn(player_id)}的{c.name_cn}因虚无被放逐")
         self._decay_action_limit_status(player_id, 'attack_blocked', 'attack_blocked', '禁攻')
         self._decay_action_limit_status(player_id, 'attack_only', 'attack_only', '仅攻击')
+        self._decay_action_limit_status(player_id, 'magic_blocked', 'magic_blocked', '魔力封锁')
         self._save_last_turn_damage_snapshot(player_id)
         self._advance_turn()
 
@@ -450,8 +451,6 @@ class GameEngine2v2(GameEngine):
         for i in range(self.num_players):
             if self.players[i].health <= 0:
                 self._check_yggdrasil(i)
-                if self.game_over:
-                    return
         team0_alive = any(self.players[p].health > 0 for p in self.teams[0])
         team1_alive = any(self.players[p].health > 0 for p in self.teams[1])
         if not team0_alive and not team1_alive:
@@ -460,6 +459,8 @@ class GameEngine2v2(GameEngine):
             self.winner = -1
             self.phase = 'game_over'
             self.log_msg("双方队伍全部阵亡！平局！")
+            return
+        if self.game_over:
             return
         if not team0_alive:
             self.game_over = True
@@ -561,19 +562,24 @@ class GameEngine2v2(GameEngine):
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}进行反制！")
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
-            self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
-            is_precision = pending.get('is_precision', False)
-            if counter_removed.def_id == 'Bubble':
-                if is_precision:
-                    self._execute_card_effect_half_damage(player_id, card, choice)
+            self._game_over_defer_depth += 1
+            try:
+                self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
+                is_precision = pending.get('is_precision', False)
+                if counter_removed.def_id == 'Bubble':
+                    if is_precision:
+                        self._execute_card_effect_half_damage(player_id, card, choice)
+                        responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
+                        return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
+                    self._execute_card_effect(player_id, card, choice)
                     responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
-                    return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
-                self._execute_card_effect(player_id, card, choice)
-                responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
-                return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
-            if counter_removed.def_id == 'MagicBubble':
-                self.negated_card = True
-            return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+                    return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
+                if counter_removed.def_id == 'MagicBubble':
+                    self.negated_card = True
+                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+            finally:
+                self._game_over_defer_depth -= 1
+                self._check_game_over()
         return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
 
 
@@ -655,14 +661,17 @@ class GameEngine2v2(GameEngine):
             self._is_valid_player_id(target_id)
             and self.is_enemy(player_id, target_id)
             and self.players[target_id].health > 0
-            and not bool(getattr(self.players[target_id], 'untargetable', False))
+            and not (bool(getattr(self.players[target_id], 'untargetable', False)) and not self._is_status_immune(target_id))
         )
 
     def _is_valid_effect_target(self, player_id: int, target_id) -> bool:
         return (
             self._is_valid_player_id(target_id)
             and self.players[target_id].health > 0
-            and (target_id == player_id or not bool(getattr(self.players[target_id], 'untargetable', False)))
+            and (
+                target_id == player_id
+                or not (bool(getattr(self.players[target_id], 'untargetable', False)) and not self._is_status_immune(target_id))
+            )
         )
 
     def _card_requires_target(self, card: CardInstance) -> bool:
@@ -884,7 +893,9 @@ class GameEngine2v2(GameEngine):
             allow_dead_target = self._card_is(card, 'Yggdrasil', 'vanilla:yggdrasil')
             if allow_dead_target:
                 if (not self._is_valid_player_id(target_player_id)
-                        or (target_player_id != player_id and bool(getattr(self.players[target_player_id], 'untargetable', False)))):
+                        or (target_player_id != player_id
+                            and bool(getattr(self.players[target_player_id], 'untargetable', False))
+                            and not self._is_status_immune(target_player_id))):
                     return {'success': False, 'error': '没有可选中的玩家'}
             elif not self._is_valid_effect_target(player_id, target_player_id):
                 return {'success': False, 'error': '没有可选中的玩家'}
@@ -1236,7 +1247,8 @@ class GameEngine2v2(GameEngine):
         if turn_will_be_skipped:
             ps.skip_turn = max(0, int(ps.skip_turn) - 1)
         if self.round_num > 1:
-            draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - ps.sluggish)
+            sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
+            draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - sluggish_reduction)
             if ps.enemy_draw_reduction > 0:
                 ps.enemy_draw_reduction -= 1
             if self._queue_foresight_replace_choice(player_id, draw_count, 'turn_start_2v2'):
@@ -1246,8 +1258,8 @@ class GameEngine2v2(GameEngine):
                 }
                 return
             drawn = ps.draw_cards(draw_count)
-            if ps.sluggish > 0:
-                self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
+            if sluggish_reduction > 0:
+                self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(sluggish_reduction, DRAW_PER_TURN)}张抽牌")
             self._clear_sluggish_after_draw(player_id)
             pincer_overload = sum(
                 1
@@ -1298,12 +1310,13 @@ class GameEngine2v2(GameEngine):
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         if ps.poison > 0:
-            self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
-            if self.game_over or ps.health <= 0:
-                return
+            if not self._is_status_immune(player_id):
+                self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
+                if self.game_over or ps.health <= 0:
+                    return
             self._decay_poison_after_turn_start(player_id)
             self._apply_toxic_poison_after_poison_settlement(player_id)
-        if ps.fire > 0:
+        if ps.fire > 0 and not self._is_status_immune(player_id):
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
                 return
@@ -1365,7 +1378,7 @@ class GameEngine2v2(GameEngine):
         if self.round_num > 1:
             draw_count = max(0, int((foresight_result or {}).get('draw_count', 0) or 0))
             drawn = ps.draw_cards(draw_count)
-            if ps.sluggish > 0:
+            if ps.sluggish > 0 and not self._is_status_immune(player_id):
                 self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
             self._clear_sluggish_after_draw(player_id)
             pincer_overload = sum(
@@ -1416,12 +1429,13 @@ class GameEngine2v2(GameEngine):
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         if ps.poison > 0:
-            self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
-            if self.game_over or ps.health <= 0:
-                return
+            if not self._is_status_immune(player_id):
+                self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
+                if self.game_over or ps.health <= 0:
+                    return
             self._decay_poison_after_turn_start(player_id)
             self._apply_toxic_poison_after_poison_settlement(player_id)
-        if ps.fire > 0:
+        if ps.fire > 0 and not self._is_status_immune(player_id):
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.game_over or ps.health <= 0:
                 return
@@ -1475,7 +1489,7 @@ class GameEngine2v2(GameEngine):
         ps = self.players[target_id]
         if attacker_id < 0:
             attacker_id = self._last_attacker.get(target_id, -1)
-        if ps.untargetable and not is_battery:
+        if ps.untargetable and not is_battery and not self._is_status_immune(target_id):
             self.log_msg(f"{self.pn(target_id)}无法被攻击选中")
             return 0
         total_dealt = 0
@@ -1543,12 +1557,16 @@ class GameEngine2v2(GameEngine):
             if attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
                 reduction = min(0.6, 0.2 * attacker_state.weakness)
                 dmg = max(1, int(dmg * (1.0 - reduction)))
-            root_armor = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
-            fragile = self._custom_status_value(target_id, 'jungle:fragile', 'fragile')
+            if immune:
+                root_armor = 0
+                fragile = 0
+            else:
+                root_armor = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
+                fragile = self._custom_status_value(target_id, 'jungle:fragile', 'fragile')
             effective_armor = int(ps.armor) + root_armor - fragile
             dmg = max(0, dmg - effective_armor)
-            if ps.sponge_active and dmg > 0:
-                converted = min(10, dmg)
+            if ps.sponge_active and dmg > 0 and not immune:
+                converted = min(10, dmg // 2)
                 ps.poison += converted
                 dmg = 0
             dmg = self._apply_universal_damage_shields(target_id, dmg, attacker_id, '攻击', DAMAGE_TYPE_PHYSICAL)
@@ -1564,7 +1582,7 @@ class GameEngine2v2(GameEngine):
                 if root_layers > 0:
                     self._set_custom_status_alias_group(target_id, 'jungle:root_status', ('jungle:root', 'jungle:root_status', 'root_status'), root_layers - 1)
                     self._consume_jungle_root_layer_from_equipment(target_id)
-            if dmg > 0 and ps.toxic > 0:
+            if dmg > 0 and ps.toxic > 0 and not immune:
                 ps.poison += ps.toxic
             self._game_over_defer_depth += 1
             try:

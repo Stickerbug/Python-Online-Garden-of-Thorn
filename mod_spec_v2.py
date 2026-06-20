@@ -196,6 +196,7 @@ VALID_LOGIC_OPS = {
     "random_discard_from_hand",
     "put_card_to_deck",
     "shuffle_discard_into_deck",
+    "shuffle_hand",
     "give_card_to_hand",
     "give_magic_orb_to_hand",
     "give_card_to_deck",

@@ -428,7 +428,7 @@ Object.entries(I18N).forEach(([lang, dict]) => {
     const fallback = (zh, en) => lang === 'zh' ? zh : en;
     dict.default_status = GAME_TITLE;
     dict.tutorial_hint_play_fusioned = dict.tutorial_hint_play_fusioned || fallback('聚变后的攻击牌已经准备好了。当前能量足够，把它打出看看强化后的伤害。', 'The fused attack is ready. You have enough E now; play it to see the boosted damage.');
-    dict.target_pick_hint = dict.target_pick_hint || 'Click a highlighted player area.';
+    dict.target_pick_hint = dict.target_pick_hint || fallback('点击一个高亮的玩家区域以选择目标', 'Click one highlighted player area to choose the target.');
     dict.waiting_opponent_counter = dict.waiting_opponent_counter || dict.waiting_response || 'Waiting for response';
     dict.tutorial_victory_message = dict.tutorial_victory_message || fallback('恭喜你，成功完成了新手教程！\n希望你能在 Garden of Thorn 中玩得开心！', 'Congratulations, you completed the tutorial!\nHave fun in Garden of Thorn!');
     dict.tutorial_defeat_message = dict.tutorial_defeat_message || fallback('哎呀，对局失败了。没关系，祝你在接下来的游戏中越打越顺！', 'The tutorial match was lost. That is fine; the next match will be smoother.');
@@ -436,7 +436,10 @@ Object.entries(I18N).forEach(([lang, dict]) => {
     dict.tutorial_start = dict.tutorial_start || fallback('新手引导', 'Tutorial');
     dict.tutorial_skip = dict.tutorial_skip || fallback('跳过引导', 'Skip Tutorial');
     dict.tutorial_intro = dict.tutorial_intro || fallback('现在，让我们开始新手教程吧！', 'Now, let’s begin the tutorial.');
-    dict.tutorial_hint_play = dict.tutorial_hint_play || fallback('先打出一张 Thorn 攻击牌，观察对手 H 的变化。', 'Play a Thorn attack first, then watch the opponent’s H change.');
+    dict.tutorial_hint_ui = dict.tutorial_hint_ui || fallback('先认识界面：底部是手牌，双方头像旁是 H/E/M 和状态，右侧是战斗日志。点击“查看抽牌堆”看看接下来可能抽到什么。', 'First read the interface: your hand is at the bottom, H/E/M and states are near each player, and the battle log is on the side. Press View Draw Deck to inspect upcoming cards.');
+    dict.tutorial_hint_play = dict.tutorial_hint_play || fallback('现在打出一张 Thorn 攻击牌。1v1 中攻击牌会指向对方；若目标无法选中，则不能打出。', 'Now play a Thorn attack. In 1v1, attacks target the opponent; if the target cannot be selected, the card cannot be played.');
+    dict.tutorial_hint_target = dict.tutorial_hint_target || fallback('接下来试一张需要目标的牌。点击高亮的玩家区域选择目标；Root 装备永远留在使用者装备栏，箭头只表示它影响谁。', 'Now try a card that asks for a target. Click a highlighted player area to choose the target. Root equipment stays on its user; the arrow only shows who it affects.');
+    dict.tutorial_hint_trigger = dict.tutorial_hint_trigger || fallback('装备区出现可触发按钮时，可以点击触发。有些装备触发时会重新选择目标。', 'When a trigger button appears in the equipment area, you can activate it. Some equipment chooses a fresh target when triggered.');
     dict.tutorial_hint_end = dict.tutorial_hint_end || fallback('行动完成后，点击“结束回合”，把节奏交给对手。', 'After acting, press End Turn to pass the pace to the opponent.');
     dict.tutorial_hint_enemy = dict.tutorial_hint_enemy || fallback('现在观察对手行动。注意战斗日志和 H/E/M 的变化。', 'Now watch the opponent act. Track the battle log and H/E/M bars.');
     dict.tutorial_hint_deck = dict.tutorial_hint_deck || fallback('先看看抽牌堆：点击“查看牌堆”，了解接下来可能抽到什么。', 'Check your draw deck: press View Deck to see what may come next.');
@@ -446,10 +449,10 @@ Object.entries(I18N).forEach(([lang, dict]) => {
     dict.tutorial_hint_root = dict.tutorial_hint_root || fallback('Root 装备牌会持续生效或在满足条件后触发。先打出一张，下一回合再观察它的作用。', 'Root equipment cards provide ongoing or triggered effects. Play one now and observe it next turn.');
     dict.tutorial_hint_fission = dict.tutorial_hint_fission || fallback('现在，让我们来看看不同类型的牌。裂变是一张 Bloom 技能牌。普通攻击被裂变后总伤害可能接近不变，但三角形会在每段伤害后成长。把裂变用于三角形。', 'Now let’s look at different card types. Fission is a Bloom skill card. Splitting a basic attack may keep total damage close, but Triangle grows after each hit. Use Fission on Triangle.');
     dict.tutorial_hint_play_fissioned = dict.tutorial_hint_play_fissioned || fallback('三角形已经带有裂变层数。现在把它打出，观察每段伤害和三角形层数如何连续结算。', 'Triangle now has Fission. Play it and watch each hit resolve while Triangle stacks grow.');
-    dict.tutorial_hint_fusion = dict.tutorial_hint_fusion || fallback('聚变也是 Bloom 技能牌。它会选择2-3张同名攻击牌，合成为一张更强的牌。选择同名攻击牌完成聚变。', 'Fusion is also a Bloom skill card. It chooses 2-3 same-name attacks and combines them into one stronger card.');
+    dict.tutorial_hint_fusion = dict.tutorial_hint_fusion || fallback('聚变也是 Bloom 技能牌。它会选择2张同名攻击牌，合成为一张更强的牌。选择同名攻击牌完成聚变。', 'Fusion is also a Bloom skill card. It chooses 2 same-name attacks and combines them into one stronger card.');
 });
 I18N.en.tutorial_start = 'Tutorial';
-I18N.en.target_pick_hint = 'Click a highlighted player area.';
+I18N.en.target_pick_hint = 'Click one highlighted player area to choose the target.';
 I18N.en.waiting_opponent_counter = 'Waiting for opponent counter';
 I18N.en.tutorial_hint_play_fusioned = 'The fused attack is ready. You have enough E now; play it to see the boosted damage.';
 I18N.en.tutorial_victory_message = 'Congratulations, you completed the tutorial!\nHave fun in Garden of Thorn!';
@@ -467,7 +470,10 @@ I18N.ja.tutorial_defeat_message = 'チュートリアルの対局に敗北しま
 I18N.ja.tutorial_retry = 'チュートリアルをやり直す';
 I18N.ja.target_pick_hint = '強調表示されたプレイヤー欄を押してください。';
 I18N.en.tutorial_intro = 'Now, let’s begin the tutorial.';
-I18N.en.tutorial_hint_play = 'Play a Thorn attack first, then watch the opponent’s H change.';
+I18N.en.tutorial_hint_ui = 'First read the interface: your hand is at the bottom, H/E/M and states are near each player, and the battle log is on the side. Press View Draw Deck to inspect upcoming cards.';
+I18N.en.tutorial_hint_play = 'Now play a Thorn attack. In 1v1, attacks target the opponent; if the target cannot be selected, the card cannot be played.';
+I18N.en.tutorial_hint_target = 'Now try a card that asks for a target. Click a highlighted player area to choose the target. Root equipment stays on its user; the arrow only shows who it affects.';
+I18N.en.tutorial_hint_trigger = 'When a trigger button appears in the equipment area, you can activate it. Some equipment chooses a fresh target when triggered.';
 I18N.en.tutorial_hint_end = 'After acting, press End Turn to pass the pace to the opponent.';
 I18N.en.tutorial_hint_enemy = 'Now watch the opponent act. Track the battle log and H/E/M bars.';
 I18N.en.tutorial_hint_deck = 'Check your draw deck: press View Deck to see what may come next.';
@@ -477,12 +483,15 @@ I18N.en.tutorial_hint_bloom = 'Bloom skill cards heal, apply states, or change r
 I18N.en.tutorial_hint_root = 'Root equipment cards provide ongoing or triggered effects. Play one now and observe it next turn.';
 I18N.en.tutorial_hint_fission = 'Now let’s look at different card types. Fission is a Bloom skill card. Splitting a basic attack may keep total damage close, but Triangle grows after each hit. Use Fission on Triangle.';
 I18N.en.tutorial_hint_play_fissioned = 'Triangle now has Fission. Play it and watch each hit resolve while Triangle stacks grow.';
-I18N.en.tutorial_hint_fusion = 'Fusion is also a Bloom skill card. It chooses 2-3 same-name attacks and combines them into one stronger card.';
+I18N.en.tutorial_hint_fusion = 'Fusion is also a Bloom skill card. It chooses 2 same-name attacks and combines them into one stronger card.';
 I18N.zh.tutorial_start = '新手引导';
-I18N.zh.target_pick_hint = '点击高亮的玩家区域。';
+I18N.zh.target_pick_hint = '点击一个高亮的玩家区域以选择目标';
 I18N.zh.tutorial_skip = '跳过引导';
 I18N.zh.tutorial_intro = '现在，让我们开始新手教程吧！';
-I18N.zh.tutorial_hint_play = '先打出一张 Thorn 攻击牌，观察对手 H 的变化。';
+I18N.zh.tutorial_hint_ui = '先认识界面：底部是手牌，双方头像旁是 H/E/M 和状态，右侧是战斗日志。点击“查看抽牌堆”看看接下来可能抽到什么。';
+I18N.zh.tutorial_hint_play = '现在打出一张 Thorn 攻击牌。1v1 中攻击牌会指向对方；若目标无法选中，则不能打出。';
+I18N.zh.tutorial_hint_target = '接下来试一张需要目标的牌。点击高亮的玩家区域选择目标；Root 装备永远留在使用者装备栏，箭头只表示它影响谁。';
+I18N.zh.tutorial_hint_trigger = '装备区出现可触发按钮时，可以点击触发。有些装备触发时会重新选择目标。';
 I18N.zh.tutorial_hint_end = '行动完成后，点击“结束回合”，把节奏交给对手。';
 I18N.zh.tutorial_hint_enemy = '现在观察对手行动。注意战斗日志和 H/E/M 的变化。';
 I18N.zh.tutorial_hint_deck = '先看看抽牌堆：点击“查看牌堆”，了解接下来可能抽到什么。';
@@ -492,7 +501,7 @@ I18N.zh.tutorial_hint_bloom = 'Bloom 技能牌用于回复、施加状态或改�
 I18N.zh.tutorial_hint_root = 'Root 装备牌会持续生效或在满足条件后触发。先打出一张，下一回合再观察它的作用。';
 I18N.zh.tutorial_hint_fission = '现在，让我们来看看不同类型的牌。裂变是一张 Bloom 技能牌。普通攻击被裂变后总伤害可能接近不变，但三角形会在每段伤害后成长。把裂变用于三角形。';
 I18N.zh.tutorial_hint_play_fissioned = '三角形已经带有裂变层数。现在把它打出，观察每段伤害和三角形层数如何连续结算。';
-I18N.zh.tutorial_hint_fusion = '聚变也是 Bloom 技能牌。它会选择2-3张同名攻击牌，合成为一张更强的牌。选择同名攻击牌完成聚变。';
+I18N.zh.tutorial_hint_fusion = '聚变也是 Bloom 技能牌。它会选择2张同名攻击牌，合成为一张更强的牌。选择同名攻击牌完成聚变。';
 Object.assign(I18N.en, { tutorial_hint_free: 'You have seen the core actions. Now try your own line: play useful cards, watch H/E/M, then end your turn.' });
 Object.assign(I18N.zh, { tutorial_hint_free: '核心操作已经看过了。现在可以自己判断：打出合适的牌，观察 H/E/M，然后结束回合。' });
 Object.assign(I18N.fr, { tutorial_hint_free: 'Vous avez vu les actions principales. Essayez maintenant votre propre ligne : jouez les bonnes cartes, observez H/E/M, puis terminez le tour.' });
@@ -570,7 +579,7 @@ Object.assign(I18N.en, {
     tutorial_hint_root: 'Root equipment cards provide ongoing or triggered effects after being played. Play one now and observe it next turn.',
     tutorial_hint_fission: 'Now let’s look at different card types. Fission is a Bloom skill card. Splitting a basic attack may keep total damage close, but Triangle grows after each hit. Use Fission on Triangle.',
     tutorial_hint_play_fissioned: 'Triangle now has Fission. Play it and watch each hit resolve while Triangle stacks grow.',
-    tutorial_hint_fusion: 'Fusion is also a Bloom skill card. It chooses 2-3 same-name attacks and combines them into one stronger card.',
+    tutorial_hint_fusion: 'Fusion is also a Bloom skill card. It chooses 2 same-name attacks and combines them into one stronger card.',
     tutorial_hint_play_fusioned: 'The fused attack is ready. You have enough E now; play it to see the boosted damage.',
     tutorial_victory_message: 'Congratulations, you completed the tutorial!\nHave fun in Garden of Thorn!',
     tutorial_defeat_message: 'The tutorial match was lost. That is fine; the next match will be smoother.',
@@ -629,7 +638,7 @@ Object.assign(I18N.fr, {
     tutorial_hint_root: 'Les cartes Root fournissent des effets continus ou déclenchés. Jouez-en une et observez-la au prochain tour.',
     tutorial_hint_fission: 'Voyons les types de cartes. Fission est une Bloom : sur une attaque simple, le total peut rester proche, mais Triangle grandit après chaque touche. Utilisez Fission sur Triangle.',
     tutorial_hint_play_fissioned: 'Triangle possède maintenant Fission. Jouez-le et observez chaque dégât et chaque couche.',
-    tutorial_hint_fusion: 'Fusion est aussi une Bloom. Elle combine 2-3 attaques de même nom en une carte plus forte.',
+    tutorial_hint_fusion: 'Fusion est aussi une Bloom. Elle combine 2 attaques de même nom en une carte plus forte.',
     tutorial_hint_play_fusioned: 'L’attaque fusionnée est prête. Vous avez assez de E : jouez-la pour voir les dégâts augmentés.',
     tutorial_victory_message: 'Félicitations, vous avez terminé le tutoriel !\nAmusez-vous bien dans Garden of Thorn !',
     tutorial_defeat_message: 'La partie du tutoriel est perdue. Ce n’est pas grave : la prochaine sera plus fluide.',
@@ -670,7 +679,7 @@ Object.assign(I18N.ja, {
     tutorial_hint_root: 'Root は継続効果や発動効果を持ちます。1枚使って、次のターンに効果を確認しましょう。',
     tutorial_hint_fission: '別のタイプを見てみましょう。裂変は Bloom です。通常攻撃では総ダメージが近いこともありますが、三角形は各ヒット後に成長します。三角形に裂変を使いましょう。',
     tutorial_hint_play_fissioned: '三角形に裂変が付きました。使って、各ヒットと層の増え方を確認しましょう。',
-    tutorial_hint_fusion: '聚变も Bloom です。同名攻撃カード2-3枚を1枚の強いカードにまとめます。',
+    tutorial_hint_fusion: '聚变も Bloom です。同名攻撃カード2枚を1枚の強いカードにまとめます。',
     tutorial_hint_play_fusioned: '融合した攻撃カードの準備ができました。Eは足りています。打ち出して強化後のダメージを見てみましょう。',
     tutorial_victory_message: 'おめでとうございます。チュートリアルを完了しました！\nGarden of Thorn を楽しんでください！',
     tutorial_defeat_message: 'チュートリアルの対局に敗北しました。大丈夫です。次の対局ではもっと動きが見えてきます。',
@@ -759,22 +768,22 @@ Object.assign(I18N.ja, {
 
 Object.assign(I18N.zh, {
     gallery_related_cards: '相关卡牌',
-    tag_desc_fusion_layer: '特殊机制，不是普通标签。聚变层数与裂变层数共同决定攻击牌下一次打出时的结算：总伤害先按聚变层数放大，再按裂变层数拆成多次伤害，每次伤害为 ceil(原始伤害×聚变层数/裂变层数)。打出聚变时，选择2-3张同名攻击牌，将聚变层数相加，裂变层数取最大，合并为一张牌。牌进入弃牌堆后会恢复为默认聚变1。',
+    tag_desc_fusion_layer: '特殊机制，不是普通标签。聚变层数与裂变层数共同决定攻击牌下一次打出时的结算：总伤害先按聚变层数放大，再按裂变层数拆成多次伤害，每次伤害为 ceil(原始伤害×聚变层数/裂变层数)。打出聚变时，选择2张同名攻击牌，将聚变层数相加，裂变层数取最大，合并为一张牌。牌进入弃牌堆后会恢复为默认聚变1。',
     tag_desc_fission_layer: '特殊机制，不是普通标签。裂变层数表示攻击牌打出时会拆成多少次结算，并与聚变层数共同作用：每次伤害为 ceil(原始伤害×聚变层数/裂变层数)。如果卡牌每次命中都会改变后续伤害，例如三角形，每一次裂变命中都会按当时的层数重新计算。牌进入弃牌堆后会恢复为默认裂变1。'
 });
 Object.assign(I18N.en, {
     gallery_related_cards: 'Related cards',
-    tag_desc_fusion_layer: 'Special mechanic, not a normal tag. Fusion and Fission work together when an attack is next played: total damage is first scaled by Fusion, then split into Fission hits. Each hit deals ceil(base damage × Fusion / Fission). Playing Fusion chooses 2-3 same-name attacks, adds their Fusion levels, keeps the highest Fission level, and merges them into one card. When the card enters the discard pile, Fusion resets to the default 1.',
+    tag_desc_fusion_layer: 'Special mechanic, not a normal tag. Fusion and Fission work together when an attack is next played: total damage is first scaled by Fusion, then split into Fission hits. Each hit deals ceil(base damage × Fusion / Fission). Playing Fusion chooses 2 same-name attacks, adds their Fusion levels, keeps the highest Fission level, and merges them into one card. When the card enters the discard pile, Fusion resets to the default 1.',
     tag_desc_fission_layer: 'Special mechanic, not a normal tag. Fission is the number of hits an attack is split into, and it works together with Fusion: each hit deals ceil(base damage × Fusion / Fission). If a card changes later damage after each hit, such as Triangle, every Fission hit recalculates from the current layer count. When the card enters the discard pile, Fission resets to the default 1.'
 });
 Object.assign(I18N.fr, {
     gallery_related_cards: 'Cartes liées',
-    tag_desc_fusion_layer: 'Mécanique spéciale, pas un tag normal. Fusion et Fission agissent ensemble quand une attaque est jouée : les dégâts totaux sont d’abord multipliés par Fusion, puis divisés en plusieurs touches de Fission. Chaque touche inflige ceil(dégâts de base × Fusion / Fission). Jouer Fusion choisit 2-3 attaques de même nom, additionne leurs niveaux de Fusion, garde le plus haut niveau de Fission et les fusionne en une carte. Quand la carte va dans la défausse, Fusion revient à 1.',
+    tag_desc_fusion_layer: 'Mécanique spéciale, pas un tag normal. Fusion et Fission agissent ensemble quand une attaque est jouée : les dégâts totaux sont d’abord multipliés par Fusion, puis divisés en plusieurs touches de Fission. Chaque touche inflige ceil(dégâts de base × Fusion / Fission). Jouer Fusion choisit 2 attaques de même nom, additionne leurs niveaux de Fusion, garde le plus haut niveau de Fission et les fusionne en une carte. Quand la carte va dans la défausse, Fusion revient à 1.',
     tag_desc_fission_layer: 'Mécanique spéciale, pas un tag normal. Fission indique en combien de touches une attaque est divisée, et agit avec Fusion : chaque touche inflige ceil(dégâts de base × Fusion / Fission). Si une carte modifie les dégâts suivants à chaque touche, comme Triangle, chaque touche de Fission recalcule avec les couches actuelles. Quand la carte va dans la défausse, Fission revient à 1.'
 });
 Object.assign(I18N.ja, {
     gallery_related_cards: '関連カード',
-    tag_desc_fusion_layer: '通常のタグではなく特殊な仕組みです。融合と分裂は攻撃カードを次に打ち出す時に共同で作用します。総ダメージはまず融合層で拡大され、その後分裂層の回数に分けられます。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。融合を使うと同名攻撃カード2-3枚を選び、融合層を合計し、分裂層は最大値を取り、1枚のカードにします。カードが捨て札に入ると融合は既定値1に戻ります。',
+    tag_desc_fusion_layer: '通常のタグではなく特殊な仕組みです。融合と分裂は攻撃カードを次に打ち出す時に共同で作用します。総ダメージはまず融合層で拡大され、その後分裂層の回数に分けられます。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。融合を使うと同名攻撃カード2枚を選び、融合層を合計し、分裂層は最大値を取り、1枚のカードにします。カードが捨て札に入ると融合は既定値1に戻ります。',
     tag_desc_fission_layer: '通常のタグではなく特殊な仕組みです。分裂層は攻撃カードが何回に分かれて解決されるかを表し、融合層と共同で作用します。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。三角形のようにヒットごとに以後のダメージが変わるカードは、各分裂ヒットでその時点の層数を使って再計算します。カードが捨て札に入ると分裂は既定値1に戻ります。'
 });
 
@@ -1892,7 +1901,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'status-bleed', re: /^(?:[+-]?\d+层流血|流血[:：]?[+-]?\d+层?)/i },
     { cls: 'status-fracture', re: /^(?:[+-]?\d+层破损|破损[:：]?[+-]?\d+层?|破损[×x][+-]?\d+层?)/i },
     { cls: 'status-stagnation', re: /^(?:[+-]?\d+层滞留|滞留[:：]?[+-]?\d+层?)/i },
-    { cls: 'status-blind', re: /^(?:[+-]?\d+层失明|失明[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-blind', re: /^(?:[+-]?\d+层失明|失明[:：]?[+-]?\d+层?|失明)/i },
     { cls: 'status-foresight', re: /^(?:[+-]?\d+层预知|预知[:：]?[+-]?\d+层?)/i },
     { cls: 'status-overload', re: /^(?:[+-]?\d+层超载|超载[:：]?[+-]?\d+层?)/i },
     { cls: 'status-heal-block', re: /^(?:[+-]?\d+层禁疗|禁疗[:：]?[+-]?\d+层?)/i },
@@ -1905,6 +1914,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'status-sponge', re: /^(?:[+-]?\d+层海绵|海绵[:：]?[+-]?\d+层?|海绵)/i },
     { cls: 'status-attack-blocked', re: /^(?:[+-]?\d+层(?:禁攻|禁止攻击|attack_blocked)|(?:禁攻|禁止攻击|attack_blocked)[:：]?[+-]?\d+层?)/i },
     { cls: 'status-attack-only', re: /^(?:[+-]?\d+层仅攻击|仅攻击[:：]?[+-]?\d+层?)/i },
+    { cls: 'magic', re: /^(?:[+-]?\d+层魔力封锁|魔力封锁[:：]?[+-]?\d+层?)/i },
     { cls: 'status-untargetable', re: /^(?:[+-]?\d+层无法选中|无法选中[:：]?[+-]?\d+层?)/i },
     { cls: 'status-magic-nazar', re: /^(?:[+-]?\d+层魔法邪眼|魔法邪眼[:：]?[+-]?\d+层?)/i },
     { cls: 'toxic', re: /^(?:\d+层淬毒|\d+\s*(?:Toxic|Toxique|Tóxico|Токсин)|淬毒\d+)/i },
@@ -2038,7 +2048,9 @@ function colorizeCardText(value) {
             }
         }
         if (matched) {
-            html += `<span class="card-token ${matched.cls}">${escapeHtml(matched.text)}</span>`;
+            const termKey = getCardTextTokenTermKey(matched.cls, matched.text);
+            const termAttr = termKey ? ` data-term-key="${escapeHtml(termKey)}"` : '';
+            html += `<span class="card-token ${matched.cls}"${termAttr}>${escapeHtml(matched.text)}</span>`;
             i += matched.text.length;
         } else {
             html += escapeHtml(text[i]);
@@ -2046,6 +2058,76 @@ function colorizeCardText(value) {
         }
     }
     return html;
+}
+
+function getCardTextTokenTermKey(cls, text = '') {
+    const raw = String(text || '');
+    const tagMap = {
+        'tag-team-limited': 'flag:team_limited',
+        'tag-team-unique': 'flag:team_unique',
+        'tag-infinite-exclude': 'flag:infinite_exclude',
+        'tag-non-stackable': 'flag:non_stackable',
+        'tag-indestructible': 'flag:indestructible',
+        'tag-uncancellable': 'flag:uncancellable',
+        'tag-self-only': 'flag:self_only',
+        'tag-magic-swift': 'flag:magic_swift',
+        'tag-temp-swift': 'flag:temp_swift',
+        'tag-temp-heavy': 'flag:temp_heavy',
+        'tag-precision': 'flag:precision',
+        'tag-exile': 'flag:exile',
+        'tag-sprout': 'flag:sprout',
+        'tag-symbiosis': 'flag:symbiosis',
+        'tag-attract': 'flag:attract',
+        'tag-void': 'flag:void',
+        'tag-rebound': 'flag:rebound',
+        'tag-copy': 'flag:copy',
+        'tag-unique': 'flag:unique',
+        'tag-swift': 'flag:swift',
+        'tag-stealth': 'flag:stealth',
+        'tag-revealed': 'flag:revealed',
+        'tag-power': 'flag:power',
+    };
+    if (tagMap[cls]) return tagMap[cls];
+    const statusMap = {
+        'status-toxic-poison': 'status:toxic_poison',
+        'status-sluggish': 'status:sluggish',
+        'status-fragile': 'status:fragile',
+        'status-shield': 'status:shield',
+        'status-turn-heal': 'status:turn_heal',
+        'status-turn-magic': 'status:turn_magic',
+        'status-root': 'status:root_status',
+        'status-triangle': 'status:triangle',
+        'status-dodge': 'status:dodge',
+        'status-nazar': 'status:nazar',
+        'status-bleed': 'status:bleed',
+        'status-fracture': 'status:fracture',
+        'status-stagnation': 'status:stagnation',
+        'status-blind': 'status:blind',
+        'status-foresight': 'status:foresight',
+        'status-overload': 'status:overload',
+        'status-heal-block': 'status:heal_block',
+        'status-weakness': 'status:weakness',
+        'status-fragment': 'status:fragment',
+        'status-immune': 'status:immune',
+        'status-stunned': 'status:stunned',
+        'status-invincible': 'status:invincible',
+        'status-bandage': 'status:bandage',
+        'status-sponge': 'status:sponge',
+        'status-attack-blocked': 'status:attack_blocked',
+        'status-attack-only': 'status:attack_only',
+        'status-untargetable': 'status:untargetable',
+        'status-magic-nazar': 'status:magic_nazar',
+    };
+    if (statusMap[cls]) return statusMap[cls];
+    if (cls === 'toxic') return 'term:toxic';
+    if (cls === 'fire') return 'term:F';
+    if (cls === 'poison') return 'term:P';
+    if (cls === 'damage') return raw.includes('电伤') ? 'term:electric_damage' : 'term:D';
+    if (cls === 'armor') return 'term:A';
+    if (cls === 'heal' || cls === 'health') return 'term:health';
+    if (cls === 'elixir') return 'term:elixir';
+    if (cls === 'magic') return 'term:magic';
+    return '';
 }
 
 function getLocalizedEventText(ev, field) {
@@ -2509,6 +2591,8 @@ let tutorialDeckViewed = false;
 let tutorialCounterSeen = false;
 let tutorialIntroActive = false;
 let tutorialIntroShown = false;
+let tutorialTargetHintSeen = false;
+let tutorialTriggerHintSeen = false;
 let tutorialOverlayStartTimer = null;
 let tutorialIntroTimer = null;
 let tutorialStrictFocus = false;
@@ -2626,6 +2710,20 @@ const bootLoader = {
         setTimeout(() => this.el && this.el.classList.add('hidden'), 120);
     }
 };
+
+function clearTargetPickUi() {
+    if (targetPickCleanup) {
+        try { targetPickCleanup(); } catch (_) {}
+        targetPickCleanup = null;
+    }
+    document.querySelectorAll('[data-player-target-region]').forEach(el => {
+        el.classList.remove('target-pickable', 'target-picked');
+    });
+    document.querySelectorAll('.target-pickable, .target-picked').forEach(el => {
+        el.classList.remove('target-pickable', 'target-picked');
+    });
+    document.querySelectorAll('.target-pick-board-hint').forEach(el => el.remove());
+}
 
 function gameAlert(title, message, buttons) {
     if ((!buttons || buttons.length === 0) && (title === UI.notice || title === t('notice'))) {
@@ -3390,6 +3488,9 @@ let rulesScrollTop = 0;
 let galleryReturnToRules = false;
 let galleryMultiPetalPreviewId = null;
 let galleryShowMultiPetalPreview = false;
+let gallerySelectedModKeys = null;
+let gallerySelectedTypeKeys = null;
+let galleryCardRenderToken = 0;
 
 function bindRulesCardLinks(root) {
     if (!root) return;
@@ -3617,7 +3718,6 @@ function setGalleryMode(mode) {
 }
 
 function showCardGallery(selectedId = null, mode = 'cards') {
-    showView('view-card-gallery');
     phase = 'gallery';
     setGalleryMode(mode);
     const backBtn = $('btn-gallery-back');
@@ -3626,7 +3726,11 @@ function showCardGallery(selectedId = null, mode = 'cards') {
     if (!gallerySelectedId || !CARD_DEFS[gallerySelectedId] || gallerySelectedId === 'Error') {
         gallerySelectedId = Object.keys(CARD_DEFS).filter(id => id !== 'Error').sort(compareGalleryCards)[0] || null;
     }
+    showView('view-card-gallery');
     renderCardGallery();
+    requestAnimationFrame(() => {
+        if (getVisibleViewId() === 'view-card-gallery') renderCardGallery();
+    });
 }
 
 function getCustomTagDef(flag) {
@@ -3751,6 +3855,64 @@ function hasGalleryMultiPetalPreview(cd) {
     return /[（(]\s*\d+\s*子瓣\s*[）)]|[x×]\s*\d+\s*层|子瓣/.test(text);
 }
 
+function getGalleryCardModKey(cd) {
+    if (!cd) return 'unknown';
+    if (cd.source_mod_is_vanilla) return 'vanilla';
+    return String(cd.source_mod_filename || cd.source_mod_name_en || cd.source_mod_name || cd.v2_mod_id || 'unknown');
+}
+
+function getGalleryCardModLabel(cd) {
+    if (!cd) return 'Unknown';
+    if (cd.source_mod_is_vanilla) return currentLang === 'zh' ? '原版卡' : 'Vanilla Cards';
+    return localizedModNameFromFields({
+        name_cn: cd.source_mod_name_cn,
+        name_en: cd.source_mod_name_en,
+        name: cd.source_mod_name,
+        filename: cd.source_mod_filename,
+    }, cd.source_mod_filename || cd.source_mod_name || 'Unknown');
+}
+
+function getGalleryModOptions() {
+    const map = new Map();
+    Object.values(CARD_DEFS).filter(isPublicCardDef).forEach(cd => {
+        const key = getGalleryCardModKey(cd);
+        if (!map.has(key)) {
+            map.set(key, {
+                key,
+                label: getGalleryCardModLabel(cd),
+                sortName: cd.source_mod_is_vanilla ? '000' : String(cd.source_mod_name_en || cd.source_mod_sort_name || cd.source_mod_name || cd.source_mod_filename || key).toLowerCase(),
+                isVanilla: !!cd.source_mod_is_vanilla,
+                count: 0,
+            });
+        }
+        map.get(key).count += 1;
+    });
+    return [...map.values()].sort((a, b) => {
+        if (a.isVanilla !== b.isVanilla) return a.isVanilla ? -1 : 1;
+        return a.sortName.localeCompare(b.sortName, 'en');
+    });
+}
+
+function getGalleryTypeOptions() {
+    return ['thorn', 'bloom', 'guard', 'root'].map(type => ({
+        key: type,
+        label: getCardTypeLabel(type) || type,
+        color: CARD_TYPE_COLORS[type] || COLORS.text_primary,
+        count: Object.values(CARD_DEFS).filter(cd => isPublicCardDef(cd) && cd.card_type === type).length,
+    }));
+}
+
+function ensureGalleryCardFilterState() {
+    const modKeys = getGalleryModOptions().map(item => item.key);
+    const typeKeys = getGalleryTypeOptions().map(item => item.key);
+    const shouldInitMods = !(gallerySelectedModKeys instanceof Set);
+    const shouldInitTypes = !(gallerySelectedTypeKeys instanceof Set);
+    if (shouldInitMods) gallerySelectedModKeys = new Set(modKeys);
+    if (shouldInitTypes) gallerySelectedTypeKeys = new Set(typeKeys);
+    gallerySelectedModKeys = new Set([...gallerySelectedModKeys].filter(key => modKeys.includes(key)));
+    gallerySelectedTypeKeys = new Set([...gallerySelectedTypeKeys].filter(key => typeKeys.includes(key)));
+}
+
 function getAllGalleryFlags() {
     const flags = new Set(Object.keys(CARD_FLAG_STYLES));
     Object.keys(CUSTOM_TAG_DEFS || {}).forEach(flag => {
@@ -3781,65 +3943,136 @@ function renderCardGallery() {
         renderStatusGallery(list, detail, q);
         return;
     }
+    ensureGalleryCardFilterState();
+    list.className = 'gallery-card-list gallery-filter-list gallery-mod-filter-list';
+    detail.className = 'gallery-detail gallery-card-grid-detail';
+    const modOptions = getGalleryModOptions();
+    const typeOptions = getGalleryTypeOptions();
+    list.innerHTML = `
+        <div class="gallery-filter-title">${escapeHtml(currentLang === 'zh' ? '模组筛选' : 'Mods')}</div>
+        <div class="gallery-filter-actions">
+            <button class="btn btn-secondary gallery-filter-btn" type="button" data-gallery-mod-action="all">${escapeHtml(currentLang === 'zh' ? '全选' : 'All')}</button>
+            <button class="btn btn-secondary gallery-filter-btn" type="button" data-gallery-mod-action="none">${escapeHtml(currentLang === 'zh' ? '全部取消' : 'None')}</button>
+        </div>
+        <div class="gallery-filter-options">
+            ${modOptions.map(item => `
+                <label class="gallery-filter-option${gallerySelectedModKeys.has(item.key) ? ' active' : ''}">
+                    <input type="checkbox" data-gallery-mod="${escapeHtml(item.key)}" ${gallerySelectedModKeys.has(item.key) ? 'checked' : ''}>
+                    <span>${escapeHtml(item.label)}</span>
+                    <small>${item.count}</small>
+                </label>
+            `).join('')}
+        </div>
+    `;
+    list.querySelector('[data-gallery-mod-action="all"]')?.addEventListener('click', () => {
+        gallerySelectedModKeys = new Set(modOptions.map(item => item.key));
+        renderCardGallery();
+    });
+    list.querySelector('[data-gallery-mod-action="none"]')?.addEventListener('click', () => {
+        gallerySelectedModKeys = new Set();
+        renderCardGallery();
+    });
+    list.querySelectorAll('[data-gallery-mod]').forEach(input => {
+        input.addEventListener('change', () => {
+            const key = input.getAttribute('data-gallery-mod') || '';
+            if (!(gallerySelectedModKeys instanceof Set)) gallerySelectedModKeys = new Set();
+            if (input.checked) gallerySelectedModKeys.add(key);
+            else gallerySelectedModKeys.delete(key);
+            renderCardGallery();
+        });
+    });
     const ids = Object.keys(CARD_DEFS)
         .filter(id => id !== 'Error')
         .filter(id => {
             const cd = CARD_DEFS[id];
+            if (!cd) return false;
+            if (!gallerySelectedModKeys.has(getGalleryCardModKey(cd))) return false;
+            if (!gallerySelectedTypeKeys.has(cd.card_type)) return false;
             return !q || cardSearchText(id).includes(q);
         })
         .sort(compareGalleryCards);
-    list.innerHTML = '';
-    ids.forEach(id => {
-        const cd = CARD_DEFS[id];
-        const flags = [...new Set(normalizeFlagList(cd.flags || []).filter(flag => flag !== 'infinite_exclude'))].map(getFlagLabel).join(' / ');
-        const row = document.createElement('div');
-        row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
-        row.innerHTML = `<div class="gallery-row-title">${getCardName(cd)}</div>${flags ? `<div class="gallery-row-meta">${flags}</div>` : ''}`;
-        row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
-        list.appendChild(row);
+    detail.innerHTML = `
+        <div class="gallery-card-grid-shell">
+            <div id="gallery-card-grid" class="gallery-card-grid"></div>
+            <aside id="gallery-type-filter" class="gallery-type-filter">
+                <div class="gallery-filter-title">${escapeHtml(currentLang === 'zh' ? '类型筛选' : 'Types')}</div>
+                <div class="gallery-filter-options">
+                    ${typeOptions.map(item => `
+                        <label class="gallery-filter-option type-filter-option${gallerySelectedTypeKeys.has(item.key) ? ' active' : ''}" style="--type-color:${escapeHtml(item.color)}">
+                            <input type="checkbox" data-gallery-type="${escapeHtml(item.key)}" ${gallerySelectedTypeKeys.has(item.key) ? 'checked' : ''}>
+                            <span>${escapeHtml(item.label)}</span>
+                            <small>${item.count}</small>
+                        </label>
+                    `).join('')}
+                </div>
+            </aside>
+        </div>
+    `;
+    const grid = $('gallery-card-grid');
+    if (!grid) return;
+    const renderToken = ++galleryCardRenderToken;
+    if (!ids.length) {
+        grid.innerHTML = `<p class="gallery-no-items">${escapeHtml(UI.gallery_no_items)}</p>`;
+    } else {
+        grid.textContent = '';
+        let index = 0;
+        const renderBatch = () => {
+            if (renderToken !== galleryCardRenderToken || !document.body.contains(grid)) return;
+            const fragment = document.createDocumentFragment();
+            const end = Math.min(index + 10, ids.length);
+            for (; index < end; index++) {
+                const cd = CARD_DEFS[ids[index]];
+                if (!cd) continue;
+                const cardDict = { def_id: cd.id, instance_flags: [], disabled_flags: [] };
+                const wrap = document.createElement('button');
+                wrap.type = 'button';
+                wrap.className = 'gallery-card-tile';
+                wrap.title = getCardName(cd);
+                const cardEl = createCardElement(cardDict, { small: false, disableIntro: true });
+                wrap.appendChild(cardEl);
+                const openIntro = (event) => {
+                    if (event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                    showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(wrap) });
+                };
+                const toggleIntro = (event) => {
+                    if (event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                    if (isTermIntroOverlayVisible()) {
+                        hideTermIntroOverlay();
+                        return;
+                    }
+                    showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(wrap) });
+                };
+                wrap.addEventListener('click', openIntro);
+                wrap.addEventListener('contextmenu', toggleIntro);
+                fragment.appendChild(wrap);
+            }
+            grid.appendChild(fragment);
+            if (index < ids.length) {
+                (window.requestIdleCallback || window.requestAnimationFrame || window.setTimeout)(renderBatch);
+            }
+        };
+        renderBatch();
+    }
+    detail.querySelectorAll('[data-gallery-type]').forEach(input => {
+        input.addEventListener('change', () => {
+            const key = input.getAttribute('data-gallery-type') || '';
+            if (!(gallerySelectedTypeKeys instanceof Set)) gallerySelectedTypeKeys = new Set();
+            if (input.checked) gallerySelectedTypeKeys.add(key);
+            else gallerySelectedTypeKeys.delete(key);
+            renderCardGallery();
+        });
     });
-    if (!ids.includes(gallerySelectedId)) gallerySelectedId = ids[0] || null;
-    const cd = CARD_DEFS[gallerySelectedId];
-    if (!cd) {
-        detail.innerHTML = `<p>${UI.gallery_no_items}</p>`;
-        return;
-    }
-    gallerySelectedId = cd.id;
-    if (galleryMultiPetalPreviewId !== cd.id) {
-        galleryMultiPetalPreviewId = cd.id;
-        galleryShowMultiPetalPreview = false;
-    }
-    const canPreviewMultiPetal = hasGalleryMultiPetalPreview(cd);
-    const previewCardDict = {
-        def_id: cd.id,
-        instance_flags: [],
-        disabled_flags: [],
-        extra_hits: canPreviewMultiPetal && galleryShowMultiPetalPreview ? 1 : 0,
-    };
-    const cardEl = createCardElement(previewCardDict, { small: false, showAllFlags: true });
-    detail.innerHTML = `<div class="gallery-detail-card"><div id="gallery-card-preview"></div><div class="gallery-detail-info">
-        <h3>${escapeHtml(getCardName(cd))}</h3>
-        ${buildCardIntroSummaryHtml(cd)}
-        <div class="term-intro-list gallery-term-intro-list">${renderTermIntroItems(collectCardIntroTerms(previewCardDict))}</div>
-    </div></div>`;
-    const preview = $('gallery-card-preview');
-    if (preview) {
-        preview.appendChild(cardEl);
-        if (canPreviewMultiPetal) {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'btn btn-secondary gallery-multipetal-toggle' + (galleryShowMultiPetalPreview ? ' active' : '');
-            btn.textContent = '重瓣';
-            btn.onclick = () => {
-                galleryShowMultiPetalPreview = !galleryShowMultiPetalPreview;
-                renderCardGallery();
-            };
-            preview.appendChild(btn);
-        }
-    }
 }
 
 function renderTagGallery(list, detail, q) {
+    list.className = 'gallery-card-list';
+    detail.className = 'gallery-detail';
     const flags = getAllGalleryFlags().filter(flag => {
         const en = getGalleryFlagEnglishLabel(flag);
         const text = `${flag} ${getFlagLabel(flag)} ${en}`.toLowerCase();
@@ -3874,6 +4107,8 @@ function renderTagGallery(list, detail, q) {
 }
 
 function renderOpeningEventGallery(list, detail, q) {
+    list.className = 'gallery-card-list';
+    detail.className = 'gallery-detail';
     const events = (openingEvents || []).filter(ev => {
         const text = [
             ev.id,
@@ -3968,6 +4203,8 @@ function getAllStatusDefs() {
 }
 
 function renderStatusGallery(list, detail, q) {
+    list.className = 'gallery-card-list';
+    detail.className = 'gallery-detail';
     const allStatuses = getAllStatusDefs();
     const statuses = [...allStatuses.values()].filter(s => {
         const text = `${s.key} ${s.label} ${s.desc}`.toLowerCase();
@@ -5315,6 +5552,9 @@ function createCardElement(cardDict, options = {}) {
     if (defId === 'Coconut' || cardDef.id === 'Coconut' || cardDef.legacy_id === 'Coconut' || cardDef.name_cn === '椰子') {
         el.classList.add('card-coconut');
     }
+    if (defId === 'Sponge' || cardDef.id === 'Sponge' || cardDef.legacy_id === 'Sponge' || cardDef.name_cn === '海绵') {
+        el.classList.add('card-sponge');
+    }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Grapes', 'MagicGrapes', 'Peas', 'MagicPeas'])
         || ['葡萄', '魔法葡萄', '豌豆', '魔法豌豆'].includes(cardDef.name_cn)) {
         el.classList.add('card-petal-copy');
@@ -5431,7 +5671,7 @@ function createCardElement(cardDict, options = {}) {
         ${cardArtHtml}
         <div class="card-type-label-wrap"><span class="card-type-label" style="color:${displayTypeColor}">${escapeHtml(typeLabel)}</span></div>
         <div class="card-effect">${colorizeCardText(effectText || '')}</div>
-        ${descriptionText ? `<div class="card-description">${colorizeCardText(descriptionText)}</div>` : ''}
+        ${descriptionText ? `<div class="card-description">${escapeHtml(descriptionText)}</div>` : ''}
         ${bottomHtml}
     `;
     bindInlineCardChips(el);
@@ -6160,7 +6400,7 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
         }
         dmg = Math.max(0, dmg - armor - rootArmor + fragile);
         if (sponge && dmg > 0) {
-            spongePoison += Math.min(10, dmg);
+            spongePoison += Math.min(10, Math.floor(dmg / 2));
             dmg = 0;
         }
         if (shield > 0 && dmg > 0) {
@@ -6776,7 +7016,7 @@ function buildCardIntroSummaryHtml(cardDef) {
     if (!triggerText && !descriptionText) return '';
     return `
         <section class="term-intro-summary">
-            ${descriptionText ? `<div class="term-intro-flavor">${colorizeCardText(descriptionText)}</div>` : ''}
+            ${descriptionText ? `<div class="term-intro-flavor">${escapeHtml(descriptionText)}</div>` : ''}
             ${triggerText ? `<div class="term-intro-summary-block">
                 <div class="term-intro-summary-label">触发</div>
                 <div class="term-intro-summary-text">${colorizeCardText(triggerText)}</div>
@@ -6872,6 +7112,7 @@ function collectCardIntroTerms(cardDict) {
         [/眩晕|Stun|stunned|skip_turn/i, 'stunned'],
         [/禁攻|禁止攻击|attack_blocked/i, 'attack_blocked'],
         [/仅攻击|attack_only/i, 'attack_only'],
+        [/魔力封锁|magic_blocked/i, 'magic_blocked'],
         [/状态免疫|status_immune|\bimmune\b/i, 'status_immune'],
         [/流血|Bleed|bleed/i, 'bleed'],
         [/禁疗|Heal Block|heal_block/i, 'heal_block'],
@@ -6932,11 +7173,12 @@ function getStatusIntroItem(statusInfo) {
         magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
-        status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效。', color: '#16A085' },
-        immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效。', color: '#16A085' },
+        status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。闪避不属于状态。', color: '#16A085' },
+        immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。闪避不属于状态。', color: '#16A085' },
         stunned: { label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         attack_blocked: { label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
+        magic_blocked: { label: '魔力封锁', desc: '存在时，不能打出带有魔力消耗的卡牌。回合结束时层数-1。', color: COLORS.magic_text },
         untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。', color: '#1A5276' },
         bandage: { label: UI.status_bandage, desc: '受到致命伤害后无敌直到自己下个回合结束，然后死亡。', color: '#1E8449' },
         sponge: { label: UI.status_sponge, desc: '表示海绵的存在。', color: '#6C3483' },
@@ -6976,6 +7218,7 @@ function getStatusIntroItem(statusInfo) {
         stunned: { label: UI.status_stunned, desc: lt({ zh: builtIns.stunned.desc, en: 'At your turn, lose 1 stack and skip active actions. Passive equipment still works.', fr: 'À votre tour, perdez 1 charge et sautez vos actions actives. Les équipements passifs fonctionnent encore.', ja: '自分のターンに1層減り、能動行動をスキップします。装備の受動効果は通常通りです。' }) },
         attack_blocked: { label: UI.status_attack_blocked, desc: lt({ zh: builtIns.attack_blocked.desc, en: 'You cannot play Thorn cards while this effect lasts.', fr: 'Vous ne pouvez pas jouer de cartes Thorn tant que cet effet dure.', ja: '効果中、Thornカードを使用できません。' }) },
         attack_only: { label: UI.status_attack_only, desc: lt({ zh: builtIns.attack_only.desc, en: 'You can only play Thorn cards while this effect lasts.', fr: 'Vous ne pouvez jouer que des cartes Thorn tant que cet effet dure.', ja: '効果中、Thornカードしか使用できません。' }) },
+        magic_blocked: { label: lt({ zh: '魔力封锁', en: 'Magic Lock', fr: 'Verrou magique', ja: '魔力封鎖' }), desc: lt({ zh: builtIns.magic_blocked.desc, en: 'You cannot play cards with M cost while this effect lasts. Loses 1 stack at turn end.', fr: 'Vous ne pouvez pas jouer de cartes coûtant M tant que cet effet dure. Perd 1 charge en fin de tour.', ja: '効果中、M消費のあるカードを使用できません。ターン終了時に1層減ります。' }) },
         untargetable: { label: UI.status_untargetable, desc: lt({ zh: builtIns.untargetable.desc, en: 'Cannot be selected by some targeted effects.', fr: 'Ne peut pas être choisi par certains effets ciblés.', ja: '一部の対象指定効果で選べません。' }) },
         bandage: { label: UI.status_bandage, desc: lt({ zh: builtIns.bandage.desc, en: 'After lethal damage, become invincible until your next turn ends, then die.', fr: 'Après des dégâts mortels, devient invincible jusqu’à la fin de votre prochain tour, puis meurt.', ja: '致命ダメージ後、次の自分ターン終了まで無敵になり、その後死亡します。' }) },
         sluggish: { label: UI.status_sluggish, desc: lt({ zh: builtIns.sluggish.desc, en: 'Draw that many fewer cards each turn.', fr: 'Pioche autant de cartes en moins à chaque tour.', ja: '毎ターンその層数分だけドローが減ります。' }) },
@@ -7041,6 +7284,10 @@ function ensureTermIntroOverlay() {
     overlay.addEventListener('click', (event) => {
         if (event.target === overlay) hideTermIntroOverlay();
     });
+    overlay.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        hideTermIntroOverlay();
+    });
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && !overlay.classList.contains('hidden')) hideTermIntroOverlay();
     });
@@ -7055,6 +7302,10 @@ function hideTermIntroOverlay() {
     termIntroOverlayEl.classList.remove('card-flying');
     termIntroOverlayEl.classList.add('hidden');
     termIntroOverlayEl.setAttribute('aria-hidden', 'true');
+}
+
+function isTermIntroOverlayVisible() {
+    return !!(termIntroOverlayEl && !termIntroOverlayEl.classList.contains('hidden'));
 }
 
 function removeTermIntroCardGhost() {
@@ -7190,7 +7441,7 @@ function showTermIntroForCard(cardDict, cardOptions = {}) {
     const list = overlay.querySelector('#term-intro-list');
     cardSlot.innerHTML = '';
     const card = createCardElement(introCardDict, {
-        showAllFlags: true,
+        showAllFlags: false,
         disableIntro: true,
         blindForSelf: blinded,
         ownerState: cardOptions.ownerState || getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you),
@@ -7245,6 +7496,71 @@ function showTermIntroForStatus(statusInfo) {
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
     requestAnimationFrame(() => overlay.classList.add('visible'));
+}
+
+function showTermIntroForTokenKey(termKey, sourceEl = null) {
+    const rawKey = String(termKey || '').trim();
+    if (!rawKey) return false;
+    if (rawKey.startsWith('flag:')) {
+        const flag = normalizeCardFlag(rawKey.slice(5));
+        const items = [];
+        addFlagIntroItem(items, new Set(), flag);
+        if (!items.length) return false;
+        showTermIntroForStandaloneItem(items[0], sourceEl, lt({ zh: '标签说明', en: 'Tag Guide', fr: 'Guide de tag', ja: 'タグ説明' }));
+        return true;
+    }
+    if (rawKey.startsWith('status:')) {
+        const key = rawKey.slice(7);
+        showTermIntroForStatus({ key, name: key, val: '' });
+        return true;
+    }
+    if (rawKey.startsWith('term:')) {
+        const key = rawKey.slice(5);
+        const item = getTermIntroLibrary()[key];
+        if (!item) return false;
+        showTermIntroForStandaloneItem({ key, ...item }, sourceEl, lt({ zh: '术语说明', en: 'Term Guide', fr: 'Guide des termes', ja: '用語説明' }));
+        return true;
+    }
+    return false;
+}
+
+function showTermIntroForStandaloneItem(item, sourceEl = null, titleText = '') {
+    if (!item) return;
+    const overlay = ensureTermIntroOverlay();
+    removeFloatingCardPreview();
+    removeCardHoldPreview();
+    overlay.classList.remove('visible');
+    overlay.classList.remove('card-flying');
+    const cardSlot = overlay.querySelector('#term-intro-card');
+    const title = overlay.querySelector('#term-intro-title');
+    const list = overlay.querySelector('#term-intro-list');
+    const color = item.color || COLORS.text_primary;
+    cardSlot.innerHTML = `
+        <div class="term-intro-status-card" style="--term-color:${escapeHtml(color)}">
+            <span class="status-tag term-intro-status-tag" style="color:${escapeHtml(color)};background:${escapeHtml(COLORS.bg_card || '#fff')};border-color:${escapeHtml(color)}">${escapeHtml(item.label || item.key || '')}</span>
+        </div>
+    `;
+    title.textContent = titleText || lt({ zh: '术语说明', en: 'Term Guide', fr: 'Guide des termes', ja: '用語説明' });
+    list.innerHTML = renderTermIntroItems([item]);
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+}
+
+function bindCardTextTokenContextMenu() {
+    if (document.body && document.body.dataset.termTokenContextBound === '1') return;
+    if (document.body) document.body.dataset.termTokenContextBound = '1';
+    document.addEventListener('contextmenu', (event) => {
+        const token = event.target && event.target.closest ? event.target.closest('.card-token[data-term-key]') : null;
+        if (!token) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (isTermIntroOverlayVisible()) {
+            hideTermIntroOverlay();
+            return;
+        }
+        showTermIntroForTokenKey(token.dataset.termKey || '', token);
+    }, true);
 }
 
 function attachTermIntroLongPress(anchor, onShow) {
@@ -7311,6 +7627,16 @@ function attachTermIntroLongPress(anchor, onShow) {
     });
     ['pointerup', 'pointerleave', 'pointercancel', 'lostpointercapture'].forEach(type => {
         anchor.addEventListener(type, cancel);
+    });
+    anchor.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        cancel();
+        if (isTermIntroOverlayVisible()) {
+            hideTermIntroOverlay();
+            return;
+        }
+        onShow();
     });
 }
 
@@ -7435,7 +7761,7 @@ function buildCardHoldPreviewHtml(cardDef, blinded = false) {
     return `
         <div class="card-hold-preview-title">${escapeHtml(getCardName(cardDef))}</div>
         ${effectText ? `<div class="card-hold-preview-effect">${colorizeCardText(effectText)}</div>` : ''}
-        ${descriptionText ? `<div class="card-hold-preview-desc">${colorizeCardText(descriptionText)}</div>` : ''}
+        ${descriptionText ? `<div class="card-hold-preview-desc">${escapeHtml(descriptionText)}</div>` : ''}
     `;
 }
 
@@ -7913,6 +8239,7 @@ function connectSocket(serverUrl) {
             others_total_rounds: data.others_total_rounds || draftState.others_total_rounds || {},
             opponent_picks_count: data.opponent_picks_count ?? draftState.opponent_picks_count,
             player_names: data.player_names || draftState.player_names,
+            selected_opening_events: data.selected_opening_events || draftState.selected_opening_events || {},
             total_rounds: data.total_rounds || draftState.total_rounds,
             round: data.round || draftState.round,
         };
@@ -7963,6 +8290,7 @@ function connectSocket(serverUrl) {
             return;
         }
         const previousGameState = gameState;
+        clearTargetPickUi();
         soloMode = !!data.solo;
         syncBattleLogMatch(data || {});
         gameState = data;
@@ -8014,6 +8342,7 @@ function connectSocket(serverUrl) {
     bindSocketEvent('solo_state', (data) => {
         clearPendingSoloFallback();
         const previousGameState = gameState;
+        clearTargetPickUi();
         soloMode = true;
         tutorialMode = !!data.tutorial || tutorialMode;
         isSpectating = false;
@@ -8391,7 +8720,7 @@ function renderAccountInfoPanel(user) {
     const draws = Number(user.draws || 0) || 0;
     const winRate = games > 0 ? `${(wins / games * 100).toFixed(1)}%` : '0.0%';
     const items = [
-        [currentLang === 'zh' ? '对局数' : 'Games', games],
+        [currentLang === 'zh' ? '有效对局数' : 'Valid Games', games],
         [currentLang === 'zh' ? '胜率' : 'Win Rate', winRate],
         [currentLang === 'zh' ? '胜 / 负 / 平' : 'W / L / D', `${wins} / ${losses} / ${draws}`],
         [UI.account_online_time || '在线时间', formatAccountOnlineTime(user.online_seconds_total ?? user.online_seconds ?? 0)],
@@ -10753,7 +11082,7 @@ function startLocalSoloRuntime(kind, payload) {
     if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
     try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=19');
+        const worker = new Worker('/static/js/local_solo_worker.js?v=20');
         localSoloRuntime.worker = worker;
         localSoloRuntime.enabled = true;
         localSoloRuntime.fallbackPayload = payload;
@@ -10860,6 +11189,8 @@ function startTutorial(returnTarget = 'home') {
     tutorialCounterSeen = false;
     tutorialIntroActive = false;
     tutorialIntroShown = false;
+    tutorialTargetHintSeen = false;
+    tutorialTriggerHintSeen = false;
     if (tutorialOverlayStartTimer) { clearTimeout(tutorialOverlayStartTimer); tutorialOverlayStartTimer = null; }
     if (tutorialIntroTimer) { clearTimeout(tutorialIntroTimer); tutorialIntroTimer = null; }
     tutorialEndHintCount = 0;
@@ -10949,7 +11280,7 @@ function onTutorialGuardClick(e) {
     if (!tutorialMode || !tutorialStrictFocus) return;
     const target = e.target;
     if (!(target instanceof Element)) return;
-    if (target.closest('.tutorial-highlight, #btn-tutorial-skip')) return;
+    if (target.closest('.tutorial-highlight, #btn-tutorial-skip, .target-pickable, [data-player-target-region].target-pickable')) return;
     e.preventDefault();
     e.stopPropagation();
 }
@@ -11007,8 +11338,15 @@ function updateTutorialOverlay() {
         return cd && cd.card_type === 'thorn' && Number(c.fusion_level || 1) > 1 && canPlayCard(c);
     });
     const hasEnhancedAttack = hasFissionedAttack || hasFusionedAttack;
-    const shouldShowDeckHint = !!(gameState && (gameState.round_num || 0) >= 2 && myTurn && !tutorialDeckViewed);
+    const hasTargetCard = hand.some(c => {
+        const cd = getCardDef(c.def_id);
+        return cd && cd.card_type !== 'thorn' && canPlayCard(c) && cardNeedsPlayerTarget(cd, c);
+    });
+    const triggerButton = document.querySelector('.btn-equip-trigger:not(:disabled)');
+    const shouldShowDeckHint = !!(gameState && myTurn && !tutorialDeckViewed);
     const shouldShowCounterHint = !!responsePending;
+    const shouldShowTriggerHint = !!(myTurn && !tutorialTriggerHintSeen && triggerButton && !shouldShowCounterHint && !shouldShowDeckHint);
+    const shouldShowTargetHint = !!(myTurn && !tutorialTargetHintSeen && hasTargetCard && playedThisTurn === 0 && !shouldShowCounterHint && !shouldShowDeckHint && !shouldShowTriggerHint);
     const endHintCandidate = !!(!enemyTurn && myTurn && playedThisTurn > 0 && !hasEnhancedAttack);
     if (endHintCandidate) {
         const key = `${gameState.round_num || 0}:${gameState.current_player || 0}`;
@@ -11019,10 +11357,11 @@ function updateTutorialOverlay() {
     }
     const shouldShowEndHint = endHintCandidate && tutorialEndHintCount <= 2;
     const shouldFocusEndHint = shouldShowEndHint && tutorialEndHintCount <= 1;
-    const strictFocus = shouldShowCounterHint || shouldShowDeckHint || shouldFocusEndHint;
+    const strictFocus = shouldShowCounterHint || shouldShowDeckHint || shouldShowTriggerHint || shouldFocusEndHint;
     tutorialStrictFocus = strictFocus;
     if (shield) shield.classList.toggle('hidden', !strictFocus);
     if (shouldShowCounterHint) tutorialCounterSeen = true;
+    if (shouldShowTriggerHint) tutorialTriggerHintSeen = true;
     if (kicker) kicker.textContent = UI.tutorial_start;
     if (text) {
         text.textContent = shouldShowCounterHint
@@ -11030,7 +11369,11 @@ function updateTutorialOverlay() {
             : enemyTurn
             ? UI.tutorial_hint_enemy
             : shouldShowDeckHint
-                ? UI.tutorial_hint_deck
+                ? (UI.tutorial_hint_ui || UI.tutorial_hint_deck)
+                : shouldShowTriggerHint
+                    ? UI.tutorial_hint_trigger
+                : shouldShowTargetHint
+                    ? UI.tutorial_hint_target
                 : (myTurn && hasFissionedAttack)
                     ? UI.tutorial_hint_play_fissioned
                     : (myTurn && hasFusionedAttack)
@@ -11053,11 +11396,13 @@ function updateTutorialOverlay() {
     }
     if (arrow) {
         let arrowMode = '';
-        if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && myTurn && hasFissionedAttack) {
+        if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && shouldShowTargetHint) {
+            arrowMode = 'target';
+        } else if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && !shouldShowTriggerHint && myTurn && hasFissionedAttack) {
             arrowMode = 'fissioned';
-        } else if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && myTurn && hasFusionedAttack) {
+        } else if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && !shouldShowTriggerHint && myTurn && hasFusionedAttack) {
             arrowMode = 'fusioned';
-        } else if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && myTurn && playedThisTurn === 0) {
+        } else if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && !shouldShowTriggerHint && myTurn && playedThisTurn === 0) {
             if ((gameState.round_num || 0) <= 1) arrowMode = 'play';
             else if (hasFission) arrowMode = 'fission';
             else if (hasFusion) arrowMode = 'fusion';
@@ -11073,6 +11418,8 @@ function updateTutorialOverlay() {
     } else if (!enemyTurn && shouldShowDeckHint) {
         const btn = $('btn-view-deck');
         if (btn) btn.classList.add('tutorial-highlight');
+    } else if (!enemyTurn && shouldShowTriggerHint && triggerButton) {
+        triggerButton.classList.add('tutorial-highlight');
     } else if (shouldFocusEndHint) {
         const btn = $('btn-end-turn');
         if (btn) btn.classList.add('tutorial-highlight');
@@ -11110,6 +11457,7 @@ function positionTutorialArrow(arrow, mode) {
             if (mode === 'fissioned') return cd.card_type === 'thorn' && Number(card.fission_level || 1) > 1;
             if (mode === 'fusion') return card.def_id === 'Fusion';
             if (mode === 'fusioned') return cd.card_type === 'thorn' && Number(card.fusion_level || 1) > 1;
+            if (mode === 'target') return cd.card_type !== 'thorn' && cardNeedsPlayerTarget(cd, card);
             if (mode === 'root') return cd.card_type === 'root';
             if (mode === 'bloom') return cd.card_type === 'bloom';
             return cd.card_type === 'thorn';
@@ -11152,6 +11500,8 @@ function stopTutorialUiForGameOver() {
     tutorialCounterSeen = false;
     tutorialIntroActive = false;
     tutorialIntroShown = false;
+    tutorialTargetHintSeen = false;
+    tutorialTriggerHintSeen = false;
     tutorialStrictFocus = false;
     tutorialEndHintCount = 0;
     tutorialEndHintKey = '';
@@ -11181,6 +11531,8 @@ function finishTutorialReturn() {
     tutorialCounterSeen = false;
     tutorialIntroActive = false;
     tutorialIntroShown = false;
+    tutorialTargetHintSeen = false;
+    tutorialTriggerHintSeen = false;
     tutorialStrictFocus = false;
     if (tutorialOverlayStartTimer) { clearTimeout(tutorialOverlayStartTimer); tutorialOverlayStartTimer = null; }
     if (tutorialIntroTimer) { clearTimeout(tutorialIntroTimer); tutorialIntroTimer = null; }
@@ -11254,6 +11606,7 @@ const BUILTIN_CARD_PINYIN_ALIASES = {
     MagicBattery: 'mo fa dian chi',
     Powder: 'fen mo',
     GoldenLeaf: 'huang jin ye',
+    MagicGoldenLeaf: 'mo fa huang jin ye',
     Pincer: 'shi zhen zhe zhen',
     Cancer: 'ai xi bao',
     Corruption: 'fu hua',
@@ -11269,6 +11622,7 @@ const BUILTIN_CARD_PINYIN_ALIASES = {
     Compass: 'zhi nan zhen',
     Sponge: 'hai mian',
     Poo: 'bian bian',
+    MagicPoo: 'mo fa bian bian',
     Honey: 'feng mi',
     Pill: 'yao wan',
     Magnet: 'ci tie',
@@ -11973,6 +12327,15 @@ function updateDraftInfo(data) {
     const othersStatus = data.others_status || {};
     const info = $('draft-info');
     if (info) {
+        const selectedEvents = data.selected_opening_events || {};
+        const selectedText = Object.entries(selectedEvents).map(([idx, ev]) => {
+            const pNames = data.player_names || [];
+            const pidx = parseInt(idx);
+            const name = pNames[pidx] || `P${pidx + 1}`;
+            const eventName = getLocalizedEventText(ev, 'name') || ev.name || '?';
+            return `${name}: ${eventName}`;
+        }).join(' | ');
+        const selectedSuffix = selectedText ? ` | ${currentLang === 'zh' ? '配装' : 'Setup'}: ${selectedText}` : '';
         if (is2v2) {
             const pNames = data.player_names || [];
             const othersInfo = Object.entries(othersStatus).map(([idx, status]) => {
@@ -11993,9 +12356,9 @@ function updateDraftInfo(data) {
                 return `${name}: ${statusStr}`;
             }).join(' | ');
             if (picks.length >= totalRounds) {
-                info.textContent = `${UI.draft_complete} | ${othersInfo}`;
+                info.textContent = `${UI.draft_complete} | ${othersInfo}${selectedSuffix}`;
             } else {
-                info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${othersInfo}`;
+                info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${othersInfo}${selectedSuffix}`;
             }
         } else {
             // 1v1: show opponent status
@@ -12014,12 +12377,31 @@ function updateDraftInfo(data) {
                 oppStatusText = `${oppPicksCount}/${totalRounds}`;
             }
             if (picks.length >= totalRounds) {
-                info.textContent = `${UI.draft_complete} | ${UI.waiting_opponent}: ${oppStatusText}`;
+                info.textContent = `${UI.draft_complete} | ${UI.waiting_opponent}: ${oppStatusText}${selectedSuffix}`;
             } else {
-                info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${UI.waiting_opponent}: ${oppStatusText}`;
+                info.textContent = `${UI.draft_info} ${round}/${totalRounds} | ${UI.draft_reroll}: ${rerolls} | ${UI.waiting_opponent}: ${oppStatusText}${selectedSuffix}`;
             }
         }
     }
+}
+
+function formatEndTurnButtonText(gs) {
+    const base = UI.end_turn || '结束回合';
+    if (!gs || gs.phase !== 'action') return base;
+    const current = Number(gs.current_player);
+    const timerPlayer = Number(gs.turn_timer_player);
+    const remaining = Number(gs.turn_timer_remaining);
+    if (!Number.isFinite(remaining) || remaining < 0) return base;
+    if (Number.isFinite(timerPlayer) && Number.isFinite(current) && timerPlayer !== current) return base;
+    return `${base}(${String(Math.max(0, Math.ceil(remaining))).padStart(2, '0')}s)`;
+}
+
+function updateEndTurnButtonLabels(gs) {
+    const label = formatEndTurnButtonText(gs);
+    const btn = $('btn-end-turn');
+    if (btn) btn.textContent = label;
+    const classicBtn = $('classic-end-turn');
+    if (classicBtn) classicBtn.textContent = label;
 }
 
 function renderDraft(data, isReroll, previousDraftState = null) {
@@ -13575,7 +13957,7 @@ function renderClassicBattle(gs) {
         }
         const endBtn = $('classic-end-turn');
         if (endBtn) {
-            endBtn.textContent = UI.end_turn;
+            endBtn.textContent = formatEndTurnButtonText(gs);
             endBtn.disabled = !vm.turn.isMyTurn || isActionBusy({ includeAnimation: false }) || gs.phase === 'game_over';
             endBtn.classList.toggle('is-ready', !endBtn.disabled);
         }
@@ -13722,6 +14104,7 @@ function renderGame(data) {
 
     const endTurnBtn = $('btn-end-turn');
     if (endTurnBtn) {
+        endTurnBtn.textContent = formatEndTurnButtonText(gs);
         endTurnBtn.disabled = !myTurn || isSpectating || gs.phase === 'game_over' || isActionBusy({ includeAnimation: false });
     }
     const inSoloGame = !!gs.solo;
@@ -13856,8 +14239,10 @@ function renderStatusTags(containerId, playerData) {
     if (p.skip_turn > 0) tags.push({ key: 'stunned', name: UI.status_stunned, abbr: 'Stn', val: p.skip_turn, fg: COLORS.damage, bg: COLORS.damage_bg });
     const attackBlocked = Math.max(Number(p.attack_blocked || 0), customCount('attack_blocked', '禁攻'));
     const attackOnly = Math.max(Number(p.attack_only || 0), customCount('attack_only', '仅攻击'));
+    const magicBlocked = customCount('magic_blocked', '魔力封锁');
     if (attackBlocked > 0) tags.push({ key: 'attack_blocked', name: UI.status_attack_blocked, abbr: '禁攻', val: attackBlocked, fg: '#C0392B', bg: '#FDEDEC' });
     if (attackOnly > 0) tags.push({ key: 'attack_only', name: UI.status_attack_only, abbr: 'TOnly', val: attackOnly, fg: '#D35400', bg: '#FEF5E7' });
+    if (magicBlocked > 0) tags.push({ key: 'magic_blocked', name: '魔力封锁', abbr: '封M', val: magicBlocked, fg: COLORS.magic_text, bg: COLORS.magic_bg });
     if (p.untargetable) tags.push({ key: 'untargetable', name: UI.status_untargetable, abbr: 'Unt', val: '', fg: '#1A5276', bg: '#EBF5FB' });
     if (p.bandage_active) tags.push({ key: 'bandage', name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
     if (p.sponge_active) tags.push({ key: 'sponge', name: UI.status_sponge, abbr: 'Spg', val: '', fg: '#6C3483', bg: '#F4ECF7' });
@@ -13896,7 +14281,7 @@ function renderStatusTags(containerId, playerData) {
         if (count > 0) tags.push({ key: info.keys[0], name: info.name, abbr: info.abbr, val: count, fg: info.fg, bg: info.bg, title: info.title });
     });
     if (customStatuses && typeof customStatuses === 'object') {
-            const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','status_immune','immune','状态免疫','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
+            const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
         Object.entries(customStatuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;
@@ -14087,8 +14472,10 @@ function canPlayCard(cardDict) {
     const cardDef = getCardDef(cardDict.def_id);
     if (!cardDef) return false;
     if (cardDef.card_type === 'guard' && !cardHasPlayableScript(cardDef) && !(cardDef.effects || []).length) return false;
-    if (getActionLimitStatusValue(you, 'attack_blocked', '禁攻') > 0 && cardDef.card_type === 'thorn') return false;
-    if (getActionLimitStatusValue(you, 'attack_only', '仅攻击') > 0 && cardDef.card_type !== 'thorn') return false;
+    const immune = isStatusImmune(you);
+    if (!immune && getActionLimitStatusValue(you, 'attack_blocked', '禁攻') > 0 && cardDef.card_type === 'thorn') return false;
+    if (!immune && getActionLimitStatusValue(you, 'attack_only', '仅攻击') > 0 && cardDef.card_type !== 'thorn') return false;
+    if (!immune && getActionLimitStatusValue(you, 'magic_blocked', '魔力封锁') > 0 && Number(cardDict.cost_m || cardDef.cost_m || 0) > 0) return false;
     const elixir = you.elixir || 0;
     const magic = you.magic || 0;
     const { totalE, totalM } = getCardDisplayCosts(cardDict, cardDef, you);
@@ -14115,6 +14502,10 @@ function getActionLimitStatusValue(playerData, ...keys) {
     return value;
 }
 
+function isStatusImmune(playerData = {}) {
+    return getActionLimitStatusValue(playerData, 'status_immune', 'immune', '状态免疫') > 0;
+}
+
 function getCannotPlayReason(cardDict) {
     const gs = gameState || {};
     const you = gs.you || {};
@@ -14126,8 +14517,10 @@ function getCannotPlayReason(cardDict) {
     if (cardDef.card_type === 'guard' && !cardHasPlayableScript(cardDef) && !(cardDef.effects || []).length) {
         return UI.error_waiting_response_ui || UI.cannot_play;
     }
-    if (getActionLimitStatusValue(you, 'attack_blocked', '禁攻') > 0 && cardDef.card_type === 'thorn') return UI.error_attack_blocked || UI.cannot_play;
-    if (getActionLimitStatusValue(you, 'attack_only', '仅攻击') > 0 && cardDef.card_type !== 'thorn') return UI.error_attack_only || UI.cannot_play;
+    const immune = isStatusImmune(you);
+    if (!immune && getActionLimitStatusValue(you, 'attack_blocked', '禁攻') > 0 && cardDef.card_type === 'thorn') return UI.error_attack_blocked || UI.cannot_play;
+    if (!immune && getActionLimitStatusValue(you, 'attack_only', '仅攻击') > 0 && cardDef.card_type !== 'thorn') return UI.error_attack_only || UI.cannot_play;
+    if (!immune && getActionLimitStatusValue(you, 'magic_blocked', '魔力封锁') > 0 && Number(cardDict.cost_m || cardDef.cost_m || 0) > 0) return UI.error_magic_blocked || '本回合无法使用带有魔力消耗的卡牌';
     const { totalE, totalM } = getCardDisplayCosts(cardDict, cardDef, you);
     const reasons = [];
     if (totalE > (you.elixir || 0)) reasons.push(UI.error_not_enough_e || UI.insufficient_resources || UI.cannot_play);
@@ -14222,11 +14615,13 @@ function syncPlayerRegionTargets(gs) {
     if (!gs) return;
     const useClassicRefs = shouldUseClassicBattle(gs);
     const assign = (selector, id) => {
-        const el = document.querySelector(selector);
         const pid = normalizePlayerId(id);
-        if (!el || pid == null) return;
-        el.dataset.playerTargetRegion = '1';
-        el.dataset.playerId = String(pid);
+        if (pid == null) return;
+        document.querySelectorAll(selector).forEach(el => {
+            if (!el) return;
+            el.dataset.playerTargetRegion = '1';
+            el.dataset.playerId = String(pid);
+        });
     };
     if (useClassicRefs) {
         assign('#classic-fighter-self', gs.your_id);
@@ -14266,25 +14661,53 @@ function choosePlayerTargetOnBoard(title, targets) {
         if (targetPickCleanup) targetPickCleanup();
         let settled = false;
         let outsideEnabled = false;
-        const handlers = new Map();
+        const validIds = new Set(targets.map(target => String(normalizePlayerId(target.id))).filter(id => id !== 'null'));
+        const tutorialShield = tutorialMode ? document.querySelector('#tutorial-overlay .tutorial-click-shield') : null;
+        if (tutorialShield) tutorialShield.classList.add('hidden');
+        const hint = tutorialMode ? document.createElement('div') : null;
+        if (hint) {
+            hint.className = 'target-pick-board-hint';
+            hint.textContent = UI.target_pick_hint || title || UI.choose_target || '点击一个高亮的玩家区域以选择目标';
+            document.body.appendChild(hint);
+        }
         const finish = (value) => {
             if (settled) return;
             settled = true;
             regions.forEach(({ el }) => {
                 el.classList.remove('target-pickable', 'target-picked');
-                el.removeEventListener('click', handlers.get(el), true);
             });
-            handlers.clear();
-            document.removeEventListener('pointerdown', outsideHandler, true);
+            document.querySelectorAll('.target-pickable, .target-picked').forEach(el => {
+                el.classList.remove('target-pickable', 'target-picked');
+            });
+            document.removeEventListener('pointerdown', pointerHandler, true);
             document.removeEventListener('keydown', keyHandler, true);
             document.removeEventListener('contextmenu', contextHandler, true);
+            if (hint) hint.remove();
+            if (tutorialShield) tutorialShield.classList.remove('hidden');
             if (targetPickCleanup === finishCancel) targetPickCleanup = null;
             resolve(value);
         };
         const finishCancel = () => finish(-1);
-        const isPickableNode = (node) => !!(node && node.closest && node.closest('[data-player-target-region].target-pickable'));
-        const outsideHandler = (event) => {
-            if (!outsideEnabled || isPickableNode(event.target)) return;
+        const pickableFromEvent = (event) => {
+            if (!event || !event.target || !event.target.closest) return null;
+            const el = event.target.closest('[data-player-target-region].target-pickable, .target-pickable');
+            if (!el || !isVisibleTargetRegion(el)) return null;
+            return el;
+        };
+        const pointerHandler = (event) => {
+            const el = pickableFromEvent(event);
+            if (el) {
+                const pid = normalizePlayerId(el.dataset.playerId);
+                if (pid != null && validIds.has(String(pid))) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    el.classList.add('target-picked');
+                    flashTargetRegion(pid);
+                    setTimeout(() => finish(pid), 90);
+                    return;
+                }
+            }
+            if (!outsideEnabled) return;
             event.preventDefault();
             finishCancel();
         };
@@ -14298,18 +14721,9 @@ function choosePlayerTargetOnBoard(title, targets) {
             finishCancel();
         };
         regions.forEach(({ target, el }) => {
-            const handler = (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                el.classList.add('target-picked');
-                flashTargetRegion(target.id);
-                setTimeout(() => finish(target.id), 90);
-            };
-            handlers.set(el, handler);
             el.classList.add('target-pickable');
-            el.addEventListener('click', handler, true);
         });
-        document.addEventListener('pointerdown', outsideHandler, true);
+        document.addEventListener('pointerdown', pointerHandler, true);
         document.addEventListener('keydown', keyHandler, true);
         document.addEventListener('contextmenu', contextHandler, true);
         setTimeout(() => { outsideEnabled = true; }, 0);
@@ -15052,7 +15466,7 @@ function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true, candida
         const stateData = getPlayerDataById(targetId) || data || {};
         const alive = (stateData && Number(stateData.health || 0) > 0);
         if (aliveOnly && !alive) return;
-        if (targetId !== normalizePlayerId(gameState.your_id) && stateData && stateData.untargetable) return;
+        if (targetId !== normalizePlayerId(gameState.your_id) && stateData && stateData.untargetable && !isStatusImmune(stateData)) return;
         out.push({
             id: targetId,
             group,
@@ -15080,7 +15494,7 @@ async function choosePlayerTarget(title, opts = {}) {
         gameAlert(UI.notice, UI.no_selectable_player || UI.no_valid_target || 'No valid target');
         return -1;
     }
-    if (targets.length === 1) {
+    if (targets.length === 1 && !tutorialMode) {
         flashTargetRegion(targets[0].id);
         return targets[0].id;
     }
@@ -15192,6 +15606,30 @@ function cardPlayChoosesTarget(cardDef) {
     return getCardPlayPayloads(cardDef).some(effectTreeUsesEventTarget);
 }
 
+function effectTreeHasRequestTarget(value) {
+    if (!value) return false;
+    if (Array.isArray(value)) return value.some(effectTreeHasRequestTarget);
+    if (value && typeof value === 'object') {
+        const op = String(value.op || value.type || '');
+        if (op === 'request_target') return true;
+        return Object.values(value).some(effectTreeHasRequestTarget);
+    }
+    return false;
+}
+
+function cardPlayRequestsTarget(cardDef) {
+    return getCardPlayPayloads(cardDef).some(effectTreeHasRequestTarget);
+}
+
+function rootCardNeedsPlayTargetByLegacyFields(cardDef) {
+    if (!cardDef || cardDef.card_type !== 'root') return false;
+    const id = String(cardDef.id || cardDef.def_id || '');
+    if (['Leaf', 'MagicLeaf', 'Yggdrasil', 'MagicYucca', 'Fries'].includes(id)) return true;
+    if (Number(cardDef.heal || 0) > 0) return true;
+    if (Number(cardDef.gain_m || 0) > 0 && id !== 'GoldenLeaf') return true;
+    return false;
+}
+
 async function chooseEnemyTarget(title) {
     const targets = getEnemyTargetOptions();
     if (!targets.length) {
@@ -15214,7 +15652,7 @@ function cardNeedsPlayerTarget(cardDef, cardDict = null) {
     if (cardHasSelfOnlyFlag(cardDict || {}, cardDef) && cardDef.card_type !== 'thorn') return false;
     if (cardDef.card_type === 'guard') return false;
     if (cardDef.card_type === 'thorn') return gs.mode === '2v2';
-    if (cardDef.card_type === 'root') return true;
+    if (cardDef.card_type === 'root') return cardPlayRequestsTarget(cardDef) || rootCardNeedsPlayTargetByLegacyFields(cardDef);
     if (['bloom', 'root'].includes(cardDef.card_type)) return true;
     return false;
 }
@@ -15388,6 +15826,39 @@ function appendColorizedLogText(parent, text) {
     parent.appendChild(span);
 }
 
+function appendBattleLogCardChip(parent, cardText, cardDict = null) {
+    if (!parent) return false;
+    const rawCardText = stripBattleLogCardMarkers(cardText || '').trim();
+    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(rawCardText);
+    if (!defId) return false;
+    const chip = createCardChoiceChip({ ...(cardDict || {}), def_id: defId }, { hideInstanceOnlyFlags: false });
+    chip.classList.add('battle-log-card-chip');
+    parent.appendChild(chip);
+    return true;
+}
+
+function renderBattleLogInlineCardLine(el, text) {
+    if (!el) return false;
+    const rawLine = String(text || '');
+    const cardDict = decodeBattleLogCardMarker(rawLine);
+    const line = stripBattleLogCardMarkers(rawLine);
+    const patterns = [
+        /^(.+?使用并装备了)([^，。！!]+)(.*)$/,
+        /^(.+?使用了?)([^，。！!]+)(.*)$/,
+    ];
+    for (const pattern of patterns) {
+        const match = line.match(pattern);
+        if (!match) continue;
+        const cardText = String(match[2] || '').trim();
+        if (!((cardDict && cardDict.def_id) || findCardDefIdByAnyName(cardText))) continue;
+        appendColorizedLogText(el, match[1]);
+        appendBattleLogCardChip(el, cardText, cardDict);
+        appendColorizedLogText(el, match[3] || '');
+        return true;
+    }
+    return false;
+}
+
 function createBattleLogElement(entry) {
     const el = document.createElement('div');
     if (entry.type === 'chat') {
@@ -15437,6 +15908,9 @@ function createBattleLogElement(entry) {
     else if (line.includes('===')) el.classList.add('log-round');
     if (entry && entry.kind === 'use') {
         renderBattleUseLogChipLine(el, entry);
+        return el;
+    }
+    if (renderBattleLogInlineCardLine(el, displayLine)) {
         return el;
     }
     el.innerHTML = colorizeCardText(displayLine);
@@ -16429,9 +16903,6 @@ function buildFusionCombosForGroup(group) {
     for (let i = 0; i < group.length; i++) {
         for (let j = i + 1; j < group.length; j++) {
             combos.push([group[i], group[j]]);
-            for (let k = j + 1; k < group.length; k++) {
-                combos.push([group[i], group[j], group[k]]);
-            }
         }
     }
     return dedupeCardCombos(combos);
@@ -16454,7 +16925,7 @@ async function onPlayCard(cardInstanceId, options = {}) {
     const cardDef = getCardDef(cardDict.def_id);
     if (cardDef && cardDef.card_type === 'thorn' && gameState && gameState.mode !== '2v2') {
         const opponent = gameState.opponent || {};
-        if (opponent.untargetable) {
+        if (opponent.untargetable && !isStatusImmune(opponent)) {
             flashStatus(UI.no_selectable_player || '没有可选中的玩家', 2200, 'error');
             return;
         }
@@ -16463,6 +16934,7 @@ async function onPlayCard(cardInstanceId, options = {}) {
     if (cardHasSelfOnlyFlag(cardDict, cardDef) && (!cardDef || cardDef.card_type !== 'thorn')) {
         targetPlayerId = normalizePlayerId(gameState.your_id);
     } else if (cardNeedsPlayerTarget(cardDef, cardDict)) {
+        if (tutorialMode) tutorialTargetHintSeen = true;
         targetPlayerId = await choosePlayerTarget(
             UI.choose_target || UI.select_target || 'Choose target',
             getCardTargetPickOptions(cardDef),
@@ -17236,7 +17708,7 @@ async function showChoiceUI(data) {
     } else if (choiceType === 'choose_card_from_hand') {
         const isMimicChoice = isMimicCardDict(cardDict);
         const filter = choiceParams.filter || {};
-        let otherCards = (choiceTargetData().hand || []).filter(c => (
+        let otherCards = (data.hand_cards || choiceTargetData().hand || []).filter(c => (
             !isMimicChoice || c.instance_id !== cardDict.instance_id
         ));
         if (filter.card_type) {
@@ -17256,7 +17728,10 @@ async function showChoiceUI(data) {
                     : cardChoiceOption(c)
             ));
             const sel = await simpleChoice(choiceTitle(UI.choose_hand_for.replace('{0}', cardName)), options, choicePromptConfig);
-            if (sel >= 0 && sel < otherCards.length) choiceResult = { target_instance_id: otherCards[sel].instance_id };
+            if (sel >= 0 && sel < otherCards.length) {
+                choiceResult = { target_instance_id: otherCards[sel].instance_id };
+                if (choiceTargetId != null) choiceResult.target_player_id = choiceTargetId;
+            }
         } else {
             const noMatchMsg = filter.card_type ? UI.no_matching_cards || '没有符合条件的牌' : (UI.no_cards_in_hand || '手牌为空');
             gameAlert(UI.notice, noMatchMsg);
@@ -17306,12 +17781,12 @@ async function showChoiceUI(data) {
         const targetId = data.target_player_id != null ? data.target_player_id : -1;
         const targetData = targetId >= 0 ? getPlayerDataById(targetId) : (gameState.opponent || {});
         const fallbackOpponent = gameState.opponent || {};
-        const oppHand = targetData.hand || targetData.revealed_hand || fallbackOpponent.hand || fallbackOpponent.revealed_hand || [];
+        const oppHand = data.hand_cards || targetData.hand || targetData.revealed_hand || fallbackOpponent.hand || fallbackOpponent.revealed_hand || [];
         if (!oppHand.length) { gameAlert(UI.notice, UI.no_enemy_hand); }
         else {
             const options = oppHand.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_enemy_hand_for.replace('{0}', cardName)), options, choicePromptConfig);
-            if (sel >= 0 && sel < oppHand.length) choiceResult = { target_instance_id: oppHand[sel].instance_id };
+            if (sel >= 0 && sel < oppHand.length) choiceResult = { target_instance_id: oppHand[sel].instance_id, target_player_id: targetId };
         }
     } else if (choiceType === 'choose_target') {
         const candidates = choiceParams.candidates || choiceParams.target || choiceParams.targets || 'enemy';
@@ -17519,12 +17994,8 @@ function renderGameOver(data) {
     const logContainer = $('gameover-log');
     if (logContainer) {
         logContainer.innerHTML = '';
-        (gs.log || []).forEach(line => {
-            const el = document.createElement('div');
-            el.className = 'log-entry';
-            el.textContent = translateLogLine(line);
-            logContainer.appendChild(el);
-        });
+        const finalLogEntries = compactBattleLogLinesForDisplay(gs.log || []);
+        finalLogEntries.forEach(entry => logContainer.appendChild(createBattleLogElement(entry)));
     }
     const rematchBtn = $('btn-rematch');
     if (rematchBtn) {
@@ -18856,6 +19327,7 @@ async function init() {
     bindClickOnce('btn-open-settings', openSettings);
     bindClickOnce('btn-card-gallery', () => showCardGallery());
     bindClickOnce('btn-open-about', openAbout);
+    bindCardTextTokenContextMenu();
 
     document.addEventListener('contextmenu', (e) => {
         if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {

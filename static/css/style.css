@@ -1775,7 +1775,7 @@ body {
 }
 
 .replay-setup-card-chip.choice-card-token {
-  font-size: 11px;
+  --chip-scale: 0.85;
 }
 
 .account-replay-setup-empty {
@@ -2370,6 +2370,141 @@ body {
 
 .gallery-detail { padding: 18px; overflow-y: auto; }
 
+.gallery-card-grid-detail {
+  padding: 0;
+  overflow: hidden;
+}
+
+.gallery-filter-list {
+  gap: 10px;
+}
+
+.gallery-filter-title {
+  font-weight: 800;
+  color: var(--text-primary);
+  font-size: 14px;
+  padding: 2px 2px 0;
+}
+
+.gallery-filter-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.gallery-filter-btn {
+  padding: 6px 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.gallery-filter-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.gallery-filter-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 7px 8px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.gallery-filter-option input {
+  width: auto;
+  margin: 0;
+}
+
+.gallery-filter-option span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-filter-option small {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.gallery-filter-option.active {
+  border-color: var(--magic);
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.gallery-filter-option.type-filter-option.active {
+  border-color: var(--type-color);
+  box-shadow: inset 3px 0 0 var(--type-color);
+}
+
+.gallery-card-grid-shell {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+}
+
+.gallery-card-grid {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  align-content: start;
+  column-gap: 5px;
+  row-gap: 9px;
+}
+
+.gallery-card-tile {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  color: inherit;
+  font: inherit;
+  text-align: initial;
+}
+
+.gallery-card-tile .card {
+  --card-w: min(112px, 100%);
+  text-align: initial;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.gallery-card-tile:hover .card,
+.gallery-card-tile:focus-visible .card {
+  transform: translateY(-3px);
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.18));
+}
+
+.gallery-type-filter {
+  border-left: 1px solid var(--border-color);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  background: color-mix(in srgb, var(--bg-card) 92%, var(--bg-primary));
+}
+
+.gallery-no-items {
+  color: var(--text-muted);
+  margin: 0;
+  padding: 16px;
+}
+
 .gallery-detail-card {
   display: grid;
   grid-template-columns: 171px 1fr;
@@ -2531,6 +2666,34 @@ body {
   }
   .gallery-detail {
     padding: 12px;
+  }
+  .gallery-card-grid-detail {
+    padding: 0;
+  }
+  .gallery-card-grid-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .gallery-type-filter {
+    order: -1;
+    border-left: 0;
+    border-bottom: 1px solid var(--border-color);
+    padding: 8px 10px;
+    max-height: 130px;
+  }
+  .gallery-type-filter .gallery-filter-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-y: visible;
+  }
+  .gallery-card-grid {
+    padding: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    column-gap: 4px;
+    row-gap: 7px;
+  }
+  .gallery-card-tile .card {
+    --card-w: min(72px, 100%);
   }
   .gallery-detail-card {
     grid-template-columns: 95px 1fr;
@@ -4394,13 +4557,12 @@ body {
 }
 
 .opp-hand-chip.choice-card-token {
-  max-width: min(160px, 34vw);
+  --chip-scale: 0.92;
+  --chip-max-width: min(160px, 34vw);
 }
 
 .opp-hand-chip .choice-card-name {
-  max-width: min(132px, 30vw);
-  padding: 2px 7px;
-  font-size: 12px;
+  --chip-max-width: min(132px, 30vw);
   line-height: 1.1;
 }
 
@@ -5391,29 +5553,19 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .inline-card-chip.choice-card-token {
+  --chip-scale: 0.86;
   display: inline-flex;
   vertical-align: baseline;
   margin: 0 0.1em;
-  gap: 3px;
   transform: translateY(-0.04em);
 }
 
 .inline-card-chip.inline-card-chip-compact .choice-card-name {
-  max-width: min(150px, 34vw);
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-size: 0.86em;
+  --chip-max-width: min(150px, 34vw);
   line-height: 1;
 }
 
-.inline-card-chip.inline-card-chip-compact .choice-card-flags {
-  gap: 2px;
-}
-
 .inline-card-chip.inline-card-chip-compact .choice-card-flags .card-flag {
-  padding: 0 3px;
-  border-radius: 2px;
-  font-size: 0.72em;
   line-height: 1.05;
 }
 
@@ -5425,26 +5577,16 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .card.card-assembler .inline-card-chip.choice-card-token {
-  gap: 1px;
+  --chip-scale: 0.72;
   margin: 0 0.04em;
   transform: translateY(-0.02em);
 }
 
 .card.card-assembler .inline-card-chip.inline-card-chip-compact .choice-card-name {
-  max-width: 23cqi;
-  padding: 0 3px;
-  border-radius: 2px;
-  font-size: 0.72em;
-}
-
-.card.card-assembler .inline-card-chip.inline-card-chip-compact .choice-card-flags {
-  gap: 1px;
+  --chip-max-width: 23cqi;
 }
 
 .card.card-assembler .inline-card-chip.inline-card-chip-compact .choice-card-flags .card-flag {
-  padding: 0 2px;
-  border-radius: 2px;
-  font-size: 0.58em;
   line-height: 1;
 }
 
@@ -5473,6 +5615,13 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   line-height: 1.18;
   padding-top: 3.2cqi;
   padding-bottom: 1.8cqi;
+}
+
+.card.card-sponge .card-effect {
+  font-size: 7.1cqi;
+  line-height: 1.12;
+  padding-top: 2.5cqi;
+  padding-bottom: 1.2cqi;
 }
 
 .card.card-fragment .card-description,
@@ -6774,6 +6923,30 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   pointer-events: none;
 }
 
+.target-pick-board-hint {
+  position: fixed;
+  left: 50%;
+  top: 18%;
+  transform: translateX(-50%);
+  z-index: 1250;
+  padding: 8px 14px;
+  border-radius: 7px;
+  border: 1px solid rgba(26, 188, 156, 0.45);
+  background: rgba(255, 255, 255, 0.92);
+  color: #117A65;
+  font-family: var(--font-main);
+  font-size: 15px;
+  font-weight: 800;
+  box-shadow: 0 8px 22px rgba(17, 122, 101, 0.16);
+  pointer-events: none;
+}
+
+[data-theme="dark"] .target-pick-board-hint {
+  background: rgba(22, 30, 30, 0.94);
+  color: #58D68D;
+  border-color: rgba(88, 214, 141, 0.42);
+}
+
 [data-player-target-region].target-picked {
   outline-color: var(--bloom);
   box-shadow: inset 0 0 0 999px rgba(26, 188, 156, 0.14), 0 0 0 5px rgba(26, 188, 156, 0.2);
@@ -7152,10 +7325,11 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .log-entry .battle-log-card-chip.choice-card-token {
+  --chip-scale: 0.88;
+  --chip-max-width: min(130px, 28vw);
   display: inline-flex;
   margin: 0 2px;
   vertical-align: middle;
-  gap: 3px;
   transform: translateY(-1px);
 }
 
@@ -7164,21 +7338,10 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .log-entry .battle-log-card-chip .choice-card-name {
-  max-width: min(130px, 28vw);
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-size: 0.88em;
   line-height: 1.05;
 }
 
-.log-entry .battle-log-card-chip .choice-card-flags {
-  gap: 2px;
-}
-
 .log-entry .battle-log-card-chip .choice-card-flags .card-flag {
-  padding: 0 3px;
-  border-radius: 2px;
-  font-size: 0.72em;
   line-height: 1.05;
 }
 
@@ -7416,10 +7579,8 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .counter-card-btn .choice-card-name {
-  max-width: 130px;
-  padding: 2px 6px;
+  --chip-max-width: 130px;
   background: #fff;
-  font-size: 12px;
 }
 
 .counter-card-cost {
@@ -8073,9 +8234,12 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 
 .btn-end-turn {
   padding: 10px 24px;
+  min-width: 128px;
   font-size: 15px;
   font-weight: 700;
   font-family: var(--font-main);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
   background: var(--thorn);
   color: #fff;
   border: 1px solid var(--thorn);
@@ -8273,12 +8437,12 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .draft-pick-token.choice-card-token {
-  max-width: min(190px, 42vw);
+  --chip-scale: 0.92;
+  --chip-max-width: min(190px, 42vw);
 }
 
 .draft-pick-token .choice-card-name {
-  padding: 2px 7px;
-  font-size: 12px;
+  line-height: 1.08;
 }
 
 .draft-reroll-btn {
@@ -8671,11 +8835,11 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .view-deck-modal .deck-entry .choice-card-token {
-  max-width: min(220px, 58vw);
+  --chip-max-width: min(220px, 58vw);
 }
 
 .view-deck-modal .deck-entry .choice-card-name {
-  max-width: min(180px, 48vw);
+  --chip-max-width: min(180px, 48vw);
 }
 
 .view-deck-modal .deck-entry-count {
@@ -9493,24 +9657,40 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .choice-card-token {
+  --chip-scale: 1;
+  --chip-max-width: min(230px, 46vw);
+  --chip-font-size: calc(13px * var(--chip-scale));
+  --chip-gap: calc(5px * var(--chip-scale));
+  --chip-name-pad-y: calc(3px * var(--chip-scale));
+  --chip-name-pad-x: calc(8px * var(--chip-scale));
+  --chip-border-width: max(1px, calc(1px * var(--chip-scale)));
+  --chip-radius: calc(4px * var(--chip-scale));
+  --chip-shadow-y: calc(1px * var(--chip-scale));
+  --chip-shadow-blur: calc(4px * var(--chip-scale));
+  --chip-flag-gap: calc(4px * var(--chip-scale));
+  --chip-flag-font-size: calc(10px * var(--chip-scale));
+  --chip-flag-pad-y: calc(1px * var(--chip-scale));
+  --chip-flag-pad-x: calc(4px * var(--chip-scale));
+  --chip-flag-radius: calc(2px * var(--chip-scale));
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--chip-gap);
   min-width: 0;
   vertical-align: middle;
+  font-size: var(--chip-font-size);
 }
 
 .choice-card-name {
   display: inline-flex;
   align-items: center;
-  max-width: min(230px, 46vw);
-  padding: 3px 8px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
+  max-width: var(--chip-max-width);
+  padding: var(--chip-name-pad-y) var(--chip-name-pad-x);
+  border: var(--chip-border-width) solid currentColor;
+  border-radius: var(--chip-radius);
   background: #fff !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 var(--chip-shadow-y) var(--chip-shadow-blur) rgba(0, 0, 0, 0.08);
   font-family: var(--font-card);
-  font-size: 13px;
+  font-size: 1em;
   font-weight: 800;
   line-height: 1.1;
   overflow: hidden;
@@ -9522,12 +9702,12 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: calc(2px * var(--chip-scale)) calc(6px * var(--chip-scale));
+  border-radius: var(--chip-radius);
   background: rgba(46, 204, 113, 0.14);
-  border: 1px solid rgba(46, 204, 113, 0.45);
+  border: var(--chip-border-width) solid rgba(46, 204, 113, 0.45);
   color: var(--elixir);
-  font-size: 12px;
+  font-size: calc(12px * var(--chip-scale));
   font-weight: 900;
   line-height: 1.1;
   white-space: nowrap;
@@ -9542,15 +9722,15 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--chip-flag-gap);
   min-width: 0;
 }
 
 .choice-card-flags .card-flag {
-  font-size: 10px;
+  font-size: var(--chip-flag-font-size);
   line-height: 1;
-  padding: 1px 4px;
-  border-radius: 2px;
+  padding: var(--chip-flag-pad-y) var(--chip-flag-pad-x);
+  border-radius: var(--chip-flag-radius);
   white-space: nowrap;
 }
 
@@ -12504,7 +12684,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
   grid-area: end;
   align-self: center;
   justify-self: center;
-  width: min(180px, 84%);
+  width: min(190px, 88%);
   min-height: 70px;
   border-radius: 16px;
   border: 1px solid var(--bloom);
@@ -12512,6 +12692,8 @@ html[data-ui-style="minimal"] .btn-end-turn {
   color: #fff;
   font-size: 18px;
   font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
   letter-spacing: 0;
   box-shadow: var(--shadow-lg);
   cursor: pointer;
@@ -12890,15 +13072,24 @@ html[data-ui-style="minimal"] .btn-end-turn {
 }
 
 @media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  :root {
+    --mobile-ui-scale: 0.88;
+  }
+
+  body {
+    font-size: 13px;
+  }
+
   body {
     overflow-x: hidden;
   }
 
   .game-container {
-    gap: 4px;
-    padding: 4px;
+    gap: 3px;
+    padding: 3px;
     max-width: 100vw;
     overflow: hidden;
+    font-size: 12px;
   }
 
   .player-info-bar,
@@ -12906,6 +13097,48 @@ html[data-ui-style="minimal"] .btn-end-turn {
   .opp-hand-equip,
   .equip-row,
   .hand-play-row {
+    min-height: 0;
+  }
+
+  .player-info-bar,
+  .opp-info,
+  .teammate-sidebar,
+  .controls-bar,
+  .status-bar {
+    font-size: 11.5px;
+    gap: 4px;
+  }
+
+  .status-tag,
+  .card-count-info,
+  .pile-count,
+  .bar-text {
+    font-size: 10.5px;
+  }
+
+  .bar-track {
+    height: 10px;
+  }
+
+  .battle-log,
+  .log-content,
+  .chat-log,
+  .phase-chat-log {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .modal-content,
+  .game-prompt,
+  .game-alert,
+  .choice-option,
+  .settings-panel,
+  .about-panel {
+    font-size: 12px;
+  }
+
+  .choice-option {
+    padding: 6px 8px;
     min-height: 0;
   }
 
@@ -12928,16 +13161,29 @@ html[data-ui-style="minimal"] .btn-end-turn {
   .controls-bar {
     flex-wrap: wrap;
     justify-content: center;
+    padding: 4px;
+    gap: 4px;
   }
 
   .controls-right {
     flex-wrap: wrap;
     justify-content: center;
+    gap: 4px;
   }
 
   .battle-log .log-content {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+  }
+
+  .target-pick-board-hint,
+  .play-drop-hint,
+  .mobile-play-confirm {
+    font-size: 12px;
+  }
+
+  .floating-card-preview {
+    --preview-scale: 0.9;
   }
 }
 

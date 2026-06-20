@@ -40,14 +40,14 @@ class ModLoopContinue extends Error {}
 
 const TUTORIAL_DECKS = [
     [
-        'Basic', 'Rose', 'Leaf', 'Coffee', 'Fission',
-        'Triangle', 'Bubble', 'Fusion', 'Basic', 'Basic',
-        'Bone', 'Battery', 'Stinger', 'Leaf', 'Bubble',
+        'Basic', 'Rose', 'Leaf', 'Bone', 'Bubble',
+        'Fission', 'Triangle', 'Sewage', 'Fusion', 'Basic',
+        'Basic', 'Fire', 'Yggdrasil', 'Yucca', 'MagicBubble',
     ],
     [
-        'Basic', 'Rose', 'Coffee', 'Battery', 'Rose',
-        'Basic', 'Bone', 'Leaf', 'Bubble', 'Basic',
-        'Stinger', 'Battery', 'Bubble', 'Triangle', 'Fire',
+        'Basic', 'Battery', 'Leaf', 'Basic', 'Bone',
+        'Stinger', 'Fire', 'Disc', 'Bubble', 'Mine',
+        'Basic', 'Bone', 'Mark', 'Sewage', 'MagicBubble',
     ],
 ];
 
@@ -1800,7 +1800,12 @@ class LocalSoloEngine {
             choice_params: choiceParams,
             original_choice: choice && typeof choice === 'object' ? { ...choice } : null,
         };
-        if (targetId != null) this.pending_choice.target_player_id = targetId;
+        if (targetId != null) {
+            this.pending_choice.target_player_id = targetId;
+            if (['choose_from_enemy_hand', 'choose_card_from_hand'].includes(choiceType) && this.players[targetId]) {
+                this.pending_choice.hand_cards = this.players[targetId].hand.map(c => c.toDict());
+            }
+        }
         if (alreadyPaid) {
             const ps = this.players[playerId];
             if (!ps.findHandCard(card.instance_id)) ps.hand.unshift(card);
@@ -1808,7 +1813,7 @@ class LocalSoloEngine {
             ps.magic += card.cost_m;
             ps.cards_played_this_turn[card.def_id] = Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
         }
-        return {
+        const result = {
             success: true,
             needs_choice: true,
             choice_type: choiceType,
@@ -1816,6 +1821,10 @@ class LocalSoloEngine {
             target_player_id: targetId,
             card: card.toDict(),
         };
+        if (targetId != null && ['choose_from_enemy_hand', 'choose_card_from_hand'].includes(choiceType) && this.players[targetId]) {
+            result.hand_cards = this.players[targetId].hand.map(c => c.toDict());
+        }
+        return result;
     }
 
     checkCardResponseAfterChoice(playerId, card, choice) {
@@ -3146,6 +3155,34 @@ class LocalSoloEngine {
         });
     }
 
+    effect_counter_pending_attack_damage(playerId, card, params, log = '') {
+        const context = this._active_effect_context || {};
+        let incoming = 0;
+        const parts = context.incoming_damage_parts;
+        if (Array.isArray(parts) && parts.length) incoming = toInt(parts[0], 0);
+        if (incoming <= 0) incoming = toInt(context.first_damage ?? context.damage_amount ?? context.incoming_damage, 0);
+        const ratio = Number(params.ratio ?? params.multiplier ?? 0.5) || 0;
+        const amount = Math.max(0, Math.ceil(incoming * ratio));
+        if (amount <= 0) return;
+        const sourceText = String(params.source || params.source_text || (card ? cardName(card.def_id) : '\u53cd\u51fb'));
+        const targetRef = params.target || 'target';
+        const targets = (targetRef === 'all_enemies' || targetRef === 'enemies')
+            ? [1 - playerId].filter(id => id >= 0 && id < this.players.length)
+            : this.resolveTargets(playerId, targetRef);
+        targets.forEach(targetId => {
+            if (targetId < 0 || targetId >= this.players.length) return;
+            if (String(params.mode || params.damage_mode || 'attack').toLowerCase() === 'direct') {
+                this.dealDirectDamage(targetId, amount, sourceText, playerId, {
+                    damage_type: params.damage_type || null,
+                    damage_tag: params.damage_tag || null,
+                });
+            } else {
+                this.dealAttackDamage(targetId, amount, 1, false, playerId, card);
+            }
+        });
+        if (log) this.logMsg(log);
+    }
+
     effect_lifesteal_damage(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         const amount = this.modifiedAttackDamage(this.evalInt(playerId, params.amount ?? 8, card, 8), card);
@@ -4144,7 +4181,15 @@ class LocalSoloEngine {
     }
 
     effect_request_card() {}
-    effect_request_target() {}
+    effect_request_target(playerId, card, params) {
+        const targetId = this.choiceTargetFromChoice(this._active_choice, -1);
+        if (targetId >= 0 && targetId < this.players.length) {
+            this._active_choice.target_player = targetId;
+            this._active_choice.target_player_id = targetId;
+            this._active_choice.target_id = targetId;
+            this._active_effect_context.target_id = targetId;
+        }
+    }
     effect_request_confirm() {}
     effect_aura_enemy_elixir_recovery() {}
 
@@ -4438,7 +4483,7 @@ class LocalSoloEngine {
             const fragile = this.customStatusValue(targetId, 'jungle:fragile', 'fragile');
             dmg = Math.max(0, dmg - ps.armor - rootArmor + fragile);
             if (ps.sponge_active && dmg > 0) {
-                const converted = Math.min(10, dmg);
+                const converted = Math.min(10, Math.floor(dmg / 2));
                 ps.poison += converted;
                 dmg = 0;
             }
@@ -4991,7 +5036,8 @@ class LocalSoloEngine {
             const removed = responder.removeHandCard(instanceId);
             this.logMsg(`${this.pn(responderId)}使用${cardName(removed.def_id)}进行反制！`);
             const dodgeBeforeCounter = toInt(responder.dodge, 0);
-            this.executeCounterEffect(responderId, removed, card, playerId);
+            const pendingDamagePrediction = this.simulatePendingResponseDamage(responderId, null);
+            this.executeCounterEffect(responderId, removed, card, playerId, pendingDamagePrediction);
             if (removed.def_id === 'Bubble') {
                 const result = pending.is_precision
                     ? this.executeCardEffectHalfDamage(playerId, card, choice)
@@ -5005,7 +5051,7 @@ class LocalSoloEngine {
         return this.executeCardEffect(playerId, card, choice);
     }
 
-    executeCounterEffect(responderId, counterCard, originalCard, originalPlayerId) {
+    executeCounterEffect(responderId, counterCard, originalCard, originalPlayerId, pendingDamagePrediction = null) {
         const effects = getScriptEffects(counterCard.def(), 'response');
         if (this.hasCardEvent(counterCard.def(), 'response')) {
             this.runCardEvent(responderId, counterCard, 'response', {
@@ -5018,12 +5064,20 @@ class LocalSoloEngine {
                 target_id: originalPlayerId,
                 original_card_instance_id: originalCard && originalCard.instance_id,
                 original_card_def_id: originalCard && originalCard.def_id,
+                incoming_damage: toInt(pendingDamagePrediction && pendingDamagePrediction.total, 0),
+                first_damage: toInt((pendingDamagePrediction && pendingDamagePrediction.parts && pendingDamagePrediction.parts[0]) || 0, 0),
+                damage_amount: toInt(pendingDamagePrediction && pendingDamagePrediction.total, 0),
+                incoming_damage_parts: (pendingDamagePrediction && Array.isArray(pendingDamagePrediction.parts)) ? [...pendingDamagePrediction.parts] : [],
             });
         } else if (effects.length) {
             this.runEffectList(responderId, counterCard, effects, null, {
                 event: 'response',
                 source_id: responderId,
                 target_id: originalPlayerId,
+                incoming_damage: toInt(pendingDamagePrediction && pendingDamagePrediction.total, 0),
+                first_damage: toInt((pendingDamagePrediction && pendingDamagePrediction.parts && pendingDamagePrediction.parts[0]) || 0, 0),
+                damage_amount: toInt(pendingDamagePrediction && pendingDamagePrediction.total, 0),
+                incoming_damage_parts: (pendingDamagePrediction && Array.isArray(pendingDamagePrediction.parts)) ? [...pendingDamagePrediction.parts] : [],
             });
         } else if (counterCard.def_id === 'Bubble') {
             this.players[responderId].dodge += 1;
@@ -5163,16 +5217,12 @@ class LocalSoloEngine {
             if (iid === excludeId) return;
             let found = null;
             let zone = null;
-            ['discard', 'exile'].some(zoneName => {
-                const cards = ps[zoneName] || [];
-                const idx = cards.findIndex(c => c.instance_id === iid);
-                if (idx >= 0) {
-                    found = cards[idx];
-                    zone = cards;
-                    return true;
-                }
-                return false;
-            });
+            const cards = ps.discard || [];
+            const idx = cards.findIndex(c => c.instance_id === iid);
+            if (idx >= 0) {
+                found = cards[idx];
+                zone = cards;
+            }
             if (!found || !ps.canAddToHand()) return;
             zone.splice(zone.indexOf(found), 1);
             found.mimic_discount = 0;
@@ -5213,8 +5263,8 @@ class LocalSoloEngine {
         if (this.current_player !== 1 || this.phase !== 'action' || this.game_over) return null;
         const ps = this.players[1];
         if (Object.values(ps.cards_played_this_turn).reduce((a, b) => a + b, 0) >= 1) return null;
-        const safe = new Set(['Basic', 'Bone', 'Fire', 'Rose', 'Coffee', 'Battery']);
-        const order = ['thorn', 'bloom', 'root'];
+        const safe = new Set(['Basic', 'Bone', 'Stinger', 'Battery']);
+        const order = ['thorn', 'root'];
         for (const type of order) {
             for (const card of ps.hand) {
                 if (!safe.has(card.def_id) || card.card_type !== type) continue;

@@ -307,8 +307,8 @@ _reg(CardDef('Fission', 'Fission', '裂变', 0, 0, 'bloom', 2, 'Common',
              flags={'exile', 'self_only'}))
 
 _reg(CardDef('Fusion', 'Fusion', '聚变', 0, 0, 'bloom', 2, 'Common',
-             '将相同的攻击聚合为一击。', '选择手中2-3张同名攻击牌，将它们的聚变层数相加，裂变层数取最大值，变为一张牌',
-             flags={'exile', 'self_only'}))
+             '将相同的攻击聚合为一击。', '选择手中2张同名攻击牌，将它们的聚变层数相加，裂变层数取最大值，变为一张牌',
+             flags={'self_only'}))
 
 _reg(CardDef('Iris', 'Iris', '鸢尾', 3, 0, 'bloom', 3, 'Common',
              '美丽而致命。', '施加10层中毒'))
@@ -380,6 +380,9 @@ _reg(CardDef('Powder', 'Powder', '粉末', 4, 0, 'root', 5, 'Common',
 
 _reg(CardDef('GoldenLeaf', 'Golden Leaf', '黄金叶', 3, 0, 'root', 5, 'Common',
              '这闪亮的叶子能为你带来额外的抽牌机会。', '手牌爆牌上限+1；自己回合开始时多抽一张牌'))
+
+_reg(CardDef('MagicGoldenLeaf', 'Magic Golden Leaf', '魔法黄金叶', 0, 6, 'root', 3, 'Epic',
+             '闪耀的叶片将魔力收束成更大的空间。', '目标手中所有0E卡牌不占用手牌上限'))
 
 _reg(CardDef('Pincer', 'Pincer', '螫针', 4, 0, 'root', 3, 'Common',
              '毒素可以减缓对手行动，但小心别划伤自己。', '装备时，每回合对目标施加1层超载'))

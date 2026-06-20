@@ -751,7 +751,7 @@ function renderRegisteredUserCard(user) {
           </div>
         </div>
         <div class="user-score-row" aria-label="账号战绩">
-          <span><b>${escapeHtml(user.games_played || 0)}</b> 对局</span>
+          <span><b>${escapeHtml(user.games_played || 0)}</b> 有效对局</span>
           <span><b>${escapeHtml(user.wins || 0)}</b> 胜</span>
           <span><b>${escapeHtml(user.losses || 0)}</b> 败</span>
           <span><b>${escapeHtml(user.draws || 0)}</b> 平</span>

@@ -11,6 +11,7 @@ let durationTarget = 'moderation';
 let reportsRequestInFlight = false;
 let usersRequestInFlight = false;
 let ipBansRequestInFlight = false;
+let reportsLoadedOnce = false;
 const HANDLING_FETCH_TIMEOUT_MS = 5000;
 
 function text(value) {
@@ -93,6 +94,11 @@ function showApp() {
   $('app').classList.remove('hidden');
   setText('summary', '未加载，点击刷新读取当前列表');
   renderList();
+  if (currentTab === 'reports' && !reportsLoadedOnce) {
+    setTimeout(() => {
+      refreshCurrent().catch(() => null);
+    }, 0);
+  }
 }
 
 function showLogin() {
@@ -142,6 +148,9 @@ function switchTab(tab) {
   const summaryText = tab === 'reports' ? `举报 ${reports.length}` : (tab === 'users' ? `玩家 ${users.length}` : `IP封禁 ${ipBans.length}`);
   setText('summary', `${summaryText}，点击刷新读取`);
   renderList();
+  if (tab === 'reports' && !reportsLoadedOnce) {
+    refreshCurrent().catch(() => null);
+  }
 }
 
 async function loadReports() {
@@ -151,7 +160,9 @@ async function loadReports() {
   try {
     const data = await api(`/api/handling/reports?status=${encodeURIComponent(status)}&limit=30`);
     reports = data.items || [];
+    reportsLoadedOnce = true;
     setText('summary', `举报 ${reports.length}/${data.total || reports.length}`);
+    renderList();
   } finally {
     reportsRequestInFlight = false;
   }
@@ -384,7 +395,7 @@ function renderUserDetail(user) {
   addKv(detail, '在线', user.online ? `${user.online.status || '在线'} ${user.online.mode || ''}` : '否');
   addKv(detail, '创建时间', fmtTime(user.created_at), true);
   addKv(detail, '上次游玩', fmtTime(user.last_login_at), true);
-  addKv(detail, '战绩', `${user.games_played || 0}局 / 胜${user.wins || 0} 负${user.losses || 0} 平${user.draws || 0}`);
+  addKv(detail, '有效战绩', `${user.games_played || 0}局 / 胜${user.wins || 0} 负${user.losses || 0} 平${user.draws || 0}`);
   addKv(detail, '胜率', `${user.win_rate || 0}%`, true);
   if (user.banned) {
     addKv(detail, '封禁原因', user.ban_reason || '-');
