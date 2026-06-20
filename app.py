@@ -81,6 +81,7 @@ from db import (
     get_chat_message_with_context,
     get_db_connection,
     get_ip_ban_status,
+    get_active_user_warnings,
     get_user_ban_status,
     get_report_detail,
     get_user_by_id,
@@ -430,6 +431,7 @@ ACTION_TURN_SECONDS = _env_float('GTN_ACTION_TURN_SECONDS', 60)
 ACTION_TURN_CARD_BONUS_SECONDS = _env_float('GTN_ACTION_TURN_CARD_BONUS_SECONDS', 5)
 DRAFT_TIMEOUT_SECONDS = _env_float('GTN_DRAFT_TIMEOUT_SECONDS', 240)
 EVENT_SELECT_TIMEOUT_SECONDS = _env_float('GTN_EVENT_SELECT_TIMEOUT_SECONDS', 40)
+EVENT_REVEAL_TIMEOUT_SECONDS = _env_float('GTN_EVENT_REVEAL_TIMEOUT_SECONDS', 40)
 EVENT_SUB_CHOICE_TIMEOUT_SECONDS = _env_float('GTN_EVENT_SUB_CHOICE_TIMEOUT_SECONDS', 60)
 ROOM_TIMER_TICK_SECONDS = _env_float('GTN_ROOM_TIMER_TICK_SECONDS', 1)
 _LOBBY_BROADCAST_LOCK = threading.Lock()
@@ -2067,6 +2069,11 @@ def auth_user_payload(user):
     else:
         payload['display_name'] = payload.get('username', '')
         payload.update(special_public_fields({}))
+    try:
+        payload['warnings'] = get_active_user_warnings(payload.get('id'), limit=3) if DB_AVAILABLE else []
+    except Exception as exc:
+        admin_event('error', f'failed to load user warnings: {exc}')
+        payload['warnings'] = []
     return payload
 
 
@@ -2553,6 +2560,8 @@ def _reset_pregame_deadline(room, pidx, status):
 def _pregame_timeout_for_status(status):
     if status == 'event_select':
         return EVENT_SELECT_TIMEOUT_SECONDS
+    if status == 'event_reveal':
+        return EVENT_REVEAL_TIMEOUT_SECONDS
     if status == 'drafting':
         return DRAFT_TIMEOUT_SECONDS
     if status == 'sub_choice':
@@ -2672,6 +2681,23 @@ def _auto_select_opening_event_locked(room, pidx):
     return True
 
 
+def _auto_confirm_opening_reveal_locked(room, pidx):
+    engine = room.engine
+    if getattr(engine, 'opening_event_picks', [None])[pidx] is None:
+        return False
+    if not all(pick is not None for pick in getattr(engine, 'opening_event_picks', [])):
+        return False
+    started = getattr(engine, 'player_draft_started', [False] * len(getattr(room, 'player_sids', []) or []))
+    if pidx < len(started) and started[pidx]:
+        return False
+    engine.start_draft_for_player(pidx)
+    record_room_replay_action(room, 'confirm_opening_reveal', pidx, {'auto': True})
+    record_room_replay_keyframe(room, 'draft_start')
+    _reset_pregame_deadline(room, pidx, 'event_reveal')
+    admin_event('game', f'auto_confirm_opening_reveal room={room.room_id} pidx={pidx}', room_id=room.room_id)
+    return True
+
+
 def _auto_submit_event_sub_choice_locked(room, pidx):
     engine = room.engine
     if not engine.needs_sub_choice(pidx):
@@ -2718,6 +2744,8 @@ def _room_timer_worker():
                         timeout = None
                         if status == 'event_select':
                             timeout = EVENT_SELECT_TIMEOUT_SECONDS
+                        elif status == 'event_reveal':
+                            timeout = EVENT_REVEAL_TIMEOUT_SECONDS
                         elif status == 'drafting':
                             timeout = DRAFT_TIMEOUT_SECONDS
                         elif status == 'sub_choice':
@@ -2736,6 +2764,8 @@ def _room_timer_worker():
                         changed = False
                         if status == 'event_select':
                             changed = _auto_select_opening_event_locked(room, pidx)
+                        elif status == 'event_reveal':
+                            changed = _auto_confirm_opening_reveal_locked(room, pidx)
                         elif status == 'drafting':
                             changed = _auto_complete_draft_locked(room, pidx)
                         elif status == 'sub_choice':
@@ -3541,8 +3571,24 @@ def _apply_report_moderation_action(report_detail, moderation_action, duration_s
             socketio.emit('kicked', {'reason': 'account banned'}, room=sid)
             socketio.server.disconnect(sid)
     elif action == 'warn':
+        try:
+            duration = int(duration_seconds or 0)
+        except (TypeError, ValueError):
+            duration = 0
+        if duration <= 0:
+            duration = 60 * 60
+        try:
+            expires_at = (datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=duration)).isoformat().replace('+00:00', 'Z')
+        except Exception:
+            expires_at = ''
+        payload = {
+            'message': note or '请注意游戏内行为',
+            'expires_at': expires_at,
+            'duration_seconds': duration,
+        }
         for sid in _online_sids_for_user(target_user_id, target_username):
-            socketio.emit('server_error', {'message': f'管理员警告：{note or "请注意游戏内行为"}'}, room=sid)
+            socketio.emit('account_warning', payload, room=sid)
+            socketio.emit('server_error', {'message': f'管理员警告：{payload["message"]}'}, room=sid)
 
 
 def _community_request_fields(data):
@@ -6675,6 +6721,10 @@ def send_pregame_state(room, pidx, allow_sub_choice=False):
 
 
 def start_game(room):
+    for sid in getattr(room, 'player_sids', []) or []:
+        if sid in players:
+            players[sid]['status'] = 'in_game'
+            players[sid]['room_id'] = room.room_id
     if hasattr(room.engine, 'log'):
         room.engine.log = []
     if hasattr(room.engine, '_log_compaction_floor'):

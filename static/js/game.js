@@ -2470,6 +2470,7 @@ let loginCredential = '';
 let currentAccount = loadCachedAccount();
 let accountMode = 'login';
 let accountPanelTab = 'info';
+let accountWarningTimer = null;
 let socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
 let friendsMessageTimer = null;
 let dmData = { threads: [], unread_count: 0 };
@@ -2574,6 +2575,11 @@ let allyConsentTimerId = null;
 let allyConsentCountdown = 0;
 let surrenderConsentTimerId = null;
 let surrenderConsentCountdown = 0;
+let localCountdownTimerId = null;
+let localTurnTimerSnapshot = null;
+let localPregameTimerSnapshot = null;
+let matchTransitionGuardUntil = 0;
+let allowLobbyTransitionUntil = 0;
 let soloMode = false;
 let soloDeckA = [];
 let soloDeckB = [];
@@ -3464,8 +3470,26 @@ function isNetworkMatchPhase(value = phase) {
     ].includes(String(value || ''));
 }
 
+function markNetworkMatchTransition(reason = '') {
+    if (soloMode || replayMode) return;
+    const now = Date.now();
+    matchTransitionGuardUntil = Math.max(matchTransitionGuardUntil, now + 8000);
+    if (reason) debugLog('[client] match transition guard:', reason);
+}
+
+function allowLobbyTransition(reason = '') {
+    allowLobbyTransitionUntil = Date.now() + 5000;
+    matchTransitionGuardUntil = 0;
+    if (reason) debugLog('[client] allow lobby transition:', reason);
+}
+
+function isMatchTransitionGuardActive() {
+    return !soloMode && !replayMode && Date.now() < matchTransitionGuardUntil;
+}
+
 function shouldIgnoreLobbyUpdateWhileInMatch() {
     if (soloMode || replayMode) return false;
+    if (isMatchTransitionGuardActive()) return true;
     if (isNetworkMatchPhase(phase)) return true;
     return [
         'view-draft',
@@ -4175,7 +4199,7 @@ function getAllStatusDefs() {
         { key: 'foresight', label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
         { key: 'fracture', label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         { key: 'stagnation', label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
-        { key: 'blind', label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始时手牌会被打乱，然后清空失明。', color: '#2C3E50' },
+        { key: 'blind', label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。回合开始生效后，清空失明。', color: '#2C3E50' },
         { key: 'heal_block', label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数-1。', color: '#E84393' },
         { key: 'weakness', label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
@@ -5423,6 +5447,16 @@ function isOwnBlindActive() {
 function getOwnBlindLevel() {
     if (!gameState || !gameState.you || isSpectating) return 0;
     return Math.max(0, Math.floor(Number(gameState.you.blind || 0)));
+}
+
+function shouldMaskOwnDrawDeck(state = gameState) {
+    if (!state || isSpectating) return false;
+    return getOwnBlindLevel() >= 1;
+}
+
+function shouldMaskOwnDiscardPile(state = gameState) {
+    if (!state || isSpectating) return false;
+    return getOwnBlindLevel() >= 2;
 }
 
 function updateBlindVisualClasses(state = gameState) {
@@ -7201,7 +7235,7 @@ function getStatusIntroItem(statusInfo) {
         foresight: { label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
         fracture: { label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         stagnation: { label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
-        blind: { label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始时手牌会被打乱，然后清空失明。', color: '#2C3E50' },
+        blind: { label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。回合开始生效后，清空失明。', color: '#2C3E50' },
         'jungle:fragile': { label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A' },
         fragile: { label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A' },
         'jungle:shield': { label: '护盾', desc: '受到伤害时先消耗护盾层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。', color: '#2E7D7D' },
@@ -8060,6 +8094,17 @@ function connectSocket(serverUrl) {
         skinLookByPlayerId.set(pid, look);
         applySkinLookToRenderedAvatars(pid, look);
     });
+    bindSocketEvent('account_warning', (data = {}) => {
+        if (!currentAccount) return;
+        const warning = {
+            message: data.message || '请注意游戏内行为',
+            expires_at: data.expires_at || '',
+            created_at: new Date().toISOString(),
+        };
+        currentAccount.warnings = [warning].concat(activeAccountWarnings()).slice(0, 3);
+        cacheAccount(currentAccount);
+        renderAccountWarningBanner();
+    });
     bindSocketEvent('login_ok', (data) => {
         debugLog('[client] login ok: sid=', data.sid, 'nickname=', data.nickname);
         mySid = data.sid || '';
@@ -8201,8 +8246,14 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('game_phase', (data) => {
         debugLog('[client] game_phase:', data.phase);
-        phase = data.phase;
+        const nextPhase = data.phase;
         if (!data.solo) soloMode = false;
+        if (nextPhase === 'lobby' && isMatchTransitionGuardActive() && Date.now() > allowLobbyTransitionUntil) {
+            debugLog('[client] ignored stale game_phase:lobby during match transition, current phase=', phase, 'view=', activeViewId);
+            return;
+        }
+        if (isNetworkMatchPhase(nextPhase)) markNetworkMatchTransition(`game_phase:${nextPhase}`);
+        phase = nextPhase;
         if (!data.spectating) {
             isSpectating = false;
             pendingSpectateRoomId = null;
@@ -8229,6 +8280,7 @@ function connectSocket(serverUrl) {
         } else if (phase === 'game_over') {
             updateStatus(UI.game_over);
         } else if (phase === 'lobby') {
+            allowLobbyTransition('game_phase:lobby');
             showView('view-lobby');
             updateStatus(getViewStatusText('view-lobby'));
         } else if (phase === 'action' || phase === 'draw' || phase === 'response' || phase === 'choice') {
@@ -8238,6 +8290,7 @@ function connectSocket(serverUrl) {
         syncPhaseChatMatch(data || {});
     });
     bindSocketEvent('draft_state', (data) => {
+        markNetworkMatchTransition('draft_state');
         const previousDraftState = draftState;
         const oldOptIds = draftState && draftState.options ? draftState.options.map(o => o.def_id) : [];
         const newOptIds = data.options ? data.options.map(o => o.def_id) : [];
@@ -8273,6 +8326,7 @@ function connectSocket(serverUrl) {
         if (!data) return;
         if (draftState && phaseContextMatchKey(data) && phaseContextMatchKey(draftState) && phaseContextMatchKey(data) !== phaseContextMatchKey(draftState)) return;
         if (eventSelectData && phaseContextMatchKey(data) && phaseContextMatchKey(eventSelectData) && phaseContextMatchKey(data) !== phaseContextMatchKey(eventSelectData)) return;
+        rememberPregameTimerSnapshot(data);
         if (draftState) {
             draftState.pregame_timer_remaining = data.pregame_timer_remaining;
             draftState.pregame_timer_total = data.pregame_timer_total;
@@ -8283,10 +8337,11 @@ function connectSocket(serverUrl) {
             eventSelectData.pregame_timer_total = data.pregame_timer_total;
             eventSelectData.pregame_timer_status = data.pregame_timer_status;
         }
-        updatePregameTimerDisplay(data, data.pregame_timer_status === 'event_select' ? 'event' : 'draft');
+        updatePregameTimerDisplay(data, ['event_select', 'event_reveal'].includes(data.pregame_timer_status) ? 'event' : 'draft');
     });
     bindSocketEvent('event_select', (data) => {
         debugLog('[client] event_select');
+        markNetworkMatchTransition('event_select');
         phase = 'event_select';
         eventSelectData = data;
         syncBattleLogMatch(data || {});
@@ -8297,6 +8352,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('event_reveal', (data) => {
         debugLog('[client] event_reveal');
+        markNetworkMatchTransition('event_reveal');
         phase = 'event_reveal';
         eventSelectData = data;
         syncBattleLogMatch(data || {});
@@ -8308,6 +8364,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('event_sub_choice', (data) => {
         debugLog('[client] event_sub_choice');
+        markNetworkMatchTransition('event_sub_choice');
         phase = 'event_sub_choice';
         // Keep showing draft view so player can see their picks
         showView('view-draft');
@@ -8316,6 +8373,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('state_update', (data) => {
         debugLog('[client] state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null, 'spectating=', data.spectating);
+        markNetworkMatchTransition('state_update');
         if (data && data.spectating && pendingSpectateRoomId != null && data.room_id != null && Number(data.room_id) !== Number(pendingSpectateRoomId)) {
             debugLog('[client] ignored stale spectate state for room=', data.room_id, 'pending=', pendingSpectateRoomId);
             return;
@@ -8329,6 +8387,8 @@ function connectSocket(serverUrl) {
             return;
         }
         const previousGameState = gameState;
+        data = preserveGameOverLogState(data, previousGameState);
+        rememberTurnTimerSnapshot(data);
         clearTargetPickUi();
         soloMode = !!data.solo;
         syncBattleLogMatch(data || {});
@@ -8386,6 +8446,7 @@ function connectSocket(serverUrl) {
     bindSocketEvent('turn_timer_update', (data) => {
         if (!data || !gameState) return;
         if (data.room_id != null && gameState.room_id != null && Number(data.room_id) !== Number(gameState.room_id)) return;
+        rememberTurnTimerSnapshot(data);
         gameState.turn_timer_remaining = data.turn_timer_remaining;
         gameState.turn_timer_total = data.turn_timer_total;
         gameState.turn_timer_player = data.turn_timer_player;
@@ -8397,6 +8458,8 @@ function connectSocket(serverUrl) {
     bindSocketEvent('solo_state', (data) => {
         clearPendingSoloFallback();
         const previousGameState = gameState;
+        data = preserveGameOverLogState(data, previousGameState);
+        rememberTurnTimerSnapshot(data);
         clearTargetPickUi();
         soloMode = true;
         tutorialMode = !!data.tutorial || tutorialMode;
@@ -8558,6 +8621,7 @@ function connectSocket(serverUrl) {
         const message = data.message || UI.mod_mismatch_msg || UI.operation_failed;
         debugLog('[client] match_start_failed:', message);
         if (data.reason !== 'mod_mismatch') hideModal();
+        allowLobbyTransition('match_start_failed');
         clearNetworkMatchStateForLobby();
         phase = 'lobby';
         showView('view-lobby');
@@ -8615,6 +8679,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('reconnect_timeout', () => {
         flashStatus(UI.reconnect_timeout, 3000, 'error');
+        allowLobbyTransition('reconnect_timeout');
         phase = 'lobby';
     });
     bindSocketEvent('rematch_requested', (data = {}) => {
@@ -8663,6 +8728,7 @@ function connectSocket(serverUrl) {
         showView('view-game');
     });
     bindSocketEvent('spectate_leave', () => {
+        allowLobbyTransition('spectate_leave');
         clearNetworkMatchStateForLobby();
         pendingSpectateRoomId = null;
         activeSpectateRoomId = null;
@@ -8780,6 +8846,56 @@ function accountStatsText(user) {
         user.losses || 0,
         user.draws || 0
     );
+}
+
+function parseServerTimeMs(value) {
+    if (!value) return 0;
+    const ms = Date.parse(String(value).replace('Z', '+00:00'));
+    return Number.isFinite(ms) ? ms : 0;
+}
+
+function activeAccountWarnings() {
+    const list = Array.isArray(currentAccount?.warnings) ? currentAccount.warnings : [];
+    const now = Date.now();
+    return list.filter((warning) => {
+        const expiresAt = parseServerTimeMs(warning.expires_at);
+        return expiresAt && expiresAt > now;
+    });
+}
+
+function formatWarningRemaining(expiresAt) {
+    const ms = parseServerTimeMs(expiresAt);
+    if (!ms) return '';
+    const seconds = Math.max(0, Math.ceil((ms - Date.now()) / 1000));
+    if (seconds <= 0) return '';
+    if (seconds >= 86400) return `${Math.ceil(seconds / 86400)}天`;
+    if (seconds >= 3600) return `${Math.ceil(seconds / 3600)}小时`;
+    if (seconds >= 60) return `${Math.ceil(seconds / 60)}分钟`;
+    return `${seconds}秒`;
+}
+
+function renderAccountWarningBanner() {
+    const banner = $('account-warning-banner');
+    if (!banner) return;
+    if (accountWarningTimer) {
+        clearTimeout(accountWarningTimer);
+        accountWarningTimer = null;
+    }
+    const warnings = activeAccountWarnings();
+    if (!warnings.length) {
+        banner.classList.add('hidden');
+        banner.textContent = '';
+        if (currentAccount && Array.isArray(currentAccount.warnings) && currentAccount.warnings.length) {
+            currentAccount.warnings = warnings;
+            cacheAccount(currentAccount);
+        }
+        return;
+    }
+    const warning = warnings[0];
+    const remaining = formatWarningRemaining(warning.expires_at);
+    banner.textContent = `管理员警告：${warning.message || '请注意游戏内行为'}${remaining ? `（剩余 ${remaining}）` : ''}`;
+    banner.classList.remove('hidden');
+    accountWarningTimer = setTimeout(renderAccountWarningBanner, 1000);
 }
 
 function formatAccountPlayTime(seconds) {
@@ -9981,6 +10097,7 @@ function cacheAccount(user) {
                 searchable_by_nickname: user.searchable_by_nickname !== false,
                 searchable_by_player_id: user.searchable_by_player_id !== false,
                 skin: normalizeSkinConfig(user.skin || {}),
+                warnings: Array.isArray(user.warnings) ? user.warnings : [],
             };
             localStorage.setItem('gtn_account_user', JSON.stringify(safeUser));
         } else {
@@ -9992,6 +10109,7 @@ function cacheAccount(user) {
 function renderAccountState() {
     const accountDisplay = currentAccount ? (currentAccount.display_name || currentAccount.username) : '';
     const accountText = currentAccount ? tf('account_logged_in_as', accountDisplay) : UI.account_not_logged_in;
+    renderAccountWarningBanner();
     const popName = $('account-popover-name');
     if (popName) {
         if (currentAccount?.player_id) {
@@ -12462,8 +12580,81 @@ function updateDraftInfo(data) {
     }
 }
 
-function formatPregameTimerText(data) {
+function ensureLocalCountdownTimer() {
+    if (localCountdownTimerId) return;
+    localCountdownTimerId = setInterval(() => {
+        if (gameState && gameState.phase === 'action') {
+            updateEndTurnButtonLabels(gameState);
+        }
+        const pregameSource = eventSelectData || draftState;
+        if (pregameSource && localPregameTimerSnapshot) {
+            const status = pregameSource.pregame_timer_status || localPregameTimerSnapshot.status || '';
+            updatePregameTimerDisplay(pregameSource, ['event_select', 'event_reveal'].includes(status) ? 'event' : 'draft');
+        }
+    }, 200);
+}
+
+function localTimerRemainingSeconds(snapshot) {
+    if (!snapshot || !Number.isFinite(snapshot.remaining)) return NaN;
+    if (snapshot.paused) return snapshot.remaining;
+    const elapsed = Math.max(0, (performance.now() - snapshot.receivedAt) / 1000);
+    return Math.max(0, snapshot.remaining - elapsed);
+}
+
+function rememberTurnTimerSnapshot(data) {
+    const remaining = Number(data && data.turn_timer_remaining);
+    if (!Number.isFinite(remaining) || remaining < 0) {
+        localTurnTimerSnapshot = null;
+        return;
+    }
+    localTurnTimerSnapshot = {
+        roomId: data.room_id != null ? String(data.room_id) : '',
+        phase: data.phase || '',
+        currentPlayer: data.current_player,
+        timerPlayer: data.turn_timer_player,
+        remaining,
+        paused: !!data.turn_timer_paused,
+        receivedAt: performance.now(),
+    };
+    ensureLocalCountdownTimer();
+}
+
+function getDisplayedTurnTimerRemaining(gs) {
+    const fallback = Number(gs && gs.turn_timer_remaining);
+    if (!localTurnTimerSnapshot) return fallback;
+    if (gs && gs.room_id != null && localTurnTimerSnapshot.roomId && String(gs.room_id) !== localTurnTimerSnapshot.roomId) return fallback;
+    if (gs && gs.current_player != null && localTurnTimerSnapshot.currentPlayer != null && Number(gs.current_player) !== Number(localTurnTimerSnapshot.currentPlayer)) return fallback;
+    return localTimerRemainingSeconds(localTurnTimerSnapshot);
+}
+
+function rememberPregameTimerSnapshot(data) {
     const remaining = Number(data && data.pregame_timer_remaining);
+    if (!Number.isFinite(remaining) || remaining < 0) {
+        localPregameTimerSnapshot = null;
+        return;
+    }
+    localPregameTimerSnapshot = {
+        matchKey: phaseContextMatchKey(data || {}) || '',
+        status: data.pregame_timer_status || '',
+        remaining,
+        paused: false,
+        receivedAt: performance.now(),
+    };
+    ensureLocalCountdownTimer();
+}
+
+function getDisplayedPregameTimerRemaining(data) {
+    const fallback = Number(data && data.pregame_timer_remaining);
+    if (!localPregameTimerSnapshot) return fallback;
+    const dataKey = phaseContextMatchKey(data || {});
+    if (dataKey && localPregameTimerSnapshot.matchKey && dataKey !== localPregameTimerSnapshot.matchKey) return fallback;
+    const status = data && data.pregame_timer_status;
+    if (status && localPregameTimerSnapshot.status && status !== localPregameTimerSnapshot.status) return fallback;
+    return localTimerRemainingSeconds(localPregameTimerSnapshot);
+}
+
+function formatPregameTimerText(data) {
+    const remaining = getDisplayedPregameTimerRemaining(data);
     if (!Number.isFinite(remaining) || remaining < 0) return '';
     const safe = Math.max(0, Math.ceil(remaining));
     const min = Math.floor(safe / 60);
@@ -12473,6 +12664,7 @@ function formatPregameTimerText(data) {
     let label = currentLang === 'zh' ? '剩余时间' : 'Time left';
     if (currentLang === 'zh') {
         if (status === 'event_select') label = '选择配装剩余';
+        else if (status === 'event_reveal') label = '开始选牌剩余';
         else if (status === 'drafting') label = '选牌剩余';
         else if (status === 'sub_choice') label = '配装处理剩余';
     }
@@ -12484,7 +12676,7 @@ function updatePregameTimerDisplay(data, target = '') {
     const draftTimer = $('draft-timer');
     const eventTimer = $('event-timer');
     const status = data && data.pregame_timer_status;
-    const useEvent = target === 'event' || status === 'event_select';
+    const useEvent = target === 'event' || status === 'event_select' || status === 'event_reveal';
     if (draftTimer && (!useEvent || target === 'draft')) draftTimer.textContent = useEvent && target !== 'draft' ? '' : text;
     if (eventTimer) eventTimer.textContent = useEvent ? text : '';
 }
@@ -12509,11 +12701,14 @@ function updateSelectedEventsSummary(data) {
 }
 
 function formatEndTurnButtonText(gs) {
-    const base = UI.end_turn || '结束回合';
-    if (!gs || gs.phase !== 'action') return base;
+    const endTurnText = UI.end_turn || '结束回合';
+    if (!gs || gs.phase !== 'action') return endTurnText;
     const current = Number(gs.current_player);
     const timerPlayer = Number(gs.turn_timer_player);
-    const remaining = Number(gs.turn_timer_remaining);
+    const remaining = getDisplayedTurnTimerRemaining(gs);
+    const yourId = Number(gs.your_id != null ? gs.your_id : playerId);
+    const isOwnTurn = Number.isFinite(current) && Number.isFinite(yourId) && current === yourId;
+    const base = isOwnTurn ? endTurnText : (UI.opponent_turn || '对方回合');
     if (!Number.isFinite(remaining) || remaining < 0) return base;
     if (Number.isFinite(timerPlayer) && Number.isFinite(current) && timerPlayer !== current) return base;
     return `${base}(${String(Math.max(0, Math.ceil(remaining))).padStart(2, '0')}s)`;
@@ -12737,7 +12932,7 @@ function renderEventReveal(data) {
     showView('view-event-select');
     syncPhaseChatMatch(data || {});
     updatePhaseChatChannelOptions(data || {});
-    updatePregameTimerDisplay({}, 'event');
+    updatePregameTimerDisplay(data || {}, 'event');
     const container = $('event-options');
     if (!container) return;
     const rerollBtn = $('btn-event-reroll');
@@ -13477,14 +13672,16 @@ function formatPlayerPileInfo(playerData, includeDiscard, opponentStyle = false)
     const blindLevel = getOwnBlindLevel();
     const pid = normalizePlayerId(playerData && playerData.player_id);
     const isSelf = pid != null && pid === normalizePlayerId(gameState && gameState.your_id);
-    if (blindLevel >= 3) {
+    const maskOwnDrawDeck = isSelf && shouldMaskOwnDrawDeck();
+    const maskOwnDiscardPile = isSelf && shouldMaskOwnDiscardPile();
+    if (blindLevel >= 3 && isSelf) {
         const text = includeDiscard ? UI.hand_deck_discard_info.replace('{0}', '?').replace('{1}', '?').replace('{2}', '?')
             : UI.hand_deck_info_opp.replace('{0}', '?').replace('{1}', '?');
         return { text, title: '', opponentStyle };
     }
     const hand = playerData.hand_count || 0;
-    const deck = playerData.deck_count || 0;
-    const discard = playerData.discard_count || 0;
+    const deck = maskOwnDrawDeck ? '?' : (playerData.deck_count || 0);
+    const discard = maskOwnDiscardPile ? '?' : (playerData.discard_count || 0);
     const full = includeDiscard
         ? UI.hand_deck_discard_info.replace('{0}', hand).replace('{1}', deck).replace('{2}', discard)
         : UI.hand_deck_info_opp.replace('{0}', hand).replace('{1}', deck);
@@ -14066,10 +14263,12 @@ function renderClassicBattle(gs) {
         const blindLevel = getOwnBlindLevel();
         const maskOwnResources = blindLevel >= 2;
         const maskOwnPiles = blindLevel >= 3;
+        const maskOwnDrawDeck = shouldMaskOwnDrawDeck();
+        const maskOwnDiscardPile = shouldMaskOwnDiscardPile();
         renderClassicResourceOrbs($('classic-e-orbs'), vm.self.e, vm.self.maxE, resourcePreviewCard ? resourcePreviewCard.cost_e : 0, 'e', maskOwnResources);
         renderClassicResourceOrbs($('classic-m-orbs'), vm.self.m, vm.self.maxM, resourcePreviewCard ? resourcePreviewCard.cost_m : 0, 'm', maskOwnResources);
-        $('classic-deck-count').textContent = `▣${maskOwnPiles ? '?' : vm.deckCount}`;
-        $('classic-discard-count').textContent = `⟲${maskOwnPiles ? '?' : vm.discardCount}`;
+        $('classic-deck-count').textContent = `▣${maskOwnDrawDeck ? '?' : vm.deckCount}`;
+        $('classic-discard-count').textContent = `⟲${maskOwnDiscardPile ? '?' : vm.discardCount}`;
         $('classic-exile-count').textContent = `◇${maskOwnPiles ? '?' : vm.exileCount}`;
         renderClassicFighter($('classic-fighter-self'), vm.self, 'self', selected);
         renderClassicFighter($('classic-fighter-enemy'), vm.enemy, 'enemy', selected);
@@ -15527,6 +15726,26 @@ function clearScheduledGameOver() {
     scheduledGameOverState = null;
 }
 
+function copyBattleLogState(source) {
+    if (!source || !Array.isArray(source.log)) return null;
+    return {
+        log: source.log.slice(),
+        log_start: Number(source.log_start || 0),
+        log_total: source.log_total != null
+            ? Number(source.log_total)
+            : Number(source.log_start || 0) + source.log.length,
+    };
+}
+
+function preserveGameOverLogState(state, fallback) {
+    if (!state || state.phase !== 'game_over') return state;
+    const current = copyBattleLogState(state);
+    if (current && current.log.length) return { ...state, ...current };
+    const previous = copyBattleLogState(fallback);
+    if (!previous || !previous.log.length) return state;
+    return { ...state, ...previous };
+}
+
 function estimateGameOverAnimationDelay(previous, next) {
     if (!previous || !next || !areSequentialGameStates(previous, next, { allowSoloPerspectiveShift: true })) return 0;
     const damageCount = getNewBattleLogLines(previous, next)
@@ -15554,19 +15773,21 @@ function renderGameOverAfterFinalAnimation(previous, next, options = {}) {
     }
     if (options.tutorial) stopTutorialUiForGameOver();
     showView('view-game');
+    const stableNext = preserveGameOverLogState(next, previous);
     const previewState = options.deferResultLabels
-        ? { ...next, phase: (previous && previous.phase && previous.phase !== 'game_over') ? previous.phase : 'action' }
-        : next;
+        ? { ...stableNext, phase: (previous && previous.phase && previous.phase !== 'game_over') ? previous.phase : 'action' }
+        : stableNext;
     renderGame(previewState);
-    showStateDeltas(previous, next);
+    showStateDeltas(previous, stableNext);
     updateStatus(UI.game_over);
-    const delay = estimateGameOverAnimationDelay(previous, next);
-    scheduledGameOverState = next;
+    const delay = estimateGameOverAnimationDelay(previous, stableNext);
+    scheduledGameOverState = stableNext;
     gameOverRenderTimer = setTimeout(() => {
         gameOverRenderTimer = null;
-        const finalState = gameState && gameState.phase === 'game_over'
-            ? gameState
-            : scheduledGameOverState;
+        const finalState = preserveGameOverLogState(
+            gameState && gameState.phase === 'game_over' ? gameState : scheduledGameOverState,
+            scheduledGameOverState
+        );
         scheduledGameOverState = null;
         if (!finalState || finalState.phase !== 'game_over') return;
         if (options.fullScreen === false) renderGame(finalState);
@@ -15785,7 +16006,9 @@ function cardNeedsPlayerTarget(cardDef, cardDict = null) {
     if (cardHasSelfOnlyFlag(cardDict || {}, cardDef) && cardDef.card_type !== 'thorn') return false;
     if (cardDef.card_type === 'guard') return false;
     if (cardDef.card_type === 'thorn') return gs.mode === '2v2';
-    if (cardDef.card_type === 'root') return cardPlayRequestsTarget(cardDef) || rootCardNeedsPlayTargetByLegacyFields(cardDef);
+    if (cardDef.card_type === 'root') {
+        return cardPlayRequestsTarget(cardDef) || cardPlayChoosesTarget(cardDef) || rootCardNeedsPlayTargetByLegacyFields(cardDef);
+    }
     if (['bloom', 'root'].includes(cardDef.card_type)) return true;
     return false;
 }
@@ -17073,8 +17296,6 @@ async function onPlayCard(cardInstanceId, options = {}) {
             getCardTargetPickOptions(cardDef),
         );
         if (targetPlayerId < 0) return;
-    } else if (gameState && gameState.mode === '2v2' && cardDef && cardDef.card_type === 'root') {
-        targetPlayerId = normalizePlayerId(gameState.your_id);
     }
     const choice = await getCardChoice(cardDict, targetPlayerId);
     if (choice === false) return;
@@ -18089,7 +18310,8 @@ function updateGameOverRematchButton(gs) {
 }
 
 function renderGameOver(data) {
-    const gs = data || gameState;
+    const gs = preserveGameOverLogState(data || gameState, gameState) || {};
+    const finalLog = Array.isArray(gs.log) ? gs.log.slice() : [];
     resetMatchRuntimeState({ clearGameState: false });
     showView('view-gameover');
     syncRematchStateFromGameState(gs);
@@ -18129,7 +18351,7 @@ function renderGameOver(data) {
     const logContainer = $('gameover-log');
     if (logContainer) {
         logContainer.innerHTML = '';
-        const finalLogEntries = compactBattleLogLinesForDisplay(gs.log || []);
+        const finalLogEntries = compactBattleLogLinesForDisplay(finalLog);
         finalLogEntries.forEach(entry => logContainer.appendChild(createBattleLogElement(entry)));
     }
     const rematchBtn = $('btn-rematch');
@@ -18186,6 +18408,7 @@ function renderGameOver(data) {
             returnLobbyBtn.textContent = UI.return_lobby;
             returnLobbyBtn.onclick = () => {
                 if (!socket) return;
+                allowLobbyTransition('return_lobby_button');
                 socket.emit('return_lobby');
                 clearNetworkMatchStateForLobby();
                 showView('view-lobby');
@@ -18314,7 +18537,7 @@ function onViewPile(pileType = 'deck') {
     const deckPlayer = getDeckViewerPlayer();
     const hasOrderedDeck = isDeckPile && !!deckPlayer.deck_ordered;
     const pile = isDeckPile ? (deckPlayer.deck_ordered || deckPlayer.deck || []) : (deckPlayer.discard || []);
-    const blindPile = getOwnBlindLevel() >= 3 && !isSpectating;
+    const blindPile = isDeckPile ? shouldMaskOwnDrawDeck() : shouldMaskOwnDiscardPile();
     const modal = $('modal');
     const content = $('modal-content');
     if (!modal || !content) return;
@@ -19832,6 +20055,7 @@ async function init() {
         }
     });
     $('btn-return-lobby').addEventListener('click', () => {
+        allowLobbyTransition('return_lobby_button');
         if (socket) socket.emit('return_lobby', {});
         showView('view-lobby');
         phase = 'lobby';

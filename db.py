@@ -1628,7 +1628,9 @@ def resolve_report_entry(report_id, action, moderation_action='none', admin_user
     now_dt = utc_now_dt()
     now = utc_iso(now_dt)
     duration = int(duration_seconds or 0) if duration_seconds is not None else None
-    expires_at = utc_iso(now_dt + timedelta(seconds=max(1, duration))) if duration and moderation_action == 'mute' else None
+    if moderation_action == 'warn' and not duration:
+        duration = 60 * 60
+    expires_at = utc_iso(now_dt + timedelta(seconds=max(1, duration))) if duration and moderation_action in {'mute', 'warn'} else None
     with get_db_connection() as conn:
         row = conn.execute('SELECT * FROM reports WHERE id = ?', (rid,)).fetchone()
         if row is None:
@@ -1669,6 +1671,38 @@ def resolve_report_entry(report_id, action, moderation_action='none', admin_user
             )
         conn.commit()
     return get_report_detail(rid), None
+
+
+def get_active_user_warnings(user_id, limit=3):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return []
+    now = utc_now()
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            '''
+            SELECT id, reason, created_at, expires_at, related_report_id
+            FROM moderation_actions
+            WHERE target_user_id = ?
+              AND action_type = 'warn'
+              AND expires_at IS NOT NULL
+              AND expires_at > ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            ''',
+            (uid, now, max(1, min(int(limit or 3), 10))),
+        ).fetchall()
+        return [
+            {
+                'id': row['id'],
+                'message': row['reason'] or '请注意游戏内行为',
+                'created_at': row['created_at'],
+                'expires_at': row['expires_at'],
+                'related_report_id': row['related_report_id'],
+            }
+            for row in rows
+        ]
 
 
 def _role_row_to_profile(user_row, role_row):

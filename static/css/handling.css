@@ -149,6 +149,12 @@ input:focus, select:focus, textarea:focus {
   justify-content: space-between;
   gap: 8px;
 }
+.report-list-reason {
+  margin-top: 4px;
+  color: var(--text);
+  font-weight: 600;
+  line-height: 1.35;
+}
 .badge {
   display: inline-flex;
   align-items: center;
@@ -184,11 +190,45 @@ input:focus, select:focus, textarea:focus {
   padding: 8px 0;
   border-bottom: 1px solid var(--line);
 }
+.report-summary-card {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  padding: 10px;
+  margin: 8px 0 12px;
+}
+.report-flow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 17px;
+}
+.report-arrow {
+  color: var(--muted);
+}
+.report-reason {
+  margin-top: 8px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.report-object {
+  margin-top: 5px;
+  color: var(--muted);
+}
 .evidence {
   border: 1px solid var(--line);
   border-radius: 4px;
   margin: 8px 0;
   padding: 8px;
+}
+.json-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+}
+.json-details[open] summary {
+  margin-bottom: 8px;
 }
 pre {
   overflow: auto;

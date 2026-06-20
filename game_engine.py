@@ -7568,7 +7568,7 @@ class GameEngine:
             return False
         events = getattr(card.card_def, 'v2_events', None) or {}
         event_def = events.get('on_play')
-        return self._effect_tree_uses_choice_target(event_def)
+        return self._effect_tree_uses_choice_target(event_def) or self._effect_tree_uses_target_selector(event_def)
 
     def _root_play_requires_owner_target(self, card: Optional[CardInstance]) -> bool:
         return False

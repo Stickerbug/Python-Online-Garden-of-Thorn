@@ -222,11 +222,11 @@ function renderList() {
     if (currentTab === 'reports') {
       if (item.id === selectedReportId) row.classList.add('active');
       const title = el('div', 'list-title');
-      title.appendChild(el('strong', '', `#${item.id} ${item.object_type || ''}`));
+      title.appendChild(el('strong', '', `${reportPartyName(item.reporter_username, item.reporter_user_id)} → ${reportPartyName(item.target_username, item.target_user_id)}`));
       title.appendChild(el('span', `badge ${item.status || ''}`, item.status || '-'));
       row.appendChild(title);
-      row.appendChild(el('div', 'muted', `${item.category || '-'} · ${item.reporter_username || '-'} → ${item.target_username || '-'}`));
-      row.appendChild(el('div', 'mono muted', fmtTime(item.created_at)));
+      row.appendChild(el('div', 'report-list-reason', reportReasonText(item)));
+      row.appendChild(el('div', 'muted', `举报对象：${reportObjectText(item)} · ${fmtTime(item.created_at)}`));
       const risk = el('span', `badge risk-${item.risk_level || 0}`, `risk ${item.risk_level || 0}`);
       row.appendChild(risk);
       row.addEventListener('click', () => selectReport(item.id));
@@ -265,6 +265,36 @@ function addKv(parent, key, value, mono = false) {
   parent.appendChild(row);
 }
 
+function reportPartyName(name, id) {
+  const text = String(name || '').trim();
+  if (text) return text;
+  return id ? `用户 #${id}` : '未知玩家';
+}
+
+function reportObjectText(report) {
+  const typeMap = { chat_message: '聊天消息', player: '玩家', match: '对局', replay: '回放', mod: '模组' };
+  const type = typeMap[report.object_type] || report.object_type || '对象';
+  return report.object_id ? `${type} ${report.object_id}` : type;
+}
+
+function reportReasonText(report) {
+  const category = report.category || '-';
+  const reason = String(report.reason_text || '').trim();
+  return reason ? `${category}：${reason}` : category;
+}
+
+function appendCollapsedJson(parent, summaryText, data) {
+  const details = document.createElement('details');
+  details.className = 'json-details';
+  const summary = document.createElement('summary');
+  summary.textContent = summaryText;
+  details.appendChild(summary);
+  const pre = el('pre', 'mono');
+  pre.textContent = JSON.stringify(data || {}, null, 2);
+  details.appendChild(pre);
+  parent.appendChild(details);
+}
+
 async function selectReport(id) {
   selectedReportId = id;
   renderList();
@@ -284,14 +314,18 @@ function renderReportDetail(report) {
   detail.classList.remove('hidden');
   detail.textContent = '';
   detail.appendChild(el('h2', '', `举报 #${report.id}`));
+  const summary = el('div', 'report-summary-card');
+  const flow = el('div', 'report-flow');
+  flow.appendChild(el('strong', '', reportPartyName(report.reporter_username, report.reporter_user_id)));
+  flow.appendChild(el('span', 'report-arrow', '→'));
+  flow.appendChild(el('strong', '', reportPartyName(report.target_username, report.target_user_id)));
+  summary.appendChild(flow);
+  summary.appendChild(el('div', 'report-reason', `因为：${reportReasonText(report)}`));
+  summary.appendChild(el('div', 'report-object', `举报对象：${reportObjectText(report)}`));
+  detail.appendChild(summary);
   addKv(detail, '状态', report.status);
-  addKv(detail, '类型', `${report.object_type || '-'} / ${report.category || '-'}`);
-  addKv(detail, '对象', report.object_id, true);
-  addKv(detail, '举报者', `${report.reporter_username || '-'} (#${report.reporter_user_id || '-'})`);
-  addKv(detail, '目标', `${report.target_username || '-'} (#${report.target_user_id || '-'})`);
   addKv(detail, '风险', report.risk_level, true);
   addKv(detail, '创建时间', fmtTime(report.created_at), true);
-  addKv(detail, '原因', report.reason_text || '-');
   if (report.resolved_at) {
     addKv(detail, '处理时间', fmtTime(report.resolved_at), true);
     addKv(detail, '处理人', report.resolved_by || '-');
@@ -316,9 +350,7 @@ function renderReportDetail(report) {
   (report.evidence || []).forEach((ev) => {
     const box = el('div', 'evidence');
     box.appendChild(el('div', 'mono muted', `${ev.evidence_type || '-'} · ${fmtTime(ev.created_at)}`));
-    const pre = el('pre', 'mono');
-    pre.textContent = JSON.stringify(ev.data || {}, null, 2);
-    box.appendChild(pre);
+    appendCollapsedJson(box, '查看 JSON 证据', ev.data || {});
     const maybeIp = findIpInEvidence(ev.data);
     if (maybeIp) {
       const btn = el('button', 'btn small danger', `封禁 IP ${maybeIp}`);

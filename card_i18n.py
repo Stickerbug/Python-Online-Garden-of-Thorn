@@ -183,7 +183,7 @@ CARD_I18N = {
     'Chromosome': {
         'name': _t('染色体', 'Chromosome', 'Chromosome', 'Cromossomo', 'Хромосома', '染色体'),
         'desc': _t('从基因中提取记忆，寻找所需之牌。', 'Extract memory from genes to find the card you need.', 'Extrait des souvenirs des gènes pour trouver la carte voulue.', 'Extrai memórias dos genes para encontrar a carta necessária.', 'Извлекает память из генов, чтобы найти нужную карту.', '遺伝子から記憶を取り出し、必要なカードを探す。'),
-        'effect': _t('从牌堆中选择一张牌将其加入手中', 'Choose one card from the deck and add it to your hand', 'Choisissez une carte du deck et ajoutez-la à votre main', 'Escolha uma carta do deck e adicione-a à mão', 'Выберите карту из колоды и добавьте её в руку', '山札からカード1枚を選び、手札に加える'),
+        'effect': _t('从弃牌堆中选择一张牌将其加入手中', 'Choose one card from the discard pile and add it to your hand', 'Choisissez une carte de la défausse et ajoutez-la à votre main', 'Escolha uma carta da pilha de descarte e adicione-a à mão', 'Выберите карту из сброса и добавьте её в руку', '捨て札からカード1枚を選び、手札に加える'),
     },
     'Sewage': {
         'name': _t('污水', 'Sewage', 'Eaux usées', 'Esgoto', 'Стоки', '汚水'),
