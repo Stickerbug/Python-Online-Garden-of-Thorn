@@ -8350,6 +8350,17 @@ function connectSocket(serverUrl) {
             optimisticResourceOverride = null;
         }
     });
+    bindSocketEvent('turn_timer_update', (data) => {
+        if (!data || !gameState) return;
+        if (data.room_id != null && gameState.room_id != null && Number(data.room_id) !== Number(gameState.room_id)) return;
+        gameState.turn_timer_remaining = data.turn_timer_remaining;
+        gameState.turn_timer_total = data.turn_timer_total;
+        gameState.turn_timer_player = data.turn_timer_player;
+        gameState.turn_timer_paused = data.turn_timer_paused;
+        if (data.current_player != null) gameState.current_player = data.current_player;
+        if (data.phase) gameState.phase = data.phase;
+        updateEndTurnButtonLabels(gameState);
+    });
     bindSocketEvent('solo_state', (data) => {
         clearPendingSoloFallback();
         const previousGameState = gameState;

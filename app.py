@@ -2468,6 +2468,26 @@ def _room_timer_payload(room):
     }
 
 
+def emit_turn_timer_update(room):
+    """Send only timer fields so countdown ticks do not re-render the battle UI."""
+    try:
+        engine = getattr(room, 'engine', None)
+        payload = {
+            'room_id': getattr(room, 'room_id', None),
+            'phase': getattr(engine, 'phase', None),
+            'current_player': getattr(engine, 'current_player', None),
+            **_room_timer_payload(room),
+        }
+        for sid in list(getattr(room, 'player_sids', []) or []):
+            if sid:
+                socketio.emit('turn_timer_update', payload, room=sid)
+        for sid in list(getattr(room, 'spectators', []) or []):
+            if sid:
+                socketio.emit('turn_timer_update', payload, room=sid)
+    except Exception as exc:
+        admin_event('error', f'turn_timer_update failed room={getattr(room, "room_id", "?")}: {exc}', room_id=getattr(room, 'room_id', None))
+
+
 def _selected_opening_event_names(engine):
     names = {}
     for idx, picked_id in enumerate(getattr(engine, 'opening_event_picks', []) or []):
@@ -2662,7 +2682,7 @@ def _room_timer_worker():
                         action_lock.release()
             for room in timer_broadcast_rooms:
                 if room not in {item[0] for item in expired_turns}:
-                    broadcast_game_state(room)
+                    emit_turn_timer_update(room)
             for room in start_rooms:
                 schedule_start_game(room)
             for room, pidx in pregame_updates:

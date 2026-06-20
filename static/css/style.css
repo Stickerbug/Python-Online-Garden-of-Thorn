@@ -11338,7 +11338,8 @@ html[data-ui-style="minimal"] .controls-right .btn {
 
 html[data-ui-style="minimal"] .btn-end-turn {
   padding: 8px 18px;
-  min-width: 56px;
+  min-width: 118px;
+  text-align: center;
 }
 
 .game-container.classic-battle-hidden {
