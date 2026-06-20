@@ -13342,6 +13342,58 @@ html[data-ui-style="minimal"] .btn-end-turn {
   --chip-flag-pad-x: 0.7cqi;
 }
 
+/* Text-flow chips.
+   These chips live in explanation/preview prose, so they should match the
+   surrounding text line instead of the full card layout scale. */
+.term-intro-panel .inline-card-chip.choice-card-token,
+.gallery-detail-info .inline-card-chip.choice-card-token,
+.card-hold-preview .inline-card-chip.choice-card-token,
+.choice-option-text .inline-card-chip.choice-card-token {
+  --chip-font-size: 0.96em;
+  --chip-gap: 0.26em;
+  --chip-name-pad-y: 0.02em;
+  --chip-name-pad-x: 0.36em;
+  --chip-border-width: 1px;
+  --chip-radius: 0.24em;
+  --chip-shadow-y: 0;
+  --chip-shadow-blur: 0;
+  --chip-flag-gap: 0.2em;
+  --chip-flag-font-size: 0.78em;
+  --chip-flag-pad-y: 0;
+  --chip-flag-pad-x: 0.28em;
+  --chip-flag-radius: 0.18em;
+  display: inline-flex;
+  max-width: 100%;
+  margin: 0 0.08em;
+  vertical-align: -0.08em;
+  transform: none;
+}
+
+.term-intro-panel .inline-card-chip .choice-card-name,
+.gallery-detail-info .inline-card-chip .choice-card-name,
+.card-hold-preview .inline-card-chip .choice-card-name,
+.choice-option-text .inline-card-chip .choice-card-name {
+  max-width: min(16em, 64vw);
+  min-height: 1.16em;
+  line-height: 1.02;
+}
+
+.term-intro-panel .inline-card-chip .choice-card-extra-cost,
+.gallery-detail-info .inline-card-chip .choice-card-extra-cost,
+.card-hold-preview .inline-card-chip .choice-card-extra-cost,
+.choice-option-text .inline-card-chip .choice-card-extra-cost {
+  padding: 0.02em 0.34em;
+  font-size: 0.9em;
+  line-height: 1.02;
+}
+
+.term-intro-panel .inline-card-chip .choice-card-flags .card-flag,
+.gallery-detail-info .inline-card-chip .choice-card-flags .card-flag,
+.card-hold-preview .inline-card-chip .choice-card-flags .card-flag,
+.choice-option-text .inline-card-chip .choice-card-flags .card-flag {
+  line-height: 1;
+}
+
 .teammate-hand-chip {
   --teammate-chip-scale: 1;
   min-width: calc(42px * var(--teammate-chip-scale));

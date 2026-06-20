@@ -3464,6 +3464,35 @@ def _match_winner_user_ids_for_stats(row, summary, player_ids):
     return winner_ids, False
 
 
+def _match_player_ids_for_stats(conn, row, user_ids):
+    raw_ids = _safe_json_loads(row['player_ids_json'] if 'player_ids_json' in row.keys() else '[]', [])
+    raw_names = _safe_json_loads(row['player_names_json'] if 'player_names_json' in row.keys() else '[]', [])
+    max_len = max(len(raw_ids) if isinstance(raw_ids, list) else 0, len(raw_names) if isinstance(raw_names, list) else 0)
+    normalized = []
+    recovered = 0
+    for idx in range(max_len):
+        uid = None
+        if isinstance(raw_ids, list) and idx < len(raw_ids):
+            try:
+                uid = int(raw_ids[idx]) if raw_ids[idx] is not None else None
+            except (TypeError, ValueError):
+                uid = None
+            if uid not in user_ids:
+                uid = None
+        if uid is None and isinstance(raw_names, list) and idx < len(raw_names):
+            name = sanitize_username(raw_names[idx])
+            if name:
+                row_user = _find_user_row_by_username_key(conn, name)
+                if row_user is not None:
+                    uid = int(row_user['id'])
+                    if uid in user_ids:
+                        recovered += 1
+                    else:
+                        uid = None
+        normalized.append(uid)
+    return normalized, recovered
+
+
 def rebuild_user_stats_from_matches():
     """Recompute account W/L/D from persisted match summaries.
 
@@ -3477,6 +3506,7 @@ def rebuild_user_stats_from_matches():
         rows = conn.execute('SELECT * FROM matches ORDER BY id ASC').fetchall()
         counted_matches = 0
         skipped_matches = 0
+        recovered_player_refs = 0
         for row in rows:
             summary = _safe_json_loads(row['summary_json'], {})
             if str(row['result'] or summary.get('result') or '').lower() not in ('win', 'draw', 'finished'):
@@ -3493,14 +3523,8 @@ def rebuild_user_stats_from_matches():
             if len(side_counts) < 2 or any(int(value or 0) < 3 for value in side_counts[:2]):
                 skipped_matches += 1
                 continue
-            player_ids = _safe_json_loads(row['player_ids_json'] if 'player_ids_json' in row.keys() else '[]', [])
-            normalized_player_ids = []
-            for value in player_ids:
-                try:
-                    uid = int(value) if value is not None else None
-                except (TypeError, ValueError):
-                    uid = None
-                normalized_player_ids.append(uid if uid in user_ids else None)
+            normalized_player_ids, recovered = _match_player_ids_for_stats(conn, row, user_ids)
+            recovered_player_refs += recovered
             participants = [uid for uid in normalized_player_ids if uid in user_ids]
             if not participants:
                 skipped_matches += 1
@@ -3526,6 +3550,7 @@ def rebuild_user_stats_from_matches():
             'matches': len(rows),
             'counted_matches': counted_matches,
             'skipped_matches': skipped_matches,
+            'recovered_player_refs': recovered_player_refs,
         }
 
 
@@ -3536,6 +3561,7 @@ def rebuild_user_play_seconds_from_matches():
         totals = {uid: 0 for uid in user_ids}
         rows = conn.execute('SELECT * FROM matches ORDER BY id ASC').fetchall()
         counted_matches = 0
+        recovered_player_refs = 0
         for row in rows:
             try:
                 duration = max(0, int(row['duration_seconds'] or 0))
@@ -3543,13 +3569,11 @@ def rebuild_user_play_seconds_from_matches():
                 duration = 0
             if duration <= 0:
                 continue
-            player_ids = _safe_json_loads(row['player_ids_json'] if 'player_ids_json' in row.keys() else '[]', [])
+            player_ids, recovered = _match_player_ids_for_stats(conn, row, user_ids)
+            recovered_player_refs += recovered
             added = False
             for value in player_ids:
-                try:
-                    uid = int(value) if value is not None else None
-                except (TypeError, ValueError):
-                    uid = None
+                uid = value
                 if uid in totals:
                     totals[uid] += duration
                     added = True
@@ -3566,4 +3590,5 @@ def rebuild_user_play_seconds_from_matches():
             'matches': len(rows),
             'counted_matches': counted_matches,
             'total_seconds': sum(totals.values()),
+            'recovered_player_refs': recovered_player_refs,
         }
