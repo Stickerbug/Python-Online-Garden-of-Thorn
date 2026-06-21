@@ -710,7 +710,11 @@ body {
   left: 14px;
   width: min(560px, calc(100vw - 28px));
   max-height: min(560px, calc(100vh - 76px));
-  overflow: auto;
+  overflow: hidden;
+}
+
+#leaderboard-note {
+  flex: 0 0 auto;
 }
 
 .leaderboard-list {
@@ -719,12 +723,16 @@ body {
   gap: 0;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  overflow: hidden;
+  overflow: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  max-height: calc(min(560px, calc(100vh - 76px)) - 92px);
 }
 
 .leaderboard-row {
   display: grid;
   grid-template-columns: 48px minmax(92px, 1fr) 64px 64px 56px 56px 56px;
+  min-width: 440px;
   align-items: center;
   gap: 0;
   padding: 0;
@@ -756,6 +764,9 @@ body {
 }
 
 .leaderboard-row.leaderboard-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   background: color-mix(in srgb, var(--bg-secondary) 78%, var(--bg-primary));
   color: var(--text-secondary);
   font-weight: 800;
