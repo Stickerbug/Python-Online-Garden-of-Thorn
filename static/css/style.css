@@ -240,8 +240,7 @@ html.fonts-loaded-main {
   border-radius: 6px;
 }
 
-[data-theme="dark"] .card-effect,
-[data-theme="dark"] .card-description {
+[data-theme="dark"] .card-effect {
   color: #d7deea;
 }
 
@@ -2121,6 +2120,15 @@ body {
   line-height: 1.35;
 }
 
+.home-icp {
+  color: inherit;
+  text-decoration: none;
+}
+
+.home-icp:hover {
+  text-decoration: underline;
+}
+
 .form-row-check {
   display: flex;
   align-items: center;
@@ -2508,7 +2516,8 @@ body {
   overflow-y: auto;
   padding: 8px;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  --gallery-card-w: clamp(86px, 7.4vw, 104px);
+  grid-template-columns: repeat(auto-fill, minmax(var(--gallery-card-w), 1fr));
   align-content: start;
   column-gap: 4px;
   row-gap: 6px;
@@ -2528,7 +2537,7 @@ body {
 }
 
 .gallery-card-tile .card {
-  --card-w: min(118px, calc((100vw - 360px) / 6));
+  --card-w: var(--gallery-card-w);
   text-align: initial;
   transition: transform 120ms ease, filter 120ms ease;
 }
@@ -2610,21 +2619,13 @@ body {
 
 @media (max-width: 1180px) and (min-width: 901px) {
   .gallery-card-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-
-  .gallery-card-tile .card {
-    --card-w: min(112px, calc((100vw - 360px) / 5));
+    --gallery-card-w: clamp(82px, 8vw, 100px);
   }
 }
 
 @media (max-width: 1020px) and (min-width: 901px) {
   .gallery-card-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .gallery-card-tile .card {
-    --card-w: min(108px, calc((100vw - 360px) / 4));
+    --gallery-card-w: clamp(78px, 8.7vw, 96px);
   }
 }
 
@@ -2758,12 +2759,10 @@ body {
   }
   .gallery-card-grid {
     padding: 5px;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    --gallery-card-w: clamp(64px, 20vw, 78px);
+    grid-template-columns: repeat(auto-fill, minmax(var(--gallery-card-w), 1fr));
     column-gap: 2px;
     row-gap: 4px;
-  }
-  .gallery-card-tile .card {
-    --card-w: min(76px, calc((100vw - 18px) / 3));
   }
   .gallery-detail-card {
     grid-template-columns: 95px 1fr;
@@ -2792,11 +2791,7 @@ body {
 
 @media (max-width: 430px) {
   .gallery-card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .gallery-card-tile .card {
-    --card-w: min(82px, calc((100vw - 18px) / 2));
+    --gallery-card-w: clamp(62px, 24vw, 76px);
   }
 }
 
@@ -5537,7 +5532,6 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   padding-top: 26cqi;
 }
 
-.card.card-blinded .card-description,
 .card.card-blinded .card-flags,
 .card.card-blinded .card-bottom-zone {
   display: none;
@@ -5670,23 +5664,11 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   line-height: 1;
 }
 
-.card.card-assembler .card-description {
-  font-size: 6.2cqi;
-  line-height: 1.12;
-  padding-top: 0.7cqi;
-}
-
 .card.card-honey .card-effect {
   font-size: 7.75cqi;
   line-height: 1.18;
   padding-top: 3.4cqi;
   padding-bottom: 2cqi;
-}
-
-.card.card-honey .card-description {
-  font-size: 6.4cqi;
-  line-height: 1.16;
-  padding-top: 0.8cqi;
 }
 
 .card.card-fragment .card-effect,
@@ -5713,24 +5695,11 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   padding-bottom: 1.7cqi;
 }
 
-.card.card-fragment .card-description,
-.card.card-coconut .card-description {
-  font-size: 6.35cqi;
-  line-height: 1.15;
-  padding-top: 0.75cqi;
-}
-
 .card.card-petal-copy .card-effect {
   font-size: 8.1cqi;
   line-height: 1.2;
   padding-top: 3.4cqi;
   padding-bottom: 2cqi;
-}
-
-.card.card-petal-copy .card-description {
-  font-size: 6.4cqi;
-  line-height: 1.16;
-  padding-top: 0.8cqi;
 }
 
 .card.card-magic-grapes .card-effect {
@@ -5740,31 +5709,11 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   padding-bottom: 1.6cqi;
 }
 
-.card.card-magic-grapes .card-description {
-  font-size: 6.2cqi;
-  line-height: 1.14;
-  padding-top: 0.65cqi;
-}
-
 .card.card-magic-peas .card-effect {
   font-size: 7.35cqi;
   line-height: 1.13;
   padding-top: 2.7cqi;
   padding-bottom: 1.35cqi;
-}
-
-.card.card-magic-peas .card-description {
-  font-size: 6.05cqi;
-  line-height: 1.12;
-  padding-top: 0.55cqi;
-}
-
-.card-description {
-  padding: 2cqi 2.5cqi 1cqi;
-  font-size: 7cqi;
-  color: var(--text-muted);
-  line-height: 1.3;
-  overflow-wrap: anywhere;
 }
 
 .card-token {
@@ -7414,12 +7363,12 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .log-entry .battle-log-card-chip.choice-card-token {
-  --chip-scale: 0.88;
-  --chip-max-width: min(130px, 28vw);
+  --chip-scale: 0.8;
+  --chip-max-width: min(118px, 25vw);
   display: inline-flex;
   margin: 0 2px;
   vertical-align: middle;
-  transform: translateY(-1px);
+  transform: translateY(-0.5px);
 }
 
 .log-entry .card-token {
@@ -10486,6 +10435,40 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   transform: scale(0.97);
 }
 
+.gtn-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(127, 140, 141, 0.24);
+  border-top-color: var(--magic);
+  border-radius: 50%;
+  animation: gtnSpin 0.85s linear infinite;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+}
+
+@keyframes gtnSpin {
+  to { transform: rotate(360deg); }
+}
+
+.btn.is-loading {
+  cursor: wait;
+  opacity: 0.82;
+  pointer-events: none;
+}
+
+.btn-loading-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-loading-content .gtn-spinner {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}
+
 .boot-loader {
   position: fixed;
   inset: 0;
@@ -10506,19 +10489,19 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 .boot-title { font: 700 22px/1.1 var(--font-card); color: var(--text-primary); }
 .boot-sub { margin-top: 6px; color: var(--text-secondary); font-size: 13px; }
-.boot-step { margin-top: 14px; color: var(--text-primary); font-size: 13px; min-height: 20px; }
+.boot-wait-row {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+}
+.boot-step { color: var(--text-primary); font-size: 13px; min-height: 20px; }
 .boot-progress {
-  margin-top: 10px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--border-light);
-  overflow: hidden;
+  display: none;
 }
 .boot-progress-fill {
-  width: 0%;
-  height: 100%;
-  background: var(--magic);
-  transition: width .2s ease;
+  display: none;
 }
 
 /* 2026 UI pass: unified, denser, cleaner surfaces */
@@ -11102,7 +11085,6 @@ button:not(:disabled):active,
   --card-effect-font-scale: 9cqi;
   --card-effect-padding-y: 6cqi;
   --card-effect-padding-x: 2.5cqi;
-  --card-description-font-scale: 7cqi;
   --card-flag-font-scale: 6cqi;
   --card-flag-radius: 2cqi;
 }
@@ -11251,16 +11233,6 @@ button:not(:disabled):active,
   padding: var(--card-effect-padding-y) var(--card-effect-padding-x);
 }
 
-.card .card-description,
-.card.card-small .card-description,
-.teammate-hand-row .card .card-description,
-.game-container.mode-spectate .card .card-description,
-.game-container.mode-urf .hand-area .card .card-description {
-  font-size: var(--card-description-font-scale);
-  line-height: 1.3;
-  padding: 2cqi 2.5cqi 1cqi;
-}
-
 .card .card-flags,
 .card.card-small .card-flags,
 .teammate-hand-row .card .card-flags,
@@ -11404,19 +11376,6 @@ html[data-ui-style="minimal"] .card.root::before,
 .battle-classic .card.root::before { background: var(--root); }
 html[data-ui-style="minimal"] .card.guard::before,
 .battle-classic .card.guard::before { background: var(--guard); }
-
-html[data-ui-style="minimal"] .card .card-description,
-html[data-ui-style="minimal"] .drag-ghost .card-description,
-html[data-ui-style="minimal"] .card-play-flash .card-description,
-html[data-ui-style="minimal"] .fusion-merge-clone .card-description,
-html[data-ui-style="minimal"] .card-shatter-piece .card-description,
-.battle-classic .card .card-description,
-.battle-classic .drag-ghost .card-description,
-.battle-classic .card-play-flash .card-description,
-.battle-classic .fusion-merge-clone .card-description,
-.battle-classic .card-shatter-piece .card-description {
-  display: none;
-}
 
 html[data-ui-style="minimal"] .card-type-label,
 .battle-classic .card-type-label {
@@ -13142,7 +13101,6 @@ html[data-ui-style="minimal"] .btn-end-turn {
   --card-name-height: 18cqi;
   --card-type-font-scale: 6.5cqi;
   --card-effect-font-scale: 9cqi;
-  --card-description-font-scale: 7cqi;
   --card-flag-font-scale: 6cqi;
   aspect-ratio: 63 / 88;
   container-type: inline-size;
@@ -13175,7 +13133,6 @@ html[data-ui-style="minimal"] .btn-end-turn {
 .card .card-name,
 .card .card-type-label,
 .card .card-effect,
-.card .card-description,
 .card .card-flag,
 .card .card-prediction,
 .card .card-prediction-label,
@@ -13677,4 +13634,106 @@ html[data-ui-style="minimal"] .btn-end-turn {
   .battle-classic .classic-end-turn {
     width: 100%;
   }
+}
+
+@media (max-width: 900px), (max-height: 620px), (hover: none) and (pointer: coarse) {
+  .game-container .hand-play-row {
+    min-width: 0;
+    overflow: visible;
+  }
+
+  .game-container .hand-area {
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: flex-end;
+    align-items: flex-end;
+    overflow-x: hidden;
+    overflow-y: visible;
+    gap: 2px;
+    padding: 2px 2px 4px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .game-container:not(.mode-urf) .hand-area .card {
+    width: var(--card-w, clamp(42px, min(calc((100% - 14px) / 7), calc((100dvh - 240px) * 63 / 88)), 78px));
+  }
+
+  .game-container.mode-urf .hand-area {
+    flex-wrap: wrap;
+    justify-content: center;
+    overflow-x: hidden;
+    gap: 2px;
+  }
+
+  .game-container.mode-urf .hand-area .card {
+    width: var(--card-w, clamp(42px, min(calc((100% - 10px) / 5), calc((100dvh - 220px) * 63 / 88)), 76px));
+  }
+
+  .game-container.mode-2v2 .hand-area .card {
+    width: var(--card-w, clamp(40px, min(calc((100% - 14px) / 7), calc((100dvh - 250px) * 63 / 88)), 72px));
+  }
+}
+
+/* Final override: chips embedded in card effect text follow the surrounding
+   text size.  This keeps chips and their attached labels
+   proportional when an individual card shrinks its text. */
+.card .card-effect .inline-card-chip.choice-card-token {
+  --chip-font-size: 0.94em;
+  --chip-gap: 0.22em;
+  --chip-max-width: 13em;
+  --chip-name-pad-y: 0.05em;
+  --chip-name-pad-x: 0.38em;
+  --chip-border-width: max(1px, 0.055em);
+  --chip-radius: 0.28em;
+  --chip-shadow-y: 0;
+  --chip-shadow-blur: 0;
+  --chip-flag-gap: 0.18em;
+  --chip-flag-font-size: 0.74em;
+  --chip-flag-pad-y: 0.02em;
+  --chip-flag-pad-x: 0.26em;
+  --chip-flag-radius: 0.18em;
+  margin: 0 0.07em;
+  vertical-align: -0.08em;
+  transform: none;
+}
+
+.card .card-effect .inline-card-chip .choice-card-name {
+  max-width: var(--chip-max-width);
+  min-height: 1.12em;
+  line-height: 1.02;
+  justify-content: center;
+  text-align: center;
+}
+
+.card .card-effect .inline-card-chip .choice-card-extra-cost {
+  font-size: 0.86em;
+  line-height: 1.02;
+  padding: 0.02em 0.32em;
+}
+
+.card .card-effect .inline-card-chip .choice-card-flags {
+  gap: var(--chip-flag-gap);
+}
+
+.card .card-effect .inline-card-chip .choice-card-flags .card-flag {
+  font-size: var(--chip-flag-font-size);
+  line-height: 1;
+  padding: var(--chip-flag-pad-y) var(--chip-flag-pad-x);
+  border-radius: var(--chip-flag-radius);
+}
+
+.card.card-fragment .card-effect {
+  font-size: 8.7cqi;
+  line-height: 1.25;
+}
+
+.card.card-assembler .card-effect {
+  font-size: 5.9cqi;
+  line-height: 1.1;
+}
+
+.card.card-assembler .card-effect .inline-card-chip.choice-card-token {
+  --chip-name-pad-x: 0.32em;
+  --chip-max-width: 11.5em;
 }

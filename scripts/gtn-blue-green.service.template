@@ -1,0 +1,26 @@
+[Unit]
+Description=Garden of Thorn blue-green instance
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/gtn-next
+Environment=GTN_INSTANCE=release
+Environment=GTN_INSTANCE_ID=release-5002-next
+Environment=GTN_VERSION=next
+Environment=GTN_GIT_SHA=
+Environment=GTN_STATIC_VERSION=next
+Environment=GTN_BIND_HOST=127.0.0.1
+Environment=GTN_PORT=5002
+Environment=GTN_DRAIN_FILE=/tmp/gtn-release-5002-next.drain
+Environment=GTN_SYSTEMD_SERVICE=gtn-release-next
+Environment=GTN_DB_MAINTENANCE_ENABLED=0
+ExecStart=/opt/gtn-next/venv/bin/python /opt/gtn-next/app.py
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=25
+
+[Install]
+WantedBy=multi-user.target

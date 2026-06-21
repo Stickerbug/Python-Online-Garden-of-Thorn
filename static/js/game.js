@@ -1922,15 +1922,15 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'status-untargetable', re: /^(?:[+-]?\d+层无法选中|无法选中[:：]?[+-]?\d+层?)/i },
     { cls: 'status-magic-nazar', re: /^(?:[+-]?\d+层魔法邪眼|魔法邪眼[:：]?[+-]?\d+层?)/i },
     { cls: 'toxic', re: /^(?:\d+层淬毒|\d+\s*(?:Toxic|Toxique|Tóxico|Токсин)|淬毒\d+)/i },
-    { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*F(?![A-Za-z])|F(?![A-Za-z])|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/ },
-    { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P(?![A-Za-z])|P(?![A-Za-z])|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/ },
-    { cls: 'damage', re: /^(?:[+-]?\d+电伤|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/ },
+    { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*F(?![A-Za-z0-9])|F(?![A-Za-z0-9])|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/ },
+    { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P(?![A-Za-z0-9])|P(?![A-Za-z0-9])|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/ },
+    { cls: 'damage', re: /^(?:[+-]?(?:\d+|x|X)\s*电伤|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/ },
     { cls: 'heal', re: /^造成伤害\d+%(?:\([^)]+\)|（[^）]+）)的H/ },
     { cls: 'armor', re: /^[+-]?\d+A/ },
-    { cls: 'heal', re: /^[+]?\d+H(?![A-Za-z])/ },
-    { cls: 'health', re: /^H(?![A-Za-z])/ },
-    { cls: 'elixir', re: /^[+-]?(?:\d+E|E)(?![A-Za-z])/ },
-    { cls: 'magic', re: /^[+-]?(?:\d+M|M)(?![A-Za-z])/ },
+    { cls: 'heal', re: /^[+]?\d+H(?![A-Za-z0-9])/ },
+    { cls: 'health', re: /^H(?![A-Za-z0-9])/ },
+    { cls: 'elixir', re: /^[+-]?(?:\d+E|E)(?![A-Za-z0-9])/ },
+    { cls: 'magic', re: /^[+-]?(?:\d+M|M)(?![A-Za-z0-9])/ },
 ];
 
 function buildInlineCardDict(defId, modifierText = '') {
@@ -1994,6 +1994,8 @@ function buildInlineCardDict(defId, modifierText = '') {
 function inlineCardChipHtml(cardDict) {
     const chip = createCardChoiceChip(cardDict, { hideInstanceOnlyFlags: false });
     chip.classList.add('inline-card-chip', 'inline-card-chip-compact');
+    delete chip.dataset.termIntroBound;
+    delete chip.dataset.choiceChipBound;
     chip.dataset.inlineCardChip = '1';
     chip.dataset.cardDict = JSON.stringify(cardDict || {});
     return chip.outerHTML;
@@ -2006,8 +2008,6 @@ function bindInlineCardChips(root, options = {}) {
     const allowTermIntro = options.allowTermIntro !== false;
     const termIntroDepth = Math.max(0, Number(options.termIntroDepth || 0) || 0);
     root.querySelectorAll('.inline-card-chip.choice-card-token[data-inline-card-chip="1"]').forEach(chip => {
-        if (chip.dataset.inlineChipBound === '1') return;
-        chip.dataset.inlineChipBound = '1';
         let cardDict = null;
         try {
             cardDict = JSON.parse(chip.dataset.cardDict || '{}');
@@ -2015,14 +2015,20 @@ function bindInlineCardChips(root, options = {}) {
             cardDict = null;
         }
         if (!cardDict || !cardDict.def_id) return;
-        const stop = (event) => {
-            event.stopPropagation();
-        };
-        ['click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend'].forEach(type => {
-            chip.addEventListener(type, stop, { passive: true });
-        });
-        attachFloatingCardPreview(chip, cardDict);
-        if (allowTermIntro) {
+        if (chip.dataset.inlineChipBaseBound !== '1') {
+            chip.dataset.inlineChipBaseBound = '1';
+            const stop = (event) => {
+                event.stopPropagation();
+            };
+            ['click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend'].forEach(type => {
+                chip.addEventListener(type, stop, { passive: true });
+            });
+            attachFloatingCardPreview(chip, cardDict);
+        }
+        if (allowTermIntro && chip.dataset.inlineChipTermBound !== '1') {
+            delete chip.dataset.termIntroBound;
+            chip.dataset.inlineChipTermBound = '1';
+            chip.dataset.inlineChipTermDepth = String(termIntroDepth);
             attachTermIntroToCard(chip, cardDict, { termIntroDepth });
         }
     });
@@ -2062,6 +2068,43 @@ function colorizeCardText(value) {
         }
     }
     return html;
+}
+
+function getBattleLogKnownPlayerNames() {
+    const names = new Set();
+    const add = (value) => {
+        const text = String(value || '').trim();
+        if (text) names.add(text);
+    };
+    const gs = gameState || {};
+    add(gs.your_name);
+    add(gs.opponent_name);
+    add(gs.teammate_name);
+    (gs.opponent_names || []).forEach(add);
+    (gs.spectate_players || []).forEach(player => {
+        add(player && (player.name || player.nickname));
+    });
+    for (let i = 1; i <= 4; i += 1) {
+        add(gs[`player${i}_name`]);
+        add(`P${i}`);
+    }
+    ['Player A', 'Player B', 'Player C', 'Player D', '你', '练习对手', UI.you, UI.opponent, UI.tutorial_player_you, UI.tutorial_player_opponent].forEach(add);
+    return Array.from(names).sort((a, b) => b.length - a.length);
+}
+
+function colorizeBattleLogText(value) {
+    const text = String(value || '');
+    for (const name of getBattleLogKnownPlayerNames()) {
+        if (!name || !text.startsWith(name)) continue;
+        const rest = text.slice(name.length);
+        return escapeHtml(name) + colorizeCardText(rest);
+    }
+    const prefixMatch = text.match(/^(.+?)(使用|受到|获得|回复|抽|弃|失去|移入|因|的|被)/);
+    if (prefixMatch && prefixMatch[1] && prefixMatch[1].length <= 32) {
+        const name = prefixMatch[1];
+        return escapeHtml(name) + colorizeCardText(text.slice(name.length));
+    }
+    return colorizeCardText(text);
 }
 
 function getCardTextTokenTermKey(cls, text = '') {
@@ -2699,11 +2742,10 @@ let lastRenderedTurnKey = '';
 const lastStatusSignatures = new Map();
 const GALLERY_MECHANIC_FLAGS = new Set(['fusion_layer', 'fission_layer']);
 const bootLoader = {
-    el: null, stepEl: null, fillEl: null, value: 0,
+    el: null, stepEl: null, value: 0,
     init() {
         this.el = document.getElementById('boot-loader');
         this.stepEl = document.getElementById('boot-step');
-        this.fillEl = document.getElementById('boot-progress-fill');
     },
     step(text, pct) {
         if (!this.el) this.init();
@@ -2713,13 +2755,45 @@ const bootLoader = {
         }
         if (typeof pct === 'number') {
             this.value = Math.max(this.value, pct);
-            if (this.fillEl) this.fillEl.style.width = `${this.value}%`;
         }
     },
     done() {        this.step(UI.init_done, 100);
-        setTimeout(() => this.el && this.el.classList.add('hidden'), 120);
+        setTimeout(() => this.el && this.el.classList.add('hidden'), 180);
     }
 };
+
+function setButtonLoading(buttonOrId, loading, label) {
+    const btn = typeof buttonOrId === 'string' ? $(buttonOrId) : buttonOrId;
+    if (!btn) return;
+    if (loading) {
+        if (!btn.dataset.loadingOriginalHtml) {
+            btn.dataset.loadingOriginalHtml = btn.innerHTML;
+            btn.dataset.loadingOriginalDisabled = btn.disabled ? '1' : '0';
+        }
+        btn.classList.add('is-loading');
+        btn.disabled = true;
+        btn.textContent = '';
+        const wrap = document.createElement('span');
+        wrap.className = 'btn-loading-content';
+        const spinner = document.createElement('span');
+        spinner.className = 'gtn-spinner';
+        spinner.setAttribute('aria-hidden', 'true');
+        const text = document.createElement('span');
+        text.textContent = label || UI.connecting || UI.game_loading || '加载中...';
+        wrap.append(spinner, text);
+        btn.appendChild(wrap);
+        return;
+    }
+    btn.classList.remove('is-loading');
+    if (btn.dataset.loadingOriginalHtml) {
+        btn.innerHTML = btn.dataset.loadingOriginalHtml;
+        btn.disabled = btn.dataset.loadingOriginalDisabled === '1';
+        delete btn.dataset.loadingOriginalHtml;
+        delete btn.dataset.loadingOriginalDisabled;
+    } else {
+        btn.disabled = false;
+    }
+}
 
 function clearTargetPickUi() {
     if (targetPickCleanup) {
@@ -5688,7 +5762,6 @@ function createCardElement(cardDict, options = {}) {
     const cardName = blinded ? '?' : getCardName(cardDef);
     const englishName = (!blinded && shouldShowEnglishCardName(cardDef, cardName)) ? getEnglishCardName(cardDef) : '';
     const effectText = blinded ? '?' : getCardEffectTextForInstance(cardDict, cardDef);
-    const descriptionText = blinded ? '?' : getCardDescriptionText(cardDef);
     const imageUrl = (!blinded && showCardImages) ? getCardArtUrl(cardDict, cardDef) : '';
     if (blinded) {
         el.classList.add('card-blinded');
@@ -5782,7 +5855,6 @@ function createCardElement(cardDict, options = {}) {
         ${cardArtHtml}
         <div class="card-type-label-wrap"><span class="card-type-label" style="color:${displayTypeColor}">${escapeHtml(typeLabel)}</span></div>
         <div class="card-effect">${colorizeCardText(effectText || '')}</div>
-        ${descriptionText ? `<div class="card-description">${escapeHtml(descriptionText)}</div>` : ''}
         ${bottomHtml}
     `;
     bindInlineCardChips(el);
@@ -8131,11 +8203,13 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('connect_error', (err) => {
         debugLog('[client] socket connect_error', err && err.message ? err.message : err);
+        setButtonLoading('btn-connect', false);
         if (phase === 'connecting') {
             flashStatus(UI.server_no_response, 3000, 'error');
         }
     });
     bindSocketEvent('kicked', (data = {}) => {
+        setButtonLoading('btn-connect', false);
         const reason = data.reason || UI.disconnected || 'Disconnected';
         debugLog('[client] kicked:', reason);
         flashStatus(translateServerMessage(reason), 5000, 'error');
@@ -8169,6 +8243,7 @@ function connectSocket(serverUrl) {
         renderAccountWarningBanner();
     });
     bindSocketEvent('login_ok', (data) => {
+        setButtonLoading('btn-connect', false);
         debugLog('[client] login ok: sid=', data.sid, 'nickname=', data.nickname);
         mySid = data.sid || '';
         nickname = data.nickname || nickname;
@@ -8202,9 +8277,21 @@ function connectSocket(serverUrl) {
         updateStatus(UI.lobby_status.replace('{0}', nickname));
     });
     bindSocketEvent('login_fail', (data) => {
+        setButtonLoading('btn-connect', false);
         showView('view-login');
         const err = $('login-error');
         if (err) err.textContent = moderationMessageFromPayload(data, translateLoginReason(data.reason));
+        if (data && data.draining) {
+            showModal(`
+                <h3>${escapeHtml(UI.notice || UI.operation_failed || '提示')}</h3>
+                <p>${escapeHtml(translateServerMessage(data.reason || data.message || '服务器正在静默更新，请刷新进入新版。'))}</p>
+                <div class="modal-buttons">
+                    <button class="btn btn-primary" id="drain-refresh-login">${escapeHtml(UI.refresh || '刷新')}</button>
+                </div>
+            `);
+            const btn = $('drain-refresh-login');
+            if (btn) btn.onclick = () => window.location.reload();
+        }
     });
     bindSocketEvent('lobby_update', (data) => {
         debugLog('[client] lobby_update players=', (data.players || []).length);
@@ -8717,6 +8804,20 @@ function connectSocket(serverUrl) {
         phase = 'lobby';
         showView('view-lobby');
         flashStatus(translateServerMessage(message), 4200, 'error');
+        if (data.draining) {
+            showModal(`
+                <h3>${escapeHtml(UI.notice || UI.operation_failed || '提示')}</h3>
+                <p>${escapeHtml(translateServerMessage(message))}</p>
+                <div class="modal-buttons">
+                    <button class="btn btn-primary" id="drain-refresh-match">${escapeHtml(UI.refresh || '刷新')}</button>
+                    <button class="btn" id="drain-stay-match">${escapeHtml(UI.cancel || '取消')}</button>
+                </div>
+            `);
+            const refreshBtn = $('drain-refresh-match');
+            const stayBtn = $('drain-stay-match');
+            if (refreshBtn) refreshBtn.onclick = () => window.location.reload();
+            if (stayBtn) stayBtn.onclick = hideModal;
+        }
     });
     bindSocketEvent('opponent_disconnected', (data) => {
         if (data && data.timeout) {
@@ -8893,6 +8994,7 @@ function onLogin() {
     loginCredential = nick;
     if (err) err.textContent = '';
     updateStatus(UI.connecting);
+    setButtonLoading('btn-connect', true, UI.connecting);
     connectSocket(server);
 }
 
@@ -10507,6 +10609,7 @@ function onAccountEnter() {
     if (err) err.textContent = '';
     setAccountError('');
     updateStatus(UI.connecting);
+    setButtonLoading('btn-connect', true, UI.connecting);
     connectSocket(getServerAddress());
 }
 
@@ -14405,6 +14508,7 @@ function renderGame(data) {
     cleanupDragState();
     showView('view-game');
     const gs = data || gameState;
+    repairSpectate2v2Layout(gs);
     const you = gs.you || {};
     const opp = gs.opponent || {};
     const opp2 = gs.opponent2 || {};
@@ -14778,16 +14882,17 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
     if (!container) return;
     removeFloatingCardPreview();
     container.innerHTML = '';
+    const useSpectate2v2Chip = !!(isSpectating && gameState && gameState.mode === '2v2');
     const revealedHand = oppData.revealed_hand || oppData.hand;
     const revealedTagCards = oppData.revealed_tag_cards || [];
     if (revealedHand && revealedHand.length > 0) {
         revealedHand.forEach(cd => {
             const prediction = getCardPredictionOptionsForOwner(cd, oppData);
-            const el = isSpectating
+            const el = isSpectating && !useSpectate2v2Chip
                 ? createCardElement(cd, { small: true, prediction, ownerState: oppData })
                 : createCardChoiceChip(cd, { previewOptions: { prediction, ownerState: oppData } });
-            el.classList.add(isSpectating ? 'opp-hand-card' : 'opp-hand-chip');
-            if (isSpectating) attachFloatingCardPreview(el, cd, { prediction, ownerState: oppData });
+            el.classList.add(isSpectating && !useSpectate2v2Chip ? 'opp-hand-card' : 'opp-hand-chip');
+            if (isSpectating && !useSpectate2v2Chip) attachFloatingCardPreview(el, cd, { prediction, ownerState: oppData });
             container.appendChild(el);
         });
     } else if (revealedTagCards.length > 0) {
@@ -14797,11 +14902,11 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
         // Show revealed cards as chips (hide 'revealed' tag on chip, but keep in preview)
         sortedRevealed.forEach(cd => {
             const prediction = getCardPredictionOptionsForOwner(cd, oppData);
-            const el = isSpectating
+            const el = isSpectating && !useSpectate2v2Chip
                 ? createCardElement(cd, { small: true, prediction, ownerState: oppData })
                 : createCardChoiceChip(cd, { hideFlags: ['revealed'], previewOptions: { prediction, ownerState: oppData } });
-            el.classList.add(isSpectating ? 'opp-hand-card' : 'opp-hand-chip');
-            if (isSpectating) attachFloatingCardPreview(el, cd, { prediction, ownerState: oppData });
+            el.classList.add(isSpectating && !useSpectate2v2Chip ? 'opp-hand-card' : 'opp-hand-chip');
+            if (isSpectating && !useSpectate2v2Chip) attachFloatingCardPreview(el, cd, { prediction, ownerState: oppData });
             container.appendChild(el);
         });
         for (let i = 0; i < hiddenCount; i++) {
@@ -14826,6 +14931,7 @@ function renderTeammateHand(teammateData) {
     if (!container) return;
     removeFloatingCardPreview();
     container.innerHTML = '';
+    const useSpectate2v2Chip = !!(isSpectating && gameState && gameState.mode === '2v2');
     const hand = teammateData.hand || [];
     if (getOwnBlindLevel() >= 3 && hand.length > 0) {
         appendUnknownHandMarker(container);
@@ -14833,8 +14939,10 @@ function renderTeammateHand(teammateData) {
     }
     hand.forEach(card => {
         const prediction = getCardPredictionOptionsForOwner(card, teammateData);
-        const el = isSpectating ? createCardElement(card, { small: true, prediction, ownerState: teammateData }) : createTeammateHandChip(card, teammateData);
-        if (isSpectating) attachFloatingCardPreview(el, card, { prediction, ownerState: teammateData });
+        const el = isSpectating && !useSpectate2v2Chip
+            ? createCardElement(card, { small: true, prediction, ownerState: teammateData })
+            : createTeammateHandChip(card, teammateData);
+        if (isSpectating && !useSpectate2v2Chip) attachFloatingCardPreview(el, card, { prediction, ownerState: teammateData });
         container.appendChild(el);
     });
 }
@@ -14871,7 +14979,10 @@ function renderPlayerHand(playerData) {
     });
     container.innerHTML = '';
     const hand = playerData.hand || [];
-    const handSlots = Math.max(7, Math.min(10, hand.length || 0));
+    const mobileHandLayout = isTouchPlayMode()
+        || (window.matchMedia && window.matchMedia('(max-width: 900px), (max-height: 620px)').matches);
+    const maxSingleRowSlots = mobileHandLayout ? 7 : 10;
+    const handSlots = Math.max(7, Math.min(maxSingleRowSlots, hand.length || 0));
     container.style.setProperty('--hand-card-slots', String(handSlots + 0.35));
     if (selectedPlayCardId != null && !hand.some(c => c.instance_id === selectedPlayCardId)) {
         clearSelectedPlayCard();
@@ -16261,7 +16372,8 @@ function renderBattleUseLogChipLine(el, entry) {
     const cardDict = (entry && entry.cardDict && typeof entry.cardDict === 'object') ? entry.cardDict : null;
     const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(entry && entry.card);
     if (!defId) {
-        el.innerHTML = colorizeCardText(stripBattleLogCardMarkers(entry && entry.text ? entry.text : ''));
+        el.innerHTML = colorizeBattleLogText(stripBattleLogCardMarkers(entry && entry.text ? entry.text : ''));
+        bindInlineCardChips(el, { interactive: true });
         return;
     }
     const parts = getBattleUseTemplateParts(localizePlayerNameInText(entry.actor || ''));
@@ -16282,8 +16394,9 @@ function renderBattleUseLogChipLine(el, entry) {
 function appendColorizedLogText(parent, text) {
     if (!parent || !text) return;
     const span = document.createElement('span');
-    span.innerHTML = colorizeCardText(stripBattleLogCardMarkers(text));
+    span.innerHTML = colorizeBattleLogText(stripBattleLogCardMarkers(text));
     parent.appendChild(span);
+    bindInlineCardChips(span, { interactive: true });
 }
 
 function appendBattleLogCardChip(parent, cardText, cardDict = null) {
@@ -16295,6 +16408,119 @@ function appendBattleLogCardChip(parent, cardText, cardDict = null) {
     chip.classList.add('battle-log-card-chip');
     parent.appendChild(chip);
     return true;
+}
+
+function getBattleLogCardNameCandidates() {
+    const candidates = [];
+    const seen = new Set();
+    const add = (name, defId) => {
+        const text = String(name || '').trim();
+        if (!text || !defId) return;
+        if (text.length < 2 && !/[\u3400-\u9fffぁ-んァ-ン]/.test(text)) return;
+        const key = `${text}\u0000${defId}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        candidates.push({ text, defId });
+    };
+    for (const [defId, cd] of Object.entries(CARD_DEFS || {})) {
+        if (!cd) continue;
+        add(getCardName(cd), defId);
+        add(cd.name_cn, defId);
+        add(cd.name_en, defId);
+        add(cd.id, defId);
+        add(cd.def_id, defId);
+        add(defId, defId);
+        Object.values(cd.name_i18n || {}).forEach(name => add(name, defId));
+    }
+    return candidates.sort((a, b) => b.text.length - a.text.length);
+}
+
+function isAsciiWordChar(ch) {
+    return /[A-Za-z0-9_]/.test(ch || '');
+}
+
+function isBattleLogCardNameBoundary(text, index, length, name) {
+    if (!/^[A-Za-z0-9_ -]+$/.test(name || '')) return true;
+    const before = index > 0 ? text[index - 1] : '';
+    const after = index + length < text.length ? text[index + length] : '';
+    return !isAsciiWordChar(before) && !isAsciiWordChar(after);
+}
+
+function getBattleLogProtectedPlayerRanges(text) {
+    const raw = String(text || '');
+    const ranges = [];
+    if (!raw) return ranges;
+    const names = getBattleLogKnownPlayerNames();
+    const addRange = (start, end) => {
+        if (start >= 0 && end > start) ranges.push({ start, end });
+    };
+    for (const name of names) {
+        if (!name) continue;
+        let pos = raw.indexOf(name);
+        while (pos >= 0) {
+            addRange(pos, pos + name.length);
+            pos = raw.indexOf(name, pos + Math.max(1, name.length));
+        }
+    }
+    ranges.sort((a, b) => a.start - b.start || b.end - a.end);
+    const merged = [];
+    for (const range of ranges) {
+        const last = merged[merged.length - 1];
+        if (last && range.start <= last.end) {
+            last.end = Math.max(last.end, range.end);
+        } else {
+            merged.push({ ...range });
+        }
+    }
+    return merged;
+}
+
+function isInsideBattleLogProtectedRange(index, length, ranges) {
+    const start = Number(index || 0);
+    const end = start + Math.max(0, Number(length || 0));
+    return (ranges || []).some(range => start < range.end && end > range.start);
+}
+
+function appendBattleLogTextWithCardChips(parent, text) {
+    if (!parent) return false;
+    const raw = String(text || '');
+    if (!raw) return false;
+    const candidates = getBattleLogCardNameCandidates();
+    const protectedRanges = getBattleLogProtectedPlayerRanges(raw);
+    let cursor = 0;
+    let usedChip = false;
+    let guard = 0;
+    while (cursor < raw.length && guard++ < 200) {
+        const rest = raw.slice(cursor);
+        const marker = rest.match(/^\[\[card:([a-z0-9_:/-]+)((?:\|[^\]]+)*)\]\]/i);
+        if (marker && marker[1]) {
+            appendBattleLogCardChip(parent, marker[1], buildInlineCardDict(marker[1], marker[2] || ''));
+            cursor += marker[0].length;
+            usedChip = true;
+            continue;
+        }
+        let best = null;
+        for (const candidate of candidates) {
+            const idx = raw.indexOf(candidate.text, cursor);
+            if (idx < 0) continue;
+            if (isInsideBattleLogProtectedRange(idx, candidate.text.length, protectedRanges)) continue;
+            if (!isBattleLogCardNameBoundary(raw, idx, candidate.text.length, candidate.text)) continue;
+            if (!best || idx < best.index || (idx === best.index && candidate.text.length > best.text.length)) {
+                best = { ...candidate, index: idx };
+            }
+        }
+        if (!best) {
+            appendColorizedLogText(parent, raw.slice(cursor));
+            break;
+        }
+        if (best.index > cursor) {
+            appendColorizedLogText(parent, raw.slice(cursor, best.index));
+        }
+        appendBattleLogCardChip(parent, best.text, { def_id: best.defId });
+        usedChip = true;
+        cursor = best.index + best.text.length;
+    }
+    return usedChip;
 }
 
 function renderBattleLogInlineCardLine(el, text) {
@@ -16376,9 +16602,15 @@ function createBattleLogElement(entry) {
         return el;
     }
     if (renderBattleLogInlineCardLine(el, displayLine)) {
+        bindInlineCardChips(el, { interactive: true });
         return el;
     }
-    el.innerHTML = colorizeCardText(displayLine);
+    if (appendBattleLogTextWithCardChips(el, displayLine)) {
+        bindInlineCardChips(el, { interactive: true });
+        return el;
+    }
+    el.innerHTML = colorizeBattleLogText(displayLine);
+    bindInlineCardChips(el, { interactive: true });
     return el;
 }
 
@@ -18623,6 +18855,37 @@ function getDeckViewerPlayer() {
         return getSpectatePerspectivePlayer(gameState) || gameState.you || {};
     }
     return (gameState && gameState.you) || {};
+}
+
+function repairSpectate2v2Layout(gs) {
+    if (!gs || gs.mode !== '2v2' || !gs.spectating || !Array.isArray(gs.spectate_players) || gs.spectate_players.length < 4) return;
+    const perspective = normalizePlayerId(gs.spectate_perspective != null ? gs.spectate_perspective : gs.your_id);
+    if (perspective == null || perspective < 0 || perspective >= gs.spectate_players.length) return;
+    const teammate = perspective < 2 ? 1 - perspective : (perspective === 2 ? 3 : 2);
+    const enemies = [0, 1, 2, 3].filter(id => id !== perspective && id !== teammate);
+    const currentIds = [
+        normalizePlayerId(gs.your_id),
+        normalizePlayerId(gs.teammate_id),
+        ...((gs.enemy_ids || []).map(normalizePlayerId)),
+    ].filter(id => id != null);
+    if (currentIds.length >= 4 && new Set(currentIds).size === currentIds.length) return;
+    const players = gs.spectate_players;
+    const playerName = id => (players[id] && players[id].name) || `P${id + 1}`;
+    gs.your_id = perspective;
+    gs.spectate_perspective = perspective;
+    gs.teammate_id = teammate;
+    gs.enemy_ids = enemies;
+    gs.you = players[perspective] || {};
+    gs.teammate = players[teammate] || {};
+    gs.opponent = players[enemies[0]] || {};
+    gs.opponent2 = players[enemies[1]] || {};
+    gs.your_name = playerName(perspective);
+    gs.teammate_name = playerName(teammate);
+    gs.opponent_names = enemies.map(playerName);
+    gs.teammate_is_admin_player = !!(players[teammate] && players[teammate].is_admin_player);
+    gs.opponent_admin_flags = enemies.map(id => !!(players[id] && players[id].is_admin_player));
+    gs.teammate_special = specialPublicReplayFields(players[teammate] || {});
+    gs.opponent_specials = enemies.map(id => specialPublicReplayFields(players[id] || {}));
 }
 
 function onViewDeck() {

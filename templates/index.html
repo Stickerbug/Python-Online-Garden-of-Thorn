@@ -7,7 +7,7 @@
 <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/static/css/style.css?v=235">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ static_version|default('dev')|urlencode }}">
 <script>
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
@@ -47,9 +47,9 @@
   <div class="boot-loader-inner">
     <div class="boot-title">Garden of Thorn 荆棘花园</div>
     <div class="boot-sub">启动中</div>
-    <div id="boot-step" class="boot-step">准备加载...</div>
-    <div class="boot-progress">
-      <div id="boot-progress-fill" class="boot-progress-fill"></div>
+    <div class="boot-wait-row">
+      <span class="gtn-spinner boot-spinner" aria-hidden="true"></span>
+      <div id="boot-step" class="boot-step">准备加载...</div>
     </div>
   </div>
 </div>
@@ -314,7 +314,7 @@
 <p id="login-error" class="error-text"></p>
 <div class="home-footer">
   <div class="home-copyright">©2026 Garden of Thorn Dev Team</div>
-  <div class="home-icp">皖ICP备2026016693号-1</div>
+  <a class="home-icp" href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">皖ICP备2026016693号-1</a>
 </div>
 </div>
 </div>
@@ -906,6 +906,10 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-    <script src="/static/js/game.js?v=298"></script>
+    <script>
+      window.__GTN_INSTANCE_ID__ = {{ instance_id|default('local')|tojson }};
+      window.__GTN_APP_VERSION__ = {{ app_version|default('dev')|tojson }};
+    </script>
+    <script src="/static/js/game.js?v={{ static_version|default('dev')|urlencode }}"></script>
 </body>
 </html>

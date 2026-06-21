@@ -4213,6 +4213,22 @@ class LocalSoloEngine {
         return { ownerId: -1, eq: null };
     }
 
+    consumeJungleRootLayerFromEquipment(targetId) {
+        for (const [ownerId, ps] of this.players.entries()) {
+            for (const eq of ps.equipment || []) {
+                const defId = String((eq.card_instance && eq.card_instance.def_id) || eq.def_id || '');
+                eq.custom_vars = eq.custom_vars || {};
+                const layers = toInt(eq.custom_vars.jungle_root_layers, 0);
+                if (layers <= 0 && !['Root', 'jungle:root'].includes(defId)) continue;
+                const effectTarget = toInt(eq.effect_target ?? eq.owner ?? ownerId, ownerId);
+                if (effectTarget !== targetId) continue;
+                if (layers <= 0) continue;
+                eq.custom_vars.jungle_root_layers = layers - 1;
+                return;
+            }
+        }
+    }
+
     resolveEquipmentRef(playerId, ref, currentCard = null) {
         ref = parseJsonish(ref);
         if (ref instanceof LocalEquipment) return ref;
@@ -4498,6 +4514,13 @@ class LocalSoloEngine {
             if (dmg > 0) this._last_positive_damage_hits[targetId] += 1;
             this.recordDamage(targetId, dmg, attackerId);
             this.logMsg(`${this.pn(targetId)}受到${dmg}点伤害（H=${ps.health}）`);
+            if (dmg > 0) {
+                const rootLayers = this.customStatusValue(targetId, 'jungle:root', 'jungle:root_status', 'root_status');
+                if (rootLayers > 0) {
+                    this.setCustomStatusAliasGroup(targetId, 'jungle:root_status', ['jungle:root_status', 'jungle:root', 'root_status'], rootLayers - 1);
+                    this.consumeJungleRootLayerFromEquipment(targetId);
+                }
+            }
             if (dmg > 0 && ps.toxic > 0) ps.poison += ps.toxic;
             this._game_over_defer_depth += 1;
             try {

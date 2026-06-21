@@ -1,0 +1,42 @@
+# GTN blue-green nginx template.
+# Include this idea in the release server block.  Do not copy blindly over the
+# whole site file; merge with your existing TLS/static/socket settings.
+
+upstream gtn_release_active {
+    server 127.0.0.1:5000;
+    # Switch to the prepared new instance during blue-green deploy:
+    # server 127.0.0.1:5002;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name gtn.stickerbug.top;
+
+    # ssl_certificate ...
+    # ssl_certificate_key ...
+
+    location /socket.io/ {
+        proxy_pass http://gtn_release_active;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+        proxy_buffering off;
+    }
+
+    location / {
+        proxy_pass http://gtn_release_active;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+    }
+}

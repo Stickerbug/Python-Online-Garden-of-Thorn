@@ -3014,8 +3014,8 @@ class GameEngine:
                         self._apply_setup_modifiers_to_card(player_id, mana_card)
                         if self._replace_first_card_in_setup_zones(player_id, source_def, mana_card):
                             converted += 1
-                            source_name = CARD_DEFS.get(source_def, CardDef('', '', '', 0, 0, '', 0, '', '', '')).name_cn
-                            self.log_msg(f"{self.pn(player_id)}【魔力转化】：{source_name}变为魔法球(萌芽+共生)")
+                if converted:
+                    self.log_msg(f"{self.pn(player_id)}【魔力转化】：将最多3张牌转化为[[card:ManaOrb|flag=sprout|flag=symbiosis]]")
         elif event_id == 3:
             converted = 0
             if self._card_allowed('Light') and sub and 'convert_def_ids' in sub:
@@ -3029,7 +3029,7 @@ class GameEngine:
                     self._apply_setup_modifiers_to_card(player_id, light_card)
                     if self._replace_first_card_in_setup_zones(player_id, target_def, light_card):
                         converted += 1
-                self.log_msg(f"{self.pn(player_id)}【光之洗礼】：{converted}张牌变为Light(萌芽+共生)")
+                self.log_msg(f"{self.pn(player_id)}【光之洗礼】：{converted}张牌变为[[card:Light|flag=sprout|flag=symbiosis]]")
         elif event_id == 4:
             target_ids = self._opening_event_enemy_targets(player_id)
             for target_id in target_ids:
@@ -3903,6 +3903,17 @@ class GameEngine:
             return None
         choice_params = self._effect_params(choice_request)
         choice_type = self._choice_type_for_effect(choice_request, card)
+        if choice_type == 'choose_target' and isinstance(choice_params, dict):
+            allowed = str(choice_params.get('allowed', '') or '').strip().lower()
+            if allowed and not any(key in choice_params for key in ('target', 'targets', 'candidates')):
+                if allowed in ('any', 'all', 'both'):
+                    choice_params = {**choice_params, 'target': 'all', 'include_self': True}
+                elif allowed in ('self', 'owner'):
+                    choice_params = {**choice_params, 'target': 'self', 'include_self': True}
+                elif allowed in ('friendly', 'ally', 'allies'):
+                    choice_params = {**choice_params, 'target': 'friendly', 'include_self': True}
+                elif allowed in ('enemy', 'enemies', 'opponent', 'opponents'):
+                    choice_params = {**choice_params, 'target': 'enemy', 'include_self': False}
         if choice_type == 'choose_target' and not choice_params and (
             self._v2_play_requires_choice_target(card) or self._root_play_requires_owner_target(card)
         ):
@@ -7577,8 +7588,67 @@ class GameEngine:
         event_def = events.get('on_play')
         return self._effect_tree_uses_choice_target(event_def) or self._effect_tree_uses_target_selector(event_def)
 
-    def _root_play_requires_owner_target(self, card: Optional[CardInstance]) -> bool:
+    def _root_equipment_events_use_effect_target(self, card: Optional[CardInstance]) -> bool:
+        if card is None or not getattr(card, 'card_def', None):
+            return False
+        events = getattr(card.card_def, 'v2_events', None) or {}
+        for event_name, event_def in events.items():
+            name = str(event_name or '')
+            if name in ('on_play', 'play'):
+                continue
+            # Manual trigger cards choose their target when triggered, not when equipped.
+            if 'trigger' in name:
+                continue
+            if not (
+                'equip' in name
+                or 'turn_start' in name
+                or 'turn_end' in name
+                or 'damage' in name
+                or 'destroy' in name
+            ):
+                continue
+            if self._effect_tree_uses_choice_target(event_def) or self._effect_tree_uses_target_selector(event_def):
+                return True
         return False
+
+    def _root_play_requires_owner_target(self, card: Optional[CardInstance]) -> bool:
+        if card is None or getattr(card, 'card_type', '') != 'root':
+            return False
+        if self._card_is_self_only(card):
+            return False
+        if self._root_equipment_events_use_effect_target(card):
+            return True
+        target_on_equip_ids = {
+            'Cactus', 'desert_cards_addition:cactus',
+            'Coconut', 'desert_cards_addition:coconut',
+            'Uranium', 'factory:uranium',
+            'MagicUranium', 'factory:magicuranium',
+            'Cutter', 'factory:cutter',
+            'ElectricWeb', 'factory:electricweb',
+            'Goggles', 'factory:goggles',
+            'Soil', 'garden:soil',
+            'Web', 'garden:web',
+            'Faster', 'garden:faster',
+            'Cotton', 'jungle:cotton',
+            'MagicCotton', 'jungle:magic_cotton',
+            'Plank', 'jungle:plank',
+            'Root', 'jungle:root',
+            'Sponge', 'troll_cards:sponge',
+            'Pill', 'troll_cards:pill',
+            'Leaf', 'vanilla:leaf',
+            'Yucca', 'vanilla:yucca',
+            'Disc', 'vanilla:disc',
+            'Battery', 'vanilla:battery',
+            'MagicLeaf', 'vanilla:magicleaf',
+            'MagicYucca', 'vanilla:magicyucca',
+            'MagicBattery', 'vanilla:magicbattery',
+            'Powder', 'vanilla:powder',
+            'GoldenLeaf', 'vanilla:goldenleaf',
+            'Pincer', 'vanilla:pincer',
+            'Cancer', 'vanilla:cancer',
+            'MagicGoldenLeaf', 'vanilla:magicgoldenleaf',
+        }
+        return self._card_matches_any_id(card, getattr(card, 'card_def', None), target_on_equip_ids)
 
     def _default_enemy_target_for_event(self, player_id: int) -> int:
         if hasattr(self, 'get_enemies'):
@@ -9648,9 +9718,20 @@ class GameEngine:
     def _consume_jungle_root_layer_from_equipment(self, owner_id: int):
         if not (0 <= owner_id < len(self.players)):
             return
-        for eq in list(self.players[owner_id].equipment):
-            if not self._card_matches_any_id(eq.card_instance, eq.card_def, ['Root', 'jungle:root']):
-                continue
+        candidates = []
+        for equip_owner_id, owner_state in enumerate(self.players):
+            for eq in list(getattr(owner_state, 'equipment', []) or []):
+                tracked_layers = int(eq.custom_vars.get('jungle_root_layers', 0) or 0)
+                if tracked_layers <= 0 and not self._card_matches_any_id(eq.card_instance, eq.card_def, ['Root', 'jungle:root']):
+                    continue
+                try:
+                    effect_target = int(getattr(eq, 'effect_target', equip_owner_id))
+                except (TypeError, ValueError):
+                    effect_target = equip_owner_id
+                if effect_target != owner_id:
+                    continue
+                candidates.append(eq)
+        for eq in candidates:
             layers = int(eq.custom_vars.get('jungle_root_layers', 0) or 0)
             if layers <= 0:
                 continue

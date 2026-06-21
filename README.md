@@ -52,6 +52,40 @@ python app.py
 
 > **提示**：如果只有一台电脑，直接打开 `http://127.0.0.1:5000`，使用两个浏览器标签页即可本机测试。
 
+## 静默更新思路
+
+当前服务支持“排空模式（drain）”，用于以后做不中断对局的更新：
+
+1. 启动一个新实例，例如监听 `127.0.0.1:5002`。
+2. 将 Nginx 新流量切到新实例。
+3. 将旧实例设为 drain。旧实例会拒绝新登录和新开局，但允许断线玩家返回正在进行的旧对局。
+4. 等旧实例房间清空后，再停止旧服务。
+
+辅助脚本：
+
+```bash
+scripts/blue_green_prepare.sh /opt/gtn-release /opt/gtn-next 5002 release
+```
+
+运行实例时建议设置：
+
+```bash
+GTN_INSTANCE_ID=release-5002-版本号
+GTN_VERSION=版本号
+GTN_GIT_SHA=当前提交
+GTN_STATIC_VERSION=当前提交
+GTN_BIND_HOST=127.0.0.1
+GTN_PORT=5002
+```
+
+管理命令可查看或切换 drain：
+
+```text
+drain status
+drain on
+drain off
+```
+
 ### 游戏流程
 
 1. 输入昵称，点击"进入大厅"。

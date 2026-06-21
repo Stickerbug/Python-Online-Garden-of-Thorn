@@ -233,6 +233,13 @@ GTN_BETA_PUBLIC_URL = os.environ.get('GTN_BETA_PUBLIC_URL', '').strip()
 _default_bind_host = '127.0.0.1'
 GTN_BIND_HOST = os.environ.get('GTN_BIND_HOST', _default_bind_host).strip() or _default_bind_host
 GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 5000)
+GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
+GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
+GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
+GTN_STATIC_VERSION = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
+GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
+GTN_DRAINING_ENV = os.environ.get('GTN_DRAINING', '').strip().lower()
+_DRAIN_OVERRIDE = None
 
 
 def is_beta_instance():
@@ -241,6 +248,42 @@ def is_beta_instance():
 
 def is_release_instance():
     return GTN_INSTANCE == 'release'
+
+
+def is_instance_draining():
+    if _DRAIN_OVERRIDE is not None:
+        return bool(_DRAIN_OVERRIDE)
+    if GTN_DRAINING_ENV in {'1', 'true', 'yes', 'on', 'drain', 'draining'}:
+        return True
+    if GTN_DRAIN_FILE:
+        try:
+            return os.path.exists(GTN_DRAIN_FILE)
+        except OSError:
+            return False
+    return False
+
+
+def set_instance_draining(value: bool):
+    global _DRAIN_OVERRIDE
+    _DRAIN_OVERRIDE = bool(value)
+    if GTN_DRAIN_FILE:
+        try:
+            if value:
+                with open(GTN_DRAIN_FILE, 'w', encoding='utf-8') as fh:
+                    fh.write(f'{iso_now()} {GTN_INSTANCE_ID}\n')
+            elif os.path.exists(GTN_DRAIN_FILE):
+                os.remove(GTN_DRAIN_FILE)
+        except OSError as exc:
+            admin_event('warning', f'failed to update drain file {GTN_DRAIN_FILE}: {exc}')
+
+
+def drain_reject_payload():
+    return {
+        'reason': '服务器正在静默更新，旧实例不再接收新对局。请刷新进入新版。',
+        'draining': True,
+        'instance_id': GTN_INSTANCE_ID,
+        'version': GTN_VERSION,
+    }
 
 
 socketio = SocketIO(
@@ -411,6 +454,17 @@ def _env_int(name, default):
         return int(os.environ.get(name, default))
     except (TypeError, ValueError):
         return int(default)
+
+
+def _env_bool(name, default=True):
+    value = os.environ.get(name)
+    if value is None:
+        return bool(default)
+    return str(value).strip().lower() not in {'0', 'false', 'no', 'off'}
+
+
+def db_maintenance_enabled():
+    return _env_bool('GTN_DB_MAINTENANCE_ENABLED', True)
 
 
 _RESOURCE_BREAKDOWN_CACHE = {'ts': 0.0, 'data': None}
@@ -2294,6 +2348,9 @@ def ensure_friend_request_cleanup_started():
     global _friend_request_cleanup_started
     if _friend_request_cleanup_started:
         return
+    if not db_maintenance_enabled():
+        admin_event('db', 'friend request cleanup disabled by GTN_DB_MAINTENANCE_ENABLED=0')
+        return
     _friend_request_cleanup_started = True
     try:
         socketio.start_background_task(_friend_request_cleanup_worker)
@@ -2320,6 +2377,9 @@ def _dm_cleanup_worker():
 def ensure_dm_cleanup_started():
     global _dm_cleanup_started
     if _dm_cleanup_started:
+        return
+    if not db_maintenance_enabled():
+        admin_event('db', 'dm cleanup disabled by GTN_DB_MAINTENANCE_ENABLED=0')
         return
     _dm_cleanup_started = True
     try:
@@ -4082,6 +4142,50 @@ def emit_match_start_failed(sids, message, reason='mod_mismatch'):
             socketio.emit('match_start_failed', payload, room=psid)
 
 
+def has_reconnect_candidate_locked(nickname='', user_id=None, account_player_id='', beta_mode=False):
+    name_key = normalize_username_key(nickname or '')
+    account_player_id = str(account_player_id or '')
+    for room in rooms.values():
+        if bool(getattr(room, 'beta_mode', False)) != bool(beta_mode):
+            continue
+        for dc_info in getattr(room, 'disconnected_players', {}).values():
+            if user_id and dc_info.get('user_id') == user_id:
+                return True
+            if account_player_id and str(dc_info.get('account_player_id') or '') == account_player_id:
+                return True
+            if name_key and normalize_username_key(dc_info.get('nickname', '')) == name_key:
+                return True
+        for profile in getattr(room, 'player_profiles', {}).values():
+            if not isinstance(profile, dict):
+                continue
+            # Profiles cover players whose online sid was already removed before
+            # disconnected_players was rebuilt.  Only count slots that are not
+            # currently online in this room.
+            profile_sid = profile.get('sid')
+            if profile_sid in players:
+                continue
+            if user_id and profile.get('user_id') == user_id:
+                return True
+            if account_player_id and str(profile.get('account_player_id') or '') == account_player_id:
+                return True
+            if name_key and normalize_username_key(profile.get('nickname', '')) == name_key:
+                return True
+    return False
+
+
+def reject_new_match_if_draining(sids=None, event_name='match_start'):
+    if not is_instance_draining():
+        return False
+    payload = drain_reject_payload()
+    payload['message'] = payload['reason']
+    for psid in set(sids or []):
+        if psid:
+            socketio.emit('match_start_failed', payload, room=psid)
+            socketio.emit('server_error', {'message': payload['reason'], 'draining': True}, room=psid)
+    admin_event('deploy', f'drain rejected {event_name}', sids=list(set(sids or [])))
+    return True
+
+
 def get_lobby_list(beta_mode=None):
     lobby = []
     for sid, p in players.items():
@@ -4712,6 +4816,12 @@ def _collect_runtime_metrics():
         'uptime_seconds': uptime,
         'server_profile': {
             'instance': GTN_INSTANCE,
+            'instance_id': GTN_INSTANCE_ID,
+            'version': GTN_VERSION,
+            'git_sha': GTN_GIT_SHA,
+            'static_version': GTN_STATIC_VERSION,
+            'draining': is_instance_draining(),
+            'drain_file': GTN_DRAIN_FILE,
             'port': GTN_PORT,
             'bind_host': GTN_BIND_HOST,
             'git_branch': os.environ.get('GTN_GIT_BRANCH', 'main').strip() or 'main',
@@ -4893,8 +5003,13 @@ def get_admin_status_payload():
         'success': True,
         'instance': {
             'name': GTN_INSTANCE,
+            'id': GTN_INSTANCE_ID,
+            'version': GTN_VERSION,
+            'git_sha': GTN_GIT_SHA,
             'port': GTN_PORT,
             'bind_host': GTN_BIND_HOST,
+            'draining': is_instance_draining(),
+            'drain_file': GTN_DRAIN_FILE,
             'git_branch': os.environ.get('GTN_GIT_BRANCH', 'main').strip() or 'main',
             'service_name': os.environ.get('GTN_SYSTEMD_SERVICE', '').strip(),
             'base_dir': os.path.dirname(os.path.abspath(__file__)),
@@ -4949,8 +5064,13 @@ def get_admin_status_payload_light():
         'light': True,
         'instance': {
             'name': GTN_INSTANCE,
+            'id': GTN_INSTANCE_ID,
+            'version': GTN_VERSION,
+            'git_sha': GTN_GIT_SHA,
             'port': GTN_PORT,
             'bind_host': GTN_BIND_HOST,
+            'draining': is_instance_draining(),
+            'drain_file': GTN_DRAIN_FILE,
             'git_branch': os.environ.get('GTN_GIT_BRANCH', 'main').strip() or 'main',
             'service_name': os.environ.get('GTN_SYSTEMD_SERVICE', '').strip(),
             'base_dir': os.path.dirname(os.path.abspath(__file__)),
@@ -5020,6 +5140,7 @@ def get_admin_status_payload_cached():
 ADMIN_COMMANDS = {
     'help': 'help - 显示可用指令',
     'status': 'status - 显示服务器摘要',
+    'drain': 'drain [on|off|status] - 设置/查看静默更新排空模式',
     'players': 'players - 列出在线玩家',
     'rooms': 'rooms - 列出当前对局',
     'roomplayers': 'roomplayers <房间ID> - 显示房间内玩家编号、昵称和状态',
@@ -5435,6 +5556,25 @@ def execute_admin_command(line):
         result = run_admin_git_pull_main()
         admin_event('admin' if result.get('success') else 'error', f"gitpull: {result.get('output', '')[:240]}")
         return result
+    if cmd == 'drain':
+        action = (parts[1].lower() if len(parts) > 1 else 'status')
+        if action in ('on', 'true', '1', 'start', 'enable'):
+            set_instance_draining(True)
+            admin_event('deploy', f'drain enabled from console instance={GTN_INSTANCE_ID}')
+        elif action in ('off', 'false', '0', 'stop', 'disable'):
+            set_instance_draining(False)
+            admin_event('deploy', f'drain disabled from console instance={GTN_INSTANCE_ID}')
+        elif action not in ('status', 'show'):
+            return {'success': False, 'output': command_error(raw, len(parts[0]) + 1, 'on|off|status')}
+        with _lock:
+            room_count = len(rooms)
+            player_count = len(players)
+        return {'success': True, 'output': (
+            f"Drain: {'ON' if is_instance_draining() else 'OFF'}\n"
+            f"Instance: {GTN_INSTANCE_ID} | Version: {GTN_VERSION} | Port: {GTN_PORT}\n"
+            f"Rooms: {room_count} | Players: {player_count}\n"
+            f"Drain file: {GTN_DRAIN_FILE or '-'}"
+        )}
     if cmd == 'status':
         payload = get_admin_status_payload()
         summary = payload['summary']
@@ -5443,7 +5583,8 @@ def execute_admin_command(line):
         socket_metrics = metrics.get('socket', {})
         r2_metrics = metrics.get('r2', {})
         return {'success': True, 'output': (
-            f"Instance: {profile.get('instance', GTN_INSTANCE)} | Port: {profile.get('port', GTN_PORT)} | "
+            f"Instance: {profile.get('instance_id') or profile.get('id') or GTN_INSTANCE_ID} | "
+            f"Port: {profile.get('port', GTN_PORT)} | Drain: {'ON' if is_instance_draining() else 'OFF'} | "
             f"Branch: {profile.get('git_branch', os.environ.get('GTN_GIT_BRANCH', 'main'))} | "
             f"Service: {profile.get('service_name') or '-'}\n"
             f"在线：{summary['online_players']} | 大厅：{summary['lobby_players']} | "
@@ -7158,10 +7299,10 @@ def build_spectate_state(room, perspective=0):
     base['spectate_perspective'] = perspective
     if room.mode == '2v2' and len(full_players) >= 4:
         teammate_id = engine.get_teammate(perspective) if hasattr(engine, 'get_teammate') else (perspective ^ 1)
-        enemy_ids = engine.get_enemies(perspective) if hasattr(engine, 'get_enemies') else [i for i in range(4) if i not in (perspective, teammate_id)]
+        enemy_ids = engine.get_all_enemies(perspective) if hasattr(engine, 'get_all_enemies') else [i for i in range(4) if i not in (perspective, teammate_id)]
         enemy_ids = [i for i in enemy_ids if 0 <= i < len(full_players)]
-        while len(enemy_ids) < 2:
-            enemy_ids.append(0)
+        if len(enemy_ids) < 2:
+            enemy_ids = [i for i in range(len(full_players)) if i not in (perspective, teammate_id)]
         base['you'] = full_players[perspective]
         base['teammate'] = full_players[teammate_id] if 0 <= teammate_id < len(full_players) else {}
         base['opponent'] = full_players[enemy_ids[0]]
@@ -7319,12 +7460,24 @@ def both_disconnected_cleanup(room_id):
 def index():
     if is_beta_instance():
         return beta_entry_response()
-    return render_template('index.html', beta_mode=False)
+    return render_template(
+        'index.html',
+        beta_mode=False,
+        static_version=GTN_STATIC_VERSION,
+        instance_id=GTN_INSTANCE_ID,
+        app_version=GTN_VERSION,
+    )
 
 
 def beta_entry_response():
     if is_beta_authenticated():
-        return render_template('index.html', beta_mode=True)
+        return render_template(
+            'index.html',
+            beta_mode=True,
+            static_version=GTN_STATIC_VERSION,
+            instance_id=GTN_INSTANCE_ID,
+            app_version=GTN_VERSION,
+        )
     return render_template('beta_gate.html')
 
 
@@ -7710,7 +7863,27 @@ def admin_status():
             'history': list(MATCH_HISTORY)[:80],
         }
         log_admin_api_timing('/api/admin/status', (time.perf_counter() - started) * 1000, error=type(exc).__name__)
-        return jsonify(payload)
+    return jsonify(payload)
+
+
+@app.route('/api/admin/drain', methods=['GET', 'POST'])
+def admin_drain():
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        value = bool(data.get('draining'))
+        set_instance_draining(value)
+        admin_event('deploy', f'instance drain set to {value}', instance_id=GTN_INSTANCE_ID)
+    return jsonify({
+        'success': True,
+        'instance': GTN_INSTANCE,
+        'instance_id': GTN_INSTANCE_ID,
+        'version': GTN_VERSION,
+        'port': GTN_PORT,
+        'draining': is_instance_draining(),
+        'drain_file': GTN_DRAIN_FILE,
+        'rooms': len(rooms),
+        'players': len(players),
+    })
 
 
 @app.route('/api/admin/security/suspicious')
@@ -7730,7 +7903,12 @@ def healthz():
     return jsonify({
         'success': True,
         'instance': GTN_INSTANCE,
+        'instance_id': GTN_INSTANCE_ID,
+        'version': GTN_VERSION,
+        'git_sha': GTN_GIT_SHA,
         'port': GTN_PORT,
+        'draining': is_instance_draining(),
+        'drain_file': GTN_DRAIN_FILE,
         'git_branch': os.environ.get('GTN_GIT_BRANCH', 'main').strip() or 'main',
         'time': iso_now(),
         'uptime_seconds': max(0, int(time.time() - SERVER_STARTED_AT)),
@@ -7791,6 +7969,12 @@ def health_full():
         'success': True,
         'time': iso_now(),
         'instance': GTN_INSTANCE,
+        'instance_id': GTN_INSTANCE_ID,
+        'version': GTN_VERSION,
+        'git_sha': GTN_GIT_SHA,
+        'static_version': GTN_STATIC_VERSION,
+        'draining': is_instance_draining(),
+        'drain_file': GTN_DRAIN_FILE,
         'db_ok': db_ok,
         'db_error': db_error,
         'socket_ok': True,
@@ -9387,6 +9571,21 @@ def on_login(data):
         user_id = None
         is_registered_user = False
         skin_config = public_skin_config(data.get('skin'))
+    if is_instance_draining():
+        reconnect_allowed = False
+        if _lock.acquire(timeout=0.2):
+            try:
+                reconnect_allowed = has_reconnect_candidate_locked(
+                    nickname=name,
+                    user_id=user_id,
+                    account_player_id=account_user.get('player_id') if account_user else '',
+                    beta_mode=is_beta_mode,
+                )
+            finally:
+                _lock.release()
+        if not reconnect_allowed:
+            emit('login_fail', drain_reject_payload())
+            return
     disabled_mods = ensure_valid_disabled_mods(normalize_disabled_mods_with_default(data.get('disabled_mods')))
     if preferred_mode not in ('1v1', '2v2', 'urf'):
         preferred_mode = '1v1'
@@ -9753,6 +9952,8 @@ def on_invite_team(data):
     data = socket_guard('invite_team', data, require_player=True)
     if data is None:
         return
+    if reject_new_match_if_draining([sid], 'invite_team'):
+        return
     try:
         target_team_leader = validate_socket_sid(data.get('target_team_leader'), name='target_team_leader')
     except ValueError as exc:
@@ -9805,6 +10006,8 @@ def on_accept_team_match(data):
         from_leader = validate_socket_sid(data.get('from_leader'), name='from_leader')
     except ValueError as exc:
         _security_illegal(sid, 'accept_team_match', str(exc))
+        return
+    if reject_new_match_if_draining([sid, from_leader], 'accept_team_match'):
         return
     with _lock:
         if sid not in teams or from_leader not in teams:
@@ -10176,6 +10379,8 @@ def on_invite(data):
     data = socket_guard('invite', data, require_player=True)
     if data is None:
         return
+    if reject_new_match_if_draining([sid], 'invite'):
+        return
     try:
         target_sid = validate_socket_sid(data.get('target_sid'), name='target_sid')
     except ValueError as exc:
@@ -10240,6 +10445,8 @@ def on_accept_invite(data):
         inviter_sid = validate_socket_sid(data.get('inviter_sid'), name='inviter_sid')
     except ValueError as exc:
         _security_illegal(sid, 'accept_invite', str(exc))
+        return
+    if reject_new_match_if_draining([sid, inviter_sid], 'accept_invite'):
         return
     pending_loadout = None
     if has_mod_loadout_payload(data):
@@ -10758,6 +10965,8 @@ def on_solo_start(data):
     data = socket_guard('solo_start', data, require_player=False)
     if data is None:
         return
+    if reject_new_match_if_draining([sid], 'solo_start'):
+        return
     try:
         deck0 = validate_solo_deck_entries(data.get('deck0', []), name='deck0')
         deck1 = validate_solo_deck_entries(data.get('deck1', []), name='deck1')
@@ -10804,6 +11013,8 @@ def on_tutorial_start(data=None):
     sid = request.sid
     data = socket_guard('tutorial_start', data, require_player=False, allow_empty=True)
     if data is None:
+        return
+    if reject_new_match_if_draining([sid], 'tutorial_start'):
         return
     deck0 = [
         'Basic', 'Rose', 'Leaf', 'Bone', 'Bubble',
@@ -11870,6 +12081,10 @@ def on_rematch(data=None):
             room = rooms[room_id]
             if room.engine.phase != 'game_over':
                 return
+            if is_instance_draining():
+                socketio.emit('server_error', {'message': drain_reject_payload()['reason'], 'draining': True}, room=sid)
+                emit_rematch_state(room)
+                return
             if getattr(room, '_returned_lobby_sids', set()):
                 socketio.emit('server_error', {'message': '有玩家已返回大厅'}, room=sid)
                 emit_rematch_state(room)
@@ -12165,6 +12380,9 @@ def start_replay_cleanup_thread():
     global _replay_cleanup_started
     if _replay_cleanup_started:
         return
+    if not db_maintenance_enabled():
+        admin_event('db', 'replay cleanup disabled by GTN_DB_MAINTENANCE_ENABLED=0')
+        return
     cleanup_enabled = str(os.environ.get('GTN_REPLAY_CLEANUP_ENABLED', '1')).strip().lower()
     if cleanup_enabled in {'0', 'false', 'no', 'off'}:
         return
@@ -12181,4 +12399,10 @@ ensure_dm_cleanup_started()
 
 
 if __name__ == '__main__':
+    print(
+        f"Starting GTN instance={GTN_INSTANCE} id={GTN_INSTANCE_ID} "
+        f"version={GTN_VERSION} sha={GTN_GIT_SHA or '-'} "
+        f"bind={GTN_BIND_HOST}:{GTN_PORT} draining={is_instance_draining()}",
+        flush=True,
+    )
     socketio.run(app, host=GTN_BIND_HOST, port=GTN_PORT, debug=False)

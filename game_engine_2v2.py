@@ -480,13 +480,8 @@ class GameEngine2v2(GameEngine):
     def _clear_dead_player_private_zones(self, player_id: int):
         if not self._is_valid_player_id(player_id):
             return
-        ps = self.players[player_id]
-        hand_count = len(ps.hand)
-        deck_count = len(ps.deck)
-        if hand_count or deck_count:
-            ps.hand.clear()
-            ps.deck.clear()
-            self.log_msg(f"{self.pn(player_id)}阵亡，清除{hand_count}张手牌和{deck_count}张牌堆牌")
+        # Dead players can be revived, so keep their hand/deck intact.
+        return
 
 
     def _remove_equipment_targeting_dead_player(self, dead_player_id: int):
@@ -1068,13 +1063,22 @@ class GameEngine2v2(GameEngine):
 
     def _on_player_death(self, player_id: int):
         ps = self.players[player_id]
-        self._clear_dead_player_private_zones(player_id)
         surviving_equip = []
         for eq in ps.equipment:
             if 'indestructible' in eq.card_instance.flags:
                 surviving_equip.append(eq)
             else:
-                ps.discard.append(eq.card_instance)
+                owner_id = getattr(eq, 'owner', player_id)
+                try:
+                    owner_id = int(owner_id)
+                except (TypeError, ValueError):
+                    owner_id = player_id
+                if not self._is_valid_player_id(owner_id):
+                    owner_id = player_id
+                if 'exile' in eq.card_instance.flags:
+                    self.players[owner_id].exile.append(eq.card_instance)
+                else:
+                    self._discard_card(self.players[owner_id], eq.card_instance)
                 self.log_msg(f"{self.pn(player_id)}的{eq.card_def.name_cn}因死亡被摧毁")
         ps.equipment = surviving_equip
         self._remove_equipment_targeting_dead_player(player_id)
