@@ -128,6 +128,9 @@ class PlayerState:
         self.magic_battery_m_this_turn: int = 0
         self.coffee_first_use: bool = True
         self.invincible: bool = False
+        self.invincible_until_player: Optional[int] = None
+        self.invincible_granted_round: int = -1
+        self.invincible_granted_turn_marker: int = -1
         self.skip_turn: int = 0
         self.damage_multiplier: float = 1.0
         self.bandage_active: bool = False
@@ -209,6 +212,9 @@ class PlayerState:
             'nazar_big_hits': self.nazar_big_hits,
             'equipment_protection': self.equipment_protection,
             'invincible': self.invincible,
+            'invincible_until_player': self.invincible_until_player,
+            'invincible_granted_round': self.invincible_granted_round,
+            'invincible_granted_turn_marker': self.invincible_granted_turn_marker,
             'skip_turn': self.skip_turn,
             'damage_multiplier': self.damage_multiplier,
             'bandage_active': self.bandage_active,
@@ -283,6 +289,9 @@ class PlayerState:
         ps.nazar_big_hits = d.get('nazar_big_hits', 0)
         ps.equipment_protection = d.get('equipment_protection', 0)
         ps.invincible = d.get('invincible', False)
+        ps.invincible_until_player = d.get('invincible_until_player', None)
+        ps.invincible_granted_round = int(d.get('invincible_granted_round', -1) if d.get('invincible_granted_round', -1) is not None else -1)
+        ps.invincible_granted_turn_marker = int(d.get('invincible_granted_turn_marker', -1) if d.get('invincible_granted_turn_marker', -1) is not None else -1)
         ps.skip_turn = int(d.get('skip_turn', 0))
         ps.damage_multiplier = d.get('damage_multiplier', 1.0)
         ps.bandage_active = d.get('bandage_active', False)
@@ -603,6 +612,50 @@ class GameEngine:
         'modify_damage': 'modify_damage',
     }
 
+
+    def _current_turn_marker(self) -> int:
+        try:
+            turn_index = getattr(self, 'turn_index', None)
+            if turn_index is not None:
+                return int(turn_index)
+            return int(getattr(self, 'current_player', -1))
+        except Exception:
+            return -1
+
+    def _set_invincible_until_next_own_turn_end(self, player_id: int):
+        if not (0 <= player_id < len(self.players)):
+            return
+        ps = self.players[player_id]
+        ps.invincible = True
+        ps.invincible_until_player = player_id
+        ps.invincible_granted_round = int(getattr(self, 'round_num', 0) or 0)
+        ps.invincible_granted_turn_marker = self._current_turn_marker()
+
+    def _clear_invincible_state(self, player_id: int):
+        if not (0 <= player_id < len(self.players)):
+            return
+        ps = self.players[player_id]
+        ps.invincible = False
+        ps.invincible_until_player = None
+        ps.invincible_granted_round = -1
+        ps.invincible_granted_turn_marker = -1
+
+    def _should_expire_invincible_on_turn_end(self, player_id: int) -> bool:
+        if not (0 <= player_id < len(self.players)):
+            return False
+        ps = self.players[player_id]
+        if not ps.invincible:
+            return False
+        until_player = getattr(ps, 'invincible_until_player', None)
+        if until_player is not None and until_player != player_id:
+            return False
+        grant_round_value = getattr(ps, 'invincible_granted_round', -1)
+        grant_marker_value = getattr(ps, 'invincible_granted_turn_marker', -1)
+        grant_round = int(grant_round_value if grant_round_value is not None else -1)
+        grant_marker = int(grant_marker_value if grant_marker_value is not None else -1)
+        current_round = int(getattr(self, 'round_num', 0) or 0)
+        current_marker = self._current_turn_marker()
+        return not (grant_round == current_round and grant_marker == current_marker)
 
 
     def _find_equipment_for_card(self, owner_id: int, card: Optional[CardInstance]):
@@ -3512,6 +3565,7 @@ class GameEngine:
         ps.damage_multiplier = 1.0
         ps.bandage_active = False
         ps.bandage_death_pending = False
+        self._clear_invincible_state(player_id)
         try:
             ps.custom_statuses.clear()
         except Exception:
@@ -3531,7 +3585,7 @@ class GameEngine:
         was_dead = ps.health <= 0
         ps.health = 5
         self._clear_yggdrasil_effects(target_id)
-        ps.invincible = True
+        self._set_invincible_until_next_own_turn_end(target_id)
         drawn = self._draw_cards_with_v2_hooks(target_id, 3, 'yggdrasil')
         if card is not None:
             if exile_from_hand and card in ps.hand:
@@ -3545,7 +3599,7 @@ class GameEngine:
         else:
             actor_text = f"{self.pn(target_id)}的世界树之叶"
         revive_text = '复活，' if was_dead else ''
-        self.log_msg(f"{actor_text}{self.pn(target_id)}{revive_text}生命值设为5，抽{len(drawn)}张牌，清除所有效果，无敌直到下回合结束！")
+        self.log_msg(f"{actor_text}{self.pn(target_id)}{revive_text}生命值设为5，抽{len(drawn)}张牌，清除所有效果，无敌直到下一个自己回合结束！")
         return True
 
     def _check_yggdrasil(self, player_id: int):
@@ -3553,10 +3607,10 @@ class GameEngine:
         if ps.health <= 0 and self._yggdrasil_check:
             if ps.bandage_active:
                 ps.health = 1
-                ps.invincible = True
+                self._set_invincible_until_next_own_turn_end(player_id)
                 ps.bandage_active = False
                 ps.bandage_death_pending = True
-                self.log_msg(f"{self.pn(player_id)}的绷带发动！无敌直到下个友方回合结束，然后死亡")
+                self.log_msg(f"{self.pn(player_id)}的绷带发动！无敌直到下一个自己回合结束，然后死亡")
                 self._check_game_over()
                 return
             for card in ps.hand[:]:
@@ -3573,7 +3627,7 @@ class GameEngine:
                             health_amount = params.get('health', 5)
                             self._trigger_yggdrasil_effect(player_id, card, exile_from_hand=True)
                             ps.health = health_amount
-                            self.log_msg(log or f"{self.pn(player_id)}的{card.name_cn}发动！清除己方所有效果，生命值设为{health_amount}，本回合无敌！")
+                            self.log_msg(log or f"{self.pn(player_id)}的{card.name_cn}发动！清除己方所有效果，生命值设为{health_amount}，无敌直到下一个自己回合结束！")
                             self._check_game_over()
                             return
 
@@ -4592,8 +4646,8 @@ class GameEngine:
                 self.log_msg(log or f"{self.pn(target_id)}血量设为{amount}")
 
     def _atomic_set_invincible(self, player_id, card, params, log, choice, context):
-        self.players[player_id].invincible = True
-        self.log_msg(log or f"{self.pn(player_id)}获得无敌")
+        self._set_invincible_until_next_own_turn_end(player_id)
+        self.log_msg(log or f"{self.pn(player_id)}获得无敌直到下一个自己回合结束")
 
     def _atomic_set_untargetable(self, player_id, card, params, log, choice, context):
         self.players[player_id].untargetable = True
@@ -4667,7 +4721,7 @@ class GameEngine:
 
     def _atomic_counter_set_invincible_then_die(self, player_id, card, params, log, choice, context):
         self.players[player_id].bandage_active = True
-        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将无敌至下个友方回合结束")
+        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将无敌至下一个自己回合结束")
 
     def _atomic_equip_sponge(self, player_id, card, params, log, choice, context):
         self.players[player_id].sponge_active = True
@@ -4708,11 +4762,11 @@ class GameEngine:
 
     def _atomic_on_fatal_invincible_then_die(self, player_id, card, params, log, choice, context):
         self.players[player_id].bandage_active = True
-        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将无敌至下个友方回合结束，然后死亡")
+        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将无敌至下一个自己回合结束，然后死亡")
 
     def _atomic_on_fatal_set_health_exile(self, player_id, card, params, log, choice, context):
         health_amount = params.get('health', 5)
-        self.log_msg(log or f"{self.pn(player_id)}的{card.name_cn}被动效果：受到致命伤害时清除所有效果，生命值设为{health_amount}，本回合无敌")
+        self.log_msg(log or f"{self.pn(player_id)}的{card.name_cn}被动效果：受到致命伤害时清除所有效果，生命值设为{health_amount}，无敌直到下一个自己回合结束")
 
     def _atomic_deal_damage_multi(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -4748,7 +4802,7 @@ class GameEngine:
         ps = self.players[target_id]
         ps.armor = 0
         ps.dodge = 0
-        ps.invincible = False
+        self._clear_invincible_state(target_id)
         ps.equipment_protection = 0
         self.log_msg(log or f"{self.pn(target_id)}的所有正面效果已清除")
 
@@ -4774,7 +4828,7 @@ class GameEngine:
         ps.blind = 0
         ps.armor = 0
         ps.dodge = 0
-        ps.invincible = False
+        self._clear_invincible_state(target_id)
         ps.equipment_protection = 0
         self.log_msg(log or f"{self.pn(target_id)}的所有效果已清除")
 
@@ -4788,7 +4842,9 @@ class GameEngine:
                       'untargetable': 'untargetable', 'equip_protection': 'equipment_protection'}
         attr = status_map.get(status)
         if attr and hasattr(ps, attr):
-            if isinstance(getattr(ps, attr), bool):
+            if attr == 'invincible':
+                self._clear_invincible_state(target_id)
+            elif isinstance(getattr(ps, attr), bool):
                 setattr(ps, attr, False)
             else:
                 setattr(ps, attr, 0)
@@ -6042,10 +6098,10 @@ class GameEngine:
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         self._decay_equipment_armor_end_turn(player_id)
-        if ps.bandage_death_pending:
+        if ps.bandage_death_pending and self._should_expire_invincible_on_turn_end(player_id):
             ps.health = 0
             ps.bandage_death_pending = False
-            ps.invincible = False
+            self._clear_invincible_state(player_id)
             self.log_msg(f"{self.pn(player_id)}的绷带效果结束，死亡！")
             if self._start_turn_status_damage_would_defeat(1 - player_id):
                 self._resolve_start_turn_status_damage_for_transition(1 - player_id)
@@ -6055,7 +6111,7 @@ class GameEngine:
         if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
             ps.bandage_death_pending = True
-            self.log_msg(f"{self.pn(player_id)}的绷带无敌将持续到下个友方回合结束")
+            self.log_msg(f"{self.pn(player_id)}的绷带无敌将持续到下一个自己回合结束")
         # Fracture: clear at end of own turn. Status immunity suppresses the effect, not decay.
         if ps.fracture > 0:
             ps.fracture = 0
@@ -6088,6 +6144,14 @@ class GameEngine:
         self._decay_action_limit_status(player_id, 'attack_blocked', 'attack_blocked', '禁攻')
         self._decay_action_limit_status(player_id, 'attack_only', 'attack_only', '仅攻击')
         self._decay_action_limit_status(player_id, 'magic_blocked', 'magic_blocked', '魔力封锁')
+        if (
+            ps.invincible
+            and not ps.bandage_active
+            and not ps.bandage_death_pending
+            and self._should_expire_invincible_on_turn_end(player_id)
+        ):
+            self._clear_invincible_state(player_id)
+            self.log_msg(f"{self.pn(player_id)}的无敌效果结束")
         self._save_last_turn_damage_snapshot(player_id)
         if player_id == self.first_player:
             other = 1 - self.first_player
@@ -6124,11 +6188,6 @@ class GameEngine:
                 return
 
     def _end_round(self):
-        for pid in range(2):
-            ps = self.players[pid]
-            if ps.invincible and not ps.bandage_active and not ps.bandage_death_pending:
-                ps.invincible = False
-                self.log_msg(f"{self.pn(pid)}的无敌效果结束")
         self.round_num += 1
         if self.game_over:
             return

@@ -499,6 +499,9 @@ class LocalPlayer {
         this.magic_battery_m_this_turn = 0;
         this.coffee_first_use = true;
         this.invincible = false;
+        this.invincible_until_player = null;
+        this.invincible_granted_round = -1;
+        this.invincible_granted_turn_marker = -1;
         this.skip_turn = 0;
         this.damage_multiplier = 1.0;
         this.bandage_active = false;
@@ -689,6 +692,9 @@ class LocalPlayer {
             nazar_big_hits: this.nazar_big_hits,
             equipment_protection: this.equipment_protection,
             invincible: this.invincible,
+            invincible_until_player: this.invincible_until_player,
+            invincible_granted_round: this.invincible_granted_round,
+            invincible_granted_turn_marker: this.invincible_granted_turn_marker,
             skip_turn: this.skip_turn,
             damage_multiplier: this.damage_multiplier,
             bandage_active: this.bandage_active,
@@ -811,7 +817,8 @@ class LocalSoloEngine {
                 'health', 'max_health', 'base_max_health', 'elixir', 'max_elixir', 'magic', 'max_magic',
                 'armor', 'poison', 'fire', 'vulnerable', 'toxic', 'triangle_stacks', 'dodge',
                 'nazar_active', 'nazar_big_hits', 'equipment_protection', 'magic_battery_m_this_turn',
-                'coffee_first_use', 'invincible', 'skip_turn', 'damage_multiplier', 'bandage_active',
+                'coffee_first_use', 'invincible', 'invincible_until_player', 'invincible_granted_round',
+                'invincible_granted_turn_marker', 'skip_turn', 'damage_multiplier', 'bandage_active',
                 'bandage_death_pending', 'attack_blocked', 'untargetable', 'sponge_active',
                 'shovel_active', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
                 'extra_hand_limit_bonus', 'negate_next_skill', 'is_first_player',
@@ -4152,7 +4159,11 @@ class LocalSoloEngine {
 
     effect_invincible(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'self');
-        this.players[targetId].invincible = this.evalInt(playerId, params.value ?? params.amount ?? 1, card, 1) > 0;
+        if (this.evalInt(playerId, params.value ?? params.amount ?? 1, card, 1) > 0) {
+            this.setInvincibleUntilNextOwnTurnEnd(targetId);
+        } else {
+            this.clearInvincibleState(targetId);
+        }
     }
 
     effect_mod_e_regen(playerId, card, params) {
@@ -4565,6 +4576,36 @@ class LocalSoloEngine {
         return total;
     }
 
+    currentTurnMarker() {
+        return toInt(this.current_player, -1);
+    }
+
+    setInvincibleUntilNextOwnTurnEnd(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        ps.invincible = true;
+        ps.invincible_until_player = playerId;
+        ps.invincible_granted_round = toInt(this.round_num, 0);
+        ps.invincible_granted_turn_marker = this.currentTurnMarker();
+    }
+
+    clearInvincibleState(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        ps.invincible = false;
+        ps.invincible_until_player = null;
+        ps.invincible_granted_round = -1;
+        ps.invincible_granted_turn_marker = -1;
+    }
+
+    shouldExpireInvincibleOnTurnEnd(playerId) {
+        const ps = this.players[playerId];
+        if (!ps || !ps.invincible) return false;
+        if (ps.invincible_until_player != null && ps.invincible_until_player !== playerId) return false;
+        return !(toInt(ps.invincible_granted_round, -1) === toInt(this.round_num, 0)
+            && toInt(ps.invincible_granted_turn_marker, -1) === this.currentTurnMarker());
+    }
+
     clearYggdrasilEffects(playerId) {
         const ps = this.players[playerId];
         if (!ps) return;
@@ -4576,6 +4617,7 @@ class LocalSoloEngine {
         ps.damage_multiplier = 1.0;
         ps.bandage_active = false;
         ps.bandage_death_pending = false;
+        this.clearInvincibleState(playerId);
         ps.custom_statuses = {};
         ps.custom_vars['三角形层数'] = 0;
     }
@@ -4586,7 +4628,7 @@ class LocalSoloEngine {
         const wasDead = ps.health <= 0;
         ps.health = 5;
         this.clearYggdrasilEffects(targetId);
-        ps.invincible = true;
+        this.setInvincibleUntilNextOwnTurnEnd(targetId);
         const drawn = ps.drawCards(3);
         if (card) {
             if (options.exileFromHand) {
@@ -4601,7 +4643,7 @@ class LocalSoloEngine {
             ? `${this.pn(sourcePlayerId)}的世界树之叶使`
             : `${this.pn(targetId)}的世界树之叶`;
         const reviveText = wasDead ? '复活，' : '';
-        this.logMsg(`${actorText}${this.pn(targetId)}${reviveText}生命值设为5，抽${drawn.length}张牌，清除所有效果，无敌直到下回合结束！`);
+        this.logMsg(`${actorText}${this.pn(targetId)}${reviveText}生命值设为5，抽${drawn.length}张牌，清除所有效果，无敌直到下一个自己回合结束！`);
         return true;
     }
 
@@ -4621,10 +4663,10 @@ class LocalSoloEngine {
         if (!ps || ps.health > 0) return;
         if (ps.bandage_active) {
             ps.health = 1;
-            ps.invincible = true;
+            this.setInvincibleUntilNextOwnTurnEnd(playerId);
             ps.bandage_active = false;
             ps.bandage_death_pending = true;
-            this.logMsg(`${this.pn(playerId)}的绷带发动！无敌直到下个友方回合结束，然后死亡`);
+            this.logMsg(`${this.pn(playerId)}的绷带发动！无敌直到下一个自己回合结束，然后死亡`);
             return;
         }
         const idx = ps.hand.findIndex(card => card.def_id === 'Yggdrasil');
@@ -5183,10 +5225,10 @@ class LocalSoloEngine {
         this.runOwnerTurnEndEquipment(playerId);
         if (this.game_over) return;
         this.decayEquipmentArmorEndTurn(playerId);
-        if (ps.bandage_death_pending) {
+        if (ps.bandage_death_pending && this.shouldExpireInvincibleOnTurnEnd(playerId)) {
             ps.health = 0;
             ps.bandage_death_pending = false;
-            ps.invincible = false;
+            this.clearInvincibleState(playerId);
             this.logMsg(`${this.pn(playerId)}的绷带效果结束，死亡！`);
             this.checkGameOver();
             if (this.game_over) return;
@@ -5205,6 +5247,10 @@ class LocalSoloEngine {
         });
         this.decayActionLimitStatus(playerId, 'attack_blocked', 'attack_blocked', '禁攻');
         this.decayActionLimitStatus(playerId, 'attack_only', 'attack_only', '仅攻击');
+        if (ps.invincible && !ps.bandage_active && !ps.bandage_death_pending && this.shouldExpireInvincibleOnTurnEnd(playerId)) {
+            this.clearInvincibleState(playerId);
+            this.logMsg(`${this.pn(playerId)}的无敌效果结束`);
+        }
         this.saveLastTurnDamageSnapshot(playerId);
         if (playerId === this.first_player) this.startPlayerTurn(1 - this.first_player);
         else this.endRound();
@@ -5277,12 +5323,6 @@ class LocalSoloEngine {
     }
 
     endRound() {
-        this.players.forEach((ps, pid) => {
-            if (ps.invincible && !ps.bandage_active && !ps.bandage_death_pending) {
-                ps.invincible = false;
-                this.logMsg(`${this.pn(pid)}的无敌效果结束`);
-            }
-        });
         this.round_num += 1;
         if (!this.game_over) this.startDrawPhase();
     }

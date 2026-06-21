@@ -474,7 +474,8 @@ body {
 
 .account-top-btn,
 .friends-top-btn,
-.skin-top-btn {
+.skin-top-btn,
+.leaderboard-top-btn {
   position: relative;
   padding: 9px 16px;
   border-radius: var(--radius-md);
@@ -509,7 +510,8 @@ body {
 
 .account-top-btn.hidden,
 .friends-top-btn.hidden,
-.skin-top-btn.hidden {
+.skin-top-btn.hidden,
+.leaderboard-top-btn.hidden {
   display: none;
 }
 
@@ -702,6 +704,54 @@ body {
   width: min(300px, calc(100vw - 28px));
   max-height: min(520px, calc(100vh - 76px));
   overflow: auto;
+}
+
+.leaderboard-popover {
+  left: 14px;
+  width: min(420px, calc(100vw - 28px));
+  max-height: min(560px, calc(100vh - 76px));
+  overflow: auto;
+}
+
+.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 2.4em minmax(0, 1fr) 4.2em auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.leaderboard-row.is-self-rank {
+  margin-top: 8px;
+  border-color: rgba(36, 113, 163, 0.45);
+  background: rgba(36, 113, 163, 0.08);
+}
+
+.leaderboard-rank,
+.leaderboard-rate,
+.leaderboard-record {
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.leaderboard-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
 }
 
 .account-popover-head {
@@ -6497,6 +6547,18 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   color: #0984e3;
   background: rgba(9, 132, 227, 0.15);
   border-color: rgba(9, 132, 227, 0.3);
+}
+
+.card-flag.temp-swift {
+  color: #0EA5E9;
+  background: rgba(14, 165, 233, 0.15);
+  border-color: rgba(14, 165, 233, 0.3);
+}
+
+.card-flag.temp-heavy {
+  color: #795548;
+  background: rgba(121, 85, 72, 0.15);
+  border-color: rgba(121, 85, 72, 0.3);
 }
 
 .card-flag.magic-swift {

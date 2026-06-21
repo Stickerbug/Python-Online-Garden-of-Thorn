@@ -831,6 +831,108 @@ def row_to_admin_user(row):
     return user
 
 
+def list_leaderboard(min_games=20, limit=50):
+    min_games = max(1, int(min_games or 20))
+    limit = max(1, min(100, int(limit or 50)))
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            '''
+            SELECT id, username, player_id, games_played, wins, losses, draws
+            FROM users
+            WHERE deleted_at IS NULL
+              AND COALESCE(banned, 0) = 0
+              AND games_played >= ?
+            ORDER BY
+              CAST(wins AS REAL) / NULLIF(games_played, 0) DESC,
+              games_played DESC,
+              wins DESC,
+              username_lower ASC
+            LIMIT ?
+            ''',
+            (min_games, limit),
+        ).fetchall()
+    items = []
+    for row in rows:
+        games = int(row['games_played'] or 0)
+        wins = int(row['wins'] or 0)
+        losses = int(row['losses'] or 0)
+        draws = int(row['draws'] or 0)
+        items.append({
+            'username': row['username'],
+            'player_id': row['player_id'],
+            'games_played': games,
+            'wins': wins,
+            'losses': losses,
+            'draws': draws,
+            'win_rate': round(wins / games * 100, 1) if games else 0.0,
+        })
+    return items
+
+
+def get_leaderboard_rank(user_id, min_games=20):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    min_games = max(1, int(min_games or 20))
+    with get_db_connection() as conn:
+        row = conn.execute(
+            '''
+            SELECT id, username, player_id, games_played, wins, losses, draws
+            FROM users
+            WHERE id = ?
+              AND deleted_at IS NULL
+              AND COALESCE(banned, 0) = 0
+              AND games_played >= ?
+            ''',
+            (uid, min_games),
+        ).fetchone()
+        if row is None:
+            return None
+        games = int(row['games_played'] or 0)
+        wins = int(row['wins'] or 0)
+        rank_row = conn.execute(
+            '''
+            SELECT COUNT(*) + 1 AS rank
+            FROM users
+            WHERE deleted_at IS NULL
+              AND COALESCE(banned, 0) = 0
+              AND games_played >= ?
+              AND (
+                CAST(wins AS REAL) / NULLIF(games_played, 0) > CAST(? AS REAL) / NULLIF(?, 0)
+                OR (
+                  CAST(wins AS REAL) / NULLIF(games_played, 0) = CAST(? AS REAL) / NULLIF(?, 0)
+                  AND games_played > ?
+                )
+                OR (
+                  CAST(wins AS REAL) / NULLIF(games_played, 0) = CAST(? AS REAL) / NULLIF(?, 0)
+                  AND games_played = ?
+                  AND wins > ?
+                )
+                OR (
+                  CAST(wins AS REAL) / NULLIF(games_played, 0) = CAST(? AS REAL) / NULLIF(?, 0)
+                  AND games_played = ?
+                  AND wins = ?
+                  AND username_lower < (SELECT username_lower FROM users WHERE id = ?)
+                )
+              )
+            ''',
+            (min_games, wins, games, wins, games, games, wins, games, games, wins, wins, games, games, wins, uid),
+        ).fetchone()
+    losses = int(row['losses'] or 0)
+    draws = int(row['draws'] or 0)
+    return {
+        'rank': int(rank_row['rank'] or 0) if rank_row else 0,
+        'username': row['username'],
+        'player_id': row['player_id'],
+        'games_played': games,
+        'wins': wins,
+        'losses': losses,
+        'draws': draws,
+        'win_rate': round(wins / games * 100, 1) if games else 0.0,
+    }
+
+
 def create_user(username, password):
     name = sanitize_username(username)
     ok, error = validate_username(name)

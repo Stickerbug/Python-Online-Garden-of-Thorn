@@ -80,6 +80,7 @@ from db import (
     get_admin_user_detail,
     get_chat_message_with_context,
     get_db_connection,
+    get_leaderboard_rank,
     get_ip_ban_status,
     get_active_user_warnings,
     get_user_ban_status,
@@ -90,6 +91,7 @@ from db import (
     is_user_muted_db,
     list_friends,
     list_dm_threads,
+    list_leaderboard,
     list_card_draft_stats,
     list_ip_bans,
     list_reports,
@@ -8621,6 +8623,39 @@ def api_auth_me():
     if not request.cookies.get(REMEMBER_COOKIE_NAME):
         return _attach_remember_cookie(response, user)
     return response
+
+
+@app.route('/api/leaderboard')
+def api_leaderboard():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'items': [], 'error': DB_INIT_ERROR}), 503
+    try:
+        min_games = int(request.args.get('min_games') or 20)
+    except (TypeError, ValueError):
+        min_games = 20
+    try:
+        limit = int(request.args.get('limit') or 50)
+    except (TypeError, ValueError):
+        limit = 50
+    started = time.perf_counter()
+    try:
+        limit = min(limit, 50)
+        items = list_leaderboard(min_games=min_games, limit=limit)
+        self_rank = None
+        try:
+            user = _current_account_user()
+            if user and user.get('id'):
+                rank_payload = get_leaderboard_rank(user.get('id'), min_games=min_games)
+                if rank_payload and int(rank_payload.get('rank') or 0) > limit:
+                    self_rank = rank_payload
+        except Exception as exc:
+            admin_event('error', f'leaderboard self rank failed: {exc}')
+        db_slow_log('/api/leaderboard', (time.perf_counter() - started) * 1000, 'leaderboard')
+        return jsonify({'success': True, 'items': items, 'self_rank': self_rank, 'min_games': max(1, min_games)})
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return jsonify({'success': False, 'items': [], 'error': '后台暂时不可用，请稍后刷新。'}), 503
+        raise
 
 
 def _db_busy_response(exc):

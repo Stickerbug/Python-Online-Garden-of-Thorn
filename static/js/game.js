@@ -856,6 +856,7 @@ Object.assign(I18N.en, {
     account_password_confirm: 'Confirm Password', account_old_password: 'Current Password', account_new_password: 'New Password',
     account_new_password_confirm: 'Confirm New Password', account_change_password: 'Change Password', account_password_changed: 'Password changed',
     account_change_username: 'Change Username', account_info: 'Account Info', account_online_time: 'Total Match Time', account_delete: 'Delete Account', stats: 'Stats',
+    leaderboard: 'Leaderboard', leaderboard_note: 'Players with at least 20 valid games', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
     account_need_login: 'Log in or register first', account_error: 'Account error', account_password_mismatch: 'Passwords do not match', guest_enter: 'Enter as Guest',
@@ -866,6 +867,7 @@ Object.assign(I18N.zh, {
     account_password_confirm: '确认密码', account_old_password: '原密码', account_new_password: '新密码',
     account_new_password_confirm: '确认新密码', account_change_password: '修改密码', account_password_changed: '密码已修改',
     account_change_username: '修改用户名', account_info: '账号信息', account_online_time: '总对局时长', account_delete: '注销账户', stats: '统计',
+    leaderboard: '排行榜', leaderboard_note: '显示有效对局20局及以上的玩家', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
     account_need_login: '请先登录或注册账号', account_error: '账号错误', account_password_mismatch: '两次输入的密码不一致', guest_enter: '游客进入',
@@ -877,6 +879,7 @@ Object.assign(I18N.fr, {
     account_new_password_confirm: 'Confirmer le nouveau', account_change_password: 'Changer le mot de passe', account_password_changed: 'Mot de passe changé',
     account_change_username: 'Changer le nom', account_info: 'Compte', account_online_time: 'Temps total en match',
     account_delete: 'Supprimer le compte', stats: 'Stats',
+    leaderboard: 'Classement', leaderboard_note: 'Joueurs avec au moins 20 parties valides', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...',
     account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
     account_not_logged_in: 'Non connecté', account_logged_in_as: 'Connecté : {0}', account_stats: 'Parties {0} / V {1} / D {2} / N {3}',
     account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', account_password_mismatch: 'Les mots de passe ne correspondent pas', guest_enter: 'Entrer en invité',
@@ -888,6 +891,7 @@ Object.assign(I18N.ja, {
     account_new_password_confirm: '新しい確認', account_change_password: 'パスワード変更', account_password_changed: '変更しました',
     account_change_username: 'ユーザー名変更', account_info: 'アカウント情報', account_online_time: '総対戦時間',
     account_delete: 'アカウント削除', stats: '統計',
+    leaderboard: 'ランキング', leaderboard_note: '有効対戦20戦以上のプレイヤー', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...',
     account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
     account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
@@ -1934,8 +1938,9 @@ const CARD_TEXT_TOKEN_RULES = [
 ];
 
 function buildInlineCardDict(defId, modifierText = '') {
+    const resolvedDefId = findCardDefIdByAnyName(defId) || defId;
     const cardDict = {
-        def_id: defId,
+        def_id: resolvedDefId,
         instance_flags: [],
         disabled_flags: [],
     };
@@ -1945,8 +1950,13 @@ function buildInlineCardDict(defId, modifierText = '') {
         .filter(Boolean)
         .forEach(part => {
             const m = part.match(/^([^:=]+)\s*[:=]\s*(.+)$/);
-            const key = normalizeCardFlag(m ? m[1] : part);
+            const rawKey = m ? m[1].trim() : part;
             const value = m ? m[2].trim() : '';
+            if ((rawKey === 'flag' || rawKey === 'tag') && value) {
+                cardDict.instance_flags.push(normalizeCardFlag(value));
+                return;
+            }
+            const key = normalizeCardFlag(rawKey);
             const numberValue = Math.max(0, Math.floor(Number(value || 0)));
             if (key === 'swift') {
                 if (numberValue > 0) {
@@ -1983,9 +1993,6 @@ function buildInlineCardDict(defId, modifierText = '') {
                     cardDict.instance_flags.push('power');
                 }
                 return;
-            }
-            if ((key === 'flag' || key === 'tag') && value) {
-                cardDict.instance_flags.push(normalizeCardFlag(value));
             }
         });
     return cardDict;
@@ -2042,9 +2049,9 @@ function colorizeCardText(value) {
     let i = 0;
     while (i < text.length) {
         const rest = text.slice(i);
-        const cardMarker = rest.match(/^\[\[card:([a-z0-9_:/-]+)((?:\|[^\]]+)*)\]\]/i);
+        const cardMarker = rest.match(/^\[\[card:([^\]|\r\n]+)((?:\|[^\]]+)*)\]\]/i);
         if (cardMarker && cardMarker[1]) {
-            const defId = cardMarker[1];
+            const defId = cardMarker[1].trim();
             html += inlineCardChipHtml(buildInlineCardDict(defId, cardMarker[2] || ''));
             i += cardMarker[0].length;
             continue;
@@ -3163,6 +3170,8 @@ function updateStaticText() {
     if (btnFriendsTop) btnFriendsTop.textContent = UI.friends;
     const btnSkinTop = $('btn-skin-top');
     if (btnSkinTop) btnSkinTop.textContent = UI.skin;
+    const btnLeaderboardTop = $('btn-leaderboard-top');
+    if (btnLeaderboardTop) btnLeaderboardTop.textContent = UI.leaderboard || '排行榜';
     const skinTitle = $('skin-title');
     if (skinTitle) skinTitle.textContent = UI.skin_title || UI.skin;
     const skinBack = $('btn-skin-back');
@@ -3216,6 +3225,10 @@ function updateStaticText() {
     if (statsPopoverTitle) statsPopoverTitle.textContent = UI.stats || '统计';
     const statsTopBtn = $('btn-stats-top');
     if (statsTopBtn) statsTopBtn.textContent = UI.stats || '统计';
+    const leaderboardTitle = $('leaderboard-popover-title');
+    if (leaderboardTitle) leaderboardTitle.textContent = UI.leaderboard || '排行榜';
+    const leaderboardNote = $('leaderboard-note');
+    if (leaderboardNote) leaderboardNote.textContent = UI.leaderboard_note || '显示有效对局20局及以上的玩家';
     const accountModeLogin = $('btn-account-mode-login');
     if (accountModeLogin) accountModeLogin.textContent = UI.account_login;
     const accountModeRegister = $('btn-account-mode-register');
@@ -3508,6 +3521,8 @@ function updateTopActionButtons(viewId = activeViewId) {
     if (statsTop) statsTop.classList.toggle('hidden', !onHome || !currentAccount);
     const skinTop = $('btn-skin-top');
     if (skinTop) skinTop.classList.toggle('hidden', !onHome);
+    const leaderboardTop = $('btn-leaderboard-top');
+    if (leaderboardTop) leaderboardTop.classList.toggle('hidden', !onHome);
 }
 
 function showView(viewId) {
@@ -3525,6 +3540,7 @@ function showView(viewId) {
         toggleAccountPopover(false);
         toggleFriendsPopover(false);
         toggleStatsPopover(false);
+        toggleLeaderboardPopover(false);
     }
     if (!sameView && viewId !== 'view-game') {
         const logContainer = $('battle-log');
@@ -10620,6 +10636,7 @@ function toggleAccountPopover(force) {
     pop.classList.toggle('hidden', !show);
     if (show) {
         toggleStatsPopover(false);
+        toggleLeaderboardPopover(false);
         refreshAuthMe().then(() => {
             if (currentAccount) loadAccountReplays();
         });
@@ -10634,9 +10651,65 @@ function toggleStatsPopover(force) {
     if (show) {
         toggleAccountPopover(false);
         toggleFriendsPopover(false);
+        toggleLeaderboardPopover(false);
         refreshAuthMe().then(() => {
             if (currentAccount) loadAccountReplays();
         });
+    }
+}
+
+function leaderboardRowHtml(item, rank, extraClass = '') {
+    const games = Number(item && item.games_played || 0) || 0;
+    const wins = Number(item && item.wins || 0) || 0;
+    const losses = Number(item && item.losses || 0) || 0;
+    const draws = Number(item && item.draws || 0) || 0;
+    const rate = Number(item && item.win_rate || 0);
+    const rateText = `${Number.isInteger(rate) ? rate.toFixed(0) : rate.toFixed(1)}%`;
+    return `
+        <div class="leaderboard-row${extraClass ? ` ${extraClass}` : ''}">
+            <span class="leaderboard-rank">${escapeHtml(String(rank || '-'))}</span>
+            <span class="leaderboard-name">${escapeHtml(item && item.username || '-')}</span>
+            <span class="leaderboard-rate">${escapeHtml(rateText)}</span>
+            <span class="leaderboard-record">${games}/${wins}/${losses}/${draws}</span>
+        </div>
+    `;
+}
+
+function renderLeaderboardItems(items, selfRank = null) {
+    const list = $('leaderboard-list');
+    if (!list) return;
+    const rows = Array.isArray(items) ? items : [];
+    if (!rows.length) {
+        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.leaderboard_empty || '暂无符合条件的玩家。')}</div>`
+            + (selfRank ? leaderboardRowHtml(selfRank, selfRank.rank, 'is-self-rank') : '');
+        return;
+    }
+    list.innerHTML = rows.map((item, index) => leaderboardRowHtml(item, index + 1)).join('')
+        + (selfRank ? leaderboardRowHtml(selfRank, selfRank.rank, 'is-self-rank') : '');
+}
+
+async function loadLeaderboard() {
+    const list = $('leaderboard-list');
+    if (!list) return;
+    list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.leaderboard_loading || '正在加载排行榜...')}</div>`;
+    try {
+        const data = await authRequest('/api/leaderboard?min_games=20&limit=50', undefined, { timeoutMs: 5000 });
+        renderLeaderboardItems(data.items || [], data.self_rank || null);
+    } catch (err) {
+        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(err.message || UI.account_error || '加载失败')}</div>`;
+    }
+}
+
+function toggleLeaderboardPopover(force) {
+    const pop = $('leaderboard-popover');
+    if (!pop) return;
+    const show = typeof force === 'boolean' ? force : pop.classList.contains('hidden');
+    pop.classList.toggle('hidden', !show);
+    if (show) {
+        toggleAccountPopover(false);
+        toggleFriendsPopover(false);
+        toggleStatsPopover(false);
+        loadLeaderboard();
     }
 }
 
@@ -11226,6 +11299,8 @@ function toggleFriendsPopover(force) {
     pop.classList.toggle('hidden', !show);
     if (show) {
         toggleAccountPopover(false);
+        toggleStatsPopover(false);
+        toggleLeaderboardPopover(false);
         loadFriends(true);
     } else {
         stopSocialNetworkActivity();
@@ -16487,7 +16562,10 @@ function getBattleLogCardNameCandidates() {
     const add = (name, defId) => {
         const text = String(name || '').trim();
         if (!text || !defId) return;
-        if (text.length < 2 && !/[\u3400-\u9fffぁ-んァ-ン]/.test(text)) return;
+        // Single CJK card names are too ambiguous for whole-line fuzzy matching:
+        // "重" can appear inside "多重瓣", and "轻" can appear in ordinary prose.
+        // Explicit use/equip patterns and [[card:...]] markers still render them as chips.
+        if (text.length < 2) return;
         const key = `${text}\u0000${defId}`;
         if (seen.has(key)) return;
         seen.add(key);
@@ -16515,6 +16593,21 @@ function isBattleLogCardNameBoundary(text, index, length, name) {
     const before = index > 0 ? text[index - 1] : '';
     const after = index + length < text.length ? text[index + length] : '';
     return !isAsciiWordChar(before) && !isAsciiWordChar(after);
+}
+
+function isBattleLogCardNameContextBlocked(text, index, length, candidate) {
+    const raw = String(text || '');
+    const before = raw.slice(Math.max(0, index - 12), index);
+    const after = raw.slice(index + length, Math.min(raw.length, index + length + 8));
+    const name = String(candidate && candidate.text || '');
+    if (!name) return true;
+    // Status/effect layer prose should stay as status text, not card chips.
+    // Examples: "+1层眩晕", "获得2层破损", "施加10层中毒".
+    if (/(?:[+\-－]?\d+|[一二三四五六七八九十百]+)?\s*层\s*$/.test(before)) return true;
+    if (/^(?:状态|效果|层数|层)/.test(after)) return true;
+    // Setup/event names are not card names even when they contain a card name.
+    if (before.endsWith('【') || /配装[:：]?$/.test(before)) return true;
+    return false;
 }
 
 function getBattleLogProtectedPlayerRanges(text) {
@@ -16576,6 +16669,7 @@ function appendBattleLogTextWithCardChips(parent, text) {
             if (idx < 0) continue;
             if (isInsideBattleLogProtectedRange(idx, candidate.text.length, protectedRanges)) continue;
             if (!isBattleLogCardNameBoundary(raw, idx, candidate.text.length, candidate.text)) continue;
+            if (isBattleLogCardNameContextBlocked(raw, idx, candidate.text.length, candidate)) continue;
             if (!best || idx < best.index || (idx === best.index && candidate.text.length > best.text.length)) {
                 best = { ...candidate, index: idx };
             }
@@ -16600,7 +16694,9 @@ function renderBattleLogInlineCardLine(el, text) {
     const cardDict = decodeBattleLogCardMarker(rawLine);
     const line = stripBattleLogCardMarkers(rawLine);
     const patterns = [
+        /^(.+?使用了并装备了)([^，。！!]+)(.*)$/,
         /^(.+?使用并装备了)([^，。！!]+)(.*)$/,
+        /^(.+?使用了?并给.+?装备了)([^，。！!]+)(.*)$/,
         /^(.+?使用了?)([^，。！!]+)(.*)$/,
     ];
     for (const pattern of patterns) {
@@ -20189,6 +20285,7 @@ async function init() {
     if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());
     if ($('btn-friends-top')) $('btn-friends-top').addEventListener('click', () => toggleFriendsPopover());
     if ($('btn-skin-top')) $('btn-skin-top').addEventListener('click', openSkinEditor);
+    if ($('btn-leaderboard-top')) $('btn-leaderboard-top').addEventListener('click', () => toggleLeaderboardPopover());
     if ($('btn-skin-back')) $('btn-skin-back').addEventListener('click', () => showView('view-login'));
     if ($('btn-skin-save')) $('btn-skin-save').addEventListener('click', saveSkinFromEditor);
     if ($('btn-skin-reset')) $('btn-skin-reset').addEventListener('click', resetSkinEditor);
@@ -20261,6 +20358,7 @@ async function init() {
     if ($('btn-account-replays-refresh')) $('btn-account-replays-refresh').addEventListener('click', loadAccountReplays);
     if ($('btn-stats-top')) $('btn-stats-top').addEventListener('click', () => toggleStatsPopover());
     if ($('btn-stats-popover-close')) $('btn-stats-popover-close').addEventListener('click', () => toggleStatsPopover(false));
+    if ($('btn-leaderboard-popover-close')) $('btn-leaderboard-popover-close').addEventListener('click', () => toggleLeaderboardPopover(false));
     if ($('btn-account-replay-close')) $('btn-account-replay-close').addEventListener('click', closeAccountReplayModal);
     if ($('account-replay-progress')) {
         $('account-replay-progress').addEventListener('input', (event) => {

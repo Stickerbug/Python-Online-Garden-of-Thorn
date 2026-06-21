@@ -386,10 +386,10 @@ class GameEngine2v2(GameEngine):
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         self._decay_equipment_armor_end_turn(player_id)
-        if ps.bandage_death_pending:
+        if ps.bandage_death_pending and self._should_expire_invincible_on_turn_end(player_id):
             ps.health = 0
             ps.bandage_death_pending = False
-            ps.invincible = False
+            self._clear_invincible_state(player_id)
             self.log_msg(f"{self.pn(player_id)}的绷带效果结束，生命值归零！")
             self._on_player_death(player_id)
             if self.game_over:
@@ -397,7 +397,7 @@ class GameEngine2v2(GameEngine):
         if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
             ps.bandage_death_pending = True
-            self.log_msg(f"{self.pn(player_id)}的绷带无敌将持续到下个友方回合结束")
+            self.log_msg(f"{self.pn(player_id)}的绷带无敌将持续到下一个自己回合结束")
         # Fracture: clear at end of own turn
         if ps.fracture > 0:
             ps.fracture = 0
@@ -430,15 +430,18 @@ class GameEngine2v2(GameEngine):
         self._decay_action_limit_status(player_id, 'attack_blocked', 'attack_blocked', '禁攻')
         self._decay_action_limit_status(player_id, 'attack_only', 'attack_only', '仅攻击')
         self._decay_action_limit_status(player_id, 'magic_blocked', 'magic_blocked', '魔力封锁')
+        if (
+            ps.invincible
+            and not ps.bandage_active
+            and not ps.bandage_death_pending
+            and self._should_expire_invincible_on_turn_end(player_id)
+        ):
+            self._clear_invincible_state(player_id)
+            self.log_msg(f"{self.pn(player_id)}的无敌效果结束")
         self._save_last_turn_damage_snapshot(player_id)
         self._advance_turn()
 
     def _end_round(self):
-        for pid in range(4):
-            ps = self.players[pid]
-            if ps.invincible and not ps.bandage_active and not ps.bandage_death_pending:
-                ps.invincible = False
-                self.log_msg(f"{self.pn(pid)}的无敌效果结束")
         self.round_num += 1
         if self.game_over:
             return
