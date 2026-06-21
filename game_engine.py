@@ -5837,7 +5837,7 @@ class GameEngine:
                 else:
                     self.log_msg(f"{self.pn(player_id)}使用污水，但装备保护抵消了摧毁")
             else:
-                self.log_msg(f"{self.pn(player_id)}使用污水，但目标不可摧毁或不存在")
+                self.log_msg(f"{self.pn(player_id)}使用污水，但没有可摧毁的装备")
         else:
             destroyable = [e for e in opp.equipment if 'indestructible' not in e.card_instance.flags]
             if destroyable:
@@ -5847,17 +5847,24 @@ class GameEngine:
                     self.log_msg(f"{self.pn(player_id)}使用污水！摧毁了敌方的{eq.card_def.name_cn}")
                 else:
                     self.log_msg(f"{self.pn(player_id)}使用污水，但装备保护抵消了摧毁")
+            else:
+                self.log_msg(f"{self.pn(player_id)}使用污水，但没有可摧毁的装备")
 
     def _effect_magicsewage(self, player_id: int, card: CardInstance, choice=None):
-        for pid in range(2):
+        destroyed_count = 0
+        for pid in range(len(self.players)):
             p = self.players[pid]
             to_destroy = [e for e in p.equipment if 'indestructible' not in e.card_instance.flags]
             for eq in to_destroy:
                 destroyed = self._destroy_equipment(pid, eq)
                 if destroyed:
+                    destroyed_count += 1
                     self.log_msg(f"魔法污水摧毁了{self.pn(pid)}的{eq.card_def.name_cn}")
                 else:
                     self.log_msg(f"魔法污水试图摧毁{self.pn(pid)}的{eq.card_def.name_cn}，但装备保护抵消了")
+        if destroyed_count > 0:
+            self.players[player_id].gain_elixir(destroyed_count)
+            self.log_msg(f"{self.pn(player_id)}回复{destroyed_count}E")
 
     def _effect_mimic(self, player_id: int, card: CardInstance, choice=None):
         ps = self.players[player_id]
@@ -9432,14 +9439,21 @@ class GameEngine:
                     self.log_msg(log)
 
     def _atomic_destroy_all_destroyable_equipment(self, player_id, card, params, log, choice, context):
+        destroyed_count = 0
         for tid in self._resolve_targets(player_id, params.get('target', 'both')):
             for eq in list(self.players[tid].equipment):
                 if 'indestructible' not in eq.card_instance.flags:
                     eq_name = eq.card_def.name_cn
                     if self._destroy_equipment(tid, eq):
+                        destroyed_count += 1
                         self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(tid)}的{eq_name}")
                     elif log:
                         self.log_msg(log)
+        if isinstance(context, dict):
+            context['last_destroyed_equipment_count'] = destroyed_count
+            vars_obj = context.setdefault('vars', {})
+            if isinstance(vars_obj, dict):
+                vars_obj['last_destroyed_equipment_count'] = destroyed_count
 
     def _atomic_activate_corruption(self, player_id, card, params, log, choice, context):
         eq = self._find_equipment_for_card(player_id, card)
@@ -9460,7 +9474,13 @@ class GameEngine:
 
     def _atomic_gain_e(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        amount_expr = params.get('amount', 1)
+        if isinstance(amount_expr, dict) and amount_expr.get('ref') in ('context_var', 'temp_var'):
+            amount = int((context or {}).get(str(amount_expr.get('name', '')), 0) or 0)
+        else:
+            amount = self._eval_int(player_id, amount_expr, card, 1)
+        if amount <= 0:
+            return
         self.players[target_id].gain_elixir(amount)
         self.log_msg(log or f"{self.pn(target_id)}获得{amount}E")
 

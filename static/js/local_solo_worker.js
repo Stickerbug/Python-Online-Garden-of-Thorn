@@ -3803,13 +3803,18 @@ class LocalSoloEngine {
     }
 
     effect_destroy_all_destroyable_equipment(playerId, card, params, log) {
+        let destroyedCount = 0;
         this.resolveTargets(playerId, params.target || 'enemy').forEach(tid => {
             [...this.players[tid].equipment].forEach(eq => {
                 if (!eq.card_instance.flags.has('indestructible') && this.destroyEquipment(tid, eq)) {
+                    destroyedCount += 1;
                     this.logDestroyedEquipment(playerId, tid, eq, log);
                 }
             });
         });
+        if (this._active_effect_context) {
+            this._active_effect_context.last_destroyed_equipment_count = destroyedCount;
+        }
     }
 
     effect_destroy_random_equip(playerId, card, params, log) {

@@ -6699,6 +6699,8 @@ def send_pregame_state(room, pidx, allow_sub_choice=False):
     if sid not in players:
         return
     engine = room.engine
+    if getattr(engine, 'phase', None) not in ('event_select', 'event_reveal', 'draft'):
+        return
     status = engine.get_player_status(pidx)
     if status == 'event_select':
         emit_room_game_phase(room, sid, 'event_select')
@@ -6736,7 +6738,7 @@ def start_game(room):
     for sid in room.player_sids:
         if sid in players:
             emit_room_game_phase(room, sid, 'playing')
-    broadcast_game_state(room)
+    _broadcast_game_state_now(room)
     broadcast_lobby()
 
 

@@ -340,7 +340,8 @@ _reg(CardDef('Sewage', 'Sewage', '污水', 2, 0, 'bloom', 10, 'Common',
              '腐蚀一切装备。', '摧毁目标一张装备'))
 
 _reg(CardDef('MagicSewage', 'Magic Sewage', '魔法污水', 0, 6, 'bloom', 3, 'Common',
-             '至死方休！', '摧毁场上所有装备'))
+             '至死方休！', '摧毁场上所有装备；每摧毁1张装备，回复自己1E',
+             flags={'self_only'}))
 
 _reg(CardDef('Mimic', 'Mimic', '拟态', 0, 0, 'bloom', 2, 'Common',
              '完美模仿。', '将一张手牌的复制加入手中，使其下一次打出时费用-1',

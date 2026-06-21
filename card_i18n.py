@@ -218,7 +218,7 @@ CARD_I18N = {
     'MagicSewage': {
         'name': _t('魔法污水', 'Magic Sewage', 'Eaux usées magiques', 'Esgoto Mágico', 'Магические стоки', '魔法汚水'),
         'desc': _t('至死方休！', 'It stops only at death.', 'Cela ne s’arrête qu’à la mort.', 'Só para com a morte.', 'Остановится только со смертью.', '死ぬまで止まらない！'),
-        'effect': _t('摧毁场上所有装备', 'Destroy all equipment on the field', 'Détruit tous les équipements sur le terrain', 'Destrói todo equipamento em campo', 'Уничтожить всё снаряжение на поле', '場の全ての装備を破壊する'),
+        'effect': _t('摧毁场上所有装备；每摧毁1张装备，回复自己1E', 'Destroy all equipment on the field; for each equipment destroyed, restore 1E to yourself', 'Détruit tous les équipements sur le terrain ; pour chaque équipement détruit, récupérez 1E', 'Destrói todo equipamento em campo; para cada equipamento destruído, recupere 1E', 'Уничтожить всё снаряжение на поле; за каждое уничтоженное снаряжение восстановите себе 1E', '場の全ての装備を破壊する。破壊した装備1つにつき自分のEを1回復'),
     },
     'MagicBubble': {
         'name': _t('魔法泡泡', 'Magic Bubble', 'Bulle magique', 'Bolha Mágica', 'Магический пузырь', '魔法の泡'),

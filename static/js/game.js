@@ -78,7 +78,7 @@ const I18N = {
         use_card: 'Use', insufficient_resources: 'Insufficient resources', choose_attack_for: 'Choose an attack for {0}', choose_equip_for: 'Choose equipment',
         choose_discard_for: 'Choose a discard for {0}', choose_from_deck_for: 'Choose from deck', choose_from_discard_for: 'Choose from discard for {0}',
         choose_hand_for: 'Choose from hand for {0}', choose_from_enemy_hand_for: 'Choose from enemy hand', choose_attack_group_for: 'Choose attack group for {0}',
-        no_attack_cards: 'No attack cards', no_enemy_equipment: 'No enemy equipment', no_enemy_hand: 'No enemy hand', deck_empty: 'Deck empty',
+        no_attack_cards: 'No attack cards', no_enemy_equipment: 'No destroyable enemy equipment', no_enemy_hand: 'No enemy hand', deck_empty: 'Deck empty',
         no_matching_cards: 'No matching cards', no_cards_in_hand: 'No cards in hand',
         discard_empty: 'Discard pile empty', no_same_attack: 'No matching attack cards', confirm_surrender: 'Surrender?', request_rematch: 'Request Rematch',
         opponent_rematch: 'Opponent requests rematch', rematch_sent: 'Rematch request sent', rematch_waiting: 'Waiting for opponent', rematch_agreed: 'Rematch accepted',
@@ -194,7 +194,7 @@ I18N.zh = { ...I18N.en,
     classic_equip_stage: '点击己方装备',
     use_card: '使用', insufficient_resources: '资源不足', choose_attack_for: '为 {0} 选择攻击牌', choose_equip_for: '选择装备牌',
     choose_discard_for: '为 {0} 选择弃牌', choose_from_deck_for: '从牌堆选择', choose_from_discard_for: '为 {0} 从弃牌堆选择', choose_hand_for: '为 {0} 从手牌选择',
-    choose_from_enemy_hand_for: '从敌方手牌选择', choose_attack_group_for: '为 {0} 选择攻击组', no_attack_cards: '没有攻击牌', no_enemy_equipment: '对方没有装备',
+    choose_from_enemy_hand_for: '从敌方手牌选择', choose_attack_group_for: '为 {0} 选择攻击组', no_attack_cards: '没有攻击牌', no_enemy_equipment: '对方没有可摧毁的装备',
     no_enemy_hand: '对方没有手牌', deck_empty: '牌堆为空', no_matching_cards: '没有符合条件的牌', no_cards_in_hand: '手牌为空', discard_empty: '弃牌堆为空', no_same_attack: '没有同名攻击牌',
     confirm_surrender: '确认投降？', request_rematch: '请求再来一局', opponent_rematch: '对方请求再来一局', rematch_sent: '已发送再来一局请求',
     rematch_waiting: '等待对方', rematch_agreed: '对方已接受', agree_rematch: '接受再来一局', rematch_progress: '再来一局({0}/{1})', you_win: '你赢了！', you_lose: '你输了！', you_draw: '平局！',
@@ -300,7 +300,7 @@ I18N.fr = { ...I18N.en,
     use_card: 'Utiliser', insufficient_resources: 'Ressources insuffisantes', choose_attack_for: 'Choisir une attaque pour', choose_equip_for: 'Choisir un équipement',
     choose_discard_for: 'Choisir une carte à défausser', choose_from_deck_for: 'Choisir depuis le deck', choose_from_discard_for: 'Choisir depuis la défausse', choose_hand_for: 'Choisir depuis la main',
     choose_from_enemy_hand_for: 'Choisir depuis la main ennemie', choose_attack_group_for: "Choisir un groupe d'attaque",
-    no_attack_cards: "Aucune carte d'attaque", no_enemy_equipment: 'Aucun équipement ennemi', no_enemy_hand: 'Aucune main ennemie', deck_empty: 'Deck vide', discard_empty: 'Défausse vide',
+    no_attack_cards: "Aucune carte d'attaque", no_enemy_equipment: 'Aucun équipement ennemi destructible', no_enemy_hand: 'Aucune main ennemie', deck_empty: 'Deck vide', discard_empty: 'Défausse vide',
     no_same_attack: "Aucune carte d'attaque identique", confirm_surrender: "Confirmer l'abandon ?", request_rematch: 'Demander une revanche',
     opponent_rematch: "L'adversaire demande une revanche", rematch_sent: 'Demande de revanche envoyée', rematch_waiting: "En attente de l'adversaire", rematch_agreed: 'Revanche acceptée',
     rematch_progress: 'Rejouer ({0}/{1})',
@@ -369,7 +369,7 @@ I18N.ja = { ...I18N.en,
     use_card: '使用', insufficient_resources: 'リソース不足', choose_attack_for: '攻撃カードを選択', choose_equip_for: '装備を選択',
     choose_discard_for: '捨て札を選択', choose_from_deck_for: 'デッキから選択', choose_from_discard_for: '捨て札から選択', choose_hand_for: '手札から選択',
     choose_from_enemy_hand_for: '相手の手札から選択', choose_attack_group_for: '攻撃グループを選択',
-    no_attack_cards: '攻撃カードなし', no_enemy_equipment: '敵の装備なし', no_enemy_hand: '敵の手札なし', deck_empty: 'デッキ空', discard_empty: '捨て札空',
+    no_attack_cards: '攻撃カードなし', no_enemy_equipment: '破壊できる敵装備なし', no_enemy_hand: '敵の手札なし', deck_empty: 'デッキ空', discard_empty: '捨て札空',
     no_same_attack: '同じ攻撃カードなし', confirm_surrender: '降参しますか？', request_rematch: '再戦をリクエスト',
     opponent_rematch: '相手が再戦をリクエストしています', rematch_sent: '再戦リクエスト送信済み', rematch_waiting: '相手の確認待ち', rematch_agreed: '再戦が合意されました',
     rematch_progress: '再戦({0}/{1})',
@@ -2223,7 +2223,7 @@ const LOG_FALLBACK_REPLACE = {
         ['敌方', 'opponent'], ['己方', 'self'], ['对敌方造成', 'deals to opponent '], ['造成', 'deals '], ['伤害', ' damage'],
         ['回复', 'recovers '], ['获得', 'gains '], ['装备了', 'equips '], ['使用了', 'uses '], ['使用', 'uses '],
         ['摧毁了', 'destroys '], ['但', ' but '], ['未找到目标', 'no target found'], ['未选择目标', 'no target selected'], ['目标无效', 'invalid target'],
-        ['目标不可摧毁或不存在', 'target is indestructible or missing'], ['手牌已满', 'hand is full'], ['无中毒层数', 'no poison layers'],
+        ['目标不可摧毁或不存在', 'target is indestructible or missing'], ['没有可摧毁的装备', 'no destroyable equipment'], ['手牌已满', 'hand is full'], ['无中毒层数', 'no poison layers'],
         ['点物理伤害', ' physical damage'], ['层中毒', ' Poison'], ['层灼烧', ' Burn'], ['层闪避', ' Dodge'], ['层装备保护', ' Equip Protect'],
         ['回合', ' rounds'], ['张牌', ' cards'], ['牌堆', 'deck'], ['弃牌堆', 'discard pile'], ['场上所有装备', 'all equipment on field']
     ],
@@ -5380,6 +5380,69 @@ function getCardDef(defId) {
     return null;
 }
 
+let cardDefsPayloadRefreshAt = 0;
+let cardDefsPayloadRefreshPending = false;
+
+function collectUnknownCardDefIds(payload) {
+    const unknown = new Set();
+    const seen = new Set();
+    let visited = 0;
+    const visit = value => {
+        if (value == null || visited > 6000) return;
+        const type = typeof value;
+        if (type !== 'object') return;
+        if (seen.has(value)) return;
+        seen.add(value);
+        visited += 1;
+        if (Array.isArray(value)) {
+            value.forEach(visit);
+            return;
+        }
+        const defId = value.def_id || value.card_id || value.card_def_id;
+        if (defId != null) {
+            const raw = String(defId).trim();
+            if (raw && raw !== '?' && raw !== 'Error' && !getCardDef(raw)) {
+                unknown.add(raw);
+            }
+        }
+        Object.keys(value).forEach(key => {
+            if (key === 'log' || key === 'message' || key === 'text') return;
+            visit(value[key]);
+        });
+    };
+    visit(payload);
+    return unknown;
+}
+
+function rerenderAfterCardDefsRefresh() {
+    if (phase === 'draft' && draftState) {
+        renderDraft(draftState, false, null);
+        return;
+    }
+    if ((phase === 'event_select' || phase === 'event_reveal' || phase === 'event_sub_choice') && eventSelectData) {
+        if (phase === 'event_reveal') renderEventReveal(eventSelectData);
+        else renderEventSelect(eventSelectData);
+        return;
+    }
+    if (gameState && ['action', 'draw', 'response', 'choice', 'playing'].includes(phase)) {
+        renderGame(gameState);
+    }
+}
+
+function maybeRefreshCardDefsForPayload(payload, reason = 'payload') {
+    const unknown = collectUnknownCardDefIds(payload);
+    if (!unknown.size) return;
+    const now = Date.now();
+    if (cardDefsPayloadRefreshPending || now - cardDefsPayloadRefreshAt < 4000) return;
+    cardDefsPayloadRefreshAt = now;
+    cardDefsPayloadRefreshPending = true;
+    console.warn('[cards] unknown card definitions, refreshing:', reason, Array.from(unknown).slice(0, 8));
+    refreshCardsAfterModSettingsConfirmed()
+        .then(rerenderAfterCardDefsRefresh)
+        .catch(err => console.warn('[cards] refresh for unknown card definitions failed:', err))
+        .finally(() => { cardDefsPayloadRefreshPending = false; });
+}
+
 function getCardLocalIds(cardDict, cardDef) {
     const ids = [];
     const push = value => {
@@ -8290,6 +8353,7 @@ function connectSocket(serverUrl) {
         syncPhaseChatMatch(data || {});
     });
     bindSocketEvent('draft_state', (data) => {
+        if (shouldIgnoreLatePregamePayload(data, 'draft_state')) return;
         markNetworkMatchTransition('draft_state');
         const previousDraftState = draftState;
         const oldOptIds = draftState && draftState.options ? draftState.options.map(o => o.def_id) : [];
@@ -8300,10 +8364,12 @@ function connectSocket(serverUrl) {
         syncPhaseChatMatch(data || {});
         if (data.your_id != null) playerId = data.your_id;
         mergeSkinLooksFromPayload(data);
+        maybeRefreshCardDefsForPayload(data, 'draft_state');
         renderDraft(data, isReroll, previousDraftState);
     });
     bindSocketEvent('pregame_status_update', (data) => {
         if (!data || !draftState) return;
+        if (shouldIgnoreLatePregamePayload(data, 'pregame_status_update')) return;
         if (phaseContextMatchKey(data) && phaseContextMatchKey(draftState) && phaseContextMatchKey(data) !== phaseContextMatchKey(draftState)) return;
         draftState = {
             ...draftState,
@@ -8324,6 +8390,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('pregame_timer_update', (data) => {
         if (!data) return;
+        if (shouldIgnoreLatePregamePayload(data, 'pregame_timer_update')) return;
         if (draftState && phaseContextMatchKey(data) && phaseContextMatchKey(draftState) && phaseContextMatchKey(data) !== phaseContextMatchKey(draftState)) return;
         if (eventSelectData && phaseContextMatchKey(data) && phaseContextMatchKey(eventSelectData) && phaseContextMatchKey(data) !== phaseContextMatchKey(eventSelectData)) return;
         rememberPregameTimerSnapshot(data);
@@ -8341,6 +8408,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('event_select', (data) => {
         debugLog('[client] event_select');
+        if (shouldIgnoreLatePregamePayload(data, 'event_select')) return;
         markNetworkMatchTransition('event_select');
         phase = 'event_select';
         eventSelectData = data;
@@ -8348,10 +8416,12 @@ function connectSocket(serverUrl) {
         syncPhaseChatMatch(data || {});
         if (data.your_id != null) playerId = data.your_id;
         mergeSkinLooksFromPayload(data);
+        maybeRefreshCardDefsForPayload(data, 'event_select');
         renderEventSelect(data);
     });
     bindSocketEvent('event_reveal', (data) => {
         debugLog('[client] event_reveal');
+        if (shouldIgnoreLatePregamePayload(data, 'event_reveal')) return;
         markNetworkMatchTransition('event_reveal');
         phase = 'event_reveal';
         eventSelectData = data;
@@ -8360,10 +8430,12 @@ function connectSocket(serverUrl) {
         updatePhaseChatChannelOptions(data || {});
         if (data.your_id != null) playerId = data.your_id;
         mergeSkinLooksFromPayload(data);
+        maybeRefreshCardDefsForPayload(data, 'event_reveal');
         renderEventReveal(data);
     });
     bindSocketEvent('event_sub_choice', (data) => {
         debugLog('[client] event_sub_choice');
+        if (shouldIgnoreLatePregamePayload(data, 'event_sub_choice')) return;
         markNetworkMatchTransition('event_sub_choice');
         phase = 'event_sub_choice';
         // Keep showing draft view so player can see their picks
@@ -8394,6 +8466,11 @@ function connectSocket(serverUrl) {
         syncBattleLogMatch(data || {});
         gameState = data;
         phase = data.phase || phase;
+        if (isActiveBattlePhase(phase)) {
+            draftState = {};
+            eventSelectData = {};
+        }
+        maybeRefreshCardDefsForPayload(data, 'state_update');
         if (data.spectating) {
             isSpectating = true;
             if (data.room_id != null) activeSpectateRoomId = Number(data.room_id);
@@ -8418,6 +8495,10 @@ function connectSocket(serverUrl) {
             const rp = $('response-panel');
             if (rp) { rp.innerHTML = ''; rp.classList.add('hidden'); }
             if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
+        }
+        if (data.pending_choice == null && choicePending) {
+            choicePending = false;
+            choiceData = {};
         }
         if (pendingPlayCard && data.you && data.you.hand) {
             const stillInHand = data.you.hand.some(c => c.instance_id === pendingPlayCard.instance_id);
@@ -8467,6 +8548,7 @@ function connectSocket(serverUrl) {
         syncBattleLogMatch(data || {});
         gameState = data;
         phase = data.phase || phase;
+        maybeRefreshCardDefsForPayload(data, 'solo_state');
         playerId = data.your_id;
         if (data.pending_response == null && !responsePending) {
             pendingPlayCard = null;
@@ -8558,11 +8640,20 @@ function connectSocket(serverUrl) {
             appendGameChat(nick, data.text, data, data);
         }
     });
-    bindSocketEvent('mod_settings_updated', (data) => {
+    bindSocketEvent('mod_settings_updated', async (data) => {
         if (data && data.ok) {
+            if (Array.isArray(data.disabled_mods)) {
+                localStorage.setItem('gtn_disabled_mods', JSON.stringify(data.disabled_mods));
+                renderModsList();
+            }
             showActionToast(UI.save_success, 1600, 'success');
-            refreshCardsAfterModSettingsConfirmed();
+            await refreshCardsAfterModSettingsConfirmed();
             return;
+        }
+        if (data && Array.isArray(data.disabled_mods)) {
+            localStorage.setItem('gtn_disabled_mods', JSON.stringify(data.disabled_mods));
+            renderModsList();
+            await refreshCardsAfterModSettingsConfirmed();
         }
         flashStatus(UI.save_failed.replace('{0}', (data && data.reason) || UI.operation_failed), 3200, 'error');
     });
@@ -13258,6 +13349,19 @@ function phaseContextMatchKey(ctx) {
     return String(ctx.match_key || (ctx.room_id != null ? `room:${ctx.room_id}` : ''));
 }
 
+function isActiveBattlePhase(value = phase) {
+    return ['playing', 'action', 'draw', 'response', 'choice', 'game_over'].includes(String(value || ''));
+}
+
+function shouldIgnoreLatePregamePayload(data, eventName = 'pregame') {
+    if (soloMode || replayMode || !isActiveBattlePhase()) return false;
+    const incomingKey = phaseContextMatchKey(data);
+    const currentKey = phaseContextMatchKey(gameState) || phaseContextMatchKey(draftState) || phaseContextMatchKey(eventSelectData);
+    if (incomingKey && currentKey && incomingKey !== currentKey) return false;
+    debugLog('[client] ignored late pregame payload after battle start:', eventName, 'phase=', phase, 'match=', incomingKey || currentKey);
+    return true;
+}
+
 function syncPhaseChatMatch(ctx) {
     const key = phaseContextMatchKey(ctx);
     if (key && phaseChatMatchKey && phaseChatMatchKey !== key) {
@@ -16216,6 +16320,11 @@ function renderBattleLogInlineCardLine(el, text) {
 }
 
 function createBattleLogElement(entry) {
+    if (typeof entry === 'string') {
+        entry = { type: 'battle', text: entry };
+    } else if (!entry || typeof entry !== 'object') {
+        entry = { type: 'battle', text: String(entry || '') };
+    }
     const el = document.createElement('div');
     if (entry.type === 'chat') {
         el.className = 'log-entry log-chat';
@@ -18351,7 +18460,7 @@ function renderGameOver(data) {
     const logContainer = $('gameover-log');
     if (logContainer) {
         logContainer.innerHTML = '';
-        const finalLogEntries = compactBattleLogLinesForDisplay(finalLog);
+        const finalLogEntries = compactBattleLogEntriesForDisplay(finalLog);
         finalLogEntries.forEach(entry => logContainer.appendChild(createBattleLogElement(entry)));
     }
     const rematchBtn = $('btn-rematch');
@@ -19079,14 +19188,17 @@ function setModSource(source) {
     renderCommunityModList();
 }
 
-function refreshCardsAfterCommunityChange() {
-    fetchCardDefs({ useCache: false }).then(() => fetchOpeningEvents({ useCache: false })).then(() => {
-        loadSoloDecks(false);
-        renderSoloBuilder();
-    });
+async function refreshCardsAfterCommunityChange() {
+    await refreshCardsAfterModSettingsConfirmed();
     if (socket && socket.connected && phase === 'lobby') {
         socket.emit('update_mod_settings', { disabled_mods: getDisabledMods(), ...getCommunityModSelection() });
     }
+}
+
+function scheduleCardsAfterCommunityChange() {
+    refreshCardsAfterCommunityChange().catch(err => {
+        console.warn('Failed to refresh card data after community mod change:', err);
+    });
 }
 
 async function refreshCardsAfterModSettingsConfirmed() {
@@ -19105,7 +19217,7 @@ function clearCommunityModSelection() {
     localStorage.setItem('gtn_community_mods', '[]');
     renderModSourceControls();
     renderCommunityModList();
-    refreshCardsAfterCommunityChange();
+    scheduleCardsAfterCommunityChange();
 }
 
 function formatCommunityTime(value) {
@@ -19153,7 +19265,7 @@ function toggleCommunityModSelection(mod, enabled) {
     setSelectedCommunityMods(filtered);
     renderCommunityCurrent();
     renderCommunityModList();
-    refreshCardsAfterCommunityChange();
+    scheduleCardsAfterCommunityChange();
 }
 
 function renderCommunityCurrent() {
@@ -19481,7 +19593,7 @@ async function deleteCommunityMod(mod) {
         const selected = getCommunityModSelection();
         if ((selected.community_mods || []).some(item => item.sha256 === mod.sha256)) {
             setSelectedCommunityMods((selected.community_mods || []).filter(item => item.sha256 !== mod.sha256));
-            refreshCardsAfterCommunityChange();
+            scheduleCardsAfterCommunityChange();
         }
         setStatus(UI.community_delete_success);
         await loadSettingsCommunityMods();
@@ -19583,7 +19695,7 @@ function coerceValidDisabledMods(disabled) {
     return { disabled: Array.from(new Set(next)), forcedVanilla };
 }
 
-function saveDisabledMods() {
+async function saveDisabledMods() {
     const listEl = $('settings-mods-list');
     if (!listEl) return;
     const checkboxes = listEl.querySelectorAll('input[type="checkbox"]');
@@ -19607,13 +19719,10 @@ function saveDisabledMods() {
         localStorage.removeItem('gtn_server');
         serverInput.value = '';
     }
+    await refreshCardsAfterModSettingsConfirmed();
     if (socket && socket.connected && phase === 'lobby') {
         socket.emit('update_mod_settings', { disabled_mods: disabled, ...getCommunityModSelection() });
     }
-    fetchCardDefs({ useCache: false }).then(() => fetchOpeningEvents({ useCache: false })).then(() => {
-        loadSoloDecks(false);
-        renderSoloBuilder();
-    });
 }
 
 function initModEditor() {
@@ -19902,7 +20011,10 @@ async function init() {
         if (e.key === 'Enter') onLogin();
     });
     bindClickOnce('btn-open-settings', openSettings);
-    $('btn-settings-close').addEventListener('click', () => { saveDisabledMods(); closeSettings(); });
+    $('btn-settings-close').addEventListener('click', async () => {
+        await saveDisabledMods();
+        closeSettings();
+    });
     if ($('btn-lobby-settings')) $('btn-lobby-settings').addEventListener('click', () => openSettings({ hideServer: true }));
     if ($('settings-tab-appearance')) $('settings-tab-appearance').addEventListener('click', () => setSettingsTab('appearance'));
     if ($('settings-tab-server')) $('settings-tab-server').addEventListener('click', () => setSettingsTab('server'));
@@ -20115,3 +20227,4 @@ window.addEventListener('resize', () => {
     if (tutorialMode) setTimeout(updateTutorialOverlay, 80);
 });
 debugLog('[LOAD] game.js loaded, onEndTurn=', typeof onEndTurn);
+

@@ -1492,7 +1492,7 @@ def _try_run_engine_atomic_op(engine, context: Dict[str, Any], op: str, params: 
     if choice is None and isinstance(action, dict):
         choice = action.get("choice", action)
     engine_effect = _engine_effect_from_step(engine, context, step, effect_type)
-    engine_context = dict(context)
+    engine_context = context
     try:
         engine._run_effect_list(source_id, card, [engine_effect], choice if isinstance(choice, dict) else None, engine_context)
     except (KeyboardInterrupt, SystemExit):

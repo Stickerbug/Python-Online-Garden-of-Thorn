@@ -681,7 +681,11 @@ class GameEngine2v2(GameEngine):
             return False
         if self._card_is_self_only(card) and card.card_type != 'thorn':
             return False
-        return card.card_type in ('thorn', 'bloom', 'root')
+        if card.card_type == 'thorn':
+            return True
+        if card.card_type in ('bloom', 'root'):
+            return self._v2_play_requires_choice_target(card) or self._root_play_requires_owner_target(card)
+        return False
 
     def _selected_effect_target(self, player_id: int, choice=None) -> int:
         target_id = -1
