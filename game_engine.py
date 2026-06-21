@@ -6098,20 +6098,19 @@ class GameEngine:
     def _run_owner_turn_end_equipment(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
             return
-        ps = self.players[player_id]
-        for eq in list(ps.equipment):
+        for owner_id, eq in self._iter_equipment_targeting_player(player_id):
             if not self._has_card_event(eq.card_def, 'owner_turn_end'):
                 continue
-            target_id = getattr(eq, 'effect_target', player_id)
+            target_id = getattr(eq, 'effect_target', owner_id)
             if not isinstance(target_id, int) or not (0 <= target_id < len(self.players)):
                 target_id = player_id
-            self._run_card_event(player_id, eq.card_instance, 'owner_turn_end', None, {
+            self._run_card_event(owner_id, eq.card_instance, 'owner_turn_end', None, {
                 'event': 'owner_turn_end',
-                'source_id': player_id,
+                'source_id': owner_id,
                 'target_id': target_id,
                 'current_equipment': eq,
                 'selected_equipment_instance_id': getattr(eq.card_instance, 'instance_id', None),
-                'selected_equipment_owner_id': player_id,
+                'selected_equipment_owner_id': owner_id,
             })
 
     def _decay_equipment_armor_end_turn(self, player_id: int):
@@ -8235,7 +8234,11 @@ class GameEngine:
     def _iter_equipment_targeting_player(self, player_id: int):
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(getattr(owner_state, 'equipment', [])):
-                if getattr(eq, 'effect_target', owner_id) == player_id:
+                try:
+                    effect_target = int(getattr(eq, 'effect_target', owner_id))
+                except (TypeError, ValueError):
+                    effect_target = owner_id
+                if effect_target == player_id:
                     yield owner_id, eq
 
     def _decay_poison_after_turn_start(self, player_id: int):
@@ -8534,18 +8537,18 @@ class GameEngine:
         for owner_state in self.players:
             for eq in getattr(owner_state, 'equipment', []):
                 eq.uses_this_turn = 0
-        for eq in list(ps.equipment):
+        for owner_id, eq in self._iter_equipment_targeting_player(player_id):
             eq_key = self._equipment_turn_start_key(eq)
             if eq_key not in early_owner_turn_start_equipment:
                 eq.turns_equipped += 1
             else:
                 continue
-            effect_target_id = int(getattr(eq, 'effect_target', player_id))
+            effect_target_id = int(getattr(eq, 'effect_target', owner_id))
             if not (0 <= effect_target_id < len(self.players)):
                 effect_target_id = player_id
             if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
-                    player_id, eq.card_instance, 'owner_turn_start', None,
-                    {'source_id': player_id, 'target_id': effect_target_id}):
+                    owner_id, eq.card_instance, 'owner_turn_start', None,
+                    {'source_id': owner_id, 'target_id': effect_target_id}):
                 continue
             if eq.def_id == 'Leaf':
                 ps.heal(2)
@@ -8658,18 +8661,18 @@ class GameEngine:
         for owner_state in self.players:
             for eq in getattr(owner_state, 'equipment', []):
                 eq.uses_this_turn = 0
-        for eq in list(ps.equipment):
+        for owner_id, eq in self._iter_equipment_targeting_player(player_id):
             eq_key = self._equipment_turn_start_key(eq)
             if eq_key not in early_owner_turn_start_equipment:
                 eq.turns_equipped += 1
             else:
                 continue
-            effect_target_id = int(getattr(eq, 'effect_target', player_id))
+            effect_target_id = int(getattr(eq, 'effect_target', owner_id))
             if not (0 <= effect_target_id < len(self.players)):
                 effect_target_id = player_id
             if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
-                    player_id, eq.card_instance, 'owner_turn_start', None,
-                    {'source_id': player_id, 'target_id': effect_target_id}):
+                    owner_id, eq.card_instance, 'owner_turn_start', None,
+                    {'source_id': owner_id, 'target_id': effect_target_id}):
                 continue
             if eq.def_id == 'Leaf':
                 ps.heal(2)
