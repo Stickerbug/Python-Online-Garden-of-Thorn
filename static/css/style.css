@@ -708,7 +708,7 @@ body {
 
 .leaderboard-popover {
   left: 14px;
-  width: min(420px, calc(100vw - 28px));
+  width: min(560px, calc(100vw - 28px));
   max-height: min(560px, calc(100vh - 76px));
   overflow: auto;
 }
@@ -716,33 +716,68 @@ body {
 .leaderboard-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
 
 .leaderboard-row {
   display: grid;
-  grid-template-columns: 2.4em minmax(0, 1fr) 4.2em auto;
+  grid-template-columns: 48px minmax(92px, 1fr) 64px 64px 56px 56px 56px;
   align-items: center;
-  gap: 8px;
-  padding: 7px 8px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  border-radius: 0;
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 13px;
+  font-family: var(--font-main);
+}
+
+.leaderboard-row:last-child {
+  border-bottom: 0;
+}
+
+.leaderboard-row > span {
+  min-width: 0;
+  padding: 7px 8px;
+  border-right: 1px solid color-mix(in srgb, var(--border-color) 64%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+.leaderboard-row > span:last-child {
+  border-right: 0;
+}
+
+.leaderboard-row.leaderboard-head {
+  background: color-mix(in srgb, var(--bg-secondary) 78%, var(--bg-primary));
+  color: var(--text-secondary);
+  font-weight: 800;
 }
 
 .leaderboard-row.is-self-rank {
-  margin-top: 8px;
-  border-color: rgba(36, 113, 163, 0.45);
-  background: rgba(36, 113, 163, 0.08);
+  background: rgba(255, 221, 87, 0.28);
+  color: #6f5200;
+  font-weight: 900;
+}
+
+.leaderboard-row.is-self-extra {
+  border-top: 2px solid rgba(207, 187, 80, 0.72);
 }
 
 .leaderboard-rank,
 .leaderboard-rate,
-.leaderboard-record {
-  font-family: var(--font-mono, monospace);
-  font-variant-numeric: tabular-nums;
+.leaderboard-games,
+.leaderboard-wins,
+.leaderboard-losses,
+.leaderboard-draws {
+  font-family: var(--font-main);
   white-space: nowrap;
 }
 
@@ -752,6 +787,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 800;
+  text-align: left;
 }
 
 .account-popover-head {

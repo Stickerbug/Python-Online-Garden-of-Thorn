@@ -860,7 +860,7 @@ Object.assign(I18N.en, {
     account_password_confirm: 'Confirm Password', account_old_password: 'Current Password', account_new_password: 'New Password',
     account_new_password_confirm: 'Confirm New Password', account_change_password: 'Change Password', account_password_changed: 'Password changed',
     account_change_username: 'Change Username', account_info: 'Account Info', account_online_time: 'Total Match Time', account_delete: 'Delete Account', stats: 'Stats',
-    leaderboard: 'Leaderboard', leaderboard_note: 'Players with at least 20 valid games', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...',
+    leaderboard: 'Leaderboard', leaderboard_note: 'Reach more than 20 valid games and rank in the top 50 to enter the leaderboard. Good luck!', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
     account_need_login: 'Log in or register first', account_error: 'Account error', account_password_mismatch: 'Passwords do not match', guest_enter: 'Enter as Guest',
@@ -871,7 +871,7 @@ Object.assign(I18N.zh, {
     account_password_confirm: '确认密码', account_old_password: '原密码', account_new_password: '新密码',
     account_new_password_confirm: '确认新密码', account_change_password: '修改密码', account_password_changed: '密码已修改',
     account_change_username: '修改用户名', account_info: '账号信息', account_online_time: '总对局时长', account_delete: '注销账户', stats: '统计',
-    leaderboard: '排行榜', leaderboard_note: '显示有效对局20局及以上的玩家', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...',
+    leaderboard: '排行榜', leaderboard_note: '有效对局数超过20且排名前50，即可上榜。加油！', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
     account_need_login: '请先登录或注册账号', account_error: '账号错误', account_password_mismatch: '两次输入的密码不一致', guest_enter: '游客进入',
@@ -883,7 +883,7 @@ Object.assign(I18N.fr, {
     account_new_password_confirm: 'Confirmer le nouveau', account_change_password: 'Changer le mot de passe', account_password_changed: 'Mot de passe changé',
     account_change_username: 'Changer le nom', account_info: 'Compte', account_online_time: 'Temps total en match',
     account_delete: 'Supprimer le compte', stats: 'Stats',
-    leaderboard: 'Classement', leaderboard_note: 'Joueurs avec au moins 20 parties valides', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...',
+    leaderboard: 'Classement', leaderboard_note: 'Plus de 20 parties valides et un rang dans le top 50 permettent d’apparaître ici. Courage !', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...',
     account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
     account_not_logged_in: 'Non connecté', account_logged_in_as: 'Connecté : {0}', account_stats: 'Parties {0} / V {1} / D {2} / N {3}',
     account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', account_password_mismatch: 'Les mots de passe ne correspondent pas', guest_enter: 'Entrer en invité',
@@ -895,7 +895,7 @@ Object.assign(I18N.ja, {
     account_new_password_confirm: '新しい確認', account_change_password: 'パスワード変更', account_password_changed: '変更しました',
     account_change_username: 'ユーザー名変更', account_info: 'アカウント情報', account_online_time: '総対戦時間',
     account_delete: 'アカウント削除', stats: '統計',
-    leaderboard: 'ランキング', leaderboard_note: '有効対戦20戦以上のプレイヤー', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...',
+    leaderboard: 'ランキング', leaderboard_note: '有効対戦が20戦を超え、順位が50位以内になると掲載されます。頑張って！', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...',
     account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
     account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
@@ -10800,22 +10800,40 @@ function leaderboardRowHtml(item, rank, extraClass = '') {
             <span class="leaderboard-rank">${escapeHtml(String(rank || '-'))}</span>
             <span class="leaderboard-name">${escapeHtml(item && item.username || '-')}</span>
             <span class="leaderboard-rate">${escapeHtml(rateText)}</span>
-            <span class="leaderboard-record">${games}/${wins}/${losses}/${draws}</span>
+            <span class="leaderboard-games">${games}</span>
+            <span class="leaderboard-wins">${wins}</span>
+            <span class="leaderboard-losses">${losses}</span>
+            <span class="leaderboard-draws">${draws}</span>
         </div>
     `;
+}
+
+function leaderboardHeaderHtml() {
+    const labels = currentLang === 'zh'
+        ? ['排行', '昵称', '胜率', '总局数', '胜场', '败场', '平场']
+        : ['Rank', 'Name', 'Win %', 'Games', 'Wins', 'Losses', 'Draws'];
+    return `<div class="leaderboard-row leaderboard-head">
+        ${labels.map((label, idx) => `<span class="${idx === 1 ? 'leaderboard-name' : ''}">${escapeHtml(label)}</span>`).join('')}
+    </div>`;
 }
 
 function renderLeaderboardItems(items, selfRank = null) {
     const list = $('leaderboard-list');
     if (!list) return;
     const rows = Array.isArray(items) ? items : [];
+    const currentId = currentAccount && currentAccount.id != null ? String(currentAccount.id) : '';
+    const renderedRows = rows.map((item, index) => {
+        const isSelf = currentId && item && item.id != null && String(item.id) === currentId;
+        return leaderboardRowHtml(item, index + 1, isSelf ? 'is-self-rank' : '');
+    }).join('');
+    const selfRow = selfRank ? leaderboardRowHtml(selfRank, selfRank.rank, 'is-self-rank is-self-extra') : '';
     if (!rows.length) {
-        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.leaderboard_empty || '暂无符合条件的玩家。')}</div>`
-            + (selfRank ? leaderboardRowHtml(selfRank, selfRank.rank, 'is-self-rank') : '');
+        list.innerHTML = leaderboardHeaderHtml()
+            + `<div class="account-replay-sub">${escapeHtml(UI.leaderboard_empty || '暂无符合条件的玩家。')}</div>`
+            + selfRow;
         return;
     }
-    list.innerHTML = rows.map((item, index) => leaderboardRowHtml(item, index + 1)).join('')
-        + (selfRank ? leaderboardRowHtml(selfRank, selfRank.rank, 'is-self-rank') : '');
+    list.innerHTML = leaderboardHeaderHtml() + renderedRows + selfRow;
 }
 
 async function loadLeaderboard() {
