@@ -10531,124 +10531,131 @@ def on_chat(data):
     data = socket_guard('chat', data, require_player=True, allow_empty=False)
     if data is None:
         return
-    with _lock:
+    now = time.time()
+    if not _lock.acquire(timeout=0.2):
+        admin_event('warning', 'chat skipped: global lock busy')
+        emit('server_error', {'message': '服务器正在处理上一项操作，请稍后重试'})
+        return
+    try:
         if sid not in players:
             return
-        player = players[sid]
-        mute_key = chat_mute_key(sid, player)
-        if is_muted(mute_key):
-            emit('server_error', muted_error_payload(mute_remaining_seconds(mute_key)))
-            _security_record('chat_muted_attempt', 'muted player tried to chat', sid=sid, severity='low')
-            return
-        if DB_AVAILABLE and player.get('user_id'):
-            muted, mute_info = is_user_muted_db(player.get('user_id'))
-            if muted:
-                remaining = 0
-                try:
-                    until_dt = datetime.fromisoformat(str(mute_info.get('muted_until') or '').replace('Z', '+00:00'))
-                    remaining = max(0, int((until_dt - datetime.now(timezone.utc)).total_seconds()))
-                except Exception:
-                    remaining = 0
-                emit('server_error', muted_error_payload(remaining))
-                _security_record('chat_muted_attempt', 'db-muted player tried to chat', sid=sid, severity='low', extra=mute_info)
-                return
-        room_id = player.get('room_id')
-        spectating_room = player.get('spectating_room')
-        now = time.time()
-        exempt = is_chat_limit_exempt(player)
-        if not exempt:
-            if not rate_limiter(f'chat-fast:{mute_key}', limit=1, window=2):
-                _security_record('chat_fast_rate', 'chat sent faster than 1 per 2 seconds', sid=sid, severity='low')
-                emit('server_error', {'message': '聊天发送过快'})
-                return
-            if not rate_limiter(f'chat-burst:{mute_key}', limit=5, window=10):
-                _security_record('chat_burst_rate', 'chat sent faster than 5 per 10 seconds', sid=sid, severity='medium')
-                emit('server_error', {'message': '聊天发送过快'})
-                return
-        try:
-            text, chat_risk = _validate_chat_text_for_sender(data.get('text', ''), exempt=exempt)
-        except ValueError as exc:
-            _security_illegal(sid, 'chat', str(exc), severity='low')
-            return
-        if not text:
-            return
-        risk = chat_risk.get('risk') or {}
-        risk_level = int(chat_risk.get('risk_level') or 0)
-        risk_action = str(chat_risk.get('risk_action') or '')
-        matched_rules = list(chat_risk.get('matched_rules') or [])
-        normalized_message = chat_risk.get('normalized_message') or normalize_message(text)
-        if risk_action == 'reject_mute' or risk_level >= 4:
-            if DB_AVAILABLE:
-                try:
-                    record_chat_message(
-                        f'room:{room_id}' if room_id is not None else ('spectate' if spectating_room is not None else f'lobby:{_lobby_chat_scope_key(player.get("beta_mode", False))}'),
-                        str(data.get('channel') or 'public')[:40],
-                        player.get('user_id'),
-                        player.get('nickname', ''),
-                        text,
-                        normalized_message,
-                        risk_level,
-                        hidden=True,
-                    )
-                except Exception as exc:
-                    admin_event('error', f'failed to record rejected chat: {exc}')
-            mute_user(mute_key, 300, 'severe chat risk')
-            if DB_AVAILABLE and player.get('user_id'):
-                try:
-                    set_user_mute(player.get('user_id'), player.get('nickname', ''), 300, 'severe chat risk', 'system')
-                except Exception as exc:
-                    admin_event('error', f'failed to persist severe chat mute: {exc}')
-            _security_record('chat_rejected', 'severe chat risk rejected', sid=sid, severity='high', extra={'rules': matched_rules})
-            emit('server_error', muted_error_payload(300, message='消息包含高风险内容，已被拦截并临时禁言'))
-            return
-        if risk_action == 'mask_flag' or risk_level >= 3:
-            text = risk.get('sanitized_text') or text
-        nickname = player['nickname']
-        is_spectator = player.get('status') == 'spectating'
-        chat_data = {
-            'nickname': nickname,
-            'text': text,
-            'is_spectator': is_spectator,
-            'risk_level': risk_level,
-            'risk_action': risk_action,
-        }
-        if matched_rules:
-            chat_data['matched_rules'] = matched_rules[:5]
-        chat_data.update(special_public_fields(player))
+        player_snapshot = copy.deepcopy(players[sid])
+    finally:
+        _lock.release()
 
-        def persist_chat(room_key, channel):
-            if not DB_AVAILABLE:
-                return None
+    mute_key = chat_mute_key(sid, player_snapshot)
+    if is_muted(mute_key):
+        emit('server_error', muted_error_payload(mute_remaining_seconds(mute_key)))
+        _security_record('chat_muted_attempt', 'muted player tried to chat', sid=sid, severity='low')
+        return
+    if DB_AVAILABLE and player_snapshot.get('user_id'):
+        try:
+            muted, mute_info = is_user_muted_db(player_snapshot.get('user_id'))
+        except Exception as exc:
+            admin_event('error', f'failed to check chat mute: {exc}')
+            muted, mute_info = False, {}
+        if muted:
+            remaining = 0
             try:
-                return record_chat_message(
-                    room_key,
-                    channel,
-                    player.get('user_id'),
-                    nickname,
+                until_dt = datetime.fromisoformat(str(mute_info.get('muted_until') or '').replace('Z', '+00:00'))
+                remaining = max(0, int((until_dt - datetime.now(timezone.utc)).total_seconds()))
+            except Exception:
+                remaining = 0
+            emit('server_error', muted_error_payload(remaining))
+            _security_record('chat_muted_attempt', 'db-muted player tried to chat', sid=sid, severity='low', extra=mute_info)
+            return
+
+    exempt = is_chat_limit_exempt(player_snapshot)
+    if not exempt:
+        if not rate_limiter(f'chat-fast:{mute_key}', limit=1, window=2):
+            _security_record('chat_fast_rate', 'chat sent faster than 1 per 2 seconds', sid=sid, severity='low')
+            emit('server_error', {'message': '聊天发送过快'})
+            return
+        if not rate_limiter(f'chat-burst:{mute_key}', limit=5, window=10):
+            _security_record('chat_burst_rate', 'chat sent faster than 5 per 10 seconds', sid=sid, severity='medium')
+            emit('server_error', {'message': '聊天发送过快'})
+            return
+    try:
+        text, chat_risk = _validate_chat_text_for_sender(data.get('text', ''), exempt=exempt)
+    except ValueError as exc:
+        _security_illegal(sid, 'chat', str(exc), severity='low')
+        return
+    if not text:
+        return
+
+    risk = chat_risk.get('risk') or {}
+    risk_level = int(chat_risk.get('risk_level') or 0)
+    risk_action = str(chat_risk.get('risk_action') or '')
+    matched_rules = list(chat_risk.get('matched_rules') or [])
+    normalized_message = chat_risk.get('normalized_message') or normalize_message(text)
+    if risk_action == 'reject_mute' or risk_level >= 4:
+        if DB_AVAILABLE:
+            try:
+                room_id = player_snapshot.get('room_id')
+                spectating_room = player_snapshot.get('spectating_room')
+                record_chat_message(
+                    f'room:{room_id}' if room_id is not None else ('spectate' if spectating_room is not None else f'lobby:{_lobby_chat_scope_key(player_snapshot.get("beta_mode", False))}'),
+                    str(data.get('channel') or 'public')[:40],
+                    player_snapshot.get('user_id'),
+                    player_snapshot.get('nickname', ''),
                     text,
                     normalized_message,
                     risk_level,
-                    hidden=False,
+                    hidden=True,
                 )
             except Exception as exc:
-                admin_event('error', f'failed to record chat message: {exc}')
-                return None
+                admin_event('error', f'failed to record rejected chat: {exc}')
+        mute_user(mute_key, 300, 'severe chat risk')
+        if DB_AVAILABLE and player_snapshot.get('user_id'):
+            try:
+                set_user_mute(player_snapshot.get('user_id'), player_snapshot.get('nickname', ''), 300, 'severe chat risk', 'system')
+            except Exception as exc:
+                admin_event('error', f'failed to persist severe chat mute: {exc}')
+        _security_record('chat_rejected', 'severe chat risk rejected', sid=sid, severity='high', extra={'rules': matched_rules})
+        emit('server_error', muted_error_payload(300, message='消息包含高风险内容，已被拦截并临时禁言'))
+        return
+    if risk_action == 'mask_flag' or risk_level >= 3:
+        text = risk.get('sanitized_text') or text
 
-        def emit_chat_to(recipients, payload):
-            seen = set()
-            for target_sid in recipients:
-                if target_sid in seen:
-                    continue
-                seen.add(target_sid)
-                if target_sid in players:
-                    socketio.emit('chat', payload, room=target_sid)
+    nickname = player_snapshot.get('nickname', '')
+    is_spectator = player_snapshot.get('status') == 'spectating'
+    chat_data = {
+        'nickname': nickname,
+        'text': text,
+        'is_spectator': is_spectator,
+        'risk_level': risk_level,
+        'risk_action': risk_action,
+    }
+    if matched_rules:
+        chat_data['matched_rules'] = matched_rules[:5]
+    chat_data.update(special_public_fields(player_snapshot))
 
-        def player_name_at(room, pidx):
-            if not isinstance(pidx, int) or pidx < 0 or pidx >= len(room.player_sids):
-                return '?'
-            psid = room.player_sids[pidx]
-            return room_player_nickname(room, psid, '?')
+    def player_name_at(room, pidx):
+        if not isinstance(pidx, int) or pidx < 0 or pidx >= len(room.player_sids):
+            return '?'
+        psid = room.player_sids[pidx]
+        return room_player_nickname(room, psid, '?')
 
+    record_room_key = None
+    record_channel = 'public'
+    recipients = []
+    lobby_payloads = None
+    error_payload = None
+    security_note = None
+    security_severity = 'medium'
+    room_scope = None
+    room_scope_id = None
+
+    if not _lock.acquire(timeout=0.2):
+        admin_event('warning', 'chat route skipped: global lock busy')
+        emit('server_error', {'message': '服务器正在处理上一项操作，请稍后重试'})
+        return
+    try:
+        if sid not in players:
+            return
+        player = players[sid]
+        room_id = player.get('room_id')
+        spectating_room = player.get('spectating_room')
         if room_id is not None and room_id in rooms:
             room = rooms[room_id]
             pidx = room.player_index(sid)
@@ -10678,61 +10685,97 @@ def on_chat(data):
                     chat_data['chat_target_name'] = player_name_at(room, target_pidx)
                     recipients = [sid, room.player_sids[target_pidx]]
             if not check_chat_rate_locked(sid, player, now):
-                _security_record('chat_rate', 'room chat rate limited', sid=sid, severity='medium')
+                security_note = 'room chat rate limited'
+                error_payload = {'message': '聊天发送过快'}
                 mute_user(mute_key, 60, 'chat rate limit')
-                emit('server_error', {'message': '聊天发送过快'})
-                return
-            chat_message_id = persist_chat(f'room:{room.room_id}', chat_data.get('chat_channel') or channel or 'public')
-            if chat_message_id:
-                chat_data['message_id'] = chat_message_id
-            append_admin_game_chat_locked(chat_data, now, scope='room', room_id=room.room_id)
-            emit_chat_to(recipients, chat_data)
+            else:
+                record_room_key = f'room:{room.room_id}'
+                record_channel = chat_data.get('chat_channel') or channel or 'public'
+                room_scope = 'room'
+                room_scope_id = room.room_id
+                append_admin_game_chat_locked(chat_data, now, scope='room', room_id=room.room_id)
         elif spectating_room is not None and spectating_room in rooms:
             room = rooms[spectating_room]
             if room.mode == '2v2':
                 chat_data['chat_channel'] = 'public'
             if not check_chat_rate_locked(sid, player, now):
-                _security_record('chat_rate', 'spectator chat rate limited', sid=sid, severity='medium')
+                security_note = 'spectator chat rate limited'
+                error_payload = {'message': '聊天发送过快'}
                 mute_user(mute_key, 60, 'chat rate limit')
-                emit('server_error', {'message': '聊天发送过快'})
-                return
-            chat_message_id = persist_chat(f'room:{room.room_id}:spectate', chat_data.get('chat_channel') or 'public')
-            if chat_message_id:
-                chat_data['message_id'] = chat_message_id
-            append_admin_game_chat_locked(chat_data, now, scope='spectate', room_id=room.room_id)
-            emit_chat_to(list(room.player_sids) + list(room.spectators), chat_data)
+            else:
+                recipients = list(room.player_sids) + list(room.spectators)
+                record_room_key = f'room:{room.room_id}:spectate'
+                record_channel = chat_data.get('chat_channel') or 'public'
+                room_scope = 'spectate'
+                room_scope_id = room.room_id
+                append_admin_game_chat_locked(chat_data, now, scope='spectate', room_id=room.room_id)
         else:
             beta_mode = bool(player.get('beta_mode', False))
             mentions = _extract_lobby_mentions(text, beta_mode=beta_mode)
             if mentions and not exempt:
                 mention_key = f"mention:{chat_rate_key(sid, player)}"
                 if not rate_limiter(mention_key, limit=MENTION_RATE_LIMIT, window=60):
-                    _security_record('mention_rate', 'lobby mention rate limited', sid=sid, severity='medium')
-                    emit('server_error', {'message': '@发送过快'})
-                    return
-            if mentions:
-                chat_data['mentions'] = [
-                    {
-                        'user_id': item.get('user_id'),
-                        'nickname': item.get('nickname'),
-                        'player_id': item.get('player_id'),
-                    }
-                    for item in mentions
-                ]
-                chat_data['mention_user_ids'] = [item.get('user_id') for item in mentions if item.get('user_id')]
-                chat_data['mention_names'] = [item.get('nickname') for item in mentions if item.get('nickname')]
-            will_fold = lobby_chat_would_fold_locked(chat_data, now, beta_mode=beta_mode)
-            if not will_fold and not check_chat_rate_locked(sid, player, now):
-                _security_record('chat_rate', 'lobby chat rate limited', sid=sid, severity='medium')
-                mute_user(mute_key, 60, 'chat rate limit')
-                emit('server_error', {'message': '聊天发送过快'})
-                return
-            chat_message_id = persist_chat(f'lobby:{_lobby_chat_scope_key(beta_mode)}', 'public')
-            if chat_message_id:
-                chat_data['message_id'] = chat_message_id
-            append_lobby_chat_locked(chat_data, now, beta_mode=beta_mode)
-            append_admin_game_chat_locked(chat_data, now, scope='lobby')
-            emit_lobby_chat_history_payloads(lobby_chat_history_payloads_locked(100, beta_mode=beta_mode))
+                    security_note = 'lobby mention rate limited'
+                    error_payload = {'message': '@发送过快'}
+            if not error_payload:
+                if mentions:
+                    chat_data['mentions'] = [
+                        {
+                            'user_id': item.get('user_id'),
+                            'nickname': item.get('nickname'),
+                            'player_id': item.get('player_id'),
+                        }
+                        for item in mentions
+                    ]
+                    chat_data['mention_user_ids'] = [item.get('user_id') for item in mentions if item.get('user_id')]
+                    chat_data['mention_names'] = [item.get('nickname') for item in mentions if item.get('nickname')]
+                will_fold = lobby_chat_would_fold_locked(chat_data, now, beta_mode=beta_mode)
+                if not will_fold and not check_chat_rate_locked(sid, player, now):
+                    security_note = 'lobby chat rate limited'
+                    error_payload = {'message': '聊天发送过快'}
+                    mute_user(mute_key, 60, 'chat rate limit')
+                else:
+                    record_room_key = f'lobby:{_lobby_chat_scope_key(beta_mode)}'
+                    record_channel = 'public'
+                    append_lobby_chat_locked(chat_data, now, beta_mode=beta_mode)
+                    append_admin_game_chat_locked(chat_data, now, scope='lobby')
+                    lobby_payloads = lobby_chat_history_payloads_locked(100, beta_mode=beta_mode)
+    finally:
+        _lock.release()
+
+    if security_note:
+        _security_record('chat_rate', security_note, sid=sid, severity=security_severity)
+    if error_payload:
+        emit('server_error', error_payload)
+        return
+
+    chat_message_id = None
+    if DB_AVAILABLE and record_room_key:
+        try:
+            chat_message_id = record_chat_message(
+                record_room_key,
+                record_channel,
+                player_snapshot.get('user_id'),
+                nickname,
+                text,
+                normalized_message,
+                risk_level,
+                hidden=False,
+            )
+        except Exception as exc:
+            admin_event('error', f'failed to record chat message: {exc}')
+    if chat_message_id:
+        chat_data['message_id'] = chat_message_id
+
+    if lobby_payloads is not None:
+        emit_lobby_chat_history_payloads(lobby_payloads)
+    elif recipients:
+        seen = set()
+        for target_sid in recipients:
+            if target_sid in seen:
+                continue
+            seen.add(target_sid)
+            socketio.emit('chat', chat_data, room=target_sid)
 
 
 @socketio.on('draft_pick')
