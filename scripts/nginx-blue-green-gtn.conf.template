@@ -1,11 +1,18 @@
 # GTN blue-green nginx template.
-# Include this idea in the release server block.  Do not copy blindly over the
-# whole site file; merge with your existing TLS/static/socket settings.
+# Merge this idea into the release server block.  Do not copy blindly over the
+# whole site file; keep your existing TLS/static/security settings.
+#
+# Sticky refresh rule:
+# - New/lobby traffic uses the "default" active backend below.
+# - A browser in an existing match stores cookie gtn_route_port=5000 or 5002.
+# - Refreshing during that match is routed back to the old instance.
+# - Returning to lobby/rematch clears the cookie and moves to the active backend.
 
-upstream gtn_release_active {
-    server 127.0.0.1:5000;
-    # Switch to the prepared new instance during blue-green deploy:
-    # server 127.0.0.1:5002;
+map $cookie_gtn_route_port $gtn_release_backend {
+    # Switch only this default line during a blue-green cutover.
+    default 127.0.0.1:5000;
+    5000 127.0.0.1:5000;
+    5002 127.0.0.1:5002;
 }
 
 server {
@@ -16,7 +23,7 @@ server {
     # ssl_certificate_key ...
 
     location /socket.io/ {
-        proxy_pass http://gtn_release_active;
+        proxy_pass http://$gtn_release_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -30,7 +37,7 @@ server {
     }
 
     location / {
-        proxy_pass http://gtn_release_active;
+        proxy_pass http://$gtn_release_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

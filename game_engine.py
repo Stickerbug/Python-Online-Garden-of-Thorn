@@ -2905,6 +2905,8 @@ class GameEngine:
         return max(1, base + max(0, int(getattr(card, 'extra_hits', 0) or 0)))
 
     def _card_base_petal_count(self, card: CardInstance) -> int:
+        if getattr(card, 'def_id', '') == 'Fission':
+            return 2
         vanilla_fallback = {'Sand': 4, 'Wing': 2, 'Light': 2}
         best = max(
             1,
@@ -2939,7 +2941,10 @@ class GameEngine:
                 modifiers = set(modifiers or [])
                 card.setup_modifiers = modifiers
             if 'multi_petal' not in modifiers:
-                card.extra_hits = max(0, int(getattr(card, 'extra_hits', 0) or 0)) + 1
+                if getattr(card, 'def_id', '') == 'Fission':
+                    card.instance_flags.add('multi_petal_fission')
+                else:
+                    card.extra_hits = max(0, int(getattr(card, 'extra_hits', 0) or 0)) + 1
                 modifiers.add('multi_petal')
         return card
 
@@ -3266,6 +3271,12 @@ class GameEngine:
         shield = self._custom_status_value(player_id, *shield_keys)
         if shield > 0:
             self._set_custom_status_alias_group(player_id, 'jungle:shield', shield_keys, shield // 2)
+
+    def _apply_jungle_turn_start_regen(self, player_id: int):
+        if not (0 <= player_id < len(self.players)):
+            return
+        ps = self.players[player_id]
+        immune = self._is_status_immune(player_id)
         heal_turn_keys = ('jungle:turn_heal_turns', 'turn_heal_turns')
         heal_power_keys = ('jungle:turn_heal_power', 'turn_heal_power')
         heal_turns = self._custom_status_value(player_id, *heal_turn_keys)
@@ -3348,8 +3359,9 @@ class GameEngine:
         self._record_damage(player_id, actual, source_id)
         self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={ps.health}）")
         self._run_v2_after_damage_hooks(damage_context, actual)
-        self._check_yggdrasil(player_id)
-        self._check_game_over()
+        if not getattr(self, '_defer_turn_start_death_checks', False):
+            self._check_yggdrasil(player_id)
+            self._check_game_over()
         return actual
 
     def _custom_status_value(self, player_id: int, *names: str) -> int:
@@ -8531,6 +8543,7 @@ class GameEngine:
         early_owner_turn_start_equipment = self._run_owner_turn_start_action_status_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        self._defer_turn_start_death_checks = True
         if self.round_num > 1:
             sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
             draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - sluggish_reduction)
@@ -8557,19 +8570,16 @@ class GameEngine:
                 self.log_msg(f"{self.pn(opp_id)}的腐化效果激活")
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
+            self._defer_turn_start_death_checks = False
             return
         if ps.poison > 0:
             if not self._is_status_immune(player_id):
                 dmg = ps.poison
                 self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
-                if self.game_over or ps.health <= 0:
-                    return
             self._decay_poison_after_turn_start(player_id)
             self._apply_toxic_poison_after_poison_settlement(player_id)
         if ps.fire > 0 and not self._is_status_immune(player_id):
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
-            if self.game_over or ps.health <= 0:
-                return
         if self.round_num > 1:
             elixir_recovery = ELIXIR_RECOVERY
             for eq in list(opp.equipment):
@@ -8623,6 +8633,12 @@ class GameEngine:
             elif eq.def_id == 'GoldenLeaf':
                 ps.draw_cards(1)
                 self.log_msg(f"{self.pn(player_id)}的黄金叶效果：多抽1张牌")
+        if not self.game_over:
+            self._apply_jungle_turn_start_regen(player_id)
+        self._defer_turn_start_death_checks = False
+        if ps.health <= 0:
+            self._check_yggdrasil(player_id)
+            self._check_game_over()
 
     def _queue_foresight_replace_choice(self, player_id: int, draw_count: int, resume_handler: str) -> bool:
         ps = self.players[player_id]
@@ -8660,6 +8676,7 @@ class GameEngine:
         opp = self.players[opp_id]
         early_owner_turn_start_equipment = getattr(self, '_pending_turn_start_early_owner_equipment', set()) or set()
         self._pending_turn_start_early_owner_equipment = set()
+        self._defer_turn_start_death_checks = True
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(owner_state.equipment):
                 if self._has_card_event(eq.card_def, 'any_turn_start'):
@@ -8675,6 +8692,7 @@ class GameEngine:
                 self.log_msg(f"{self.pn(opp_id)}的腐化效果激活")
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
+            self._defer_turn_start_death_checks = False
             return
         if self.round_num > 1:
             draw_count = max(0, int((foresight_result or {}).get('draw_count', 0) or 0))
@@ -8687,14 +8705,10 @@ class GameEngine:
             if not self._is_status_immune(player_id):
                 dmg = ps.poison
                 self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
-                if self.game_over or ps.health <= 0:
-                    return
             self._decay_poison_after_turn_start(player_id)
             self._apply_toxic_poison_after_poison_settlement(player_id)
         if ps.fire > 0 and not self._is_status_immune(player_id):
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
-            if self.game_over or ps.health <= 0:
-                return
         if self.round_num > 1:
             elixir_recovery = ELIXIR_RECOVERY
             for eq in list(opp.equipment):
@@ -8747,6 +8761,12 @@ class GameEngine:
             elif eq.def_id == 'GoldenLeaf':
                 ps.draw_cards(1)
                 self.log_msg(f"{self.pn(player_id)}的黄金叶效果：多抽1张牌")
+        if not self.game_over:
+            self._apply_jungle_turn_start_regen(player_id)
+        self._defer_turn_start_death_checks = False
+        if ps.health <= 0:
+            self._check_yggdrasil(player_id)
+            self._check_game_over()
         if self.game_over:
             return
         if ps.skip_turn > 0 and not self._is_status_immune(player_id):
@@ -9294,7 +9314,11 @@ class GameEngine:
                     'bonus_damage', 'return_to_hand_turns', 'held_turns', 'swift_value', 'magic_swift_value',
                     'power_value', 'temp_swift_value', 'temp_heavy_value'):
             setattr(target_card, prop, value)
-            if prop == 'swift_value':
+            if prop == 'fusion_level':
+                target_card.fusion_multiplier = float(value)
+            elif prop == 'fission_level':
+                target_card.fission_count = max(0, int(value) - 1)
+            elif prop == 'swift_value':
                 if value > 0:
                     target_card.instance_flags.add('swift')
                     target_card.disabled_flags.discard('swift')
@@ -9362,7 +9386,15 @@ class GameEngine:
             return
         prop = str(params.get('property', params.get('prop', 'fusion_level')))
         current = self._get_card_property_numeric_value(target_card, prop)
-        value = current + self._eval_int(player_id, params.get('amount', params.get('value', 0)), card)
+        amount = self._eval_int(player_id, params.get('amount', params.get('value', 0)), card)
+        if (
+            prop == 'fission_level'
+            and getattr(card, 'def_id', '') == 'Fission'
+            and 'multi_petal' in getattr(card, 'setup_modifiers', set())
+            and int(amount) == 2
+        ):
+            amount = 3
+        value = current + amount
         self._set_card_property_value(player_id, card, {'card': params.get('card', {'ref': 'current_card'}), 'property': prop}, value)
         if log:
             self.log_msg(log)

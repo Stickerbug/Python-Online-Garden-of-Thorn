@@ -2561,6 +2561,18 @@ body {
   grid-template-columns: minmax(0, 1fr) 210px;
 }
 
+.gallery-card-grid-main {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.gallery-card-tools {
+  padding: 6px 8px 2px;
+  display: flex;
+  justify-content: flex-start;
+}
+
 .gallery-card-grid {
   min-height: 0;
   overflow-y: auto;
@@ -2626,8 +2638,10 @@ body {
 }
 
 .gallery-multipetal-toggle {
-  display: block;
-  margin: 8px auto 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
   min-width: 72px;
   padding: 6px 14px;
 }

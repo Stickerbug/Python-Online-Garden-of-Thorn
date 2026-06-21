@@ -1058,10 +1058,11 @@ class GameEngine2v2(GameEngine):
         self._record_damage(player_id, actual, source_id)
         self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={ps.health}）")
         self._run_v2_after_damage_hooks(damage_context, actual)
-        self._check_yggdrasil(player_id)
-        if ps.health <= 0:
-            self._on_player_death(player_id)
-        self._check_game_over()
+        if not getattr(self, '_defer_turn_start_death_checks', False):
+            self._check_yggdrasil(player_id)
+            if ps.health <= 0:
+                self._on_player_death(player_id)
+            self._check_game_over()
         return actual
 
     def _on_player_death(self, player_id: int):
@@ -1271,6 +1272,7 @@ class GameEngine2v2(GameEngine):
         early_owner_turn_start_equipment = self._run_owner_turn_start_action_status_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        self._defer_turn_start_death_checks = True
         turn_will_be_skipped = bool(ps.skip_turn)
         if turn_will_be_skipped:
             ps.skip_turn = max(0, int(ps.skip_turn) - 1)
@@ -1336,18 +1338,15 @@ class GameEngine2v2(GameEngine):
                     self.log_msg(f"{self.pn(eid)}的腐化效果激活")
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
+            self._defer_turn_start_death_checks = False
             return
         if ps.poison > 0:
             if not self._is_status_immune(player_id):
                 self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
-                if self.game_over or ps.health <= 0:
-                    return
             self._decay_poison_after_turn_start(player_id)
             self._apply_toxic_poison_after_poison_settlement(player_id)
         if ps.fire > 0 and not self._is_status_immune(player_id):
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
-            if self.game_over or ps.health <= 0:
-                return
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(owner_state.equipment):
                 if getattr(eq, 'effect_target', owner_id) != player_id:
@@ -1385,6 +1384,14 @@ class GameEngine2v2(GameEngine):
                 elif eq.def_id == 'GoldenLeaf':
                     ps.draw_cards(1)
                     self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}多抽1张牌")
+        if not self.game_over:
+            self._apply_jungle_turn_start_regen(player_id)
+        self._defer_turn_start_death_checks = False
+        if ps.health <= 0:
+            self._check_yggdrasil(player_id)
+            if ps.health <= 0:
+                self._on_player_death(player_id)
+            self._check_game_over()
         if turn_will_be_skipped:
             self.log_msg(f"{self.pn(player_id)}被跳过本回合")
             self._skip_current_turn_after_start = True
@@ -1403,6 +1410,7 @@ class GameEngine2v2(GameEngine):
         ps = self.players[player_id]
         early_owner_turn_start_equipment = set(state.get('early_owner_turn_start_equipment') or set())
         turn_will_be_skipped = bool(state.get('turn_will_be_skipped'))
+        self._defer_turn_start_death_checks = True
         if self.round_num > 1:
             draw_count = max(0, int((foresight_result or {}).get('draw_count', 0) or 0))
             drawn = ps.draw_cards(draw_count)
@@ -1455,18 +1463,15 @@ class GameEngine2v2(GameEngine):
                     self.log_msg(f"{self.pn(eid)}的腐化效果激活")
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
+            self._defer_turn_start_death_checks = False
             return
         if ps.poison > 0:
             if not self._is_status_immune(player_id):
                 self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
-                if self.game_over or ps.health <= 0:
-                    return
             self._decay_poison_after_turn_start(player_id)
             self._apply_toxic_poison_after_poison_settlement(player_id)
         if ps.fire > 0 and not self._is_status_immune(player_id):
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
-            if self.game_over or ps.health <= 0:
-                return
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(owner_state.equipment):
                 if getattr(eq, 'effect_target', owner_id) != player_id:
@@ -1504,6 +1509,14 @@ class GameEngine2v2(GameEngine):
                 elif eq.def_id == 'GoldenLeaf':
                     ps.draw_cards(1)
                     self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}多抽1张牌")
+        if not self.game_over:
+            self._apply_jungle_turn_start_regen(player_id)
+        self._defer_turn_start_death_checks = False
+        if ps.health <= 0:
+            self._check_yggdrasil(player_id)
+            if ps.health <= 0:
+                self._on_player_death(player_id)
+            self._check_game_over()
         if turn_will_be_skipped:
             self.log_msg(f"{self.pn(player_id)}被跳过本回合")
             self._skip_current_turn_after_start = True

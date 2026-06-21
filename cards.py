@@ -304,11 +304,14 @@ _reg(CardDef('MagicStinger', 'Magic Stinger', '魔法刺', 0, 8, 'thorn', 5, 'Co
 
 _reg(CardDef('Fission', 'Fission', '裂变', 0, 0, 'bloom', 2, 'Common',
              '将一次攻击分裂为多次。', '选择一张手中的攻击牌，将其裂变层数增加2',
-             flags={'exile', 'self_only'}))
+             flags={'exile', 'self_only'},
+             image='card-art/Fission.svg', image_url='card-art/Fission.svg',
+             upgraded_image='assets/cards/fission+1.svg', upgraded_image_url='assets/cards/fission+1.svg'))
 
 _reg(CardDef('Fusion', 'Fusion', '聚变', 0, 0, 'bloom', 2, 'Common',
              '将相同的攻击聚合为一击。', '选择手中2张同名攻击牌，将它们的聚变层数相加，裂变层数取最大值，变为一张牌',
-             flags={'self_only'}))
+             flags={'self_only'},
+             image='card-art/Fusion.svg', image_url='card-art/Fusion.svg'))
 
 _reg(CardDef('Iris', 'Iris', '鸢尾', 3, 0, 'bloom', 3, 'Common',
              '美丽而致命。', '施加10层中毒'))

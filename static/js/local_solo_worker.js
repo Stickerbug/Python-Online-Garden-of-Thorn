@@ -1563,15 +1563,14 @@ class LocalSoloEngine {
                 this.logMsg(`${this.pn(oppId)}的腐化效果激活`);
             }
         });
+        this._deferTurnStartDeathChecks = true;
         if (ps.poison > 0) {
             this.dealDirectDamage(playerId, ps.poison, '中毒');
-            if (this.game_over || ps.health <= 0) return;
             ps.poison = Math.floor(ps.poison / 2);
             this.applyToxicPoisonAfterPoisonSettlement(playerId);
         }
         if (ps.fire > 0) {
             this.dealDirectDamage(playerId, ps.fire, '灼烧');
-            if (this.game_over || ps.health <= 0) return;
         }
         if (this.round_num > 1) {
             let recovery = ELIXIR_RECOVERY;
@@ -1600,6 +1599,12 @@ class LocalSoloEngine {
                 });
             }
         });
+        if (!this.game_over) this.applyJungleTurnStartRegen(playerId);
+        this._deferTurnStartDeathChecks = false;
+        if (ps.health <= 0) {
+            this.checkYggdrasil(playerId);
+            this.checkGameOver();
+        }
     }
 
     applyToxicPoisonAfterPoisonSettlement(playerId) {
@@ -2219,6 +2224,11 @@ class LocalSoloEngine {
         ps.fragile = 0;
         const shield = this.customStatusValue(playerId, 'jungle:shield', 'shield');
         if (shield > 0) this.setCustomStatusAliasGroup(playerId, 'jungle:shield', ['jungle:shield', 'shield'], Math.floor(shield / 2));
+    }
+
+    applyJungleTurnStartRegen(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return;
         const healTurns = this.customStatusValue(playerId, 'jungle:turn_heal_turns', 'turn_heal_turns');
         const healPower = this.customStatusValue(playerId, 'jungle:turn_heal_power', 'turn_heal_power');
         if (healTurns > 0 && healPower > 0) {
@@ -3515,7 +3525,17 @@ class LocalSoloEngine {
             : prop === 'cost_m_override'
                 ? (target.cost_m_override != null ? target.cost_m_override : toInt(target.def().cost_m, 0))
                 : toInt(target[prop], 0);
-        target[prop] = this.clampCardProperty(target, prop, current + this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0));
+        let amount = this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0);
+        if (
+            prop === 'fission_level'
+            && card && card.def_id === 'Fission'
+            && card.setup_modifiers instanceof Set
+            && card.setup_modifiers.has('multi_petal')
+            && toInt(amount, 0) === 2
+        ) {
+            amount = 3;
+        }
+        target[prop] = this.clampCardProperty(target, prop, current + amount);
         if (prop === 'fusion_level') target.fusion_multiplier = target.fusion_level;
         if (prop === 'fission_level') target.fission_count = Math.max(0, target.fission_level - 1);
         this.syncCardSpecialPropertyFlag(target, prop, false);
@@ -4305,12 +4325,16 @@ class LocalSoloEngine {
     applySetupModifiersToCard(playerId, card) {
         if (!card || !this.players[playerId]) return card;
         const eventId = toInt(this.opening_event_picks[playerId], -1);
-        if (eventId === 9 && this.cardBasePetalCount(card) >= 2) {
+        if (eventId === 9 && (card.def_id === 'Fission' || this.cardBasePetalCount(card) >= 2)) {
             card.setup_modifiers = card.setup_modifiers instanceof Set
                 ? card.setup_modifiers
                 : new Set(card.setup_modifiers || []);
             if (!card.setup_modifiers.has('multi_petal')) {
-                card.extra_hits = Math.max(0, toInt(card.extra_hits, 0)) + 1;
+                if (card.def_id === 'Fission') {
+                    card.instance_flags.add('multi_petal_fission');
+                } else {
+                    card.extra_hits = Math.max(0, toInt(card.extra_hits, 0)) + 1;
+                }
                 card.setup_modifiers.add('multi_petal');
             }
         }
@@ -4449,8 +4473,10 @@ class LocalSoloEngine {
         ps.health -= actual;
         this.recordDamage(playerId, actual, sourceId);
         this.logMsg(`${this.pn(playerId)}受到${actual}点${source}伤害（H=${ps.health}）`);
-        this.checkYggdrasil(playerId);
-        this.checkGameOver();
+        if (!this._deferTurnStartDeathChecks) {
+            this.checkYggdrasil(playerId);
+            this.checkGameOver();
+        }
         return actual;
     }
 

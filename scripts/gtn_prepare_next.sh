@@ -89,7 +89,7 @@ python -m py_compile app.py db.py game_engine.py game_engine_2v2.py game_engine_
 
 if [[ -d "$RELEASE_DIR/scripts" ]]; then
   mkdir -p "$NEXT_DIR/scripts"
-  for helper in blue_green_status.sh blue_green_switch_nginx.sh BLUE_GREEN_DEPLOY.md gtn-blue-green.service.template nginx-blue-green-gtn.conf.template; do
+  for helper in blue_green_status.sh blue_green_switch_nginx.sh gtn_stop_idle_instance.sh BLUE_GREEN_DEPLOY.md gtn-blue-green.service.template nginx-blue-green-gtn.conf.template; do
     if [[ -f "$RELEASE_DIR/scripts/$helper" ]]; then
       cp "$RELEASE_DIR/scripts/$helper" "$NEXT_DIR/scripts/$helper"
       [[ "$helper" == *.sh ]] && chmod +x "$NEXT_DIR/scripts/$helper"

@@ -3,6 +3,10 @@ const debugLog = (...args) => {
     if (DEBUG_CLIENT_LOGS) console.log(...args);
 };
 const GTN_BETA_MODE = !!window.__GTN_BETA_MODE__;
+const GTN_INSTANCE_ID = String(window.__GTN_INSTANCE_ID__ || '');
+const GTN_INSTANCE_PORT = String(window.__GTN_INSTANCE_PORT__ || '');
+const GTN_ROUTE_COOKIE = 'gtn_route_port';
+const GTN_ACTIVE_ROUTE_KEY = 'gtn_active_route';
 const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_theme',
     'gtn_lang',
@@ -2628,6 +2632,71 @@ let surrenderConsentCountdown = 0;
 let localCountdownTimerId = null;
 let localTurnTimerSnapshot = null;
 let localPregameTimerSnapshot = null;
+
+function setRouteCookie(name, value, maxAgeSeconds) {
+    try {
+        document.cookie = `${name}=${encodeURIComponent(String(value || ''))}; Path=/; Max-Age=${Number(maxAgeSeconds) || 0}; SameSite=Lax`;
+    } catch (_) {}
+}
+
+function clearRouteCookie(name) {
+    try {
+        document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`;
+    } catch (_) {}
+}
+
+function readActiveMatchRoute() {
+    try {
+        const raw = localStorage.getItem(GTN_ACTIVE_ROUTE_KEY);
+        if (!raw) return null;
+        const route = JSON.parse(raw);
+        if (!route || !route.instance_port) return null;
+        const savedAt = Number(route.saved_at || 0);
+        if (savedAt && Date.now() - savedAt > 8 * 60 * 60 * 1000) {
+            clearActiveMatchRoute('expired');
+            return null;
+        }
+        return route;
+    } catch (_) {
+        return null;
+    }
+}
+
+function clearActiveMatchRoute(reason = '') {
+    try { localStorage.removeItem(GTN_ACTIVE_ROUTE_KEY); } catch (_) {}
+    clearRouteCookie(GTN_ROUTE_COOKIE);
+    if (reason) debugLog('[client] cleared match route:', reason);
+}
+
+function rememberActiveMatchRoute(payload = {}, reason = '') {
+    if (soloMode || replayMode || !payload || payload.solo || payload.replay) return;
+    const phaseName = String(payload.phase || phase || '');
+    if (!isNetworkMatchPhase(phaseName)) return;
+    const port = String(payload.instance_port || GTN_INSTANCE_PORT || '').trim();
+    if (!port) return;
+    const route = {
+        instance_id: String(payload.instance_id || GTN_INSTANCE_ID || ''),
+        instance_port: port,
+        room_id: payload.room_id != null ? String(payload.room_id) : '',
+        match_key: phaseContextMatchKey(payload) || '',
+        saved_at: Date.now(),
+        reason: reason || phaseName,
+    };
+    try { localStorage.setItem(GTN_ACTIVE_ROUTE_KEY, JSON.stringify(route)); } catch (_) {}
+    setRouteCookie(GTN_ROUTE_COOKIE, port, 8 * 60 * 60);
+    debugLog('[client] remembered match route:', route);
+}
+
+function activeMatchRouteLoginPayload() {
+    const route = readActiveMatchRoute();
+    if (!route) return {};
+    return {
+        desired_instance_id: route.instance_id || '',
+        desired_instance_port: route.instance_port || '',
+        desired_room_id: route.room_id || '',
+        desired_match_key: route.match_key || '',
+    };
+}
 let matchTransitionGuardUntil = 0;
 let allowLobbyTransitionUntil = 0;
 let soloMode = false;
@@ -3591,6 +3660,7 @@ function shouldIgnoreLobbyUpdateWhileInMatch() {
 
 function clearNetworkMatchStateForLobby() {
     if (soloMode || replayMode) return;
+    clearActiveMatchRoute('lobby');
     gameState = {};
     draftState = {};
     eventSelectData = {};
@@ -3612,7 +3682,6 @@ let gallerySelectedId = null;
 let galleryMode = 'cards';
 let rulesScrollTop = 0;
 let galleryReturnToRules = false;
-let galleryMultiPetalPreviewId = null;
 let galleryShowMultiPetalPreview = false;
 let gallerySelectedModKeys = null;
 let gallerySelectedTypeKeys = null;
@@ -3975,10 +4044,22 @@ function compareGalleryCards(a, b) {
 function hasGalleryMultiPetalPreview(cd) {
     if (!cd) return false;
     if (cd.upgraded_image_url || cd.upgraded_image) return true;
+    if (cd.id === 'Fission' || cd.legacy_id === 'Fission') return true;
     const hits = Number(cd.hits || 1);
     if (Number.isFinite(hits) && hits >= 2) return true;
     const text = `${getCardEffectText(cd) || ''} ${cd.effect_text || ''}`.toLowerCase();
     return /[（(]\s*\d+\s*子瓣\s*[）)]|[x×]\s*\d+\s*层|子瓣/.test(text);
+}
+
+function makeGalleryCardPreviewDict(cd) {
+    const cardDict = { def_id: cd.id, instance_flags: [], disabled_flags: [] };
+    if (galleryShowMultiPetalPreview && hasGalleryMultiPetalPreview(cd)) {
+        cardDict.setup_modifiers = ['multi_petal'];
+        if (!(cd.id === 'Fission' || cd.legacy_id === 'Fission')) {
+            cardDict.extra_hits = 1;
+        }
+    }
+    return cardDict;
 }
 
 function getGalleryCardModKey(cd) {
@@ -4119,7 +4200,14 @@ function renderCardGallery() {
         .sort(compareGalleryCards);
     detail.innerHTML = `
         <div class="gallery-card-grid-shell">
-            <div id="gallery-card-grid" class="gallery-card-grid"></div>
+            <div class="gallery-card-grid-main">
+                <div class="gallery-card-tools">
+                    <button id="gallery-multipetal-toggle" class="btn btn-secondary gallery-multipetal-toggle${galleryShowMultiPetalPreview ? ' active' : ''}" type="button">
+                        ${escapeHtml(currentLang === 'zh' ? '子瓣' : 'Petal')}
+                    </button>
+                </div>
+                <div id="gallery-card-grid" class="gallery-card-grid"></div>
+            </div>
             <aside id="gallery-type-filter" class="gallery-type-filter">
                 <div class="gallery-filter-title">${escapeHtml(currentLang === 'zh' ? '类型筛选' : 'Types')}</div>
                 <div class="gallery-filter-options">
@@ -4136,6 +4224,10 @@ function renderCardGallery() {
     `;
     const grid = $('gallery-card-grid');
     if (!grid) return;
+    $('gallery-multipetal-toggle')?.addEventListener('click', () => {
+        galleryShowMultiPetalPreview = !galleryShowMultiPetalPreview;
+        renderCardGallery();
+    });
     const renderToken = ++galleryCardRenderToken;
     if (!ids.length) {
         grid.innerHTML = `<p class="gallery-no-items">${escapeHtml(UI.gallery_no_items)}</p>`;
@@ -4146,7 +4238,7 @@ function renderCardGallery() {
             if (renderToken !== galleryCardRenderToken) return;
             const cd = CARD_DEFS[id];
             if (!cd) return;
-            const cardDict = { def_id: cd.id, instance_flags: [], disabled_flags: [] };
+            const cardDict = makeGalleryCardPreviewDict(cd);
             const wrap = document.createElement('button');
             wrap.type = 'button';
             wrap.className = 'gallery-card-tile';
@@ -5661,7 +5753,8 @@ function getCardLayerLabel(cardDict) {
 
 function getCardArtUrl(cardDict, cardDef) {
     const extraHits = Math.max(0, Number(cardDict && cardDict.extra_hits || 0));
-    if (extraHits > 0) {
+    const setupModifiers = Array.isArray(cardDict && cardDict.setup_modifiers) ? cardDict.setup_modifiers : [];
+    if (extraHits > 0 || setupModifiers.includes('multi_petal')) {
         const upgraded = (cardDict && (cardDict.upgraded_image_url || cardDict.upgraded_image))
             || (cardDef && (cardDef.upgraded_image_url || cardDef.upgraded_image));
         if (upgraded) return upgraded;
@@ -5687,6 +5780,13 @@ function getEquipmentIconHtml(cardInst, cardDef) {
 function getCardEffectTextForInstance(cardDict, cardDef) {
     let text = getCardEffectText(cardDef) || '';
     const extraHits = Math.max(0, Number(cardDict && cardDict.extra_hits || 0));
+    const setupModifiers = Array.isArray(cardDict && cardDict.setup_modifiers) ? cardDict.setup_modifiers : [];
+    if (cardDef && (cardDef.id === 'Fission' || cardDef.legacy_id === 'Fission') && setupModifiers.includes('multi_petal')) {
+        text = text.replace(/裂变层数增加2/g, '裂变层数增加3')
+            .replace(/Fission by 2/g, 'Fission by 3')
+            .replace(/Fission de 2/g, 'Fission de 3')
+            .replace(/分裂を2/g, '分裂を3');
+    }
     if (!extraHits || !text || !cardDef) return text;
     const info = getAttackDamageBaseInfo(cardDict || {}, cardDef);
     const baseHits = Math.max(
@@ -8151,6 +8251,7 @@ function emitSocketLogin() {
         account_login: !!currentAccount,
         beta_mode: GTN_BETA_MODE,
         skin: getCurrentSkinConfig(),
+        ...activeMatchRouteLoginPayload(),
         ...getModLoginPayload(),
     });
     return true;
@@ -8294,6 +8395,11 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('login_fail', (data) => {
         setButtonLoading('btn-connect', false);
+        if (data && data.reason === 'instance_mismatch' && data.requested_instance_port) {
+            setRouteCookie(GTN_ROUTE_COOKIE, data.requested_instance_port, 8 * 60 * 60);
+            window.location.reload();
+            return;
+        }
         showView('view-login');
         const err = $('login-error');
         if (err) err.textContent = moderationMessageFromPayload(data, translateLoginReason(data.reason));
@@ -8420,6 +8526,7 @@ function connectSocket(serverUrl) {
         }
         if (isNetworkMatchPhase(nextPhase)) markNetworkMatchTransition(`game_phase:${nextPhase}`);
         phase = nextPhase;
+        rememberActiveMatchRoute(data || {}, `game_phase:${nextPhase}`);
         if (!data.spectating) {
             isSpectating = false;
             pendingSpectateRoomId = null;
@@ -8458,6 +8565,7 @@ function connectSocket(serverUrl) {
     bindSocketEvent('draft_state', (data) => {
         if (shouldIgnoreLatePregamePayload(data, 'draft_state')) return;
         markNetworkMatchTransition('draft_state');
+        rememberActiveMatchRoute({ ...(data || {}), phase: 'draft' }, 'draft_state');
         const previousDraftState = draftState;
         const oldOptIds = draftState && draftState.options ? draftState.options.map(o => o.def_id) : [];
         const newOptIds = data.options ? data.options.map(o => o.def_id) : [];
@@ -8487,6 +8595,12 @@ function connectSocket(serverUrl) {
             pregame_timer_remaining: data.pregame_timer_remaining ?? draftState.pregame_timer_remaining,
             pregame_timer_total: data.pregame_timer_total ?? draftState.pregame_timer_total,
             pregame_timer_status: data.pregame_timer_status || draftState.pregame_timer_status,
+            watching_pregame_timers: normalizeWatchingPregameTimers(data.watching_pregame_timers, draftState.watching_pregame_timers),
+            watching_pregame_timer_player: data.watching_pregame_timer_player ?? draftState.watching_pregame_timer_player,
+            watching_pregame_timer_name: data.watching_pregame_timer_name || draftState.watching_pregame_timer_name,
+            watching_pregame_timer_remaining: data.watching_pregame_timer_remaining ?? draftState.watching_pregame_timer_remaining,
+            watching_pregame_timer_total: data.watching_pregame_timer_total ?? draftState.watching_pregame_timer_total,
+            watching_pregame_timer_status: data.watching_pregame_timer_status || draftState.watching_pregame_timer_status,
         };
         if (data.your_id != null) playerId = data.your_id;
         updateDraftInfo(draftState);
@@ -8501,19 +8615,32 @@ function connectSocket(serverUrl) {
             draftState.pregame_timer_remaining = data.pregame_timer_remaining;
             draftState.pregame_timer_total = data.pregame_timer_total;
             draftState.pregame_timer_status = data.pregame_timer_status;
+            draftState.watching_pregame_timers = normalizeWatchingPregameTimers(data.watching_pregame_timers, draftState.watching_pregame_timers);
+            draftState.watching_pregame_timer_player = data.watching_pregame_timer_player;
+            draftState.watching_pregame_timer_name = data.watching_pregame_timer_name;
+            draftState.watching_pregame_timer_remaining = data.watching_pregame_timer_remaining;
+            draftState.watching_pregame_timer_total = data.watching_pregame_timer_total;
+            draftState.watching_pregame_timer_status = data.watching_pregame_timer_status;
         }
         if (eventSelectData) {
             eventSelectData.pregame_timer_remaining = data.pregame_timer_remaining;
             eventSelectData.pregame_timer_total = data.pregame_timer_total;
             eventSelectData.pregame_timer_status = data.pregame_timer_status;
+            eventSelectData.watching_pregame_timers = normalizeWatchingPregameTimers(data.watching_pregame_timers, eventSelectData.watching_pregame_timers);
+            eventSelectData.watching_pregame_timer_player = data.watching_pregame_timer_player;
+            eventSelectData.watching_pregame_timer_name = data.watching_pregame_timer_name;
+            eventSelectData.watching_pregame_timer_remaining = data.watching_pregame_timer_remaining;
+            eventSelectData.watching_pregame_timer_total = data.watching_pregame_timer_total;
+            eventSelectData.watching_pregame_timer_status = data.watching_pregame_timer_status;
         }
-        updatePregameTimerDisplay(data, ['event_select', 'event_reveal'].includes(data.pregame_timer_status) ? 'event' : 'draft');
+        updatePregameTimerDisplay(data, pregameTimerDisplayTarget(data));
     });
     bindSocketEvent('event_select', (data) => {
         debugLog('[client] event_select');
         if (shouldIgnoreLatePregamePayload(data, 'event_select')) return;
         markNetworkMatchTransition('event_select');
         phase = 'event_select';
+        rememberActiveMatchRoute({ ...(data || {}), phase: 'event_select' }, 'event_select');
         eventSelectData = data;
         syncBattleLogMatch(data || {});
         syncPhaseChatMatch(data || {});
@@ -8527,6 +8654,7 @@ function connectSocket(serverUrl) {
         if (shouldIgnoreLatePregamePayload(data, 'event_reveal')) return;
         markNetworkMatchTransition('event_reveal');
         phase = 'event_reveal';
+        rememberActiveMatchRoute({ ...(data || {}), phase: 'event_reveal' }, 'event_reveal');
         eventSelectData = data;
         syncBattleLogMatch(data || {});
         syncPhaseChatMatch(data || {});
@@ -8541,6 +8669,7 @@ function connectSocket(serverUrl) {
         if (shouldIgnoreLatePregamePayload(data, 'event_sub_choice')) return;
         markNetworkMatchTransition('event_sub_choice');
         phase = 'event_sub_choice';
+        rememberActiveMatchRoute({ ...(data || {}), phase: 'event_sub_choice' }, 'event_sub_choice');
         // Keep showing draft view so player can see their picks
         showView('view-draft');
         updateStatus(data.needs_sub_choice ? UI.select_event : UI.event_waiting);
@@ -8549,6 +8678,7 @@ function connectSocket(serverUrl) {
     bindSocketEvent('state_update', (data) => {
         debugLog('[client] state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null, 'spectating=', data.spectating);
         markNetworkMatchTransition('state_update');
+        rememberActiveMatchRoute(data || {}, 'state_update');
         if (data && data.spectating && pendingSpectateRoomId != null && data.room_id != null && Number(data.room_id) !== Number(pendingSpectateRoomId)) {
             debugLog('[client] ignored stale spectate state for room=', data.room_id, 'pending=', pendingSpectateRoomId);
             return;
@@ -12857,8 +12987,7 @@ function ensureLocalCountdownTimer() {
         }
         const pregameSource = eventSelectData || draftState;
         if (pregameSource && localPregameTimerSnapshot) {
-            const status = pregameSource.pregame_timer_status || localPregameTimerSnapshot.status || '';
-            updatePregameTimerDisplay(pregameSource, ['event_select', 'event_reveal'].includes(status) ? 'event' : 'draft');
+            updatePregameTimerDisplay(pregameSource, pregameTimerDisplayTarget(pregameSource));
         }
     }, 200);
 }
@@ -12888,6 +13017,63 @@ function rememberTurnTimerSnapshot(data) {
     ensureLocalCountdownTimer();
 }
 
+function effectivePregameTimerData(data) {
+    if (!data) return data;
+    if (Array.isArray(data.watching_pregame_timers) && data.watching_pregame_timers.length) {
+        const timers = data.watching_pregame_timers
+            .map((timer) => ({
+                player: timer.player,
+                name: timer.name || '',
+                status: timer.status || '',
+                total: timer.total,
+                remaining: Number(timer.remaining),
+                receivedAt: Number(timer.receivedAt) || performance.now(),
+            }))
+            .filter((timer) => Number.isFinite(timer.remaining) && timer.remaining >= 0);
+        if (timers.length) {
+            const first = timers[0];
+            return {
+                ...data,
+                watching_pregame_timers: timers,
+                pregame_timer_remaining: first.remaining,
+                pregame_timer_total: first.total,
+                pregame_timer_status: first.status,
+                pregame_timer_watching: true,
+                pregame_timer_watching_player: first.player,
+                pregame_timer_watching_name: first.name,
+            };
+        }
+    }
+    const watchingRemaining = Number(data.watching_pregame_timer_remaining);
+    if (!Number.isFinite(watchingRemaining) || watchingRemaining < 0) return data;
+    return {
+        ...data,
+        pregame_timer_remaining: data.watching_pregame_timer_remaining,
+        pregame_timer_total: data.watching_pregame_timer_total,
+        pregame_timer_status: data.watching_pregame_timer_status,
+        pregame_timer_watching: true,
+        pregame_timer_watching_player: data.watching_pregame_timer_player,
+        pregame_timer_watching_name: data.watching_pregame_timer_name,
+    };
+}
+
+function normalizeWatchingPregameTimers(timers, previous = []) {
+    if (!Array.isArray(timers)) return Array.isArray(previous) ? previous : [];
+    const now = performance.now();
+    const previousByKey = new Map((Array.isArray(previous) ? previous : []).map((item) => [`${item.player}:${item.status}`, item]));
+    return timers.map((timer) => {
+        const key = `${timer.player}:${timer.status || ''}`;
+        const prev = previousByKey.get(key);
+        return {
+            ...timer,
+            receivedAt: now,
+            // If a partial payload ever omits remaining, keep the older value instead of flashing blank.
+            remaining: timer.remaining ?? prev?.remaining,
+            total: timer.total ?? prev?.total,
+        };
+    });
+}
+
 function getDisplayedTurnTimerRemaining(gs) {
     const fallback = Number(gs && gs.turn_timer_remaining);
     if (!localTurnTimerSnapshot) return fallback;
@@ -12897,14 +13083,18 @@ function getDisplayedTurnTimerRemaining(gs) {
 }
 
 function rememberPregameTimerSnapshot(data) {
-    const remaining = Number(data && data.pregame_timer_remaining);
+    const effective = effectivePregameTimerData(data);
+    const remaining = Number(effective && effective.pregame_timer_remaining);
     if (!Number.isFinite(remaining) || remaining < 0) {
         localPregameTimerSnapshot = null;
         return;
     }
     localPregameTimerSnapshot = {
-        matchKey: phaseContextMatchKey(data || {}) || '',
-        status: data.pregame_timer_status || '',
+        matchKey: phaseContextMatchKey(effective || {}) || '',
+        status: effective.pregame_timer_status || '',
+        watching: !!effective.pregame_timer_watching,
+        watchingPlayer: effective.pregame_timer_watching_player,
+        watchingName: effective.pregame_timer_watching_name || '',
         remaining,
         paused: false,
         receivedAt: performance.now(),
@@ -12913,23 +13103,52 @@ function rememberPregameTimerSnapshot(data) {
 }
 
 function getDisplayedPregameTimerRemaining(data) {
-    const fallback = Number(data && data.pregame_timer_remaining);
+    const effective = effectivePregameTimerData(data);
+    const fallback = Number(effective && effective.pregame_timer_remaining);
     if (!localPregameTimerSnapshot) return fallback;
-    const dataKey = phaseContextMatchKey(data || {});
+    const dataKey = phaseContextMatchKey(effective || {});
     if (dataKey && localPregameTimerSnapshot.matchKey && dataKey !== localPregameTimerSnapshot.matchKey) return fallback;
-    const status = data && data.pregame_timer_status;
+    const status = effective && effective.pregame_timer_status;
     if (status && localPregameTimerSnapshot.status && status !== localPregameTimerSnapshot.status) return fallback;
+    const watching = !!(effective && effective.pregame_timer_watching);
+    if (watching !== !!localPregameTimerSnapshot.watching) return fallback;
+    if (watching && effective.pregame_timer_watching_player != null
+        && localPregameTimerSnapshot.watchingPlayer != null
+        && Number(effective.pregame_timer_watching_player) !== Number(localPregameTimerSnapshot.watchingPlayer)) return fallback;
     return localTimerRemainingSeconds(localPregameTimerSnapshot);
 }
 
 function formatPregameTimerText(data) {
-    const remaining = getDisplayedPregameTimerRemaining(data);
+    const effective = effectivePregameTimerData(data);
+    const formatOne = (item) => {
+        const rawRemaining = Number(item && item.remaining);
+        if (!Number.isFinite(rawRemaining) || rawRemaining < 0) return '';
+        const elapsed = item.receivedAt ? Math.max(0, (performance.now() - item.receivedAt) / 1000) : 0;
+        const safe = Math.max(0, Math.ceil(rawRemaining - elapsed));
+        const min = Math.floor(safe / 60);
+        const sec = safe % 60;
+        const clock = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+        const status = item.status || '';
+        let label = currentLang === 'zh' ? '剩余时间' : 'Time left';
+        if (currentLang === 'zh') {
+            if (status === 'event_select') label = '选择配装剩余';
+            else if (status === 'event_reveal') label = '开始选牌剩余';
+            else if (status === 'drafting') label = '选牌剩余';
+            else if (status === 'sub_choice') label = '配装处理剩余';
+            return `${item.name || '对方'}${label} ${clock}`;
+        }
+        return `${item.name || 'Opponent'}: ${label} ${clock}`;
+    };
+    if (effective && Array.isArray(effective.watching_pregame_timers) && effective.watching_pregame_timers.length) {
+        return effective.watching_pregame_timers.map(formatOne).filter(Boolean).join(' / ');
+    }
+    const remaining = getDisplayedPregameTimerRemaining(effective);
     if (!Number.isFinite(remaining) || remaining < 0) return '';
     const safe = Math.max(0, Math.ceil(remaining));
     const min = Math.floor(safe / 60);
     const sec = safe % 60;
     const clock = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-    const status = data.pregame_timer_status || '';
+    const status = effective.pregame_timer_status || '';
     let label = currentLang === 'zh' ? '剩余时间' : 'Time left';
     if (currentLang === 'zh') {
         if (status === 'event_select') label = '选择配装剩余';
@@ -12937,7 +13156,21 @@ function formatPregameTimerText(data) {
         else if (status === 'drafting') label = '选牌剩余';
         else if (status === 'sub_choice') label = '配装处理剩余';
     }
+    if (effective.pregame_timer_watching) {
+        const who = effective.pregame_timer_watching_name || (currentLang === 'zh' ? '对方' : 'Opponent');
+        label = currentLang === 'zh' ? `${who}${label}` : `${who}: ${label}`;
+    }
     return `${label} ${clock}`;
+}
+
+function pregameTimerDisplayTarget(data, fallback = '') {
+    if (phase === 'draft') return 'draft';
+    if (phase === 'event_select' || phase === 'event_reveal') return 'event';
+    const effective = effectivePregameTimerData(data);
+    const status = effective && effective.pregame_timer_status;
+    if (status === 'event_select' || status === 'event_reveal') return 'event';
+    if (status === 'drafting' || status === 'sub_choice') return 'draft';
+    return fallback || '';
 }
 
 function updatePregameTimerDisplay(data, target = '') {
@@ -12945,8 +13178,9 @@ function updatePregameTimerDisplay(data, target = '') {
     const draftTimer = $('draft-timer');
     const eventTimer = $('event-timer');
     const status = data && data.pregame_timer_status;
-    const useEvent = target === 'event' || status === 'event_select' || status === 'event_reveal';
-    if (draftTimer && (!useEvent || target === 'draft')) draftTimer.textContent = useEvent && target !== 'draft' ? '' : text;
+    const resolvedTarget = target || pregameTimerDisplayTarget(data);
+    const useEvent = resolvedTarget === 'event' || (!resolvedTarget && (status === 'event_select' || status === 'event_reveal'));
+    if (draftTimer && (!useEvent || resolvedTarget === 'draft')) draftTimer.textContent = useEvent && resolvedTarget !== 'draft' ? '' : text;
     if (eventTimer) eventTimer.textContent = useEvent ? text : '';
 }
 
@@ -15312,7 +15546,7 @@ function choosePlayerTargetOnBoard(title, targets) {
         const finishCancel = () => finish(-1);
         const pickableFromEvent = (event) => {
             if (!event || !event.target || !event.target.closest) return null;
-            const el = event.target.closest('[data-player-target-region].target-pickable, .target-pickable');
+            const el = event.target.closest('[data-player-target-region].target-pickable');
             if (!el || !isVisibleTargetRegion(el)) return null;
             return el;
         };
@@ -18784,6 +19018,7 @@ function updateGameOverRematchButton(gs) {
         rematchBtn.disabled = progress.hasVoted;
         rematchBtn.onclick = () => {
             if (!socket || rematchBtn.disabled) return;
+            clearActiveMatchRoute('rematch');
             socket.emit('rematch');
             const nextVotes = Math.min(progress.total, Math.max(progress.votes + (progress.hasVoted ? 0 : 1), progress.votes));
             rematchState = { ...progress, votes: nextVotes, hasVoted: true, mode: '2v2' };
@@ -18800,6 +19035,7 @@ function updateGameOverRematchButton(gs) {
         rematchBtn.onclick = () => {
             if (!socket) { debugLog('[REMATCH] socket missing'); return; }
             debugLog('[REMATCH] emit rematch accept');
+            clearActiveMatchRoute('rematch');
             socket.emit('rematch');
             rematchBtn.textContent = UI.rematch_sent;
             rematchBtn.disabled = true;
@@ -18810,6 +19046,7 @@ function updateGameOverRematchButton(gs) {
         rematchBtn.onclick = () => {
             if (!socket) { debugLog('[REMATCH] socket missing'); return; }
             debugLog('[REMATCH] emit rematch request');
+            clearActiveMatchRoute('rematch');
             socket.emit('rematch');
             rematchBtn.textContent = UI.rematch_sent;
             rematchBtn.disabled = true;
@@ -20600,6 +20837,7 @@ async function init() {
     });
     $('btn-return-lobby').addEventListener('click', () => {
         allowLobbyTransition('return_lobby_button');
+        clearActiveMatchRoute('return_lobby_button');
         if (socket) socket.emit('return_lobby', {});
         showView('view-lobby');
         phase = 'lobby';
@@ -20609,6 +20847,7 @@ async function init() {
             closeAccountReplayModal();
             return;
         }
+        clearActiveMatchRoute('leave_spectate');
         if (socket) socket.emit('leave_spectate', {});
     });
     $('btn-lobby-chat-send').addEventListener('click', onLobbyChatSend);

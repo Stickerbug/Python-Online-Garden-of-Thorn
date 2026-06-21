@@ -39,6 +39,7 @@ curl -fsS http://127.0.0.1:5002/api/health/full
 将正式域名反代从 `127.0.0.1:5000` 切到 `127.0.0.1:5002`。
 
 ```bash
+scripts/blue_green_switch_nginx.sh 5002 /opt/gtn-next
 nginx -t
 systemctl reload nginx
 ```
@@ -47,6 +48,10 @@ systemctl reload nginx
 
 - 新打开网页的玩家进入新实例。
 - 已打开旧网页的玩家仍可能连着旧实例。
+- 已经在旧对局中的玩家刷新页面时，前端会带 `gtn_route_port` cookie，Nginx 应按该 cookie 路由回旧实例。
+- 回到大厅、再来一局、退出观战会清除该 cookie，之后进入当前 active 实例。
+
+如果你的 Nginx 还没有 sticky map，请先把 `scripts/nginx-blue-green-gtn.conf.template` 的 `map $cookie_gtn_route_port $gtn_release_backend` 合并到正式站点配置。以后切换只改 map 里的 `default 127.0.0.1:端口;`。
 
 ## 4. 旧实例进入排空
 

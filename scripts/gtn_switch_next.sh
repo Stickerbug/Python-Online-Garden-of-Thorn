@@ -8,6 +8,8 @@ NEXT_PORT="${GTN_NEXT_PORT:-5002}"
 NEXT_DIR="${GTN_NEXT_DIR:-/opt/gtn-next}"
 RELEASE_DIR="${GTN_RELEASE_DIR:-/opt/gtn-release}"
 APPLY=0
+OLD_PORT="${GTN_OLD_PORT:-5000}"
+OLD_SERVICE="${GTN_OLD_SERVICE:-gtn-release}"
 
 for arg in "$@"; do
   case "$arg" in
@@ -15,6 +17,8 @@ for arg in "$@"; do
     --port=*) NEXT_PORT="${arg#*=}" ;;
     --next-dir=*) NEXT_DIR="${arg#*=}" ;;
     --release-dir=*) RELEASE_DIR="${arg#*=}" ;;
+    --old-port=*) OLD_PORT="${arg#*=}" ;;
+    --old-service=*) OLD_SERVICE="${arg#*=}" ;;
     -h|--help)
       cat <<EOF
 Usage:
@@ -51,6 +55,12 @@ fi
 if [[ "$APPLY" == "1" ]]; then
   systemctl reload nginx
   echo "Nginx reloaded. Public release traffic should now target $NEXT_PORT."
+  if [[ -x /usr/local/bin/gtn-stop-idle-instance.sh ]]; then
+    echo "Starting idle-stop monitor for old instance $OLD_SERVICE on port $OLD_PORT."
+    nohup /usr/local/bin/gtn-stop-idle-instance.sh "$OLD_PORT" "$OLD_SERVICE" >/var/log/gtn-idle-stop-launch.log 2>&1 &
+  else
+    echo "Warning: /usr/local/bin/gtn-stop-idle-instance.sh not found; old instance will not be auto-stopped." >&2
+  fi
 else
   echo "Nginx was not reloaded. Run this to apply:"
   echo "  systemctl reload nginx"

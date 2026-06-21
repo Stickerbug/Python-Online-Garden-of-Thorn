@@ -284,7 +284,19 @@ def drain_reject_payload():
         'reason': '服务器正在静默更新，旧实例不再接收新对局。请刷新进入新版。',
         'draining': True,
         'instance_id': GTN_INSTANCE_ID,
+        'instance_port': GTN_PORT,
         'version': GTN_VERSION,
+    }
+
+
+def instance_payload():
+    return {
+        'instance': GTN_INSTANCE,
+        'instance_id': GTN_INSTANCE_ID,
+        'instance_port': GTN_PORT,
+        'version': GTN_VERSION,
+        'static_version': GTN_STATIC_VERSION,
+        'draining': is_instance_draining(),
     }
 
 
@@ -1284,6 +1296,7 @@ def emit_room_game_phase(room, sid, phase, **extra):
         'room_id': room.room_id,
         'match_key': room_match_key(room),
     }
+    payload.update(instance_payload())
     payload.update(room_mod_payload(room))
     payload.update(extra)
     socketio.emit('game_phase', payload, room=sid)
@@ -2654,6 +2667,69 @@ def _pregame_timer_payload(room, pidx, status=None, now=None):
     }
 
 
+def _watched_pregame_timer_payload(room, pidx, now=None):
+    engine = getattr(room, 'engine', None)
+    if engine is None or not hasattr(engine, 'get_player_status'):
+        return {}
+    try:
+        own_status = engine.get_player_status(pidx)
+    except Exception:
+        own_status = None
+    if own_status != 'ready':
+        return {}
+    player_count = len(getattr(room, 'player_sids', []) or getattr(engine, 'players', []) or [])
+    candidates = []
+    for other_idx in range(player_count):
+        if other_idx == pidx:
+            continue
+        try:
+            status = engine.get_player_status(other_idx)
+        except Exception:
+            continue
+        if status and status != 'ready':
+            candidates.append((other_idx, status))
+    if not candidates:
+        return {
+            'watching_pregame_timers': [],
+            'watching_pregame_timer_player': None,
+            'watching_pregame_timer_name': None,
+            'watching_pregame_timer_status': None,
+            'watching_pregame_timer_remaining': None,
+            'watching_pregame_timer_total': None,
+        }
+    status_priority = {
+        'event_select': 0,
+        'event_reveal': 1,
+        'drafting': 2,
+        'sub_choice': 3,
+    }
+    names = getattr(engine, 'player_names', []) or []
+    watching_timers = []
+    for target_idx, target_status in sorted(
+        candidates,
+        key=lambda item: (status_priority.get(item[1], 99), item[0]),
+    ):
+        timer = _pregame_timer_payload(room, target_idx, target_status, now=now)
+        watching_timers.append({
+            'player': target_idx,
+            'name': names[target_idx] if target_idx < len(names) else f'P{target_idx + 1}',
+            'status': timer.get('pregame_timer_status'),
+            'remaining': timer.get('pregame_timer_remaining'),
+            'total': timer.get('pregame_timer_total'),
+        })
+    if not watching_timers:
+        return {}
+    first = watching_timers[0]
+    return {
+        'watching_pregame_timers': watching_timers,
+        'watching_pregame_timer_player': first.get('player'),
+        'watching_pregame_timer_name': first.get('name'),
+        'watching_pregame_timer_status': first.get('status'),
+        'watching_pregame_timer_remaining': first.get('remaining'),
+        'watching_pregame_timer_total': first.get('total'),
+    }
+
+
 def emit_pregame_timer_update(room, pidx, status=None):
     try:
         if pidx < 0 or pidx >= len(getattr(room, 'player_sids', []) or []):
@@ -2667,6 +2743,7 @@ def emit_pregame_timer_update(room, pidx, status=None):
             'your_id': pidx,
             **_pregame_timer_payload(room, pidx, status),
         }
+        payload.update(_watched_pregame_timer_payload(room, pidx))
         socketio.emit('pregame_timer_update', payload, room=sid)
     except Exception as exc:
         admin_event('error', f'pregame_timer_update failed room={getattr(room, "room_id", "?")} pidx={pidx}: {exc}', room_id=getattr(room, 'room_id', None))
@@ -2801,8 +2878,11 @@ def _room_timer_worker():
                         expired_turns.append((room, getattr(engine, 'current_player', None)))
                     elif was_action and not was_paused:
                         timer_broadcast_rooms.add(room)
-                    for pidx in range(len(getattr(room, 'player_sids', []) or [])):
+                    player_count = len(getattr(room, 'player_sids', []) or [])
+                    pregame_statuses = []
+                    for pidx in range(player_count):
                         status = engine.get_player_status(pidx) if hasattr(engine, 'get_player_status') else None
+                        pregame_statuses.append(status)
                         timeout = None
                         if status == 'event_select':
                             timeout = EVENT_SELECT_TIMEOUT_SECONDS
@@ -2837,6 +2917,10 @@ def _room_timer_worker():
                                 pregame_updates.add((room, pi))
                             if all(engine.player_ready[pi] for pi in range(len(room.player_sids))):
                                 start_rooms.add(room)
+                    if any(status and status != 'ready' for status in pregame_statuses):
+                        for pidx, status in enumerate(pregame_statuses):
+                            if status == 'ready':
+                                pregame_timer_updates.add((room, pidx, None))
             for room, pidx in expired_turns:
                 if pidx is None:
                     continue
@@ -6388,6 +6472,8 @@ def send_draft_state(room, pidx):
         'selected_opening_events': _selected_opening_event_names(engine),
         **_pregame_timer_payload(room, pidx, 'drafting'),
     }
+    payload.update(_watched_pregame_timer_payload(room, pidx))
+    payload.update(instance_payload())
     payload.update(room_mod_payload(room))
     socketio.emit('draft_state', payload, room=sid)
 
@@ -6434,6 +6520,8 @@ def send_pregame_status_update(room, targets=None):
             'selected_opening_events': _selected_opening_event_names(engine),
             **_pregame_timer_payload(room, pidx, engine.get_player_status(pidx)),
         }
+        payload.update(_watched_pregame_timer_payload(room, pidx))
+        payload.update(instance_payload())
         socketio.emit('pregame_status_update', payload, room=sid)
 
 
@@ -6492,6 +6580,8 @@ def send_event_state(room, pidx):
         'selected_opening_events': _selected_opening_event_names(engine),
         **_pregame_timer_payload(room, pidx, 'event_select'),
     }
+    payload.update(_watched_pregame_timer_payload(room, pidx))
+    payload.update(instance_payload())
     payload.update(room_mod_payload(room))
     socketio.emit('event_select', payload, room=sid)
 
@@ -6533,6 +6623,8 @@ def send_event_reveal_state(room, pidx):
         'your_id': pidx,
         'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
     }
+    payload.update(_watched_pregame_timer_payload(room, pidx))
+    payload.update(instance_payload())
     payload.update(room_mod_payload(room))
     socketio.emit('event_reveal', payload, room=sid)
 
@@ -6560,6 +6652,7 @@ def _broadcast_game_state_now(room):
         state['room_id'] = room.room_id
         state['match_key'] = room_match_key(room)
         state['spectator_count'] = room_spectator_count(room)
+        state.update(instance_payload())
         state.update(_room_timer_payload(room))
         state.update(room_mod_payload(room))
         if room.engine.phase == 'game_over':
@@ -6827,6 +6920,8 @@ def send_event_sub_choice_state(room, pidx):
         'selected_opening_events': _selected_opening_event_names(engine),
         **_pregame_timer_payload(room, pidx, 'sub_choice'),
     }
+    payload.update(_watched_pregame_timer_payload(room, pidx))
+    payload.update(instance_payload())
     payload.update(room_mod_payload(room))
     socketio.emit('event_sub_choice', payload, room=sid)
 
@@ -7467,6 +7562,7 @@ def index():
         beta_mode=False,
         static_version=GTN_STATIC_VERSION,
         instance_id=GTN_INSTANCE_ID,
+        instance_port=GTN_PORT,
         app_version=GTN_VERSION,
     )
 
@@ -7478,6 +7574,7 @@ def beta_entry_response():
             beta_mode=True,
             static_version=GTN_STATIC_VERSION,
             instance_id=GTN_INSTANCE_ID,
+            instance_port=GTN_PORT,
             app_version=GTN_VERSION,
         )
     return render_template('beta_gate.html')
@@ -9555,9 +9652,25 @@ def on_login(data):
     try:
         raw_name = validate_str(data.get('nickname', ''), max_len=64, name='nickname')
         preferred_mode = validate_str(data.get('mode', '1v1'), max_len=8, name='mode')
+        desired_instance_id = validate_str(data.get('desired_instance_id', ''), max_len=96, pattern=r'[A-Za-z0-9_.:\-]*', name='desired_instance_id')
+        desired_instance_port = validate_str(data.get('desired_instance_port', ''), max_len=8, pattern=r'[0-9]*', name='desired_instance_port')
     except ValueError as exc:
         _security_illegal(sid, 'login', str(exc), emit_error=False)
         emit('login_fail', {'reason': '登录参数错误'})
+        return
+    if (
+        desired_instance_id
+        and desired_instance_id != GTN_INSTANCE_ID
+        and desired_instance_port
+        and desired_instance_port != str(GTN_PORT)
+    ):
+        emit('login_fail', {
+            'reason': 'instance_mismatch',
+            'message': '当前对局属于另一个服务实例，正在切回原实例。',
+            'requested_instance_id': desired_instance_id,
+            'requested_instance_port': desired_instance_port,
+            **instance_payload(),
+        })
         return
     wants_account_login = bool(data.get('account_login'))
     client_beta_mode = bool(data.get('beta_mode'))
@@ -9759,6 +9872,7 @@ def on_login(data):
     }
     if is_registered_user:
         login_payload['user'] = auth_user_payload(account_user)
+    login_payload.update(instance_payload())
     login_payload.update(special_public_fields(players.get(sid, {})))
     emit('login_ok', login_payload)
     broadcast_lobby()

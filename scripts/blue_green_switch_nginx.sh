@@ -46,11 +46,20 @@ if marker in text:
 else:
     release, rest = text, ""
 
-release = re.sub(
-    r"proxy_pass http://127\.0\.0\.1:\d+(/socket\.io/)?;",
-    lambda m: f"proxy_pass http://127.0.0.1:{port}{m.group(1) or ''};",
-    release,
-)
+if "map $cookie_gtn_route_port $gtn_release_backend" in release:
+    release = re.sub(
+        r"(map\s+\$cookie_gtn_route_port\s+\$gtn_release_backend\s*\{[^{}]*?default\s+)127\.0\.0\.1:\d+(\s*;)",
+        rf"\g<1>127.0.0.1:{port}\2",
+        release,
+        count=1,
+        flags=re.S,
+    )
+else:
+    release = re.sub(
+        r"proxy_pass http://127\.0\.0\.1:\d+(/socket\.io/)?;",
+        lambda m: f"proxy_pass http://127.0.0.1:{port}{m.group(1) or ''};",
+        release,
+    )
 release = release.replace("alias /opt/gtn-release/static/;", f"alias {root}/static/;")
 release = release.replace("alias /opt/gtn-release/static/fonts/;", f"alias {root}/static/fonts/;")
 release = release.replace("alias /opt/gtn-release/static/assets/icons/favicon.ico;", f"alias {root}/static/assets/icons/favicon.ico;")
