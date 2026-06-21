@@ -1513,6 +1513,7 @@ class GameEngine2v2(GameEngine):
         if not isinstance(getattr(self, '_last_positive_damage_hits', None), list) or len(self._last_positive_damage_hits) != len(self.players):
             self._last_positive_damage_hits = [0] * len(self.players)
         self._last_positive_damage_hits[target_id] = 0
+        immune = self._is_status_immune(target_id)
         for _ in range(hits):
             precision_dodged = False
             plank_blocks_attack = False
@@ -1547,7 +1548,7 @@ class GameEngine2v2(GameEngine):
             dmg = self._apply_damage_dealt_equipment_multiplier(dmg, attacker_id)
             if plank_blocks_attack:
                 dmg = 0
-            if dmg > 0 and ps.nazar_active:
+            if dmg > 0 and ps.nazar_active and not immune:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
                 if original_dmg >= 10:
@@ -1594,7 +1595,7 @@ class GameEngine2v2(GameEngine):
             self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
             self._run_v2_after_damage_hooks(damage_context, dmg)
-            if dmg > 0:
+            if dmg > 0 and not immune:
                 root_layers = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
                 if root_layers > 0:
                     self._set_custom_status_alias_group(target_id, 'jungle:root_status', ('jungle:root', 'jungle:root_status', 'root_status'), root_layers - 1)
