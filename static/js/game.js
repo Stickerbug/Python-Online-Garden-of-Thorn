@@ -16190,12 +16190,78 @@ function cardPlayRequestsTarget(cardDef) {
     return getCardPlayPayloads(cardDef).some(effectTreeHasRequestTarget);
 }
 
+function getRootEquipmentEventPayloads(cardDef) {
+    if (!cardDef || cardDef.card_type !== 'root') return [];
+    const out = [];
+    const v2Events = (cardDef.v2_events && typeof cardDef.v2_events === 'object')
+        ? cardDef.v2_events
+        : ((cardDef.v2_resource && cardDef.v2_resource.events && typeof cardDef.v2_resource.events === 'object')
+            ? cardDef.v2_resource.events
+            : {});
+    Object.entries(v2Events).forEach(([eventName, eventDef]) => {
+        const name = String(eventName || '');
+        if (name === 'on_play' || name === 'play') return;
+        // Manual trigger cards choose their target when triggered, not when equipped.
+        if (name.includes('trigger')) return;
+        if (
+            name.includes('equip')
+            || name.includes('turn_start')
+            || name.includes('turn_end')
+            || name.includes('damage')
+            || name.includes('destroy')
+        ) {
+            out.push(eventDef);
+        }
+    });
+    return out;
+}
+
+function rootEquipmentEventsNeedPlayTarget(cardDef) {
+    if (!cardDef || cardDef.card_type !== 'root') return false;
+    return getRootEquipmentEventPayloads(cardDef)
+        .some(payload => effectTreeUsesEventTarget(payload) || effectTreeHasRequestTarget(payload));
+}
+
 function rootCardNeedsPlayTargetByLegacyFields(cardDef) {
     if (!cardDef || cardDef.card_type !== 'root') return false;
-    const id = String(cardDef.id || cardDef.def_id || '');
-    if (['Leaf', 'MagicLeaf', 'Yggdrasil', 'MagicYucca', 'Fries'].includes(id)) return true;
+    const ids = [
+        cardDef.id,
+        cardDef.def_id,
+        cardDef.legacy_id,
+    ].map(id => String(id || '').toLowerCase()).filter(Boolean);
+    const targetOnEquipIds = new Set([
+        'cactus', 'desert_cards_addition:cactus',
+        'coconut', 'desert_cards_addition:coconut',
+        'uranium', 'factory:uranium',
+        'magicuranium', 'factory:magicuranium',
+        'cutter', 'factory:cutter',
+        'electricweb', 'factory:electricweb',
+        'goggles', 'factory:goggles',
+        'soil', 'garden:soil',
+        'web', 'garden:web',
+        'faster', 'garden:faster',
+        'cotton', 'jungle:cotton',
+        'magiccotton', 'jungle:magic_cotton',
+        'plank', 'jungle:plank',
+        'root', 'jungle:root',
+        'sponge', 'troll_cards:sponge',
+        'pill', 'troll_cards:pill',
+        'leaf', 'vanilla:leaf',
+        'yucca', 'vanilla:yucca',
+        'disc', 'vanilla:disc',
+        'battery', 'vanilla:battery',
+        'magicleaf', 'vanilla:magicleaf',
+        'magicyucca', 'vanilla:magicyucca',
+        'magicbattery', 'vanilla:magicbattery',
+        'powder', 'vanilla:powder',
+        'goldenleaf', 'vanilla:goldenleaf',
+        'pincer', 'vanilla:pincer',
+        'cancer', 'vanilla:cancer',
+        'magicgoldenleaf', 'vanilla:magicgoldenleaf',
+    ]);
+    if (ids.some(id => targetOnEquipIds.has(id))) return true;
     if (Number(cardDef.heal || 0) > 0) return true;
-    if (Number(cardDef.gain_m || 0) > 0 && id !== 'GoldenLeaf') return true;
+    if (Number(cardDef.gain_m || 0) > 0 && !ids.includes('goldenleaf') && !ids.includes('vanilla:goldenleaf')) return true;
     return false;
 }
 
@@ -16222,7 +16288,12 @@ function cardNeedsPlayerTarget(cardDef, cardDict = null) {
     if (cardDef.card_type === 'guard') return false;
     if (cardDef.card_type === 'thorn') return gs.mode === '2v2';
     if (cardDef.card_type === 'root') {
-        return cardPlayRequestsTarget(cardDef) || cardPlayChoosesTarget(cardDef) || rootCardNeedsPlayTargetByLegacyFields(cardDef);
+        return (
+            cardPlayRequestsTarget(cardDef)
+            || cardPlayChoosesTarget(cardDef)
+            || rootEquipmentEventsNeedPlayTarget(cardDef)
+            || rootCardNeedsPlayTargetByLegacyFields(cardDef)
+        );
     }
     if (['bloom', 'root'].includes(cardDef.card_type)) return true;
     return false;
