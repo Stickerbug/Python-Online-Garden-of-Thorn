@@ -12003,7 +12003,7 @@ def on_resolve_choice(data):
         pending = getattr(engine, 'pending_choice', None)
         if not pending:
             admin_event('player', f'ignored stale resolve_choice without pending choice room={room_id}', sid=sid, room_id=room_id)
-            soft_reject(sid, 'resolve_choice', 'NO_PENDING_CHOICE', room=room, pidx=pidx, send_state=True)
+            send_game_state_to(room, pidx)
             return
         try:
             pending_player_id = int(pending.get('player_id', pidx))
@@ -12011,7 +12011,6 @@ def on_resolve_choice(data):
             pending_player_id = pidx
         if pending_player_id != pidx:
             admin_event('player', f'ignored resolve_choice from non-pending player room={room_id} pending={pending_player_id} got={pidx}', sid=sid, room_id=room_id)
-            soft_reject(sid, 'resolve_choice', 'NO_PENDING_CHOICE', room=room, pidx=pidx, send_state=True)
             send_game_state_to(room, pidx)
             return
         result = engine.resolve_choice(pidx, choice)
@@ -12042,6 +12041,10 @@ def on_resolve_choice(data):
         broadcast_game_state(room)
     else:
         code = normalize_soft_reject_code(result.get('error')) or 'NO_PENDING_CHOICE'
+        if code == 'NO_PENDING_CHOICE':
+            admin_event('player', f'ignored stale resolve_choice result room={room_id} error={result.get("error")}', sid=sid, room_id=room_id)
+            send_game_state_to(room, pidx)
+            return
         soft_reject(sid, 'resolve_choice', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
 
 

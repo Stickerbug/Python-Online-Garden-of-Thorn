@@ -19176,11 +19176,11 @@ async function showChoiceUI(data) {
         debugLog('[client] skipped stale choice result', { requestSeq, choiceRequestSeq, choiceType });
         return;
     }
-    choicePending = false;
     if (!canSendGameAction('resolve_choice', { includeAnimation: false })) {
         invalidateChoiceRequest();
         return;
     }
+    choicePending = false;
     beginPendingServerAction('resolve_choice', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
     emitModeEvent('solo_resolve_choice', 'resolve_choice', { choice: choiceResult });
 }
