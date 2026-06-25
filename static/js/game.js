@@ -1481,6 +1481,21 @@ function normalizeGameModeKey(mode) {
     return raw;
 }
 
+function renderLobbyModeTabLabel(tab, mode, count = null) {
+    if (!tab) return;
+    tab.innerHTML = '';
+    const labelEl = document.createElement('span');
+    labelEl.className = 'mode-tab-label';
+    labelEl.textContent = getModeLabel(mode);
+    tab.appendChild(labelEl);
+    if (count !== null && count !== undefined) {
+        const countEl = document.createElement('span');
+        countEl.className = 'mode-tab-count';
+        countEl.textContent = `(${Number(count) || 0})`;
+        tab.appendChild(countEl);
+    }
+}
+
 function shouldShowLobbyGameModeBadge(mode) {
     const key = normalizeGameModeKey(mode);
     return key !== '1v1' && key !== '2v2';
@@ -3448,8 +3463,9 @@ function updateStaticText() {
     if (lobbyHeader) lobbyHeader.textContent = UI.lobby_title;
     document.querySelectorAll('#lobby-mode-tabs .mode-tab').forEach(tab => {
         const tabMode = tab.getAttribute('data-mode') || '1v1';
-        const countMatch = String(tab.textContent || '').match(/\((\d+)\)\s*$/);
-        tab.textContent = `${getModeLabel(tabMode)}${countMatch ? ` (${countMatch[1]})` : ''}`;
+        const countEl = tab.querySelector('.mode-tab-count');
+        const countMatch = countEl ? String(countEl.textContent || '').match(/\d+/) : String(tab.textContent || '').match(/\((\d+)\)\s*$/);
+        renderLobbyModeTabLabel(tab, tabMode, countMatch ? countMatch[1] : null);
     });
     const onlinePlayersH3 = document.querySelector('#view-lobby .lobby-left .lobby-section:first-child h3');
     if (onlinePlayersH3) onlinePlayersH3.textContent = UI.online_players;
@@ -11050,7 +11066,7 @@ function updateLeaderboardRefreshMeta() {
     const remainSeconds = Math.max(0, Math.ceil((nextMs - Date.now()) / 1000));
     const mm = Math.floor(remainSeconds / 60);
     const ss = remainSeconds % 60;
-    const timeText = `${formatLeaderboardRefreshTime(nextMs)} ${mm}:${String(ss).padStart(2, '0')}`;
+    const timeText = `${mm}:${String(ss).padStart(2, '0')}`;
     meta.textContent = (UI.leaderboard_next_refresh || '下次 {0}').replace('{0}', timeText);
 }
 
@@ -13016,8 +13032,7 @@ function renderLobby(data) {
         const currentMode = serverMode || cachedMode;
         modeTabs.querySelectorAll('.mode-tab').forEach(tab => {
             const tabMode = tab.getAttribute('data-mode');
-            const label = getModeLabel(tabMode);
-            tab.textContent = `${label} (${Number(modeCounts[tabMode] || 0)})`;
+            renderLobbyModeTabLabel(tab, tabMode, Number(modeCounts[tabMode] || 0));
             if (tabMode === currentMode) {
                 tab.classList.add('active');
             } else {
@@ -17164,11 +17179,16 @@ function appendColorizedLogText(parent, text) {
 function appendBattleLogCardChip(parent, cardText, cardDict = null) {
     if (!parent) return false;
     const rawCardText = stripBattleLogCardMarkers(cardText || '').trim();
-    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(rawCardText);
+    const lookupText = rawCardText
+        .replace(/\s*[（(]\s*→[^）)]*[）)]\s*$/u, '')
+        .trim();
+    const suffix = lookupText && lookupText !== rawCardText ? rawCardText.slice(rawCardText.indexOf(lookupText) + lookupText.length) : '';
+    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(lookupText || rawCardText);
     if (!defId) return false;
     const chip = createCardChoiceChip({ ...(cardDict || {}), def_id: defId }, { hideInstanceOnlyFlags: false });
     chip.classList.add('battle-log-card-chip');
     parent.appendChild(chip);
+    if (suffix) appendColorizedLogText(parent, suffix);
     return true;
 }
 
@@ -17223,6 +17243,18 @@ function isBattleLogCardNameContextBlocked(text, index, length, candidate) {
     if (/^(?:状态|效果|层数|层)/.test(after)) return true;
     // Setup/event names are not card names even when they contain a card name.
     if (before.endsWith('【') || /配装[:：]?$/.test(before)) return true;
+    return false;
+}
+
+function isBattleLogCardNameContextAllowed(text, index, length, candidate) {
+    const raw = String(text || '');
+    const before = raw.slice(Math.max(0, index - 24), index);
+    const after = raw.slice(index + length, Math.min(raw.length, index + length + 12));
+    if (before.endsWith('[[card:')) return true;
+    if (/(?:使用了并装备了|使用并装备了|使用了|使用|装备了|获得装备|触发|放逐了)$/.test(before)) return true;
+    if (/(?:摧毁了|摧毁|获得了|获得|得到|拿走了|回到手中|移入弃牌堆|被放逐)$/.test(before)) return true;
+    if (/的$/.test(before) && /^(?:因|被|装备护甲|回转|多余副本|唯一牌|虚无|副本效果)/.test(after)) return true;
+    if (/(?:摧毁了|摧毁|获得了|获得|拿走了).{0,12}的$/.test(before)) return true;
     return false;
 }
 
@@ -17286,6 +17318,7 @@ function appendBattleLogTextWithCardChips(parent, text) {
             if (isInsideBattleLogProtectedRange(idx, candidate.text.length, protectedRanges)) continue;
             if (!isBattleLogCardNameBoundary(raw, idx, candidate.text.length, candidate.text)) continue;
             if (isBattleLogCardNameContextBlocked(raw, idx, candidate.text.length, candidate)) continue;
+            if (!isBattleLogCardNameContextAllowed(raw, idx, candidate.text.length, candidate)) continue;
             if (!best || idx < best.index || (idx === best.index && candidate.text.length > best.text.length)) {
                 best = { ...candidate, index: idx };
             }
@@ -17313,6 +17346,14 @@ function renderBattleLogInlineCardLine(el, text) {
         /^(.+?使用了并装备了)([^，。！!]+)(.*)$/,
         /^(.+?使用并装备了)([^，。！!]+)(.*)$/,
         /^(.+?使用了?并给.+?装备了)([^，。！!]+)(.*)$/,
+        /^(.+?使用了?并装备了)([^，。！!]+)(.*)$/,
+        /^(.+?获得装备)([^，。！!]+)(.*)$/,
+        /^(.+?装备了)([^，。！!]+)(.*)$/,
+        /^(.+?摧毁了.+?的)([^，。！!]+)(.*)$/,
+        /^(.+?摧毁.+?的)([^，。！!]+)(.*)$/,
+        /^(.+?的)([^，。！!]+)(因回转回到手中.*)$/,
+        /^(.+?的)([^，。！!]+)(因虚无被放逐.*)$/,
+        /^(.+?的)([^，。！!]+)(因队伍独一被放逐.*)$/,
         /^(.+?使用了?)([^，。！!]+)(.*)$/,
     ];
     for (const pattern of patterns) {
@@ -17384,7 +17425,7 @@ function createBattleLogElement(entry) {
         renderBattleUseLogChipLine(el, entry);
         return el;
     }
-    if (renderBattleLogInlineCardLine(el, displayLine)) {
+    if (renderBattleLogInlineCardLine(el, line) || (displayLine !== line && renderBattleLogInlineCardLine(el, displayLine))) {
         bindInlineCardChips(el, { interactive: true });
         return el;
     }
