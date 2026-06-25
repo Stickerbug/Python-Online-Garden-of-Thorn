@@ -10209,7 +10209,8 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
     overflow: hidden;
     border: 1px solid var(--border-color);
     background: var(--bg-card);
-    min-width: 468px;
+    width: min(100%, 546px);
+    min-width: min(100%, 468px);
 }
 
 .mode-tab {
@@ -10231,13 +10232,15 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
     flex: 1 1 0;
     min-width: 0;
     white-space: nowrap;
+    font-size: clamp(10px, 2.6vw, 14px);
 }
 
 .mode-tab-label {
     display: block;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
 }
 
 .mode-tab-count {
@@ -10274,12 +10277,29 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .lobby-header-with-tabs .mode-tabs {
-    width: 100%;
-    max-width: 546px;
+    width: min(100%, 546px);
+    max-width: 100%;
 }
 
 .lobby-header-with-tabs .mode-tab {
     flex: 1;
+}
+
+@media (max-width: 620px) {
+  .mode-tabs {
+    min-width: 0;
+  }
+
+  .mode-tab {
+    gap: 3px;
+    padding-left: clamp(4px, 1.8vw, 10px);
+    padding-right: clamp(4px, 1.8vw, 10px);
+    font-size: clamp(8px, 2.45vw, 12px);
+  }
+
+  .mode-tab-count {
+    font-size: 0.78em;
+  }
 }
 
 .lobby-team-section {
