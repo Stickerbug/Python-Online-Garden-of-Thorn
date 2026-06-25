@@ -558,16 +558,15 @@ def generate_draft_options(pool: List[CardInstance], card_type: str, count: int 
 def create_random_weighted_deck_def_ids(count: int = DECK_SIZE, allowed_def_ids: Optional[Set[str]] = None) -> List[str]:
     weighted = []
     weights = []
-    for def_id, weight in _effective_draft_weights(allowed_def_ids).items():
+    for def_id, card_def in CARD_DEFS.items():
         if def_id == ERROR_CARD_ID:
             continue
-        card_def = CARD_DEFS.get(def_id)
-        if not card_def:
+        if allowed_def_ids is not None and def_id not in allowed_def_ids:
             continue
         if 'team_limited' in normalize_card_flags(getattr(card_def, 'flags', set()) or set()):
             continue
         try:
-            weight_value = max(0.0, float(weight or 0))
+            weight_value = max(0.0, float(getattr(card_def, 'count', 0) or 0))
         except (TypeError, ValueError):
             weight_value = 0.0
         if weight_value <= 0:
