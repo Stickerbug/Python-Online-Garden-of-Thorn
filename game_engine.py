@@ -3938,6 +3938,8 @@ class GameEngine:
                 return True
             min_count = self._eval_int(0, params.get('min_count', 1), card, 1) if params else 1
             max_count = self._eval_int(0, params.get('max_count', min_count), card, min_count) if params else 1
+            if min_count <= 0 and isinstance(ids, list):
+                return True
             if min_count <= 1 and max_count <= 1 and choice.get('target_instance_id') is not None:
                 return True
             return False

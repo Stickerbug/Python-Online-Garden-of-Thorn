@@ -18465,7 +18465,7 @@ function multiChoice(title, options, config = {}) {
         const el = $('game-prompt');
         if (!el) { resolve([]); return; }
         if (!options.length) { resolve([]); return; }
-        const min = Number(config.min || config.min_count || 1);
+        const min = Number(config.min ?? config.min_count ?? 1);
         const max = Number(config.max || config.max_count || options.length);
         const cancellable = config.cancellable !== false;
         $('game-prompt-title').textContent = title || '';
@@ -19077,13 +19077,15 @@ async function showChoiceUI(data) {
     } else if (choiceType === 'choose_cards_from_hand') {
         const allCards = choiceTargetData().hand || [];
         const wantedType = choiceParams.card_type || 'any';
-        const minCount = Number(choiceParams.min_count || 1);
+        const minCount = Number(choiceParams.min_count ?? 1);
         const maxCount = Math.max(minCount, Number(choiceParams.max_count || minCount));
         const cards = allCards.filter(c => {
             const cd = getCardDef(c.def_id);
             return wantedType === 'any' || (cd && cd.card_type === wantedType);
         });
-        if (!cards.length) { gameAlert(UI.notice, UI.no_valid_target || '没有可选择的卡牌'); }
+        if (!cards.length && minCount <= 0) {
+            choiceResult = { target_instance_ids: [] };
+        } else if (!cards.length) { gameAlert(UI.notice, UI.no_valid_target || '没有可选择的卡牌'); }
         else if (choiceParams.same_name) {
             const groups = {};
             cards.forEach(c => { const g = groups[c.def_id] || (groups[c.def_id] = []); g.push(c); });
