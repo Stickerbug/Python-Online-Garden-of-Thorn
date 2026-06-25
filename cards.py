@@ -556,8 +556,7 @@ def generate_draft_options(pool: List[CardInstance], card_type: str, count: int 
 
 
 def create_random_weighted_deck_def_ids(count: int = DECK_SIZE, allowed_def_ids: Optional[Set[str]] = None) -> List[str]:
-    weighted = []
-    weights = []
+    by_type: Dict[str, Tuple[List[str], List[float]]] = {}
     for def_id, card_def in CARD_DEFS.items():
         if def_id == ERROR_CARD_ID:
             continue
@@ -571,11 +570,27 @@ def create_random_weighted_deck_def_ids(count: int = DECK_SIZE, allowed_def_ids:
             weight_value = 0.0
         if weight_value <= 0:
             continue
-        weighted.append(def_id)
+        ids, weights = by_type.setdefault(card_def.card_type, ([], []))
+        ids.append(def_id)
         weights.append(weight_value)
-    if not weighted:
+    picked: List[str] = []
+    for card_type, quota in DRAFT_RATIO.items():
+        ids, weights = by_type.get(card_type, ([], []))
+        if not ids:
+            continue
+        picked.extend(random.choices(ids, weights=weights, k=max(0, int(quota or 0))))
+    if not picked:
         return []
-    return random.choices(weighted, weights=weights, k=max(0, int(count or 0)))
+    target_count = max(0, int(count or 0))
+    if len(picked) < target_count:
+        all_ids = []
+        all_weights = []
+        for ids, weights in by_type.values():
+            all_ids.extend(ids)
+            all_weights.extend(weights)
+        if all_ids:
+            picked.extend(random.choices(all_ids, weights=all_weights, k=target_count - len(picked)))
+    return picked[:target_count]
 
 
 def create_deck_from_draft(picked_def_ids: List[str], allowed_def_ids: Optional[Set[str]] = None) -> List[CardInstance]:
