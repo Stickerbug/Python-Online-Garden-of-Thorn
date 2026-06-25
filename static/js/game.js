@@ -9877,6 +9877,60 @@ function collectReplayPlayers(snapshot) {
     }));
 }
 
+function replayCardInstanceKey(card) {
+    if (!card || typeof card !== 'object') return '';
+    if (card.instance_id != null && card.instance_id !== '') return `i:${String(card.instance_id)}`;
+    const defId = card.def_id || card.id || '';
+    if (!defId) return '';
+    return `d:${defId}:${card.fusion_level || 1}:${card.fission_level || 1}:${card.held_turns || 0}:${card.bonus_damage || 0}`;
+}
+
+function replayCardHasExileFlag(card) {
+    if (!card || typeof card !== 'object') return false;
+    const def = getCardDef(card.def_id || card.id || '');
+    const { effective } = getEffectiveCardFlagSets(card, def || {});
+    return effective.has('exile');
+}
+
+function normalizeReplayPlayerZones(player) {
+    if (!player || typeof player !== 'object') return player || {};
+    const normalized = { ...player };
+    const zones = {
+        hand: Array.isArray(normalized.hand) ? normalized.hand.slice() : [],
+        equipment: Array.isArray(normalized.equipment) ? normalized.equipment.slice() : [],
+        exile: Array.isArray(normalized.exile) ? normalized.exile.slice() : [],
+        discard: Array.isArray(normalized.discard) ? normalized.discard.slice() : [],
+        deck: Array.isArray(normalized.deck) ? normalized.deck.slice() : [],
+    };
+    zones.discard = zones.discard.filter(card => {
+        if (replayCardHasExileFlag(card)) {
+            zones.exile.push(card);
+            return false;
+        }
+        return true;
+    });
+    const seen = new Set();
+    const keepUnique = cards => cards.filter(card => {
+        const key = replayCardInstanceKey(card);
+        if (!key) return true;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+    normalized.hand = keepUnique(zones.hand);
+    normalized.equipment = keepUnique(zones.equipment);
+    normalized.exile = keepUnique(zones.exile);
+    normalized.discard = keepUnique(zones.discard);
+    normalized.deck = keepUnique(zones.deck);
+    delete normalized.deck_ordered;
+    delete normalized.discard_ordered;
+    normalized.hand_count = normalized.hand.length;
+    normalized.deck_count = normalized.deck.length;
+    normalized.discard_count = normalized.discard.length;
+    normalized.exile_count = normalized.exile.length;
+    return normalized;
+}
+
 function getReplayTeamLayout(perspective, count) {
     if (count >= 4) {
         const teammate = perspective < 2 ? 1 - perspective : (perspective === 2 ? 3 : 2);
@@ -9889,7 +9943,7 @@ function getReplayTeamLayout(perspective, count) {
 function buildReplaySpectateState(frame, perspective = accountReplayPerspective) {
     const snapshot = getReplaySnapshot(frame);
     const perspectives = getReplayPerspectives(snapshot);
-    const players = collectReplayPlayers(snapshot);
+    const players = collectReplayPlayers(snapshot).map(normalizeReplayPlayerZones);
     const count = players.length || perspectives.length || 2;
     let safePerspective = Number.isFinite(Number(perspective)) ? Number(perspective) : 0;
     safePerspective = Math.max(0, Math.min(Math.max(0, count - 1), safePerspective));
