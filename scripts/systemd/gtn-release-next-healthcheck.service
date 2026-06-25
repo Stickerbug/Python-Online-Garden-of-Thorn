@@ -1,0 +1,7 @@
+[Unit]
+Description=Garden of Thorn release-next healthcheck
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/gtn-healthcheck.sh gtn-release-next 5002 /opt/gtn-next
+
