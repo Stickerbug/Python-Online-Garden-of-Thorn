@@ -708,7 +708,7 @@ body {
 
 .leaderboard-popover {
   left: 14px;
-  width: min(560px, calc(100vw - 28px));
+  width: min(660px, calc(100vw - 28px));
   max-height: min(560px, calc(100vh - 76px));
   overflow: hidden;
 }
@@ -742,8 +742,8 @@ body {
 
 .leaderboard-row {
   display: grid;
-  grid-template-columns: 48px minmax(92px, 1fr) 64px 64px 56px 56px 56px;
-  min-width: 440px;
+  grid-template-columns: 48px minmax(92px, 1fr) 78px 64px 64px 54px 54px 54px;
+  min-width: 520px;
   align-items: center;
   gap: 0;
   padding: 0;
@@ -795,6 +795,7 @@ body {
 
 .leaderboard-rank,
 .leaderboard-rate,
+.leaderboard-weighted-rate,
 .leaderboard-games,
 .leaderboard-wins,
 .leaderboard-losses,
@@ -810,6 +811,59 @@ body {
   white-space: nowrap;
   font-weight: 800;
   text-align: left;
+}
+
+.leaderboard-weighted-head {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  overflow: visible !important;
+}
+
+.leaderboard-help-btn {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font: inherit;
+  font-size: 10px;
+  line-height: 13px;
+  text-align: center;
+  cursor: help;
+}
+
+.leaderboard-help-btn::after {
+  content: attr(data-help);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 7px);
+  transform: translateX(-50%);
+  width: min(280px, calc(100vw - 48px));
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+  white-space: normal;
+  text-align: left;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 8;
+}
+
+.leaderboard-help-btn:hover::after,
+.leaderboard-help-btn:focus-visible::after,
+.leaderboard-help-btn:focus::after {
+  opacity: 1;
 }
 
 .account-popover-head {

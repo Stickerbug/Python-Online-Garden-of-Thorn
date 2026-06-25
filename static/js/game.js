@@ -883,7 +883,7 @@ Object.assign(I18N.en, {
     account_password_confirm: 'Confirm Password', account_old_password: 'Current Password', account_new_password: 'New Password',
     account_new_password_confirm: 'Confirm New Password', account_change_password: 'Change Password', account_password_changed: 'Password changed',
     account_change_username: 'Change Username', account_info: 'Account Info', account_online_time: 'Total Match Time', account_delete: 'Delete Account', stats: 'Stats',
-    leaderboard: 'Leaderboard', leaderboard_note: 'Reach more than 20 valid games and rank in the top 50 to enter the leaderboard. Good luck!', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...', leaderboard_next_refresh: 'Next {0}',
+    leaderboard: 'Leaderboard', leaderboard_note: 'Ranked by weighted win rate. Reach more than 20 valid games and rank in the top 50 to enter the leaderboard. Good luck!', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...', leaderboard_next_refresh: 'Refresh in {0}', leaderboard_weighted_rate: 'Weighted %', leaderboard_raw_rate: 'Win %', leaderboard_weighted_help: 'Weighted win rate = (wins + 0.5 x draws + 50% x 50) / (games + 50). It lowers the rank boost from small samples.',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
     account_need_login: 'Log in or register first', account_error: 'Account error', account_password_mismatch: 'Passwords do not match', guest_enter: 'Enter as Guest',
@@ -894,7 +894,7 @@ Object.assign(I18N.zh, {
     account_password_confirm: '确认密码', account_old_password: '原密码', account_new_password: '新密码',
     account_new_password_confirm: '确认新密码', account_change_password: '修改密码', account_password_changed: '密码已修改',
     account_change_username: '修改用户名', account_info: '账号信息', account_online_time: '总对局时长', account_delete: '注销账户', stats: '统计',
-    leaderboard: '排行榜', leaderboard_note: '有效对局数超过20且排名前50，即可上榜。加油！', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...', leaderboard_next_refresh: '下次 {0}',
+    leaderboard: '排行榜', leaderboard_note: '排行按照加权胜率计算。有效对局数超过20且排名前50，即可上榜。加油！', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...', leaderboard_next_refresh: '刷新倒计时 {0}', leaderboard_weighted_rate: '加权胜率', leaderboard_raw_rate: '胜率', leaderboard_weighted_help: '加权胜率 = (胜场 + 0.5×平场 + 50%×50) ÷ (总局数 + 50)。对局少时会更接近50%，对局多时更接近真实胜率。',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
     account_need_login: '请先登录或注册账号', account_error: '账号错误', account_password_mismatch: '两次输入的密码不一致', guest_enter: '游客进入',
@@ -906,7 +906,7 @@ Object.assign(I18N.fr, {
     account_new_password_confirm: 'Confirmer le nouveau', account_change_password: 'Changer le mot de passe', account_password_changed: 'Mot de passe changé',
     account_change_username: 'Changer le nom', account_info: 'Compte', account_online_time: 'Temps total en match',
     account_delete: 'Supprimer le compte', stats: 'Stats',
-    leaderboard: 'Classement', leaderboard_note: 'Plus de 20 parties valides et un rang dans le top 50 permettent d’apparaître ici. Courage !', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...', leaderboard_next_refresh: 'Proch. {0}',
+    leaderboard: 'Classement', leaderboard_note: 'Classement par taux de victoire pondéré. Plus de 20 parties valides et un rang dans le top 50 permettent d’apparaître ici. Courage !', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...', leaderboard_next_refresh: 'Actualisation {0}', leaderboard_weighted_rate: 'Taux pondéré', leaderboard_raw_rate: 'Victoire', leaderboard_weighted_help: 'Taux pondéré = (victoires + 0,5 x nuls + 50% x 50) / (parties + 50). Les petits échantillons sont rapprochés de 50%.',
     account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
     account_not_logged_in: 'Non connecté', account_logged_in_as: 'Connecté : {0}', account_stats: 'Parties {0} / V {1} / D {2} / N {3}',
     account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', account_password_mismatch: 'Les mots de passe ne correspondent pas', guest_enter: 'Entrer en invité',
@@ -918,7 +918,7 @@ Object.assign(I18N.ja, {
     account_new_password_confirm: '新しい確認', account_change_password: 'パスワード変更', account_password_changed: '変更しました',
     account_change_username: 'ユーザー名変更', account_info: 'アカウント情報', account_online_time: '総対戦時間',
     account_delete: 'アカウント削除', stats: '統計',
-    leaderboard: 'ランキング', leaderboard_note: '有効対戦が20戦を超え、順位が50位以内になると掲載されます。頑張って！', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...', leaderboard_next_refresh: '次 {0}',
+    leaderboard: 'ランキング', leaderboard_note: '加重勝率で順位を計算します。有効対戦が20戦を超え、順位が50位以内になると掲載されます。頑張って！', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...', leaderboard_next_refresh: '更新まで {0}', leaderboard_weighted_rate: '加重勝率', leaderboard_raw_rate: '勝率', leaderboard_weighted_help: '加重勝率 = (勝利 + 0.5 x 引分 + 50% x 50) / (対戦数 + 50)。対戦数が少ないほど50%に近づきます。',
     account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
     account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
@@ -10866,11 +10866,14 @@ function leaderboardRowHtml(item, rank, extraClass = '') {
     const losses = Number(item && item.losses || 0) || 0;
     const draws = Number(item && item.draws || 0) || 0;
     const rate = Number(item && item.win_rate || 0);
+    const weightedRate = Number(item && item.weighted_win_rate != null ? item.weighted_win_rate : rate);
     const rateText = `${Number.isInteger(rate) ? rate.toFixed(0) : rate.toFixed(1)}%`;
+    const weightedText = `${Number.isInteger(weightedRate) ? weightedRate.toFixed(0) : weightedRate.toFixed(1)}%`;
     return `
         <div class="leaderboard-row${extraClass ? ` ${extraClass}` : ''}">
             <span class="leaderboard-rank">${escapeHtml(String(rank || '-'))}</span>
             <span class="leaderboard-name">${escapeHtml(item && item.username || '-')}</span>
+            <span class="leaderboard-rate leaderboard-weighted-rate">${escapeHtml(weightedText)}</span>
             <span class="leaderboard-rate">${escapeHtml(rateText)}</span>
             <span class="leaderboard-games">${games}</span>
             <span class="leaderboard-wins">${wins}</span>
@@ -10882,10 +10885,17 @@ function leaderboardRowHtml(item, rank, extraClass = '') {
 
 function leaderboardHeaderHtml() {
     const labels = currentLang === 'zh'
-        ? ['排行', '昵称', '胜率', '总局数', '胜场', '败场', '平场']
-        : ['Rank', 'Name', 'Win %', 'Games', 'Wins', 'Losses', 'Draws'];
+        ? ['排行', '昵称', UI.leaderboard_weighted_rate || '加权胜率', UI.leaderboard_raw_rate || '胜率', '总局数', '胜场', '败场', '平场']
+        : ['Rank', 'Name', UI.leaderboard_weighted_rate || 'Weighted %', UI.leaderboard_raw_rate || 'Win %', 'Games', 'Wins', 'Losses', 'Draws'];
     return `<div class="leaderboard-row leaderboard-head">
-        ${labels.map((label, idx) => `<span class="${idx === 1 ? 'leaderboard-name' : ''}">${escapeHtml(label)}</span>`).join('')}
+        ${labels.map((label, idx) => {
+            const cls = idx === 1 ? 'leaderboard-name' : '';
+            if (idx === 2) {
+                const help = escapeHtml(UI.leaderboard_weighted_help || '');
+                return `<span class="${cls} leaderboard-weighted-head">${escapeHtml(label)}<button class="leaderboard-help-btn" type="button" title="${help}" aria-label="${help}" data-help="${help}">?</button></span>`;
+            }
+            return `<span class="${cls}">${escapeHtml(label)}</span>`;
+        }).join('')}
     </div>`;
 }
 

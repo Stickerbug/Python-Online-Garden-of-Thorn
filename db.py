@@ -831,9 +831,46 @@ def row_to_admin_user(row):
     return user
 
 
+LEADERBOARD_PRIOR_GAMES = 50
+LEADERBOARD_PRIOR_WIN_RATE = 0.5
+
+
+def _leaderboard_weighted_rate(wins, draws, games):
+    games = max(0, int(games or 0))
+    wins = max(0, int(wins or 0))
+    draws = max(0, int(draws or 0))
+    weighted = (wins + draws * 0.5 + LEADERBOARD_PRIOR_WIN_RATE * LEADERBOARD_PRIOR_GAMES)
+    weighted /= (games + LEADERBOARD_PRIOR_GAMES) if games + LEADERBOARD_PRIOR_GAMES > 0 else 1
+    return weighted * 100
+
+
+def _leaderboard_payload(row, rank=None):
+    games = int(row['games_played'] or 0)
+    wins = int(row['wins'] or 0)
+    losses = int(row['losses'] or 0)
+    draws = int(row['draws'] or 0)
+    payload = {
+        'id': row['id'],
+        'username': row['username'],
+        'player_id': row['player_id'],
+        'games_played': games,
+        'wins': wins,
+        'losses': losses,
+        'draws': draws,
+        'win_rate': round(wins / games * 100, 1) if games else 0.0,
+        'weighted_win_rate': round(_leaderboard_weighted_rate(wins, draws, games), 1),
+        'leaderboard_prior_games': LEADERBOARD_PRIOR_GAMES,
+        'leaderboard_prior_win_rate': int(LEADERBOARD_PRIOR_WIN_RATE * 100),
+    }
+    if rank is not None:
+        payload['rank'] = int(rank or 0)
+    return payload
+
+
 def list_leaderboard(min_games=20, limit=50):
     min_games = max(1, int(min_games or 20))
     limit = max(1, min(100, int(limit or 50)))
+    prior_points = LEADERBOARD_PRIOR_WIN_RATE * LEADERBOARD_PRIOR_GAMES
     with get_db_connection() as conn:
         rows = conn.execute(
             '''
@@ -842,31 +879,16 @@ def list_leaderboard(min_games=20, limit=50):
             WHERE deleted_at IS NULL
               AND COALESCE(banned, 0) = 0
               AND games_played >= ?
-            ORDER BY
-              CAST(wins AS REAL) / NULLIF(games_played, 0) DESC,
-              games_played DESC,
-              wins DESC,
-              username_lower ASC
+              ORDER BY
+                (COALESCE(wins, 0) + COALESCE(draws, 0) * 0.5 + ?) / (games_played + ?) DESC,
+                games_played DESC,
+                wins DESC,
+                username_lower ASC
             LIMIT ?
             ''',
-            (min_games, limit),
+            (min_games, prior_points, LEADERBOARD_PRIOR_GAMES, limit),
         ).fetchall()
-    items = []
-    for row in rows:
-        games = int(row['games_played'] or 0)
-        wins = int(row['wins'] or 0)
-        losses = int(row['losses'] or 0)
-        draws = int(row['draws'] or 0)
-        items.append({
-            'username': row['username'],
-            'player_id': row['player_id'],
-            'games_played': games,
-            'wins': wins,
-            'losses': losses,
-            'draws': draws,
-            'win_rate': round(wins / games * 100, 1) if games else 0.0,
-        })
-    return items
+    return [_leaderboard_payload(row) for row in rows]
 
 
 def get_leaderboard_rank(user_id, min_games=20):
@@ -875,6 +897,7 @@ def get_leaderboard_rank(user_id, min_games=20):
     except (TypeError, ValueError):
         return None
     min_games = max(1, int(min_games or 20))
+    prior_points = LEADERBOARD_PRIOR_WIN_RATE * LEADERBOARD_PRIOR_GAMES
     with get_db_connection() as conn:
         row = conn.execute(
             '''
@@ -889,48 +912,27 @@ def get_leaderboard_rank(user_id, min_games=20):
         ).fetchone()
         if row is None:
             return None
-        games = int(row['games_played'] or 0)
-        wins = int(row['wins'] or 0)
-        rank_row = conn.execute(
+        ranked_rows = conn.execute(
             '''
-            SELECT COUNT(*) + 1 AS rank
+            SELECT id
             FROM users
             WHERE deleted_at IS NULL
               AND COALESCE(banned, 0) = 0
               AND games_played >= ?
-              AND (
-                CAST(wins AS REAL) / NULLIF(games_played, 0) > CAST(? AS REAL) / NULLIF(?, 0)
-                OR (
-                  CAST(wins AS REAL) / NULLIF(games_played, 0) = CAST(? AS REAL) / NULLIF(?, 0)
-                  AND games_played > ?
-                )
-                OR (
-                  CAST(wins AS REAL) / NULLIF(games_played, 0) = CAST(? AS REAL) / NULLIF(?, 0)
-                  AND games_played = ?
-                  AND wins > ?
-                )
-                OR (
-                  CAST(wins AS REAL) / NULLIF(games_played, 0) = CAST(? AS REAL) / NULLIF(?, 0)
-                  AND games_played = ?
-                  AND wins = ?
-                  AND username_lower < (SELECT username_lower FROM users WHERE id = ?)
-                )
-              )
+            ORDER BY
+              (COALESCE(wins, 0) + COALESCE(draws, 0) * 0.5 + ?) / (games_played + ?) DESC,
+              games_played DESC,
+              wins DESC,
+              username_lower ASC
             ''',
-            (min_games, wins, games, wins, games, games, wins, games, games, wins, wins, games, games, wins, uid),
-        ).fetchone()
-    losses = int(row['losses'] or 0)
-    draws = int(row['draws'] or 0)
-    return {
-        'rank': int(rank_row['rank'] or 0) if rank_row else 0,
-        'username': row['username'],
-        'player_id': row['player_id'],
-        'games_played': games,
-        'wins': wins,
-        'losses': losses,
-        'draws': draws,
-        'win_rate': round(wins / games * 100, 1) if games else 0.0,
-    }
+            (min_games, prior_points, LEADERBOARD_PRIOR_GAMES),
+        ).fetchall()
+        rank = 0
+        for idx, ranked in enumerate(ranked_rows, start=1):
+            if int(ranked['id']) == uid:
+                rank = idx
+                break
+    return _leaderboard_payload(row, rank=rank)
 
 
 def create_user(username, password):

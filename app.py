@@ -8931,6 +8931,11 @@ def api_leaderboard():
             'next_refresh_at': datetime.fromtimestamp(next_refresh_ts, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
             'next_refresh_ts': int(next_refresh_ts),
             'refresh_interval_seconds': _LEADERBOARD_CACHE_SECONDS,
+            'weighted_formula': {
+                'prior_games': 50,
+                'prior_win_rate': 0.5,
+                'draw_value': 0.5,
+            },
         })
     except sqlite3.OperationalError as exc:
         if 'locked' in str(exc).lower():
