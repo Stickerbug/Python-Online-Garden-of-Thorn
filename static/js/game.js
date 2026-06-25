@@ -5,6 +5,9 @@ const debugLog = (...args) => {
 const GTN_BETA_MODE = !!window.__GTN_BETA_MODE__;
 const GTN_INSTANCE_ID = String(window.__GTN_INSTANCE_ID__ || '');
 const GTN_INSTANCE_PORT = String(window.__GTN_INSTANCE_PORT__ || '');
+const MAX_CLIENT_CARD_LAYER = 64;
+const MAX_CLIENT_CARD_EXTRA_HITS = 32;
+const MAX_CLIENT_DAMAGE_SEGMENTS = 100;
 const GTN_ROUTE_COOKIE = 'gtn_route_port';
 const GTN_ACTIVE_ROUTE_KEY = 'gtn_active_route';
 const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
@@ -39,6 +42,24 @@ function gtnBetaStorageKey(key) {
         if (raw.startsWith(prefix)) return `gtn_beta_${raw.slice(4)}`;
     }
     return key;
+}
+
+function clampClientCardLayer(value) {
+    const n = Math.floor(Number(value));
+    if (!Number.isFinite(n)) return 1;
+    return Math.min(MAX_CLIENT_CARD_LAYER, Math.max(1, n));
+}
+
+function clampClientExtraHits(value) {
+    const n = Math.floor(Number(value));
+    if (!Number.isFinite(n)) return 0;
+    return Math.min(MAX_CLIENT_CARD_EXTRA_HITS, Math.max(0, n));
+}
+
+function clampClientDamageSegments(value) {
+    const n = Math.floor(Number(value));
+    if (!Number.isFinite(n)) return 1;
+    return Math.min(MAX_CLIENT_DAMAGE_SEGMENTS, Math.max(1, n));
 }
 (() => {
     if (!GTN_BETA_MODE || !window.localStorage) return;
@@ -5760,8 +5781,8 @@ function getCardBlindDisplayColor(cardDef, blindLevel = 0) {
 }
 
 function getCardLayerLabel(cardDict) {
-    const fusionLevel = Number(cardDict.fusion_level || 1);
-    const fissionLevel = Number(cardDict.fission_level || 1);
+    const fusionLevel = clampClientCardLayer(cardDict.fusion_level || 1);
+    const fissionLevel = clampClientCardLayer(cardDict.fission_level || 1);
     const parts = [];
     if (fusionLevel > 1) parts.push(`${UI.fusion_layer || 'Fusion'}:${fusionLevel}`);
     if (fissionLevel > 1) parts.push(`${UI.fission_layer || 'Fission'}:${fissionLevel}`);
@@ -5938,8 +5959,8 @@ function createCardElement(cardDict, options = {}) {
             flagsHtml += `<span class="card-flag ${style.cls}">${escapeHtml(label)}</span>`;
         }
     }
-    const fusionLevel = Number(cardDict.fusion_level || 1);
-    const fissionLevel = Number(cardDict.fission_level || 1);
+    const fusionLevel = clampClientCardLayer(cardDict.fusion_level || 1);
+    const fissionLevel = clampClientCardLayer(cardDict.fission_level || 1);
     if (!blinded && fusionLevel > 1) {
         flagsHtml += `<span class="card-flag fusion-layer">${escapeHtml(UI.fusion_layer || 'Fusion')}: ${fusionLevel}</span>`;
     }
@@ -6121,8 +6142,8 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
         parts.push(cardFlagHtml(flag));
     });
     if (includeLayers) {
-        const fusionLevel = Math.max(1, Number(cardDict.fusion_level || 1));
-        const fissionLevel = Math.max(1, Number(cardDict.fission_level || 1));
+        const fusionLevel = clampClientCardLayer(cardDict.fusion_level || 1);
+        const fissionLevel = clampClientCardLayer(cardDict.fission_level || 1);
         if (fusionLevel > 1) parts.push(cardFlagHtml('fusion_layer', `${UI.fusion_layer || 'Fusion'}: ${fusionLevel}`));
         if (fissionLevel > 1) parts.push(cardFlagHtml('fission_layer', `${UI.fission_layer || 'Fission'}: ${fissionLevel}`));
     }
@@ -6230,8 +6251,8 @@ function isMimicCardDict(cardDict) {
 
 function getMimicSpecialCostForCard(cardDict) {
     if (!cardDict) return 0;
-    const fusionExtra = Math.max(0, Math.floor(Number(cardDict.fusion_level || 1)) - 1);
-    const fissionExtra = Math.max(0, Math.floor(Number(cardDict.fission_level || 1)) - 1);
+    const fusionExtra = Math.max(0, clampClientCardLayer(cardDict.fusion_level || 1) - 1);
+    const fissionExtra = Math.max(0, clampClientCardLayer(cardDict.fission_level || 1) - 1);
     const power = Math.max(0, Math.floor(Number(cardDict.power_value || 0)));
     const swift = Math.max(0, Math.floor(Number(cardDict.swift_value || 0)));
     const magicSwift = Math.max(0, Math.floor(Number(cardDict.magic_swift_value || 0)));
@@ -6432,22 +6453,22 @@ function readPlayerHealthValue(playerState, keys, fallback = 0) {
 }
 
 function getClawDamageHits(cardDict, attackerState, targetState, info) {
-    const fusion = Math.max(1, Number(cardDict.fusion_level || 1));
-    const fission = Math.max(1, Number(cardDict.fission_level || 1));
-    const baseHits = Math.max(1, Math.round(Number((info && info.hits) || 1)) + Math.max(0, Number(cardDict.extra_hits || 0)));
+    const fusion = clampClientCardLayer(cardDict.fusion_level || 1);
+    const fission = clampClientCardLayer(cardDict.fission_level || 1);
+    const baseHits = clampClientDamageSegments(Math.round(Number((info && info.hits) || 1)) + clampClientExtraHits(cardDict.extra_hits || 0));
     const bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
     const power = Math.max(0, Number(cardDict.power_value || 0));
-    const totalSegments = Math.max(1, baseHits * fission);
+    const totalSegments = clampClientDamageSegments(baseHits * fission);
     const powerPerSegment = Math.ceil(power / totalSegments);
     const maxHealth = readPlayerHealthValue(targetState, ['max_health', 'maxHp', 'maxH', 'max_h'], 0);
     let health = readPlayerHealthValue(targetState, ['health', 'hp', 'h'], maxHealth);
     if (!maxHealth) {
         const amount = Number((info && info.amount) || 5) + bonus;
         const perHit = Math.ceil(amount * fusion / fission) + powerPerSegment;
-        return Array.from({ length: baseHits * fission }, () => perHit);
+        return Array.from({ length: totalSegments }, () => perHit);
     }
     const hits = [];
-    for (let i = 0; i < baseHits * fission; i++) {
+    for (let i = 0; i < totalSegments; i++) {
         const base = health >= maxHealth / 2 ? 10 : 5;
         const dealt = Math.ceil((base + bonus) * fusion / fission) + powerPerSegment;
         hits.push(dealt);
@@ -6463,14 +6484,14 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
     if ((cardDict.def_id || cardDef.id || '') === 'Claw') {
         return getClawDamageHits(cardDict || {}, attackerState || {}, targetState || {}, info);
     }
-    const fusion = Math.max(1, Number(cardDict.fusion_level || 1));
-    const fission = Math.max(1, Number(cardDict.fission_level || 1));
+    const fusion = clampClientCardLayer(cardDict.fusion_level || 1);
+    const fission = clampClientCardLayer(cardDict.fission_level || 1);
     const bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
     const power = Math.max(0, Number(cardDict.power_value || 0));
     if (info.triangle) {
         const startStacks = Math.max(0, Number(attackerState.triangle_stacks || 0));
         const hits = [];
-        for (let i = 0; i < fission; i++) {
+        for (let i = 0; i < clampClientDamageSegments(fission); i++) {
             const stack = Math.min(4, startStacks + i);
             const amount = Number(info.amount || 0) + 3 * stack + bonus;
             hits.push(Math.ceil(amount * fusion / fission) + Math.ceil(power / fission));
@@ -6478,8 +6499,8 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
         return hits;
     }
     const inheritExtraHits = info.inheritExtraHits !== false && !cardMatchesAnyLocalId(cardDict, cardDef, ['Peas', 'MagicPeas']);
-    const extraHits = inheritExtraHits ? Math.max(0, Number(cardDict.extra_hits || 0)) : 0;
-    const totalHits = Math.max(1, Math.round(Number(info.hits || 1)) + extraHits) * fission;
+    const extraHits = inheritExtraHits ? clampClientExtraHits(cardDict.extra_hits || 0) : 0;
+    const totalHits = clampClientDamageSegments((Math.max(1, Math.round(Number(info.hits || 1))) + extraHits) * fission);
     const amount = Number(info.amount || 0) + bonus;
     const perHit = Math.ceil(amount * fusion / fission);
     const powerPerSegment = Math.ceil(power / Math.max(1, totalHits));
@@ -7460,8 +7481,8 @@ function collectCardIntroTerms(cardDict) {
     if (/(迅捷(?![：:]?魔)|(^|[^a-z_])swift($|[^a-z_])|(^|[^a-z_])swift_value($|[^a-z_]))/i.test(rawText.replace(/魔力迅捷/g, ''))) {
         addFlagIntroItem(items, seen, 'swift');
     }
-    const fusionLevel = Math.max(1, Number(cardDict && cardDict.fusion_level || 1));
-    const fissionLevel = Math.max(1, Number(cardDict && cardDict.fission_level || 1));
+    const fusionLevel = clampClientCardLayer(cardDict && cardDict.fusion_level || 1);
+    const fissionLevel = clampClientCardLayer(cardDict && cardDict.fission_level || 1);
     if (fusionLevel > 1 || cardDef.id === 'Fusion') addTermIntroItem(items, seen, 'fusion_layer');
     if (fissionLevel > 1 || cardDef.id === 'Fission') addTermIntroItem(items, seen, 'fission_layer');
     if (!items.some(item => item.key === 'D') && cardDef.card_type === 'thorn') addTermIntroItem(items, seen, 'D');

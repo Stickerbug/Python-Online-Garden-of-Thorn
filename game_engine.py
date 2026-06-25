@@ -12,6 +12,7 @@ from cards import (
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     DECK_SIZE, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, build_draft_pool, generate_draft_options,
     create_deck_from_draft, ERROR_CARD_ID, normalize_card_flag, normalize_card_flags,
+    clamp_card_layer, clamp_card_extra_hits, clamp_damage_hits,
 )
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 from mod_runtime_v2 import run_v2_event, run_v2_steps, validate_v2_ui_response
@@ -2926,7 +2927,17 @@ class GameEngine:
 
     def _card_total_hits(self, card: CardInstance, base_hits: Optional[int] = None) -> int:
         base = int(base_hits if base_hits is not None else getattr(card.card_def, 'hits', 1) or 1)
-        return max(1, base + max(0, int(getattr(card, 'extra_hits', 0) or 0)))
+        return clamp_damage_hits(base + clamp_card_extra_hits(getattr(card, 'extra_hits', 0)))
+
+    def _clamp_card_layers(self, card: Optional[CardInstance]) -> Optional[CardInstance]:
+        if card is None:
+            return None
+        card.fission_level = clamp_card_layer(getattr(card, 'fission_level', 1))
+        card.fusion_level = clamp_card_layer(getattr(card, 'fusion_level', 1))
+        card.fission_count = max(0, card.fission_level - 1)
+        card.fusion_multiplier = float(card.fusion_level)
+        card.extra_hits = clamp_card_extra_hits(getattr(card, 'extra_hits', 0))
+        return card
 
     def _card_base_petal_count(self, card: CardInstance) -> int:
         if getattr(card, 'def_id', '') == 'Fission':
@@ -2968,7 +2979,7 @@ class GameEngine:
                 if getattr(card, 'def_id', '') == 'Fission':
                     card.instance_flags.add('multi_petal_fission')
                 else:
-                    card.extra_hits = max(0, int(getattr(card, 'extra_hits', 0) or 0)) + 1
+                    card.extra_hits = clamp_card_extra_hits(max(0, int(getattr(card, 'extra_hits', 0) or 0)) + 1)
                 modifiers.add('multi_petal')
         return card
 
@@ -3822,9 +3833,9 @@ class GameEngine:
                 extra = 0
             return base + int(math.ceil(extra / 2))
 
-        copy_card.fusion_level = half_extra(getattr(target, 'fusion_level', 1), 1)
+        copy_card.fusion_level = clamp_card_layer(half_extra(getattr(target, 'fusion_level', 1), 1))
         copy_card.fusion_multiplier = float(copy_card.fusion_level)
-        copy_card.fission_level = half_extra(getattr(target, 'fission_level', 1), 1)
+        copy_card.fission_level = clamp_card_layer(half_extra(getattr(target, 'fission_level', 1), 1))
         copy_card.fission_count = max(0, copy_card.fission_level - 1)
         for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value'):
             try:
@@ -5222,7 +5233,7 @@ class GameEngine:
         targets = [c for c in targets if c and c.card_def.card_type == card_type]
         if targets:
             t = targets[0]
-            t.fission_level = max(1, int(getattr(t, 'fission_level', 1))) + times
+            t.fission_level = clamp_card_layer(max(1, int(getattr(t, 'fission_level', 1))) + times)
             t.fission_count = t.fission_level - 1
             if log:
                 self.log_msg(log)
@@ -5282,8 +5293,8 @@ class GameEngine:
                 self.log_msg(log or f"{self.pn(player_id)}聚变目标无效")
                 return
             keep = selected[0]
-            keep.fusion_level = sum(max(1, int(getattr(c, 'fusion_level', 1))) for c in selected)
-            keep.fission_level = max(max(1, int(getattr(c, 'fission_level', 1))) for c in selected)
+            keep.fusion_level = clamp_card_layer(sum(clamp_card_layer(getattr(c, 'fusion_level', 1)) for c in selected))
+            keep.fission_level = clamp_card_layer(max(clamp_card_layer(getattr(c, 'fission_level', 1)) for c in selected))
             keep.fusion_multiplier = float(keep.fusion_level)
             keep.fission_count = keep.fission_level - 1
             for c in selected[1:]:
@@ -5869,7 +5880,7 @@ class GameEngine:
         if choice and 'target_instance_id' in choice:
             target = ps.find_hand_card(choice['target_instance_id'])
             if target and target.card_type == 'thorn':
-                target.fission_level = max(1, int(getattr(target, 'fission_level', 1))) + 2
+                target.fission_level = clamp_card_layer(max(1, int(getattr(target, 'fission_level', 1))) + 2)
                 target.fission_count = target.fission_level - 1
                 self.log_msg(f"{self.pn(player_id)}使用裂变")
             else:
@@ -5894,8 +5905,8 @@ class GameEngine:
                 self.log_msg(f"{self.pn(player_id)}使用聚变，但目标不是同名攻击牌")
                 return
             first = cards[0]
-            first.fusion_level = sum(max(1, int(getattr(c, 'fusion_level', 1))) for c in cards)
-            first.fission_level = max(max(1, int(getattr(c, 'fission_level', 1))) for c in cards)
+            first.fusion_level = clamp_card_layer(sum(clamp_card_layer(getattr(c, 'fusion_level', 1)) for c in cards))
+            first.fission_level = clamp_card_layer(max(clamp_card_layer(getattr(c, 'fission_level', 1)) for c in cards))
             first.fusion_multiplier = float(first.fusion_level)
             first.fission_count = first.fission_level - 1
             for c in cards[1:]:
@@ -8864,6 +8875,9 @@ class GameEngine:
                            is_battery: bool = False, is_precision: bool = False,
                            attacker_id: int = -1,
                            source_card: Optional[CardInstance] = None) -> int:
+        hits = clamp_damage_hits(hits)
+        if source_card is not None:
+            self._clamp_card_layers(source_card)
         ps = self.players[target_id]
         if attacker_id < 0:
             attacker_id = 1 - target_id
@@ -9062,7 +9076,8 @@ class GameEngine:
         if self._uses_atomic_play_effects(card) and not self._is_chilli_card(card):
             self._log_card_play(player_id, card)
         if card.card_type == 'thorn':
-            fission_level = max(1, int(getattr(card, 'fission_level', 1)))
+            self._clamp_card_layers(card)
+            fission_level = clamp_card_layer(getattr(card, 'fission_level', 1))
             for hit_idx in range(fission_level):
                 if self.game_over:
                     break
@@ -9380,7 +9395,9 @@ class GameEngine:
             prop = 'cost_m_override'
         value = int(value)
         if prop in ('fusion_level', 'fission_level'):
-            value = max(1, value)
+            value = clamp_card_layer(value)
+        elif prop == 'extra_hits':
+            value = clamp_card_extra_hits(value)
         elif prop in ('mimic_discount', 'cost_e_override', 'cost_m_override', 'bonus_damage', 'return_to_hand_turns',
                       'held_turns', 'swift_value', 'magic_swift_value', 'power_value', 'temp_swift_value', 'temp_heavy_value'):
             value = max(0, value)
@@ -9391,7 +9408,7 @@ class GameEngine:
                 value = min(18, value)
             elif prop == 'power_value':
                 value = min(18, value)
-        if prop in ('fusion_level', 'fission_level', 'mimic_discount', 'cost_e_override', 'cost_m_override',
+        if prop in ('fusion_level', 'fission_level', 'extra_hits', 'mimic_discount', 'cost_e_override', 'cost_m_override',
                     'bonus_damage', 'return_to_hand_turns', 'held_turns', 'swift_value', 'magic_swift_value',
                     'power_value', 'temp_swift_value', 'temp_heavy_value'):
             setattr(target_card, prop, value)
@@ -9837,12 +9854,12 @@ class GameEngine:
     def _atomic_create_copies_to_deck_top(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         def_id = str(params.get('def_id') or (getattr(card, 'def_id', '') if card else ''))
-        count = self._eval_int(player_id, params.get('count', 1), card, 1)
+        count = min(20, max(0, self._eval_int(player_id, params.get('count', 1), card, 1)))
         flags = normalize_card_flags(params.get('flags', []))
         swift = self._eval_int(player_id, params.get('swift_value', 0), card, 0)
         magic_swift = self._eval_int(player_id, params.get('magic_swift_value', 0), card, 0)
         power = self._eval_int(player_id, params.get('power_value', 0), card, 0)
-        extra_hits = self._eval_int(player_id, params.get('extra_hits', 0), card, 0)
+        extra_hits = clamp_card_extra_hits(self._eval_int(player_id, params.get('extra_hits', 0), card, 0))
         ps = self.players[target_id]
         made = []
         for _ in range(max(0, count)):

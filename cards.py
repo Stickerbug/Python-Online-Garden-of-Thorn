@@ -4,6 +4,30 @@ import random
 import copy
 
 ERROR_CARD_ID = 'Error'
+MAX_CARD_LAYER = 64
+MAX_CARD_EXTRA_HITS = 32
+MAX_DAMAGE_HITS = 100
+
+
+def clamp_card_layer(value: Any, default: int = 1) -> int:
+    try:
+        return min(MAX_CARD_LAYER, max(1, int(value)))
+    except Exception:
+        return max(1, min(MAX_CARD_LAYER, int(default or 1)))
+
+
+def clamp_card_extra_hits(value: Any) -> int:
+    try:
+        return min(MAX_CARD_EXTRA_HITS, max(0, int(value)))
+    except Exception:
+        return 0
+
+
+def clamp_damage_hits(value: Any) -> int:
+    try:
+        return min(MAX_DAMAGE_HITS, max(1, int(value)))
+    except Exception:
+        return 1
 
 CARD_FLAG_ALIASES = {
     'tag_troll_cards:exile': 'exile',
@@ -142,6 +166,10 @@ class CardInstance:
         if not self.def_id:
             self.def_id = ERROR_CARD_ID
             return
+        self.fission_level = clamp_card_layer(self.fission_level)
+        self.fusion_level = clamp_card_layer(self.fusion_level)
+        self.fission_count = max(0, self.fission_level - 1)
+        self.extra_hits = clamp_card_extra_hits(self.extra_hits)
         defs = globals().get('CARD_DEFS')
         if isinstance(defs, dict) and defs and self.def_id not in defs:
             self.def_id = ERROR_CARD_ID
@@ -188,10 +216,10 @@ class CardInstance:
             'instance_id': self.instance_id,
             'cost_e_override': self.cost_e_override,
             'cost_m_override': self.cost_m_override,
-            'fission_count': self.fission_count,
-            'fusion_multiplier': self.fusion_multiplier,
-            'fission_level': self.fission_level,
-            'fusion_level': self.fusion_level,
+            'fission_count': max(0, clamp_card_layer(self.fission_level) - 1),
+            'fusion_multiplier': float(clamp_card_layer(self.fusion_level)),
+            'fission_level': clamp_card_layer(self.fission_level),
+            'fusion_level': clamp_card_layer(self.fusion_level),
             'mimic_discount': self.mimic_discount,
             'bonus_damage': self.bonus_damage,
             'held_turns': self.held_turns,
@@ -203,7 +231,7 @@ class CardInstance:
             'power_value': self.power_value,
             'temp_swift_value': self.temp_swift_value,
             'temp_heavy_value': self.temp_heavy_value,
-            'extra_hits': self.extra_hits,
+            'extra_hits': clamp_card_extra_hits(self.extra_hits),
             'setup_modifiers': list(self.setup_modifiers) if self.setup_modifiers else [],
         }
 
@@ -214,10 +242,10 @@ class CardInstance:
             instance_id=d['instance_id'],
             cost_e_override=d.get('cost_e_override'),
             cost_m_override=d.get('cost_m_override'),
-            fission_count=d.get('fission_count', 0),
-            fusion_multiplier=d.get('fusion_multiplier', 1.0),
-            fission_level=max(1, int(d.get('fission_level', d.get('fission_count', 0) + 1))),
-            fusion_level=max(1, int(d.get('fusion_level', d.get('fusion_multiplier', 1.0)))),
+            fission_count=max(0, clamp_card_layer(d.get('fission_level', d.get('fission_count', 0) + 1)) - 1),
+            fusion_multiplier=float(clamp_card_layer(d.get('fusion_level', d.get('fusion_multiplier', 1.0)))),
+            fission_level=clamp_card_layer(d.get('fission_level', d.get('fission_count', 0) + 1)),
+            fusion_level=clamp_card_layer(d.get('fusion_level', d.get('fusion_multiplier', 1.0))),
             mimic_discount=d.get('mimic_discount', 0),
             bonus_damage=max(0, int(d.get('bonus_damage', 0))),
             held_turns=max(0, int(d.get('held_turns', 0))),
@@ -229,7 +257,7 @@ class CardInstance:
             power_value=max(0, int(d.get('power_value', 0))),
             temp_swift_value=max(0, int(d.get('temp_swift_value', 0))),
             temp_heavy_value=max(0, int(d.get('temp_heavy_value', 0))),
-            extra_hits=max(0, int(d.get('extra_hits', 0))),
+            extra_hits=clamp_card_extra_hits(d.get('extra_hits', 0)),
             setup_modifiers=set(str(x) for x in (d.get('setup_modifiers') or []) if x),
         )
 
@@ -239,10 +267,10 @@ class CardInstance:
             instance_id=_new_instance_id(),
             cost_e_override=self.cost_e_override,
             cost_m_override=self.cost_m_override,
-            fission_count=self.fission_count,
-            fusion_multiplier=self.fusion_multiplier,
-            fission_level=self.fission_level,
-            fusion_level=self.fusion_level,
+            fission_count=max(0, clamp_card_layer(self.fission_level) - 1),
+            fusion_multiplier=float(clamp_card_layer(self.fusion_level)),
+            fission_level=clamp_card_layer(self.fission_level),
+            fusion_level=clamp_card_layer(self.fusion_level),
             mimic_discount=self.mimic_discount,
             bonus_damage=self.bonus_damage,
             held_turns=self.held_turns,
@@ -254,7 +282,7 @@ class CardInstance:
             power_value=self.power_value,
             temp_swift_value=self.temp_swift_value,
             temp_heavy_value=self.temp_heavy_value,
-            extra_hits=self.extra_hits,
+            extra_hits=clamp_card_extra_hits(self.extra_hits),
             setup_modifiers=set(self.setup_modifiers),
         )
         return c

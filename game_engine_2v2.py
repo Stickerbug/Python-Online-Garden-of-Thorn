@@ -12,7 +12,7 @@ from cards import (
     BASE_MAX_ELIXIR, BASE_MAX_MAGIC, INITIAL_HEALTH, INITIAL_ELIXIR,
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     DECK_SIZE, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, build_draft_pool, generate_draft_options,
-    create_deck_from_draft, ERROR_CARD_ID,
+    create_deck_from_draft, ERROR_CARD_ID, clamp_damage_hits,
 )
 
 
@@ -1537,6 +1537,9 @@ class GameEngine2v2(GameEngine):
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
                            is_battery: bool = False, is_precision: bool = False,
                            attacker_id: int = -1, source_card=None) -> int:
+        hits = clamp_damage_hits(hits)
+        if source_card is not None:
+            self._clamp_card_layers(source_card)
         if not self._is_valid_player_id(target_id):
             return 0
         ps = self.players[target_id]

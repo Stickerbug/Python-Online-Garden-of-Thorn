@@ -6,7 +6,7 @@ import random
 import uuid
 from typing import Any, Dict, Iterable, List, Optional
 
-from cards import CARD_DEFS, CardInstance, ERROR_CARD_ID
+from cards import CARD_DEFS, CardInstance, ERROR_CARD_ID, clamp_card_extra_hits, clamp_damage_hits
 from damage_types import DAMAGE_TYPE_PHYSICAL
 
 
@@ -159,15 +159,15 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
     if op == "deal_damage":
         source = _player_id(engine, resolve_v2_target(engine, context, params.get("source", "source")))
         amount = max(0, _to_int(eval_v2_value(engine, context, params.get("amount", 0))))
-        hits = max(1, _to_int(eval_v2_value(engine, context, params.get("hits", 1))))
+        hits = clamp_damage_hits(_to_int(eval_v2_value(engine, context, params.get("hits", 1))))
         card = context.get("card")
         inherit_extra_hits = params.get("inherit_extra_hits", params.get("use_card_extra_hits", True)) is not False
         if card is not None and inherit_extra_hits:
             try:
                 if hasattr(engine, "_card_total_hits"):
-                    hits = max(1, int(engine._card_total_hits(card, hits)))
+                    hits = clamp_damage_hits(engine._card_total_hits(card, hits))
                 else:
-                    hits = max(1, hits + max(0, int(getattr(card, "extra_hits", 0) or 0)))
+                    hits = clamp_damage_hits(hits + clamp_card_extra_hits(getattr(card, "extra_hits", 0)))
             except Exception:
                 pass
         if (
