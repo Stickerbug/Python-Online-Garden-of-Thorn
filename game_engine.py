@@ -3882,6 +3882,10 @@ class GameEngine:
                 ps.exile.append(card)
                 self.log_msg(f"{self.pn(player_id)}的唯一牌{card.name_cn}多余副本被放逐")
 
+    def _enforce_unique_cards_for_all(self):
+        for pid in range(len(self.players)):
+            self._enforce_unique_cards_for_player(pid)
+
     def _refund_pending_choice_cost(self, player_id: int, card: CardInstance):
         ps = self.players[player_id]
         played_count = ps.cards_played_this_turn.get(card.def_id, 1)
@@ -4143,7 +4147,9 @@ class GameEngine:
         response_result = self._check_card_response_after_choice(player_id, card, choice)
         if response_result:
             return response_result
-        return self._execute_card_effect(player_id, card, choice)
+        result = self._execute_card_effect(player_id, card, choice)
+        self._enforce_unique_cards_for_all()
+        return result
 
     def _check_response_needed(self, player_id: int, card: CardInstance) -> bool:
         flags = self._effective_card_flags(card)
@@ -4270,6 +4276,7 @@ class GameEngine:
         return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
 
     def _after_response_result(self, player_id: int, result: dict) -> dict:
+        self._enforce_unique_cards_for_all()
         if (
             not self.game_over
             and self.phase == 'action'
@@ -4501,6 +4508,7 @@ class GameEngine:
                 handler = getattr(self, f'_resume_{resume_handler}', None)
                 if callable(handler):
                     handler(player_id, {'foresight_discarded': discarded, 'foresight_drawn': replacement_drawn, 'draw_count': draw_budget})
+            self._enforce_unique_cards_for_all()
             return {'success': True, 'foresight_discarded': discarded, 'foresight_drawn': replacement_drawn}
         # Handle reorder_deck choice (e.g. Magic Goggles)
         if choice_type == 'reorder_deck':
@@ -4554,6 +4562,7 @@ class GameEngine:
                     self._log_card_play(player_id, card)
                     self._dispatch_card_event('card_used', player_id, card, target_id=player_id, choice=choice)
                     self._run_v2_play_hook('after_play_card', player_id, card, choice)
+            self._enforce_unique_cards_for_all()
             return {'success': True, 'reordered': True}
         self.pending_choice = None
         card = CardInstance.from_dict(pending['card'])
@@ -4589,11 +4598,15 @@ class GameEngine:
         ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', 0) or 0))
         self._apply_magic_acceleration_after_play(player_id, card)
         if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
-            return self._execute_card_effect(player_id, card, choice)
+            result = self._execute_card_effect(player_id, card, choice)
+            self._enforce_unique_cards_for_all()
+            return result
         response_result = self._check_card_response_after_choice(player_id, card, choice)
         if response_result:
             return response_result
-        return self._execute_card_effect(player_id, card, choice)
+        result = self._execute_card_effect(player_id, card, choice)
+        self._enforce_unique_cards_for_all()
+        return result
 
 
     PASSIVE_EFFECT_TYPES = {'on_fatal_set_health_exile', 'on_fatal_invincible_then_die'}

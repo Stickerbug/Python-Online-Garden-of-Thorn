@@ -960,7 +960,9 @@ class GameEngine2v2(GameEngine):
         self._active_choice = choice if isinstance(choice, dict) else {}
         try:
             if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
-                return self._execute_card_effect(player_id, card, choice)
+                result = self._execute_card_effect(player_id, card, choice)
+                self._enforce_unique_cards_for_all()
+                return result
             needs_response = self._check_response_needed(player_id, card)
             needs_precision_response = self._check_precision_response_needed(player_id, card)
             if needs_response or needs_precision_response:
@@ -999,7 +1001,9 @@ class GameEngine2v2(GameEngine):
                         'is_precision': needs_precision_response and not needs_response,
                     }
                     return {'success': True, 'needs_response': True, 'card': card.to_dict()}
-            return self._execute_card_effect(player_id, card, choice)
+            result = self._execute_card_effect(player_id, card, choice)
+            self._enforce_unique_cards_for_all()
+            return result
         finally:
             self._active_choice = None
 

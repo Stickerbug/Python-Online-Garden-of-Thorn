@@ -1153,6 +1153,11 @@ def _move_card(engine, card: CardInstance, owner_id: int, zone: str, already_det
         ps.exile.append(card)
     else:
         ps.discard.append(card)
+    if zone in ("hand", "deck", "discard") and hasattr(engine, "_enforce_unique_cards_for_player"):
+        try:
+            engine._enforce_unique_cards_for_player(owner_id, preferred_card=card)
+        except Exception:
+            pass
 
 
 def _detach_card(engine, card: CardInstance) -> None:
