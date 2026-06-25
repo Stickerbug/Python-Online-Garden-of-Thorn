@@ -344,6 +344,7 @@ I18N.fr = { ...I18N.en,
     choose_convert_count: 'Nombre de conversions', choose_magic_card_n: 'Carte magie n°{0}', choose_source_card_n: 'Carte source n°{0}',
     choose_light_cards: 'Cartes de conversion Lumière', choose_yggdrasil_card: 'Carte Arbre-Monde', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
     selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
+    mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Feu infini', mode_random_deck: 'Deck aléatoire',
     hand_deck_info_opp: 'Main:{0} Deck:{1}', hand_deck_discard_info: 'Main:{0} Deck:{1} Défausse:{2}', round_status: 'Tour {0} - {1}',
     server_broadcast: 'Serveur : {0}', error_msg: 'Erreur : {0}', lobby_status: 'Salon - {0}', no_counter_countdown: 'Pas de contre({0})',
     select_event_desc: "Choisir un événement de départ", opponent_selected: 'Adversaire a choisi', opponent_selecting: 'Adversaire choisit...',
@@ -413,6 +414,7 @@ I18N.ja = { ...I18N.en,
     choose_convert_count: '変換回数を選択', choose_magic_card_n: 'マジックカード第{0}枚', choose_source_card_n: 'ソースカード第{0}枚',
     choose_light_cards: '光変換カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
     selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
+    mode_select: 'モード', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '無限火力', mode_random_deck: 'ランダムデッキ',
     hand_deck_info_opp: '手札:{0} デッキ:{1}', hand_deck_discard_info: '手札:{0} デッキ:{1} 捨て札:{2}', round_status: '第{0}ターン - {1}',
     server_broadcast: 'サーバー: {0}', error_msg: 'エラー: {0}', lobby_status: 'ロビー - {0}', no_counter_countdown: 'カウンターなし({0})',
     select_event_desc: 'オープニングイベントを選択', opponent_selected: '相手が選択済み', opponent_selecting: '相手が選択中...',
@@ -1460,6 +1462,16 @@ let currentUiStyle = migrateStoredUiStyle();
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || (I18N.zh[key]) || key; }
 function tf(key, ...values) { return t(key).replace(/\{(\d+)\}/g, (_, i) => values[Number(i)] ?? ''); }
 const UI = new Proxy({}, { get: (_, key) => t(key) });
+
+function getModeLabel(mode) {
+    const key = `mode_${String(mode || '1v1')}`;
+    return UI[key] || {
+        '1v1': '1v1',
+        '2v2': '2v2',
+        urf: currentLang === 'zh' ? '无限火力' : 'Infinite Fire',
+        random_deck: currentLang === 'zh' ? '随机卡组' : 'Random Deck',
+    }[mode] || String(mode || '1v1');
+}
 
 function isAdminPlayer(player) {
     return !!(player && (player.is_admin_player || player.isAdminPlayer || player.admin));
@@ -3421,6 +3433,11 @@ function updateStaticText() {
     if (serverInput) serverInput.placeholder = UI.server_placeholder;
     const lobbyHeader = document.querySelector('#view-lobby .lobby-header h2');
     if (lobbyHeader) lobbyHeader.textContent = UI.lobby_title;
+    document.querySelectorAll('#lobby-mode-tabs .mode-tab').forEach(tab => {
+        const tabMode = tab.getAttribute('data-mode') || '1v1';
+        const countMatch = String(tab.textContent || '').match(/\((\d+)\)\s*$/);
+        tab.textContent = `${getModeLabel(tabMode)}${countMatch ? ` (${countMatch[1]})` : ''}`;
+    });
     const onlinePlayersH3 = document.querySelector('#view-lobby .lobby-left .lobby-section:first-child h3');
     if (onlinePlayersH3) onlinePlayersH3.textContent = UI.online_players;
     const ongoingGamesH3 = document.querySelector('#view-lobby .lobby-left .lobby-section:last-child h3');
@@ -12863,7 +12880,7 @@ function renderLobby(data) {
         const currentMode = serverMode || cachedMode;
         modeTabs.querySelectorAll('.mode-tab').forEach(tab => {
             const tabMode = tab.getAttribute('data-mode');
-            const label = UI[`mode_${tabMode}`] || tabMode;
+            const label = getModeLabel(tabMode);
             tab.textContent = `${label} (${Number(modeCounts[tabMode] || 0)})`;
             if (tabMode === currentMode) {
                 tab.classList.add('active');
@@ -13039,12 +13056,11 @@ function renderLobby(data) {
                     return `${UI.round}${roundNum}`;
                 })();
                 let gameLabel;
+                const modeLabel = getModeLabel(g.mode);
                 if (g.mode === '2v2') {
                     gameLabel = `${g.player1} & ${g.player2} vs ${g.player3 || '?'} & ${g.player4 || '?'} (${phaseLabel})`;
-                } else if (g.mode === 'urf') {
-                    gameLabel = `${g.player1} vs ${g.player2} [${UI.mode_urf || 'Infinite Fire'}] (${phaseLabel})`;
-                } else if (g.mode === 'random_deck') {
-                    gameLabel = `${g.player1} vs ${g.player2} [${UI.mode_random_deck || 'Random Deck'}] (${phaseLabel})`;
+                } else if (g.mode === 'urf' || g.mode === 'random_deck') {
+                    gameLabel = `${g.player1} vs ${g.player2} [${modeLabel}] (${phaseLabel})`;
                 } else {
                     gameLabel = `${g.player1} vs ${g.player2} (${phaseLabel})`;
                 }
@@ -14542,7 +14558,7 @@ function buildBattleViewModel(state) {
             currentPlayer: normalizePlayerId(gs.current_player),
             isMyTurn: isMyTurn(),
             mode: gs.mode || '',
-            modeText: UI[`mode_${gs.mode}`] || (gs.mode === 'urf' ? '无限火力' : (gs.mode === '2v2' ? '2v2' : '1v1')),
+            modeText: getModeLabel(gs.mode),
         },
         pendingResponse: gs.pending_response || (responsePending ? responseData : null),
         playableCards: new Set((you.hand || []).filter(canPlayCard).map(card => card.instance_id)),
