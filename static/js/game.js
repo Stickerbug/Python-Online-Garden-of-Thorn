@@ -1470,7 +1470,20 @@ function getModeLabel(mode) {
         '2v2': '2v2',
         urf: currentLang === 'zh' ? '无限火力' : 'Infinite Fire',
         random_deck: currentLang === 'zh' ? '随机卡组' : 'Random Deck',
+        randomDeck: currentLang === 'zh' ? '随机卡组' : 'Random Deck',
+        'random-deck': currentLang === 'zh' ? '随机卡组' : 'Random Deck',
     }[mode] || String(mode || '1v1');
+}
+
+function normalizeGameModeKey(mode) {
+    const raw = String(mode || '1v1');
+    if (raw === 'randomDeck' || raw === 'random-deck' || raw === 'random') return 'random_deck';
+    return raw;
+}
+
+function shouldShowLobbyGameModeBadge(mode) {
+    const key = normalizeGameModeKey(mode);
+    return key !== '1v1' && key !== '2v2';
 }
 
 function isAdminPlayer(player) {
@@ -13123,7 +13136,7 @@ function renderLobby(data) {
                 const modeLabel = getModeLabel(g.mode);
                 if (g.mode === '2v2') {
                     gameLabel = `${g.player1} & ${g.player2} vs ${g.player3 || '?'} & ${g.player4 || '?'} (${phaseLabel})`;
-                } else if (g.mode === 'urf' || g.mode === 'random_deck') {
+                } else if (shouldShowLobbyGameModeBadge(g.mode)) {
                     gameLabel = `${g.player1} vs ${g.player2} [${modeLabel}] (${phaseLabel})`;
                 } else {
                     gameLabel = `${g.player1} vs ${g.player2} (${phaseLabel})`;
