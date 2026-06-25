@@ -586,6 +586,8 @@ class GameEngine2v2(GameEngine):
                 self.log_msg(f"{self.pn(player_id)}触发叶子！对{self.pn(target_id)}造成8D")
         elif eq.def_id == 'Mark':
             if opp:
+                if self._status_application_blocked(target_id, 'skip_turn'):
+                    return
                 opp.skip_turn += 1
                 self.log_msg(f"{self.pn(player_id)}触发标记！{self.pn(target_id)}+1层眩晕")
         elif eq.def_id == 'Mine':
@@ -1027,7 +1029,7 @@ class GameEngine2v2(GameEngine):
         if not self._is_valid_player_id(player_id):
             return 0
         ps = self.players[player_id]
-        if ps.invincible:
+        if ps.invincible and not self._is_status_immune(player_id):
             self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
             return 0
         actual = amount
@@ -1036,7 +1038,11 @@ class GameEngine2v2(GameEngine):
         if str(resolved_damage_tag).strip() in (DAMAGE_TAG_POISON, DAMAGE_TAG_FIRE, 'poison', '中毒', 'fire', 'burn', '灼烧') and self._is_status_immune(player_id):
             return 0
         actual = self._apply_corruption_multiplier_to_damage(actual)
-        actual = self._apply_damage_dealt_equipment_multiplier(actual, source_id)
+        actual = self._apply_damage_dealt_equipment_multiplier(
+            actual,
+            source_id,
+            include_flat_bonus=(resolved_damage_type == DAMAGE_TYPE_PHYSICAL and resolved_damage_tag == DAMAGE_TAG_PHYSICAL),
+        )
         damage_context = self._v2_damage_context(
             player_id,
             actual,
@@ -1170,16 +1176,22 @@ class GameEngine2v2(GameEngine):
 
     def _effect_iris(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
+        if self._status_application_blocked(target, 'poison'):
+            return
         self.players[target].poison += 10
         self.log_msg(f"{self.pn(player_id)}使用鸢尾！{self.pn(target)}+10中毒")
 
     def _effect_fire(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
+        if self._status_application_blocked(target, 'fire'):
+            return
         self.players[target].fire += 2
         self.log_msg(f"{self.pn(player_id)}使用火！{self.pn(target)}+2灼烧")
 
     def _effect_cancer(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
+        if self._status_application_blocked(target, 'toxic'):
+            return
         self.players[target].toxic += 1
         self.log_msg(f"{self.pn(player_id)}装备了癌细胞！{self.pn(target)}+1淬毒")
 
@@ -1273,8 +1285,8 @@ class GameEngine2v2(GameEngine):
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         self._defer_turn_start_death_checks = True
-        turn_will_be_skipped = bool(ps.skip_turn)
-        if turn_will_be_skipped:
+        turn_will_be_skipped = bool(ps.skip_turn) and not self._is_status_immune(player_id)
+        if ps.skip_turn > 0:
             ps.skip_turn = max(0, int(ps.skip_turn) - 1)
         if self.round_num > 1:
             sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
@@ -1541,14 +1553,14 @@ class GameEngine2v2(GameEngine):
         for _ in range(hits):
             precision_dodged = False
             plank_blocks_attack = False
-            if ps.dodge > 0:
+            if ps.dodge > 0 and not immune:
                 ps.dodge -= 1
                 if not is_precision:
                     self.log_msg(f"{self.pn(target_id)}闪避了攻击")
                     continue
                 precision_dodged = True
                 self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗")
-            if ps.invincible:
+            if ps.invincible and not immune:
                 self.log_msg(f"{self.pn(target_id)}无敌，免疫伤害")
                 continue
             if source_card is not None and self._has_equipment(target_id, 'Plank', 'jungle:plank'):

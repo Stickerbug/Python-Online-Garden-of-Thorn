@@ -1300,6 +1300,8 @@ def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str) 
         elif op == "set_status":
             engine.log_msg(f"{engine.pn(player_id)}{'获得' if after else '失去'}状态免疫")
         return
+    if _status_application_blocked_by_immunity(engine, player_id, status_id, amount, op):
+        return
     attr = _builtin_status_attr(status_id)
     before = _status_stack(engine, player_id, status_id)
     if attr:
@@ -1345,6 +1347,34 @@ def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str) 
         engine.log_msg(f"{engine.pn(player_id)}-{abs(delta)}层{label}")
     elif op == "set_status":
         engine.log_msg(f"{engine.pn(player_id)}的{label}变为{after}层")
+
+
+def _status_application_blocked_by_immunity(engine, player_id: int, status_id: str, amount: int, op: str) -> bool:
+    if op == "remove_status":
+        return False
+    try:
+        next_amount = int(amount or 0)
+    except Exception:
+        next_amount = 0
+    if next_amount <= 0:
+        return False
+    status_key = str(status_id or "").split(":")[-1]
+    if status_key in ("status_immune", "immune", "状态免疫", "dodge", "闪避"):
+        return False
+    checker = getattr(engine, "_status_application_blocked", None)
+    if callable(checker):
+        for candidate in (status_id, status_key):
+            try:
+                if checker(player_id, candidate):
+                    return True
+            except Exception:
+                continue
+        return False
+    immune = getattr(engine, "_is_status_immune", None)
+    try:
+        return bool(callable(immune) and immune(player_id))
+    except Exception:
+        return False
 
 
 def _status_stack(engine, player_id: int, status_id: str) -> int:

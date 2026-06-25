@@ -179,6 +179,25 @@ input:focus, select:focus, textarea:focus {
   gap: 8px;
   margin-top: 12px;
 }
+
+.split-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.action-card {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px;
+  background: #fafbfc;
+}
+
+.action-card label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+}
 .detail {
   overflow: auto;
   max-height: calc(100vh - 112px);

@@ -157,7 +157,7 @@ const I18N = {
         continue_enter: 'Continue',
         mod_default_name: 'Mod {0}',
         mod_selection_force_vanilla: 'Enabled the vanilla card mod because the selected mods must contain at least one Thorn, Bloom, Root, and Guard card.',
-    mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Infinite Fire',
+    mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Infinite Fire', mode_random_deck: 'Random Deck',
         form_team: 'Form Team', leave_team: 'Leave Team', invite_team: 'Invite Team',
         team_invite_msg: '{0} invites you to form a team', team_formed_msg: 'Team formed with {0}',
         team_disbanded_msg: 'Team disbanded', team_match_invite_msg: 'Team {0} challenges your team',
@@ -257,7 +257,7 @@ I18N.zh = { ...I18N.en,
     tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
-    mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力',
+    mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
     form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
     team_invite_msg: '{0} 邀请你组队', team_formed_msg: '已与 {0} 组队',
     team_disbanded_msg: '队伍已解散', team_match_invite_msg: '队伍 {0} 向你们发起挑战',
@@ -860,7 +860,7 @@ Object.assign(I18N.en, {
     account_password_confirm: 'Confirm Password', account_old_password: 'Current Password', account_new_password: 'New Password',
     account_new_password_confirm: 'Confirm New Password', account_change_password: 'Change Password', account_password_changed: 'Password changed',
     account_change_username: 'Change Username', account_info: 'Account Info', account_online_time: 'Total Match Time', account_delete: 'Delete Account', stats: 'Stats',
-    leaderboard: 'Leaderboard', leaderboard_note: 'Reach more than 20 valid games and rank in the top 50 to enter the leaderboard. Good luck!', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...',
+    leaderboard: 'Leaderboard', leaderboard_note: 'Reach more than 20 valid games and rank in the top 50 to enter the leaderboard. Good luck!', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...', leaderboard_next_refresh: 'Next {0}',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
     account_need_login: 'Log in or register first', account_error: 'Account error', account_password_mismatch: 'Passwords do not match', guest_enter: 'Enter as Guest',
@@ -871,7 +871,7 @@ Object.assign(I18N.zh, {
     account_password_confirm: '确认密码', account_old_password: '原密码', account_new_password: '新密码',
     account_new_password_confirm: '确认新密码', account_change_password: '修改密码', account_password_changed: '密码已修改',
     account_change_username: '修改用户名', account_info: '账号信息', account_online_time: '总对局时长', account_delete: '注销账户', stats: '统计',
-    leaderboard: '排行榜', leaderboard_note: '有效对局数超过20且排名前50，即可上榜。加油！', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...',
+    leaderboard: '排行榜', leaderboard_note: '有效对局数超过20且排名前50，即可上榜。加油！', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...', leaderboard_next_refresh: '下次 {0}',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
     account_need_login: '请先登录或注册账号', account_error: '账号错误', account_password_mismatch: '两次输入的密码不一致', guest_enter: '游客进入',
@@ -883,7 +883,7 @@ Object.assign(I18N.fr, {
     account_new_password_confirm: 'Confirmer le nouveau', account_change_password: 'Changer le mot de passe', account_password_changed: 'Mot de passe changé',
     account_change_username: 'Changer le nom', account_info: 'Compte', account_online_time: 'Temps total en match',
     account_delete: 'Supprimer le compte', stats: 'Stats',
-    leaderboard: 'Classement', leaderboard_note: 'Plus de 20 parties valides et un rang dans le top 50 permettent d’apparaître ici. Courage !', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...',
+    leaderboard: 'Classement', leaderboard_note: 'Plus de 20 parties valides et un rang dans le top 50 permettent d’apparaître ici. Courage !', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...', leaderboard_next_refresh: 'Proch. {0}',
     account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
     account_not_logged_in: 'Non connecté', account_logged_in_as: 'Connecté : {0}', account_stats: 'Parties {0} / V {1} / D {2} / N {3}',
     account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', account_password_mismatch: 'Les mots de passe ne correspondent pas', guest_enter: 'Entrer en invité',
@@ -895,7 +895,7 @@ Object.assign(I18N.ja, {
     account_new_password_confirm: '新しい確認', account_change_password: 'パスワード変更', account_password_changed: '変更しました',
     account_change_username: 'ユーザー名変更', account_info: 'アカウント情報', account_online_time: '総対戦時間',
     account_delete: 'アカウント削除', stats: '統計',
-    leaderboard: 'ランキング', leaderboard_note: '有効対戦が20戦を超え、順位が50位以内になると掲載されます。頑張って！', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...',
+    leaderboard: 'ランキング', leaderboard_note: '有効対戦が20戦を超え、順位が50位以内になると掲載されます。頑張って！', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...', leaderboard_next_refresh: '次 {0}',
     account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
     account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
@@ -2619,6 +2619,7 @@ let responsePending = false;
 let responseData = {};
 let choicePending = false;
 let choiceData = {};
+let choiceRequestSeq = 0;
 let isSpectating = false;
 let spectatePerspective = 0;
 let pendingSpectateRoomId = null;
@@ -2631,6 +2632,20 @@ let surrenderConsentTimerId = null;
 let surrenderConsentCountdown = 0;
 let localCountdownTimerId = null;
 let localTurnTimerSnapshot = null;
+
+function beginChoiceRequest(data = {}) {
+    choicePending = true;
+    choiceData = data || {};
+    choiceRequestSeq += 1;
+    choiceData._choice_request_seq = choiceRequestSeq;
+    showChoiceUI(choiceData);
+}
+
+function invalidateChoiceRequest() {
+    choicePending = false;
+    choiceData = {};
+    choiceRequestSeq += 1;
+}
 let localPregameTimerSnapshot = null;
 
 function setRouteCookie(name, value, maxAgeSeconds) {
@@ -2808,6 +2823,7 @@ let gameOverRenderTimer = null;
 let scheduledGameOverState = null;
 let gameTimelineEntries = [];
 let battleChatEntries = [];
+let roomChatHistorySignature = '';
 let renderedBattleLogCount = 0;
 let renderedBattleLogTotal = 0;
 let renderedTimelineDomCount = 0;
@@ -3298,6 +3314,7 @@ function updateStaticText() {
     if (leaderboardTitle) leaderboardTitle.textContent = UI.leaderboard || '排行榜';
     const leaderboardNote = $('leaderboard-note');
     if (leaderboardNote) leaderboardNote.textContent = UI.leaderboard_note || '显示有效对局20局及以上的玩家';
+    updateLeaderboardRefreshMeta();
     const accountModeLogin = $('btn-account-mode-login');
     if (accountModeLogin) accountModeLogin.textContent = UI.account_login;
     const accountModeRegister = $('btn-account-mode-register');
@@ -7238,12 +7255,12 @@ function getTermIntroLibrary() {
         team_unique: { label: UI.tag_team_unique || 'Team Unique', desc: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose this card, one copy is kept at random and the extras are exiled.', fr: 'Si plusieurs coéquipiers choisissent cette carte, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }), color: '#8D6E63' },
         power: { label: UI.tag_power || 'Power', desc: lt({ zh: '此牌造成的每段 D 增加。若是多段 D，会按段数把威力向上分配。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }), color: '#C0392B' },
         magic_swift: { label: UI.tag_magic_swift || 'Magic Swift', desc: lt({ zh: 'M 花费减少对应层数，最低为 0M。', en: 'Reduces M cost by its value, minimum 0M.', fr: 'Réduit le coût M de sa valeur, minimum 0M.', ja: 'M コストを値だけ減らします。最低0M。' }), color: '#6C5CE7' },
-        temp_swift: { label: UI.tag_temp_swift || 'Temporary Swift', desc: lt({ zh: '本次打出时 E 花费减少对应层数，进入弃牌堆后清除。', en: 'Reduces E cost for this play only, then clears when entering discard.', fr: 'Réduit le coût E pour ce jeu seulement, puis disparaît en entrant dans la défausse.', ja: '今回の使用時だけ E コストを減らし、弃牌堆に入ると消えます。' }), color: '#0EA5E9' },
-        temp_heavy: { label: UI.tag_temp_heavy || 'Temporary Heavy', desc: lt({ zh: '本次打出时 E 花费增加对应层数，进入弃牌堆后清除。', en: 'Increases E cost for this play only, then clears when entering discard.', fr: 'Augmente le coût E pour ce jeu seulement, puis disparaît en entrant dans la défausse.', ja: '今回の使用時だけ E コストを増やし、弃牌堆に入ると消えます。' }), color: '#795548' },
+        temp_swift: { label: UI.tag_temp_swift || 'Temporary Swift', desc: lt({ zh: '本次打出时 E 花费减少对应层数，打出后清除。', en: 'Reduces E cost for this play only, then clears after being played.', fr: 'Réduit le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを減らし、使用後に消えます。' }), color: '#0EA5E9' },
+        temp_heavy: { label: UI.tag_temp_heavy || 'Temporary Heavy', desc: lt({ zh: '本次打出时 E 花费增加对应层数，打出后清除。', en: 'Increases E cost for this play only, then clears after being played.', fr: 'Augmente le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを増やし、使用後に消えます。' }), color: '#795548' },
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: lt({ zh: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', en: 'While present, an enemy skill card that actually costs at least 3E is negated, then this loses 1 stack.', fr: 'Tant qu’il existe, une compétence ennemie coûtant réellement au moins 3E est annulée, puis perd 1 charge.', ja: '存在中、敵が実際に3E以上消費する技能カードを無効にし、その後1層減ります。' }), color: COLORS.magic },
         equipment_armor: { label: lt({ zh: '装备护甲', en: 'Equipment Armor', fr: 'Armure d’équipement', ja: '装備護甲' }), desc: lt({ zh: '存在时，若装备将被摧毁，则使该装备不被摧毁，并消耗1层装备护甲。玩家回合结束时，该玩家所有装备的装备护甲-1。', en: 'If the equipment would be destroyed, prevent that destruction and consume 1 Equipment Armor. At the end of a player turn, all that player’s equipment loses 1 Equipment Armor.', fr: 'Si l’équipement devait être détruit, empêche cette destruction et consomme 1 Armure d’équipement. À la fin du tour d’un joueur, tout son équipement perd 1 Armure d’équipement.', ja: '装備が破壊される時、それを防ぎ装備護甲を1層消費します。プレイヤーのターン終了時、そのプレイヤーの全装備の装備護甲が1層減ります。' }), color: COLORS.indestructible },
-        fusion_layer: { label: UI.fusion_layer || 'Fusion', desc: lt({ zh: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', en: 'Amplifies attack damage. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after entering discard.', fr: 'Amplifie les dégâts d’attaque. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 en entrant dans la défausse.', ja: '攻撃ダメージを増やします。各命中は切り上げ(基礎ダメージ×聚变/裂变)。弃牌堆に入ると1に戻ります。' }), color: '#8E44AD' },
-        fission_layer: { label: UI.fission_layer || 'Fission', desc: lt({ zh: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。进弃牌堆后恢复为 1。', en: 'Splits an attack into multiple hits. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after entering discard.', fr: 'Divise une attaque en plusieurs coups. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 en entrant dans la défausse.', ja: '攻撃を複数回命中に分けます。各命中は切り上げ(基礎ダメージ×聚变/裂变)。弃牌堆に入ると1に戻ります。' }), color: '#2874A6' },
+        fusion_layer: { label: UI.fusion_layer || 'Fusion', desc: lt({ zh: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。打出后恢复为 1。', en: 'Amplifies attack damage. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after being played.', fr: 'Amplifie les dégâts d’attaque. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 après avoir été jouée.', ja: '攻撃ダメージを増やします。各命中は切り上げ(基礎ダメージ×聚变/裂变)。使用後に1へ戻ります。' }), color: '#8E44AD' },
+        fission_layer: { label: UI.fission_layer || 'Fission', desc: lt({ zh: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。打出后恢复为 1。', en: 'Splits an attack into multiple hits. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after being played.', fr: 'Divise une attaque en plusieurs coups. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 après avoir été jouée.', ja: '攻撃を複数回命中に分けます。各命中は切り上げ(基礎ダメージ×聚变/裂变)。使用後に1へ戻ります。' }), color: '#2874A6' },
         layers: { label: lt({ zh: '层数', en: 'Stacks', fr: 'Charges', ja: '層数' }), desc: lt({ zh: '状态或特殊属性的数量。层数越高效果会越强，或持续越久。', en: 'The quantity of a state or special property. More stacks usually mean stronger or longer-lasting effects.', fr: 'Quantité d’un état ou d’une propriété spéciale. Plus de charges signifie souvent un effet plus fort ou plus long.', ja: '状態や特殊属性の数量です。多いほど効果が強い、または長く続きます。' }), color: COLORS.text_primary },
     };
 }
@@ -7282,8 +7299,8 @@ function getIntroFlagDescription(flag, custom = null) {
         unique: lt({ zh: '整场对局自己总牌库中仅允许出现一张，多余的将被放逐。', en: 'Only one copy may exist in your total deck during the match; extras are exiled.', fr: 'Une seule copie peut exister dans votre deck total pendant la partie ; les autres sont exilées.', ja: '対局中、自分の総デッキに1枚だけ存在できます。余分は放逐されます。' }),
         swift: lt({ zh: 'E花费减少X，最少为0。', en: 'E cost is reduced by X, minimum 0.', fr: 'Le coût E est réduit de X, minimum 0.', ja: 'E コストをX減らします。最低0。' }),
         magic_swift: lt({ zh: 'M花费减少X，最少为0。', en: 'M cost is reduced by X, minimum 0.', fr: 'Le coût M est réduit de X, minimum 0.', ja: 'M コストをX減らします。最低0。' }),
-        temp_swift: lt({ zh: '本次打出时E花费减少X，进入弃牌堆后清除。', en: 'For this play only, E cost is reduced by X; clears when entering discard.', fr: 'Pour ce jeu seulement, le coût E est réduit de X ; disparaît en entrant dans la défausse.', ja: '今回の使用時だけ E コストをX減らし、弃牌堆に入ると消えます。' }),
-        temp_heavy: lt({ zh: '本次打出时E花费增加X，进入弃牌堆后清除。', en: 'For this play only, E cost is increased by X; clears when entering discard.', fr: 'Pour ce jeu seulement, le coût E augmente de X ; disparaît en entrant dans la défausse.', ja: '今回の使用時だけ E コストをX増やし、弃牌堆に入ると消えます。' }),
+        temp_swift: lt({ zh: '本次打出时E花费减少X，打出后清除。', en: 'For this play only, E cost is reduced by X; clears after being played.', fr: 'Pour ce jeu seulement, le coût E est réduit de X ; disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストをX減らし、使用後に消えます。' }),
+        temp_heavy: lt({ zh: '本次打出时E花费增加X，打出后清除。', en: 'For this play only, E cost is increased by X; clears after being played.', fr: 'Pour ce jeu seulement, le coût E augmente de X ; disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストをX増やし、使用後に消えます。' }),
         power: lt({ zh: '此牌造成的每段D增加。多段D会按段数把威力向上分配。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }),
         team_limited: lt({ zh: '只在一队至少2名玩家的模式出现；单人训练场可选，但没有实际意义。', en: 'Appears only in modes where a team has at least 2 players. In training it can appear but has no practical effect.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. En entraînement, elle peut apparaître mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ出ます。訓練場では出ても実質効果はありません。' }),
         team_unique: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose it, one copy is kept at random and extras are exiled.', fr: 'Si plusieurs coéquipiers la choisissent, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }),
@@ -8573,6 +8590,7 @@ function connectSocket(serverUrl) {
         draftState = data;
         syncBattleLogMatch(data || {});
         syncPhaseChatMatch(data || {});
+        syncRoomChatHistory(data || {});
         if (data.your_id != null) playerId = data.your_id;
         mergeSkinLooksFromPayload(data);
         maybeRefreshCardDefsForPayload(data, 'draft_state');
@@ -8603,6 +8621,7 @@ function connectSocket(serverUrl) {
             watching_pregame_timer_status: data.watching_pregame_timer_status || draftState.watching_pregame_timer_status,
         };
         if (data.your_id != null) playerId = data.your_id;
+        syncRoomChatHistory(data || {});
         updateDraftInfo(draftState);
     });
     bindSocketEvent('pregame_timer_update', (data) => {
@@ -8644,6 +8663,7 @@ function connectSocket(serverUrl) {
         eventSelectData = data;
         syncBattleLogMatch(data || {});
         syncPhaseChatMatch(data || {});
+        syncRoomChatHistory(data || {});
         if (data.your_id != null) playerId = data.your_id;
         mergeSkinLooksFromPayload(data);
         maybeRefreshCardDefsForPayload(data, 'event_select');
@@ -8658,6 +8678,7 @@ function connectSocket(serverUrl) {
         eventSelectData = data;
         syncBattleLogMatch(data || {});
         syncPhaseChatMatch(data || {});
+        syncRoomChatHistory(data || {});
         updatePhaseChatChannelOptions(data || {});
         if (data.your_id != null) playerId = data.your_id;
         mergeSkinLooksFromPayload(data);
@@ -8670,6 +8691,8 @@ function connectSocket(serverUrl) {
         markNetworkMatchTransition('event_sub_choice');
         phase = 'event_sub_choice';
         rememberActiveMatchRoute({ ...(data || {}), phase: 'event_sub_choice' }, 'event_sub_choice');
+        syncPhaseChatMatch(data || {});
+        syncRoomChatHistory(data || {});
         // Keep showing draft view so player can see their picks
         showView('view-draft');
         updateStatus(data.needs_sub_choice ? UI.select_event : UI.event_waiting);
@@ -8697,6 +8720,7 @@ function connectSocket(serverUrl) {
         clearTargetPickUi();
         soloMode = !!data.solo;
         syncBattleLogMatch(data || {});
+        syncRoomChatHistory(data || {});
         gameState = data;
         phase = data.phase || phase;
         if (isActiveBattlePhase(phase)) {
@@ -8730,8 +8754,7 @@ function connectSocket(serverUrl) {
             if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
         }
         if (data.pending_choice == null && choicePending) {
-            choicePending = false;
-            choiceData = {};
+            invalidateChoiceRequest();
         }
         if (pendingPlayCard && data.you && data.you.hand) {
             const stillInHand = data.you.hand.some(c => c.instance_id === pendingPlayCard.instance_id);
@@ -8844,10 +8867,8 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('choice_request', (data) => {
         clearPendingServerAction({ keepOptimistic: true });
-        choicePending = true;
-        choiceData = data;
         pendingPlayCard = null;
-        showChoiceUI(data);
+        beginChoiceRequest(data);
     });
     bindSocketEvent('v2_ui_request', (data) => {
         clearPendingServerAction({ keepOptimistic: true });
@@ -8860,7 +8881,13 @@ function connectSocket(serverUrl) {
         pendingPlayCard = null;
         clearSelectedPlayCard();
         removeFloatingCardPreview();
-        clientRejectAction((data && data.message) || UI.operation_failed);
+        const rejectCode = data && (data.code || data.error_code || data.reason);
+        const rejectMessage = (data && data.message) || UI.operation_failed;
+        if (rejectCode === 'NO_PENDING_CHOICE' || rejectMessage === UI.error_no_pending_choice || rejectMessage === '没有待选择操作') {
+            debugLog('[client] ignored stale no-pending-choice rejection');
+            return;
+        }
+        clientRejectAction(rejectMessage);
     });
     bindSocketEvent('chat', (data) => {
         debugLog('[client] chat:', data.nickname, data.text, 'spectator=', data.is_spectator);
@@ -8922,6 +8949,13 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('server_error', (data) => {
         debugLog('[client] server_error:', data.message);
+        const errorCode = data && (data.code || data.error_code || data.reason);
+        const errorMessage = data && (data.message || '');
+        if (errorCode === 'NO_PENDING_CHOICE' || errorMessage === UI.error_no_pending_choice || errorMessage === '没有待选择操作') {
+            debugLog('[client] ignored stale no-pending-choice server_error');
+            clearPendingServerAction();
+            return;
+        }
         clearPendingSoloFallback();
         if (activeViewId === 'view-solo' && phase === 'solo_edit') {
             pendingSoloStart = false;
@@ -10817,6 +10851,53 @@ function leaderboardHeaderHtml() {
     </div>`;
 }
 
+let leaderboardCache = null;
+let leaderboardLoadingPromise = null;
+let leaderboardRefreshTimerId = null;
+
+function getNextLeaderboardRefreshMs(nowMs = Date.now()) {
+    const intervalMs = 5 * 60 * 1000;
+    return Math.floor(nowMs / intervalMs) * intervalMs + intervalMs;
+}
+
+function formatLeaderboardRefreshTime(tsMs) {
+    const dt = new Date(tsMs);
+    const hh = String(dt.getHours()).padStart(2, '0');
+    const mm = String(dt.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+}
+
+function updateLeaderboardRefreshMeta() {
+    const meta = $('leaderboard-refresh-meta');
+    if (!meta) return;
+    const nextMs = leaderboardCache && leaderboardCache.nextRefreshMs
+        ? leaderboardCache.nextRefreshMs
+        : getNextLeaderboardRefreshMs();
+    const remainSeconds = Math.max(0, Math.ceil((nextMs - Date.now()) / 1000));
+    const mm = Math.floor(remainSeconds / 60);
+    const ss = remainSeconds % 60;
+    const timeText = `${formatLeaderboardRefreshTime(nextMs)} ${mm}:${String(ss).padStart(2, '0')}`;
+    meta.textContent = (UI.leaderboard_next_refresh || '下次 {0}').replace('{0}', timeText);
+}
+
+function startLeaderboardRefreshTimer() {
+    if (leaderboardRefreshTimerId) clearInterval(leaderboardRefreshTimerId);
+    updateLeaderboardRefreshMeta();
+    leaderboardRefreshTimerId = setInterval(() => {
+        const pop = $('leaderboard-popover');
+        const open = pop && !pop.classList.contains('hidden');
+        if (!open) {
+            clearInterval(leaderboardRefreshTimerId);
+            leaderboardRefreshTimerId = null;
+            return;
+        }
+        updateLeaderboardRefreshMeta();
+        if (leaderboardCache && Date.now() >= Number(leaderboardCache.nextRefreshMs || 0) + 250) {
+            loadLeaderboard({ force: true, keepExisting: true });
+        }
+    }, 1000);
+}
+
 function renderLeaderboardItems(items, selfRank = null) {
     const list = $('leaderboard-list');
     if (!list) return;
@@ -10836,15 +10917,41 @@ function renderLeaderboardItems(items, selfRank = null) {
     list.innerHTML = leaderboardHeaderHtml() + renderedRows + selfRow;
 }
 
-async function loadLeaderboard() {
+async function loadLeaderboard(options = {}) {
     const list = $('leaderboard-list');
     if (!list) return;
-    list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.leaderboard_loading || '正在加载排行榜...')}</div>`;
+    const now = Date.now();
+    if (!options.force && leaderboardCache && now < Number(leaderboardCache.nextRefreshMs || 0)) {
+        renderLeaderboardItems(leaderboardCache.items || [], leaderboardCache.selfRank || null);
+        updateLeaderboardRefreshMeta();
+        return;
+    }
+    if (leaderboardLoadingPromise) {
+        return leaderboardLoadingPromise;
+    }
+    if (!options.keepExisting) {
+        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.leaderboard_loading || '正在加载排行榜...')}</div>`;
+    }
     try {
-        const data = await authRequest('/api/leaderboard?min_games=20&limit=50', undefined, { timeoutMs: 5000 });
+        leaderboardLoadingPromise = authRequest('/api/leaderboard?min_games=20&limit=50', undefined, { timeoutMs: 5000 });
+        const data = await leaderboardLoadingPromise;
+        const nextRefreshMs = data && data.next_refresh_ts
+            ? Number(data.next_refresh_ts) * 1000
+            : getNextLeaderboardRefreshMs();
+        leaderboardCache = {
+            items: data.items || [],
+            selfRank: data.self_rank || null,
+            nextRefreshMs,
+            generatedAt: data.generated_at || '',
+        };
         renderLeaderboardItems(data.items || [], data.self_rank || null);
+        updateLeaderboardRefreshMeta();
     } catch (err) {
-        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(err.message || UI.account_error || '加载失败')}</div>`;
+        if (!leaderboardCache) {
+            list.innerHTML = `<div class="account-replay-sub">${escapeHtml(err.message || UI.account_error || '加载失败')}</div>`;
+        }
+    } finally {
+        leaderboardLoadingPromise = null;
     }
 }
 
@@ -10858,6 +10965,10 @@ function toggleLeaderboardPopover(force) {
         toggleFriendsPopover(false);
         toggleStatsPopover(false);
         loadLeaderboard();
+        startLeaderboardRefreshTimer();
+    } else if (leaderboardRefreshTimerId) {
+        clearInterval(leaderboardRefreshTimerId);
+        leaderboardRefreshTimerId = null;
     }
 }
 
@@ -11668,11 +11779,16 @@ function handleLocalSoloMessage(event) {
         showResponseUI(data);
     } else if (message.type === 'choice_request') {
         clearPendingServerAction({ keepOptimistic: true });
-        choicePending = true;
-        choiceData = data;
         pendingPlayCard = null;
-        showChoiceUI(data);
+        beginChoiceRequest(data);
     } else if (message.type === 'server_error') {
+        const errorCode = data && (data.code || data.error_code || data.reason);
+        const errorMessage = data && (data.message || '');
+        if (errorCode === 'NO_PENDING_CHOICE' || errorMessage === UI.error_no_pending_choice || errorMessage === '没有待选择操作') {
+            debugLog('[client] ignored stale local no-pending-choice server_error');
+            clearPendingServerAction();
+            return;
+        }
         clearPendingServerAction();
         flashStatus(translateServerError(data.message), 3000, 'error');
         if (gameState && gameState.phase) renderGame(gameState);
@@ -12714,11 +12830,11 @@ function renderLobby(data) {
         ? data.mode_counts
         : lobbyPlayers.reduce((acc, player) => {
             const mode = player.mode || '1v1';
-            if (mode === '1v1' || mode === '2v2' || mode === 'urf') {
+            if (mode === '1v1' || mode === '2v2' || mode === 'urf' || mode === 'random_deck') {
                 acc[mode] = (acc[mode] || 0) + 1;
             }
             return acc;
-        }, { '1v1': 0, '2v2': 0, urf: 0 });
+        }, { '1v1': 0, '2v2': 0, urf: 0, random_deck: 0 });
 
     const modeTabs = $('lobby-mode-tabs');
     if (modeTabs) {
@@ -12906,6 +13022,8 @@ function renderLobby(data) {
                     gameLabel = `${g.player1} & ${g.player2} vs ${g.player3 || '?'} & ${g.player4 || '?'} (${phaseLabel})`;
                 } else if (g.mode === 'urf') {
                     gameLabel = `${g.player1} vs ${g.player2} [${UI.mode_urf || 'Infinite Fire'}] (${phaseLabel})`;
+                } else if (g.mode === 'random_deck') {
+                    gameLabel = `${g.player1} vs ${g.player2} [${UI.mode_random_deck || 'Random Deck'}] (${phaseLabel})`;
                 } else {
                     gameLabel = `${g.player1} vs ${g.player2} (${phaseLabel})`;
                 }
@@ -13817,8 +13935,7 @@ function resetMatchRuntimeState(options = {}) {
     hideGameAlert();
     responsePending = false;
     responseData = {};
-    choicePending = false;
-    choiceData = {};
+    invalidateChoiceRequest();
     activeV2UiRequestId = null;
     pendingPlayCard = null;
     optimisticResourceOverride = null;
@@ -13913,7 +14030,83 @@ function makeChatTimelineEntry(nick, text, meta = {}, channelMeta = {}) {
         specialRoleColor: getSpecialRoleColor(meta),
         channel: channelMeta.chat_channel || channelMeta.channel || '',
         targetName: channelMeta.chat_target_name || channelMeta.targetName || '',
+        repeat_count: Number(meta.repeat_count || meta.repeatCount || 1),
+        repeatCount: Number(meta.repeat_count || meta.repeatCount || 1),
+        pregame: !!meta.pregame,
+        logAnchor: Number(meta.log_anchor ?? meta.logAnchor ?? 0),
     };
+}
+
+function chatTimelineSignature(entry = {}) {
+    return JSON.stringify([
+        entry.type || 'chat',
+        entry.nick || entry.nickname || '',
+        entry.text || '',
+        !!entry.system,
+        !!entry.isAdmin,
+        entry.specialRoleColor || '',
+        entry.channel || '',
+        entry.targetName || '',
+        !!entry.pregame,
+        Number(entry.logAnchor || 0),
+    ]);
+}
+
+function appendCompressedTimelineChat(list, entry, max = 500) {
+    if (!Array.isArray(list) || !entry) return false;
+    const last = list[list.length - 1];
+    if (last && chatTimelineSignature(last) === chatTimelineSignature(entry)) {
+        const nextCount = Number(last.repeat_count || last.repeatCount || 1) + Number(entry.repeat_count || entry.repeatCount || 1);
+        last.repeat_count = nextCount;
+        last.repeatCount = nextCount;
+        return true;
+    }
+    list.push(entry);
+    while (list.length > max) list.shift();
+    return false;
+}
+
+function roomChatHistoryItemToTimelineEntry(item = {}) {
+    const nick = getChatDisplayName(item);
+    return makeChatTimelineEntry(nick, item.text || '', item, {
+        chat_channel: item.chat_channel || item.channel || '',
+        chat_target_name: item.chat_target_name || item.targetName || '',
+    });
+}
+
+function syncRoomChatHistory(data = {}) {
+    const history = data && data.room_chat_history;
+    if (!history || !Array.isArray(history.items)) return;
+    const matchKey = phaseContextMatchKey(data);
+    const signature = JSON.stringify([
+        matchKey,
+        history.items.map(item => [
+            item && item.id,
+            item && item.time,
+            item && item.nickname,
+            item && item.text,
+            item && item.repeat_count,
+            item && item.chat_channel,
+            item && item.chat_target_name,
+            item && item.pregame,
+            item && item.log_anchor,
+        ]),
+    ]);
+    if (signature === roomChatHistorySignature) return;
+    roomChatHistorySignature = signature;
+    const entries = history.items.map(roomChatHistoryItemToTimelineEntry);
+    const pregame = entries.filter(entry => entry.pregame);
+    const battle = entries.filter(entry => !entry.pregame);
+    pregameChatEntries = pregame.slice(-500);
+    phaseChatEntries = pregame.slice(-500);
+    battleChatEntries = battle.slice(-500);
+    if (matchKey) {
+        phaseChatMatchKey = matchKey;
+        pregameChatMatchKey = matchKey;
+    }
+    if (phase === 'draft' || phase === 'event_select' || phase === 'event_reveal' || phase === 'event_sub_choice') {
+        renderPhaseChat();
+    }
 }
 
 function renderPhaseChat() {
@@ -13929,11 +14122,9 @@ function renderPhaseChat() {
 function appendPhaseChat(nick, text, meta = {}, channelMeta = {}) {
     const ctx = currentPhaseChatContext();
     syncPhaseChatMatch(ctx);
-    const entry = makeChatTimelineEntry(nick, text, meta, channelMeta);
-    phaseChatEntries.push(entry);
-    if (phaseChatEntries.length > 120) phaseChatEntries.shift();
-    pregameChatEntries.push(entry);
-    if (pregameChatEntries.length > 120) pregameChatEntries.shift();
+    const entry = makeChatTimelineEntry(nick, text, { ...meta, pregame: true }, channelMeta);
+    appendCompressedTimelineChat(phaseChatEntries, { ...entry }, 500);
+    appendCompressedTimelineChat(pregameChatEntries, { ...entry }, 500);
     renderPhaseChat();
 }
 
@@ -14330,7 +14521,7 @@ function buildBattleViewModel(state) {
             currentPlayer: normalizePlayerId(gs.current_player),
             isMyTurn: isMyTurn(),
             mode: gs.mode || '',
-            modeText: gs.mode === 'urf' ? '无限火力' : (gs.mode === '2v2' ? '2v2' : '1v1'),
+            modeText: UI[`mode_${gs.mode}`] || (gs.mode === 'urf' ? '无限火力' : (gs.mode === '2v2' ? '2v2' : '1v1')),
         },
         pendingResponse: gs.pending_response || (responsePending ? responseData : null),
         playableCards: new Set((you.hand || []).filter(canPlayCard).map(card => card.instance_id)),
@@ -17041,6 +17232,7 @@ function resetBattleLogDom(content) {
 function resetBattleLogState(content) {
     gameTimelineEntries = [];
     battleChatEntries = [];
+    roomChatHistorySignature = '';
     renderedBattleLogCount = 0;
     renderedBattleLogTotal = 0;
     renderedClassicLogSignature = '';
@@ -17536,23 +17728,11 @@ function renderLobbyChatHistory(data = {}) {
 }
 
 function appendGameChat(nick, text, meta = {}, channelMeta = {}) {
-    const entry = {
-        type: 'chat',
-        nick,
-        text,
-        message_id: meta.message_id || meta.messageId || '',
-        sender_user_id: meta.sender_user_id || meta.senderUserId || meta.user_id || '',
-        sender_name: meta.sender_name || meta.senderName || meta.nickname || nick,
-        nickname: meta.nickname || nick,
-        system: !!meta.system,
-        isAdmin: isAdminPlayer(meta),
-        specialRoleColor: getSpecialRoleColor(meta),
-        channel: channelMeta.chat_channel || channelMeta.channel || '',
-        targetName: channelMeta.chat_target_name || channelMeta.targetName || '',
-        logAnchor: Number(gameState && gameState.log_total != null ? gameState.log_total : ((gameState && Array.isArray(gameState.log)) ? gameState.log.length : 0)),
-    };
-    battleChatEntries.push(entry);
-    if (battleChatEntries.length > 160) battleChatEntries.shift();
+    const entry = makeChatTimelineEntry(nick, text, {
+        ...meta,
+        log_anchor: meta.log_anchor ?? meta.logAnchor ?? Number(gameState && gameState.log_total != null ? gameState.log_total : ((gameState && Array.isArray(gameState.log)) ? gameState.log.length : 0)),
+    }, channelMeta);
+    appendCompressedTimelineChat(battleChatEntries, entry, 500);
     renderLog((gameState && gameState.log) || [], (gameState && gameState.log_start) || 0, gameState && gameState.log_total);
 }
 
@@ -18692,6 +18872,7 @@ async function showReorderDeckUI(deckCards, titleText) {
 
 async function showChoiceUI(data) {
     if (isSpectating) return;
+    const requestSeq = data && data._choice_request_seq ? data._choice_request_seq : choiceRequestSeq;
     removeFloatingCardPreview();
     const choiceType = data.choice_type || '';
     const cardDict = data.card || {};
@@ -18954,9 +19135,13 @@ async function showChoiceUI(data) {
     if (!choiceResult) {
         choiceResult = { cancelled: true };
     }
+    if (requestSeq !== choiceRequestSeq || !choicePending) {
+        debugLog('[client] skipped stale choice result', { requestSeq, choiceRequestSeq, choiceType });
+        return;
+    }
     choicePending = false;
     if (!canSendGameAction('resolve_choice', { includeAnimation: false })) {
-        choicePending = true;
+        invalidateChoiceRequest();
         return;
     }
     beginPendingServerAction('resolve_choice', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });

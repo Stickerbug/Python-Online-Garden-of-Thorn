@@ -336,8 +336,8 @@ _reg(CardDef('Chilli', 'Chilli', '辣椒', 0, 0, 'bloom', 5, 'Common',
              '太过辛辣，让你不得不用一张牌解辣。', '丢弃一张牌，然后抽一张牌',
              flags={'self_only'}))
 
-_reg(CardDef('Chromosome', 'Chromosome', '染色体', 2, 0, 'bloom', 2, 'Common',
-             '从基因中提取记忆，寻找所需之牌。', '从弃牌堆中选择一张牌将其加入手中'))
+_reg(CardDef('Chromosome', 'Chromosome', '染色体', 1, 0, 'bloom', 2, 'Common',
+             '从基因中提取记忆，寻找所需之牌。', '从弃牌堆中选择一张牌将其加入手中，并使其获得共生'))
 
 _reg(CardDef('Sewage', 'Sewage', '污水', 2, 0, 'bloom', 10, 'Common',
              '腐蚀一切装备。', '摧毁目标一张装备'))
@@ -347,7 +347,7 @@ _reg(CardDef('MagicSewage', 'Magic Sewage', '魔法污水', 0, 6, 'bloom', 3, 'C
              flags={'self_only'}))
 
 _reg(CardDef('Mimic', 'Mimic', '拟态', 0, 0, 'bloom', 2, 'Common',
-             '完美模仿。', '将一张手牌的复制加入手中，使其下一次打出时费用-1',
+             '完美模仿。', '将一张手牌的复制加入手中',
              flags={'exile', 'self_only'}))
 
 _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 0, 'Super',
@@ -525,6 +525,30 @@ def generate_draft_options(pool: List[CardInstance], card_type: str, count: int 
             return available + weighted_unique_sample([c for c in type_cards if c.def_id in exclude], min(needed, len(fallback)))
         return available
     return weighted_unique_sample(type_cards, min(count, len(unique_cards)))
+
+
+def create_random_weighted_deck_def_ids(count: int = DECK_SIZE, allowed_def_ids: Optional[Set[str]] = None) -> List[str]:
+    weighted = []
+    weights = []
+    for def_id, weight in _effective_draft_weights(allowed_def_ids).items():
+        if def_id == ERROR_CARD_ID:
+            continue
+        card_def = CARD_DEFS.get(def_id)
+        if not card_def:
+            continue
+        if 'team_limited' in normalize_card_flags(getattr(card_def, 'flags', set()) or set()):
+            continue
+        try:
+            weight_value = max(0.0, float(weight or 0))
+        except (TypeError, ValueError):
+            weight_value = 0.0
+        if weight_value <= 0:
+            continue
+        weighted.append(def_id)
+        weights.append(weight_value)
+    if not weighted:
+        return []
+    return random.choices(weighted, weights=weights, k=max(0, int(count or 0)))
 
 
 def create_deck_from_draft(picked_def_ids: List[str], allowed_def_ids: Optional[Set[str]] = None) -> List[CardInstance]:

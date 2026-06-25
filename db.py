@@ -1715,24 +1715,36 @@ def get_report_detail(report_id):
         return data
 
 
-def resolve_report_entry(report_id, action, moderation_action='none', admin_username='', note='', duration_seconds=None):
+def resolve_report_entry(
+    report_id,
+    action,
+    moderation_action='none',
+    admin_username='',
+    note='',
+    duration_seconds=None,
+    target_moderation_action=None,
+    reporter_moderation_action=None,
+):
     try:
         rid = int(report_id)
     except (TypeError, ValueError):
         return None, '举报不存在'
     action = str(action or '').strip().lower()
     moderation_action = str(moderation_action or 'none').strip().lower()
+    target_moderation_action = str(target_moderation_action if target_moderation_action is not None else moderation_action or 'none').strip().lower()
+    reporter_moderation_action = str(reporter_moderation_action if reporter_moderation_action is not None else 'none').strip().lower()
     status_map = {'accept': 'accepted', 'reject': 'rejected', 'abusive': 'abusive'}
     if action not in status_map:
         return None, '处理动作无效'
-    if moderation_action not in {'none', 'warn', 'mute', 'ban', 'invalidate_match'}:
+    valid_moderation_actions = {'none', 'warn', 'mute', 'ban', 'invalidate_match'}
+    if moderation_action not in valid_moderation_actions or target_moderation_action not in valid_moderation_actions or reporter_moderation_action not in valid_moderation_actions:
         return None, '处罚动作无效'
     now_dt = utc_now_dt()
     now = utc_iso(now_dt)
     duration = int(duration_seconds or 0) if duration_seconds is not None else None
-    if moderation_action == 'warn' and not duration:
+    if (moderation_action == 'warn' or target_moderation_action == 'warn' or reporter_moderation_action == 'warn') and not duration:
         duration = 60 * 60
-    expires_at = utc_iso(now_dt + timedelta(seconds=max(1, duration))) if duration and moderation_action in {'mute', 'warn'} else None
+    expires_at = utc_iso(now_dt + timedelta(seconds=max(1, duration))) if duration else None
     with get_db_connection() as conn:
         row = conn.execute('SELECT * FROM reports WHERE id = ?', (rid,)).fetchone()
         if row is None:
@@ -1750,7 +1762,12 @@ def resolve_report_entry(report_id, action, moderation_action='none', admin_user
                 'UPDATE users SET false_report_count = COALESCE(false_report_count, 0) + 1 WHERE id = ?',
                 (row['reporter_user_id'],),
             )
-        if moderation_action != 'none':
+
+        def insert_moderation_action(target_user_id, target_username, action_type):
+            action_type = str(action_type or 'none').strip().lower()
+            if action_type == 'none':
+                return
+            action_expires_at = expires_at if action_type in {'mute', 'warn'} and duration else None
             conn.execute(
                 '''
                 INSERT INTO moderation_actions (
@@ -1761,16 +1778,19 @@ def resolve_report_entry(report_id, action, moderation_action='none', admin_user
                 ''',
                 (
                     str(admin_username or '')[:80],
-                    row['target_user_id'],
-                    row['target_username'],
-                    moderation_action,
+                    target_user_id,
+                    target_username,
+                    action_type,
                     str(note or '')[:500],
                     duration,
                     now,
-                    expires_at,
+                    action_expires_at,
                     rid,
                 ),
             )
+
+        insert_moderation_action(row['target_user_id'], row['target_username'], target_moderation_action)
+        insert_moderation_action(row['reporter_user_id'], row['reporter_username'], reporter_moderation_action)
         conn.commit()
     return get_report_detail(rid), None
 

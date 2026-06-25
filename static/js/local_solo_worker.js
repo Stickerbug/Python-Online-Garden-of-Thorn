@@ -1387,8 +1387,10 @@ class LocalSoloEngine {
             });
             this.logMsg(`${this.pn(playerId)}【光之洗礼】：${converted}张牌变为Light(萌芽+共生)`);
         } else if (eventId === 4) {
-            opp.fire += 2;
-            this.logMsg(`${this.pn(playerId)}【烈焰预兆】：敌方+2灼烧`);
+            if (!this.statusApplicationBlocked(1 - playerId, 'fire')) {
+                opp.fire += 2;
+                this.logMsg(`${this.pn(playerId)}【烈焰预兆】：敌方+2灼烧`);
+            }
         } else if (eventId === 5) {
             const picked = (sub.add_def_ids || sub.def_ids || []).slice(0, 1);
             let added = 0;
@@ -1464,7 +1466,9 @@ class LocalSoloEngine {
         this.applyTurnStartEffects(playerId);
         if (this.game_over) return;
         const ps = this.players[playerId];
-        if (ps.skip_turn > 0) {
+        if (ps.skip_turn > 0 && this.isStatusImmune(playerId)) {
+            ps.skip_turn = Math.max(0, toInt(ps.skip_turn, 0) - 1);
+        } else if (ps.skip_turn > 0) {
             ps.skip_turn -= 1;
             this.logMsg(`${this.pn(playerId)}被眩晕，跳过本回合！`);
             this.endPlayerTurn(playerId);
@@ -1670,7 +1674,7 @@ class LocalSoloEngine {
         const cleared = [];
         [['foresight', '预知'], ['blind', '失明']].forEach(([attr, label]) => {
             if (toInt(ps[attr], 0) <= 0) return;
-            if (attr === 'blind' && ps.hand.length) {
+            if (attr === 'blind' && ps.hand.length && !this.isStatusImmune(playerId)) {
                 shuffle(ps.hand);
                 this.logMsg(`${this.pn(playerId)}因失明打乱手牌`);
             }
@@ -1821,7 +1825,7 @@ class LocalSoloEngine {
         if (alreadyPaid) {
             const ps = this.players[playerId];
             if (!ps.findHandCard(card.instance_id)) ps.hand.unshift(card);
-            ps.elixir += card.cost_e + Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
+            ps.elixir += this.paidEForRefund(playerId, card);
             ps.magic += card.cost_m;
             ps.cards_played_this_turn[card.def_id] = Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
         }
@@ -2160,6 +2164,7 @@ class LocalSoloEngine {
         const ps = this.players[targetId];
         if (!ps) return 0;
         const key = String(status || '');
+        if (this.isStatusImmune(targetId) && !['status_immune', 'immune', '状态免疫'].includes(key)) return 0;
         const map = {
             poison: ps.poison,
             '中毒': ps.poison,
@@ -2232,16 +2237,20 @@ class LocalSoloEngine {
         const healTurns = this.customStatusValue(playerId, 'jungle:turn_heal_turns', 'turn_heal_turns');
         const healPower = this.customStatusValue(playerId, 'jungle:turn_heal_power', 'turn_heal_power');
         if (healTurns > 0 && healPower > 0) {
-            ps.heal(healPower);
-            this.logMsg(`${this.pn(playerId)}的回合回复：+${healPower}H`);
+            if (!this.isStatusImmune(playerId)) {
+                ps.heal(healPower);
+                this.logMsg(`${this.pn(playerId)}的回合回复：+${healPower}H`);
+            }
             this.setCustomStatusAliasGroup(playerId, 'jungle:turn_heal_turns', ['jungle:turn_heal_turns', 'turn_heal_turns'], healTurns - 1);
             if (healTurns - 1 <= 0) this.setCustomStatusAliasGroup(playerId, 'jungle:turn_heal_power', ['jungle:turn_heal_power', 'turn_heal_power'], 0);
         }
         const magicTurns = this.customStatusValue(playerId, 'jungle:turn_magic_turns', 'turn_magic_turns');
         const magicPower = this.customStatusValue(playerId, 'jungle:turn_magic_power', 'turn_magic_power');
         if (magicTurns > 0 && magicPower > 0) {
-            ps.gainMagic(magicPower);
-            this.logMsg(`${this.pn(playerId)}的魔力回合回复：+${magicPower}M`);
+            if (!this.isStatusImmune(playerId)) {
+                ps.gainMagic(magicPower);
+                this.logMsg(`${this.pn(playerId)}的魔力回合回复：+${magicPower}M`);
+            }
             this.setCustomStatusAliasGroup(playerId, 'jungle:turn_magic_turns', ['jungle:turn_magic_turns', 'turn_magic_turns'], magicTurns - 1);
             if (magicTurns - 1 <= 0) this.setCustomStatusAliasGroup(playerId, 'jungle:turn_magic_power', ['jungle:turn_magic_power', 'turn_magic_power'], 0);
         }
@@ -2670,6 +2679,15 @@ class LocalSoloEngine {
         if (prop === 'discard_size' || prop === 'discard_count') return ps.discard.length;
         if (prop === 'exile_size' || prop === 'exile_count') return ps.exile.length;
         if (prop === 'equip_count' || prop === 'equipment_count') return ps.equipment.length;
+        const statusProps = new Set([
+            'dodge', 'poison', 'fire', 'vulnerable', 'toxic', 'equipment_protection',
+            'attack_blocked', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
+            'nazar_big_hits', 'sluggish', 'overload', 'foresight', 'fracture', 'stagnation',
+            'blind', 'heal_block', 'weakness', 'bleed', 'skip_turn',
+            'invincible', 'untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
+            'negate_next_skill', 'nazar_active',
+        ]);
+        if (this.isStatusImmune(targetId) && statusProps.has(prop)) return 0;
         return toInt(ps[prop], 0);
     }
 
@@ -2680,6 +2698,15 @@ class LocalSoloEngine {
         if (prop === 'energy') prop = 'elixir';
         if (prop === 'max_energy') prop = 'max_elixir';
         const next = Math.max(0, toInt(value, 0));
+        const statusProps = new Set([
+            'poison', 'fire', 'vulnerable', 'toxic', 'equipment_protection',
+            'attack_blocked', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
+            'nazar_big_hits', 'sluggish', 'overload', 'foresight', 'fracture', 'stagnation',
+            'blind', 'heal_block', 'weakness', 'bleed', 'skip_turn',
+            'invincible', 'untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
+            'negate_next_skill', 'nazar_active',
+        ]);
+        if (next > 0 && this.isStatusImmune(targetId) && statusProps.has(prop)) return;
         if (prop === 'hand_limit') {
             const golden = ps.equipment.filter(eq => eq.def_id === 'GoldenLeaf' && (eq.effect_target ?? targetId) === targetId).length;
             ps.extra_hand_limit_bonus = Math.max(0, next - HAND_LIMIT - golden);
@@ -2755,6 +2782,12 @@ class LocalSoloEngine {
         }
         this.dispatchPlayerStatChanges(before, playerId, sourceCard);
         return actual;
+    }
+
+    paidEForRefund(playerId, card) {
+        if (!card) return 0;
+        if (card._paid_e_this_play != null) return Math.max(0, toInt(card._paid_e_this_play, 0));
+        return Math.max(0, toInt(card.cost_e, 0) + this.getExtraEForCard(playerId, card));
     }
 
     mimicSpecialCostForCard(target) {
@@ -3254,6 +3287,7 @@ class LocalSoloEngine {
 
     effect_apply_poison(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        if (this.statusApplicationBlocked(targetId, 'poison')) return;
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
         this.players[targetId].poison += amount;
         this.logMsg(`${this.pn(targetId)}+${amount}层中毒`);
@@ -3261,6 +3295,7 @@ class LocalSoloEngine {
 
     effect_apply_burn(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        if (this.statusApplicationBlocked(targetId, 'fire')) return;
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
         this.players[targetId].fire += amount;
         this.logMsg(`${this.pn(targetId)}+${amount}层灼烧`);
@@ -3268,6 +3303,7 @@ class LocalSoloEngine {
 
     effect_apply_toxic(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        if (this.statusApplicationBlocked(targetId, 'toxic')) return;
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
         this.players[targetId].toxic += amount;
         this.logMsg(`${this.pn(targetId)}+${amount}层淬毒`);
@@ -3275,6 +3311,7 @@ class LocalSoloEngine {
 
     effect_apply_vulnerable(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        if (this.statusApplicationBlocked(targetId, 'vulnerable')) return;
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
         this.players[targetId].vulnerable += amount;
     }
@@ -3933,6 +3970,7 @@ class LocalSoloEngine {
 
     effect_skip_turn(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
+        if (this.statusApplicationBlocked(targetId, 'skip_turn')) return;
         const amount = toInt(params.amount, 1);
         this.players[targetId].skip_turn += amount;
     }
@@ -3950,6 +3988,7 @@ class LocalSoloEngine {
         const idx = ps.discard.findIndex(c => c.def_id === targetDef);
         if (idx >= 0 && ps.canAddToHand()) {
             const found = ps.discard.splice(idx, 1)[0];
+            found.instance_flags.add('symbiosis');
             ps.addToHand(found);
             if (log) this.logMsg(log);
         }
@@ -4021,6 +4060,7 @@ class LocalSoloEngine {
         const status = String(params.status || params.name || '');
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
         if (!status) return;
+        if (this.statusApplicationBlocked(targetId, status)) return;
         if (['status_immune', 'immune', '状态免疫'].includes(status)) {
             this.players[targetId].custom_statuses = this.players[targetId].custom_statuses || {};
             delete this.players[targetId].custom_statuses.immune;
@@ -4051,6 +4091,7 @@ class LocalSoloEngine {
     effect_apply_turn_regen(playerId, card, params, log, choice) {
         const targetId = this.resolveTarget(playerId, params.target || 'self', choice);
         const kind = String(params.kind || 'heal');
+        if (this.statusApplicationBlocked(targetId, kind === 'magic' ? 'turn_magic_turns' : 'turn_heal_turns')) return;
         const turns = this.evalInt(playerId, params.turns ?? params.amount ?? 1, card, 1, choice);
         const power = this.evalInt(playerId, params.power ?? params.level ?? 1, card, 1, choice);
         const [mergedTurns, mergedPower] = this.mergeTurnRegenStatus(targetId, kind, turns, power);
@@ -4073,6 +4114,7 @@ class LocalSoloEngine {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy', choice);
         if (!this.players[targetId]) return;
         const status = String(params.status || 'jungle:shield');
+        if (this.statusApplicationBlocked(targetId, status)) return;
         const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 1, card, 1, choice));
         const current = this.customStatusValue(targetId, status);
         this.setCustomStatusAliasGroup(targetId, status, [status], current + amount);
@@ -4180,6 +4222,7 @@ class LocalSoloEngine {
     effect_invincible(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'self');
         if (this.evalInt(playerId, params.value ?? params.amount ?? 1, card, 1) > 0) {
+            if (this.statusApplicationBlocked(targetId, 'invincible')) return;
             this.setInvincibleUntilNextOwnTurnEnd(targetId);
         } else {
             this.clearInvincibleState(targetId);
@@ -4373,8 +4416,8 @@ class LocalSoloEngine {
     applyLateRoundFirePressure() {
         if (this.round_num < LATE_ROUND_FIRE_START) return;
         let applied = 0;
-        this.players.forEach(ps => {
-            if (ps.health > 0) {
+        this.players.forEach((ps, playerId) => {
+            if (ps.health > 0 && !this.statusApplicationBlocked(playerId, 'fire')) {
                 ps.fire += 1;
                 applied += 1;
             }
@@ -4430,7 +4473,7 @@ class LocalSoloEngine {
         const ps = this.players[targetId];
         if (!ps || actual <= 0) return actual;
         const shield = this.customStatusValue(targetId, 'jungle:shield', 'shield');
-        if (shield > 0) {
+        if (shield > 0 && !this.isStatusImmune(targetId)) {
             const blocked = Math.min(shield, actual);
             actual -= blocked;
             this.setCustomStatusAliasGroup(targetId, 'jungle:shield', ['jungle:shield', 'shield'], shield - blocked);
@@ -4464,7 +4507,7 @@ class LocalSoloEngine {
 
     dealDirectDamage(playerId, amount, source = '', sourceId = null, damageMeta = null) {
         const ps = this.players[playerId];
-        if (!ps || ps.invincible) {
+        if (!ps || (ps.invincible && !this.isStatusImmune(playerId))) {
             if (ps) this.logMsg(`${this.pn(playerId)}无敌，免疫${source}伤害`);
             return 0;
         }
@@ -4482,7 +4525,8 @@ class LocalSoloEngine {
 
     dealAttackDamage(targetId, amount, hits = 1, isPrecision = false, attackerId = 1 - targetId, sourceCard = null) {
         const ps = this.players[targetId];
-        if (!ps || ps.untargetable) {
+        const immune = this.isStatusImmune(targetId);
+        if (!ps || (ps.untargetable && !immune)) {
             if (ps) this.logMsg(`${this.pn(targetId)}无法被攻击选中`);
             return 0;
         }
@@ -4494,7 +4538,7 @@ class LocalSoloEngine {
         for (let h = 0; h < hits; h++) {
             let precisionDodged = false;
             let plankBlocksAttack = false;
-            if (ps.dodge > 0) {
+            if (ps.dodge > 0 && !immune) {
                 ps.dodge -= 1;
                 if (!isPrecision) {
                     this.logMsg(`${this.pn(targetId)}闪避了攻击`);
@@ -4505,7 +4549,7 @@ class LocalSoloEngine {
                     this.logMsg(`${this.pn(targetId)}的闪避被精准消耗`);
                 }
             }
-            if (ps.invincible) {
+            if (ps.invincible && !immune) {
                 this.logMsg(`${this.pn(targetId)}无敌，免疫伤害`);
                 continue;
             }
@@ -4537,10 +4581,10 @@ class LocalSoloEngine {
                     }
                 }
             }
-            const rootArmor = this.customStatusValue(targetId, 'jungle:root', 'jungle:root_status', 'root_status');
-            const fragile = this.customStatusValue(targetId, 'jungle:fragile', 'fragile');
+            const rootArmor = immune ? 0 : this.customStatusValue(targetId, 'jungle:root', 'jungle:root_status', 'root_status');
+            const fragile = immune ? 0 : this.customStatusValue(targetId, 'jungle:fragile', 'fragile');
             dmg = Math.max(0, dmg - ps.armor - rootArmor + fragile);
-            if (ps.sponge_active && dmg > 0) {
+            if (ps.sponge_active && dmg > 0 && !immune) {
                 const converted = Math.min(10, Math.floor(dmg / 2));
                 ps.poison += converted;
                 dmg = 0;
@@ -4558,7 +4602,7 @@ class LocalSoloEngine {
                     this.consumeJungleRootLayerFromEquipment(targetId);
                 }
             }
-            if (dmg > 0 && ps.toxic > 0) ps.poison += ps.toxic;
+            if (dmg > 0 && ps.toxic > 0 && !immune) ps.poison += ps.toxic;
             this._game_over_defer_depth += 1;
             try {
                 this.checkYggdrasil(targetId);
@@ -4609,6 +4653,7 @@ class LocalSoloEngine {
     setInvincibleUntilNextOwnTurnEnd(playerId) {
         const ps = this.players[playerId];
         if (!ps) return;
+        if (this.isStatusImmune(playerId)) return;
         ps.invincible = true;
         ps.invincible_until_player = playerId;
         ps.invincible_granted_round = toInt(this.round_num, 0);
@@ -4687,7 +4732,7 @@ class LocalSoloEngine {
     checkYggdrasil(playerId) {
         const ps = this.players[playerId];
         if (!ps || ps.health > 0) return;
-        if (ps.bandage_active) {
+        if (ps.bandage_active && !this.isStatusImmune(playerId)) {
             ps.health = 1;
             this.setInvincibleUntilNextOwnTurnEnd(playerId);
             ps.bandage_active = false;
@@ -4729,7 +4774,7 @@ class LocalSoloEngine {
         card.fission_hit = 0;
     }
 
-    resetCardForDiscard(card) {
+    resetCardAfterPlay(card) {
         if (card.card_type === 'thorn') this.resetOneShotAttackAttrs(card);
         card.cost_e_override = null;
         card.cost_m_override = null;
@@ -4742,8 +4787,10 @@ class LocalSoloEngine {
         card.instance_flags.delete('temp_heavy');
     }
 
+    resetCardForDiscard(card) {
+    }
+
     discardCard(ps, card) {
-        this.resetCardForDiscard(card);
         ps.discard.push(card);
     }
 
@@ -4799,9 +4846,23 @@ class LocalSoloEngine {
         }, 0);
     }
 
+    isStatusImmune(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return false;
+        const custom = ps.custom_statuses || {};
+        return ['status_immune', 'immune', '状态免疫'].some(key => toInt(custom[key], 0) > 0 || toInt(ps[key], 0) > 0);
+    }
+
+    statusApplicationBlocked(playerId, status) {
+        if (!this.players[playerId]) return true;
+        if (['status_immune', 'immune', '状态免疫', 'dodge', '闪避'].includes(String(status || ''))) return false;
+        return this.isStatusImmune(playerId);
+    }
+
     actionLimitStatusValue(playerId, attr, ...aliases) {
         const ps = this.players[playerId];
         if (!ps) return 0;
+        if (this.isStatusImmune(playerId)) return 0;
         return Math.max(Math.max(0, toInt(ps[attr], 0)), this.customStatusValue(playerId, ...aliases));
     }
 
@@ -4827,7 +4888,7 @@ class LocalSoloEngine {
         if (this.actionLimitStatusValue(playerId, 'attack_blocked', 'attack_blocked', '禁攻') > 0 && def.card_type === 'thorn') return [false, '本回合无法使用攻击牌'];
         if (this.actionLimitStatusValue(playerId, 'attack_only', 'attack_only', '仅攻击') > 0 && def.card_type !== 'thorn') return [false, '本回合只能使用攻击牌'];
         if (ps.shovel_active) return [false, '链子效果中，无法使用卡牌'];
-        const totalE = card.cost_e + this.getExtraEForCard(playerId, card);
+        const totalE = Math.max(0, card.cost_e + this.getExtraEForCard(playerId, card));
         if (totalE > ps.elixir) return [false, `能量不足（需要${totalE}E，当前${ps.elixir}E）`];
         if (card.cost_m > ps.magic) return [false, `魔力不足（需要${card.cost_m}M，当前${ps.magic}M）`];
         return [true, ''];
@@ -4905,7 +4966,7 @@ class LocalSoloEngine {
             const queued = this.queueCardChoice(playerId, card, choice, false);
             if (queued) return queued;
         }
-        const totalE = card.cost_e + this.getExtraEForCard(playerId, card);
+        const totalE = Math.max(0, card.cost_e + this.getExtraEForCard(playerId, card));
         card._paid_e_this_play = totalE;
         this.spendResource(playerId, 'elixir', totalE, card);
         this.spendResource(playerId, 'magic', card.cost_m, card);
@@ -4933,6 +4994,7 @@ class LocalSoloEngine {
             this.negated_card = false;
             this.logCardPlay(playerId, card);
             this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}被魔法泡泡反制，失效！`);
+            this.resetCardAfterPlay(card);
             if (card.flags.has('exile')) ps.exile.push(card);
             else this.discardCard(ps, card);
             this.dispatchCardEvent('card_used', playerId, card, playerId, null, null, choice);
@@ -4949,6 +5011,7 @@ class LocalSoloEngine {
                 opponent.custom_statuses.magic_nazar = stacks - 1;
                 if (opponent.custom_statuses.magic_nazar <= 0) delete opponent.custom_statuses.magic_nazar;
                 this.logMsg(`${this.pn(opponentId)}的魔法邪眼使${this.pn(playerId)}的${cardName(card.def_id)}失效`);
+                this.resetCardAfterPlay(card);
                 if (card.flags.has('exile')) ps.exile.push(card);
                 else this.discardCard(ps, card);
                 this.dispatchCardEvent('card_used', playerId, card, playerId, null, null, choice);
@@ -4963,7 +5026,7 @@ class LocalSoloEngine {
             const target = ps.findHandCard(choice.target_instance_id);
             if (target && !this.canPayMimicSpecialCost(playerId, target)) {
                 ps.hand.unshift(card);
-                ps.elixir += card.cost_e + Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
+                ps.elixir += this.paidEForRefund(playerId, card);
                 ps.magic += card.cost_m;
                 ps.cards_played_this_turn[card.def_id] = Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
                 return { success: false, error: '能量不足' };
@@ -4989,7 +5052,7 @@ class LocalSoloEngine {
             if (this.log[playLogMarker] === expected) this.log.splice(playLogMarker, 1);
             if (!ps.findHandCard(card.instance_id)) {
                 ps.hand.unshift(card);
-                ps.elixir += card.cost_e + Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
+                ps.elixir += this.paidEForRefund(playerId, card);
                 ps.magic += card.cost_m;
                 ps.cards_played_this_turn[card.def_id] = Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
             }
@@ -5012,6 +5075,7 @@ class LocalSoloEngine {
             Object.prototype.hasOwnProperty.call(playScripts, key)
             && scriptEffectsFrom(playScripts[key]).length > 0
         );
+        this.resetCardAfterPlay(card);
         if ((card.card_type === 'root' && !scriptControlsPlay) || card._placed_as_equipment) {
             if (!this.findEquipmentForCard(equipOwnerId, card)) {
                 const eq = new LocalEquipment(card, equipOwnerId);
@@ -5019,7 +5083,6 @@ class LocalSoloEngine {
                 this.logMsg(`${this.pn(equipOwnerId)}装备了${cardName(card.def_id)}`);
             }
         } else if (card.flags.has('rebound')) {
-            this.resetCardForDiscard(card);
             ps.addToHand(card);
             this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}因回转回到手中`);
         } else if (card.flags.has('exile')) {
@@ -5090,12 +5153,13 @@ class LocalSoloEngine {
             if (!ps.findHandCard(card.instance_id)) ps.hand.unshift(card);
             return { success: false, cancelled: true, error: '选择已取消' };
         }
+        const handCard = ps.findHandCard(card.instance_id);
+        const costCard = handCard || card;
         const dupCount = toInt(ps.cards_played_this_turn[card.def_id], 0);
-        card._paid_e_this_play = card.cost_e + dupCount;
+        card._paid_e_this_play = Math.max(0, costCard.cost_e + this.getExtraEForCard(playerId, costCard));
         this.spendResource(playerId, 'elixir', card._paid_e_this_play, card);
         this.spendResource(playerId, 'magic', card.cost_m, card);
         ps.cards_played_this_turn[card.def_id] = dupCount + 1;
-        const handCard = ps.findHandCard(card.instance_id);
         if (handCard) ps.removeHandCard(card.instance_id);
         this.applyMagicAccelerationAfterPlay(playerId, card);
         if (this.cardNeedsChoice(card) && !this.choiceSatisfiesRequest(card, choice)) {
@@ -5176,15 +5240,24 @@ class LocalSoloEngine {
                 incoming_damage_parts: (pendingDamagePrediction && Array.isArray(pendingDamagePrediction.parts)) ? [...pendingDamagePrediction.parts] : [],
             });
         } else if (counterCard.def_id === 'Bubble') {
-            this.players[responderId].dodge += 1;
+            if (!this.statusApplicationBlocked(responderId, 'dodge')) {
+                this.players[responderId].dodge += 1;
+            }
         } else if (counterCard.def_id === 'Nazar') {
-            this.players[responderId].nazar_active = true;
-            this.players[responderId].nazar_big_hits = 0;
+            if (!this.statusApplicationBlocked(responderId, 'nazar_active')) {
+                this.players[responderId].nazar_active = true;
+                this.players[responderId].nazar_big_hits = 0;
+            }
         } else if (counterCard.def_id === 'MagicNazar') {
-            this.players[responderId].custom_statuses.magic_nazar = toInt(this.players[responderId].custom_statuses.magic_nazar, 0) + 2;
+            if (!this.statusApplicationBlocked(responderId, 'magic_nazar')) {
+                this.players[responderId].custom_statuses.magic_nazar = toInt(this.players[responderId].custom_statuses.magic_nazar, 0) + 2;
+            }
         } else if (counterCard.def_id === 'MagicBubble') {
-            this.players[responderId].negate_next_skill = true;
+            if (!this.statusApplicationBlocked(responderId, 'negate_next_skill')) {
+                this.players[responderId].negate_next_skill = true;
+            }
         }
+        this.resetCardAfterPlay(counterCard);
         if (counterCard.flags.has('exile')) this.players[responderId].exile.push(counterCard);
         else this.discardCard(this.players[responderId], counterCard);
         this.dispatchCardEvent('card_used', responderId, counterCard, originalPlayerId == null ? responderId : originalPlayerId);
@@ -5226,7 +5299,9 @@ class LocalSoloEngine {
         } else if (eq.def_id === 'Leaf') {
             if (this.destroyEquipment(playerId, eq)) this.dealAttackDamage(1 - playerId, 8, 1, false, playerId);
         } else if (eq.def_id === 'Mark') {
-            if (this.destroyEquipment(playerId, eq)) this.players[1 - playerId].skip_turn = true;
+            if (this.destroyEquipment(playerId, eq) && !this.statusApplicationBlocked(1 - playerId, 'skip_turn')) {
+                this.players[1 - playerId].skip_turn = true;
+            }
         } else if (eq.def_id === 'Mine') {
             if (this.destroyEquipment(playerId, eq)) this.dealAttackDamage(1 - playerId, 20, 1, false, playerId);
         }

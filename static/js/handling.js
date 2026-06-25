@@ -5,6 +5,7 @@ let reports = [];
 let users = [];
 let ipBans = [];
 let selectedReportId = null;
+let selectedReport = null;
 let selectedUserId = null;
 let selectedDuration = 0;
 let durationTarget = 'moderation';
@@ -253,6 +254,7 @@ function renderList() {
 }
 
 function clearDetail() {
+  selectedReport = null;
   $('empty').classList.remove('hidden');
   $('detail').classList.add('hidden');
   $('detail').textContent = '';
@@ -283,6 +285,13 @@ function reportReasonText(report) {
   return reason ? `${category}：${reason}` : category;
 }
 
+function updateReportActionHints(report) {
+  const targetName = report ? reportPartyName(report.target_username, report.target_user_id) : '被举报人';
+  const reporterName = report ? reportPartyName(report.reporter_username, report.reporter_user_id) : '举报人';
+  setText('target-action-hint', `作用于：${targetName}`);
+  setText('reporter-action-hint', `作用于：${reporterName}`);
+}
+
 function appendCollapsedJson(parent, summaryText, data) {
   const details = document.createElement('details');
   details.className = 'json-details';
@@ -297,6 +306,7 @@ function appendCollapsedJson(parent, summaryText, data) {
 
 async function selectReport(id) {
   selectedReportId = id;
+  selectedReport = null;
   renderList();
   setText('action-result', '');
   try {
@@ -309,6 +319,8 @@ async function selectReport(id) {
 }
 
 function renderReportDetail(report) {
+  selectedReport = report || null;
+  updateReportActionHints(report);
   $('empty').classList.add('hidden');
   const detail = $('detail');
   detail.classList.remove('hidden');
@@ -367,7 +379,8 @@ function renderReportDetail(report) {
   detail.appendChild(el('h3', '', '处理记录'));
   (report.actions || []).forEach((action) => {
     const box = el('div', 'evidence');
-    box.appendChild(el('div', 'mono', `${fmtTime(action.created_at)} ${action.action_type || ''}`));
+    const actionTarget = reportPartyName(action.target_username, action.target_user_id);
+    box.appendChild(el('div', 'mono', `${fmtTime(action.created_at)} ${action.action_type || ''} → ${actionTarget}`));
     box.appendChild(el('div', 'muted', `${action.admin_username || '-'} · ${action.reason || '-'}`));
     detail.appendChild(box);
   });
@@ -477,10 +490,12 @@ async function resolveReport() {
   }
   const payload = {
     action: $('resolve-action').value,
-    moderation_action: $('moderation-action').value,
+    target_moderation_action: $('target-moderation-action').value,
+    reporter_moderation_action: $('reporter-moderation-action').value,
     duration_seconds: selectedDuration,
     note: $('note').value,
   };
+  payload.moderation_action = payload.target_moderation_action;
   try {
     const data = await api(`/api/handling/reports/${encodeURIComponent(selectedReportId)}/resolve`, {
       method: 'POST',

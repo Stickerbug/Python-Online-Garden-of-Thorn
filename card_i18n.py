@@ -163,7 +163,7 @@ CARD_I18N = {
     'Mimic': {
         'name': _t('拟态', 'Mimic', 'Mimique', 'Mímico', 'Мимикрия', '擬態'),
         'desc': _t('完美模仿。', 'A perfect imitation.', 'Une imitation parfaite.', 'Uma imitação perfeita.', 'Идеальная имитация.', '完全な模倣。'),
-        'effect': _t('将一张手牌的复制加入手中，使其下一次打出时费用-1', 'Add a copy of one hand card to your hand; its next play costs -1', 'Ajoutez à votre main une copie d’une carte en main ; son prochain jeu coûte -1', 'Adicione à sua mão uma cópia de uma carta da mão; da próxima vez que for jogada, custa -1', 'Добавьте в руку копию одной карты из руки; её следующий розыгрыш стоит -1', '手札1枚のコピーを手札に加え、次に出す時のコストを-1する'),
+        'effect': _t('将一张手牌的复制加入手中', 'Add a copy of one hand card to your hand.', 'Ajoutez à votre main une copie d’une carte en main.', 'Adicione à sua mão uma cópia de uma carta da mão.', 'Добавьте в руку копию одной карты из руки.', '手札1枚のコピーを手札に加える。'),
     },
     'Coffee': {
         'name': _t('咖啡', 'Coffee', 'Café', 'Café', 'Кофе', 'コーヒー'),

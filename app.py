@@ -33,6 +33,7 @@ from game_engine_2v2 import GameEngine2v2
 from game_engine_urf import GameEngineInfiniteFire
 from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
+    create_random_weighted_deck_def_ids,
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
     normalize_card_flag, normalize_card_flags,
@@ -169,6 +170,9 @@ DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = {
 }
 BUILTIN_SETUP_CARD_IDS = {'ManaOrb'}
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
+PVP_MODES = ('1v1', '2v2', 'urf', 'random_deck')
+DUEL_INVITE_MODES = ('1v1', 'urf', 'random_deck')
+CHAT_CACHE_LIMIT = 500
 
 try:
     merged = merge_mod_cards_to_card_defs()
@@ -436,8 +440,8 @@ ADMIN_LOGIN_FAILURES = {}
 BETA_LOGIN_FAILURES = {}
 AUTH_LOGIN_FAILURES = {}
 LOBBY_CHAT_CACHE = {
-    'release': deque(maxlen=200),
-    'beta': deque(maxlen=200),
+    'release': deque(maxlen=500),
+    'beta': deque(maxlen=500),
 }
 ADMIN_GAME_CHAT_CACHE = deque(maxlen=500)
 SOCIAL_DM_THREADS_CACHE = {}
@@ -490,6 +494,10 @@ _RUNTIME_METRICS_CACHE_SECONDS = _env_float('GTN_RUNTIME_METRICS_CACHE_SECONDS',
 _ADMIN_STATUS_CACHE = {'ts': 0.0, 'data': None}
 _ADMIN_STATUS_LOCK = threading.Lock()
 _ADMIN_STATUS_CACHE_SECONDS = _env_float('GTN_ADMIN_STATUS_CACHE_SECONDS', 5)
+_LEADERBOARD_CACHE_SECONDS = 300
+_LEADERBOARD_CACHE = {}
+_LEADERBOARD_SELF_RANK_CACHE = {}
+_LEADERBOARD_CACHE_LOCK = threading.Lock()
 _ADMIN_API_SLOW_MS = _env_float('GTN_ADMIN_API_SLOW_MS', 1000)
 _SOCKET_ACTION_SLOW_MS = _env_float('GTN_SOCKET_ACTION_SLOW_MS', 500)
 _ROOM_ACTION_LOCK_WAIT_SECONDS = _env_float('GTN_ROOM_ACTION_LOCK_WAIT_SECONDS', 0.25)
@@ -1160,6 +1168,8 @@ class GameRoom:
         self._returned_lobby_sids = set()
         self._returned_lobby_names = {}
         self.pending_surrender_request = None
+        self.chat_history = deque(maxlen=CHAT_CACHE_LIMIT)
+        self.chat_sequence = 0
         self.action_lock = threading.Lock()
         self.state_broadcast_lock = threading.Lock()
         self.state_broadcast_pending = False
@@ -1847,7 +1857,7 @@ def _lobby_chat_scope_key(beta_mode=False):
 def _lobby_chat_cache_locked(beta_mode=False):
     key = _lobby_chat_scope_key(beta_mode)
     if key not in LOBBY_CHAT_CACHE:
-        LOBBY_CHAT_CACHE[key] = deque(maxlen=200)
+        LOBBY_CHAT_CACHE[key] = deque(maxlen=CHAT_CACHE_LIMIT)
     return LOBBY_CHAT_CACHE[key]
 
 
@@ -1998,6 +2008,95 @@ def admin_game_chat_recent_locked(limit=300):
     if limit and limit > 0:
         items = items[-limit:]
     return [copy.deepcopy(item) for item in items]
+
+
+def _room_chat_next_id_locked(room):
+    room.chat_sequence = int(getattr(room, 'chat_sequence', 0) or 0) + 1
+    return room.chat_sequence
+
+
+def _room_chat_visible_player_ids(room, recipients):
+    visible = []
+    for target_sid in recipients or []:
+        try:
+            pidx = room.player_index(target_sid)
+        except Exception:
+            pidx = -1
+        if pidx >= 0 and pidx not in visible:
+            visible.append(pidx)
+    return visible
+
+
+def append_room_chat_locked(room, payload, now=None, recipients=None, spectator_visible=False, pregame=False):
+    if room is None:
+        return False
+    now = time.time() if now is None else float(now)
+    if not hasattr(room, 'chat_history') or room.chat_history is None:
+        room.chat_history = deque(maxlen=CHAT_CACHE_LIMIT)
+    chat_payload = copy.deepcopy(payload or {})
+    chat_payload['type'] = 'chat'
+    chat_payload['time'] = datetime.fromtimestamp(now, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
+    chat_payload['ts'] = now
+    chat_payload.setdefault('repeat_count', 1)
+    chat_payload['pregame'] = bool(pregame)
+    chat_payload['spectator_visible'] = bool(spectator_visible)
+    chat_payload['visible_player_ids'] = _room_chat_visible_player_ids(room, recipients)
+    try:
+        chat_payload['log_anchor'] = int(getattr(room.engine, 'log_total', len(getattr(room.engine, 'log', []) or [])) or 0)
+    except Exception:
+        chat_payload['log_anchor'] = 0
+    last = room.chat_history[-1] if room.chat_history else None
+    last_chat = last if isinstance(last, dict) and last.get('type') == 'chat' else None
+    can_fold = (
+        last_chat is not None
+        and _chat_entry_signature(last_chat) == _chat_entry_signature(chat_payload)
+        and bool(last_chat.get('spectator_visible')) == bool(chat_payload.get('spectator_visible'))
+        and list(last_chat.get('visible_player_ids') or []) == list(chat_payload.get('visible_player_ids') or [])
+        and bool(last_chat.get('pregame')) == bool(chat_payload.get('pregame'))
+        and int(last_chat.get('log_anchor') or 0) == int(chat_payload.get('log_anchor') or 0)
+    )
+    if can_fold:
+        last_chat['repeat_count'] = int(last_chat.get('repeat_count') or 1) + 1
+        last_chat['time'] = chat_payload['time']
+        last_chat['ts'] = now
+        return False
+    chat_payload['id'] = _room_chat_next_id_locked(room)
+    room.chat_history.append(chat_payload)
+    return True
+
+
+def room_chat_history_for_sid(room, sid=None, spectator=False, limit=CHAT_CACHE_LIMIT):
+    if room is None:
+        return {'items': [], 'limit': limit, 'total_cached': 0}
+    items = list(getattr(room, 'chat_history', []) or [])
+    try:
+        pidx = room.player_index(sid) if sid is not None else -1
+    except Exception:
+        pidx = -1
+    visible = []
+    for entry in items:
+        if not isinstance(entry, dict):
+            continue
+        if spectator:
+            if not entry.get('spectator_visible'):
+                continue
+        elif pidx >= 0:
+            ids = entry.get('visible_player_ids')
+            if isinstance(ids, list) and ids and pidx not in ids:
+                continue
+        else:
+            continue
+        item = copy.deepcopy(entry)
+        item.pop('visible_player_ids', None)
+        item.pop('spectator_visible', None)
+        visible.append(item)
+    if limit and limit > 0:
+        visible = visible[-limit:]
+    return {
+        'items': visible,
+        'limit': limit,
+        'total_cached': len(items),
+    }
 
 
 def console_chat_payload(text):
@@ -3692,12 +3791,13 @@ def _online_sids_for_user(user_id=None, username=''):
     return found
 
 
-def _apply_report_moderation_action(report_detail, moderation_action, duration_seconds=0, note=''):
+def _apply_report_moderation_action(report_detail, moderation_action, duration_seconds=0, note='', party='target'):
     action = str(moderation_action or 'none').strip().lower()
     if action == 'none' or not report_detail:
         return
-    target_user_id = report_detail.get('target_user_id')
-    target_username = report_detail.get('target_username') or ''
+    party = 'reporter' if str(party or '').strip().lower() == 'reporter' else 'target'
+    target_user_id = report_detail.get(f'{party}_user_id')
+    target_username = report_detail.get(f'{party}_username') or ''
     if action == 'mute' and target_user_id:
         seconds = max(60, min(int(duration_seconds or 600), 60 * 60 * 24 * 1000))
         set_user_mute(target_user_id, target_username, seconds, note, session.get('username') or ADMIN_PLAYER_DISPLAY_NAME)
@@ -6310,7 +6410,7 @@ def _build_lobby_update_payloads_locked():
     scope_payload_cache = {}
 
     def mode_counts_for_scope(beta_mode):
-        counts = {'1v1': 0, '2v2': 0, 'urf': 0}
+        counts = {mode: 0 for mode in PVP_MODES}
         excluded_statuses = {'solo', 'tutorial', 'spectating'}
         for player in players.values():
             if bool(player.get('beta_mode', False)) != bool(beta_mode):
@@ -6470,6 +6570,7 @@ def send_draft_state(room, pidx):
         'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
         'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
         'selected_opening_events': _selected_opening_event_names(engine),
+        'room_chat_history': room_chat_history_for_sid(room, sid),
         **_pregame_timer_payload(room, pidx, 'drafting'),
     }
     payload.update(_watched_pregame_timer_payload(room, pidx))
@@ -6518,6 +6619,7 @@ def send_pregame_status_update(room, targets=None):
             'your_id': pidx,
             'your_status': engine.get_player_status(pidx),
             'selected_opening_events': _selected_opening_event_names(engine),
+            'room_chat_history': room_chat_history_for_sid(room, sid),
             **_pregame_timer_payload(room, pidx, engine.get_player_status(pidx)),
         }
         payload.update(_watched_pregame_timer_payload(room, pidx))
@@ -6578,6 +6680,7 @@ def send_event_state(room, pidx):
         'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
         'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
         'selected_opening_events': _selected_opening_event_names(engine),
+        'room_chat_history': room_chat_history_for_sid(room, sid),
         **_pregame_timer_payload(room, pidx, 'event_select'),
     }
     payload.update(_watched_pregame_timer_payload(room, pidx))
@@ -6622,6 +6725,7 @@ def send_event_reveal_state(room, pidx):
         'match_key': room_match_key(room),
         'your_id': pidx,
         'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
+        'room_chat_history': room_chat_history_for_sid(room, sid),
     }
     payload.update(_watched_pregame_timer_payload(room, pidx))
     payload.update(instance_payload())
@@ -6652,6 +6756,7 @@ def _broadcast_game_state_now(room):
         state['room_id'] = room.room_id
         state['match_key'] = room_match_key(room)
         state['spectator_count'] = room_spectator_count(room)
+        state['room_chat_history'] = room_chat_history_for_sid(room, sid)
         state.update(instance_payload())
         state.update(_room_timer_payload(room))
         state.update(room_mod_payload(room))
@@ -6828,6 +6933,7 @@ def send_game_state_to(room, pidx):
         state['room_id'] = room.room_id
         state['match_key'] = room_match_key(room)
         state['spectator_count'] = room_spectator_count(room)
+        state['room_chat_history'] = room_chat_history_for_sid(room, sid)
         state.update(_room_timer_payload(room))
         state.update(room_mod_payload(room))
         if room.engine.phase == 'game_over':
@@ -6918,6 +7024,7 @@ def send_event_sub_choice_state(room, pidx):
         'match_key': room_match_key(room),
         'your_id': pidx,
         'selected_opening_events': _selected_opening_event_names(engine),
+        'room_chat_history': room_chat_history_for_sid(room, sid),
         **_pregame_timer_payload(room, pidx, 'sub_choice'),
     }
     payload.update(_watched_pregame_timer_payload(room, pidx))
@@ -6975,6 +7082,32 @@ def start_game(room):
     record_room_replay_keyframe(room, 'game_start')
     for sid in room.player_sids:
         if sid in players:
+            emit_room_game_phase(room, sid, 'playing')
+    _broadcast_game_state_now(room)
+    broadcast_lobby()
+
+
+def start_random_deck_room(room):
+    deck_def_ids = create_random_weighted_deck_def_ids(DECK_SIZE, getattr(room.engine, 'allowed_card_ids', None))
+    if len(deck_def_ids) < DECK_SIZE:
+        raise ValueError('当前模组没有足够可用卡牌生成随机卡组')
+    if hasattr(room.engine, 'log'):
+        room.engine.log = []
+    if hasattr(room.engine, '_log_compaction_floor'):
+        room.engine._log_compaction_floor = 0
+    room.engine.opening_event_picks = [None, None]
+    room.engine.opening_event_sub_choices = [None, None]
+    room.engine.draft_picks = [list(deck_def_ids), list(deck_def_ids)]
+    room.engine.player_ready = [True, True]
+    room.engine.player_draft_started = [True, True]
+    room.engine.start_game()
+    room.started_at = time.time()
+    admin_event('game', f'room {room.room_id} started mode={room.mode} random_deck={deck_def_ids}')
+    record_room_replay_keyframe(room, 'game_start')
+    for sid in room.player_sids:
+        if sid in players:
+            players[sid]['status'] = 'in_game'
+            players[sid]['room_id'] = room.room_id
             emit_room_game_phase(room, sid, 'playing')
     _broadcast_game_state_now(room)
     broadcast_lobby()
@@ -7341,6 +7474,7 @@ def broadcast_spectate_state(room):
         state = build_spectate_state(room, perspective=perspective)
         state['your_id'] = -1
         state['spectating'] = True
+        state['room_chat_history'] = room_chat_history_for_sid(room, spid, spectator=True)
         for i, psid in enumerate(room.player_sids):
             state[f'player{i + 1}_name'] = room_player_nickname(room, psid, '?')
         socketio.emit('state_update', state, room=spid)
@@ -7386,6 +7520,7 @@ def build_spectate_state(room, perspective=0):
     base['room_id'] = room.room_id
     base['match_key'] = room_match_key(room)
     base['spectator_count'] = room_spectator_count(room)
+    base['room_chat_history'] = room_chat_history_for_sid(room, spectator=True)
     base.update(room_mod_payload(room))
     try:
         perspective = int(perspective or 0)
@@ -7777,6 +7912,8 @@ def handling_report_resolve(report_id):
     try:
         action = validate_str(data.get('action', ''), min_len=1, max_len=20, pattern=r'[A-Za-z0-9_.:\-]+', name='action')
         moderation_action = validate_str(data.get('moderation_action', 'none'), min_len=1, max_len=30, pattern=r'[A-Za-z0-9_.:\-]+', name='moderation_action')
+        target_moderation_action = validate_str(data.get('target_moderation_action', moderation_action), min_len=1, max_len=30, pattern=r'[A-Za-z0-9_.:\-]+', name='target_moderation_action')
+        reporter_moderation_action = validate_str(data.get('reporter_moderation_action', 'none'), min_len=1, max_len=30, pattern=r'[A-Za-z0-9_.:\-]+', name='reporter_moderation_action')
         duration_seconds = validate_int(data.get('duration_seconds', 0), default=0, minimum=0, maximum=60 * 60 * 24 * 1000, name='duration_seconds')
         note = validate_str(data.get('note', ''), max_len=500, name='note', truncate=True)
     except ValueError as exc:
@@ -7785,18 +7922,23 @@ def handling_report_resolve(report_id):
         return _json_error('处理动作无效', 400)
     if moderation_action not in VALID_MODERATION_ACTIONS:
         return _json_error('处罚动作无效', 400)
+    if target_moderation_action not in VALID_MODERATION_ACTIONS or reporter_moderation_action not in VALID_MODERATION_ACTIONS:
+        return _json_error('处罚动作无效', 400)
     detail, error = resolve_report_entry(
         report_id,
         action,
         moderation_action=moderation_action,
+        target_moderation_action=target_moderation_action,
+        reporter_moderation_action=reporter_moderation_action,
         admin_username=session.get('username') or 'handling',
         note=note,
         duration_seconds=duration_seconds,
     )
     if error:
         return _json_error(error, 400)
-    _apply_report_moderation_action(detail, moderation_action, duration_seconds=duration_seconds, note=note)
-    admin_event('moderation', f'handling report #{report_id} resolved action={action} moderation={moderation_action}')
+    _apply_report_moderation_action(detail, target_moderation_action, duration_seconds=duration_seconds, note=note, party='target')
+    _apply_report_moderation_action(detail, reporter_moderation_action, duration_seconds=duration_seconds, note=note, party='reporter')
+    admin_event('moderation', f'handling report #{report_id} resolved action={action} target_moderation={target_moderation_action} reporter_moderation={reporter_moderation_action}')
     return jsonify({'success': True, 'report': detail})
 
 
@@ -8736,19 +8878,60 @@ def api_leaderboard():
         limit = 50
     started = time.perf_counter()
     try:
+        min_games = max(1, min(int(min_games), 10000))
         limit = min(limit, 50)
-        items = list_leaderboard(min_games=min_games, limit=limit)
+        now_ts = time.time()
+        window_start = int(now_ts // _LEADERBOARD_CACHE_SECONDS) * _LEADERBOARD_CACHE_SECONDS
+        next_refresh_ts = window_start + _LEADERBOARD_CACHE_SECONDS
+        cache_key = (window_start, min_games, limit)
+        generated_at = window_start
+        with _LEADERBOARD_CACHE_LOCK:
+            cached_payload = _LEADERBOARD_CACHE.get(cache_key)
+        if cached_payload is not None:
+            items = copy.deepcopy(cached_payload.get('items') or [])
+            generated_at = float(cached_payload.get('generated_at') or window_start)
+            list_cached = True
+        else:
+            items = list_leaderboard(min_games=min_games, limit=limit)
+            list_cached = False
+            with _LEADERBOARD_CACHE_LOCK:
+                _LEADERBOARD_CACHE.clear()
+                _LEADERBOARD_SELF_RANK_CACHE.clear()
+                _LEADERBOARD_CACHE[cache_key] = {
+                    'items': copy.deepcopy(items),
+                    'generated_at': now_ts,
+                }
+            generated_at = now_ts
         self_rank = None
         try:
             user = _current_account_user()
             if user and user.get('id'):
-                rank_payload = get_leaderboard_rank(user.get('id'), min_games=min_games)
+                user_id = int(user.get('id'))
+                self_cache_key = (window_start, min_games, limit, user_id)
+                with _LEADERBOARD_CACHE_LOCK:
+                    self_cached_marker = _LEADERBOARD_SELF_RANK_CACHE.get(self_cache_key, '__missing__')
+                if self_cached_marker != '__missing__':
+                    rank_payload = copy.deepcopy(self_cached_marker)
+                else:
+                    rank_payload = get_leaderboard_rank(user_id, min_games=min_games)
+                    with _LEADERBOARD_CACHE_LOCK:
+                        _LEADERBOARD_SELF_RANK_CACHE[self_cache_key] = copy.deepcopy(rank_payload)
                 if rank_payload and int(rank_payload.get('rank') or 0) > limit:
                     self_rank = rank_payload
         except Exception as exc:
             admin_event('error', f'leaderboard self rank failed: {exc}')
         db_slow_log('/api/leaderboard', (time.perf_counter() - started) * 1000, 'leaderboard')
-        return jsonify({'success': True, 'items': items, 'self_rank': self_rank, 'min_games': max(1, min_games)})
+        return jsonify({
+            'success': True,
+            'items': items,
+            'self_rank': self_rank,
+            'min_games': min_games,
+            'cached': list_cached,
+            'generated_at': datetime.fromtimestamp(generated_at, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+            'next_refresh_at': datetime.fromtimestamp(next_refresh_ts, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+            'next_refresh_ts': int(next_refresh_ts),
+            'refresh_interval_seconds': _LEADERBOARD_CACHE_SECONDS,
+        })
     except sqlite3.OperationalError as exc:
         if 'locked' in str(exc).lower():
             return jsonify({'success': False, 'items': [], 'error': '后台暂时不可用，请稍后刷新。'}), 503
@@ -9651,7 +9834,7 @@ def on_login(data):
     account_user = _current_account_user() if DB_AVAILABLE else None
     try:
         raw_name = validate_str(data.get('nickname', ''), max_len=64, name='nickname')
-        preferred_mode = validate_str(data.get('mode', '1v1'), max_len=8, name='mode')
+        preferred_mode = validate_str(data.get('mode', '1v1'), max_len=16, name='mode')
         desired_instance_id = validate_str(data.get('desired_instance_id', ''), max_len=96, pattern=r'[A-Za-z0-9_.:\-]*', name='desired_instance_id')
         desired_instance_port = validate_str(data.get('desired_instance_port', ''), max_len=8, pattern=r'[0-9]*', name='desired_instance_port')
     except ValueError as exc:
@@ -9735,7 +9918,7 @@ def on_login(data):
             emit('login_fail', drain_reject_payload())
             return
     disabled_mods = ensure_valid_disabled_mods(normalize_disabled_mods_with_default(data.get('disabled_mods')))
-    if preferred_mode not in ('1v1', '2v2', 'urf'):
+    if preferred_mode not in PVP_MODES:
         preferred_mode = '1v1'
     try:
         community_fields, community_mod = resolve_community_loadout(data)
@@ -9911,14 +10094,14 @@ def on_set_mode(data):
     if data is None:
         return
     try:
-        mode = validate_str(data.get('mode', '1v1'), min_len=1, max_len=8, name='mode')
+        mode = validate_str(data.get('mode', '1v1'), min_len=1, max_len=16, name='mode')
     except ValueError as exc:
         _security_illegal(sid, 'set_mode', str(exc))
         return
     with _lock:
         if sid not in players:
             return
-        if mode not in ('1v1', '2v2', 'urf'):
+        if mode not in PVP_MODES:
             return
         players[sid]['mode'] = mode
         if mode != '2v2' and sid in teams:
@@ -10555,7 +10738,7 @@ def on_invite(data):
             return
         inviter_mode = inviter.get('mode', '1v1')
         target_mode = target.get('mode', '1v1')
-        if inviter_mode not in ('1v1', 'urf') or target_mode != inviter_mode:
+        if inviter_mode not in DUEL_INVITE_MODES or target_mode != inviter_mode:
             emit('server_error', {'message': '双方模式不一致，无法邀请'})
             return
         if player_loadout_hash(inviter) != player_loadout_hash(target):
@@ -10646,6 +10829,17 @@ def on_accept_invite(data):
             for psid in room.player_sids:
                 emit_room_game_phase(room, psid, 'playing')
             broadcast_game_state(room)
+        elif room.mode == 'random_deck':
+            try:
+                start_random_deck_room(room)
+            except Exception as exc:
+                rooms.pop(room_id, None)
+                inviter['room_id'] = None
+                inviter['status'] = 'lobby'
+                accepter['room_id'] = None
+                accepter['status'] = 'lobby'
+                emit_match_start_failed([inviter_sid, sid], f'随机卡组生成失败：{exc}')
+                return
         else:
             room.engine.start_event_select_first()
             record_room_replay_keyframe(room, 'event_select_start')
@@ -10843,6 +11037,14 @@ def on_chat(data):
                 room_scope = 'room'
                 room_scope_id = room.room_id
                 append_admin_game_chat_locked(chat_data, now, scope='room', room_id=room.room_id)
+                append_room_chat_locked(
+                    room,
+                    chat_data,
+                    now,
+                    recipients=recipients,
+                    spectator_visible=(record_channel == 'public'),
+                    pregame=room.engine.phase in ('draft', 'event_select', 'event_reveal', 'event_sub_choice', 'sub_choice'),
+                )
         elif spectating_room is not None and spectating_room in rooms:
             room = rooms[spectating_room]
             if room.mode == '2v2':
@@ -10858,6 +11060,14 @@ def on_chat(data):
                 room_scope = 'spectate'
                 room_scope_id = room.room_id
                 append_admin_game_chat_locked(chat_data, now, scope='spectate', room_id=room.room_id)
+                append_room_chat_locked(
+                    room,
+                    chat_data,
+                    now,
+                    recipients=recipients,
+                    spectator_visible=True,
+                    pregame=room.engine.phase in ('draft', 'event_select', 'event_reveal', 'event_sub_choice', 'sub_choice'),
+                )
         else:
             beta_mode = bool(player.get('beta_mode', False))
             mentions = _extract_lobby_mentions(text, beta_mode=beta_mode)
@@ -12330,6 +12540,14 @@ def on_rematch(data=None):
                         if psid in players:
                             emit_room_game_phase(room, psid, 'playing')
                     broadcast_game_state(room)
+                elif room.mode == 'random_deck':
+                    try:
+                        start_random_deck_room(room)
+                    except Exception as exc:
+                        admin_event('error', f'random deck rematch failed room={room.room_id}: {exc}')
+                        for psid in room.player_sids:
+                            if psid in players:
+                                socketio.emit('server_error', {'message': f'随机卡组生成失败：{exc}'}, room=psid)
                 else:
                     room.engine.start_event_select_first()
                     record_room_replay_keyframe(room, 'event_select_start')
@@ -12474,6 +12692,7 @@ def _send_spectate_state_internal(spid, room):
     state = build_spectate_state(room, perspective=perspective)
     state['your_id'] = -1
     state['spectating'] = True
+    state['room_chat_history'] = room_chat_history_for_sid(room, spid, spectator=True)
     for i, psid in enumerate(room.player_sids):
         state[f'player{i + 1}_name'] = room_player_nickname(room, psid, '?')
         state[f'player{i + 1}_is_admin_player'] = player_is_admin(psid, room)

@@ -79,7 +79,7 @@ class EquipmentInstance:
         return ei
 
 
-def reset_card_for_discard(card: CardInstance):
+def reset_card_after_play(card: CardInstance):
     card.cost_e_override = None
     card.cost_m_override = None
     card.mimic_discount = 0
@@ -103,6 +103,10 @@ def reset_card_for_discard(card: CardInstance):
             delattr(card, '_mimic_copy')
         except Exception:
             pass
+
+
+def reset_card_for_discard(card: CardInstance):
+    return
 
 
 class PlayerState:
@@ -625,6 +629,8 @@ class GameEngine:
     def _set_invincible_until_next_own_turn_end(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
             return
+        if self._is_status_immune(player_id):
+            return
         ps = self.players[player_id]
         ps.invincible = True
         ps.invincible_until_player = player_id
@@ -791,6 +797,14 @@ class GameEngine:
         if status in counts:
             return int(counts.get(status, 0))
         return int(getattr(ps, 'custom_statuses', {}).get(status, 0) or 0)
+
+    def _status_application_blocked(self, target_id: int, status: str) -> bool:
+        if not (0 <= target_id < len(self.players)):
+            return True
+        status = str(status or '').strip()
+        if status in ('status_immune', 'immune', '状态免疫', 'dodge', '闪避'):
+            return False
+        return self._is_status_immune(target_id)
 
     def _custom_status_definition(self, status):
         status = str(status or '').strip()
@@ -1365,10 +1379,12 @@ class GameEngine:
                 return 0
             return int(getattr(ps, prop, 0))
         if prop == 'dodge':
+            if self._is_status_immune(target_id):
+                return 0
             return int(getattr(ps, prop, 0))
         if prop in ('invincible', 'untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
                     'negate_next_skill', 'nazar_active'):
-            if prop in ('untargetable', 'negate_next_skill', 'nazar_active') and self._is_status_immune(target_id):
+            if self._is_status_immune(target_id):
                 return 0
             return 1 if bool(getattr(ps, prop, False)) else 0
         if prop == 'skip_turn':
@@ -1424,6 +1440,14 @@ class GameEngine:
             'invincible', 'untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
             'negate_next_skill', 'nazar_active',
         }
+        status_numeric_props = {
+            'poison', 'fire', 'vulnerable', 'toxic', 'equipment_protection',
+            'attack_blocked', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
+            'nazar_big_hits', 'sluggish', 'overload', 'foresight', 'fracture', 'stagnation',
+            'blind', 'heal_block', 'weakness', 'bleed', 'skip_turn',
+        }
+        if value > 0 and self._is_status_immune(target_id) and (prop in status_numeric_props or prop in bool_props):
+            return None
         if prop in non_negative:
             if prop == 'hand_limit_bonus':
                 prop = 'extra_hand_limit_bonus'
@@ -3091,6 +3115,8 @@ class GameEngine:
         elif event_id == 4:
             target_ids = self._opening_event_enemy_targets(player_id)
             for target_id in target_ids:
+                if self._status_application_blocked(target_id, 'fire'):
+                    continue
                 self.players[target_id].fire += 2
             target_label = "敌方全体" if len(target_ids) > 1 else "敌方"
             self.log_msg(f"{self.pn(player_id)}【烈焰预兆】：{target_label}+2灼烧")
@@ -3188,7 +3214,9 @@ class GameEngine:
             return
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
-        if ps.skip_turn > 0 and not self._is_status_immune(player_id):
+        if ps.skip_turn > 0 and self._is_status_immune(player_id):
+            ps.skip_turn = max(0, int(ps.skip_turn) - 1)
+        elif ps.skip_turn > 0:
             ps.skip_turn -= 1
             self.log_msg(f"{self.pn(player_id)}被眩晕，跳过本回合！")
             self._end_player_turn(player_id)
@@ -3212,7 +3240,7 @@ class GameEngine:
     def _card_payable_now(self, player_id: int, card: CardInstance) -> bool:
         ps = self.players[player_id]
         extra_e = self._get_extra_e_for_card(player_id, card)
-        return card.cost_e + extra_e <= ps.elixir and card.cost_m <= ps.magic
+        return max(0, card.cost_e + extra_e) <= ps.elixir and card.cost_m <= ps.magic
 
     def _continue_honey_control_if_needed(self, player_id: int):
         if self.game_over or self.phase != 'action' or self.current_player != player_id:
@@ -3324,7 +3352,7 @@ class GameEngine:
     def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None,
                             damage_type: Optional[str] = None, damage_tag: Optional[str] = None):
         ps = self.players[player_id]
-        if ps.invincible:
+        if ps.invincible and not self._is_status_immune(player_id):
             self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
             return 0
         actual = amount
@@ -3554,7 +3582,8 @@ class GameEngine:
             return
         applied = 0
         for ps in self.players:
-            if ps.health > 0:
+            player_id = getattr(ps, 'player_id', -1)
+            if ps.health > 0 and not self._status_application_blocked(player_id, 'fire'):
                 ps.fire += 1
                 applied += 1
         if applied:
@@ -3617,7 +3646,7 @@ class GameEngine:
     def _check_yggdrasil(self, player_id: int):
         ps = self.players[player_id]
         if ps.health <= 0 and self._yggdrasil_check:
-            if ps.bandage_active:
+            if ps.bandage_active and not self._is_status_immune(player_id):
                 ps.health = 1
                 self._set_invincible_until_next_own_turn_end(player_id)
                 ps.bandage_active = False
@@ -3845,8 +3874,8 @@ class GameEngine:
     def _refund_pending_choice_cost(self, player_id: int, card: CardInstance):
         ps = self.players[player_id]
         played_count = ps.cards_played_this_turn.get(card.def_id, 1)
-        extra_e = 0 if 'symbiosis' in card.flags else max(0, played_count - 1)
-        ps.elixir += card.cost_e + extra_e
+        paid_e = max(0, int(getattr(card, '_paid_e_this_play', 0) or 0))
+        ps.elixir += paid_e
         ps.magic += card.cost_m
         ps.cards_played_this_turn[card.def_id] = max(0, played_count - 1)
 
@@ -4352,19 +4381,23 @@ class GameEngine:
                 {'event': 'response', 'source_id': responder_id, 'target_id': response_target_id},
             )
         elif counter_card.def_id == 'Bubble':
-            ps.dodge += 1
-            self.log_msg(f"{self.pn(responder_id)}获得1层闪避")
+            if not self._status_application_blocked(responder_id, 'dodge'):
+                ps.dodge += 1
+                self.log_msg(f"{self.pn(responder_id)}获得1层闪避")
         elif counter_card.def_id == 'Nazar':
-            ps.nazar_active = True
-            ps.nazar_big_hits = 0
-            self.log_msg(f"{self.pn(responder_id)}获得邪眼护符效果")
+            if not self._status_application_blocked(responder_id, 'nazar_active'):
+                ps.nazar_active = True
+                ps.nazar_big_hits = 0
+                self.log_msg(f"{self.pn(responder_id)}获得邪眼护符效果")
         elif counter_card.def_id == 'MagicNazar':
-            magic_nazar_stacks = int(ps.custom_statuses.get('magic_nazar', 0) or 0) + 2
-            ps.custom_statuses['magic_nazar'] = magic_nazar_stacks
-            self.log_msg(f"{self.pn(responder_id)}获得2层魔法邪眼（共{magic_nazar_stacks}层）")
+            if not self._status_application_blocked(responder_id, 'magic_nazar'):
+                magic_nazar_stacks = int(ps.custom_statuses.get('magic_nazar', 0) or 0) + 2
+                ps.custom_statuses['magic_nazar'] = magic_nazar_stacks
+                self.log_msg(f"{self.pn(responder_id)}获得2层魔法邪眼（共{magic_nazar_stacks}层）")
         elif counter_card.def_id == 'MagicBubble':
-            ps.negate_next_skill = True
-            self.log_msg(f"{self.pn(responder_id)}的魔法泡泡：敌方下次技能牌失效")
+            if not self._status_application_blocked(responder_id, 'negate_next_skill'):
+                ps.negate_next_skill = True
+                self.log_msg(f"{self.pn(responder_id)}的魔法泡泡：敌方下次技能牌失效")
         elif counter_card.card_def.effects:
             counter_effects = [e for e in counter_card.card_def.effects
                                if (isinstance(e, dict) and e.get('type', '').startswith('counter_'))
@@ -4381,6 +4414,7 @@ class GameEngine:
                 handler = getattr(self, f'_atomic_{eff_type}', None)
                 if handler:
                     handler(responder_id, counter_card, params, log, None, 'counter')
+        reset_card_after_play(counter_card)
         if 'exile' in counter_card.flags:
             ps.exile.append(counter_card)
         else:
@@ -4389,7 +4423,7 @@ class GameEngine:
                                   target_id=response_target_id)
 
     def _reset_one_shot_attack_attrs(self, card: CardInstance):
-        reset_card_for_discard(card)
+        reset_card_after_play(card)
 
     def _discard_card(self, ps, card: CardInstance):
         reset_card_for_discard(card)
@@ -4642,6 +4676,7 @@ class GameEngine:
                 target = matched2[0] if matched2 else None
             if target and ps.can_add_to_hand():
                 ps.discard.remove(target)
+                target.instance_flags.add('symbiosis')
                 ps.add_to_hand(target)
                 if log:
                     self.log_msg(log)
@@ -4658,10 +4693,14 @@ class GameEngine:
                 self.log_msg(log or f"{self.pn(target_id)}血量设为{amount}")
 
     def _atomic_set_invincible(self, player_id, card, params, log, choice, context):
+        if self._status_application_blocked(player_id, 'invincible'):
+            return
         self._set_invincible_until_next_own_turn_end(player_id)
         self.log_msg(log or f"{self.pn(player_id)}获得无敌直到下一个自己回合结束")
 
     def _atomic_set_untargetable(self, player_id, card, params, log, choice, context):
+        if self._status_application_blocked(player_id, 'untargetable'):
+            return
         self.players[player_id].untargetable = True
         self.players[player_id].shovel_active = True
         self.log_msg(log or f"{self.pn(player_id)}无法被攻击选中")
@@ -4669,16 +4708,22 @@ class GameEngine:
     def _atomic_block_enemy_attacks(self, player_id, card, params, log, choice, context):
         duration = params.get('duration', 1)
         opp = self.players[1 - player_id]
+        if self._status_application_blocked(1 - player_id, 'attack_blocked'):
+            return
         opp.attack_blocked = max(opp.attack_blocked, duration)
         self.log_msg(log or f"{self.pn(1 - player_id)}无法使用攻击牌{duration}回合")
 
     def _atomic_force_enemy_attacks_only(self, player_id, card, params, log, choice, context):
         duration = params.get('duration', 1)
         opp = self.players[1 - player_id]
+        if self._status_application_blocked(1 - player_id, 'attack_only'):
+            return
         opp.attack_only = max(opp.attack_only, duration)
         self.log_msg(log or f"{self.pn(1 - player_id)}仅可使用攻击牌{duration}回合")
 
     def _atomic_block_own_actions(self, player_id, card, params, log, choice, context):
+        if self._status_application_blocked(player_id, 'shovel_active'):
+            return
         self.players[player_id].shovel_active = True
         self.log_msg(log or f"{self.pn(player_id)}无法使用卡牌")
 
@@ -4688,15 +4733,21 @@ class GameEngine:
         self.log_msg(log or f"{self.pn(player_id)}获得{amount}闪避")
 
     def _atomic_counter_nazar(self, player_id, card, params, log, choice, context):
+        if self._status_application_blocked(player_id, 'nazar_active'):
+            return
         self.players[player_id].nazar_active = True
         self.players[player_id].nazar_big_hits = 0
         self.log_msg(log or f"{self.pn(player_id)}获得邪眼护符效果")
 
     def _atomic_counter_negate_skill(self, player_id, card, params, log, choice, context):
+        if self._status_application_blocked(player_id, 'negate_next_skill'):
+            return
         self.players[player_id].negate_next_skill = True
         self.log_msg(log or f"{self.pn(player_id)}的下次技能牌将失效")
 
     def _atomic_counter_equip_protect(self, player_id, card, params, log, choice, context):
+        if self._status_application_blocked(player_id, 'equipment_protection'):
+            return
         amount = params.get('amount', 1)
         self.players[player_id].equipment_protection += amount
         self.log_msg(log or f"{self.pn(player_id)}获得{amount}装备保护")
@@ -4728,14 +4779,20 @@ class GameEngine:
     def _atomic_counter_block_enemy_attacks(self, player_id, card, params, log, choice, context):
         duration = params.get('duration', 1)
         opp = self.players[1 - player_id]
+        if self._status_application_blocked(1 - player_id, 'attack_blocked'):
+            return
         opp.attack_blocked = max(opp.attack_blocked, duration)
         self.log_msg(log or f"{self.pn(1 - player_id)}无法使用攻击牌")
 
     def _atomic_counter_set_invincible_then_die(self, player_id, card, params, log, choice, context):
+        if self._status_application_blocked(player_id, 'bandage_active'):
+            return
         self.players[player_id].bandage_active = True
         self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将无敌至下一个自己回合结束")
 
     def _atomic_equip_sponge(self, player_id, card, params, log, choice, context):
+        if self._status_application_blocked(player_id, 'sponge_active'):
+            return
         self.players[player_id].sponge_active = True
         self.log_msg(log or f"{self.pn(player_id)}伤害转为毒伤")
 
@@ -4761,6 +4818,8 @@ class GameEngine:
 
     def _atomic_equip_add_toxic(self, player_id, card, params, log, choice, context):
         amount = params.get('amount', 1)
+        if self._status_application_blocked(1 - player_id, 'toxic'):
+            return
         self.players[1 - player_id].toxic += amount
         self.log_msg(log or f"敌方+{amount}淬毒")
 
@@ -4773,6 +4832,8 @@ class GameEngine:
         pass
 
     def _atomic_on_fatal_invincible_then_die(self, player_id, card, params, log, choice, context):
+        if self._status_application_blocked(player_id, 'bandage_active'):
+            return
         self.players[player_id].bandage_active = True
         self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将无敌至下一个自己回合结束，然后死亡")
 
@@ -5100,6 +5161,8 @@ class GameEngine:
         card_type = params.get('card_type', 'thorn')
         duration = params.get('duration', 1)
         ts = self.players[target_id]
+        if self._status_application_blocked(target_id, 'attack_blocked' if card_type == 'thorn' else f'{card_type}_blocked'):
+            return
         if card_type == 'thorn':
             ts.attack_blocked = max(ts.attack_blocked, duration)
         elif card_type == 'bloom':
@@ -5113,6 +5176,8 @@ class GameEngine:
         duration = params.get('duration', 1)
         ts = self.players[target_id]
         if card_type == 'thorn':
+            if self._status_application_blocked(target_id, 'attack_only'):
+                return
             ts.attack_only = max(ts.attack_only, duration)
         self.log_msg(log or f"{self.pn(target_id)}仅可使用{card_type}牌{duration}回合")
 
@@ -5120,6 +5185,8 @@ class GameEngine:
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         card_type = params.get('card_type', 'thorn')
         ts = self.players[target_id]
+        if self._status_application_blocked(target_id, f'negate_{card_type}'):
+            return
         ts.negate_next = getattr(ts, 'negate_next', None)
         ts.negate_next = card_type
         self.log_msg(log or f"{self.pn(target_id)}的{card_type}牌将失效")
@@ -5127,6 +5194,8 @@ class GameEngine:
     def _atomic_skip_turn(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         amount = int(params.get('amount', 1))
+        if self._status_application_blocked(target_id, 'skip_turn'):
+            return
         self.players[target_id].skip_turn += amount
         self.log_msg(log or f"{self.pn(target_id)}+{amount}层眩晕")
 
@@ -5837,10 +5906,14 @@ class GameEngine:
             self.log_msg(f"{self.pn(player_id)}使用聚变，但未选择目标")
 
     def _effect_iris(self, player_id: int, card: CardInstance, choice=None):
+        if self._status_application_blocked(1 - player_id, 'poison'):
+            return
         self.players[1 - player_id].poison += 10
         self.log_msg(f"{self.pn(player_id)}使用鸢尾！敌方+10中毒")
 
     def _effect_fire(self, player_id: int, card: CardInstance, choice=None):
+        if self._status_application_blocked(1 - player_id, 'fire'):
+            return
         self.players[1 - player_id].fire += 2
         self.log_msg(f"{self.pn(player_id)}使用火！敌方+2灼烧")
 
@@ -5898,6 +5971,7 @@ class GameEngine:
                 if c.def_id == target_def:
                     found = ps.discard.pop(i)
                     if ps.can_add_to_hand():
+                        found.instance_flags.add('symbiosis')
                         ps.add_to_hand(found)
                     else:
                         ps.discard.append(found)
@@ -5953,7 +6027,7 @@ class GameEngine:
                 if not self._pay_mimic_special_cost(player_id, target, card):
                     return
                 copy_card = self._make_mimic_copy_card(target)
-                copy_card.mimic_discount = 1
+                copy_card.mimic_discount = 0
                 if ps.can_add_to_hand():
                     ps.add_to_hand(copy_card)
                     self._enforce_unique_cards_for_player(player_id, preferred_card=copy_card)
@@ -6003,6 +6077,8 @@ class GameEngine:
 
     def _effect_cancer(self, player_id: int, card: CardInstance, choice=None):
         opp = self.players[1 - player_id]
+        if self._status_application_blocked(1 - player_id, 'toxic'):
+            return
         opp.toxic += 1
         self.log_msg(f"{self.pn(player_id)}装备了癌细胞！敌方+1淬毒")
 
@@ -8067,7 +8143,7 @@ class GameEngine:
         if not (0 <= player_id < len(self.players)):
             return False
         ps = self.players[player_id]
-        if ps.bandage_active or ps.invincible:
+        if (ps.bandage_active or ps.invincible) and not self._is_status_immune(player_id):
             return True
         for card in list(ps.hand):
             if getattr(card, 'def_id', '') == 'Yggdrasil':
@@ -8769,7 +8845,9 @@ class GameEngine:
             self._check_game_over()
         if self.game_over:
             return
-        if ps.skip_turn > 0 and not self._is_status_immune(player_id):
+        if ps.skip_turn > 0 and self._is_status_immune(player_id):
+            ps.skip_turn = max(0, int(ps.skip_turn) - 1)
+        elif ps.skip_turn > 0:
             ps.skip_turn -= 1
             self.log_msg(f"{self.pn(player_id)}被眩晕，跳过本回合！")
             self._end_player_turn(player_id)
@@ -8800,7 +8878,7 @@ class GameEngine:
         for _ in range(hits):
             precision_dodged = False
             plank_blocks_attack = False
-            if ps.dodge > 0:
+            if ps.dodge > 0 and not immune:
                 ps.dodge -= 1
                 if is_precision:
                     precision_dodged = True
@@ -8809,7 +8887,7 @@ class GameEngine:
                 else:
                     self.log_msg(f"{self.pn(target_id)}闪避了攻击")
                     continue
-            if ps.invincible:
+            if ps.invincible and not immune:
                 self.log_msg(f"{self.pn(target_id)}无敌，免疫伤害")
                 continue
             if amount <= 0 and hits <= 1:
@@ -8935,6 +9013,7 @@ class GameEngine:
         if self.negated_card and card.card_type == 'bloom':
             self.negated_card = False
             self._log_card_play(player_id, card)
+            reset_card_after_play(card)
             if 'exile' in card.flags:
                 ps.exile.append(card)
             else:
@@ -8958,6 +9037,7 @@ class GameEngine:
                     if opp.custom_statuses['magic_nazar'] <= 0:
                         opp.custom_statuses.pop('magic_nazar', None)
                     self._log_card_play(player_id, card)
+                    reset_card_after_play(card)
                     if 'exile' in card.flags:
                         ps.exile.append(card)
                     else:
@@ -9031,6 +9111,7 @@ class GameEngine:
         if equip_owner_id < 0 or equip_owner_id >= len(self.players):
             equip_owner_id = player_id
         equip_owner = self.players[equip_owner_id]
+        reset_card_after_play(card)
         if (card.card_type == 'root' and not script_controls_play) or placed_as_equipment:
             eq = self._find_equipment_for_card(equip_owner_id, card)
             if eq is None:
@@ -9057,7 +9138,6 @@ class GameEngine:
             if hasattr(card, '_placed_as_equipment_owner'):
                 delattr(card, '_placed_as_equipment_owner')
         elif 'rebound' in card.flags:
-            reset_card_for_discard(card)
             ps.add_to_hand(card)
             self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因回转回到手中")
         elif 'exile' in card.flags:
@@ -9282,7 +9362,8 @@ class GameEngine:
         if card is not None and card.def_id == 'Mimic' and not self._pay_mimic_special_cost(player_id, target, card):
             return
         copy_card = self._make_mimic_copy_card(target)
-        copy_card.mimic_discount = self._eval_int(player_id, params.get('discount_e', 1), card, 1)
+        default_discount = 0 if card is not None and card.def_id == 'Mimic' else 1
+        copy_card.mimic_discount = self._eval_int(player_id, params.get('discount_e', default_discount), card, default_discount)
         ps.add_to_hand(copy_card)
         self._enforce_unique_cards_for_player(player_id, preferred_card=copy_card)
         if log:
@@ -9668,6 +9749,8 @@ class GameEngine:
 
     def _atomic_apply_poison(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        if self._status_application_blocked(target_id, 'poison'):
+            return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].poison += amount
         self._normalize_status_value(self.players[target_id], 'poison')
@@ -9675,6 +9758,8 @@ class GameEngine:
 
     def _atomic_apply_burn(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        if self._status_application_blocked(target_id, 'fire'):
+            return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].fire += amount
         self._normalize_status_value(self.players[target_id], 'fire')
@@ -9682,6 +9767,8 @@ class GameEngine:
 
     def _atomic_apply_toxic(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        if self._status_application_blocked(target_id, 'toxic'):
+            return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].toxic += amount
         self._normalize_status_value(self.players[target_id], 'toxic')
@@ -9689,6 +9776,8 @@ class GameEngine:
 
     def _atomic_apply_vulnerable(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        if self._status_application_blocked(target_id, 'vulnerable'):
+            return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].vulnerable += amount
         self._normalize_status_value(self.players[target_id], 'vulnerable')
@@ -9697,6 +9786,8 @@ class GameEngine:
     def _atomic_apply_jungle_status(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         status = str(params.get('status', 'jungle:shield'))
+        if self._status_application_blocked(target_id, status):
+            return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self._add_custom_status_value(target_id, status, amount)
         label = str(params.get('label') or status.split(':')[-1])
@@ -9705,6 +9796,8 @@ class GameEngine:
 
     def _atomic_apply_turn_regen(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if self._status_application_blocked(target_id, 'turn_magic_turns' if str(params.get('kind', 'heal')) == 'magic' else 'turn_heal_turns'):
+            return
         turns = self._eval_int(player_id, params.get('turns', 1), card, 1)
         power = self._eval_int(player_id, params.get('power', 1), card, 1)
         kind = str(params.get('kind', 'heal'))
@@ -9775,6 +9868,8 @@ class GameEngine:
 
     def _atomic_consume_magic_for_status(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        if self._status_application_blocked(target_id, params.get('status', 'jungle:toxic_poison')):
+            return
         source_id = self._resolve_target(player_id, params.get('source', 'self'))
         status = str(params.get('status', 'jungle:toxic_poison'))
         amount = max(0, int(getattr(self.players[source_id], 'magic', 0) or 0))
@@ -9793,6 +9888,8 @@ class GameEngine:
 
     def _atomic_jungle_root_gain(self, player_id, card, params, log, choice, context):
         owner_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if self._status_application_blocked(owner_id, 'jungle:root_status'):
+            return
         amount = self._eval_int(player_id, params.get('amount', 2), card, 2)
         self._add_custom_status_value(owner_id, 'jungle:root_status', amount)
         _, eq = self._find_equipment_by_card_instance_id(getattr(card, 'instance_id', None))
@@ -9894,7 +9991,7 @@ class GameEngine:
             if not (0 <= tid < len(self.players)):
                 continue
             ps = self.players[tid]
-            if ps.hand:
+            if ps.hand and not self._is_status_immune(tid):
                 random.shuffle(ps.hand)
                 self.log_msg(log or f"{self.pn(tid)}因失明打乱手牌")
 
@@ -9906,6 +10003,9 @@ class GameEngine:
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
         if 0 <= target_id < len(self.players):
             amount = self._eval_int(player_id, params.get('amount', 18), card, 18)
+            if self._status_application_blocked(target_id, 'poison'):
+                self._destroy_equipment(player_id, eq, check_protection=False)
+                return
             self.players[target_id].poison += amount
             self._normalize_status_value(self.players[target_id], 'poison')
             self.log_msg(log or f"{self.pn(target_id)}+{amount}中毒")
@@ -9915,6 +10015,8 @@ class GameEngine:
         status = str(params.get('status', '')).strip()
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            if self._status_application_blocked(tid, status):
+                continue
             ps = self.players[tid]
             if status in ('poison', '中毒'):
                 ps.poison += amount
@@ -10253,7 +10355,8 @@ class GameEngine:
                 self.deal_attack_damage(opp_id, 8)
         elif eq.def_id == 'Mark':
             if self._destroy_equipment(player_id, eq, check_protection=False):
-                self.players[opp_id].skip_turn += 1
+                if not self._status_application_blocked(opp_id, 'skip_turn'):
+                    self.players[opp_id].skip_turn += 1
         elif eq.def_id == 'Mine':
             if self._destroy_equipment(player_id, eq, check_protection=False):
                 self.deal_attack_damage(opp_id, 20)

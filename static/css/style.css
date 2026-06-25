@@ -717,6 +717,17 @@ body {
   flex: 0 0 auto;
 }
 
+.leaderboard-refresh-meta {
+  margin-left: auto;
+  margin-right: 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  font-family: var(--font-main);
+  opacity: 0.9;
+}
+
 .leaderboard-list {
   display: flex;
   flex-direction: column;

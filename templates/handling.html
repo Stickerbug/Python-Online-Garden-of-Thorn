@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>举报处理</title>
-<link rel="stylesheet" href="/static/css/handling.css?v=3">
+<link rel="stylesheet" href="/static/css/handling.css?v=4">
 </head>
 <body>
 <div id="login" class="login-view">
@@ -72,14 +72,29 @@
         <option value="reject">驳回举报</option>
         <option value="abusive">标记恶意举报</option>
       </select>
-      <label>处罚动作</label>
-      <select id="moderation-action">
-        <option value="none">不处罚</option>
-        <option value="warn">警告</option>
-        <option value="mute">禁言</option>
-        <option value="ban">封禁账号</option>
-        <option value="invalidate_match">标记对局异常</option>
-      </select>
+      <div class="split-actions">
+        <div class="action-card">
+          <label>被举报人处理</label>
+          <select id="target-moderation-action">
+            <option value="none">不处罚</option>
+            <option value="warn">警告</option>
+            <option value="mute">禁言</option>
+            <option value="ban">封禁账号</option>
+            <option value="invalidate_match">标记对局异常</option>
+          </select>
+          <div id="target-action-hint" class="hint">作用于被举报人。</div>
+        </div>
+        <div class="action-card">
+          <label>举报人处理</label>
+          <select id="reporter-moderation-action">
+            <option value="none">不处罚</option>
+            <option value="warn">警告</option>
+            <option value="mute">禁言</option>
+            <option value="ban">封禁账号</option>
+          </select>
+          <div id="reporter-action-hint" class="hint">作用于举报提交者。</div>
+        </div>
+      </div>
       <div class="duration-row">
         <label>处罚时长</label>
         <button id="mod-duration" class="btn">选择时长</button>
@@ -123,6 +138,6 @@
   </div>
 </div>
 
-<script src="/static/js/handling.js?v=3"></script>
+<script src="/static/js/handling.js?v=4"></script>
 </body>
 </html>
