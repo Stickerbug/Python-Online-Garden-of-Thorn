@@ -167,6 +167,7 @@ class PlayerState:
         self.exile: List[CardInstance] = []
         self.equipment: List[EquipmentInstance] = []
         self.extra_hand_limit_bonus: int = 0
+        self.external_zero_e_ignore_hand_limit: bool = False
         self.cards_played_this_turn: Dict[str, int] = {}
         self.cards_played_this_turn_instance_ids: List[int] = []
         self.turn_damage_taken: int = 0
@@ -396,7 +397,7 @@ class PlayerState:
         return HAND_LIMIT + own_golden_leaf + max(0, int(getattr(self, 'extra_hand_limit_bonus', 0)))
 
     def zero_e_cards_ignore_hand_limit(self) -> bool:
-        return any(
+        return bool(getattr(self, 'external_zero_e_ignore_hand_limit', False)) or any(
             e.def_id in ('MagicGoldenLeaf', 'vanilla:magicgoldenleaf')
             and getattr(e, 'effect_target', self.player_id) == self.player_id
             for e in self.equipment
@@ -2388,6 +2389,35 @@ class GameEngine:
             ps._enter_hand_callback = self._handle_card_enter_hand
             ps._draw_callback = self._handle_draw_callback
 
+    def _refresh_hand_limit_bonuses(self):
+        for ps in getattr(self, 'players', []):
+            ps.extra_hand_limit_bonus = 0
+            ps.external_zero_e_ignore_hand_limit = False
+        for owner_id, owner_state in enumerate(getattr(self, 'players', []) or []):
+            for eq in getattr(owner_state, 'equipment', []) or []:
+                try:
+                    target_id = int(getattr(eq, 'effect_target', owner_id))
+                except Exception:
+                    target_id = owner_id
+                if target_id != owner_id and 0 <= target_id < len(self.players):
+                    if self._equipment_is(eq, 'GoldenLeaf', 'vanilla:goldenleaf'):
+                        self.players[target_id].extra_hand_limit_bonus += 1
+                    if self._equipment_is(eq, 'MagicGoldenLeaf', 'vanilla:magicgoldenleaf'):
+                        self.players[target_id].external_zero_e_ignore_hand_limit = True
+
+    def _player_zero_e_cards_ignore_hand_limit(self, player_id: int) -> bool:
+        if not (0 <= player_id < len(getattr(self, 'players', []))):
+            return False
+        for owner_id, owner_state in enumerate(getattr(self, 'players', []) or []):
+            for eq in getattr(owner_state, 'equipment', []) or []:
+                try:
+                    target_id = int(getattr(eq, 'effect_target', owner_id))
+                except Exception:
+                    target_id = owner_id
+                if target_id == player_id and self._equipment_is(eq, 'MagicGoldenLeaf', 'vanilla:magicgoldenleaf'):
+                    return True
+        return False
+
     def _handle_card_enter_hand(self, player_id: int, card: CardInstance):
         if not (0 <= player_id < len(getattr(self, 'players', []))):
             return
@@ -2410,12 +2440,30 @@ class GameEngine:
                 added += 1
             if added > 0:
                 self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因副本效果加入{added}张放逐复制")
+        swift_before = int(getattr(card, 'swift_value', 0) or 0)
         if self._has_card_event(card.card_def, 'enter_hand'):
             self._run_card_event(player_id, card, 'enter_hand', None, {
                 'source_id': player_id,
                 'target_id': player_id,
                 'zone': 'hand',
             })
+        if self._card_is(card, 'BloodCorn', 'desert_cards_addition:blood_corn'):
+            swift_after = int(getattr(card, 'swift_value', 0) or 0)
+            if swift_after <= swift_before:
+                self._add_card_swift_stack(card, 1)
+
+    def _add_card_swift_stack(self, card: CardInstance, amount: int = 1):
+        if not card or amount == 0:
+            return
+        current = int(getattr(card, 'swift_value', 0) or 0)
+        value = max(0, min(18, current + int(amount)))
+        setattr(card, 'swift_value', value)
+        if value > 0:
+            card.instance_flags.add('swift')
+            card.disabled_flags.discard('swift')
+        else:
+            card.instance_flags.discard('swift')
+            card.disabled_flags.add('swift')
 
     def _handle_draw_callback(self, player_id: int, card: CardInstance):
         """Called when a player draws a card. Triggers v2 after_draw event hooks."""
@@ -2484,6 +2532,7 @@ class GameEngine:
         return payload
 
     def get_public_state(self, for_player: int) -> dict:
+        self._refresh_hand_limit_bonuses()
         opponent = 1 - for_player
         opp_data = self.players[opponent].to_dict(include_private=False)
         opp_data['hand_count'] = len([c for c in self.players[opponent].hand if c.def_id != ERROR_CARD_ID])
@@ -6117,6 +6166,21 @@ class GameEngine:
     def _effect_mine(self, player_id: int, card: CardInstance, choice=None):
         pass
 
+    def _refresh_equipment_derived_player_flags(self, player_id: int):
+        if not (0 <= player_id < len(self.players)):
+            return
+        ps = self.players[player_id]
+        equipment = list(getattr(ps, 'equipment', []) or [])
+
+        if any(self._equipment_is(eq, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge') for eq in equipment):
+            ps.sponge_active = True
+
+        if any(self._equipment_is(eq, 'Pill', 'troll_cards:pill', 'vanilla:pill') for eq in equipment):
+            ps.custom_statuses = getattr(ps, 'custom_statuses', {})
+            for key in ('immune', '状态免疫'):
+                ps.custom_statuses.pop(key, None)
+            ps.custom_statuses['status_immune'] = 1
+
     def _destroy_equipment(self, owner_id: int, eq: EquipmentInstance, check_protection: bool = True,
                            source_id: Optional[int] = None) -> bool:
         ps = self.players[owner_id]
@@ -6154,7 +6218,7 @@ class GameEngine:
                 self._check_yggdrasil(owner_id)
             else:
                 self.log_msg("海绵被摧毁！无中毒层数")
-        if self._equipment_is(eq, 'Pill', 'vanilla:pill'):
+        if self._equipment_is(eq, 'Pill', 'vanilla:pill') and not has_destroy_script:
             ps.enemy_draw_reduction = max(0, ps.enemy_draw_reduction - 1)
             ps.enemy_e_reduction = max(0, ps.enemy_e_reduction - 1)
             for key in ('status_immune', 'immune', '状态免疫'):
@@ -6169,6 +6233,8 @@ class GameEngine:
             ps.exile.append(eq.card_instance)
         else:
             self._discard_card(ps, eq.card_instance)
+        self._refresh_equipment_derived_player_flags(owner_id)
+        self._refresh_hand_limit_bonuses()
         self._dispatch_card_event('equipment_destroyed', owner_id if source_id is None else source_id,
                                   eq.card_instance, target_id=owner_id,
                                   equipment=eq, equipment_owner_id=owner_id)
@@ -8557,6 +8623,8 @@ class GameEngine:
         if isinstance(value, dict):
             op = str(value.get('op') or value.get('type') or '')
             status = value.get('status') or value.get('name') or value.get('id')
+            if op == 'electric_web_arm':
+                return True
             if op in ('add_status', 'status_add_named', 'set_status', 'set_status_named') and str(status) in action_statuses:
                 return True
             return any(self._effect_tree_contains_action_status(v, depth + 1) for v in value.values())
@@ -9002,7 +9070,7 @@ class GameEngine:
             try:
                 self._check_yggdrasil(target_id)
                 if dmg > 0 and not is_battery:
-                    for eq in list(ps.equipment):
+                    for equipment_owner_id, eq in list(self._iter_equipment_targeting_player(target_id)):
                         if self._has_card_event(eq.card_def, 'damage_taken') and self._run_card_event(
                                 target_id, eq.card_instance, 'damage_taken', None,
                                 {
@@ -9010,7 +9078,7 @@ class GameEngine:
                                     'target_id': target_id,
                                     'damage': dmg,
                                     'selected_equipment_instance_id': eq.card_instance.instance_id,
-                                    'selected_equipment_owner_id': target_id,
+                                    'selected_equipment_owner_id': equipment_owner_id,
                                 }):
                             continue
                         if eq.def_id == 'Battery':
@@ -9162,6 +9230,7 @@ class GameEngine:
                         effect_target = equip_owner_id
                     self.players[effect_target].armor += 2
                 equip_owner.equipment.append(eq)
+                self._refresh_hand_limit_bonuses()
                 self.log_msg(f"{self.pn(equip_owner_id)}装备了{card.name_cn}")
             if hasattr(card, '_placed_as_equipment'):
                 delattr(card, '_placed_as_equipment')
@@ -9230,6 +9299,7 @@ class GameEngine:
                 if 0 <= selected_target < len(self.players):
                     eq.effect_target = selected_target
             owner.equipment.append(eq)
+            self._refresh_hand_limit_bonuses()
             self.log_msg(log or f"{self.pn(owner_id)}装备了{target_card.name_cn}")
         if target_card is card:
             card._placed_as_equipment = True
@@ -9266,6 +9336,7 @@ class GameEngine:
             else:
                 eq.effect_target = owner_id
             self.players[owner_id].equipment.append(eq)
+            self._refresh_hand_limit_bonuses()
             self._remember_created_card(new_card, context if isinstance(context, dict) else None)
             self.log_msg(log or f"{self.pn(owner_id)}获得装备{card_def.name_cn}")
 
@@ -9739,18 +9810,24 @@ class GameEngine:
 
     def _atomic_heal(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not (0 <= target_id < len(self.players)):
+            return
         amount = self._eval_int(player_id, params.get('amount', 0), card)
         self.players[target_id].heal(amount)
         self.log_msg(log or f"{self.pn(target_id)}回复{amount}H")
 
     def _atomic_draw(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not (0 <= target_id < len(self.players)):
+            return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].draw_cards(amount)
         self.log_msg(log or f"{self.pn(target_id)}抽{amount}张牌")
 
     def _atomic_gain_e(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not (0 <= target_id < len(self.players)):
+            return
         amount_expr = params.get('amount', 1)
         if isinstance(amount_expr, dict) and amount_expr.get('ref') in ('context_var', 'temp_var'):
             amount = int((context or {}).get(str(amount_expr.get('name', '')), 0) or 0)
@@ -9763,18 +9840,24 @@ class GameEngine:
 
     def _atomic_gain_m(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not (0 <= target_id < len(self.players)):
+            return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].gain_magic(amount)
         self.log_msg(log or f"{self.pn(target_id)}获得{amount}M")
 
     def _atomic_gain_armor(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not (0 <= target_id < len(self.players)):
+            return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].armor += amount
         self.log_msg(log or f"{self.pn(target_id)}获得{amount}护甲")
 
     def _atomic_gain_dodge(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not (0 <= target_id < len(self.players)):
+            return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].dodge += amount
         self.log_msg(log or f"{self.pn(target_id)}获得{amount}闪避")

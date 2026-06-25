@@ -117,13 +117,15 @@ class GameEngine2v2(GameEngine):
     def _refresh_hand_limit_bonuses(self):
         for ps in self.players:
             ps.extra_hand_limit_bonus = 0
+            ps.external_zero_e_ignore_hand_limit = False
         for owner_id, owner_state in enumerate(self.players):
             for eq in owner_state.equipment:
-                if eq.def_id != 'GoldenLeaf':
-                    continue
                 target_id = getattr(eq, 'effect_target', owner_id)
                 if target_id != owner_id and 0 <= target_id < len(self.players):
-                    self.players[target_id].extra_hand_limit_bonus += 1
+                    if self._equipment_is(eq, 'GoldenLeaf', 'vanilla:goldenleaf'):
+                        self.players[target_id].extra_hand_limit_bonus += 1
+                    if self._equipment_is(eq, 'MagicGoldenLeaf', 'vanilla:magicgoldenleaf'):
+                        self.players[target_id].external_zero_e_ignore_hand_limit = True
 
 
 

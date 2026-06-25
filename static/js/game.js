@@ -1978,7 +1978,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'toxic', re: /^(?:\d+层淬毒|\d+\s*(?:Toxic|Toxique|Tóxico|Токсин)|淬毒\d+)/i },
     { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*F(?![A-Za-z0-9])|F(?![A-Za-z0-9])|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/ },
     { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P(?![A-Za-z0-9])|P(?![A-Za-z0-9])|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/ },
-    { cls: 'damage', re: /^(?:[+-]?(?:\d+|x|X)\s*电伤|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/ },
+    { cls: 'damage', re: /^(?:[+-]?(?:\d+|x|X)\s*(?:点)?(?:电伤|电伤害|电击伤害)(?:[×x]\d+)?|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/ },
     { cls: 'heal', re: /^造成伤害\d+%(?:\([^)]+\)|（[^）]+）)的H/ },
     { cls: 'armor', re: /^[+-]?\d+A/ },
     { cls: 'heal', re: /^[+]?\d+H(?![A-Za-z0-9])/ },
@@ -6793,6 +6793,12 @@ function formatPredictionDamagePart(hits) {
     return `<span class="card-prediction-part damage">${escapeHtml(text)}</span>`;
 }
 
+function formatPredictionElectricDamagePart(hits) {
+    const text = formatDamageHits(hits).replace(/D\b/g, '电伤');
+    if (!text) return '';
+    return `<span class="card-prediction-part damage">${escapeHtml(text)}</span>`;
+}
+
 function formatPositiveEffectHits(values, suffix) {
     const times = '\u00d7';
     const list = (Array.isArray(values) ? values : [])
@@ -6946,6 +6952,55 @@ function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positive
     });
 }
 
+function effectTargetIsPredictionTarget(target) {
+    if (target == null || target === '') return false;
+    if (typeof target === 'string') {
+        return ['target', 'enemy', 'choice_target', 'selected_target', 'chosen_target', 'event_target'].includes(target);
+    }
+    if (target && typeof target === 'object') {
+        const ref = String(target.ref || target.selector || target.type || '').toLowerCase();
+        const value = String(target.value || target.target || '').toLowerCase();
+        return ['target', 'enemy', 'choice_target', 'selected_target', 'chosen_target', 'event_target'].includes(ref)
+            || ['target', 'enemy', 'choice_target', 'selected_target', 'chosen_target', 'event_target'].includes(value);
+    }
+    return false;
+}
+
+function stepLooksLikeElectricDamage(params = {}) {
+    const tag = String(params.damage_tag || params.tag || params.source || params.source_text || '').toLowerCase();
+    return tag.includes('electric') || tag.includes('battery') || tag.includes('电');
+}
+
+function collectTargetPredictionFromV2Steps(prediction, steps, context = null) {
+    const localContext = context || {
+        lastDamage: prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0),
+        lastPositiveHits: prediction.target.damageHits.filter(value => Number(value || 0) > 0).length,
+    };
+    (Array.isArray(steps) ? steps : []).forEach(step => {
+        if (!step || typeof step !== 'object') return;
+        const op = step.op || step.type;
+        const params = step.params && typeof step.params === 'object' ? step.params : step;
+        if (op === 'if') {
+            const branch = predictionConditionLikelyTrue(step.condition || params.condition, localContext)
+                ? (step.then || params.then || [])
+                : (step.else || params.else || []);
+            collectTargetPredictionFromV2Steps(prediction, branch, localContext);
+            return;
+        }
+        if (op !== 'direct_damage' && op !== 'deal_direct_damage') return;
+        if (!effectTargetIsPredictionTarget(params.target || 'target')) return;
+        const amount = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.amount, localContext)));
+        if (amount <= 0) return;
+        if (stepLooksLikeElectricDamage(params)) {
+            prediction.target.electricHits.push(amount);
+        } else {
+            prediction.target.damageHits.push(amount);
+        }
+        localContext.lastDamage = amount;
+        localContext.lastPositiveHits = amount > 0 ? 1 : 0;
+    });
+}
+
 function getCoffeePredictionAmount(selfState) {
     const vars = (selfState && selfState.custom_vars) || {};
     const marker = Number(vars['咖啡首次使用']);
@@ -6982,9 +7037,10 @@ function addKnownSelfPrediction(prediction, cardDict, selfState) {
 
 function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     const result = {
-        target: { damageHits: [], poison: 0, fire: 0 },
+        target: { damageHits: [], electricHits: [], poison: 0, fire: 0 },
         self: { heal: [], elixir: [], magic: [], armor: [] },
         damageHits: [],
+        electricHits: [],
         poison: 0,
         fire: 0,
     };
@@ -7019,9 +7075,11 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     collectSelfPredictionFromEffects(result, cardDict, cardDef, attackerState, positiveHitCount);
     const onPlay = cardDef.v2_events && cardDef.v2_events.on_play;
     const steps = onPlay && (onPlay.steps || onPlay);
+    collectTargetPredictionFromV2Steps(result, steps);
     collectSelfPredictionFromV2Steps(result, steps, attackerState, positiveHitCount);
     addKnownSelfPrediction(result, cardDict, attackerState);
     result.damageHits = result.target.damageHits;
+    result.electricHits = result.target.electricHits;
     result.poison = result.target.poison;
     result.fire = result.target.fire;
     return result;
@@ -7052,6 +7110,7 @@ function getCardPlayEffectPredictionHtml(cardDict, options = {}) {
     const targetParts = [];
     const selfParts = [];
     if (prediction.target.damageHits.length) targetParts.push(formatPredictionDamagePart(prediction.target.damageHits));
+    if (prediction.target.electricHits.length) targetParts.push(formatPredictionElectricDamagePart(prediction.target.electricHits));
     if (prediction.target.poison > 0) targetParts.push(formatPredictionPart(prediction.target.poison, 'P', 'poison'));
     if (prediction.target.fire > 0) targetParts.push(formatPredictionPart(prediction.target.fire, 'F', 'fire'));
     selfParts.push(formatPredictionSelfPart(prediction.self.heal, 'H', 'heal'));
