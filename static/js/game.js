@@ -11002,6 +11002,14 @@ function toggleStatsPopover(force) {
     }
 }
 
+function leaderboardRankClass(rank) {
+    const value = Number(rank);
+    if (value === 1) return 'leaderboard-rank-gold';
+    if (value === 2) return 'leaderboard-rank-silver';
+    if (value === 3) return 'leaderboard-rank-bronze';
+    return '';
+}
+
 function leaderboardRowHtml(item, rank, extraClass = '') {
     const games = Number(item && item.games_played || 0) || 0;
     const wins = Number(item && item.wins || 0) || 0;
@@ -11011,10 +11019,11 @@ function leaderboardRowHtml(item, rank, extraClass = '') {
     const weightedRate = Number(item && item.weighted_win_rate != null ? item.weighted_win_rate : rate);
     const rateText = `${Number.isInteger(rate) ? rate.toFixed(0) : rate.toFixed(1)}%`;
     const weightedText = `${Number.isInteger(weightedRate) ? weightedRate.toFixed(0) : weightedRate.toFixed(1)}%`;
+    const rankClass = leaderboardRankClass(rank);
     return `
         <div class="leaderboard-row${extraClass ? ` ${extraClass}` : ''}">
-            <span class="leaderboard-rank">${escapeHtml(String(rank || '-'))}</span>
-            <span class="leaderboard-name">${escapeHtml(item && item.username || '-')}</span>
+            <span class="leaderboard-rank ${rankClass}">${escapeHtml(String(rank || '-'))}</span>
+            <span class="leaderboard-name ${rankClass}">${escapeHtml(item && item.username || '-')}</span>
             <span class="leaderboard-rate leaderboard-weighted-rate">${escapeHtml(weightedText)}</span>
             <span class="leaderboard-rate">${escapeHtml(rateText)}</span>
             <span class="leaderboard-games">${games}</span>
@@ -11091,11 +11100,22 @@ function startLeaderboardRefreshTimer() {
 function renderLeaderboardItems(items, selfRank = null) {
     const list = $('leaderboard-list');
     if (!list) return;
-    const rows = Array.isArray(items) ? items : [];
+    const rows = (Array.isArray(items) ? [...items] : []).sort((a, b) => {
+        const scoreA = Number(a && a.weighted_win_rate != null ? a.weighted_win_rate : a && a.win_rate || 0);
+        const scoreB = Number(b && b.weighted_win_rate != null ? b.weighted_win_rate : b && b.win_rate || 0);
+        if (Math.abs(scoreB - scoreA) >= 0.0001) return scoreB - scoreA;
+        return Number(b && b.games_played || 0) - Number(a && a.games_played || 0);
+    });
     const currentId = currentAccount && currentAccount.id != null ? String(currentAccount.id) : '';
+    let previousScore = null;
+    let previousRank = 0;
     const renderedRows = rows.map((item, index) => {
         const isSelf = currentId && item && item.id != null && String(item.id) === currentId;
-        return leaderboardRowHtml(item, index + 1, isSelf ? 'is-self-rank' : '');
+        const score = Number(item && item.weighted_win_rate != null ? item.weighted_win_rate : item && item.win_rate || 0);
+        const rank = previousScore !== null && Math.abs(score - previousScore) < 0.0001 ? previousRank : index + 1;
+        previousScore = score;
+        previousRank = rank;
+        return leaderboardRowHtml(item, rank, isSelf ? 'is-self-rank' : '');
     }).join('');
     const selfRow = selfRank ? leaderboardRowHtml(selfRank, selfRank.rank, 'is-self-rank is-self-extra') : '';
     if (!rows.length) {
