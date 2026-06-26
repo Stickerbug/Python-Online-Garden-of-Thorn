@@ -618,6 +618,7 @@ function renderPlayers(players) {
 
 function draftStatsQuery() {
   const params = new URLSearchParams();
+  params.set('scope', $('draft-stats-scope')?.value || 'total');
   params.set('mode', $('draft-stats-mode')?.value || '');
   params.set('sort', $('draft-stats-sort')?.value || 'pick_rate');
   params.set('order', $('draft-stats-order')?.value || 'desc');
@@ -650,7 +651,7 @@ async function rebuildDraftWinStats() {
     const data = await api('/api/admin/draft-stats/rebuild-wins', { method: 'POST', body: '{}' });
     const result = data.result || {};
     if (resultBox) {
-      resultBox.textContent = `已重算胜率：历史对局 ${formatNumber(result.matches || 0)}，可用摘要 ${formatNumber(result.counted_matches || 0)}，跳过 ${formatNumber(result.skipped_matches || 0)}，卡牌 ${formatNumber(result.cards || 0)}。`;
+      resultBox.textContent = `已重算胜率：历史对局 ${formatNumber(result.matches || 0)}，可用摘要 ${formatNumber(result.counted_matches || 0)}，跳过 ${formatNumber(result.skipped_matches || 0)}，总计卡牌 ${formatNumber(result.cards || 0)}，周卡牌 ${formatNumber(result.weekly_cards || 0)}。`;
     }
     await loadDraftStats();
   } catch (error) {
@@ -671,7 +672,8 @@ function cardTypeLabel(type) {
 function renderDraftStats(data) {
   const items = data.items || [];
   const count = $('draft-stats-count');
-  if (count) count.textContent = `${items.length}/${data.total || 0}`;
+  const scopeLabel = data.scope === 'week' ? `本周 ${data.week_start || ''}` : '总计';
+  if (count) count.textContent = `${scopeLabel} · ${items.length}/${data.total || 0}`;
   const table = $('draft-stats-table');
   if (!table) return;
   if (!items.length) {
@@ -680,22 +682,23 @@ function renderDraftStats(data) {
   }
   table.innerHTML = `
     <table>
-      <thead><tr><th>模式</th><th>卡牌</th><th>类型</th><th>抽取</th><th>刷出</th><th>抽取率</th><th>抽到胜利</th><th>抽到局数</th><th>抽到胜率</th><th>最近更新</th></tr></thead>
+      <thead><tr><th>范围</th><th>模式</th><th>卡牌</th><th>类型</th><th>抽取率</th><th>抽到胜率</th><th>抽取</th><th>刷出</th><th>抽到胜利</th><th>抽到局数</th><th>最近更新</th></tr></thead>
       <tbody>
         ${items.map((item) => `
           <tr>
+            <td>${escapeHtml(scopeLabel)}</td>
             <td>${escapeHtml(item.mode === 'merged' ? '合并' : (item.mode || '-'))}</td>
             <td>
               <strong>${escapeHtml(item.name_cn || item.card_id || '-')}</strong>
               <span class="muted"> ${escapeHtml(item.card_id || '')}</span>
             </td>
             <td>${escapeHtml(cardTypeLabel(item.card_type))}</td>
+            <td class="admin-data">${escapeHtml(formatPercent(item.pick_rate || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatPercent(item.card_win_rate || 0))}</td>
             <td class="admin-data">${escapeHtml(formatNumber(item.picked_count || 0))}</td>
             <td class="admin-data">${escapeHtml(formatNumber(item.shown_count || 0))}</td>
-            <td class="admin-data">${escapeHtml(formatPercent(item.pick_rate || 0))}</td>
             <td class="admin-data">${escapeHtml(formatNumber(item.win_games || 0))}</td>
             <td class="admin-data">${escapeHtml(formatNumber(item.picked_games || 0))}</td>
-            <td class="admin-data">${escapeHtml(formatPercent(item.card_win_rate || 0))}</td>
             <td class="admin-data">${escapeHtml(formatAdminTime(item.updated_at))}</td>
           </tr>`).join('')}
       </tbody>
@@ -1729,6 +1732,7 @@ function bindEvents() {
   $('draft-stats-refresh')?.addEventListener('click', loadDraftStats);
   $('draft-stats-rebuild-wins')?.addEventListener('click', rebuildDraftWinStats);
   $('draft-stats-merge')?.addEventListener('change', loadDraftStats);
+  $('draft-stats-scope')?.addEventListener('change', loadDraftStats);
   $('draft-stats-mode')?.addEventListener('change', loadDraftStats);
   $('draft-stats-sort')?.addEventListener('change', loadDraftStats);
   $('draft-stats-order')?.addEventListener('change', loadDraftStats);

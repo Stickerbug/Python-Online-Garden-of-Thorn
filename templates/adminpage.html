@@ -213,6 +213,10 @@
           <input id="draft-stats-merge" type="checkbox" checked>
           合并模式
         </label>
+        <select id="draft-stats-scope" aria-label="统计范围">
+          <option value="total">总计</option>
+          <option value="week">本周</option>
+        </select>
         <select id="draft-stats-mode" aria-label="模式筛选">
           <option value="">全部模式</option>
           <option value="1v1">1v1</option>
@@ -235,7 +239,7 @@
         <button id="draft-stats-refresh" class="ghost-btn" type="button">刷新统计</button>
         <button id="draft-stats-rebuild-wins" class="ghost-btn" type="button">按对局摘要重算胜率</button>
       </div>
-      <p id="draft-stats-rebuild-result" class="empty-detail">统计口径：玩家最终选择某张牌时，当前三个候选项计入“刷出”；被选中的牌计入“抽取”。被重抽掉的候选项不计入刷出。胜率按玩家选到该牌的对局摘要重算。</p>
+      <p id="draft-stats-rebuild-result" class="empty-detail">统计口径：玩家最终选择某张牌时，当前三个候选项计入“刷出”；被选中的牌计入“抽取”。被重抽掉的候选项不计入刷出。本周抽取率从更新后开始统计；胜率可按对局摘要重算。</p>
       <div id="draft-stats-table" class="admin-table"></div>
     </section>
   </section>

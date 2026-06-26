@@ -109,6 +109,22 @@ def utc_iso(value):
     return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
 
 
+def current_week_start():
+    today = datetime.now(timezone.utc).date()
+    return (today - timedelta(days=today.weekday())).isoformat()
+
+
+def week_start_for_iso(value):
+    try:
+        text = str(value or '').strip()
+        if not text:
+            return current_week_start()
+        dt = datetime.fromisoformat(text.replace('Z', '+00:00'))
+        return (dt.astimezone(timezone.utc).date() - timedelta(days=dt.astimezone(timezone.utc).weekday())).isoformat()
+    except Exception:
+        return current_week_start()
+
+
 def format_duration_zh(seconds):
     try:
         value = max(0, int(seconds))
@@ -541,6 +557,37 @@ def init_db():
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_mode ON card_draft_win_stats(mode)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_rate ON card_draft_win_stats(win_games, picked_games)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS card_draft_stats_weekly (
+                week_start TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                card_id TEXT NOT NULL,
+                shown_count INTEGER NOT NULL DEFAULT 0,
+                picked_count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (week_start, mode, card_id)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_stats_weekly_week_mode ON card_draft_stats_weekly(week_start, mode)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_stats_weekly_rate ON card_draft_stats_weekly(week_start, picked_count, shown_count)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS card_draft_win_stats_weekly (
+                week_start TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                card_id TEXT NOT NULL,
+                picked_games INTEGER NOT NULL DEFAULT 0,
+                win_games INTEGER NOT NULL DEFAULT 0,
+                draw_games INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (week_start, mode, card_id)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_weekly_week_mode ON card_draft_win_stats_weekly(week_start, mode)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_weekly_rate ON card_draft_win_stats_weekly(week_start, win_games, picked_games)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS reports (
@@ -2176,6 +2223,7 @@ def record_card_draft_pick(mode, option_ids, picked_id):
     if not counts or not picked:
         return False
     now = utc_now()
+    week_start = current_week_start()
     with get_db_connection() as conn:
         for card_id, shown_inc in counts.items():
             picked_inc = 1 if card_id == picked else 0
@@ -2189,6 +2237,17 @@ def record_card_draft_pick(mode, option_ids, picked_id):
                     updated_at = excluded.updated_at
                 ''',
                 (mode_key, card_id, int(shown_inc), int(picked_inc), now),
+            )
+            conn.execute(
+                '''
+                INSERT INTO card_draft_stats_weekly (week_start, mode, card_id, shown_count, picked_count, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(week_start, mode, card_id) DO UPDATE SET
+                    shown_count = shown_count + excluded.shown_count,
+                    picked_count = picked_count + excluded.picked_count,
+                    updated_at = excluded.updated_at
+                ''',
+                (week_start, mode_key, card_id, int(shown_inc), int(picked_inc), now),
             )
         conn.commit()
     return True
@@ -2222,6 +2281,7 @@ def record_card_draft_counts(mode, card_counts):
     if not rows:
         return False
     now = utc_now()
+    week_start = current_week_start()
     with get_db_connection() as conn:
         conn.executemany(
             '''
@@ -2233,6 +2293,17 @@ def record_card_draft_counts(mode, card_counts):
                 updated_at = excluded.updated_at
             ''',
             [(mode_key, card_id, shown_inc, picked_inc, now) for card_id, shown_inc, picked_inc in rows],
+        )
+        conn.executemany(
+            '''
+            INSERT INTO card_draft_stats_weekly (week_start, mode, card_id, shown_count, picked_count, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(week_start, mode, card_id) DO UPDATE SET
+                shown_count = shown_count + excluded.shown_count,
+                picked_count = picked_count + excluded.picked_count,
+                updated_at = excluded.updated_at
+            ''',
+            [(week_start, mode_key, card_id, shown_inc, picked_inc, now) for card_id, shown_inc, picked_inc in rows],
         )
         conn.commit()
     return True
@@ -2269,6 +2340,7 @@ def record_card_draft_win_result(mode, player_card_ids, winner_indices=None, res
     if not rows:
         return False
     now = utc_now()
+    week_start = current_week_start()
     with get_db_connection() as conn:
         conn.executemany(
             '''
@@ -2282,6 +2354,21 @@ def record_card_draft_win_result(mode, player_card_ids, winner_indices=None, res
             ''',
             [
                 (mode_key, card_id, picked_inc, win_inc, draw_inc, now)
+                for card_id, (picked_inc, win_inc, draw_inc) in rows.items()
+            ],
+        )
+        conn.executemany(
+            '''
+            INSERT INTO card_draft_win_stats_weekly (week_start, mode, card_id, picked_games, win_games, draw_games, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(week_start, mode, card_id) DO UPDATE SET
+                picked_games = picked_games + excluded.picked_games,
+                win_games = win_games + excluded.win_games,
+                draw_games = draw_games + excluded.draw_games,
+                updated_at = excluded.updated_at
+            ''',
+            [
+                (week_start, mode_key, card_id, picked_inc, win_inc, draw_inc, now)
                 for card_id, (picked_inc, win_inc, draw_inc) in rows.items()
             ],
         )
@@ -2357,6 +2444,7 @@ def rebuild_card_draft_win_stats_from_matches():
     """
     now = utc_now()
     totals = {}
+    weekly_totals = {}
     with get_db_connection() as conn:
         rows = conn.execute('SELECT * FROM matches ORDER BY id ASC').fetchall()
         scanned_matches = len(rows)
@@ -2371,6 +2459,7 @@ def rebuild_card_draft_win_stats_from_matches():
             if raw_result not in ('win', 'draw', 'finished'):
                 skipped_matches += 1
                 continue
+            week_start = week_start_for_iso(row['ended_at'] or row['started_at'])
             summary = _safe_json_loads(row['summary_json'], {})
             player_cards = _match_draft_card_ids_by_player(summary)
             if not player_cards:
@@ -2393,11 +2482,20 @@ def rebuild_card_draft_win_stats_from_matches():
                     elif pidx in winner_set:
                         wins += 1
                     totals[key] = (picked, wins, draws)
+                    weekly_key = (week_start, mode, card_id)
+                    week_picked, week_wins, week_draws = weekly_totals.get(weekly_key, (0, 0, 0))
+                    week_picked += 1
+                    if is_draw:
+                        week_draws += 1
+                    elif pidx in winner_set:
+                        week_wins += 1
+                    weekly_totals[weekly_key] = (week_picked, week_wins, week_draws)
             if added:
                 counted_matches += 1
             else:
                 skipped_matches += 1
         conn.execute('DELETE FROM card_draft_win_stats')
+        conn.execute('DELETE FROM card_draft_win_stats_weekly')
         if totals:
             conn.executemany(
                 '''
@@ -2409,6 +2507,17 @@ def rebuild_card_draft_win_stats_from_matches():
                     for (mode, card_id), (picked, wins, draws) in totals.items()
                 ],
             )
+        if weekly_totals:
+            conn.executemany(
+                '''
+                INSERT INTO card_draft_win_stats_weekly (week_start, mode, card_id, picked_games, win_games, draw_games, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''',
+                [
+                    (week_start, mode, card_id, picked, wins, draws, now)
+                    for (week_start, mode, card_id), (picked, wins, draws) in weekly_totals.items()
+                ],
+            )
         conn.commit()
     return {
         'matches': scanned_matches,
@@ -2418,10 +2527,11 @@ def rebuild_card_draft_win_stats_from_matches():
         'picked_games': sum(value[0] for value in totals.values()),
         'win_games': sum(value[1] for value in totals.values()),
         'draw_games': sum(value[2] for value in totals.values()),
+        'weekly_cards': len(weekly_totals),
     }
 
 
-def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0, merge_modes=False):
+def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0, merge_modes=False, scope='total', week_start=None):
     mode_key = str(mode or '').strip()
     sort_key = str(sort or 'pick_rate')
     sort_expr = CARD_DRAFT_STAT_SORTS.get(sort_key, CARD_DRAFT_STAT_SORTS['pick_rate'])
@@ -2438,6 +2548,18 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
     mode_filter = mode_key if mode_key in ('1v1', '2v2') else ''
     mode_where = 'WHERE mode = ?' if mode_filter else ''
     mode_params = [mode_filter] if mode_filter else []
+    scope_key = 'week' if str(scope or '').lower() in ('week', 'weekly') else 'total'
+    draft_table = 'card_draft_stats_weekly' if scope_key == 'week' else 'card_draft_stats'
+    win_table = 'card_draft_win_stats_weekly' if scope_key == 'week' else 'card_draft_win_stats'
+    selected_week = week_start_for_iso(week_start) if scope_key == 'week' else ''
+    if scope_key == 'week':
+        week_clause = 'week_start = ?'
+        if mode_filter:
+            mode_where = f'WHERE {week_clause} AND mode = ?'
+            mode_params = [selected_week, mode_filter]
+        else:
+            mode_where = f'WHERE {week_clause}'
+            mode_params = [selected_week]
     order_clause = f'{sort_expr} {direction}, shown_count DESC, card_id ASC'
     with get_db_connection() as conn:
         if merge:
@@ -2449,7 +2571,7 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
                         SUM(shown_count) AS shown_count,
                         SUM(picked_count) AS picked_count,
                         MAX(updated_at) AS updated_at
-                    FROM card_draft_stats
+                    FROM {draft_table}
                     {mode_where}
                     GROUP BY card_id
                 ),
@@ -2461,7 +2583,7 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
                         SUM(win_games) AS win_games,
                         SUM(draw_games) AS draw_games,
                         MAX(updated_at) AS win_updated_at
-                    FROM card_draft_win_stats
+                    FROM {win_table}
                     {mode_where}
                     GROUP BY card_id
                 )
@@ -2490,6 +2612,7 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
                 mode_params + mode_params + [safe_limit, safe_offset],
             ).fetchall()
         else:
+            draft_mode_where = mode_where.replace('week_start', 'draft.week_start').replace('mode', 'draft.mode')
             base_query = f'''
                 SELECT
                     draft.mode,
@@ -2503,10 +2626,11 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
                     COALESCE(wins.updated_at, '') AS win_updated_at,
                     CASE WHEN draft.shown_count > 0 THEN CAST(draft.picked_count AS REAL) / draft.shown_count * 100 ELSE 0 END AS pick_rate,
                     CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS card_win_rate
-                FROM card_draft_stats AS draft
-                LEFT JOIN card_draft_win_stats AS wins
+                FROM {draft_table} AS draft
+                LEFT JOIN {win_table} AS wins
                     ON wins.mode = draft.mode AND wins.card_id = draft.card_id
-                {mode_where.replace('mode', 'draft.mode')}
+                    {'AND wins.week_start = draft.week_start' if scope_key == 'week' else ''}
+                {draft_mode_where}
             '''
             total = conn.execute(f'SELECT COUNT(*) FROM ({base_query})', mode_params).fetchone()[0]
             rows = conn.execute(
@@ -2540,6 +2664,8 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
         'sort': sort_key if sort_key in CARD_DRAFT_STAT_SORTS else 'pick_rate',
         'order': 'asc' if direction == 'ASC' else 'desc',
         'merge_modes': merge,
+        'scope': scope_key,
+        'week_start': selected_week,
     }
 
 

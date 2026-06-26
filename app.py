@@ -246,6 +246,7 @@ GTN_STATIC_VERSION = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() o
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
 GTN_DRAINING_ENV = os.environ.get('GTN_DRAINING', '').strip().lower()
 _DRAIN_OVERRIDE = None
+CHANGELOG_PATH = os.environ.get('GTN_CHANGELOG_PATH', os.path.join(os.path.dirname(__file__), 'CHANGELOG.txt')).strip()
 
 
 def is_beta_instance():
@@ -254,6 +255,47 @@ def is_beta_instance():
 
 def is_release_instance():
     return GTN_INSTANCE == 'release'
+
+
+_CHANGELOG_DATE_RE = re.compile(r'^\s*(\d{4}-\d{2}-\d{2})\s*$')
+
+
+def read_changelog_items(limit=20):
+    try:
+        limit = max(1, min(int(limit or 20), 50))
+    except (TypeError, ValueError):
+        limit = 20
+    try:
+        with open(CHANGELOG_PATH, 'r', encoding='utf-8') as fh:
+            lines = fh.read().splitlines()
+    except FileNotFoundError:
+        return []
+    except OSError as exc:
+        admin_event('error', f'changelog_read_failed path={CHANGELOG_PATH} error={exc}')
+        return []
+
+    items = []
+    current = None
+    body = []
+    for line in lines:
+        match = _CHANGELOG_DATE_RE.match(line)
+        if match:
+            if current:
+                content = '\n'.join(body).strip()
+                if content:
+                    items.append({'date': current, 'content': content})
+            current = match.group(1)
+            body = []
+            continue
+        if current:
+            body.append(line.rstrip())
+    if current:
+        content = '\n'.join(body).strip()
+        if content:
+            items.append({'date': current, 'content': content})
+
+    items.sort(key=lambda item: item.get('date', ''), reverse=True)
+    return items[:limit]
 
 
 def is_instance_draining():
@@ -8380,6 +8422,14 @@ def health_full():
     })
 
 
+@app.route('/api/changelog')
+def api_changelog():
+    return jsonify({
+        'success': True,
+        'items': read_changelog_items(request.args.get('limit', 20)),
+    })
+
+
 @app.route('/api/report', methods=['POST'])
 def api_report():
     if not DB_AVAILABLE:
@@ -8574,6 +8624,8 @@ def admin_draft_stats():
             limit=request.args.get('limit', 300),
             offset=request.args.get('offset', 0),
             merge_modes=str(request.args.get('merge_modes', '')).lower() in ('1', 'true', 'yes', 'on'),
+            scope=request.args.get('scope', 'total'),
+            week_start=request.args.get('week_start'),
         )
     except Exception as exc:
         admin_event('error', f'admin draft stats failed: {exc}')
@@ -12688,6 +12740,8 @@ def on_rematch(data=None):
                 room.created_at = time.time()
                 room.started_at = None
                 room.pregame_deadlines = {}
+                room.chat_history = []
+                room.chat_sequence = 0
                 reset_room_replay(room)
                 if room.player_sids and room.player_sids[0] in players:
                     room.engine.allowed_card_ids = set(players[room.player_sids[0]].get('allowed_card_ids', [])) or None

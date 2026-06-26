@@ -538,7 +538,8 @@ Object.assign(I18N.fr, { waiting_opponent_counter: 'En attente du contre adverse
 Object.assign(I18N.ja, { waiting_opponent_counter: 'Waiting for opponent counter' });
 
 Object.assign(I18N.zh, {
-    about_title: '关于', about_gameplay: '游戏玩法', about_credits: '致谢', about_contact: '联系方式',
+    about_title: '关于', about_gameplay: '游戏玩法', about_credits: '致谢', about_changelog: '更新日志', about_contact: '联系方式',
+    changelog_empty: '暂无更新日志。', changelog_error: '更新日志加载失败。',
     credits_developer: '开发者', credits_design: '设计', credits_art: '美工', credits_special: '特别鸣谢',
     rules_intro_title: '游戏介绍', rules_type_thorn: '攻击(Thorn)', rules_type_bloom: '技能(Bloom)', rules_type_root: '装备(Root)', rules_type_guard: '反制(Guard)',
     rules_goal_title: '基本目标',
@@ -577,7 +578,8 @@ Object.assign(I18N.zh, {
 });
 
 Object.assign(I18N.en, {
-    about_title: 'About', about_gameplay: 'How to Play', about_credits: 'Credits', about_contact: 'Contact',
+    about_title: 'About', about_gameplay: 'How to Play', about_credits: 'Credits', about_changelog: 'Changelog', about_contact: 'Contact',
+    changelog_empty: 'No changelog yet.', changelog_error: 'Failed to load changelog.',
     credits_developer: 'Developer', credits_design: 'Design', credits_art: 'Art', credits_special: 'Special Thanks',
     rules_intro_title: 'Game Introduction', rules_type_thorn: 'Thorn attacks', rules_type_bloom: 'Bloom skills', rules_type_root: 'Root equipment', rules_type_guard: 'Guard counters',
     rules_goal_title: 'Goal',
@@ -632,7 +634,8 @@ Object.assign(I18N.en, {
 });
 
 Object.assign(I18N.fr, {
-    about_title: 'À propos', about_gameplay: 'Règles', about_credits: 'Crédits', about_contact: 'Contact',
+    about_title: 'À propos', about_gameplay: 'Règles', about_credits: 'Crédits', about_changelog: 'Journal', about_contact: 'Contact',
+    changelog_empty: 'Aucun journal de mise à jour.', changelog_error: 'Impossible de charger le journal.',
     credits_developer: 'Développeur', credits_design: 'Design', credits_art: 'Art', credits_special: 'Remerciements',
     rules_intro_title: 'Présentation du jeu', rules_type_thorn: 'attaques Thorn', rules_type_bloom: 'compétences Bloom', rules_type_root: 'équipements Root', rules_type_guard: 'contres Guard',
     rules_goal_title: 'Objectif',
@@ -673,7 +676,8 @@ Object.assign(I18N.fr, {
 });
 
 Object.assign(I18N.ja, {
-    about_title: '概要', about_gameplay: '遊び方', about_credits: 'クレジット', about_contact: '連絡先',
+    about_title: '概要', about_gameplay: '遊び方', about_credits: 'クレジット', about_changelog: '更新履歴', about_contact: '連絡先',
+    changelog_empty: '更新履歴はありません。', changelog_error: '更新履歴の読み込みに失敗しました。',
     credits_developer: '開発者', credits_design: 'デザイン', credits_art: '美術', credits_special: 'Special Thanks',
     rules_intro_title: 'ゲーム紹介', rules_type_thorn: '攻撃(Thorn)', rules_type_bloom: 'スキル(Bloom)', rules_type_root: '装備(Root)', rules_type_guard: 'カウンター(Guard)',
     rules_goal_title: '基本目標',
@@ -1829,6 +1833,11 @@ const CARD_FLAG_ALIASES = {
     'troll_cards:swift': 'swift',
     stealth: 'stealth',
     revealed: 'revealed',
+    multi_petal_fission: '',
+    flag_multi_petal_fission: '',
+    tag_multi_petal_fission: '',
+    'gtn:multi_petal_fission': '',
+    'tag_gtn:multi_petal_fission': '',
 };
 
 const _VANILLA_FLAGS = new Set([
@@ -2685,6 +2694,7 @@ let isSpectating = false;
 let spectatePerspective = 0;
 let pendingSpectateRoomId = null;
 let activeSpectateRoomId = null;
+let spectateCardDataKey = '';
 let responseTimerId = null;
 let responseCountdown = 0;
 let allyConsentTimerId = null;
@@ -2875,16 +2885,18 @@ const LOCAL_SOLO_SUPPORTED_V2_OPS = new Set([
     'goggles_enable', 'request_reorder_deck',
 ]);
 const COMBAT_FLOAT_TOTAL_LIMIT_MS = 5000;
-const COMBAT_FLOAT_BASE_DURATION_MS = 1700;
+const COMBAT_FLOAT_BASE_DURATION_MS = 1500;
 const COMBAT_FLOAT_MIN_DURATION_MS = 620;
 const COMBAT_FLOAT_END_PAD_MS = 140;
 const COMBAT_FLOAT_MAX_LAST_DELAY_MS = COMBAT_FLOAT_TOTAL_LIMIT_MS - COMBAT_FLOAT_MIN_DURATION_MS - COMBAT_FLOAT_END_PAD_MS;
+const COMBAT_HIT_STEP_MS = 170;
 let targetPickCleanup = null;
 let gameOverRenderTimer = null;
 let scheduledGameOverState = null;
 let gameTimelineEntries = [];
 let battleChatEntries = [];
 let roomChatHistorySignature = '';
+let battleChatMatchKey = '';
 let renderedBattleLogCount = 0;
 let renderedBattleLogTotal = 0;
 let renderedTimelineDomCount = 0;
@@ -3292,6 +3304,8 @@ function updateStaticText() {
     if (aboutTabRules) aboutTabRules.textContent = UI.about_gameplay;
     const aboutTabCredits = $('about-tab-credits');
     if (aboutTabCredits) aboutTabCredits.textContent = UI.about_credits;
+    const aboutTabChangelog = $('about-tab-changelog');
+    if (aboutTabChangelog) aboutTabChangelog.textContent = UI.about_changelog || '更新日志';
     const creditsDeveloper = $('credits-developer-title');
     if (creditsDeveloper) creditsDeveloper.textContent = UI.credits_developer;
     const creditsDesign = $('credits-design-title');
@@ -3316,6 +3330,8 @@ function updateStaticText() {
     if (btnFriendsTop) btnFriendsTop.textContent = UI.friends;
     const btnSkinTop = $('btn-skin-top');
     if (btnSkinTop) btnSkinTop.textContent = UI.skin;
+    const btnChangelogTop = $('btn-changelog-top');
+    if (btnChangelogTop) btnChangelogTop.textContent = UI.about_changelog || '更新日志';
     const btnLeaderboardTop = $('btn-leaderboard-top');
     if (btnLeaderboardTop) btnLeaderboardTop.textContent = UI.leaderboard || '排行榜';
     const skinTitle = $('skin-title');
@@ -3628,6 +3644,17 @@ function maybeAnimateTurnFocus(gs) {
     requestAnimationFrame(() => {
         const region = getPlayerRegionById(gs.current_player);
         restartTransientClass(region, 'turn-focus-pulse', 900);
+        const current = normalizePlayerId(gs.current_player);
+        const self = normalizePlayerId(gs.your_id != null ? gs.your_id : playerId);
+        const endTurnBtn = $('btn-end-turn');
+        const classicEndTurnBtn = $('classic-end-turn');
+        if (current != null && self != null && current === self) {
+            restartTransientClass(endTurnBtn, 'turn-button-focus-pulse', 860);
+            restartTransientClass(classicEndTurnBtn, 'turn-button-focus-pulse', 860);
+        } else {
+            restartTransientClass(endTurnBtn, 'turn-button-wait-pulse', 640);
+            restartTransientClass(classicEndTurnBtn, 'turn-button-wait-pulse', 640);
+        }
     });
 }
 
@@ -3674,6 +3701,8 @@ function updateTopActionButtons(viewId = activeViewId) {
     if (statsTop) statsTop.classList.toggle('hidden', !onHome || !currentAccount);
     const skinTop = $('btn-skin-top');
     if (skinTop) skinTop.classList.toggle('hidden', !onHome);
+    const changelogTop = $('btn-changelog-top');
+    if (changelogTop) changelogTop.classList.toggle('hidden', !onHome);
     const leaderboardTop = $('btn-leaderboard-top');
     if (leaderboardTop) leaderboardTop.classList.toggle('hidden', !onHome);
 }
@@ -3751,6 +3780,7 @@ function clearNetworkMatchStateForLobby() {
     isSpectating = false;
     pendingSpectateRoomId = null;
     activeSpectateRoomId = null;
+    spectateCardDataKey = '';
     spectatePerspective = 0;
     pendingPlayCard = null;
     responsePending = false;
@@ -3787,14 +3817,20 @@ function bindRulesCardLinks(root) {
 
 function setAboutPage(page) {
     const isCredits = page === 'credits';
+    const isChangelog = page === 'changelog';
     const rulesPage = $('about-page-rules');
     const creditsPage = $('about-page-credits');
+    const changelogPage = $('about-page-changelog');
     const rulesTab = $('about-tab-rules');
     const creditsTab = $('about-tab-credits');
-    if (rulesPage) rulesPage.classList.toggle('hidden', isCredits);
+    const changelogTab = $('about-tab-changelog');
+    if (rulesPage) rulesPage.classList.toggle('hidden', isCredits || isChangelog);
     if (creditsPage) creditsPage.classList.toggle('hidden', !isCredits);
-    if (rulesTab) rulesTab.classList.toggle('active', !isCredits);
+    if (changelogPage) changelogPage.classList.toggle('hidden', !isChangelog);
+    if (rulesTab) rulesTab.classList.toggle('active', !isCredits && !isChangelog);
     if (creditsTab) creditsTab.classList.toggle('active', isCredits);
+    if (changelogTab) changelogTab.classList.toggle('active', isChangelog);
+    if (isChangelog) loadChangelog();
 }
 
 function formatNamedTemplate(template, values) {
@@ -3877,6 +3913,78 @@ function ensureTutorialButtons() {
     }
 }
 
+let changelogLoaded = false;
+let changelogLoadingPromise = null;
+
+function formatChangelogDate(dateText) {
+    const date = new Date(`${dateText}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return dateText || '';
+    const localeMap = { zh: 'zh-CN', en: 'en-US', fr: 'fr-FR', ja: 'ja-JP' };
+    try {
+        return new Intl.DateTimeFormat(localeMap[currentLang] || 'zh-CN', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        }).format(date);
+    } catch (_) {
+        return dateText || '';
+    }
+}
+
+function renderChangelogItems(items) {
+    const body = $('about-changelog-body');
+    if (!body) return;
+    body.textContent = '';
+    if (!Array.isArray(items) || !items.length) {
+        const empty = document.createElement('p');
+        empty.className = 'muted';
+        empty.textContent = UI.changelog_empty || '暂无更新日志。';
+        body.appendChild(empty);
+        return;
+    }
+    items.slice(0, 20).forEach(item => {
+        const entry = document.createElement('article');
+        entry.className = 'changelog-entry';
+        const date = document.createElement('h4');
+        date.className = 'changelog-date';
+        date.textContent = formatChangelogDate(item && item.date);
+        const content = document.createElement('p');
+        content.className = 'changelog-content';
+        content.textContent = String(item && item.content || '').trim();
+        entry.appendChild(date);
+        entry.appendChild(content);
+        body.appendChild(entry);
+    });
+}
+
+async function loadChangelog(force = false) {
+    if (changelogLoaded && !force) return;
+    if (changelogLoadingPromise) return changelogLoadingPromise;
+    const body = $('about-changelog-body');
+    if (body && !changelogLoaded) {
+        body.innerHTML = `<p class="muted">${escapeHtml(UI.loading || 'Loading...')}</p>`;
+    }
+    changelogLoadingPromise = fetch('/api/changelog?limit=20', { cache: 'no-store' })
+        .then(resp => resp.ok ? resp.json() : Promise.reject(new Error(`HTTP ${resp.status}`)))
+        .then(data => {
+            changelogLoaded = true;
+            renderChangelogItems(data && data.items || []);
+        })
+        .catch(() => {
+            if (body) {
+                body.textContent = '';
+                const error = document.createElement('p');
+                error.className = 'error-text';
+                error.textContent = UI.changelog_error || '更新日志加载失败。';
+                body.appendChild(error);
+            }
+        })
+        .finally(() => {
+            changelogLoadingPromise = null;
+        });
+    return changelogLoadingPromise;
+}
+
 function openAbout() {
     const panel = $('about-panel');
     if (panel) panel.classList.remove('hidden');
@@ -3885,6 +3993,12 @@ function openAbout() {
     const body = $('about-rules-body');
     bindRulesCardLinks(body);
     if (body && rulesScrollTop) requestAnimationFrame(() => { body.scrollTop = rulesScrollTop; });
+}
+
+function openChangelog() {
+    const panel = $('about-panel');
+    if (panel) panel.classList.remove('hidden');
+    setAboutPage('changelog');
 }
 
 function closeAbout() {
@@ -5482,7 +5596,7 @@ function installCommunityFontFace(url) {
 }
 
 async function loadCommunityFontSubsetForCurrentSelection() {
-    const community = getCommunityModSelection();
+    const community = getEffectiveCommunityModSelectionForData();
     if (community.mod_source !== 'community' || !community.community_mods.length) return;
     const key = community.community_mod_hash || JSON.stringify(community.community_mods);
     if (loadedCommunityFontSubsets.has(key)) return;
@@ -5506,9 +5620,35 @@ async function loadCommunityFontSubsetForCurrentSelection() {
     }
 }
 
+function shouldUseAllOfficialModsForViewing() {
+    return !!isSpectating;
+}
+
+function getEffectiveDisabledModsForData() {
+    if (isSpectating && gameState && Array.isArray(gameState.disabled_mods)) {
+        return gameState.disabled_mods.map(item => String(item || '')).filter(Boolean);
+    }
+    return shouldUseAllOfficialModsForViewing() ? [] : getDisabledMods();
+}
+
+function getEffectiveCommunityModSelectionForData() {
+    if (isSpectating && gameState && gameState.mod_source === 'community') {
+        const mods = Array.isArray(gameState.community_mods) ? gameState.community_mods : [];
+        const names = mods.map(mod => mod && (mod.name || String(mod.sha256 || '').slice(0, 8))).filter(Boolean).join(' / ');
+        return {
+            mod_source: 'community',
+            community_mods: mods,
+            community_mod_url: gameState.community_mod_url || (mods.length === 1 ? mods[0].public_url : ''),
+            community_mod_hash: gameState.community_mod_hash || mods.map(mod => mod && mod.sha256).filter(Boolean).sort().join(','),
+            community_mod_name: gameState.community_mod_name || names,
+        };
+    }
+    return getCommunityModSelection();
+}
+
 function getDataCacheKey(kind) {
-    const disabled = getDisabledMods().slice().sort().join(',') || 'none';
-    const community = getCommunityModSelection();
+    const disabled = getEffectiveDisabledModsForData().slice().sort().join(',') || 'none';
+    const community = getEffectiveCommunityModSelectionForData();
     const communityKey = community.mod_source === 'community' ? community.community_mod_hash : 'official';
     return `gtn_${kind}_cache_${DATA_CACHE_VERSION}_${disabled}_${communityKey}`;
 }
@@ -5533,6 +5673,31 @@ function writeDataCache(kind, data) {
     } catch (_) {
         // Cache is only a startup optimization; quota failures are non-fatal.
     }
+}
+
+function spectateModDataKeyFromState(state = gameState) {
+    if (!state || !state.spectating) return '';
+    const disabled = Array.isArray(state.disabled_mods)
+        ? state.disabled_mods.map(item => String(item || '')).filter(Boolean).sort().join(',')
+        : 'all-official';
+    const communityHash = state.mod_source === 'community'
+        ? String(state.community_mod_hash || '').trim()
+        : 'official';
+    return `${state.room_id || ''}:${disabled || 'none'}:${communityHash}`;
+}
+
+function ensureSpectateCardDataForState(state = gameState) {
+    const key = spectateModDataKeyFromState(state);
+    if (!key || key === spectateCardDataKey) return;
+    spectateCardDataKey = key;
+    Promise.all([
+        refreshCardDefsFromServer({ silent: true }),
+        refreshOpeningEventsFromServer({ silent: true }),
+    ]).then(() => {
+        rerenderAfterCardDefsRefresh();
+    }).catch(err => {
+        console.warn('[spectate] failed to refresh card data for room mods:', err);
+    });
 }
 
 function refreshCardDataViews() {
@@ -6128,6 +6293,7 @@ function shouldDisplayCardFlag(flag, options = {}) {
 
 function cardFlagHtml(flag, text = null) {
     const normalized = normalizeCardFlag(flag);
+    if (!normalized) return '';
     if (getCustomTagDef(normalized)) return customTagHtml(normalized, text);
     if (normalized === 'fusion_layer') {
         const label = text || `${UI.fusion_layer || 'Fusion'}`;
@@ -6237,6 +6403,7 @@ function createCardChoiceChip(cardDict, options = {}) {
             .map(flag => normalizeCardFlag(flag))
             .filter(flag => shouldDisplayCardFlag(flag, options))))
             .map(flag => cardFlagHtml(flag))
+            .filter(Boolean)
             .join('');
         if (flagsHtml) {
             const flags = document.createElement('span');
@@ -8674,6 +8841,7 @@ function connectSocket(serverUrl) {
             isSpectating = false;
             pendingSpectateRoomId = null;
             activeSpectateRoomId = null;
+            spectateCardDataKey = '';
             spectatePerspective = 0;
         }
         if (phase === 'draft') {
@@ -8853,7 +9021,6 @@ function connectSocket(serverUrl) {
             draftState = {};
             eventSelectData = {};
         }
-        maybeRefreshCardDefsForPayload(data, 'state_update');
         if (data.spectating) {
             isSpectating = true;
             if (data.room_id != null) activeSpectateRoomId = Number(data.room_id);
@@ -8863,7 +9030,10 @@ function connectSocket(serverUrl) {
             pendingSpectateRoomId = null;
             activeSpectateRoomId = null;
             spectatePerspective = 0;
+            spectateCardDataKey = '';
         }
+        maybeRefreshCardDefsForPayload(data, 'state_update');
+        if (isSpectating) ensureSpectateCardDataForState(data);
         if (!isSpectating && data.your_id != null) playerId = data.your_id;
         mergeSkinLooksFromPayload(data);
         if (!isSpectating && data.pending_response != null) {
@@ -8927,6 +9097,7 @@ function connectSocket(serverUrl) {
         soloMode = true;
         tutorialMode = !!data.tutorial || tutorialMode;
         isSpectating = false;
+        spectateCardDataKey = '';
         syncBattleLogMatch(data || {});
         gameState = data;
         phase = data.phase || phase;
@@ -9230,6 +9401,7 @@ function connectSocket(serverUrl) {
         clearNetworkMatchStateForLobby();
         pendingSpectateRoomId = null;
         activeSpectateRoomId = null;
+        spectateCardDataKey = '';
         isSpectating = false;
         spectatePerspective = 0;
         phase = 'lobby';
@@ -11932,6 +12104,7 @@ function handleLocalSoloState(data) {
     soloMode = true;
     tutorialMode = !!data.tutorial || tutorialMode;
     isSpectating = false;
+    spectateCardDataKey = '';
     syncBattleLogMatch(data || {});
     gameState = data;
     phase = data.phase || phase;
@@ -13244,6 +13417,7 @@ function renderLobby(data) {
                     btn.onclick = () => {
                         pendingSpectateRoomId = Number(g.room_id);
                         activeSpectateRoomId = null;
+                        spectateCardDataKey = '';
                         socket.emit('spectate', { room_id: g.room_id });
                     };
                     row.appendChild(btn);
@@ -14284,8 +14458,13 @@ function roomChatHistoryItemToTimelineEntry(item = {}) {
 
 function syncRoomChatHistory(data = {}) {
     const history = data && data.room_chat_history;
-    if (!history || !Array.isArray(history.items)) return;
     const matchKey = phaseContextMatchKey(data);
+    if (matchKey && battleChatMatchKey && battleChatMatchKey !== matchKey) {
+        battleChatEntries = [];
+        roomChatHistorySignature = '';
+    }
+    if (matchKey) battleChatMatchKey = matchKey;
+    if (!history || !Array.isArray(history.items)) return;
     const signature = JSON.stringify([
         matchKey,
         history.items.map(item => [
@@ -14307,10 +14486,11 @@ function syncRoomChatHistory(data = {}) {
     const battle = entries.filter(entry => !entry.pregame);
     pregameChatEntries = pregame.slice(-500);
     phaseChatEntries = pregame.slice(-500);
-    battleChatEntries = battle.slice(-500);
+    battleChatEntries = battle.map(entry => ({ ...entry, matchKey })).slice(-500);
     if (matchKey) {
         phaseChatMatchKey = matchKey;
         pregameChatMatchKey = matchKey;
+        battleChatMatchKey = matchKey;
     }
     if (phase === 'draft' || phase === 'event_select' || phase === 'event_reveal' || phase === 'event_sub_choice') {
         renderPhaseChat();
@@ -16129,7 +16309,9 @@ function showCombatFloat(selector, text, kind, index = 0, options = {}) {
     const y = rect.top + rect.height * 0.5 + laneY;
     el.style.left = `${Math.min(window.innerWidth - 10, Math.max(10, x))}px`;
     el.style.top = `${Math.min(window.innerHeight - 10, Math.max(10, y))}px`;
-    el.style.setProperty('--float-x', `${side * Math.min(18, 6 + band * 4)}px`);
+    const floatX = side * Math.min(18, 6 + band * 4);
+    el.style.setProperty('--float-x', `${floatX}px`);
+    el.style.setProperty('--float-x-enter', `${floatX * 0.36}px`);
     el.style.setProperty('--float-duration', `${duration}ms`);
     el.dataset.floatId = String(++combatFloatSeq);
     document.body.appendChild(el);
@@ -16144,6 +16326,37 @@ function showCombatFloatSequence(selector, events, interval = 200) {
         }, Math.max(0, event.delay));
     });
     return timeline.events;
+}
+
+function triggerCombatImpact(selector, kind = 'damage', delay = 0) {
+    const region = document.querySelector(selector);
+    if (!region) return;
+    const impactKind = kind === 'poison' || kind === 'fire' ? kind : 'damage';
+    setTimeout(() => {
+        region.classList.remove('combat-impact', 'combat-impact-poison', 'combat-impact-fire');
+        void region.offsetWidth;
+        region.classList.add('combat-impact');
+        if (impactKind === 'poison') region.classList.add('combat-impact-poison');
+        if (impactKind === 'fire') region.classList.add('combat-impact-fire');
+        setTimeout(() => {
+            region.classList.remove('combat-impact', 'combat-impact-poison', 'combat-impact-fire');
+        }, 460);
+    }, Math.max(0, Number(delay) || 0));
+}
+
+function triggerCombatPulse(selector, kind = 'info', delay = 0) {
+    const region = document.querySelector(selector);
+    if (!region) return;
+    setTimeout(() => {
+        region.classList.remove('combat-pulse', 'combat-pulse-heal', 'combat-pulse-resource');
+        void region.offsetWidth;
+        region.classList.add('combat-pulse');
+        if (kind === 'heal') region.classList.add('combat-pulse-heal');
+        if (kind === 'elixir' || kind === 'magic' || kind === 'armor') region.classList.add('combat-pulse-resource');
+        setTimeout(() => {
+            region.classList.remove('combat-pulse', 'combat-pulse-heal', 'combat-pulse-resource');
+        }, 420);
+    }, Math.max(0, Number(delay) || 0));
 }
 
 function scheduleSkinDamageMoods(playerId, events) {
@@ -16561,10 +16774,11 @@ function showStateDeltas(previous, next) {
             damageHits.forEach((hit, hitIndex) => {
                 const amount = Number(hit && hit.amount);
                 if (!Number.isFinite(amount) || amount <= 0) return;
-                const delay = hitIndex * 200;
+                const delay = hitIndex * COMBAT_HIT_STEP_MS;
                 stagedHealth = Number.isFinite(Number(hit.health)) ? Number(hit.health) : stagedHealth - amount;
                 lastHealthDelay = delay;
                 skinDamageEvents.push({ delay, kind: hit.visualKind || 'damage' });
+                triggerCombatImpact(ref.selector, hit.visualKind || 'damage', delay);
                 events.push({
                     text: `-${amount}H`,
                     kind: 'damage',
@@ -16590,15 +16804,23 @@ function showStateDeltas(previous, next) {
         } else if (healthDelta < 0) {
             events.push({ text: `${healthDelta}H`, kind: 'damage', barKey: 'health', barValue: newHealth, barMax: healthMax });
             skinDamageEvents.push({ delay: 0, kind: 'damage' });
+            triggerCombatImpact(ref.selector, inferredStatusDamageKind || 'damage', 0);
         } else if (healthDelta > 0) {
             events.push({ text: `+${healthDelta}H`, kind: 'heal', barKey: 'health', barValue: newHealth, barMax: healthMax });
+            triggerCombatPulse(ref.selector, 'heal', 0);
         }
-        if (armorDelta > 0) events.push({ text: `+${armorDelta}A`, kind: 'armor' });
-        else if (armorDelta < 0) events.push({ text: `${armorDelta}A`, kind: 'armor' });
-        if (poisonDelta > 0) events.push({ text: `+${poisonDelta}P`, kind: 'poison' });
-        else if (poisonDelta < 0) events.push({ text: `${poisonDelta}P`, kind: 'poison' });
-        if (fireDelta > 0) events.push({ text: `+${fireDelta}F`, kind: 'fire' });
-        else if (fireDelta < 0) events.push({ text: `${fireDelta}F`, kind: 'fire' });
+        if (armorDelta > 0) {
+            events.push({ text: `+${armorDelta}A`, kind: 'armor' });
+            triggerCombatPulse(ref.selector, 'armor', 40);
+        } else if (armorDelta < 0) events.push({ text: `${armorDelta}A`, kind: 'armor' });
+        if (poisonDelta > 0) {
+            events.push({ text: `+${poisonDelta}P`, kind: 'poison' });
+            triggerCombatPulse(ref.selector, 'poison', 70);
+        } else if (poisonDelta < 0) events.push({ text: `${poisonDelta}P`, kind: 'poison' });
+        if (fireDelta > 0) {
+            events.push({ text: `+${fireDelta}F`, kind: 'fire' });
+            triggerCombatPulse(ref.selector, 'fire', 70);
+        } else if (fireDelta < 0) events.push({ text: `${fireDelta}F`, kind: 'fire' });
         let stagedElixir = oldElixir;
         let stagedMagic = oldMagic;
         const barStartValues = {};
@@ -16638,11 +16860,13 @@ function showStateDeltas(previous, next) {
         }
         if (elixirDelta > 0) {
             events.push({ text: `+${elixirDelta}E`, kind: 'elixir', delay: resourceDelay, stackIndex: resourceCost ? 1 : undefined, barKey: 'elixir', barValue: newElixir, barMax: elixirMax });
+            triggerCombatPulse(ref.selector, 'elixir', resourceDelay);
         } else if (elixirDelta < 0) {
             events.push({ text: `${elixirDelta}E`, kind: 'elixir', delay: resourceDelay, stackIndex: resourceCost ? 1 : undefined, barKey: 'elixir', barValue: newElixir, barMax: elixirMax });
         }
         if (magicDelta > 0) {
             events.push({ text: `+${magicDelta}M`, kind: 'magic', delay: resourceDelay, stackIndex: resourceCost ? 2 : undefined, barKey: 'magic', barValue: newMagic, barMax: magicMax });
+            triggerCombatPulse(ref.selector, 'magic', resourceDelay + 40);
         } else if (magicDelta < 0) {
             events.push({ text: `${magicDelta}M`, kind: 'magic', delay: resourceDelay, stackIndex: resourceCost ? 2 : undefined, barKey: 'magic', barValue: newMagic, barMax: magicMax });
         }
@@ -17467,6 +17691,7 @@ function resetBattleLogState(content) {
     gameTimelineEntries = [];
     battleChatEntries = [];
     roomChatHistorySignature = '';
+    battleChatMatchKey = '';
     renderedBattleLogCount = 0;
     renderedBattleLogTotal = 0;
     renderedClassicLogSignature = '';
@@ -17721,7 +17946,11 @@ function compactBattleLogEntriesForDisplay(log) {
 
 function buildBattleTimelineEntries(log) {
     const entries = [];
-    const chats = (battleChatEntries || []).slice().sort((a, b) => Number(a.logAnchor || 0) - Number(b.logAnchor || 0));
+    const currentMatchKey = phaseContextMatchKey(gameState);
+    const chats = (battleChatEntries || [])
+        .filter(entry => !currentMatchKey || !entry.matchKey || entry.matchKey === currentMatchKey)
+        .slice()
+        .sort((a, b) => Number(a.logAnchor || 0) - Number(b.logAnchor || 0));
     pregameChatEntries.forEach((entry, index) => {
         entries.push({ ...entry, pregame: true, pregameChatSeed: index === 0 });
     });
@@ -17962,11 +18191,17 @@ function renderLobbyChatHistory(data = {}) {
 }
 
 function appendGameChat(nick, text, meta = {}, channelMeta = {}) {
+    const matchKey = phaseContextMatchKey(gameState);
     const entry = makeChatTimelineEntry(nick, text, {
         ...meta,
         log_anchor: meta.log_anchor ?? meta.logAnchor ?? Number(gameState && gameState.log_total != null ? gameState.log_total : ((gameState && Array.isArray(gameState.log)) ? gameState.log.length : 0)),
     }, channelMeta);
-    appendCompressedTimelineChat(battleChatEntries, entry, 500);
+    if (matchKey && battleChatMatchKey && battleChatMatchKey !== matchKey) {
+        battleChatEntries = [];
+        roomChatHistorySignature = '';
+    }
+    if (matchKey) battleChatMatchKey = matchKey;
+    appendCompressedTimelineChat(battleChatEntries, { ...entry, matchKey }, 500);
     renderLog((gameState && gameState.log) || [], (gameState && gameState.log_start) || 0, gameState && gameState.log_total);
 }
 
@@ -18324,6 +18559,14 @@ function animatePlayedCard(cardInstanceId, options = {}) {
             flash.style.setProperty('--play-dx', `${dx}px`);
             flash.style.setProperty('--play-dy', `${dy}px`);
             targeted = true;
+            setTimeout(() => {
+                const burst = document.createElement('div');
+                burst.className = 'card-impact-burst';
+                burst.style.left = `${targetRect.left + targetRect.width / 2}px`;
+                burst.style.top = `${targetRect.top + targetRect.height / 2}px`;
+                document.body.appendChild(burst);
+                setTimeout(() => burst.remove(), 520);
+            }, 310);
         }
     }
     document.body.appendChild(flash);
@@ -20031,8 +20274,8 @@ async function syncModSelectionBeforeInviteAccept() {
 
 function buildModQueryString() {
     const params = new URLSearchParams();
-    params.set('disabled_mods', getDisabledMods().join(','));
-    const community = getCommunityModSelection();
+    params.set('disabled_mods', getEffectiveDisabledModsForData().join(','));
+    const community = getEffectiveCommunityModSelectionForData();
     params.set('mod_source', community.mod_source);
     if (community.mod_source === 'community') {
         params.set('community_mods', JSON.stringify(community.community_mods));
@@ -20961,6 +21204,7 @@ async function init() {
     if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());
     if ($('btn-friends-top')) $('btn-friends-top').addEventListener('click', () => toggleFriendsPopover());
     if ($('btn-skin-top')) $('btn-skin-top').addEventListener('click', openSkinEditor);
+    if ($('btn-changelog-top')) $('btn-changelog-top').addEventListener('click', openChangelog);
     if ($('btn-leaderboard-top')) $('btn-leaderboard-top').addEventListener('click', () => toggleLeaderboardPopover());
     if ($('btn-skin-back')) $('btn-skin-back').addEventListener('click', () => showView('view-login'));
     if ($('btn-skin-save')) $('btn-skin-save').addEventListener('click', saveSkinFromEditor);
@@ -21144,6 +21388,7 @@ async function init() {
     });
     if ($('about-tab-rules')) $('about-tab-rules').addEventListener('click', () => setAboutPage('rules'));
     if ($('about-tab-credits')) $('about-tab-credits').addEventListener('click', () => setAboutPage('credits'));
+    if ($('about-tab-changelog')) $('about-tab-changelog').addEventListener('click', () => setAboutPage('changelog'));
     if ($('btn-about-close')) $('btn-about-close').addEventListener('click', closeAbout);
     if ($('btn-credit-discord')) $('btn-credit-discord').addEventListener('click', () => window.open('https://discord.gg/JgjnsAEXMC', '_blank', 'noopener'));
     if ($('btn-credit-bilibili')) $('btn-credit-bilibili').addEventListener('click', () => window.open('https://space.bilibili.com/1490695733', '_blank', 'noopener'));
