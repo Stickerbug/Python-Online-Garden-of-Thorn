@@ -8,6 +8,7 @@ let completionItems = [];
 let completionIndex = -1;
 let completionAbort = null;
 let completionLine = '';
+let completionAppliedLine = '';
 
 function showLogin(show) {
   $('console-login').classList.toggle('hidden', !show);
@@ -98,7 +99,6 @@ function appendEntry(kind, text, prefix = '') {
 function clearOutput() {
   $('console-output').innerHTML = '';
   appendEntry('info', 'GTN 管理控制台已就绪。输入 help 查看命令。', '[INFO]');
-  scheduleCompletions(0);
 }
 
 async function checkAuth() {
@@ -169,6 +169,7 @@ function hideCompletions() {
   completionItems = [];
   completionIndex = -1;
   completionLine = '';
+  completionAppliedLine = '';
   const box = $('console-completions');
   box.classList.add('hidden');
   box.innerHTML = '';
@@ -176,7 +177,7 @@ function hideCompletions() {
 
 function applyCompletion(value, options = {}) {
   const input = $('console-command');
-  const raw = input.value;
+  const raw = options.baseLine ?? completionLine ?? input.value;
   const trailing = raw.endsWith(' ');
   const parts = raw.split(/\s+/);
   if (trailing || !parts.length) {
@@ -184,9 +185,13 @@ function applyCompletion(value, options = {}) {
   } else {
     parts[parts.length - 1] = value;
   }
-  input.value = parts.filter(Boolean).join(' ') + (options.addSpace ? ' ' : '');
+  const nextValue = parts.filter(Boolean).join(' ') + (options.addSpace ? ' ' : '');
+  input.value = nextValue;
+  completionAppliedLine = nextValue;
   input.focus();
-  hideCompletions();
+  if (!options.keepOpen) {
+    hideCompletions();
+  }
 }
 
 function activeCompletionValue() {
@@ -200,6 +205,7 @@ function renderCompletions(items) {
   completionItems = items || [];
   completionIndex = completionItems.length ? 0 : -1;
   completionLine = $('console-command').value;
+  completionAppliedLine = '';
   if (!completionItems.length) {
     hideCompletions();
     return;
@@ -231,9 +237,11 @@ async function refreshCompletions() {
     if (!response.ok) return;
     const data = await response.json();
     renderCompletions(data.items || []);
+    return data.items || [];
   } catch (err) {
     if (err.name !== 'AbortError') hideCompletions();
   }
+  return [];
 }
 
 function moveCompletion(delta) {
@@ -250,6 +258,32 @@ function scheduleCompletions(delay = 80) {
   $('console-command')._completeTimer = window.setTimeout(refreshCompletions, delay);
 }
 
+function completionStillOwnsInput() {
+  const value = $('console-command').value;
+  if (!completionItems.length || $('console-completions').classList.contains('hidden')) return false;
+  if (completionAppliedLine) return value === completionAppliedLine;
+  return value === completionLine;
+}
+
+async function tabComplete(delta = 1) {
+  const input = $('console-command');
+  if (!completionStillOwnsInput()) {
+    const items = await refreshCompletions();
+    if (!items.length) return;
+    completionIndex = delta < 0 ? items.length - 1 : 0;
+    moveCompletion(0);
+    applyCompletion(activeCompletionValue(), { keepOpen: true, baseLine: completionLine });
+    return;
+  }
+  if (!completionAppliedLine) {
+    applyCompletion(activeCompletionValue(), { keepOpen: true, baseLine: completionLine });
+    return;
+  }
+  moveCompletion(delta);
+  applyCompletion(activeCompletionValue(), { keepOpen: true, baseLine: completionLine });
+  input.focus();
+}
+
 function bindEvents() {
   $('console-login-form').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -262,23 +296,18 @@ function bindEvents() {
   $('console-command-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const input = $('console-command');
-    const active = activeCompletionValue();
-    if (active && !$('console-completions').classList.contains('hidden') && input.value === completionLine) {
-      applyCompletion(active, { addSpace: false });
-      scheduleCompletions(0);
-      return;
-    }
     const line = input.value;
     input.value = '';
     runCommand(line);
   });
 
   $('console-command').addEventListener('input', () => {
+    completionAppliedLine = '';
     scheduleCompletions(80);
   });
 
   $('console-command').addEventListener('focus', () => {
-    if (!$('console-command').value || !$('console-completions').classList.contains('hidden')) {
+    if ($('console-command').value || !$('console-completions').classList.contains('hidden')) {
       scheduleCompletions(0);
     }
   });
@@ -287,11 +316,7 @@ function bindEvents() {
     const input = $('console-command');
     if (event.key === 'Tab') {
       event.preventDefault();
-      if (!completionItems.length) {
-        refreshCompletions();
-      } else {
-        moveCompletion(event.shiftKey ? -1 : 1);
-      }
+      tabComplete(event.shiftKey ? -1 : 1);
       return;
     }
     if (event.key === 'ArrowDown' && completionItems.length) {
