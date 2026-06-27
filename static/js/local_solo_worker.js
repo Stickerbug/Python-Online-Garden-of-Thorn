@@ -4855,8 +4855,7 @@ class LocalSoloEngine {
 
     statusApplicationBlocked(playerId, status) {
         if (!this.players[playerId]) return true;
-        if (['status_immune', 'immune', '状态免疫', 'dodge', '闪避'].includes(String(status || ''))) return false;
-        return this.isStatusImmune(playerId);
+        return false;
     }
 
     actionLimitStatusValue(playerId, attr, ...aliases) {
@@ -5202,7 +5201,9 @@ class LocalSoloEngine {
                 const result = pending.is_precision
                     ? this.executeCardEffectHalfDamage(playerId, card, choice)
                     : this.executeCardEffect(playerId, card, choice);
-                responder.dodge = Math.min(toInt(responder.dodge, 0), dodgeBeforeCounter);
+                if (!this.isStatusImmune(responderId)) {
+                    responder.dodge = Math.min(toInt(responder.dodge, 0), dodgeBeforeCounter);
+                }
                 return result;
             }
             if (removed.def_id === 'MagicBubble') this.negated_card = true;

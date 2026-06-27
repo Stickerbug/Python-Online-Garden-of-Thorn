@@ -3304,8 +3304,6 @@ function updateStaticText() {
     if (aboutTabRules) aboutTabRules.textContent = UI.about_gameplay;
     const aboutTabCredits = $('about-tab-credits');
     if (aboutTabCredits) aboutTabCredits.textContent = UI.about_credits;
-    const aboutTabChangelog = $('about-tab-changelog');
-    if (aboutTabChangelog) aboutTabChangelog.textContent = UI.about_changelog || '更新日志';
     const creditsDeveloper = $('credits-developer-title');
     if (creditsDeveloper) creditsDeveloper.textContent = UI.credits_developer;
     const creditsDesign = $('credits-design-title');
@@ -3332,6 +3330,11 @@ function updateStaticText() {
     if (btnSkinTop) btnSkinTop.textContent = UI.skin;
     const btnChangelogTop = $('btn-changelog-top');
     if (btnChangelogTop) btnChangelogTop.textContent = UI.about_changelog || '更新日志';
+    const changelogTitle = $('changelog-popover-title');
+    if (changelogTitle) changelogTitle.textContent = UI.about_changelog || '更新日志';
+    if (changelogCache && Array.isArray(changelogCache.items) && !$('changelog-popover')?.classList.contains('hidden')) {
+        renderChangelogItems(changelogCache.items);
+    }
     const btnLeaderboardTop = $('btn-leaderboard-top');
     if (btnLeaderboardTop) btnLeaderboardTop.textContent = UI.leaderboard || '排行榜';
     const skinTitle = $('skin-title');
@@ -3722,6 +3725,7 @@ function showView(viewId) {
         toggleAccountPopover(false);
         toggleFriendsPopover(false);
         toggleStatsPopover(false);
+        toggleChangelogPopover(false);
         toggleLeaderboardPopover(false);
     }
     if (!sameView && viewId !== 'view-game') {
@@ -3817,20 +3821,14 @@ function bindRulesCardLinks(root) {
 
 function setAboutPage(page) {
     const isCredits = page === 'credits';
-    const isChangelog = page === 'changelog';
     const rulesPage = $('about-page-rules');
     const creditsPage = $('about-page-credits');
-    const changelogPage = $('about-page-changelog');
     const rulesTab = $('about-tab-rules');
     const creditsTab = $('about-tab-credits');
-    const changelogTab = $('about-tab-changelog');
-    if (rulesPage) rulesPage.classList.toggle('hidden', isCredits || isChangelog);
+    if (rulesPage) rulesPage.classList.toggle('hidden', isCredits);
     if (creditsPage) creditsPage.classList.toggle('hidden', !isCredits);
-    if (changelogPage) changelogPage.classList.toggle('hidden', !isChangelog);
-    if (rulesTab) rulesTab.classList.toggle('active', !isCredits && !isChangelog);
+    if (rulesTab) rulesTab.classList.toggle('active', !isCredits);
     if (creditsTab) creditsTab.classList.toggle('active', isCredits);
-    if (changelogTab) changelogTab.classList.toggle('active', isChangelog);
-    if (isChangelog) loadChangelog();
 }
 
 function formatNamedTemplate(template, values) {
@@ -3915,6 +3913,12 @@ function ensureTutorialButtons() {
 
 let changelogLoaded = false;
 let changelogLoadingPromise = null;
+let changelogCache = null;
+const CHANGELOG_CACHE_KEY = 'gtn_changelog_cache_v1';
+
+function currentChangelogCacheVersion() {
+    return String(window.__GTN_STATIC_VERSION__ || window.__GTN_APP_VERSION__ || window.__GTN_INSTANCE_ID__ || 'dev');
+}
 
 function formatChangelogDate(dateText) {
     const date = new Date(`${dateText}T00:00:00`);
@@ -3932,7 +3936,7 @@ function formatChangelogDate(dateText) {
 }
 
 function renderChangelogItems(items) {
-    const body = $('about-changelog-body');
+    const body = $('changelog-popover-body');
     if (!body) return;
     body.textContent = '';
     if (!Array.isArray(items) || !items.length) {
@@ -3960,15 +3964,32 @@ function renderChangelogItems(items) {
 async function loadChangelog(force = false) {
     if (changelogLoaded && !force) return;
     if (changelogLoadingPromise) return changelogLoadingPromise;
-    const body = $('about-changelog-body');
+    const body = $('changelog-popover-body');
+    const cacheVersion = currentChangelogCacheVersion();
+    if (!force) {
+        try {
+            const cached = JSON.parse(localStorage.getItem(CHANGELOG_CACHE_KEY) || 'null');
+            if (cached && cached.version === cacheVersion && Array.isArray(cached.items)) {
+                changelogCache = cached;
+                changelogLoaded = true;
+                renderChangelogItems(cached.items);
+                return;
+            }
+        } catch (_) {}
+    }
     if (body && !changelogLoaded) {
         body.innerHTML = `<p class="muted">${escapeHtml(UI.loading || 'Loading...')}</p>`;
     }
-    changelogLoadingPromise = fetch('/api/changelog?limit=20', { cache: 'no-store' })
+    changelogLoadingPromise = fetch('/api/changelog?limit=20', { cache: 'default' })
         .then(resp => resp.ok ? resp.json() : Promise.reject(new Error(`HTTP ${resp.status}`)))
         .then(data => {
             changelogLoaded = true;
-            renderChangelogItems(data && data.items || []);
+            const items = data && data.items || [];
+            changelogCache = { version: cacheVersion, serverVersion: data && data.version || '', items, savedAt: Date.now() };
+            try {
+                localStorage.setItem(CHANGELOG_CACHE_KEY, JSON.stringify(changelogCache));
+            } catch (_) {}
+            renderChangelogItems(items);
         })
         .catch(() => {
             if (body) {
@@ -3996,9 +4017,20 @@ function openAbout() {
 }
 
 function openChangelog() {
-    const panel = $('about-panel');
-    if (panel) panel.classList.remove('hidden');
-    setAboutPage('changelog');
+    toggleChangelogPopover(true);
+}
+
+function toggleChangelogPopover(force) {
+    const pop = $('changelog-popover');
+    if (!pop) return;
+    const shouldOpen = typeof force === 'boolean' ? force : pop.classList.contains('hidden');
+    pop.classList.toggle('hidden', !shouldOpen);
+    if (shouldOpen) {
+        toggleLeaderboardPopover(false);
+        if (typeof toggleAccountPopover === 'function') toggleAccountPopover(false);
+        if (typeof toggleFriendsPopover === 'function') toggleFriendsPopover(false);
+        loadChangelog();
+    }
 }
 
 function closeAbout() {
@@ -7782,8 +7814,9 @@ function getStatusIntroItem(statusInfo) {
         magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
-        status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。闪避不属于状态。', color: '#16A085' },
-        immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。闪避不属于状态。', color: '#16A085' },
+        dodge: { label: UI.status_dodge || '闪避', desc: '受到攻击牌攻击时消耗1层，使普通攻击无效；若攻击带有精准，则改为造成一半伤害。状态免疫存在时，闪避层数可以累积，但不会生效或被消耗。', color: COLORS.guard },
+        status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。', color: '#16A085' },
+        immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。', color: '#16A085' },
         stunned: { label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         attack_blocked: { label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
@@ -7822,8 +7855,9 @@ function getStatusIntroItem(statusInfo) {
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: getTermIntroLibrary().magic_nazar.desc },
         equip_protect: { label: UI.status_equip_protect, desc: lt({ zh: builtIns.equip_protect.desc, en: 'Prevents equipment from being destroyed by destroy effects.', fr: 'Empêche un équipement d’être détruit par les effets de destruction.', ja: '装備が破壊効果で破壊されるのを防ぎます。' }) },
         invincible: { label: UI.status_invincible, desc: lt({ zh: builtIns.invincible.desc, en: 'While invincible, damage does not cause defeat.', fr: 'Pendant l’invincibilité, les dégâts ne provoquent pas la défaite.', ja: '無敵中はダメージで敗北しません。' }) },
-        status_immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, harmful states do not take effect.', fr: 'Tant que cet effet existe, les états néfastes ne prennent pas effet.', ja: '存在中、悪性状態は効果を発揮しません。' }) },
-        immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, harmful states do not take effect.', fr: 'Tant que cet effet existe, les états néfastes ne prennent pas effet.', ja: '存在中、悪性状態は効果を発揮しません。' }) },
+        dodge: { label: UI.status_dodge || 'Dodge', desc: lt({ zh: builtIns.dodge.desc, en: 'When attacked by a Thorn card, consume 1 stack to dodge it. Precision attacks deal half damage instead. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Lorsqu’une carte Thorn vous attaque, consomme 1 charge pour l’esquiver. Les attaques Precision infligent la moitié des dégâts. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: 'Thornカードで攻撃された時、1層消費して回避します。Precision攻撃は半分のダメージになります。状態免疫中は回避を蓄積できますが、発動も消費もされません。' }) },
+        status_immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。' }) },
+        immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。' }) },
         stunned: { label: UI.status_stunned, desc: lt({ zh: builtIns.stunned.desc, en: 'At your turn, lose 1 stack and skip active actions. Passive equipment still works.', fr: 'À votre tour, perdez 1 charge et sautez vos actions actives. Les équipements passifs fonctionnent encore.', ja: '自分のターンに1層減り、能動行動をスキップします。装備の受動効果は通常通りです。' }) },
         attack_blocked: { label: UI.status_attack_blocked, desc: lt({ zh: builtIns.attack_blocked.desc, en: 'You cannot play Thorn cards while this effect lasts.', fr: 'Vous ne pouvez pas jouer de cartes Thorn tant que cet effet dure.', ja: '効果中、Thornカードを使用できません。' }) },
         attack_only: { label: UI.status_attack_only, desc: lt({ zh: builtIns.attack_only.desc, en: 'You can only play Thorn cards while this effect lasts.', fr: 'Vous ne pouvez jouer que des cartes Thorn tant que cet effet dure.', ja: '効果中、Thornカードしか使用できません。' }) },
@@ -21205,6 +21239,7 @@ async function init() {
     if ($('btn-friends-top')) $('btn-friends-top').addEventListener('click', () => toggleFriendsPopover());
     if ($('btn-skin-top')) $('btn-skin-top').addEventListener('click', openSkinEditor);
     if ($('btn-changelog-top')) $('btn-changelog-top').addEventListener('click', openChangelog);
+    if ($('btn-changelog-popover-close')) $('btn-changelog-popover-close').addEventListener('click', () => toggleChangelogPopover(false));
     if ($('btn-leaderboard-top')) $('btn-leaderboard-top').addEventListener('click', () => toggleLeaderboardPopover());
     if ($('btn-skin-back')) $('btn-skin-back').addEventListener('click', () => showView('view-login'));
     if ($('btn-skin-save')) $('btn-skin-save').addEventListener('click', saveSkinFromEditor);
@@ -21388,7 +21423,6 @@ async function init() {
     });
     if ($('about-tab-rules')) $('about-tab-rules').addEventListener('click', () => setAboutPage('rules'));
     if ($('about-tab-credits')) $('about-tab-credits').addEventListener('click', () => setAboutPage('credits'));
-    if ($('about-tab-changelog')) $('about-tab-changelog').addEventListener('click', () => setAboutPage('changelog'));
     if ($('btn-about-close')) $('btn-about-close').addEventListener('click', closeAbout);
     if ($('btn-credit-discord')) $('btn-credit-discord').addEventListener('click', () => window.open('https://discord.gg/JgjnsAEXMC', '_blank', 'noopener'));
     if ($('btn-credit-bilibili')) $('btn-credit-bilibili').addEventListener('click', () => window.open('https://space.bilibili.com/1490695733', '_blank', 'noopener'));

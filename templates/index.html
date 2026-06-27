@@ -61,6 +61,15 @@
 <button id="btn-changelog-top" class="changelog-top-btn">更新日志</button>
 <button id="btn-leaderboard-top" class="leaderboard-top-btn">排行榜</button>
 </div>
+<div id="changelog-popover" class="changelog-popover account-popover hidden">
+  <div class="account-popover-head">
+    <div id="changelog-popover-title" class="account-popover-title">更新日志</div>
+    <button id="btn-changelog-popover-close" class="account-close-btn" type="button">×</button>
+  </div>
+  <div id="changelog-popover-body" class="changelog-popover-body">
+    <p class="muted">暂无更新日志。</p>
+  </div>
+</div>
 <div id="account-popover" class="account-popover hidden">
   <div class="account-popover-head">
     <div id="account-popover-title" class="account-popover-title">账号</div>
@@ -769,7 +778,6 @@
 <div class="settings-tabs">
 <button id="about-tab-rules" class="settings-tab active" type="button">游戏玩法</button>
 <button id="about-tab-credits" class="settings-tab" type="button">致谢</button>
-<button id="about-tab-changelog" class="settings-tab" type="button">更新日志</button>
 </div>
 <div id="about-page-rules" class="about-rules">
 <div class="rules-body about-rules-body" id="about-rules-body">
@@ -813,11 +821,6 @@
 <p>CommonGoldIngot</p>
 <p>2EX7427</p>
 </section>
-</div>
-<div id="about-page-changelog" class="settings-changelog hidden">
-<div id="about-changelog-body" class="about-changelog-body">
-<p class="muted">暂无更新日志。</p>
-</div>
 </div>
 <div class="settings-footer">
 <button id="btn-about-close" class="btn btn-primary">确定</button>
@@ -928,6 +931,7 @@
       window.__GTN_INSTANCE_ID__ = {{ instance_id|default('local')|tojson }};
       window.__GTN_INSTANCE_PORT__ = {{ instance_port|default('')|tojson }};
       window.__GTN_APP_VERSION__ = {{ app_version|default('dev')|tojson }};
+      window.__GTN_STATIC_VERSION__ = {{ static_version|default('dev')|tojson }};
     </script>
     <script src="/static/js/game.js?v={{ static_version|default('dev')|urlencode }}"></script>
 </body>

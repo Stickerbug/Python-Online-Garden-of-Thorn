@@ -298,6 +298,14 @@ def read_changelog_items(limit=20):
     return items[:limit]
 
 
+def changelog_version():
+    try:
+        st = os.stat(CHANGELOG_PATH)
+        return f'{int(st.st_mtime)}-{int(st.st_size)}'
+    except Exception:
+        return ''
+
+
 def is_instance_draining():
     if _DRAIN_OVERRIDE is not None:
         return bool(_DRAIN_OVERRIDE)
@@ -2658,7 +2666,29 @@ def _room_current_action_player_disconnected(room, engine) -> bool:
     return bool(current_sid and current_sid in getattr(room, 'disconnected_players', {}))
 
 
+def _pending_player_id(pending, fallback=None):
+    if not isinstance(pending, dict):
+        return fallback
+    for key in ('player_id', 'target_player_id', 'responder_id'):
+        if key in pending:
+            try:
+                return int(pending.get(key))
+            except Exception:
+                return fallback
+    return fallback
+
+
 def _room_action_timer_paused(engine, room=None):
+    try:
+        current = int(getattr(engine, 'current_player', -1))
+    except Exception:
+        current = -1
+    pending_choice = getattr(engine, 'pending_choice', None)
+    if pending_choice and _pending_player_id(pending_choice, current) != current:
+        return True
+    pending_v2_ui = getattr(engine, 'pending_v2_ui', None)
+    if pending_v2_ui and _pending_player_id(pending_v2_ui, current) != current:
+        return True
     return bool(
         getattr(engine, 'pending_response', None)
         or getattr(engine, 'pending_ally_request', None)
@@ -4471,6 +4501,69 @@ def has_reconnect_candidate_locked(nickname='', user_id=None, account_player_id=
             if name_key and normalize_username_key(profile.get('nickname', '')) == name_key:
                 return True
     return False
+
+
+def _same_login_identity(player, name_key='', user_id=None, account_player_id='', beta_mode=False):
+    if not player or bool(player.get('beta_mode', False)) != bool(beta_mode):
+        return False
+    if user_id and player.get('user_id') == user_id:
+        return True
+    account_player_id = str(account_player_id or '')
+    if account_player_id and str(player.get('account_player_id') or '') == account_player_id:
+        return True
+    return bool(name_key and normalize_username_key(player.get('nickname', '')) == name_key)
+
+
+def _can_take_over_online_session(player, name_key='', user_id=None, account_player_id='', beta_mode=False, client_ip=''):
+    if not _same_login_identity(player, name_key, user_id, account_player_id, beta_mode):
+        return False
+    if user_id or account_player_id:
+        return True
+    # Guests have no stable account identity.  Only allow replacing a same-IP
+    # stale session, which covers network hiccups without letting another user
+    # steal an active guest nickname immediately.
+    if client_ip and player.get('ip') == client_ip:
+        if player.get('status') in {'in_game', 'reconnecting', 'spectating', 'solo', 'tutorial'}:
+            return True
+        last_seen = float(player.get('last_lobby_activity_at') or player.get('login_at') or 0)
+        return time.time() - last_seen >= 15
+    return False
+
+
+def _take_over_online_session_locked(old_sid, reason='login_reconnect'):
+    """Remove a stale online sid while preserving room reconnect metadata."""
+    if old_sid not in players:
+        return False
+    player = players[old_sid]
+    mark_player_session_last_seen_locked(player, exclude_sid=old_sid)
+    room_id = player.get('room_id')
+    spectating_room = player.get('spectating_room')
+    if room_id is not None and room_id in rooms:
+        room = rooms[room_id]
+        pidx = room.player_index(old_sid)
+        if pidx >= 0 and getattr(room.engine, 'phase', '') != 'game_over':
+            profile = room.store_player_profile(old_sid, pidx, player)
+            profile['disconnect_time'] = time.time()
+            room.disconnected_players[old_sid] = dict(profile)
+            admin_event('player', f'{reason}: prepared stale session for reconnect room={room_id}', sid=old_sid, room_id=room_id)
+        elif pidx < 0:
+            player['room_id'] = None
+    if spectating_room is not None and spectating_room in rooms:
+        room = rooms[spectating_room]
+        if old_sid in room.spectators:
+            room.spectators.remove(old_sid)
+    solo_sessions.pop(old_sid, None)
+    tutorial_sessions.discard(old_sid)
+    for inv_sid, target_sid in list(invites.items()):
+        if inv_sid == old_sid or target_sid == old_sid:
+            del invites[inv_sid]
+    if old_sid in teams:
+        team = teams[old_sid]
+        for member_sid in list(team.get('members', [])):
+            if member_sid in teams:
+                del teams[member_sid]
+    del players[old_sid]
+    return True
 
 
 def reject_new_match_if_draining(sids=None, event_name='match_start'):
@@ -8426,6 +8519,7 @@ def health_full():
 def api_changelog():
     return jsonify({
         'success': True,
+        'version': changelog_version(),
         'items': read_changelog_items(request.args.get('limit', 20)),
     })
 
@@ -10131,6 +10225,7 @@ def on_login(data):
     except Exception as exc:
         emit('login_fail', {'reason': f'社区模组加载失败: {exc}'})
         return
+    stale_disconnect_sids = []
     if not _lock.acquire(timeout=0.5):
         snapshot = _lock.snapshot() if hasattr(_lock, 'snapshot') else {}
         admin_event('warning', f'login skipped: global lock busy held={snapshot.get("held_seconds", 0)}s')
@@ -10138,10 +10233,32 @@ def on_login(data):
         return
     try:
         name_key = normalize_username_key(name)
-        for p in players.values():
-            if bool(p.get('beta_mode', False)) == bool(is_beta_mode) and normalize_username_key(p.get('nickname', '')) == name_key:
+        takeover_sids = []
+        account_player_id = account_user.get('player_id') if account_user else ''
+        client_ip = _client_ip()
+        for old_sid, p in list(players.items()):
+            if _can_take_over_online_session(
+                p,
+                name_key=name_key,
+                user_id=user_id,
+                account_player_id=account_player_id,
+                beta_mode=is_beta_mode,
+                client_ip=client_ip,
+            ):
+                takeover_sids.append(old_sid)
+                continue
+            if _same_login_identity(
+                p,
+                name_key=name_key,
+                user_id=user_id,
+                account_player_id=account_player_id,
+                beta_mode=is_beta_mode,
+            ):
                 emit('login_fail', {'reason': 'Nickname already exists'})
                 return
+        for old_sid in takeover_sids:
+            if _take_over_online_session_locked(old_sid, reason='login_takeover'):
+                stale_disconnect_sids.append(old_sid)
         reconnect_room = None
         reconnect_old_sid = None
         reconnect_probe = {
@@ -10212,6 +10329,11 @@ def on_login(data):
         admin_event('player', f'{"[beta] " if is_beta_mode else ""}{name} joined as {initial_status}', sid=sid, mode=preferred_mode)
     finally:
         _lock.release()
+    for old_sid in stale_disconnect_sids:
+        try:
+            socketio.server.disconnect(old_sid)
+        except Exception as exc:
+            admin_event('error', f'login takeover disconnect old sid failed: {exc}', sid=old_sid)
     if reconnect_room:
         reconnect_info = (
             reconnect_room.disconnected_players.get(reconnect_old_sid)
@@ -11998,6 +12120,11 @@ def on_play_card(data):
         except Exception:
             replay_def_id = ''
         if room.mode == '2v2':
+            if target_player_id >= 0:
+                choice = dict(choice or {})
+                choice.setdefault('target_player', target_player_id)
+                choice.setdefault('target_player_id', target_player_id)
+                choice.setdefault('target_id', target_player_id)
             result = engine.play_card(pidx, card_instance_id, target_player_id=target_player_id, choice=choice)
         else:
             if target_player_id >= 0:
@@ -12156,6 +12283,7 @@ def on_ally_consent_response(data):
         if not getattr(engine, 'pending_ally_request', None):
             soft_reject(sid, 'ally_consent_response', 'NO_PENDING_CHOICE', '没有待同意的队友用牌', room=room, pidx=pidx, send_state=True)
             return
+        requester_id = _pending_player_id(getattr(engine, 'pending_ally_request', None), None)
         result = engine.handle_ally_consent(pidx, accepted)
         _stamp_pending_interactions(room)
     finally:
@@ -12169,7 +12297,7 @@ def on_ally_consent_response(data):
         _sync_room_action_timer_after_state_change(room)
     emit_turn_timer_update(room)
     if result.get('needs_response'):
-        _add_room_action_timer_bonus(room, expected_player=pidx)
+        _add_room_action_timer_bonus(room, expected_player=requester_id)
         broadcast_game_state(room)
         emit_or_resolve_pending_response(room, reason='ally_consent')
     elif result.get('needs_choice'):
@@ -12182,6 +12310,9 @@ def on_ally_consent_response(data):
     elif not result.get('success'):
         emit('server_error', {'message': result.get('error', 'Operation failed')})
     else:
+        if accepted:
+            _add_room_action_timer_bonus(room, expected_player=requester_id)
+            emit_turn_timer_update(room)
         broadcast_game_state(room)
 
 
@@ -12324,6 +12455,9 @@ def on_v2_ui_response(data):
         broadcast_game_state(room)
         emit_room_v2_ui_request(room)
     elif result.get('success'):
+        if not result.get('cancelled') and str(button).lower() not in ('cancel', 'close', 'timeout'):
+            _add_room_action_timer_bonus(room, expected_player=pidx)
+            emit_turn_timer_update(room)
         broadcast_game_state(room)
     else:
         code = normalize_soft_reject_code(result.get('error')) or 'PENDING_V2_UI'

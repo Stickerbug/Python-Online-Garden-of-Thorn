@@ -708,6 +708,19 @@ body {
   overflow: auto;
 }
 
+.changelog-popover {
+  left: 14px;
+  width: min(420px, calc(100vw - 28px));
+  max-height: min(520px, calc(100vh - 76px));
+  overflow: hidden;
+}
+
+.changelog-popover-body {
+  max-height: calc(min(520px, calc(100vh - 76px)) - 54px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .leaderboard-popover {
   left: 14px;
   width: min(660px, calc(100vw - 28px));
@@ -2472,8 +2485,7 @@ body {
 }
 
 #about-page-rules,
-#about-page-credits,
-#about-page-changelog {
+#about-page-credits {
   min-height: 0;
   flex: 1 1 auto;
   overflow-y: auto;
@@ -2481,8 +2493,7 @@ body {
 }
 
 #about-page-rules.hidden,
-#about-page-credits.hidden,
-#about-page-changelog.hidden {
+#about-page-credits.hidden {
   display: none;
 }
 
@@ -2504,7 +2515,7 @@ body {
   text-decoration: none;
 }
 
-.about-changelog-body {
+.changelog-popover-body {
   display: grid;
   gap: 12px;
   padding: 4px 2px 8px;

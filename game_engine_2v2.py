@@ -563,10 +563,12 @@ class GameEngine2v2(GameEngine):
                 if counter_removed.def_id == 'Bubble':
                     if is_precision:
                         self._execute_card_effect_half_damage(player_id, card, choice)
-                        responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
+                        if not self._is_status_immune(responder_id):
+                            responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
                         return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
                     self._execute_card_effect(player_id, card, choice)
-                    responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
+                    if not self._is_status_immune(responder_id):
+                        responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
                     return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
                 if counter_removed.def_id == 'MagicBubble':
                     self.negated_card = True
@@ -926,6 +928,8 @@ class GameEngine2v2(GameEngine):
             if choice is None:
                 choice = {}
             choice['target_player'] = target_player_id
+            choice['target_player_id'] = target_player_id
+            choice['target_id'] = target_player_id
         if self.game_over:
             return {'success': False, 'error': '娓告垙宸茬粡缁撴潫'}
         if self.current_player != player_id:

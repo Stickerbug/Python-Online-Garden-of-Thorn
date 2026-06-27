@@ -746,7 +746,7 @@ class GameEngine:
         status = str(status or '').strip()
         if status in ('status_immune', 'immune', '状态免疫'):
             return 1 if self._is_status_immune(target_id) else 0
-        if self._is_status_immune(target_id) and status not in ('status_immune', 'immune', '状态免疫', 'dodge', '闪避'):
+        if self._is_status_immune(target_id) and status not in ('status_immune', 'immune', '状态免疫'):
             return 0
         counts = {
             'poison': ps.poison,
@@ -803,10 +803,8 @@ class GameEngine:
     def _status_application_blocked(self, target_id: int, status: str) -> bool:
         if not (0 <= target_id < len(self.players)):
             return True
-        status = str(status or '').strip()
-        if status in ('status_immune', 'immune', '状态免疫', 'dodge', '闪避'):
-            return False
-        return self._is_status_immune(target_id)
+        # 状态免疫只让状态暂时不起作用，不阻止状态被施加、叠层或按自身规则衰减。
+        return False
 
     def _custom_status_definition(self, status):
         status = str(status or '').strip()
@@ -4313,10 +4311,12 @@ class GameEngine:
                 if counter_removed.def_id == 'Bubble':
                     if is_precision:
                         self._execute_card_effect_half_damage(player_id, card, choice)
-                        responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
+                        if not self._is_status_immune(responder_id):
+                            responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
                         return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
                     self._execute_card_effect(player_id, card, choice)
-                    responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
+                    if not self._is_status_immune(responder_id):
+                        responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
                     return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
                 if counter_removed.def_id == 'MagicBubble':
                     self.negated_card = True
@@ -6609,7 +6609,7 @@ class GameEngine:
         if op == 'has_status_named':
             tid = self._resolve_target(player_id, cond.get('target', 'self'))
             status = str(cond.get('status', '')).strip()
-            if self._is_status_immune(tid) and status not in ('status_immune', 'immune', '状态免疫', 'dodge', '闪避'):
+            if self._is_status_immune(tid) and status not in ('status_immune', 'immune', '状态免疫'):
                 return False
             if status == '邪眼':
                 return bool(self.players[tid].nazar_active)
@@ -6638,7 +6638,7 @@ class GameEngine:
         if op == 'has_status':
             tid = self._resolve_target(player_id, cond.get('target', 'self'))
             status = str(cond.get('status', '')).strip()
-            if self._is_status_immune(tid) and status not in ('status_immune', 'immune', '状态免疫', 'dodge', '闪避'):
+            if self._is_status_immune(tid) and status not in ('status_immune', 'immune', '状态免疫'):
                 return False
             ps = self.players[tid]
             status_map = {
@@ -7590,7 +7590,7 @@ class GameEngine:
         if isinstance(cond, dict) and cond.get('op') in ('has_status_named', 'has_status'):
             target_id = self._resolve_target(player_id, cond.get('target', 'self'))
             status_name = str(cond.get('name', cond.get('status', cond.get('id', ''))))
-            if self._is_status_immune(target_id) and status_name not in ('status_immune', 'immune', '状态免疫', 'dodge', '闪避'):
+            if self._is_status_immune(target_id) and status_name not in ('status_immune', 'immune', '状态免疫'):
                 return False
         if isinstance(cond, dict) and cond.get('op') == 'list_contains':
             values = self._eval_list(player_id, cond.get('list', []), card)
@@ -7727,7 +7727,12 @@ class GameEngine:
                 if not hasattr(self, method_name):
                     dmg = self._modified_attack_damage(card_damage, card)
                     is_precision = 'precision' in card.flags
-                    self.deal_attack_damage(1 - player_id, dmg, card_hits_val, is_precision=is_precision)
+                    if hasattr(self, '_selected_attack_target'):
+                        target_id = self._selected_attack_target(player_id, choice)
+                    else:
+                        target_id = 1 - player_id
+                    if 0 <= int(target_id) < len(self.players):
+                        self.deal_attack_damage(target_id, dmg, card_hits_val, is_precision=is_precision, attacker_id=player_id, source_card=card)
             if self._card_has_v2_event(card.card_def, 'on_play'):
                 self._run_v2_card_event(player_id, card, 'on_play', choice)
                 return

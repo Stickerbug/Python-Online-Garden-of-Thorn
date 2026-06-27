@@ -1355,31 +1355,10 @@ def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str) 
 
 
 def _status_application_blocked_by_immunity(engine, player_id: int, status_id: str, amount: int, op: str) -> bool:
-    if op == "remove_status":
-        return False
-    try:
-        next_amount = int(amount or 0)
-    except Exception:
-        next_amount = 0
-    if next_amount <= 0:
-        return False
-    status_key = str(status_id or "").split(":")[-1]
-    if status_key in ("status_immune", "immune", "状态免疫", "dodge", "闪避"):
-        return False
-    checker = getattr(engine, "_status_application_blocked", None)
-    if callable(checker):
-        for candidate in (status_id, status_key):
-            try:
-                if checker(player_id, candidate):
-                    return True
-            except Exception:
-                continue
-        return False
-    immune = getattr(engine, "_is_status_immune", None)
-    try:
-        return bool(callable(immune) and immune(player_id))
-    except Exception:
-        return False
+    if not _valid_player(engine, player_id):
+        return True
+    # 状态免疫不阻止状态写入，只压制状态生效。
+    return False
 
 
 def _status_stack(engine, player_id: int, status_id: str) -> int:
