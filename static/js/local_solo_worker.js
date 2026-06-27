@@ -1369,7 +1369,7 @@ class LocalSoloEngine {
                     mana.instance_flags.add('symbiosis');
                     this.applySetupModifiersToCard(playerId, mana);
                     ps.deck[idx] = mana;
-                    this.logMsg(`${this.pn(playerId)}【魔力转化】：${cardName(sourceDef)}变为魔法球(萌芽+共生)`);
+                    this.logMsg(`${this.pn(playerId)}【魔力转化】：${cardName(sourceDef)}变为[[card:ManaOrb|flag=sprout|flag=symbiosis]]`);
                 }
             });
         } else if (eventId === 3) {
@@ -1385,7 +1385,7 @@ class LocalSoloEngine {
                     converted += 1;
                 }
             });
-            this.logMsg(`${this.pn(playerId)}【光之洗礼】：${converted}张牌变为Light(萌芽+共生)`);
+            this.logMsg(`${this.pn(playerId)}【光之洗礼】：${converted}张牌变为[[card:Light|flag=sprout|flag=symbiosis]]`);
         } else if (eventId === 4) {
             if (!this.statusApplicationBlocked(1 - playerId, 'fire')) {
                 opp.fire += 2;

@@ -761,6 +761,7 @@ function renderRegisteredUserCard(user) {
   const detail = registeredUserDetails.get(key);
   const winRate = formatPercent(user.win_rate);
   const playTime = formatUptime(user.play_seconds || 0);
+  const thornDewTotal = Number(user.thorn_dew_total ?? ((Number(user.thorn_dew_free || 0) || 0) + (Number(user.thorn_dew_paid || 0) || 0))) || 0;
   const detailsHtml = expanded ? renderRegisteredUserDetails(user, detail) : '';
   return `
     <article class="registered-user-card ${expanded ? 'expanded' : ''}">
@@ -785,6 +786,7 @@ function renderRegisteredUserCard(user) {
           <span><b>${escapeHtml(user.draws || 0)}</b> 平</span>
           <span><b>${escapeHtml(winRate)}</b> 胜率</span>
           <span><b class="admin-data">${escapeHtml(playTime)}</b> 总对局时长</span>
+          <span><b>${escapeHtml(thornDewTotal)}</b> 荆露</span>
         </div>
         <span class="expand-mark">${expanded ? '收起' : '详情'}</span>
       </button>
@@ -801,6 +803,10 @@ function renderRegisteredUserDetails(user, detail) {
   }
   const matches = detail.matches || [];
   const online = (detail.user && detail.user.online) || user.online;
+  const detailUser = detail.user || user;
+  const thornDewFree = Number(detailUser.thorn_dew_free || 0) || 0;
+  const thornDewPaid = Number(detailUser.thorn_dew_paid || 0) || 0;
+  const thornDewTotal = Number(detailUser.thorn_dew_total ?? (thornDewFree + thornDewPaid)) || 0;
   return `
     <div class="registered-user-details">
       <div class="user-detail-grid">
@@ -813,6 +819,7 @@ function renderRegisteredUserDetails(user, detail) {
             <div><dt>注册时间</dt><dd class="admin-data">${escapeHtml(formatAdminTime(user.created_at))}</dd></div>
             <div><dt>上次下线</dt><dd class="admin-data">${escapeHtml(formatAdminTime(user.last_login_at))}</dd></div>
             <div><dt>总对局时长</dt><dd class="admin-data">${escapeHtml(formatUptime(user.play_seconds || 0))}</dd></div>
+            <div><dt>荆露</dt><dd>${escapeHtml(thornDewTotal)} <span class="muted">普通 ${escapeHtml(thornDewFree)} / 充值 ${escapeHtml(thornDewPaid)}</span></dd></div>
             <div><dt>当前状态</dt><dd>${online ? `${escapeHtml(labelFrom(STATUS_LABELS, online.status))} ${online.room_id != null ? `#${escapeHtml(online.room_id)}` : ''}` : '离线'}</dd></div>
           </dl>
         </div>

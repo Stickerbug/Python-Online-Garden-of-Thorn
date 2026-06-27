@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GTN 管理控制台</title>
+<link rel="stylesheet" href="/static/css/adminconsole.css?v=1">
+</head>
+<body class="console-body">
+<main class="console-root">
+  <section id="console-login" class="console-login">
+    <div class="console-login-card">
+      <div class="console-kicker">Garden of Thorn</div>
+      <h1>管理控制台</h1>
+      <p>输入控制台密码以继续。此页面不会加载管理台重型面板。</p>
+      <form id="console-login-form" autocomplete="off">
+        <input id="console-password" type="password" autocomplete="current-password" placeholder="Console password" autofocus>
+        <button type="submit">进入</button>
+      </form>
+      <div id="console-login-error" class="console-login-error" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section id="console-shell" class="console-shell hidden" aria-label="GTN 管理控制台">
+    <header class="console-header">
+      <div>
+        <div class="console-title">GTN Admin Console</div>
+        <div id="console-status" class="console-status">connected</div>
+      </div>
+      <div class="console-actions">
+        <a href="/adminpage" target="_blank" rel="noopener">adminpage</a>
+        <a href="/handling" target="_blank" rel="noopener">handling</a>
+        <button id="console-clear" type="button">clear</button>
+        <button id="console-logout" type="button">logout</button>
+      </div>
+    </header>
+
+    <div id="console-output" class="console-output" role="log" aria-live="polite"></div>
+
+    <div id="console-completions" class="console-completions hidden"></div>
+
+    <form id="console-command-form" class="console-input-row" autocomplete="off">
+      <span class="console-prompt">&gt;</span>
+      <input id="console-command" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="控制台命令">
+    </form>
+  </section>
+</main>
+<script src="/static/js/adminconsole.js?v=1"></script>
+</body>
+</html>

@@ -368,6 +368,10 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN online_session_started_at TEXT')
         if 'play_seconds' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN play_seconds INTEGER DEFAULT 0')
+        if 'thorn_dew_free' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN thorn_dew_free INTEGER DEFAULT 0')
+        if 'thorn_dew_paid' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN thorn_dew_paid INTEGER DEFAULT 0')
         _assign_missing_player_ids(conn)
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_last_login ON users(last_login_at)')
@@ -393,6 +397,27 @@ def init_db():
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_user_roles_type_sort ON user_roles(role_type, sort_order)')
         _seed_builtin_user_roles(conn)
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS user_currency_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                currency TEXT NOT NULL,
+                free_delta INTEGER NOT NULL DEFAULT 0,
+                paid_delta INTEGER NOT NULL DEFAULT 0,
+                reason TEXT,
+                source_type TEXT,
+                source_id TEXT,
+                balance_free_after INTEGER NOT NULL DEFAULT 0,
+                balance_paid_after INTEGER NOT NULL DEFAULT 0,
+                admin_username TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_currency_tx_user ON user_currency_transactions(user_id, id DESC)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_currency_tx_created ON user_currency_transactions(created_at)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS remember_tokens (
@@ -840,7 +865,7 @@ def row_to_user(row):
     if row is None:
         return None
     skin_raw = row['skin_json'] if 'skin_json' in row.keys() else None
-    return {
+    data = {
         'id': row['id'],
         'username': row['username'],
         'player_id': row['player_id'] if 'player_id' in row.keys() else None,
@@ -864,8 +889,12 @@ def row_to_user(row):
         'online_seconds': int(row['online_seconds'] or 0) if 'online_seconds' in row.keys() else 0,
         'online_session_started_at': row['online_session_started_at'] if 'online_session_started_at' in row.keys() else None,
         'play_seconds': int(row['play_seconds'] or 0) if 'play_seconds' in row.keys() else 0,
+        'thorn_dew_free': max(0, int(row['thorn_dew_free'] or 0)) if 'thorn_dew_free' in row.keys() else 0,
+        'thorn_dew_paid': max(0, int(row['thorn_dew_paid'] or 0)) if 'thorn_dew_paid' in row.keys() else 0,
         'skin': normalize_skin_config(skin_raw),
     }
+    data['thorn_dew_total'] = data['thorn_dew_free'] + data['thorn_dew_paid']
+    return data
 
 
 def row_to_admin_user(row):
@@ -876,6 +905,138 @@ def row_to_admin_user(row):
     wins = int(user.get('wins') or 0)
     user['win_rate'] = round(wins / games * 100, 1) if games else 0.0
     return user
+
+
+def _thorn_dew_payload(row_or_user):
+    if row_or_user is None:
+        return {'free': 0, 'paid': 0, 'total': 0}
+    getter = row_or_user.get if isinstance(row_or_user, dict) else row_or_user.__getitem__
+    try:
+        free = max(0, int(getter('thorn_dew_free') or 0))
+    except Exception:
+        free = 0
+    try:
+        paid = max(0, int(getter('thorn_dew_paid') or 0))
+    except Exception:
+        paid = 0
+    return {'free': free, 'paid': paid, 'total': free + paid}
+
+
+def get_user_thorn_dew(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return _thorn_dew_payload(None)
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT thorn_dew_free, thorn_dew_paid FROM users WHERE id = ?', (uid,)).fetchone()
+        return _thorn_dew_payload(row)
+
+
+def adjust_user_thorn_dew(user_id, free_delta=0, paid_delta=0, reason='', source_type='admin', source_id='', admin_username=''):
+    try:
+        uid = int(user_id)
+        free_delta = int(free_delta or 0)
+        paid_delta = int(paid_delta or 0)
+    except (TypeError, ValueError):
+        return None, '参数无效'
+    if free_delta == 0 and paid_delta == 0:
+        return None, '调整数量不能为0'
+    now = utc_now()
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            return None, '账号不存在'
+        free_before = max(0, int(row['thorn_dew_free'] or 0)) if 'thorn_dew_free' in row.keys() else 0
+        paid_before = max(0, int(row['thorn_dew_paid'] or 0)) if 'thorn_dew_paid' in row.keys() else 0
+        free_after = free_before + free_delta
+        paid_after = paid_before + paid_delta
+        if free_after < 0 or paid_after < 0:
+            return None, '余额不足'
+        conn.execute(
+            'UPDATE users SET thorn_dew_free = ?, thorn_dew_paid = ? WHERE id = ?',
+            (free_after, paid_after, uid),
+        )
+        conn.execute(
+            '''
+            INSERT INTO user_currency_transactions (
+                user_id, currency, free_delta, paid_delta, reason, source_type, source_id,
+                balance_free_after, balance_paid_after, admin_username, created_at
+            )
+            VALUES (?, 'thorn_dew', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                uid,
+                free_delta,
+                paid_delta,
+                str(reason or '')[:300],
+                str(source_type or '')[:80],
+                str(source_id or '')[:120],
+                free_after,
+                paid_after,
+                str(admin_username or '')[:80],
+                now,
+            ),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        return row_to_user(row), None
+
+
+def spend_user_thorn_dew(user_id, amount, reason='', source_type='spend', source_id='', admin_username=''):
+    try:
+        amount = int(amount or 0)
+    except (TypeError, ValueError):
+        return None, '数量无效'
+    if amount <= 0:
+        return None, '数量必须大于0'
+    balance = get_user_thorn_dew(user_id)
+    if balance['total'] < amount:
+        return None, '荆露不足'
+    free_spent = min(balance['free'], amount)
+    paid_spent = amount - free_spent
+    return adjust_user_thorn_dew(
+        user_id,
+        free_delta=-free_spent,
+        paid_delta=-paid_spent,
+        reason=reason,
+        source_type=source_type,
+        source_id=source_id,
+        admin_username=admin_username,
+    )
+
+
+def list_user_thorn_dew_transactions(user_id, limit=30):
+    try:
+        uid = int(user_id)
+        safe_limit = max(1, min(int(limit or 30), 100))
+    except (TypeError, ValueError):
+        return []
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            '''
+            SELECT * FROM user_currency_transactions
+            WHERE user_id = ? AND currency = 'thorn_dew'
+            ORDER BY id DESC
+            LIMIT ?
+            ''',
+            (uid, safe_limit),
+        ).fetchall()
+        return [
+            {
+                'id': row['id'],
+                'free_delta': row['free_delta'],
+                'paid_delta': row['paid_delta'],
+                'reason': row['reason'],
+                'source_type': row['source_type'],
+                'source_id': row['source_id'],
+                'balance_free_after': row['balance_free_after'],
+                'balance_paid_after': row['balance_paid_after'],
+                'balance_total_after': int(row['balance_free_after'] or 0) + int(row['balance_paid_after'] or 0),
+                'admin_username': row['admin_username'],
+                'created_at': row['created_at'],
+            }
+            for row in rows
+        ]
 
 
 LEADERBOARD_PRIOR_GAMES = 50

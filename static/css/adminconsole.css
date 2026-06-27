@@ -1,0 +1,274 @@
+:root {
+  color-scheme: dark;
+  --bg: #080b0e;
+  --panel: #0f1419;
+  --panel-2: #111a22;
+  --line: #28323d;
+  --text: #d8e1ea;
+  --muted: #83909c;
+  --green: #75d98a;
+  --red: #ff6b6b;
+  --yellow: #f0c66a;
+  --blue: #7db7ff;
+  --cyan: #74e0db;
+  --purple: #c49bff;
+  --orange: #ffad66;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+button,
+input,
+a {
+  font: inherit;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.console-root {
+  min-height: 100vh;
+  padding: 18px;
+}
+
+.console-login {
+  min-height: calc(100vh - 36px);
+  display: grid;
+  place-items: center;
+}
+
+.console-login-card {
+  width: min(460px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  padding: 24px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.35);
+}
+
+.console-kicker {
+  color: var(--cyan);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.console-login-card h1 {
+  margin: 8px 0 10px;
+  font-size: 24px;
+}
+
+.console-login-card p {
+  margin: 0 0 18px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.console-login-card form,
+.console-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.console-login-card input,
+.console-input-row input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #06090c;
+  color: var(--text);
+  padding: 10px 12px;
+  outline: none;
+}
+
+.console-login-card input:focus,
+.console-input-row input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px rgba(116, 224, 219, 0.25);
+}
+
+.console-login-card button,
+.console-actions button,
+.console-actions a {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #18212b;
+  color: var(--text);
+  padding: 9px 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.console-login-card button:hover,
+.console-actions button:hover,
+.console-actions a:hover {
+  border-color: var(--cyan);
+  color: #ffffff;
+}
+
+.console-login-error {
+  min-height: 22px;
+  margin-top: 12px;
+  color: var(--red);
+}
+
+.console-shell {
+  height: calc(100vh - 36px);
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.console-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  background: #0b1116;
+  padding: 10px 12px;
+}
+
+.console-title {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.console-status {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.console-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.console-output {
+  overflow: auto;
+  padding: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  scrollbar-color: #536170 #0b1116;
+  scrollbar-width: thin;
+}
+
+.console-entry {
+  padding: 1px 0;
+}
+
+.console-entry.command {
+  color: var(--cyan);
+  margin-top: 8px;
+}
+
+.console-entry.ok .entry-prefix {
+  color: var(--green);
+}
+
+.console-entry.err .entry-prefix {
+  color: var(--red);
+}
+
+.console-entry.info .entry-prefix {
+  color: var(--blue);
+}
+
+.console-token.command {
+  color: var(--cyan);
+}
+
+.console-token.error {
+  color: var(--red);
+}
+
+.console-token.warning {
+  color: var(--yellow);
+}
+
+.console-token.room {
+  color: var(--purple);
+}
+
+.console-token.id {
+  color: var(--blue);
+}
+
+.console-token.number {
+  color: var(--orange);
+}
+
+.console-token.time {
+  color: #aeb8c2;
+}
+
+.console-completions {
+  max-height: 180px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  background: var(--panel-2);
+  padding: 6px;
+}
+
+.completion-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.completion-item.active,
+.completion-item:hover {
+  background: #20303d;
+  color: #fff;
+}
+
+.console-input-row {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  background: #070b0f;
+  padding: 9px 12px;
+}
+
+.console-prompt {
+  color: var(--green);
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .console-root {
+    padding: 8px;
+  }
+
+  .console-shell {
+    height: calc(100vh - 16px);
+  }
+
+  .console-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

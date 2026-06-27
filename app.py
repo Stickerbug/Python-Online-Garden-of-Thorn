@@ -16,6 +16,7 @@ import threading
 import copy
 import shutil
 import shlex
+import difflib
 import hashlib
 import platform
 import subprocess
@@ -65,6 +66,7 @@ from db import (
     admin_change_user_password,
     admin_set_user_ban,
     admin_set_user_role,
+    adjust_user_thorn_dew,
     add_friend_request,
     change_username,
     change_user_password,
@@ -85,6 +87,7 @@ from db import (
     get_ip_ban_status,
     get_active_user_warnings,
     get_user_ban_status,
+    get_user_thorn_dew,
     get_report_detail,
     get_user_by_id,
     get_user_role_profile,
@@ -97,6 +100,7 @@ from db import (
     list_ip_bans,
     list_reports,
     list_user_roles,
+    list_user_thorn_dew_transactions,
     begin_user_online_session,
     mark_user_last_seen,
     mark_friend_notifications_read_for_user,
@@ -119,6 +123,7 @@ from db import (
     send_dm_message,
     set_ip_ban,
     set_user_mute,
+    spend_user_thorn_dew,
     soft_delete_user,
     update_user_skin,
     update_user_social_settings,
@@ -442,6 +447,8 @@ LOBBY_IDLE_TIMEOUT_SECONDS = int(os.environ.get('LOBBY_IDLE_TIMEOUT_SECONDS', '6
 LOBBY_IDLE_CHECK_SECONDS = int(os.environ.get('LOBBY_IDLE_CHECK_SECONDS', '60'))
 DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2:sha256:260000$82e7gAIa0D6034Qq$a0c9a5ad6028ce6c8798abc1314bc74b099b2441c3f39c3b3e6255ea2156f06b'
 ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', DEFAULT_ADMIN_PASSWORD_HASH)
+DEFAULT_ADMIN_CONSOLE_PASSWORD_HASH = 'scrypt:32768:8:1$37ezeWM6dBx97XH0$733f3b74ee3092ac5422eb19df05ff626cb251150a74ed3e03a6e7dd7799607d18123cf6e4b7d518e78e50c1700240f34c9411eb52761b1f9d695ff71c4309af'
+ADMIN_CONSOLE_PASSWORD_HASH = os.environ.get('ADMIN_CONSOLE_PASSWORD_HASH', DEFAULT_ADMIN_CONSOLE_PASSWORD_HASH)
 DEFAULT_HANDLING_PASSWORD_HASH = 'scrypt:32768:8:1$6XzIIWqGawFYwXIn$7edc14f2c68bde8881dfc98df724aaafa88f04236ff1fa461450d6010422ff0129b1cda604bde7d422b355bd2e5d6bb8126e740251cee2722c53a7443fc4f24a'
 HANDLING_PASSWORD_HASH = os.environ.get('HANDLING_PASSWORD_HASH', DEFAULT_HANDLING_PASSWORD_HASH)
 DEFAULT_BETA_ACCESS_KEY_HASH = 'scrypt:32768:8:1$GIMYfhSs9RpKMGUK$6f592ac96112ce2f7323012956fc2624890779b9f540c4b7601aff88e3635b3aea26157143eb26874b11cbe30f7da33b25e46285f1f547a846a3f12dc740eb0b'
@@ -824,6 +831,10 @@ def is_admin_authenticated():
     return bool(session.get('admin_authenticated'))
 
 
+def is_admin_console_authenticated():
+    return bool(session.get('admin_console_authenticated'))
+
+
 def is_handling_authenticated():
     return bool(session.get('handling_authenticated')) or is_admin_authenticated()
 
@@ -1152,8 +1163,9 @@ def protect_admin_api():
         g._admin_api_timing_logged = False
     admin_surface = (
         path.startswith('/api/admin/')
+        or path.startswith('/api/adminconsole/')
         or path.startswith('/api/handling/')
-        or path in {'/admin', '/adminpage', '/handling'}
+        or path in {'/admin', '/adminpage', '/adminconsole', '/handling'}
     )
     if DB_AVAILABLE and not admin_surface and not path.startswith('/static/') and not path.startswith('/fonts/') and path != '/favicon.ico':
         try:
@@ -1170,6 +1182,9 @@ def protect_admin_api():
             return (f'IP 已被封禁（{suffix}）：{reason}', 403, {'Content-Type': 'text/plain; charset=utf-8'})
     public_paths = {'/api/admin/login', '/api/admin/me'}
     if path.startswith('/api/admin/') and path not in public_paths and not is_admin_authenticated():
+        return admin_unauthorized()
+    console_public_paths = {'/api/adminconsole/login', '/api/adminconsole/me'}
+    if path.startswith('/api/adminconsole/') and path not in console_public_paths and not is_admin_console_authenticated():
         return admin_unauthorized()
     handling_public_paths = {'/api/handling/login', '/api/handling/me'}
     if path.startswith('/api/handling/') and path not in handling_public_paths and not is_handling_authenticated():
@@ -5530,40 +5545,280 @@ def get_admin_status_payload_cached():
             _ADMIN_STATUS_LOCK.release()
 
 
+ADMIN_COMMAND_TREE = {
+    'help': {
+        'summary': '显示命令帮助',
+        'usage': 'help [一级命令] [二级命令]',
+        'children': {},
+    },
+    'player': {
+        'summary': '玩家与账号',
+        'usage': 'player <list|get|kick|mute|ban|unban|password|role|dew> ...',
+        'children': {
+            'list': {'summary': '列出在线玩家', 'usage': 'player list'},
+            'get': {'summary': '查看在线玩家或注册账号详情', 'usage': 'player get <sid|昵称|ID|注册顺序|用户名>'},
+            'kick': {'summary': '踢出在线玩家', 'usage': 'player kick <sid|昵称>'},
+            'mute': {'summary': '禁言在线玩家', 'usage': 'player mute <sid|昵称> [秒数]'},
+            'ban': {'summary': '封禁账号并踢下线', 'usage': 'player ban <ID|注册顺序|用户名> [秒数] [原因]'},
+            'unban': {'summary': '解除账号封禁', 'usage': 'player unban <ID|注册顺序|用户名>'},
+            'password': {'summary': '管理员修改账号密码', 'usage': 'player password <ID|注册顺序|用户名> <新密码>'},
+            'role': {'summary': '管理账号身份', 'usage': 'player role list|get|set|clear ...'},
+            'dew': {'summary': '管理荆露', 'usage': 'player dew get|add|addpaid|spend|tx <ID|注册顺序|用户名> [数量] [原因]'},
+        },
+    },
+    'room': {
+        'summary': '房间与对局',
+        'usage': 'room <list|get|players|log|chat|state|skip|end|set|history> ...',
+        'children': {
+            'list': {'summary': '列出当前对局', 'usage': 'room list'},
+            'get': {'summary': '查看房间摘要、倒计时、模组和 pending 状态', 'usage': 'room get <房间ID>'},
+            'players': {'summary': '显示房间内玩家编号、昵称和状态', 'usage': 'room players <房间ID>'},
+            'log': {'summary': '查看房间最近战斗日志', 'usage': 'room log <房间ID> [数量]'},
+            'chat': {'summary': '查看房间最近聊天', 'usage': 'room chat <房间ID> [数量]'},
+            'state': {'summary': '查看精简房间状态 JSON', 'usage': 'room state <房间ID>'},
+            'skip': {'summary': '尝试跳过当前回合', 'usage': 'room skip <房间ID>'},
+            'end': {'summary': '强制结束对局', 'usage': 'room end <房间ID> <winner|draw>'},
+            'set': {'summary': '修改玩家基础数值', 'usage': 'room set <房间ID> <玩家序号> <h|e|m|armor|dodge|poison|burn|toxic|vulnerable> <数值>'},
+            'history': {'summary': '查看最近历史对局', 'usage': 'room history [数量]'},
+        },
+    },
+    'card': {
+        'summary': '对局内卡牌操作',
+        'usage': 'card <add|remove> ...',
+        'children': {
+            'add': {'summary': '向玩家手牌加入卡牌', 'usage': 'card add <房间ID> <玩家序号> <卡牌ID> [数量] [tags=tag1,tag2] [fusion=层数] [fission=层数]'},
+            'remove': {'summary': '删除玩家卡牌', 'usage': 'card remove <房间ID> <玩家序号> <hand|deck|discard|exile|equipment|all> <卡牌ID|all|#序号|instance=ID> [数量|all]'},
+        },
+    },
+    'mod': {
+        'summary': '模组与卡池',
+        'usage': 'mod <list|loadout> ...',
+        'children': {
+            'list': {'summary': '列出已加载模组', 'usage': 'mod list'},
+            'loadout': {'summary': '查看玩家或房间的模组组合', 'usage': 'mod loadout <sid|昵称|房间ID>'},
+        },
+    },
+    'chat': {
+        'summary': '聊天与广播',
+        'usage': 'chat <broadcast|lobby|mute> ...',
+        'children': {
+            'broadcast': {'summary': '发送服务器广播', 'usage': 'chat broadcast <内容>'},
+            'lobby': {'summary': '查看大厅聊天缓存', 'usage': 'chat lobby [数量]'},
+            'mute': {'summary': '禁言在线玩家', 'usage': 'chat mute <sid|昵称> [秒数]'},
+        },
+    },
+    'server': {
+        'summary': '服务器状态与维护',
+        'usage': 'server <status|drain|pull|logs|suspicious|clear> ...',
+        'children': {
+            'status': {'summary': '显示服务器摘要', 'usage': 'server status'},
+            'drain': {'summary': '设置/查看静默更新排空模式', 'usage': 'server drain [on|off|status]'},
+            'pull': {'summary': '手动拉取 GitHub origin/main', 'usage': 'server pull'},
+            'logs': {'summary': '查看最近管理事件', 'usage': 'server logs [数量]'},
+            'suspicious': {'summary': '查看最近可疑安全事件', 'usage': 'server suspicious [数量]'},
+            'clear': {'summary': '清空终端输出', 'usage': 'server clear'},
+        },
+    },
+    'storage': {
+        'summary': '数据、统计与回放',
+        'usage': 'storage <summary|draftstats|rebuildstats> ...',
+        'children': {
+            'summary': {'summary': '查看数据库、回放和快照占用', 'usage': 'storage summary'},
+            'draftstats': {'summary': '查看卡牌选牌抽取率统计', 'usage': 'storage draftstats [1v1|2v2]'},
+            'rebuildstats': {'summary': '按永久 matches 摘要重算账号战绩和总对局时长', 'usage': 'storage rebuildstats confirm'},
+        },
+    },
+    'report': {
+        'summary': '举报与安全记录',
+        'usage': 'report <suspicious> ...',
+        'children': {
+            'suspicious': {'summary': '查看最近可疑安全事件', 'usage': 'report suspicious [数量]'},
+        },
+    },
+    'diagnose': {
+        'summary': '一键诊断',
+        'usage': 'diagnose <server|room|player|stuck> ...',
+        'children': {
+            'server': {'summary': '诊断服务器健康、锁、房间和数据库', 'usage': 'diagnose server'},
+            'room': {'summary': '诊断指定房间是否卡住', 'usage': 'diagnose room <房间ID>'},
+            'player': {'summary': '诊断玩家连接、账号、房间和模组', 'usage': 'diagnose player <sid|昵称|ID|用户名>'},
+            'stuck': {'summary': '列出疑似卡住的房间', 'usage': 'diagnose stuck'},
+        },
+    },
+}
+
 ADMIN_COMMANDS = {
-    'help': 'help - 显示可用指令',
-    'status': 'status - 显示服务器摘要',
-    'drain': 'drain [on|off|status] - 设置/查看静默更新排空模式',
-    'players': 'players - 列出在线玩家',
-    'rooms': 'rooms - 列出当前对局',
-    'roomplayers': 'roomplayers <房间ID> - 显示房间内玩家编号、昵称和状态',
-    'logs': 'logs [数量] - 查看最近管理事件',
-    'suspicious': 'suspicious [数量] - 查看最近可疑安全事件',
-    'lobbychat': 'lobbychat [数量] - 查看大厅聊天缓存',
-    'history': 'history [数量] - 查看最近历史对局',
-    'draftstats': 'draftstats [1v1|2v2] - 查看卡牌选牌抽取率统计',
-    'rebuildstats': 'rebuildstats confirm - 按永久 matches 摘要重算账号战绩和总对局时长',
-    'broadcast': 'broadcast <内容> - 发送服务器广播',
-    'kick': 'kick <sid|昵称> - 踢出玩家',
-    'mutechat': 'mutechat <sid|昵称> [秒数] - 禁言在线玩家',
-    'userpass': 'userpass <ID|注册顺序|用户名> <新密码> - 管理员修改账号密码',
-    'banuser': 'banuser <ID|注册顺序|用户名> [秒数] [原因] - 封禁账号并踢下线；不填秒数为永久',
-    'unbanuser': 'unbanuser <ID|注册顺序|用户名> - 解除账号封禁',
-    'role': 'role list|get|set|clear ... - 管理账号身份；例：role set 46namknat staff title=设计师 color=bloom',
-    'gitpull': 'gitpull - 手动拉取 GitHub origin/main（只允许 fast-forward，不覆盖本地改动）',
-    'skip': 'skip <房间ID> - 尝试跳过当前回合',
-    'endgame': 'endgame <房间ID> <winner|draw> - 强制结束对局；winner 可用 0/1，2v2 表示队伍',
-    'set': 'set <房间ID> <玩家序号> <h|e|m|armor|dodge|poison|burn|toxic|vulnerable> <数值>',
-    'givecard': 'givecard <房间ID> <玩家序号> <卡牌ID> [数量] [tags=tag1,tag2] [fusion=层数] [fission=层数] - 向玩家手牌加入卡牌',
-    'delcard': 'delcard <房间ID> <玩家序号> <hand|deck|discard|exile|equipment|all> <卡牌ID|all|#序号|instance=ID> [数量|all] - 删除玩家卡牌',
-    'clear': 'clear - 清空终端输出',
+    'help': 'help [命令] - 显示分层帮助',
+    'player': 'player - 玩家与账号',
+    'room': 'room - 房间与对局',
+    'card': 'card - 对局内卡牌操作',
+    'mod': 'mod - 模组与卡池',
+    'chat': 'chat - 聊天与广播',
+    'server': 'server - 服务器状态与维护',
+    'storage': 'storage - 数据、统计与回放',
+    'report': 'report - 举报与安全记录',
+    'diagnose': 'diagnose - 一键诊断',
+}
+
+ADMIN_LEGACY_COMMANDS = {
+    'status': 'server status',
+    'drain': 'server drain',
+    'players': 'player list',
+    'rooms': 'room list',
+    'roomplayers': 'room players',
+    'logs': 'server logs',
+    'suspicious': 'server suspicious',
+    'lobbychat': 'chat lobby',
+    'history': 'room history',
+    'draftstats': 'storage draftstats',
+    'rebuildstats': 'storage rebuildstats',
+    'broadcast': 'chat broadcast',
+    'kick': 'player kick',
+    'mutechat': 'player mute',
+    'userpass': 'player password',
+    'banuser': 'player ban',
+    'banaccount': 'player ban',
+    'unbanuser': 'player unban',
+    'unbanaccount': 'player unban',
+    'role': 'player role',
+    'userrole': 'player role',
+    'dew': 'player dew',
+    'thorndew': 'player dew',
+    'jinglu': 'player dew',
+    '荆露': 'player dew',
+    'gitpull': 'server pull',
+    'pullmain': 'server pull',
+    'updatecode': 'server pull',
+    'skip': 'room skip',
+    'endgame': 'room end',
+    'set': 'room set',
+    'givecard': 'card add',
+    'delcard': 'card remove',
+    'clear': 'server clear',
 }
 
 
-def command_error(command, pointer=0, expected=''):
+def _usage_for_command(command_path):
+    node = ADMIN_COMMAND_TREE
+    current = None
+    for part in command_path:
+        current = node.get(part) if isinstance(node, dict) else None
+        if not current:
+            return ''
+        node = current.get('children', {})
+    return (current or {}).get('usage', '')
+
+
+def render_admin_help(parts=None):
+    parts = [str(p or '').lower() for p in (parts or []) if str(p or '').strip()]
+    if not parts:
+        lines = ['可用一级命令：']
+        for name, meta in ADMIN_COMMAND_TREE.items():
+            lines.append(f"/{name:<8} {meta.get('summary', '')}")
+        lines.append('')
+        lines.append('输入 /help <命令> 查看二级命令，例如：/help card')
+        return '\n'.join(lines)
+    first = parts[0]
+    if first not in ADMIN_COMMAND_TREE:
+        suggestion = difflib.get_close_matches(first, ADMIN_COMMAND_TREE.keys(), n=1)
+        extra = f"\n你是不是想输入：/{suggestion[0]}" if suggestion else ''
+        return f"未知命令：/{first}{extra}"
+    meta = ADMIN_COMMAND_TREE[first]
+    if len(parts) == 1:
+        lines = [f"/{first} - {meta.get('summary', '')}", '', f"用法：/{meta.get('usage', first)}"]
+        children = meta.get('children', {})
+        if children:
+            lines.extend(['', '子命令：'])
+            for name, child in children.items():
+                lines.append(f"  {name:<12} {child.get('summary', '')}")
+            lines.append('')
+            lines.append(f"输入 /help {first} <子命令> 查看具体用法。")
+        return '\n'.join(lines)
+    second = parts[1]
+    child = meta.get('children', {}).get(second)
+    if not child:
+        suggestion = difflib.get_close_matches(second, meta.get('children', {}).keys(), n=1)
+        extra = f"\n你是不是想输入：/{first} {suggestion[0]}" if suggestion else ''
+        return f"未知子命令：/{first} {second}{extra}"
+    return '\n'.join([
+        f"/{first} {second} - {child.get('summary', '')}",
+        '',
+        f"用法：/{child.get('usage', first + ' ' + second)}",
+    ])
+
+
+def command_error(command, pointer=0, expected='', kind='参数错误'):
     caret = ' ' * max(0, pointer) + '^'
-    detail = f'\n需要：{expected}' if expected else ''
-    return f'未知或不完整的指令\n{command}\n{caret}{detail}'
+    usage = f'\n用法：/{expected}' if expected else ''
+    return f'{kind}\n{command}\n{caret}{usage}'
+
+
+def unknown_command_error(command, cmd):
+    suggestion = difflib.get_close_matches(cmd, list(ADMIN_COMMAND_TREE.keys()) + list(ADMIN_LEGACY_COMMANDS.keys()), n=1)
+    extra = f'\n你是不是想输入：/{suggestion[0]}' if suggestion else ''
+    return f'未知命令：/{cmd}{extra}\n输入 /help 查看可用命令。'
+
+
+def _quote_admin_parts(parts):
+    return ' '.join(shlex.quote(str(part)) for part in parts if str(part) != '')
+
+
+def _translate_structured_admin_command(parts):
+    if not parts:
+        return None, None
+    cmd = parts[0].lower()
+    if cmd not in ADMIN_COMMAND_TREE or cmd == 'help':
+        return None, None
+    sub = parts[1].lower() if len(parts) > 1 else ''
+    rest = parts[2:]
+    command_map = {
+        ('player', 'list'): ['players'],
+        ('player', 'get'): ['playerget', *rest],
+        ('player', 'kick'): ['kick', *rest],
+        ('player', 'mute'): ['mutechat', *rest],
+        ('player', 'ban'): ['banuser', *rest],
+        ('player', 'unban'): ['unbanuser', *rest],
+        ('player', 'password'): ['userpass', *rest],
+        ('player', 'role'): ['role', *rest],
+        ('player', 'dew'): ['dew', *rest],
+        ('room', 'list'): ['rooms'],
+        ('room', 'get'): ['roomget', *rest],
+        ('room', 'players'): ['roomplayers', *rest],
+        ('room', 'log'): ['roomlog', *rest],
+        ('room', 'chat'): ['roomchat', *rest],
+        ('room', 'state'): ['roomstate', *rest],
+        ('room', 'skip'): ['skip', *rest],
+        ('room', 'end'): ['endgame', *rest],
+        ('room', 'set'): ['set', *rest],
+        ('room', 'history'): ['history', *rest],
+        ('card', 'add'): ['givecard', *rest],
+        ('card', 'remove'): ['delcard', *rest],
+        ('mod', 'list'): ['modlist'],
+        ('mod', 'loadout'): ['modloadout', *rest],
+        ('chat', 'broadcast'): ['broadcast', *rest],
+        ('chat', 'lobby'): ['lobbychat', *rest],
+        ('chat', 'mute'): ['mutechat', *rest],
+        ('server', 'status'): ['status'],
+        ('server', 'drain'): ['drain', *rest],
+        ('server', 'pull'): ['gitpull'],
+        ('server', 'logs'): ['logs', *rest],
+        ('server', 'suspicious'): ['suspicious', *rest],
+        ('server', 'clear'): ['clear'],
+        ('storage', 'summary'): ['storagesummary'],
+        ('storage', 'draftstats'): ['draftstats', *rest],
+        ('storage', 'rebuildstats'): ['rebuildstats', *rest],
+        ('report', 'suspicious'): ['suspicious', *rest],
+        ('diagnose', 'server'): ['diagnose-server'],
+        ('diagnose', 'room'): ['diagnose-room', *rest],
+        ('diagnose', 'player'): ['diagnose-player', *rest],
+        ('diagnose', 'stuck'): ['diagnose-stuck'],
+    }
+    if not sub:
+        return None, render_admin_help([cmd])
+    target = command_map.get((cmd, sub))
+    if target is None:
+        return None, render_admin_help([cmd, sub])
+    return _quote_admin_parts(target), None
 
 
 def run_git_command(args, timeout=120):
@@ -5776,6 +6031,263 @@ def format_role_profile(user, profile):
     )
 
 
+def format_thorn_dew_user(user):
+    if not user:
+        return '账号不存在'
+    free = int(user.get('thorn_dew_free') or 0)
+    paid = int(user.get('thorn_dew_paid') or 0)
+    total = free + paid
+    return (
+        f"{user.get('username')} (ID:{user.get('player_id') or '-'} 注册顺序：{user.get('id')})\n"
+        f"荆露：{total}（普通 {free} / 充值 {paid}）"
+    )
+
+
+def _short_hash(value, length=12):
+    text = str(value or '')
+    return text[:length] if text else '-'
+
+
+def _format_loadout_from_meta(meta):
+    if not meta:
+        return '无模组信息'
+    mods = meta.get('mods_list') or []
+    order = meta.get('v2_load_order') or []
+    lines = [
+        f"source={meta.get('mod_source', 'official')}",
+        f"loadout={_short_hash(meta.get('loadout_hash') or meta.get('mods_hash'))}",
+        f"v2={_short_hash(meta.get('v2_loadout_hash'))}",
+        f"disabled={','.join(meta.get('disabled_mods') or []) or '-'}",
+        f"mods={', '.join(mods) if mods else '-'}",
+    ]
+    if order:
+        lines.append(f"v2_order={', '.join(order)}")
+    if meta.get('community_mods'):
+        lines.append(f"community={json.dumps(meta.get('community_mods'), ensure_ascii=False)[:600]}")
+    return '\n'.join(lines)
+
+
+def _find_online_player_for_admin(token):
+    sid = find_player_sid(str(token or ''))
+    if sid and sid in players:
+        return sid, players[sid]
+    lowered = str(token or '').strip().lower()
+    if not lowered:
+        return None, None
+    for psid, player in players.items():
+        if lowered in (
+            str(player.get('account_player_id') or '').lower(),
+            str(player.get('user_id') or '').lower(),
+        ):
+            return psid, player
+    return None, None
+
+
+def _format_online_player_detail(sid, player):
+    lines = [
+        f"在线玩家：{player.get('nickname', '?')}",
+        f"sid={sid}",
+        f"账号ID={player.get('user_id') or '-'} 玩家ID={player.get('account_player_id') or '-'}",
+        f"状态={zh_status(player.get('status'))} 模式={player.get('mode', '-')}",
+        f"房间={player.get('room_id') if player.get('room_id') is not None else '-'} 观战={player.get('spectating_room') if player.get('spectating_room') is not None else '-'}",
+        f"内测={bool(player.get('beta_mode'))}",
+        f"loadout={_short_hash(player_loadout_hash(player))}",
+    ]
+    return '\n'.join(lines)
+
+
+def admin_player_get_output(identifier):
+    sid, player = _find_online_player_for_admin(identifier)
+    blocks = []
+    if player:
+        blocks.append(_format_online_player_detail(sid, player))
+    if DB_AVAILABLE:
+        user = find_user_for_admin(identifier)
+        if user:
+            blocks.append(
+                '\n'.join([
+                    f"注册账号：{user.get('username')}",
+                    f"注册顺序={user.get('id')} 玩家ID={user.get('player_id') or '-'}",
+                    f"有效对局={user.get('games_played', 0)} 胜/负/平={user.get('wins', 0)}/{user.get('losses', 0)}/{user.get('draws', 0)}",
+                    f"总对局时长={format_duration_zh(user.get('play_seconds') or 0)}",
+                    f"荆露={user.get('thorn_dew_total', 0)}（普通 {user.get('thorn_dew_free', 0)} / 充值 {user.get('thorn_dew_paid', 0)}）",
+                    f"创建={admin_display_time(user.get('created_at'))} 上次下线={admin_display_time(user.get('last_login_at'))}",
+                ])
+            )
+    if not blocks:
+        return f'找不到玩家或账号：{identifier}'
+    return '\n\n'.join(blocks)
+
+
+def admin_room_get_output(room_id):
+    rid = int(room_id)
+    if rid not in rooms:
+        return f'不存在房间：{rid}'
+    room = rooms[rid]
+    e = room.engine
+    lines = [
+        f"房间 #{rid} mode={room.mode} beta={bool(getattr(room, 'beta_mode', False))}",
+        f"阶段={zh_phase(getattr(e, 'phase', ''))} 回合={getattr(e, 'round_num', 0)} 当前玩家={getattr(e, 'current_player', '-')}",
+        f"game_over={bool(getattr(e, 'game_over', False))} winner={getattr(e, 'winner', '-')} winning_team={getattr(e, 'winning_team', '-')}",
+        f"观战={len(getattr(room, 'spectators', []) or [])} 日志={len(getattr(e, 'log', []) or [])} 聊天={len(getattr(room, 'chat_history', []) or [])}",
+        f"action_timer_player={getattr(room, 'action_timer_player', None)} remaining={int(getattr(room, 'action_timer_remaining', 0) or 0)}s",
+        f"pending_response={bool(getattr(e, 'pending_response', None))} pending_choice={bool(getattr(e, 'pending_choice', None))} pending_v2_ui={bool(getattr(e, 'pending_v2_ui', None))}",
+        f"disconnected={len(getattr(room, 'disconnected_players', {}) or {})} rematch_votes={len(getattr(room, '_rematch_votes', set()) or set())}",
+        '',
+        '玩家：',
+    ]
+    for pidx, psid in enumerate(getattr(room, 'player_sids', []) or []):
+        ps = e.players[pidx] if pidx < len(getattr(e, 'players', []) or []) else None
+        online = psid in players
+        name = room_player_nickname(room, psid, '?')
+        hp = f"H={ps.health}/{ps.max_health} E={ps.elixir}/{ps.max_elixir} M={ps.magic}/{ps.max_magic}" if ps else ''
+        lines.append(f"  {pidx}: {name} sid={psid} {'在线' if online else '断线/离线'} {hp}")
+    lines.extend(['', '模组：', _format_loadout_from_meta(room_mod_payload(room))])
+    return '\n'.join(lines)
+
+
+def admin_room_log_output(room_id, count=40):
+    rid = int(room_id)
+    if rid not in rooms:
+        return f'不存在房间：{rid}'
+    try:
+        safe_count = max(1, min(int(count or 40), 200))
+    except Exception:
+        safe_count = 40
+    logs = list(getattr(rooms[rid].engine, 'log', []) or [])[-safe_count:]
+    return '\n'.join(logs) or '暂无战斗日志。'
+
+
+def admin_room_chat_output(room_id, count=60):
+    rid = int(room_id)
+    if rid not in rooms:
+        return f'不存在房间：{rid}'
+    try:
+        safe_count = max(1, min(int(count or 60), 200))
+    except Exception:
+        safe_count = 60
+    items = list(getattr(rooms[rid], 'chat_history', []) or [])[-safe_count:]
+    lines = []
+    for entry in items:
+        if entry.get('type') == 'time':
+            lines.append(f"--- {entry.get('display_time') or admin_display_time(entry.get('time'))} ---")
+            continue
+        repeat = int(entry.get('repeat_count') or 1)
+        repeat_text = f" ×{repeat}" if repeat > 1 else ''
+        lines.append(f"{admin_display_time(entry.get('time'))} [{entry.get('chat_channel') or 'public'}] {entry.get('nickname', '?')}: {entry.get('text', '')}{repeat_text}")
+    return '\n'.join(lines) or '暂无房间聊天。'
+
+
+def admin_room_state_output(room_id):
+    rid = int(room_id)
+    if rid not in rooms:
+        return f'不存在房间：{rid}'
+    room = rooms[rid]
+    e = room.engine
+    payload = {
+        'room_id': rid,
+        'mode': room.mode,
+        'phase': getattr(e, 'phase', ''),
+        'round': getattr(e, 'round_num', 0),
+        'current_player': getattr(e, 'current_player', None),
+        'game_over': bool(getattr(e, 'game_over', False)),
+        'winner': getattr(e, 'winner', None),
+        'action_timer': {
+            'player': getattr(room, 'action_timer_player', None),
+            'remaining': int(getattr(room, 'action_timer_remaining', 0) or 0),
+        },
+        'pending': {
+            'response': bool(getattr(e, 'pending_response', None)),
+            'choice': bool(getattr(e, 'pending_choice', None)),
+            'v2_ui': bool(getattr(e, 'pending_v2_ui', None)),
+        },
+        'players': [],
+    }
+    for pidx, psid in enumerate(getattr(room, 'player_sids', []) or []):
+        ps = e.players[pidx] if pidx < len(getattr(e, 'players', []) or []) else None
+        payload['players'].append({
+            'index': pidx,
+            'name': room_player_nickname(room, psid, '?'),
+            'sid': psid,
+            'online': psid in players,
+            'health': getattr(ps, 'health', None),
+            'max_health': getattr(ps, 'max_health', None),
+            'hand': len(getattr(ps, 'hand', []) or []) if ps else None,
+            'deck': len(getattr(ps, 'deck', []) or []) if ps else None,
+            'equipment': len(getattr(ps, 'equipment', []) or []) if ps else None,
+        })
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def admin_mod_list_output():
+    mods = load_all_mods()
+    if not mods:
+        return '没有已加载模组。'
+    lines = ['模组  版本  作者  卡牌  来源']
+    for mod in mods:
+        info = getattr(mod, 'info', {}) or {}
+        info_get = info.get if isinstance(info, dict) else lambda key, default=None: getattr(info, key, default)
+        name = getattr(mod, 'name', '') or info_get('name_cn') or info_get('name') or getattr(mod, 'id', '?')
+        version = getattr(mod, 'version', '') or info_get('version') or '-'
+        author = getattr(mod, 'author', '') or info_get('author') or '-'
+        cards = len(getattr(mod, 'cards', []) or [])
+        source = getattr(mod, 'source', '') or getattr(mod, 'filepath', '') or '-'
+        lines.append(f"{name}  {version}  {author}  {cards}  {source}")
+    return '\n'.join(lines)
+
+
+def admin_mod_loadout_output(identifier):
+    token = str(identifier or '').strip()
+    if not token:
+        return '缺少 <sid|昵称|房间ID>'
+    if token.isdigit() and int(token) in rooms:
+        room = rooms[int(token)]
+        return f"房间 #{token} 模组组合：\n{_format_loadout_from_meta(room_mod_payload(room))}"
+    sid, player = _find_online_player_for_admin(token)
+    if not player:
+        return f'找不到在线玩家或房间：{identifier}'
+    return f"{player.get('nickname', '?')} 模组组合：\n{_format_loadout_from_meta(player)}"
+
+
+def admin_storage_summary_output():
+    if not DB_AVAILABLE:
+        return f'数据库不可用：{DB_INIT_ERROR or "-"}'
+    payload = storage_summary()
+    db = payload.get('db', {})
+    replays = payload.get('replays', {})
+    mods = payload.get('mod_blobs', {})
+    cards = payload.get('card_snapshots', {})
+    return '\n'.join([
+        f"DB: {db.get('path', '-')} total={db.get('total_file_bytes', 0)} bytes sqlite={db.get('db_file_bytes', 0)} wal={db.get('wal_file_bytes', 0)} shm={db.get('shm_file_bytes', 0)}",
+        f"Replays: count={replays.get('count', 0)} bytes={replays.get('bytes', 0)} old={replays.get('old_count', 0)} old_bytes={replays.get('old_bytes', 0)} retention={replays.get('retention_days', '-')}",
+        f"Community mod snapshots: count={mods.get('community_count', 0)} bytes={mods.get('community_bytes', 0)} orphan={mods.get('orphan_count', 0)} orphan_bytes={mods.get('orphan_bytes', 0)}",
+        f"Card snapshots: count={cards.get('count', 0)} bytes={cards.get('bytes', 0)} orphan={cards.get('orphan_count', 0)} orphan_bytes={cards.get('orphan_bytes', 0)}",
+    ])
+
+
+def admin_diagnose_stuck_output():
+    lines = []
+    now = time.time()
+    for rid, room in rooms.items():
+        e = room.engine
+        reasons = []
+        if getattr(e, 'pending_response', None):
+            reasons.append('pending_response')
+        if getattr(e, 'pending_choice', None):
+            reasons.append('pending_choice')
+        if getattr(e, 'pending_v2_ui', None):
+            reasons.append('pending_v2_ui')
+        if getattr(room, 'action_lock', None) and room.action_lock.locked():
+            reasons.append('action_lock')
+        if getattr(room, 'disconnected_players', None):
+            reasons.append(f"disconnected={len(room.disconnected_players)}")
+        if getattr(room, 'created_at', 0) and now - room.created_at > 7200 and not getattr(e, 'game_over', False):
+            reasons.append('long_running')
+        if reasons:
+            lines.append(f"#{rid} {room.mode} phase={getattr(e, 'phase', '')} round={getattr(e, 'round_num', 0)} reasons={','.join(reasons)}")
+    return '\n'.join(lines) or '没有发现明显卡住房间。'
+
+
 def make_admin_card_instance(card_id, options):
     card = CardInstance(def_id=card_id)
     tags = [t for t in options.get('tags', []) if t]
@@ -5936,13 +6448,22 @@ def execute_admin_command(line):
     raw = (line or '').strip()
     if not raw:
         return {'success': False, 'output': command_error('', 0, '指令')}
+    if raw.startswith('/'):
+        raw = raw[1:].lstrip()
+        if not raw:
+            return {'success': False, 'output': command_error('/', 1, '指令')}
     try:
         parts = shlex.split(raw)
     except ValueError as exc:
         return {'success': False, 'output': f'指令解析失败：{exc}'}
     cmd = parts[0].lower()
     if cmd == 'help':
-        return {'success': True, 'output': '\n'.join(ADMIN_COMMANDS.values())}
+        return {'success': True, 'output': render_admin_help(parts[1:])}
+    translated, structured_error = _translate_structured_admin_command(parts)
+    if structured_error:
+        return {'success': False, 'output': structured_error}
+    if translated:
+        return execute_admin_command(translated)
     if cmd == 'clear':
         return {'success': True, 'output': '', 'clear': True}
     if cmd in ('gitpull', 'pullmain', 'updatecode'):
@@ -6000,6 +6521,10 @@ def execute_admin_command(line):
         return {'success': True, 'output': '\n'.join(
             f"{'[内测]' if p.get('beta_mode') else '[正式]'} {p['nickname']} ID:{p.get('player_id') or '-'} [{p['sid']}] 状态={zh_status(p['status'])} 房间={p.get('room_id')}" for p in rows
         )}
+    if cmd == 'playerget':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'player get <sid|昵称|ID|注册顺序|用户名>')}
+        return {'success': True, 'output': admin_player_get_output(parts[1])}
     if cmd == 'rooms':
         with _lock:
             rows = build_admin_rooms()
@@ -6009,6 +6534,24 @@ def execute_admin_command(line):
             f"#{r['room_id']} {r['mode']} 阶段={zh_phase(r['phase'])} 回合={r['round']} 观战={r['spectators']} 玩家={' vs '.join(r['players'])}"
             for r in rows
         )}
+    if cmd == 'roomget':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'room get <房间ID>')}
+        return {'success': True, 'output': admin_room_get_output(parse_int_token(parts[1], 'room_id'))}
+    if cmd == 'roomlog':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'room log <房间ID> [数量]')}
+        count = parse_int_token(parts[2], 'count') if len(parts) > 2 else 40
+        return {'success': True, 'output': admin_room_log_output(parse_int_token(parts[1], 'room_id'), count)}
+    if cmd == 'roomchat':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'room chat <房间ID> [数量]')}
+        count = parse_int_token(parts[2], 'count') if len(parts) > 2 else 60
+        return {'success': True, 'output': admin_room_chat_output(parse_int_token(parts[1], 'room_id'), count)}
+    if cmd == 'roomstate':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'room state <房间ID>')}
+        return {'success': True, 'output': admin_room_state_output(parse_int_token(parts[1], 'room_id'))}
     if cmd in ('roomplayers', 'rplayers', 'rp'):
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), '<房间ID>')}
@@ -6099,6 +6642,36 @@ def execute_admin_command(line):
                 f"{item['picked_count']}/{item['shown_count']}  {item['pick_rate']:.1f}%"
             )
         return {'success': True, 'output': '\n'.join(lines)}
+    if cmd == 'storagesummary':
+        return {'success': True, 'output': admin_storage_summary_output()}
+    if cmd == 'modlist':
+        return {'success': True, 'output': admin_mod_list_output()}
+    if cmd == 'modloadout':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'mod loadout <sid|昵称|房间ID>')}
+        return {'success': True, 'output': admin_mod_loadout_output(parts[1])}
+    if cmd == 'diagnose-server':
+        payload = get_admin_status_payload_light()
+        lock_snapshot = _lock.snapshot()
+        summary = payload.get('summary', {})
+        return {'success': True, 'output': '\n'.join([
+            '服务器诊断：',
+            f"db_ok={DB_AVAILABLE} db_error={DB_INIT_ERROR or '-'}",
+            f"players={summary.get('online_players')} lobby={summary.get('lobby_players')} rooms={summary.get('rooms')} spectators={summary.get('spectators')}",
+            f"global_lock held={lock_snapshot.get('held')} held_seconds={lock_snapshot.get('held_seconds')} owner={lock_snapshot.get('owner')}",
+            admin_diagnose_stuck_output(),
+        ])}
+    if cmd == 'diagnose-room':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'diagnose room <房间ID>')}
+        rid = parse_int_token(parts[1], 'room_id')
+        return {'success': True, 'output': admin_room_get_output(rid) + '\n\n最近日志：\n' + admin_room_log_output(rid, 20)}
+    if cmd == 'diagnose-player':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'diagnose player <sid|昵称|ID|用户名>')}
+        return {'success': True, 'output': admin_player_get_output(parts[1])}
+    if cmd == 'diagnose-stuck':
+        return {'success': True, 'output': admin_diagnose_stuck_output()}
     if cmd in ('rebuildstats', 'recalcstats', '重算战绩'):
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
@@ -6199,6 +6772,55 @@ def execute_admin_command(line):
                 broadcast_lobby()
             return {'success': True, 'output': output}
         return {'success': False, 'output': command_error(raw, len(raw), 'role list|get|set|clear')}
+    if cmd in ('dew', 'thorndew', 'jinglu', '荆露'):
+        if len(parts) < 3 or parts[1].lower() not in ('get', 'add', 'addpaid', 'paid', 'spend', 'tx', 'history'):
+            return {'success': False, 'output': command_error(raw, len(raw), 'dew get|add|addpaid|spend|tx <ID|注册顺序|用户名> [数量] [原因]')}
+        sub = parts[1].lower()
+        user = find_user_for_admin(parts[2])
+        if not user:
+            return {'success': False, 'output': '账号不存在'}
+        if sub == 'get':
+            balance = get_user_thorn_dew(user['id'])
+            user = dict(user)
+            user['thorn_dew_free'] = balance['free']
+            user['thorn_dew_paid'] = balance['paid']
+            return {'success': True, 'output': format_thorn_dew_user(user)}
+        if sub in ('tx', 'history'):
+            rows = list_user_thorn_dew_transactions(user['id'], limit=20)
+            lines = [format_thorn_dew_user(user), '', '最近流水：']
+            if not rows:
+                lines.append('暂无流水。')
+            for row in rows:
+                free_delta = int(row.get('free_delta') or 0)
+                paid_delta = int(row.get('paid_delta') or 0)
+                delta_text = []
+                if free_delta:
+                    delta_text.append(f"普通{free_delta:+d}")
+                if paid_delta:
+                    delta_text.append(f"充值{paid_delta:+d}")
+                lines.append(
+                    f"{admin_display_time(row.get('created_at'))} {'/'.join(delta_text) or '0'} "
+                    f"余额={row.get('balance_total_after')} 原因={row.get('reason') or '-'}"
+                )
+            return {'success': True, 'output': '\n'.join(lines)}
+        if len(parts) < 4:
+            return {'success': False, 'output': command_error(raw, len(raw), '<数量>')}
+        try:
+            amount = int(parts[3])
+        except (TypeError, ValueError):
+            return {'success': False, 'output': '数量必须是整数'}
+        reason = ' '.join(parts[4:]).strip() or 'admin command'
+        admin_name = 'console'
+        if sub == 'add':
+            updated, error = adjust_user_thorn_dew(user['id'], free_delta=amount, reason=reason, source_type='admin_command', admin_username=admin_name)
+        elif sub in ('addpaid', 'paid'):
+            updated, error = adjust_user_thorn_dew(user['id'], paid_delta=amount, reason=reason, source_type='admin_command', admin_username=admin_name)
+        else:
+            updated, error = spend_user_thorn_dew(user['id'], amount, reason=reason, source_type='admin_command', admin_username=admin_name)
+        if error:
+            return {'success': False, 'output': error}
+        admin_event('admin', f"thorn dew {sub} user={user['username']}#{user['id']} amount={amount} reason={reason}")
+        return {'success': True, 'output': format_thorn_dew_user(updated)}
     if cmd in ('userpass', 'passwd', 'setpass'):
         if len(parts) < 3:
             return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> <新密码>')}
@@ -6374,11 +6996,14 @@ def execute_admin_command(line):
                 f"delcard room {room_id} player {pidx} zone={zone} selector={selector.get('label')} count={count if count is not None else 'all'}",
             )
         return {'success': ok, 'output': output}
-    return {'success': False, 'output': command_error(raw, 0, '有效指令')}
+    return {'success': False, 'output': unknown_command_error(raw, cmd)}
 
 
 def admin_completions(line):
     raw = line or ''
+    if raw.lstrip().startswith('/'):
+        leading = len(raw) - len(raw.lstrip())
+        raw = raw[:leading] + raw.lstrip()[1:].lstrip()
     try:
         parts = shlex.split(raw)
     except ValueError:
@@ -6387,20 +7012,48 @@ def admin_completions(line):
     token = '' if trailing_space else (parts[-1] if parts else '')
     position = len(parts) if trailing_space else max(0, len(parts) - 1)
     if position == 0:
-        return [c for c in ADMIN_COMMANDS if c.startswith(token.lower())]
+        values = list(ADMIN_COMMAND_TREE.keys())
+        return [c for c in values if c.startswith(token.lower())]
     cmd = parts[0].lower() if parts else ''
-    if cmd in ('kick',) and position == 1:
+    if cmd == 'help':
+        if position == 1:
+            values = list(ADMIN_COMMAND_TREE.keys())
+            return [v for v in values if v.startswith(token.lower())]
+        if position == 2 and len(parts) > 1:
+            children = ADMIN_COMMAND_TREE.get(parts[1].lower(), {}).get('children', {})
+            return [v for v in children.keys() if v.startswith(token.lower())]
+        return []
+    if cmd in ADMIN_COMMAND_TREE:
+        if position == 1:
+            values = list(ADMIN_COMMAND_TREE.get(cmd, {}).get('children', {}).keys())
+            return [v for v in values if v.startswith(token.lower())]
+        sub = parts[1].lower() if len(parts) > 1 else ''
+        translated, _err = _translate_structured_admin_command([cmd, sub, *parts[2:]])
+        if translated:
+            return admin_completions(translated + (' ' if trailing_space else ''))
+        return []
+    if cmd in ('kick', 'playerget', 'diagnose-player') and position == 1:
         values = []
         with _lock:
             for sid, p in players.items():
                 values.append(p.get('nickname', ''))
                 values.append(sid)
+                values.append(p.get('account_player_id', ''))
         return [v for v in values if v and v.lower().startswith(token.lower())][:20]
     card_admin_cmds = ('givecard', 'addcard', 'give', 'delcard', 'remcard', 'rmcard', 'deletecard')
-    if cmd in ('skip', 'endgame', 'set', *card_admin_cmds, 'roomplayers', 'rplayers', 'rp') and position == 1:
+    if cmd in ('skip', 'endgame', 'set', *card_admin_cmds, 'roomplayers', 'rplayers', 'rp', 'roomget', 'roomlog', 'roomchat', 'roomstate', 'diagnose-room') and position == 1:
         with _lock:
             values = [str(rid) for rid in rooms.keys()]
         return [v for v in values if v.startswith(token)]
+    if cmd == 'modloadout' and position == 1:
+        values = []
+        with _lock:
+            values.extend(str(rid) for rid in rooms.keys())
+            for sid, p in players.items():
+                values.append(p.get('nickname', ''))
+                values.append(sid)
+                values.append(p.get('account_player_id', ''))
+        return [v for v in values if v and v.lower().startswith(token.lower())][:30]
     if cmd in ('givecard', 'addcard', 'give') and position == 3:
         values = sorted(CARD_DEFS.keys())
         return [v for v in values if v.lower().startswith(token.lower())][:30]
@@ -6436,6 +7089,20 @@ def admin_completions(line):
     if cmd in ('role', 'userrole') and position >= 4 and len(parts) > 1 and parts[1].lower() == 'set':
         values = ['title=', 'color=bloom', 'color=guard', 'sort=', 'key=', 'direct=', 'chat=']
         return [v for v in values if v.lower().startswith(token.lower())]
+    if cmd in ('dew', 'thorndew', 'jinglu', '荆露') and position == 1:
+        values = ['get', 'add', 'addpaid', 'spend', 'tx']
+        return [v for v in values if v.startswith(token.lower())]
+    if cmd in ('dew', 'thorndew', 'jinglu', '荆露') and position == 2:
+        try:
+            rows = list_admin_users(query=token, sort='username', order='asc', limit=30).get('users', [])
+            values = []
+            for user in rows:
+                values.append(user.get('player_id', ''))
+                values.append(str(user.get('id')))
+                values.append(user.get('username', ''))
+            return [v for v in values if v and v.lower().startswith(token.lower())][:30]
+        except Exception:
+            return []
     if cmd in ('userpass', 'passwd', 'setpass', 'banuser', 'banaccount', 'unbanuser', 'unbanaccount') and position == 1:
         try:
             rows = list_admin_users(query=token, sort='username', order='asc', limit=30).get('users', [])
@@ -8085,6 +8752,11 @@ def admin_page():
     return render_template('adminpage.html')
 
 
+@app.route('/adminconsole')
+def admin_console_page():
+    return render_template('adminconsole.html')
+
+
 @app.route('/handling')
 def handling_page():
     return render_template('handling.html')
@@ -8119,6 +8791,39 @@ def admin_logout():
     session.pop('admin_authenticated', None)
     session.pop('admin_login_time', None)
     admin_event('security', 'admin logout')
+    return jsonify({'success': True})
+
+
+@app.route('/api/adminconsole/me')
+def admin_console_me():
+    return jsonify({'authenticated': is_admin_console_authenticated(), 'admin': is_admin_authenticated()})
+
+
+@app.route('/api/adminconsole/login', methods=['POST'])
+def admin_console_login():
+    data = request.get_json(silent=True) or {}
+    password = data.get('password', '')
+    ip = _client_ip()
+    rate_key = f'adminconsole:{ip}'
+    if should_rate_limit_admin_login(rate_key):
+        admin_event('security', f'admin console login rate limited from {ip}')
+        return jsonify({'success': False, 'error': 'too many attempts'}), 429
+    if password and check_password_hash(ADMIN_CONSOLE_PASSWORD_HASH, password):
+        session['admin_console_authenticated'] = True
+        session['admin_console_login_time'] = time.time()
+        ADMIN_LOGIN_FAILURES.pop(rate_key, None)
+        admin_event('security', f'admin console login success from {ip}')
+        return jsonify({'success': True})
+    record_admin_login_failure(rate_key)
+    admin_event('security', f'admin console login failed from {ip}')
+    return jsonify({'success': False, 'error': 'invalid password'}), 401
+
+
+@app.route('/api/adminconsole/logout', methods=['POST'])
+def admin_console_logout():
+    session.pop('admin_console_authenticated', None)
+    session.pop('admin_console_login_time', None)
+    admin_event('security', 'admin console logout')
     return jsonify({'success': True})
 
 
@@ -8957,6 +9662,25 @@ def admin_command():
 
 @app.route('/api/admin/complete')
 def admin_complete():
+    return jsonify({'success': True, 'items': admin_completions(request.args.get('line', ''))})
+
+
+@app.route('/api/adminconsole/command', methods=['POST'])
+def admin_console_command():
+    data = request.get_json(silent=True) or {}
+    line = data.get('line', '')
+    try:
+        result = execute_admin_command(line)
+    except ValueError as exc:
+        result = {'success': False, 'output': str(exc)}
+    except Exception as exc:
+        admin_event('error', f'admin console command failed: {line}: {exc}')
+        result = {'success': False, 'output': f'Command failed: {type(exc).__name__}: {exc}'}
+    return jsonify(result)
+
+
+@app.route('/api/adminconsole/complete')
+def admin_console_complete():
     return jsonify({'success': True, 'items': admin_completions(request.args.get('line', ''))})
 
 
