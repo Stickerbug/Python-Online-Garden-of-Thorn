@@ -144,6 +144,8 @@ class PlayerState:
         self.sponge_active: bool = False
         self.shovel_active: bool = False
         self.sluggish: int = 0
+        self.enemy_draw_reduction: int = 0
+        self.enemy_e_reduction: int = 0
         self.overload: int = 0
         self.foresight: int = 0
         self.fracture: int = 0
@@ -226,6 +228,8 @@ class PlayerState:
             'sponge_active': self.sponge_active,
             'shovel_active': self.shovel_active,
             'sluggish': self.sluggish,
+            'enemy_draw_reduction': self.enemy_draw_reduction,
+            'enemy_e_reduction': self.enemy_e_reduction,
             'overload': self.overload,
             'foresight': self.foresight,
             'fracture': self.fracture,
@@ -300,6 +304,8 @@ class PlayerState:
         ps.sponge_active = d.get('sponge_active', False)
         ps.shovel_active = d.get('shovel_active', False)
         ps.sluggish = d.get('sluggish', 0)
+        ps.enemy_draw_reduction = int(d.get('enemy_draw_reduction', 0) or 0)
+        ps.enemy_e_reduction = int(d.get('enemy_e_reduction', 0) or 0)
         ps.overload = d.get('overload', 0)
         ps.foresight = d.get('foresight', 0)
         ps.fracture = d.get('fracture', 0)
