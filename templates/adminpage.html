@@ -214,6 +214,10 @@
           <input id="draft-stats-merge" type="checkbox" checked>
           合并模式
         </label>
+        <label class="admin-inline-toggle">
+          <input id="draft-stats-winner-only" type="checkbox">
+          只看胜者
+        </label>
         <select id="draft-stats-scope" aria-label="统计范围">
           <option value="total">总计</option>
           <option value="week">本周</option>
@@ -240,7 +244,7 @@
         <button id="draft-stats-refresh" class="ghost-btn" type="button">刷新统计</button>
         <button id="draft-stats-rebuild-wins" class="ghost-btn" type="button">按对局摘要重算胜率</button>
       </div>
-      <p id="draft-stats-rebuild-result" class="empty-detail">统计口径：玩家最终选择某张牌时，当前三个候选项计入“刷出”；被选中的牌计入“抽取”。被重抽掉的候选项不计入刷出。本周抽取率从更新后开始统计；胜率可按对局摘要重算。</p>
+      <p id="draft-stats-rebuild-result" class="empty-detail">统计口径：玩家最终选择某张牌时，当前三个候选项计入“刷出”；被选中的牌计入“抽取”。被重抽掉的候选项不计入刷出。“只看胜者”只显示至少被胜者选过的牌；胜者历史数据可按对局摘要重算，但旧聚合数据不能恢复“胜者刷出但未选”的候选项。</p>
       <div id="draft-stats-table" class="admin-table"></div>
     </section>
   </section>

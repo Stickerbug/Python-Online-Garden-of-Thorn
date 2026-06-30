@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 283.46 283.46">
+  <defs>
+    <style>
+      .bg {
+        fill: #4f8f5d;
+        stroke: #347449;
+        stroke-width: 15px;
+      }
+      .line {
+        fill: none;
+        stroke: #f7f8f8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 19px;
+      }
+      .coin {
+        fill: #ffe06a;
+        stroke: #d3a332;
+        stroke-width: 12px;
+      }
+    </style>
+  </defs>
+  <circle class="bg" cx="141.73" cy="141.73" r="118"/>
+  <path class="line" d="M90.5 82.5h95.5l18.5 40.5-62.7 76.8-62.7-76.8 11.4-40.5Z"/>
+  <path class="line" d="M91.5 122.5h111"/>
+  <path class="line" d="M117.5 82.5l24.3 117.3 23.9-117.3"/>
+  <circle class="coin" cx="199.5" cy="196" r="38"/>
+  <path class="line" d="M199.5 174v44"/>
+  <path class="line" d="M181.5 196h36"/>
+</svg>

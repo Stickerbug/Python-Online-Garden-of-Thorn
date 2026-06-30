@@ -147,7 +147,7 @@ class GameEngine2v2(GameEngine):
             revealed_tag_cards = [
                 c.to_dict()
                 for c in self.players[eid].hand
-                if c.def_id != ERROR_CARD_ID and 'revealed' in getattr(c, 'flags', set())
+                if c.def_id != ERROR_CARD_ID and 'revealed' in getattr(c, 'flags', set()) and not self._card_is_sublime(c)
             ]
             if revealed_tag_cards:
                 ed['revealed_tag_cards'] = revealed_tag_cards
@@ -157,24 +157,30 @@ class GameEngine2v2(GameEngine):
         if teammate_id >= 0:
             teammate_data = self.players[teammate_id].to_dict(include_private=True)
             self._redact_error_cards_from_payload(teammate_data)
+            for zone in ('hand', 'deck', 'discard', 'exile'):
+                teammate_data[zone] = self._visible_card_dicts(
+                    getattr(self.players[teammate_id], zone, []),
+                    for_player,
+                    teammate_id,
+                )
             if self.pending_choice and self.pending_choice.get('player_id') == for_player:
                 ct = self.pending_choice.get('choice_type', '')
                 target_id = self.pending_choice.get('target_player_id')
                 if ct in ('choose_from_enemy_hand',):
                     if target_id in enemy_ids:
-                        opp_data_list[enemy_ids.index(target_id)]['hand'] = self._visible_card_dicts(self.players[target_id].hand, for_player, target_id)
+                        opp_data_list[enemy_ids.index(target_id)]['hand'] = self._visible_card_dicts(self.players[target_id].hand, for_player, target_id, choice_list=True)
                 params = self.pending_choice.get('choice_params', {}) or {}
                 if target_id in enemy_ids and ct in ('choose_card_from_hand', 'choose_from_deck', 'choose_from_discard', 'choose_from_exile', 'choose_equipment'):
                     ed = opp_data_list[enemy_ids.index(target_id)]
                     zone = params.get('zone', '')
                     if ct == 'choose_card_from_hand' or zone == 'hand':
-                        ed['hand'] = self._visible_card_dicts(self.players[target_id].hand, for_player, target_id)
+                        ed['hand'] = self._visible_card_dicts(self.players[target_id].hand, for_player, target_id, choice_list=True)
                     if ct == 'choose_from_deck' or zone == 'deck':
-                        ed['deck'] = self._visible_card_dicts(self.players[target_id].deck, for_player, target_id)
+                        ed['deck'] = self._visible_card_dicts(self.players[target_id].deck, for_player, target_id, choice_list=True)
                     if ct == 'choose_from_discard' or zone == 'discard':
-                        ed['discard'] = self._visible_card_dicts(self.players[target_id].discard, for_player, target_id)
+                        ed['discard'] = self._visible_card_dicts(self.players[target_id].discard, for_player, target_id, choice_list=True)
                     if ct == 'choose_from_exile' or zone == 'exile':
-                        ed['exile'] = self._visible_card_dicts(self.players[target_id].exile, for_player, target_id)
+                        ed['exile'] = self._visible_card_dicts(self.players[target_id].exile, for_player, target_id, choice_list=True)
 
         log_start = 0
         self._mark_log_visible()
@@ -267,13 +273,23 @@ class GameEngine2v2(GameEngine):
         all_done = all(len(self.draft_picks[i]) >= self.draft_target_count(i) for i in range(4))
         return {'success': True, 'picks': self.draft_picks[player_id], 'all_done': all_done}
 
+    def _effective_first_pressure_players(self) -> Set[int]:
+        team_picks: List[List[int]] = []
+        for team in self.teams:
+            team_picks.append([pid for pid in team if self.opening_event_picks[pid] == 7])
+        counts = [len(picks) for picks in team_picks]
+        if not counts or counts[0] == counts[1]:
+            return set()
+        winner_team = 0 if counts[0] > counts[1] else 1
+        if not team_picks[winner_team]:
+            return set()
+        return {random.choice(team_picks[winner_team])}
+
     def start_game(self):
         self.phase = 'playing'
-        force_first = []
-        for i in range(4):
-            if self.opening_event_picks[i] == 7:
-                force_first.append(i)
-        if len(force_first) == 1:
+        force_first = sorted(self._effective_first_pressure_players())
+        self._first_pressure_effective_players = set(force_first)
+        if force_first:
             self.first_player = force_first[0]
         else:
             first_team = random.randint(0, 1)
@@ -304,7 +320,7 @@ class GameEngine2v2(GameEngine):
             if i == self.first_player:
                 ps.elixir = FIRST_PLAYER_ELIXIR
                 hand_size = FIRST_PLAYER_HAND_SIZE
-                if self.opening_event_picks[i] == 7 and len(force_first) == 1:
+                if i in self._first_pressure_effective_players:
                     hand_size = 4
                     ps.elixir += 3
                 if self.opening_event_picks[i] == 5:
@@ -322,6 +338,13 @@ class GameEngine2v2(GameEngine):
         self.log_msg(f"回合顺序：{' → '.join(self.pn(p) for p in self.turn_order)}")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         self._start_player_turn(self.first_player)
+
+    def _apply_opening_event(self, player_id: int):
+        if self.opening_event_picks[player_id] == 7:
+            effective = getattr(self, '_first_pressure_effective_players', set())
+            if player_id not in effective:
+                return
+        return super()._apply_opening_event(player_id)
 
     def _enforce_team_unique_cards(self):
         for team in self.teams:
@@ -404,9 +427,9 @@ class GameEngine2v2(GameEngine):
         if ps.fracture > 0:
             ps.fracture = 0
             self.log_msg(f"{self.pn(player_id)}的破损效果消失")
-        # Heal block: decrement at end of own turn
+        # Heal block: halve at end of own turn
         if ps.heal_block > 0:
-            ps.heal_block = max(0, ps.heal_block - 1)
+            ps.heal_block = max(0, ps.heal_block // 2)
             if ps.heal_block == 0:
                 self.log_msg(f"{self.pn(player_id)}的禁疗效果消失")
         # Weakness: decrement at end of own turn
@@ -1637,6 +1660,12 @@ class GameEngine2v2(GameEngine):
                 ps.poison += converted
                 dmg = 0
             dmg = self._apply_universal_damage_shields(target_id, dmg, attacker_id, '攻击', DAMAGE_TYPE_PHYSICAL)
+            if (
+                dmg > 0
+                and getattr(self, '_prediction_capture_target_id', None) == target_id
+                and int(getattr(self, '_prediction_first_attack_damage', 0) or 0) <= 0
+            ):
+                self._prediction_first_attack_damage = int(dmg)
             ps.health -= dmg
             total_dealt += dmg
             if dmg > 0:

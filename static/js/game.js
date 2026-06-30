@@ -18,6 +18,12 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_hidden_features_enabled',
     'gtn_show_english_card_names',
     'gtn_show_card_images',
+    'gtn_audio_enabled',
+    'gtn_audio_master',
+    'gtn_audio_music',
+    'gtn_audio_ui',
+    'gtn_audio_sfx',
+    'gtn_audio_settings_v3',
     'gtn_skin_config',
     'gtn_server',
     'gtn_disabled_mods',
@@ -74,6 +80,370 @@ function clampClientDamageSegments(value) {
     Object.defineProperty(proto, '__gtnBetaStoragePatched', { value: true });
 })();
 
+const AUDIO_DEFAULTS = Object.freeze({
+    enabled: true,
+    master: 80,
+    music: 80,
+    ui: 80,
+    sfx: 80,
+});
+const AUDIO_STORAGE_KEYS = Object.freeze({
+    enabled: 'gtn_audio_enabled',
+    master: 'gtn_audio_master',
+    music: 'gtn_audio_music',
+    ui: 'gtn_audio_ui',
+    sfx: 'gtn_audio_sfx',
+    version: 'gtn_audio_settings_v3',
+});
+const AUDIO_GROUPS = Object.freeze({
+    ui_click: 'ui',
+    ui_open: 'ui',
+    ui_close: 'ui',
+    ui_error: 'ui',
+    ui_invite: 'ui',
+    card_play: 'sfx',
+    card_draw: 'sfx',
+    damage: 'sfx',
+    heal: 'sfx',
+    resource: 'sfx',
+    poison: 'sfx',
+    fire: 'sfx',
+    counter: 'sfx',
+    equip: 'sfx',
+    turn_start: 'sfx',
+});
+const AUDIO_FILE_SOURCES = Object.freeze({
+    ui_click: [
+        '/static/audio/sfx/ui/click_1.ogg',
+        '/static/audio/sfx/ui/click_2.ogg',
+        '/static/audio/sfx/ui/click_3.ogg',
+    ],
+    ui_open: [
+        '/static/audio/sfx/ui/click_2.ogg',
+    ],
+    ui_close: [
+        '/static/audio/sfx/ui/click_3.ogg',
+    ],
+    ui_error: '/static/audio/sfx/ui/error.ogg',
+    ui_invite: [
+        '/static/audio/sfx/battle/resource_gem_2.ogg',
+        '/static/audio/sfx/battle/heal_gem_1.ogg',
+    ],
+    card_play: [
+        '/static/audio/sfx/battle/card_play.ogg',
+        '/static/audio/sfx/battle/card_play_2.ogg',
+    ],
+    card_draw: [
+        '/static/audio/sfx/battle/card_draw.ogg',
+        '/static/audio/sfx/battle/card_draw_2.ogg',
+    ],
+    damage: [
+        '/static/audio/sfx/battle/hit_soft_1.ogg',
+        '/static/audio/sfx/battle/hit_soft_2.ogg',
+    ],
+    heal: [
+        '/static/audio/sfx/battle/heal_gem_1.ogg',
+        '/static/audio/sfx/battle/heal_spell_1.ogg',
+    ],
+    resource: [
+        '/static/audio/sfx/battle/resource_gem_1.ogg',
+        '/static/audio/sfx/battle/resource_gem_2.ogg',
+    ],
+    poison: [
+        '/static/audio/sfx/battle/poison_slime_1.ogg',
+        '/static/audio/sfx/battle/poison_slime_2.ogg',
+    ],
+    fire: [
+        '/static/audio/sfx/battle/fire_spell_1.ogg',
+        '/static/audio/sfx/battle/fire_spell_2.ogg',
+    ],
+    counter: [
+        '/static/audio/sfx/battle/counter_spell_1.ogg',
+        '/static/audio/sfx/battle/heal_spell_1.ogg',
+    ],
+    equip: '/static/audio/sfx/battle/equip.ogg',
+    turn_start: '/static/audio/sfx/battle/turn_start_gem_1.ogg',
+});
+let audioSettings = { ...AUDIO_DEFAULTS };
+let audioContext = null;
+let audioUnlocked = false;
+let audioLastPlayedAt = Object.create(null);
+let audioElementCache = Object.create(null);
+let audioFileUnavailable = Object.create(null);
+let audioLogMatchKey = '';
+let audioLastLogTotal = 0;
+let audioPreloaded = false;
+
+function clampPercent(value, fallback = 100) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function loadAudioSettings() {
+    const hasV3 = localStorage.getItem(AUDIO_STORAGE_KEYS.version) === '3';
+    const storedValues = ['master', 'music', 'ui', 'sfx'].map(key => Number(localStorage.getItem(AUDIO_STORAGE_KEYS[key])));
+    const wasAccidentallySilent = !hasV3 && storedValues.some(Number.isFinite) && storedValues.every(value => value === 0);
+    if (!hasV3 || wasAccidentallySilent) {
+        Object.entries(AUDIO_DEFAULTS).forEach(([key, value]) => {
+            if (key === 'enabled') localStorage.setItem(AUDIO_STORAGE_KEYS.enabled, value ? '1' : '0');
+            else localStorage.setItem(AUDIO_STORAGE_KEYS[key], String(value));
+        });
+        localStorage.setItem(AUDIO_STORAGE_KEYS.version, '3');
+    }
+    audioSettings = {
+        enabled: localStorage.getItem(AUDIO_STORAGE_KEYS.enabled) !== '0',
+        master: clampPercent(localStorage.getItem(AUDIO_STORAGE_KEYS.master), AUDIO_DEFAULTS.master),
+        music: clampPercent(localStorage.getItem(AUDIO_STORAGE_KEYS.music), AUDIO_DEFAULTS.music),
+        ui: clampPercent(localStorage.getItem(AUDIO_STORAGE_KEYS.ui), AUDIO_DEFAULTS.ui),
+        sfx: clampPercent(localStorage.getItem(AUDIO_STORAGE_KEYS.sfx), AUDIO_DEFAULTS.sfx),
+    };
+    return audioSettings;
+}
+
+function saveAudioSettings(partial = {}) {
+    audioSettings = { ...audioSettings, ...partial };
+    localStorage.setItem(AUDIO_STORAGE_KEYS.enabled, audioSettings.enabled ? '1' : '0');
+    localStorage.setItem(AUDIO_STORAGE_KEYS.version, '3');
+    ['master', 'music', 'ui', 'sfx'].forEach((key) => {
+        localStorage.setItem(AUDIO_STORAGE_KEYS[key], String(clampPercent(audioSettings[key], AUDIO_DEFAULTS[key])));
+    });
+    syncAudioSettingsUi();
+}
+
+function perceivedAudioGain(value) {
+    const ratio = clampPercent(value, 0) / 100;
+    return ratio * ratio;
+}
+
+function getAudioGain(group) {
+    if (!audioSettings.enabled) return 0;
+    const groupKey = group === 'music' ? 'music' : group === 'ui' ? 'ui' : 'sfx';
+    return perceivedAudioGain(audioSettings.master) * perceivedAudioGain(audioSettings[groupKey]);
+}
+
+function audioFileVolumeFromGain(gainValue) {
+    if (gainValue <= 0) return 0;
+    return Math.max(0, Math.min(1, Math.sqrt(gainValue) * 0.2875));
+}
+
+function getAudioContext() {
+    if (audioContext) return audioContext;
+    const AudioCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtor) return null;
+    audioContext = new AudioCtor();
+    return audioContext;
+}
+
+function unlockAudio() {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+    audioUnlocked = true;
+    preloadAudioFiles();
+}
+
+function playProceduralAudio(name, options = {}) {
+    const group = options.group || AUDIO_GROUPS[name] || 'sfx';
+    const gainValue = getAudioGain(group);
+    if (gainValue <= 0) return;
+    const nowMs = performance.now();
+    const throttleMs = Number(options.throttleMs == null ? 50 : options.throttleMs);
+    if (nowMs - Number(audioLastPlayedAt[name] || 0) < throttleMs) return;
+    audioLastPlayedAt[name] = nowMs;
+    if (!audioUnlocked) return;
+    playAudioFile(name, gainValue, options);
+}
+
+function playAudioFile(name, gainValue, options = {}) {
+    const src = pickAudioSource(name);
+    if (!src || audioFileUnavailable[src]) return false;
+    try {
+        let base = audioElementCache[src];
+        if (!base) {
+            base = new Audio(src);
+            base.preload = 'auto';
+            audioElementCache[src] = base;
+            try { base.load(); } catch (_) {}
+        }
+        const audio = base.cloneNode(true);
+        audio.volume = audioFileVolumeFromGain(gainValue) * Math.max(0, Math.min(1.5, Number(options.volumeScale == null ? 1 : options.volumeScale)));
+        if (options.playbackRate) audio.playbackRate = Math.max(0.65, Math.min(1.7, Number(options.playbackRate)));
+        audio.play().catch(() => { audioFileUnavailable[src] = true; });
+        return true;
+    } catch (_) {
+        audioFileUnavailable[src] = true;
+        return false;
+    }
+}
+
+function pickAudioSource(name) {
+    const source = AUDIO_FILE_SOURCES[name];
+    if (Array.isArray(source)) {
+        const available = source.filter(src => !audioFileUnavailable[src]);
+        const list = available.length ? available : source;
+        return list[Math.floor(Math.random() * list.length)];
+    }
+    return source || '';
+}
+
+function preloadAudioFiles() {
+    if (audioPreloaded) return;
+    audioPreloaded = true;
+    Object.values(AUDIO_FILE_SOURCES).flatMap(source => Array.isArray(source) ? source : [source]).forEach(src => {
+        if (!src || audioElementCache[src] || audioFileUnavailable[src]) return;
+        try {
+            const audio = new Audio(src);
+            audio.preload = 'auto';
+            audioElementCache[src] = audio;
+            audio.load();
+        } catch (_) {
+            audioFileUnavailable[src] = true;
+        }
+    });
+}
+
+function playProceduralOnly(name, gainValue) {
+    playAudioFile(name, gainValue);
+}
+
+function playUiAudio(name = 'ui_click', options = {}) {
+    playProceduralAudio(name, { group: 'ui', ...options });
+}
+
+function playInviteAudio() {
+    playUiAudio('ui_invite', { throttleMs: 900, volumeScale: 0.78, playbackRate: 1.04 });
+}
+
+function playSfxAudio(name, options = {}) {
+    playProceduralAudio(name, { group: 'sfx', ...options });
+}
+
+function playSfxAudioRepeated(name, count, options = {}) {
+    const n = Math.max(1, Math.min(80, Math.floor(Number(count) || 1)));
+    const spacing = Number(options.spacingMs || (n <= 4 ? 66 : n <= 12 ? 42 : 24));
+    const volumeScale = Number(options.volumeScale || (n <= 4 ? 1 : n <= 12 ? 0.72 : 0.48));
+    const playbackRate = Number(options.playbackRate || (n <= 4 ? 1 : n <= 12 ? 1.12 : 1.28));
+    for (let i = 0; i < n; i += 1) {
+        window.setTimeout(() => playSfxAudio(name, { ...options, volumeScale, playbackRate, throttleMs: 0 }), i * spacing);
+    }
+}
+
+function syncAudioSettingsUi() {
+    const enabled = $('settings-audio-enabled');
+    if (enabled) enabled.checked = !!audioSettings.enabled;
+    ['master', 'music', 'ui', 'sfx'].forEach((key) => {
+        const input = $(`settings-volume-${key}`);
+        const output = $(`settings-volume-${key}-value`);
+        const value = clampPercent(audioSettings[key], AUDIO_DEFAULTS[key]);
+        if (input) input.value = String(value);
+        if (input) input.style.setProperty('--range-percent', `${value}%`);
+        if (output) output.textContent = `${value}%`;
+    });
+}
+
+function bindAudioSettingsControls() {
+    const enabled = $('settings-audio-enabled');
+    if (enabled) enabled.addEventListener('change', () => {
+        unlockAudio();
+        saveAudioSettings({ enabled: enabled.checked });
+        playUiAudio(enabled.checked ? 'ui_open' : 'ui_close');
+    });
+    ['master', 'music', 'ui', 'sfx'].forEach((key) => {
+        const input = $(`settings-volume-${key}`);
+        if (!input) return;
+        input.addEventListener('input', () => {
+            saveAudioSettings({ [key]: clampPercent(input.value, AUDIO_DEFAULTS[key]) });
+        });
+        input.addEventListener('change', () => {
+            unlockAudio();
+            playUiAudio('ui_click', { throttleMs: 0 });
+        });
+    });
+    const testBtn = $('btn-audio-test');
+    if (testBtn) testBtn.addEventListener('click', () => {
+        unlockAudio();
+        playUiAudio('ui_open', { throttleMs: 0 });
+        window.setTimeout(() => playSfxAudio('card_play', { throttleMs: 0 }), 120);
+    });
+}
+
+function initAudioSystem() {
+    loadAudioSettings();
+    syncAudioSettingsUi();
+    ['pointerdown', 'keydown', 'touchstart'].forEach((eventName) => {
+        document.addEventListener(eventName, unlockAudio, { once: true, passive: true });
+    });
+    document.addEventListener('click', (event) => {
+        if (!event.target || event.defaultPrevented) return;
+        const target = event.target.closest('button, .settings-tab, .mode-tab, .choice-card-token, .top-nav-icon-btn, .btn');
+        if (target) {
+            playUiAudio(getUiAudioNameForElement(target));
+        }
+    }, true);
+}
+
+function getUiAudioNameForElement(element) {
+    const id = String(element && element.id || '');
+    const text = String(element && element.textContent || '');
+    const explicitAudio = element && element.dataset && element.dataset.audio;
+    if (explicitAudio && AUDIO_GROUPS[explicitAudio]) return explicitAudio;
+    if (/close|back|cancel|return|leave|decline|refuse|dismiss/i.test(id) || /关闭|返回|取消|退出|拒绝|忽略/.test(text)) return 'ui_close';
+    if (element.classList && element.classList.contains('btn-counter-disabled')) return 'ui_error';
+    if (element.disabled || element.getAttribute('aria-disabled') === 'true') return 'ui_error';
+    if (element.classList && element.classList.contains('top-icon-btn')) return 'ui_click';
+    if (element.classList && (element.classList.contains('settings-tab') || element.classList.contains('mode-tab'))) return 'ui_click';
+    return 'ui_click';
+}
+
+function resetAudioBattleLogTracker() {
+    audioLogMatchKey = '';
+    audioLastLogTotal = 0;
+}
+
+function playAudioForBattleLogLine(line) {
+    const text = String(line || '');
+    if (!text.trim()) return;
+    if (/反制|失效/.test(text)) {
+        playSfxAudio('counter');
+    } else if (/使用并装备|装备了|装备/.test(text)) {
+        playSfxAudio('equip');
+    } else if (/使用了|打出|触发/.test(text)) {
+        playSfxAudio('card_play');
+    }
+    if (/抽\d*张|抽取/.test(text)) playSfxAudio('card_draw');
+}
+
+function getBattleLogDamageHitCount(text) {
+    const raw = String(text || '');
+    const multiply = raw.match(/[D电伤]\s*×\s*(\d+)/);
+    if (multiply) return Number(multiply[1] || 1);
+    const plusDamage = raw.match(/(?:受到|造成)?[（(]?(\d+(?:\+\d+)+)[）)]?D/);
+    if (plusDamage) return plusDamage[1].split('+').length;
+    const hp = raw.match(/[（(]H=([^）)]+)[）)]/);
+    if (hp) return Math.max(1, String(hp[1] || '').split('→').filter(Boolean).length - 1);
+    return 1;
+}
+
+function playAudioForNewBattleLogs(rawLog, logStart, logTotal, matchKey) {
+    const key = String(matchKey || '');
+    if (!key || !Array.isArray(rawLog)) return;
+    if (audioLogMatchKey !== key) {
+        audioLogMatchKey = key;
+        audioLastLogTotal = Number(logTotal || logStart + rawLog.length);
+        return;
+    }
+    const total = Number(logTotal || logStart + rawLog.length);
+    const start = Number(logStart || 0);
+    if (total <= audioLastLogTotal) {
+        audioLastLogTotal = total;
+        return;
+    }
+    const firstNewAbsolute = Math.max(audioLastLogTotal, start);
+    const firstNewIndex = Math.max(0, firstNewAbsolute - start);
+    rawLog.slice(firstNewIndex).forEach(playAudioForBattleLogLine);
+    audioLastLogTotal = total;
+}
+
 const I18N = {
     en: {
         round: 'Round', your_turn: 'Your Turn', opponent_turn: "Opponent's Turn", you: 'You', opponent: 'Opponent',
@@ -117,8 +487,8 @@ const I18N = {
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_immune: 'Status Immune', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Blind', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_temp_swift: 'Temporary Swift', flag_temp_heavy: 'Temporary Heavy', flag_stealth: 'Stealth', flag_revealed: 'Revealed', flag_team_limited: 'Team Limited', flag_team_unique: 'Team Unique', flag_power: 'Power', flag_magic_swift: 'Magic Swift',
-        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_temp_swift: 'Temporary Swift', tag_temp_heavy: 'Temporary Heavy', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_temp_swift: 'Temporary Swift', flag_temp_heavy: 'Temporary Heavy', flag_stealth: 'Stealth', flag_revealed: 'Revealed', flag_sublime: 'Sublime', flag_team_limited: 'Team Limited', flag_team_unique: 'Team Unique', flag_power: 'Power', flag_magic_swift: 'Magic Swift',
+        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_temp_swift: 'Temporary Swift', tag_temp_heavy: 'Temporary Heavy', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_sublime: 'Sublime', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
@@ -127,7 +497,8 @@ const I18N = {
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
         lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', start_draft: 'Start Draft', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
         card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard', fusion_layer: 'Fusion', fission_layer: 'Fission',
-        settings_title: 'Settings', settings_appearance: 'Appearance', settings_theme: 'Theme', settings_lang: 'Language', settings_mods: 'Mods', settings_theme_light: 'Light', settings_theme_dark: 'Dark',
+        settings_title: 'Settings', settings_appearance: 'Appearance', settings_theme: 'Theme', settings_lang: 'Language', settings_mods: 'Mods', settings_audio: 'Audio', settings_theme_light: 'Light', settings_theme_dark: 'Dark',
+        settings_audio_enabled: 'Enable audio', settings_volume_master: 'Master volume', settings_volume_music: 'Music', settings_volume_ui: 'Buttons', settings_volume_sfx: 'Effects', settings_audio_test: 'Test sound', settings_audio_hint: 'Volume uses a perceived loudness curve, so slider changes feel closer to what you hear.',
         no_games: 'No ongoing games', back_to_home: 'Back to Home', settings_btn: 'Settings', settings_server: 'Server', settings_server_addr: 'Address', not_your_turn: 'Not your turn',
         counter_insufficient: 'Tip: counter cards are not affordable', default_status: 'Garden of Thorn', game_loading: 'Loading...', server_no_response: 'Server is not responding. Check the connection or refresh.',
         spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat', solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training', clear_deck: 'Clear Deck',
@@ -232,14 +603,15 @@ I18N.zh = { ...I18N.en,
     status_equip_protect: '装备保护', status_invincible: '无敌', status_immune: '状态免疫', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_sublime: '崇高', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张手牌丢弃，然后抽对应张牌', foresight_replace_confirm: '替换',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
     round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
     select_event_desc: '选择一个配装倾向', start_draft: '开始选牌', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
-    settings_title: '设置', settings_appearance: '外观', settings_theme: '主题', settings_lang: '语言', settings_mods: '模组', settings_theme_light: '明亮', settings_theme_dark: '黑暗',
+    settings_title: '设置', settings_appearance: '外观', settings_theme: '主题', settings_lang: '语言', settings_mods: '模组', settings_audio: '音频', settings_theme_light: '明亮', settings_theme_dark: '黑暗',
+    settings_audio_enabled: '启用音频', settings_volume_master: '主音量', settings_volume_music: '背景音乐', settings_volume_ui: '按钮', settings_volume_sfx: '效果', settings_audio_test: '测试音效', settings_audio_hint: '音量使用体感曲线，滑块变化会更接近人耳感受到的大小。',
     no_games: '暂无进行中的对局', back_to_home: '返回主页', settings_btn: '设置', settings_server: '服务器', settings_server_addr: '地址', not_your_turn: '还没轮到你',
     counter_insufficient: '提示：当前没有可支付的反制牌', default_status: 'Garden of Thorn', game_loading: '加载中...', server_no_response: '服务器没有响应，请检查连接或刷新页面。',
     spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线：{0}', chat_title: '聊天',
@@ -275,7 +647,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_sublime: '崇高', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
@@ -349,7 +721,8 @@ I18N.fr = { ...I18N.en,
     server_broadcast: 'Serveur : {0}', error_msg: 'Erreur : {0}', lobby_status: 'Salon - {0}', no_counter_countdown: 'Pas de contre({0})',
     select_event_desc: "Choisir un événement de départ", opponent_selected: 'Adversaire a choisi', opponent_selecting: 'Adversaire choisit...',
     card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard',
-    settings_title: 'Paramètres', settings_appearance: 'Apparence', settings_theme: 'Thème', settings_lang: 'Langue', settings_mods: 'Mods', settings_theme_light: 'Clair', settings_theme_dark: 'Sombre',
+    settings_title: 'Paramètres', settings_appearance: 'Apparence', settings_theme: 'Thème', settings_lang: 'Langue', settings_mods: 'Mods', settings_audio: 'Audio', settings_theme_light: 'Clair', settings_theme_dark: 'Sombre',
+    settings_audio_enabled: 'Activer l’audio', settings_volume_master: 'Volume général', settings_volume_music: 'Musique', settings_volume_ui: 'Boutons', settings_volume_sfx: 'Effets', settings_audio_test: 'Tester le son', settings_audio_hint: 'Le volume suit une courbe de loudness perçu pour mieux correspondre à l’oreille.',
     no_games: 'Aucune partie en cours', back_to_home: "Retour à l'accueil", settings_btn: 'Paramètres', settings_server: 'Serveur', settings_server_addr: 'Adresse',
     not_your_turn: "Ce n'est pas votre tour", counter_insufficient: 'Conseil : Ressources insuffisantes pour les cartes de contre', default_status: 'Garden of Thorn',
     game_loading: 'Chargement...', server_no_response: 'Le serveur ne répond pas. Vérifiez votre connexion.',
@@ -419,7 +792,8 @@ I18N.ja = { ...I18N.en,
     server_broadcast: 'サーバー: {0}', error_msg: 'エラー: {0}', lobby_status: 'ロビー - {0}', no_counter_countdown: 'カウンターなし({0})',
     select_event_desc: 'オープニングイベントを選択', opponent_selected: '相手が選択済み', opponent_selecting: '相手が選択中...',
     card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard',
-    settings_title: '設定', settings_appearance: '外観', settings_theme: 'テーマ', settings_lang: '言語', settings_mods: 'Mod', settings_theme_light: 'ライト', settings_theme_dark: 'ダーク',
+    settings_title: '設定', settings_appearance: '外観', settings_theme: 'テーマ', settings_lang: '言語', settings_mods: 'Mod', settings_audio: '音声', settings_theme_light: 'ライト', settings_theme_dark: 'ダーク',
+    settings_audio_enabled: '音声を有効化', settings_volume_master: 'マスター音量', settings_volume_music: 'BGM', settings_volume_ui: 'ボタン', settings_volume_sfx: '効果音', settings_audio_test: 'テスト再生', settings_audio_hint: '音量は体感カーブを使い、耳で感じる変化に近づけています。',
     no_games: '進行中の対戦なし', back_to_home: 'ホームに戻る', settings_btn: '設定', settings_server: 'サーバー', settings_server_addr: 'アドレス',
     not_your_turn: 'あなたのターンではありません', counter_insufficient: 'ヒント：カウンターに必要なリソースが不足しています', default_status: 'Garden of Thorn',
     game_loading: '読み込み中...', server_no_response: 'サーバーが応答しません。接続を確認してください。',
@@ -574,6 +948,7 @@ Object.assign(I18N.zh, {
     tag_desc_rebound: '结算去向关键词。带有回转的牌打出并结算后，会立即回到使用者手牌。',
     tag_desc_stealth: '响应关键词。此牌不会触发对手的响应窗口。',
     tag_desc_revealed: '可见性关键词。此牌在手中时永久对对手展示。',
+    tag_desc_sublime: '可见性关键词。此牌不会出现在其他玩家的看牌效果或卡牌选择列表中。',
     tag_desc_default: '模组或扩展标签。该标签的具体含义由对应模组或卡牌效果定义。'
 });
 
@@ -631,6 +1006,7 @@ Object.assign(I18N.en, {
     tag_desc_default: 'Mod or extension tag. Its exact meaning is defined by the relevant mod or card effect.',
     tag_desc_stealth: 'Response keyword. This card does not trigger opponent response windows.',
     tag_desc_revealed: 'Visibility keyword. This card is permanently visible to the opponent while in hand.'
+    , tag_desc_sublime: 'Visibility keyword. This card is hidden from other players when cards are viewed or chosen.'
 });
 
 Object.assign(I18N.fr, {
@@ -1783,6 +2159,7 @@ const CARD_FLAG_STYLES = {
     fission_layer: { label: '', fg: '#0f766e', bg: 'rgba(15,118,110,0.14)', cls: 'fission-layer' },
     stealth: { label: '', fg: '#2C3E50', bg: '#EBF5FB', cls: 'stealth' },
     revealed: { label: '', fg: '#E74C3C', bg: '#FDEDEC', cls: 'revealed' },
+    sublime: { label: '', fg: '#9A7A12', bg: '#FFF6D0', cls: 'sublime' },
 };
 
 const CARD_FLAG_TERM_COLORS = {
@@ -1812,6 +2189,7 @@ const CARD_FLAG_TERM_COLORS = {
     tomato_layer: '#b42318',
     stealth: '#2C3E50',
     revealed: '#E74C3C',
+    sublime: '#9A7A12',
 };
 
 const CARD_FLAG_ALIASES = {
@@ -1837,6 +2215,10 @@ const CARD_FLAG_ALIASES = {
     tag_symbiosy: 'symbiosis',
     stealth: 'stealth',
     revealed: 'revealed',
+    sublime: 'sublime',
+    'vanilla:sublime': 'sublime',
+    tag_sublime: 'sublime',
+    'tag_vanilla:sublime': 'sublime',
     multi_petal_fission: '',
     flag_multi_petal_fission: '',
     tag_multi_petal_fission: '',
@@ -1848,7 +2230,7 @@ const _VANILLA_FLAGS = new Set([
     'precision', 'exile', 'non_stackable', 'indestructible', 'sprout',
     'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
     'infinite_exclude', 'rebound', 'copy', 'unique',
-    'swift', 'temp_swift', 'temp_heavy', 'stealth', 'revealed', 'team_limited', 'team_unique',
+    'swift', 'temp_swift', 'temp_heavy', 'stealth', 'revealed', 'sublime', 'team_limited', 'team_unique',
     'power', 'magic_swift',
 ]);
 
@@ -1973,6 +2355,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'tag-swift', re: /^(?:迅捷|Swift)(?::[+-]?\d+)?/i },
     { cls: 'tag-stealth', re: /^(?:隐匿|Stealth)/i },
     { cls: 'tag-revealed', re: /^(?:被揭示|Revealed)/i },
+    { cls: 'tag-sublime', re: /^(?:崇高|Sublime)/i },
     { cls: 'tag-power', re: /^(?:威力|Power)(?::[+-]?\d+)?/i },
     { cls: 'status-toxic-poison', re: /^(?:[+-]?\d+层剧毒|剧毒[:：]?[+-]?\d+层?|剧毒[×x][+-]?\d+层?)/i },
     { cls: 'status-sluggish', re: /^(?:[+-]?\d+层迟缓|迟缓[:：]?[+-]?\d+层?)/i },
@@ -2076,6 +2459,22 @@ function buildInlineCardDict(defId, modifierText = '') {
     return cardDict;
 }
 
+function parseInlineCardMarker(text) {
+    const marker = String(text || '').match(/^\[\[card:([^\]\r\n]+)\]\]/i);
+    if (!marker || !marker[1]) return null;
+    const parts = marker[1]
+        .split('|')
+        .map(part => part.trim())
+        .filter(Boolean);
+    const defId = parts.shift();
+    if (!defId) return null;
+    return {
+        raw: marker[0],
+        defId,
+        modifierText: parts.join('|'),
+    };
+}
+
 function inlineCardChipHtml(cardDict) {
     const chip = createCardChoiceChip(cardDict, { hideInstanceOnlyFlags: false });
     chip.classList.add('inline-card-chip', 'inline-card-chip-compact');
@@ -2084,6 +2483,274 @@ function inlineCardChipHtml(cardDict) {
     chip.dataset.inlineCardChip = '1';
     chip.dataset.cardDict = JSON.stringify(cardDict || {});
     return chip.outerHTML;
+}
+
+const INLINE_ICON_DATA_URLS = {
+    'H': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogIzZiYjgyZDsKICAgICAgICBzdHJva2U6ICMzNGFkMzc7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEgewogICAgICAgIHN0cm9rZS1taXRlcmxpbWl0OiAxMDsKICAgICAgICBzdHJva2Utd2lkdGg6IDVweDsKICAgICAgfQoKICAgICAgLnN0MSB7CiAgICAgICAgZmlsbDogI2M5ZTNiZTsKICAgICAgICBzdHJva2U6ICNiZWRkYTk7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxjaXJjbGUgY2xhc3M9InN0MSIgY3g9IjE0MS44MyIgY3k9IjE0MiIgcj0iOTIuMTMiLz4KICA8cG9seWdvbiBjbGFzcz0ic3QwIiBwb2ludHM9IjE4MS40MiAxNDEuNzMgMTQxLjczIDIwNy4yMSAxMDIuMDUgMTQxLjczIDE0MS43MyA3Ni4yNiAxODEuNDIgMTQxLjczIi8+Cjwvc3ZnPg==',
+    'health': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogIzZiYjgyZDsKICAgICAgICBzdHJva2U6ICMzNGFkMzc7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEgewogICAgICAgIHN0cm9rZS1taXRlcmxpbWl0OiAxMDsKICAgICAgICBzdHJva2Utd2lkdGg6IDVweDsKICAgICAgfQoKICAgICAgLnN0MSB7CiAgICAgICAgZmlsbDogI2M5ZTNiZTsKICAgICAgICBzdHJva2U6ICNiZWRkYTk7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxjaXJjbGUgY2xhc3M9InN0MSIgY3g9IjE0MS44MyIgY3k9IjE0MiIgcj0iOTIuMTMiLz4KICA8cG9seWdvbiBjbGFzcz0ic3QwIiBwb2ludHM9IjE4MS40MiAxNDEuNzMgMTQxLjczIDIwNy4yMSAxMDIuMDUgMTQxLjczIDE0MS43MyA3Ni4yNiAxODEuNDIgMTQxLjczIi8+Cjwvc3ZnPg==',
+    'heal': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogIzZiYjgyZDsKICAgICAgICBzdHJva2U6ICMzNGFkMzc7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEgewogICAgICAgIHN0cm9rZS1taXRlcmxpbWl0OiAxMDsKICAgICAgICBzdHJva2Utd2lkdGg6IDVweDsKICAgICAgfQoKICAgICAgLnN0MSB7CiAgICAgICAgZmlsbDogI2M5ZTNiZTsKICAgICAgICBzdHJva2U6ICNiZWRkYTk7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxjaXJjbGUgY2xhc3M9InN0MSIgY3g9IjE0MS44MyIgY3k9IjE0MiIgcj0iOTIuMTMiLz4KICA8cG9seWdvbiBjbGFzcz0ic3QwIiBwb2ludHM9IjE4MS40MiAxNDEuNzMgMTQxLjczIDIwNy4yMSAxMDIuMDUgMTQxLjczIDE0MS43MyA3Ni4yNiAxODEuNDIgMTQxLjczIi8+Cjwvc3ZnPg==',
+    'E': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogI2YyZWIzZTsKICAgICAgICBzdHJva2U6ICNmNmUxNTA7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEgewogICAgICAgIHN0cm9rZS1taXRlcmxpbWl0OiAxMDsKICAgICAgICBzdHJva2Utd2lkdGg6IDVweDsKICAgICAgfQoKICAgICAgLnN0MSB7CiAgICAgICAgZmlsbDogI2ZmZmVlZTsKICAgICAgICBzdHJva2U6ICNmZmZjZGI7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxjaXJjbGUgY2xhc3M9InN0MSIgY3g9IjE0MS43MyIgY3k9IjE0MS43MyIgcj0iOTIuMTMiLz4KICA8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMTI0LjcyLDY5LjA1bDM2LjYyLDEzLjE5Yy4xNi4wNi4yNC4yNS4xNS40bC0yNi40NSw0OS4yOSw0NS4zLDEyLjE0Yy4xOS4wNS4yNy4yNy4xNi40M2wtNDcuNDYsNjguODVjLS4xOC4yNi0uNTcuMDgtLjUxLS4yMmwxMC44MS01MS4yMWMuMDMtLjE1LS4wNi0uMjktLjItLjMzbC00MC4xNS0xMS42MWMtLjE1LS4wNC0uMjQtLjItLjItLjM1bDIxLjU0LTgwLjRjLjA0LS4xNi4yMS0uMjUuMzctLjE5WiIvPgo8L3N2Zz4=',
+    'elixir': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogI2YyZWIzZTsKICAgICAgICBzdHJva2U6ICNmNmUxNTA7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEgewogICAgICAgIHN0cm9rZS1taXRlcmxpbWl0OiAxMDsKICAgICAgICBzdHJva2Utd2lkdGg6IDVweDsKICAgICAgfQoKICAgICAgLnN0MSB7CiAgICAgICAgZmlsbDogI2ZmZmVlZTsKICAgICAgICBzdHJva2U6ICNmZmZjZGI7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxjaXJjbGUgY2xhc3M9InN0MSIgY3g9IjE0MS43MyIgY3k9IjE0MS43MyIgcj0iOTIuMTMiLz4KICA8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMTI0LjcyLDY5LjA1bDM2LjYyLDEzLjE5Yy4xNi4wNi4yNC4yNS4xNS40bC0yNi40NSw0OS4yOSw0NS4zLDEyLjE0Yy4xOS4wNS4yNy4yNy4xNi40M2wtNDcuNDYsNjguODVjLS4xOC4yNi0uNTcuMDgtLjUxLS4yMmwxMC44MS01MS4yMWMuMDMtLjE1LS4wNi0uMjktLjItLjMzbC00MC4xNS0xMS42MWMtLjE1LS4wNC0uMjQtLjItLjItLjM1bDIxLjU0LTgwLjRjLjA0LS4xNi4yMS0uMjUuMzctLjE5WiIvPgo8L3N2Zz4=',
+    'M': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogI2VhZjZmZDsKICAgICAgICBzdHJva2U6ICNkM2VkZmI7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEgewogICAgICAgIHN0cm9rZS1taXRlcmxpbWl0OiAxMDsKICAgICAgICBzdHJva2Utd2lkdGg6IDVweDsKICAgICAgfQoKICAgICAgLnN0MSB7CiAgICAgICAgZmlsbDogIzdmYzhmMDsKICAgICAgICBzdHJva2U6ICM2ZWJiZTk7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxjaXJjbGUgY2xhc3M9InN0MCIgY3g9IjE0MS43MyIgY3k9IjE0MS43MyIgcj0iOTIuMTMiLz4KICA8cG9seWdvbiBjbGFzcz0ic3QxIiBwb2ludHM9IjExOC42NyAxMjUuNjcgMTM1LjY0IDk0LjE4IDE1Mi42IDEyNS42NyAxODcuNzkgMTMyLjA4IDE2My4wOSAxNTcuOTQgMTY3Ljg3IDE5My4zOSAxMzUuNjQgMTc3Ljg5IDEwMy40IDE5My4zOSAxMDguMTggMTU3Ljk0IDgzLjQ4IDEzMi4wOCAxMTguNjcgMTI1LjY3Ii8+CiAgPHBvbHlnb24gY2xhc3M9InN0MSIgcG9pbnRzPSIxODAuMjQgOTkuMDcgMTg1LjA5IDkwLjA3IDE4OS45MyA5OS4wNyAxOTkuOTkgMTAwLjkgMTkyLjkzIDEwOC4yOSAxOTQuMyAxMTguNDIgMTg1LjA5IDExMy45OSAxNzUuODggMTE4LjQyIDE3Ny4yNCAxMDguMjkgMTcwLjE4IDEwMC45IDE4MC4yNCA5OS4wNyIvPgo8L3N2Zz4=',
+    'magic': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogI2VhZjZmZDsKICAgICAgICBzdHJva2U6ICNkM2VkZmI7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEgewogICAgICAgIHN0cm9rZS1taXRlcmxpbWl0OiAxMDsKICAgICAgICBzdHJva2Utd2lkdGg6IDVweDsKICAgICAgfQoKICAgICAgLnN0MSB7CiAgICAgICAgZmlsbDogIzdmYzhmMDsKICAgICAgICBzdHJva2U6ICM2ZWJiZTk7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxjaXJjbGUgY2xhc3M9InN0MCIgY3g9IjE0MS43MyIgY3k9IjE0MS43MyIgcj0iOTIuMTMiLz4KICA8cG9seWdvbiBjbGFzcz0ic3QxIiBwb2ludHM9IjExOC42NyAxMjUuNjcgMTM1LjY0IDk0LjE4IDE1Mi42IDEyNS42NyAxODcuNzkgMTMyLjA4IDE2My4wOSAxNTcuOTQgMTY3Ljg3IDE5My4zOSAxMzUuNjQgMTc3Ljg5IDEwMy40IDE5My4zOSAxMDguMTggMTU3Ljk0IDgzLjQ4IDEzMi4wOCAxMTguNjcgMTI1LjY3Ii8+CiAgPHBvbHlnb24gY2xhc3M9InN0MSIgcG9pbnRzPSIxODAuMjQgOTkuMDcgMTg1LjA5IDkwLjA3IDE4OS45MyA5OS4wNyAxOTkuOTkgMTAwLjkgMTkyLjkzIDEwOC4yOSAxOTQuMyAxMTguNDIgMTg1LjA5IDExMy45OSAxNzUuODggMTE4LjQyIDE3Ny4yNCAxMDguMjkgMTcwLjE4IDEwMC45IDE4MC4yNCA5OS4wNyIvPgo8L3N2Zz4=',
+    'D': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogI2FjM2MyMzsKICAgICAgICBzdHJva2U6ICM4ZTNiMjI7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEsIC5zdDIsIC5zdDMsIC5zdDQgewogICAgICAgIHN0cm9rZS1taXRlcmxpbWl0OiAxMDsKICAgICAgICBzdHJva2Utd2lkdGg6IDVweDsKICAgICAgfQoKICAgICAgLnN0MSB7CiAgICAgICAgZmlsbDogI2UxMWMxMzsKICAgICAgICBzdHJva2U6ICNiZDFiMjE7CiAgICAgIH0KCiAgICAgIC5zdDIgewogICAgICAgIGZpbGw6ICNlZmVmZWY7CiAgICAgICAgc3Ryb2tlOiAjZGNkZGRkOwogICAgICB9CgogICAgICAuc3QzIHsKICAgICAgICBmaWxsOiAjZTRlNGU1OwogICAgICAgIHN0cm9rZTogI2NkY2VjZTsKICAgICAgfQoKICAgICAgLnN0NCB7CiAgICAgICAgZmlsbDogI2FhYWJhYjsKICAgICAgICBzdHJva2U6ICM5MjkyOTI7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxjaXJjbGUgY2xhc3M9InN0MiIgY3g9IjE0MS44MyIgY3k9IjE0MiIgcj0iOTIuMTMiLz4KICA8cGF0aCBjbGFzcz0ic3QwIiBkPSJNODguOTgsMTU3LjA3aDExLjUzdjM1LjQxYzAsLjE2LS4xMy4yOC0uMjguMjhoLTEwLjk2Yy0uMTYsMC0uMjgtLjEzLS4yOC0uMjh2LTM1LjQxaDBaIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxNjcuODQgLTEwLjEpIHJvdGF0ZSg1MCkiLz4KICA8cGF0aCBjbGFzcz0ic3Q0IiBkPSJNMTM4Ljk0LDE5MC41MWMtNC40MSwzLjctMTkuNTMtNy4wNi0zMy43OC0yNC4wNHMtMjIuMjItMzMuNzQtMTcuODEtMzcuNDQsNTYsNTcuNzgsNTEuNTksNjEuNDhaIi8+CiAgPHBhdGggY2xhc3M9InN0MyIgZD0iTTE5Mi43OSw5Mi4yOGwtODguNzYsNTguNzJjLS4xNC4wOS0uMTcuMjktLjA2LjQybDE1LjUxLDE4LjQ5Yy4xMS4xMy4zMS4xNC40Mi4wMWw3My4yNC03Ny4yMWMuMjMtLjI0LS4wOC0uNjItLjM2LS40M1oiLz4KICA8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjA1Ljk4LDExNC43N2MwLDEwLjMtNy4xMSwxNC4xLTEyLjE0LDE0LjEtNC4wNSwwLTEyLjE0LTQuNzgtMTIuMTQtMTQuMSwwLTExLjk4LDEyLjE0LTIxLjcsMTIuMTQtMjEuNywwLDAsMTIuMTQsOS43MiwxMi4xNCwyMS43WiIvPgo8L3N2Zz4=',
+    'damage': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogI2FjM2MyMzsKICAgICAgICBzdHJva2U6ICM4ZTNiMjI7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEsIC5zdDIsIC5zdDMsIC5zdDQgewogICAgICAgIHN0cm9rZS1taXRlcmxpbWl0OiAxMDsKICAgICAgICBzdHJva2Utd2lkdGg6IDVweDsKICAgICAgfQoKICAgICAgLnN0MSB7CiAgICAgICAgZmlsbDogI2UxMWMxMzsKICAgICAgICBzdHJva2U6ICNiZDFiMjE7CiAgICAgIH0KCiAgICAgIC5zdDIgewogICAgICAgIGZpbGw6ICNlZmVmZWY7CiAgICAgICAgc3Ryb2tlOiAjZGNkZGRkOwogICAgICB9CgogICAgICAuc3QzIHsKICAgICAgICBmaWxsOiAjZTRlNGU1OwogICAgICAgIHN0cm9rZTogI2NkY2VjZTsKICAgICAgfQoKICAgICAgLnN0NCB7CiAgICAgICAgZmlsbDogI2FhYWJhYjsKICAgICAgICBzdHJva2U6ICM5MjkyOTI7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxjaXJjbGUgY2xhc3M9InN0MiIgY3g9IjE0MS44MyIgY3k9IjE0MiIgcj0iOTIuMTMiLz4KICA8cGF0aCBjbGFzcz0ic3QwIiBkPSJNODguOTgsMTU3LjA3aDExLjUzdjM1LjQxYzAsLjE2LS4xMy4yOC0uMjguMjhoLTEwLjk2Yy0uMTYsMC0uMjgtLjEzLS4yOC0uMjh2LTM1LjQxaDBaIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxNjcuODQgLTEwLjEpIHJvdGF0ZSg1MCkiLz4KICA8cGF0aCBjbGFzcz0ic3Q0IiBkPSJNMTM4Ljk0LDE5MC41MWMtNC40MSwzLjctMTkuNTMtNy4wNi0zMy43OC0yNC4wNHMtMjIuMjItMzMuNzQtMTcuODEtMzcuNDQsNTYsNTcuNzgsNTEuNTksNjEuNDhaIi8+CiAgPHBhdGggY2xhc3M9InN0MyIgZD0iTTE5Mi43OSw5Mi4yOGwtODguNzYsNTguNzJjLS4xNC4wOS0uMTcuMjktLjA2LjQybDE1LjUxLDE4LjQ5Yy4xMS4xMy4zMS4xNC40Mi4wMWw3My4yNC03Ny4yMWMuMjMtLjI0LS4wOC0uNjItLjM2LS40M1oiLz4KICA8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjA1Ljk4LDExNC43N2MwLDEwLjMtNy4xMSwxNC4xLTEyLjE0LDE0LjEtNC4wNSwwLTEyLjE0LTQuNzgtMTIuMTQtMTQuMSwwLTExLjk4LDEyLjE0LTIxLjcsMTIuMTQtMjEuNywwLDAsMTIuMTQsOS43MiwxMi4xNCwyMS43WiIvPgo8L3N2Zz4=',
+    'electric_damage': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogIzU4YzNlYjsKICAgICAgICBzdHJva2U6ICMzOWJiY2I7CiAgICAgICAgc3Ryb2tlLXdpZHRoOiA3cHg7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEgewogICAgICAgIHN0cm9rZS1taXRlcmxpbWl0OiAxMDsKICAgICAgfQoKICAgICAgLnN0MSB7CiAgICAgICAgZmlsbDogI2NhZTdlNTsKICAgICAgICBzdHJva2U6ICNhYWQ5ZDI7CiAgICAgICAgc3Ryb2tlLXdpZHRoOiA1cHg7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxjaXJjbGUgY2xhc3M9InN0MSIgY3g9IjE0MS44MyIgY3k9IjE0MiIgcj0iOTIuMTMiLz4KICA8cG9seWdvbiBjbGFzcz0ic3QwIiBwb2ludHM9IjEzNC44MiAxMjAuNDMgMTQxLjgzIDg1LjMxIDE0OC44NCAxMjAuNDMgMTc1LjE1IDk2LjEzIDE2MC4xOCAxMjguNjcgMTk1Ljc1IDEyNC40OCAxNjQuNTEgMTQyIDE5NS43NSAxNTkuNTIgMTYwLjE4IDE1NS4zMyAxNzUuMTUgMTg3Ljg3IDE0OC44NCAxNjMuNTcgMTQxLjgzIDE5OC42OSAxMzQuODIgMTYzLjU3IDEwOC41MSAxODcuODcgMTIzLjQ4IDE1NS4zMyA4Ny45MSAxNTkuNTIgMTE5LjE1IDE0MiA4Ny45MSAxMjQuNDggMTIzLjQ4IDEyOC42NyAxMDguNTEgOTYuMTMgMTM0LjgyIDEyMC40MyIvPgo8L3N2Zz4=',
+    'P': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogbm9uZTsKICAgICAgfQoKICAgICAgLnN0MCwgLnN0MSB7CiAgICAgICAgb3BhY2l0eTogLjU7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEsIC5zdDIgewogICAgICAgIHN0cm9rZTogIzlmNGE5ODsKICAgICAgICBzdHJva2UtbWl0ZXJsaW1pdDogMTA7CiAgICAgICAgc3Ryb2tlLXdpZHRoOiA1cHg7CiAgICAgIH0KCiAgICAgIC5zdDEsIC5zdDIgewogICAgICAgIGZpbGw6ICNiYjYyYTM7CiAgICAgIH0KCiAgICAgIC5zdDIgewogICAgICAgIG9wYWNpdHk6IC44OwogICAgICB9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8Y2lyY2xlIGNsYXNzPSJzdDIiIGN4PSIxMzkuMTQiIGN5PSIyMjQuMTkiIHI9IjE1LjcxIi8+CiAgPGNpcmNsZSBjbGFzcz0ic3QyIiBjeD0iNjQuNzIiIGN5PSIxNDcuNzEiIHI9IjIyLjYyIi8+CiAgPHBhdGggY2xhc3M9InN0MiIgZD0iTTIxOS41NCwxMjIuMzRsMTQuMDgsMzYuNjRjLjcxLDEuODYtLjY2LDMuODUtMi42NSwzLjg1aC05Mi43MWMtMS45NSwwLTMuMzItMS45My0yLjY4LTMuNzdsMTMuMS0zNy41NmMuNDMtMS4yMi0uMDItMi41OC0xLjExLTMuMjktMTEuOTktNy44LTE5LjU5LTE5LjMxLTE5LjU5LTMyLjE1LDAtMjMuNDksMjUuMzgtNDIuNTIsNTYuNjktNDIuNTJzNTYuNjksMTkuMDMsNTYuNjksNDIuNTJjMCwxMy4yMy04LjA2LDI1LjA1LTIwLjcsMzIuODUtMS4xNS43MS0xLjYyLDIuMTUtMS4xMywzLjQxWiIvPgogIDxjaXJjbGUgY2xhc3M9InN0MSIgY3g9IjE2Ni42MyIgY3k9Ijg1LjY2IiByPSI5LjU0Ii8+CiAgPGNpcmNsZSBjbGFzcz0ic3QxIiBjeD0iMjAxLjkiIGN5PSI4NS42NiIgcj0iOS41NCIvPgogIDxsaW5lIGNsYXNzPSJzdDAiIHgxPSIxNjMuOTMiIHkxPSIxNjIuODQiIHgyPSIxNjkuMzIiIHkyPSIxMzQuMjEiLz4KICA8bGluZSBjbGFzcz0ic3QwIiB4MT0iMjA0LjU5IiB5MT0iMTYyLjg0IiB4Mj0iMTk5LjIiIHkyPSIxMzQuMjEiLz4KPC9zdmc+',
+    'poison': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogbm9uZTsKICAgICAgfQoKICAgICAgLnN0MCwgLnN0MSB7CiAgICAgICAgb3BhY2l0eTogLjU7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEsIC5zdDIgewogICAgICAgIHN0cm9rZTogIzlmNGE5ODsKICAgICAgICBzdHJva2UtbWl0ZXJsaW1pdDogMTA7CiAgICAgICAgc3Ryb2tlLXdpZHRoOiA1cHg7CiAgICAgIH0KCiAgICAgIC5zdDEsIC5zdDIgewogICAgICAgIGZpbGw6ICNiYjYyYTM7CiAgICAgIH0KCiAgICAgIC5zdDIgewogICAgICAgIG9wYWNpdHk6IC44OwogICAgICB9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8Y2lyY2xlIGNsYXNzPSJzdDIiIGN4PSIxMzkuMTQiIGN5PSIyMjQuMTkiIHI9IjE1LjcxIi8+CiAgPGNpcmNsZSBjbGFzcz0ic3QyIiBjeD0iNjQuNzIiIGN5PSIxNDcuNzEiIHI9IjIyLjYyIi8+CiAgPHBhdGggY2xhc3M9InN0MiIgZD0iTTIxOS41NCwxMjIuMzRsMTQuMDgsMzYuNjRjLjcxLDEuODYtLjY2LDMuODUtMi42NSwzLjg1aC05Mi43MWMtMS45NSwwLTMuMzItMS45My0yLjY4LTMuNzdsMTMuMS0zNy41NmMuNDMtMS4yMi0uMDItMi41OC0xLjExLTMuMjktMTEuOTktNy44LTE5LjU5LTE5LjMxLTE5LjU5LTMyLjE1LDAtMjMuNDksMjUuMzgtNDIuNTIsNTYuNjktNDIuNTJzNTYuNjksMTkuMDMsNTYuNjksNDIuNTJjMCwxMy4yMy04LjA2LDI1LjA1LTIwLjcsMzIuODUtMS4xNS43MS0xLjYyLDIuMTUtMS4xMywzLjQxWiIvPgogIDxjaXJjbGUgY2xhc3M9InN0MSIgY3g9IjE2Ni42MyIgY3k9Ijg1LjY2IiByPSI5LjU0Ii8+CiAgPGNpcmNsZSBjbGFzcz0ic3QxIiBjeD0iMjAxLjkiIGN5PSI4NS42NiIgcj0iOS41NCIvPgogIDxsaW5lIGNsYXNzPSJzdDAiIHgxPSIxNjMuOTMiIHkxPSIxNjIuODQiIHgyPSIxNjkuMzIiIHkyPSIxMzQuMjEiLz4KICA8bGluZSBjbGFzcz0ic3QwIiB4MT0iMjA0LjU5IiB5MT0iMTYyLjg0IiB4Mj0iMTk5LjIiIHkyPSIxMzQuMjEiLz4KPC9zdmc+',
+    'F': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgc3Ryb2tlLXdpZHRoOiA1cHg7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEgewogICAgICAgIGZpbGw6ICNlYTU3MjM7CiAgICAgICAgc3Ryb2tlOiAjZTUzMDEwOwogICAgICAgIHN0cm9rZS1taXRlcmxpbWl0OiAxMDsKICAgICAgfQoKICAgICAgLnN0MSB7CiAgICAgICAgc3Ryb2tlLXdpZHRoOiAxMHB4OwogICAgICB9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8cG9seWdvbiBjbGFzcz0ic3QxIiBwb2ludHM9IjEwMi41NyAyNDEuNDIgNzQuMTQgMTc0Ljg1IDEwOS40OCAxOTAuNzcgMTExLjIyIDEyOC4xNSAxNDUuNjggMTk0LjA5IDE1MC4yMyAxMjguMTUgMTY4LjA3IDE5My41NiAxODYuNzkgMTQyLjMyIDIwMS4zIDIwNS44MSAxODMuOTUgMjQxLjUzIDEwMi41NyAyNDEuNDIiLz4KICA8cG9seWdvbiBjbGFzcz0ic3QwIiBwb2ludHM9IjIzNy42NyAxMjMuNyAyMTcuMjQgMTExLjA4IDIxOC45OSA4Ny4xMiAyMzcuNzUgMTAwLjYgMjM3LjY3IDEyMy43Ii8+CiAgPHBvbHlnb24gY2xhc3M9InN0MCIgcG9pbnRzPSI1MC4wNiAxMzUuMyA0MS41NiAxMTIuODQgNTcuNTQgOTQuOTEgNjQuMiAxMTcuMDMgNTAuMDYgMTM1LjMiLz4KICA8cG9seWdvbiBjbGFzcz0ic3QwIiBwb2ludHM9IjE0MS4zNSA4My4wMSAxMjguOSA2Mi40NyAxNDEuMzUgNDEuOTMgMTUxLjkzIDYyLjQ3IDE0MS4zNSA4My4wMSIvPgogIDxwb2x5Z29uIGNsYXNzPSJzdDAiIHBvaW50cz0iMjI2LjQzIDE5My42OCAyMjYuNDYgMTY5LjY2IDI0Ny43NiAxNTguNTggMjQ2LjE0IDE4MS42MiAyMjYuNDMgMTkzLjY4Ii8+CiAgPHBvbHlnb24gY2xhc3M9InN0MCIgcG9pbnRzPSI0OC4xNSAyMzguNCAzNS43IDIxNy44NiA0OC4xNSAxOTcuMzIgNTguNzMgMjE3Ljg2IDQ4LjE1IDIzOC40Ii8+Cjwvc3ZnPg==',
+    'fire': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgc3Ryb2tlLXdpZHRoOiA1cHg7CiAgICAgIH0KCiAgICAgIC5zdDAsIC5zdDEgewogICAgICAgIGZpbGw6ICNlYTU3MjM7CiAgICAgICAgc3Ryb2tlOiAjZTUzMDEwOwogICAgICAgIHN0cm9rZS1taXRlcmxpbWl0OiAxMDsKICAgICAgfQoKICAgICAgLnN0MSB7CiAgICAgICAgc3Ryb2tlLXdpZHRoOiAxMHB4OwogICAgICB9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8cG9seWdvbiBjbGFzcz0ic3QxIiBwb2ludHM9IjEwMi41NyAyNDEuNDIgNzQuMTQgMTc0Ljg1IDEwOS40OCAxOTAuNzcgMTExLjIyIDEyOC4xNSAxNDUuNjggMTk0LjA5IDE1MC4yMyAxMjguMTUgMTY4LjA3IDE5My41NiAxODYuNzkgMTQyLjMyIDIwMS4zIDIwNS44MSAxODMuOTUgMjQxLjUzIDEwMi41NyAyNDEuNDIiLz4KICA8cG9seWdvbiBjbGFzcz0ic3QwIiBwb2ludHM9IjIzNy42NyAxMjMuNyAyMTcuMjQgMTExLjA4IDIxOC45OSA4Ny4xMiAyMzcuNzUgMTAwLjYgMjM3LjY3IDEyMy43Ii8+CiAgPHBvbHlnb24gY2xhc3M9InN0MCIgcG9pbnRzPSI1MC4wNiAxMzUuMyA0MS41NiAxMTIuODQgNTcuNTQgOTQuOTEgNjQuMiAxMTcuMDMgNTAuMDYgMTM1LjMiLz4KICA8cG9seWdvbiBjbGFzcz0ic3QwIiBwb2ludHM9IjE0MS4zNSA4My4wMSAxMjguOSA2Mi40NyAxNDEuMzUgNDEuOTMgMTUxLjkzIDYyLjQ3IDE0MS4zNSA4My4wMSIvPgogIDxwb2x5Z29uIGNsYXNzPSJzdDAiIHBvaW50cz0iMjI2LjQzIDE5My42OCAyMjYuNDYgMTY5LjY2IDI0Ny43NiAxNTguNTggMjQ2LjE0IDE4MS42MiAyMjYuNDMgMTkzLjY4Ii8+CiAgPHBvbHlnb24gY2xhc3M9InN0MCIgcG9pbnRzPSI0OC4xNSAyMzguNCAzNS43IDIxNy44NiA0OC4xNSAxOTcuMzIgNTguNzMgMjE3Ljg2IDQ4LjE1IDIzOC40Ii8+Cjwvc3ZnPg==',
+    'A': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogI2U2ZTZlNjsKICAgICAgICBzdHJva2U6ICNiNWI1YjY7CiAgICAgICAgc3Ryb2tlLW1pdGVybGltaXQ6IDEwOwogICAgICAgIHN0cm9rZS13aWR0aDogMTBweDsKICAgICAgfQogICAgPC9zdHlsZT4KICA8L2RlZnM+CiAgPHBhdGggY2xhc3M9InN0MCIgZD0iTTIyMC4yNyw5Mi41MmMwLDE1LjE1LTkuNDEsMjguMS0yMi43MSwzMy4zMnY2NS4xYzAsMTkuNzgtMTYuMDQsMzUuODMtMzUuODEsMzUuODNoLTM1LjgzYy0xOS43OSwwLTM1LjgzLTE2LjA1LTM1LjgzLTM1Ljgzdi02My43M2MtMTUuNDctMy45Ny0yNi45LTE3Ljk5LTI2LjktMzQuNywwLTE5Ljc5LDE2LjA0LTM1LjgzLDM1LjgzLTM1LjgzLDE2LjY2LDAsMzAuNjcsMTEuMzcsMzQuNjYsMjYuNzloMTYuMWMzLjk5LTE1LjQyLDE4LjAxLTI2Ljc5LDM0LjY4LTI2Ljc5LDE5Ljc4LDAsMzUuODEsMTYuMDQsMzUuODEsMzUuODNaIi8+Cjwvc3ZnPg==',
+    'armor': 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iX+WbvuWxgl8xIiBkYXRhLW5hbWU9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgdmlld0JveD0iMCAwIDI4My40NiAyODMuNDYiPgogIDwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyOS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiAyLjEuMCBCdWlsZCAxODYpICAtLT4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLnN0MCB7CiAgICAgICAgZmlsbDogI2U2ZTZlNjsKICAgICAgICBzdHJva2U6ICNiNWI1YjY7CiAgICAgICAgc3Ryb2tlLW1pdGVybGltaXQ6IDEwOwogICAgICAgIHN0cm9rZS13aWR0aDogMTBweDsKICAgICAgfQogICAgPC9zdHlsZT4KICA8L2RlZnM+CiAgPHBhdGggY2xhc3M9InN0MCIgZD0iTTIyMC4yNyw5Mi41MmMwLDE1LjE1LTkuNDEsMjguMS0yMi43MSwzMy4zMnY2NS4xYzAsMTkuNzgtMTYuMDQsMzUuODMtMzUuODEsMzUuODNoLTM1LjgzYy0xOS43OSwwLTM1LjgzLTE2LjA1LTM1LjgzLTM1Ljgzdi02My43M2MtMTUuNDctMy45Ny0yNi45LTE3Ljk5LTI2LjktMzQuNywwLTE5Ljc5LDE2LjA0LTM1LjgzLDM1LjgzLTM1LjgzLDE2LjY2LDAsMzAuNjcsMTEuMzcsMzQuNjYsMjYuNzloMTYuMWMzLjk5LTE1LjQyLDE4LjAxLTI2Ljc5LDM0LjY4LTI2Ljc5LDE5Ljc4LDAsMzUuODEsMTYuMDQsMzUuODEsMzUuODNaIi8+Cjwvc3ZnPg==',
+};
+
+function getInlineIconUrl(iconKey) {
+    const key = String(iconKey || '').trim();
+    if (!key) return '';
+    const uiIcons = {
+        H: 'hit-point',
+        health: 'hit-point',
+        heal: 'hit-point',
+        E: 'elixir',
+        elixir: 'elixir',
+        M: 'magic',
+        magic: 'magic',
+        D: 'damage',
+        damage: 'damage',
+        electric_damage: 'electric_damage',
+        deck: 'draw-pile',
+        draw_pile: 'draw-pile',
+        'draw-pile': 'draw-pile',
+        discard: 'discard-pile',
+        discard_pile: 'discard-pile',
+        'discard-pile': 'discard-pile',
+        exile: 'exile-pile',
+        exile_pile: 'exile-pile',
+        'exile-pile': 'exile-pile',
+        hand: 'total-pile',
+        hand_limit: 'total-pile',
+        total_pile: 'total-pile',
+        'total-pile': 'total-pile',
+    };
+    if (uiIcons[key]) return `/static/assets/ui-icons/${uiIcons[key]}.svg`;
+    const statusIcons = {
+        A: 'armor',
+        armor: 'armor',
+        dodge: 'dodge',
+        P: 'poison',
+        poison: 'poison',
+        F: 'fire',
+        fire: 'fire',
+        toxic: 'toxic',
+        triangle: 'triangle',
+        nazar: 'nazar',
+        magic_nazar: 'magic_nazar',
+        equip_protect: 'equip_protect',
+        invincible: 'invincible',
+        status_immune: 'status_immune',
+        stunned: 'stunned',
+        attack_blocked: 'attack_blocked',
+        attack_only: 'attack_only',
+        untargetable: 'untargetable',
+        bandage: 'bandage',
+        sponge: 'sponge',
+        sluggish: 'sluggish',
+        overload: 'overload',
+        foresight: 'foresight',
+        fracture: 'fracture',
+        stagnation: 'stagnation',
+        blind: 'blind',
+        heal_block: 'heal_block',
+        weakness: 'weakness',
+        bleed: 'bleed',
+        fragment: 'fragment',
+        fragile: 'fragile',
+        shield: 'shield',
+        turn_heal: 'turn_heal',
+        turn_magic: 'turn_magic',
+        root_status: 'root_status',
+        toxic_poison: 'toxic_poison',
+        magic_blocked: 'magic_blocked',
+    };
+    if (statusIcons[key]) return `/static/assets/status-icons/${statusIcons[key]}.svg`;
+    return '';
+}
+
+function renderInlineIconHtml(iconKey, label = '') {
+    const key = String(iconKey || '').trim();
+    const url = getInlineIconUrl(key) || INLINE_ICON_DATA_URLS[key];
+    const safeLabel = String(label || iconKey || '').trim();
+    if (!url) return safeLabel ? `<span class="inline-token-icon-fallback">${escapeHtml(safeLabel)}</span>` : '';
+    const title = safeLabel ? ` title="${escapeHtml(safeLabel)}"` : '';
+    return `<span class="inline-token-icon-wrap"><img class="inline-token-icon" src="${escapeHtml(url)}" alt="" aria-hidden="true"${title} onerror="this.closest('.inline-token-icon-wrap')?.classList.add('icon-load-failed')"><span class="inline-token-icon-fallback">${escapeHtml(safeLabel)}</span></span>`;
+}
+
+function getIconTermKey(iconKey) {
+    const key = String(iconKey || '').trim();
+    const map = {
+        H: 'term:H',
+        health: 'term:H',
+        heal: 'term:H',
+        E: 'term:E',
+        elixir: 'term:E',
+        M: 'term:M',
+        magic: 'term:M',
+        D: 'term:D',
+        damage: 'term:D',
+        electric_damage: 'term:electric_damage',
+        P: 'term:P',
+        poison: 'term:P',
+        F: 'term:F',
+        fire: 'term:F',
+        A: 'term:A',
+        armor: 'term:A',
+        dodge: 'status:dodge',
+    };
+    return map[key] || '';
+}
+
+function getIconTokenClass(iconKey) {
+    const key = String(iconKey || '').trim();
+    const map = {
+        H: 'heal',
+        health: 'health',
+        heal: 'heal',
+        E: 'elixir',
+        elixir: 'elixir',
+        M: 'magic',
+        magic: 'magic',
+        D: 'damage',
+        damage: 'damage',
+        electric_damage: 'damage',
+        P: 'poison',
+        poison: 'poison',
+        F: 'fire',
+        fire: 'fire',
+        A: 'armor',
+        armor: 'armor',
+        dodge: 'status-dodge',
+        shield: 'status-shield',
+        fragile: 'status-fragile',
+        toxic_poison: 'status-toxic-poison',
+        root_status: 'status-root',
+        turn_heal: 'status-turn-heal',
+        turn_magic: 'status-turn-magic',
+    };
+    return map[key] || '';
+}
+
+function getCardTextTokenIconKey(cls, rawText = '') {
+    if (cls === 'damage') return String(rawText || '').includes('电伤') ? 'electric_damage' : 'damage';
+    if (cls === 'heal' || cls === 'health') return 'H';
+    if (cls === 'elixir') return 'E';
+    if (cls === 'magic') return 'M';
+    if (cls === 'armor') return 'armor';
+    const statusMap = {
+        'status-toxic-poison': 'toxic_poison',
+        'status-sluggish': 'sluggish',
+        'status-fragile': 'fragile',
+        'status-shield': 'shield',
+        'status-turn-heal': 'turn_heal',
+        'status-turn-magic': 'turn_magic',
+        'status-root': 'root_status',
+        'status-triangle': 'triangle',
+        'status-dodge': 'dodge',
+        'status-nazar': 'nazar',
+        'status-bleed': 'bleed',
+        'status-fracture': 'fracture',
+        'status-stagnation': 'stagnation',
+        'status-blind': 'blind',
+        'status-foresight': 'foresight',
+        'status-overload': 'overload',
+        'status-heal-block': 'heal_block',
+        'status-weakness': 'weakness',
+        'status-fragment': 'fragment',
+        'status-immune': 'status_immune',
+        'status-stunned': 'stunned',
+        'status-invincible': 'invincible',
+        'status-bandage': 'bandage',
+        'status-sponge': 'sponge',
+        'status-attack-blocked': 'attack_blocked',
+        'status-attack-only': 'attack_only',
+        'status-untargetable': 'untargetable',
+        'status-magic-nazar': 'magic_nazar',
+        toxic: 'toxic',
+        fire: 'fire',
+        poison: 'poison',
+    };
+    return statusMap[cls] || '';
+}
+
+function renderCardTextTokenHtml(cls, rawText = '', termAttr = '') {
+    const text = String(rawText || '');
+    const iconKey = getCardTextTokenIconKey(cls, text);
+    const iconHtml = renderInlineIconHtml(iconKey, text);
+    return `<span class="card-token ${cls}"${termAttr}>${escapeHtml(text)}${iconHtml}</span>`;
+}
+
+function extractInlineUnitPrefix(sourceText, iconStart, iconKey) {
+    const before = String(sourceText || '').slice(0, iconStart);
+    const rawKey = String(iconKey || '').trim();
+    const key = ({
+        damage: 'D',
+        electric: 'electric_damage',
+        health: 'H',
+        heal: 'H',
+        elixir: 'E',
+        magic: 'M',
+        poison: 'P',
+        fire: 'F',
+        armor: 'A',
+    })[rawKey] || rawKey;
+    const valueAtom = String.raw`(?:\([^)]+\)|（[^）]+）|[+-]?(?:\d+|[a-zA-Z])(?:\.\d+)?|[+-]?\d+%)`;
+    const stackValueAtom = String.raw`(?:${valueAtom})(?:\s*层)?`;
+    const healingExpression = String.raw`(?:造成伤害\d+%(?:\([^)]+\)|（[^）]+）)?的|造成伤害的\d+%(?:\([^)]+\)|（[^）]+）)?|造成伤害(?:\([^)]+\)|（[^）]+）)?的)`;
+    const poisonExpression = String.raw`(?:向下取整\([^)]*\)层|向下取整（[^）]*）层|目标所有|所有|对应|施加|获得|去除|减少|增加)`;
+    const statusStackExpression = String.raw`(?:[+-]?(?:\d+|[a-zA-Z])(?:\.\d+)?层|[+-]?(?:\d+|[a-zA-Z])(?:\.\d+)?\s*)`;
+    const damageExpression = String.raw`(?:层数两倍的|层数的两倍|层数等同的|层数相同的)`;
+    const patterns = {
+        D: new RegExp(`${valueAtom}(?:\\s*)$`),
+        electric_damage: new RegExp(`${valueAtom}(?:\\s*)$`),
+        H: new RegExp(`(?:${healingExpression}|${valueAtom})(?:\\s*)$`),
+        E: /[+-]?(?:\d+|[a-zA-Z])(?:\.\d+)?(?:\s*)$/,
+        M: /[+-]?(?:\d+|[a-zA-Z])(?:\.\d+)?(?:\s*)$/,
+        P: new RegExp(`(?:${poisonExpression}|${statusStackExpression}|${stackValueAtom})(?:\\s*)$`),
+        F: new RegExp(`(?:${statusStackExpression}|${stackValueAtom})(?:\\s*)$`),
+        A: /[+-]?(?:\d+|[a-zA-Z])(?:\.\d+)?(?:\s*)$/,
+    };
+    if (key === 'D' || key === 'electric_damage') {
+        patterns[key] = new RegExp(`(?:${damageExpression}|${valueAtom})(?:\\s*)$`);
+    }
+    const pattern = patterns[key];
+    if (!pattern) return null;
+    const match = before.match(pattern);
+    if (!match || !match[0]) return null;
+    const text = match[0];
+    return {
+        text,
+        htmlLength: escapeHtml(text).length,
+    };
+}
+
+function extractInlineUnitSuffix(restAfterIcon, iconKey) {
+    const rawKey = String(iconKey || '').trim();
+    const key = ({
+        damage: 'D',
+        electric: 'electric_damage',
+        health: 'H',
+        heal: 'H',
+        poison: 'P',
+        fire: 'F',
+    })[rawKey] || rawKey;
+    const canHaveMultiplier = key === 'D' || key === 'electric_damage' || key === 'H' || key === 'P' || key === 'F';
+    if (!canHaveMultiplier) return null;
+    const text = String(restAfterIcon || '');
+    const match = text.match(/^\s*[×x]\s*(?:\([^)]+\)|（[^）]+）|\d+(?:\.\d+)?|[a-zA-Z])/);
+    if (!match || !match[0]) return null;
+    return {
+        text: match[0],
+        length: match[0].length,
+    };
 }
 
 function bindInlineCardChips(root, options = {}) {
@@ -2127,11 +2794,49 @@ function colorizeCardText(value) {
     let i = 0;
     while (i < text.length) {
         const rest = text.slice(i);
-        const cardMarker = rest.match(/^\[\[card:([^\]|\r\n]+)((?:\|[^\]]+)*)\]\]/i);
-        if (cardMarker && cardMarker[1]) {
-            const defId = cardMarker[1].trim();
-            html += inlineCardChipHtml(buildInlineCardDict(defId, cardMarker[2] || ''));
-            i += cardMarker[0].length;
+        const damageFromPoisonMarker = rest.match(/^\[\[icon:P\]\]((?:层数两倍的|层数的两倍|层数等同的|层数相同的))\[\[icon:(D|electric_damage)\]\]/i);
+        if (damageFromPoisonMarker && damageFromPoisonMarker[1] && damageFromPoisonMarker[2]) {
+            const damageIconKey = damageFromPoisonMarker[2];
+            const termKey = getIconTermKey(damageIconKey);
+            const termAttr = termKey ? ` data-term-key="${escapeHtml(termKey)}"` : '';
+            const cls = getIconTokenClass(damageIconKey);
+            html += `<span class="card-token inline-icon-token inline-unit-token${cls ? ` ${escapeHtml(cls)}` : ''}"${termAttr}>${renderInlineIconHtml('P', 'P')}${escapeHtml(damageFromPoisonMarker[1])}${renderInlineIconHtml(damageIconKey, damageIconKey)}</span>`;
+            i += damageFromPoisonMarker[0].length;
+            continue;
+        }
+        const iconMarker = rest.match(/^\[\[icon:([a-zA-Z0-9_:-]+)\]\]/i);
+        if (iconMarker && iconMarker[1]) {
+            const iconKey = iconMarker[1];
+            const termKey = getIconTermKey(iconKey);
+            const termAttr = termKey ? ` data-term-key="${escapeHtml(termKey)}"` : '';
+            const cls = getIconTokenClass(iconKey);
+            const unitPrefix = extractInlineUnitPrefix(text, i, iconKey);
+            if (unitPrefix) {
+                const unitSuffix = extractInlineUnitSuffix(text.slice(i + iconMarker[0].length), iconKey);
+                html = html.slice(0, Math.max(0, html.length - unitPrefix.htmlLength));
+                html += `<span class="card-token inline-icon-token inline-unit-token${cls ? ` ${escapeHtml(cls)}` : ''}"${termAttr}>${escapeHtml(unitPrefix.text)}${renderInlineIconHtml(iconKey, iconKey)}${unitSuffix ? escapeHtml(unitSuffix.text) : ''}</span>`;
+                i += iconMarker[0].length + (unitSuffix ? unitSuffix.length : 0);
+                continue;
+            }
+            html += `<span class="card-token inline-icon-token${cls ? ` ${escapeHtml(cls)}` : ''}"${termAttr}>${renderInlineIconHtml(iconKey, iconKey)}</span>`;
+            i += iconMarker[0].length;
+            continue;
+        }
+        const statusMarker = rest.match(/^\[\[status:([^\]\r\n]+)\]\]/i);
+        if (statusMarker && statusMarker[1]) {
+            const statusKey = statusMarker[1].trim();
+            const statusDef = getAllStatusDefs().get(statusKey) || getAllStatusDefs().get(statusKey.replace(/^.*:/, ''));
+            const label = statusDef ? statusDef.label : statusKey;
+            const color = statusDef ? statusDef.color : '';
+            const style = color ? ` style="color:${escapeHtml(color)}"` : '';
+            html += `<span class="card-token status-inline" data-term-key="status:${escapeHtml(statusKey)}"${style}>${escapeHtml(label)}</span>`;
+            i += statusMarker[0].length;
+            continue;
+        }
+        const cardMarker = parseInlineCardMarker(rest);
+        if (cardMarker) {
+            html += inlineCardChipHtml(buildInlineCardDict(cardMarker.defId, cardMarker.modifierText));
+            i += cardMarker.raw.length;
             continue;
         }
         let matched = null;
@@ -2145,7 +2850,7 @@ function colorizeCardText(value) {
         if (matched) {
             const termKey = getCardTextTokenTermKey(matched.cls, matched.text);
             const termAttr = termKey ? ` data-term-key="${escapeHtml(termKey)}"` : '';
-            html += `<span class="card-token ${matched.cls}"${termAttr}>${escapeHtml(matched.text)}</span>`;
+            html += renderCardTextTokenHtml(matched.cls, matched.text, termAttr);
             i += matched.text.length;
         } else {
             html += escapeHtml(text[i]);
@@ -2177,8 +2882,29 @@ function getBattleLogKnownPlayerNames() {
     return Array.from(names).sort((a, b) => b.length - a.length);
 }
 
+function normalizeBattleLogIconTokens(value) {
+    let text = String(value || '');
+    const amountExpr = String.raw`(?:[+\-－]?\d+(?:\.\d+)?(?:\+\d+(?:\.\d+)?)?|\([+\-－]?\d+(?:\.\d+)?(?:\+[+\-－]?\d+(?:\.\d+)?)+\)|（[+\-－]?\d+(?:\.\d+)?(?:\+[+\-－]?\d+(?:\.\d+)?)+）)`;
+    const unitBoundary = String.raw`(?=(?:\s|$|[，。；;、！!？?）)\]]|[（(]|[×x]))`;
+    const replaceUnit = (unit, iconKey) => {
+        const re = new RegExp(`(${amountExpr})${unit}${unitBoundary}`, 'g');
+        text = text.replace(re, `$1[[icon:${iconKey}]]`);
+    };
+    text = text.replace(/(\d+(?:\.\d+)?)电伤/g, '$1[[icon:electric_damage]]');
+    replaceUnit('D', 'D');
+    replaceUnit('P', 'P');
+    replaceUnit('F', 'F');
+    replaceUnit('H', 'H');
+    replaceUnit('E', 'E');
+    replaceUnit('M', 'M');
+    text = text.replace(/(^|[^:])H=/g, '$1[[icon:H]]=');
+    text = text.replace(/(^|[^:])E=/g, '$1[[icon:E]]=');
+    text = text.replace(/(^|[^:])M=/g, '$1[[icon:M]]=');
+    return text;
+}
+
 function colorizeBattleLogText(value) {
-    const text = String(value || '');
+    const text = normalizeBattleLogIconTokens(value);
     for (const name of getBattleLogKnownPlayerNames()) {
         if (!name || !text.startsWith(name)) continue;
         const rest = text.slice(name.length);
@@ -2615,6 +3341,7 @@ let dmThreadsLastFetchAt = 0;
 const dmFailureBackoff = { threads: 0, messages: new Map() };
 const socialEndpointRequestTimes = new Map();
 let activeSocialFriendId = null;
+let activeSocialSection = 'friends';
 let lobbyMentionCandidates = [];
 let lobbyMentionMenu = null;
 let lobbyMentionActiveRange = null;
@@ -2707,6 +3434,7 @@ let surrenderConsentTimerId = null;
 let surrenderConsentCountdown = 0;
 let localCountdownTimerId = null;
 let localTurnTimerSnapshot = null;
+let lastPregameResyncRequestAt = 0;
 
 function beginChoiceRequest(data = {}) {
     choicePending = true;
@@ -2761,6 +3489,10 @@ function clearActiveMatchRoute(reason = '') {
 function rememberActiveMatchRoute(payload = {}, reason = '') {
     if (soloMode || replayMode || !payload || payload.solo || payload.replay) return;
     const phaseName = String(payload.phase || phase || '');
+    if (payload.game_over || phaseName === 'game_over') {
+        clearActiveMatchRoute(reason ? `game_over:${reason}` : 'game_over');
+        return;
+    }
     if (!isNetworkMatchPhase(phaseName)) return;
     const port = String(payload.instance_port || GTN_INSTANCE_PORT || '').trim();
     if (!port) return;
@@ -2848,7 +3580,7 @@ const LOCAL_SOLO_SUPPORTED_EFFECTS = new Set([
     'damage', 'deal_damage', 'direct_damage', 'lifesteal_damage', 'triangle_damage',
     'heal', 'draw', 'gain_e', 'gain_m', 'add_armor', 'gain_armor', 'gain_dodge',
     'poison', 'apply_poison', 'burn', 'apply_burn', 'toxic', 'apply_toxic',
-    'vulnus', 'apply_vulnerable', 'if', 'if_else', 'repeat', 'for_each_selected_card',
+    'if', 'if_else', 'repeat', 'for_each_selected_card',
     'request_card', 'request_target', 'request_confirm',
     'card_prop_set', 'card_prop_add', 'card_prop_mul', 'card_damage_multiply', 'clear_tags',
     'equipment_prop_set', 'equipment_prop_add',
@@ -3215,12 +3947,30 @@ function updateStaticText() {
     if (settingsTabMods) settingsTabMods.textContent = UI.settings_mods;
     const settingsTabSocial = $('settings-tab-social');
     if (settingsTabSocial) settingsTabSocial.textContent = UI.social;
+    const settingsTabAudio = $('settings-tab-audio');
+    if (settingsTabAudio) settingsTabAudio.textContent = UI.settings_audio || '音频';
     const settingsAppearance = $('settings-section-appearance');
     if (settingsAppearance) settingsAppearance.textContent = UI.settings_appearance;
     const settingsMods = $('settings-section-mods');
     if (settingsMods) settingsMods.textContent = UI.settings_mods;
     const settingsSocial = $('settings-section-social');
     if (settingsSocial) settingsSocial.textContent = UI.social;
+    const settingsAudio = $('settings-section-audio');
+    if (settingsAudio) settingsAudio.textContent = UI.settings_audio || '音频';
+    const audioEnabledLabel = $('settings-label-audio-enabled');
+    if (audioEnabledLabel) audioEnabledLabel.textContent = UI.settings_audio_enabled || '启用音频';
+    const audioMasterLabel = $('settings-label-volume-master');
+    if (audioMasterLabel) audioMasterLabel.textContent = UI.settings_volume_master || '主音量';
+    const audioMusicLabel = $('settings-label-volume-music');
+    if (audioMusicLabel) audioMusicLabel.textContent = UI.settings_volume_music || '背景音乐';
+    const audioUiLabel = $('settings-label-volume-ui');
+    if (audioUiLabel) audioUiLabel.textContent = UI.settings_volume_ui || '按钮';
+    const audioSfxLabel = $('settings-label-volume-sfx');
+    if (audioSfxLabel) audioSfxLabel.textContent = UI.settings_volume_sfx || '效果';
+    const audioTestBtn = $('btn-audio-test');
+    if (audioTestBtn) audioTestBtn.textContent = UI.settings_audio_test || '测试音效';
+    const audioHint = $('settings-audio-hint');
+    if (audioHint) audioHint.textContent = UI.settings_audio_hint || '音量使用体感曲线，滑块变化会更接近人耳感受到的大小。';
     const socialLoginHint = $('settings-social-login-hint');
     if (socialLoginHint) socialLoginHint.textContent = UI.social_login_hint;
     const acceptFriendLabel = $('settings-label-accept-friend-requests');
@@ -3326,21 +4076,19 @@ function updateStaticText() {
     if (btnConnect) btnConnect.textContent = UI.enter_lobby;
     const btnSoloTraining = $('btn-solo-training');
     if (btnSoloTraining) btnSoloTraining.textContent = UI.solo_training;
-    const btnAccountTop = $('btn-account-top');
-    if (btnAccountTop) btnAccountTop.textContent = UI.account;
-    const btnFriendsTop = $('btn-friends-top');
-    if (btnFriendsTop) btnFriendsTop.textContent = UI.friends;
-    const btnSkinTop = $('btn-skin-top');
-    if (btnSkinTop) btnSkinTop.textContent = UI.skin;
-    const btnChangelogTop = $('btn-changelog-top');
-    if (btnChangelogTop) btnChangelogTop.textContent = UI.about_changelog || '更新日志';
+    setIconButtonLabel('btn-open-settings', UI.settings_btn || UI.settings || '设置');
+    setIconButtonLabel('btn-account-top', UI.account);
+    setIconButtonLabel('btn-friends-top', UI.friends);
+    setIconButtonLabel('btn-skin-top', UI.skin);
+    setIconButtonLabel('btn-changelog-top', UI.about_changelog || '更新日志');
+    setIconButtonLabel('btn-card-gallery', UI.card_gallery || UI.gallery || '图鉴');
+    setIconButtonLabel('btn-replays-top', UI.account_replays || UI.replay || '回放');
     const changelogTitle = $('changelog-popover-title');
     if (changelogTitle) changelogTitle.textContent = UI.about_changelog || '更新日志';
     if (changelogCache && Array.isArray(changelogCache.items) && !$('changelog-popover')?.classList.contains('hidden')) {
         renderChangelogItems(changelogCache.items);
     }
-    const btnLeaderboardTop = $('btn-leaderboard-top');
-    if (btnLeaderboardTop) btnLeaderboardTop.textContent = UI.leaderboard || '排行榜';
+    setIconButtonLabel('btn-leaderboard-top', UI.leaderboard || '排行榜');
     const skinTitle = $('skin-title');
     if (skinTitle) skinTitle.textContent = UI.skin_title || UI.skin;
     const skinBack = $('btn-skin-back');
@@ -3391,9 +4139,7 @@ function updateStaticText() {
     const accountPopoverTitle = $('account-popover-title');
     if (accountPopoverTitle) accountPopoverTitle.textContent = UI.account;
     const statsPopoverTitle = $('stats-popover-title');
-    if (statsPopoverTitle) statsPopoverTitle.textContent = UI.stats || '统计';
-    const statsTopBtn = $('btn-stats-top');
-    if (statsTopBtn) statsTopBtn.textContent = UI.stats || '统计';
+    if (statsPopoverTitle) statsPopoverTitle.textContent = UI.account_replays || UI.replay || '回放';
     const leaderboardTitle = $('leaderboard-popover-title');
     if (leaderboardTitle) leaderboardTitle.textContent = UI.leaderboard || '排行榜';
     const leaderboardNote = $('leaderboard-note');
@@ -3585,11 +4331,15 @@ function updateStaticText() {
     if (youLabel && (!gameState || !gameState.your_name)) youLabel.textContent = UI.you;
     const oppInfo = $('opp-info');
     if (oppInfo && (!gameState || !gameState.opponent)) {
-        setPileInfoText(oppInfo, isMinimalUiStyle() ? { text: '✦0 ▣0', title: UI.hand_deck_zero_opp } : { text: UI.hand_deck_zero_opp, title: '' });
+        setPileInfoText(oppInfo, isMinimalUiStyle()
+            ? { text: '0/0', title: UI.hand_deck_zero_opp, items: [{ icon: 'total-pile', value: 0 }, { icon: 'draw-pile', value: 0 }] }
+            : { text: UI.hand_deck_zero_opp, title: '' });
     }
     const youInfo = $('you-info');
     if (youInfo && (!gameState || !gameState.you)) {
-        setPileInfoText(youInfo, isMinimalUiStyle() ? { text: '✦0 ▣0 ⟲0', title: UI.hand_deck_zero_you } : { text: UI.hand_deck_zero_you, title: '' });
+        setPileInfoText(youInfo, isMinimalUiStyle()
+            ? { text: '0/0/0', title: UI.hand_deck_zero_you, items: [{ icon: 'total-pile', value: 0 }, { icon: 'draw-pile', value: 0 }, { icon: 'discard-pile', value: 0 }] }
+            : { text: UI.hand_deck_zero_you, title: '' });
     }
     const onlineCount = $('lobby-online-count');
     if (onlineCount && phase !== 'lobby') onlineCount.textContent = tf('online_count', 0);
@@ -3626,6 +4376,24 @@ function updateStaticText() {
 }
 
 function $(id) { return document.getElementById(id); }
+
+function setIconButtonLabel(id, label) {
+    const btn = $(id);
+    if (!btn) return;
+    const text = label || btn.getAttribute('aria-label') || btn.title || '';
+    const labelEl = btn.querySelector('.top-icon-label');
+    if (labelEl) {
+        labelEl.textContent = text;
+    } else {
+        btn.textContent = text;
+    }
+    btn.setAttribute('aria-label', text);
+    if (btn.classList && btn.classList.contains('top-icon-btn')) {
+        btn.removeAttribute('title');
+    } else {
+        btn.title = text;
+    }
+}
 
 function restartTransientClass(el, className, duration = 650) {
     if (!el || !className) return;
@@ -3700,16 +4468,20 @@ function appendSpectatorCountStatus(text, gs) {
 
 function updateTopActionButtons(viewId = activeViewId) {
     const onHome = viewId === 'view-login';
+    const settingsTop = $('btn-open-settings');
+    if (settingsTop) settingsTop.classList.toggle('hidden', !onHome);
     const accountTop = $('btn-account-top');
     if (accountTop) accountTop.classList.toggle('hidden', !onHome);
     const friendsTop = $('btn-friends-top');
     if (friendsTop) friendsTop.classList.toggle('hidden', !onHome || !currentAccount);
-    const statsTop = $('btn-stats-top');
-    if (statsTop) statsTop.classList.toggle('hidden', !onHome || !currentAccount);
     const skinTop = $('btn-skin-top');
     if (skinTop) skinTop.classList.toggle('hidden', !onHome);
     const changelogTop = $('btn-changelog-top');
     if (changelogTop) changelogTop.classList.toggle('hidden', !onHome);
+    const galleryTop = $('btn-card-gallery');
+    if (galleryTop) galleryTop.classList.toggle('hidden', !onHome);
+    const replayTop = $('btn-replays-top');
+    if (replayTop) replayTop.classList.toggle('hidden', !onHome);
     const leaderboardTop = $('btn-leaderboard-top');
     if (leaderboardTop) leaderboardTop.classList.toggle('hidden', !onHome);
 }
@@ -3919,6 +4691,9 @@ let changelogLoaded = false;
 let changelogLoadingPromise = null;
 let changelogCache = null;
 const CHANGELOG_CACHE_KEY = 'gtn_changelog_cache_v1';
+const CHANGELOG_READ_VERSION_KEY = 'gtn_changelog_read_version_v1';
+const CHANGELOG_READ_DATE_KEY = 'gtn_changelog_read_latest_date_v1';
+const CHANGELOG_BOOT_VERSION_KEY = 'gtn_changelog_boot_version_v1';
 
 function currentChangelogCacheVersion() {
     return String(window.__GTN_STATIC_VERSION__ || window.__GTN_APP_VERSION__ || window.__GTN_INSTANCE_ID__ || 'dev');
@@ -3965,23 +4740,65 @@ function renderChangelogItems(items) {
     });
 }
 
-async function loadChangelog(force = false) {
+function getChangelogUnreadCount(cache = changelogCache) {
+    if (!cache || !Array.isArray(cache.items) || !cache.items.length) return 0;
+    const serverVersion = String(cache.serverVersion || '');
+    const readVersion = String(localStorage.getItem(CHANGELOG_READ_VERSION_KEY) || '');
+    if (serverVersion && readVersion === serverVersion) return 0;
+    const readDate = String(localStorage.getItem(CHANGELOG_READ_DATE_KEY) || '');
+    if (!readDate) return Math.min(cache.items.length, 99);
+    const newerCount = cache.items.filter(item => String(item && item.date || '') > readDate).length;
+    return Math.min(Math.max(newerCount, serverVersion ? 1 : 0), 99);
+}
+
+function updateChangelogBadge() {
+    const btn = $('btn-changelog-top');
+    if (!btn) return;
+    const count = getChangelogUnreadCount();
+    if (count > 0) {
+        btn.dataset.badge = count > 99 ? '99+' : String(count);
+        btn.classList.add('has-badge');
+    } else {
+        delete btn.dataset.badge;
+        btn.classList.remove('has-badge');
+    }
+}
+
+function markChangelogRead() {
+    if (!changelogCache || !Array.isArray(changelogCache.items) || !changelogCache.items.length) return;
+    try {
+        localStorage.setItem(CHANGELOG_READ_VERSION_KEY, String(changelogCache.serverVersion || ''));
+        localStorage.setItem(CHANGELOG_READ_DATE_KEY, String(changelogCache.items[0] && changelogCache.items[0].date || ''));
+    } catch (_) {}
+    updateChangelogBadge();
+}
+
+function loadCachedChangelog() {
+    try {
+        const cached = JSON.parse(localStorage.getItem(CHANGELOG_CACHE_KEY) || 'null');
+        if (cached && Array.isArray(cached.items)) {
+            changelogCache = cached;
+            changelogLoaded = true;
+            return cached;
+        }
+    } catch (_) {}
+    return null;
+}
+
+async function loadChangelog(force = false, options = {}) {
     if (changelogLoaded && !force) return;
     if (changelogLoadingPromise) return changelogLoadingPromise;
     const body = $('changelog-popover-body');
     const cacheVersion = currentChangelogCacheVersion();
     if (!force) {
-        try {
-            const cached = JSON.parse(localStorage.getItem(CHANGELOG_CACHE_KEY) || 'null');
-            if (cached && cached.version === cacheVersion && Array.isArray(cached.items)) {
-                changelogCache = cached;
-                changelogLoaded = true;
-                renderChangelogItems(cached.items);
-                return;
-            }
-        } catch (_) {}
+        const cached = loadCachedChangelog();
+        if (cached && cached.version === cacheVersion) {
+            renderChangelogItems(cached.items);
+            updateChangelogBadge();
+            return;
+        }
     }
-    if (body && !changelogLoaded) {
+    if (body && !changelogLoaded && !options.silent) {
         body.innerHTML = `<p class="muted">${escapeHtml(UI.loading || 'Loading...')}</p>`;
     }
     changelogLoadingPromise = fetch('/api/changelog?limit=20', { cache: 'default' })
@@ -3993,10 +4810,11 @@ async function loadChangelog(force = false) {
             try {
                 localStorage.setItem(CHANGELOG_CACHE_KEY, JSON.stringify(changelogCache));
             } catch (_) {}
-            renderChangelogItems(items);
+            if (!options.silent) renderChangelogItems(items);
+            updateChangelogBadge();
         })
         .catch(() => {
-            if (body) {
+            if (body && !options.silent) {
                 body.textContent = '';
                 const error = document.createElement('p');
                 error.className = 'error-text';
@@ -4008,6 +4826,17 @@ async function loadChangelog(force = false) {
             changelogLoadingPromise = null;
         });
     return changelogLoadingPromise;
+}
+
+function initChangelogBadge() {
+    loadCachedChangelog();
+    updateChangelogBadge();
+    const cacheVersion = currentChangelogCacheVersion();
+    const lastBootVersion = String(localStorage.getItem(CHANGELOG_BOOT_VERSION_KEY) || '');
+    if (cacheVersion && lastBootVersion !== cacheVersion) {
+        try { localStorage.setItem(CHANGELOG_BOOT_VERSION_KEY, cacheVersion); } catch (_) {}
+        loadChangelog(true, { silent: true });
+    }
 }
 
 function openAbout() {
@@ -4033,7 +4862,7 @@ function toggleChangelogPopover(force) {
         toggleLeaderboardPopover(false);
         if (typeof toggleAccountPopover === 'function') toggleAccountPopover(false);
         if (typeof toggleFriendsPopover === 'function') toggleFriendsPopover(false);
-        loadChangelog();
+        Promise.resolve(loadChangelog()).then(markChangelogRead);
     }
 }
 
@@ -4152,8 +4981,8 @@ function showCardGallery(selectedId = null, mode = 'cards') {
     const backBtn = $('btn-gallery-back');
     if (backBtn) backBtn.textContent = galleryReturnToRules ? UI.gallery_back_rules : UI.back_to_home;
     if (selectedId) gallerySelectedId = selectedId;
-    if (!gallerySelectedId || !CARD_DEFS[gallerySelectedId] || gallerySelectedId === 'Error') {
-        gallerySelectedId = Object.keys(CARD_DEFS).filter(id => id !== 'Error').sort(compareGalleryCards)[0] || null;
+    if (!gallerySelectedId || !isVisibleLoadoutCardDef(CARD_DEFS[gallerySelectedId])) {
+        gallerySelectedId = Object.keys(CARD_DEFS).filter(id => isVisibleLoadoutCardDef(CARD_DEFS[id])).sort(compareGalleryCards)[0] || null;
     }
     showView('view-card-gallery');
     renderCardGallery();
@@ -4235,7 +5064,11 @@ function getGalleryFlagUsers(flag) {
 const GALLERY_CARD_TYPE_ORDER = { thorn: 0, bloom: 1, guard: 2, root: 3 };
 
 function isPublicCardDef(cd) {
-    return !!(cd && cd.id !== 'Error');
+    return !!(cd && cd.id !== 'Error' && cd.visible_in_current_loadout !== false);
+}
+
+function isVisibleLoadoutCardDef(cd) {
+    return !!(cd && cd.id !== 'Error' && cd.visible_in_current_loadout !== false);
 }
 
 function localizedModNameFromFields(obj, fallback = '') {
@@ -4423,7 +5256,7 @@ function renderCardGallery() {
         });
     });
     const ids = Object.keys(CARD_DEFS)
-        .filter(id => id !== 'Error')
+        .filter(id => isVisibleLoadoutCardDef(CARD_DEFS[id]))
         .filter(id => {
             const cd = CARD_DEFS[id];
             if (!cd) return false;
@@ -4594,6 +5427,16 @@ function renderOpeningEventGallery(list, detail, q) {
 function getAllStatusDefs() {
     const result = new Map();
     const termLib = getTermIntroLibrary();
+    const vanillaStatusIds = new Set([
+        'jungle:fragile',
+        'jungle:shield',
+        'jungle:turn_heal_turns',
+        'jungle:turn_heal_power',
+        'jungle:turn_magic_turns',
+        'jungle:turn_magic_power',
+        'jungle:root_status',
+        'jungle:toxic_poison',
+    ]);
     const builtInList = [
         { key: 'poison', label: UI.status_poison, desc: termLib.P ? termLib.P.desc : '', color: COLORS.poison },
         { key: 'fire', label: UI.status_fire, desc: termLib.F ? termLib.F.desc : '', color: COLORS.fire },
@@ -4603,7 +5446,8 @@ function getAllStatusDefs() {
         { key: 'magic_nazar', label: '魔法邪眼', desc: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', color: COLORS.magic },
         { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         { key: 'invincible', label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
-        { key: 'status_immune', label: UI.status_immune || '状态免疫', desc: '效果存在时，部分负面状态不会生效。', color: '#16A085' },
+        { key: 'dodge', label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
+        { key: 'status_immune', label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。', color: '#16A085' },
         { key: 'stunned', label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         { key: 'attack_blocked', label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         { key: 'attack_only', label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
@@ -4616,18 +5460,18 @@ function getAllStatusDefs() {
         { key: 'fracture', label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         { key: 'stagnation', label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
         { key: 'blind', label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。回合开始生效后，清空失明。', color: '#2C3E50' },
-        { key: 'heal_block', label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数-1。', color: '#E84393' },
+        { key: 'heal_block', label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数下取整减半。', color: '#E84393' },
         { key: 'weakness', label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
         { key: 'fragment', label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
-        { key: 'jungle:fragile', label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A' },
-        { key: 'jungle:shield', label: '护盾', desc: '受到伤害时先消耗护盾层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。', color: '#2E7D7D' },
-        { key: 'jungle:turn_heal_turns', label: '回合回复', desc: '写作“回合回复:X;Y”。出现和回合开始时回复Y点H，然后X减少1；X为0时消失。', color: '#F48FB1' },
-        { key: 'jungle:turn_magic_turns', label: '魔力回合回复', desc: '写作“魔力回合回复:X;Y”。出现和回合开始时回复Y点M，然后X减少1；X为0时消失。', color: COLORS.magic },
-        { key: 'jungle:root_status', label: '树根', desc: '增加护甲；受到物理伤害时减少1层。产生它的树根装备离场时，会清除对应树根。', color: '#6E8B3D' },
-        { key: 'jungle:toxic_poison', label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31' },
+        { key: 'jungle:fragile', label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A', source: 'vanilla' },
+        { key: 'jungle:shield', label: '护盾', desc: '受到伤害时先消耗护盾层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。', color: '#2E7D7D', source: 'vanilla' },
+        { key: 'jungle:turn_heal_turns', iconKey: 'turn_heal', label: '回合回复', desc: '写作“回合回复:X;Y”。出现和回合开始时回复Y点H，然后X减少1；X为0时消失。', color: '#F48FB1', source: 'vanilla' },
+        { key: 'jungle:turn_magic_turns', iconKey: 'turn_magic', label: '魔力回合回复', desc: '写作“魔力回合回复:X;Y”。出现和回合开始时回复Y点M，然后X减少1；X为0时消失。', color: COLORS.magic, source: 'vanilla' },
+        { key: 'jungle:root_status', label: '树根', desc: '增加护甲；受到物理伤害时减少1层。产生它的树根装备离场时，会清除对应树根。', color: '#6E8B3D', source: 'vanilla' },
+        { key: 'jungle:toxic_poison', iconKey: 'toxic_poison', label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31', source: 'vanilla' },
     ];
-    builtInList.forEach(s => result.set(s.key, { ...s, source: 'vanilla' }));
+    builtInList.forEach(s => result.set(s.key, { ...s, source: s.source || 'vanilla' }));
     if (CUSTOM_STATUS_DEFS && typeof CUSTOM_STATUS_DEFS === 'object') {
         Object.entries(CUSTOM_STATUS_DEFS).forEach(([id, def]) => {
             const existing = result.get(id);
@@ -4639,12 +5483,49 @@ function getAllStatusDefs() {
                 label,
                 desc: desc || (existing ? existing.desc : ''),
                 color,
-                source: def.v2_mod_id || def.source_mod || 'mod',
+                source: vanillaStatusIds.has(id) || (existing && existing.source === 'vanilla') ? 'vanilla' : (def.v2_mod_id || def.source_mod || 'mod'),
                 customDef: def,
             });
         });
     }
     return result;
+}
+
+const STATUS_ICON_BASE = '/static/assets/status-icons/';
+const STATUS_ICON_KEYS = new Set([
+    'armor', 'attack_blocked', 'attack_only', 'bandage', 'bleed', 'blind', 'dodge', 'equip_protect',
+    'fire', 'foresight', 'fracture', 'fragile', 'fragment', 'heal_block',
+    'invincible', 'magic_blocked', 'magic_nazar', 'nazar', 'overload', 'poison',
+    'root_status', 'shield', 'sluggish', 'sponge', 'stagnation', 'status_immune',
+    'stunned', 'toxic_poison', 'toxic', 'triangle', 'turn_heal', 'turn_magic',
+    'untargetable', 'weakness'
+]);
+
+function normalizeStatusIconKey(key) {
+    const raw = String(key || '').trim();
+    if (!raw) return '';
+    if (raw === 'jungle:fragile') return 'fragile';
+    if (raw === 'jungle:shield') return 'shield';
+    if (raw === 'jungle:root_status' || raw === 'jungle:root') return 'root_status';
+    if (raw === 'jungle:toxic_poison') return 'toxic_poison';
+    if (raw === 'jungle:turn_heal_turns' || raw === 'turn_heal_turns' || raw === 'jungle:turn_heal_power' || raw === 'turn_heal_power') return 'turn_heal';
+    if (raw === 'jungle:turn_magic_turns' || raw === 'turn_magic_turns' || raw === 'jungle:turn_magic_power' || raw === 'turn_magic_power') return 'turn_magic';
+    if (raw === 'skip_turn') return 'stunned';
+    if (raw === 'fragment_stacks') return 'fragment';
+    return raw.replace(/^.*:/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+}
+
+function getStatusIconUrl(key, explicitIconKey = '') {
+    const iconKey = normalizeStatusIconKey(explicitIconKey || key);
+    if (!STATUS_ICON_KEYS.has(iconKey)) return '';
+    return `${STATUS_ICON_BASE}${iconKey}.svg`;
+}
+
+function renderStatusIconHtml(key, label = '', explicitIconKey = '', extraClass = '') {
+    const url = getStatusIconUrl(key, explicitIconKey);
+    if (!url) return '';
+    const cls = extraClass ? ` status-icon-${escapeHtml(extraClass)}` : '';
+    return `<img class="status-icon${cls}" src="${escapeHtml(url)}" alt="${escapeHtml(label || '')}" loading="lazy">`;
 }
 
 function renderStatusGallery(list, detail, q) {
@@ -4663,7 +5544,7 @@ function renderStatusGallery(list, detail, q) {
         const row = document.createElement('div');
         row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
         const sourceTag = s.source === 'vanilla' ? '' : `<span class="gallery-row-meta" style="color:${s.color}">${s.source}</span>`;
-        row.innerHTML = `<div class="gallery-row-title" style="color:${s.color}">${escapeHtml(s.label)}</div>${sourceTag}`;
+        row.innerHTML = `<div class="gallery-row-title gallery-status-title" style="color:${s.color}">${renderStatusIconHtml(s.key, s.label, s.iconKey, 'gallery-row')}${escapeHtml(s.label)}</div>${sourceTag}`;
         row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
         list.appendChild(row);
     });
@@ -4675,7 +5556,7 @@ function renderStatusGallery(list, detail, q) {
     }
     gallerySelectedId = `status:${s.key}`;
     detail.innerHTML = `<div class="gallery-simple-detail">
-        <h3 style="color:${s.color}">${escapeHtml(s.label)}</h3>
+        <h3 class="gallery-status-heading" style="color:${s.color}">${renderStatusIconHtml(s.key, s.label, s.iconKey, 'gallery-detail')}${escapeHtml(s.label)}</h3>
         <p><b>ID：</b>${s.key}</p>
         <p><b>来源：</b>${s.source === 'vanilla' ? '原版' : s.source}</p>
         <p>${escapeHtml(s.desc)}</p>
@@ -6083,7 +6964,8 @@ function getCardEffectTextForInstance(cardDict, cardDef) {
     if (nextHits <= baseHits || baseHits < 2) return text;
     if (info && !info.triangle) {
         const times = '\u00d7';
-        const oldHitPattern = new RegExp(`(\\d+\\s*[DＤ]\\s*[x×${times}]\\s*)${baseHits}`, 'g');
+        const damageUnitPattern = String.raw`(?:[DＤ]|\[\[icon:D\]\]|\[\[icon:damage\]\])`;
+        const oldHitPattern = new RegExp(`(\\d+\\s*${damageUnitPattern}\\s*[x×${times}]\\s*)${baseHits}`, 'g');
         text = text.replace(oldHitPattern, `$1${nextHits}`);
     }
     const baseCopyCount = Math.max(0, baseHits - 1);
@@ -6140,6 +7022,9 @@ function createCardElement(cardDict, options = {}) {
     }
     if (defId === 'Yggdrasil' || cardDef.id === 'Yggdrasil' || cardDef.legacy_id === 'Yggdrasil' || cardDef.name_cn === '世界树之叶') {
         el.classList.add('card-yggdrasil');
+    }
+    if (cardDef.ui_effect_size === 'slightly_small') {
+        el.classList.add('card-effect-slightly-small');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Grapes', 'MagicGrapes', 'Peas', 'MagicPeas'])
         || ['葡萄', '魔法葡萄', '豌豆', '魔法豌豆'].includes(cardDef.name_cn)) {
@@ -6320,6 +7205,12 @@ function cardHasSelfOnlyFlag(cardDict, cardDef = null) {
     return effective.has('self_only') || effective.has('tag_self_only');
 }
 
+function cardHasSublimeFlag(cardDict, cardDef = null) {
+    const resolvedDef = cardDef || getCardDef(cardDict && cardDict.def_id);
+    const { effective } = getEffectiveCardFlagSets(cardDict || {}, resolvedDef || {});
+    return effective.has('sublime') || effective.has('vanilla:sublime') || effective.has('tag_sublime') || effective.has('tag_vanilla:sublime');
+}
+
 function shouldDisplayCardFlag(flag, options = {}) {
     const normalized = normalizeCardFlag(flag);
     if (!normalized) return false;
@@ -6466,7 +7357,11 @@ function createCardChoiceChip(cardDict, options = {}) {
     if (!blinded && options.extraCostText) {
         const cost = document.createElement('span');
         cost.className = 'choice-card-extra-cost';
-        cost.textContent = options.extraCostText;
+        if (options.extraCostHtml) {
+            cost.innerHTML = options.extraCostHtml;
+        } else {
+            cost.textContent = options.extraCostText;
+        }
         chip.appendChild(cost);
     }
     const flagsHtml = blinded ? '' : buildInstanceOnlyFlagHtml(cardDict, cardDef, options);
@@ -6520,9 +7415,13 @@ function getAvailableElixirForMimicChoice(sourceCard, ownerState = null) {
 function mimicCardChoiceOption(cardDict, sourceCard = null, ownerState = null) {
     const cost = getMimicSpecialCostForCard(cardDict);
     const availableE = getAvailableElixirForMimicChoice(sourceCard, ownerState);
-    const extraCostText = (UI.mimic_extra_cost || 'Cost {0}E').replace('{0}', cost);
+    const template = UI.mimic_extra_cost || 'Cost {0}E';
+    const extraCostText = template.replace('{0}', cost);
+    const prefix = template.includes('{0}') ? template.split('{0}')[0] : '';
+    const extraCostHtml = `${prefix ? `<span class="choice-extra-cost-label">${escapeHtml(prefix)}</span>` : ''}${renderResourceCostInline(cost, 0)}`;
     return cardChoiceOption(cardDict, {
         extraCostText,
+        extraCostHtml,
         disabled: cost > availableE,
     });
 }
@@ -7044,6 +7943,21 @@ function pushPositiveValue(list, value, count = 1) {
     for (let i = 0; i < times; i++) list.push(amount);
 }
 
+function isPredictionStatusImmune(state) {
+    if (!state || typeof state !== 'object') return false;
+    const custom = state.custom_statuses || {};
+    return Number(state.status_immune || custom.status_immune || custom.immune || custom['状态免疫'] || 0) > 0;
+}
+
+function applyHealBlockToPrediction(value, recipientState) {
+    const amount = Math.max(0, Math.floor(Number(value || 0)));
+    if (amount <= 0 || !recipientState || isPredictionStatusImmune(recipientState)) return amount;
+    const healBlock = Math.max(0, Math.floor(Number(recipientState.heal_block || 0)));
+    if (healBlock <= 0) return amount;
+    const reduction = Math.min(1, 0.5 * healBlock);
+    return Math.max(0, Math.floor(amount * (1 - reduction)));
+}
+
 function effectTargetIsSelf(target) {
     if (target == null || target === '') return true;
     if (typeof target === 'string') {
@@ -7064,12 +7978,12 @@ function collectSelfPredictionFromEffects(prediction, cardDict, cardDef, selfSta
         const type = effect.type || effect.op;
         const params = effect.params || effect;
         if (type === 'lifesteal_damage') {
-            pushPositiveValue(prediction.self.heal, firstNumericEffectValue(params.heal) || 4, positiveHitCount);
+            pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(firstNumericEffectValue(params.heal) || 4, selfState), positiveHitCount);
             return;
         }
         if (!effectTargetIsSelf(params.target)) return;
         if (type === 'heal') {
-            pushPositiveValue(prediction.self.heal, firstNumericEffectValue(params.amount));
+            pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(firstNumericEffectValue(params.amount), selfState));
         } else if (type === 'gain_e' || type === 'gain_elixir') {
             pushPositiveValue(prediction.self.elixir, firstNumericEffectValue(params.amount));
         } else if (type === 'gain_m' || type === 'gain_magic') {
@@ -7153,12 +8067,12 @@ function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positive
             const heal = params.heal_percent != null || params.ratio != null
                 ? Math.floor(localContext.lastDamage * Number(params.heal_percent ?? params.ratio ?? 0))
                 : (firstNumericEffectValue(params.heal) || 4);
-            pushPositiveValue(prediction.self.heal, heal, params.heal_percent != null || params.ratio != null ? 1 : positiveHitCount);
+            pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(heal, selfState), params.heal_percent != null || params.ratio != null ? 1 : positiveHitCount);
             return;
         }
         if (!effectTargetIsSelf(params.target)) return;
         if (op === 'heal') {
-            pushPositiveValue(prediction.self.heal, Math.floor(evalPredictionNumberExpr(params.amount, localContext)));
+            pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(Math.floor(evalPredictionNumberExpr(params.amount, localContext)), selfState));
         } else if (op === 'gain_e') {
             pushPositiveValue(prediction.self.elixir, evalPredictionNumberExpr(params.amount, localContext));
         } else if (op === 'gain_m') {
@@ -7232,13 +8146,13 @@ function addKnownSelfPrediction(prediction, cardDict, selfState) {
     const positiveHitCount = prediction.target.damageHits.filter(v => Number(v) > 0).length;
     switch (cardDict.def_id) {
         case 'Fang':
-            if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, 4, positiveHitCount);
+            if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(4, selfState), positiveHitCount);
             break;
         case 'Fries':
-            if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, 12);
+            if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(12, selfState));
             break;
         case 'Rose':
-            if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, 7);
+            if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(7, selfState));
             break;
         case 'ManaOrb':
             if (!prediction.self.magic.length) pushPositiveValue(prediction.self.magic, 3);
@@ -7580,6 +8494,7 @@ function getTermIntroLibrary() {
         response: { label: UI.counter || lt({ zh: '反制', en: 'Counter', fr: 'Contre', ja: '反制' }), desc: lt({ zh: '对方行动满足条件时会出现响应机会。反制能改变对方行动的结果。', en: 'A response chance appears when an opponent action meets its condition. Counters can change that action’s result.', fr: 'Une fenêtre de réponse apparaît quand l’action adverse remplit la condition. Un contre peut modifier le résultat.', ja: '相手の行動が条件を満たすと応答機会が出ます。反制はその結果を変えます。' }), color: CARD_TYPE_COLORS.guard },
         same_name_penalty: { label: lt({ zh: '同名卡惩罚', en: 'Same-name penalty', fr: 'Pénalité de même nom', ja: '同名カードペナルティ' }), desc: lt({ zh: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', en: 'Playing the same card name repeatedly in one turn costs extra E. Symbiosis ignores it.', fr: 'Jouer plusieurs fois le même nom pendant un tour coûte du E supplémentaire. Symbiose l’ignore.', ja: '同一ターンに同名カードを繰り返すと追加 E が必要です。共生は無視します。' }), color: COLORS.elixir },
         revealed: { label: UI.tag_revealed || lt({ zh: '被揭示', en: 'Revealed', fr: 'Révélé', ja: '公開' }), desc: lt({ zh: '在手中时永久对对手展示。', en: 'While in hand, this card is always visible to opponents.', fr: 'Tant qu’elle est en main, cette carte reste visible pour les adversaires.', ja: '手札にある間、相手に常に見えます。' }), color: '#E74C3C' },
+        sublime: { label: UI.tag_sublime || lt({ zh: '崇高', en: 'Sublime', fr: 'Sublime', ja: '崇高' }), desc: lt({ zh: '带有此标签的卡牌，不会出现在其他玩家的看牌效果或卡牌选择列表中。', en: 'Cards with this tag are hidden from other players when cards are viewed or chosen.', fr: 'Les cartes avec ce tag sont cachées aux autres joueurs lors des effets de vue ou de choix.', ja: 'このタグを持つカードは、他プレイヤーがカードを見る・選ぶ効果では表示されません。' }), color: '#9A7A12' },
         team_limited: { label: UI.tag_team_limited || 'Team Limited', desc: lt({ zh: '只会出现在一队至少 2 名玩家的模式；单人训练场可选，但没有实际意义。', en: 'Appears only in modes where a team has at least 2 players. It can be selected in training but has no practical effect there.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. Sélectionnable en entraînement, mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ意味があります。訓練場では選べますが実質効果はありません。' }), color: '#607D3B' },
         team_unique: { label: UI.tag_team_unique || 'Team Unique', desc: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose this card, one copy is kept at random and the extras are exiled.', fr: 'Si plusieurs coéquipiers choisissent cette carte, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }), color: '#8D6E63' },
         power: { label: UI.tag_power || 'Power', desc: lt({ zh: '此牌造成的每段 D 增加。若是多段 D，会按段数把威力向上分配。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }), color: '#C0392B' },
@@ -7605,7 +8520,31 @@ function addTermIntroItem(items, seen, key, override = null) {
         label: item.label || key,
         desc: item.desc || item.description || '',
         color: item.color || COLORS.text_primary,
+        iconKey: item.iconKey || getTermIntroIconKey(key, item),
     });
+}
+
+function getTermIntroIconKey(key, item = null) {
+    const rawKey = String(key || '').replace(/^status:/, '');
+    const normalized = normalizeStatusIconKey(rawKey);
+    if (rawKey === 'H' || rawKey === 'health') return 'H';
+    if (rawKey === 'E' || rawKey === 'elixir') return 'E';
+    if (rawKey === 'M' || rawKey === 'magic') return 'M';
+    if (rawKey === 'D') return 'damage';
+    if (rawKey === 'A' || rawKey === 'armor') return 'armor';
+    if (rawKey === 'electric_damage') return 'electric_damage';
+    if (rawKey === 'P') return 'poison';
+    if (rawKey === 'F') return 'fire';
+    if (rawKey === 'magic_damage') return 'magic';
+    if (rawKey === 'response') return '';
+    if (rawKey === 'deck') return 'draw-pile';
+    if (rawKey === 'discard') return 'discard-pile';
+    if (rawKey === 'overdraw' || rawKey === 'hand_limit') return 'total-pile';
+    if (rawKey === 'overcap' || rawKey === 'same_name_penalty') return 'E';
+    if (getInlineIconUrl(normalized)) return normalized;
+    if (item && item.color === COLORS.poison) return 'poison';
+    if (item && item.color === COLORS.fire) return 'fire';
+    return '';
 }
 
 function getIntroFlagDescription(flag, custom = null) {
@@ -7635,6 +8574,7 @@ function getIntroFlagDescription(flag, custom = null) {
         team_unique: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose it, one copy is kept at random and extras are exiled.', fr: 'Si plusieurs coéquipiers la choisissent, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }),
         stealth: lt({ zh: '不会触发对手的响应窗口。', en: 'Does not open the opponent’s response window.', fr: 'N’ouvre pas la fenêtre de réponse adverse.', ja: '相手の応答ウィンドウを開きません。' }),
         revealed: lt({ zh: '在手中时永久对对手展示。', en: 'While in hand, it is always shown to opponents.', fr: 'Tant qu’elle est en main, elle est toujours visible pour les adversaires.', ja: '手札にある間、相手に常に表示されます。' }),
+        sublime: lt({ zh: '不会出现在其他玩家的看牌效果或卡牌选择列表中。', en: 'Hidden from other players when cards are viewed or chosen.', fr: 'Cachée aux autres joueurs lors des effets de vue ou de choix.', ja: '他プレイヤーがカードを見る・選ぶ効果では表示されません。' }),
         fusion_layer: getTermIntroLibrary().fusion_layer.desc,
         fission_layer: getTermIntroLibrary().fission_layer.desc,
     };
@@ -7736,6 +8676,7 @@ function collectCardIntroTerms(cardDict) {
         [/(爆费|上限)/i, 'overcap'],
         [/(同名|共生|same-name)/i, 'same_name_penalty'],
         [/(被揭示|revealed)/i, 'revealed'],
+        [/(崇高|sublime)/i, 'sublime'],
     ];
     probes.forEach(([re, key]) => {
         if (re.test(rawText)) addTermIntroItem(items, seen, key);
@@ -7812,13 +8753,12 @@ function getStatusIntroItem(statusInfo) {
         poison: { label: UI.status_poison, desc: getTermIntroLibrary().P.desc, color: COLORS.poison },
         fire: { label: UI.status_fire, desc: getTermIntroLibrary().F.desc, color: COLORS.fire },
         toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc, color: '#6C3483' },
-        vulnerable: { label: '易伤', desc: '受到的物理伤害增加50%。', color: COLORS.damage },
         triangle: { label: UI.status_triangle, desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
         nazar: { label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
         magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
-        dodge: { label: UI.status_dodge || '闪避', desc: '受到攻击牌攻击时消耗1层，使普通攻击无效；若攻击带有精准，则改为造成一半伤害。状态免疫存在时，闪避层数可以累积，但不会生效或被消耗。', color: COLORS.guard },
+        dodge: { label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
         status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。', color: '#16A085' },
         immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。', color: '#16A085' },
         stunned: { label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
@@ -7846,7 +8786,7 @@ function getStatusIntroItem(statusInfo) {
         root_status: { label: '树根', desc: '增加护甲；受到物理伤害时减少1层。产生它的树根装备离场时，会清除对应树根。', color: '#6E8B3D' },
         'jungle:toxic_poison': { label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31' },
         toxic_poison: { label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31' },
-        heal_block: { label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数-1。', color: '#E84393' },
+        heal_block: { label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数下取整减半。', color: '#E84393' },
         weakness: { label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         bleed: { label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
         fragment: { label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
@@ -7859,7 +8799,7 @@ function getStatusIntroItem(statusInfo) {
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: getTermIntroLibrary().magic_nazar.desc },
         equip_protect: { label: UI.status_equip_protect, desc: lt({ zh: builtIns.equip_protect.desc, en: 'Prevents equipment from being destroyed by destroy effects.', fr: 'Empêche un équipement d’être détruit par les effets de destruction.', ja: '装備が破壊効果で破壊されるのを防ぎます。' }) },
         invincible: { label: UI.status_invincible, desc: lt({ zh: builtIns.invincible.desc, en: 'While invincible, damage does not cause defeat.', fr: 'Pendant l’invincibilité, les dégâts ne provoquent pas la défaite.', ja: '無敵中はダメージで敗北しません。' }) },
-        dodge: { label: UI.status_dodge || 'Dodge', desc: lt({ zh: builtIns.dodge.desc, en: 'When attacked by a Thorn card, consume 1 stack to dodge it. Precision attacks deal half damage instead. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Lorsqu’une carte Thorn vous attaque, consomme 1 charge pour l’esquiver. Les attaques Precision infligent la moitié des dégâts. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: 'Thornカードで攻撃された時、1層消費して回避します。Precision攻撃は半分のダメージになります。状態免疫中は回避を蓄積できますが、発動も消費もされません。' }) },
+        dodge: { label: UI.status_dodge || 'Dodge', desc: lt({ zh: builtIns.dodge.desc, en: 'When physical damage would be taken, lose 1 stack to prevent that hit. If the source card has Precision, prevent only half of the damage. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Quand des dégâts physiques devraient être subis, perdez 1 charge pour annuler ce coup. Si la carte source a Précision, seule la moitié des dégâts est annulée. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: '物理ダメージを受ける時、1層減らしてそのダメージを防ぎます。発生源カードがPrecisionを持つ場合、防ぐのは半分だけです。状態免疫中は蓄積できますが発動も消費もされません。' }) },
         status_immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。' }) },
         immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。' }) },
         stunned: { label: UI.status_stunned, desc: lt({ zh: builtIns.stunned.desc, en: 'At your turn, lose 1 stack and skip active actions. Passive equipment still works.', fr: 'À votre tour, perdez 1 charge et sautez vos actions actives. Les équipements passifs fonctionnent encore.', ja: '自分のターンに1層減り、能動行動をスキップします。装備の受動効果は通常通りです。' }) },
@@ -7880,7 +8820,7 @@ function getStatusIntroItem(statusInfo) {
         turn_magic: { label: lt({ zh: '魔力回合回复', en: 'Turn Magic Regen', fr: 'Régénération magique', ja: '魔力ターン回復' }), desc: lt({ zh: builtIns.turn_magic.desc, en: 'Shown as Turn Magic Regen:X;Y. When applied and at turn start, recover Y M, then X decreases by 1. Removed at X=0.', fr: 'Affiché Régénération magique:X;Y. À l’application et au début du tour, récupère Y M, puis X diminue de 1. Retiré à X=0.', ja: '魔力回合回复:X;Y と表示。付与時とターン開始時にY M回復し、Xが1減ります。X=0で消えます。' }) },
         root_status: { label: lt({ zh: '树根', en: 'Root', fr: 'Racine', ja: '根' }), desc: lt({ zh: builtIns.root_status.desc, en: 'Increases armor. Loses 1 stack when physical damage is taken. The Root equipment that created it clears its own stacks when leaving play.', fr: 'Augmente l’armure. Perd 1 charge quand des dégâts physiques sont subis. L’équipement Racine qui l’a créé retire ses propres charges en quittant le jeu.', ja: '護甲を増やします。物理ダメージを受けると1層減ります。生成元のRoot装備が離場すると対応分を消します。' }) },
         toxic_poison: { label: lt({ zh: '剧毒', en: 'Toxic Poison', fr: 'Poison virulent', ja: '劇毒' }), desc: lt({ zh: builtIns.toxic_poison.desc, en: 'After Poison resolves, applies that many additional P.', fr: 'Après la résolution du Poison, applique autant de P supplémentaires.', ja: '毒の解決後、同じ層数のPを追加付与します。' }) },
-        heal_block: { label: UI.status_heal_block, desc: lt({ zh: builtIns.heal_block.desc, en: 'Reduces life healing by 50% per stack, up to 100%. Loses 1 stack at your turn end.', fr: 'Réduit les soins de vie de 50% par charge, jusqu’à 100%. Perd 1 charge à la fin de votre tour.', ja: '生命回復を1層ごとに50%、最大100%減らします。自分ターン終了時に1層減ります。' }) },
+        heal_block: { label: UI.status_heal_block, desc: lt({ zh: builtIns.heal_block.desc, en: 'Reduces life healing by 50% per stack, up to 100%. Halves stacks at your turn end, rounded down.', fr: 'Réduit les soins de vie de 50% par charge, jusqu’à 100%. À la fin de votre tour, les charges sont divisées par deux arrondies à l’inférieur.', ja: '生命回復を1層ごとに50%、最大100%減らします。自分ターン終了時に切り捨てで半減します。' }) },
         weakness: { label: UI.status_weakness, desc: lt({ zh: builtIns.weakness.desc, en: 'Your physical damage dealt to others is reduced by 20% per stack, up to 60%. Loses 1 stack at your turn end.', fr: 'Vos dégâts physiques infligés aux autres sont réduits de 20% par charge, jusqu’à 60%. Perd 1 charge à la fin de votre tour.', ja: '自分が他人に与える物理ダメージを1層ごとに20%、最大60%減らします。自分ターン終了時に1層減ります。' }) },
         bleed: { label: UI.status_bleed, desc: lt({ zh: builtIns.bleed.desc, en: 'When you play a Thorn card, take physical damage equal to its stacks. At turn end, stacks halve rounded down.', fr: 'Quand vous jouez une carte Thorn, subissez des dégâts physiques égaux aux charges. À la fin du tour, les charges sont divisées par deux arrondies à l’inférieur.', ja: 'Thornカードを使う時、層数分の物理ダメージを受けます。ターン終了時に切り捨てで半減します。' }) },
         fragment: { label: UI.status_fragment, desc: lt({ zh: builtIns.fragment.desc, en: 'Gains Fragment stacks. At 4 stacks, you may spend 4 stacks to add Thor’s Hammer to hand.', fr: 'Gagne des fragments. À 4 charges, vous pouvez en dépenser 4 pour ajouter Thor’s Hammer à la main.', ja: '碎片層数を得ます。4層で4層消費し、雷神之锤を手札に加えられます。' }) },
@@ -8065,7 +9005,7 @@ function renderTermIntroItems(items) {
     }
     return items.map(item => `
         <article class="term-intro-item" style="--term-color:${escapeHtml(item.color || COLORS.text_primary)}">
-            <div class="term-intro-item-title">${escapeHtml(item.label)}</div>
+            <div class="term-intro-item-title">${renderInlineIconHtml(item.iconKey || '', item.label)}<span>${escapeHtml(item.label)}</span></div>
             <div class="term-intro-item-desc">${escapeHtml(item.desc || '')}</div>
         </article>
     `).join('');
@@ -8123,9 +9063,10 @@ function showTermIntroForStatus(statusInfo) {
     const title = overlay.querySelector('#term-intro-title');
     const list = overlay.querySelector('#term-intro-list');
     const displayText = getStatusDisplayText(statusInfo || {});
+    const statusIcon = renderStatusIconHtml(item.key || statusInfo?.key || '', item.label || displayText, item.iconKey || statusInfo?.iconKey || '', 'tag');
     cardSlot.innerHTML = `
         <div class="term-intro-status-card" style="--term-color:${escapeHtml(item.color || COLORS.text_primary)}">
-            <span class="status-tag term-intro-status-tag" style="color:${escapeHtml(statusInfo?.fg || item.color || COLORS.text_primary)};background:${escapeHtml(statusInfo?.bg || COLORS.bg_card || '#fff')};border-color:${escapeHtml(statusInfo?.fg || item.color || COLORS.text_primary)}">${escapeHtml(displayText)}</span>
+            <span class="status-tag term-intro-status-tag" style="color:${escapeHtml(statusInfo?.fg || item.color || COLORS.text_primary)};background:${escapeHtml(statusInfo?.bg || COLORS.bg_card || '#fff')};border-color:${escapeHtml(statusInfo?.fg || item.color || COLORS.text_primary)}">${statusIcon}<span class="status-tag-text">${escapeHtml(displayText)}</span></span>
         </div>
     `;
     title.textContent = `${displayText} · ${lt({ zh: '状态说明', en: 'State Guide', fr: 'Guide d’état', ja: '状態説明' })}`;
@@ -8182,9 +9123,10 @@ function showTermIntroForStandaloneItem(item, sourceEl = null, titleText = '') {
     const title = overlay.querySelector('#term-intro-title');
     const list = overlay.querySelector('#term-intro-list');
     const color = item.color || COLORS.text_primary;
+    const statusIcon = renderStatusIconHtml(item.key || '', item.label || item.key || '', item.iconKey || '', 'tag');
     cardSlot.innerHTML = `
         <div class="term-intro-status-card" style="--term-color:${escapeHtml(color)}">
-            <span class="status-tag term-intro-status-tag" style="color:${escapeHtml(color)};background:${escapeHtml(COLORS.bg_card || '#fff')};border-color:${escapeHtml(color)}">${escapeHtml(item.label || item.key || '')}</span>
+            <span class="status-tag term-intro-status-tag" style="color:${escapeHtml(color)};background:${escapeHtml(COLORS.bg_card || '#fff')};border-color:${escapeHtml(color)}">${statusIcon}<span class="status-tag-text">${escapeHtml(item.label || item.key || '')}</span></span>
         </div>
     `;
     title.textContent = titleText || lt({ zh: '术语说明', en: 'Term Guide', fr: 'Guide des termes', ja: '用語説明' });
@@ -8673,10 +9615,32 @@ function connectSocket(serverUrl) {
             flashStatus(UI.server_no_response, 3000, 'error');
         }
     });
+    bindSocketEvent('account_session_replaced', (data = {}) => {
+        const reason = data.reason || '账号在其他位置进入大厅。\n如果该操作不是由本人进行，请修改密码。';
+        manualDisconnect = true;
+        phase = 'login';
+        showModal(`
+            <h3>${escapeHtml(UI.notice || '提示')}</h3>
+            <p>${escapeHtml(translateServerMessage(reason)).replace(/\n/g, '<br>')}</p>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" id="account-replaced-ok">${escapeHtml(UI.ok || '确定')}</button>
+            </div>
+        `);
+        const ok = $('account-replaced-ok');
+        if (ok) ok.onclick = () => {
+            hideModal();
+            showView('view-login');
+        };
+    });
     bindSocketEvent('kicked', (data = {}) => {
         setButtonLoading('btn-connect', false);
         const reason = data.reason || UI.disconnected || 'Disconnected';
         debugLog('[client] kicked:', reason);
+        if (data.code === 'account_entered_elsewhere') {
+            manualDisconnect = true;
+            phase = 'login';
+            return;
+        }
         flashStatus(translateServerMessage(reason), 5000, 'error');
     });
     bindSocketEvent('latency_pong', (data = {}) => {
@@ -8789,6 +9753,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('invite_received', (data) => {
         debugLog('[client] invite_received:', data);
+        playInviteAudio();
         showModal(`
             <h3>${UI.invite_received}</h3>
             <p>${data.inviter_name} ${UI.invite_message}</p>
@@ -8813,6 +9778,7 @@ function connectSocket(serverUrl) {
         flashStatus(UI.invite_declined, 2000);
     });
     bindSocketEvent('team_invite', (data) => {
+        playInviteAudio();
         showModal(`
             <h3>${UI.form_team}</h3>
             <p>${tf('team_invite_msg', data.from_name)}</p>
@@ -8841,6 +9807,7 @@ function connectSocket(serverUrl) {
         flashStatus(UI.team_declined_msg, 2000);
     });
     bindSocketEvent('team_match_invite', (data) => {
+        playInviteAudio();
         showModal(`
             <h3>${UI.invite_team}</h3>
             <p>${tf('team_match_invite_msg', data.from_team.join(' & '))}</p>
@@ -11206,6 +12173,8 @@ function toggleStatsPopover(force) {
     if (!pop) return;
     const show = typeof force === 'boolean' ? force : pop.classList.contains('hidden');
     pop.classList.toggle('hidden', !show);
+    const title = $('stats-popover-title');
+    if (title) title.textContent = UI.account_replays || UI.replay || '回放';
     if (show) {
         toggleAccountPopover(false);
         toggleFriendsPopover(false);
@@ -11486,30 +12455,89 @@ function renderFriendSection(id, items, emptyText, type) {
     el.innerHTML = list.map(item => friendCardHtml(item, type)).join('');
 }
 
+function renderSocialSelectorList() {
+    const el = $('social-selector-list');
+    if (!el) return;
+    if (activeSocialSection === 'requests') {
+        const incoming = Array.isArray(socialData.incoming) ? socialData.incoming : [];
+        const outgoing = Array.isArray(socialData.outgoing) ? socialData.outgoing : [];
+        el.innerHTML = [
+            `<div class="friend-section-title compact">${escapeHtml(UI.friend_requests || '好友请求')}</div>`,
+            incoming.length ? incoming.map(item => friendCardHtml(item, 'incoming')).join('') : `<div class="friend-empty">${escapeHtml(UI.friend_request_empty)}</div>`,
+            `<div class="friend-section-title compact">${escapeHtml(UI.friend_sent || '已发送')}</div>`,
+            outgoing.length ? outgoing.map(item => friendCardHtml(item, 'outgoing')).join('') : `<div class="friend-empty">${escapeHtml(UI.friend_sent_empty)}</div>`,
+        ].join('');
+        return;
+    }
+    if (activeSocialSection === 'dm') {
+        const threads = Array.isArray(dmData.threads) ? dmData.threads : [];
+        el.innerHTML = threads.length ? threads.map(thread => {
+            const user = thread.user || {};
+            const unread = Number(thread.unread_count || 0);
+            const active = String(thread.thread_id) === String(activeDmThreadId);
+            return `
+              <button class="dm-thread-item${active ? ' active' : ''}" type="button" data-dm-thread="${escapeHtml(thread.thread_id)}">
+                <span class="dm-thread-name">${escapeHtml(user.username || '-')}</span>
+                ${unread > 0 ? `<span class="dm-unread">${escapeHtml(unread > 99 ? '99+' : String(unread))}</span>` : ''}
+                <span class="dm-thread-preview">${escapeHtml(thread.last_message || '暂无消息')}</span>
+              </button>`;
+        }).join('') : `<div class="friend-empty">暂无私信</div>`;
+        return;
+    }
+    const friends = Array.isArray(socialData.friends) ? socialData.friends : [];
+    el.innerHTML = friends.length ? friends.map(item => friendCardHtml(item, 'friend')).join('') : `<div class="friend-empty">${escapeHtml(UI.friend_empty)}</div>`;
+}
+
+function renderUnifiedRequestsList() {
+    const el = $('friend-requests-list');
+    if (!el) return;
+    const incoming = Array.isArray(socialData.incoming) ? socialData.incoming : [];
+    const outgoing = Array.isArray(socialData.outgoing) ? socialData.outgoing : [];
+    el.innerHTML = [
+        `<div class="friend-section-title compact">${escapeHtml(UI.friend_requests || '好友请求')}</div>`,
+        incoming.length ? incoming.map(item => friendCardHtml(item, 'incoming')).join('') : `<div class="friend-empty">${escapeHtml(UI.friend_request_empty)}</div>`,
+        `<div class="friend-section-title compact">${escapeHtml(UI.friend_sent || '已发送')}</div>`,
+        outgoing.length ? outgoing.map(item => friendCardHtml(item, 'outgoing')).join('') : `<div class="friend-empty">${escapeHtml(UI.friend_sent_empty)}</div>`,
+    ].join('');
+}
+
 function renderFriendsState() {
     renderFriendSection('friend-incoming-list', socialData.incoming, UI.friend_request_empty, 'incoming');
     renderFriendSection('friend-outgoing-list', socialData.outgoing, UI.friend_sent_empty, 'outgoing');
+    renderUnifiedRequestsList();
     renderFriendSection('friends-list', socialData.friends, UI.friend_empty, 'friend');
+    renderSocialSelectorList();
     renderFriendDetailProfile();
     renderDmThreads();
     updateFriendsBadge();
 }
 
-function showSocialDetailTab(tabName = 'profile') {
-    const tab = String(tabName || 'profile');
+function normalizeSocialTab(tabName = 'friends') {
+    const tab = String(tabName || 'friends');
+    if (tab === 'profile') return 'friends';
+    if (tab === 'incoming' || tab === 'outgoing') return 'requests';
+    if (tab === 'dm') return 'dm';
+    return 'friends';
+}
+
+function showSocialDetailTab(tabName = 'friends') {
+    const tab = normalizeSocialTab(tabName);
+    activeSocialSection = tab;
     document.querySelectorAll('[data-social-detail-tab]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.socialDetailTab === tab);
     });
-    ['profile', 'dm', 'incoming', 'outgoing'].forEach(name => {
+    ['profile', 'dm', 'incoming', 'outgoing', 'requests'].forEach(name => {
         const page = $(`social-detail-page-${name}`);
-        if (page) page.classList.toggle('hidden', name !== tab);
+        const visible = (tab === 'friends' && name === 'profile') || (tab === 'dm' && name === 'dm') || (tab === 'requests' && name === 'requests');
+        if (page) page.classList.toggle('hidden', !visible);
     });
+    renderSocialSelectorList();
     if (tab === 'dm') {
         loadDmThreads(true, { force: true });
     }
 }
 
-function toggleSocialDetailModal(force, tabName = 'profile') {
+function toggleSocialDetailModal(force, tabName = 'friends') {
     const modal = $('social-detail-modal');
     if (!modal) return;
     const show = typeof force === 'boolean' ? force : modal.classList.contains('hidden');
@@ -11524,7 +12552,7 @@ function toggleSocialDetailModal(force, tabName = 'profile') {
     }
 }
 
-function openFriendDetail(userId, tabName = 'profile') {
+function openFriendDetail(userId, tabName = 'friends') {
     if (userId != null && userId !== '') {
         activeSocialFriendId = String(userId);
     }
@@ -11652,6 +12680,7 @@ function renderDmThreads() {
         const unread = Number(dmData.unread_count || 0);
         title.textContent = unread > 0 ? `私信 (${unread > 99 ? '99+' : unread})` : '私信';
     }
+    if (activeSocialSection === 'dm') renderSocialSelectorList();
 }
 
 function renderDmMessages() {
@@ -11873,7 +12902,7 @@ function startDmToUser(userId, username = '') {
 }
 
 async function startDmFromIdentifier() {
-    const input = $('input-friend-identifier');
+    const input = $('input-social-identifier') || $('input-friend-identifier');
     const identifier = (input?.value || '').trim();
     if (!identifier) return;
     activeDmThreadId = null;
@@ -11892,7 +12921,7 @@ async function sendDmMessage() {
     if (!input) return;
     const text = input.value.trim();
     if (!text) return;
-    const identifier = activeDmTargetIdentifier || ($('input-friend-identifier')?.value || '').trim();
+    const identifier = activeDmTargetIdentifier || ($('input-social-identifier')?.value || $('input-friend-identifier')?.value || '').trim();
     const payload = { text };
     if (activeDmTargetUserId) payload.target_user_id = activeDmTargetUserId;
     else if (identifier) payload.identifier = identifier;
@@ -11918,7 +12947,7 @@ async function sendDmMessage() {
 
 async function addFriendFromInput() {
     setFriendsError('');
-    const input = $('input-friend-identifier');
+    const input = $('input-social-identifier') || $('input-friend-identifier');
     const identifier = (input?.value || '').trim();
     if (!identifier) return;
     try {
@@ -11988,6 +13017,11 @@ function toggleFriendsPopover(force) {
     } else {
         stopSocialNetworkActivity();
     }
+}
+
+function openSocialCenter(tabName = 'friends') {
+    toggleSocialDetailModal(true, tabName);
+    loadFriends(true);
 }
 
 function renderSocialSettings() {
@@ -12289,6 +13323,7 @@ function emitModeEvent(soloEventName, onlineEventName, payload = {}) {
 }
 
 function showSoloTraining() {
+    clearActiveMatchRoute('open_solo_training');
     soloMode = false;
     phase = 'solo_edit';
     clearActionToast();
@@ -12893,7 +13928,7 @@ function renderSoloBuilder() {
     if (list) {
         list.innerHTML = '';
         Object.keys(CARD_DEFS)
-            .filter(defId => defId !== 'Error')
+            .filter(defId => isVisibleLoadoutCardDef(CARD_DEFS[defId]))
             .filter(defId => !q || cardSearchText(defId).includes(q))
             .sort(compareGalleryCards)
             .forEach(defId => {
@@ -13548,6 +14583,7 @@ function ensureLocalCountdownTimer() {
         const pregameSource = eventSelectData || draftState;
         if (pregameSource && localPregameTimerSnapshot) {
             updatePregameTimerDisplay(pregameSource, pregameTimerDisplayTarget(pregameSource));
+            maybeRequestPregameStateResync(pregameSource);
         }
     }, 200);
 }
@@ -13742,6 +14778,19 @@ function updatePregameTimerDisplay(data, target = '') {
     const useEvent = resolvedTarget === 'event' || (!resolvedTarget && (status === 'event_select' || status === 'event_reveal'));
     if (draftTimer && (!useEvent || resolvedTarget === 'draft')) draftTimer.textContent = useEvent && resolvedTarget !== 'draft' ? '' : text;
     if (eventTimer) eventTimer.textContent = useEvent ? text : '';
+}
+
+function maybeRequestPregameStateResync(data) {
+    if (!socket || !socket.connected || !localPregameTimerSnapshot) return;
+    const phaseName = phase || (data && data.phase);
+    if (!['draft', 'event_select', 'event_reveal'].includes(phaseName)) return;
+    const elapsed = Math.max(0, (performance.now() - localPregameTimerSnapshot.receivedAt) / 1000);
+    const overdue = elapsed - Number(localPregameTimerSnapshot.remaining || 0);
+    if (!Number.isFinite(overdue) || overdue < 2) return;
+    const now = performance.now();
+    if (now - lastPregameResyncRequestAt < 5000) return;
+    lastPregameResyncRequestAt = now;
+    socket.emit('request_pregame_state', {});
 }
 
 function updateSelectedEventsSummary(data) {
@@ -14832,7 +15881,10 @@ function formatPlayerPileInfo(playerData, includeDiscard, opponentStyle = false)
     if (blindLevel >= 3 && isSelf) {
         const text = includeDiscard ? UI.hand_deck_discard_info.replace('{0}', '?').replace('{1}', '?').replace('{2}', '?')
             : UI.hand_deck_info_opp.replace('{0}', '?').replace('{1}', '?');
-        return { text, title: '', opponentStyle };
+        const items = includeDiscard
+            ? [{ icon: 'total-pile', value: '?' }, { icon: 'draw-pile', value: '?' }, { icon: 'discard-pile', value: '?' }]
+            : [{ icon: 'total-pile', value: '?' }, { icon: 'draw-pile', value: '?' }];
+        return { text, title: text, opponentStyle, items };
     }
     const hand = playerData.hand_count || 0;
     const deck = maskOwnDrawDeck ? '?' : (playerData.deck_count || 0);
@@ -14841,15 +15893,24 @@ function formatPlayerPileInfo(playerData, includeDiscard, opponentStyle = false)
         ? UI.hand_deck_discard_info.replace('{0}', hand).replace('{1}', deck).replace('{2}', discard)
         : UI.hand_deck_info_opp.replace('{0}', hand).replace('{1}', deck);
     if (!isMinimalUiStyle()) return { text: full, title: '' };
-    const compact = includeDiscard ? `✦${hand} ▣${deck} ⟲${discard}` : `✦${hand} ▣${deck}`;
-    return { text: compact, title: full, opponentStyle };
+    const items = includeDiscard
+        ? [{ icon: 'total-pile', value: hand }, { icon: 'draw-pile', value: deck }, { icon: 'discard-pile', value: discard }]
+        : [{ icon: 'total-pile', value: hand }, { icon: 'draw-pile', value: deck }];
+    const compact = includeDiscard ? `${hand}/${deck}/${discard}` : `${hand}/${deck}`;
+    return { text: compact, title: full, opponentStyle, items };
 }
 
 function setPileInfoText(el, info) {
     if (!el || !info) return;
-    el.textContent = info.text;
     el.title = info.title || '';
     el.classList.toggle('compact-info', !!info.title);
+    if (Array.isArray(info.items) && info.items.length) {
+        el.classList.add('pile-icon-info');
+        el.innerHTML = info.items.map(item => `<span class="pile-icon-count" title="${escapeHtml(info.title || '')}"><img src="/static/assets/ui-icons/${escapeHtml(item.icon)}.svg" alt="" aria-hidden="true"><span>${escapeHtml(item.value)}</span></span>`).join('');
+        return;
+    }
+    el.classList.remove('pile-icon-info');
+    el.textContent = info.text;
 }
 
 function getBattlePlayerId(gs, slot) {
@@ -15422,9 +16483,9 @@ function renderClassicBattle(gs) {
         const maskOwnDiscardPile = shouldMaskOwnDiscardPile();
         renderClassicResourceOrbs($('classic-e-orbs'), vm.self.e, vm.self.maxE, resourcePreviewCard ? resourcePreviewCard.cost_e : 0, 'e', maskOwnResources);
         renderClassicResourceOrbs($('classic-m-orbs'), vm.self.m, vm.self.maxM, resourcePreviewCard ? resourcePreviewCard.cost_m : 0, 'm', maskOwnResources);
-        $('classic-deck-count').textContent = `▣${maskOwnDrawDeck ? '?' : vm.deckCount}`;
-        $('classic-discard-count').textContent = `⟲${maskOwnDiscardPile ? '?' : vm.discardCount}`;
-        $('classic-exile-count').textContent = `◇${maskOwnPiles ? '?' : vm.exileCount}`;
+        setIconCounter($('classic-deck-count'), 'draw-pile', maskOwnDrawDeck ? '?' : vm.deckCount, UI.view_draw_deck_title || UI.view_deck_title || 'Draw Deck');
+        setIconCounter($('classic-discard-count'), 'discard-pile', maskOwnDiscardPile ? '?' : vm.discardCount, UI.view_discard_title || 'Discard');
+        setIconCounter($('classic-exile-count'), 'exile-pile', maskOwnPiles ? '?' : vm.exileCount, UI.flag_exile || 'Exile');
         renderClassicFighter($('classic-fighter-self'), vm.self, 'self', selected);
         renderClassicFighter($('classic-fighter-enemy'), vm.enemy, 'enemy', selected);
         renderClassicPlayLane(vm);
@@ -15661,9 +16722,9 @@ function renderPlayerBars(containerId, playerData) {
     const masked = (isSelf && blindLevel >= 2) || (!isSelf && blindLevel >= 3);
     container.classList.toggle('blind-resource-masked', masked);
     const bars = [
-        { key: 'health', cur: playerData.health || 0, max: playerData.max_health || 100, color: COLORS.health, bg: COLORS.health_bg, label: 'H' },
-        { key: 'elixir', cur: playerData.elixir || 0, max: playerData.max_elixir || 10, color: COLORS.elixir, bg: COLORS.elixir_bg, label: 'E' },
-        { key: 'magic', cur: playerData.magic || 0, max: playerData.max_magic || 10, color: COLORS.magic, bg: COLORS.magic_bg, label: 'M' },
+        { key: 'health', cur: playerData.health || 0, max: playerData.max_health || 100, color: COLORS.health, bg: COLORS.health_bg, label: 'H', icon: 'hit-point', title: 'H' },
+        { key: 'elixir', cur: playerData.elixir || 0, max: playerData.max_elixir || 10, color: COLORS.elixir, bg: COLORS.elixir_bg, label: 'E', icon: 'elixir', title: 'E' },
+        { key: 'magic', cur: playerData.magic || 0, max: playerData.max_magic || 10, color: COLORS.magic, bg: COLORS.magic_bg, label: 'M', icon: 'magic', title: 'M' },
     ];
     if (container.children.length !== bars.length) {
         container.innerHTML = '';
@@ -15672,7 +16733,10 @@ function renderPlayerBars(containerId, playerData) {
             wrapper.className = 'bar-wrapper';
             wrapper.dataset.barKey = bar.key;
             wrapper.innerHTML = `
-                <span class="bar-label" style="color:${bar.color}">${bar.label}</span>
+                <span class="bar-label resource-icon-label" style="color:${bar.color}" title="${escapeHtml(bar.title || bar.label)}" aria-label="${escapeHtml(bar.title || bar.label)}">
+                    <img class="resource-icon" src="/static/assets/ui-icons/${escapeHtml(bar.icon)}.svg" alt="" aria-hidden="true">
+                    <span class="resource-icon-fallback">${escapeHtml(bar.label)}</span>
+                </span>
                 <div class="bar-track" style="background:${bar.bg}">
                     <div class="bar-fill" style="background:${bar.color};width:0%"></div>
                     <span class="bar-text">0/0</span>
@@ -15692,6 +16756,28 @@ function renderPlayerBars(containerId, playerData) {
         if (text) text.textContent = masked ? '?' : `${bar.cur}/${bar.max}`;
         wrappers[i].classList.toggle('blind-masked', masked);
     });
+}
+
+function setIconCounter(el, iconName, value, label = '') {
+    if (!el) return;
+    const text = value == null ? '?' : String(value);
+    el.classList.add('icon-counter');
+    el.title = label || text;
+    el.innerHTML = `<img class="icon-counter-img" src="/static/assets/ui-icons/${escapeHtml(iconName)}.svg" alt="" aria-hidden="true"><span class="icon-counter-text">${escapeHtml(text)}</span>`;
+}
+
+function renderResourceCostInline(costE = 0, costM = 0, { bracket = false } = {}) {
+    const parts = [];
+    const e = Math.max(0, Number(costE) || 0);
+    const m = Math.max(0, Number(costM) || 0);
+    if (e > 0 || m <= 0) {
+        parts.push(`<span class="resource-cost-part resource-cost-e"><img src="/static/assets/ui-icons/elixir.svg" alt="" aria-hidden="true"><span>${escapeHtml(e)}</span></span>`);
+    }
+    if (m > 0) {
+        parts.push(`<span class="resource-cost-part resource-cost-m"><img src="/static/assets/ui-icons/magic.svg" alt="" aria-hidden="true"><span>${escapeHtml(m)}</span></span>`);
+    }
+    const inner = parts.join('<span class="resource-cost-sep">/</span>');
+    return bracket ? `<span class="resource-cost-bracket">[</span>${inner}<span class="resource-cost-bracket">]</span>` : inner;
 }
 
 function renderStatusTags(containerId, playerData) {
@@ -15750,26 +16836,26 @@ function renderStatusTags(containerId, playerData) {
     const turnHealPower = customStatusMax('jungle:turn_heal_power', 'turn_heal_power');
     if (turnHealTurns > 0 && turnHealPower > 0) {
         const info = getStatusIntroItem({ key: 'turn_heal' });
-        tags.push({ key: 'jungle:turn_heal_turns', name: info.label, abbr: currentLang === 'zh' ? '回合回复' : 'Heal', val: `${turnHealTurns};${turnHealPower}`, fg: '#F48FB1', bg: '#FDEDF2' });
+        tags.push({ key: 'jungle:turn_heal_turns', iconKey: 'turn_heal', name: info.label, abbr: currentLang === 'zh' ? '回合回复' : 'Heal', val: `${turnHealTurns};${turnHealPower}`, fg: '#F48FB1', bg: '#FDEDF2' });
     }
     const turnMagicTurns = customStatusSum('jungle:turn_magic_turns', 'turn_magic_turns');
     const turnMagicPower = customStatusMax('jungle:turn_magic_power', 'turn_magic_power');
     if (turnMagicTurns > 0 && turnMagicPower > 0) {
         const info = getStatusIntroItem({ key: 'turn_magic' });
-        tags.push({ key: 'jungle:turn_magic_turns', name: info.label, abbr: currentLang === 'zh' ? '魔力回复' : 'M Regen', val: `${turnMagicTurns};${turnMagicPower}`, fg: '#6C5CE7', bg: '#F0ECFF' });
+        tags.push({ key: 'jungle:turn_magic_turns', iconKey: 'turn_magic', name: info.label, abbr: currentLang === 'zh' ? '魔力回复' : 'M Regen', val: `${turnMagicTurns};${turnMagicPower}`, fg: '#6C5CE7', bg: '#F0ECFF' });
     }
     const jungleStatusDisplay = [
-        { keys: ['jungle:fragile', 'fragile'], name: '易损', abbr: '易损', fg: '#8E5A2A', bg: '#F7EFE8', title: '护甲降低对应层数；若降为负数，会使物理伤害增加。自己回合开始时清除。' },
-        { keys: ['jungle:shield', 'shield'], name: '护盾', abbr: '护盾', fg: '#2E7D7D', bg: '#E8F6F6', title: '消耗层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。' },
-        { keys: ['jungle:root_status', 'jungle:root', 'root_status'], name: '树根', abbr: '树根', fg: '#6E8B3D', bg: '#EEF5E5', title: '增加护甲；受到物理伤害时减少1层。' },
-        { keys: ['jungle:toxic_poison', 'toxic_poison'], name: '剧毒', abbr: '剧毒', fg: '#5E8C31', bg: '#EEF6E7', title: '中毒结算后施加对应层数的中毒。' },
+        { keys: ['jungle:fragile', 'fragile'], iconKey: 'fragile', name: '易损', abbr: '易损', fg: '#8E5A2A', bg: '#F7EFE8', title: '护甲降低对应层数；若降为负数，会使物理伤害增加。自己回合开始时清除。' },
+        { keys: ['jungle:shield', 'shield'], iconKey: 'shield', name: '护盾', abbr: '护盾', fg: '#2E7D7D', bg: '#E8F6F6', title: '消耗层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。' },
+        { keys: ['jungle:root_status', 'jungle:root', 'root_status'], iconKey: 'root_status', name: '树根', abbr: '树根', fg: '#6E8B3D', bg: '#EEF5E5', title: '增加护甲；受到物理伤害时减少1层。' },
+        { keys: ['jungle:toxic_poison', 'toxic_poison'], iconKey: 'toxic_poison', name: '剧毒', abbr: '剧毒', fg: '#5E8C31', bg: '#EEF6E7', title: '中毒结算后施加对应层数的中毒。' },
     ];
     jungleStatusDisplay.forEach((info) => {
         const count = customStatusSum(...info.keys);
-        if (count > 0) tags.push({ key: info.keys[0], name: info.name, abbr: info.abbr, val: count, fg: info.fg, bg: info.bg, title: info.title });
+        if (count > 0) tags.push({ key: info.keys[0], iconKey: info.iconKey, name: info.name, abbr: info.abbr, val: count, fg: info.fg, bg: info.bg, title: info.title });
     });
     if (customStatuses && typeof customStatuses === 'object') {
-            const builtinKeys = new Set(['poison','fire','vulnerable','toxic','dodge','armor','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
+            const builtinKeys = new Set(['poison','fire','toxic','dodge','armor','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
         Object.entries(customStatuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;
@@ -15802,7 +16888,8 @@ function renderStatusTags(containerId, playerData) {
         const shownVal = maskStatusValues && t.val ? '?' : t.val;
         const fullText = shownVal ? `${t.name}:${shownVal}` : t.name;
         nextItems.push(fullText);
-        el.textContent = fullText;
+        const statusIcon = renderStatusIconHtml(t.key, t.name, t.iconKey, 'tag');
+        el.innerHTML = `${statusIcon}<span class="status-tag-text">${escapeHtml(fullText)}</span>`;
         el.title = hideStatusIntro ? '' : (t.title || '');
         el.dataset.statusKey = t.key || '';
         el.dataset.statusName = t.name || '';
@@ -16375,6 +17462,11 @@ function triggerCombatImpact(selector, kind = 'damage', delay = 0) {
     if (!region) return;
     const impactKind = kind === 'poison' || kind === 'fire' ? kind : 'damage';
     setTimeout(() => {
+        playSfxAudio(impactKind, {
+            throttleMs: 0,
+            volumeScale: impactKind === 'damage' ? 0.92 : 0.82,
+            playbackRate: impactKind === 'damage' ? (0.96 + Math.random() * 0.12) : 1,
+        });
         region.classList.remove('combat-impact', 'combat-impact-poison', 'combat-impact-fire');
         void region.offsetWidth;
         region.classList.add('combat-impact');
@@ -16390,6 +17482,15 @@ function triggerCombatPulse(selector, kind = 'info', delay = 0) {
     const region = document.querySelector(selector);
     if (!region) return;
     setTimeout(() => {
+        if (kind === 'heal') {
+            playSfxAudio('heal', { throttleMs: 0, volumeScale: 0.78 });
+        } else if (kind === 'elixir' || kind === 'magic') {
+            playSfxAudio('resource', { throttleMs: 0, volumeScale: 0.7, playbackRate: kind === 'magic' ? 1.08 : 0.96 });
+        } else if (kind === 'poison') {
+            playSfxAudio('poison', { throttleMs: 0, volumeScale: 0.62 });
+        } else if (kind === 'fire') {
+            playSfxAudio('fire', { throttleMs: 0, volumeScale: 0.62 });
+        }
         region.classList.remove('combat-pulse', 'combat-pulse-heal', 'combat-pulse-resource');
         void region.offsetWidth;
         region.classList.add('combat-pulse');
@@ -17367,14 +18468,27 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
                 triggerCostE > 0 ? `${triggerCostE}E` : '',
                 triggerCostM > 0 ? `${triggerCostM}M` : '',
             ].filter(Boolean).join(' ') || '0E';
+            const currentElixir = getBarValueForKey(gameState && gameState.you, 'elixir');
+            const currentMagic = getBarValueForKey(gameState && gameState.you, 'magic');
+            const lacksElixir = triggerCostE > currentElixir;
+            const lacksMagic = triggerCostM > currentMagic;
+            const lacksResource = lacksElixir || lacksMagic;
             const triggerText = `${fullText} 触发：${triggerCostText}`;
             const visibleText = isMinimalUiStyle() ? `⚡ ${equipDisplayName} ${triggerCostText}` : triggerText;
             btn.innerHTML = `${getEquipmentIconHtml(cardInst, cardDef)}<span class="equip-trigger-text">${escapeHtml(visibleText)}</span>`;
-            btn.title = isMinimalUiStyle() ? triggerText : '';
-            btn.disabled = isActionBusy({ includeAnimation: false });
+            const resourceHint = lacksResource
+                ? `${triggerText}（${[
+                    lacksElixir ? '能量不足' : '',
+                    lacksMagic ? '魔力不足' : '',
+                ].filter(Boolean).join('，')}）`
+                : triggerText;
+            btn.title = isMinimalUiStyle() || lacksResource ? resourceHint : '';
+            btn.disabled = isActionBusy({ includeAnimation: false }) || lacksResource;
+            btn.classList.toggle('equip-trigger-unavailable', lacksResource);
             attachFloatingCardPreview(btn, previewCardInst);
             attachTermIntroToCard(btn, previewCardInst);
             btn.onclick = async () => {
+                if (lacksResource) return;
                 if (!canSendGameAction('use_trigger', { includeAnimation: false })) return;
                 const payload = { equipment_instance_id: cardInst.instance_id };
                 if (equipmentChoosesTargetOnTrigger(cardDef)) {
@@ -17432,25 +18546,38 @@ function getBattleUseTemplateParts(actorName) {
 }
 
 function renderBattleUseLogChipLine(el, entry) {
-    const cardDict = (entry && entry.cardDict && typeof entry.cardDict === 'object') ? entry.cardDict : null;
-    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(entry && entry.card);
-    if (!defId) {
+    const cards = Array.isArray(entry && entry.cards) && entry.cards.length
+        ? entry.cards
+        : [{
+            card: entry && entry.card,
+            cardDict: (entry && entry.cardDict && typeof entry.cardDict === 'object') ? entry.cardDict : null,
+            count: entry && entry.count,
+        }];
+    const usableCards = cards.map(card => {
+        const cardDict = (card && card.cardDict && typeof card.cardDict === 'object') ? card.cardDict : null;
+        const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(card && card.card);
+        return { ...card, cardDict, defId };
+    }).filter(card => card.defId);
+    if (!usableCards.length) {
         el.innerHTML = colorizeBattleLogText(stripBattleLogCardMarkers(entry && entry.text ? entry.text : ''));
         bindInlineCardChips(el, { interactive: true });
         return;
     }
     const parts = getBattleUseTemplateParts(localizePlayerNameInText(entry.actor || ''));
     appendColorizedLogText(el, parts.before);
-    const chip = createCardChoiceChip({ ...(cardDict || {}), def_id: defId }, { hideInstanceOnlyFlags: false });
-    chip.classList.add('battle-log-card-chip');
-    el.appendChild(chip);
-    const count = Math.max(1, Number(entry.count || 1));
-    if (count > 1) {
-        const countSpan = document.createElement('span');
-        countSpan.className = 'battle-log-card-count';
-        countSpan.textContent = `×${count}`;
-        el.appendChild(countSpan);
-    }
+    usableCards.forEach((card, index) => {
+        if (index > 0) appendColorizedLogText(el, '、');
+        const chip = createCardChoiceChip({ ...(card.cardDict || {}), def_id: card.defId }, { hideInstanceOnlyFlags: false });
+        chip.classList.add('battle-log-card-chip');
+        el.appendChild(chip);
+        const count = Math.max(1, Number(card.count || 1));
+        if (count > 1) {
+            const countSpan = document.createElement('span');
+            countSpan.className = 'battle-log-card-count';
+            countSpan.textContent = `×${count}`;
+            el.appendChild(countSpan);
+        }
+    });
     if (parts.after) appendColorizedLogText(el, parts.after);
 }
 
@@ -17590,10 +18717,10 @@ function appendBattleLogTextWithCardChips(parent, text) {
     let guard = 0;
     while (cursor < raw.length && guard++ < 200) {
         const rest = raw.slice(cursor);
-        const marker = rest.match(/^\[\[card:([a-z0-9_:/-]+)((?:\|[^\]]+)*)\]\]/i);
-        if (marker && marker[1]) {
-            appendBattleLogCardChip(parent, marker[1], buildInlineCardDict(marker[1], marker[2] || ''));
-            cursor += marker[0].length;
+        const marker = parseInlineCardMarker(rest);
+        if (marker) {
+            appendBattleLogCardChip(parent, marker.defId, buildInlineCardDict(marker.defId, marker.modifierText));
+            cursor += marker.raw.length;
             usedChip = true;
             continue;
         }
@@ -17860,23 +18987,138 @@ function parseBattleUseLogForCompact(line) {
     const cleanLine = stripBattleLogCardMarkers(rawLine);
     const match = cleanLine.match(/^(.+?)使用了?([^，]+?)(?: ×(\d+))?$/);
     if (!match) return null;
+    const cardText = String(match[2] || '').trim();
+    if (/^并(?:给.+?装备了|装备了)/.test(cardText)) return null;
     return {
         actor: match[1],
-        card: match[2],
+        card: cardText,
         cardDict,
-        cardSignature: battleLogCardSignature(cardDict, match[2]),
+        cardSignature: battleLogCardSignature(cardDict, cardText),
         count: Math.max(1, Number(match[3] || 1)),
+        cards: [{
+            card: cardText,
+            cardDict,
+            cardSignature: battleLogCardSignature(cardDict, cardText),
+            count: Math.max(1, Number(match[3] || 1)),
+        }],
     };
+}
+
+function mergeBattleUseForCompact(target, source) {
+    if (!target || !source || target.actor !== source.actor) return false;
+    const targetCards = Array.isArray(target.cards) && target.cards.length
+        ? target.cards
+        : [{
+            card: target.card,
+            cardDict: target.cardDict,
+            cardSignature: target.cardSignature,
+            count: Math.max(1, Number(target.count || 1)),
+        }];
+    const sourceCards = Array.isArray(source.cards) && source.cards.length
+        ? source.cards
+        : [{
+            card: source.card,
+            cardDict: source.cardDict,
+            cardSignature: source.cardSignature,
+            count: Math.max(1, Number(source.count || 1)),
+        }];
+    sourceCards.forEach(card => {
+        const existing = targetCards.find(item =>
+            item.card === card.card && item.cardSignature === card.cardSignature
+        );
+        if (existing) {
+            existing.count = Math.max(1, Number(existing.count || 1)) + Math.max(1, Number(card.count || 1));
+        } else {
+            targetCards.push({ ...card });
+        }
+    });
+    target.cards = targetCards;
+    target.card = targetCards[0] ? targetCards[0].card : target.card;
+    target.cardDict = targetCards[0] ? targetCards[0].cardDict : target.cardDict;
+    target.cardSignature = targetCards[0] ? targetCards[0].cardSignature : target.cardSignature;
+    target.count = targetCards.reduce((sum, item) => sum + Math.max(1, Number(item.count || 1)), 0);
+    return true;
 }
 
 function formatBattleUseLogForCompact(use) {
     if (!use) return '';
-    return `${use.actor}使用了${use.card}${use.count > 1 ? `×${use.count}` : ''}`;
+    const cards = Array.isArray(use.cards) && use.cards.length
+        ? use.cards
+        : [{ card: use.card, count: use.count }];
+    const cardText = cards.map(item => `${item.card}${Number(item.count || 1) > 1 ? `×${Number(item.count || 1)}` : ''}`).join('、');
+    return `${use.actor}使用了${cardText}`;
 }
 
 function formatBattleDamageLogForCompact(damage) {
     if (!damage) return '';
     return `${damage.target}受到${formatBattleDamageUnitsForCompact(damage.units)}（H=${(damage.hp || []).join('→')}）`;
+}
+
+function parseBattlePostUseLogForCompact(line) {
+    const rawLine = String(line || '');
+    const cardDict = decodeBattleLogCardMarker(rawLine);
+    const cleanLine = stripBattleLogCardMarkers(rawLine);
+    let match = cleanLine.match(/^(.+?)的(.+?)(因回转回到手中|因虚无被放逐|因队伍独一被放逐|被放逐|移入弃牌堆)(?: ×(\d+))?$/);
+    if (!match) {
+        match = cleanLine.match(/^(.+?)(被放逐|移入弃牌堆)(?: ×(\d+))?$/);
+        if (!match) return null;
+        const cardText = String(match[1] || '').trim();
+        return {
+            actor: '',
+            card: cardText,
+            cardDict,
+            cardSignature: battleLogCardSignature(cardDict, cardText),
+            action: String(match[2] || ''),
+            count: Math.max(1, Number(match[3] || 1)),
+        };
+    }
+    const cardText = String(match[2] || '').trim();
+    return {
+        actor: String(match[1] || ''),
+        card: cardText,
+        cardDict,
+        cardSignature: battleLogCardSignature(cardDict, cardText),
+        action: String(match[3] || ''),
+        count: Math.max(1, Number(match[4] || 1)),
+    };
+}
+
+function mergeBattlePostUseForCompact(target, source) {
+    if (!target || !source) return false;
+    if (target.actor !== source.actor || target.card !== source.card || target.action !== source.action || target.cardSignature !== source.cardSignature) return false;
+    target.count = Math.max(1, Number(target.count || 1)) + Math.max(1, Number(source.count || 1));
+    return true;
+}
+
+function formatBattlePostUseLogForCompact(entry) {
+    if (!entry) return '';
+    const countText = Number(entry.count || 1) > 1 ? ` ×${Number(entry.count || 1)}` : '';
+    return entry.actor
+        ? `${entry.actor}的${entry.card}${entry.action}${countText}`
+        : `${entry.card}${entry.action}${countText}`;
+}
+
+function findRecentCompactUseGroup(output, actor) {
+    for (let index = output.length - 1; index >= 0 && index >= output.length - 5; index -= 1) {
+        const entry = output[index];
+        if (!entry) continue;
+        if (entry.kind === 'use' && entry.actor === actor) return entry;
+        if (!['damage', 'post_use', 'raw'].includes(entry.kind)) return null;
+        if (entry.kind === 'post_use' && entry.actor && entry.actor !== actor) return null;
+        if (entry.kind === 'raw' && !/^(?:.+?受到|.+?回复|.+?获得|\+|-|\d+)/.test(entry.text || '')) return null;
+    }
+    return null;
+}
+
+function findRecentCompactEntry(output, kind, predicate) {
+    for (let index = output.length - 1; index >= 0 && index >= output.length - 8; index -= 1) {
+        const entry = output[index];
+        if (!entry) continue;
+        if (entry.kind === kind && (!predicate || predicate(entry))) return entry;
+        if (!['use', 'damage', 'post_use', 'raw'].includes(entry.kind)) return null;
+        if (entry.kind === 'raw' && !/^(?:.+?受到|.+?回复|.+?获得|\+|-|\d+)/.test(entry.text || '')) return null;
+    }
+    return null;
 }
 
 function compactBattleLogLinesForDisplay(log) {
@@ -17887,17 +19129,19 @@ function compactBattleLogLinesForDisplay(log) {
         if (use) {
             const last = output[output.length - 1];
             const previous = output[output.length - 2];
-            if (last && last.kind === 'damage') {
-                if (previous && previous.kind === 'use' && previous.actor === use.actor && previous.card === use.card && previous.cardSignature === use.cardSignature) {
-                    previous.count += use.count;
-                    previous.rawEnd = rawIndex;
-                } else {
-                    output.splice(output.length - 1, 0, { kind: 'use', ...use, rawStart: rawIndex, rawEnd: rawIndex });
-                }
+            if (last && last.kind === 'damage' && previous && previous.kind === 'use' && previous.actor === use.actor) {
+                mergeBattleUseForCompact(previous, use);
+                previous.rawEnd = rawIndex;
                 return;
             }
-            if (last && last.kind === 'use' && last.actor === use.actor && last.card === use.card && last.cardSignature === use.cardSignature) {
-                last.count += use.count;
+            const recentGroup = findRecentCompactUseGroup(output, use.actor);
+            if (recentGroup && recentGroup !== last) {
+                mergeBattleUseForCompact(recentGroup, use);
+                recentGroup.rawEnd = rawIndex;
+                return;
+            }
+            if (last && last.kind === 'use' && last.actor === use.actor) {
+                mergeBattleUseForCompact(last, use);
                 last.rawEnd = rawIndex;
                 return;
             }
@@ -17913,7 +19157,35 @@ function compactBattleLogLinesForDisplay(log) {
                 last.rawEnd = rawIndex;
                 return;
             }
+            const recentDamage = findRecentCompactEntry(output, 'damage', entry => entry.target === damage.target);
+            if (recentDamage) {
+                recentDamage.units = (recentDamage.units || []).concat(damage.units || []);
+                recentDamage.hp = mergeBattleHpChainForCompact(recentDamage.hp, damage.hp);
+                recentDamage.rawEnd = rawIndex;
+                return;
+            }
             output.push({ kind: 'damage', ...damage, rawStart: rawIndex, rawEnd: rawIndex });
+            return;
+        }
+        const postUse = parseBattlePostUseLogForCompact(line);
+        if (postUse) {
+            const last = output[output.length - 1];
+            if (last && last.kind === 'post_use' && mergeBattlePostUseForCompact(last, postUse)) {
+                last.rawEnd = rawIndex;
+                return;
+            }
+            const recentPostUse = findRecentCompactEntry(output, 'post_use', entry =>
+                entry.actor === postUse.actor
+                && entry.card === postUse.card
+                && entry.action === postUse.action
+                && entry.cardSignature === postUse.cardSignature
+            );
+            if (recentPostUse && mergeBattlePostUseForCompact(recentPostUse, postUse)) {
+                recentPostUse.rawEnd = rawIndex;
+                return;
+            }
+            const group = findRecentCompactUseGroup(output, postUse.actor);
+            output.push({ kind: 'post_use', ...postUse, rawStart: rawIndex, rawEnd: rawIndex, groupActor: group ? group.actor : '' });
             return;
         }
         output.push({ kind: 'raw', text: stripBattleLogCardMarkers(line), rawStart: rawIndex, rawEnd: rawIndex });
@@ -17921,6 +19193,7 @@ function compactBattleLogLinesForDisplay(log) {
     return output.map(entry => {
         if (entry.kind === 'use') return formatBattleUseLogForCompact(entry);
         if (entry.kind === 'damage') return formatBattleDamageLogForCompact(entry);
+        if (entry.kind === 'post_use') return formatBattlePostUseLogForCompact(entry);
         return entry.text || '';
     });
 }
@@ -17933,17 +19206,19 @@ function compactBattleLogEntriesForDisplay(log) {
         if (use) {
             const last = output[output.length - 1];
             const previous = output[output.length - 2];
-            if (last && last.kind === 'damage') {
-                if (previous && previous.kind === 'use' && previous.actor === use.actor && previous.card === use.card && previous.cardSignature === use.cardSignature) {
-                    previous.count += use.count;
-                    previous.rawEnd = rawIndex;
-                } else {
-                    output.splice(output.length - 1, 0, { kind: 'use', ...use, rawStart: rawIndex, rawEnd: rawIndex });
-                }
+            if (last && last.kind === 'damage' && previous && previous.kind === 'use' && previous.actor === use.actor) {
+                mergeBattleUseForCompact(previous, use);
+                previous.rawEnd = rawIndex;
                 return;
             }
-            if (last && last.kind === 'use' && last.actor === use.actor && last.card === use.card && last.cardSignature === use.cardSignature) {
-                last.count += use.count;
+            const recentGroup = findRecentCompactUseGroup(output, use.actor);
+            if (recentGroup && recentGroup !== last) {
+                mergeBattleUseForCompact(recentGroup, use);
+                recentGroup.rawEnd = rawIndex;
+                return;
+            }
+            if (last && last.kind === 'use' && last.actor === use.actor) {
+                mergeBattleUseForCompact(last, use);
                 last.rawEnd = rawIndex;
                 return;
             }
@@ -17959,7 +19234,35 @@ function compactBattleLogEntriesForDisplay(log) {
                 last.rawEnd = rawIndex;
                 return;
             }
+            const recentDamage = findRecentCompactEntry(output, 'damage', entry => entry.target === damage.target);
+            if (recentDamage) {
+                recentDamage.units = (recentDamage.units || []).concat(damage.units || []);
+                recentDamage.hp = mergeBattleHpChainForCompact(recentDamage.hp, damage.hp);
+                recentDamage.rawEnd = rawIndex;
+                return;
+            }
             output.push({ kind: 'damage', ...damage, rawStart: rawIndex, rawEnd: rawIndex });
+            return;
+        }
+        const postUse = parseBattlePostUseLogForCompact(line);
+        if (postUse) {
+            const last = output[output.length - 1];
+            if (last && last.kind === 'post_use' && mergeBattlePostUseForCompact(last, postUse)) {
+                last.rawEnd = rawIndex;
+                return;
+            }
+            const recentPostUse = findRecentCompactEntry(output, 'post_use', entry =>
+                entry.actor === postUse.actor
+                && entry.card === postUse.card
+                && entry.action === postUse.action
+                && entry.cardSignature === postUse.cardSignature
+            );
+            if (recentPostUse && mergeBattlePostUseForCompact(recentPostUse, postUse)) {
+                recentPostUse.rawEnd = rawIndex;
+                return;
+            }
+            const group = findRecentCompactUseGroup(output, postUse.actor);
+            output.push({ kind: 'post_use', ...postUse, rawStart: rawIndex, rawEnd: rawIndex, groupActor: group ? group.actor : '' });
             return;
         }
         const last = output[output.length - 1];
@@ -17974,10 +19277,16 @@ function compactBattleLogEntriesForDisplay(log) {
         type: 'battle',
         text: entry.kind === 'use'
             ? formatBattleUseLogForCompact(entry)
-            : (entry.kind === 'damage' ? formatBattleDamageLogForCompact(entry) : `${entry.text || ''}${Number(entry.count || 1) > 1 ? ` ×${Number(entry.count || 1)}` : ''}`),
+            : (entry.kind === 'damage'
+                ? formatBattleDamageLogForCompact(entry)
+                : (entry.kind === 'post_use'
+                    ? formatBattlePostUseLogForCompact(entry)
+                    : `${entry.text || ''}${Number(entry.count || 1) > 1 ? ` ×${Number(entry.count || 1)}` : ''}`)),
         kind: entry.kind,
         actor: entry.actor,
         card: entry.card,
+        action: entry.action,
+        cards: entry.cards,
         cardDict: entry.cardDict,
         cardSignature: entry.cardSignature,
         count: entry.count,
@@ -18037,6 +19346,7 @@ function renderLog(log, logStart = 0, logTotal = null) {
     logStart = Number(logStart || 0);
     const rawLog = log.map(line => String(line || ''));
     logTotal = Number(logTotal == null ? logStart + rawLog.length : logTotal);
+    playAudioForNewBattleLogs(rawLog, logStart, logTotal, matchKey);
     if (logTotal < renderedBattleLogTotal || logStart > renderedBattleLogTotal) {
         resetBattleLogState(content);
         renderedBattleLogTotal = logStart;
@@ -18818,7 +20128,7 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
         if (comboSel < 0) return false;
         return { target_instance_ids: uniqueCombos[comboSel].map(c => c.instance_id) };
     } else if (isMimicCardDict(cardDict)) {
-        const others = hand.filter(c => c.instance_id !== cardDict.instance_id);
+        const others = hand.filter(c => c.instance_id !== cardDict.instance_id && !cardHasSublimeFlag(c));
         if (!others.length) { gameAlert(UI.notice, UI.no_attack_cards); return false; }
         const options = others.map(c => mimicCardChoiceOption(c, cardDict, gameState && gameState.you));
         const sel = await simpleChoice(UI.choose_hand_for.replace('{0}', sourceCardName), options);
@@ -19035,7 +20345,6 @@ function showResponseUI(data) {
     btnRow.className = 'response-btn-row';
     groupedCardCosts.forEach(({ cc, ccDef, costE, costM, canAffordAny, count }) => {
         if (!ccDef) return;
-        const costStr = costM === 0 ? `${costE}E` : `${costE}E/${costM}M`;
         const btn = document.createElement('button');
         btn.className = 'btn counter-card-btn ' + (canAffordAny ? 'btn-primary' : 'btn-counter-disabled');
         btn.appendChild(createCardChoiceChip(cc));
@@ -19047,7 +20356,7 @@ function showResponseUI(data) {
         }
         const cost = document.createElement('span');
         cost.className = 'counter-card-cost';
-        cost.textContent = blindLevel > 0 ? '[?]' : `[${costStr}]`;
+        cost.innerHTML = blindLevel > 0 ? '[?]' : renderResourceCostInline(costE, costM, { bracket: true });
         btn.appendChild(cost);
         if (!hideResponsePrediction) {
             const counterPrediction = prediction.counters && prediction.counters[String(cc.instance_id)];
@@ -19480,7 +20789,9 @@ async function showChoiceUI(data) {
             }
         }
     } else if (choiceType === 'choose_cards_from_hand') {
-        const allCards = choiceTargetData().hand || [];
+        const allCards = (choiceTargetData().hand || []).filter(c => (
+            !cardHasSublimeFlag(c) && c.instance_id !== cardDict.instance_id
+        ));
         const wantedType = choiceParams.card_type || 'any';
         const minCount = Number(choiceParams.min_count ?? 1);
         const maxCount = Math.max(minCount, Number(choiceParams.max_count || minCount));
@@ -19527,7 +20838,9 @@ async function showChoiceUI(data) {
         const isMimicChoice = isMimicCardDict(cardDict);
         const filter = choiceParams.filter || {};
         let otherCards = (data.hand_cards || choiceTargetData().hand || []).filter(c => (
-            !isMimicChoice || c.instance_id !== cardDict.instance_id
+            !cardHasSublimeFlag(c) &&
+            c.instance_id !== cardDict.instance_id &&
+            (!isMimicChoice || c.instance_id !== cardDict.instance_id)
         ));
         if (filter.card_type) {
             const allowedTypes = Array.isArray(filter.card_type) ? filter.card_type : [filter.card_type];
@@ -19555,7 +20868,7 @@ async function showChoiceUI(data) {
             gameAlert(UI.notice, noMatchMsg);
         }
     } else if (choiceType === 'choose_from_deck') {
-        const deck = choiceTargetData().deck || [];
+        const deck = (choiceTargetData().deck || []).filter(c => !cardHasSublimeFlag(c));
         if (!deck.length) {
             gameAlert(UI.notice, UI.deck_empty);
             choiceResult = { cancelled: true };
@@ -19566,7 +20879,7 @@ async function showChoiceUI(data) {
             if (sel >= 0 && sel < deck.length) choiceResult = { target_instance_id: deck[sel].instance_id };
         }
     } else if (choiceType === 'choose_from_discard') {
-        const discard = choiceTargetData().discard || [];
+        const discard = (choiceTargetData().discard || []).filter(c => !cardHasSublimeFlag(c));
         if (!discard.length) {
             gameAlert(UI.notice, UI.discard_empty);
             choiceResult = { cancelled: true };
@@ -19577,7 +20890,7 @@ async function showChoiceUI(data) {
             if (sel >= 0 && sel < discard.length) choiceResult = { target_instance_id: discard[sel].instance_id, target_def_id: discard[sel].def_id };
         }
     } else if (choiceType === 'choose_from_exile') {
-        const exile = choiceTargetData().exile || [];
+        const exile = (choiceTargetData().exile || []).filter(c => !cardHasSublimeFlag(c));
         if (!exile.length) {
             gameAlert(UI.notice, UI.no_valid_target || '无可选卡牌');
             choiceResult = { cancelled: true };
@@ -19599,7 +20912,8 @@ async function showChoiceUI(data) {
         const targetId = data.target_player_id != null ? data.target_player_id : -1;
         const targetData = targetId >= 0 ? getPlayerDataById(targetId) : (gameState.opponent || {});
         const fallbackOpponent = gameState.opponent || {};
-        const oppHand = data.hand_cards || targetData.hand || targetData.revealed_hand || fallbackOpponent.hand || fallbackOpponent.revealed_hand || [];
+        const oppHand = (data.hand_cards || targetData.hand || targetData.revealed_hand || fallbackOpponent.hand || fallbackOpponent.revealed_hand || [])
+            .filter(c => !cardHasSublimeFlag(c));
         if (!oppHand.length) { gameAlert(UI.notice, UI.no_enemy_hand); }
         else {
             const options = oppHand.map(c => cardChoiceOption(c));
@@ -19618,7 +20932,9 @@ async function showChoiceUI(data) {
         });
         if (targetId >= 0) choiceResult = { target_player: targetId, target_player_id: targetId };
     } else if (choiceType === 'foresight_replace') {
-        const handCards = data.hand_cards || data.deck_cards || [];
+        const handCards = (data.hand_cards || data.deck_cards || []).filter(c => (
+            !cardHasSublimeFlag(c) && c.instance_id !== cardDict.instance_id
+        ));
         const maxReplace = Number(choiceParams.max_count || choiceParams.count || 1);
         if (!handCards.length) { gameAlert(UI.notice, UI.no_valid_target || '没有可选择的卡牌'); }
         else {
@@ -20348,13 +21664,13 @@ function openSettings(options = {}) {
 
 function setSettingsTab(tab) {
     if (tab === 'server' && !settingsAllowServerEdit) tab = 'appearance';
-    settingsActiveTab = ['appearance', 'server', 'mods', 'social'].includes(tab) ? tab : 'appearance';
+    settingsActiveTab = ['appearance', 'server', 'mods', 'social', 'audio'].includes(tab) ? tab : 'appearance';
     renderSettingsTabs();
 }
 
 function renderSettingsTabs() {
     const hidden = hiddenFeaturesEnabled();
-    const tabs = ['appearance', 'server', 'mods', 'social'];
+    const tabs = ['appearance', 'server', 'mods', 'social', 'audio'];
     tabs.forEach(tab => {
         const btn = $(`settings-tab-${tab}`);
         const page = $(`settings-page-${tab}`);
@@ -21217,6 +22533,8 @@ async function init() {
     applyUiStyle(migrateStoredUiStyle());
     const savedLang = normalizeLang(localStorage.getItem('gtn_lang') || 'zh');
     applyLang(savedLang);
+    initAudioSystem();
+    initChangelogBadge();
     bootLoader.step(UI.init_theme_lang, 24);
     bootLoader.step(UI.init_fonts, 36);
     if (document.fonts && document.fonts.ready) {
@@ -21244,10 +22562,11 @@ async function init() {
         });
     });
     if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());
-    if ($('btn-friends-top')) $('btn-friends-top').addEventListener('click', () => toggleFriendsPopover());
+    if ($('btn-friends-top')) $('btn-friends-top').addEventListener('click', () => openSocialCenter('friends'));
     if ($('btn-skin-top')) $('btn-skin-top').addEventListener('click', openSkinEditor);
     if ($('btn-changelog-top')) $('btn-changelog-top').addEventListener('click', openChangelog);
     if ($('btn-changelog-popover-close')) $('btn-changelog-popover-close').addEventListener('click', () => toggleChangelogPopover(false));
+    if ($('btn-replays-top')) $('btn-replays-top').addEventListener('click', () => toggleStatsPopover());
     if ($('btn-leaderboard-top')) $('btn-leaderboard-top').addEventListener('click', () => toggleLeaderboardPopover());
     if ($('btn-skin-back')) $('btn-skin-back').addEventListener('click', () => showView('view-login'));
     if ($('btn-skin-save')) $('btn-skin-save').addEventListener('click', saveSkinFromEditor);
@@ -21269,6 +22588,7 @@ async function init() {
     if ($('btn-account-popover-logout')) $('btn-account-popover-logout').addEventListener('click', onAccountLogout);
     if ($('btn-friend-add')) $('btn-friend-add').addEventListener('click', addFriendFromInput);
     if ($('btn-dm-start')) $('btn-dm-start').addEventListener('click', startDmFromIdentifier);
+    if ($('btn-social-add')) $('btn-social-add').addEventListener('click', addFriendFromInput);
     if ($('btn-dm-refresh')) $('btn-dm-refresh').addEventListener('click', async () => {
         await loadDmThreads(true, { force: true });
         if (activeDmThreadId) await openDmThread(activeDmThreadId, { markRead: true, force: true });
@@ -21283,6 +22603,12 @@ async function init() {
     const friendIdentifierInput = $('input-friend-identifier');
     if (friendIdentifierInput) {
         friendIdentifierInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addFriendFromInput();
+        });
+    }
+    const socialIdentifierInput = $('input-social-identifier');
+    if (socialIdentifierInput) {
+        socialIdentifierInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') addFriendFromInput();
         });
     }
@@ -21319,7 +22645,6 @@ async function init() {
         }
     });
     if ($('btn-account-replays-refresh')) $('btn-account-replays-refresh').addEventListener('click', loadAccountReplays);
-    if ($('btn-stats-top')) $('btn-stats-top').addEventListener('click', () => toggleStatsPopover());
     if ($('btn-stats-popover-close')) $('btn-stats-popover-close').addEventListener('click', () => toggleStatsPopover(false));
     if ($('btn-leaderboard-popover-close')) $('btn-leaderboard-popover-close').addEventListener('click', () => toggleLeaderboardPopover(false));
     if ($('btn-account-replay-close')) $('btn-account-replay-close').addEventListener('click', closeAccountReplayModal);
@@ -21415,6 +22740,8 @@ async function init() {
     if ($('settings-tab-server')) $('settings-tab-server').addEventListener('click', () => setSettingsTab('server'));
     if ($('settings-tab-mods')) $('settings-tab-mods').addEventListener('click', () => setSettingsTab('mods'));
     if ($('settings-tab-social')) $('settings-tab-social').addEventListener('click', () => setSettingsTab('social'));
+    if ($('settings-tab-audio')) $('settings-tab-audio').addEventListener('click', () => setSettingsTab('audio'));
+    bindAudioSettingsControls();
     ['settings-accept-friend-requests', 'settings-searchable-by-nickname', 'settings-searchable-by-player-id'].forEach((id) => {
         const input = $(id);
         if (input) input.addEventListener('change', saveSocialSettings);

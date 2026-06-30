@@ -624,6 +624,7 @@ function draftStatsQuery() {
   params.set('order', $('draft-stats-order')?.value || 'desc');
   params.set('limit', '100');
   if ($('draft-stats-merge')?.checked) params.set('merge_modes', '1');
+  if ($('draft-stats-winner-only')?.checked) params.set('winner_only', '1');
   return params;
 }
 
@@ -673,7 +674,8 @@ function renderDraftStats(data) {
   const items = data.items || [];
   const count = $('draft-stats-count');
   const scopeLabel = data.scope === 'week' ? `本周 ${data.week_start || ''}` : '总计';
-  if (count) count.textContent = `${scopeLabel} · ${items.length}/${data.total || 0}`;
+  const winnerOnly = !!data.winner_only;
+  if (count) count.textContent = `${scopeLabel}${winnerOnly ? ' · 胜者' : ''} · ${items.length}/${data.total || 0}`;
   const table = $('draft-stats-table');
   if (!table) return;
   if (!items.length) {
@@ -682,7 +684,7 @@ function renderDraftStats(data) {
   }
   table.innerHTML = `
     <table>
-      <thead><tr><th>范围</th><th>模式</th><th>卡牌</th><th>类型</th><th>抽取率</th><th>抽到胜率</th><th>抽取</th><th>刷出</th><th>抽到胜利</th><th>抽到局数</th><th>最近更新</th></tr></thead>
+      <thead><tr><th>范围</th><th>模式</th><th>卡牌</th><th>类型</th><th>抽取率</th><th>抽到胜率</th><th>抽取</th><th>刷出</th><th>${winnerOnly ? '胜者选中' : '抽到胜利'}</th><th>抽到局数</th><th>最近更新</th></tr></thead>
       <tbody>
         ${items.map((item) => `
           <tr>
@@ -1739,6 +1741,7 @@ function bindEvents() {
   $('draft-stats-refresh')?.addEventListener('click', loadDraftStats);
   $('draft-stats-rebuild-wins')?.addEventListener('click', rebuildDraftWinStats);
   $('draft-stats-merge')?.addEventListener('change', loadDraftStats);
+  $('draft-stats-winner-only')?.addEventListener('change', loadDraftStats);
   $('draft-stats-scope')?.addEventListener('change', loadDraftStats);
   $('draft-stats-mode')?.addEventListener('change', loadDraftStats);
   $('draft-stats-sort')?.addEventListener('change', loadDraftStats);

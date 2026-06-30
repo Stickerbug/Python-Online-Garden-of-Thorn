@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #995023;
+        stroke: #743f1e;
+      }
+
+      .st0, .st1 {
+        stroke-width: 15px;
+      }
+
+      .st0, .st1, .st2 {
+        stroke-miterlimit: 10;
+      }
+
+      .st1 {
+        fill: #7b4f23;
+        stroke: #7b4e22;
+      }
+
+      .st3 {
+        opacity: .6;
+      }
+
+      .st2 {
+        fill: url(#_未命名的渐变_102);
+        opacity: .8;
+        stroke: #cd73ab;
+        stroke-width: 5px;
+      }
+    </style>
+    <radialGradient id="_未命名的渐变_102" data-name="未命名的渐变 102" cx="141.73" cy="141.73" fx="141.73" fy="141.73" r="106.3" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#612257"/>
+      <stop offset="1" stop-color="#d796c0"/>
+    </radialGradient>
+  </defs>
+  <circle class="st2" cx="141.73" cy="141.73" r="106.3"/>
+  <g class="st3">
+    <path class="st0" d="M106.73,104.16c12.03-4.56-39.42-43.75,59.92-26.8,55.72,9.51,36.63,54.8,36.63,54.8,26.73,35.78-5.94,28.4-5.94,28.4,4.45,52.54-38.61,29.89-38.61,29.89-1.48,50.73-55.67-11.65-55.67-11.65-50.25-1.36-22.54-43.29-22.54-43.29-35.14-1.68,26.2-31.37,26.2-31.37Z"/>
+    <circle class="st1" cx="146.77" cy="140.46" r="15.56"/>
+  </g>
+</svg>

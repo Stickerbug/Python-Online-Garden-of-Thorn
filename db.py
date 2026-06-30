@@ -2692,7 +2692,7 @@ def rebuild_card_draft_win_stats_from_matches():
     }
 
 
-def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0, merge_modes=False, scope='total', week_start=None):
+def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0, merge_modes=False, scope='total', week_start=None, winner_only=False):
     mode_key = str(mode or '').strip()
     sort_key = str(sort or 'pick_rate')
     sort_expr = CARD_DRAFT_STAT_SORTS.get(sort_key, CARD_DRAFT_STAT_SORTS['pick_rate'])
@@ -2712,6 +2712,7 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
     scope_key = 'week' if str(scope or '').lower() in ('week', 'weekly') else 'total'
     draft_table = 'card_draft_stats_weekly' if scope_key == 'week' else 'card_draft_stats'
     win_table = 'card_draft_win_stats_weekly' if scope_key == 'week' else 'card_draft_win_stats'
+    winner_filter = bool(winner_only)
     selected_week = week_start_for_iso(week_start) if scope_key == 'week' else ''
     if scope_key == 'week':
         week_clause = 'week_start = ?'
@@ -2749,19 +2750,18 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
                     GROUP BY card_id
                 )
                 SELECT
-                    draft.mode,
-                    draft.card_id,
-                    draft.shown_count,
-                    draft.picked_count,
-                    draft.updated_at,
+                    {'wins.mode' if winner_filter else 'draft.mode'} AS mode,
+                    {'wins.card_id' if winner_filter else 'draft.card_id'} AS card_id,
+                    COALESCE(draft.shown_count, 0) AS shown_count,
+                    COALESCE(draft.picked_count, 0) AS picked_count,
+                    COALESCE(draft.updated_at, '') AS updated_at,
                     COALESCE(wins.picked_games, 0) AS picked_games,
                     COALESCE(wins.win_games, 0) AS win_games,
                     COALESCE(wins.draw_games, 0) AS draw_games,
                     COALESCE(wins.win_updated_at, '') AS win_updated_at,
-                    CASE WHEN draft.shown_count > 0 THEN CAST(draft.picked_count AS REAL) / draft.shown_count * 100 ELSE 0 END AS pick_rate,
+                    CASE WHEN COALESCE(draft.shown_count, 0) > 0 THEN CAST(COALESCE(draft.picked_count, 0) AS REAL) / draft.shown_count * 100 ELSE 0 END AS pick_rate,
                     CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS card_win_rate
-                FROM draft
-                LEFT JOIN wins ON wins.card_id = draft.card_id
+                FROM {'wins LEFT JOIN draft ON draft.card_id = wins.card_id WHERE wins.win_games > 0' if winner_filter else 'draft LEFT JOIN wins ON wins.card_id = draft.card_id'}
             '''
             total = conn.execute(f'SELECT COUNT(*) FROM ({base_query})', mode_params + mode_params).fetchone()[0]
             rows = conn.execute(
@@ -2774,25 +2774,48 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
             ).fetchall()
         else:
             draft_mode_where = mode_where.replace('week_start', 'draft.week_start').replace('mode', 'draft.mode')
-            base_query = f'''
-                SELECT
-                    draft.mode,
-                    draft.card_id,
-                    draft.shown_count,
-                    draft.picked_count,
-                    draft.updated_at,
-                    COALESCE(wins.picked_games, 0) AS picked_games,
-                    COALESCE(wins.win_games, 0) AS win_games,
-                    COALESCE(wins.draw_games, 0) AS draw_games,
-                    COALESCE(wins.updated_at, '') AS win_updated_at,
-                    CASE WHEN draft.shown_count > 0 THEN CAST(draft.picked_count AS REAL) / draft.shown_count * 100 ELSE 0 END AS pick_rate,
-                    CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS card_win_rate
-                FROM {draft_table} AS draft
-                LEFT JOIN {win_table} AS wins
-                    ON wins.mode = draft.mode AND wins.card_id = draft.card_id
-                    {'AND wins.week_start = draft.week_start' if scope_key == 'week' else ''}
-                {draft_mode_where}
-            '''
+            if winner_filter:
+                wins_mode_where = mode_where.replace('week_start', 'wins.week_start').replace('mode', 'wins.mode')
+                winner_where = f'{wins_mode_where} AND wins.win_games > 0' if wins_mode_where else 'WHERE wins.win_games > 0'
+                base_query = f'''
+                    SELECT
+                        wins.mode,
+                        wins.card_id,
+                        COALESCE(draft.shown_count, 0) AS shown_count,
+                        COALESCE(draft.picked_count, 0) AS picked_count,
+                        COALESCE(draft.updated_at, '') AS updated_at,
+                        COALESCE(wins.picked_games, 0) AS picked_games,
+                        COALESCE(wins.win_games, 0) AS win_games,
+                        COALESCE(wins.draw_games, 0) AS draw_games,
+                        COALESCE(wins.updated_at, '') AS win_updated_at,
+                        CASE WHEN COALESCE(draft.shown_count, 0) > 0 THEN CAST(COALESCE(draft.picked_count, 0) AS REAL) / draft.shown_count * 100 ELSE 0 END AS pick_rate,
+                        CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS card_win_rate
+                    FROM {win_table} AS wins
+                    LEFT JOIN {draft_table} AS draft
+                        ON draft.mode = wins.mode AND draft.card_id = wins.card_id
+                        {'AND draft.week_start = wins.week_start' if scope_key == 'week' else ''}
+                    {winner_where}
+                '''
+            else:
+                base_query = f'''
+                    SELECT
+                        draft.mode,
+                        draft.card_id,
+                        draft.shown_count,
+                        draft.picked_count,
+                        draft.updated_at,
+                        COALESCE(wins.picked_games, 0) AS picked_games,
+                        COALESCE(wins.win_games, 0) AS win_games,
+                        COALESCE(wins.draw_games, 0) AS draw_games,
+                        COALESCE(wins.updated_at, '') AS win_updated_at,
+                        CASE WHEN draft.shown_count > 0 THEN CAST(draft.picked_count AS REAL) / draft.shown_count * 100 ELSE 0 END AS pick_rate,
+                        CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS card_win_rate
+                    FROM {draft_table} AS draft
+                    LEFT JOIN {win_table} AS wins
+                        ON wins.mode = draft.mode AND wins.card_id = draft.card_id
+                        {'AND wins.week_start = draft.week_start' if scope_key == 'week' else ''}
+                    {draft_mode_where}
+                '''
             total = conn.execute(f'SELECT COUNT(*) FROM ({base_query})', mode_params).fetchone()[0]
             rows = conn.execute(
                 f'''
@@ -2827,6 +2850,7 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
         'merge_modes': merge,
         'scope': scope_key,
         'week_start': selected_week,
+        'winner_only': winner_filter,
     }
 
 
@@ -3087,6 +3111,15 @@ def _basic_social_user(row):
     }
 
 
+def _user_row_is_deleted(row) -> bool:
+    if row is None:
+        return True
+    try:
+        return bool(row['deleted_at']) if 'deleted_at' in row.keys() else False
+    except Exception:
+        return False
+
+
 def _cleanup_expired_friend_requests(conn, force=False):
     global _FRIEND_CLEANUP_LAST_TS
     now_ts = time.time()
@@ -3175,10 +3208,12 @@ def _friend_unread_count(conn, user_id):
     row = conn.execute(
         '''
         SELECT COUNT(*) AS count
-        FROM friendships
-        WHERE addressee_id = ?
-          AND addressee_read_at IS NULL
-          AND (status = ? OR notice_type = ?)
+        FROM friendships f
+        JOIN users u ON u.id = f.requester_id
+        WHERE f.addressee_id = ?
+          AND f.addressee_read_at IS NULL
+          AND (f.status = ? OR f.notice_type = ?)
+          AND u.deleted_at IS NULL
         ''',
         (user_id, 'pending', 'auto_add'),
     ).fetchone()
@@ -3275,14 +3310,15 @@ def _find_social_target(conn, identifier):
     player_id = token.upper()
     if PLAYER_ID_RE.fullmatch(player_id):
         row = conn.execute(
-            'SELECT * FROM users WHERE player_id = ? AND searchable_by_player_id = 1',
+            'SELECT * FROM users WHERE player_id = ? AND searchable_by_player_id = 1 AND deleted_at IS NULL',
             (player_id,),
         ).fetchone()
         if row is not None:
             return row
     name = sanitize_username(token)
     if name:
-        return _find_user_row_by_username_key(conn, name, searchable_by_nickname=True)
+        row = _find_user_row_by_username_key(conn, name, searchable_by_nickname=True)
+        return None if _user_row_is_deleted(row) else row
     return None
 
 
@@ -3294,7 +3330,7 @@ def list_friends(user_id, mark_read=False):
     with get_db_connection() as conn:
         started = time.perf_counter()
         self_row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
-        if self_row is None:
+        if self_row is None or _user_row_is_deleted(self_row):
             return None, '请先登录账号'
         rows = conn.execute(
             '''
@@ -3312,7 +3348,7 @@ def list_friends(user_id, mark_read=False):
         for row in rows:
             other_id = row['addressee_id'] if row['requester_id'] == uid else row['requester_id']
             other = conn.execute('SELECT * FROM users WHERE id = ?', (other_id,)).fetchone()
-            if other is None:
+            if other is None or _user_row_is_deleted(other):
                 continue
             item = {
                 'request_id': row['id'],
@@ -3358,10 +3394,12 @@ def add_friend_request(user_id, identifier):
     return_friend_list = False
     with get_db_connection() as conn:
         requester = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
-        if requester is None:
+        if requester is None or _user_row_is_deleted(requester):
             return None, '请先登录账号'
         target = _find_social_target(conn, identifier)
         if target is None:
+            return None, '账号不存在'
+        if _user_row_is_deleted(target):
             return None, '账号不存在'
         if int(target['id']) == uid:
             return None, '不能添加自己为好友'
@@ -3536,7 +3574,15 @@ def _trim_dm_thread_bytes(conn, thread_id):
 
 def _dm_unread_count_conn(conn, user_id):
     row = conn.execute(
-        'SELECT COUNT(*) AS count FROM dm_messages WHERE recipient_user_id = ? AND read_at IS NULL AND hidden = 0',
+        '''
+        SELECT COUNT(*) AS count
+        FROM dm_messages m
+        JOIN users u ON u.id = m.sender_user_id
+        WHERE m.recipient_user_id = ?
+          AND m.read_at IS NULL
+          AND m.hidden = 0
+          AND u.deleted_at IS NULL
+        ''',
         (int(user_id),),
     ).fetchone()
     return int(row['count'] or 0) if row else 0
@@ -3584,7 +3630,15 @@ def dm_unread_count(user_id):
         return 0
     with get_db_connection() as conn:
         row = conn.execute(
-            'SELECT COUNT(*) AS count FROM dm_messages WHERE recipient_user_id = ? AND read_at IS NULL AND hidden = 0',
+            '''
+            SELECT COUNT(*) AS count
+            FROM dm_messages m
+            JOIN users u ON u.id = m.sender_user_id
+            WHERE m.recipient_user_id = ?
+              AND m.read_at IS NULL
+              AND m.hidden = 0
+              AND u.deleted_at IS NULL
+            ''',
             (uid,),
         ).fetchone()
         return int(row['count'] or 0) if row else 0
@@ -3599,7 +3653,7 @@ def list_dm_threads(user_id, limit=50):
     with get_db_connection() as conn:
         started = time.perf_counter()
         self_row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
-        if self_row is None:
+        if self_row is None or _user_row_is_deleted(self_row):
             return None, '请先登录账号'
         rows = conn.execute(
             '''
@@ -3629,7 +3683,7 @@ def list_dm_threads(user_id, limit=50):
         for row in rows:
             other_id = row['user_high_id'] if row['user_low_id'] == uid else row['user_low_id']
             other = conn.execute('SELECT * FROM users WHERE id = ?', (other_id,)).fetchone()
-            if other is None:
+            if other is None or _user_row_is_deleted(other):
                 continue
             items.append({
                 'thread_id': row['id'],
@@ -3660,6 +3714,8 @@ def get_dm_messages(user_id, thread_id, mark_read=True, limit=50):
             return None, '会话不存在'
         other_id = thread['user_high_id'] if thread['user_low_id'] == uid else thread['user_low_id']
         other = conn.execute('SELECT * FROM users WHERE id = ?', (other_id,)).fetchone()
+        if other is None or _user_row_is_deleted(other):
+            return None, '账号不存在'
         if mark_read:
             mark_key = (uid, tid)
             now_monotonic = time.monotonic()
@@ -3709,17 +3765,19 @@ def send_dm_message(sender_user_id, target_identifier=None, target_user_id=None,
         return None, '消息不能为空'
     with get_db_connection() as conn:
         sender = conn.execute('SELECT * FROM users WHERE id = ?', (sender_id,)).fetchone()
-        if sender is None:
+        if sender is None or _user_row_is_deleted(sender):
             return None, '请先登录账号'
         target = None
         if target_user_id is not None:
             try:
-                target = conn.execute('SELECT * FROM users WHERE id = ?', (int(target_user_id),)).fetchone()
+                target = conn.execute('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', (int(target_user_id),)).fetchone()
             except (TypeError, ValueError):
                 target = None
         if target is None:
             target = _find_social_target(conn, target_identifier)
         if target is None:
+            return None, '账号不存在'
+        if _user_row_is_deleted(target):
             return None, '账号不存在'
         target_id = int(target['id'])
         if target_id == sender_id:

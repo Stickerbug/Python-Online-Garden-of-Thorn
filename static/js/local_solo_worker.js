@@ -516,6 +516,7 @@ class LocalPlayer {
         this.sluggish = 0;
         this.foresight = 0;
         this.blind = 0;
+        this.heal_block = 0;
         this.extra_hand_limit_bonus = 0;
         this.negate_next_skill = false;
         this.is_first_player = false;
@@ -641,6 +642,10 @@ class LocalPlayer {
     }
 
     heal(amount) {
+        if (toInt(this.heal_block, 0) > 0 && !(this.custom_statuses && toInt(this.custom_statuses.status_immune, 0) > 0)) {
+            const reduction = Math.min(1, 0.5 * toInt(this.heal_block, 0));
+            amount = amount > 0 ? Math.max(0, Math.floor(amount * (1 - reduction))) : amount;
+        }
         this.health = Math.min(this.health + amount, this.base_max_health);
     }
 
@@ -5349,6 +5354,10 @@ class LocalSoloEngine {
         });
         this.decayActionLimitStatus(playerId, 'attack_blocked', 'attack_blocked', '禁攻');
         this.decayActionLimitStatus(playerId, 'attack_only', 'attack_only', '仅攻击');
+        if (toInt(ps.heal_block, 0) > 0) {
+            ps.heal_block = Math.max(0, Math.floor(toInt(ps.heal_block, 0) / 2));
+            if (ps.heal_block === 0) this.logMsg(`${this.pn(playerId)}的禁疗效果消失`);
+        }
         if (ps.invincible && !ps.bandage_active && !ps.bandage_death_pending && this.shouldExpireInvincibleOnTurnEnd(playerId)) {
             this.clearInvincibleState(playerId);
             this.logMsg(`${this.pn(playerId)}的无敌效果结束`);

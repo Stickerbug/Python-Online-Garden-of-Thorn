@@ -569,6 +569,7 @@ EVENT_SELECT_TIMEOUT_SECONDS = _env_float('GTN_EVENT_SELECT_TIMEOUT_SECONDS', 40
 EVENT_REVEAL_TIMEOUT_SECONDS = _env_float('GTN_EVENT_REVEAL_TIMEOUT_SECONDS', 40)
 EVENT_SUB_CHOICE_TIMEOUT_SECONDS = _env_float('GTN_EVENT_SUB_CHOICE_TIMEOUT_SECONDS', 60)
 ROOM_TIMER_TICK_SECONDS = _env_float('GTN_ROOM_TIMER_TICK_SECONDS', 1)
+PREGAME_STATE_RESEND_SECONDS = _env_float('GTN_PREGAME_STATE_RESEND_SECONDS', 8)
 _LOBBY_BROADCAST_LOCK = threading.Lock()
 _LOBBY_BROADCAST_PENDING = False
 _LOBBY_BROADCAST_DIRTY = False
@@ -1245,6 +1246,7 @@ class GameRoom:
         self.action_timer_remaining = float(ACTION_TURN_SECONDS)
         self.action_timer_last_tick = time.time()
         self.pregame_deadlines = {}
+        self.pregame_state_last_resend = 0.0
         self.team_assignments = None
         self._history_recorded = False
         self.created_at = time.time()
@@ -1474,7 +1476,7 @@ def _find_disconnected_sid_for_player(room, player):
         if player_name_key and player_name_key == normalize_username_key(dc_info.get('nickname', '')):
             return old_sid
     for old_sid, profile in list(getattr(room, 'player_profiles', {}).items()):
-        if old_sid in players:
+        if not _profile_slot_is_reconnectable(room, old_sid, profile):
             continue
         if player_user_id and profile.get('user_id') == player_user_id:
             admin_event('player', f'reconnect matched by room profile user_id room={getattr(room, "room_id", "?")}', sid=old_sid)
@@ -1659,6 +1661,31 @@ def _room_disconnected_teams(room):
             pidx = int(dc_info.get('player_index', -1))
         except Exception:
             pidx = -1
+        team = _room_team_for_player(room, pidx)
+        if team >= 0:
+            teams_seen.add(team)
+    return teams_seen
+
+
+def _room_timed_out_disconnected_teams(room, now=None):
+    """Return teams whose blocking player has been disconnected for the full timeout."""
+    now = now or time.time()
+    teams_seen = set()
+    for dc_info in getattr(room, 'disconnected_players', {}).values():
+        try:
+            pidx = int(dc_info.get('player_index', -1))
+        except Exception:
+            pidx = -1
+        if pidx < 0:
+            continue
+        if getattr(room, 'mode', None) == '2v2' and _room_player_dead(room, pidx):
+            continue
+        try:
+            disconnected_at = float(dc_info.get('disconnect_time') or now)
+        except Exception:
+            disconnected_at = now
+        if now - disconnected_at < RECONNECT_TIMEOUT_SECONDS:
+            continue
         team = _room_team_for_player(room, pidx)
         if team >= 0:
             teams_seen.add(team)
@@ -3152,6 +3179,14 @@ def _room_timer_worker():
                         for pidx, status in enumerate(pregame_statuses):
                             if status == 'ready':
                                 pregame_timer_updates.add((room, pidx, None))
+                        last_resend = float(getattr(room, 'pregame_state_last_resend', 0.0) or 0.0)
+                        if now - last_resend >= max(1.0, float(PREGAME_STATE_RESEND_SECONDS)):
+                            room.pregame_state_last_resend = now
+                            for pi in range(len(room.player_sids)):
+                                pregame_updates.add((room, pi))
+                    elif pregame_statuses and all(status == 'ready' for status in pregame_statuses):
+                        if getattr(engine, 'phase', None) in ('event_select', 'event_reveal', 'draft'):
+                            start_rooms.add(room)
             for room, pidx in expired_turns:
                 if pidx is None:
                     continue
@@ -3357,6 +3392,7 @@ SOCKET_EVENT_LIMITS = {
     'draft_pick': (40, 60),
     'draft_reroll': (8, 60),
     'select_opening_event': (10, 60),
+    'request_pregame_state': (12, 60),
     'play_card': (30, 30),
     'response': (30, 30),
     'ally_consent_response': (20, 30),
@@ -4488,34 +4524,95 @@ def emit_match_start_failed(sids, message, reason='mod_mismatch'):
 
 
 def has_reconnect_candidate_locked(nickname='', user_id=None, account_player_id='', beta_mode=False):
+    room, old_sid = find_reconnect_candidate_locked(
+        nickname=nickname,
+        user_id=user_id,
+        account_player_id=account_player_id,
+        beta_mode=beta_mode,
+    )
+    return bool(room and old_sid)
+
+
+def _room_can_offer_reconnect(room, beta_mode=False):
+    if not room or bool(getattr(room, 'beta_mode', False)) != bool(beta_mode):
+        return False
+    engine = getattr(room, 'engine', None)
+    if engine is None or getattr(engine, 'game_over', False) or getattr(engine, 'phase', '') == 'game_over':
+        return False
+    return True
+
+
+def _profile_slot_is_reconnectable(room, profile_sid, profile):
+    if not isinstance(profile, dict) or profile_sid in players:
+        return False
+    try:
+        pidx = int(profile.get('player_index', -1))
+    except Exception:
+        pidx = -1
+    current_sids = list(getattr(room, 'player_sids', []) or [])
+    if pidx < 0 or pidx >= len(current_sids):
+        return False
+    current_sid = current_sids[pidx]
+    # A profile is only a reconnect hint for its original empty slot.  If the
+    # slot is already occupied by an online sid, this is stale finished-match
+    # metadata and must not steal reconnect from a current match.
+    return current_sid == profile_sid or current_sid not in players
+
+
+def _room_sort_ts(room):
+    for attr in ('started_at', 'created_at'):
+        try:
+            value = float(getattr(room, attr, 0) or 0)
+            if value > 0:
+                return value
+        except Exception:
+            pass
+    try:
+        return float(getattr(room, 'room_id', 0) or 0)
+    except Exception:
+        return 0.0
+
+
+def find_reconnect_candidate_locked(nickname='', user_id=None, account_player_id='', beta_mode=False):
     name_key = normalize_username_key(nickname or '')
     account_player_id = str(account_player_id or '')
+    candidates = []
     for room in rooms.values():
-        if bool(getattr(room, 'beta_mode', False)) != bool(beta_mode):
+        if not _room_can_offer_reconnect(room, beta_mode):
             continue
-        for dc_info in getattr(room, 'disconnected_players', {}).values():
-            if user_id and dc_info.get('user_id') == user_id:
-                return True
-            if account_player_id and str(dc_info.get('account_player_id') or '') == account_player_id:
-                return True
-            if name_key and normalize_username_key(dc_info.get('nickname', '')) == name_key:
-                return True
-        for profile in getattr(room, 'player_profiles', {}).values():
-            if not isinstance(profile, dict):
+        room_ts = _room_sort_ts(room)
+        for dc_sid, dc_info in list(getattr(room, 'disconnected_players', {}).items()):
+            same_identity = (
+                (user_id and dc_info.get('user_id') == user_id)
+                or (account_player_id and str(dc_info.get('account_player_id') or '') == account_player_id)
+                or (name_key and normalize_username_key(dc_info.get('nickname', '')) == name_key)
+            )
+            if not same_identity:
                 continue
-            # Profiles cover players whose online sid was already removed before
-            # disconnected_players was rebuilt.  Only count slots that are not
-            # currently online in this room.
-            profile_sid = profile.get('sid')
-            if profile_sid in players:
+            try:
+                disconnect_ts = float(dc_info.get('disconnect_time') or 0)
+            except Exception:
+                disconnect_ts = 0.0
+            candidates.append((2, disconnect_ts, room_ts, getattr(room, 'room_id', 0), room, dc_sid))
+        for profile_sid, profile in list(getattr(room, 'player_profiles', {}).items()):
+            if not _profile_slot_is_reconnectable(room, profile_sid, profile):
                 continue
-            if user_id and profile.get('user_id') == user_id:
-                return True
-            if account_player_id and str(profile.get('account_player_id') or '') == account_player_id:
-                return True
-            if name_key and normalize_username_key(profile.get('nickname', '')) == name_key:
-                return True
-    return False
+            same_identity = (
+                (user_id and profile.get('user_id') == user_id)
+                or (account_player_id and str(profile.get('account_player_id') or '') == account_player_id)
+                or (name_key and normalize_username_key(profile.get('nickname', '')) == name_key)
+            )
+            if not same_identity:
+                continue
+            try:
+                disconnect_ts = float(profile.get('disconnect_time') or 0)
+            except Exception:
+                disconnect_ts = 0.0
+            candidates.append((1, disconnect_ts, room_ts, getattr(room, 'room_id', 0), room, profile_sid))
+    if not candidates:
+        return None, None
+    candidates.sort(key=lambda item: (item[0], item[1], item[2], item[3]), reverse=True)
+    return candidates[0][4], candidates[0][5]
 
 
 def _same_login_identity(player, name_key='', user_id=None, account_player_id='', beta_mode=False):
@@ -4548,18 +4645,28 @@ def _can_take_over_online_session(player, name_key='', user_id=None, account_pla
 def _take_over_online_session_locked(old_sid, reason='login_reconnect'):
     """Remove a stale online sid while preserving room reconnect metadata."""
     if old_sid not in players:
-        return False
+        return None
     player = players[old_sid]
     mark_player_session_last_seen_locked(player, exclude_sid=old_sid)
     room_id = player.get('room_id')
     spectating_room = player.get('spectating_room')
+    takeover_info = {
+        'sid': old_sid,
+        'nickname': player.get('nickname', ''),
+        'user_id': player.get('user_id'),
+        'account_player_id': player.get('account_player_id') or '',
+        'had_room': False,
+        'prepared_reconnect': False,
+    }
     if room_id is not None and room_id in rooms:
         room = rooms[room_id]
         pidx = room.player_index(old_sid)
         if pidx >= 0 and getattr(room.engine, 'phase', '') != 'game_over':
+            takeover_info['had_room'] = True
             profile = room.store_player_profile(old_sid, pidx, player)
             profile['disconnect_time'] = time.time()
             room.disconnected_players[old_sid] = dict(profile)
+            takeover_info['prepared_reconnect'] = True
             admin_event('player', f'{reason}: prepared stale session for reconnect room={room_id}', sid=old_sid, room_id=room_id)
         elif pidx < 0:
             player['room_id'] = None
@@ -4578,7 +4685,7 @@ def _take_over_online_session_locked(old_sid, reason='login_reconnect'):
             if member_sid in teams:
                 del teams[member_sid]
     del players[old_sid]
-    return True
+    return takeover_info
 
 
 def reject_new_match_if_draining(sids=None, event_name='match_start'):
@@ -7521,6 +7628,9 @@ def schedule_event_state(room, pidx):
 
 
 def schedule_start_game(room):
+    if getattr(room, '_start_game_scheduled', False):
+        return
+    room._start_game_scheduled = True
     _start_socket_background_task(start_game, room)
 
 
@@ -7941,24 +8051,53 @@ def send_pregame_state(room, pidx, allow_sub_choice=False):
     send_draft_state(room, pidx)
 
 
+@socketio.on('request_pregame_state')
+@measure_socket_action('request_pregame_state')
+def on_request_pregame_state(data=None):
+    sid = request.sid
+    data = socket_guard('request_pregame_state', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
+    with _lock:
+        player = players.get(sid)
+        if not player:
+            return
+        room_id = player.get('room_id')
+        room = rooms.get(room_id)
+        if room is None:
+            return
+        pidx = room.player_index(sid)
+        if pidx < 0:
+            return
+        engine = getattr(room, 'engine', None)
+        if engine is None or getattr(engine, 'phase', None) not in ('event_select', 'event_reveal', 'draft'):
+            return
+    schedule_pregame_state(room, pidx, allow_sub_choice=True)
+
+
 def start_game(room):
-    for sid in getattr(room, 'player_sids', []) or []:
-        if sid in players:
-            players[sid]['status'] = 'in_game'
-            players[sid]['room_id'] = room.room_id
-    if hasattr(room.engine, 'log'):
-        room.engine.log = []
-    if hasattr(room.engine, '_log_compaction_floor'):
-        room.engine._log_compaction_floor = 0
-    room.engine.start_game()
-    room.started_at = time.time()
-    admin_event('game', f'room {room.room_id} started mode={room.mode}')
-    record_room_replay_keyframe(room, 'game_start')
-    for sid in room.player_sids:
-        if sid in players:
-            emit_room_game_phase(room, sid, 'playing')
-    _broadcast_game_state_now(room)
-    broadcast_lobby()
+    try:
+        if getattr(room.engine, 'phase', None) not in ('event_select', 'event_reveal', 'draft'):
+            return
+        for sid in getattr(room, 'player_sids', []) or []:
+            if sid in players:
+                players[sid]['status'] = 'in_game'
+                players[sid]['room_id'] = room.room_id
+        if hasattr(room.engine, 'log'):
+            room.engine.log = []
+        if hasattr(room.engine, '_log_compaction_floor'):
+            room.engine._log_compaction_floor = 0
+        room.engine.start_game()
+        room.started_at = time.time()
+        admin_event('game', f'room {room.room_id} started mode={room.mode}')
+        record_room_replay_keyframe(room, 'game_start')
+        for sid in room.player_sids:
+            if sid in players:
+                emit_room_game_phase(room, sid, 'playing')
+        _broadcast_game_state_now(room)
+        broadcast_lobby()
+    finally:
+        room._start_game_scheduled = False
 
 
 def start_random_deck_room(room):
@@ -8523,7 +8662,7 @@ def _mark_disconnect_timeout_loss(room, player_index, nickname):
     # reconnect timeout path in every phase, including draft/setup.
     if getattr(room, 'mode', None) == '2v2' and _room_player_dead(room, player_index):
         return False
-    disconnected_teams = _room_disconnected_teams(room)
+    disconnected_teams = _room_timed_out_disconnected_teams(room)
     if len(disconnected_teams) >= 2:
         return _finish_room_by_health_tiebreak(room, '双方断线超时')
     return _finish_room_by_forfeit(room, player_index, nickname, '断线超时')
@@ -9425,6 +9564,7 @@ def admin_draft_stats():
             merge_modes=str(request.args.get('merge_modes', '')).lower() in ('1', 'true', 'yes', 'on'),
             scope=request.args.get('scope', 'total'),
             week_start=request.args.get('week_start'),
+            winner_only=str(request.args.get('winner_only', '')).lower() in ('1', 'true', 'yes', 'on'),
         )
     except Exception as exc:
         admin_event('error', f'admin draft stats failed: {exc}')
@@ -10204,7 +10344,7 @@ def api_cards():
         community_hash=community_fields.get('community_mod_hash', ''),
     )
     allowed_card_ids = loadout['allowed_card_ids']
-    card_mod_sources = get_card_mod_sources(disabled_mods)
+    card_mod_sources = get_card_mod_sources([])
     if community_mod:
         selected_hashes = {
             str(entry.get('sha256') or '').strip().lower()
@@ -10222,13 +10362,12 @@ def api_cards():
                 }
     result = {}
     for def_id, card_def in CARD_DEFS.items():
-        if def_id not in allowed_card_ids:
-            continue
         source = card_mod_sources.get(def_id, {})
         image_url = str(getattr(card_def, 'image_url', '') or getattr(card_def, 'image', '') or '')
         upgraded_image_url = str(getattr(card_def, 'upgraded_image_url', '') or getattr(card_def, 'upgraded_image', '') or '')
         card_payload = {
             'id': card_def.id,
+            'visible_in_current_loadout': def_id in allowed_card_ids,
             'name_en': card_def.name_en,
             'name_cn': card_def.name_cn,
             'source_mod_filename': source.get('filename', ''),
@@ -10949,7 +11088,7 @@ def on_login(data):
     except Exception as exc:
         emit('login_fail', {'reason': f'社区模组加载失败: {exc}'})
         return
-    stale_disconnect_sids = []
+    stale_disconnect_sessions = []
     if not _lock.acquire(timeout=0.5):
         snapshot = _lock.snapshot() if hasattr(_lock, 'snapshot') else {}
         admin_event('warning', f'login skipped: global lock busy held={snapshot.get("held_seconds", 0)}s')
@@ -10981,40 +11120,20 @@ def on_login(data):
                 emit('login_fail', {'reason': 'Nickname already exists'})
                 return
         for old_sid in takeover_sids:
-            if _take_over_online_session_locked(old_sid, reason='login_takeover'):
-                stale_disconnect_sids.append(old_sid)
-        reconnect_room = None
-        reconnect_old_sid = None
-        reconnect_probe = {
-            'nickname': name,
-            'user_id': user_id,
-            'account_player_id': account_user.get('player_id') if account_user else '',
-        }
-        for room in rooms.values():
-            if bool(getattr(room, 'beta_mode', False)) != bool(is_beta_mode):
-                continue
-            for dc_sid, dc_info in room.disconnected_players.items():
-                same_disconnected_identity = (
-                    (user_id and dc_info.get('user_id') == user_id)
-                    or (account_user and account_user.get('player_id') and str(dc_info.get('account_player_id') or '') == str(account_user.get('player_id') or ''))
-                    or normalize_username_key(dc_info.get('nickname', '')) == name_key
-                )
-                if same_disconnected_identity:
-                    reconnect_room = room
-                    reconnect_old_sid = dc_sid
-                    break
-            if not reconnect_room:
-                profile_sid = _find_disconnected_sid_for_player(room, reconnect_probe)
-                if profile_sid and profile_sid not in players:
-                    reconnect_room = room
-                    reconnect_old_sid = profile_sid
-                    if profile_sid not in room.disconnected_players:
-                        profile = room_player_profile(room, profile_sid)
-                        profile['disconnect_time'] = time.time()
-                        room.disconnected_players[profile_sid] = dict(profile)
-                        admin_event('player', f'login restored reconnect metadata room={room.room_id}', sid=profile_sid, room_id=room.room_id)
-            if reconnect_room:
-                break
+            takeover_info = _take_over_online_session_locked(old_sid, reason='login_takeover')
+            if takeover_info:
+                stale_disconnect_sessions.append(takeover_info)
+        reconnect_room, reconnect_old_sid = find_reconnect_candidate_locked(
+            nickname=name,
+            user_id=user_id,
+            account_player_id=account_user.get('player_id') if account_user else '',
+            beta_mode=is_beta_mode,
+        )
+        if reconnect_room and reconnect_old_sid not in reconnect_room.disconnected_players:
+            profile = room_player_profile(reconnect_room, reconnect_old_sid)
+            profile['disconnect_time'] = time.time()
+            reconnect_room.disconnected_players[reconnect_old_sid] = dict(profile)
+            admin_event('player', f'login restored reconnect metadata room={reconnect_room.room_id}', sid=reconnect_old_sid, room_id=reconnect_room.room_id)
         initial_status = 'reconnecting' if reconnect_room else 'lobby'
         login_now = time.time()
         players[sid] = {
@@ -11053,8 +11172,18 @@ def on_login(data):
         admin_event('player', f'{"[beta] " if is_beta_mode else ""}{name} joined as {initial_status}', sid=sid, mode=preferred_mode)
     finally:
         _lock.release()
-    for old_sid in stale_disconnect_sids:
+    takeover_notice = {
+        'reason': '账号在其他位置进入大厅。\n如果该操作不是由本人进行，请修改密码。',
+        'code': 'account_entered_elsewhere',
+    }
+    for takeover_info in stale_disconnect_sessions:
+        old_sid = takeover_info.get('sid')
+        if not old_sid:
+            continue
         try:
+            if takeover_info.get('user_id') or takeover_info.get('account_player_id'):
+                socketio.emit('account_session_replaced', takeover_notice, room=old_sid)
+                socketio.emit('kicked', takeover_notice, room=old_sid)
             socketio.server.disconnect(old_sid)
         except Exception as exc:
             admin_event('error', f'login takeover disconnect old sid failed: {exc}', sid=old_sid)
@@ -11606,6 +11735,10 @@ def on_reconnect_accept(data):
         room = rooms[room_id]
         if bool(getattr(room, 'beta_mode', False)) != bool(player.get('beta_mode', False)):
             player['status'] = 'lobby'
+            return
+        if getattr(room.engine, 'game_over', False) or getattr(room.engine, 'phase', '') == 'game_over':
+            player['status'] = 'lobby'
+            player['room_id'] = None
             return
         if old_sid not in room.disconnected_players:
             fallback_old_sid = _find_disconnected_sid_for_player(room, player)
@@ -13598,6 +13731,7 @@ def on_rematch(data=None):
                 room.created_at = time.time()
                 room.started_at = None
                 room.pregame_deadlines = {}
+                room.pregame_state_last_resend = 0.0
                 room.chat_history = []
                 room.chat_sequence = 0
                 reset_room_replay(room)

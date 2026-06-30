@@ -820,13 +820,15 @@ def get_active_mod_variables() -> List[dict]:
 
 def merge_mod_cards_to_card_defs() -> List[str]:
     from cards import CARD_DEFS, ERROR_CARD_ID
-    mods = get_enabled_mods()
-    active = [m for m in mods if m.enabled and not m.errors]
+    # CARD_DEFS is the global definition registry used for rendering, logs,
+    # previews, images, and card lookup. It should contain every valid local
+    # mod card; per-player/per-room mod selection is enforced separately by
+    # allowed_card_ids when building draft/deck pools.
+    mods = load_all_mods()
+    active = [m for m in mods if not m.errors]
     for mod in mods:
         if mod.errors:
             print(f'[模组] 跳过模组 {mod.info.name if mod.info else mod.filename}，验证错误: {mod.errors}')
-        elif not mod.enabled:
-            print(f'[模组] 跳过已禁用模组 {mod.info.name if mod.info else mod.filename}')
     merged = []
     for mod in active:
         for mc in mod.cards:
