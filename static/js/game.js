@@ -1519,6 +1519,7 @@ Object.assign(I18N.en, {
     compact_view_deck: 'Draw',
     compact_view_draw_deck: 'Draw',
     compact_view_discard: 'Discard',
+    compact_view_exile: 'Exile',
     compact_urf_replace: 'Swap',
     compact_urf_sell: 'Sell',
     compact_set_next_draw: 'Next',
@@ -1539,6 +1540,7 @@ Object.assign(I18N.zh, {
     compact_view_deck: '抽牌',
     compact_view_draw_deck: '抽牌',
     compact_view_discard: '弃牌',
+    compact_view_exile: '放逐',
     compact_urf_replace: '换牌',
     compact_urf_sell: '售卖',
     compact_set_next_draw: '设抽',
@@ -1559,6 +1561,7 @@ Object.assign(I18N.fr, {
     compact_view_deck: 'Pioche',
     compact_view_draw_deck: 'Pioche',
     compact_view_discard: 'Défausse',
+    compact_view_exile: 'Exil',
     compact_urf_replace: 'Swap',
     compact_urf_sell: 'Vendre',
     compact_set_next_draw: 'Suiv.',
@@ -1579,6 +1582,7 @@ Object.assign(I18N.ja, {
     compact_view_deck: '山札',
     compact_view_draw_deck: '山札',
     compact_view_discard: '捨札',
+    compact_view_exile: '放逐',
     compact_urf_replace: '交換',
     compact_urf_sell: '売却',
     compact_set_next_draw: '次',
@@ -1599,48 +1603,64 @@ Object.assign(I18N.en, {
     view_deck: 'View Draw Deck',
     view_draw_deck: 'View Draw Deck',
     view_discard: 'View Discard',
+    view_exile: 'View Exile',
     deck_total: 'Draw deck: {0} cards',
     draw_deck_total: 'Draw deck: {0} cards',
     discard_total: 'Discard: {0} cards',
+    exile_total: 'Exile: {0} cards',
     view_deck_title: 'Draw Deck',
     view_draw_deck_title: 'Draw Deck',
     view_discard_title: 'Discard Pile',
+    view_exile_title: 'Exile',
+    exile_empty: 'Exile empty',
     tutorial_hint_deck: 'Check your draw deck: press View Draw Deck to see what may come next.',
 });
 Object.assign(I18N.zh, {
     view_deck: '查看抽牌堆',
     view_draw_deck: '查看抽牌堆',
     view_discard: '查看弃牌堆',
+    view_exile: '查看放逐区',
     deck_total: '抽牌堆：{0} 张',
     draw_deck_total: '抽牌堆：{0} 张',
     discard_total: '弃牌堆：{0} 张',
+    exile_total: '放逐区：{0} 张',
     view_deck_title: '抽牌堆',
     view_draw_deck_title: '抽牌堆',
     view_discard_title: '弃牌堆',
+    view_exile_title: '放逐区',
+    exile_empty: '放逐区为空',
     tutorial_hint_deck: '先看看抽牌堆：点击“查看抽牌堆”，了解接下来可能抽到什么。',
 });
 Object.assign(I18N.fr, {
     view_deck: 'Voir la pioche',
     view_draw_deck: 'Voir la pioche',
     view_discard: 'Voir la défausse',
+    view_exile: 'Voir l’exil',
     deck_total: 'Pioche : {0} cartes',
     draw_deck_total: 'Pioche : {0} cartes',
     discard_total: 'Défausse : {0} cartes',
+    exile_total: 'Exil : {0} cartes',
     view_deck_title: 'Pioche',
     view_draw_deck_title: 'Pioche',
     view_discard_title: 'Défausse',
+    view_exile_title: 'Exil',
+    exile_empty: 'Exil vide',
     tutorial_hint_deck: 'Regardez votre pioche : appuyez sur Voir la pioche.',
 });
 Object.assign(I18N.ja, {
     view_deck: '山札を見る',
     view_draw_deck: '山札を見る',
     view_discard: '捨て札を見る',
+    view_exile: '放逐を見る',
     deck_total: '山札: {0}枚',
     draw_deck_total: '山札: {0}枚',
     discard_total: '捨て札: {0}枚',
+    exile_total: '放逐: {0}枚',
     view_deck_title: '山札',
     view_draw_deck_title: '山札',
     view_discard_title: '捨て札',
+    view_exile_title: '放逐',
+    exile_empty: '放逐は空',
     tutorial_hint_deck: '山札を確認します。「山札を見る」を押しましょう。',
 });
 
@@ -2460,7 +2480,7 @@ function buildInlineCardDict(defId, modifierText = '') {
 }
 
 function parseInlineCardMarker(text) {
-    const marker = String(text || '').match(/^\[\[card:([^\]\r\n]+)\]\]/i);
+    const marker = String(text || '').match(/^\[\[card:([^\r\n]*?)\]\]/i);
     if (!marker || !marker[1]) return null;
     const parts = marker[1]
         .split('|')
@@ -3568,6 +3588,7 @@ let classicAimFrame = 0;
 let classicHoverPreviewTimer = null;
 let classicHoverInfoEl = null;
 let classicHoveredCardId = null;
+let classicTargetPickInFlight = false;
 let actionToastTimer = null;
 let combatFloatSeq = 0;
 const localSoloRuntime = {
@@ -4332,13 +4353,13 @@ function updateStaticText() {
     const oppInfo = $('opp-info');
     if (oppInfo && (!gameState || !gameState.opponent)) {
         setPileInfoText(oppInfo, isMinimalUiStyle()
-            ? { text: '0/0', title: UI.hand_deck_zero_opp, items: [{ icon: 'total-pile', value: 0 }, { icon: 'draw-pile', value: 0 }] }
+            ? { text: '0/0/0', title: UI.hand_deck_zero_opp, items: [{ icon: 'total-pile', value: 0 }, { icon: 'draw-pile', value: 0 }, { icon: 'discard-pile', value: 0 }] }
             : { text: UI.hand_deck_zero_opp, title: '' });
     }
     const youInfo = $('you-info');
     if (youInfo && (!gameState || !gameState.you)) {
         setPileInfoText(youInfo, isMinimalUiStyle()
-            ? { text: '0/0/0', title: UI.hand_deck_zero_you, items: [{ icon: 'total-pile', value: 0 }, { icon: 'draw-pile', value: 0 }, { icon: 'discard-pile', value: 0 }] }
+            ? { text: '0/0/0/0', title: UI.hand_deck_zero_you, items: [{ icon: 'total-pile', value: 0 }, { icon: 'draw-pile', value: 0 }, { icon: 'discard-pile', value: 0 }, { icon: 'exile-pile', value: 0 }] }
             : { text: UI.hand_deck_zero_you, title: '' });
     }
     const onlineCount = $('lobby-online-count');
@@ -4405,9 +4426,16 @@ function restartTransientClass(el, className, duration = 650) {
     }, duration);
 }
 
+function getTargetFeedbackElement(region) {
+    if (!region || !region.querySelector) return region || null;
+    return region.matches && region.matches('.player-avatar, .mini-skin-avatar')
+        ? region
+        : (region.querySelector('.player-avatar, .mini-skin-avatar') || region);
+}
+
 function flashTargetRegion(playerId) {
     const region = getPlayerRegionById(playerId);
-    restartTransientClass(region, 'target-feedback-pulse', 720);
+    restartTransientClass(getTargetFeedbackElement(region), 'target-feedback-pulse', 720);
 }
 
 function maybeAnimateTurnFocus(gs) {
@@ -5967,6 +5995,8 @@ function ensureMobilePlayConfirm() {
 
 function clearSelectedPlayCard(options = {}) {
     selectedPlayCardId = null;
+    classicTargetPickInFlight = false;
+    if (targetPickCleanup) targetPickCleanup();
     classicAimHoverTarget = '';
     if (classicAimFrame) {
         cancelAnimationFrame(classicAimFrame);
@@ -6211,8 +6241,9 @@ function selectPlayCardForConfirm(cardInstanceId) {
     return true;
 }
 
-function selectClassicPlayCard(cardInstanceId, event = null) {
+async function selectClassicPlayCard(cardInstanceId, event = null) {
     if (!shouldUseClassicBattle(gameState) || isActionBusy()) return false;
+    if (classicTargetPickInFlight) return false;
     const hand = (gameState.you || {}).hand || [];
     const cardDict = hand.find(c => c.instance_id === cardInstanceId);
     const cardDef = cardDict ? getCardDef(cardDict.def_id) : null;
@@ -6228,12 +6259,30 @@ function selectClassicPlayCard(cardInstanceId, event = null) {
     const cardEl = document.querySelector(`.card[data-instance-id="${cardInstanceId}"]`);
     if (cardEl) cardEl.classList.add('tap-selected');
     renderClassicBattle(gameState);
+    syncPlayerRegionTargets(gameState);
     scheduleClassicAimCurveUpdate();
+    const selfOnly = cardHasSelfOnlyFlag(cardDict, cardDef) && cardDef.card_type !== 'thorn';
+    if (cardNeedsPlayerTarget(cardDef, cardDict) && !selfOnly) {
+        classicTargetPickInFlight = true;
+        const selectedId = cardInstanceId;
+        try {
+            const targetPlayerId = await chooseClassicPlayerTargetForCard(cardDef);
+            if (selectedPlayCardId !== selectedId) return false;
+            if (targetPlayerId < 0) {
+                clearSelectedPlayCard();
+                return false;
+            }
+            await onPlayCard(selectedId, { confirmed: true, targetPlayerId });
+        } finally {
+            classicTargetPickInFlight = false;
+        }
+    }
     return true;
 }
 
 async function classicPlaySelectedCard() {
     if (!shouldUseClassicBattle(gameState) || isActionBusy()) return false;
+    if (classicTargetPickInFlight) return false;
     const id = selectedPlayCardId;
     if (id == null) return false;
     await onPlayCard(id, { confirmed: true });
@@ -6255,6 +6304,7 @@ function classicCanPlayFromElement(elementId) {
 
 function classicCanAutoPlaySelfOnlyFromEvent(event) {
     if (!shouldUseClassicBattle(gameState) || selectedPlayCardId == null || isActionBusy()) return false;
+    if (classicTargetPickInFlight) return false;
     const selected = getSelectedClassicCard();
     if (!isClassicSelfOnlyCard(selected)) return false;
     const target = event && event.target;
@@ -6271,6 +6321,8 @@ function getClassicPlayedCardAnimationTarget(cardDict, cardDef, targetPlayerId =
     const card = normalizeBattleCard(cardDict, (gameState && gameState.you) || {});
     if (isClassicSelfOnlyCard(card)) return null;
     if (targetPlayerId >= 0) {
+        const targetRegion = getPlayerRegionById(targetPlayerId);
+        if (targetRegion) return targetRegion;
         const selfId = normalizePlayerId(gameState && gameState.your_id);
         return targetPlayerId === selfId
             ? document.querySelector('#classic-fighter-self .player-avatar') || $('classic-fighter-self')
@@ -8484,7 +8536,7 @@ function getTermIntroLibrary() {
         magic_damage: { label: lt({ zh: '魔法伤害(Magic Damage)', en: 'Magic Damage', fr: 'Dégâts magiques', ja: '魔法ダメージ' }), desc: magicDamageDesc, color: COLORS.magic },
         A: { label: lt({ zh: 'A：护甲(Armor)', en: 'A: Armor', fr: 'A : armure', ja: 'A：護甲' }), desc: lt({ zh: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。', en: 'Reduces D. It does not reduce magic damage from Poison, Burn, or similar states.', fr: 'Réduit D. Ne réduit pas les dégâts magiques du Poison, de la Brûlure ou des états similaires.', ja: 'D を軽減します。中毒、灼烧などの魔法ダメージは軽減しません。' }), color: COLORS.armor_text },
         P: { label: lt({ zh: 'P：中毒(Poison)', en: 'P: Poison', fr: 'P : poison', ja: 'P：毒' }), desc: lt({ zh: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', en: 'At your turn start, take magic damage equal to current P. If you survive, P halves rounded down, e.g. 10P→5P, 5P→2P.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au P actuel. Si vous survivez, P est divisé par deux arrondi à l’inférieur, ex. 10P→5P, 5P→2P.', ja: '自分のターン開始時、現在の P と同じ魔法ダメージを受けます。生存していれば P は切り捨てで半減します。例：10P→5P、5P→2P。' }), color: COLORS.poison },
-        F: { label: lt({ zh: 'F：灼烧(Fire)', en: 'F: Burn', fr: 'F : brûlure', ja: 'F：火傷' }), desc: lt({ zh: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 20 回合及以上后，每回合开始时对所有玩家施加1层灼烧。', en: 'At your turn start, take magic damage equal to current F. Burn stacks do not decrease. From round 20 onward, all players gain 1 Burn at each turn start.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au F actuel. Les charges de Brûlure ne diminuent pas. À partir du tour 20, tous les joueurs gagnent 1 Brûlure au début de chaque tour.', ja: '自分のターン開始時、現在の F と同じ魔法ダメージを受けます。火傷は減少しません。20ラウンド以降、各ターン開始時に全員へ火傷1層を付与します。' }), color: COLORS.fire },
+        F: { label: lt({ zh: 'F：灼烧(Fire)', en: 'F: Burn', fr: 'F : brûlure', ja: 'F：火傷' }), desc: lt({ zh: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 10 回合及以上后，每回合开始时对所有玩家施加1层灼烧。', en: 'At your turn start, take magic damage equal to current F. Burn stacks do not decrease. From round 10 onward, all players gain 1 Burn at each turn start.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au F actuel. Les charges de Brûlure ne diminuent pas. À partir du tour 10, tous les joueurs gagnent 1 Brûlure au début de chaque tour.', ja: '自分のターン開始時、現在の F と同じ魔法ダメージを受けます。火傷は減少しません。10ラウンド以降、各ターン開始時に全員へ火傷1層を付与します。' }), color: COLORS.fire },
         toxic: { label: `${UI.status_toxic || 'Toxic'}(Toxic)`, desc: lt({ zh: '造成实际 D 后，对目标施加与淬毒层数相同的 P 层数。伤害被完全挡住时不会触发。', en: 'After actually dealing D, apply P equal to Toxic stacks. It does not trigger if all damage is blocked.', fr: 'Après avoir réellement infligé D, applique P égal aux charges de Toxique. Ne se déclenche pas si tous les dégâts sont bloqués.', ja: '実際に D を与えた後、淬毒層数と同じ P を付与します。ダメージが完全に防がれた場合は発動しません。' }), color: '#6C3483' },
         hand_limit: { label: lt({ zh: '手牌上限', en: 'Hand Limit', fr: 'Limite de main', ja: '手札上限' }), desc: lt({ zh: '你能保留在手中的最大牌数。抽牌、回手或创建牌时超过上限，就会发生爆牌。', en: 'The maximum number of cards you can keep in hand. Drawing, returning, or creating cards past this limit causes overflow.', fr: 'Nombre maximum de cartes que vous pouvez garder en main. Piocher, renvoyer ou créer au-delà de cette limite provoque un débordement.', ja: '手札に保持できる最大枚数です。ドロー、回手、生成で上限を超えると爆牌します。' }), color: COLORS.text_primary },
         overdraw: { label: lt({ zh: '爆牌', en: 'Hand Overflow', fr: 'Débordement de main', ja: '手札超過' }), desc: lt({ zh: '手牌超过上限时，多出来的牌不能留在手中，会按规则被移出手牌。装备黄金叶等效果可以提高上限。', en: 'When hand size exceeds the limit, extra cards cannot stay in hand and are removed by rule. Effects like Golden Leaf can raise the limit.', fr: 'Quand la main dépasse la limite, les cartes en trop ne restent pas en main et sont retirées selon les règles. Golden Leaf peut augmenter cette limite.', ja: '手札が上限を超えると、余分なカードは手札に残らずルールに従って移動します。黄金叶などで上限を上げられます。' }), color: COLORS.damage },
@@ -9619,6 +9671,9 @@ function connectSocket(serverUrl) {
         const reason = data.reason || '账号在其他位置进入大厅。\n如果该操作不是由本人进行，请修改密码。';
         manualDisconnect = true;
         phase = 'login';
+        currentAccount = null;
+        cacheAccount(null);
+        renderAccountState();
         showModal(`
             <h3>${escapeHtml(UI.notice || '提示')}</h3>
             <p>${escapeHtml(translateServerMessage(reason)).replace(/\n/g, '<br>')}</p>
@@ -9912,12 +9967,14 @@ function connectSocket(serverUrl) {
             pregame_timer_remaining: data.pregame_timer_remaining ?? draftState.pregame_timer_remaining,
             pregame_timer_total: data.pregame_timer_total ?? draftState.pregame_timer_total,
             pregame_timer_status: data.pregame_timer_status || draftState.pregame_timer_status,
+            pregame_timer_paused: data.pregame_timer_paused ?? draftState.pregame_timer_paused,
             watching_pregame_timers: normalizeWatchingPregameTimers(data.watching_pregame_timers, draftState.watching_pregame_timers),
             watching_pregame_timer_player: data.watching_pregame_timer_player ?? draftState.watching_pregame_timer_player,
             watching_pregame_timer_name: data.watching_pregame_timer_name || draftState.watching_pregame_timer_name,
             watching_pregame_timer_remaining: data.watching_pregame_timer_remaining ?? draftState.watching_pregame_timer_remaining,
             watching_pregame_timer_total: data.watching_pregame_timer_total ?? draftState.watching_pregame_timer_total,
             watching_pregame_timer_status: data.watching_pregame_timer_status || draftState.watching_pregame_timer_status,
+            watching_pregame_timer_paused: data.watching_pregame_timer_paused ?? draftState.watching_pregame_timer_paused,
         };
         if (data.your_id != null) playerId = data.your_id;
         syncRoomChatHistory(data || {});
@@ -9933,23 +9990,27 @@ function connectSocket(serverUrl) {
             draftState.pregame_timer_remaining = data.pregame_timer_remaining;
             draftState.pregame_timer_total = data.pregame_timer_total;
             draftState.pregame_timer_status = data.pregame_timer_status;
+            draftState.pregame_timer_paused = data.pregame_timer_paused;
             draftState.watching_pregame_timers = normalizeWatchingPregameTimers(data.watching_pregame_timers, draftState.watching_pregame_timers);
             draftState.watching_pregame_timer_player = data.watching_pregame_timer_player;
             draftState.watching_pregame_timer_name = data.watching_pregame_timer_name;
             draftState.watching_pregame_timer_remaining = data.watching_pregame_timer_remaining;
             draftState.watching_pregame_timer_total = data.watching_pregame_timer_total;
             draftState.watching_pregame_timer_status = data.watching_pregame_timer_status;
+            draftState.watching_pregame_timer_paused = data.watching_pregame_timer_paused;
         }
         if (eventSelectData) {
             eventSelectData.pregame_timer_remaining = data.pregame_timer_remaining;
             eventSelectData.pregame_timer_total = data.pregame_timer_total;
             eventSelectData.pregame_timer_status = data.pregame_timer_status;
+            eventSelectData.pregame_timer_paused = data.pregame_timer_paused;
             eventSelectData.watching_pregame_timers = normalizeWatchingPregameTimers(data.watching_pregame_timers, eventSelectData.watching_pregame_timers);
             eventSelectData.watching_pregame_timer_player = data.watching_pregame_timer_player;
             eventSelectData.watching_pregame_timer_name = data.watching_pregame_timer_name;
             eventSelectData.watching_pregame_timer_remaining = data.watching_pregame_timer_remaining;
             eventSelectData.watching_pregame_timer_total = data.watching_pregame_timer_total;
             eventSelectData.watching_pregame_timer_status = data.watching_pregame_timer_status;
+            eventSelectData.watching_pregame_timer_paused = data.watching_pregame_timer_paused;
         }
         updatePregameTimerDisplay(data, pregameTimerDisplayTarget(data));
     });
@@ -12038,9 +12099,9 @@ async function onAccountChangePassword() {
             new_password: newPassword,
             new_password_confirm: newPasswordConfirm,
         });
-        currentAccount = data.user || currentAccount;
+        currentAccount = data.logged_out ? null : (data.user || currentAccount);
         clearAccountPasswordInputs();
-        setAccountError(UI.account_password_changed);
+        setAccountError(data.message || UI.account_password_changed);
         renderAccountState();
     } catch (err) {
         setAccountError(err.message || UI.account_error);
@@ -14634,6 +14695,7 @@ function effectivePregameTimerData(data) {
                 pregame_timer_remaining: first.remaining,
                 pregame_timer_total: first.total,
                 pregame_timer_status: first.status,
+                pregame_timer_paused: !!first.paused,
                 pregame_timer_watching: true,
                 pregame_timer_watching_player: first.player,
                 pregame_timer_watching_name: first.name,
@@ -14647,6 +14709,7 @@ function effectivePregameTimerData(data) {
         pregame_timer_remaining: data.watching_pregame_timer_remaining,
         pregame_timer_total: data.watching_pregame_timer_total,
         pregame_timer_status: data.watching_pregame_timer_status,
+        pregame_timer_paused: !!data.watching_pregame_timer_paused,
         pregame_timer_watching: true,
         pregame_timer_watching_player: data.watching_pregame_timer_player,
         pregame_timer_watching_name: data.watching_pregame_timer_name,
@@ -14666,6 +14729,7 @@ function normalizeWatchingPregameTimers(timers, previous = []) {
             // If a partial payload ever omits remaining, keep the older value instead of flashing blank.
             remaining: timer.remaining ?? prev?.remaining,
             total: timer.total ?? prev?.total,
+            paused: timer.paused ?? prev?.paused,
         };
     });
 }
@@ -14692,7 +14756,7 @@ function rememberPregameTimerSnapshot(data) {
         watchingPlayer: effective.pregame_timer_watching_player,
         watchingName: effective.pregame_timer_watching_name || '',
         remaining,
-        paused: false,
+        paused: !!effective.pregame_timer_paused,
         receivedAt: performance.now(),
     };
     ensureLocalCountdownTimer();
@@ -14719,7 +14783,7 @@ function formatPregameTimerText(data) {
     const formatOne = (item) => {
         const rawRemaining = Number(item && item.remaining);
         if (!Number.isFinite(rawRemaining) || rawRemaining < 0) return '';
-        const elapsed = item.receivedAt ? Math.max(0, (performance.now() - item.receivedAt) / 1000) : 0;
+        const elapsed = item.paused ? 0 : (item.receivedAt ? Math.max(0, (performance.now() - item.receivedAt) / 1000) : 0);
         const safe = Math.max(0, Math.ceil(rawRemaining - elapsed));
         const min = Math.floor(safe / 60);
         const sec = safe % 60;
@@ -14782,6 +14846,7 @@ function updatePregameTimerDisplay(data, target = '') {
 
 function maybeRequestPregameStateResync(data) {
     if (!socket || !socket.connected || !localPregameTimerSnapshot) return;
+    if (localPregameTimerSnapshot.paused) return;
     const phaseName = phase || (data && data.phase);
     if (!['draft', 'event_select', 'event_reveal'].includes(phaseName)) return;
     const elapsed = Math.max(0, (performance.now() - localPregameTimerSnapshot.receivedAt) / 1000);
@@ -15872,31 +15937,35 @@ function updateClassicExtraControls(gs) {
     panel.classList.toggle('hidden', visibleCount === 0);
 }
 
-function formatPlayerPileInfo(playerData, includeDiscard, opponentStyle = false) {
+function formatPlayerPileInfo(playerData, includeDiscard, opponentStyle = false, includeExile = false) {
     const blindLevel = getOwnBlindLevel();
     const pid = normalizePlayerId(playerData && playerData.player_id);
     const isSelf = pid != null && pid === normalizePlayerId(gameState && gameState.your_id);
     const maskOwnDrawDeck = isSelf && shouldMaskOwnDrawDeck();
     const maskOwnDiscardPile = isSelf && shouldMaskOwnDiscardPile();
+    const maskOwnExilePile = isSelf && shouldMaskOwnDiscardPile();
     if (blindLevel >= 3 && isSelf) {
-        const text = includeDiscard ? UI.hand_deck_discard_info.replace('{0}', '?').replace('{1}', '?').replace('{2}', '?')
+        const text = includeDiscard
+            ? `${UI.hand_deck_discard_info.replace('{0}', '?').replace('{1}', '?').replace('{2}', '?')}${includeExile ? ' 放逐：?' : ''}`
             : UI.hand_deck_info_opp.replace('{0}', '?').replace('{1}', '?');
-        const items = includeDiscard
-            ? [{ icon: 'total-pile', value: '?' }, { icon: 'draw-pile', value: '?' }, { icon: 'discard-pile', value: '?' }]
-            : [{ icon: 'total-pile', value: '?' }, { icon: 'draw-pile', value: '?' }];
+        const items = [{ icon: 'total-pile', value: '?' }, { icon: 'draw-pile', value: '?' }];
+        if (includeDiscard) items.push({ icon: 'discard-pile', value: '?' });
+        if (includeExile) items.push({ icon: 'exile-pile', value: '?' });
         return { text, title: text, opponentStyle, items };
     }
     const hand = playerData.hand_count || 0;
     const deck = maskOwnDrawDeck ? '?' : (playerData.deck_count || 0);
     const discard = maskOwnDiscardPile ? '?' : (playerData.discard_count || 0);
-    const full = includeDiscard
+    const exile = maskOwnExilePile ? '?' : (playerData.exile_count || 0);
+    let full = includeDiscard
         ? UI.hand_deck_discard_info.replace('{0}', hand).replace('{1}', deck).replace('{2}', discard)
         : UI.hand_deck_info_opp.replace('{0}', hand).replace('{1}', deck);
+    if (includeExile) full += ` 放逐：${exile}`;
     if (!isMinimalUiStyle()) return { text: full, title: '' };
-    const items = includeDiscard
-        ? [{ icon: 'total-pile', value: hand }, { icon: 'draw-pile', value: deck }, { icon: 'discard-pile', value: discard }]
-        : [{ icon: 'total-pile', value: hand }, { icon: 'draw-pile', value: deck }];
-    const compact = includeDiscard ? `${hand}/${deck}/${discard}` : `${hand}/${deck}`;
+    const items = [{ icon: 'total-pile', value: hand }, { icon: 'draw-pile', value: deck }];
+    if (includeDiscard) items.push({ icon: 'discard-pile', value: discard });
+    if (includeExile) items.push({ icon: 'exile-pile', value: exile });
+    const compact = [hand, deck, ...(includeDiscard ? [discard] : []), ...(includeExile ? [exile] : [])].join('/');
     return { text: compact, title: full, opponentStyle, items };
 }
 
@@ -15948,10 +16017,10 @@ function normalizeBattlePlayer(gs, raw, slot) {
         statuses: data,
         equipment: Array.isArray(data.equipment) ? data.equipment : [],
         hasCorruptionEquipment: playerHasCorruptionEquipment(data),
-        handCount: Number(data.hand_count || 0),
-        deckCount: Number(data.deck_count || 0),
-        discardCount: Number(data.discard_count || 0),
-        exileCount: Number(data.exile_count || 0),
+        handCount: Number(data.hand_count != null ? data.hand_count : (Array.isArray(data.hand) ? data.hand.length : 0)),
+        deckCount: Number(data.deck_count != null ? data.deck_count : (Array.isArray(data.deck) ? data.deck.length : 0)),
+        discardCount: Number(data.discard_count != null ? data.discard_count : (Array.isArray(data.discard) ? data.discard.length : 0)),
+        exileCount: Number(data.exile_count != null ? data.exile_count : (Array.isArray(data.exile) ? data.exile.length : 0)),
         isCurrent: normalizePlayerId(gs.current_player) === id,
         isDefeated: Number(data.health || 0) <= 0,
         raw: data,
@@ -16165,25 +16234,65 @@ function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e
         container.dataset.current = '?';
         container.dataset.max = '?';
         container.dataset.spend = '0';
+        container.style.removeProperty('--classic-resource-slots');
         container.textContent = '?';
         return;
     }
     const cur = Math.max(0, Number(current) || 0);
-    const total = Math.max(0, Math.min(16, Number(max) || 0));
+    const rawMax = Math.max(0, Number(max) || 0);
+    const displayTotal = Math.min(17, Math.max(12, rawMax + 2));
     const cost = Math.max(0, Number(spend) || 0);
     container.dataset.current = String(cur);
-    container.dataset.max = String(total);
+    container.dataset.max = String(rawMax);
     container.dataset.spend = String(cost);
+    container.dataset.displayMax = String(displayTotal);
+    container.style.setProperty('--classic-resource-slots', String(displayTotal));
     container.innerHTML = '';
-    for (let i = 0; i < total; i++) {
+    const chunks = buildClassicResourceChunks(cur, displayTotal);
+    let remainingSpend = cost;
+    for (let i = chunks.length - 1; i >= 0 && remainingSpend > 0; i--) {
+        chunks[i].willSpend = true;
+        remainingSpend -= chunks[i].value;
+    }
+    const missingChunks = buildClassicResourceChunks(Math.max(0, cost - cur), Math.max(0, displayTotal - chunks.length))
+        .map(chunk => ({ ...chunk, missing: true, willSpend: true }));
+    const visibleChunks = chunks.concat(missingChunks).slice(0, displayTotal);
+    while (visibleChunks.length < displayTotal) visibleChunks.push({ value: 1, empty: true });
+    visibleChunks.forEach((chunk) => {
         const orb = document.createElement('span');
         orb.className = `classic-orb classic-orb-${kind}`;
-        if (i < cur) orb.classList.add('is-filled');
-        if (cost && i >= Math.max(0, cur - cost) && i < cur) orb.classList.add('will-spend');
-        if (cost && i >= cur && i < cost) orb.classList.add('is-missing');
+        const slotValue = Math.max(1, Number(chunk.value) || 1);
+        if (chunk.empty) {
+            orb.classList.add('is-empty');
+        } else if (chunk.missing) {
+            orb.classList.add('is-missing');
+        } else {
+            orb.classList.add('is-filled');
+        }
+        if (chunk.willSpend) {
+            orb.classList.add('will-spend');
+        }
+        if (slotValue >= 10) {
+            orb.classList.add('is-grouped');
+            orb.dataset.groupValue = String(slotValue);
+        }
         container.appendChild(orb);
+    });
+    if (!displayTotal) container.textContent = '0';
+}
+
+function buildClassicResourceChunks(amount, maxSlots = 17) {
+    let remaining = Math.max(0, Math.floor(Number(amount) || 0));
+    const chunks = [];
+    while (remaining >= 10 && chunks.length < maxSlots) {
+        chunks.push({ value: 10 });
+        remaining -= 10;
     }
-    if (!total) container.textContent = '0';
+    while (remaining > 0 && chunks.length < maxSlots) {
+        chunks.push({ value: 1 });
+        remaining -= 1;
+    }
+    return chunks;
 }
 
 function getClassicResourcePreviewCard(vm = null) {
@@ -16280,6 +16389,51 @@ function renderClassicPlayLane(vm) {
     `;
 }
 
+function renderClassicIconCounter(icon, value, title = '') {
+    const safeIcon = String(icon || '').replace(/[^a-z0-9_-]/gi, '');
+    const safeTitle = escapeHtml(title || '');
+    const safeValue = value == null ? '0' : escapeHtml(String(value));
+    return `<span class="classic-icon-counter" title="${safeTitle}">
+        <img src="/static/assets/ui-icons/${safeIcon}.svg" alt="" aria-hidden="true">
+        <span>${safeValue}</span>
+    </span>`;
+}
+
+function renderClassicPileCounters(player, side, masks = {}) {
+    const isSelf = side === 'self';
+    const handValue = isSelf && masks.maskHandCount ? '?' : player.handCount;
+    const deckValue = isSelf && masks.maskDrawDeck ? '?' : player.deckCount;
+    const discardValue = isSelf && masks.maskDiscardPile ? '?' : player.discardCount;
+    const exileValue = isSelf && masks.maskPiles ? '?' : player.exileCount;
+    return `<div class="classic-fighter-piles" aria-label="piles">
+        ${renderClassicIconCounter('total-pile', handValue, UI.hand || UI.card || 'Hand')}
+        ${renderClassicIconCounter('draw-pile', deckValue, UI.view_draw_deck_title || UI.view_deck_title || 'Draw Deck')}
+        ${renderClassicIconCounter('discard-pile', discardValue, UI.view_discard_title || 'Discard')}
+        ${renderClassicIconCounter('exile-pile', exileValue, UI.flag_exile || 'Exile')}
+    </div>`;
+}
+
+function renderClassicStatStrip(kind, current, max, masked = false) {
+    const isMagic = kind === 'm';
+    const icon = isMagic ? 'magic' : 'elixir';
+    const label = isMagic ? 'M' : 'E';
+    if (masked) {
+        return `<div class="classic-stat-strip classic-stat-${kind} is-masked" data-kind="${kind}">
+            <img src="/static/assets/ui-icons/${icon}.svg" alt="" aria-hidden="true">
+            <div class="classic-stat-track"><div class="classic-stat-fill" style="width:0%"></div></div>
+            <span>?</span>
+        </div>`;
+    }
+    const cur = Math.max(0, Number(current) || 0);
+    const total = Math.max(1, Number(max) || 0);
+    const pct = Math.max(0, Math.min(100, (cur / total) * 100));
+    return `<div class="classic-stat-strip classic-stat-${kind}" data-kind="${kind}">
+        <img src="/static/assets/ui-icons/${icon}.svg" alt="" aria-hidden="true">
+        <div class="classic-stat-track"><div class="classic-stat-fill" style="width:${pct}%"></div></div>
+        <span>${label} ${cur}/${total}</span>
+    </div>`;
+}
+
 function removeClassicHoverInfo() {
     if (classicHoverPreviewTimer) {
         clearTimeout(classicHoverPreviewTimer);
@@ -16328,7 +16482,7 @@ function showClassicHoverInfo(card, anchor) {
     });
 }
 
-function renderClassicFighter(container, player, side, selectedCard = null) {
+function renderClassicFighter(container, player, side, selectedCard = null, masks = {}) {
     if (!container) return;
     const hpPct = player.maxHp > 0 ? Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100)) : 0;
     const role = getClassicPlayRole(selectedCard);
@@ -16348,10 +16502,15 @@ function renderClassicFighter(container, player, side, selectedCard = null) {
         <div class="classic-fighter-name">${escapeHtml(player.name || '?')}</div>
         ${intentText ? `<div class="classic-intent-badge">${escapeHtml(intentText)}</div>` : '<div class="classic-intent-badge is-empty"></div>'}
         ${renderPlayerAvatar(player)}
+        <div class="classic-fighter-resources">
+            ${renderClassicStatStrip('e', player.e, player.maxE, !!masks.maskResources)}
+            ${renderClassicStatStrip('m', player.m, player.maxM, !!masks.maskResources)}
+        </div>
         <div class="classic-hp-wrap" data-bar-key="health" data-bar-label="H" data-bar-armor="${Number(player.armor || 0)}">
             <div class="classic-hp-track"><div class="classic-hp-fill" style="width:${hpPct}%"></div></div>
             <div class="classic-hp-text">H ${player.hp}/${player.maxHp}${player.armor ? ` · A ${player.armor}` : ''}</div>
         </div>
+        ${renderClassicPileCounters(player, side, masks)}
         <div class="classic-status-ring">${renderClassicStatusList(player)}</div>
         <div class="classic-equipment-ring">${renderClassicEquipmentList(player)}</div>
     `;
@@ -16486,8 +16645,15 @@ function renderClassicBattle(gs) {
         setIconCounter($('classic-deck-count'), 'draw-pile', maskOwnDrawDeck ? '?' : vm.deckCount, UI.view_draw_deck_title || UI.view_deck_title || 'Draw Deck');
         setIconCounter($('classic-discard-count'), 'discard-pile', maskOwnDiscardPile ? '?' : vm.discardCount, UI.view_discard_title || 'Discard');
         setIconCounter($('classic-exile-count'), 'exile-pile', maskOwnPiles ? '?' : vm.exileCount, UI.flag_exile || 'Exile');
-        renderClassicFighter($('classic-fighter-self'), vm.self, 'self', selected);
-        renderClassicFighter($('classic-fighter-enemy'), vm.enemy, 'enemy', selected);
+        const selfMasks = {
+            maskResources: maskOwnResources,
+            maskPiles: maskOwnPiles,
+            maskDrawDeck: maskOwnDrawDeck,
+            maskDiscardPile: maskOwnDiscardPile,
+            maskHandCount: blindLevel >= 4,
+        };
+        renderClassicFighter($('classic-fighter-self'), vm.self, 'self', selected, selfMasks);
+        renderClassicFighter($('classic-fighter-enemy'), vm.enemy, 'enemy', selected, {});
         renderClassicPlayLane(vm);
         renderClassicHand(vm);
         renderClassicLog(vm);
@@ -16625,7 +16791,7 @@ function renderGame(data) {
         renderTeammateHand(teammate);
         renderEquipment('teammate-equip', teammate, false);
         const opp2Info = $('opp2-info');
-        if (opp2Info) setPileInfoText(opp2Info, formatPlayerPileInfo(opp2, false, true));
+        if (opp2Info) setPileInfoText(opp2Info, formatPlayerPileInfo(opp2, true, true));
         const tmInfo = $('teammate-info');
         if (tmInfo) setPileInfoText(tmInfo, formatPlayerPileInfo(teammate, true));
     }
@@ -16688,7 +16854,7 @@ function renderGame(data) {
             oppInfo.title = '';
             oppInfo.classList.remove('compact-info');
         } else {
-            setPileInfoText(oppInfo, formatPlayerPileInfo(opp, false, true));
+            setPileInfoText(oppInfo, formatPlayerPileInfo(opp, true, true));
         }
     }
     const youInfo = $('you-info');
@@ -16699,7 +16865,7 @@ function renderGame(data) {
             youInfo.title = '';
             youInfo.classList.remove('compact-info');
         } else {
-            setPileInfoText(youInfo, formatPlayerPileInfo(you, true));
+            setPileInfoText(youInfo, formatPlayerPileInfo(you, true, false, true));
         }
     }
     scheduleAdjust();
@@ -17206,8 +17372,8 @@ function syncPlayerRegionTargets(gs) {
         });
     };
     if (useClassicRefs) {
-        assign('#classic-fighter-self', gs.your_id);
-        assign('#classic-fighter-enemy', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
+        assign('#classic-fighter-self .player-avatar', gs.your_id);
+        assign('#classic-fighter-enemy .player-avatar', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
         return;
     }
     assign('.player-section', gs.your_id);
@@ -17284,7 +17450,7 @@ function choosePlayerTargetOnBoard(title, targets) {
                     event.preventDefault();
                     event.stopPropagation();
                     el.classList.add('target-picked');
-                    flashTargetRegion(pid);
+                    restartTransientClass(getTargetFeedbackElement(el), 'target-feedback-pulse', 720);
                     setTimeout(() => finish(pid), 90);
                     return;
                 }
@@ -18192,6 +18358,16 @@ function getCardTargetPickOptions(cardDef) {
         };
     }
     return { includeSelf: true, candidates: 'all', aliveOnly: true };
+}
+
+async function chooseClassicPlayerTargetForCard(cardDef) {
+    const targets = getPlayerTargetOptions(getCardTargetPickOptions(cardDef));
+    if (!targets.length) {
+        flashStatus(UI.no_selectable_player || UI.no_valid_target || '没有可选中的玩家', 2200, 'error');
+        return -1;
+    }
+    const picked = await choosePlayerTargetOnBoard(UI.choose_target || UI.select_target || 'Choose target', targets);
+    return picked == null ? -1 : picked;
 }
 
 function effectTreeUsesEventTarget(value) {
@@ -20055,10 +20231,11 @@ async function onPlayCard(cardInstanceId, options = {}) {
             return;
         }
     }
-    let targetPlayerId = -1;
+    let targetPlayerId = normalizePlayerId(options.targetPlayerId ?? options.target_player_id);
+    if (targetPlayerId == null) targetPlayerId = -1;
     if (cardHasSelfOnlyFlag(cardDict, cardDef) && (!cardDef || cardDef.card_type !== 'thorn')) {
         targetPlayerId = normalizePlayerId(gameState.your_id);
-    } else if (cardNeedsPlayerTarget(cardDef, cardDict)) {
+    } else if (cardNeedsPlayerTarget(cardDef, cardDict) && targetPlayerId < 0) {
         if (tutorialMode) tutorialTargetHintSeen = true;
         targetPlayerId = await choosePlayerTarget(
             UI.choose_target || UI.select_target || 'Choose target',
@@ -21301,6 +21478,26 @@ function getDeckViewerPlayer() {
     return (gameState && gameState.you) || {};
 }
 
+function getPileViewerPlayers(pileType = 'deck') {
+    if (!gameState) return [];
+    const self = getDeckViewerPlayer();
+    return self ? [self] : [];
+}
+
+function getPileViewerName(player) {
+    if (!player) return '';
+    const pid = normalizePlayerId(player.player_id);
+    if (pid != null) return getPlayerNameById(pid);
+    return localizeCanonicalPlayerName(player.name || player.nickname || '');
+}
+
+function getPileFromPlayer(player, pileType = 'deck') {
+    if (!player) return [];
+    if (pileType === 'exile') return player.exile || [];
+    if (pileType === 'discard') return player.discard_ordered || player.discard || [];
+    return player.deck_ordered || player.deck || [];
+}
+
 function repairSpectate2v2Layout(gs) {
     if (!gs || gs.mode !== '2v2' || !gs.spectating || !Array.isArray(gs.spectate_players) || gs.spectate_players.length < 4) return;
     const perspective = normalizePlayerId(gs.spectate_perspective != null ? gs.spectate_perspective : gs.your_id);
@@ -21345,15 +21542,17 @@ function onViewPile(pileType = 'deck') {
         return;
     }
     const isDeckPile = pileType === 'deck';
+    const isDiscardPile = pileType === 'discard';
+    const isExilePile = pileType === 'exile';
+    if (isExilePile) {
+        return;
+    }
     if (isDeckPile && tutorialMode) {
         tutorialDeckViewed = true;
         hideTutorialOverlay();
         setTimeout(updateTutorialOverlay, 80);
     }
-    const deckPlayer = getDeckViewerPlayer();
-    const hasOrderedDeck = isDeckPile && !!deckPlayer.deck_ordered;
-    const pile = isDeckPile ? (deckPlayer.deck_ordered || deckPlayer.deck || []) : (deckPlayer.discard || []);
-    const blindPile = isDeckPile ? shouldMaskOwnDrawDeck() : shouldMaskOwnDiscardPile();
+    const pilePlayers = getPileViewerPlayers(pileType);
     const modal = $('modal');
     const content = $('modal-content');
     if (!modal || !content) return;
@@ -21361,79 +21560,108 @@ function onViewPile(pileType = 'deck') {
     content.className = 'modal-inner view-deck-modal';
     content.innerHTML = '';
     const title = document.createElement('h3');
-    const deckOwnerName = (isSpectating || (gameState && gameState.spectating)) && deckPlayer && deckPlayer.name
-        ? localizeCanonicalPlayerName(deckPlayer.name)
-        : '';
     const titleText = isDeckPile
         ? (UI.view_draw_deck_title || UI.view_deck_title)
-        : (UI.view_discard_title || UI.discard_empty || 'Discard');
+        : (isExilePile
+            ? (UI.view_exile_title || UI.flag_exile || 'Exile')
+            : (UI.view_discard_title || UI.discard_empty || 'Discard'));
+    const deckOwnerName = !isDiscardPile && pilePlayers[0] && pilePlayers[0].name
+        ? getPileViewerName(pilePlayers[0])
+        : '';
     title.textContent = deckOwnerName ? `${titleText} - ${deckOwnerName}` : titleText;
     content.appendChild(title);
-    const total = document.createElement('p');
-    total.className = 'deck-total';
     const totalTemplate = isDeckPile
         ? (UI.draw_deck_total || UI.deck_total)
-        : (UI.discard_total || 'Discard: {0}');
-    total.textContent = totalTemplate.replace('{0}', blindPile ? '?' : pile.length);
-    content.appendChild(total);
-    const list = document.createElement('div');
-    list.className = 'deck-list';
-    if (blindPile) {
-        const row = document.createElement('div');
-        row.className = 'deck-entry deck-entry-blinded';
-        const unknown = document.createElement('span');
-        unknown.className = 'choice-card-token choice-card-blinded';
-        const unknownName = document.createElement('span');
-        unknownName.className = 'choice-card-name';
-        unknownName.textContent = '?';
-        unknown.appendChild(unknownName);
-        row.appendChild(unknown);
-        list.appendChild(row);
-    } else if (!pile.length) {
-        const row = document.createElement('div');
-        row.className = 'deck-entry deck-entry-empty';
-        const empty = document.createElement('span');
-        empty.className = 'choice-option-detail';
-        empty.textContent = isDeckPile ? (UI.deck_empty || 'Deck empty') : (UI.discard_empty || 'Discard pile empty');
-        row.appendChild(empty);
-        list.appendChild(row);
-    } else if (hasOrderedDeck) {
-        // Goggles: show deck in order (top to bottom)
-        pile.forEach((c, idx) => {
+        : (isExilePile
+            ? (UI.exile_total || 'Exile: {0}')
+            : (UI.discard_total || 'Discard: {0}'));
+    const emptyText = isDeckPile
+        ? (UI.deck_empty || 'Deck empty')
+        : (isExilePile
+            ? (UI.exile_empty || 'Exile empty')
+            : (UI.discard_empty || 'Discard pile empty'));
+
+    const renderPileSection = (pilePlayer, showOwner) => {
+        const pid = normalizePlayerId(pilePlayer && pilePlayer.player_id);
+        const selfId = normalizePlayerId(gameState && gameState.your_id);
+        const isSelf = pid != null && selfId != null && pid === selfId;
+        const pile = getPileFromPlayer(pilePlayer, pileType);
+        const hasOrderedDeck = isDeckPile && !!(pilePlayer && pilePlayer.deck_ordered);
+        const blindPile = isDeckPile
+            ? (isSelf && shouldMaskOwnDrawDeck())
+            : ((isDiscardPile || isExilePile) && isSelf && shouldMaskOwnDiscardPile());
+        if (showOwner) {
+            const owner = document.createElement('h4');
+            owner.className = 'deck-owner-title';
+            owner.textContent = getPileViewerName(pilePlayer) || '?';
+            content.appendChild(owner);
+        }
+        const total = document.createElement('p');
+        total.className = 'deck-total';
+        total.textContent = totalTemplate.replace('{0}', blindPile ? '?' : pile.length);
+        content.appendChild(total);
+        const list = document.createElement('div');
+        list.className = 'deck-list';
+        if (blindPile) {
             const row = document.createElement('div');
-            row.className = 'deck-entry';
-            const numEl = document.createElement('span');
-            numEl.className = 'choice-option-detail deck-entry-count';
-            numEl.textContent = `#${idx + 1}`;
-            row.appendChild(createCardChoiceChip(c));
-            row.appendChild(numEl);
+            row.className = 'deck-entry deck-entry-blinded';
+            const unknown = document.createElement('span');
+            unknown.className = 'choice-card-token choice-card-blinded';
+            const unknownName = document.createElement('span');
+            unknownName.className = 'choice-card-name';
+            unknownName.textContent = '?';
+            unknown.appendChild(unknownName);
+            row.appendChild(unknown);
             list.appendChild(row);
-        });
-    } else {
-        const groups = new Map();
-        pile.forEach(c => {
-            const key = cardChoiceIdentity(c);
-            const group = groups.get(key) || { card: c, count: 0 };
-            group.count += 1;
-            groups.set(key, group);
-        });
-        Array.from(groups.values()).sort((a, b) => {
-            const ad = getCardDef(a.card.def_id);
-            const bd = getCardDef(b.card.def_id);
-            if (ad && bd) return compareGalleryCards(a.card.def_id, b.card.def_id);
-            return (ad ? getCardName(ad) : a.card.def_id || '').localeCompare(bd ? getCardName(bd) : b.card.def_id || '');
-        }).forEach(({ card, count }) => {
+        } else if (!pile.length) {
             const row = document.createElement('div');
-            row.className = 'deck-entry';
-            row.appendChild(createCardChoiceChip(card));
-            const countEl = document.createElement('span');
-            countEl.className = 'choice-option-detail deck-entry-count';
-            countEl.textContent = `x${count}`;
-            row.appendChild(countEl);
+            row.className = 'deck-entry deck-entry-empty';
+            const empty = document.createElement('span');
+            empty.className = 'choice-option-detail';
+            empty.textContent = emptyText;
+            row.appendChild(empty);
             list.appendChild(row);
-        });
-    }
-    content.appendChild(list);
+        } else if (hasOrderedDeck) {
+            // Goggles: show deck in order (top to bottom)
+            pile.forEach((c, idx) => {
+                const row = document.createElement('div');
+                row.className = 'deck-entry';
+                const numEl = document.createElement('span');
+                numEl.className = 'choice-option-detail deck-entry-count';
+                numEl.textContent = `#${idx + 1}`;
+                row.appendChild(createCardChoiceChip(c));
+                row.appendChild(numEl);
+                list.appendChild(row);
+            });
+        } else {
+            const groups = new Map();
+            pile.forEach(c => {
+                const key = cardChoiceIdentity(c);
+                const group = groups.get(key) || { card: c, count: 0 };
+                group.count += 1;
+                groups.set(key, group);
+            });
+            Array.from(groups.values()).sort((a, b) => {
+                const ad = getCardDef(a.card.def_id);
+                const bd = getCardDef(b.card.def_id);
+                if (ad && bd) return compareGalleryCards(a.card.def_id, b.card.def_id);
+                return (ad ? getCardName(ad) : a.card.def_id || '').localeCompare(bd ? getCardName(bd) : b.card.def_id || '');
+            }).forEach(({ card, count }) => {
+                const row = document.createElement('div');
+                row.className = 'deck-entry';
+                row.appendChild(createCardChoiceChip(card));
+                const countEl = document.createElement('span');
+                countEl.className = 'choice-option-detail deck-entry-count';
+                countEl.textContent = `x${count}`;
+                row.appendChild(countEl);
+                list.appendChild(row);
+            });
+        }
+        content.appendChild(list);
+    };
+
+    const players = pilePlayers.length ? pilePlayers : [{}];
+    players.forEach(player => renderPileSection(player, isDiscardPile && players.length > 1));
     const buttons = document.createElement('div');
     buttons.className = 'modal-buttons';
     const closeBtn = document.createElement('button');
@@ -22819,6 +23047,7 @@ async function init() {
     ['classic-play-lane', 'classic-fighter-self', 'classic-fighter-enemy'].forEach(id => {
         const el = $(id);
         if (el) el.addEventListener('click', (event) => {
+            if (id !== 'classic-play-lane' && !(event.target && event.target.closest && event.target.closest('.player-avatar'))) return;
             if (shouldUseClassicBattle(gameState) && selectedPlayCardId != null && classicCanPlayFromElement(id)) {
                 event.preventDefault();
                 classicPlaySelectedCard();
@@ -22943,12 +23172,38 @@ async function init() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', init);
-window.addEventListener('resize', () => {
-    const gc = document.querySelector('.game-container');
-    if (gc) gc.style.removeProperty('--card-w');
-    scheduleAdjust();
-    if (tutorialMode) setTimeout(updateTutorialOverlay, 80);
-});
-debugLog('[LOAD] game.js loaded, onEndTurn=', typeof onEndTurn);
+if (window.__GTN_CARD_EXPORTER_RENDERER__) {
+    const gtnCardExporterCreateCardElement = createCardElement;
+    window.GTN_CARD_RENDERER = {
+        setCardDefs(defs) {
+            CARD_DEFS = defs && typeof defs === 'object' ? defs : {};
+        },
+        setOptions(options = {}) {
+            if (Object.prototype.hasOwnProperty.call(options, 'showEnglish')) {
+                showEnglishCardNames = !!options.showEnglish;
+            }
+            if (Object.prototype.hasOwnProperty.call(options, 'showImages')) {
+                showCardImages = !!options.showImages;
+            }
+            if (options.lang) {
+                currentLang = normalizeLang(options.lang);
+            }
+        },
+        createCardElement(cardDict, options = {}) {
+            return gtnCardExporterCreateCardElement(cardDict, { ...options, disableIntro: true });
+        },
+        getCardDef,
+        colorizeCardText,
+    };
+    debugLog('[LOAD] game.js card exporter renderer loaded');
+} else {
+    document.addEventListener('DOMContentLoaded', init);
+    window.addEventListener('resize', () => {
+        const gc = document.querySelector('.game-container');
+        if (gc) gc.style.removeProperty('--card-w');
+        scheduleAdjust();
+        if (tutorialMode) setTimeout(updateTutorialOverlay, 80);
+    });
+    debugLog('[LOAD] game.js loaded, onEndTurn=', typeof onEndTurn);
+}
 

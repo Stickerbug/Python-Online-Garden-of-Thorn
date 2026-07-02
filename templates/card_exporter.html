@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GTN 卡牌图片导出器</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/static/css/style.css?v=card-exporter-renderer-18">
+  <link rel="stylesheet" href="/static/css/card_exporter.css?v=card-exporter-renderer-18">
+</head>
+<body>
+  <main class="exporter-shell">
+    <section id="login-panel" class="exporter-card login-panel">
+      <h1>GTN 卡牌图片导出器</h1>
+      <p>使用内测秘钥进入。此工具只读取卡牌数据并在浏览器本地生成图片，不影响正式游戏。</p>
+      <form id="login-form" class="login-form">
+        <label for="exporter-key">密码</label>
+        <input id="exporter-key" type="password" autocomplete="current-password" autofocus>
+        <button type="submit">进入导出器</button>
+      </form>
+      <p id="login-error" class="error-text" aria-live="polite"></p>
+    </section>
+
+    <section id="exporter-panel" class="exporter-layout hidden">
+      <aside class="exporter-card controls">
+        <div class="toolbar-title">
+          <h1>卡牌图片导出器</h1>
+          <button id="logout-btn" type="button">退出</button>
+        </div>
+
+        <label>搜索
+          <input id="search-input" type="search" placeholder="中文 / English / ID">
+        </label>
+
+        <label>模组
+          <select id="mod-filter"></select>
+        </label>
+
+        <div class="control-grid">
+          <label>宽度(px)
+            <input id="card-width" type="number" min="240" max="2400" step="12" value="744">
+          </label>
+          <label>倍率
+            <select id="pixel-ratio">
+              <option value="1">1x</option>
+              <option value="2">2x</option>
+              <option value="3" selected>3x</option>
+              <option value="4">4x</option>
+            </select>
+          </label>
+        </div>
+        <label>预览缩放
+          <input id="preview-scale" type="range" min="25" max="200" step="5" value="100">
+        </label>
+
+        <div class="check-list">
+          <label><input id="show-art" type="checkbox" checked> 显示卡牌图片</label>
+          <label><input id="show-english" type="checkbox" checked> 显示英文名</label>
+          <label><input id="show-count" type="checkbox" checked> 文件名包含数量</label>
+        </div>
+
+        <div class="sheet-options">
+          <strong>拼版导出</strong>
+          <div class="control-grid">
+            <label>列数
+              <input id="sheet-columns" type="number" min="1" max="8" step="1" value="3">
+            </label>
+            <label>间距(px)
+              <input id="sheet-gap" type="number" min="0" max="80" step="2" value="12">
+            </label>
+          </div>
+          <label>拼版卡宽(px)
+            <input id="sheet-card-width" type="number" min="180" max="1200" step="12" value="360">
+          </label>
+        </div>
+
+        <div class="button-grid">
+          <button id="export-current-btn" type="button">导出当前卡</button>
+          <button id="export-filtered-btn" type="button">导出列表</button>
+          <button id="preview-sheet-btn" type="button">预览拼版</button>
+          <button id="export-sheet-btn" type="button">导出拼版</button>
+          <button id="reload-btn" type="button">重新加载</button>
+        </div>
+
+        <p id="status-line" class="status-line">准备中...</p>
+      </aside>
+
+      <section class="exporter-card browser-panel">
+        <div class="browser-head">
+          <strong id="list-count">0 张</strong>
+          <span>点击左侧列表中的卡牌预览并导出。</span>
+        </div>
+        <div id="card-list" class="card-list"></div>
+      </section>
+
+      <section class="exporter-card preview-panel">
+        <div id="card-preview-wrap" class="card-preview-wrap"></div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    window.__GTN_CARD_EXPORTER_RENDERER__ = true;
+    window.__GTN_BETA_MODE__ = false;
+    window.__GTN_INSTANCE_ID__ = 'card-exporter';
+    window.__GTN_INSTANCE_PORT__ = '';
+  </script>
+  <script src="/static/js/game.js?v=card-exporter-renderer-18"></script>
+  <script src="/static/js/card_exporter.js?v=card-exporter-renderer-18"></script>
+</body>
+</html>

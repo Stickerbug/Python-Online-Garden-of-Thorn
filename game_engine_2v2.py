@@ -130,6 +130,7 @@ class GameEngine2v2(GameEngine):
 
 
     def get_public_state(self, for_player: int) -> dict:
+        self._refresh_equipment_derived_player_flags()
         self._refresh_hand_limit_bonuses()
         teammate_id = self.get_teammate(for_player)
         enemy_ids = self.get_all_enemies(for_player)

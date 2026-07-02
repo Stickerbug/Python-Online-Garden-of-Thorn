@@ -372,6 +372,8 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN thorn_dew_free INTEGER DEFAULT 0')
         if 'thorn_dew_paid' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN thorn_dew_paid INTEGER DEFAULT 0')
+        if 'password_changed_at' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN password_changed_at TEXT')
         _assign_missing_player_ids(conn)
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_last_login ON users(last_login_at)')
@@ -891,6 +893,7 @@ def row_to_user(row):
         'play_seconds': int(row['play_seconds'] or 0) if 'play_seconds' in row.keys() else 0,
         'thorn_dew_free': max(0, int(row['thorn_dew_free'] or 0)) if 'thorn_dew_free' in row.keys() else 0,
         'thorn_dew_paid': max(0, int(row['thorn_dew_paid'] or 0)) if 'thorn_dew_paid' in row.keys() else 0,
+        'password_changed_at': row['password_changed_at'] if 'password_changed_at' in row.keys() else None,
         'skin': normalize_skin_config(skin_raw),
     }
     data['thorn_dew_total'] = data['thorn_dew_free'] + data['thorn_dew_paid']
@@ -1263,10 +1266,12 @@ def change_user_password(user_id, old_password, new_password):
             return None, '请先登录账号'
         if not check_password_hash(row['password_hash'], str(old_password or '')):
             return None, '原密码错误'
+        changed_at = utc_now()
         conn.execute(
-            'UPDATE users SET password_hash = ? WHERE id = ?',
-            (generate_password_hash(str(new_password)), uid),
+            'UPDATE users SET password_hash = ?, password_changed_at = ? WHERE id = ?',
+            (generate_password_hash(str(new_password)), changed_at, uid),
         )
+        conn.execute('DELETE FROM remember_tokens WHERE user_id = ?', (uid,))
         conn.commit()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         return row_to_user(row), None
@@ -1384,10 +1389,12 @@ def admin_change_user_password(identifier, new_password):
     if not ok:
         return None, error
     with get_db_connection() as conn:
+        changed_at = utc_now()
         conn.execute(
-            'UPDATE users SET password_hash = ? WHERE id = ?',
-            (generate_password_hash(str(new_password)), user['id']),
+            'UPDATE users SET password_hash = ?, password_changed_at = ? WHERE id = ?',
+            (generate_password_hash(str(new_password)), changed_at, user['id']),
         )
+        conn.execute('DELETE FROM remember_tokens WHERE user_id = ?', (user['id'],))
         conn.commit()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
         return row_to_user(row), None

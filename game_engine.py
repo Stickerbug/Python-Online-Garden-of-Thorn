@@ -23,7 +23,7 @@ from damage_types import (
 )
 
 CORRUPTION_DAMAGE_MULTIPLIER = 1.5
-LATE_ROUND_FIRE_START = 20
+LATE_ROUND_FIRE_START = 10
 
 
 class ModLoopBreak(Exception):
@@ -2546,6 +2546,7 @@ class GameEngine:
         return payload
 
     def get_public_state(self, for_player: int) -> dict:
+        self._refresh_equipment_derived_player_flags()
         self._refresh_hand_limit_bonuses()
         opponent = 1 - for_player
         opp_data = self.players[opponent].to_dict(include_private=False)
@@ -4477,6 +4478,8 @@ class GameEngine:
                     'event': 'response',
                     'source_id': responder_id,
                     'target_id': response_target_id,
+                    'response_target_id': response_target_id,
+                    'defender_id': responder_id,
                     'target_player_explicit': True,
                     'original_card_instance_id': getattr(original_card, 'instance_id', None),
                     'original_card_def_id': getattr(original_card, 'def_id', ''),
@@ -4916,10 +4919,13 @@ class GameEngine:
         self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将无敌至下一个自己回合结束")
 
     def _atomic_equip_sponge(self, player_id, card, params, log, choice, context):
-        if self._status_application_blocked(player_id, 'sponge_active'):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not (0 <= target_id < len(self.players)):
+            target_id = player_id
+        if self._status_application_blocked(target_id, 'sponge_active'):
             return
-        self.players[player_id].sponge_active = True
-        self.log_msg(log or f"{self.pn(player_id)}伤害转为毒伤")
+        self.players[target_id].sponge_active = True
+        self.log_msg(log or f"{self.pn(target_id)}伤害转为毒伤")
 
     def _atomic_equip_reduce_enemy_draw(self, player_id, card, params, log, choice, context):
         amount = params.get('amount', 1)
@@ -6234,14 +6240,17 @@ class GameEngine:
     def _effect_mine(self, player_id: int, card: CardInstance, choice=None):
         pass
 
-    def _refresh_equipment_derived_player_flags(self, player_id: int):
-        if not (0 <= player_id < len(self.players)):
-            return
-        ps = self.players[player_id]
-        equipment = list(getattr(ps, 'equipment', []) or [])
-
-        if any(self._equipment_is(eq, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge') for eq in equipment):
-            ps.sponge_active = True
+    def _refresh_equipment_derived_player_flags(self, player_id: int = -1):
+        for ps in self.players:
+            ps.sponge_active = False
+        for owner_id, owner_state in enumerate(self.players):
+            for eq in list(getattr(owner_state, 'equipment', []) or []):
+                if not self._equipment_is(eq, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge'):
+                    continue
+                target_id = self._equipment_effect_target_id(eq, owner_id)
+                if self._status_application_blocked(target_id, 'sponge_active'):
+                    continue
+                self.players[target_id].sponge_active = True
 
         # Pill applies status immunity through its card event to the chosen effect target.
         # Equipment itself stays in the user's equipment area, so deriving the status from
@@ -6302,15 +6311,16 @@ class GameEngine:
             self._run_card_event(owner_id, eq.card_instance, 'equipment_destroy', None,
                                  {'source_id': owner_id, 'target_id': effect_target_id,
                                   'equipment_owner_id': owner_id})
-        elif self._equipment_is(eq, 'Sponge', 'vanilla:sponge') and ps.sponge_active:
-            poison_layers = ps.poison
-            ps.sponge_active = False
-            ps.poison = 0
+        elif self._equipment_is(eq, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge') and self.players[effect_target_id].sponge_active:
+            target_state = self.players[effect_target_id]
+            poison_layers = target_state.poison
+            target_state.sponge_active = False
+            target_state.poison = 0
             if poison_layers > 0:
                 physical_dmg = poison_layers * 2
-                ps.health -= physical_dmg
-                self.log_msg(f"海绵被摧毁！去除{poison_layers}层中毒，受到{physical_dmg}点物理伤害")
-                self._check_yggdrasil(owner_id)
+                target_state.health -= physical_dmg
+                self.log_msg(f"海绵被摧毁！{self.pn(effect_target_id)}去除{poison_layers}层中毒，受到{physical_dmg}点物理伤害")
+                self._check_yggdrasil(effect_target_id)
             else:
                 self.log_msg("海绵被摧毁！无中毒层数")
         if is_pill:

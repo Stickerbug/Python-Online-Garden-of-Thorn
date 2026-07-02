@@ -231,6 +231,71 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         context["last_damage"] = total
         return {"success": True, "last_damage": total}
 
+    if op == "counter_pending_attack_damage":
+        ratio = float(params.get("ratio", params.get("multiplier", 0.5)) or 0)
+        vars_dict = context.get("vars", {}) if isinstance(context.get("vars"), dict) else {}
+        action_dict = context.get("current_action", {}) if isinstance(context.get("current_action"), dict) else {}
+        incoming = _to_int(
+            context.get(
+                "first_hit_damage",
+                context.get(
+                    "first_damage",
+                    vars_dict.get(
+                        "first_hit_damage",
+                        vars_dict.get(
+                            "first_damage",
+                            action_dict.get("first_hit_damage", action_dict.get("first_damage", 0)),
+                        ),
+                    ),
+                ),
+            )
+        )
+        if incoming <= 0:
+            parts = context.get("incoming_damage_parts") or vars_dict.get("incoming_damage_parts") or action_dict.get("incoming_damage_parts")
+            if isinstance(parts, (list, tuple)) and parts:
+                incoming = _to_int(parts[0])
+        amount = max(0, int(math.ceil(incoming * ratio)))
+        if amount <= 0:
+            return {"success": True, "last_damage": 0}
+        raw_source = params.get("source", "source")
+        source_selector = raw_source if _looks_like_target_selector(raw_source) else "source"
+        source = _player_id(engine, resolve_v2_target(engine, context, source_selector))
+        source_text = params.get("source_text") or params.get("source_name") or params.get("label")
+        if source_text is None and not _looks_like_target_selector(raw_source):
+            source_text = raw_source
+        source_text = str(source_text or "反击")
+        damage_type = str(params.get("damage_type") or DAMAGE_TYPE_PHYSICAL)
+        damage_tag = params.get("damage_tag")
+        mode = str(params.get("mode", params.get("damage_mode", "direct")) or "direct").lower()
+        total = 0
+        target_ref = params.get("target", "target")
+        if target_ref in ("all_enemies", "enemies"):
+            targets = list(engine.get_all_enemies(source)) if hasattr(engine, "get_all_enemies") else [_enemy_id(engine, source)]
+        else:
+            targets = _as_player_list(engine, resolve_v2_target(engine, context, target_ref))
+        for target_id in targets:
+            if not _valid_player(engine, target_id):
+                continue
+            if mode in ("attack", "physical_attack") and hasattr(engine, "deal_attack_damage"):
+                dealt = engine.deal_attack_damage(target_id, amount, 1, is_precision=False, attacker_id=source)
+            elif hasattr(engine, "_deal_direct_damage"):
+                try:
+                    dealt = engine._deal_direct_damage(
+                        target_id,
+                        amount,
+                        source_text,
+                        source,
+                        damage_type=damage_type,
+                        damage_tag=damage_tag,
+                    )
+                except TypeError:
+                    dealt = engine._deal_direct_damage(target_id, amount, source_text, source)
+            else:
+                dealt = 0
+            total += int(dealt or 0)
+        context["last_damage"] = total
+        return {"success": True, "last_damage": total}
+
     if op == "heal":
         amount = max(0, _to_int(eval_v2_value(engine, context, params.get("amount", 0))))
         for target_id in _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "source"))):

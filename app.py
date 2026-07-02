@@ -1449,6 +1449,15 @@ def _room_all_blocking_players_disconnected(room):
     return bool(blocking_sids) and all(s in room.disconnected_players for s in blocking_sids)
 
 
+def _room_has_blocking_disconnect(room):
+    if room is None:
+        return False
+    disconnected = getattr(room, 'disconnected_players', {}) or {}
+    if not disconnected:
+        return False
+    return any(sid in disconnected for sid in _room_blocking_player_sids(room))
+
+
 def _player_matches_room_participant(room, nickname):
     if not nickname:
         return False
@@ -2324,6 +2333,7 @@ def auth_user_payload(user):
     payload.pop('online_seconds', None)
     payload.pop('online_session_started_at', None)
     payload.pop('online_seconds_total', None)
+    payload.pop('password_changed_at', None)
     profile = get_special_account_profile(payload.get('username', ''))
     if profile:
         payload['display_name'] = profile['display_name']
@@ -2735,6 +2745,7 @@ def _room_action_timer_paused(engine, room=None):
         getattr(engine, 'pending_response', None)
         or getattr(engine, 'pending_ally_request', None)
         or _room_current_action_player_disconnected(room, engine)
+        or _room_has_blocking_disconnect(room)
     )
 
 
@@ -2860,6 +2871,35 @@ def _reset_pregame_deadline(room, pidx, status):
         room.pregame_deadlines.pop((pidx, status), None)
 
 
+def _pause_pregame_deadlines_locked(room, now=None):
+    """Keep pregame countdowns visually frozen while a blocking player reconnects."""
+    if room is None or not hasattr(room, 'pregame_deadlines'):
+        return
+    now = now or time.time()
+    last = getattr(room, 'pregame_pause_last_tick', None)
+    room.pregame_pause_last_tick = now
+    if last is None:
+        return
+    delta = max(0.0, now - float(last))
+    if delta <= 0:
+        return
+    for key, deadline in list(room.pregame_deadlines.items()):
+        try:
+            room.pregame_deadlines[key] = float(deadline) + delta
+        except Exception:
+            continue
+
+
+def _clear_pregame_deadline_pause(room):
+    if room is None:
+        return
+    if hasattr(room, 'pregame_pause_last_tick'):
+        try:
+            delattr(room, 'pregame_pause_last_tick')
+        except Exception:
+            room.pregame_pause_last_tick = None
+
+
 def _draft_timer_total_for_player(engine, pidx):
     try:
         picks = getattr(engine, 'draft_picks', []) or []
@@ -2905,11 +2945,11 @@ def _add_draft_pick_time_bonus(room, pidx, now=None):
 def _pregame_timer_payload(room, pidx, status=None, now=None):
     engine = getattr(room, 'engine', None)
     if engine is None:
-        return {'pregame_timer_remaining': None, 'pregame_timer_total': None, 'pregame_timer_status': None}
+        return {'pregame_timer_remaining': None, 'pregame_timer_total': None, 'pregame_timer_status': None, 'pregame_timer_paused': False}
     status = status or (engine.get_player_status(pidx) if hasattr(engine, 'get_player_status') else None)
     timeout = _pregame_timeout_for_status(status, room, pidx)
     if timeout is None:
-        return {'pregame_timer_remaining': None, 'pregame_timer_total': None, 'pregame_timer_status': status}
+        return {'pregame_timer_remaining': None, 'pregame_timer_total': None, 'pregame_timer_status': status, 'pregame_timer_paused': _room_has_blocking_disconnect(room)}
     now = now or time.time()
     if not hasattr(room, 'pregame_deadlines'):
         room.pregame_deadlines = {}
@@ -2922,6 +2962,7 @@ def _pregame_timer_payload(room, pidx, status=None, now=None):
         'pregame_timer_remaining': int(math.ceil(max(0.0, float(deadline) - now))),
         'pregame_timer_total': int(timeout),
         'pregame_timer_status': status,
+        'pregame_timer_paused': _room_has_blocking_disconnect(room),
     }
 
 
@@ -2974,6 +3015,7 @@ def _watched_pregame_timer_payload(room, pidx, now=None):
             'status': timer.get('pregame_timer_status'),
             'remaining': timer.get('pregame_timer_remaining'),
             'total': timer.get('pregame_timer_total'),
+            'paused': timer.get('pregame_timer_paused'),
         })
     if not watching_timers:
         return {}
@@ -2985,6 +3027,7 @@ def _watched_pregame_timer_payload(room, pidx, now=None):
         'watching_pregame_timer_status': first.get('status'),
         'watching_pregame_timer_remaining': first.get('remaining'),
         'watching_pregame_timer_total': first.get('total'),
+        'watching_pregame_timer_paused': first.get('paused'),
     }
 
 
@@ -3131,12 +3174,23 @@ def _room_timer_worker():
                     if engine is None or getattr(engine, 'game_over', False):
                         continue
                     was_action = getattr(engine, 'phase', None) == 'action'
-                    was_paused = _room_action_timer_paused(engine, room) if was_action else False
                     if _tick_room_action_timer_locked(room, now):
                         expired_turns.append((room, getattr(engine, 'current_player', None)))
-                    elif was_action and not was_paused:
+                    elif was_action:
                         timer_broadcast_rooms.add(room)
                     player_count = len(getattr(room, 'player_sids', []) or [])
+                    if _room_has_blocking_disconnect(room):
+                        _pause_pregame_deadlines_locked(room, now)
+                        if hasattr(engine, 'get_player_status'):
+                            for pidx in range(player_count):
+                                try:
+                                    status = engine.get_player_status(pidx)
+                                except Exception:
+                                    status = None
+                                if _pregame_timeout_for_status(status, room, pidx) is not None:
+                                    pregame_timer_updates.add((room, pidx, status))
+                        continue
+                    _clear_pregame_deadline_pause(room)
                     pregame_statuses = []
                     for pidx in range(player_count):
                         status = engine.get_player_status(pidx) if hasattr(engine, 'get_player_status') else None
@@ -3827,11 +3881,39 @@ def _set_account_session(user):
     session.permanent = True
     session['user_id'] = user['id']
     session['username'] = user['username']
+    session['password_changed_at'] = user.get('password_changed_at') or ''
 
 
 def _clear_account_session():
     session.pop('user_id', None)
     session.pop('username', None)
+    session.pop('password_changed_at', None)
+
+
+def _account_session_is_current(user):
+    if not user:
+        return False
+    session_stamp = str(session.get('password_changed_at') or '')
+    user_stamp = str(user.get('password_changed_at') or '')
+    return session_stamp == user_stamp
+
+
+def _disconnect_account_sockets(user_id, reason, code='account_session_invalidated'):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return 0
+    with _lock:
+        sids = [sid for sid, player in players.items() if player.get('user_id') == uid]
+    payload = {'reason': reason, 'code': code}
+    for sid in sids:
+        try:
+            socketio.emit('account_session_replaced', payload, room=sid)
+            socketio.emit('kicked', payload, room=sid)
+            socketio.server.disconnect(sid)
+        except Exception as exc:
+            admin_event('error', f'account session disconnect failed: {exc}', sid=sid)
+    return len(sids)
 
 
 def _attach_remember_cookie(response, user):
@@ -3865,6 +3947,9 @@ def _current_account_user(allow_remember=True):
     user = get_user_by_id(session.get('user_id'))
     if user:
         if user.get('deleted'):
+            _clear_account_session()
+            return None
+        if not _account_session_is_current(user):
             _clear_account_session()
             return None
         _set_account_session(user)
@@ -6934,8 +7019,13 @@ def execute_admin_command(line):
         user, error = admin_change_user_password(parts[1], parts[2])
         if error:
             return {'success': False, 'output': error}
+        kicked = _disconnect_account_sockets(
+            user.get('id'),
+            '密码已由管理员修改，所有已登录设备已退出。\n请重新登录。',
+            code='password_changed',
+        )
         admin_event('admin', f"changed password for account {user['username']}#{user['id']}")
-        return {'success': True, 'output': f"已修改账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 的密码。"}
+        return {'success': True, 'output': f"已修改账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 的密码。已退出在线设备 {kicked} 个。"}
     if cmd in ('banuser', 'banaccount'):
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> [秒数] [原因]')}
@@ -8800,6 +8890,94 @@ def beta_entry_response():
     return render_template('beta_gate.html')
 
 
+def is_card_exporter_authenticated():
+    return bool(session.get('card_exporter_authenticated'))
+
+
+@app.route('/card-exporter')
+def card_exporter_page():
+    return render_template('card_exporter.html')
+
+
+@app.route('/api/card-exporter/me')
+def api_card_exporter_me():
+    return jsonify({'authenticated': is_card_exporter_authenticated()})
+
+
+@app.route('/api/card-exporter/login', methods=['POST'])
+def api_card_exporter_login():
+    data = request.get_json(silent=True) or {}
+    key = str(data.get('key') or '')
+    if key and check_password_hash(BETA_ACCESS_KEY_HASH, key):
+        session['card_exporter_authenticated'] = True
+        session['card_exporter_login_time'] = time.time()
+        admin_event('security', f'card exporter login success from {_client_ip()}')
+        return jsonify({'success': True})
+    admin_event('security', f'card exporter login failed from {_client_ip()}')
+    return jsonify({'success': False, 'error': '密码错误'}), 401
+
+
+@app.route('/api/card-exporter/logout', methods=['POST'])
+def api_card_exporter_logout():
+    session.pop('card_exporter_authenticated', None)
+    session.pop('card_exporter_login_time', None)
+    return jsonify({'success': True})
+
+
+@app.route('/api/card-exporter/cards')
+def api_card_exporter_cards():
+    if not is_card_exporter_authenticated():
+        return jsonify({'success': False, 'error': '需要密码'}), 401
+    try:
+        reload_mod_card_defs()
+    except Exception as exc:
+        admin_event('error', f'card exporter failed to reload mod card defs: {exc}')
+    card_mod_sources = get_card_mod_sources([])
+    cards = []
+    for def_id, card_def in CARD_DEFS.items():
+        if str(def_id or '').lower() in {'error', 'gtn:error', 'system:error'}:
+            continue
+        source = card_mod_sources.get(def_id, {})
+        image_url = str(getattr(card_def, 'image_url', '') or getattr(card_def, 'image', '') or '')
+        upgraded_image_url = str(getattr(card_def, 'upgraded_image_url', '') or getattr(card_def, 'upgraded_image', '') or '')
+        payload = {
+            'id': card_def.id,
+            'name_en': card_def.name_en,
+            'name_cn': card_def.name_cn,
+            'source_mod_filename': source.get('filename', ''),
+            'source_mod_name': source.get('name', ''),
+            'source_mod_name_cn': source.get('name_cn', ''),
+            'source_mod_name_en': source.get('name_en', ''),
+            'source_mod_sort_name': source.get('sort_name', ''),
+            'source_mod_is_vanilla': bool(source.get('is_vanilla', False)),
+            'cost_e': card_def.cost_e,
+            'cost_m': card_def.cost_m,
+            'card_type': card_def.card_type,
+            'count': card_def.count,
+            'quality': card_def.quality,
+            'description': card_def.description,
+            'effect_text': card_def.effect_text,
+            'flags': list(card_def.flags) if card_def.flags else [],
+            'trigger_cost_e': card_def.trigger_cost_e,
+            'trigger_cost_m': getattr(card_def, 'trigger_cost_m', 0),
+            'trigger_effect_text': card_def.trigger_effect_text,
+            'response_trigger': card_def.response_trigger,
+            'image': image_url,
+            'image_url': image_url,
+            'upgraded_image': upgraded_image_url,
+            'upgraded_image_url': upgraded_image_url,
+        }
+        payload.update(card_text(def_id, payload))
+        cards.append(payload)
+    cards.sort(key=lambda c: (
+        0 if c.get('source_mod_is_vanilla') else 1,
+        str(c.get('source_mod_sort_name') or c.get('source_mod_name_en') or c.get('source_mod_name') or '').lower(),
+        {'thorn': 0, 'bloom': 1, 'guard': 2, 'root': 3}.get(str(c.get('card_type') or '').lower(), 9),
+        str(c.get('id') or '').lower(),
+    ))
+    return jsonify({'success': True, 'cards': cards})
+
+
 @app.route('/api/beta/login', methods=['POST'])
 def beta_login():
     if is_release_instance():
@@ -9879,7 +10057,8 @@ def api_auth_login():
 def api_auth_change_password():
     if not DB_AVAILABLE:
         return db_unavailable_response()
-    user_id = session.get('user_id')
+    current_user = _current_account_user(allow_remember=False)
+    user_id = current_user.get('id') if current_user else None
     if not user_id:
         return jsonify({'success': False, 'error': '请先登录账号'}), 401
     data = request.get_json(silent=True) or {}
@@ -9890,15 +10069,29 @@ def api_auth_change_password():
     user, error = change_user_password(user_id, old_password, new_password)
     if error:
         return jsonify({'success': False, 'error': error}), 400
-    _set_account_session(user)
-    return jsonify({'success': True, 'user': auth_user_payload(user)})
+    kicked = _disconnect_account_sockets(
+        user_id,
+        '密码已修改，所有已登录设备已退出。\n请重新登录。',
+        code='password_changed',
+    )
+    admin_event('security', f'password changed for account {user.get("username")}#{user_id}; invalidated {kicked} socket session(s)')
+    _clear_account_session()
+    response = jsonify({
+        'success': True,
+        'logged_out': True,
+        'message': '密码已修改，请重新登录',
+        'user': auth_user_payload(user),
+        'kicked': kicked,
+    })
+    return _clear_remember_cookie(response)
 
 
 @app.route('/api/auth/change-username', methods=['POST'])
 def api_auth_change_username():
     if not DB_AVAILABLE:
         return db_unavailable_response()
-    user_id = session.get('user_id')
+    current_user = _current_account_user(allow_remember=False)
+    user_id = current_user.get('id') if current_user else None
     if not user_id:
         return jsonify({'success': False, 'error': '请先登录账号'}), 401
     data = request.get_json(silent=True) or {}
@@ -9931,7 +10124,8 @@ def api_auth_change_username():
 def api_auth_delete_account():
     if not DB_AVAILABLE:
         return db_unavailable_response()
-    user_id = session.get('user_id')
+    current_user = _current_account_user(allow_remember=False)
+    user_id = current_user.get('id') if current_user else None
     if not user_id:
         return jsonify({'success': False, 'error': '请先登录账号'}), 401
     user, error = soft_delete_user(user_id)
@@ -9946,7 +10140,8 @@ def api_auth_delete_account():
 def api_auth_skin():
     if not DB_AVAILABLE:
         return db_unavailable_response()
-    user_id = session.get('user_id')
+    current_user = _current_account_user(allow_remember=False)
+    user_id = current_user.get('id') if current_user else None
     if not user_id:
         return jsonify({'success': False, 'error': '请先登录账号'}), 401
     try:
@@ -10003,7 +10198,7 @@ def api_auth_me():
     user = _current_account_user()
     if not user:
         _clear_account_session()
-        return jsonify({'authenticated': False, 'db_available': True})
+        return _clear_remember_cookie(jsonify({'authenticated': False, 'db_available': True}))
     if user.get('banned'):
         _clear_account_session()
         status = get_user_ban_status(user_id=user.get('id'), username=user.get('username'))
