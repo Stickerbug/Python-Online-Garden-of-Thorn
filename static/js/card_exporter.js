@@ -359,7 +359,7 @@ async function nodeToPng(node, filename, pixelRatio = 3) {
   clone.style.transform = 'none';
   await absolutizeCloneAssets(clone);
   const css = await inlineFontUrls(sanitizeCssForSvg(collectCssText()));
-  const wrapper = document.createElement('div');
+  const wrapper = document.createElement('html');
   wrapper.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
   wrapper.setAttribute('lang', document.documentElement.getAttribute('lang') || 'zh');
   const theme = document.documentElement.getAttribute('data-theme');
@@ -367,10 +367,15 @@ async function nodeToPng(node, filename, pixelRatio = 3) {
   if (theme) wrapper.setAttribute('data-theme', theme);
   if (uiStyle) wrapper.setAttribute('data-ui-style', uiStyle);
   wrapper.className = document.documentElement.className || '';
+  const head = document.createElement('head');
   const style = document.createElement('style');
   style.textContent = css;
-  wrapper.appendChild(style);
-  wrapper.appendChild(clone);
+  head.appendChild(style);
+  const body = document.createElement('body');
+  body.style.margin = '0';
+  body.appendChild(clone);
+  wrapper.appendChild(head);
+  wrapper.appendChild(body);
   const html = new XMLSerializer().serializeToString(wrapper);
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
