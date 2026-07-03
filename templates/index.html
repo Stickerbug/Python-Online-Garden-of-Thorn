@@ -986,6 +986,7 @@
       window.__GTN_INSTANCE_PORT__ = {{ instance_port|default('')|tojson }};
       window.__GTN_APP_VERSION__ = {{ app_version|default('dev')|tojson }};
       window.__GTN_STATIC_VERSION__ = {{ static_version|default('dev')|tojson }};
+      window.__GTN_CHANGELOG_VERSION__ = {{ changelog_version|default('')|tojson }};
     </script>
     <script src="/static/js/game.js?v={{ static_version|default('dev')|urlencode }}"></script>
 </body>

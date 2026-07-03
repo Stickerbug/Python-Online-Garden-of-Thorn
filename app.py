@@ -8922,6 +8922,7 @@ def index():
         instance_id=GTN_INSTANCE_ID,
         instance_port=GTN_PORT,
         app_version=GTN_VERSION,
+        changelog_version=changelog_version(),
     )
 
 
@@ -8934,6 +8935,7 @@ def beta_entry_response():
             instance_id=GTN_INSTANCE_ID,
             instance_port=GTN_PORT,
             app_version=GTN_VERSION,
+            changelog_version=changelog_version(),
         )
     return render_template('beta_gate.html')
 

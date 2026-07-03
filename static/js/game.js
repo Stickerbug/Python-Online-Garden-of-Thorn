@@ -4729,7 +4729,7 @@ const CHANGELOG_READ_DATE_KEY = 'gtn_changelog_read_latest_date_v1';
 const CHANGELOG_BOOT_VERSION_KEY = 'gtn_changelog_boot_version_v1';
 
 function currentChangelogCacheVersion() {
-    return String(window.__GTN_STATIC_VERSION__ || window.__GTN_APP_VERSION__ || window.__GTN_INSTANCE_ID__ || 'dev');
+    return String(window.__GTN_CHANGELOG_VERSION__ || window.__GTN_STATIC_VERSION__ || window.__GTN_APP_VERSION__ || window.__GTN_INSTANCE_ID__ || 'dev');
 }
 
 function formatChangelogDate(dateText) {
