@@ -1852,10 +1852,7 @@ function migrateStoredUiStyle() {
         localStorage.setItem('gtn_ui_style', stored);
         localStorage.setItem(UI_STYLE_MIGRATION_KEY, '1');
     }
-    if (stored !== 'classic' || !hiddenFeaturesEnabled()) stored = 'minimal';
-    if (!hiddenFeaturesEnabled() && localStorage.getItem('gtn_ui_style') === 'classic') {
-        localStorage.setItem('gtn_ui_style', 'minimal');
-    }
+    if (stored !== 'classic') stored = 'minimal';
     return stored;
 }
 let currentUiStyle = migrateStoredUiStyle();
@@ -3410,6 +3407,7 @@ let activeViewId = '';
 let lastDraftOptionsSignature = '';
 let lastDraftPicksSignature = '';
 let eventSelectData = {};
+let activeEventSubChoiceKey = '';
 let phaseChatEntries = [];
 let phaseChatMatchKey = '';
 let pregameChatEntries = [];
@@ -3779,6 +3777,7 @@ function gamePrompt(title, options, config = {}) {
         const cancellable = config.cancellable !== false;
         $('game-prompt-title').textContent = title || '';
         const optsEl = $('game-prompt-options');
+        containPromptScroll(optsEl);
         let msgEl = $('game-prompt-message');
         if (!msgEl) {
             msgEl = document.createElement('div');
@@ -3826,7 +3825,7 @@ function applyTheme(theme) {
 }
 
 function applyUiStyle(style) {
-    currentUiStyle = style === 'classic' && hiddenFeaturesEnabled() ? 'classic' : 'minimal';
+    currentUiStyle = style === 'classic' ? 'classic' : 'minimal';
     document.documentElement.setAttribute('data-ui-style', currentUiStyle);
     localStorage.setItem('gtn_ui_style', currentUiStyle);
     const sel = $('settings-ui-style-select');
@@ -3840,12 +3839,10 @@ function updateUiStyleAvailability() {
     const select = $('settings-ui-style-select');
     if (!select) return;
     const classicOpt = select.querySelector('option[value="classic"]');
-    const unlocked = hiddenFeaturesEnabled();
     if (classicOpt) {
-        classicOpt.disabled = !unlocked;
-        classicOpt.hidden = !unlocked;
+        classicOpt.disabled = false;
+        classicOpt.hidden = false;
     }
-    if (!unlocked && select.value === 'classic') select.value = 'minimal';
 }
 
 function compactText(normalKey, compactKey) {
@@ -4486,6 +4483,14 @@ function formatCompactRoundStatus(gs, phaseText = '') {
     return `R${roundNum} · ${phaseText}`;
 }
 
+function formatClassicRoundLabel(gs) {
+    const roundNum = Number(gs && gs.round_num);
+    if (Number.isFinite(roundNum) && roundNum > 0) return `R${roundNum}`;
+    if ((gs && gs.phase) === 'draft') return UI.draft_phase || 'Draft';
+    if ((gs && gs.phase) === 'event_select' || (gs && gs.phase) === 'event_reveal') return UI.select_event || 'Setup';
+    return 'R0';
+}
+
 function appendSpectatorCountStatus(text, gs) {
     if (!gs || gs.solo || gs.spectator_count == null) return text;
     const count = Number(gs.spectator_count);
@@ -4792,6 +4797,11 @@ function updateChangelogBadge() {
     }
 }
 
+function isChangelogPopoverOpen() {
+    const pop = $('changelog-popover');
+    return !!(pop && !pop.classList.contains('hidden'));
+}
+
 function markChangelogRead() {
     if (!changelogCache || !Array.isArray(changelogCache.items) || !changelogCache.items.length) return;
     try {
@@ -4814,14 +4824,20 @@ function loadCachedChangelog() {
 }
 
 async function loadChangelog(force = false, options = {}) {
-    if (changelogLoaded && !force) return;
+    if (changelogLoaded && !force) {
+        if (!options.silent && changelogCache && Array.isArray(changelogCache.items)) {
+            renderChangelogItems(changelogCache.items);
+        }
+        updateChangelogBadge();
+        return;
+    }
     if (changelogLoadingPromise) return changelogLoadingPromise;
     const body = $('changelog-popover-body');
     const cacheVersion = currentChangelogCacheVersion();
     if (!force) {
         const cached = loadCachedChangelog();
         if (cached && cached.version === cacheVersion) {
-            renderChangelogItems(cached.items);
+            if (!options.silent) renderChangelogItems(cached.items);
             updateChangelogBadge();
             return;
         }
@@ -4838,7 +4854,7 @@ async function loadChangelog(force = false, options = {}) {
             try {
                 localStorage.setItem(CHANGELOG_CACHE_KEY, JSON.stringify(changelogCache));
             } catch (_) {}
-            if (!options.silent) renderChangelogItems(items);
+            if (!options.silent || isChangelogPopoverOpen()) renderChangelogItems(items);
             updateChangelogBadge();
         })
         .catch(() => {
@@ -6143,7 +6159,7 @@ function updateClassicAimHoverTarget() {
         return;
     }
     const el = document.elementFromPoint(classicAimPointer.x, classicAimPointer.y);
-    const fighter = el && el.closest ? el.closest('#classic-fighter-self, #classic-fighter-enemy') : null;
+    const fighter = el && el.closest ? el.closest('#classic-fighter-self, #classic-fighter-enemy, #classic-fighter-enemy-2, #classic-fighter-ally') : null;
     if (fighter && classicCanPlayFromElement(fighter.id)) hoverId = fighter.id;
     if (hoverId === classicAimHoverTarget) return;
     classicAimHoverTarget = hoverId;
@@ -6296,9 +6312,10 @@ function classicCanPlayFromElement(elementId) {
     const card = cardDef ? normalizeBattleCard(cardDict, gameState.you || {}) : null;
     const selfOnly = isClassicSelfOnlyCard(card);
     const role = getClassicPlayRole(card);
-    if (elementId === 'classic-play-lane') return selfOnly || role === 'stage';
-    if (elementId === 'classic-fighter-enemy') return role === 'enemy';
-    if (elementId === 'classic-fighter-self') return !selfOnly && (role === 'self' || role === 'equip');
+    if (elementId === 'classic-play-lane') return !selfOnly && role === 'stage';
+    if (elementId === 'classic-fighter-enemy' || elementId === 'classic-fighter-enemy-2') return role === 'enemy';
+    if (elementId === 'classic-fighter-ally') return !selfOnly && (role === 'self' || role === 'equip' || role === 'enemy');
+    if (elementId === 'classic-fighter-self') return selfOnly || role === 'self' || role === 'equip';
     return false;
 }
 
@@ -7428,6 +7445,112 @@ function createCardChoiceChip(cardDict, options = {}) {
     attachFloatingCardPreview(chip, previewCard, { ...(previewOptions || {}), blindForSelf: blinded, blindLevel });
     attachTermIntroToCard(chip, previewCard, { ...(previewOptions || {}), blindForSelf: blinded, blindLevel });
     return chip;
+}
+
+function createClassicCardTile(cardDict, options = {}) {
+    const tile = document.createElement('span');
+    tile.className = 'classic-card-tile';
+    const defId = (cardDict && cardDict.def_id) || '';
+    const cardDef = getCardDef(defId);
+    if (!cardDef || options.faceDown) {
+        tile.classList.add('classic-card-tile-back');
+        tile.setAttribute('aria-label', UI.card || 'Card');
+        tile.innerHTML = `<span class="classic-card-tile-inner"><span class="classic-card-tile-back-face"></span></span>`;
+        return tile;
+    }
+    const ownerState = options.ownerState || null;
+    const blindLevel = getCardBlindLevelForSelf(cardDict, options);
+    const blinded = blindLevel > 0;
+    const hideTypeByBlind = blindLevel >= 2;
+    const typeColor = getCardBlindDisplayColor(cardDef, blindLevel);
+    const costs = getCardDisplayCosts(cardDict, cardDef, ownerState);
+    const imageUrl = cardDict.image || cardDict.image_url || cardDef.image || cardDef.image_url || `/static/cards/${encodeURIComponent(defId)}.webp`;
+    tile.dataset.defId = defId;
+    if (cardDict.instance_id != null) tile.dataset.instanceId = String(cardDict.instance_id);
+    tile.classList.add(`classic-card-tile-${cardDef.card_type || 'unknown'}`);
+    tile.style.setProperty('--tile-type-color', typeColor);
+    if (blinded) {
+        tile.classList.add('classic-card-tile-blinded');
+        tile.classList.toggle('classic-card-tile-blinded-deep', hideTypeByBlind);
+    }
+    const displayName = blinded
+        ? (hideTypeByBlind ? '?' : (getCardTypeLabel(cardDef.card_type) || '?'))
+        : getCardName(cardDef);
+    const flagsHtml = blinded ? '' : buildInstanceOnlyFlagHtml(cardDict, cardDef, {
+        ...options,
+        hideFlags: options.hideFlags || [],
+    });
+    tile.innerHTML = `
+        <span class="classic-card-tile-inner">
+            <span class="classic-card-tile-costs">
+                <span class="classic-card-tile-cost cost-e">${blinded ? '?' : costs.totalE}</span>
+                <span class="classic-card-tile-cost cost-m">${blinded ? '?' : costs.totalM}</span>
+            </span>
+            <span class="classic-card-tile-name">${escapeHtml(displayName)}</span>
+            <span class="classic-card-tile-art">${blinded ? '' : `<img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.style.display='none'">`}</span>
+            ${flagsHtml ? `<span class="classic-card-tile-flags choice-card-flags">${flagsHtml}</span>` : ''}
+        </span>
+    `;
+    const previewOptions = options.previewOptions || null;
+    const previewCard = blinded ? { ...cardDict, __blind_for_self: true, __blind_level: blindLevel } : cardDict;
+    attachFloatingCardPreview(tile, previewCard, { ...(previewOptions || {}), ownerState, blindForSelf: blinded, blindLevel });
+    attachTermIntroToCard(tile, previewCard, { ...(previewOptions || {}), ownerState, blindForSelf: blinded, blindLevel });
+    return tile;
+}
+
+function getClassicVisibleHandEntries(player, side) {
+    const data = (player && player.raw) || {};
+    const visible = [];
+    const revealedHand = data.revealed_hand || data.hand;
+    const revealedTagCards = data.revealed_tag_cards || [];
+    if (Array.isArray(revealedHand) && revealedHand.length) {
+        revealedHand.forEach(card => visible.push({ card, hideFlags: [] }));
+        return { visible, hiddenCount: 0 };
+    }
+    if (Array.isArray(revealedTagCards) && revealedTagCards.length) {
+        const sorted = [...revealedTagCards].sort((a, b) => (a.instance_id || 0) - (b.instance_id || 0));
+        sorted.forEach(card => visible.push({ card, hideFlags: ['revealed'] }));
+        const count = Number(data.hand_count != null ? data.hand_count : 0);
+        return { visible, hiddenCount: Math.max(0, count - sorted.length) };
+    }
+    const count = Number(data.hand_count != null ? data.hand_count : (Array.isArray(data.hand) ? data.hand.length : 0));
+    if (side !== 'self' && getOwnBlindLevel() >= 3 && count > 0) {
+        return { visible: [], hiddenCount: 1, unknownMarker: true };
+    }
+    return { visible: [], hiddenCount: Math.max(0, count) };
+}
+
+function createClassicHandTilesRow(player, side) {
+    if (!player || side === 'self') return null;
+    const { visible, hiddenCount, unknownMarker } = getClassicVisibleHandEntries(player, side);
+    if (!visible.length && !hiddenCount) return null;
+    const row = document.createElement('div');
+    row.className = 'classic-card-tile-row';
+    if (unknownMarker) {
+        const mark = document.createElement('span');
+        mark.className = 'classic-card-tile-unknown';
+        mark.textContent = '?';
+        row.appendChild(mark);
+    } else {
+        for (let i = 0; i < hiddenCount; i += 1) {
+            row.appendChild(createClassicCardTile({}, { faceDown: true }));
+        }
+    }
+    visible.forEach(({ card, hideFlags }) => {
+        const prediction = getCardPredictionOptionsForOwner(card, player.raw || {});
+        row.appendChild(createClassicCardTile(card, {
+            hideFlags,
+            ownerState: player.raw || {},
+            previewOptions: { prediction, ownerState: player.raw || {} },
+        }));
+    });
+    Array.from(row.children).forEach((child, index, list) => {
+        const offset = index - (list.length - 1) / 2;
+        child.style.setProperty('--tile-rot', `${Math.max(-12, Math.min(12, offset * 5))}deg`);
+        child.style.setProperty('--tile-y', `${Math.abs(offset) * 2}px`);
+        child.style.setProperty('--tile-z', String(50 + index));
+    });
+    return row;
 }
 
 function cardChoiceOption(cardDict, extra = {}) {
@@ -9949,6 +10072,7 @@ function connectSocket(serverUrl) {
         mergeSkinLooksFromPayload(data);
         maybeRefreshCardDefsForPayload(data, 'draft_state');
         renderDraft(data, isReroll, previousDraftState);
+        syncOpponentDisconnectModalFromState(data);
     });
     bindSocketEvent('pregame_status_update', (data) => {
         if (!data || !draftState) return;
@@ -9979,6 +10103,7 @@ function connectSocket(serverUrl) {
         if (data.your_id != null) playerId = data.your_id;
         syncRoomChatHistory(data || {});
         updateDraftInfo(draftState);
+        syncOpponentDisconnectModalFromState(data);
     });
     bindSocketEvent('pregame_timer_update', (data) => {
         if (!data) return;
@@ -10028,6 +10153,7 @@ function connectSocket(serverUrl) {
         mergeSkinLooksFromPayload(data);
         maybeRefreshCardDefsForPayload(data, 'event_select');
         renderEventSelect(data);
+        syncOpponentDisconnectModalFromState(data);
     });
     bindSocketEvent('event_reveal', (data) => {
         debugLog('[client] event_reveal');
@@ -10044,6 +10170,7 @@ function connectSocket(serverUrl) {
         mergeSkinLooksFromPayload(data);
         maybeRefreshCardDefsForPayload(data, 'event_reveal');
         renderEventReveal(data);
+        syncOpponentDisconnectModalFromState(data);
     });
     bindSocketEvent('event_sub_choice', (data) => {
         debugLog('[client] event_sub_choice');
@@ -10057,6 +10184,7 @@ function connectSocket(serverUrl) {
         showView('view-draft');
         updateStatus(data.needs_sub_choice ? UI.select_event : UI.event_waiting);
         handleEventSubChoice(data);
+        syncOpponentDisconnectModalFromState(data);
     });
     bindSocketEvent('state_update', (data) => {
         debugLog('[client] state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null, 'spectating=', data.spectating);
@@ -10141,6 +10269,7 @@ function connectSocket(serverUrl) {
             if (data.pending_v2_ui) showV2UiRequest(data.pending_v2_ui);
             optimisticResourceOverride = null;
         }
+        syncOpponentDisconnectModalFromState(data);
     });
     bindSocketEvent('turn_timer_update', (data) => {
         if (!data || !gameState) return;
@@ -10365,16 +10494,16 @@ function connectSocket(serverUrl) {
     bindSocketEvent('opponent_disconnected', (data) => {
         if (data && data.timeout) {
             if (data.stay) {
-                hideModal();
+                clearOpponentDisconnectModal();
                 flashStatus(UI.opponent_disconnected, 2400, 'warning');
                 return;
             }
             if (data.game_over) {
-                hideModal();
+                clearOpponentDisconnectModal();
                 updateStatus(UI.game_over);
                 return;
             }
-            hideModal();
+            clearOpponentDisconnectModal();
             updateStatus(UI.opponent_disconnected);
             flashStatus(UI.opponent_disconnected, 2400, 'warning');
             return;
@@ -10391,7 +10520,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('opponent_reconnected', () => {
         flashStatus(UI.opponent_reconnected, 2000);
-        hideModal();
+        clearOpponentDisconnectModal();
     });
     bindSocketEvent('reconnect_available', (data) => {
         phase = 'reconnecting';
@@ -14122,10 +14251,26 @@ function normalizeSetupCardChoiceEntry(entry, idx) {
     return obj;
 }
 
+function containPromptScroll(el) {
+    if (!el || el.dataset.scrollContained === '1') return;
+    el.dataset.scrollContained = '1';
+    el.addEventListener('wheel', (event) => {
+        const dy = Number(event.deltaY || 0);
+        if (!dy) return;
+        const atTop = el.scrollTop <= 0;
+        const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+        if ((dy < 0 && atTop) || (dy > 0 && atBottom)) {
+            event.preventDefault();
+        }
+        event.stopPropagation();
+    }, { passive: false });
+}
+
 function showSetupCardMultiSelect(entries, maxCount, title, config = {}) {
     return new Promise((resolve) => {
         const el = $('game-prompt');
         const optsEl = $('game-prompt-options');
+        containPromptScroll(optsEl);
         if (!el || !optsEl) { resolve([]); return; }
         cleanupGamePromptTransientButtons();
 
@@ -14173,6 +14318,7 @@ function showSetupCardMultiSelect(entries, maxCount, title, config = {}) {
         list.style.gap = '6px';
         list.style.maxHeight = config.maxHeight || (config.searchable ? '44vh' : '48vh');
         list.style.overflow = 'auto';
+        containPromptScroll(list);
         optsEl.appendChild(list);
 
         const confirmBtn = document.createElement('button');
@@ -14197,6 +14343,7 @@ function showSetupCardMultiSelect(entries, maxCount, title, config = {}) {
         }
 
         function renderList() {
+            const previousScrollTop = list.scrollTop || 0;
             const q = config.searchable ? search.value.trim().toLowerCase() : '';
             list.innerHTML = '';
             source
@@ -14209,7 +14356,11 @@ function showSetupCardMultiSelect(entries, maxCount, title, config = {}) {
                     row.style.justifyContent = 'flex-start';
                     row.style.minHeight = '34px';
                     renderChoiceOptionContent(row, cardChoiceOption(entry, { detail: `#${entry._choiceIndex + 1}` }), entry._choiceIndex, { numbered: false });
-                    row.onclick = () => {
+                    row.onmousedown = (event) => {
+                        event.preventDefault();
+                    };
+                    row.onclick = (event) => {
+                        event.preventDefault();
                         if (selected.has(entry._choiceIndex)) {
                             selected.delete(entry._choiceIndex);
                         } else if (selected.size < max) {
@@ -14220,6 +14371,12 @@ function showSetupCardMultiSelect(entries, maxCount, title, config = {}) {
                     };
                     list.appendChild(row);
                 });
+            if (previousScrollTop) {
+                list.scrollTop = previousScrollTop;
+                requestAnimationFrame(() => {
+                    list.scrollTop = previousScrollTop;
+                });
+            }
         }
 
         function finish(value) {
@@ -14891,12 +15048,33 @@ function formatEndTurnButtonText(gs) {
     return `${base}(${String(Math.max(0, Math.ceil(remaining))).padStart(2, '0')}s)`;
 }
 
+function formatClassicTurnTimerText(gs) {
+    if (!gs || gs.phase !== 'action') return '';
+    const current = Number(gs.current_player);
+    const timerPlayer = Number(gs.turn_timer_player);
+    const remaining = getDisplayedTurnTimerRemaining(gs);
+    if (!Number.isFinite(remaining) || remaining < 0) return '';
+    if (Number.isFinite(timerPlayer) && Number.isFinite(current) && timerPlayer !== current) return '';
+    return `${String(Math.max(0, Math.ceil(remaining))).padStart(2, '0')}s`;
+}
+
+function formatClassicEndTurnButtonText(gs) {
+    const endTurnText = UI.end_turn || '结束回合';
+    if (!gs || gs.phase !== 'action') return endTurnText;
+    const current = Number(gs.current_player);
+    const yourId = Number(gs.your_id != null ? gs.your_id : playerId);
+    const isOwnTurn = Number.isFinite(current) && Number.isFinite(yourId) && current === yourId;
+    return isOwnTurn ? endTurnText : (UI.opponent_turn || '对方回合');
+}
+
 function updateEndTurnButtonLabels(gs) {
     const label = formatEndTurnButtonText(gs);
     const btn = $('btn-end-turn');
     if (btn) btn.textContent = label;
     const classicBtn = $('classic-end-turn');
-    if (classicBtn) classicBtn.textContent = label;
+    if (classicBtn) classicBtn.textContent = formatClassicEndTurnButtonText(gs);
+    const classicTimer = $('classic-turn-timer');
+    if (classicTimer) classicTimer.textContent = formatClassicTurnTimerText(gs);
 }
 
 function renderDraft(data, isReroll, previousDraftState = null) {
@@ -15165,6 +15343,15 @@ async function handleEventSubChoice(data) {
     updatePregameTimerDisplay(data, 'draft');
     const eventId = data.event_id;
     const needsSubChoice = data.needs_sub_choice;
+    const subChoiceKey = [
+        data && data.room_id != null ? data.room_id : '',
+        data && data.your_id != null ? data.your_id : playerId,
+        eventId != null ? eventId : ''
+    ].join(':');
+    if (activeEventSubChoiceKey && activeEventSubChoiceKey === subChoiceKey) {
+        eventSelectData = { ...(eventSelectData || {}), ...(data || {}) };
+        return;
+    }
     if (!needsSubChoice) {
         // No sub-choice needed, just submit empty
         socket.emit('submit_event_sub_choice', { sub_choice: null });
@@ -15173,21 +15360,26 @@ async function handleEventSubChoice(data) {
     }
     // Store data for sub-choice flows
     eventSelectData = data;
+    activeEventSubChoiceKey = subChoiceKey;
     let subChoice = null;
-    if (String(eventId) === '2') {
-        subChoice = await showMagicConversionFlow();
-        if (subChoice === false) subChoice = null;
-    } else if (String(eventId) === '3') {
-        subChoice = await showLightConversionChoice();
-        if (subChoice === false) subChoice = null;
-    } else if (String(eventId) === '5') {
-        subChoice = await showFatedDrawChoice(eventSelectData.fated_draw_pool || []);
-        if (subChoice === false) subChoice = { add_def_ids: [] };
-    } else if (String(eventId) === '8') {
-        subChoice = await showYggdrasilConversionChoice();
-        if (subChoice === false) subChoice = null;
+    try {
+        if (String(eventId) === '2') {
+            subChoice = await showMagicConversionFlow();
+            if (subChoice === false) subChoice = null;
+        } else if (String(eventId) === '3') {
+            subChoice = await showLightConversionChoice();
+            if (subChoice === false) subChoice = null;
+        } else if (String(eventId) === '5') {
+            subChoice = await showFatedDrawChoice(eventSelectData.fated_draw_pool || []);
+            if (subChoice === false) subChoice = { add_def_ids: [] };
+        } else if (String(eventId) === '8') {
+            subChoice = await showYggdrasilConversionChoice();
+            if (subChoice === false) subChoice = null;
+        }
+        socket.emit('submit_event_sub_choice', { sub_choice: subChoice });
+    } finally {
+        if (activeEventSubChoiceKey === subChoiceKey) activeEventSubChoiceKey = '';
     }
-    socket.emit('submit_event_sub_choice', { sub_choice: subChoice });
 }
 
 async function showFatedDrawChoice(poolCards) {
@@ -15941,6 +16133,7 @@ function formatPlayerPileInfo(playerData, includeDiscard, opponentStyle = false,
     const blindLevel = getOwnBlindLevel();
     const pid = normalizePlayerId(playerData && playerData.player_id);
     const isSelf = pid != null && pid === normalizePlayerId(gameState && gameState.your_id);
+    includeExile = !!includeExile && isSelf;
     const maskOwnDrawDeck = isSelf && shouldMaskOwnDrawDeck();
     const maskOwnDiscardPile = isSelf && shouldMaskOwnDiscardPile();
     const maskOwnExilePile = isSelf && shouldMaskOwnDiscardPile();
@@ -15985,6 +16178,8 @@ function setPileInfoText(el, info) {
 function getBattlePlayerId(gs, slot) {
     if (!gs) return null;
     if (slot === 'self') return normalizePlayerId(gs.your_id);
+    if (slot === 'ally') return normalizePlayerId(gs.teammate_id);
+    if (slot === 'enemy2') return normalizePlayerId((gs.enemy_ids || [])[1]);
     if (slot === 'enemy') {
         if (gs.mode === '2v2') return normalizePlayerId((gs.enemy_ids || [])[0]);
         const yourId = normalizePlayerId(gs.your_id);
@@ -15997,9 +16192,16 @@ function getBattlePlayerId(gs, slot) {
 function normalizeBattlePlayer(gs, raw, slot) {
     const data = raw || {};
     const id = getBattlePlayerId(gs, slot);
-    const name = slot === 'self'
-        ? (gs.your_name || data.name || UI.you)
-        : (gs.opponent_name || data.name || UI.opponent);
+    let name = gs.opponent_name || data.name || UI.opponent;
+    if (slot === 'self') name = gs.your_name || data.name || UI.you;
+    else if (slot === 'ally') name = gs.teammate_name || data.name || UI.teammate || UI.ally_label || 'Ally';
+    else if (slot === 'enemy2') {
+        const enemyNames = Array.isArray(gs.opponent_names) ? gs.opponent_names : [];
+        name = enemyNames[1] || data.name || `${UI.enemy_label || UI.opponent} 2`;
+    } else if (slot === 'enemy' && gs.mode === '2v2') {
+        const enemyNames = Array.isArray(gs.opponent_names) ? gs.opponent_names : [];
+        name = enemyNames[0] || data.name || `${UI.enemy_label || UI.opponent} 1`;
+    }
     return {
         id,
         name: localizeCanonicalPlayerName(name),
@@ -16058,6 +16260,9 @@ function buildBattleViewModel(state) {
     const opponent = gs.opponent || {};
     const self = normalizeBattlePlayer(gs, you, 'self');
     const enemy = normalizeBattlePlayer(gs, opponent, 'enemy');
+    const is2v2 = isClassic2v2State(gs);
+    const ally = is2v2 ? normalizeBattlePlayer(gs, gs.teammate || {}, 'ally') : null;
+    const enemy2 = is2v2 ? normalizeBattlePlayer(gs, gs.opponent2 || {}, 'enemy2') : null;
     const hand = (you.hand || []).map(card => normalizeBattleCard(card, you));
     const selected = hand.find(card => card.instance_id === selectedPlayCardId) || null;
     const phaseText = gs.phase === 'action'
@@ -16072,6 +16277,8 @@ function buildBattleViewModel(state) {
     return {
         self,
         enemy,
+        ally,
+        enemy2,
         hand,
         selectedCard: selected,
         turn: {
@@ -16093,9 +16300,18 @@ function buildBattleViewModel(state) {
     };
 }
 
+function isClassic2v2State(gs) {
+    if (!gs) return false;
+    return gs.mode === '2v2'
+        || gs.teammate_id != null
+        || !!gs.teammate
+        || !!gs.opponent2
+        || (Array.isArray(gs.enemy_ids) && gs.enemy_ids.length >= 2);
+}
+
 function shouldUseClassicBattle(gs) {
     if (!isClassicBattleUiStyle() || !gs) return false;
-    if (isSpectating || gs.mode === '2v2') return false;
+    if (isSpectating) return false;
     return ['action', 'draw', 'response', 'choice', 'game_over'].includes(gs.phase);
 }
 
@@ -16152,7 +16368,16 @@ function renderMiniPlayerSkin(containerId, playerData = {}, id = null) {
 function renderClassicStatusList(player) {
     const tmp = document.createElement('div');
     renderStatusTagsToElement(tmp, player && player.raw ? player.raw : {});
-    return tmp.innerHTML || '<span class="classic-empty-mark">-</span>';
+    tmp.querySelectorAll('.status-tag').forEach(tag => {
+        const value = tag.dataset.statusValue || '';
+        const text = tag.querySelector('.status-tag-text');
+        const fullText = text ? text.textContent : (tag.textContent || '');
+        if (fullText) tag.dataset.statusFullText = fullText;
+        tag.classList.add('classic-status-icon-only');
+        if (text) text.remove();
+        if (value) tag.dataset.badge = value;
+    });
+    return tmp.innerHTML || '';
 }
 
 function renderStatusTagsToElement(container, playerData) {
@@ -16184,8 +16409,9 @@ function renderStatusTagsToElement(container, playerData) {
 
 function renderClassicEquipmentList(player) {
     const equipment = (player && player.equipment) || [];
-    if (!equipment.length) return '<span class="classic-empty-mark">-</span>';
-    return equipment.map(eq => {
+    if (!equipment.length) return '';
+    const total = equipment.length;
+    return equipment.map((eq, index) => {
         const cardInst = eq.card_instance || {};
         const cardDef = getCardDef(cardInst.def_id || '');
         const name = cardDef ? getCardName(cardDef) : (cardInst.def_id || '?');
@@ -16194,7 +16420,24 @@ function renderClassicEquipmentList(player) {
         const targetSuffix = targetId != null && targetId !== ownerId ? `→${getPlayerNameById(targetId)}` : '';
         const typeColor = cardDef ? (CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary) : COLORS.text_primary;
         const instanceId = cardInst.instance_id != null ? String(cardInst.instance_id) : '';
-        return `<span class="classic-equip-chip" data-instance-id="${escapeHtml(instanceId)}" style="--chip-color:${typeColor}">${getEquipmentIconHtml(cardInst, cardDef)}<span class="classic-equip-name">${escapeHtml(name + targetSuffix)}</span></span>`;
+        const turns = Math.max(0, Number(eq.turns_equipped || 0));
+        const equipArmor = Math.max(0, Number(eq.armor || 0));
+        const customVars = eq.custom_vars && typeof eq.custom_vars === 'object' ? eq.custom_vars : {};
+        const layerValue = Math.max(0, Number(customVars.layers || customVars.layer || 0));
+        const topParts = [];
+        if (targetSuffix) topParts.push(targetSuffix);
+        if (layerValue > 0) topParts.push(String(layerValue));
+        const angle = total ? (index / total) * 360 : 0;
+        const orbitDelay = -((Date.now() / 1000) % 15).toFixed(2);
+        const spinDelay = -((Date.now() / 1000) % 13).toFixed(2);
+        return `<span class="classic-equip-chip" data-instance-id="${escapeHtml(instanceId)}" title="${escapeHtml(name + targetSuffix)}" style="--chip-color:${typeColor};--equip-angle:${angle}deg;--equip-orbit-delay:${orbitDelay}s;--equip-spin-delay:${spinDelay}s">
+            <span class="classic-equip-visual">
+                ${topParts.length ? `<span class="classic-equip-top">${escapeHtml(topParts.join(' · '))}</span>` : ''}
+                ${getEquipmentIconHtml(cardInst, cardDef)}
+                ${turns ? `<span class="classic-equip-turns">${escapeHtml(String(turns))}</span>` : ''}
+                ${equipArmor ? `<span class="classic-equip-armor" title="${escapeHtml(UI.term_equipment_armor || '装备护甲')}">${escapeHtml(String(equipArmor))}</span>` : ''}
+            </span>
+        </span>`;
     }).join('');
 }
 
@@ -16218,10 +16461,16 @@ function attachClassicEquipmentPreviews(container, player) {
 function attachClassicStatusIntros(container) {
     if (!container) return;
     container.querySelectorAll('.classic-status-ring .status-tag').forEach(tag => {
+        const key = tag.dataset.statusKey || '';
+        const value = tag.dataset.statusValue || '';
+        const fullText = tag.dataset.statusFullText || '';
+        const fallbackName = fullText && value && fullText.endsWith(`:${value}`)
+            ? fullText.slice(0, -1 * (`:${value}`).length)
+            : fullText;
         attachTermIntroToStatus(tag, {
-            key: tag.dataset.statusKey || '',
-            name: tag.dataset.statusName || tag.textContent || '',
-            val: tag.dataset.statusValue || '',
+            key,
+            name: tag.dataset.statusName || fallbackName || tag.title || '',
+            val: value,
             fg: tag.style.color || '',
         });
     });
@@ -16240,7 +16489,7 @@ function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e
     }
     const cur = Math.max(0, Number(current) || 0);
     const rawMax = Math.max(0, Number(max) || 0);
-    const displayTotal = Math.min(17, Math.max(12, rawMax + 2));
+    const displayTotal = Math.min(15, Math.max(1, rawMax || cur || 1));
     const cost = Math.max(0, Number(spend) || 0);
     container.dataset.current = String(cur);
     container.dataset.max = String(rawMax);
@@ -16248,15 +16497,7 @@ function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e
     container.dataset.displayMax = String(displayTotal);
     container.style.setProperty('--classic-resource-slots', String(displayTotal));
     container.innerHTML = '';
-    const chunks = buildClassicResourceChunks(cur, displayTotal);
-    let remainingSpend = cost;
-    for (let i = chunks.length - 1; i >= 0 && remainingSpend > 0; i--) {
-        chunks[i].willSpend = true;
-        remainingSpend -= chunks[i].value;
-    }
-    const missingChunks = buildClassicResourceChunks(Math.max(0, cost - cur), Math.max(0, displayTotal - chunks.length))
-        .map(chunk => ({ ...chunk, missing: true, willSpend: true }));
-    const visibleChunks = chunks.concat(missingChunks).slice(0, displayTotal);
+    const visibleChunks = buildClassicResourcePreviewChunks(cur, cost, displayTotal);
     while (visibleChunks.length < displayTotal) visibleChunks.push({ value: 1, empty: true });
     visibleChunks.forEach((chunk) => {
         const orb = document.createElement('span');
@@ -16272,7 +16513,7 @@ function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e
         if (chunk.willSpend) {
             orb.classList.add('will-spend');
         }
-        if (slotValue >= 10) {
+        if (slotValue >= 10 || chunk.grouped) {
             orb.classList.add('is-grouped');
             orb.dataset.groupValue = String(slotValue);
         }
@@ -16282,31 +16523,55 @@ function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e
 }
 
 function buildClassicResourceChunks(amount, maxSlots = 17) {
-    let remaining = Math.max(0, Math.floor(Number(amount) || 0));
+    const total = Math.max(0, Math.floor(Number(amount) || 0));
+    let remaining = total;
     const chunks = [];
-    while (remaining >= 10 && chunks.length < maxSlots) {
-        chunks.push({ value: 10 });
-        remaining -= 10;
+    if (total > 15) {
+        const tens = Math.floor(total / 10);
+        const ones = total % 10;
+        for (let i = 0; i < tens; i++) chunks.push({ value: 10, grouped: true });
+        remaining = ones;
     }
-    while (remaining > 0 && chunks.length < maxSlots) {
+    while (remaining > 0) {
         chunks.push({ value: 1 });
         remaining -= 1;
     }
-    return chunks;
+    return chunks.slice(0, Math.max(0, Number(maxSlots) || 0));
+}
+
+function buildClassicResourcePreviewChunks(current, spend, displayTotal) {
+    const cur = Math.max(0, Math.floor(Number(current) || 0));
+    const cost = Math.max(0, Math.floor(Number(spend) || 0));
+    const baseChunks = buildClassicResourceChunks(cur, Math.max(32, displayTotal * 2)).map(chunk => ({ ...chunk }));
+    let spendFromCurrent = Math.min(cur, cost);
+    let spentAmount = 0;
+    for (let i = baseChunks.length - 1; i >= 0 && spendFromCurrent > 0; i--) {
+        const before = Math.max(0, Number(baseChunks[i].value) || 0);
+        const take = Math.min(before, spendFromCurrent);
+        baseChunks[i].value = before - take;
+        spentAmount += take;
+        spendFromCurrent -= take;
+    }
+    const remainingChunks = baseChunks.filter(chunk => Number(chunk.value) > 0);
+    const spendChunks = buildClassicResourceChunks(spentAmount, Math.max(32, displayTotal * 2))
+        .map(chunk => ({ ...chunk, willSpend: true }));
+    const missingChunks = buildClassicResourceChunks(Math.max(0, cost - cur), Math.max(32, displayTotal * 2))
+        .map(chunk => ({ ...chunk, missing: true, willSpend: true }));
+    return remainingChunks.concat(spendChunks, missingChunks);
 }
 
 function getClassicResourcePreviewCard(vm = null) {
-    if (vm && vm.selectedCard) return vm.selectedCard;
-    const selected = getSelectedClassicCard();
-    if (selected) return selected;
     const hoverId = classicHoveredCardId == null ? null : Number(classicHoveredCardId);
-    if (hoverId == null || !Number.isFinite(hoverId)) return null;
-    if (vm && Array.isArray(vm.hand)) {
-        const found = vm.hand.find(card => Number(card.instance_id) === hoverId);
-        if (found) return found;
+    if (hoverId != null && Number.isFinite(hoverId)) {
+        if (vm && Array.isArray(vm.hand)) {
+            const found = vm.hand.find(card => Number(card.instance_id) === hoverId);
+            if (found) return found;
+        }
+        const raw = ((gameState && gameState.you && gameState.you.hand) || []).find(card => Number(card.instance_id) === hoverId);
+        if (raw) return normalizeBattleCard(raw, (gameState && gameState.you) || {});
     }
-    const raw = ((gameState && gameState.you && gameState.you.hand) || []).find(card => Number(card.instance_id) === hoverId);
-    return raw ? normalizeBattleCard(raw, (gameState && gameState.you) || {}) : null;
+    if (vm && vm.selectedCard) return vm.selectedCard;
+    return getSelectedClassicCard();
 }
 
 function applyClassicResourcePreview(card = null, ownerState = null) {
@@ -16376,9 +16641,9 @@ function renderClassicPlayLane(vm) {
     const selected = vm && vm.selectedCard;
     const role = getClassicPlayRole(selected);
     const selfOnly = isClassicSelfOnlyCard(selected);
-    lane.classList.toggle('is-armed', !!selected && (selfOnly || role === 'stage'));
+    lane.classList.toggle('is-armed', !!selected && !selfOnly && role === 'stage');
     lane.classList.toggle('is-aim-passive', !!selected && !selfOnly && role !== 'stage');
-    lane.classList.toggle('is-self-only', !!selected && selfOnly);
+    lane.classList.toggle('is-self-only', false);
     lane.classList.toggle('is-equip-role', role === 'equip');
     lane.classList.toggle('is-self-role', role === 'self');
     lane.classList.toggle('is-enemy-role', role === 'enemy');
@@ -16405,18 +16670,20 @@ function renderClassicPileCounters(player, side, masks = {}) {
     const deckValue = isSelf && masks.maskDrawDeck ? '?' : player.deckCount;
     const discardValue = isSelf && masks.maskDiscardPile ? '?' : player.discardCount;
     const exileValue = isSelf && masks.maskPiles ? '?' : player.exileCount;
+    const exileCounter = isSelf
+        ? renderClassicIconCounter('exile-pile', exileValue, UI.flag_exile || 'Exile')
+        : '';
     return `<div class="classic-fighter-piles" aria-label="piles">
         ${renderClassicIconCounter('total-pile', handValue, UI.hand || UI.card || 'Hand')}
         ${renderClassicIconCounter('draw-pile', deckValue, UI.view_draw_deck_title || UI.view_deck_title || 'Draw Deck')}
         ${renderClassicIconCounter('discard-pile', discardValue, UI.view_discard_title || 'Discard')}
-        ${renderClassicIconCounter('exile-pile', exileValue, UI.flag_exile || 'Exile')}
+        ${exileCounter}
     </div>`;
 }
 
 function renderClassicStatStrip(kind, current, max, masked = false) {
     const isMagic = kind === 'm';
     const icon = isMagic ? 'magic' : 'elixir';
-    const label = isMagic ? 'M' : 'E';
     if (masked) {
         return `<div class="classic-stat-strip classic-stat-${kind} is-masked" data-kind="${kind}">
             <img src="/static/assets/ui-icons/${icon}.svg" alt="" aria-hidden="true">
@@ -16430,7 +16697,7 @@ function renderClassicStatStrip(kind, current, max, masked = false) {
     return `<div class="classic-stat-strip classic-stat-${kind}" data-kind="${kind}">
         <img src="/static/assets/ui-icons/${icon}.svg" alt="" aria-hidden="true">
         <div class="classic-stat-track"><div class="classic-stat-fill" style="width:${pct}%"></div></div>
-        <span>${label} ${cur}/${total}</span>
+        <span>${cur}/${total}</span>
     </div>`;
 }
 
@@ -16495,25 +16762,31 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
     container.classList.toggle('is-play-target', isHardTarget);
     container.classList.toggle('is-soft-target', isSoftTarget);
     container.classList.toggle('is-self-only-target', isSelfOnlyTarget);
-    const intentText = side === 'enemy'
-        ? (player.isCurrent ? (UI.opponent_turn || 'Opponent') : (selectedCard && role === 'enemy' ? (UI.classic_target_enemy || '') : ''))
-        : (player.isCurrent ? (UI.your_turn || 'Your turn') : (selectedCard && !selfOnly && (role === 'self' || role === 'equip') ? getClassicPlayHint(selectedCard) : ''));
     container.innerHTML = `
         <div class="classic-fighter-name">${escapeHtml(player.name || '?')}</div>
-        ${intentText ? `<div class="classic-intent-badge">${escapeHtml(intentText)}</div>` : '<div class="classic-intent-badge is-empty"></div>'}
-        ${renderPlayerAvatar(player)}
+        <div class="classic-card-tile-slot"></div>
         <div class="classic-fighter-resources">
             ${renderClassicStatStrip('e', player.e, player.maxE, !!masks.maskResources)}
             ${renderClassicStatStrip('m', player.m, player.maxM, !!masks.maskResources)}
         </div>
+        <div class="classic-avatar-stack">
+            ${renderPlayerAvatar(player)}
+            <div class="classic-equipment-ring">${renderClassicEquipmentList(player)}</div>
+        </div>
         <div class="classic-hp-wrap" data-bar-key="health" data-bar-label="H" data-bar-armor="${Number(player.armor || 0)}">
-            <div class="classic-hp-track"><div class="classic-hp-fill" style="width:${hpPct}%"></div></div>
-            <div class="classic-hp-text">H ${player.hp}/${player.maxHp}${player.armor ? ` · A ${player.armor}` : ''}</div>
+            <img class="classic-hp-icon" src="/static/assets/ui-icons/hit-point.svg" alt="" aria-hidden="true">
+            <div class="classic-hp-body">
+                <div class="classic-hp-track"><div class="classic-hp-fill" style="width:${hpPct}%"></div></div>
+                <div class="classic-hp-text">${player.hp}/${player.maxHp}${player.armor ? ` · A ${player.armor}` : ''}</div>
+            </div>
         </div>
         ${renderClassicPileCounters(player, side, masks)}
         <div class="classic-status-ring">${renderClassicStatusList(player)}</div>
-        <div class="classic-equipment-ring">${renderClassicEquipmentList(player)}</div>
     `;
+    const tileSlot = container.querySelector('.classic-card-tile-slot');
+    const tileRow = createClassicHandTilesRow(player, side);
+    if (tileSlot && tileRow) tileSlot.appendChild(tileRow);
+    if (tileSlot) tileSlot.classList.toggle('is-empty', !tileRow);
     attachClassicEquipmentPreviews(container, player);
     attachClassicStatusIntros(container);
 }
@@ -16559,7 +16832,7 @@ function renderClassicHand(vm) {
         wrap.addEventListener('mouseenter', () => {
             removeClassicHoverInfo();
             classicHoveredCardId = card.instance_id;
-            if (!selectedPlayCardId) applyClassicResourcePreview(card, gameState && gameState.you);
+            applyClassicResourcePreview(card, gameState && gameState.you);
             classicHoverPreviewTimer = setTimeout(() => {
                 classicHoverPreviewTimer = null;
                 showClassicHoverInfo(card, wrap);
@@ -16604,6 +16877,22 @@ function renderClassicLog(vm) {
     if (wasAtBottom) content.scrollTop = content.scrollHeight;
 }
 
+function ensureClassic2v2FighterNodes() {
+    const stage = document.querySelector('#battle-classic .classic-stage');
+    if (!stage) return;
+    const ensure = (id, className) => {
+        let el = $(id);
+        if (el) return el;
+        el = document.createElement('div');
+        el.id = id;
+        el.className = className;
+        stage.appendChild(el);
+        return el;
+    };
+    ensure('classic-fighter-enemy-2', 'classic-fighter fighter-enemy fighter-enemy-2 hidden');
+    ensure('classic-fighter-ally', 'classic-fighter fighter-ally hidden');
+}
+
 function renderClassicBattle(gs) {
     const root = $('battle-classic');
     const oldContainer = document.querySelector('.game-container');
@@ -16616,6 +16905,8 @@ function renderClassicBattle(gs) {
     }
     try {
         const vm = buildBattleViewModel(gs);
+        const is2v2 = isClassic2v2State(gs);
+        if (is2v2) ensureClassic2v2FighterNodes();
         root.classList.remove('hidden');
         root.setAttribute('aria-hidden', 'false');
         oldContainer.classList.add('classic-battle-hidden');
@@ -16630,9 +16921,12 @@ function renderClassicBattle(gs) {
         root.classList.toggle('is-aiming', !!selected);
         root.classList.toggle('is-self-only-aim', !!selected && selectedSelfOnly);
         root.classList.toggle('is-target-aim', !!selected && !selectedSelfOnly);
+        root.classList.toggle('is-2v2', is2v2);
         root.dataset.selectedRole = selected ? selectedRole : '';
         $('classic-mode').textContent = vm.turn.modeText || '1v1';
-        $('classic-round').textContent = formatCompactRoundStatus(gs, vm.turn.phaseText);
+        $('classic-round').textContent = formatClassicRoundLabel(gs);
+        const classicTimer = $('classic-turn-timer');
+        if (classicTimer) classicTimer.textContent = formatClassicTurnTimerText(gs);
         $('classic-phase').textContent = vm.turn.phaseText || '';
         $('classic-action-hint').textContent = selected ? getClassicPlayHint(selected) : (vm.turn.isMyTurn ? UI.your_turn : UI.opponent_turn);
         const blindLevel = getOwnBlindLevel();
@@ -16654,6 +16948,16 @@ function renderClassicBattle(gs) {
         };
         renderClassicFighter($('classic-fighter-self'), vm.self, 'self', selected, selfMasks);
         renderClassicFighter($('classic-fighter-enemy'), vm.enemy, 'enemy', selected, {});
+        const enemy2El = $('classic-fighter-enemy-2');
+        const allyEl = $('classic-fighter-ally');
+        if (enemy2El) {
+            enemy2El.classList.toggle('hidden', !is2v2);
+            if (is2v2) renderClassicFighter(enemy2El, vm.enemy2, 'enemy', selected, {});
+        }
+        if (allyEl) {
+            allyEl.classList.toggle('hidden', !is2v2);
+            if (is2v2) renderClassicFighter(allyEl, vm.ally, 'ally', selected, {});
+        }
         renderClassicPlayLane(vm);
         renderClassicHand(vm);
         renderClassicLog(vm);
@@ -16664,7 +16968,7 @@ function renderClassicBattle(gs) {
         }
         const endBtn = $('classic-end-turn');
         if (endBtn) {
-            endBtn.textContent = formatEndTurnButtonText(gs);
+            endBtn.textContent = formatClassicEndTurnButtonText(gs);
             endBtn.disabled = !vm.turn.isMyTurn || isActionBusy({ includeAnimation: false }) || gs.phase === 'game_over';
             endBtn.classList.toggle('is-ready', !endBtn.disabled);
         }
@@ -16879,7 +17183,7 @@ function renderPlayerBars(containerId, playerData) {
     container.dataset.playerBars = '1';
     const blindLevel = getOwnBlindLevel();
     const pid = normalizePlayerId(playerData && playerData.player_id);
-    const region = container.closest('[data-player-target-region], .player-section, .opp-half, #teammate-sidebar, #classic-fighter-self, #classic-fighter-enemy');
+    const region = container.closest('[data-player-target-region], .player-section, .opp-half, #teammate-sidebar, #classic-fighter-self, #classic-fighter-enemy, #classic-fighter-enemy-2, #classic-fighter-ally');
     if (region && pid != null) {
         region.dataset.playerTargetRegion = region.dataset.playerTargetRegion || '1';
         region.dataset.playerId = String(pid);
@@ -17373,7 +17677,12 @@ function syncPlayerRegionTargets(gs) {
     };
     if (useClassicRefs) {
         assign('#classic-fighter-self .player-avatar', gs.your_id);
-        assign('#classic-fighter-enemy .player-avatar', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
+        const is2v2 = isClassic2v2State(gs);
+        assign('#classic-fighter-enemy .player-avatar', is2v2 ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
+        if (is2v2) {
+            assign('#classic-fighter-enemy-2 .player-avatar', (gs.enemy_ids || [])[1]);
+            assign('#classic-fighter-ally .player-avatar', gs.teammate_id);
+        }
         return;
     }
     assign('.player-section', gs.your_id);
@@ -17492,9 +17801,9 @@ function getStatePlayerRefs(gs) {
     add(yourId, gs.you, useClassicRefs ? '#classic-fighter-self' : '.player-section');
     if (gs.mode === '2v2') {
         const enemyIds = gs.enemy_ids || [];
-        add(enemyIds[0], gs.opponent, '.opp-half.opp-left');
-        add(enemyIds[1], gs.opponent2, '#opp2-half');
-        add(gs.teammate_id, gs.teammate, '#teammate-sidebar');
+        add(enemyIds[0], gs.opponent, useClassicRefs ? '#classic-fighter-enemy' : '.opp-half.opp-left');
+        add(enemyIds[1], gs.opponent2, useClassicRefs ? '#classic-fighter-enemy-2' : '#opp2-half');
+        add(gs.teammate_id, gs.teammate, useClassicRefs ? '#classic-fighter-ally' : '#teammate-sidebar');
     } else {
         add(yourId === 1 ? 0 : 1, gs.opponent, useClassicRefs ? '#classic-fighter-enemy' : '.opp-half.opp-left');
     }
@@ -20362,6 +20671,7 @@ function multiChoice(title, options, config = {}) {
         const cancellable = config.cancellable !== false;
         $('game-prompt-title').textContent = title || '';
         const optsEl = $('game-prompt-options');
+        containPromptScroll(optsEl);
         let msgEl = $('game-prompt-message');
         if (!msgEl) {
             msgEl = document.createElement('div');
@@ -20749,10 +21059,75 @@ async function showReorderDeckUI(deckCards, titleText) {
     let dragOffsetY = 0;
     let placeholder = null;
     let dragClone = null;
+    let dragHandle = null;
+    let dragPointerId = null;
+
+    function rebuildOrderNumbers() {
+        const currentRows = list.querySelectorAll('.reorder-deck-entry:not(.reorder-clone)');
+        order.length = 0;
+        currentRows.forEach((el, i) => {
+            el.dataset.idx = i;
+            const num = el.querySelector('.reorder-deck-num');
+            if (num) num.textContent = `#${i + 1}`;
+            const origIdx = rows.indexOf(el);
+            if (origIdx >= 0) order.push(deckCards[origIdx].instance_id);
+        });
+    }
+
+    function removeDragListeners() {
+        document.removeEventListener('pointermove', moveDrag);
+        document.removeEventListener('pointerup', endDrag);
+        document.removeEventListener('pointercancel', cancelDrag);
+        window.removeEventListener('blur', cancelDrag);
+    }
+
+    function cleanupDrag(commit) {
+        const row = dragRow;
+        const ph = placeholder;
+        const clone = dragClone;
+        const handle = dragHandle;
+        const pointerId = dragPointerId;
+        removeDragListeners();
+        if (handle && pointerId !== null && typeof handle.releasePointerCapture === 'function') {
+            try {
+                if (handle.hasPointerCapture && handle.hasPointerCapture(pointerId)) {
+                    handle.releasePointerCapture(pointerId);
+                }
+            } catch (_) {}
+        }
+        if (row) {
+            if (commit && ph && ph.parentNode === list) {
+                list.insertBefore(row, ph);
+            }
+            row.classList.remove('reorder-dragging');
+            row.style.visibility = '';
+        }
+        if (ph && ph.parentNode) ph.remove();
+        if (clone && clone.parentNode) clone.remove();
+        document.querySelectorAll('.reorder-clone').forEach(el => {
+            if (el !== clone) el.remove();
+        });
+        dragRow = null;
+        dragClone = null;
+        placeholder = null;
+        dragHandle = null;
+        dragPointerId = null;
+        if (commit) rebuildOrderNumbers();
+    }
 
     function moveDrag(e) {
         if (!dragRow || !dragClone) return;
+        if (dragPointerId !== null && e.pointerId !== dragPointerId) return;
+        e.preventDefault();
         dragClone.style.top = (e.clientY - dragOffsetY) + 'px';
+
+        const listRect = list.getBoundingClientRect();
+        const scrollBand = Math.min(48, Math.max(28, listRect.height * 0.16));
+        if (e.clientY < listRect.top + scrollBand) {
+            list.scrollTop -= 10;
+        } else if (e.clientY > listRect.bottom - scrollBand) {
+            list.scrollTop += 10;
+        }
 
         // Find insertion point among current visible rows (skip placeholder & dragging row)
         let insertBefore = null;
@@ -20776,39 +21151,29 @@ async function showReorderDeckUI(deckCards, titleText) {
 
     function endDrag() {
         if (!dragRow) return;
+        cleanupDrag(true);
+    }
 
-        // Insert drag row at placeholder position
-        list.insertBefore(dragRow, placeholder);
-        placeholder.remove();
-        dragClone.remove();
-
-        dragRow.classList.remove('reorder-dragging');
-        dragRow = null;
-        dragClone = null;
-        placeholder = null;
-
-        // Rebuild order from current DOM order
-        const currentRows = list.querySelectorAll('.reorder-deck-entry');
-        order.length = 0;
-        currentRows.forEach((el, i) => {
-            el.dataset.idx = i;
-            const num = el.querySelector('.reorder-deck-num');
-            if (num) num.textContent = `#${i + 1}`;
-            const origIdx = rows.indexOf(el);
-            if (origIdx >= 0) order.push(deckCards[origIdx].instance_id);
-        });
-
-        document.removeEventListener('pointermove', moveDrag);
-        document.removeEventListener('pointerup', endDrag);
+    function cancelDrag() {
+        if (!dragRow) return;
+        cleanupDrag(false);
     }
 
     rows.forEach(row => {
         const handle = row.querySelector('.reorder-handle');
         handle.addEventListener('pointerdown', e => {
+            if (e.button !== undefined && e.button !== 0) return;
+            if (dragRow) cleanupDrag(false);
             e.preventDefault();
+            e.stopPropagation();
             const rect = row.getBoundingClientRect();
             dragRow = row;
+            dragHandle = handle;
+            dragPointerId = e.pointerId;
             dragOffsetY = e.clientY - rect.top;
+            if (typeof handle.setPointerCapture === 'function') {
+                try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+            }
 
             // Create placeholder at current position
             placeholder = document.createElement('div');
@@ -20818,6 +21183,7 @@ async function showReorderDeckUI(deckCards, titleText) {
 
             // Hide original row (remove from flow)
             row.classList.add('reorder-dragging');
+            row.style.visibility = 'hidden';
 
             // Create floating clone
             dragClone = row.cloneNode(true);
@@ -20828,10 +21194,13 @@ async function showReorderDeckUI(deckCards, titleText) {
             dragClone.style.width = rect.width + 'px';
             dragClone.style.zIndex = '10000';
             dragClone.style.pointerEvents = 'none';
+            dragClone.style.touchAction = 'none';
             document.body.appendChild(dragClone);
 
-            document.addEventListener('pointermove', moveDrag);
+            document.addEventListener('pointermove', moveDrag, { passive: false });
             document.addEventListener('pointerup', endDrag);
+            document.addEventListener('pointercancel', cancelDrag);
+            window.addEventListener('blur', cancelDrag);
         });
     });
 
@@ -20842,6 +21211,7 @@ async function showReorderDeckUI(deckCards, titleText) {
     confirmBtn.className = 'btn btn-primary';
     confirmBtn.textContent = UI.ok || '确定';
     confirmBtn.onclick = () => {
+        cleanupDrag(false);
         modal.classList.add('hidden');
         modal.classList.remove('active');
     };
@@ -20849,6 +21219,7 @@ async function showReorderDeckUI(deckCards, titleText) {
     cancelBtn.className = 'btn btn-danger';
     cancelBtn.textContent = UI.cancel || '取消';
     cancelBtn.onclick = () => {
+        cleanupDrag(false);
         order.length = 0;
         modal.classList.add('hidden');
         modal.classList.remove('active');
@@ -21383,6 +21754,10 @@ function renderGameOver(data) {
 function showOpponentDCWaiting(data) {
     const timeout = data.reconnect_timeout || 120;
     const oppName = data.opponent_nickname || '?';
+    if (window._opponentDcTimerId) {
+        clearInterval(window._opponentDcTimerId);
+        window._opponentDcTimerId = null;
+    }
     if (data && data.wait_forever) {
         showModal(`
             <div class="disconnect-modal">
@@ -21399,12 +21774,44 @@ function showOpponentDCWaiting(data) {
             <p id="dc-countdown" class="disconnect-countdown">${oppName} ${remaining}s</p>
         </div>
     `);
-    const timer = setInterval(() => {
+    window._opponentDcTimerId = setInterval(() => {
         remaining--;
         const el = $('dc-countdown');
         if (el) el.textContent = `${oppName} ${remaining}s`;
-        if (remaining <= 0) { clearInterval(timer); hideModal(); }
+        if (remaining <= 0) {
+            clearInterval(window._opponentDcTimerId);
+            window._opponentDcTimerId = null;
+            hideModal();
+        }
     }, 1000);
+}
+
+function clearOpponentDisconnectModal() {
+    if (window._opponentDcTimerId) {
+        clearInterval(window._opponentDcTimerId);
+        window._opponentDcTimerId = null;
+    }
+    const dcEl = $('dc-countdown');
+    if (dcEl) hideModal();
+}
+
+function syncOpponentDisconnectModalFromState(state) {
+    if (!state || state.phase === 'game_over' || state.solo) {
+        clearOpponentDisconnectModal();
+        return;
+    }
+    const dc = state.disconnect_state;
+    const list = dc && Array.isArray(dc.players) ? dc.players.filter(p => Number(p && p.remaining) > 0) : [];
+    if (!dc || !dc.active || !list.length) {
+        clearOpponentDisconnectModal();
+        return;
+    }
+    const names = list.map(p => p && p.nickname ? p.nickname : '?').join('、');
+    const remaining = Math.max(1, Math.min(...list.map(p => Number(p.remaining) || Number(dc.reconnect_timeout) || 120)));
+    showOpponentDCWaiting({
+        reconnect_timeout: remaining,
+        opponent_nickname: names || (UI.opponent || '?'),
+    });
 }
 
 function onEndTurn() {
@@ -21959,29 +22366,10 @@ function createSettingsModCaret(kind, key, expanded) {
     return btn;
 }
 
-const BETA_TESTING_MOD_IDS = new Set(['jungle', 'desert_cards_addition', 'garden', 'factory']);
+const BETA_TESTING_MOD_IDS = new Set();
 
 function isBetaTestingMod(mod) {
-    const info = mod?.info || {};
-    const candidates = [
-        info.id,
-        info.name,
-        info.name_cn,
-        info.name_en,
-        mod?.filename,
-        mod?.name,
-    ].filter(Boolean).map(value => String(value).toLowerCase());
-    return candidates.some(value =>
-        BETA_TESTING_MOD_IDS.has(value)
-        || value.includes('jungle cards addition')
-        || value.includes('desert cards addition')
-        || value.includes('garden cards addition')
-        || value.includes('factory cards addition')
-        || value.includes('丛林卡')
-        || value.includes('沙漠卡')
-        || value.includes('花园卡')
-        || value.includes('工厂卡')
-    );
+    return false;
 }
 
 function createModBetaWarningBadge() {
@@ -23036,15 +23424,7 @@ async function init() {
     document.addEventListener('contextmenu', (event) => {
         if (cancelClassicSelection(event)) return;
     });
-    if ($('battle-classic')) {
-        $('battle-classic').addEventListener('click', (event) => {
-            if (classicCanAutoPlaySelfOnlyFromEvent(event)) {
-                event.preventDefault();
-                classicPlaySelectedCard();
-            }
-        });
-    }
-    ['classic-play-lane', 'classic-fighter-self', 'classic-fighter-enemy'].forEach(id => {
+    ['classic-play-lane', 'classic-fighter-self', 'classic-fighter-enemy', 'classic-fighter-enemy-2', 'classic-fighter-ally'].forEach(id => {
         const el = $(id);
         if (el) el.addEventListener('click', (event) => {
             if (id !== 'classic-play-lane' && !(event.target && event.target.closest && event.target.closest('.player-avatar'))) return;

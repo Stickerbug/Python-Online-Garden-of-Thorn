@@ -21,16 +21,13 @@
   }
   const migrationKey = betaKey('gtn_ui_style_v2_migrated');
   const uiStyleKey = betaKey('gtn_ui_style');
-  const hiddenFeaturesKey = betaKey('gtn_hidden_features_enabled');
   let uiStyle = localStorage.getItem(uiStyleKey) || 'minimal';
   if (!localStorage.getItem(migrationKey) && uiStyle === 'classic') {
     uiStyle = 'minimal';
     localStorage.setItem(uiStyleKey, 'minimal');
     localStorage.setItem(migrationKey, '1');
   }
-  const hiddenFeaturesEnabled = localStorage.getItem(hiddenFeaturesKey) === '1';
-  if (uiStyle !== 'classic' || !hiddenFeaturesEnabled) uiStyle = 'minimal';
-  if (!hiddenFeaturesEnabled && localStorage.getItem(uiStyleKey) === 'classic') localStorage.setItem(uiStyleKey, 'minimal');
+  if (uiStyle !== 'classic') uiStyle = 'minimal';
   document.documentElement.setAttribute('lang', lang);
   document.documentElement.setAttribute('data-ui-style', uiStyle);
   if (window.__GTN_BETA_MODE__) document.documentElement.setAttribute('data-beta-mode', 'true');
@@ -502,7 +499,10 @@
   <div class="classic-top-hud">
     <div class="classic-top-title">
       <span class="classic-mode" id="classic-mode">Garden of Thorn 荆棘花园</span>
-      <span class="classic-round" id="classic-round">R0</span>
+      <span class="classic-turn-stack">
+        <span class="classic-round" id="classic-round">R0</span>
+        <span class="classic-turn-timer" id="classic-turn-timer"></span>
+      </span>
       <span class="classic-phase" id="classic-phase">-</span>
     </div>
     <button id="classic-settings" class="classic-icon-btn hidden" type="button" aria-label="设置">⚙</button>
@@ -527,6 +527,8 @@
       <div id="classic-play-lane" class="classic-play-lane"></div>
     </div>
     <div id="classic-fighter-enemy" class="classic-fighter fighter-enemy"></div>
+    <div id="classic-fighter-enemy-2" class="classic-fighter fighter-enemy fighter-enemy-2 hidden"></div>
+    <div id="classic-fighter-ally" class="classic-fighter fighter-ally hidden"></div>
   </div>
   <div id="classic-log-drawer" class="classic-log-drawer">
     <button id="classic-log-toggle" class="classic-log-toggle" type="button">战斗日志</button>

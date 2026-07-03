@@ -1701,6 +1701,44 @@ def _room_timed_out_disconnected_teams(room, now=None):
     return teams_seen
 
 
+def _room_disconnect_state_payload(room, viewer_sid=None):
+    now = time.time()
+    entries = []
+    for dc_sid, dc_info in list((getattr(room, 'disconnected_players', {}) or {}).items()):
+        if viewer_sid is not None and dc_sid == viewer_sid:
+            continue
+        try:
+            pidx = int(dc_info.get('player_index', -1))
+        except Exception:
+            pidx = -1
+        if pidx < 0:
+            continue
+        if getattr(room, 'mode', None) == '2v2' and _room_player_dead(room, pidx):
+            continue
+        try:
+            disconnected_at = float(dc_info.get('disconnect_time') or now)
+        except Exception:
+            disconnected_at = now
+        remaining = int(math.ceil(max(0.0, RECONNECT_TIMEOUT_SECONDS - (now - disconnected_at))))
+        entries.append({
+            'sid': dc_sid,
+            'player_index': pidx,
+            'nickname': dc_info.get('nickname') or room_player_nickname(room, dc_sid, f'P{pidx + 1}'),
+            'disconnect_time': disconnected_at,
+            'remaining': remaining,
+            'timeout': RECONNECT_TIMEOUT_SECONDS,
+        })
+    entries.sort(key=lambda item: (item.get('remaining', 0), item.get('player_index', 999)))
+    return {
+        'disconnect_state': {
+            'active': bool(entries),
+            'players': entries,
+            'reconnect_timeout': RECONNECT_TIMEOUT_SECONDS,
+            'wait_forever': False,
+        }
+    }
+
+
 def _set_room_draw(room, log_message):
     e = room.engine
     e.game_over = True
@@ -7647,6 +7685,7 @@ def send_draft_state(room, pidx):
     payload.update(_watched_pregame_timer_payload(room, pidx))
     payload.update(instance_payload())
     payload.update(room_mod_payload(room))
+    payload.update(_room_disconnect_state_payload(room, sid))
     socketio.emit('draft_state', payload, room=sid)
 
 
@@ -7695,6 +7734,7 @@ def send_pregame_status_update(room, targets=None):
         }
         payload.update(_watched_pregame_timer_payload(room, pidx))
         payload.update(instance_payload())
+        payload.update(_room_disconnect_state_payload(room, sid))
         socketio.emit('pregame_status_update', payload, room=sid)
 
 
@@ -7760,6 +7800,7 @@ def send_event_state(room, pidx):
     payload.update(_watched_pregame_timer_payload(room, pidx))
     payload.update(instance_payload())
     payload.update(room_mod_payload(room))
+    payload.update(_room_disconnect_state_payload(room, sid))
     socketio.emit('event_select', payload, room=sid)
 
 
@@ -7804,6 +7845,7 @@ def send_event_reveal_state(room, pidx):
     payload.update(_watched_pregame_timer_payload(room, pidx))
     payload.update(instance_payload())
     payload.update(room_mod_payload(room))
+    payload.update(_room_disconnect_state_payload(room, sid))
     socketio.emit('event_reveal', payload, room=sid)
 
 
@@ -8010,6 +8052,7 @@ def send_game_state_to(room, pidx):
         state['room_chat_history'] = room_chat_history_for_sid(room, sid)
         state.update(_room_timer_payload(room))
         state.update(room_mod_payload(room))
+        state.update(_room_disconnect_state_payload(room, sid))
         if room.engine.phase == 'game_over':
             state.update(room_rematch_payload(room, sid))
         _mark_player_defeated_state(room, pidx, state)
@@ -8104,6 +8147,7 @@ def send_event_sub_choice_state(room, pidx):
     payload.update(_watched_pregame_timer_payload(room, pidx))
     payload.update(instance_payload())
     payload.update(room_mod_payload(room))
+    payload.update(_room_disconnect_state_payload(room, sid))
     socketio.emit('event_sub_choice', payload, room=sid)
 
 
@@ -8697,6 +8741,7 @@ def build_spectate_state(room, perspective=0):
     base['spectator_count'] = room_spectator_count(room)
     base['room_chat_history'] = room_chat_history_for_sid(room, spectator=True)
     base.update(room_mod_payload(room))
+    base.update(_room_disconnect_state_payload(room))
     try:
         perspective = int(perspective or 0)
     except (TypeError, ValueError):
@@ -8752,6 +8797,9 @@ def _mark_disconnect_timeout_loss(room, player_index, nickname):
     # reconnect timeout path in every phase, including draft/setup.
     if getattr(room, 'mode', None) == '2v2' and _room_player_dead(room, player_index):
         return False
+    if getattr(room, 'mode', None) == '2v2':
+        changed = _force_2v2_disconnect_death(room, player_index, nickname, '断线超时')
+        return bool(getattr(e, 'game_over', False)) if changed else False
     disconnected_teams = _room_timed_out_disconnected_teams(room)
     if len(disconnected_teams) >= 2:
         return _finish_room_by_health_tiebreak(room, '双方断线超时')
