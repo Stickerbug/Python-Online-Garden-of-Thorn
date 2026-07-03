@@ -3587,6 +3587,7 @@ let classicHoverPreviewTimer = null;
 let classicHoverInfoEl = null;
 let classicHoveredCardId = null;
 let classicTargetPickInFlight = false;
+let classicBackquoteHeld = false;
 let actionToastTimer = null;
 let combatFloatSeq = 0;
 const localSoloRuntime = {
@@ -6222,6 +6223,47 @@ function cancelClassicSelection(event) {
     return true;
 }
 
+function isTypingKeyboardTarget(target) {
+    if (!target) return false;
+    const el = target.nodeType === 1 ? target : target.parentElement;
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    return !!(el.closest && el.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]'));
+}
+
+function getDigitKeyIndex(event) {
+    if (!event) return -1;
+    const code = event.code || '';
+    let digit = -1;
+    if (/^Digit\d$/.test(code)) {
+        digit = Number(code.slice(5));
+    } else if (/^Numpad\d$/.test(code)) {
+        digit = Number(code.slice(6));
+    } else if (/^\d$/.test(event.key || '')) {
+        digit = Number(event.key);
+    }
+    if (!Number.isFinite(digit) || digit < 0 || digit > 9) return -1;
+    return digit === 0 ? 9 : digit - 1;
+}
+
+function handleClassicHandNumberShortcut(event) {
+    if (!shouldUseClassicBattle(gameState)) return false;
+    if (isTypingKeyboardTarget(event && event.target)) return false;
+    if (event.altKey || event.ctrlKey || event.metaKey) return false;
+    if (event.repeat) return false;
+    const baseIndex = getDigitKeyIndex(event);
+    if (baseIndex < 0) return false;
+    const index = baseIndex + (classicBackquoteHeld ? 10 : 0);
+    if (index < 0 || index > 19) return false;
+    const hand = (gameState && gameState.you && Array.isArray(gameState.you.hand)) ? gameState.you.hand : [];
+    const card = hand[index];
+    if (!card || card.instance_id == null) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    selectClassicPlayCard(card.instance_id, event);
+    return true;
+}
+
 function selectPlayCardForConfirm(cardInstanceId) {
     if (!isTouchPlayMode()) return false;
     if (isActionBusy()) return false;
@@ -6338,12 +6380,7 @@ function getClassicPlayedCardAnimationTarget(cardDict, cardDef, targetPlayerId =
     const card = normalizeBattleCard(cardDict, (gameState && gameState.you) || {});
     if (isClassicSelfOnlyCard(card)) return null;
     if (targetPlayerId >= 0) {
-        const targetRegion = getPlayerRegionById(targetPlayerId);
-        if (targetRegion) return targetRegion;
-        const selfId = normalizePlayerId(gameState && gameState.your_id);
-        return targetPlayerId === selfId
-            ? document.querySelector('#classic-fighter-self .player-avatar') || $('classic-fighter-self')
-            : document.querySelector('#classic-fighter-enemy .player-avatar') || $('classic-fighter-enemy');
+        return getPlayerRegionById(targetPlayerId) || getClassicFighterElementByPlayerId(targetPlayerId);
     }
     const role = getClassicPlayRole(card);
     if (role === 'enemy') return document.querySelector('#classic-fighter-enemy .player-avatar') || $('classic-fighter-enemy');
@@ -16077,10 +16114,19 @@ function setClassicControlButton(id, visible, options = {}) {
 
 function updateClassicExtraControls(gs) {
     const panel = $('classic-extra-controls');
-    if (!panel) return;
+    const surrenderBtn = $('classic-surrender');
     const inSoloGame = !!gs?.solo;
     const inTutorial = !!gs?.tutorial || tutorialMode;
     const gameOver = gs?.phase === 'game_over';
+    const isReadOnlyBattle = !!(isSpectating || replayMode || gs?.spectating || gs?.replay_mode);
+    if (surrenderBtn) {
+        const showSurrender = !inSoloGame && !inTutorial && !gameOver && !isReadOnlyBattle;
+        surrenderBtn.classList.toggle('hidden', !showSurrender);
+        surrenderBtn.style.display = showSurrender ? '' : 'none';
+        surrenderBtn.title = UI.surrender || '投降';
+        surrenderBtn.setAttribute('aria-label', UI.surrender || '投降');
+    }
+    if (!panel) return;
     const isUrf = gs?.mode === 'urf';
     const myTurn = isMyTurn();
     const busy = isActionBusy({ includeAnimation: false });
@@ -16088,14 +16134,14 @@ function updateClassicExtraControls(gs) {
     const spectatePlayerCount = Array.isArray(gs?.spectate_players) ? gs.spectate_players.length : 0;
     const currentSpectatePlayer = getSpectatePerspectivePlayer(gs);
 
-    if (setClassicControlButton('classic-switch-perspective', isSpectating && spectatePlayerCount > 1, {
+    if (setClassicControlButton('classic-switch-perspective', isReadOnlyBattle && spectatePlayerCount > 1, {
         text: currentSpectatePlayer && currentSpectatePlayer.name
             ? `${UI.switch_perspective}: ${localizeCanonicalPlayerName(currentSpectatePlayer.name)}`
             : UI.switch_perspective,
         disabled: false,
     })) visibleCount += 1;
     const classicSwitch = $('classic-switch-perspective');
-    if (classicSwitch) classicSwitch.dataset.dynamic = (isSpectating && spectatePlayerCount > 1) ? '1' : '';
+    if (classicSwitch) classicSwitch.dataset.dynamic = (isReadOnlyBattle && spectatePlayerCount > 1) ? '1' : '';
 
     if (setClassicControlButton('classic-view-deck', !isUrf, {
         text: UI.view_draw_deck || UI.view_deck,
@@ -16103,6 +16149,10 @@ function updateClassicExtraControls(gs) {
     })) visibleCount += 1;
     if (setClassicControlButton('classic-view-discard', !isUrf, {
         text: UI.view_discard,
+        disabled: false,
+    })) visibleCount += 1;
+    if (setClassicControlButton('classic-leave-spectate', isReadOnlyBattle, {
+        text: replayMode ? (UI.close || '关闭') : (UI.leave_spectate || '退出观战'),
         disabled: false,
     })) visibleCount += 1;
     if (setClassicControlButton('classic-solo-next-draw', inSoloGame && !inTutorial && !gameOver && !isSpectating, {
@@ -16261,6 +16311,7 @@ function buildBattleViewModel(state) {
     const self = normalizeBattlePlayer(gs, you, 'self');
     const enemy = normalizeBattlePlayer(gs, opponent, 'enemy');
     const is2v2 = isClassic2v2State(gs);
+    const isReadOnlyBattle = !!(isSpectating || replayMode || gs.spectating || gs.replay_mode);
     const ally = is2v2 ? normalizeBattlePlayer(gs, gs.teammate || {}, 'ally') : null;
     const enemy2 = is2v2 ? normalizeBattlePlayer(gs, gs.opponent2 || {}, 'enemy2') : null;
     const hand = (you.hand || []).map(card => normalizeBattleCard(card, you));
@@ -16291,7 +16342,7 @@ function buildBattleViewModel(state) {
             modeText: getModeLabel(gs.mode),
         },
         pendingResponse: gs.pending_response || (responsePending ? responseData : null),
-        playableCards: new Set((you.hand || []).filter(canPlayCard).map(card => card.instance_id)),
+        playableCards: isReadOnlyBattle ? new Set() : new Set((you.hand || []).filter(canPlayCard).map(card => card.instance_id)),
         log: Array.isArray(gs.log) ? gs.log : [],
         deckCount: Number(you.deck_count || (you.deck || []).length || 0),
         discardCount: Number(you.discard_count || (you.discard || []).length || 0),
@@ -16311,7 +16362,6 @@ function isClassic2v2State(gs) {
 
 function shouldUseClassicBattle(gs) {
     if (!isClassicBattleUiStyle() || !gs) return false;
-    if (isSpectating) return false;
     return ['action', 'draw', 'response', 'choice', 'game_over'].includes(gs.phase);
 }
 
@@ -16374,6 +16424,10 @@ function renderClassicStatusList(player) {
         const fullText = text ? text.textContent : (tag.textContent || '');
         if (fullText) tag.dataset.statusFullText = fullText;
         tag.classList.add('classic-status-icon-only');
+        delete tag.dataset.termIntroBound;
+        delete tag.dataset.termIntroSuppressClick;
+        tag.setAttribute('role', 'button');
+        tag.tabIndex = 0;
         if (text) text.remove();
         if (value) tag.dataset.badge = value;
     });
@@ -16467,11 +16521,15 @@ function attachClassicStatusIntros(container) {
         const fallbackName = fullText && value && fullText.endsWith(`:${value}`)
             ? fullText.slice(0, -1 * (`:${value}`).length)
             : fullText;
+        delete tag.dataset.termIntroBound;
+        delete tag.dataset.termIntroSuppressClick;
         attachTermIntroToStatus(tag, {
             key,
+            iconKey: tag.dataset.statusIcon || tag.dataset.iconKey || '',
             name: tag.dataset.statusName || fallbackName || tag.title || '',
             val: value,
             fg: tag.style.color || '',
+            title: tag.title || '',
         });
     });
 }
@@ -17011,9 +17069,10 @@ function renderGame(data) {
     }
     const classicContainer = $('battle-classic');
     if (classicContainer) {
-        classicContainer.classList.toggle('mode-spectate', !!isSpectating);
+        classicContainer.classList.toggle('mode-spectate', !!(isSpectating || replayMode || gs.spectating || gs.replay_mode));
         classicContainer.classList.toggle('mode-2v2', !!is2v2);
         classicContainer.classList.toggle('mode-urf', gs.mode === 'urf');
+        classicContainer.classList.toggle('mode-replay', !!(replayMode || gs.replay_mode));
     }
 
     const opp2Half = $('opp2-half');
@@ -17706,6 +17765,26 @@ function getPlayerRegionById(id) {
     if (pid == null) return null;
     const regions = Array.from(document.querySelectorAll(`[data-player-target-region][data-player-id="${pid}"]`));
     return regions.find(isVisibleTargetRegion) || regions[0] || null;
+}
+
+function getClassicFighterElementByPlayerId(id) {
+    const pid = normalizePlayerId(id);
+    if (pid == null || !gameState) return null;
+    const pick = (selector) => document.querySelector(`${selector} .player-avatar`) || $(selector.replace(/^#/, ''));
+    const yourId = normalizePlayerId(gameState.your_id);
+    if (pid === yourId) return pick('#classic-fighter-self');
+    const teammateId = normalizePlayerId(gameState.teammate_id);
+    if (pid === teammateId) return pick('#classic-fighter-ally');
+    const enemyIds = Array.isArray(gameState.enemy_ids)
+        ? gameState.enemy_ids.map(enemyId => normalizePlayerId(enemyId))
+        : [];
+    if (pid === enemyIds[0]) return pick('#classic-fighter-enemy');
+    if (pid === enemyIds[1]) return pick('#classic-fighter-enemy-2');
+    if (!isClassic2v2State(gameState)) {
+        const opponentId = yourId == null ? null : 1 - yourId;
+        if (pid === opponentId) return pick('#classic-fighter-enemy');
+    }
+    return null;
 }
 
 function choosePlayerTargetOnBoard(title, targets) {
@@ -23415,12 +23494,22 @@ async function init() {
     $('btn-end-turn').addEventListener('click', onEndTurn);
     if ($('btn-prediction-target')) $('btn-prediction-target').addEventListener('click', openPredictionTargetPicker);
     if ($('classic-end-turn')) $('classic-end-turn').addEventListener('click', onEndTurn);
+    if ($('classic-surrender')) $('classic-surrender').addEventListener('click', onSurrender);
     if ($('classic-settings')) $('classic-settings').addEventListener('click', () => openSettings({ hideServer: true }));
     document.addEventListener('mousemove', onClassicAimPointerMove);
     document.addEventListener('pointermove', onClassicAimPointerMove);
     document.addEventListener('keydown', (event) => {
+        if (event.code === 'Backquote' || event.key === '`') {
+            if (!isTypingKeyboardTarget(event.target)) classicBackquoteHeld = true;
+            return;
+        }
+        if (handleClassicHandNumberShortcut(event)) return;
         if (event.key === 'Escape') cancelClassicSelection(event);
     });
+    document.addEventListener('keyup', (event) => {
+        if (event.code === 'Backquote' || event.key === '`') classicBackquoteHeld = false;
+    });
+    window.addEventListener('blur', () => { classicBackquoteHeld = false; });
     document.addEventListener('contextmenu', (event) => {
         if (cancelClassicSelection(event)) return;
     });
@@ -23463,6 +23552,16 @@ async function init() {
                 return;
             }
             if (socket && isSpectating) socket.emit('switch_spectate_perspective', {});
+        });
+    }
+    if ($('classic-leave-spectate')) {
+        $('classic-leave-spectate').addEventListener('click', () => {
+            if (replayMode) {
+                closeAccountReplayModal();
+                return;
+            }
+            clearActiveMatchRoute('leave_spectate');
+            if (socket) socket.emit('leave_spectate', {});
         });
     }
     if ($('btn-urf-replace')) $('btn-urf-replace').addEventListener('click', onUrfReplaceCard);

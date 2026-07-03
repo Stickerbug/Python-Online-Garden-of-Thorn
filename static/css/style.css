@@ -13981,6 +13981,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
 #classic-view-deck::before { --ui-icon-url: url("/static/assets/ui-icons/draw-pile.svg"); }
 #classic-view-discard::before { --ui-icon-url: url("/static/assets/ui-icons/discard-pile.svg"); }
 #classic-switch-perspective::before { --ui-icon-url: url("/static/assets/ui-icons/replay.svg"); }
+#classic-leave-spectate::before { --ui-icon-url: url("/static/assets/ui-icons/surrender.svg"); }
 #classic-urf-replace::before { --ui-icon-url: url("/static/assets/ui-icons/reload.svg"); }
 #classic-urf-sell::before { --ui-icon-url: url("/static/assets/ui-icons/sell-equipment.svg"); }
 #classic-solo-next-draw::before { --ui-icon-url: url("/static/assets/ui-icons/draw-pile.svg"); }
@@ -13996,6 +13997,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
 #classic-view-deck,
 #classic-view-discard,
 #classic-solo-next-draw,
+#classic-leave-spectate,
 #classic-urf-replace {
   background: var(--magic);
   color: #fff;
@@ -14005,6 +14007,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
 #classic-view-deck:not(:disabled):hover,
 #classic-view-discard:not(:disabled):hover,
 #classic-solo-next-draw:not(:disabled):hover,
+#classic-leave-spectate:not(:disabled):hover,
 #classic-urf-replace:not(:disabled):hover {
   background: #5dade2;
   color: #fff;
@@ -14316,6 +14319,37 @@ html[data-ui-style="minimal"] .btn-end-turn {
   background: #fff;
   border: 1px solid var(--classic-line);
   border-radius: 7px;
+}
+
+.classic-surrender-btn {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  z-index: 15;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: url("/static/assets/ui-icons/surrender.svg") center / 30px 30px no-repeat;
+  box-shadow: none;
+  cursor: pointer;
+  opacity: 0.86;
+  transition: opacity 120ms ease, transform 120ms ease, filter 120ms ease;
+}
+
+.classic-surrender-btn:hover {
+  opacity: 1;
+  transform: scale(1.08);
+  filter: drop-shadow(0 2px 4px rgba(199,58,65,0.24));
+}
+
+.classic-surrender-btn:active {
+  transform: scale(0.94);
+}
+
+.classic-surrender-btn.hidden {
+  display: none !important;
 }
 
 .classic-left-rail,
@@ -15001,6 +15035,8 @@ html[data-ui-style="minimal"] .btn-end-turn {
   border-radius: 8px;
   border: 1px solid currentColor;
   background: rgba(255,255,255,0.9) !important;
+  cursor: help;
+  pointer-events: auto;
 }
 
 .classic-status-ring .status-tag.classic-status-icon-only .status-icon {

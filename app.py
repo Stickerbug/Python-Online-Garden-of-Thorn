@@ -1232,6 +1232,7 @@ class GameRoom:
         # degrading to "?" / "P1" if the online player row is deleted first.
         self.player_profiles = {}
         self.reconnect_timers = {}
+        self.disconnect_timeout_defeated = set()
         self._rematch_votes = set()
         self._returned_lobby_sids = set()
         self._returned_lobby_names = {}
@@ -1737,6 +1738,64 @@ def _room_disconnect_state_payload(room, viewer_sid=None):
             'wait_forever': False,
         }
     }
+
+
+def _start_reconnect_timer_for_disconnected_player(room, old_sid, notify=True):
+    if room is None or old_sid not in getattr(room, 'disconnected_players', {}):
+        return False
+    dc_info = room.disconnected_players.get(old_sid) or {}
+    try:
+        pidx = int(dc_info.get('player_index', -1))
+    except Exception:
+        pidx = -1
+    if pidx < 0:
+        return False
+    if getattr(room, 'mode', None) == '2v2' and _room_player_dead(room, pidx):
+        return False
+    if old_sid in getattr(room, 'reconnect_timers', {}):
+        return False
+    dc_info['disconnect_time'] = time.time()
+    room.disconnected_players[old_sid] = dict(dc_info)
+    timer = threading.Timer(float(RECONNECT_TIMEOUT_SECONDS), reconnect_timeout, args=[room.room_id, old_sid])
+    room.reconnect_timers[old_sid] = timer
+    timer.daemon = True
+    timer.start()
+    if notify:
+        nickname = dc_info.get('nickname') or room_player_nickname(room, old_sid, f'P{pidx + 1}')
+        for other_sid in getattr(room, 'player_sids', []) or []:
+            if other_sid != old_sid and other_sid in players:
+                try:
+                    socketio.emit('opponent_disconnected', {
+                        'reconnect_timeout': RECONNECT_TIMEOUT_SECONDS,
+                        'wait_forever': False,
+                        'opponent_nickname': nickname,
+                    }, room=other_sid)
+                except Exception as exc:
+                    admin_event('error', f'revive reconnect timer notify failed: {exc}', room_id=getattr(room, 'room_id', None))
+    return True
+
+
+def _sync_disconnected_revived_players(room):
+    """If a dead disconnected 2v2 player is revived, make the slot blocking again."""
+    if room is None or getattr(room, 'mode', None) != '2v2':
+        return False
+    changed = False
+    timeout_defeated = getattr(room, 'disconnect_timeout_defeated', set())
+    for old_sid, dc_info in list((getattr(room, 'disconnected_players', {}) or {}).items()):
+        try:
+            pidx = int(dc_info.get('player_index', -1))
+        except Exception:
+            pidx = -1
+        if pidx < 0 or _room_player_dead(room, pidx):
+            continue
+        if pidx in timeout_defeated:
+            timeout_defeated.discard(pidx)
+            changed = True
+        if _start_reconnect_timer_for_disconnected_player(room, old_sid, notify=True):
+            admin_event('player', f'room {getattr(room, "room_id", "?")} revived disconnected player starts reconnect timer p{pidx + 1}', room_id=getattr(room, 'room_id', None))
+            changed = True
+    room.disconnect_timeout_defeated = timeout_defeated
+    return changed
 
 
 def _set_room_draw(room, log_message):
@@ -7862,6 +7921,7 @@ def room_spectator_count(room):
 def _broadcast_game_state_now(room):
     _broadcast_started = time.perf_counter()
     _broadcast_recipients = 0
+    _sync_disconnected_revived_players(room)
     _sync_room_action_timer_after_state_change(room)
     for pidx, sid in enumerate(room.player_sids):
         if sid not in players:
@@ -8042,6 +8102,7 @@ def send_game_state_to(room, pidx):
         send_pregame_state(room, pidx, allow_sub_choice=True)
     else:
         emit_room_game_phase(room, sid, phase)
+        _sync_disconnected_revived_players(room)
         _sync_room_action_timer_after_state_change(room)
         state = room.engine.get_public_state(pidx)
         state['your_id'] = pidx
@@ -8799,6 +8860,10 @@ def _mark_disconnect_timeout_loss(room, player_index, nickname):
         return False
     if getattr(room, 'mode', None) == '2v2':
         changed = _force_2v2_disconnect_death(room, player_index, nickname, '断线超时')
+        if changed:
+            if not hasattr(room, 'disconnect_timeout_defeated'):
+                room.disconnect_timeout_defeated = set()
+            room.disconnect_timeout_defeated.add(int(player_index))
         return bool(getattr(e, 'game_over', False)) if changed else False
     disconnected_teams = _room_timed_out_disconnected_teams(room)
     if len(disconnected_teams) >= 2:
@@ -13819,6 +13884,20 @@ def on_surrender(data):
                     emit('server_error', {'message': 'Surrender requires a teammate'})
                     return
                 teammate_sid = room.player_sids[teammate_id]
+                if teammate_id in getattr(room, 'disconnect_timeout_defeated', set()):
+                    result = engine.surrender(pidx)
+                    if result.get('success'):
+                        record_room_replay_action(room, 'surrender', pidx, {
+                            'result': result,
+                            'teammate_consent_skipped': 'disconnect_timeout_defeated',
+                        })
+                        broadcast_game_state(room)
+                        for psid in room.player_sids:
+                            if psid in players:
+                                socketio.emit('game_phase', {'phase': 'game_over'}, room=psid)
+                    else:
+                        emit('server_error', {'message': result.get('error', '投降失败')})
+                    return
                 if teammate_sid not in players or teammate_sid in room.disconnected_players:
                     emit('server_error', {'message': 'Teammate is not online'})
                     return
