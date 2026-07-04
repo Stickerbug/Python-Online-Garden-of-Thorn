@@ -201,6 +201,13 @@ button {
   font-weight: 700;
 }
 
+.ghost-btn.active,
+.ghost-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: rgba(26, 188, 156, 0.12);
+  color: #0f766e;
+}
+
 .ghost-btn.danger {
   color: var(--danger);
 }

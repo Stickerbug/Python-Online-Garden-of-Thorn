@@ -1,5 +1,6 @@
 import json
 import hashlib
+import math
 import os
 import secrets
 import re
@@ -25,6 +26,13 @@ DM_RETENTION_DAYS = 60
 DM_THREAD_MAX_BYTES = 100 * 1024
 RANKING_MIN_DURATION_SECONDS = int(os.environ.get('GTN_RANKING_MIN_DURATION_SECONDS', '20'))
 RANKING_MIN_ACTIONS_PER_SIDE = int(os.environ.get('GTN_RANKING_MIN_ACTIONS_PER_SIDE', '1'))
+GR_INITIAL = 1000
+GR_SOFT_RESET_RATIO = 0.5
+GR_SOFT_RESET_MIN = 850
+GR_SOFT_RESET_MAX = 1250
+GR_SEASON_MIN_GAMES = 8
+GR_TOTAL_MIN_GAMES = 20
+GR_2V2_FACTOR = 0.85
 _DM_MARK_READ_LAST_AT = {}
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
 ROLE_TYPES = {'admin', 'staff', 'contributor', 'sponsor', 'none'}
@@ -112,6 +120,27 @@ def utc_iso(value):
 def current_week_start():
     today = datetime.now(timezone.utc).date()
     return (today - timedelta(days=today.weekday())).isoformat()
+
+
+def current_gr_season(now=None):
+    dt = now or datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    year = dt.year
+    month = dt.month
+    season_id = 'S1' if year == 2026 and month == 7 else f'S{year}{month:02d}'
+    start = datetime(year, month, 1, tzinfo=timezone.utc)
+    if month == 12:
+        end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+    else:
+        end = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+    return {
+        'id': season_id,
+        'name': season_id,
+        'starts_at': utc_iso(start),
+        'ends_at': utc_iso(end - timedelta(seconds=1)),
+        'next_starts_at': utc_iso(end),
+    }
 
 
 def week_start_for_iso(value):
@@ -374,11 +403,38 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN thorn_dew_paid INTEGER DEFAULT 0')
         if 'password_changed_at' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN password_changed_at TEXT')
+        if 'total_gr' not in existing_columns:
+            conn.execute(f'ALTER TABLE users ADD COLUMN total_gr REAL DEFAULT {GR_INITIAL}')
+        if 'season_gr' not in existing_columns:
+            conn.execute(f'ALTER TABLE users ADD COLUMN season_gr REAL DEFAULT {GR_INITIAL}')
+        if 'highest_gr' not in existing_columns:
+            conn.execute(f'ALTER TABLE users ADD COLUMN highest_gr REAL DEFAULT {GR_INITIAL}')
+        if 'total_ranked_games' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN total_ranked_games INTEGER DEFAULT 0')
+        if 'season_ranked_games' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN season_ranked_games INTEGER DEFAULT 0')
+        if 'gr_season_id' not in existing_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN gr_season_id TEXT DEFAULT 'S1'")
         _assign_missing_player_ids(conn)
+        season = current_gr_season()
+        conn.execute(
+            '''
+            UPDATE users
+            SET total_gr = COALESCE(total_gr, ?),
+                season_gr = COALESCE(season_gr, ?),
+                highest_gr = MAX(COALESCE(highest_gr, ?), COALESCE(total_gr, ?), COALESCE(season_gr, ?)),
+                total_ranked_games = COALESCE(total_ranked_games, 0),
+                season_ranked_games = COALESCE(season_ranked_games, 0),
+                gr_season_id = COALESCE(gr_season_id, ?)
+            ''',
+            (GR_INITIAL, GR_INITIAL, GR_INITIAL, GR_INITIAL, GR_INITIAL, season['id']),
+        )
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_last_login ON users(last_login_at)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_stats ON users(games_played, wins, losses, draws)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_users_season_gr ON users(gr_season_id, season_gr, season_ranked_games)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_users_total_gr ON users(total_gr, total_ranked_games)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS user_roles (
@@ -582,6 +638,47 @@ def init_db():
             )
             '''
         )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS gr_match_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                match_id INTEGER,
+                season_id TEXT NOT NULL,
+                mode TEXT,
+                played_at TEXT NOT NULL,
+                participant_ids_json TEXT NOT NULL,
+                team_a_ids_json TEXT NOT NULL,
+                team_b_ids_json TEXT NOT NULL,
+                winner_side INTEGER,
+                is_draw INTEGER DEFAULT 0,
+                repeat_count INTEGER DEFAULT 0,
+                repeat_factor REAL DEFAULT 1.0,
+                total_deltas_json TEXT NOT NULL,
+                season_deltas_json TEXT NOT NULL,
+                before_json TEXT NOT NULL,
+                after_json TEXT NOT NULL
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_gr_match_results_played ON gr_match_results(played_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_gr_match_results_season ON gr_match_results(season_id, played_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_gr_match_results_match ON gr_match_results(match_id)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS gr_daily_snapshots (
+                snapshot_date TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                season_id TEXT NOT NULL,
+                season_gr REAL NOT NULL,
+                total_gr REAL NOT NULL,
+                season_ranked_games INTEGER NOT NULL DEFAULT 0,
+                total_ranked_games INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (snapshot_date, user_id)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_gr_daily_snapshots_user ON gr_daily_snapshots(user_id, snapshot_date)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_mode ON card_draft_win_stats(mode)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_rate ON card_draft_win_stats(win_games, picked_games)')
         conn.execute(
@@ -895,6 +992,12 @@ def row_to_user(row):
         'thorn_dew_paid': max(0, int(row['thorn_dew_paid'] or 0)) if 'thorn_dew_paid' in row.keys() else 0,
         'password_changed_at': row['password_changed_at'] if 'password_changed_at' in row.keys() else None,
         'skin': normalize_skin_config(skin_raw),
+        'total_gr': round(float(row['total_gr'] or GR_INITIAL), 1) if 'total_gr' in row.keys() else float(GR_INITIAL),
+        'season_gr': round(float(row['season_gr'] or GR_INITIAL), 1) if 'season_gr' in row.keys() else float(GR_INITIAL),
+        'highest_gr': round(float(row['highest_gr'] or GR_INITIAL), 1) if 'highest_gr' in row.keys() else float(GR_INITIAL),
+        'total_ranked_games': int(row['total_ranked_games'] or 0) if 'total_ranked_games' in row.keys() else 0,
+        'season_ranked_games': int(row['season_ranked_games'] or 0) if 'season_ranked_games' in row.keys() else 0,
+        'gr_season_id': row['gr_season_id'] if 'gr_season_id' in row.keys() else current_gr_season()['id'],
     }
     data['thorn_dew_total'] = data['thorn_dew_free'] + data['thorn_dew_paid']
     return data
@@ -1042,108 +1145,196 @@ def list_user_thorn_dew_transactions(user_id, limit=30):
         ]
 
 
-LEADERBOARD_PRIOR_GAMES = 50
-LEADERBOARD_PRIOR_WIN_RATE = 0.5
+def _soft_reset_gr(value):
+    try:
+        old_value = float(value)
+    except (TypeError, ValueError):
+        old_value = float(GR_INITIAL)
+    reset = GR_INITIAL + (old_value - GR_INITIAL) * GR_SOFT_RESET_RATIO
+    return max(GR_SOFT_RESET_MIN, min(GR_SOFT_RESET_MAX, reset))
 
 
-def _leaderboard_weighted_rate(wins, draws, games):
-    games = max(0, int(games or 0))
-    wins = max(0, int(wins or 0))
-    draws = max(0, int(draws or 0))
-    weighted = (wins + draws * 0.5 + LEADERBOARD_PRIOR_WIN_RATE * LEADERBOARD_PRIOR_GAMES)
-    weighted /= (games + LEADERBOARD_PRIOR_GAMES) if games + LEADERBOARD_PRIOR_GAMES > 0 else 1
-    return weighted * 100
+def ensure_current_gr_season_for_conn(conn, user_ids=None):
+    season = current_gr_season()
+    params = []
+    where = ''
+    if user_ids:
+        safe_ids = []
+        for value in user_ids:
+            try:
+                safe_ids.append(int(value))
+            except (TypeError, ValueError):
+                pass
+        if safe_ids:
+            where = f"WHERE id IN ({','.join(['?'] * len(safe_ids))})"
+            params = safe_ids
+    rows = conn.execute(
+        f'''
+        SELECT id, season_gr, gr_season_id
+        FROM users
+        {where}
+        ''',
+        params,
+    ).fetchall()
+    now = utc_now()
+    for row in rows:
+        if str(row['gr_season_id'] or '') == season['id']:
+            continue
+        new_gr = _soft_reset_gr(row['season_gr'])
+        conn.execute(
+            '''
+            UPDATE users
+            SET season_gr = ?,
+                season_ranked_games = 0,
+                gr_season_id = ?
+            WHERE id = ?
+            ''',
+            (new_gr, season['id'], row['id']),
+        )
+        conn.execute(
+            '''
+            INSERT OR REPLACE INTO gr_daily_snapshots
+                (snapshot_date, user_id, season_id, season_gr, total_gr, season_ranked_games, total_ranked_games, created_at)
+            SELECT ?, id, ?, season_gr, total_gr, season_ranked_games, total_ranked_games, ?
+            FROM users
+            WHERE id = ?
+            ''',
+            (datetime.now(timezone.utc).date().isoformat(), season['id'], now, row['id']),
+        )
+    return season
 
 
-def _leaderboard_payload(row, rank=None):
+def ensure_current_gr_season(user_ids=None):
+    with get_db_connection() as conn:
+        season = ensure_current_gr_season_for_conn(conn, user_ids)
+        conn.commit()
+        return season
+
+
+def _leaderboard_payload(row, rank=None, scope='season'):
     games = int(row['games_played'] or 0)
     wins = int(row['wins'] or 0)
     losses = int(row['losses'] or 0)
     draws = int(row['draws'] or 0)
+    season_gr = float(row['season_gr'] or GR_INITIAL) if 'season_gr' in row.keys() else float(GR_INITIAL)
+    total_gr = float(row['total_gr'] or GR_INITIAL) if 'total_gr' in row.keys() else float(GR_INITIAL)
+    gr_value = season_gr if scope == 'season' else total_gr
     payload = {
         'id': row['id'],
         'username': row['username'],
         'player_id': row['player_id'],
+        'scope': scope,
+        'gr': round(gr_value, 1),
+        'season_gr': round(season_gr, 1),
+        'total_gr': round(total_gr, 1),
+        'highest_gr': round(float(row['highest_gr'] or GR_INITIAL), 1) if 'highest_gr' in row.keys() else float(GR_INITIAL),
+        'season_ranked_games': int(row['season_ranked_games'] or 0) if 'season_ranked_games' in row.keys() else 0,
+        'total_ranked_games': int(row['total_ranked_games'] or 0) if 'total_ranked_games' in row.keys() else 0,
+        'gr_season_id': row['gr_season_id'] if 'gr_season_id' in row.keys() else current_gr_season()['id'],
         'games_played': games,
         'wins': wins,
         'losses': losses,
         'draws': draws,
         'win_rate': round(wins / games * 100, 1) if games else 0.0,
-        'weighted_win_rate': round(_leaderboard_weighted_rate(wins, draws, games), 1),
-        'leaderboard_prior_games': LEADERBOARD_PRIOR_GAMES,
-        'leaderboard_prior_win_rate': int(LEADERBOARD_PRIOR_WIN_RATE * 100),
     }
     if rank is not None:
         payload['rank'] = int(rank or 0)
     return payload
 
 
-def list_leaderboard(min_games=20, limit=50):
-    min_games = max(1, int(min_games or 20))
+def list_leaderboard(min_games=None, limit=50, scope='season'):
+    scope = 'total' if str(scope or '').lower() == 'total' else 'season'
+    min_games = int(min_games if min_games is not None else (GR_TOTAL_MIN_GAMES if scope == 'total' else GR_SEASON_MIN_GAMES))
+    min_games = max(1, int(min_games or 1))
     limit = max(1, min(100, int(limit or 50)))
-    prior_points = LEADERBOARD_PRIOR_WIN_RATE * LEADERBOARD_PRIOR_GAMES
     with get_db_connection() as conn:
+        season = ensure_current_gr_season_for_conn(conn)
+        games_col = 'total_ranked_games' if scope == 'total' else 'season_ranked_games'
+        gr_col = 'total_gr' if scope == 'total' else 'season_gr'
+        season_filter = '' if scope == 'total' else 'AND gr_season_id = ?'
+        params = [min_games]
+        if scope != 'total':
+            params.append(season['id'])
+        params.append(limit)
         rows = conn.execute(
-            '''
-            SELECT id, username, player_id, games_played, wins, losses, draws
+            f'''
+            SELECT id, username, player_id, games_played, wins, losses, draws,
+                   season_gr, total_gr, highest_gr, season_ranked_games, total_ranked_games, gr_season_id
             FROM users
             WHERE deleted_at IS NULL
               AND COALESCE(banned, 0) = 0
-              AND games_played >= ?
+              AND COALESCE({games_col}, 0) >= ?
+              {season_filter}
               ORDER BY
-                (COALESCE(wins, 0) + COALESCE(draws, 0) * 0.5 + ?) / (games_played + ?) DESC,
-                games_played DESC,
+                COALESCE({gr_col}, ?) DESC,
+                COALESCE({games_col}, 0) DESC,
                 wins DESC,
                 username_lower ASC
             LIMIT ?
             ''',
-            (min_games, prior_points, LEADERBOARD_PRIOR_GAMES, limit),
+            (*params[:-1], GR_INITIAL, params[-1]),
         ).fetchall()
-    return [_leaderboard_payload(row) for row in rows]
+        conn.commit()
+    return [_leaderboard_payload(row, scope=scope) for row in rows]
 
 
-def get_leaderboard_rank(user_id, min_games=20):
+def get_leaderboard_rank(user_id, min_games=None, scope='season'):
     try:
         uid = int(user_id)
     except (TypeError, ValueError):
         return None
-    min_games = max(1, int(min_games or 20))
-    prior_points = LEADERBOARD_PRIOR_WIN_RATE * LEADERBOARD_PRIOR_GAMES
+    scope = 'total' if str(scope or '').lower() == 'total' else 'season'
+    min_games = int(min_games if min_games is not None else (GR_TOTAL_MIN_GAMES if scope == 'total' else GR_SEASON_MIN_GAMES))
+    min_games = max(1, int(min_games or 1))
     with get_db_connection() as conn:
+        season = ensure_current_gr_season_for_conn(conn, [uid])
+        games_col = 'total_ranked_games' if scope == 'total' else 'season_ranked_games'
+        gr_col = 'total_gr' if scope == 'total' else 'season_gr'
+        season_filter = '' if scope == 'total' else 'AND gr_season_id = ?'
+        row_params = [uid, min_games]
+        rank_params = [min_games]
+        if scope != 'total':
+            row_params.append(season['id'])
+            rank_params.append(season['id'])
         row = conn.execute(
-            '''
-            SELECT id, username, player_id, games_played, wins, losses, draws
+            f'''
+            SELECT id, username, player_id, games_played, wins, losses, draws,
+                   season_gr, total_gr, highest_gr, season_ranked_games, total_ranked_games, gr_season_id
             FROM users
             WHERE id = ?
               AND deleted_at IS NULL
               AND COALESCE(banned, 0) = 0
-              AND games_played >= ?
+              AND COALESCE({games_col}, 0) >= ?
+              {season_filter}
             ''',
-            (uid, min_games),
+            row_params,
         ).fetchone()
         if row is None:
+            conn.commit()
             return None
         ranked_rows = conn.execute(
-            '''
+            f'''
             SELECT id
             FROM users
             WHERE deleted_at IS NULL
               AND COALESCE(banned, 0) = 0
-              AND games_played >= ?
+              AND COALESCE({games_col}, 0) >= ?
+              {season_filter}
             ORDER BY
-              (COALESCE(wins, 0) + COALESCE(draws, 0) * 0.5 + ?) / (games_played + ?) DESC,
-              games_played DESC,
+              COALESCE({gr_col}, ?) DESC,
+              COALESCE({games_col}, 0) DESC,
               wins DESC,
               username_lower ASC
             ''',
-            (min_games, prior_points, LEADERBOARD_PRIOR_GAMES),
+            (*rank_params, GR_INITIAL),
         ).fetchall()
         rank = 0
         for idx, ranked in enumerate(ranked_rows, start=1):
             if int(ranked['id']) == uid:
                 rank = idx
                 break
-    return _leaderboard_payload(row, rank=rank)
+        conn.commit()
+    return _leaderboard_payload(row, rank=rank, scope=scope)
 
 
 def create_user(username, password):
@@ -2242,8 +2433,10 @@ def get_user_by_id(user_id):
     except (TypeError, ValueError):
         return None
     with get_db_connection() as conn:
+        ensure_current_gr_season_for_conn(conn, [uid])
         row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         row = _clear_expired_user_ban(conn, row)
+        conn.commit()
         return row_to_user(row)
 
 
@@ -2253,7 +2446,11 @@ def get_user_by_username(username):
         return None
     with get_db_connection() as conn:
         row = _find_user_row_by_username_key(conn, name)
+        if row is not None:
+            ensure_current_gr_season_for_conn(conn, [row['id']])
+            row = conn.execute('SELECT * FROM users WHERE id = ?', (row['id'],)).fetchone()
         row = _clear_expired_user_ban(conn, row)
+        conn.commit()
         return row_to_user(row)
 
 
@@ -3035,6 +3232,7 @@ def _row_to_match_summary(row, perspective_username=None, perspective_user_id=No
         'result_raw': raw_result,
         'valid_for_ranking': bool(summary.get('valid_for_ranking', True)),
         'ranking_invalid_reason': summary.get('ranking_invalid_reason', ''),
+        'gr_result': summary.get('gr_result'),
         'room_id': summary.get('room_id'),
     }
 
@@ -3909,6 +4107,558 @@ def increment_user_stats(users, winners=None, result='finished'):
         conn.commit()
 
 
+def _gr_k_factor(total_ranked_games):
+    games = max(0, int(total_ranked_games or 0))
+    if games < 20:
+        return 40.0
+    if games < 100:
+        return 28.0
+    return 20.0
+
+
+def _gr_repeat_factor(repeat_count):
+    count = max(0, int(repeat_count or 0))
+    ordinal = count + 1
+    if ordinal <= 3:
+        return 1.0
+    if ordinal <= 6:
+        return 0.85
+    if ordinal <= 10:
+        return 0.70
+    return 0.50
+
+
+def _gr_expected(own_rating, opponent_rating):
+    return 1.0 / (1.0 + math.pow(10.0, (float(opponent_rating) - float(own_rating)) / 400.0))
+
+
+def _gr_participants_key(mode, team_a, team_b):
+    a = '-'.join(str(v) for v in sorted(team_a))
+    b = '-'.join(str(v) for v in sorted(team_b))
+    if str(mode or '').lower() == '2v2':
+        teams = sorted([a, b])
+        return f'2v2:{teams[0]}|{teams[1]}'
+    return f'1v1:{min(team_a[0], team_b[0])}-{max(team_a[0], team_b[0])}'
+
+
+def _gr_match_team_ids(summary):
+    raw_ids = summary.get('player_ids') or []
+    ids = []
+    for value in raw_ids:
+        try:
+            ids.append(int(value) if value is not None else None)
+        except (TypeError, ValueError):
+            ids.append(None)
+    mode = str(summary.get('mode') or '').lower()
+    if mode == '2v2':
+        if len(ids) < 4:
+            return None, None
+        return ids[:2], ids[2:4]
+    if len(ids) < 2:
+        return None, None
+    return [ids[0]], [ids[1]]
+
+
+def _gr_winner_side_from_summary(summary, team_a, team_b):
+    result_text = str(summary.get('result') or '').lower()
+    if result_text == 'draw':
+        return None, True
+    try:
+        winner_index = int(summary.get('winner_index')) if summary.get('winner_index') is not None else None
+    except (TypeError, ValueError):
+        winner_index = None
+    if winner_index is not None and winner_index < 0:
+        return None, True
+    winner_ids = set()
+    for value in summary.get('winner_user_ids') or []:
+        try:
+            if value is not None:
+                winner_ids.add(int(value))
+        except (TypeError, ValueError):
+            pass
+    if winner_ids and winner_ids.issubset(set(team_a)):
+        return 0, False
+    if winner_ids and winner_ids.issubset(set(team_b)):
+        return 1, False
+    mode = str(summary.get('mode') or '').lower()
+    if mode == '2v2' and winner_index in (0, 1):
+        return winner_index, False
+    if mode != '2v2' and winner_index in (0, 1):
+        return winner_index, False
+    return None, False
+
+
+def _gr_prepare_match_summary(conn, row, user_ids, username_key_to_id):
+    summary = _safe_json_loads(row['summary_json'], {})
+    mode = str(row['mode'] or summary.get('mode') or '').lower()
+    summary['mode'] = mode
+    summary['result'] = str(row['result'] or summary.get('result') or '').lower()
+    summary['winner_index'] = row['winner_index'] if row['winner_index'] is not None else summary.get('winner_index')
+    summary['ended_at'] = row['ended_at'] or summary.get('ended_at') or row['started_at'] or summary.get('started_at') or utc_now()
+    summary['duration_seconds'] = row['duration_seconds'] or summary.get('duration_seconds') or 0
+    normalized_player_ids, recovered = _match_player_ids_for_stats(conn, row, user_ids, username_key_to_id)
+    summary['player_ids'] = normalized_player_ids
+    winner_ids, is_draw = _match_winner_user_ids_for_stats(row, summary, normalized_player_ids)
+    summary['winner_user_ids'] = sorted(winner_ids)
+    if is_draw:
+        summary['result'] = 'draw'
+        summary['winner_index'] = -1
+    return summary, recovered
+
+
+def _simulate_gr_from_matches(conn):
+    user_columns = {row['name'] for row in conn.execute('PRAGMA table_info(users)').fetchall()}
+    user_where = 'WHERE deleted_at IS NULL' if 'deleted_at' in user_columns else ''
+    user_rows = conn.execute(f'SELECT id, username FROM users {user_where}').fetchall()
+    user_ids = {int(row['id']) for row in user_rows}
+    username_key_to_id = {}
+    for row in user_rows:
+        key = normalize_username_key(row['username'])
+        if key and key not in username_key_to_id:
+            username_key_to_id[key] = int(row['id'])
+    ratings = {
+        uid: {
+            'season_gr': float(GR_INITIAL),
+            'total_gr': float(GR_INITIAL),
+            'highest_gr': float(GR_INITIAL),
+            'season_ranked_games': 0,
+            'total_ranked_games': 0,
+        }
+        for uid in user_ids
+    }
+    skip_reasons = {}
+    recovered_player_refs = 0
+    counted = 0
+    match_results = []
+    repeat_counts = {}
+
+    def skip(reason):
+        skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
+
+    rows = conn.execute(
+        '''
+        SELECT * FROM matches
+        ORDER BY COALESCE(ended_at, started_at), id
+        '''
+    ).fetchall()
+    season = current_gr_season()
+    for row in rows:
+        summary, recovered = _gr_prepare_match_summary(conn, row, user_ids, username_key_to_id)
+        recovered_player_refs += recovered
+        if summary.get('result') not in ('win', 'draw', 'finished'):
+            skip('abnormal_result')
+            continue
+        mode = str(summary.get('mode') or '').lower()
+        if mode not in ('1v1', '2v2'):
+            skip('unsupported_mode')
+            continue
+        try:
+            duration = int(summary.get('duration_seconds') or 0)
+        except (TypeError, ValueError):
+            duration = 0
+        if duration < RANKING_MIN_DURATION_SECONDS:
+            skip('too_short')
+            continue
+        if _match_has_action_counts_for_stats(summary):
+            side_counts = _match_side_action_counts_for_stats(summary, mode)
+            if len(side_counts) < 2 or any(int(value or 0) < RANKING_MIN_ACTIONS_PER_SIDE for value in side_counts[:2]):
+                skip('not_enough_actions')
+                continue
+        team_a, team_b = _gr_match_team_ids(summary)
+        if not team_a or not team_b:
+            skip('missing_player_ids')
+            continue
+        if any(value is None or value not in user_ids for value in team_a + team_b):
+            skip('guest_or_unknown_player')
+            continue
+        all_ids = team_a + team_b
+        if len(set(all_ids)) != len(all_ids):
+            skip('duplicate_player')
+            continue
+        winner_side, is_draw = _gr_winner_side_from_summary(summary, team_a, team_b)
+        if winner_side is None and not is_draw:
+            skip('unknown_winner')
+            continue
+        try:
+            played_dt = datetime.fromisoformat(str(summary.get('ended_at') or '').replace('Z', '+00:00')).astimezone(timezone.utc)
+        except Exception:
+            played_dt = datetime.now(timezone.utc)
+        played_at = utc_iso(played_dt)
+        day_key = played_dt.date().isoformat()
+        participant_key = _gr_participants_key(mode, team_a, team_b)
+        repeat_key = (day_key, mode, participant_key)
+        repeat_count = repeat_counts.get(repeat_key, 0)
+        repeat_counts[repeat_key] = repeat_count + 1
+        repeat_factor = _gr_repeat_factor(repeat_count)
+        mode_factor = GR_2V2_FACTOR if mode == '2v2' else 1.0
+        team_a_season = sum(ratings[uid]['season_gr'] for uid in team_a) / len(team_a)
+        team_b_season = sum(ratings[uid]['season_gr'] for uid in team_b) / len(team_b)
+        team_a_total = sum(ratings[uid]['total_gr'] for uid in team_a) / len(team_a)
+        team_b_total = sum(ratings[uid]['total_gr'] for uid in team_b) / len(team_b)
+        before = {}
+        after = {}
+        season_deltas = {}
+        total_deltas = {}
+        for uid in all_ids:
+            on_a = uid in team_a
+            season_expected = _gr_expected(team_a_season if on_a else team_b_season, team_b_season if on_a else team_a_season)
+            total_expected = _gr_expected(team_a_total if on_a else team_b_total, team_b_total if on_a else team_a_total)
+            score = 0.5 if is_draw else (1.0 if (winner_side == 0 and on_a) or (winner_side == 1 and not on_a) else 0.0)
+            k = _gr_k_factor(ratings[uid]['total_ranked_games'])
+            season_delta = k * mode_factor * repeat_factor * (score - season_expected)
+            total_delta = k * mode_factor * repeat_factor * (score - total_expected)
+            before[str(uid)] = {
+                'season_gr': round(ratings[uid]['season_gr'], 1),
+                'total_gr': round(ratings[uid]['total_gr'], 1),
+            }
+            ratings[uid]['season_gr'] = max(0.0, ratings[uid]['season_gr'] + season_delta)
+            ratings[uid]['total_gr'] = max(0.0, ratings[uid]['total_gr'] + total_delta)
+            ratings[uid]['season_ranked_games'] += 1
+            ratings[uid]['total_ranked_games'] += 1
+            ratings[uid]['highest_gr'] = max(ratings[uid]['highest_gr'], ratings[uid]['season_gr'], ratings[uid]['total_gr'])
+            after[str(uid)] = {
+                'season_gr': round(ratings[uid]['season_gr'], 1),
+                'total_gr': round(ratings[uid]['total_gr'], 1),
+            }
+            season_deltas[str(uid)] = round(season_delta, 1)
+            total_deltas[str(uid)] = round(total_delta, 1)
+        counted += 1
+        result_payload = {
+            'applied': True,
+            'season_id': season['id'],
+            'repeat_count': repeat_count,
+            'repeat_factor': repeat_factor,
+            'season_deltas': season_deltas,
+            'total_deltas': total_deltas,
+            'before': before,
+            'after': after,
+        }
+        match_results.append({
+            'match_id': int(row['id']),
+            'summary': summary,
+            'season_id': season['id'],
+            'mode': mode,
+            'played_at': played_at,
+            'participant_ids': all_ids,
+            'team_a': team_a,
+            'team_b': team_b,
+            'winner_side': winner_side,
+            'is_draw': is_draw,
+            'repeat_count': repeat_count,
+            'repeat_factor': repeat_factor,
+            'result_payload': result_payload,
+        })
+    changed = []
+    for uid, values in ratings.items():
+        if values['total_ranked_games'] <= 0:
+            continue
+        changed.append({
+            'user_id': uid,
+            **values,
+            'delta': values['total_gr'] - GR_INITIAL,
+        })
+    changed.sort(key=lambda item: abs(item['delta']), reverse=True)
+    return {
+        'users': len(user_ids),
+        'matches': len(rows),
+        'counted_matches': counted,
+        'skipped_matches': len(rows) - counted,
+        'skip_reasons': skip_reasons,
+        'recovered_player_refs': recovered_player_refs,
+        'ratings': ratings,
+        'changed': changed,
+        'match_results': match_results,
+        'season': season,
+    }
+
+
+def rebuild_gr_from_matches(dry_run=True):
+    with get_db_connection() as conn:
+        result = _simulate_gr_from_matches(conn)
+        if dry_run:
+            preview = dict(result)
+            preview.pop('ratings', None)
+            preview.pop('match_results', None)
+            return preview
+        season = result['season']
+        conn.execute(f'''
+            UPDATE users
+            SET total_gr = ?,
+                season_gr = ?,
+                highest_gr = ?,
+                total_ranked_games = 0,
+                season_ranked_games = 0,
+                gr_season_id = ?
+            ''', (GR_INITIAL, GR_INITIAL, GR_INITIAL, season['id']))
+        conn.execute('DELETE FROM gr_match_results')
+        conn.execute('DELETE FROM gr_daily_snapshots')
+        for uid, values in result['ratings'].items():
+            conn.execute(
+                '''
+                UPDATE users
+                SET season_gr = ?,
+                    total_gr = ?,
+                    highest_gr = ?,
+                    season_ranked_games = ?,
+                    total_ranked_games = ?,
+                    gr_season_id = ?
+                WHERE id = ?
+                ''',
+                (
+                    values['season_gr'],
+                    values['total_gr'],
+                    values['highest_gr'],
+                    values['season_ranked_games'],
+                    values['total_ranked_games'],
+                    season['id'],
+                    uid,
+                ),
+            )
+        for item in result['match_results']:
+            payload = item['result_payload']
+            conn.execute(
+                '''
+                INSERT INTO gr_match_results (
+                    match_id, season_id, mode, played_at, participant_ids_json, team_a_ids_json, team_b_ids_json,
+                    winner_side, is_draw, repeat_count, repeat_factor, total_deltas_json, season_deltas_json,
+                    before_json, after_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    item['match_id'],
+                    item['season_id'],
+                    item['mode'],
+                    item['played_at'],
+                    json.dumps(item['participant_ids']),
+                    json.dumps(item['team_a']),
+                    json.dumps(item['team_b']),
+                    item['winner_side'],
+                    1 if item['is_draw'] else 0,
+                    item['repeat_count'],
+                    item['repeat_factor'],
+                    json.dumps(payload['total_deltas'], ensure_ascii=False),
+                    json.dumps(payload['season_deltas'], ensure_ascii=False),
+                    json.dumps(payload['before'], ensure_ascii=False),
+                    json.dumps(payload['after'], ensure_ascii=False),
+                ),
+            )
+            summary = dict(item['summary'] or {})
+            summary['gr_result'] = payload
+            conn.execute(
+                'UPDATE matches SET summary_json = ? WHERE id = ?',
+                (json.dumps(summary, ensure_ascii=False), item['match_id']),
+            )
+        today = datetime.now(timezone.utc).date().isoformat()
+        for uid, values in result['ratings'].items():
+            conn.execute(
+                '''
+                INSERT OR REPLACE INTO gr_daily_snapshots
+                    (snapshot_date, user_id, season_id, season_gr, total_gr, season_ranked_games, total_ranked_games, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    today,
+                    uid,
+                    season['id'],
+                    values['season_gr'],
+                    values['total_gr'],
+                    values['season_ranked_games'],
+                    values['total_ranked_games'],
+                    utc_now(),
+                ),
+            )
+        conn.commit()
+        preview = dict(result)
+        preview.pop('ratings', None)
+        preview.pop('match_results', None)
+        return preview
+
+
+def apply_gr_match_result(match_id, summary):
+    """Apply Garden Rating (GR) for one completed match.
+
+    Returns a payload suitable for match summaries. Guest-participant matches
+    intentionally return a non-scoring reason instead of raising.
+    """
+    data = dict(summary or {})
+    if not data.get('valid_for_ranking', True):
+        return {'applied': False, 'reason': data.get('ranking_invalid_reason') or 'not_valid_for_ranking'}
+    if str(data.get('result') or '').lower() not in ('win', 'draw', 'finished'):
+        return {'applied': False, 'reason': 'abnormal_result'}
+    mode = str(data.get('mode') or '').lower()
+    if mode not in ('1v1', '2v2'):
+        return {'applied': False, 'reason': 'unsupported_mode'}
+    team_a, team_b = _gr_match_team_ids(data)
+    if not team_a or not team_b:
+        return {'applied': False, 'reason': 'missing_player_ids'}
+    if any(value is None for value in team_a + team_b):
+        return {'applied': False, 'reason': 'guest_participant'}
+    all_ids = team_a + team_b
+    if len(set(all_ids)) != len(all_ids):
+        return {'applied': False, 'reason': 'duplicate_player'}
+    season = current_gr_season()
+    played_at = data.get('ended_at') or utc_now()
+    try:
+        played_dt = datetime.fromisoformat(str(played_at).replace('Z', '+00:00')).astimezone(timezone.utc)
+    except Exception:
+        played_dt = datetime.now(timezone.utc)
+        played_at = utc_iso(played_dt)
+    day_start = played_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    participant_key = _gr_participants_key(mode, team_a, team_b)
+    is_draw = str(data.get('result') or '').lower() == 'draw' or int(data.get('winner_index') if data.get('winner_index') is not None else 0) == -1
+    winner_side = None
+    if not is_draw:
+        winner_ids = set()
+        for value in data.get('winner_user_ids') or []:
+            try:
+                winner_ids.add(int(value))
+            except (TypeError, ValueError):
+                pass
+        if winner_ids and winner_ids.issubset(set(team_a)):
+            winner_side = 0
+        elif winner_ids and winner_ids.issubset(set(team_b)):
+            winner_side = 1
+        else:
+            try:
+                idx = int(data.get('winner_index'))
+            except (TypeError, ValueError):
+                idx = -1
+            winner_side = idx if mode == '2v2' and idx in (0, 1) else (0 if idx == 0 else 1 if idx == 1 else None)
+        if winner_side is None:
+            return {'applied': False, 'reason': 'unknown_winner'}
+    with get_db_connection() as conn:
+        ensure_current_gr_season_for_conn(conn, all_ids)
+        rows = conn.execute(
+            f"SELECT * FROM users WHERE id IN ({','.join(['?'] * len(all_ids))})",
+            all_ids,
+        ).fetchall()
+        by_id = {int(row['id']): row for row in rows}
+        if len(by_id) != len(all_ids):
+            return {'applied': False, 'reason': 'unknown_user'}
+        repeat_rows = conn.execute(
+            '''
+            SELECT participant_ids_json, team_a_ids_json, team_b_ids_json
+            FROM gr_match_results
+            WHERE played_at >= ? AND played_at < ? AND mode = ?
+            ''',
+            (utc_iso(day_start), utc_iso(day_end), mode),
+        ).fetchall()
+        repeat_count = 0
+        for row in repeat_rows:
+            try:
+                a = [int(v) for v in json.loads(row['team_a_ids_json'] or '[]')]
+                b = [int(v) for v in json.loads(row['team_b_ids_json'] or '[]')]
+            except Exception:
+                continue
+            if _gr_participants_key(mode, a, b) == participant_key:
+                repeat_count += 1
+        repeat_factor = _gr_repeat_factor(repeat_count)
+        mode_factor = GR_2V2_FACTOR if mode == '2v2' else 1.0
+        team_a_season = sum(float(by_id[uid]['season_gr'] or GR_INITIAL) for uid in team_a) / len(team_a)
+        team_b_season = sum(float(by_id[uid]['season_gr'] or GR_INITIAL) for uid in team_b) / len(team_b)
+        team_a_total = sum(float(by_id[uid]['total_gr'] or GR_INITIAL) for uid in team_a) / len(team_a)
+        team_b_total = sum(float(by_id[uid]['total_gr'] or GR_INITIAL) for uid in team_b) / len(team_b)
+        before = {}
+        after = {}
+        season_deltas = {}
+        total_deltas = {}
+        for uid in all_ids:
+            row = by_id[uid]
+            on_a = uid in team_a
+            season_expected = _gr_expected(team_a_season if on_a else team_b_season, team_b_season if on_a else team_a_season)
+            total_expected = _gr_expected(team_a_total if on_a else team_b_total, team_b_total if on_a else team_a_total)
+            if is_draw:
+                score = 0.5
+            else:
+                score = 1.0 if (winner_side == 0 and on_a) or (winner_side == 1 and not on_a) else 0.0
+            k = _gr_k_factor(row['total_ranked_games'])
+            season_delta = k * mode_factor * repeat_factor * (score - season_expected)
+            total_delta = k * mode_factor * repeat_factor * (score - total_expected)
+            old_season = float(row['season_gr'] or GR_INITIAL)
+            old_total = float(row['total_gr'] or GR_INITIAL)
+            new_season = max(0.0, old_season + season_delta)
+            new_total = max(0.0, old_total + total_delta)
+            before[str(uid)] = {
+                'season_gr': round(old_season, 1),
+                'total_gr': round(old_total, 1),
+            }
+            after[str(uid)] = {
+                'season_gr': round(new_season, 1),
+                'total_gr': round(new_total, 1),
+            }
+            season_deltas[str(uid)] = round(season_delta, 1)
+            total_deltas[str(uid)] = round(total_delta, 1)
+            conn.execute(
+                '''
+                UPDATE users
+                SET season_gr = ?,
+                    total_gr = ?,
+                    highest_gr = MAX(COALESCE(highest_gr, ?), ?, ?),
+                    season_ranked_games = COALESCE(season_ranked_games, 0) + 1,
+                    total_ranked_games = COALESCE(total_ranked_games, 0) + 1,
+                    gr_season_id = ?
+                WHERE id = ?
+                ''',
+                (new_season, new_total, GR_INITIAL, new_season, new_total, season['id'], uid),
+            )
+            conn.execute(
+                '''
+                INSERT OR REPLACE INTO gr_daily_snapshots
+                    (snapshot_date, user_id, season_id, season_gr, total_gr, season_ranked_games, total_ranked_games, created_at)
+                VALUES (?, ?, ?, ?, ?, COALESCE((SELECT season_ranked_games FROM users WHERE id = ?), 0),
+                        COALESCE((SELECT total_ranked_games FROM users WHERE id = ?), 0), ?)
+                ''',
+                (played_dt.date().isoformat(), uid, season['id'], new_season, new_total, uid, uid, utc_now()),
+            )
+        result_payload = {
+            'applied': True,
+            'season_id': season['id'],
+            'repeat_count': repeat_count,
+            'repeat_factor': repeat_factor,
+            'season_deltas': season_deltas,
+            'total_deltas': total_deltas,
+            'before': before,
+            'after': after,
+        }
+        conn.execute(
+            '''
+            INSERT INTO gr_match_results (
+                match_id, season_id, mode, played_at, participant_ids_json, team_a_ids_json, team_b_ids_json,
+                winner_side, is_draw, repeat_count, repeat_factor, total_deltas_json, season_deltas_json,
+                before_json, after_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                match_id,
+                season['id'],
+                mode,
+                played_at,
+                json.dumps(all_ids),
+                json.dumps(team_a),
+                json.dumps(team_b),
+                winner_side,
+                1 if is_draw else 0,
+                repeat_count,
+                repeat_factor,
+                json.dumps(total_deltas, ensure_ascii=False),
+                json.dumps(season_deltas, ensure_ascii=False),
+                json.dumps(before, ensure_ascii=False),
+                json.dumps(after, ensure_ascii=False),
+            ),
+        )
+        if match_id:
+            data['gr_result'] = result_payload
+            conn.execute(
+                'UPDATE matches SET summary_json = ? WHERE id = ?',
+                (json.dumps(data, ensure_ascii=False), match_id),
+            )
+        conn.commit()
+    return result_payload
+
+
 def add_user_play_seconds(users, seconds):
     try:
         delta = max(0, int(seconds or 0))
@@ -3924,6 +4674,179 @@ def add_user_play_seconds(users, seconds):
                 (delta, uid),
             )
         conn.commit()
+
+
+def list_user_gr_snapshots(user_id, limit=60):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return []
+    safe_limit = max(1, min(int(limit or 60), 180))
+    with get_db_connection() as conn:
+        ensure_current_gr_season_for_conn(conn, [uid])
+        rows = conn.execute(
+            '''
+            SELECT snapshot_date, season_id, season_gr, total_gr, season_ranked_games, total_ranked_games, created_at
+            FROM gr_daily_snapshots
+            WHERE user_id = ?
+            ORDER BY snapshot_date DESC
+            LIMIT ?
+            ''',
+            (uid, safe_limit),
+        ).fetchall()
+        if not rows:
+            user = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+            if user is not None:
+                today = datetime.now(timezone.utc).date().isoformat()
+                conn.execute(
+                    '''
+                    INSERT OR REPLACE INTO gr_daily_snapshots
+                        (snapshot_date, user_id, season_id, season_gr, total_gr, season_ranked_games, total_ranked_games, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''',
+                    (
+                        today,
+                        uid,
+                        user['gr_season_id'] if 'gr_season_id' in user.keys() else current_gr_season()['id'],
+                        float(user['season_gr'] or GR_INITIAL) if 'season_gr' in user.keys() else GR_INITIAL,
+                        float(user['total_gr'] or GR_INITIAL) if 'total_gr' in user.keys() else GR_INITIAL,
+                        int(user['season_ranked_games'] or 0) if 'season_ranked_games' in user.keys() else 0,
+                        int(user['total_ranked_games'] or 0) if 'total_ranked_games' in user.keys() else 0,
+                        utc_now(),
+                    ),
+                )
+                rows = conn.execute(
+                    '''
+                    SELECT snapshot_date, season_id, season_gr, total_gr, season_ranked_games, total_ranked_games, created_at
+                    FROM gr_daily_snapshots
+                    WHERE user_id = ?
+                    ORDER BY snapshot_date DESC
+                    LIMIT ?
+                    ''',
+                    (uid, safe_limit),
+                ).fetchall()
+        conn.commit()
+    return [
+        {
+            'date': row['snapshot_date'],
+            'season_id': row['season_id'],
+            'season_gr': round(float(row['season_gr'] or GR_INITIAL), 1),
+            'total_gr': round(float(row['total_gr'] or GR_INITIAL), 1),
+            'season_ranked_games': int(row['season_ranked_games'] or 0),
+            'total_ranked_games': int(row['total_ranked_games'] or 0),
+            'created_at': row['created_at'],
+        }
+        for row in reversed(rows)
+    ]
+
+
+def _insert_today_gr_snapshot(conn, row):
+    if row is None:
+        return
+    season = current_gr_season()
+    conn.execute(
+        '''
+        INSERT OR REPLACE INTO gr_daily_snapshots
+            (snapshot_date, user_id, season_id, season_gr, total_gr, season_ranked_games, total_ranked_games, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''',
+        (
+            datetime.now(timezone.utc).date().isoformat(),
+            int(row['id']),
+            row['gr_season_id'] if 'gr_season_id' in row.keys() else season['id'],
+            float(row['season_gr'] or GR_INITIAL) if 'season_gr' in row.keys() else GR_INITIAL,
+            float(row['total_gr'] or GR_INITIAL) if 'total_gr' in row.keys() else GR_INITIAL,
+            int(row['season_ranked_games'] or 0) if 'season_ranked_games' in row.keys() else 0,
+            int(row['total_ranked_games'] or 0) if 'total_ranked_games' in row.keys() else 0,
+            utc_now(),
+        ),
+    )
+
+
+def admin_set_user_gr(identifier, scope='season', value=GR_INITIAL, reason=''):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, '账号不存在'
+    scope_text = str(scope or 'season').strip().lower()
+    if scope_text in ('s', 'season', '赛季', 'season_gr'):
+        cols = ('season_gr',)
+    elif scope_text in ('t', 'total', 'alltime', '总榜', 'total_gr'):
+        cols = ('total_gr',)
+    elif scope_text in ('both', 'all', '全部', 'both_gr'):
+        cols = ('season_gr', 'total_gr')
+    else:
+        return None, '范围必须是 season、total 或 both'
+    try:
+        new_value = max(0.0, float(value))
+    except (TypeError, ValueError):
+        return None, '花阶分必须是数字'
+    with get_db_connection() as conn:
+        ensure_current_gr_season_for_conn(conn, [user['id']])
+        assignments = ', '.join(f'{col} = ?' for col in cols)
+        params = [new_value for _ in cols]
+        params.extend([GR_INITIAL, new_value, user['id']])
+        conn.execute(
+            f'''
+            UPDATE users
+            SET {assignments},
+                highest_gr = MAX(COALESCE(highest_gr, ?), ?)
+            WHERE id = ?
+            ''',
+            params,
+        )
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
+        _insert_today_gr_snapshot(conn, row)
+        conn.commit()
+        return row_to_user(row), None
+
+
+def admin_adjust_user_gr(identifier, scope='season', delta=0, reason=''):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, '账号不存在'
+    try:
+        amount = float(delta)
+    except (TypeError, ValueError):
+        return None, '调整值必须是数字'
+    scope_text = str(scope or 'season').strip().lower()
+    if scope_text in ('s', 'season', '赛季', 'season_gr'):
+        return admin_set_user_gr(identifier, 'season', float(user.get('season_gr') or GR_INITIAL) + amount, reason=reason)
+    if scope_text in ('t', 'total', 'alltime', '总榜', 'total_gr'):
+        return admin_set_user_gr(identifier, 'total', float(user.get('total_gr') or GR_INITIAL) + amount, reason=reason)
+    if scope_text in ('both', 'all', '全部', 'both_gr'):
+        with get_db_connection() as conn:
+            ensure_current_gr_season_for_conn(conn, [user['id']])
+            conn.execute(
+                '''
+                UPDATE users
+                SET season_gr = MAX(0, COALESCE(season_gr, ?) + ?),
+                    total_gr = MAX(0, COALESCE(total_gr, ?) + ?),
+                    highest_gr = MAX(
+                        COALESCE(highest_gr, ?),
+                        MAX(0, COALESCE(season_gr, ?) + ?),
+                        MAX(0, COALESCE(total_gr, ?) + ?)
+                    )
+                WHERE id = ?
+                ''',
+                (GR_INITIAL, amount, GR_INITIAL, amount, GR_INITIAL, GR_INITIAL, amount, GR_INITIAL, amount, user['id']),
+            )
+            row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
+            _insert_today_gr_snapshot(conn, row)
+            conn.commit()
+            return row_to_user(row), None
+    return None, '范围必须是 season、total 或 both'
+
+
+def admin_snapshot_user_gr(identifier):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, '账号不存在'
+    with get_db_connection() as conn:
+        ensure_current_gr_season_for_conn(conn, [user['id']])
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
+        _insert_today_gr_snapshot(conn, row)
+        conn.commit()
+        return row_to_user(row), None
 
 
 def _match_side_action_counts_for_stats(summary, mode=''):

@@ -171,6 +171,10 @@
     <button id="btn-leaderboard-popover-close" class="account-close-btn" type="button">×</button>
   </div>
   <div id="leaderboard-note" class="account-replay-sub">显示有效对局20局及以上的玩家</div>
+  <div id="leaderboard-tabs" class="account-mode-tabs leaderboard-tabs">
+    <button class="account-mode-tab active" type="button" data-leaderboard-scope="season">赛季榜</button>
+    <button class="account-mode-tab" type="button" data-leaderboard-scope="total">总榜</button>
+  </div>
   <div id="leaderboard-list" class="leaderboard-list"></div>
 </div>
 <div id="friends-popover" class="account-popover friends-popover hidden">
@@ -537,6 +541,11 @@
   </div>
   <div id="classic-hand-fan" class="classic-hand-fan"></div>
   <div class="classic-command-panel">
+    <div id="classic-chat-row" class="classic-chat-row">
+      <select id="classic-game-chat-channel" class="game-chat-channel hidden" aria-label="Chat channel"></select>
+      <input type="text" id="classic-game-chat-input" placeholder="聊天..." maxlength="200">
+      <button id="btn-classic-game-chat-send" class="classic-mini-btn" type="button">发送</button>
+    </div>
     <div id="classic-extra-controls" class="classic-extra-controls hidden">
       <button id="classic-switch-perspective" class="classic-mini-btn hidden" type="button">Switch</button>
       <button id="classic-view-deck" class="classic-mini-btn" type="button">查看抽牌堆</button>
@@ -652,6 +661,7 @@
 <div class="gameover-container">
 <h1 id="gameover-title" class="gameover-text"></h1>
 <div id="gameover-message" class="gameover-message hidden"></div>
+<div id="gameover-gr" class="gameover-gr hidden"></div>
 <div id="gameover-log" class="gameover-log"></div>
 <div class="gameover-buttons">
 <button id="btn-rematch" class="btn btn-bloom">再来一局</button>

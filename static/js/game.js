@@ -1263,7 +1263,7 @@ Object.assign(I18N.en, {
     account_password_confirm: 'Confirm Password', account_old_password: 'Current Password', account_new_password: 'New Password',
     account_new_password_confirm: 'Confirm New Password', account_change_password: 'Change Password', account_password_changed: 'Password changed',
     account_change_username: 'Change Username', account_info: 'Account Info', account_online_time: 'Total Match Time', thorn_dew: 'Thorn Dew', account_delete: 'Delete Account', stats: 'Stats',
-    leaderboard: 'Leaderboard', leaderboard_note: 'Ranked by weighted win rate. Reach more than 20 valid games and rank in the top 50 to enter the leaderboard. Good luck!', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...', leaderboard_next_refresh: 'Refresh in {0}', leaderboard_weighted_rate: 'Weighted %', leaderboard_raw_rate: 'Win %', leaderboard_weighted_help: 'Weighted win rate = (wins + 0.5 x draws + 50% x 50) / (games + 50). It lowers the rank boost from small samples.',
+    leaderboard: 'Leaderboard', leaderboard_note: 'Ranked by Garden Rating. Season board needs 8 ranked games; total board needs 20.', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...', leaderboard_next_refresh: 'Refresh in {0}', leaderboard_gr: 'GR', leaderboard_season: 'Season', leaderboard_total: 'All-time', leaderboard_raw_rate: 'Win %',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
     account_need_login: 'Log in or register first', account_error: 'Account error', account_password_mismatch: 'Passwords do not match', guest_enter: 'Enter as Guest',
@@ -1274,7 +1274,7 @@ Object.assign(I18N.zh, {
     account_password_confirm: '确认密码', account_old_password: '原密码', account_new_password: '新密码',
     account_new_password_confirm: '确认新密码', account_change_password: '修改密码', account_password_changed: '密码已修改',
     account_change_username: '修改用户名', account_info: '账号信息', account_online_time: '总对局时长', thorn_dew: '荆露', account_delete: '注销账户', stats: '统计',
-    leaderboard: '排行榜', leaderboard_note: '排行按照加权胜率计算。有效对局数超过20且排名前50，即可上榜。加油！', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...', leaderboard_next_refresh: '刷新倒计时 {0}', leaderboard_weighted_rate: '加权胜率', leaderboard_raw_rate: '胜率', leaderboard_weighted_help: '加权胜率 = (胜场 + 0.5×平场 + 50%×50) ÷ (总局数 + 50)。对局少时会更接近50%，对局多时更接近真实胜率。',
+    leaderboard: '排行榜', leaderboard_note: '排行按照花阶分计算。赛季榜需本赛季至少8场计分对局，总榜需至少20场计分对局。', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...', leaderboard_next_refresh: '刷新倒计时 {0}', leaderboard_gr: '花阶分', leaderboard_season: '赛季榜', leaderboard_total: '总榜', leaderboard_raw_rate: '胜率',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
     account_need_login: '请先登录或注册账号', account_error: '账号错误', account_password_mismatch: '两次输入的密码不一致', guest_enter: '游客进入',
@@ -1286,7 +1286,7 @@ Object.assign(I18N.fr, {
     account_new_password_confirm: 'Confirmer le nouveau', account_change_password: 'Changer le mot de passe', account_password_changed: 'Mot de passe changé',
     account_change_username: 'Changer le nom', account_info: 'Compte', account_online_time: 'Temps total en match', thorn_dew: 'Rosée d’épines',
     account_delete: 'Supprimer le compte', stats: 'Stats',
-    leaderboard: 'Classement', leaderboard_note: 'Classement par taux de victoire pondéré. Plus de 20 parties valides et un rang dans le top 50 permettent d’apparaître ici. Courage !', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...', leaderboard_next_refresh: 'Actualisation {0}', leaderboard_weighted_rate: 'Taux pondéré', leaderboard_raw_rate: 'Victoire', leaderboard_weighted_help: 'Taux pondéré = (victoires + 0,5 x nuls + 50% x 50) / (parties + 50). Les petits échantillons sont rapprochés de 50%.',
+    leaderboard: 'Classement', leaderboard_note: 'Classement par Garden Rating. Saison: 8 parties classées; total: 20.', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...', leaderboard_next_refresh: 'Actualisation {0}', leaderboard_gr: 'GR', leaderboard_season: 'Saison', leaderboard_total: 'Total', leaderboard_raw_rate: 'Victoire',
     account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
     account_not_logged_in: 'Non connecté', account_logged_in_as: 'Connecté : {0}', account_stats: 'Parties {0} / V {1} / D {2} / N {3}',
     account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', account_password_mismatch: 'Les mots de passe ne correspondent pas', guest_enter: 'Entrer en invité',
@@ -1298,7 +1298,7 @@ Object.assign(I18N.ja, {
     account_new_password_confirm: '新しい確認', account_change_password: 'パスワード変更', account_password_changed: '変更しました',
     account_change_username: 'ユーザー名変更', account_info: 'アカウント情報', account_online_time: '総対戦時間', thorn_dew: 'ソーンデュー',
     account_delete: 'アカウント削除', stats: '統計',
-    leaderboard: 'ランキング', leaderboard_note: '加重勝率で順位を計算します。有効対戦が20戦を超え、順位が50位以内になると掲載されます。頑張って！', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...', leaderboard_next_refresh: '更新まで {0}', leaderboard_weighted_rate: '加重勝率', leaderboard_raw_rate: '勝率', leaderboard_weighted_help: '加重勝率 = (勝利 + 0.5 x 引分 + 50% x 50) / (対戦数 + 50)。対戦数が少ないほど50%に近づきます。',
+    leaderboard: 'ランキング', leaderboard_note: 'Garden Ratingで順位を計算します。シーズン榜は8戦、総合榜は20戦以上が必要です。', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...', leaderboard_next_refresh: '更新まで {0}', leaderboard_gr: 'GR', leaderboard_season: 'シーズン', leaderboard_total: '総合', leaderboard_raw_rate: '勝率',
     account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
     account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
@@ -3359,6 +3359,7 @@ const dmFailureBackoff = { threads: 0, messages: new Map() };
 const socialEndpointRequestTimes = new Map();
 let activeSocialFriendId = null;
 let activeSocialSection = 'friends';
+let activeSocialRequestId = null;
 let lobbyMentionCandidates = [];
 let lobbyMentionMenu = null;
 let lobbyMentionActiveRange = null;
@@ -4163,6 +4164,11 @@ function updateStaticText() {
     if (leaderboardTitle) leaderboardTitle.textContent = UI.leaderboard || '排行榜';
     const leaderboardNote = $('leaderboard-note');
     if (leaderboardNote) leaderboardNote.textContent = UI.leaderboard_note || '显示有效对局20局及以上的玩家';
+    document.querySelectorAll('[data-leaderboard-scope]').forEach((btn) => {
+        btn.textContent = btn.dataset.leaderboardScope === 'total'
+            ? (UI.leaderboard_total || '总榜')
+            : (UI.leaderboard_season || '赛季榜');
+    });
     updateLeaderboardRefreshMeta();
     const accountModeLogin = $('btn-account-mode-login');
     if (accountModeLogin) accountModeLogin.textContent = UI.account_login;
@@ -4268,6 +4274,8 @@ function updateStaticText() {
     if (nicknameInput && !nicknameInput.value) nicknameInput.value = localStorage.getItem('gtn_nickname') || '';
     const gameChatInput = $('game-chat-input');
     if (gameChatInput) gameChatInput.placeholder = UI.message_placeholder;
+    const classicGameChatInput = $('classic-game-chat-input');
+    if (classicGameChatInput) classicGameChatInput.placeholder = UI.message_placeholder;
     const lobbyChatInput = $('lobby-chat-input');
     if (lobbyChatInput) lobbyChatInput.placeholder = UI.message_placeholder;
     const phaseChatInput = $('phase-chat-input');
@@ -4390,6 +4398,8 @@ function updateStaticText() {
     if (btnLobbyChatSend) btnLobbyChatSend.textContent = UI.send;
     const btnGameChatSend = $('btn-game-chat-send');
     if (btnGameChatSend) btnGameChatSend.textContent = UI.send;
+    const btnClassicGameChatSend = $('btn-classic-game-chat-send');
+    if (btnClassicGameChatSend) btnClassicGameChatSend.textContent = UI.send;
     updateGameChatChannelOptions(gameState);
     updateCompactUiText();
 }
@@ -6247,6 +6257,7 @@ function getDigitKeyIndex(event) {
 }
 
 function handleClassicHandNumberShortcut(event) {
+    if (isSpectating || replayMode) return false;
     if (!shouldUseClassicBattle(gameState)) return false;
     if (isTypingKeyboardTarget(event && event.target)) return false;
     if (event.altKey || event.ctrlKey || event.metaKey) return false;
@@ -7849,7 +7860,8 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
     const bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
     const power = Math.max(0, Number(cardDict.power_value || 0));
     if (info.triangle) {
-        const startStacks = Math.max(0, Number(attackerState.triangle_stacks || 0));
+        const attackerImmune = isPredictionStatusImmune(attackerState);
+        const startStacks = attackerImmune ? 0 : Math.max(0, Number(attackerState.triangle_stacks || 0));
         const hits = [];
         for (let i = 0; i < clampClientDamageSegments(fission); i++) {
             const stack = Math.min(4, startStacks + i);
@@ -8022,6 +8034,16 @@ function getPredictionCustomStatusValue(playerState = {}, ...keys) {
     return keys.reduce((sum, key) => sum + Math.max(0, Number(custom[key] || playerState[key] || 0)), 0);
 }
 
+function getPredictionStatusMaxValue(playerState = {}, ...keys) {
+    const custom = (playerState && playerState.custom_statuses && typeof playerState.custom_statuses === 'object')
+        ? playerState.custom_statuses
+        : {};
+    return keys.reduce((maxValue, key) => {
+        const value = Math.max(0, Number(custom[key] || playerState[key] || 0));
+        return Math.max(maxValue, Number.isFinite(value) ? value : 0);
+    }, 0);
+}
+
 function isPredictionStatusImmune(playerState = {}) {
     return getPredictionCustomStatusValue(playerState, 'status_immune', 'immune', '状态免疫') > 0;
 }
@@ -8041,19 +8063,19 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
     if (!rawHits.length) return [];
     const hits = [];
     let spongePoison = 0;
-    let dodge = Math.max(0, Number(targetState && targetState.dodge || 0));
-    const armor = Math.max(0, Number(targetState && targetState.armor || 0));
-    const invincible = !!(targetState && targetState.invincible);
-    const sponge = !!(targetState && targetState.sponge_active);
     const immune = isPredictionStatusImmune(targetState);
     const attackerImmune = isPredictionStatusImmune(attackerState);
+    let dodge = immune ? 0 : Math.max(0, Number(targetState && targetState.dodge || 0));
+    const armor = Math.max(0, Number(targetState && targetState.armor || 0));
+    const invincible = immune ? false : !!(targetState && targetState.invincible);
+    const sponge = immune ? false : !!(targetState && targetState.sponge_active);
     const rootArmor = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:root', 'jungle:root_status', 'root_status');
     const fragile = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:fragile', 'fragile');
     let shield = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:shield', 'shield');
     const weakness = attackerImmune ? 0 : Math.max(0, Number(attackerState && attackerState.weakness || 0));
     const plankBlocks = predictionPlayerHasEquipment(targetState, 'Plank', 'jungle:plank')
         && Number(cardDict && cardDict.cost_e || cardDef && cardDef.cost_e || 0) <= 1;
-    let nazarActive = !!(targetState && targetState.nazar_active);
+    let nazarActive = immune ? false : !!(targetState && targetState.nazar_active);
     let nazarBigHits = Math.max(0, Number(targetState && targetState.nazar_big_hits || 0));
     const corruptionMult = 1.5 ** countActiveCorruptionEquipment();
     const dizzyMult = 1 + 0.5 * countDizzyEquipmentForPrediction(attackerState);
@@ -8155,10 +8177,20 @@ function pushPositiveValue(list, value, count = 1) {
     for (let i = 0; i < times; i++) list.push(amount);
 }
 
-function isPredictionStatusImmune(state) {
-    if (!state || typeof state !== 'object') return false;
-    const custom = state.custom_statuses || {};
-    return Number(state.status_immune || custom.status_immune || custom.immune || custom['状态免疫'] || 0) > 0;
+function pushDamageValue(list, value, count = 1) {
+    const amount = Math.max(0, Math.ceil(Number(value || 0)));
+    const rawCount = Number(count);
+    const times = Number.isFinite(rawCount) ? Math.max(0, Math.floor(rawCount)) : 1;
+    if (amount <= 0 || times <= 0) return;
+    for (let i = 0; i < times; i++) list.push(amount);
+}
+
+function collectSelfStatusDamagePrediction(prediction, cardDef, selfState) {
+    if (!prediction || !prediction.self || !cardDef || !selfState || isPredictionStatusImmune(selfState)) return;
+    const fracture = getPredictionStatusMaxValue(selfState, 'fracture', '破损');
+    if (fracture > 0) pushDamageValue(prediction.self.damageHits, fracture);
+    const bleed = getPredictionStatusMaxValue(selfState, 'bleed', '流血');
+    if (bleed > 0 && cardDef.card_type === 'thorn') pushDamageValue(prediction.self.damageHits, bleed);
 }
 
 function applyHealBlockToPrediction(value, recipientState) {
@@ -8193,8 +8225,14 @@ function collectSelfPredictionFromEffects(prediction, cardDict, cardDef, selfSta
             pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(firstNumericEffectValue(params.heal) || 4, selfState), positiveHitCount);
             return;
         }
+        if (type === 'direct_damage' || type === 'deal_direct_damage') {
+            if (params.target != null && effectTargetIsSelf(params.target)) pushDamageValue(prediction.self.damageHits, firstNumericEffectValue(params.amount));
+            return;
+        }
         if (!effectTargetIsSelf(params.target)) return;
-        if (type === 'heal') {
+        if (type === 'lose_health' || type === 'self_damage' || type === 'direct_self_damage') {
+            pushDamageValue(prediction.self.damageHits, firstNumericEffectValue(params.amount));
+        } else if (type === 'heal') {
             pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(firstNumericEffectValue(params.amount), selfState));
         } else if (type === 'gain_e' || type === 'gain_elixir') {
             pushPositiveValue(prediction.self.elixir, firstNumericEffectValue(params.amount));
@@ -8282,8 +8320,16 @@ function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positive
             pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(heal, selfState), params.heal_percent != null || params.ratio != null ? 1 : positiveHitCount);
             return;
         }
+        if (op === 'direct_damage' || op === 'deal_direct_damage') {
+            if (params.target != null && effectTargetIsSelf(params.target)) {
+                pushDamageValue(prediction.self.damageHits, evalPredictionNumberExpr(params.amount, localContext));
+            }
+            return;
+        }
         if (!effectTargetIsSelf(params.target)) return;
-        if (op === 'heal') {
+        if (op === 'lose_health' || op === 'self_damage' || op === 'direct_self_damage') {
+            pushDamageValue(prediction.self.damageHits, evalPredictionNumberExpr(params.amount, localContext));
+        } else if (op === 'heal') {
             pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(Math.floor(evalPredictionNumberExpr(params.amount, localContext)), selfState));
         } else if (op === 'gain_e') {
             pushPositiveValue(prediction.self.elixir, evalPredictionNumberExpr(params.amount, localContext));
@@ -8354,7 +8400,22 @@ function getCoffeePredictionAmount(selfState) {
     return firstUse ? 2 : 1;
 }
 
-function addKnownSelfPrediction(prediction, cardDict, selfState) {
+function v2StepsContainSelfDamage(steps) {
+    return (Array.isArray(steps) ? steps : []).some(step => {
+        if (!step || typeof step !== 'object') return false;
+        const op = step.op || step.type;
+        const params = step.params && typeof step.params === 'object' ? step.params : step;
+        if ((op === 'lose_health' || op === 'self_damage' || op === 'direct_self_damage') && effectTargetIsSelf(params.target)) return true;
+        if ((op === 'direct_damage' || op === 'deal_direct_damage') && params.target != null && effectTargetIsSelf(params.target)) return true;
+        if (op === 'if') {
+            return v2StepsContainSelfDamage(step.then || params.then || [])
+                || v2StepsContainSelfDamage(step.else || params.else || []);
+        }
+        return false;
+    });
+}
+
+function addKnownSelfPrediction(prediction, cardDict, cardDef, selfState) {
     const positiveHitCount = prediction.target.damageHits.filter(v => Number(v) > 0).length;
     switch (cardDict.def_id) {
         case 'Fang':
@@ -8376,6 +8437,10 @@ function addKnownSelfPrediction(prediction, cardDict, selfState) {
             if (!prediction.self.magic.length) pushPositiveValue(prediction.self.magic, 2);
             break;
         default:
+            if (cardMatchesAnyLocalId(cardDict, null, ['BloodCorn', 'blood_corn', 'desert_cards_addition:blood_corn'])
+                && !v2StepsContainSelfDamage((cardDef && cardDef.v2_events && cardDef.v2_events.on_play && (cardDef.v2_events.on_play.steps || cardDef.v2_events.on_play)) || [])) {
+                pushDamageValue(prediction.self.damageHits, 3);
+            }
             break;
     }
 }
@@ -8383,7 +8448,7 @@ function addKnownSelfPrediction(prediction, cardDict, selfState) {
 function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     const result = {
         target: { damageHits: [], electricHits: [], poison: 0, fire: 0 },
-        self: { heal: [], elixir: [], magic: [], armor: [] },
+        self: { damageHits: [], heal: [], elixir: [], magic: [], armor: [] },
         damageHits: [],
         electricHits: [],
         poison: 0,
@@ -8406,7 +8471,8 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
             result.target.poison += Math.ceil(Number(simulatedHits.spongePoison || 0));
             result.target.damageHits = result.target.damageHits.filter(v => Number(v) > 0);
         }
-        const toxic = Math.max(0, Number(targetState && targetState.toxic || 0));
+        const attackerImmune = isPredictionStatusImmune(attackerState);
+        const toxic = attackerImmune ? 0 : Math.max(0, Number(attackerState && attackerState.toxic || 0));
         const positiveHits = result.target.damageHits.filter(v => Number(v) > 0).length;
         if (toxic > 0 && positiveHits > 0) {
             result.target.poison += toxic * positiveHits;
@@ -8422,7 +8488,8 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     const steps = onPlay && (onPlay.steps || onPlay);
     collectTargetPredictionFromV2Steps(result, steps);
     collectSelfPredictionFromV2Steps(result, steps, attackerState, positiveHitCount);
-    addKnownSelfPrediction(result, cardDict, attackerState);
+    addKnownSelfPrediction(result, cardDict, cardDef, attackerState);
+    collectSelfStatusDamagePrediction(result, cardDef, attackerState);
     result.damageHits = result.target.damageHits;
     result.electricHits = result.target.electricHits;
     result.poison = result.target.poison;
@@ -8458,6 +8525,7 @@ function getCardPlayEffectPredictionHtml(cardDict, options = {}) {
     if (prediction.target.electricHits.length) targetParts.push(formatPredictionElectricDamagePart(prediction.target.electricHits));
     if (prediction.target.poison > 0) targetParts.push(formatPredictionPart(prediction.target.poison, 'P', 'poison'));
     if (prediction.target.fire > 0) targetParts.push(formatPredictionPart(prediction.target.fire, 'F', 'fire'));
+    if (prediction.self.damageHits.length) selfParts.push(formatPredictionDamagePart(prediction.self.damageHits));
     selfParts.push(formatPredictionSelfPart(prediction.self.heal, 'H', 'heal'));
     selfParts.push(formatPredictionSelfPart(prediction.self.elixir, 'E', 'elixir'));
     selfParts.push(formatPredictionSelfPart(prediction.self.magic, 'M', 'magic'));
@@ -10811,6 +10879,46 @@ function formatAccountPlayTime(seconds) {
     return `${minutes}分钟`;
 }
 
+function formatGrValue(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '1000';
+    return String(Math.round(n));
+}
+
+function renderGrMiniChart(history) {
+    const points = (Array.isArray(history) ? history : [])
+        .map(item => ({
+            date: String(item.date || ''),
+            season: Number(item.season_gr),
+            total: Number(item.total_gr),
+        }))
+        .filter(item => item.date && Number.isFinite(item.season));
+    if (points.length < 2) {
+        return `<div class="account-gr-chart-empty">${escapeHtml(currentLang === 'zh' ? '暂无足够曲线数据' : 'Not enough rating history')}</div>`;
+    }
+    const values = points.flatMap(item => [item.season, Number.isFinite(item.total) ? item.total : item.season]);
+    const min = Math.min(...values, 950);
+    const max = Math.max(...values, 1050);
+    const span = Math.max(1, max - min);
+    const w = 260;
+    const h = 90;
+    const pad = 10;
+    const xFor = (idx) => pad + (points.length <= 1 ? 0 : idx * (w - pad * 2) / (points.length - 1));
+    const yFor = (value) => h - pad - ((value - min) / span) * (h - pad * 2);
+    const lineFor = (key) => points.map((item, idx) => `${xFor(idx).toFixed(1)},${yFor(Number.isFinite(item[key]) ? item[key] : item.season).toFixed(1)}`).join(' ');
+    const last = points[points.length - 1] || {};
+    return `
+        <svg class="account-gr-chart-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="GR">
+            <polyline class="account-gr-chart-total" points="${escapeHtml(lineFor('total'))}"></polyline>
+            <polyline class="account-gr-chart-season" points="${escapeHtml(lineFor('season'))}"></polyline>
+        </svg>
+        <div class="account-gr-chart-legend">
+            <span><i class="season"></i>${escapeHtml(currentLang === 'zh' ? '赛季' : 'Season')} ${escapeHtml(formatGrValue(last.season))}</span>
+            <span><i class="total"></i>${escapeHtml(currentLang === 'zh' ? '总分' : 'Total')} ${escapeHtml(formatGrValue(last.total))}</span>
+        </div>
+    `;
+}
+
 function renderAccountInfoPanel(user) {
     const grid = $('account-info-grid');
     if (!grid) return;
@@ -10827,6 +10935,10 @@ function renderAccountInfoPanel(user) {
     const thornDewPaid = Math.max(0, Number(user.thorn_dew_paid || 0) || 0);
     const thornDewTotal = Math.max(0, Number(user.thorn_dew_total ?? (thornDewFree + thornDewPaid)) || 0);
     const items = [
+        [currentLang === 'zh' ? '赛季花阶分' : 'Season GR', formatGrValue(user.season_gr)],
+        [currentLang === 'zh' ? '总花阶分' : 'Total GR', formatGrValue(user.total_gr)],
+        [currentLang === 'zh' ? '历史最高' : 'Best GR', formatGrValue(user.highest_gr)],
+        [currentLang === 'zh' ? '本赛季计分局' : 'Season Ranked', user.season_ranked_games || 0],
         [currentLang === 'zh' ? '有效对局数' : 'Valid Games', games],
         [currentLang === 'zh' ? '胜率' : 'Win Rate', winRate],
         [currentLang === 'zh' ? '胜 / 负 / 平' : 'W / L / D', `${wins} / ${losses} / ${draws}`],
@@ -10838,7 +10950,12 @@ function renderAccountInfoPanel(user) {
             <span class="account-info-label">${escapeHtml(label)}</span>
             <span class="account-info-value">${escapeHtml(value)}</span>
         </div>
-    `).join('');
+    `).join('') + `
+        <div class="account-info-item account-gr-chart-item">
+            <span class="account-info-label">${escapeHtml(currentLang === 'zh' ? '花阶分变化' : 'Rating Trend')}</span>
+            ${renderGrMiniChart(user.gr_history || [])}
+        </div>
+    `;
 }
 
 function normalizeSkinConfig(raw) {
@@ -12053,6 +12170,13 @@ function cacheAccount(user) {
                 losses: user.losses || 0,
                 draws: user.draws || 0,
                 play_seconds: user.play_seconds || 0,
+                season_gr: user.season_gr ?? 1000,
+                total_gr: user.total_gr ?? 1000,
+                highest_gr: user.highest_gr ?? 1000,
+                season_ranked_games: user.season_ranked_games || 0,
+                total_ranked_games: user.total_ranked_games || 0,
+                gr_season_id: user.gr_season_id || '',
+                gr_history: Array.isArray(user.gr_history) ? user.gr_history : [],
                 last_username_change_at: user.last_username_change_at || '',
                 accept_friend_requests: user.accept_friend_requests !== false,
                 searchable_by_nickname: user.searchable_by_nickname !== false,
@@ -12426,15 +12550,15 @@ function leaderboardRowHtml(item, rank, extraClass = '') {
     const losses = Number(item && item.losses || 0) || 0;
     const draws = Number(item && item.draws || 0) || 0;
     const rate = Number(item && item.win_rate || 0);
-    const weightedRate = Number(item && item.weighted_win_rate != null ? item.weighted_win_rate : rate);
+    const gr = Number(item && item.gr != null ? item.gr : (leaderboardScope === 'total' ? item.total_gr : item.season_gr));
     const rateText = `${Number.isInteger(rate) ? rate.toFixed(0) : rate.toFixed(1)}%`;
-    const weightedText = `${Number.isInteger(weightedRate) ? weightedRate.toFixed(0) : weightedRate.toFixed(1)}%`;
+    const grText = Number.isFinite(gr) ? formatGrValue(gr) : '-';
     const rankClass = leaderboardRankClass(rank);
     return `
         <div class="leaderboard-row${extraClass ? ` ${extraClass}` : ''}">
             <span class="leaderboard-rank ${rankClass}">${escapeHtml(String(rank || '-'))}</span>
             <span class="leaderboard-name ${rankClass}">${escapeHtml(item && item.username || '-')}</span>
-            <span class="leaderboard-rate leaderboard-weighted-rate">${escapeHtml(weightedText)}</span>
+            <span class="leaderboard-rate leaderboard-gr">${escapeHtml(grText)}</span>
             <span class="leaderboard-rate">${escapeHtml(rateText)}</span>
             <span class="leaderboard-games">${games}</span>
             <span class="leaderboard-wins">${wins}</span>
@@ -12446,15 +12570,11 @@ function leaderboardRowHtml(item, rank, extraClass = '') {
 
 function leaderboardHeaderHtml() {
     const labels = currentLang === 'zh'
-        ? ['排行', '昵称', UI.leaderboard_weighted_rate || '加权胜率', UI.leaderboard_raw_rate || '胜率', '总局数', '胜场', '败场', '平场']
-        : ['Rank', 'Name', UI.leaderboard_weighted_rate || 'Weighted %', UI.leaderboard_raw_rate || 'Win %', 'Games', 'Wins', 'Losses', 'Draws'];
+        ? ['排行', '昵称', UI.leaderboard_gr || '花阶分', UI.leaderboard_raw_rate || '胜率', '总局数', '胜场', '败场', '平场']
+        : ['Rank', 'Name', UI.leaderboard_gr || 'GR', UI.leaderboard_raw_rate || 'Win %', 'Games', 'Wins', 'Losses', 'Draws'];
     return `<div class="leaderboard-row leaderboard-head">
         ${labels.map((label, idx) => {
             const cls = idx === 1 ? 'leaderboard-name' : '';
-            if (idx === 2) {
-                const help = escapeHtml(UI.leaderboard_weighted_help || '');
-                return `<span class="${cls} leaderboard-weighted-head">${escapeHtml(label)}<button class="leaderboard-help-btn" type="button" title="${help}" aria-label="${help}" data-help="${help}">?</button></span>`;
-            }
             return `<span class="${cls}">${escapeHtml(label)}</span>`;
         }).join('')}
     </div>`;
@@ -12463,6 +12583,7 @@ function leaderboardHeaderHtml() {
 let leaderboardCache = null;
 let leaderboardLoadingPromise = null;
 let leaderboardRefreshTimerId = null;
+let leaderboardScope = 'season';
 
 function getNextLeaderboardRefreshMs(nowMs = Date.now()) {
     const intervalMs = 5 * 60 * 1000;
@@ -12511,17 +12632,18 @@ function renderLeaderboardItems(items, selfRank = null) {
     const list = $('leaderboard-list');
     if (!list) return;
     const rows = (Array.isArray(items) ? [...items] : []).sort((a, b) => {
-        const scoreA = Number(a && a.weighted_win_rate != null ? a.weighted_win_rate : a && a.win_rate || 0);
-        const scoreB = Number(b && b.weighted_win_rate != null ? b.weighted_win_rate : b && b.win_rate || 0);
+        const scoreA = Number(a && a.gr != null ? a.gr : (leaderboardScope === 'total' ? (a && a.total_gr) : (a && a.season_gr)) || 0);
+        const scoreB = Number(b && b.gr != null ? b.gr : (leaderboardScope === 'total' ? (b && b.total_gr) : (b && b.season_gr)) || 0);
         if (Math.abs(scoreB - scoreA) >= 0.0001) return scoreB - scoreA;
-        return Number(b && b.games_played || 0) - Number(a && a.games_played || 0);
+        const gamesKey = leaderboardScope === 'total' ? 'total_ranked_games' : 'season_ranked_games';
+        return Number(b && b[gamesKey] || 0) - Number(a && a[gamesKey] || 0);
     });
     const currentId = currentAccount && currentAccount.id != null ? String(currentAccount.id) : '';
     let previousScore = null;
     let previousRank = 0;
     const renderedRows = rows.map((item, index) => {
         const isSelf = currentId && item && item.id != null && String(item.id) === currentId;
-        const score = Number(item && item.weighted_win_rate != null ? item.weighted_win_rate : item && item.win_rate || 0);
+        const score = Number(item && item.gr != null ? item.gr : (leaderboardScope === 'total' ? (item && item.total_gr) : (item && item.season_gr)) || 0);
         const rank = previousScore !== null && Math.abs(score - previousScore) < 0.0001 ? previousRank : index + 1;
         previousScore = score;
         previousRank = rank;
@@ -12553,7 +12675,8 @@ async function loadLeaderboard(options = {}) {
         list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.leaderboard_loading || '正在加载排行榜...')}</div>`;
     }
     try {
-        leaderboardLoadingPromise = authRequest('/api/leaderboard?min_games=20&limit=50', undefined, { timeoutMs: 5000 });
+        const minGames = leaderboardScope === 'total' ? 20 : 8;
+        leaderboardLoadingPromise = authRequest(`/api/leaderboard?scope=${encodeURIComponent(leaderboardScope)}&min_games=${minGames}&limit=50`, undefined, { timeoutMs: 5000 });
         const data = await leaderboardLoadingPromise;
         const nextRefreshMs = data && data.next_refresh_ts
             ? Number(data.next_refresh_ts) * 1000
@@ -12657,8 +12780,14 @@ function friendCardHtml(item, type) {
         actions = `<button class="mini-btn" type="button" data-dm-open-user="${escapeHtml(user.id)}" data-dm-open-name="${escapeHtml(user.username || '')}">私信</button>`;
     }
     const noticeText = isNotice ? `<div class="friend-sub friend-notice">${escapeHtml(tf('friend_auto_added', user.username || '-'))}</div>` : '';
+    const requestId = item?.request_id == null ? '' : String(item.request_id);
+    const isRequestCard = type === 'incoming' || type === 'outgoing';
+    const requestAttrs = isRequestCard && requestId
+        ? ` data-friend-request-open="${escapeHtml(requestId)}" data-friend-request-type="${escapeHtml(type)}"`
+        : '';
+    const requestActive = isRequestCard && requestId && String(activeSocialRequestId || '') === requestId;
     return `
-      <div class="friend-card">
+      <div class="friend-card${isRequestCard ? ' clickable' : ''}${requestActive ? ' active' : ''}"${requestAttrs}>
         <div class="friend-card-head">
           <span class="friend-name">${escapeHtml(user.username || '-')}</span>
           <span class="friend-id">${escapeHtml(user.player_id || '')}</span>
@@ -12750,6 +12879,7 @@ function normalizeSocialTab(tabName = 'friends') {
 function showSocialDetailTab(tabName = 'friends') {
     const tab = normalizeSocialTab(tabName);
     activeSocialSection = tab;
+    if (tab !== 'requests') activeSocialRequestId = null;
     document.querySelectorAll('[data-social-detail-tab]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.socialDetailTab === tab);
     });
@@ -12776,6 +12906,18 @@ function toggleSocialDetailModal(force, tabName = 'friends') {
         renderFriendDetailProfile();
     } else {
         stopSocialNetworkActivity();
+    }
+}
+
+function openFriendRequestDetail(requestId) {
+    activeSocialRequestId = requestId == null ? null : String(requestId);
+    toggleSocialDetailModal(true, 'requests');
+    renderFriendsState();
+    if (activeSocialRequestId && window.CSS && typeof CSS.escape === 'function') {
+        const target = document.querySelector(`[data-friend-request-open="${CSS.escape(activeSocialRequestId)}"]`);
+        if (target && typeof target.scrollIntoView === 'function') {
+            target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        }
     }
 }
 
@@ -13247,7 +13389,8 @@ function toggleFriendsPopover(force) {
 }
 
 function openSocialCenter(tabName = 'friends') {
-    toggleSocialDetailModal(true, tabName);
+    const requested = tabName === 'friends' && Number(socialData.unread_count || 0) > 0 ? 'requests' : tabName;
+    toggleSocialDetailModal(true, requested);
     loadFriends(true);
 }
 
@@ -14630,6 +14773,12 @@ function renderLobby(data) {
         nameSpan.className = isMe ? 'player-name player-self' : 'player-name';
         setPlayerNameContent(nameSpan, p, { adminPrefix: true });
         row.appendChild(nameSpan);
+        if (p.is_registered_user && p.season_gr != null) {
+            const gr = document.createElement('span');
+            gr.className = 'lobby-player-gr';
+            gr.textContent = currentLang === 'zh' ? `花阶分 ${formatGrValue(p.season_gr)}` : `GR ${formatGrValue(p.season_gr)}`;
+            row.appendChild(gr);
+        }
         const actions = document.createElement('div');
         actions.className = 'lobby-player-actions';
         if (!isMe && buttonMode === 'team' && !myTeam) {
@@ -15651,6 +15800,7 @@ function ensureGameChatChannelSelect() {
 function updateGameChatChannelOptions(gs) {
     const select = ensureGameChatChannelSelect();
     populateChatChannelSelect(select, gs);
+    populateChatChannelSelect($('classic-game-chat-channel'), gs);
 }
 
 function currentPhaseChatContext() {
@@ -16115,10 +16265,16 @@ function setClassicControlButton(id, visible, options = {}) {
 function updateClassicExtraControls(gs) {
     const panel = $('classic-extra-controls');
     const surrenderBtn = $('classic-surrender');
+    const chatRow = $('classic-chat-row');
     const inSoloGame = !!gs?.solo;
     const inTutorial = !!gs?.tutorial || tutorialMode;
     const gameOver = gs?.phase === 'game_over';
     const isReadOnlyBattle = !!(isSpectating || replayMode || gs?.spectating || gs?.replay_mode);
+    if (chatRow) {
+        const showChat = !replayMode && !gs?.replay_mode;
+        chatRow.classList.toggle('hidden', !showChat);
+        chatRow.style.display = showChat ? '' : 'none';
+    }
     if (surrenderBtn) {
         const showSurrender = !inSoloGame && !inTutorial && !gameOver && !isReadOnlyBattle;
         surrenderBtn.classList.toggle('hidden', !showSurrender);
@@ -16365,6 +16521,18 @@ function shouldUseClassicBattle(gs) {
     return ['action', 'draw', 'response', 'choice', 'game_over'].includes(gs.phase);
 }
 
+function setLeaderboardScope(scope) {
+    leaderboardScope = scope === 'total' ? 'total' : 'season';
+    document.querySelectorAll('[data-leaderboard-scope]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.leaderboardScope === leaderboardScope);
+        btn.textContent = btn.dataset.leaderboardScope === 'total'
+            ? (UI.leaderboard_total || '总榜')
+            : (UI.leaderboard_season || '赛季榜');
+    });
+    leaderboardCache = null;
+    loadLeaderboard({ force: true });
+}
+
 function hashStringToHue(value) {
     const text = String(value || '?');
     let hash = 0;
@@ -16464,6 +16632,9 @@ function renderStatusTagsToElement(container, playerData) {
 function renderClassicEquipmentList(player) {
     const equipment = (player && player.equipment) || [];
     if (!equipment.length) return '';
+    const ownerIdForTrigger = normalizePlayerId((player && player.id) ?? (player && player.player_id));
+    const myIdForTrigger = normalizePlayerId(gameState && gameState.your_id);
+    const isMyEquipment = ownerIdForTrigger != null && ownerIdForTrigger === myIdForTrigger;
     const total = equipment.length;
     return equipment.map((eq, index) => {
         const cardInst = eq.card_instance || {};
@@ -16484,7 +16655,19 @@ function renderClassicEquipmentList(player) {
         const angle = total ? (index / total) * 360 : 0;
         const orbitDelay = -((Date.now() / 1000) % 15).toFixed(2);
         const spinDelay = -((Date.now() / 1000) % 13).toFixed(2);
-        return `<span class="classic-equip-chip" data-instance-id="${escapeHtml(instanceId)}" title="${escapeHtml(name + targetSuffix)}" style="--chip-color:${typeColor};--equip-angle:${angle}deg;--equip-orbit-delay:${orbitDelay}s;--equip-spin-delay:${spinDelay}s">
+        const canTrigger = canTriggerEquipmentNow(cardInst, cardDef, eq, isMyEquipment);
+        const resourceState = canTrigger ? lacksEquipmentTriggerResource(cardDef) : null;
+        const lacksResource = !!(resourceState && (resourceState.lacksElixir || resourceState.lacksMagic));
+        const triggerClass = canTrigger ? ` is-triggerable${lacksResource ? ' is-trigger-unavailable' : ''}` : '';
+        const cost = canTrigger ? getEquipmentTriggerCost(cardDef) : null;
+        const costText = cost ? [
+            cost.totalE > 0 ? `${cost.totalE}E` : '',
+            cost.totalM > 0 ? `${cost.totalM}M` : '',
+        ].filter(Boolean).join(' ') || '0E' : '';
+        const triggerHint = canTrigger
+            ? `${name}${targetSuffix} 触发：${costText}${lacksResource ? '（资源不足）' : ''}`
+            : `${name}${targetSuffix}`;
+        return `<span class="classic-equip-chip${triggerClass}" data-instance-id="${escapeHtml(instanceId)}" title="${escapeHtml(triggerHint)}" style="--chip-color:${typeColor};--equip-angle:${angle}deg;--equip-orbit-delay:${orbitDelay}s;--equip-spin-delay:${spinDelay}s">
             <span class="classic-equip-visual">
                 ${topParts.length ? `<span class="classic-equip-top">${escapeHtml(topParts.join(' · '))}</span>` : ''}
                 ${getEquipmentIconHtml(cardInst, cardDef)}
@@ -16508,6 +16691,25 @@ function attachClassicEquipmentPreviews(container, player) {
         if (cardInst && cardInst.def_id) {
             attachFloatingCardPreview(chip, cardInst);
             attachTermIntroToCard(chip, cardInst);
+            if (chip.classList.contains('is-triggerable')) {
+                chip.setAttribute('role', 'button');
+                chip.tabIndex = 0;
+                const activate = (event) => {
+                    if (event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                    if (chip.classList.contains('is-trigger-unavailable')) {
+                        flashStatus(UI.insufficient_resource || '资源不足', 1800, 'error');
+                        return;
+                    }
+                    triggerEquipmentInstance(cardInst, getCardDef(cardInst.def_id));
+                };
+                chip.addEventListener('click', activate);
+                chip.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') activate(event);
+                });
+            }
         }
     });
 }
@@ -18922,6 +19124,77 @@ function rootCardNeedsPlayTargetByLegacyFields(cardDef) {
     return false;
 }
 
+function canTriggerEquipmentNow(cardInst, cardDef, eqDict = {}, isMyEquipment = true) {
+    if (!cardInst || !cardDef || cardDef.card_type !== 'root') return false;
+    const turns = Number(eqDict.turns_equipped || 0);
+    const triggerReady = !(cardInst.def_id === 'Flower' && turns < 1);
+    return (
+        Number(cardDef.trigger_cost_e) >= 0
+        && !!isMyEquipment
+        && turns >= 1
+        && triggerReady
+        && isFriendlyTurn()
+        && !isSpectating
+        && !replayMode
+    );
+}
+
+function getEquipmentTriggerCost(cardDef) {
+    return {
+        totalE: Math.max(0, Number(cardDef && cardDef.trigger_cost_e) || 0),
+        totalM: Math.max(0, Number(cardDef && cardDef.trigger_cost_m) || 0),
+    };
+}
+
+function lacksEquipmentTriggerResource(cardDef) {
+    const cost = getEquipmentTriggerCost(cardDef);
+    return {
+        lacksElixir: cost.totalE > getBarValueForKey(gameState && gameState.you, 'elixir'),
+        lacksMagic: cost.totalM > getBarValueForKey(gameState && gameState.you, 'magic'),
+        cost,
+    };
+}
+
+async function triggerEquipmentInstance(cardInst, cardDef) {
+    if (!cardInst || !cardDef) return false;
+    const resource = lacksEquipmentTriggerResource(cardDef);
+    if (resource.lacksElixir || resource.lacksMagic) {
+        flashStatus([resource.lacksElixir ? '能量不足' : '', resource.lacksMagic ? '魔力不足' : ''].filter(Boolean).join('，'), 1800, 'error');
+        return false;
+    }
+    if (!canSendGameAction('use_trigger', { includeAnimation: false })) return false;
+    const payload = { equipment_instance_id: cardInst.instance_id };
+    if (equipmentChoosesTargetOnTrigger(cardDef)) {
+        const targetId = cardHasSelfOnlyFlag(cardInst, cardDef)
+            ? normalizePlayerId(gameState && gameState.your_id)
+            : await choosePlayerTarget(
+                UI.choose_target || UI.select_target || 'Choose target',
+                equipmentTriggerForbidsSelfTarget(cardDef)
+                    ? { includeSelf: false, candidates: 'all', aliveOnly: true }
+                    : { includeSelf: true, candidates: 'all', aliveOnly: true },
+            );
+        if (targetId < 0) return false;
+        payload.target_player_id = targetId;
+    }
+    if (resource.cost.totalE > 0 || resource.cost.totalM > 0) {
+        const override = {
+            playerId: normalizePlayerId(gameState && gameState.your_id),
+            elixir: Math.max(0, getBarValueForKey(gameState && gameState.you, 'elixir') - resource.cost.totalE),
+            magic: Math.max(0, getBarValueForKey(gameState && gameState.you, 'magic') - resource.cost.totalM),
+            maxElixir: getBarMaxForKey(gameState && gameState.you, 'elixir'),
+            maxMagic: getBarMaxForKey(gameState && gameState.you, 'magic'),
+            totalE: resource.cost.totalE,
+            totalM: resource.cost.totalM,
+        };
+        beginPendingServerAction('trigger', { optimisticResources: override, timeoutMs: SERVER_ACTION_TIMEOUT_MS });
+        queueOptimisticResourceCost(resource.cost);
+    } else {
+        beginPendingServerAction('trigger', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
+    }
+    emitModeEvent('solo_use_trigger', 'use_trigger', payload);
+    return true;
+}
+
 async function chooseEnemyTarget(title) {
     const targets = getEnemyTargetOptions();
     if (!targets.length) {
@@ -19022,20 +19295,19 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
         const fullText = UI.equip_info.replace('{0}', equipName).replace('{1}', turns) + layerSuffix + armorSuffix + (corruption ? UI.equip_corruption : '');
         const compactTextValue = `${equipName}${turns ? ` · ${turns}` : ''}${layerSuffix}${armorSuffix}${corruption ? ` · ${UI.compact_corrupted}` : ''}`;
         const text = isMinimalUiStyle() ? compactTextValue : fullText;
-        const triggerReady = !(cardInst.def_id === 'Flower' && turns < 1);
-        if (cardDef.trigger_cost_e >= 0 && isMyEquipment && turns >= 1 && triggerReady && isFriendlyTurn() && !isSpectating) {
+        if (canTriggerEquipmentNow(cardInst, cardDef, eqDict, isMyEquipment)) {
             const btn = document.createElement('button');
             btn.className = 'btn btn-small btn-equip-trigger';
-            const triggerCostE = Math.max(0, Number(cardDef.trigger_cost_e) || 0);
-            const triggerCostM = Math.max(0, Number(cardDef.trigger_cost_m) || 0);
+            const triggerCost = getEquipmentTriggerCost(cardDef);
+            const triggerCostE = triggerCost.totalE;
+            const triggerCostM = triggerCost.totalM;
             const triggerCostText = [
                 triggerCostE > 0 ? `${triggerCostE}E` : '',
                 triggerCostM > 0 ? `${triggerCostM}M` : '',
             ].filter(Boolean).join(' ') || '0E';
-            const currentElixir = getBarValueForKey(gameState && gameState.you, 'elixir');
-            const currentMagic = getBarValueForKey(gameState && gameState.you, 'magic');
-            const lacksElixir = triggerCostE > currentElixir;
-            const lacksMagic = triggerCostM > currentMagic;
+            const resourceState = lacksEquipmentTriggerResource(cardDef);
+            const lacksElixir = resourceState.lacksElixir;
+            const lacksMagic = resourceState.lacksMagic;
             const lacksResource = lacksElixir || lacksMagic;
             const triggerText = `${fullText} 触发：${triggerCostText}`;
             const visibleText = isMinimalUiStyle() ? `⚡ ${equipDisplayName} ${triggerCostText}` : triggerText;
@@ -19053,39 +19325,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             attachTermIntroToCard(btn, previewCardInst);
             btn.onclick = async () => {
                 if (lacksResource) return;
-                if (!canSendGameAction('use_trigger', { includeAnimation: false })) return;
-                const payload = { equipment_instance_id: cardInst.instance_id };
-                if (equipmentChoosesTargetOnTrigger(cardDef)) {
-                    const targetId = cardHasSelfOnlyFlag(cardInst, cardDef)
-                        ? normalizePlayerId(gameState && gameState.your_id)
-                        : await choosePlayerTarget(
-                            UI.choose_target || UI.select_target || 'Choose target',
-                            equipmentTriggerForbidsSelfTarget(cardDef)
-                                ? { includeSelf: false, candidates: 'all', aliveOnly: true }
-                                : { includeSelf: true, candidates: 'all', aliveOnly: true },
-                        );
-                    if (targetId < 0) return;
-                    payload.target_player_id = targetId;
-                }
-                const triggerCost = Math.max(0, Number(cardDef.trigger_cost_e) || 0);
-                const triggerMagicCost = Math.max(0, Number(cardDef.trigger_cost_m) || 0);
-                if (triggerCost > 0 || triggerMagicCost > 0) {
-                    const optimisticCost = { totalE: triggerCost, totalM: triggerMagicCost };
-                    const override = {
-                        playerId: normalizePlayerId(gameState && gameState.your_id),
-                        elixir: Math.max(0, getBarValueForKey(gameState && gameState.you, 'elixir') - triggerCost),
-                        magic: Math.max(0, getBarValueForKey(gameState && gameState.you, 'magic') - triggerMagicCost),
-                        maxElixir: getBarMaxForKey(gameState && gameState.you, 'elixir'),
-                        maxMagic: getBarMaxForKey(gameState && gameState.you, 'magic'),
-                        totalE: triggerCost,
-                        totalM: triggerMagicCost,
-                    };
-                    beginPendingServerAction('trigger', { optimisticResources: override, timeoutMs: SERVER_ACTION_TIMEOUT_MS });
-                    queueOptimisticResourceCost(optimisticCost);
-                } else {
-                    beginPendingServerAction('trigger', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
-                }
-                emitModeEvent('solo_use_trigger', 'use_trigger', payload);
+                triggerEquipmentInstance(cardInst, cardDef);
             };
             container.appendChild(btn);
         } else {
@@ -21721,6 +21961,60 @@ function updateGameOverRematchButton(gs) {
     }
 }
 
+function formatGrDelta(delta) {
+    const value = Number(delta || 0);
+    if (!Number.isFinite(value) || Math.abs(value) < 0.05) return '±0';
+    return `${value > 0 ? '+' : ''}${value.toFixed(Math.abs(value) >= 10 ? 0 : 1)}`;
+}
+
+function renderGameOverGr(gs = {}) {
+    const box = $('gameover-gr');
+    if (!box) return;
+    const summary = gs.match_summary || gs.summary || {};
+    const gr = summary.gr_result || gs.gr_result || null;
+    box.innerHTML = '';
+    box.classList.add('hidden');
+    const title = currentLang === 'zh' ? '花阶分' : 'Garden Rating';
+    if (!gr) return;
+    if (!gr.applied) {
+        const reason = gr.reason || summary.ranking_invalid_reason || '';
+        const text = currentLang === 'zh'
+            ? `本局不计入花阶分${reason ? `（${reason}）` : ''}`
+            : `This match did not affect GR${reason ? ` (${reason})` : ''}`;
+        box.innerHTML = `<div class="gameover-gr-title">${escapeHtml(title)}</div><div class="gameover-gr-muted">${escapeHtml(text)}</div>`;
+        box.classList.remove('hidden');
+        return;
+    }
+    const playerIds = Array.isArray(summary.player_ids) ? summary.player_ids : [];
+    const names = Array.isArray(summary.players) ? summary.players : [];
+    const seasonDeltas = gr.season_deltas || {};
+    const before = gr.before || {};
+    const after = gr.after || {};
+    const rows = [];
+    playerIds.forEach((uid, idx) => {
+        if (uid === null || uid === undefined || uid === '') return;
+        const key = String(uid);
+        const delta = seasonDeltas[key];
+        if (delta === undefined) return;
+        const oldGr = before[key] && before[key].season_gr;
+        const newGr = after[key] && after[key].season_gr;
+        const isMe = currentAccount && String(currentAccount.id) === key;
+        rows.push(`
+            <div class="gameover-gr-row${isMe ? ' is-self' : ''}">
+                <span>${escapeHtml(names[idx] || `P${idx + 1}`)}</span>
+                <span>${escapeHtml(formatGrValue(oldGr))} → ${escapeHtml(formatGrValue(newGr))}</span>
+                <b class="${Number(delta) >= 0 ? 'positive' : 'negative'}">${escapeHtml(formatGrDelta(delta))}</b>
+            </div>
+        `);
+    });
+    const repeat = Number(gr.repeat_factor || 1);
+    const repeatText = repeat < 0.999
+        ? `<div class="gameover-gr-muted">${escapeHtml(currentLang === 'zh' ? `重复对局衰减：×${repeat.toFixed(2)}` : `Repeat match factor: ×${repeat.toFixed(2)}`)}</div>`
+        : '';
+    box.innerHTML = `<div class="gameover-gr-title">${escapeHtml(title)}</div>${rows.join('')}${repeatText}`;
+    box.classList.toggle('hidden', rows.length === 0);
+}
+
 function renderGameOver(data) {
     const gs = preserveGameOverLogState(data || gameState, gameState) || {};
     const finalLog = Array.isArray(gs.log) ? gs.log.slice() : [];
@@ -21760,6 +22054,7 @@ function renderGameOver(data) {
         message.textContent = tutorialMessage;
         message.classList.toggle('hidden', !tutorialMessage);
     }
+    renderGameOverGr(gs);
     const logContainer = $('gameover-log');
     if (logContainer) {
         logContainer.innerHTML = '';
@@ -22201,6 +22496,17 @@ function onGameChatSend() {
     const text = input.value.trim();
     if (text && socket) {
         const payload = applyChatChannelPayload({ text }, 'game-chat-channel');
+        socket.emit('chat', payload);
+        input.value = '';
+    }
+}
+
+function onClassicGameChatSend() {
+    const input = $('classic-game-chat-input');
+    if (!input) return;
+    const text = input.value.trim();
+    if (text && socket) {
+        const payload = applyChatChannelPayload({ text }, 'classic-game-chat-channel');
         socket.emit('chat', payload);
         input.value = '';
     }
@@ -23263,6 +23569,9 @@ async function init() {
     if ($('btn-changelog-popover-close')) $('btn-changelog-popover-close').addEventListener('click', () => toggleChangelogPopover(false));
     if ($('btn-replays-top')) $('btn-replays-top').addEventListener('click', () => toggleStatsPopover());
     if ($('btn-leaderboard-top')) $('btn-leaderboard-top').addEventListener('click', () => toggleLeaderboardPopover());
+    document.querySelectorAll('[data-leaderboard-scope]').forEach((btn) => {
+        btn.addEventListener('click', () => setLeaderboardScope(btn.dataset.leaderboardScope || 'season'));
+    });
     if ($('btn-skin-back')) $('btn-skin-back').addEventListener('click', () => showView('view-login'));
     if ($('btn-skin-save')) $('btn-skin-save').addEventListener('click', saveSkinFromEditor);
     if ($('btn-skin-reset')) $('btn-skin-reset').addEventListener('click', resetSkinEditor);
@@ -23324,6 +23633,12 @@ async function init() {
         if (friendOpenBtn) {
             event.preventDefault();
             openFriendDetail(friendOpenBtn.dataset.friendOpen, 'profile');
+            return;
+        }
+        const requestOpenCard = event.target.closest('[data-friend-request-open]');
+        if (requestOpenCard) {
+            event.preventDefault();
+            openFriendRequestDetail(requestOpenCard.dataset.friendRequestOpen);
             return;
         }
         const dmThreadBtn = event.target.closest('[data-dm-thread]');
@@ -23500,7 +23815,7 @@ async function init() {
     document.addEventListener('pointermove', onClassicAimPointerMove);
     document.addEventListener('keydown', (event) => {
         if (event.code === 'Backquote' || event.key === '`') {
-            if (!isTypingKeyboardTarget(event.target)) classicBackquoteHeld = true;
+            if (!isSpectating && !replayMode && !isTypingKeyboardTarget(event.target)) classicBackquoteHeld = true;
             return;
         }
         if (handleClassicHandNumberShortcut(event)) return;
@@ -23632,6 +23947,12 @@ async function init() {
     $('btn-game-chat-send').addEventListener('click', onGameChatSend);
     $('game-chat-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') onGameChatSend();
+    });
+    const classicGameChatSend = $('btn-classic-game-chat-send');
+    if (classicGameChatSend) classicGameChatSend.addEventListener('click', onClassicGameChatSend);
+    const classicGameChatInput = $('classic-game-chat-input');
+    if (classicGameChatInput) classicGameChatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') onClassicGameChatSend();
     });
     const phaseChatSend = $('btn-phase-chat-send');
     if (phaseChatSend) phaseChatSend.addEventListener('click', onPhaseChatSend);

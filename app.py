@@ -63,11 +63,15 @@ from db import (
     DB_PATH,
     add_user_play_seconds,
     admin_clear_user_role,
+    admin_adjust_user_gr,
     admin_change_user_password,
+    admin_set_user_gr,
     admin_set_user_ban,
     admin_set_user_role,
+    admin_snapshot_user_gr,
     adjust_user_thorn_dew,
     add_friend_request,
+    apply_gr_match_result,
     change_username,
     change_user_password,
     cleanup_expired_friend_requests_once,
@@ -75,6 +79,7 @@ from db import (
     create_report_entry,
     create_remember_token,
     create_user,
+    current_gr_season,
     db_slow_log,
     dm_unread_count,
     find_user_for_admin,
@@ -96,6 +101,7 @@ from db import (
     list_friends,
     list_dm_threads,
     list_leaderboard,
+    list_user_gr_snapshots,
     list_card_draft_stats,
     list_ip_bans,
     list_reports,
@@ -110,6 +116,7 @@ from db import (
     record_card_draft_counts,
     record_card_draft_win_result,
     rebuild_card_draft_win_stats_from_matches,
+    rebuild_gr_from_matches,
     rebuild_user_stats_from_matches,
     rebuild_user_play_seconds_from_matches,
     remove_friend,
@@ -812,6 +819,11 @@ def admin_match_record(room, result='finished'):
                 )
                 if valid_for_ranking and result == 'finished' and getattr(e, 'game_over', False):
                     increment_user_stats(registered_user_ids, stats_winner_user_ids, stats_result)
+                    try:
+                        gr_result = apply_gr_match_result(match_id, summary)
+                        summary['gr_result'] = gr_result
+                    except Exception as gr_exc:
+                        admin_event('error', f'failed to apply GR result: {gr_exc}')
                 if result == 'finished' and getattr(e, 'game_over', False):
                     add_user_play_seconds(registered_user_ids, duration_seconds)
                 if result == 'finished' and getattr(e, 'game_over', False) and room.mode in ('1v1', '2v2'):
@@ -823,6 +835,7 @@ def admin_match_record(room, result='finished'):
                     )
             except Exception as db_exc:
                 admin_event('error', f'failed to persist match summary: {db_exc}')
+        room._match_summary = summary
         room._history_recorded = True
     except Exception as exc:
         admin_event('error', f'failed to record match history: {exc}')
@@ -2443,6 +2456,11 @@ def auth_user_payload(user):
     except Exception as exc:
         admin_event('error', f'failed to load user warnings: {exc}')
         payload['warnings'] = []
+    try:
+        payload['gr_history'] = list_user_gr_snapshots(payload.get('id'), limit=60) if DB_AVAILABLE and payload.get('id') else []
+    except Exception as exc:
+        admin_event('error', f'failed to load GR history: {exc}')
+        payload['gr_history'] = []
     return payload
 
 
@@ -2589,6 +2607,8 @@ def public_player_info(sid, player=None):
         'mode': p.get('mode', '1v1'),
         'user_id': p.get('user_id'),
         'is_registered_user': bool(p.get('is_registered_user')),
+        'season_gr': p.get('season_gr'),
+        'total_gr': p.get('total_gr'),
         'skin': public_skin_config(p.get('skin')),
         'skin_look': normalize_skin_look(p.get('skin_look')),
     }
@@ -5887,6 +5907,19 @@ ADMIN_COMMAND_TREE = {
             'loadout': {'summary': '查看玩家或房间的模组组合', 'usage': 'mod loadout <sid|昵称|房间ID>'},
         },
     },
+    'rating': {
+        'summary': '花阶分与排行榜',
+        'usage': 'rating <season|list|info|set|add|snapshot|rebuild> ...',
+        'children': {
+            'season': {'summary': '查看当前赛季信息', 'usage': 'rating season'},
+            'list': {'summary': '查看花阶分排行榜', 'usage': 'rating list [season|total] [数量]'},
+            'info': {'summary': '查看账号花阶分详情', 'usage': 'rating info <ID|注册顺序|用户名>'},
+            'set': {'summary': '手动设置花阶分', 'usage': 'rating set <ID|注册顺序|用户名> <season|total|both> <数值> [原因]'},
+            'add': {'summary': '手动增减花阶分', 'usage': 'rating add <ID|注册顺序|用户名> <season|total|both> <+/-数值> [原因]'},
+            'snapshot': {'summary': '写入今天的花阶分曲线快照', 'usage': 'rating snapshot <ID|注册顺序|用户名>'},
+            'rebuild': {'summary': '用历史 matches 摘要重建初始花阶分', 'usage': 'rating rebuild <preview|confirm>'},
+        },
+    },
     'chat': {
         'summary': '聊天与广播',
         'usage': 'chat <broadcast|lobby|mute> ...',
@@ -5942,6 +5975,7 @@ ADMIN_COMMANDS = {
     'room': 'room - 房间与对局',
     'card': 'card - 对局内卡牌操作',
     'mod': 'mod - 模组与卡池',
+    'rating': 'rating - 花阶分与排行榜',
     'chat': 'chat - 聊天与广播',
     'server': 'server - 服务器状态与维护',
     'storage': 'storage - 数据、统计与回放',
@@ -5975,6 +6009,10 @@ ADMIN_LEGACY_COMMANDS = {
     'thorndew': 'player dew',
     'jinglu': 'player dew',
     '荆露': 'player dew',
+    'gr': 'rating',
+    'gardenrating': 'rating',
+    'garden-rating': 'rating',
+    '花阶分': 'rating',
     'gitpull': 'server pull',
     'pullmain': 'server pull',
     'updatecode': 'server pull',
@@ -6084,6 +6122,13 @@ def _translate_structured_admin_command(parts):
         ('card', 'remove'): ['delcard', *rest],
         ('mod', 'list'): ['modlist'],
         ('mod', 'loadout'): ['modloadout', *rest],
+        ('rating', 'season'): ['rating-season'],
+        ('rating', 'list'): ['rating-list', *rest],
+        ('rating', 'info'): ['rating-info', *rest],
+        ('rating', 'set'): ['rating-set', *rest],
+        ('rating', 'add'): ['rating-add', *rest],
+        ('rating', 'snapshot'): ['rating-snapshot', *rest],
+        ('rating', 'rebuild'): ['rating-rebuild', *rest],
         ('chat', 'broadcast'): ['broadcast', *rest],
         ('chat', 'lobby'): ['lobbychat', *rest],
         ('chat', 'mute'): ['mutechat', *rest],
@@ -6332,6 +6377,89 @@ def format_thorn_dew_user(user):
     )
 
 
+def format_rating_value(value):
+    try:
+        return str(int(round(float(value))))
+    except (TypeError, ValueError):
+        return '-'
+
+
+def format_rating_user(user):
+    if not user:
+        return '账号不存在'
+    season = current_gr_season()
+    return '\n'.join([
+        f"{user.get('username')} (ID:{user.get('player_id') or '-'} 注册顺序：{user.get('id')})",
+        f"赛季：{season.get('name')}（{admin_display_time(season.get('starts_at'))} 至 {admin_display_time(season.get('ends_at'))}）",
+        f"赛季花阶分：{format_rating_value(user.get('season_gr'))} / 计分局：{int(user.get('season_ranked_games') or 0)}",
+        f"总花阶分：{format_rating_value(user.get('total_gr'))} / 计分局：{int(user.get('total_ranked_games') or 0)}",
+        f"历史最高：{format_rating_value(user.get('highest_gr'))}",
+        f"有效对局：{user.get('games_played', 0)} 胜/负/平={user.get('wins', 0)}/{user.get('losses', 0)}/{user.get('draws', 0)}",
+    ])
+
+
+def admin_rating_list_output(scope='season', limit=20):
+    if not DB_AVAILABLE:
+        return f'数据库不可用：{DB_INIT_ERROR or "-"}'
+    scope_text = 'total' if str(scope or '').lower() in ('total', 'all', '总榜') else 'season'
+    try:
+        safe_limit = max(1, min(int(limit or 20), 100))
+    except (TypeError, ValueError):
+        safe_limit = 20
+    min_games = 20 if scope_text == 'total' else 8
+    rows = list_leaderboard(min_games=min_games, limit=safe_limit, scope=scope_text)
+    if not rows:
+        return '暂无符合条件的花阶分排行。'
+    title = '总榜' if scope_text == 'total' else '赛季榜'
+    lines = [f"花阶分{title}（最低计分局 {min_games}）", '排名  账号  花阶分  胜率  计分局  胜/负/平']
+    for item in rows:
+        ranked_games = item.get('total_ranked_games') if scope_text == 'total' else item.get('season_ranked_games')
+        lines.append(
+            f"{item.get('rank', '-'):<4}  {item.get('username', '-')}  {format_rating_value(item.get('gr'))}  "
+            f"{float(item.get('win_rate') or 0):.1f}%  {ranked_games or 0}  "
+            f"{item.get('wins', 0)}/{item.get('losses', 0)}/{item.get('draws', 0)}"
+        )
+    return '\n'.join(lines)
+
+
+def admin_rating_rebuild_output(result, dry_run=True):
+    skip_reasons = result.get('skip_reasons') or {}
+    changed = result.get('changed') or []
+    user_names = {}
+    if DB_AVAILABLE and changed:
+        try:
+            for item in changed[:30]:
+                user = get_user_by_id(item.get('user_id'))
+                if user:
+                    user_names[int(item.get('user_id'))] = user.get('username') or str(item.get('user_id'))
+        except Exception:
+            user_names = {}
+    lines = [
+        '花阶分历史重建预览' if dry_run else '花阶分历史重建已完成',
+        f"历史对局：{result.get('matches', 0)}",
+        f"计入对局：{result.get('counted_matches', 0)}",
+        f"跳过对局：{result.get('skipped_matches', 0)}",
+        f"昵称/ID恢复引用：{result.get('recovered_player_refs', 0)}",
+    ]
+    if skip_reasons:
+        lines.append('跳过原因：' + '，'.join(f"{k}={v}" for k, v in sorted(skip_reasons.items())))
+    if changed:
+        lines.append('')
+        lines.append('变化最大的账号：')
+        for item in changed[:10]:
+            uid = int(item.get('user_id') or 0)
+            name = user_names.get(uid, str(uid))
+            lines.append(
+                f"{name}#{uid} 总榜 {format_rating_value(item.get('total_gr'))} "
+                f"赛季 {format_rating_value(item.get('season_gr'))} "
+                f"Δ{float(item.get('delta') or 0):+.1f} 局数={int(item.get('total_ranked_games') or 0)}"
+            )
+    if dry_run:
+        lines.append('')
+        lines.append('确认覆盖当前花阶分请输入：/rating rebuild confirm')
+    return '\n'.join(lines)
+
+
 def _short_hash(value, length=12):
     text = str(value or '')
     return text[:length] if text else '-'
@@ -6398,6 +6526,7 @@ def admin_player_get_output(identifier):
                     f"注册账号：{user.get('username')}",
                     f"注册顺序={user.get('id')} 玩家ID={user.get('player_id') or '-'}",
                     f"有效对局={user.get('games_played', 0)} 胜/负/平={user.get('wins', 0)}/{user.get('losses', 0)}/{user.get('draws', 0)}",
+                    f"花阶分：赛季 {format_rating_value(user.get('season_gr'))}（{int(user.get('season_ranked_games') or 0)}局）/ 总榜 {format_rating_value(user.get('total_gr'))}（{int(user.get('total_ranked_games') or 0)}局）",
                     f"总对局时长={format_duration_zh(user.get('play_seconds') or 0)}",
                     f"荆露={user.get('thorn_dew_total', 0)}（普通 {user.get('thorn_dew_free', 0)} / 充值 {user.get('thorn_dew_paid', 0)}）",
                     f"创建={admin_display_time(user.get('created_at'))} 上次下线={admin_display_time(user.get('last_login_at'))}",
@@ -6746,8 +6875,13 @@ def execute_admin_command(line):
     except ValueError as exc:
         return {'success': False, 'output': f'指令解析失败：{exc}'}
     cmd = parts[0].lower()
+    if cmd in ('gr', 'gardenrating', 'garden-rating', '花阶分'):
+        translated_parts = ['rating', *parts[1:]]
+        return execute_admin_command(_quote_admin_parts(translated_parts))
     if cmd == 'help':
         return {'success': True, 'output': render_admin_help(parts[1:])}
+    if cmd == 'rating' and len(parts) == 1:
+        return {'success': True, 'output': render_admin_help(['rating'])}
     translated, structured_error = _translate_structured_admin_command(parts)
     if structured_error:
         return {'success': False, 'output': structured_error}
@@ -6912,6 +7046,75 @@ def execute_admin_command(line):
             f"{admin_display_time(h.get('time'))} #{h['room_id']} {h['mode']} 回合={h['round']} 胜者={h['winner']} 玩家={' vs '.join(h['players'])}"
             for h in rows
         ) or '暂无历史对局。'}
+    if cmd == 'rating-season':
+        season = current_gr_season()
+        return {'success': True, 'output': '\n'.join([
+            f"当前赛季：{season.get('name')}",
+            f"开始：{admin_display_time(season.get('starts_at'))}",
+            f"结束：{admin_display_time(season.get('ends_at'))}",
+            '赛季软重置会在玩家数据读取或计分时自动执行。',
+        ])}
+    if cmd == 'rating-list':
+        scope = parts[1] if len(parts) > 1 else 'season'
+        count_token = parts[2] if len(parts) > 2 else (parts[1] if len(parts) > 1 and str(parts[1]).isdigit() else '20')
+        if str(scope).isdigit():
+            scope = 'season'
+        count = parse_int_token(count_token, 'count') if str(count_token).strip() else 20
+        return {'success': True, 'output': admin_rating_list_output(scope, count)}
+    if cmd == 'rating-info':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'rating info <ID|注册顺序|用户名>')}
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        user = find_user_for_admin(parts[1])
+        return {'success': bool(user), 'output': format_rating_user(user)}
+    if cmd in ('rating-set', 'rating-add'):
+        if len(parts) < 4:
+            usage = 'rating set <ID|注册顺序|用户名> <season|total|both> <数值> [原因]' if cmd == 'rating-set' else 'rating add <ID|注册顺序|用户名> <season|total|both> <+/-数值> [原因]'
+            return {'success': False, 'output': command_error(raw, len(raw), usage)}
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        reason = ' '.join(parts[4:]).strip() or 'admin command'
+        if cmd == 'rating-set':
+            user, error = admin_set_user_gr(parts[1], parts[2], parts[3], reason=reason)
+            action_label = '设置'
+        else:
+            user, error = admin_adjust_user_gr(parts[1], parts[2], parts[3], reason=reason)
+            action_label = '调整'
+        if error:
+            return {'success': False, 'output': error}
+        admin_event('admin', f"GR {action_label} {user.get('username')}#{user.get('id')} scope={parts[2]} value={parts[3]} reason={reason}")
+        return {'success': True, 'output': f'已{action_label}花阶分。\n{format_rating_user(user)}'}
+    if cmd == 'rating-snapshot':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'rating snapshot <ID|注册顺序|用户名>')}
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        user, error = admin_snapshot_user_gr(parts[1])
+        if error:
+            return {'success': False, 'output': error}
+        admin_event('admin', f"GR snapshot written for {user.get('username')}#{user.get('id')}")
+        return {'success': True, 'output': f'已写入今天的花阶分曲线快照。\n{format_rating_user(user)}'}
+    if cmd == 'rating-rebuild':
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        action = parts[1].lower() if len(parts) > 1 else 'preview'
+        if action in ('preview', 'dryrun', 'dry-run', '试算'):
+            try:
+                result = rebuild_gr_from_matches(dry_run=True)
+                return {'success': True, 'output': admin_rating_rebuild_output(result, dry_run=True)}
+            except Exception as exc:
+                admin_event('error', f'GR rebuild preview failed: {exc}')
+                return {'success': False, 'output': f'花阶分重建预览失败：{exc}'}
+        if action not in ('confirm', '确认'):
+            return {'success': False, 'output': command_error(raw, len(raw), 'rating rebuild <preview|confirm>')}
+        try:
+            result = rebuild_gr_from_matches(dry_run=False)
+            admin_event('admin', f"GR rebuilt from matches counted={result.get('counted_matches')} skipped={result.get('skipped_matches')}")
+            return {'success': True, 'output': admin_rating_rebuild_output(result, dry_run=False)}
+        except Exception as exc:
+            admin_event('error', f'GR rebuild failed: {exc}')
+            return {'success': False, 'output': f'花阶分重建失败：{exc}'}
     if cmd in ('draftstats', 'draftstat', 'pickrate'):
         mode = parts[1] if len(parts) > 1 else ''
         if mode and mode not in ('1v1', '2v2'):
@@ -7309,6 +7512,9 @@ def admin_completions(line):
         values = list(ADMIN_COMMAND_TREE.keys())
         return [c for c in values if c.startswith(token.lower())]
     cmd = parts[0].lower() if parts else ''
+    if cmd in ('gr', 'gardenrating', 'garden-rating', '花阶分'):
+        cmd = 'rating'
+        parts = ['rating', *parts[1:]]
     if cmd == 'help':
         if position == 1:
             values = list(ADMIN_COMMAND_TREE.keys())
@@ -7383,6 +7589,26 @@ def admin_completions(line):
     if cmd in ('role', 'userrole') and position >= 4 and len(parts) > 1 and parts[1].lower() == 'set':
         values = ['title=', 'color=bloom', 'color=guard', 'sort=', 'key=', 'direct=', 'chat=']
         return [v for v in values if v.lower().startswith(token.lower())]
+    if cmd in ('rating-info', 'rating-set', 'rating-add', 'rating-snapshot') and position == 1:
+        try:
+            rows = list_admin_users(query=token, sort='username', order='asc', limit=30).get('users', [])
+            values = []
+            for user in rows:
+                values.append(user.get('player_id', ''))
+                values.append(str(user.get('id')))
+                values.append(user.get('username', ''))
+            return [v for v in values if v and v.lower().startswith(token.lower())][:30]
+        except Exception:
+            return []
+    if cmd in ('rating-set', 'rating-add') and position == 2:
+        values = ['season', 'total', 'both']
+        return [v for v in values if v.startswith(token.lower())]
+    if cmd == 'rating-list' and position == 1:
+        values = ['season', 'total']
+        return [v for v in values if v.startswith(token.lower())]
+    if cmd == 'rating-rebuild' and position == 1:
+        values = ['preview', 'confirm']
+        return [v for v in values if v.startswith(token.lower())]
     if cmd in ('dew', 'thorndew', 'jinglu', '荆露') and position == 1:
         values = ['get', 'add', 'addpaid', 'spend', 'tx']
         return [v for v in values if v.startswith(token.lower())]
@@ -7923,6 +8149,10 @@ def _broadcast_game_state_now(room):
     _broadcast_recipients = 0
     _sync_disconnected_revived_players(room)
     _sync_room_action_timer_after_state_change(room)
+    if room.engine.game_over and not getattr(room, '_history_recorded', False):
+        admin_match_record(room)
+        room._history_recorded = True
+        admin_event('game', f'room {room.room_id} finished')
     for pidx, sid in enumerate(room.player_sids):
         if sid not in players:
             continue
@@ -7936,6 +8166,8 @@ def _broadcast_game_state_now(room):
         state.update(instance_payload())
         state.update(_room_timer_payload(room))
         state.update(room_mod_payload(room))
+        if room.engine.phase == 'game_over' or room.engine.game_over:
+            state['match_summary'] = getattr(room, '_match_summary', None)
         if room.engine.phase == 'game_over':
             state.update(room_rematch_payload(room, sid))
         _mark_player_defeated_state(room, pidx, state)
@@ -7980,10 +8212,7 @@ def _broadcast_game_state_now(room):
     broadcast_spectate_state(room)
     _broadcast_recipients += len(getattr(room, 'spectators', []) or [])
     record_socket_broadcast(room, (time.perf_counter() - _broadcast_started) * 1000, _broadcast_recipients)
-    if room.engine.game_over and not getattr(room, '_history_recorded', False):
-        admin_match_record(room)
-        room._history_recorded = True
-        admin_event('game', f'room {room.room_id} finished')
+    if room.engine.game_over:
         _schedule_game_over_cleanup(room)
 
 
@@ -8754,6 +8983,8 @@ def broadcast_spectate_state(room):
         state = build_spectate_state(room, perspective=perspective)
         state['your_id'] = -1
         state['spectating'] = True
+        if room.engine.phase == 'game_over' or room.engine.game_over:
+            state['match_summary'] = getattr(room, '_match_summary', None)
         state['room_chat_history'] = room_chat_history_for_sid(room, spid, spectator=True)
         for i, psid in enumerate(room.player_sids):
             state[f'player{i + 1}_name'] = room_player_nickname(room, psid, '?')
@@ -8803,6 +9034,8 @@ def build_spectate_state(room, perspective=0):
     base['room_chat_history'] = room_chat_history_for_sid(room, spectator=True)
     base.update(room_mod_payload(room))
     base.update(_room_disconnect_state_payload(room))
+    if getattr(engine, 'game_over', False) or getattr(engine, 'phase', None) == 'game_over':
+        base['match_summary'] = getattr(room, '_match_summary', None)
     try:
         perspective = int(perspective or 0)
     except (TypeError, ValueError):
@@ -10332,10 +10565,12 @@ def api_auth_me():
 def api_leaderboard():
     if not DB_AVAILABLE:
         return jsonify({'success': False, 'items': [], 'error': DB_INIT_ERROR}), 503
+    scope = 'total' if str(request.args.get('scope') or '').lower() == 'total' else 'season'
+    default_min_games = 20 if scope == 'total' else 8
     try:
-        min_games = int(request.args.get('min_games') or 20)
+        min_games = int(request.args.get('min_games') or default_min_games)
     except (TypeError, ValueError):
-        min_games = 20
+        min_games = default_min_games
     try:
         limit = int(request.args.get('limit') or 50)
     except (TypeError, ValueError):
@@ -10347,7 +10582,7 @@ def api_leaderboard():
         now_ts = time.time()
         window_start = int(now_ts // _LEADERBOARD_CACHE_SECONDS) * _LEADERBOARD_CACHE_SECONDS
         next_refresh_ts = window_start + _LEADERBOARD_CACHE_SECONDS
-        cache_key = (window_start, min_games, limit)
+        cache_key = (window_start, scope, min_games, limit)
         generated_at = window_start
         with _LEADERBOARD_CACHE_LOCK:
             cached_payload = _LEADERBOARD_CACHE.get(cache_key)
@@ -10356,7 +10591,7 @@ def api_leaderboard():
             generated_at = float(cached_payload.get('generated_at') or window_start)
             list_cached = True
         else:
-            items = list_leaderboard(min_games=min_games, limit=limit)
+            items = list_leaderboard(min_games=min_games, limit=limit, scope=scope)
             list_cached = False
             with _LEADERBOARD_CACHE_LOCK:
                 _LEADERBOARD_CACHE.clear()
@@ -10371,13 +10606,13 @@ def api_leaderboard():
             user = _current_account_user()
             if user and user.get('id'):
                 user_id = int(user.get('id'))
-                self_cache_key = (window_start, min_games, limit, user_id)
+                self_cache_key = (window_start, scope, min_games, limit, user_id)
                 with _LEADERBOARD_CACHE_LOCK:
                     self_cached_marker = _LEADERBOARD_SELF_RANK_CACHE.get(self_cache_key, '__missing__')
                 if self_cached_marker != '__missing__':
                     rank_payload = copy.deepcopy(self_cached_marker)
                 else:
-                    rank_payload = get_leaderboard_rank(user_id, min_games=min_games)
+                    rank_payload = get_leaderboard_rank(user_id, min_games=min_games, scope=scope)
                     with _LEADERBOARD_CACHE_LOCK:
                         _LEADERBOARD_SELF_RANK_CACHE[self_cache_key] = copy.deepcopy(rank_payload)
                 if rank_payload and int(rank_payload.get('rank') or 0) > limit:
@@ -10390,15 +10625,16 @@ def api_leaderboard():
             'items': items,
             'self_rank': self_rank,
             'min_games': min_games,
+            'scope': scope,
             'cached': list_cached,
             'generated_at': datetime.fromtimestamp(generated_at, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
             'next_refresh_at': datetime.fromtimestamp(next_refresh_ts, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
             'next_refresh_ts': int(next_refresh_ts),
             'refresh_interval_seconds': _LEADERBOARD_CACHE_SECONDS,
-            'weighted_formula': {
-                'prior_games': 50,
-                'prior_win_rate': 0.5,
-                'draw_value': 0.5,
+            'gr': {
+                'initial': 1000,
+                'season_min_games': 8,
+                'total_min_games': 20,
             },
         })
     except sqlite3.OperationalError as exc:
@@ -11468,6 +11704,8 @@ def on_login(data):
             'user_id': user_id,
             'account_player_id': account_user.get('player_id') if account_user else '',
             'is_registered_user': is_registered_user,
+            'season_gr': account_user.get('season_gr') if account_user else None,
+            'total_gr': account_user.get('total_gr') if account_user else None,
             'mod_source': community_fields.get('mod_source', 'official'),
             'community_mod_url': community_fields.get('community_mod_url', ''),
             'community_mod_hash': community_fields.get('community_mod_hash', ''),

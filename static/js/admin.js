@@ -28,6 +28,7 @@ let gameChatSignature = '';
 let lastStatusErrorSignature = '';
 let lastStatusErrorAt = 0;
 let draftStatsState = { items: [], total: 0 };
+let draftStatsWinnerOnly = false;
 let reportState = { items: [], total: 0, selectedId: null };
 let statusRequestInFlight = false;
 let gameChatRequestInFlight = false;
@@ -624,13 +625,22 @@ function draftStatsQuery() {
   params.set('order', $('draft-stats-order')?.value || 'desc');
   params.set('limit', '100');
   if ($('draft-stats-merge')?.checked) params.set('merge_modes', '1');
-  if ($('draft-stats-winner-only')?.checked) params.set('winner_only', '1');
+  if (draftStatsWinnerOnly) params.set('winner_only', '1');
   return params;
+}
+
+function updateDraftWinnerOnlyButton() {
+  const button = $('draft-stats-winner-only');
+  if (!button) return;
+  button.classList.toggle('active', draftStatsWinnerOnly);
+  button.setAttribute('aria-pressed', draftStatsWinnerOnly ? 'true' : 'false');
+  button.textContent = draftStatsWinnerOnly ? '只看胜者：开' : '只看胜者：关';
 }
 
 async function loadDraftStats() {
   const table = $('draft-stats-table');
   if (!table) return;
+  updateDraftWinnerOnlyButton();
   try {
     if (!draftStatsState.items.length) {
       table.innerHTML = '<div class="log-item">正在读取抽牌统计。</div>';
@@ -675,6 +685,8 @@ function renderDraftStats(data) {
   const count = $('draft-stats-count');
   const scopeLabel = data.scope === 'week' ? `本周 ${data.week_start || ''}` : '总计';
   const winnerOnly = !!data.winner_only;
+  draftStatsWinnerOnly = winnerOnly;
+  updateDraftWinnerOnlyButton();
   if (count) count.textContent = `${scopeLabel}${winnerOnly ? ' · 胜者' : ''} · ${items.length}/${data.total || 0}`;
   const table = $('draft-stats-table');
   if (!table) return;
@@ -1741,7 +1753,12 @@ function bindEvents() {
   $('draft-stats-refresh')?.addEventListener('click', loadDraftStats);
   $('draft-stats-rebuild-wins')?.addEventListener('click', rebuildDraftWinStats);
   $('draft-stats-merge')?.addEventListener('change', loadDraftStats);
-  $('draft-stats-winner-only')?.addEventListener('change', loadDraftStats);
+  $('draft-stats-winner-only')?.addEventListener('click', () => {
+    draftStatsWinnerOnly = !draftStatsWinnerOnly;
+    draftStatsState = { items: [], total: 0 };
+    updateDraftWinnerOnlyButton();
+    loadDraftStats();
+  });
   $('draft-stats-scope')?.addEventListener('change', loadDraftStats);
   $('draft-stats-mode')?.addEventListener('change', loadDraftStats);
   $('draft-stats-sort')?.addEventListener('change', loadDraftStats);
