@@ -1819,6 +1819,59 @@ def record_chat_message(room_id, channel, sender_user_id, sender_name, message, 
         return cur.lastrowid
 
 
+def list_lobby_chat_entries(beta_mode=False, limit=500):
+    scope = 'beta' if beta_mode else 'release'
+    safe_limit = max(1, min(int(limit or 500), 500))
+    room_id = f'lobby:{scope}'
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            '''
+            SELECT *
+            FROM chat_messages
+            WHERE room_id = ? AND hidden = 0
+            ORDER BY id DESC
+            LIMIT ?
+            ''',
+            (room_id, safe_limit),
+        ).fetchall()
+
+    entries = []
+    for row in reversed(rows):
+        created_at = row['created_at'] or utc_now()
+        try:
+            ts = datetime.fromisoformat(str(created_at).replace('Z', '+00:00')).timestamp()
+        except Exception:
+            ts = time.time()
+        entry = {
+            'type': 'chat',
+            'id': row['id'],
+            'message_id': row['id'],
+            'nickname': row['sender_name'] or '',
+            'text': row['message'] or '',
+            'chat_channel': row['channel'] or 'public',
+            'risk_level': int(row['risk_level'] or 0),
+            'time': created_at,
+            'ts': ts,
+            'repeat_count': 1,
+            'beta_mode': bool(beta_mode),
+        }
+        raw_payload = row['normalized_message'] or ''
+        if raw_payload.startswith('{'):
+            try:
+                payload = json.loads(raw_payload)
+                if isinstance(payload, dict) and payload.get('type') == 'chat':
+                    payload.setdefault('id', row['id'])
+                    payload.setdefault('message_id', row['id'])
+                    payload.setdefault('time', created_at)
+                    payload.setdefault('ts', ts)
+                    payload['beta_mode'] = bool(beta_mode)
+                    entry.update(payload)
+            except Exception:
+                pass
+        entries.append(entry)
+    return entries
+
+
 def _row_to_chat_message(row):
     if row is None:
         return None
@@ -4186,6 +4239,101 @@ def _gr_winner_side_from_summary(summary, team_a, team_b):
     if mode != '2v2' and winner_index in (0, 1):
         return winner_index, False
     return None, False
+
+
+def preview_gr_match_result(mode, player_ids, viewer_user_id=None):
+    """Preview season GR deltas for a possible 1v1/2v2 match without writes."""
+    mode = str(mode or '').lower()
+    if mode not in ('1v1', '2v2'):
+        return {'applied': False, 'reason': 'unsupported_mode'}
+    ids = []
+    for value in player_ids or []:
+        try:
+            ids.append(int(value) if value is not None else None)
+        except (TypeError, ValueError):
+            ids.append(None)
+    required = 4 if mode == '2v2' else 2
+    if len(ids) < required:
+        return {'applied': False, 'reason': 'missing_player_ids'}
+    ids = ids[:required]
+    if any(value is None for value in ids):
+        return {'applied': False, 'reason': 'guest_participant'}
+    if len(set(ids)) != len(ids):
+        return {'applied': False, 'reason': 'duplicate_player'}
+    team_a = ids[:2] if mode == '2v2' else [ids[0]]
+    team_b = ids[2:4] if mode == '2v2' else [ids[1]]
+    season = current_gr_season()
+    participant_key = _gr_participants_key(mode, team_a, team_b)
+    now_dt = datetime.now(timezone.utc)
+    day_start = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    with get_db_connection() as conn:
+        ensure_current_gr_season_for_conn(conn, ids)
+        rows = conn.execute(
+            f"SELECT * FROM users WHERE id IN ({','.join(['?'] * len(ids))})",
+            ids,
+        ).fetchall()
+        by_id = {int(row['id']): row for row in rows}
+        if len(by_id) != len(ids):
+            return {'applied': False, 'reason': 'unknown_user'}
+        repeat_rows = conn.execute(
+            '''
+            SELECT team_a_ids_json, team_b_ids_json
+            FROM gr_match_results
+            WHERE played_at >= ? AND played_at < ? AND mode = ?
+            ''',
+            (utc_iso(day_start), utc_iso(day_end), mode),
+        ).fetchall()
+    repeat_count = 0
+    for row in repeat_rows:
+        try:
+            a = [int(v) for v in json.loads(row['team_a_ids_json'] or '[]')]
+            b = [int(v) for v in json.loads(row['team_b_ids_json'] or '[]')]
+        except Exception:
+            continue
+        if _gr_participants_key(mode, a, b) == participant_key:
+            repeat_count += 1
+    repeat_factor = _gr_repeat_factor(repeat_count)
+    mode_factor = GR_2V2_FACTOR if mode == '2v2' else 1.0
+    team_a_season = sum(float(by_id[uid]['season_gr'] or GR_INITIAL) for uid in team_a) / len(team_a)
+    team_b_season = sum(float(by_id[uid]['season_gr'] or GR_INITIAL) for uid in team_b) / len(team_b)
+    outcomes = {}
+    for winner_side in (0, 1, 'draw'):
+        deltas = {}
+        for uid in ids:
+            on_a = uid in team_a
+            own_rating = team_a_season if on_a else team_b_season
+            other_rating = team_b_season if on_a else team_a_season
+            if winner_side == 'draw':
+                score = 0.5
+            else:
+                score = 1.0 if (winner_side == 0 and on_a) or (winner_side == 1 and not on_a) else 0.0
+            expected = _gr_expected(own_rating, other_rating)
+            k = _gr_k_factor(by_id[uid]['total_ranked_games'])
+            deltas[str(uid)] = round(k * mode_factor * repeat_factor * (score - expected), 1)
+        outcomes[str(winner_side)] = deltas
+    viewer = None
+    try:
+        viewer_uid = int(viewer_user_id) if viewer_user_id is not None else None
+    except (TypeError, ValueError):
+        viewer_uid = None
+    if viewer_uid in ids:
+        viewer_side = 0 if viewer_uid in team_a else 1
+        viewer = {
+            'user_id': viewer_uid,
+            'side': viewer_side,
+            'win_delta': outcomes[str(viewer_side)].get(str(viewer_uid), 0),
+            'loss_delta': outcomes[str(1 - viewer_side)].get(str(viewer_uid), 0),
+            'draw_delta': outcomes['draw'].get(str(viewer_uid), 0),
+        }
+    return {
+        'applied': True,
+        'season_id': season['id'],
+        'repeat_count': repeat_count,
+        'repeat_factor': repeat_factor,
+        'outcomes': outcomes,
+        'viewer': viewer,
+    }
 
 
 def _gr_prepare_match_summary(conn, row, user_ids, username_key_to_id):

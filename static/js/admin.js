@@ -29,6 +29,7 @@ let lastStatusErrorSignature = '';
 let lastStatusErrorAt = 0;
 let draftStatsState = { items: [], total: 0 };
 let draftStatsWinnerOnly = false;
+let draftStatsRequestSeq = 0;
 let reportState = { items: [], total: 0, selectedId: null };
 let statusRequestInFlight = false;
 let gameChatRequestInFlight = false;
@@ -640,14 +641,18 @@ function updateDraftWinnerOnlyButton() {
 async function loadDraftStats() {
   const table = $('draft-stats-table');
   if (!table) return;
+  const requestSeq = ++draftStatsRequestSeq;
   updateDraftWinnerOnlyButton();
   try {
     if (!draftStatsState.items.length) {
       table.innerHTML = '<div class="log-item">正在读取抽牌统计。</div>';
     }
-    draftStatsState = await api(`/api/admin/draft-stats?${draftStatsQuery().toString()}`);
+    const data = await api(`/api/admin/draft-stats?${draftStatsQuery().toString()}`);
+    if (requestSeq !== draftStatsRequestSeq) return;
+    draftStatsState = data;
     renderDraftStats(draftStatsState);
   } catch (error) {
+    if (requestSeq !== draftStatsRequestSeq) return;
     table.innerHTML = `<div class="log-item error">抽牌统计加载失败：${escapeHtml(error.message)}</div>`;
   }
 }

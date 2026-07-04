@@ -584,7 +584,7 @@ class GameEngine2v2(GameEngine):
             try:
                 self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
                 is_precision = pending.get('is_precision', False)
-                if counter_removed.def_id == 'Bubble':
+                if self._card_is(counter_removed, 'Bubble', 'vanilla:bubble'):
                     if is_precision:
                         self._execute_card_effect_half_damage(player_id, card, choice)
                         if not self._is_status_immune(responder_id):
@@ -594,7 +594,7 @@ class GameEngine2v2(GameEngine):
                     if not self._is_status_immune(responder_id):
                         responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
                     return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
-                if counter_removed.def_id == 'MagicBubble':
+                if self._card_is(counter_removed, 'MagicBubble', 'vanilla:magicbubble'):
                     self.negated_card = True
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             finally:
@@ -980,8 +980,9 @@ class GameEngine2v2(GameEngine):
             if getattr(self, 'pending_v2_ui', None) is not None:
                 return {'success': True, 'needs_v2_ui': True, 'card': card.to_dict()}
         extra_e = self._get_extra_e_for_card(player_id, card)
-        card._paid_e_this_play = int(card.cost_e + extra_e)
-        self._spend_resource(player_id, 'elixir', card.cost_e + extra_e, card)
+        total_e = max(0, int(card.cost_e + extra_e))
+        card._paid_e_this_play = int(total_e)
+        self._spend_resource(player_id, 'elixir', total_e, card)
         self._spend_resource(player_id, 'magic', card.cost_m, card)
         ps.remove_hand_card(card_instance_id)
         ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
@@ -1112,6 +1113,7 @@ class GameEngine2v2(GameEngine):
             if 'indestructible' in eq.card_instance.flags:
                 surviving_equip.append(eq)
             else:
+                self._cleanup_equipment_derived_effects(player_id, eq, run_destroy_event=True)
                 owner_id = getattr(eq, 'owner', player_id)
                 try:
                     owner_id = int(owner_id)
@@ -1125,6 +1127,8 @@ class GameEngine2v2(GameEngine):
                     self._discard_card(self.players[owner_id], eq.card_instance)
                 self.log_msg(f"{self.pn(player_id)}的{eq.card_def.name_cn}因死亡被摧毁")
         ps.equipment = surviving_equip
+        self._refresh_equipment_derived_player_flags()
+        self._refresh_hand_limit_bonuses()
         self._remove_equipment_targeting_dead_player(player_id)
         pending_ally = getattr(self, 'pending_ally_request', None)
         if pending_ally and (

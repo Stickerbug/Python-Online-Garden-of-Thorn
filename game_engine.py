@@ -486,13 +486,16 @@ class PlayerState:
         return drawn
 
     def heal(self, amount: int):
-        if self.heal_block > 0 and not self._is_status_immune_internal():
-            reduction = min(1.0, 0.5 * self.heal_block)
-            amount = max(0, int(amount * (1.0 - reduction))) if amount > 0 else amount
+        if amount > 0 and self.heal_block > 0:
+            if not self._is_status_immune_internal():
+                reduction = min(1.0, 0.5 * self.heal_block)
+                amount = max(0, int(amount * (1.0 - reduction)))
+            self.heal_block = max(0, self.heal_block - 1)
         self.health = min(self.health + amount, self.base_max_health)
 
     def _is_status_immune_internal(self) -> bool:
-        return int(getattr(self, 'custom_statuses', {}).get('status_immune', 0) or 0) > 0
+        custom = getattr(self, 'custom_statuses', {}) or {}
+        return any(int(custom.get(key, 0) or 0) > 0 for key in ('status_immune', 'immune', '状态免疫'))
 
     def gain_elixir(self, amount: int):
         self.elixir = min(self.elixir + amount, self.max_elixir)
@@ -3818,7 +3821,7 @@ class GameEngine:
 
     def _get_extra_e_for_card(self, player_id: int, card: CardInstance) -> int:
         ps = self.players[player_id]
-        dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
+        dup_count = self._cards_played_this_turn_count(ps, card)
         extra = 0 if 'symbiosis' in card.flags else dup_count
         if self._card_is(card, 'Bamboo', 'jungle:bamboo'):
             try:
@@ -3827,6 +3830,41 @@ class GameEngine:
                 other_bamboo = 0
             extra -= other_bamboo
         return extra
+
+    def _card_local_id_values(self, card_or_def) -> Set[str]:
+        values: Set[str] = set()
+        if card_or_def is None:
+            return values
+        for value in (
+            getattr(card_or_def, 'def_id', ''),
+            getattr(card_or_def, 'id', ''),
+            getattr(card_or_def, 'legacy_id', ''),
+        ):
+            if value:
+                values.add(str(value))
+        card_def = getattr(card_or_def, 'card_def', None)
+        if card_def is not None and card_def is not card_or_def:
+            values.update(self._card_local_id_values(card_def))
+        resource = getattr(card_def or card_or_def, 'v2_resource', {}) or {}
+        if isinstance(resource, dict):
+            for key in ('id', 'legacy_id', 'runtime_id'):
+                value = resource.get(key)
+                if value:
+                    values.add(str(value))
+        return values
+
+    def _cards_played_this_turn_count(self, ps: PlayerState, card: CardInstance) -> int:
+        played = getattr(ps, 'cards_played_this_turn', {}) or {}
+        ids = self._card_local_id_values(card)
+        if not ids:
+            ids = {str(getattr(card, 'def_id', '') or '')}
+        total = 0
+        for key in ids:
+            try:
+                total += int(played.get(key, 0) or 0)
+            except Exception:
+                continue
+        return total
 
     def _card_is(self, card_or_def, *ids: str) -> bool:
         wanted = {str(item) for item in ids if item}
@@ -3970,7 +4008,54 @@ class GameEngine:
         paid_e = max(0, int(getattr(card, '_paid_e_this_play', 0) or 0))
         ps.elixir += paid_e
         ps.magic += card.cost_m
-        ps.cards_played_this_turn[card.def_id] = max(0, played_count - 1)
+        remaining_count = max(0, played_count - 1)
+        if remaining_count > 0:
+            ps.cards_played_this_turn[card.def_id] = remaining_count
+        else:
+            ps.cards_played_this_turn.pop(card.def_id, None)
+        instance_id = int(getattr(card, 'instance_id', 0) or 0)
+        if instance_id:
+            played_ids = getattr(ps, 'cards_played_this_turn_instance_ids', None)
+            if isinstance(played_ids, list):
+                for idx in range(len(played_ids) - 1, -1, -1):
+                    if int(played_ids[idx] or 0) == instance_id:
+                        del played_ids[idx]
+                        break
+
+    def _undo_magic_acceleration_after_pending_choice(self, player_id: int, card: Optional[CardInstance] = None):
+        ps = self.players[player_id]
+        if int(getattr(ps, 'custom_vars', {}).get('setup_magic_acceleration', 0) or 0) <= 0:
+            return
+        if card is not None and int(getattr(card, 'cost_m', 0) or 0) > 0:
+            return
+        msg = f"{self.pn(player_id)}【魔力加速】：+1M"
+        for idx in range(len(self.log) - 1, -1, -1):
+            if self.log[idx] == msg:
+                del self.log[idx]
+                if ps.magic > 0:
+                    ps.magic -= 1
+                return
+
+    def _remove_pending_choice_play_log(self, player_id: int, card: CardInstance, play_log_marker: Optional[int] = None):
+        if play_log_marker is None:
+            return
+        expected_play_log = f"{self.pn(player_id)}使用了{card.name_cn}"
+        if 0 <= play_log_marker < len(self.log) and str(self.log[play_log_marker]).startswith(expected_play_log):
+            del self.log[play_log_marker]
+
+    def _undo_pending_choice_play_side_effects(
+        self,
+        player_id: int,
+        card: CardInstance,
+        play_log_marker: Optional[int] = None,
+        restore_to_hand: bool = True,
+    ):
+        ps = self.players[player_id]
+        self._remove_pending_choice_play_log(player_id, card, play_log_marker)
+        self._undo_magic_acceleration_after_pending_choice(player_id, card)
+        if restore_to_hand and ps.find_hand_card(card.instance_id) is None:
+            ps.hand.insert(0, card)
+        self._refund_pending_choice_cost(player_id, card)
 
     def _choice_target_from_choice(self, choice: Optional[dict], default: int = -1) -> int:
         if not isinstance(choice, dict):
@@ -4139,10 +4224,7 @@ class GameEngine:
                     choice_list=True,
                 )
         if already_paid:
-            ps = self.players[player_id]
-            if ps.find_hand_card(card.instance_id) is None:
-                ps.hand.insert(0, card)
-            self._refund_pending_choice_cost(player_id, card)
+            self._undo_pending_choice_play_side_effects(player_id, card)
         result = {
             'success': True,
             'needs_choice': True,
@@ -4348,7 +4430,7 @@ class GameEngine:
             try:
                 self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
                 is_precision = pending.get('is_precision', False)
-                if counter_removed.def_id == 'Bubble':
+                if self._card_is(counter_removed, 'Bubble', 'vanilla:bubble'):
                     if is_precision:
                         self._execute_card_effect_half_damage(player_id, card, choice)
                         if not self._is_status_immune(responder_id):
@@ -4358,7 +4440,7 @@ class GameEngine:
                     if not self._is_status_immune(responder_id):
                         responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
                     return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
-                if counter_removed.def_id == 'MagicBubble':
+                if self._card_is(counter_removed, 'MagicBubble', 'vanilla:magicbubble'):
                     self.negated_card = True
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             finally:
@@ -4498,21 +4580,21 @@ class GameEngine:
                 None,
                 {'event': 'response', 'source_id': responder_id, 'target_id': response_target_id},
             )
-        elif counter_card.def_id == 'Bubble':
+        elif self._card_is(counter_card, 'Bubble', 'vanilla:bubble'):
             if not self._status_application_blocked(responder_id, 'dodge'):
                 ps.dodge += 1
                 self.log_msg(f"{self.pn(responder_id)}获得1层闪避")
-        elif counter_card.def_id == 'Nazar':
+        elif self._card_is(counter_card, 'Nazar', 'vanilla:nazar'):
             if not self._status_application_blocked(responder_id, 'nazar_active'):
                 ps.nazar_active = True
                 ps.nazar_big_hits = 0
                 self.log_msg(f"{self.pn(responder_id)}获得邪眼护符效果")
-        elif counter_card.def_id == 'MagicNazar':
+        elif self._card_is(counter_card, 'MagicNazar', 'vanilla:magicnazar'):
             if not self._status_application_blocked(responder_id, 'magic_nazar'):
                 magic_nazar_stacks = int(ps.custom_statuses.get('magic_nazar', 0) or 0) + 2
                 ps.custom_statuses['magic_nazar'] = magic_nazar_stacks
                 self.log_msg(f"{self.pn(responder_id)}获得2层魔法邪眼（共{magic_nazar_stacks}层）")
-        elif counter_card.def_id == 'MagicBubble':
+        elif self._card_is(counter_card, 'MagicBubble', 'vanilla:magicbubble'):
             if not self._status_application_blocked(responder_id, 'negate_next_skill'):
                 ps.negate_next_skill = True
                 self.log_msg(f"{self.pn(responder_id)}的魔法泡泡：敌方下次技能牌失效")
@@ -4617,6 +4699,9 @@ class GameEngine:
                 isinstance(choice, dict) and (bool(choice.get('cancelled')) or bool(choice.get('cancel')))
             )
             if choice_cancelled:
+                if (pending.get('choice_params') or {}).get('cancellable') is False:
+                    self.pending_choice = pending
+                    return {'success': False, 'error': '此选择不能取消'}
                 card_data = pending.get('card')
                 card = CardInstance.from_dict(card_data) if isinstance(card_data, dict) else None
                 if card:
@@ -5406,6 +5491,34 @@ class GameEngine:
         if changed > 0 and log:
             self.log_msg(log)
 
+    def _merge_fusion_card_layers(self, keep: CardInstance, cards: List[CardInstance]):
+        if not keep or not cards:
+            return
+        keep.fusion_level = clamp_card_layer(sum(clamp_card_layer(getattr(c, 'fusion_level', 1)) for c in cards))
+        keep.fission_level = clamp_card_layer(max(clamp_card_layer(getattr(c, 'fission_level', 1)) for c in cards))
+        keep.fusion_multiplier = float(keep.fusion_level)
+        keep.fission_count = keep.fission_level - 1
+
+        for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value'):
+            setattr(keep, attr, max(0, max(int(getattr(c, attr, 0) or 0) for c in cards)))
+
+        # Layered special-effect tags remain active if any merged card had them.
+        keep.instance_flags.update(*(getattr(c, 'instance_flags', set()) or set() for c in cards))
+        keep.disabled_flags.intersection_update(*(getattr(c, 'disabled_flags', set()) or set() for c in cards))
+        layer_flag_by_attr = {
+            'swift_value': 'swift',
+            'magic_swift_value': 'magic_swift',
+            'power_value': 'power',
+            'temp_swift_value': 'temp_swift',
+            'temp_heavy_value': 'temp_heavy',
+        }
+        for attr, flag in layer_flag_by_attr.items():
+            if int(getattr(keep, attr, 0) or 0) > 0:
+                keep.instance_flags.add(flag)
+                keep.disabled_flags.discard(flag)
+            elif flag in keep.instance_flags:
+                keep.instance_flags.discard(flag)
+
     def _atomic_fusion(self, player_id, card, params, log, choice, context):
         count = self._eval_int(player_id, params.get('count', params.get('min_count', 2)), card, 2)
         max_count = self._eval_int(player_id, params.get('max_count', count), card, count)
@@ -5425,10 +5538,7 @@ class GameEngine:
                 self.log_msg(log or f"{self.pn(player_id)}聚变目标无效")
                 return
             keep = selected[0]
-            keep.fusion_level = clamp_card_layer(sum(clamp_card_layer(getattr(c, 'fusion_level', 1)) for c in selected))
-            keep.fission_level = clamp_card_layer(max(clamp_card_layer(getattr(c, 'fission_level', 1)) for c in selected))
-            keep.fusion_multiplier = float(keep.fusion_level)
-            keep.fission_count = keep.fission_level - 1
+            self._merge_fusion_card_layers(keep, selected)
             for c in selected[1:]:
                 ps.hand.remove(c)
                 self._discard_card(ps, c)
@@ -5565,6 +5675,7 @@ class GameEngine:
             self.pending_choice = {
                 'player_id': player_id,
                 'choice_type': 'reorder_deck',
+                'choice_params': {'cancellable': False},
                 'card': card.to_dict() if card else {},
                 'target_player_id': target_id,
                 'deck_cards': deck_cards,
@@ -6043,10 +6154,7 @@ class GameEngine:
                 self.log_msg(f"{self.pn(player_id)}使用聚变，但目标不是同名攻击牌")
                 return
             first = cards[0]
-            first.fusion_level = clamp_card_layer(sum(clamp_card_layer(getattr(c, 'fusion_level', 1)) for c in cards))
-            first.fission_level = clamp_card_layer(max(clamp_card_layer(getattr(c, 'fission_level', 1)) for c in cards))
-            first.fusion_multiplier = float(first.fusion_level)
-            first.fission_count = first.fission_level - 1
+            self._merge_fusion_card_layers(first, cards)
             for c in cards[1:]:
                 ps.hand.remove(c)
                 self._discard_card(ps, c)
@@ -6286,6 +6394,74 @@ class GameEngine:
                     return True
         return False
 
+    def _has_other_sponge_targeting(self, target_id: int, exclude_eq: Optional[EquipmentInstance] = None) -> bool:
+        if not (0 <= target_id < len(self.players)):
+            return False
+        for owner_id, player in enumerate(self.players):
+            for candidate in getattr(player, 'equipment', []) or []:
+                if candidate is exclude_eq:
+                    continue
+                if not self._equipment_is(candidate, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge'):
+                    continue
+                if self._equipment_effect_target_id(candidate, owner_id) == target_id:
+                    return True
+        return False
+
+    def _cleanup_equipment_derived_effects(self, owner_id: int, eq: EquipmentInstance,
+                                           *, run_destroy_event: bool = True) -> None:
+        if not (0 <= owner_id < len(self.players)) or eq is None:
+            return
+        effect_target_id = self._equipment_effect_target_id(eq, owner_id)
+        if self._equipment_is(eq, 'Disc', 'vanilla:disc'):
+            self.players[effect_target_id].armor = max(0, self.players[effect_target_id].armor - 2)
+
+        is_pill = self._equipment_is(eq, 'Pill', 'troll_cards:pill', 'vanilla:pill')
+        has_destroy_script = self._has_card_event(eq.card_def, 'equipment_destroy')
+        if run_destroy_event and has_destroy_script:
+            self._run_card_event(owner_id, eq.card_instance, 'equipment_destroy', None,
+                                 {'source_id': owner_id, 'target_id': effect_target_id,
+                                  'equipment_owner_id': owner_id})
+        elif (
+            self._equipment_is(eq, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge')
+            and self.players[effect_target_id].sponge_active
+            and not self._has_other_sponge_targeting(effect_target_id, exclude_eq=eq)
+        ):
+            target_state = self.players[effect_target_id]
+            poison_layers = target_state.poison
+            target_state.sponge_active = False
+            target_state.poison = 0
+            if poison_layers > 0:
+                physical_dmg = poison_layers * 2
+                target_state.health -= physical_dmg
+                self.log_msg(f"海绵被摧毁！{self.pn(effect_target_id)}去除{poison_layers}层中毒，受到{physical_dmg}点物理伤害")
+                self._check_yggdrasil(effect_target_id)
+            else:
+                self.log_msg("海绵被摧毁！无中毒层数")
+
+        if is_pill:
+            if not (run_destroy_event and has_destroy_script):
+                self._clear_status_immune_aliases(effect_target_id)
+                self.log_msg("药丸被摧毁！状态免疫失效")
+            # Clean up immunity that may have been applied to the equipment owner by older
+            # owner-derived Pill logic. Keep it if another active Pill still targets them.
+            if owner_id != effect_target_id and not self._has_other_pill_targeting(owner_id, exclude_eq=eq):
+                self._clear_status_immune_aliases(owner_id)
+
+        root_layers = 0
+        try:
+            root_layers = int((getattr(eq, 'custom_vars', {}) or {}).get('jungle_root_layers', 0) or 0)
+        except Exception:
+            root_layers = 0
+        if root_layers > 0:
+            current = self._custom_status_value(effect_target_id, 'jungle:root_status', 'jungle:root', 'root_status')
+            self._set_custom_status_alias_group(
+                effect_target_id,
+                'jungle:root_status',
+                ('jungle:root_status', 'jungle:root', 'root_status'),
+                max(0, current - root_layers),
+            )
+            eq.custom_vars['jungle_root_layers'] = 0
+
     def _destroy_equipment(self, owner_id: int, eq: EquipmentInstance, check_protection: bool = True,
                            source_id: Optional[int] = None) -> bool:
         ps = self.players[owner_id]
@@ -6299,38 +6475,7 @@ class GameEngine:
             ps.equipment_protection -= 1
             self.log_msg(f"{self.pn(owner_id)}的装备保护抵消了摧毁！")
             return False
-        if self._equipment_is(eq, 'Disc', 'vanilla:disc'):
-            effect_target = int(getattr(eq, 'effect_target', getattr(eq, 'owner', owner_id)))
-            if not (0 <= effect_target < len(self.players)):
-                effect_target = owner_id
-            self.players[effect_target].armor = max(0, self.players[effect_target].armor - 2)
-        effect_target_id = self._equipment_effect_target_id(eq, owner_id)
-        is_pill = self._equipment_is(eq, 'Pill', 'troll_cards:pill', 'vanilla:pill')
-        has_destroy_script = self._has_card_event(eq.card_def, 'equipment_destroy')
-        if has_destroy_script:
-            self._run_card_event(owner_id, eq.card_instance, 'equipment_destroy', None,
-                                 {'source_id': owner_id, 'target_id': effect_target_id,
-                                  'equipment_owner_id': owner_id})
-        elif self._equipment_is(eq, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge') and self.players[effect_target_id].sponge_active:
-            target_state = self.players[effect_target_id]
-            poison_layers = target_state.poison
-            target_state.sponge_active = False
-            target_state.poison = 0
-            if poison_layers > 0:
-                physical_dmg = poison_layers * 2
-                target_state.health -= physical_dmg
-                self.log_msg(f"海绵被摧毁！{self.pn(effect_target_id)}去除{poison_layers}层中毒，受到{physical_dmg}点物理伤害")
-                self._check_yggdrasil(effect_target_id)
-            else:
-                self.log_msg("海绵被摧毁！无中毒层数")
-        if is_pill:
-            if not has_destroy_script:
-                self._clear_status_immune_aliases(effect_target_id)
-                self.log_msg("药丸被摧毁！状态免疫失效")
-            # Clean up immunity that may have been applied to the equipment owner by older
-            # owner-derived Pill logic. Keep it if another active Pill still targets them.
-            if owner_id != effect_target_id and not self._has_other_pill_targeting(owner_id, exclude_eq=eq):
-                self._clear_status_immune_aliases(owner_id)
+        self._cleanup_equipment_derived_effects(owner_id, eq, run_destroy_event=True)
         ps.equipment.remove(eq)
         if 'exile' in eq.card_instance.flags:
             ps.exile.append(eq.card_instance)
@@ -6399,11 +6544,6 @@ class GameEngine:
         if ps.fracture > 0:
             ps.fracture = 0
             self.log_msg(f"{self.pn(player_id)}的破损效果消失")
-        # Heal block: halve at end of own turn.
-        if ps.heal_block > 0:
-            ps.heal_block = max(0, ps.heal_block // 2)
-            if ps.heal_block == 0:
-                self.log_msg(f"{self.pn(player_id)}的禁疗效果消失")
         # Weakness: decrement at end of own turn.
         if ps.weakness > 0:
             ps.weakness = max(0, ps.weakness - 1)
@@ -7171,7 +7311,10 @@ class GameEngine:
         if zone_name == 'equipment':
             for eq in list(ps.equipment):
                 if eq.card_instance is card_obj or eq.card_instance.instance_id == card_obj.instance_id:
+                    self._cleanup_equipment_derived_effects(owner_id, eq, run_destroy_event=False)
                     ps.equipment.remove(eq)
+                    self._refresh_equipment_derived_player_flags(owner_id)
+                    self._refresh_hand_limit_bonuses()
                     return owner_id, zone_name
             return owner_id, zone_name
         zone = getattr(ps, zone_name, None)
@@ -9287,8 +9430,7 @@ class GameEngine:
         if card.def_id == 'Mimic' and isinstance(choice, dict) and choice.get('target_instance_id') is not None:
             target = ps.find_hand_card(choice.get('target_instance_id'))
             if target is not None and not self._can_pay_mimic_special_cost(player_id, target):
-                ps.hand.insert(0, card)
-                self._refund_pending_choice_cost(player_id, card)
+                self._undo_pending_choice_play_side_effects(player_id, card)
                 return {'success': False, 'error': '\u80fd\u91cf\u4e0d\u8db3'}
         play_log_marker = len(self.log)
         if self._uses_atomic_play_effects(card) and not self._is_chilli_card(card):
@@ -9307,12 +9449,7 @@ class GameEngine:
         # Check if an effect (e.g. request_reorder_deck/assembler_effect) set pending_choice during execution
         # Must check BEFORE card disposition (discard/equip) to allow the choice to complete first
         if self.pending_choice is not None:
-            expected_play_log = f"{self.pn(player_id)}使用了{card.name_cn}"
-            if len(self.log) > play_log_marker and self.log[play_log_marker] == expected_play_log:
-                del self.log[play_log_marker]
-            if ps.find_hand_card(card.instance_id) is None:
-                ps.hand.insert(0, card)
-                self._refund_pending_choice_cost(player_id, card)
+            self._undo_pending_choice_play_side_effects(player_id, card, play_log_marker=play_log_marker)
             pending = self.pending_choice
             return {
                 'success': True,

@@ -99,6 +99,7 @@ from db import (
     get_user_by_username,
     is_user_muted_db,
     list_friends,
+    list_lobby_chat_entries,
     list_dm_threads,
     list_leaderboard,
     list_user_gr_snapshots,
@@ -112,6 +113,7 @@ from db import (
     mark_friend_notifications_read_for_user,
     normalize_skin_config,
     normalize_username_key,
+    preview_gr_match_result,
     record_chat_message,
     record_card_draft_counts,
     record_card_draft_win_result,
@@ -817,13 +819,19 @@ def admin_match_record(room, result='finished'):
                     card_defs=CARD_DEFS,
                     game_version=GAME_VERSION,
                 )
-                if valid_for_ranking and result == 'finished' and getattr(e, 'game_over', False):
+                should_score_gr = bool(valid_for_ranking and getattr(e, 'game_over', False) and room.mode in ('1v1', '2v2'))
+                if should_score_gr:
                     increment_user_stats(registered_user_ids, stats_winner_user_ids, stats_result)
                     try:
                         gr_result = apply_gr_match_result(match_id, summary)
                         summary['gr_result'] = gr_result
                     except Exception as gr_exc:
                         admin_event('error', f'failed to apply GR result: {gr_exc}')
+                elif getattr(e, 'game_over', False) and room.mode in ('1v1', '2v2'):
+                    summary['gr_result'] = {
+                        'applied': False,
+                        'reason': ranking_invalid_reason or 'not_valid_for_ranking',
+                    }
                 if result == 'finished' and getattr(e, 'game_over', False):
                     add_user_play_seconds(registered_user_ids, duration_seconds)
                 if result == 'finished' and getattr(e, 'game_over', False) and room.mode in ('1v1', '2v2'):
@@ -2171,6 +2179,36 @@ def lobby_chat_history_payloads_locked(limit=100, beta_mode=None):
     return payloads
 
 
+def load_persisted_lobby_chat_cache():
+    if not DB_AVAILABLE:
+        return
+    try:
+        loaded_counts = {}
+        with _lock:
+            for beta_mode in (False, True):
+                key = _lobby_chat_scope_key(beta_mode)
+                cache = _lobby_chat_cache_locked(beta_mode)
+                cache.clear()
+                max_id = 0
+                for item in list_lobby_chat_entries(beta_mode=beta_mode, limit=CHAT_CACHE_LIMIT):
+                    if not isinstance(item, dict) or item.get('type') != 'chat':
+                        continue
+                    cache.append(copy.deepcopy(item))
+                    try:
+                        max_id = max(max_id, int(item.get('id') or 0))
+                    except (TypeError, ValueError):
+                        pass
+                LOBBY_CHAT_SEQUENCE[key] = max(int(LOBBY_CHAT_SEQUENCE.get(key) or 0), max_id)
+                loaded_counts[key] = len(cache)
+        print(f"[startup] restored lobby chat cache: {loaded_counts}", flush=True)
+    except Exception as exc:
+        print(f"[startup] restore lobby chat cache failed: {type(exc).__name__}: {exc}", flush=True)
+        try:
+            admin_event('error', f'restore lobby chat cache failed: {exc}')
+        except Exception:
+            pass
+
+
 def emit_lobby_chat_history_payloads(payloads):
     for sid, payload in payloads or []:
         socketio.emit('lobby_chat_history', payload, room=sid)
@@ -2291,7 +2329,7 @@ def room_chat_history_for_sid(room, sid=None, spectator=False, limit=CHAT_CACHE_
         if not isinstance(entry, dict):
             continue
         if spectator:
-            if not entry.get('spectator_visible'):
+            if not (entry.get('spectator_visible') or entry.get('is_spectator')):
                 continue
         elif pidx >= 0:
             ids = entry.get('visible_player_ids')
@@ -6384,6 +6422,71 @@ def format_rating_value(value):
         return '-'
 
 
+def format_gr_delta_value(value):
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        num = 0.0
+    if abs(num) < 0.05:
+        return '±0'
+    return f"{num:+.1f}"
+
+
+def gr_preview_text_for_sids(mode, sids, viewer_sid):
+    payload = gr_preview_payload_for_sids(mode, sids, viewer_sid)
+    return payload.get('text', '') if payload else ''
+
+
+def gr_preview_payload_for_sids(mode, sids, viewer_sid):
+    if not DB_AVAILABLE:
+        return {}
+    user_ids = []
+    for psid in sids or []:
+        player = players.get(psid) or {}
+        user_ids.append(player.get('user_id') if player.get('is_registered_user') else None)
+    viewer = players.get(viewer_sid) or {}
+    viewer_user_id = viewer.get('user_id') if viewer.get('is_registered_user') else None
+    try:
+        preview = preview_gr_match_result(mode, user_ids, viewer_user_id=viewer_user_id)
+    except Exception as exc:
+        admin_event('error', f'failed to preview GR invite: {exc}')
+        return {}
+    if not preview.get('applied'):
+        reason = preview.get('reason') or ''
+        if reason == 'guest_participant':
+            text = '本局包含游客，不计花阶分'
+        if reason in ('missing_player_ids', 'unknown_user'):
+            return {}
+        else:
+            text = '本局不计花阶分' if reason != 'guest_participant' else text
+        return {
+            'applied': False,
+            'reason': reason,
+            'text': text,
+        }
+    viewer_preview = preview.get('viewer') or {}
+    if not viewer_preview:
+        return {}
+    win_delta = format_gr_delta_value(viewer_preview.get('win_delta'))
+    loss_delta = format_gr_delta_value(viewer_preview.get('loss_delta'))
+    draw_delta = format_gr_delta_value(viewer_preview.get('draw_delta'))
+    text = f'花阶分预估：胜 {win_delta} / 平 {draw_delta} / 负 {loss_delta}'
+    repeat = float(preview.get('repeat_factor') or 1)
+    if repeat < 0.999:
+        text += f'（重复对局×{repeat:.2f}）'
+    return {
+        'applied': True,
+        'text': text,
+        'repeat_factor': repeat,
+        'repeat_count': preview.get('repeat_count', 0),
+        'viewer': {
+            'win_delta': viewer_preview.get('win_delta', 0),
+            'draw_delta': viewer_preview.get('draw_delta', 0),
+            'loss_delta': viewer_preview.get('loss_delta', 0),
+        },
+    }
+
+
 def format_rating_user(user):
     if not user:
         return '账号不存在'
@@ -6851,6 +6954,21 @@ def send_system_broadcast(message):
         append_admin_game_chat_locked(payload, now, scope='system')
         lobby_history_payloads = lobby_chat_history_payloads_locked(100)
         recipients = [(sid, p.get('status')) for sid, p in players.items()]
+    if DB_AVAILABLE:
+        for beta_mode in (False, True):
+            try:
+                record_chat_message(
+                    f'lobby:{_lobby_chat_scope_key(beta_mode)}',
+                    'system',
+                    None,
+                    payload.get('nickname', '系统'),
+                    payload.get('text', ''),
+                    json.dumps({**payload, 'type': 'chat', 'beta_mode': bool(beta_mode)}, ensure_ascii=False),
+                    0,
+                    hidden=False,
+                )
+            except Exception as exc:
+                admin_event('error', f'failed to persist system lobby chat: {exc}')
     sent = 0
     for sid, status in recipients:
         if status == 'lobby':
@@ -8878,6 +8996,20 @@ def emit_or_resolve_pending_response(room, reason='emit'):
         elif getattr(room.engine, 'pending_v2_ui', None):
             emit_room_v2_ui_request(room)
     return sent
+
+
+def emit_pending_interaction_after_state_change(room, reason='state_change'):
+    engine = getattr(room, 'engine', None)
+    if engine is None or getattr(engine, 'game_over', False):
+        return
+    if getattr(engine, 'pending_response', None):
+        emit_or_resolve_pending_response(room, reason=reason)
+        return
+    if getattr(engine, 'pending_choice', None):
+        emit_pending_choice_request(room)
+        return
+    if getattr(engine, 'pending_v2_ui', None):
+        emit_room_v2_ui_request(room)
 
 
 def emit_solo_response_request(sid, engine, pidx, played_card):
@@ -11280,6 +11412,21 @@ def admin_game_chat_send():
         append_admin_game_chat_locked(payload, now, scope='console')
         lobby_history_payloads = lobby_chat_history_payloads_locked(100)
         recipients = [(sid, p.get('status')) for sid, p in players.items()]
+    if DB_AVAILABLE:
+        for beta_mode in (False, True):
+            try:
+                record_chat_message(
+                    f'lobby:{_lobby_chat_scope_key(beta_mode)}',
+                    'console',
+                    None,
+                    payload.get('nickname', '控制台'),
+                    payload.get('text', ''),
+                    json.dumps({**payload, 'type': 'chat', 'beta_mode': bool(beta_mode)}, ensure_ascii=False),
+                    0,
+                    hidden=False,
+                )
+            except Exception as exc:
+                admin_event('error', f'failed to persist console lobby chat: {exc}')
     sent = 0
     for sid, status in recipients:
         if status == 'lobby':
@@ -12041,13 +12188,31 @@ def on_invite_team(data):
                      max(my_team['leader'], target_team['leader']))
         if match_key in pending_team_matches:
             return
+        inviter_preview = gr_preview_payload_for_sids('2v2', all_match_sids, sid)
+        if not bool(data.get('confirmed')):
+            socketio.emit('team_match_confirm_required', {
+                'target_team_leader': target_team_leader,
+                'target_team': [players[ms]['nickname'] for ms in target_team['members'] if ms in players],
+                'target_team_sids': target_team['members'],
+                'gr_preview': inviter_preview,
+                'gr_preview_text': inviter_preview.get('text', ''),
+            }, room=sid)
+            return
         pending_team_matches[match_key] = True
+        for member_sid in my_team['members']:
+            if member_sid in players:
+                preview = gr_preview_payload_for_sids('2v2', all_match_sids, member_sid)
+                if preview.get('text'):
+                    socketio.emit('invite_gr_preview', {'text': preview.get('text'), 'gr_preview': preview}, room=member_sid)
         for member_sid in target_team['members']:
             if member_sid in players:
+                preview = gr_preview_payload_for_sids('2v2', all_match_sids, member_sid)
                 socketio.emit('team_match_invite', {
                     'from_leader': my_team['leader'],
                     'from_team': [players[ms]['nickname'] for ms in my_team['members'] if ms in players],
                     'from_team_sids': my_team['members'],
+                    'gr_preview_text': preview.get('text', ''),
+                    'gr_preview': preview,
                 }, room=member_sid)
 
 
@@ -12477,11 +12642,27 @@ def on_invite(data):
             message = f'模组组合不一致，无法开始对局。你：{inviter_label}；对方：{target_label}'
             emit_mod_mismatch(sid, target, message)
             return
-        invites[sid] = target_sid
         inviter_name = players[sid]['nickname']
+        match_sids = [sid, target_sid]
+        inviter_gr_preview = gr_preview_payload_for_sids(inviter_mode, match_sids, sid)
+        target_gr_preview = gr_preview_payload_for_sids(inviter_mode, match_sids, target_sid)
+        if not bool(data.get('confirmed')):
+            socketio.emit('invite_confirm_required', {
+                'target_sid': target_sid,
+                'target_name': target.get('nickname', '?'),
+                'mode': inviter_mode,
+                'gr_preview_text': inviter_gr_preview.get('text', ''),
+                'gr_preview': inviter_gr_preview,
+            }, room=sid)
+            return
+        invites[sid] = target_sid
+        if inviter_gr_preview.get('text'):
+            socketio.emit('invite_gr_preview', {'text': inviter_gr_preview.get('text'), 'gr_preview': inviter_gr_preview}, room=sid)
         result = socketio.emit('invite_received', {
             'inviter_sid': sid,
             'inviter_name': inviter_name,
+            'gr_preview_text': target_gr_preview.get('text', ''),
+            'gr_preview': target_gr_preview,
         }, room=target_sid)
 
         def _invite_timeout(inviter_sid):
@@ -13304,6 +13485,12 @@ def on_solo_response(data):
             else:
                 send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pending_player)
                 emit_solo_response_request(sid, engine, pending_player, pending.get('card') or {})
+        elif getattr(engine, 'pending_choice', None):
+            send_solo_state(sid)
+            socketio.emit('choice_request', build_choice_request_payload(engine.pending_choice), room=sid)
+        elif getattr(engine, 'pending_v2_ui', None):
+            send_solo_state(sid)
+            emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
         else:
             send_solo_state(sid)
 
@@ -13655,8 +13842,7 @@ def on_response(data):
         _sync_room_action_timer_after_state_change(room)
     emit_turn_timer_update(room)
     broadcast_game_state(room)
-    if getattr(engine, 'pending_response', None):
-        emit_or_resolve_pending_response(room, reason='response_chain')
+    emit_pending_interaction_after_state_change(room, reason='response_chain')
 
 
 @socketio.on('ally_consent_response')
@@ -14580,6 +14766,7 @@ def start_replay_cleanup_thread():
     thread.start()
 
 
+load_persisted_lobby_chat_cache()
 start_replay_cleanup_thread()
 ensure_friend_request_cleanup_started()
 ensure_dm_cleanup_started()

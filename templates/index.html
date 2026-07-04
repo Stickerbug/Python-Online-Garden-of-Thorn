@@ -538,14 +538,14 @@
   <div id="classic-log-drawer" class="classic-log-drawer">
     <button id="classic-log-toggle" class="classic-log-toggle" type="button">战斗日志</button>
     <div id="classic-log-content" class="classic-log-content"></div>
-  </div>
-  <div id="classic-hand-fan" class="classic-hand-fan"></div>
-  <div class="classic-command-panel">
     <div id="classic-chat-row" class="classic-chat-row">
       <select id="classic-game-chat-channel" class="game-chat-channel hidden" aria-label="Chat channel"></select>
       <input type="text" id="classic-game-chat-input" placeholder="聊天..." maxlength="200">
       <button id="btn-classic-game-chat-send" class="classic-mini-btn" type="button">发送</button>
     </div>
+  </div>
+  <div id="classic-hand-fan" class="classic-hand-fan"></div>
+  <div class="classic-command-panel">
     <div id="classic-extra-controls" class="classic-extra-controls hidden">
       <button id="classic-switch-perspective" class="classic-mini-btn hidden" type="button">Switch</button>
       <button id="classic-view-deck" class="classic-mini-btn" type="button">查看抽牌堆</button>
@@ -598,6 +598,11 @@
     <div id="battle-log" class="battle-log">
       <div class="log-header">战斗日志</div>
       <div class="log-content"></div>
+      <div class="controls-group controls-right battle-log-chat-row">
+        <select id="game-chat-channel" class="game-chat-channel hidden" aria-label="Chat channel"></select>
+        <input type="text" id="game-chat-input" placeholder="聊天..." maxlength="200">
+        <button id="btn-game-chat-send" class="btn btn-small">发送</button>
+      </div>
     </div>
     <div id="teammate-sidebar" class="teammate-sidebar hidden">
       <div class="teammate-sidebar-header">
@@ -645,11 +650,6 @@
         <button id="btn-spectate-view-deck" class="btn btn-magic btn-view-deck">Draw Deck</button>
         <button id="btn-spectate-view-discard" class="btn btn-magic btn-view-discard">Discard</button>
         <button id="btn-leave-spectate" class="btn btn-danger btn-leave-spectate">Leave</button>
-      </div>
-      <div class="controls-group controls-right">
-        <select id="game-chat-channel" class="game-chat-channel hidden" aria-label="Chat channel"></select>
-        <input type="text" id="game-chat-input" placeholder="聊天..." maxlength="200">
-        <button id="btn-game-chat-send" class="btn btn-small">发送</button>
       </div>
     </div>
   </div>

@@ -1492,6 +1492,63 @@ body {
   background: var(--magic-bg);
 }
 
+.invite-gr-preview {
+  margin: 8px 0 2px;
+  color: var(--bloom);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.invite-gr-preview-card {
+  margin: 10px auto 4px;
+  padding: 10px 12px;
+  max-width: 260px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.invite-gr-title {
+  margin-bottom: 6px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.invite-gr-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 3px 0;
+  font-size: 14px;
+}
+
+.invite-gr-row b {
+  font-weight: 700;
+}
+
+.invite-gr-row b.positive {
+  color: var(--health);
+}
+
+.invite-gr-row b.negative {
+  color: var(--damage);
+}
+
+.invite-gr-row b.neutral,
+.invite-gr-preview.is-neutral {
+  color: var(--text-secondary);
+}
+
+.invite-gr-repeat {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
 .friend-name-row {
   width: 100%;
   min-height: 38px;
@@ -5196,6 +5253,7 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
 }
 
 .player-info-bar {
@@ -5312,6 +5370,34 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.battle-log .battle-log-chat-row {
+  flex: 0 0 auto;
+  width: 100%;
+  margin: 0;
+  padding: 6px 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 86%, var(--bg-primary));
+  justify-content: stretch;
+  gap: 6px;
+}
+
+.battle-log .battle-log-chat-row input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+}
+
+.battle-log .battle-log-chat-row .game-chat-channel {
+  flex: 0 0 auto;
+  max-width: 118px;
+}
+
+.battle-log .battle-log-chat-row .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .controls-right input {
@@ -7805,10 +7891,10 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 
 .battle-classic [data-player-target-region].target-picked {
   outline: 0;
-  transform: scale(1.035);
   transform-origin: center center;
   box-shadow: 0 0 0 8px rgba(26, 188, 156, 0.22), 0 0 34px rgba(26, 188, 156, 0.56);
-  transition: transform 120ms cubic-bezier(.18,.85,.22,1), box-shadow 120ms ease;
+  transition: box-shadow 120ms ease, filter 120ms ease;
+  filter: brightness(1.05);
 }
 
 .battle-classic [data-player-target-region].target-pickable:hover .player-avatar,
@@ -7826,6 +7912,10 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 
 .battle-classic .player-avatar.target-feedback-pulse {
   animation: classicAvatarTargetFloat 720ms cubic-bezier(.18,.85,.22,1) both;
+}
+
+.battle-classic .classic-fighter.target-feedback-pulse {
+  animation: classicFighterTargetFlash 720ms cubic-bezier(.18,.85,.22,1) both;
 }
 
 @keyframes classicAvatarTargetGlow {
@@ -8270,7 +8360,7 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .battle-log {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   background: color-mix(in srgb, var(--bg-card) 62%, var(--bg-primary));
@@ -8281,6 +8371,10 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   min-height: 0;
   width: 100%;
   height: 100%;
+}
+
+.game-container:not(.mode-2v2) .battle-log {
+  align-self: stretch;
 }
 
 .middle-section {
@@ -8338,10 +8432,19 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 .battle-log .log-content {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 9px;
+  padding: 6px 9px 8px;
   font-size: 12px;
   line-height: 1.48;
   min-height: 0;
+}
+
+@keyframes classicFighterTargetFlash {
+  0%, 100% {
+    filter: brightness(1);
+  }
+  32% {
+    filter: brightness(1.08);
+  }
 }
 
 .log-entry {
@@ -12027,7 +12130,7 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .game-container.mode-spectate.mode-2v2 .teammate-sidebar {
-  flex: 0 0 min(34vw, 360px);
+  flex: 0 0 min(28vw, 300px);
 }
 
 .game-container.mode-2v2 .battle-log {
@@ -12080,9 +12183,9 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 }
 
 .teammate-sidebar {
-    width: clamp(220px, 30vw, 340px);
-    min-width: 210px;
-    flex: 0 0 clamp(220px, 30vw, 340px);
+    width: clamp(190px, 24vw, 292px);
+    min-width: 184px;
+    flex: 0 0 clamp(190px, 24vw, 292px);
     padding: 7px 10px;
     border-left: 1px solid var(--border-color);
     background: rgba(26, 188, 156, 0.04);
@@ -12798,7 +12901,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
 .battle-classic {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(74px, 8vw) minmax(0, 1fr) minmax(210px, 24vw);
+  grid-template-columns: minmax(74px, 8vw) minmax(0, 1fr) minmax(240px, 28vw);
   grid-template-rows: 52px minmax(0, 1fr) minmax(148px, 25vh);
   grid-template-areas:
     "hud hud hud"
@@ -14030,7 +14133,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  margin: 10px 10px 10px 0;
+  margin: 10px 10px 26px 0;
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.12);
   background: rgba(8, 12, 22, 0.68);
@@ -14084,6 +14187,13 @@ html[data-ui-style="minimal"] .btn-end-turn {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 5px;
   align-items: center;
+}
+
+.classic-log-drawer .classic-chat-row {
+  width: 100%;
+  padding: 7px 8px;
+  border-top: 1px solid var(--classic-line, rgba(255,255,255,0.12));
+  background: color-mix(in srgb, var(--classic-panel-strong, var(--bg-card)) 86%, var(--bg-primary));
 }
 
 .classic-chat-row.hidden {
@@ -14298,8 +14408,8 @@ html[data-ui-style="minimal"] .btn-end-turn {
     margin-inline: clamp(-14px, -1.2vw, -5px);
   }
   .classic-log-drawer {
-    max-width: 156px;
-    margin: 6px 6px 6px 0;
+    max-width: 210px;
+    margin: 6px 6px 20px 0;
   }
   .classic-log-content {
     font-size: 10.5px;
@@ -14391,7 +14501,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
   --classic-panel: rgba(255, 255, 255, 0.78);
   --classic-panel-strong: rgba(255, 255, 255, 0.92);
   --classic-stage: #f9faf6;
-  grid-template-columns: clamp(74px, 7vw, 112px) minmax(0, 1fr) clamp(176px, 18vw, 280px);
+  grid-template-columns: clamp(74px, 7vw, 112px) minmax(0, 1fr) clamp(220px, 22vw, 340px);
   grid-template-rows: clamp(42px, 5vh, 58px) minmax(0, 1fr) clamp(154px, 25vh, 245px);
   color: var(--classic-ink);
   background: var(--classic-stage);
@@ -14428,7 +14538,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 .classic-top-title {
   display: grid;
-  grid-template-columns: clamp(74px, 7vw, 112px) minmax(0, 1fr) clamp(176px, 18vw, 280px);
+  grid-template-columns: clamp(74px, 7vw, 112px) minmax(0, 1fr) clamp(220px, 22vw, 340px);
   flex: 1;
   width: 100%;
   align-items: center;
@@ -14744,7 +14854,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 .battle-classic.is-2v2 #classic-fighter-self {
   position: static;
-  transform: translateY(clamp(52px, 8vh, 92px)) scale(var(--classic-fighter-scale));
+  transform: translateY(clamp(58px, 8.8vh, 104px)) scale(var(--classic-fighter-scale));
   grid-column: 1;
   grid-row: 2;
 }
@@ -14760,21 +14870,21 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 .battle-classic.is-2v2 #classic-fighter-enemy {
   position: static;
-  transform: translateY(clamp(12px, 2.4vh, 28px)) scale(var(--classic-fighter-scale));
+  transform: translateY(clamp(-12px, -1.4vh, -4px)) scale(var(--classic-fighter-scale));
   grid-column: 1;
   grid-row: 1;
 }
 
 .battle-classic.is-2v2 #classic-fighter-enemy-2 {
   position: static;
-  transform: translateY(clamp(12px, 2.4vh, 28px)) scale(var(--classic-fighter-scale));
+  transform: translateY(clamp(-12px, -1.4vh, -4px)) scale(var(--classic-fighter-scale));
   grid-column: 3;
   grid-row: 1;
 }
 
 .battle-classic.is-2v2 #classic-fighter-ally {
   position: static;
-  transform: translateY(clamp(52px, 8vh, 92px)) scale(var(--classic-fighter-scale));
+  transform: translateY(clamp(58px, 8.8vh, 104px)) scale(var(--classic-fighter-scale));
   grid-column: 3;
   grid-row: 2;
 }
@@ -15283,7 +15393,6 @@ html[data-ui-style="minimal"] .btn-end-turn {
   animation-delay: var(--equip-orbit-delay, 0s);
 }
 
-.classic-fighter.is-current .classic-equip-chip,
 .classic-avatar-stack:hover .classic-equip-chip,
 .classic-equip-chip:hover {
   animation-play-state: paused;
@@ -15300,7 +15409,6 @@ html[data-ui-style="minimal"] .btn-end-turn {
   animation-delay: var(--equip-orbit-delay, 0s);
 }
 
-.classic-fighter.is-current .classic-equip-visual,
 .classic-avatar-stack:hover .classic-equip-visual,
 .classic-equip-chip:hover .classic-equip-visual {
   animation-play-state: paused;
@@ -15344,7 +15452,6 @@ html[data-ui-style="minimal"] .btn-end-turn {
   display: none !important;
 }
 
-.classic-fighter.is-current .classic-equip-chip .equip-icon,
 .classic-avatar-stack:hover .classic-equip-chip .equip-icon,
 .classic-equip-chip:hover .equip-icon {
   animation-play-state: paused;
@@ -15482,7 +15589,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 .classic-log-drawer,
 [data-theme="light"] .classic-log-drawer {
-  margin: 10px 10px 10px 0;
+  margin: 10px 10px 26px 0;
   color: var(--classic-ink);
   background: rgba(255,255,255,0.88);
   border: 1px solid var(--classic-line);
@@ -15541,11 +15648,11 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 @media (max-width: 980px), (max-height: 620px) {
   .battle-classic {
-    grid-template-columns: 66px minmax(0, 1fr) 164px;
+    grid-template-columns: 66px minmax(0, 1fr) 210px;
     grid-template-rows: 46px minmax(0, 1fr) minmax(120px, 25vh);
   }
   .classic-top-title {
-    grid-template-columns: 66px minmax(0, 1fr) 164px;
+    grid-template-columns: 66px minmax(0, 1fr) 210px;
   }
   .classic-stage {
     grid-template-columns: minmax(128px, 1fr) minmax(76px, 0.34fr) minmax(128px, 1fr);
@@ -15581,7 +15688,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
     width: clamp(62px, min(8.2vw, 20vh), 98px);
   }
   .classic-log-drawer {
-    max-width: 164px;
+    max-width: 210px;
   }
   .battle-classic.is-2v2 .classic-stage {
     width: min(92vw, 620px);
@@ -15595,11 +15702,11 @@ html[data-ui-style="minimal"] .btn-end-turn {
   }
   .battle-classic.is-2v2 #classic-fighter-self,
   .battle-classic.is-2v2 #classic-fighter-ally {
-    transform: translateY(clamp(32px, 6.5vh, 54px)) scale(var(--classic-fighter-scale));
+    transform: translateY(clamp(36px, 7vh, 60px)) scale(var(--classic-fighter-scale));
   }
   .battle-classic.is-2v2 #classic-fighter-enemy,
   .battle-classic.is-2v2 #classic-fighter-enemy-2 {
-    transform: translateY(clamp(6px, 1.8vh, 18px)) scale(var(--classic-fighter-scale));
+    transform: translateY(clamp(-10px, -1.2vh, -4px)) scale(var(--classic-fighter-scale));
   }
 }
 
@@ -15734,11 +15841,11 @@ html[data-ui-style="minimal"] .btn-end-turn {
   }
 
   .game-container.mode-2v2 .battle-log {
-    flex: 0 1 38%;
+    flex: 1 1 52%;
   }
 
   .game-container.mode-2v2 .teammate-sidebar {
-    flex: 1 1 62%;
+    flex: 0 1 48%;
     padding: 5px 7px;
     gap: 3px;
     border-radius: 6px;
@@ -16230,9 +16337,28 @@ html[data-ui-style="minimal"] .btn-end-turn {
   }
 
   .battle-log .log-content {
-    padding: 3px 5px;
+    padding: 3px 5px 5px;
     font-size: 10px;
     line-height: 1.26;
+  }
+
+  .battle-log .battle-log-chat-row {
+    order: initial;
+    flex: 0 0 auto;
+    padding: 4px 5px;
+    gap: 4px;
+  }
+
+  .battle-log .battle-log-chat-row input {
+    min-height: 24px;
+    font-size: 10px;
+  }
+
+  .battle-log .battle-log-chat-row .btn {
+    min-height: 24px;
+    padding: 3px 7px;
+    font-size: 10px;
+    border-radius: 5px;
   }
 
   .controls-bar {

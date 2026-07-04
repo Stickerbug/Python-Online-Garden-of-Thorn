@@ -642,9 +642,14 @@ class LocalPlayer {
     }
 
     heal(amount) {
-        if (toInt(this.heal_block, 0) > 0 && !(this.custom_statuses && toInt(this.custom_statuses.status_immune, 0) > 0)) {
-            const reduction = Math.min(1, 0.5 * toInt(this.heal_block, 0));
-            amount = amount > 0 ? Math.max(0, Math.floor(amount * (1 - reduction))) : amount;
+        if (amount > 0 && toInt(this.heal_block, 0) > 0) {
+            const custom = this.custom_statuses || {};
+            const immune = ['status_immune', 'immune', '状态免疫'].some(key => toInt(custom[key], 0) > 0);
+            if (!immune) {
+                const reduction = Math.min(1, 0.5 * toInt(this.heal_block, 0));
+                amount = Math.max(0, Math.floor(amount * (1 - reduction)));
+            }
+            this.heal_block = Math.max(0, toInt(this.heal_block, 0) - 1);
         }
         this.health = Math.min(this.health + amount, this.base_max_health);
     }
@@ -2038,11 +2043,54 @@ class LocalSoloEngine {
         return [...new Set(def.flags || [])].map(String).sort();
     }
 
+    cleanupEquipmentDerivedEffects(ownerId, eq) {
+        const ps = this.players[ownerId];
+        if (!ps || !eq) return;
+        const effectTarget = Math.max(0, Math.min(this.players.length - 1, toInt(eq.effect_target ?? eq.owner ?? ownerId, ownerId)));
+        const targetState = this.players[effectTarget] || ps;
+        if (this.cardIs(eq.card_instance || eq, 'Disc', 'vanilla:disc')) {
+            targetState.armor = Math.max(0, toInt(targetState.armor, 0) - 2);
+        }
+        if (
+            this.cardIs(eq.card_instance || eq, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge')
+            && !this.hasOtherSpongeTargeting(effectTarget, eq)
+        ) {
+            targetState.sponge_active = false;
+        }
+        if (this.cardIs(eq.card_instance || eq, 'Pill', 'troll_cards:pill', 'vanilla:pill')) {
+            targetState.custom_statuses = targetState.custom_statuses || {};
+            delete targetState.custom_statuses.status_immune;
+            delete targetState.custom_statuses.immune;
+            delete targetState.custom_statuses['状态免疫'];
+            targetState.status_immune = 0;
+            targetState.immune = 0;
+            targetState['状态免疫'] = 0;
+        }
+        const rootLayers = toInt((eq.custom_vars || {}).jungle_root_layers, 0);
+        if (rootLayers > 0) {
+            const current = this.customStatusValue(effectTarget, 'jungle:root_status', 'jungle:root', 'root_status');
+            this.setCustomStatusAliasGroup(effectTarget, 'jungle:root_status', ['jungle:root_status', 'jungle:root', 'root_status'], Math.max(0, current - rootLayers));
+            eq.custom_vars.jungle_root_layers = 0;
+        }
+    }
+
+    hasOtherSpongeTargeting(targetId, excludeEq = null) {
+        return this.players.some((ownerState, ownerId) => (ownerState.equipment || []).some(candidate => {
+            if (!candidate || candidate === excludeEq) return false;
+            if (!this.cardIs(candidate.card_instance || candidate, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge')) return false;
+            const effectTarget = Math.max(0, Math.min(this.players.length - 1, toInt(candidate.effect_target ?? candidate.owner ?? ownerId, ownerId)));
+            return effectTarget === targetId;
+        }));
+    }
+
     removeCardFromCurrentZone(card) {
         const loc = this.findCardLocation(card);
         if (!loc) return null;
         const ps = this.players[loc.ownerId];
-        if (loc.zone === 'equipment') ps.equipment.splice(loc.index, 1);
+        if (loc.zone === 'equipment') {
+            this.cleanupEquipmentDerivedEffects(loc.ownerId, ps.equipment[loc.index]);
+            ps.equipment.splice(loc.index, 1);
+        }
         else ps[loc.zone].splice(loc.index, 1);
         return loc;
     }
@@ -4820,11 +4868,7 @@ class LocalSoloEngine {
                 target_id: ownerId,
             });
         }
-        if (eq.def_id === 'Disc') {
-            const effectTarget = toInt(eq.effect_target ?? eq.owner ?? ownerId, ownerId);
-            const targetState = this.players[effectTarget] || ps;
-            targetState.armor = Math.max(0, targetState.armor - 2);
-        }
+        this.cleanupEquipmentDerivedEffects(ownerId, eq);
         ps.equipment.splice(ps.equipment.indexOf(eq), 1);
         if (eq.card_instance.flags.has('exile')) ps.exile.push(eq.card_instance);
         else this.discardCard(ps, eq.card_instance);
@@ -4833,12 +4877,38 @@ class LocalSoloEngine {
     }
 
     getExtraEForCard(playerId, card) {
-        let extra = card.flags.has('symbiosis') ? 0 : toInt(this.players[playerId].cards_played_this_turn[card.def_id], 0);
+        let extra = card.flags.has('symbiosis') ? 0 : this.cardsPlayedThisTurnCount(this.players[playerId], card);
         if (this.cardIs(card, 'Bamboo', 'jungle:bamboo')) {
             const otherBamboo = this.players[playerId].hand.filter(c => c !== card && this.cardIs(c, 'Bamboo', 'jungle:bamboo')).length;
             extra -= otherBamboo;
         }
         return extra;
+    }
+
+    cardLocalIds(card) {
+        const ids = new Set();
+        if (!card) return [];
+        const push = value => {
+            if (value !== undefined && value !== null && String(value)) ids.add(String(value));
+        };
+        push(card.def_id);
+        const def = typeof card.def === 'function' ? card.def() : null;
+        push(def && def.id);
+        push(def && def.legacy_id);
+        const resource = def && def.v2_resource;
+        if (resource && typeof resource === 'object') {
+            push(resource.id);
+            push(resource.legacy_id);
+            push(resource.runtime_id);
+        }
+        return Array.from(ids);
+    }
+
+    cardsPlayedThisTurnCount(ps, card) {
+        const played = (ps && ps.cards_played_this_turn) || {};
+        const ids = this.cardLocalIds(card);
+        if (!ids.length && card && card.def_id) ids.push(String(card.def_id));
+        return ids.reduce((sum, id) => sum + toInt(played[id], 0), 0);
     }
 
     customStatusValue(playerId, ...names) {
@@ -5354,10 +5424,6 @@ class LocalSoloEngine {
         });
         this.decayActionLimitStatus(playerId, 'attack_blocked', 'attack_blocked', '禁攻');
         this.decayActionLimitStatus(playerId, 'attack_only', 'attack_only', '仅攻击');
-        if (toInt(ps.heal_block, 0) > 0) {
-            ps.heal_block = Math.max(0, Math.floor(toInt(ps.heal_block, 0) / 2));
-            if (ps.heal_block === 0) this.logMsg(`${this.pn(playerId)}的禁疗效果消失`);
-        }
         if (ps.invincible && !ps.bandage_active && !ps.bandage_death_pending && this.shouldExpireInvincibleOnTurnEnd(playerId)) {
             this.clearInvincibleState(playerId);
             this.logMsg(`${this.pn(playerId)}的无敌效果结束`);

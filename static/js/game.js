@@ -484,7 +484,7 @@ const I18N = {
         opponent_disconnected: 'Opponent disconnected', opponent_reconnected: 'Opponent reconnected', reconnect_title: 'Reconnect', reconnect_prompt: 'Reconnect to the previous match?',
         reconnecting: 'Reconnecting...', reconnect_timeout: 'Reconnect timed out', mod_mismatch_title: 'Mod Mismatch', mod_mismatch_msg: 'Mods do not match, cannot start the match',
         switch_perspective: 'Switch Perspective', leave_spectate: 'Leave Spectate', switch_to_perspective: 'Switch to {0}', battle_log: 'Battle Log',
-        equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic',
+        equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic', status_armor: 'Armor',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_immune: 'Status Immune', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Blind', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
         flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_temp_swift: 'Temporary Swift', flag_temp_heavy: 'Temporary Heavy', flag_stealth: 'Stealth', flag_revealed: 'Revealed', flag_sublime: 'Sublime', flag_team_limited: 'Team Limited', flag_team_unique: 'Team Unique', flag_power: 'Power', flag_magic_swift: 'Magic Swift',
@@ -599,7 +599,7 @@ I18N.zh = { ...I18N.en,
     reconnect_title: '重连', reconnect_prompt: '是否重连到上一局对战？', reconnecting: '重连中...', reconnect_timeout: '重连超时',
     mod_mismatch_title: '模组不匹配', mod_mismatch_msg: '模组不一致，无法开始对局', mod_match_peer: '匹配对方模组', switch_perspective: '切换视角', leave_spectate: '退出观战', switch_to_perspective: '切换到 {0}',
     battle_log: '战斗日志', equip_info: '{0}（{1}回合）', equip_corruption: '[已腐化]', equip_trigger_cost: '{0} 触发：{1}E',
-    status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼',
+    status_poison: '中毒', status_fire: '灼烧', status_toxic: '淬毒', status_armor: '护甲', status_triangle: '三角形', status_dodge: '闪避', status_nazar: '邪眼',
     status_equip_protect: '装备保护', status_invincible: '无敌', status_immune: '状态免疫', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
@@ -708,7 +708,7 @@ I18N.fr = { ...I18N.en,
     mod_mismatch_title: 'Mods incompatibles', mod_mismatch_msg: 'Les mods ne correspondent pas, impossible de commencer',
     switch_perspective: 'Changer de perspective', leave_spectate: "Quitter l'observation", switch_to_perspective: 'Passer à la perspective de {0}',
     battle_log: 'Journal de combat', equip_info: '{0}({1} tours)', equip_corruption: '[Corrompu]', equip_trigger_cost: '{0} Déclencher:{1}E',
-    status_poison: 'Poison', status_fire: 'Brûlure', status_toxic: 'Toxique', status_triangle: 'Triangle', status_dodge: 'Esquive',
+    status_poison: 'Poison', status_fire: 'Brûlure', status_toxic: 'Toxique', status_armor: 'Armure', status_triangle: 'Triangle', status_dodge: 'Esquive',
     status_nazar: 'Nazar', status_equip_protect: 'Prot. Équip.', status_invincible: 'Invincible', status_immune: 'Immunité statut', status_stunned: 'Étourdi', status_attack_blocked: 'Atq bloquée', status_attack_only: 'Atq seule',
     status_untargetable: 'Non ciblable', status_bandage: 'Bandage', status_sponge: 'Éponge', status_shovel: 'Pelle',
     status_sluggish: 'Lenteur', status_overload: 'Surcharge', status_foresight: 'Prévoyance', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Cécité', status_heal_block: 'Anti-soin', status_weakness: 'Faiblesse', status_bleed: 'Saignement', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
@@ -779,7 +779,7 @@ I18N.ja = { ...I18N.en,
     mod_mismatch_title: 'Mod不一致', mod_mismatch_msg: 'Modが一致しません。対戦を開始できません',
     switch_perspective: '視点切替', leave_spectate: '観戦終了', switch_to_perspective: '{0}の視点に切替',
     battle_log: 'バトルログ', equip_info: '{0}({1}ターン)', equip_corruption: '[腐敗]', equip_trigger_cost: '{0} 発動:{1}E',
-    status_poison: '毒', status_fire: '火傷', status_toxic: '猛毒', status_triangle: '三角形', status_dodge: '回避',
+    status_poison: '毒', status_fire: '火傷', status_toxic: '猛毒', status_armor: '装甲', status_triangle: '三角形', status_dodge: '回避',
     status_nazar: 'ナザール', status_equip_protect: '装備保護', status_invincible: '無敵', status_immune: '状態免疫', status_stunned: 'スタン', status_attack_blocked: '攻撃封印', status_attack_only: '攻撃のみ',
     status_untargetable: '対象不可', status_bandage: '包帯', status_sponge: 'スポンジ', status_shovel: 'シャベル',
     status_sluggish: '遅鈍', status_overload: '過負荷', status_foresight: '予知', status_fracture: '破損', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '治療封じ', status_weakness: '虚弱', status_bleed: '出血', status_fragment: '破片', status_fragment_stacks: '破片',
@@ -948,7 +948,7 @@ Object.assign(I18N.zh, {
     tag_desc_rebound: '结算去向关键词。带有回转的牌打出并结算后，会立即回到使用者手牌。',
     tag_desc_stealth: '响应关键词。此牌不会触发对手的响应窗口。',
     tag_desc_revealed: '可见性关键词。此牌在手中时永久对对手展示。',
-    tag_desc_sublime: '可见性关键词。此牌不会出现在其他玩家的看牌效果或卡牌选择列表中。',
+    tag_desc_sublime: '选择限制关键词。此牌无法被除使用外的行为选中。',
     tag_desc_default: '模组或扩展标签。该标签的具体含义由对应模组或卡牌效果定义。'
 });
 
@@ -1006,7 +1006,7 @@ Object.assign(I18N.en, {
     tag_desc_default: 'Mod or extension tag. Its exact meaning is defined by the relevant mod or card effect.',
     tag_desc_stealth: 'Response keyword. This card does not trigger opponent response windows.',
     tag_desc_revealed: 'Visibility keyword. This card is permanently visible to the opponent while in hand.'
-    , tag_desc_sublime: 'Visibility keyword. This card is hidden from other players when cards are viewed or chosen.'
+    , tag_desc_sublime: 'Selection keyword. This card cannot be selected by actions other than playing it.'
 });
 
 Object.assign(I18N.fr, {
@@ -2409,6 +2409,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'damage', re: /^(?:[+-]?(?:\d+|x|X)\s*(?:点)?(?:电伤|电伤害|电击伤害)(?:[×x]\d+)?|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/ },
     { cls: 'heal', re: /^造成伤害\d+%(?:\([^)]+\)|（[^）]+）)的H/ },
     { cls: 'armor', re: /^[+-]?\d+A/ },
+    { cls: 'armor', re: /^护甲/ },
     { cls: 'heal', re: /^[+]?\d+H(?![A-Za-z0-9])/ },
     { cls: 'health', re: /^H(?![A-Za-z0-9])/ },
     { cls: 'elixir', re: /^[+-]?(?:\d+E|E)(?![A-Za-z0-9])/ },
@@ -3400,6 +3401,8 @@ let manualDisconnect = false;
 let latencyPingTimer = null;
 let skinSaveInFlight = false;
 let CARD_DEFS = {};
+let activeCardDataCacheKey = '';
+let activeOpeningEventsCacheKey = '';
 let gameState = {};
 let predictionTargetOverrideId = null;
 let activeV2UiRequestId = null;
@@ -5030,7 +5033,12 @@ function setGalleryMode(mode) {
     if (search) search.placeholder = UI.gallery_search;
 }
 
-function showCardGallery(selectedId = null, mode = 'cards') {
+async function showCardGallery(selectedId = null, mode = 'cards') {
+    try {
+        await ensureCardDataForCurrentMods();
+    } catch (err) {
+        console.warn('[mods] failed to refresh card data before gallery:', err);
+    }
     phase = 'gallery';
     setGalleryMode(mode);
     const backBtn = $('btn-gallery-back');
@@ -5489,12 +5497,12 @@ function getAllStatusDefs() {
         'jungle:turn_heal_power',
         'jungle:turn_magic_turns',
         'jungle:turn_magic_power',
-        'jungle:root_status',
         'jungle:toxic_poison',
     ]);
     const builtInList = [
         { key: 'poison', label: UI.status_poison, desc: termLib.P ? termLib.P.desc : '', color: COLORS.poison },
         { key: 'fire', label: UI.status_fire, desc: termLib.F ? termLib.F.desc : '', color: COLORS.fire },
+        { key: 'armor', label: UI.status_armor || '护甲', desc: termLib.A ? termLib.A.desc : '', color: COLORS.armor_text },
         { key: 'toxic', label: UI.status_toxic, desc: termLib.toxic ? termLib.toxic.desc : '', color: '#6C3483' },
         { key: 'triangle', label: UI.status_triangle || '三角形', desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
         { key: 'nazar', label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
@@ -5515,7 +5523,7 @@ function getAllStatusDefs() {
         { key: 'fracture', label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         { key: 'stagnation', label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
         { key: 'blind', label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。回合开始生效后，清空失明。', color: '#2C3E50' },
-        { key: 'heal_block', label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数下取整减半。', color: '#E84393' },
+        { key: 'heal_block', label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%）。拥有者每治疗一次，层数减少1；状态免疫存在时仍会减少层数，但不会降低治疗。', color: '#E84393' },
         { key: 'weakness', label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
         { key: 'fragment', label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
@@ -5523,7 +5531,6 @@ function getAllStatusDefs() {
         { key: 'jungle:shield', label: '护盾', desc: '受到伤害时先消耗护盾层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。', color: '#2E7D7D', source: 'vanilla' },
         { key: 'jungle:turn_heal_turns', iconKey: 'turn_heal', label: '回合回复', desc: '写作“回合回复:X;Y”。出现和回合开始时回复Y点H，然后X减少1；X为0时消失。', color: '#F48FB1', source: 'vanilla' },
         { key: 'jungle:turn_magic_turns', iconKey: 'turn_magic', label: '魔力回合回复', desc: '写作“魔力回合回复:X;Y”。出现和回合开始时回复Y点M，然后X减少1；X为0时消失。', color: COLORS.magic, source: 'vanilla' },
-        { key: 'jungle:root_status', label: '树根', desc: '增加护甲；受到物理伤害时减少1层。产生它的树根装备离场时，会清除对应树根。', color: '#6E8B3D', source: 'vanilla' },
         { key: 'jungle:toxic_poison', iconKey: 'toxic_poison', label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31', source: 'vanilla' },
     ];
     builtInList.forEach(s => result.set(s.key, { ...s, source: s.source || 'vanilla' }));
@@ -6687,6 +6694,22 @@ function getDataCacheKey(kind) {
     return `gtn_${kind}_cache_${DATA_CACHE_VERSION}_${disabled}_${communityKey}`;
 }
 
+function markActiveDataCacheKey(kind) {
+    const key = getDataCacheKey(kind);
+    if (kind === 'cards') activeCardDataCacheKey = key;
+    else if (kind === 'opening_events') activeOpeningEventsCacheKey = key;
+}
+
+function cardDataMatchesCurrentMods() {
+    return !!activeCardDataCacheKey && activeCardDataCacheKey === getDataCacheKey('cards');
+}
+
+async function ensureCardDataForCurrentMods() {
+    if (cardDataMatchesCurrentMods()) return;
+    await fetchCardDefs({ useCache: false });
+    await fetchOpeningEvents({ useCache: false });
+}
+
 function readDataCache(kind) {
     try {
         const raw = localStorage.getItem(getDataCacheKey(kind));
@@ -6749,6 +6772,7 @@ async function fetchCardDefs(options = {}) {
     const cached = useCache ? readDataCache('cards') : null;
     if (cached) {
         CARD_DEFS = cached;
+        markActiveDataCacheKey('cards');
         if (background) {
             refreshCardDefsFromServer({ silent: true });
             return;
@@ -6764,6 +6788,7 @@ async function refreshCardDefsFromServer({ silent = false } = {}) {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const nextDefs = await resp.json();
         CARD_DEFS = nextDefs || {};
+        markActiveDataCacheKey('cards');
         writeDataCache('cards', CARD_DEFS);
         await loadCommunityFontSubsetForCurrentSelection();
         refreshCardDataViews();
@@ -6771,6 +6796,7 @@ async function refreshCardDefsFromServer({ silent = false } = {}) {
         console.error('Failed to fetch card defs:', e);
         if (!CARD_DEFS || Object.keys(CARD_DEFS).length === 0) {
             CARD_DEFS = readDataCache('cards') || {};
+            if (Object.keys(CARD_DEFS).length) markActiveDataCacheKey('cards');
         }
     }
 }
@@ -6783,6 +6809,7 @@ async function fetchOpeningEvents(options = {}) {
         openingEvents = cached.events || [];
         openingEventMagicPool = cached.magic_pool || [];
         setCustomRegistries(cached.custom_tags || [], cached.custom_statuses || []);
+        markActiveDataCacheKey('opening_events');
         if (background) {
             refreshOpeningEventsFromServer({ silent: true });
             return;
@@ -6800,6 +6827,7 @@ async function refreshOpeningEventsFromServer({ silent = false } = {}) {
         openingEvents = data.events || [];
         openingEventMagicPool = data.magic_pool || [];
         setCustomRegistries(data.custom_tags || [], data.custom_statuses || []);
+        markActiveDataCacheKey('opening_events');
         writeDataCache('opening_events', {
             events: openingEvents,
             magic_pool: openingEventMagicPool,
@@ -6814,6 +6842,7 @@ async function refreshOpeningEventsFromServer({ silent = false } = {}) {
             openingEvents = cached ? (cached.events || []) : [];
             openingEventMagicPool = cached ? (cached.magic_pool || []) : [];
             setCustomRegistries(cached ? (cached.custom_tags || []) : [], cached ? (cached.custom_statuses || []) : []);
+            if (cached) markActiveDataCacheKey('opening_events');
         }
     }
 }
@@ -6950,8 +6979,9 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
     const mimicDiscount = Number(cardDict.mimic_discount || 0);
     const flags = new Set([...normalizeFlagList(cardDef.flags || []), ...normalizeFlagList(cardDict.instance_flags || [])]);
     normalizeFlagList(cardDict.disabled_flags || []).forEach(flag => flags.delete(flag));
-    const dup = ownerState && ownerState.cards_played_this_turn
-        ? Number(ownerState.cards_played_this_turn[cardDict.def_id] || 0)
+    const playedThisTurn = ownerState && ownerState.cards_played_this_turn ? ownerState.cards_played_this_turn : null;
+    const dup = playedThisTurn
+        ? getCardLocalIds(cardDict, cardDef).reduce((sum, id) => sum + Number(playedThisTurn[id] || 0), 0)
         : 0;
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
     const magicSwiftValue = Number(cardDef.magic_swift_value || cardDict.magic_swift_value || 0);
@@ -8592,7 +8622,7 @@ function counterCardCancelsResponseCard(counterCard, responseCard) {
     const counterDef = getCardDef(counterCard && counterCard.def_id);
     const responseDef = getCardDef(responseCard && responseCard.def_id);
     if (!counterDef || !responseDef) return false;
-    if (counterCard.def_id === 'MagicBubble' && responseDef.card_type === 'bloom') return true;
+    if ((counterCard.def_id === 'MagicBubble' || counterCard.def_id === 'vanilla:magicbubble' || counterDef.legacy_id === 'MagicBubble') && responseDef.card_type === 'bloom') return true;
     if (counterDef.response_trigger === responseDef.card_type && responseDef.card_type === 'bloom') return true;
     return false;
 }
@@ -8774,7 +8804,7 @@ function getTermIntroLibrary() {
         response: { label: UI.counter || lt({ zh: '反制', en: 'Counter', fr: 'Contre', ja: '反制' }), desc: lt({ zh: '对方行动满足条件时会出现响应机会。反制能改变对方行动的结果。', en: 'A response chance appears when an opponent action meets its condition. Counters can change that action’s result.', fr: 'Une fenêtre de réponse apparaît quand l’action adverse remplit la condition. Un contre peut modifier le résultat.', ja: '相手の行動が条件を満たすと応答機会が出ます。反制はその結果を変えます。' }), color: CARD_TYPE_COLORS.guard },
         same_name_penalty: { label: lt({ zh: '同名卡惩罚', en: 'Same-name penalty', fr: 'Pénalité de même nom', ja: '同名カードペナルティ' }), desc: lt({ zh: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', en: 'Playing the same card name repeatedly in one turn costs extra E. Symbiosis ignores it.', fr: 'Jouer plusieurs fois le même nom pendant un tour coûte du E supplémentaire. Symbiose l’ignore.', ja: '同一ターンに同名カードを繰り返すと追加 E が必要です。共生は無視します。' }), color: COLORS.elixir },
         revealed: { label: UI.tag_revealed || lt({ zh: '被揭示', en: 'Revealed', fr: 'Révélé', ja: '公開' }), desc: lt({ zh: '在手中时永久对对手展示。', en: 'While in hand, this card is always visible to opponents.', fr: 'Tant qu’elle est en main, cette carte reste visible pour les adversaires.', ja: '手札にある間、相手に常に見えます。' }), color: '#E74C3C' },
-        sublime: { label: UI.tag_sublime || lt({ zh: '崇高', en: 'Sublime', fr: 'Sublime', ja: '崇高' }), desc: lt({ zh: '带有此标签的卡牌，不会出现在其他玩家的看牌效果或卡牌选择列表中。', en: 'Cards with this tag are hidden from other players when cards are viewed or chosen.', fr: 'Les cartes avec ce tag sont cachées aux autres joueurs lors des effets de vue ou de choix.', ja: 'このタグを持つカードは、他プレイヤーがカードを見る・選ぶ効果では表示されません。' }), color: '#9A7A12' },
+        sublime: { label: UI.tag_sublime || lt({ zh: '崇高', en: 'Sublime', fr: 'Sublime', ja: '崇高' }), desc: lt({ zh: '带有此标签的卡牌，无法被除使用外的行为选中。', en: 'Cards with this tag cannot be selected by actions other than playing them.', fr: 'Les cartes avec ce tag ne peuvent pas être choisies par des actions autres que leur utilisation.', ja: 'このタグを持つカードは、使用以外の行動では選択できません。' }), color: '#9A7A12' },
         team_limited: { label: UI.tag_team_limited || 'Team Limited', desc: lt({ zh: '只会出现在一队至少 2 名玩家的模式；单人训练场可选，但没有实际意义。', en: 'Appears only in modes where a team has at least 2 players. It can be selected in training but has no practical effect there.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. Sélectionnable en entraînement, mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ意味があります。訓練場では選べますが実質効果はありません。' }), color: '#607D3B' },
         team_unique: { label: UI.tag_team_unique || 'Team Unique', desc: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose this card, one copy is kept at random and the extras are exiled.', fr: 'Si plusieurs coéquipiers choisissent cette carte, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }), color: '#8D6E63' },
         power: { label: UI.tag_power || 'Power', desc: lt({ zh: '此牌造成的每段 D 增加。若是多段 D，会按段数把威力向上分配。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }), color: '#C0392B' },
@@ -8854,7 +8884,7 @@ function getIntroFlagDescription(flag, custom = null) {
         team_unique: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose it, one copy is kept at random and extras are exiled.', fr: 'Si plusieurs coéquipiers la choisissent, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }),
         stealth: lt({ zh: '不会触发对手的响应窗口。', en: 'Does not open the opponent’s response window.', fr: 'N’ouvre pas la fenêtre de réponse adverse.', ja: '相手の応答ウィンドウを開きません。' }),
         revealed: lt({ zh: '在手中时永久对对手展示。', en: 'While in hand, it is always shown to opponents.', fr: 'Tant qu’elle est en main, elle est toujours visible pour les adversaires.', ja: '手札にある間、相手に常に表示されます。' }),
-        sublime: lt({ zh: '不会出现在其他玩家的看牌效果或卡牌选择列表中。', en: 'Hidden from other players when cards are viewed or chosen.', fr: 'Cachée aux autres joueurs lors des effets de vue ou de choix.', ja: '他プレイヤーがカードを見る・選ぶ効果では表示されません。' }),
+        sublime: lt({ zh: '无法被除使用外的行为选中。', en: 'Cannot be selected by actions other than playing it.', fr: 'Ne peut pas être choisie par des actions autres que son utilisation.', ja: '使用以外の行動では選択できません。' }),
         fusion_layer: getTermIntroLibrary().fusion_layer.desc,
         fission_layer: getTermIntroLibrary().fission_layer.desc,
     };
@@ -9033,6 +9063,7 @@ function getStatusIntroItem(statusInfo) {
         poison: { label: UI.status_poison, desc: getTermIntroLibrary().P.desc, color: COLORS.poison },
         fire: { label: UI.status_fire, desc: getTermIntroLibrary().F.desc, color: COLORS.fire },
         toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc, color: '#6C3483' },
+        armor: { label: UI.status_armor || '护甲', desc: getTermIntroLibrary().A.desc, color: COLORS.armor_text },
         triangle: { label: UI.status_triangle, desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
         nazar: { label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
         magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', color: COLORS.magic },
@@ -9066,7 +9097,7 @@ function getStatusIntroItem(statusInfo) {
         root_status: { label: '树根', desc: '增加护甲；受到物理伤害时减少1层。产生它的树根装备离场时，会清除对应树根。', color: '#6E8B3D' },
         'jungle:toxic_poison': { label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31' },
         toxic_poison: { label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31' },
-        heal_block: { label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%），自己回合结束时层数下取整减半。', color: '#E84393' },
+        heal_block: { label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%）。拥有者每治疗一次，层数减少1；状态免疫存在时仍会减少层数，但不会降低治疗。', color: '#E84393' },
         weakness: { label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         bleed: { label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
         fragment: { label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
@@ -9075,6 +9106,7 @@ function getStatusIntroItem(statusInfo) {
         poison: { label: UI.status_poison, desc: getTermIntroLibrary().P.desc },
         fire: { label: UI.status_fire, desc: getTermIntroLibrary().F.desc },
         toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc },
+        armor: { label: UI.status_armor || 'Armor', desc: getTermIntroLibrary().A.desc },
         triangle: { label: UI.status_triangle, desc: lt({ zh: builtIns.triangle.desc, en: 'Each stack increases later Triangle damage, up to 4. With Fission, each hit recalculates using the current stack count.', fr: 'Chaque charge augmente les dégâts suivants de Triangle, jusqu’à 4. Avec Fission, chaque coup est recalculé avec les charges actuelles.', ja: '各層が以後の三角形ダメージを増やし、上限は4層です。裂变時は各命中ごとに現在層数で再計算します。' }) },
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: getTermIntroLibrary().magic_nazar.desc },
         equip_protect: { label: UI.status_equip_protect, desc: lt({ zh: builtIns.equip_protect.desc, en: 'Prevents equipment from being destroyed by destroy effects.', fr: 'Empêche un équipement d’être détruit par les effets de destruction.', ja: '装備が破壊効果で破壊されるのを防ぎます。' }) },
@@ -9100,7 +9132,7 @@ function getStatusIntroItem(statusInfo) {
         turn_magic: { label: lt({ zh: '魔力回合回复', en: 'Turn Magic Regen', fr: 'Régénération magique', ja: '魔力ターン回復' }), desc: lt({ zh: builtIns.turn_magic.desc, en: 'Shown as Turn Magic Regen:X;Y. When applied and at turn start, recover Y M, then X decreases by 1. Removed at X=0.', fr: 'Affiché Régénération magique:X;Y. À l’application et au début du tour, récupère Y M, puis X diminue de 1. Retiré à X=0.', ja: '魔力回合回复:X;Y と表示。付与時とターン開始時にY M回復し、Xが1減ります。X=0で消えます。' }) },
         root_status: { label: lt({ zh: '树根', en: 'Root', fr: 'Racine', ja: '根' }), desc: lt({ zh: builtIns.root_status.desc, en: 'Increases armor. Loses 1 stack when physical damage is taken. The Root equipment that created it clears its own stacks when leaving play.', fr: 'Augmente l’armure. Perd 1 charge quand des dégâts physiques sont subis. L’équipement Racine qui l’a créé retire ses propres charges en quittant le jeu.', ja: '護甲を増やします。物理ダメージを受けると1層減ります。生成元のRoot装備が離場すると対応分を消します。' }) },
         toxic_poison: { label: lt({ zh: '剧毒', en: 'Toxic Poison', fr: 'Poison virulent', ja: '劇毒' }), desc: lt({ zh: builtIns.toxic_poison.desc, en: 'After Poison resolves, applies that many additional P.', fr: 'Après la résolution du Poison, applique autant de P supplémentaires.', ja: '毒の解決後、同じ層数のPを追加付与します。' }) },
-        heal_block: { label: UI.status_heal_block, desc: lt({ zh: builtIns.heal_block.desc, en: 'Reduces life healing by 50% per stack, up to 100%. Halves stacks at your turn end, rounded down.', fr: 'Réduit les soins de vie de 50% par charge, jusqu’à 100%. À la fin de votre tour, les charges sont divisées par deux arrondies à l’inférieur.', ja: '生命回復を1層ごとに50%、最大100%減らします。自分ターン終了時に切り捨てで半減します。' }) },
+        heal_block: { label: UI.status_heal_block, desc: lt({ zh: builtIns.heal_block.desc, en: 'Reduces life healing by 50% per stack, up to 100%. Each time the owner is healed, stacks decrease by 1. With Status Immunity, stacks still decrease but healing is not reduced.', fr: 'Réduit les soins de vie de 50% par charge, jusqu’à 100%. Chaque soin reçu par le propriétaire réduit les charges de 1. Avec Immunité aux états, les charges diminuent quand même mais le soin n’est pas réduit.', ja: '生命回復を1層ごとに50%、最大100%減らします。所持者が回復するたびに1層減ります。状態免疫中も層は減りますが、回復量は減りません。' }) },
         weakness: { label: UI.status_weakness, desc: lt({ zh: builtIns.weakness.desc, en: 'Your physical damage dealt to others is reduced by 20% per stack, up to 60%. Loses 1 stack at your turn end.', fr: 'Vos dégâts physiques infligés aux autres sont réduits de 20% par charge, jusqu’à 60%. Perd 1 charge à la fin de votre tour.', ja: '自分が他人に与える物理ダメージを1層ごとに20%、最大60%減らします。自分ターン終了時に1層減ります。' }) },
         bleed: { label: UI.status_bleed, desc: lt({ zh: builtIns.bleed.desc, en: 'When you play a Thorn card, take physical damage equal to its stacks. At turn end, stacks halve rounded down.', fr: 'Quand vous jouez une carte Thorn, subissez des dégâts physiques égaux aux charges. À la fin du tour, les charges sont divisées par deux arrondies à l’inférieur.', ja: 'Thornカードを使う時、層数分の物理ダメージを受けます。ターン終了時に切り捨てで半減します。' }) },
         fragment: { label: UI.status_fragment, desc: lt({ zh: builtIns.fragment.desc, en: 'Gains Fragment stacks. At 4 stacks, you may spend 4 stacks to add Thor’s Hammer to hand.', fr: 'Gagne des fragments. À 4 charges, vous pouvez en dépenser 4 pour ajouter Thor’s Hammer à la main.', ja: '碎片層数を得ます。4層で4層消費し、雷神之锤を手札に加えられます。' }) },
@@ -10037,9 +10069,11 @@ function connectSocket(serverUrl) {
     bindSocketEvent('invite_received', (data) => {
         debugLog('[client] invite_received:', data);
         playInviteAudio();
+        const grPreview = renderInviteGrPreview(data.gr_preview || data);
         showModal(`
             <h3>${UI.invite_received}</h3>
             <p>${data.inviter_name} ${UI.invite_message}</p>
+            ${grPreview}
             <div class="modal-buttons">
                 <button class="btn btn-primary" id="invite-accept">${UI.accept}</button>
                 <button class="btn btn-danger" id="invite-decline">${UI.decline}</button>
@@ -10059,6 +10093,23 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('invite_declined', () => {
         flashStatus(UI.invite_declined, 2000);
+    });
+    bindSocketEvent('invite_gr_preview', (data = {}) => {
+        if (data.text) flashStatus(data.text, 4200, 'neutral');
+    });
+    bindSocketEvent('invite_confirm_required', (data = {}) => {
+        showInviteConfirmModal({
+            title: currentLang === 'zh' ? '确认邀请' : 'Confirm Invite',
+            message: currentLang === 'zh'
+                ? `确认邀请 ${data.target_name || '?'} 进行对局吗？`
+                : `Invite ${data.target_name || '?'} to a match?`,
+            preview: data.gr_preview || data,
+            confirmText: UI.invite || '邀请',
+            onConfirm: () => {
+                socket.emit('invite', { target_sid: data.target_sid, confirmed: true });
+                updateStatus(UI.invite_sent);
+            },
+        });
     });
     bindSocketEvent('team_invite', (data) => {
         playInviteAudio();
@@ -10091,9 +10142,11 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('team_match_invite', (data) => {
         playInviteAudio();
+        const grPreview = renderInviteGrPreview(data.gr_preview || data);
         showModal(`
             <h3>${UI.invite_team}</h3>
             <p>${tf('team_match_invite_msg', data.from_team.join(' & '))}</p>
+            ${grPreview}
             <div class="modal-buttons">
                 <button class="btn btn-primary" id="match-accept">${UI.accept}</button>
                 <button class="btn btn-danger" id="match-decline">${UI.decline}</button>
@@ -10107,6 +10160,21 @@ function connectSocket(serverUrl) {
             socket.emit('decline_team_match', { from_leader: data.from_leader });
             hideModal();
         };
+    });
+    bindSocketEvent('team_match_confirm_required', (data = {}) => {
+        const targetNames = Array.isArray(data.target_team) ? data.target_team.join(' & ') : '?';
+        showInviteConfirmModal({
+            title: UI.invite_team || '邀请队伍',
+            message: currentLang === 'zh'
+                ? `确认邀请队伍 ${targetNames} 进行2v2吗？`
+                : `Invite team ${targetNames} to 2v2?`,
+            preview: data.gr_preview || data,
+            confirmText: UI.invite_team || '邀请队伍',
+            onConfirm: () => {
+                socket.emit('invite_team', { target_team_leader: data.target_team_leader, confirmed: true });
+                updateStatus(UI.invite_sent);
+            },
+        });
     });
     bindSocketEvent('team_match_declined', () => {
         flashStatus(UI.team_match_declined_msg, 2000);
@@ -13692,7 +13760,12 @@ function emitModeEvent(soloEventName, onlineEventName, payload = {}) {
     else if (socket) socket.emit(onlineEventName, payload);
 }
 
-function showSoloTraining() {
+async function showSoloTraining() {
+    try {
+        await ensureCardDataForCurrentMods();
+    } catch (err) {
+        console.warn('[mods] failed to refresh card data before solo:', err);
+    }
     clearActiveMatchRoute('open_solo_training');
     soloMode = false;
     phase = 'solo_edit';
@@ -16649,9 +16722,11 @@ function renderClassicEquipmentList(player) {
         const equipArmor = Math.max(0, Number(eq.armor || 0));
         const customVars = eq.custom_vars && typeof eq.custom_vars === 'object' ? eq.custom_vars : {};
         const layerValue = Math.max(0, Number(customVars.layers || customVars.layer || 0));
+        const rootLayerValue = Math.max(0, Number(customVars.jungle_root_layers || 0));
         const topParts = [];
         if (targetSuffix) topParts.push(targetSuffix);
         if (layerValue > 0) topParts.push(String(layerValue));
+        if (rootLayerValue > 0) topParts.push(`树根:${rootLayerValue}`);
         const angle = total ? (index / total) * 360 : 0;
         const orbitDelay = -((Date.now() / 1000) % 15).toFixed(2);
         const spinDelay = -((Date.now() / 1000) % 13).toFixed(2);
@@ -17037,7 +17112,7 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
             <img class="classic-hp-icon" src="/static/assets/ui-icons/hit-point.svg" alt="" aria-hidden="true">
             <div class="classic-hp-body">
                 <div class="classic-hp-track"><div class="classic-hp-fill" style="width:${hpPct}%"></div></div>
-                <div class="classic-hp-text">${player.hp}/${player.maxHp}${player.armor ? ` · A ${player.armor}` : ''}</div>
+                <div class="classic-hp-text">${player.hp}/${player.maxHp}</div>
             </div>
         </div>
         ${renderClassicPileCounters(player, side, masks)}
@@ -17527,8 +17602,10 @@ function renderStatusTags(containerId, playerData) {
         }
         return 0;
     };
+    const rootArmor = customCount('jungle:root', 'jungle:root_status', 'root_status');
     if (p.poison > 0) tags.push({ key: 'poison', name: UI.status_poison, abbr: 'P', val: p.poison, fg: COLORS.poison, bg: COLORS.poison_bg });
     if (p.fire > 0) tags.push({ key: 'fire', name: UI.status_fire, abbr: 'F', val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
+    if (Number(p.armor || 0) + rootArmor > 0) tags.push({ key: 'armor', name: UI.status_armor || '护甲', abbr: 'A', val: Number(p.armor || 0) + rootArmor, fg: COLORS.armor_text, bg: COLORS.armor_bg });
     if (p.toxic > 0) tags.push({ key: 'toxic', name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
     if (p.triangle_stacks > 0) tags.push({ key: 'triangle', name: UI.status_triangle, abbr: '△', val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
     if (p.nazar_active) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
@@ -17578,7 +17655,6 @@ function renderStatusTags(containerId, playerData) {
     const jungleStatusDisplay = [
         { keys: ['jungle:fragile', 'fragile'], iconKey: 'fragile', name: '易损', abbr: '易损', fg: '#8E5A2A', bg: '#F7EFE8', title: '护甲降低对应层数；若降为负数，会使物理伤害增加。自己回合开始时清除。' },
         { keys: ['jungle:shield', 'shield'], iconKey: 'shield', name: '护盾', abbr: '护盾', fg: '#2E7D7D', bg: '#E8F6F6', title: '消耗层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。' },
-        { keys: ['jungle:root_status', 'jungle:root', 'root_status'], iconKey: 'root_status', name: '树根', abbr: '树根', fg: '#6E8B3D', bg: '#EEF5E5', title: '增加护甲；受到物理伤害时减少1层。' },
         { keys: ['jungle:toxic_poison', 'toxic_poison'], iconKey: 'toxic_poison', name: '剧毒', abbr: '剧毒', fg: '#5E8C31', bg: '#EEF6E7', title: '中毒结算后施加对应层数的中毒。' },
     ];
     jungleStatusDisplay.forEach((info) => {
@@ -17586,7 +17662,7 @@ function renderStatusTags(containerId, playerData) {
         if (count > 0) tags.push({ key: info.keys[0], iconKey: info.iconKey, name: info.name, abbr: info.abbr, val: count, fg: info.fg, bg: info.bg, title: info.title });
     });
     if (customStatuses && typeof customStatuses === 'object') {
-            const builtinKeys = new Set(['poison','fire','toxic','dodge','armor','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
+            const builtinKeys = new Set(['poison','fire','toxic','dodge','armor','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:root','jungle:root_status','root_status','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
         Object.entries(customStatuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;
@@ -19273,7 +19349,11 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             : '';
         const customVars = eqDict.custom_vars || {};
         const layerValue = Number(customVars.layers || customVars.layer || 0);
-        const layerSuffix = layerValue > 0 ? ` · 层数:${layerValue}` : '';
+        const rootLayerValue = Number(customVars.jungle_root_layers || 0);
+        const layerSuffixParts = [];
+        if (layerValue > 0) layerSuffixParts.push(`层数:${layerValue}`);
+        if (rootLayerValue > 0) layerSuffixParts.push(`树根:${rootLayerValue}`);
+        const layerSuffix = layerSuffixParts.length ? ` · ${layerSuffixParts.join(' · ')}` : '';
         const equipArmor = Math.max(0, Number(eqDict.armor || 0));
         const armorSuffix = equipArmor > 0 ? ` · 护甲:${equipArmor}` : '';
         const previewCardInst = { ...cardInst };
@@ -20358,7 +20438,15 @@ function appendGameChat(nick, text, meta = {}, channelMeta = {}) {
     }
     if (matchKey) battleChatMatchKey = matchKey;
     appendCompressedTimelineChat(battleChatEntries, { ...entry, matchKey }, 500);
-    renderLog((gameState && gameState.log) || [], (gameState && gameState.log_start) || 0, gameState && gameState.log_total);
+    refreshBattleLogViews();
+}
+
+function refreshBattleLogViews() {
+    const gs = gameState || {};
+    renderLog(gs.log || [], gs.log_start || 0, gs.log_total);
+    if (shouldUseClassicBattle(gs)) {
+        renderClassicLog(buildBattleViewModel(gs));
+    }
 }
 
 function renderPendingCard() {
@@ -21334,10 +21422,11 @@ function respondSurrenderConsent(accepted) {
     if (socket) socket.emit('surrender_consent_response', { accepted: !!accepted });
 }
 
-async function showReorderDeckUI(deckCards, titleText) {
+async function showReorderDeckUI(deckCards, titleText, config = {}) {
     const modal = $('modal');
     const content = $('modal-content');
     if (!modal || !content) return null;
+    const cancellable = config.cancellable !== false;
     removeFloatingCardPreview();
     const order = deckCards.map(c => c.instance_id);
     content.className = 'modal-inner view-deck-modal';
@@ -21543,7 +21632,7 @@ async function showReorderDeckUI(deckCards, titleText) {
         modal.classList.add('hidden');
         modal.classList.remove('active');
     };
-    buttons.appendChild(cancelBtn);
+    if (cancellable) buttons.appendChild(cancelBtn);
     buttons.appendChild(confirmBtn);
     content.appendChild(buttons);
     modal.classList.remove('hidden');
@@ -21561,7 +21650,7 @@ async function showReorderDeckUI(deckCards, titleText) {
             }
         };
         confirmBtn.addEventListener('click', () => setTimeout(checkClosed, 50));
-        cancelBtn.addEventListener('click', () => setTimeout(checkClosed, 50));
+        if (cancellable) cancelBtn.addEventListener('click', () => setTimeout(checkClosed, 50));
     });
 }
 
@@ -21830,7 +21919,7 @@ async function showChoiceUI(data) {
         const deckCards = data.deck_cards || [];
         if (!deckCards.length) { gameAlert(UI.notice, UI.deck_empty); }
         else {
-            choiceResult = await showReorderDeckUI(deckCards, data.message || '调整牌堆顺序');
+            choiceResult = await showReorderDeckUI(deckCards, data.message || '调整牌堆顺序', choicePromptConfig);
         }
     }
     if (!choiceResult && choiceParams.continue_on_cancel) {
@@ -21965,6 +22054,63 @@ function formatGrDelta(delta) {
     const value = Number(delta || 0);
     if (!Number.isFinite(value) || Math.abs(value) < 0.05) return '±0';
     return `${value > 0 ? '+' : ''}${value.toFixed(Math.abs(value) >= 10 ? 0 : 1)}`;
+}
+
+function grDeltaClass(delta) {
+    const value = Number(delta || 0);
+    if (!Number.isFinite(value) || Math.abs(value) < 0.05) return 'neutral';
+    return value > 0 ? 'positive' : 'negative';
+}
+
+function renderInviteGrPreview(data = {}) {
+    const preview = data.gr_preview || data || {};
+    const text = preview.text || data.gr_preview_text || '';
+    if (!preview.applied) {
+        return text ? `<p class="invite-gr-preview is-neutral">${escapeHtml(text)}</p>` : '';
+    }
+    const viewer = preview.viewer || {};
+    const rows = [
+        [currentLang === 'zh' ? '胜利' : 'Win', viewer.win_delta],
+        [currentLang === 'zh' ? '平局' : 'Draw', viewer.draw_delta],
+        [currentLang === 'zh' ? '失败' : 'Loss', viewer.loss_delta],
+    ];
+    const repeat = Number(preview.repeat_factor || 1);
+    const repeatText = repeat < 0.999
+        ? `<div class="invite-gr-repeat">${escapeHtml(currentLang === 'zh' ? `重复对局衰减 ×${repeat.toFixed(2)}` : `Repeat match factor ×${repeat.toFixed(2)}`)}</div>`
+        : '';
+    return `
+        <div class="invite-gr-preview-card">
+            <div class="invite-gr-title">${escapeHtml(currentLang === 'zh' ? '花阶分预估' : 'Garden Rating Preview')}</div>
+            ${rows.map(([label, delta]) => `
+                <div class="invite-gr-row">
+                    <span>${escapeHtml(label)}</span>
+                    <b class="${escapeHtml(grDeltaClass(delta))}">${escapeHtml(formatGrDelta(delta))}</b>
+                </div>
+            `).join('')}
+            ${repeatText}
+        </div>
+    `;
+}
+
+function showInviteConfirmModal({ title, message, preview, confirmText, onConfirm }) {
+    showModal(`
+        <h3>${escapeHtml(title || (currentLang === 'zh' ? '确认邀请' : 'Confirm Invite'))}</h3>
+        <p>${escapeHtml(message || '')}</p>
+        ${renderInviteGrPreview(preview || {})}
+        <div class="modal-buttons">
+            <button class="btn btn-danger" id="invite-confirm-cancel">${escapeHtml(UI.cancel || '取消')}</button>
+            <button class="btn btn-primary" id="invite-confirm-ok">${escapeHtml(confirmText || UI.invite || '邀请')}</button>
+        </div>
+    `);
+    const cancel = $('invite-confirm-cancel');
+    const ok = $('invite-confirm-ok');
+    if (cancel) cancel.onclick = hideModal;
+    if (ok) {
+        ok.onclick = () => {
+            hideModal();
+            if (typeof onConfirm === 'function') onConfirm();
+        };
+    }
 }
 
 function renderGameOverGr(gs = {}) {
@@ -22541,8 +22687,9 @@ const DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = new Set([
 ]);
 const FALLBACK_DEFAULT_DISABLED_MODS = [
     'Desert Cards Addition.gtnmod',
-    'Factory Cards.gtnmod',
+    'Factory Cards Addition.gtnmod',
     'Garden Cards Addition.gtnmod',
+    'Jungle Cards Addition.gtnmod',
 ];
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 const COMMUNITY_JSON_MAX_BYTES = 150 * 1024;
