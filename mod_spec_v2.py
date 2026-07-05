@@ -315,6 +315,17 @@ VALID_LOGIC_OPS = {
     "electric_web_arm",
     "yin_yang_effect",
     "flower_burst",
+    "ocean_for_each_selectable_target",
+    "ocean_charge_self_damage",
+    "ocean_random_blind_hand",
+    "ocean_add_charge_to_hand",
+    "ocean_status_tag_damage",
+    "ocean_discard_count_damage",
+    "ocean_magic_coral_tick",
+    "ocean_add_blood_debt",
+    "ocean_mark_auto_play",
+    "ocean_sapphire_mark",
+    "ocean_dead_leaf_slow_if_no_counter",
 }
 
 VALID_EVENT_HOOKS = {

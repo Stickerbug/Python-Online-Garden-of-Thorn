@@ -603,7 +603,7 @@ I18N.zh = { ...I18N.en,
     status_equip_protect: '装备保护', status_invincible: '无敌', status_immune: '状态免疫', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_sublime: '崇高', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_sublime: '崇高', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷', flag_wide_strike: '广域打击', flag_self_target: '自刃', flag_charge: '电荷', flag_ocean_blinded: '蒙蔽',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张手牌丢弃，然后抽对应张牌', foresight_replace_confirm: '替换',
@@ -647,7 +647,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_sublime: '崇高', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_sublime: '崇高', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷', tag_wide_strike: '广域打击', tag_self_target: '自刃', tag_charge: '电荷', tag_ocean_blinded: '蒙蔽',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
@@ -2172,6 +2172,10 @@ const CARD_FLAG_STYLES = {
     power: { label: '', fg: '#C0392B', bg: 'rgba(192,57,43,0.14)', cls: 'power' },
     team_limited: { label: '', fg: '#607D3B', bg: 'rgba(96,125,59,0.15)', cls: 'team-limited' },
     team_unique: { label: '', fg: '#8D6E63', bg: 'rgba(141,110,99,0.15)', cls: 'team-unique' },
+    charge: { label: '', fg: '#4BA3FF', bg: 'rgba(75,163,255,0.15)', cls: 'charge' },
+    ocean_blinded: { label: '', fg: '#2C3E50', bg: 'rgba(44,62,80,0.12)', cls: 'ocean-blinded' },
+    wide_strike: { label: '', fg: '#1F9D8A', bg: 'rgba(31,157,138,0.14)', cls: 'wide-strike' },
+    self_target: { label: '', fg: '#B02A37', bg: 'rgba(176,42,55,0.14)', cls: 'self-target' },
     fusion_layer: { label: '', fg: '#8e44ad', bg: 'rgba(142,68,173,0.15)', cls: 'fusion-layer' },
     fission_layer: { label: '', fg: '#0f766e', bg: 'rgba(15,118,110,0.14)', cls: 'fission-layer' },
     stealth: { label: '', fg: '#2C3E50', bg: '#EBF5FB', cls: 'stealth' },
@@ -2201,6 +2205,10 @@ const CARD_FLAG_TERM_COLORS = {
     power: '#C0392B',
     team_limited: '#607D3B',
     team_unique: '#8D6E63',
+    charge: '#4BA3FF',
+    ocean_blinded: '#2C3E50',
+    wide_strike: '#1F9D8A',
+    self_target: '#B02A37',
     fusion_layer: 'var(--color-poison)',
     fission_layer: '#0f766e',
     tomato_layer: '#b42318',
@@ -2236,6 +2244,14 @@ const CARD_FLAG_ALIASES = {
     'vanilla:sublime': 'sublime',
     tag_sublime: 'sublime',
     'tag_vanilla:sublime': 'sublime',
+    waves: 'wide_strike',
+    blade: 'self_target',
+    'ocean:wide_strike': 'wide_strike',
+    'tag_ocean:wide_strike': 'wide_strike',
+    'tag_ocean_wide_strike': 'wide_strike',
+    'ocean:self_target': 'self_target',
+    'tag_ocean:self_target': 'self_target',
+    'tag_ocean_self_target': 'self_target',
     multi_petal_fission: '',
     flag_multi_petal_fission: '',
     tag_multi_petal_fission: '',
@@ -2249,6 +2265,7 @@ const _VANILLA_FLAGS = new Set([
     'infinite_exclude', 'rebound', 'copy', 'unique',
     'swift', 'temp_swift', 'temp_heavy', 'stealth', 'revealed', 'sublime', 'team_limited', 'team_unique',
     'power', 'magic_swift',
+    'charge', 'ocean_blinded', 'wide_strike', 'self_target',
 ]);
 
 function normalizeCardFlag(flag) {
@@ -2374,6 +2391,12 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'tag-revealed', re: /^(?:被揭示|Revealed)/i },
     { cls: 'tag-sublime', re: /^(?:崇高|Sublime)/i },
     { cls: 'tag-power', re: /^(?:威力|Power)(?::[+-]?\d+)?/i },
+    { cls: 'tag-charge', re: /^(?:电荷|Charge)(?::[+-]?\d+)?/i },
+    { cls: 'tag-ocean-blinded', re: /^(?:蒙蔽|Obscured)/i },
+    { cls: 'tag-wide-strike', re: /^(?:广域打击|Wide Strike)/i },
+    { cls: 'tag-self-target', re: /^(?:自刃|Self-cut)/i },
+    { cls: 'status-blood-debt', re: /^(?:[+-]?\d+层血债|血债[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-unable-counter', re: /^(?:[+-]?\d+层无法反制|无法反制[:：]?[+-]?\d+层?)/i },
     { cls: 'status-toxic-poison', re: /^(?:[+-]?\d+层剧毒|剧毒[:：]?[+-]?\d+层?|剧毒[×x][+-]?\d+层?)/i },
     { cls: 'status-sluggish', re: /^(?:[+-]?\d+层迟缓|迟缓[:：]?[+-]?\d+层?)/i },
     { cls: 'status-fragile', re: /^(?:(?:\([^)]*\)|（[^）]*）)层易损|[+-]?\d+层易损|易损[:：]?[+-]?\d+层?)/i },
@@ -2653,6 +2676,8 @@ function getIconTokenClass(iconKey) {
         root_status: 'status-root',
         turn_heal: 'status-turn-heal',
         turn_magic: 'status-turn-magic',
+        blood_debt: 'status-blood-debt',
+        unable_counter: 'status-unable-counter',
     };
     return map[key] || '';
 }
@@ -2692,6 +2717,7 @@ function getCardTextTokenIconKey(cls, rawText = '') {
         'status-attack-only': 'attack_only',
         'status-untargetable': 'untargetable',
         'status-magic-nazar': 'magic_nazar',
+        'status-blood-debt': 'blood_debt',
         toxic: 'toxic',
         fire: 'fire',
         poison: 'poison',
@@ -2962,6 +2988,10 @@ function getCardTextTokenTermKey(cls, text = '') {
         'tag-stealth': 'flag:stealth',
         'tag-revealed': 'flag:revealed',
         'tag-power': 'flag:power',
+        'tag-charge': 'flag:charge',
+        'tag-ocean-blinded': 'flag:ocean_blinded',
+        'tag-wide-strike': 'flag:wide_strike',
+        'tag-self-target': 'flag:self_target',
     };
     if (tagMap[cls]) return tagMap[cls];
     const statusMap = {
@@ -2993,6 +3023,7 @@ function getCardTextTokenTermKey(cls, text = '') {
         'status-attack-only': 'status:attack_only',
         'status-untargetable': 'status:untargetable',
         'status-magic-nazar': 'status:magic_nazar',
+        'status-blood-debt': 'status:blood_debt',
     };
     if (statusMap[cls]) return statusMap[cls];
     if (cls === 'toxic') return 'term:toxic';
@@ -3399,6 +3430,9 @@ let socketConnectUrl = '';
 let socketCreateSeq = 0;
 let manualDisconnect = false;
 let latencyPingTimer = null;
+let activeAfkCheck = null;
+let afkCheckTimer = null;
+let afkCheckHoldTimer = null;
 let skinSaveInFlight = false;
 let CARD_DEFS = {};
 let activeCardDataCacheKey = '';
@@ -3584,6 +3618,7 @@ let pendingServerAction = null;
 let pendingServerActionTimer = null;
 let optimisticResourceOverride = null;
 let selectedPlayCardId = null;
+let classicSelectedTriggerEquipmentId = null;
 let classicAimPointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 let classicAimHoverTarget = '';
 let classicAimFrame = 0;
@@ -3592,6 +3627,8 @@ let classicHoverInfoEl = null;
 let classicHoveredCardId = null;
 let classicTargetPickInFlight = false;
 let classicBackquoteHeld = false;
+const CLASSIC_MOBILE_CANVAS_W = 1600;
+const CLASSIC_MOBILE_CANVAS_H = 900;
 let actionToastTimer = null;
 let combatFloatSeq = 0;
 const localSoloRuntime = {
@@ -3838,6 +3875,40 @@ function applyUiStyle(style) {
     updateUiStyleAvailability();
     updateCompactUiText();
     refreshVisibleCardDisplays();
+    updateClassicMobileCanvas();
+}
+
+function getClassicViewportSize() {
+    const vv = window.visualViewport;
+    const width = Math.max(1, Math.floor((vv && vv.width) || window.innerWidth || document.documentElement.clientWidth || 1));
+    const height = Math.max(1, Math.floor((vv && vv.height) || window.innerHeight || document.documentElement.clientHeight || 1));
+    return { width, height };
+}
+
+function shouldUseBattleMobileCanvas() {
+    if (activeViewId !== 'view-game') return false;
+    if (currentUiStyle !== 'classic' && currentUiStyle !== 'minimal') return false;
+    const coarse = !!(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+    return coarse;
+}
+
+function updateClassicMobileCanvas() {
+    const root = document.documentElement;
+    const useCanvas = shouldUseBattleMobileCanvas();
+    root.classList.toggle('classic-mobile-canvas', useCanvas && currentUiStyle === 'classic');
+    root.classList.toggle('minimal-mobile-canvas', useCanvas && currentUiStyle === 'minimal');
+    if (!useCanvas) {
+        root.style.removeProperty('--classic-mobile-scale');
+        root.style.removeProperty('--classic-mobile-rotate');
+        return;
+    }
+    const { width, height } = getClassicViewportSize();
+    const rotate = height > width;
+    const fitW = rotate ? CLASSIC_MOBILE_CANVAS_H : CLASSIC_MOBILE_CANVAS_W;
+    const fitH = rotate ? CLASSIC_MOBILE_CANVAS_W : CLASSIC_MOBILE_CANVAS_H;
+    const scale = Math.min(width / fitW, height / fitH);
+    root.style.setProperty('--classic-mobile-scale', String(Math.max(0.1, Math.min(1, scale))));
+    root.style.setProperty('--classic-mobile-rotate', rotate ? '90deg' : '0deg');
 }
 
 function updateUiStyleAvailability() {
@@ -4543,6 +4614,7 @@ function showView(viewId) {
         activeViewId = viewId;
         updatePhaseChatPanelVisibility(viewId);
     }
+    updateClassicMobileCanvas();
     updateTopActionButtons(viewId);
     if (viewId !== 'view-login') {
         toggleAccountPopover(false);
@@ -4617,6 +4689,25 @@ function clearNetworkMatchStateForLobby() {
     clearSelectedPlayCard();
     clearPendingServerAction();
     resetRematchUiState();
+}
+
+function returnHomeAfterSocketDisconnect(message = '') {
+    closeAfkCheckOverlay();
+    clearPendingServerAction();
+    cleanupDragState();
+    pendingPlayCard = null;
+    responsePending = false;
+    responseData = null;
+    pendingSpectateRoomId = null;
+    activeSpectateRoomId = null;
+    isSpectating = false;
+    clearSelectedPlayCard();
+    removeFloatingCardPreview();
+    clearNetworkMatchStateForLobby();
+    setButtonLoading('btn-connect', false);
+    phase = 'login';
+    showView('view-login');
+    if (message) flashStatus(message, 5000, 'error');
 }
 
 let gallerySelectedId = null;
@@ -5498,6 +5589,18 @@ function getAllStatusDefs() {
         'jungle:turn_magic_turns',
         'jungle:turn_magic_power',
         'jungle:toxic_poison',
+        'magic_blocked',
+        '魔力封锁',
+        'ocean:blood_debt',
+        'troll_cards:magic_blocked',
+    ]);
+    const statusGalleryAliases = new Map([
+        ['jungle:root_status', 'root_status'],
+        ['jungle:root', 'root_status'],
+        ['魔力封锁', 'magic_blocked'],
+        ['ocean:blood_debt', 'blood_debt'],
+        ['troll_cards:magic_blocked', 'magic_blocked'],
+        ['ocean:unable_counter', 'unable_counter'],
     ]);
     const builtInList = [
         { key: 'poison', label: UI.status_poison, desc: termLib.P ? termLib.P.desc : '', color: COLORS.poison },
@@ -5527,6 +5630,10 @@ function getAllStatusDefs() {
         { key: 'weakness', label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
         { key: 'fragment', label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
+        { key: 'magic_blocked', label: '魔力封锁', desc: '存在时，不能打出带有魔力消耗的卡牌。回合结束时层数-1。', color: COLORS.magic_text },
+        { key: 'root_status', iconKey: 'root_status', label: '树根', desc: '增加护甲；受到物理伤害时减少1层。产生它的树根装备离场时，会清除对应树根。', color: '#6E8B3D' },
+        { key: 'blood_debt', iconKey: 'blood_debt', label: '血债', desc: '受到物理伤害时效果清除，攻击者获得等同于血债层数的E。', color: '#8E1B2A' },
+        { key: 'unable_counter', label: '无法反制', desc: '从左到右将层数张反制牌置入弃牌堆，然后减少对应层数。若层数不为0，抽到反制牌时自动将其置入弃牌堆并降低层数。', color: '#536878' },
         { key: 'jungle:fragile', label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A', source: 'vanilla' },
         { key: 'jungle:shield', label: '护盾', desc: '受到伤害时先消耗护盾层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。', color: '#2E7D7D', source: 'vanilla' },
         { key: 'jungle:turn_heal_turns', iconKey: 'turn_heal', label: '回合回复', desc: '写作“回合回复:X;Y”。出现和回合开始时回复Y点H，然后X减少1；X为0时消失。', color: '#F48FB1', source: 'vanilla' },
@@ -5536,16 +5643,19 @@ function getAllStatusDefs() {
     builtInList.forEach(s => result.set(s.key, { ...s, source: s.source || 'vanilla' }));
     if (CUSTOM_STATUS_DEFS && typeof CUSTOM_STATUS_DEFS === 'object') {
         Object.entries(CUSTOM_STATUS_DEFS).forEach(([id, def]) => {
-            const existing = result.get(id);
+            const aliasKey = statusGalleryAliases.get(String(id)) || '';
+            const targetId = aliasKey || id;
+            const existing = result.get(targetId);
             const label = getRegistryText(def, 'name', id);
             const desc = getRegistryText(def, 'description', '');
             const color = safeRegistryColor(def.color, existing ? existing.color : '#1F618D');
-            result.set(id, {
-                key: id,
-                label,
+            result.set(targetId, {
+                key: targetId,
+                label: existing && aliasKey ? existing.label : label,
                 desc: desc || (existing ? existing.desc : ''),
                 color,
-                source: vanillaStatusIds.has(id) || (existing && existing.source === 'vanilla') ? 'vanilla' : (def.v2_mod_id || def.source_mod || 'mod'),
+                iconKey: existing && existing.iconKey ? existing.iconKey : normalizeStatusIconKey(targetId),
+                source: vanillaStatusIds.has(id) || aliasKey || (existing && existing.source === 'vanilla') ? 'vanilla' : (def.v2_mod_id || def.source_mod || 'mod'),
                 customDef: def,
             });
         });
@@ -5555,11 +5665,12 @@ function getAllStatusDefs() {
 
 const STATUS_ICON_BASE = '/static/assets/status-icons/';
 const STATUS_ICON_KEYS = new Set([
-    'armor', 'attack_blocked', 'attack_only', 'bandage', 'bleed', 'blind', 'dodge', 'equip_protect',
+    'armor', 'attack_blocked', 'attack_only', 'bandage', 'bleed', 'blind', 'blood_debt', 'dodge', 'equip_protect',
     'fire', 'foresight', 'fracture', 'fragile', 'fragment', 'heal_block',
     'invincible', 'magic_blocked', 'magic_nazar', 'nazar', 'overload', 'poison',
     'root_status', 'shield', 'sluggish', 'sponge', 'stagnation', 'status_immune',
     'stunned', 'toxic_poison', 'toxic', 'triangle', 'turn_heal', 'turn_magic',
+    'unable_counter',
     'untargetable', 'weakness'
 ]);
 
@@ -5569,6 +5680,8 @@ function normalizeStatusIconKey(key) {
     if (raw === 'jungle:fragile') return 'fragile';
     if (raw === 'jungle:shield') return 'shield';
     if (raw === 'jungle:root_status' || raw === 'jungle:root') return 'root_status';
+    if (raw === 'status-blood-debt' || raw === 'status_blood_debt') return 'blood_debt';
+    if (raw === 'ocean:blood_debt') return 'blood_debt';
     if (raw === 'jungle:toxic_poison') return 'toxic_poison';
     if (raw === 'jungle:turn_heal_turns' || raw === 'turn_heal_turns' || raw === 'jungle:turn_heal_power' || raw === 'turn_heal_power') return 'turn_heal';
     if (raw === 'jungle:turn_magic_turns' || raw === 'turn_magic_turns' || raw === 'jungle:turn_magic_power' || raw === 'turn_magic_power') return 'turn_magic';
@@ -6029,6 +6142,7 @@ function ensureMobilePlayConfirm() {
 
 function clearSelectedPlayCard(options = {}) {
     selectedPlayCardId = null;
+    classicSelectedTriggerEquipmentId = null;
     classicTargetPickInFlight = false;
     if (targetPickCleanup) targetPickCleanup();
     classicAimHoverTarget = '';
@@ -6043,6 +6157,7 @@ function clearSelectedPlayCard(options = {}) {
     removeClassicHoverInfo();
     document.querySelectorAll('.card.tap-selected').forEach(el => el.classList.remove('tap-selected'));
     document.querySelectorAll('.classic-fighter.is-aim-hover').forEach(el => el.classList.remove('is-aim-hover'));
+    document.querySelectorAll('.classic-equip-chip.is-trigger-selected').forEach(el => el.classList.remove('is-trigger-selected'));
     const aim = $('classic-aim-layer');
     if (aim) aim.classList.add('hidden');
     const root = $('battle-classic');
@@ -6093,6 +6208,19 @@ function getSelectedClassicCard() {
     const cardDict = hand.find(c => c.instance_id === selectedPlayCardId);
     if (!cardDict) return null;
     return normalizeBattleCard(cardDict, gameState.you || {});
+}
+
+function getSelectedClassicTriggerEquipment() {
+    if (classicSelectedTriggerEquipmentId == null || !gameState || !gameState.you) return null;
+    const equipment = Array.isArray(gameState.you.equipment) ? gameState.you.equipment : [];
+    const eq = equipment.find(item => {
+        const cardInst = item && (item.card_instance || item.card || item);
+        return String(cardInst && cardInst.instance_id) === String(classicSelectedTriggerEquipmentId);
+    });
+    const cardInst = eq && (eq.card_instance || eq.card || eq);
+    const cardDef = cardInst ? getCardDef(cardInst.def_id) : null;
+    if (!eq || !cardInst || !cardDef) return null;
+    return { eq, cardInst, cardDef };
 }
 
 function isClassicSelfOnlyCard(card) {
@@ -6168,17 +6296,69 @@ function selectedClassicCardCenter() {
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
 }
 
+function selectedClassicEquipmentCenter() {
+    if (classicSelectedTriggerEquipmentId == null) return null;
+    const chip = document.querySelector(`.classic-equip-chip[data-instance-id="${classicSelectedTriggerEquipmentId}"]`);
+    const visual = chip ? (chip.querySelector('.classic-equip-visual') || chip) : null;
+    if (!visual) return null;
+    const rect = visual.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+function classicFighterElementIdToPlayerId(elementId) {
+    const fighter = $(elementId);
+    const avatar = fighter ? fighter.querySelector('.player-avatar[data-player-id]') : null;
+    const fromDom = normalizePlayerId((avatar && avatar.dataset.playerId) || (fighter && fighter.dataset.playerId));
+    if (fromDom != null) return fromDom;
+    if (!gameState) return null;
+    if (elementId === 'classic-fighter-self') return normalizePlayerId(gameState.your_id);
+    if (elementId === 'classic-fighter-ally') return normalizePlayerId(gameState.teammate_id);
+    const enemyIds = Array.isArray(gameState.enemy_ids) ? gameState.enemy_ids.map(normalizePlayerId) : [];
+    if (elementId === 'classic-fighter-enemy') {
+        if (enemyIds[0] != null) return enemyIds[0];
+        const yourId = normalizePlayerId(gameState.your_id);
+        return yourId == null ? null : 1 - yourId;
+    }
+    if (elementId === 'classic-fighter-enemy-2') return enemyIds[1] == null ? null : enemyIds[1];
+    return null;
+}
+
+function getEquipmentTriggerTargetOptions(cardDef, cardInst = null) {
+    if (cardHasSelfOnlyFlag(cardInst || {}, cardDef)) {
+        return { includeSelf: true, candidates: 'self', aliveOnly: true };
+    }
+    if (equipmentTriggerForbidsSelfTarget(cardDef)) {
+        return { includeSelf: false, candidates: 'all', aliveOnly: true };
+    }
+    return { includeSelf: true, candidates: 'all', aliveOnly: true };
+}
+
+function classicCanTriggerEquipmentFromElement(elementId, cardDef, cardInst = null) {
+    const targetId = classicFighterElementIdToPlayerId(elementId);
+    if (targetId == null) return false;
+    const targets = getPlayerTargetOptions(getEquipmentTriggerTargetOptions(cardDef, cardInst));
+    return targets.some(target => normalizePlayerId(target.id) === targetId);
+}
+
 function updateClassicAimHoverTarget() {
     let hoverId = '';
     const selected = getSelectedClassicCard();
-    if (isClassicSelfOnlyCard(selected)) {
+    const selectedEquipment = getSelectedClassicTriggerEquipment();
+    if (!selectedEquipment && isClassicSelfOnlyCard(selected)) {
         document.querySelectorAll('.classic-fighter.is-aim-hover').forEach(item => item.classList.remove('is-aim-hover'));
         classicAimHoverTarget = '';
         return;
     }
     const el = document.elementFromPoint(classicAimPointer.x, classicAimPointer.y);
     const fighter = el && el.closest ? el.closest('#classic-fighter-self, #classic-fighter-enemy, #classic-fighter-enemy-2, #classic-fighter-ally') : null;
-    if (fighter && classicCanPlayFromElement(fighter.id)) hoverId = fighter.id;
+    if (fighter) {
+        if (selectedEquipment) {
+            if (classicCanTriggerEquipmentFromElement(fighter.id, selectedEquipment.cardDef, selectedEquipment.cardInst)) hoverId = fighter.id;
+        } else if (classicCanPlayFromElement(fighter.id)) {
+            hoverId = fighter.id;
+        }
+    }
     if (hoverId === classicAimHoverTarget) return;
     classicAimHoverTarget = hoverId;
     document.querySelectorAll('.classic-fighter.is-aim-hover').forEach(item => item.classList.remove('is-aim-hover'));
@@ -6191,13 +6371,14 @@ function updateClassicAimHoverTarget() {
 function updateClassicAimCurve() {
     const root = $('battle-classic');
     const selected = getSelectedClassicCard();
+    const selectedEquipment = getSelectedClassicTriggerEquipment();
     const selfOnly = isClassicSelfOnlyCard(selected);
     const svg = ensureClassicAimLayer();
-    if (!root || !svg || !selected || selfOnly || !shouldUseClassicBattle(gameState)) {
+    if (!root || !svg || (!selected && !selectedEquipment) || (!selectedEquipment && selfOnly) || !shouldUseClassicBattle(gameState)) {
         if (svg) svg.classList.add('hidden');
         return;
     }
-    const center = selectedClassicCardCenter();
+    const center = selectedEquipment ? selectedClassicEquipmentCenter() : selectedClassicCardCenter();
     if (!center) {
         svg.classList.add('hidden');
         return;
@@ -6230,11 +6411,11 @@ function scheduleClassicAimCurveUpdate() {
 
 function onClassicAimPointerMove(event) {
     classicAimPointer = { x: event.clientX, y: event.clientY };
-    if (selectedPlayCardId != null && shouldUseClassicBattle(gameState)) scheduleClassicAimCurveUpdate();
+    if ((selectedPlayCardId != null || classicSelectedTriggerEquipmentId != null) && shouldUseClassicBattle(gameState)) scheduleClassicAimCurveUpdate();
 }
 
 function cancelClassicSelection(event) {
-    if (!shouldUseClassicBattle(gameState) || selectedPlayCardId == null) return false;
+    if (!shouldUseClassicBattle(gameState) || (selectedPlayCardId == null && classicSelectedTriggerEquipmentId == null)) return false;
     if (event) event.preventDefault();
     clearSelectedPlayCard();
     return true;
@@ -6328,6 +6509,7 @@ async function selectClassicPlayCard(cardInstanceId, event = null) {
         if (cardDict) flashStatus(getCannotPlayReason(cardDict), 2200, 'error');
         return false;
     }
+    classicSelectedTriggerEquipmentId = null;
     if (event && typeof event.clientX === 'number') classicAimPointer = { x: event.clientX, y: event.clientY };
     removeClassicHoverInfo();
     selectedPlayCardId = cardInstanceId;
@@ -6337,32 +6519,56 @@ async function selectClassicPlayCard(cardInstanceId, event = null) {
     renderClassicBattle(gameState);
     syncPlayerRegionTargets(gameState);
     scheduleClassicAimCurveUpdate();
-    const selfOnly = cardHasSelfOnlyFlag(cardDict, cardDef) && cardDef.card_type !== 'thorn';
-    if (cardNeedsPlayerTarget(cardDef, cardDict) && !selfOnly) {
-        classicTargetPickInFlight = true;
-        const selectedId = cardInstanceId;
-        try {
-            const targetPlayerId = await chooseClassicPlayerTargetForCard(cardDef);
-            if (selectedPlayCardId !== selectedId) return false;
-            if (targetPlayerId < 0) {
-                clearSelectedPlayCard();
-                return false;
-            }
-            await onPlayCard(selectedId, { confirmed: true, targetPlayerId });
-        } finally {
-            classicTargetPickInFlight = false;
-        }
-    }
     return true;
 }
 
-async function classicPlaySelectedCard() {
+async function classicPlaySelectedCard(elementId = '') {
     if (!shouldUseClassicBattle(gameState) || isActionBusy()) return false;
     if (classicTargetPickInFlight) return false;
     const id = selectedPlayCardId;
     if (id == null) return false;
-    await onPlayCard(id, { confirmed: true });
+    const opts = { confirmed: true };
+    if (elementId && elementId !== 'classic-play-lane') {
+        const targetPlayerId = classicFighterElementIdToPlayerId(elementId);
+        if (targetPlayerId != null) opts.targetPlayerId = targetPlayerId;
+    }
+    await onPlayCard(id, opts);
     return true;
+}
+
+async function selectClassicTriggerEquipment(cardInst, cardDef, event = null) {
+    if (!shouldUseClassicBattle(gameState) || isActionBusy()) return false;
+    if (!cardInst || !cardDef || !canSendGameAction('use_trigger', { includeAnimation: false })) return false;
+    const resource = lacksEquipmentTriggerResource(cardDef);
+    if (resource.lacksElixir || resource.lacksMagic) {
+        flashStatus([resource.lacksElixir ? '能量不足' : '', resource.lacksMagic ? '魔力不足' : ''].filter(Boolean).join('，'), 1800, 'error');
+        return false;
+    }
+    if (!equipmentChoosesTargetOnTrigger(cardDef)) {
+        return triggerEquipmentInstance(cardInst, cardDef);
+    }
+    if (cardHasSelfOnlyFlag(cardInst, cardDef)) {
+        return triggerEquipmentInstance(cardInst, cardDef, { targetPlayerId: normalizePlayerId(gameState && gameState.your_id) });
+    }
+    if (event && typeof event.clientX === 'number') classicAimPointer = { x: event.clientX, y: event.clientY };
+    selectedPlayCardId = null;
+    classicSelectedTriggerEquipmentId = cardInst.instance_id;
+    renderClassicBattle(gameState);
+    syncPlayerRegionTargets(gameState);
+    scheduleClassicAimCurveUpdate();
+    return true;
+}
+
+async function classicTriggerSelectedEquipmentAtElement(elementId) {
+    if (!shouldUseClassicBattle(gameState) || isActionBusy()) return false;
+    const selectedEquipment = getSelectedClassicTriggerEquipment();
+    if (!selectedEquipment) return false;
+    if (!classicCanTriggerEquipmentFromElement(elementId, selectedEquipment.cardDef, selectedEquipment.cardInst)) return false;
+    const targetPlayerId = classicFighterElementIdToPlayerId(elementId);
+    if (targetPlayerId == null) return false;
+    const ok = await triggerEquipmentInstance(selectedEquipment.cardInst, selectedEquipment.cardDef, { targetPlayerId });
+    if (ok) clearSelectedPlayCard({ skipRender: true });
+    return ok;
 }
 
 function classicCanPlayFromElement(elementId) {
@@ -6426,6 +6632,108 @@ function hideModal() {
         showTutorialOverlay();
         setTimeout(updateTutorialOverlay, 60);
     }
+}
+
+function closeAfkCheckOverlay() {
+    if (afkCheckTimer) {
+        clearInterval(afkCheckTimer);
+        afkCheckTimer = null;
+    }
+    if (afkCheckHoldTimer) {
+        cancelAnimationFrame(afkCheckHoldTimer);
+        afkCheckHoldTimer = null;
+    }
+    const overlay = $('afk-check-overlay');
+    if (overlay) overlay.remove();
+    activeAfkCheck = null;
+}
+
+function setAfkCheckStatus(message, tone = '') {
+    const el = $('afk-check-status');
+    if (!el) return;
+    el.textContent = message || '';
+    el.classList.toggle('afk-check-error', tone === 'error');
+    el.classList.toggle('afk-check-ok', tone === 'ok');
+}
+
+function updateAfkCheckCountdown() {
+    if (!activeAfkCheck) return;
+    const left = Math.max(0, Math.ceil((activeAfkCheck.expiresAt - Date.now()) / 1000));
+    const el = $('afk-check-countdown');
+    if (el) el.textContent = `${left}s`;
+    if (left <= 0) {
+        setAfkCheckStatus('挂机检测已超时，正在断开连接...', 'error');
+    }
+}
+
+function showAfkCheckOverlay(data = {}) {
+    closeAfkCheckOverlay();
+    const timeoutSeconds = Math.max(1, Number(data.timeout_seconds || 60));
+    const minMs = Math.max(100, Number(data.min_ms || 750));
+    const maxMs = Math.max(minMs + 100, Number(data.max_ms || 2200));
+    const expiresAt = Number(data.expires_at ? data.expires_at * 1000 : 0) || (Date.now() + timeoutSeconds * 1000);
+    activeAfkCheck = {
+        id: String(data.id || ''),
+        minMs,
+        maxMs,
+        expiresAt,
+        holding: false,
+        holdStart: 0,
+        sent: false,
+    };
+    const overlay = document.createElement('div');
+    overlay.id = 'afk-check-overlay';
+    overlay.className = 'afk-check-overlay';
+    overlay.innerHTML = `
+        <div class="afk-check-dialog" role="dialog" aria-modal="true">
+            <div class="afk-check-title">AFK Check</div>
+            <div class="afk-check-desc">请在 <span id="afk-check-countdown">${timeoutSeconds}s</span> 内按住圆形按钮，按钮明显发光后松开。</div>
+            <button id="afk-check-button" class="afk-check-button" type="button" aria-label="挂机检测按钮">
+                <span class="afk-check-core">按住</span>
+            </button>
+            <div id="afk-check-status" class="afk-check-status">准备好了就按住按钮。</div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    const button = $('afk-check-button');
+    const updateHold = () => {
+        if (!activeAfkCheck || !activeAfkCheck.holding || !button) return;
+        const elapsed = Date.now() - activeAfkCheck.holdStart;
+        button.classList.toggle('afk-check-ready', elapsed >= activeAfkCheck.minMs && elapsed <= activeAfkCheck.maxMs);
+        afkCheckHoldTimer = requestAnimationFrame(updateHold);
+    };
+    const startHold = (event) => {
+        event.preventDefault();
+        if (!activeAfkCheck || activeAfkCheck.sent) return;
+        activeAfkCheck.holding = true;
+        activeAfkCheck.holdStart = Date.now();
+        button.classList.add('afk-check-holding');
+        setAfkCheckStatus('保持按住...', '');
+        updateHold();
+    };
+    const endHold = (event) => {
+        if (event) event.preventDefault();
+        if (!activeAfkCheck || !activeAfkCheck.holding || activeAfkCheck.sent) return;
+        activeAfkCheck.holding = false;
+        if (afkCheckHoldTimer) {
+            cancelAnimationFrame(afkCheckHoldTimer);
+            afkCheckHoldTimer = null;
+        }
+        button.classList.remove('afk-check-holding', 'afk-check-ready');
+        const holdMs = Date.now() - activeAfkCheck.holdStart;
+        if (socket && socket.connected) {
+            activeAfkCheck.sent = true;
+            setAfkCheckStatus('正在验证...', '');
+            socket.emit('afk_check_response', { id: activeAfkCheck.id, hold_ms: holdMs });
+        } else {
+            setAfkCheckStatus('连接已断开，无法验证。', 'error');
+        }
+    };
+    button.addEventListener('pointerdown', startHold);
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(name => button.addEventListener(name, endHold));
+    button.addEventListener('contextmenu', event => event.preventDefault());
+    updateAfkCheckCountdown();
+    afkCheckTimer = setInterval(updateAfkCheckCountdown, 250);
 }
 
 function getV2Text(obj, base, fallback = '') {
@@ -7004,6 +7312,7 @@ function isOwnBlindActive() {
 
 function getOwnBlindLevel() {
     if (!gameState || !gameState.you || isSpectating) return 0;
+    if (isStatusImmune(gameState.you)) return 0;
     return Math.max(0, Math.floor(Number(gameState.you.blind || 0)));
 }
 
@@ -7018,7 +7327,9 @@ function shouldMaskOwnDiscardPile(state = gameState) {
 }
 
 function updateBlindVisualClasses(state = gameState) {
-    const level = state && state.you && !isSpectating ? Math.max(0, Math.floor(Number(state.you.blind || 0))) : 0;
+    const level = state && state.you && !isSpectating && !isStatusImmune(state.you)
+        ? Math.max(0, Math.floor(Number(state.you.blind || 0)))
+        : 0;
     const root = document.body;
     if (!root || !root.classList) return;
     for (let i = 1; i <= 4; i++) {
@@ -7032,6 +7343,9 @@ function getCardBlindLevelForSelf(cardDict, options = {}) {
         return Math.max(1, Math.floor(Number(options.blindLevel || cardDict.__blind_level || getOwnBlindLevel() || 1)));
     }
     if (options.autoBlindSelf === false) return 0;
+    if (cardDict && Number(cardDict.hand_blind_turns || cardDict.blind_level || 0) > 0 && isOwnHandCardInstance(cardDict)) {
+        return 1;
+    }
     return isOwnHandCardInstance(cardDict) ? getOwnBlindLevel() : 0;
 }
 
@@ -7056,8 +7370,8 @@ function getCardBlindDisplayColor(cardDef, blindLevel = 0) {
 }
 
 function getCardLayerLabel(cardDict) {
-    const fusionLevel = clampClientCardLayer(cardDict.fusion_level || 1);
-    const fissionLevel = clampClientCardLayer(cardDict.fission_level || 1);
+    const fusionLevel = clampClientCardLayer(cardDict.fusion_level || cardDict.fusion_multiplier || 1);
+    const fissionLevel = clampClientCardLayer(cardDict.fission_level || ((Number(cardDict.fission_count || 0) || 0) + 1) || 1);
     const parts = [];
     if (fusionLevel > 1) parts.push(`${UI.fusion_layer || 'Fusion'}:${fusionLevel}`);
     if (fissionLevel > 1) parts.push(`${UI.fission_layer || 'Fission'}:${fissionLevel}`);
@@ -7170,6 +7484,13 @@ function createCardElement(cardDict, options = {}) {
     if (defId === 'Yggdrasil' || cardDef.id === 'Yggdrasil' || cardDef.legacy_id === 'Yggdrasil' || cardDef.name_cn === '世界树之叶') {
         el.classList.add('card-yggdrasil');
     }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['Pearl', 'MagicPearl', 'Spikeball', 'Sapphire'])
+        || ['珍珠', '魔法珍珠', '尖刺球', '蓝宝石'].includes(cardDef.name_cn)) {
+        el.classList.add('card-ocean-compact');
+    }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['MagicPearl']) || cardDef.name_cn === '魔法珍珠') {
+        el.classList.add('card-ocean-magic-pearl');
+    }
     if (cardDef.ui_effect_size === 'slightly_small') {
         el.classList.add('card-effect-slightly-small');
     }
@@ -7238,8 +7559,8 @@ function createCardElement(cardDict, options = {}) {
             flagsHtml += `<span class="card-flag ${style.cls}">${escapeHtml(label)}</span>`;
         }
     }
-    const fusionLevel = clampClientCardLayer(cardDict.fusion_level || 1);
-    const fissionLevel = clampClientCardLayer(cardDict.fission_level || 1);
+    const fusionLevel = clampClientCardLayer(cardDict.fusion_level || cardDef.fusion_level || 1);
+    const fissionLevel = clampClientCardLayer(cardDict.fission_level || cardDef.fission_level || 1);
     if (!blinded && fusionLevel > 1) {
         flagsHtml += `<span class="card-flag fusion-layer">${escapeHtml(UI.fusion_layer || 'Fusion')}: ${fusionLevel}</span>`;
     }
@@ -7428,8 +7749,8 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
         parts.push(cardFlagHtml(flag));
     });
     if (includeLayers) {
-        const fusionLevel = clampClientCardLayer(cardDict.fusion_level || 1);
-        const fissionLevel = clampClientCardLayer(cardDict.fission_level || 1);
+        const fusionLevel = clampClientCardLayer(cardDict.fusion_level || cardDef.fusion_level || 1);
+        const fissionLevel = clampClientCardLayer(cardDict.fission_level || cardDef.fission_level || 1);
         if (fusionLevel > 1) parts.push(cardFlagHtml('fusion_layer', `${UI.fusion_layer || 'Fusion'}: ${fusionLevel}`));
         if (fissionLevel > 1) parts.push(cardFlagHtml('fission_layer', `${UI.fission_layer || 'Fission'}: ${fissionLevel}`));
     }
@@ -8805,6 +9126,10 @@ function getTermIntroLibrary() {
         same_name_penalty: { label: lt({ zh: '同名卡惩罚', en: 'Same-name penalty', fr: 'Pénalité de même nom', ja: '同名カードペナルティ' }), desc: lt({ zh: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', en: 'Playing the same card name repeatedly in one turn costs extra E. Symbiosis ignores it.', fr: 'Jouer plusieurs fois le même nom pendant un tour coûte du E supplémentaire. Symbiose l’ignore.', ja: '同一ターンに同名カードを繰り返すと追加 E が必要です。共生は無視します。' }), color: COLORS.elixir },
         revealed: { label: UI.tag_revealed || lt({ zh: '被揭示', en: 'Revealed', fr: 'Révélé', ja: '公開' }), desc: lt({ zh: '在手中时永久对对手展示。', en: 'While in hand, this card is always visible to opponents.', fr: 'Tant qu’elle est en main, cette carte reste visible pour les adversaires.', ja: '手札にある間、相手に常に見えます。' }), color: '#E74C3C' },
         sublime: { label: UI.tag_sublime || lt({ zh: '崇高', en: 'Sublime', fr: 'Sublime', ja: '崇高' }), desc: lt({ zh: '带有此标签的卡牌，无法被除使用外的行为选中。', en: 'Cards with this tag cannot be selected by actions other than playing them.', fr: 'Les cartes avec ce tag ne peuvent pas être choisies par des actions autres que leur utilisation.', ja: 'このタグを持つカードは、使用以外の行動では選択できません。' }), color: '#9A7A12' },
+        charge: { label: UI.tag_charge || lt({ zh: '电荷', en: 'Charge', fr: 'Charge', ja: '電荷' }), desc: lt({ zh: '此卡牌打出时对自己造成等同于层数的电伤；持有者回合开始时减少1层。', en: 'When this card is played, it deals electric damage to its owner equal to its stacks; at the owner’s turn start, it loses 1 stack.', fr: 'Quand cette carte est jouée, elle inflige à son propriétaire des dégâts électriques égaux à ses charges ; au début du tour du propriétaire, elle perd 1 charge.', ja: 'このカードを使う時、層数分の電撃ダメージを自分に与えます。所持者のターン開始時に1層減ります。' }), color: '#4BA3FF' },
+        ocean_blinded: { label: UI.tag_ocean_blinded || lt({ zh: '蒙蔽', en: 'Obscured', fr: 'Obscurci', ja: '蒙蔽' }), desc: lt({ zh: '这张牌在自己手中时只能看到问号；持有者下个回合结束，或离开手牌区时失效。', en: 'While in its owner’s hand, this card is shown as unknown. It clears at that owner’s next turn end or when the card leaves hand.', fr: 'Tant qu’elle est dans la main de son propriétaire, cette carte apparaît inconnue. Se dissipe à la fin du prochain tour du propriétaire ou quand elle quitte la main.', ja: '所持者の手札にある間、このカードは不明表示になります。次の所持者ターン終了時、または手札を離れると消えます。' }), color: '#2C3E50' },
+        wide_strike: { label: UI.tag_wide_strike || lt({ zh: '广域打击', en: 'Wide Strike', fr: 'Frappe large', ja: '広域打撃' }), desc: lt({ zh: '使用时同时对所有当前可选取对象生效，不再单独选择目标。', en: 'When played, affects all currently selectable targets at once instead of choosing one target.', fr: 'À l’utilisation, affecte toutes les cibles actuellement sélectionnables au lieu d’en choisir une.', ja: '使用時、個別に対象を選ばず、現在選択可能な全対象へ同時に効果を与えます。' }), color: '#1F9D8A' },
+        self_target: { label: UI.tag_self_target || lt({ zh: '自刃', en: 'Self-cut', fr: 'Auto-ciblage', ja: '自刃' }), desc: lt({ zh: '这张攻击牌可以选择自己为目标。', en: 'This Thorn card can choose its owner as a target.', fr: 'Cette carte Thorn peut choisir son propriétaire comme cible.', ja: 'この攻撃カードは自分を対象にできます。' }), color: '#B02A37' },
         team_limited: { label: UI.tag_team_limited || 'Team Limited', desc: lt({ zh: '只会出现在一队至少 2 名玩家的模式；单人训练场可选，但没有实际意义。', en: 'Appears only in modes where a team has at least 2 players. It can be selected in training but has no practical effect there.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. Sélectionnable en entraînement, mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ意味があります。訓練場では選べますが実質効果はありません。' }), color: '#607D3B' },
         team_unique: { label: UI.tag_team_unique || 'Team Unique', desc: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose this card, one copy is kept at random and the extras are exiled.', fr: 'Si plusieurs coéquipiers choisissent cette carte, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }), color: '#8D6E63' },
         power: { label: UI.tag_power || 'Power', desc: lt({ zh: '此牌造成的每段 D 增加。若是多段 D，会按段数把威力向上分配。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }), color: '#C0392B' },
@@ -8885,6 +9210,10 @@ function getIntroFlagDescription(flag, custom = null) {
         stealth: lt({ zh: '不会触发对手的响应窗口。', en: 'Does not open the opponent’s response window.', fr: 'N’ouvre pas la fenêtre de réponse adverse.', ja: '相手の応答ウィンドウを開きません。' }),
         revealed: lt({ zh: '在手中时永久对对手展示。', en: 'While in hand, it is always shown to opponents.', fr: 'Tant qu’elle est en main, elle est toujours visible pour les adversaires.', ja: '手札にある間、相手に常に表示されます。' }),
         sublime: lt({ zh: '无法被除使用外的行为选中。', en: 'Cannot be selected by actions other than playing it.', fr: 'Ne peut pas être choisie par des actions autres que son utilisation.', ja: '使用以外の行動では選択できません。' }),
+        charge: getTermIntroLibrary().charge.desc,
+        ocean_blinded: getTermIntroLibrary().ocean_blinded.desc,
+        wide_strike: getTermIntroLibrary().wide_strike.desc,
+        self_target: getTermIntroLibrary().self_target.desc,
         fusion_layer: getTermIntroLibrary().fusion_layer.desc,
         fission_layer: getTermIntroLibrary().fission_layer.desc,
     };
@@ -9016,6 +9345,8 @@ function collectCardIntroTerms(cardDict) {
         [/超载|Overload|overload/i, 'overload'],
         [/迟缓|Sluggish|sluggish/i, 'sluggish'],
         [/魔法邪眼|Magic Nazar|magic_nazar/i, 'magic_nazar'],
+        [/血债|Blood Debt|blood_debt|ocean:blood_debt/i, 'blood_debt'],
+        [/无法反制|Unable to Counter|unable_counter|ocean:unable_counter/i, 'unable_counter'],
     ];
     statusProbes.forEach(([re, key]) => {
         if (!re.test(rawText) || seen.has(`status:${key}`)) return;
@@ -9040,8 +9371,15 @@ function collectCardIntroTerms(cardDict) {
     if (/(迅捷(?![：:]?魔)|(^|[^a-z_])swift($|[^a-z_])|(^|[^a-z_])swift_value($|[^a-z_]))/i.test(rawText.replace(/魔力迅捷/g, ''))) {
         addFlagIntroItem(items, seen, 'swift');
     }
-    const fusionLevel = clampClientCardLayer(cardDict && cardDict.fusion_level || 1);
-    const fissionLevel = clampClientCardLayer(cardDict && cardDict.fission_level || 1);
+    const fusionLevel = clampClientCardLayer(
+        (cardDict && cardDict.fusion_level) || (cardDef && cardDef.fusion_level) || 1
+    );
+    const fissionLevel = clampClientCardLayer(
+        (cardDict && cardDict.fission_level)
+        || (cardDict && ((Number(cardDict.fission_count || 0) || 0) + 1))
+        || (cardDef && cardDef.fission_level)
+        || 1
+    );
     if (fusionLevel > 1 || cardDef.id === 'Fusion') addTermIntroItem(items, seen, 'fusion_layer');
     if (fissionLevel > 1 || cardDef.id === 'Fission') addTermIntroItem(items, seen, 'fission_layer');
     if (!items.some(item => item.key === 'D') && cardDef.card_type === 'thorn') addTermIntroItem(items, seen, 'D');
@@ -9101,6 +9439,8 @@ function getStatusIntroItem(statusInfo) {
         weakness: { label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         bleed: { label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
         fragment: { label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
+        blood_debt: { label: '血债', desc: '受到物理伤害时效果清除，攻击者获得等同于血债层数的E。', color: '#8E1B2A' },
+        unable_counter: { label: '无法反制', desc: '从左到右将层数张反制牌置入弃牌堆，然后减少对应层数。若层数不为0，抽到反制牌时自动将其置入弃牌堆并降低层数。', color: '#536878' },
     };
     const localizedStatusTerms = {
         poison: { label: UI.status_poison, desc: getTermIntroLibrary().P.desc },
@@ -9118,6 +9458,8 @@ function getStatusIntroItem(statusInfo) {
         attack_blocked: { label: UI.status_attack_blocked, desc: lt({ zh: builtIns.attack_blocked.desc, en: 'You cannot play Thorn cards while this effect lasts.', fr: 'Vous ne pouvez pas jouer de cartes Thorn tant que cet effet dure.', ja: '効果中、Thornカードを使用できません。' }) },
         attack_only: { label: UI.status_attack_only, desc: lt({ zh: builtIns.attack_only.desc, en: 'You can only play Thorn cards while this effect lasts.', fr: 'Vous ne pouvez jouer que des cartes Thorn tant que cet effet dure.', ja: '効果中、Thornカードしか使用できません。' }) },
         magic_blocked: { label: lt({ zh: '魔力封锁', en: 'Magic Lock', fr: 'Verrou magique', ja: '魔力封鎖' }), desc: lt({ zh: builtIns.magic_blocked.desc, en: 'You cannot play cards with M cost while this effect lasts. Loses 1 stack at turn end.', fr: 'Vous ne pouvez pas jouer de cartes coûtant M tant que cet effet dure. Perd 1 charge en fin de tour.', ja: '効果中、M消費のあるカードを使用できません。ターン終了時に1層減ります。' }) },
+        blood_debt: { label: lt({ zh: '血债', en: 'Blood Debt', fr: 'Dette de sang', ja: '血債' }), desc: lt({ zh: builtIns.blood_debt.desc, en: 'When physical damage is taken, this effect clears and the attacker gains E equal to its stacks.', fr: 'Quand des dégâts physiques sont subis, cet effet disparaît et l’attaquant gagne E égal aux charges.', ja: '物理ダメージを受けるとこの効果は消え、攻撃者は層数分のEを得ます。' }) },
+        unable_counter: { label: lt({ zh: '无法反制', en: 'Unable to Counter', fr: 'Contre impossible', ja: '反制不能' }), desc: lt({ zh: builtIns.unable_counter.desc, en: 'Discards counter cards from left to right equal to its stacks, then reduces those stacks. If stacks remain, drawn counter cards are discarded and reduce stacks.', fr: 'Défausse de gauche à droite autant de contres que de charges, puis réduit ces charges. S’il en reste, les contres piochés sont défaussés et réduisent les charges.', ja: '層数分だけ左から反制牌を弃牌に置き、その分層数を減らします。層数が残る間、引いた反制牌も弃牌に置かれ層数が減ります。' }) },
         untargetable: { label: UI.status_untargetable, desc: lt({ zh: builtIns.untargetable.desc, en: 'Cannot be selected by some targeted effects.', fr: 'Ne peut pas être choisi par certains effets ciblés.', ja: '一部の対象指定効果で選べません。' }) },
         bandage: { label: UI.status_bandage, desc: lt({ zh: builtIns.bandage.desc, en: 'After lethal damage, become invincible until your next turn ends, then die.', fr: 'Après des dégâts mortels, devient invincible jusqu’à la fin de votre prochain tour, puis meurt.', ja: '致命ダメージ後、次の自分ターン終了まで無敵になり、その後死亡します。' }) },
         sluggish: { label: UI.status_sluggish, desc: lt({ zh: builtIns.sluggish.desc, en: 'Draw that many fewer cards each turn.', fr: 'Pioche autant de cartes en moins à chaque tour.', ja: '毎ターンその層数分だけドローが減ります。' }) },
@@ -9137,12 +9479,14 @@ function getStatusIntroItem(statusInfo) {
         bleed: { label: UI.status_bleed, desc: lt({ zh: builtIns.bleed.desc, en: 'When you play a Thorn card, take physical damage equal to its stacks. At turn end, stacks halve rounded down.', fr: 'Quand vous jouez une carte Thorn, subissez des dégâts physiques égaux aux charges. À la fin du tour, les charges sont divisées par deux arrondies à l’inférieur.', ja: 'Thornカードを使う時、層数分の物理ダメージを受けます。ターン終了時に切り捨てで半減します。' }) },
         fragment: { label: UI.status_fragment, desc: lt({ zh: builtIns.fragment.desc, en: 'Gains Fragment stacks. At 4 stacks, you may spend 4 stacks to add Thor’s Hammer to hand.', fr: 'Gagne des fragments. À 4 charges, vous pouvez en dépenser 4 pour ajouter Thor’s Hammer à la main.', ja: '碎片層数を得ます。4層で4層消費し、雷神之锤を手札に加えられます。' }) },
     };
-    ['jungle:fragile', 'jungle:shield', 'jungle:turn_heal_turns', 'jungle:turn_magic_turns', 'jungle:root_status', 'jungle:toxic_poison'].forEach(fullKey => {
+    ['jungle:fragile', 'jungle:shield', 'jungle:turn_heal_turns', 'jungle:turn_magic_turns', 'jungle:root_status', 'jungle:toxic_poison', 'ocean:blood_debt', 'ocean:unable_counter'].forEach(fullKey => {
         const shortKey = fullKey.includes('fragile') ? 'fragile'
             : fullKey.includes('shield') ? 'shield'
             : fullKey.includes('turn_heal') ? 'turn_heal'
             : fullKey.includes('turn_magic') ? 'turn_magic'
             : fullKey.includes('root_status') ? 'root_status'
+            : fullKey.includes('blood_debt') ? 'blood_debt'
+            : fullKey.includes('unable_counter') ? 'unable_counter'
             : 'toxic_poison';
         localizedStatusTerms[fullKey] = localizedStatusTerms[shortKey];
     });
@@ -9917,8 +10261,7 @@ function connectSocket(serverUrl) {
             manualDisconnect = false;
             return;
         }
-        flashStatus(UI.disconnected, 3000, 'error');
-        phase = 'connecting';
+        returnHomeAfterSocketDisconnect(UI.disconnected || '已断开连接');
     });
     bindSocketEvent('connect_error', (err) => {
         debugLog('[client] socket connect_error', err && err.message ? err.message : err);
@@ -9956,7 +10299,8 @@ function connectSocket(serverUrl) {
             phase = 'login';
             return;
         }
-        flashStatus(translateServerMessage(reason), 5000, 'error');
+        manualDisconnect = true;
+        returnHomeAfterSocketDisconnect(translateServerMessage(reason));
     });
     bindSocketEvent('latency_pong', (data = {}) => {
         if (typeof performance === 'undefined' || data.t == null) return;
@@ -10540,6 +10884,22 @@ function connectSocket(serverUrl) {
         pendingPlayCard = null;
         clearSelectedPlayCard();
         showV2UiRequest(data);
+    });
+    bindSocketEvent('afk_check', (data) => {
+        showAfkCheckOverlay(data || {});
+    });
+    bindSocketEvent('afk_check_result', (data = {}) => {
+        if (data.success) {
+            setAfkCheckStatus(data.message || '挂机检测已通过', 'ok');
+            setTimeout(closeAfkCheckOverlay, 650);
+            return;
+        }
+        if (activeAfkCheck) activeAfkCheck.sent = false;
+        setAfkCheckStatus(data.message || '检测失败，请重试', data.retry ? '' : 'error');
+        const button = $('afk-check-button');
+        if (button) {
+            button.classList.remove('afk-check-holding', 'afk-check-ready');
+        }
     });
     bindSocketEvent('action_rejected', (data) => {
         clearPendingServerAction();
@@ -12894,18 +13254,21 @@ function renderSocialSelectorList() {
         return;
     }
     if (activeSocialSection === 'dm') {
-        const threads = Array.isArray(dmData.threads) ? dmData.threads : [];
-        el.innerHTML = threads.length ? threads.map(thread => {
-            const user = thread.user || {};
-            const unread = Number(thread.unread_count || 0);
-            const active = String(thread.thread_id) === String(activeDmThreadId);
+        const friends = Array.isArray(socialData.friends) ? socialData.friends : [];
+        el.innerHTML = friends.length ? friends.map(item => {
+            const user = item?.user || {};
+            const thread = (Array.isArray(dmData.threads) ? dmData.threads : []).find(candidate => {
+                const threadUser = candidate.user || {};
+                return String(threadUser.id || '') === String(user.id || '');
+            });
+            const unread = Number(thread?.unread_count || 0);
+            const active = String(activeDmTargetUserId || '') === String(user.id || '') || (thread && String(thread.thread_id) === String(activeDmThreadId));
             return `
-              <button class="dm-thread-item${active ? ' active' : ''}" type="button" data-dm-thread="${escapeHtml(thread.thread_id)}">
+              <button class="friend-name-row${active ? ' active' : ''}" type="button" data-dm-open-user="${escapeHtml(user.id || '')}" data-dm-open-name="${escapeHtml(user.username || '')}">
                 <span class="dm-thread-name">${escapeHtml(user.username || '-')}</span>
                 ${unread > 0 ? `<span class="dm-unread">${escapeHtml(unread > 99 ? '99+' : String(unread))}</span>` : ''}
-                <span class="dm-thread-preview">${escapeHtml(thread.last_message || '暂无消息')}</span>
               </button>`;
-        }).join('') : `<div class="friend-empty">暂无私信</div>`;
+        }).join('') : `<div class="friend-empty">${escapeHtml(UI.friend_empty || '暂无好友')}</div>`;
         return;
     }
     const friends = Array.isArray(socialData.friends) ? socialData.friends : [];
@@ -12939,7 +13302,7 @@ function renderFriendsState() {
 function normalizeSocialTab(tabName = 'friends') {
     const tab = String(tabName || 'friends');
     if (tab === 'profile') return 'friends';
-    if (tab === 'incoming' || tab === 'outgoing') return 'requests';
+    if (tab === 'incoming' || tab === 'outgoing' || tab === 'requests') return 'requests';
     if (tab === 'dm') return 'dm';
     return 'friends';
 }
@@ -13024,7 +13387,7 @@ function renderFriendDetailProfile() {
         <div class="friend-detail-stat"><b>${escapeHtml(lastSeenLabel)}</b>${escapeHtml(friendDateText(user.last_login_at))}</div>
       </div>
       <div class="friend-detail-actions">
-        <button class="mini-btn" type="button" data-dm-open-user="${escapeHtml(user.id)}" data-dm-open-name="${escapeHtml(user.username || '')}">私信</button>
+        <button class="mini-btn" type="button" data-dm-open-user="${escapeHtml(user.id)}" data-dm-open-name="${escapeHtml(user.username || '')}">进入私聊</button>
         <button class="mini-btn" type="button" data-friend-remove="${escapeHtml(user.id)}">${escapeHtml(UI.friend_remove)}</button>
       </div>
       <div>
@@ -13506,7 +13869,9 @@ function getServerAddress() {
 }
 
 function isLocalSoloRuntimeActive() {
-    return !!(localSoloRuntime.enabled && localSoloRuntime.worker);
+    // Solo training intentionally uses the server-side 1v1 GameEngine.
+    // Keep the old worker code dormant so solo behavior represents real games.
+    return false;
 }
 
 function clearPendingSoloFallback() {
@@ -13525,11 +13890,7 @@ function scheduleSoloOfflineFallback(kind, payload) {
         pendingSoloStart = false;
         pendingTutorialStart = false;
         window.__pendingSoloPayload = null;
-        if (startLocalSoloRuntime(kind, payload)) {
-            flashStatus('服务器未连接，已切换到本地训练', 2600, 'warning');
-        } else {
-            flashStatus(UI.server_no_response || UI.operation_failed, 3200, 'error');
-        }
+        flashStatus(UI.server_no_response || UI.server_not_connected || UI.operation_failed, 3200, 'error');
     }, 5000);
 }
 
@@ -13711,48 +14072,16 @@ function handleLocalSoloMessage(event) {
 }
 
 function startLocalSoloRuntime(kind, payload) {
-    if (!soloPayloadIsLocalSupported(payload)) return false;
     stopLocalSoloRuntime();
-    try {
-        const worker = new Worker('/static/js/local_solo_worker.js?v=20');
-        localSoloRuntime.worker = worker;
-        localSoloRuntime.enabled = true;
-        localSoloRuntime.fallbackPayload = payload;
-        localSoloRuntime.fallbackKind = kind;
-        worker.onmessage = handleLocalSoloMessage;
-        worker.onerror = () => {
-            const fallbackPayload = localSoloRuntime.fallbackPayload;
-            const fallbackKind = localSoloRuntime.fallbackKind;
-            stopLocalSoloRuntime();
-            if (fallbackKind === 'tutorial') {
-                pendingTutorialStart = true;
-            } else {
-                pendingSoloStart = true;
-                window.__pendingSoloPayload = fallbackPayload;
-            }
-            connectSocket(getServerAddress());
-        };
-        worker.postMessage({
-            type: kind === 'tutorial' ? 'tutorial_start' : 'solo_start',
-            payload,
-            cardDefs: CARD_DEFS,
-            openingEvents,
-            openingEventMagicPool,
-        });
-        return true;
-    } catch (e) {
-        console.error('Failed to start local solo runtime:', e);
-        stopLocalSoloRuntime();
-        return false;
-    }
+    return false;
 }
 
 function emitSoloEvent(eventName, payload = {}) {
-    if (isLocalSoloRuntimeActive()) {
-        localSoloRuntime.worker.postMessage({ type: eventName, payload });
+    if (socket && socket.connected) {
+        socket.emit(eventName, payload);
         return;
     }
-    if (socket) socket.emit(eventName, payload);
+    clientRejectAction(UI.server_not_connected || UI.server_no_response || UI.operation_failed);
 }
 
 function emitModeEvent(soloEventName, onlineEventName, payload = {}) {
@@ -13766,6 +14095,7 @@ async function showSoloTraining() {
     } catch (err) {
         console.warn('[mods] failed to refresh card data before solo:', err);
     }
+    stopLocalSoloRuntime();
     clearActiveMatchRoute('open_solo_training');
     soloMode = false;
     phase = 'solo_edit';
@@ -13820,6 +14150,7 @@ function saveSoloDecks() {
 }
 
 function startTutorial(returnTarget = 'home') {
+    stopLocalSoloRuntime();
     tutorialReturnTarget = returnTarget;
     if (returnTarget === 'home') localStorage.setItem('gtn_seen_intro', '1');
     tutorialLastLogTotal = 0;
@@ -13845,10 +14176,6 @@ function startTutorial(returnTarget = 'home') {
     if (nickInput && !nickInput.value.trim()) nickInput.value = nickname;
     localStorage.setItem('gtn_nickname', nickname);
     updateStatus(UI.tutorial_start);
-    const tutorialPayload = { playerNames: [UI.tutorial_player_you || '你', UI.tutorial_player_opponent || '练习对手'] };
-    if (startLocalSoloRuntime('tutorial', tutorialPayload)) {
-        return;
-    }
     if (!socket || !socket.connected) {
         pendingTutorialStart = true;
         connectSocket(getServerAddress());
@@ -14711,6 +15038,7 @@ async function startSoloTraining() {
     if (sub1 === false) return;
     saveSoloDecks();
     const payload = { deck0: soloDeckA, deck1: soloDeckB, event0, event1, sub0, sub1, ...getModLoginPayload() };
+    stopLocalSoloRuntime();
     if (socket && socket.connected) {
         clearPendingSoloFallback();
         emitSoloStart(payload);
@@ -16714,7 +17042,7 @@ function renderClassicEquipmentList(player) {
         const cardDef = getCardDef(cardInst.def_id || '');
         const name = cardDef ? getCardName(cardDef) : (cardInst.def_id || '?');
         const targetId = normalizePlayerId(eq.effect_target);
-        const ownerId = normalizePlayerId((player && player.id) ?? (player && player.player_id) ?? eq.owner);
+        const ownerId = normalizeEquipmentOwnerId(eq, player);
         const targetSuffix = targetId != null && targetId !== ownerId ? `→${getPlayerNameById(targetId)}` : '';
         const typeColor = cardDef ? (CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary) : COLORS.text_primary;
         const instanceId = cardInst.instance_id != null ? String(cardInst.instance_id) : '';
@@ -16733,7 +17061,8 @@ function renderClassicEquipmentList(player) {
         const canTrigger = canTriggerEquipmentNow(cardInst, cardDef, eq, isMyEquipment);
         const resourceState = canTrigger ? lacksEquipmentTriggerResource(cardDef) : null;
         const lacksResource = !!(resourceState && (resourceState.lacksElixir || resourceState.lacksMagic));
-        const triggerClass = canTrigger ? ` is-triggerable${lacksResource ? ' is-trigger-unavailable' : ''}` : '';
+        const triggerSelected = canTrigger && String(instanceId) === String(classicSelectedTriggerEquipmentId);
+        const triggerClass = canTrigger ? ` is-triggerable${lacksResource ? ' is-trigger-unavailable' : ''}${triggerSelected ? ' is-trigger-selected' : ''}` : '';
         const cost = canTrigger ? getEquipmentTriggerCost(cardDef) : null;
         const costText = cost ? [
             cost.totalE > 0 ? `${cost.totalE}E` : '',
@@ -16778,7 +17107,7 @@ function attachClassicEquipmentPreviews(container, player) {
                         flashStatus(UI.insufficient_resource || '资源不足', 1800, 'error');
                         return;
                     }
-                    triggerEquipmentInstance(cardInst, getCardDef(cardInst.def_id));
+                    selectClassicTriggerEquipment(cardInst, getCardDef(cardInst.def_id), event);
                 };
                 chip.addEventListener('click', activate);
                 chip.addEventListener('keydown', (event) => {
@@ -17016,6 +17345,25 @@ function renderClassicPileCounters(player, side, masks = {}) {
     </div>`;
 }
 
+function normalizeEquipmentOwnerId(eq, player = null) {
+    const candidates = [
+        eq && eq.owner,
+        eq && eq.owner_id,
+        eq && eq.owner_player_id,
+        eq && eq.equipment_owner,
+        eq && eq.equipment_owner_id,
+        eq && eq.card_instance && eq.card_instance.owner,
+        eq && eq.card_instance && eq.card_instance.owner_id,
+        player && player.id,
+        player && player.player_id,
+    ];
+    for (const value of candidates) {
+        const normalized = normalizePlayerId(value);
+        if (normalized != null) return normalized;
+    }
+    return null;
+}
+
 function renderClassicStatStrip(kind, current, max, masked = false) {
     const isMagic = kind === 'm';
     const icon = isMagic ? 'magic' : 'elixir';
@@ -17239,6 +17587,7 @@ function renderClassicBattle(gs) {
         return false;
     }
     try {
+        updateClassicMobileCanvas();
         const vm = buildBattleViewModel(gs);
         const is2v2 = isClassic2v2State(gs);
         if (is2v2) ensureClassic2v2FighterNodes();
@@ -17246,6 +17595,7 @@ function renderClassicBattle(gs) {
         root.setAttribute('aria-hidden', 'false');
         oldContainer.classList.add('classic-battle-hidden');
         const selected = vm.selectedCard;
+        const selectedEquipment = getSelectedClassicTriggerEquipment();
         const resourcePreviewCard = getClassicResourcePreviewCard(vm);
         const selectedRole = getClassicPlayRole(selected);
         const selectedSelfOnly = isClassicSelfOnlyCard(selected);
@@ -17253,9 +17603,9 @@ function renderClassicBattle(gs) {
         root.classList.toggle('has-selected-card', !!selected);
         root.classList.toggle('has-resource-preview', !!resourcePreviewCard);
         root.classList.toggle('has-missing-resource', missingResource);
-        root.classList.toggle('is-aiming', !!selected);
+        root.classList.toggle('is-aiming', !!selected || !!selectedEquipment);
         root.classList.toggle('is-self-only-aim', !!selected && selectedSelfOnly);
-        root.classList.toggle('is-target-aim', !!selected && !selectedSelfOnly);
+        root.classList.toggle('is-target-aim', (!!selected && !selectedSelfOnly) || !!selectedEquipment);
         root.classList.toggle('is-2v2', is2v2);
         root.dataset.selectedRole = selected ? selectedRole : '';
         $('classic-mode').textContent = vm.turn.modeText || '1v1';
@@ -17656,6 +18006,8 @@ function renderStatusTags(containerId, playerData) {
         { keys: ['jungle:fragile', 'fragile'], iconKey: 'fragile', name: '易损', abbr: '易损', fg: '#8E5A2A', bg: '#F7EFE8', title: '护甲降低对应层数；若降为负数，会使物理伤害增加。自己回合开始时清除。' },
         { keys: ['jungle:shield', 'shield'], iconKey: 'shield', name: '护盾', abbr: '护盾', fg: '#2E7D7D', bg: '#E8F6F6', title: '消耗层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。' },
         { keys: ['jungle:toxic_poison', 'toxic_poison'], iconKey: 'toxic_poison', name: '剧毒', abbr: '剧毒', fg: '#5E8C31', bg: '#EEF6E7', title: '中毒结算后施加对应层数的中毒。' },
+        { keys: ['ocean:blood_debt', 'blood_debt', '血债'], iconKey: 'blood_debt', name: '血债', abbr: '血债', fg: '#8E1B2A', bg: '#FDEDEC', title: '受到物理伤害时效果清除，攻击者获得等同于血债层数的E。' },
+        { keys: ['ocean:unable_counter', 'unable_counter', '无法反制'], iconKey: 'unable_counter', name: '无法反制', abbr: '反制封锁', fg: '#536878', bg: '#EEF2F3', title: '从左到右将层数张反制牌置入弃牌堆，然后减少对应层数。若层数不为0，抽到反制牌时自动将其置入弃牌堆并降低层数。' },
     ];
     jungleStatusDisplay.forEach((info) => {
         const count = customStatusSum(...info.keys);
@@ -18430,10 +18782,7 @@ function setRenderedBarValue(selector, key, value, max, immediate = false) {
         }
     }
     if (text) {
-        const label = wrapper.dataset.barLabel || '';
-        const armor = Number(wrapper.dataset.barArmor || 0);
-        const suffix = label === 'H' && armor ? ` · A ${armor}` : '';
-        text.textContent = label ? `${label} ${cur}/${maxValue}${suffix}` : `${cur}/${maxValue}`;
+        text.textContent = `${cur}/${maxValue}`;
     }
     wrapper.dataset.renderedValue = String(cur);
     if (!immediate && wrapper.classList.contains('classic-hp-wrap')) {
@@ -19231,7 +19580,7 @@ function lacksEquipmentTriggerResource(cardDef) {
     };
 }
 
-async function triggerEquipmentInstance(cardInst, cardDef) {
+async function triggerEquipmentInstance(cardInst, cardDef, options = {}) {
     if (!cardInst || !cardDef) return false;
     const resource = lacksEquipmentTriggerResource(cardDef);
     if (resource.lacksElixir || resource.lacksMagic) {
@@ -19241,14 +19590,15 @@ async function triggerEquipmentInstance(cardInst, cardDef) {
     if (!canSendGameAction('use_trigger', { includeAnimation: false })) return false;
     const payload = { equipment_instance_id: cardInst.instance_id };
     if (equipmentChoosesTargetOnTrigger(cardDef)) {
-        const targetId = cardHasSelfOnlyFlag(cardInst, cardDef)
-            ? normalizePlayerId(gameState && gameState.your_id)
-            : await choosePlayerTarget(
+        let targetId = normalizePlayerId(options.targetPlayerId ?? options.target_player_id);
+        if (targetId == null) {
+            targetId = cardHasSelfOnlyFlag(cardInst, cardDef)
+                ? normalizePlayerId(gameState && gameState.your_id)
+                : await choosePlayerTarget(
                 UI.choose_target || UI.select_target || 'Choose target',
-                equipmentTriggerForbidsSelfTarget(cardDef)
-                    ? { includeSelf: false, candidates: 'all', aliveOnly: true }
-                    : { includeSelf: true, candidates: 'all', aliveOnly: true },
-            );
+                    getEquipmentTriggerTargetOptions(cardDef, cardInst),
+                );
+        }
         if (targetId < 0) return false;
         payload.target_player_id = targetId;
     }
@@ -19343,7 +19693,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
             el.style.background = COLORS.indestructible_bg;
         }
         const targetId = normalizePlayerId(eqDict.effect_target);
-        const ownerId = normalizePlayerId(playerData.player_id ?? eqDict.owner);
+        const ownerId = normalizeEquipmentOwnerId(eqDict, playerData);
         const targetSuffix = targetId != null && targetId !== ownerId
             ? `→${getPlayerNameById(targetId)}`
             : '';
@@ -21682,6 +22032,34 @@ async function showChoiceUI(data) {
             const sel = await simpleChoice(choiceTitle(UI.choose_attack_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < attacks.length) choiceResult = { target_instance_id: attacks[sel].instance_id };
         }
+    } else if (choiceType === 'choose_ocean_sapphire') {
+        const targetId = await choosePlayerTarget(choiceTitle(UI.choose_target || UI.select_target || 'Choose target'), {
+            includeSelf: true,
+            aliveOnly: true,
+            candidates: 'all',
+        });
+        if (targetId >= 0) {
+            const attacks = ((gameState.you || {}).hand || []).filter(c => {
+                if (!c || c.instance_id === cardDict.instance_id || cardHasSublimeFlag(c)) return false;
+                const cd = getCardDef(c.def_id);
+                return cd && cd.card_type === 'thorn';
+            });
+            if (!attacks.length) {
+                gameAlert(UI.notice, UI.no_attack_cards || '没有攻击牌');
+                choiceResult = { cancelled: true };
+            } else {
+                const options = attacks.map(a => cardChoiceOption(a));
+                const sel = await simpleChoice(choiceTitle(UI.choose_attack_for.replace('{0}', cardName)), options, choicePromptConfig);
+                if (sel >= 0 && sel < attacks.length) {
+                    choiceResult = {
+                        target_player: targetId,
+                        target_player_id: targetId,
+                        target_id: targetId,
+                        target_instance_id: attacks[sel].instance_id,
+                    };
+                }
+            }
+        }
     } else if (choiceType === 'choose_enemy_equipment') {
         const oppEq = (gameState.opponent || {}).equipment || [];
         if (!oppEq.length) { gameAlert(UI.notice, UI.no_enemy_equipment); }
@@ -22898,10 +23276,18 @@ function createSettingsModCaret(kind, key, expanded) {
     return btn;
 }
 
-const BETA_TESTING_MOD_IDS = new Set();
+const BETA_TESTING_MOD_IDS = new Set([
+    'Ocean Cards Addition.gtnmod',
+    'ocean',
+]);
 
 function isBetaTestingMod(mod) {
-    return false;
+    if (!mod || typeof mod !== 'object') return false;
+    const info = mod.info || {};
+    return BETA_TESTING_MOD_IDS.has(mod.filename || '')
+        || BETA_TESTING_MOD_IDS.has(info.id || '')
+        || BETA_TESTING_MOD_IDS.has(info.name_en || '')
+        || BETA_TESTING_MOD_IDS.has(info.name || '');
 }
 
 function createModBetaWarningBadge() {
@@ -23979,9 +24365,17 @@ async function init() {
         const el = $(id);
         if (el) el.addEventListener('click', (event) => {
             if (id !== 'classic-play-lane' && !(event.target && event.target.closest && event.target.closest('.player-avatar'))) return;
+            if (shouldUseClassicBattle(gameState) && classicSelectedTriggerEquipmentId != null && id !== 'classic-play-lane') {
+                const selectedEquipment = getSelectedClassicTriggerEquipment();
+                if (selectedEquipment && classicCanTriggerEquipmentFromElement(id, selectedEquipment.cardDef, selectedEquipment.cardInst)) {
+                    event.preventDefault();
+                    classicTriggerSelectedEquipmentAtElement(id);
+                }
+                return;
+            }
             if (shouldUseClassicBattle(gameState) && selectedPlayCardId != null && classicCanPlayFromElement(id)) {
                 event.preventDefault();
-                classicPlaySelectedCard();
+                classicPlaySelectedCard(id);
             }
         });
     });
@@ -24149,8 +24543,14 @@ if (window.__GTN_CARD_EXPORTER_RENDERER__) {
         const gc = document.querySelector('.game-container');
         if (gc) gc.style.removeProperty('--card-w');
         scheduleAdjust();
+        updateClassicMobileCanvas();
         if (tutorialMode) setTimeout(updateTutorialOverlay, 80);
     });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', updateClassicMobileCanvas);
+        window.visualViewport.addEventListener('scroll', updateClassicMobileCanvas);
+    }
+    window.addEventListener('orientationchange', () => setTimeout(updateClassicMobileCanvas, 80));
     debugLog('[LOAD] game.js loaded, onEndTurn=', typeof onEndTurn);
 }
 

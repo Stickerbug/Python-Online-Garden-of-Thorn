@@ -18,6 +18,7 @@ import shutil
 import shlex
 import difflib
 import hashlib
+import secrets
 import platform
 import subprocess
 import sqlite3
@@ -256,7 +257,9 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_VERSION = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
+GTN_STATIC_CACHE_BUST = 'ui-20260705-2'
+_GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
 GTN_DRAINING_ENV = os.environ.get('GTN_DRAINING', '').strip().lower()
 _DRAIN_OVERRIDE = None
@@ -448,12 +451,19 @@ _pending_interaction_watchdog_started = False
 _room_timer_worker_started = False
 _next_room_id = 0
 _COMMUNITY_API_RATE: dict = {}
+PENDING_AFK_CHECKS: dict = {}
 SERVER_STARTED_AT = time.time()
 RECONNECT_TIMEOUT_SECONDS = int(os.environ.get('RECONNECT_TIMEOUT_SECONDS', '120'))
 BOTH_DISCONNECTED_CLEANUP_SECONDS = int(os.environ.get('BOTH_DISCONNECTED_CLEANUP_SECONDS', '60'))
 GAME_OVER_CLEANUP_SECONDS = int(os.environ.get('GAME_OVER_CLEANUP_SECONDS', '300'))
 LOBBY_IDLE_TIMEOUT_SECONDS = int(os.environ.get('LOBBY_IDLE_TIMEOUT_SECONDS', '600'))
 LOBBY_IDLE_CHECK_SECONDS = int(os.environ.get('LOBBY_IDLE_CHECK_SECONDS', '60'))
+AFK_CHECK_TIMEOUT_SECONDS = int(os.environ.get('AFK_CHECK_TIMEOUT_SECONDS', '60'))
+AFK_CHECK_HOLD_MIN_MS = int(os.environ.get('AFK_CHECK_HOLD_MIN_MS', '750'))
+AFK_CHECK_HOLD_MAX_MS = int(os.environ.get('AFK_CHECK_HOLD_MAX_MS', '2200'))
+AFK_AUTO_MIN_SECONDS = int(os.environ.get('AFK_AUTO_MIN_SECONDS', '300'))
+AFK_AUTO_MAX_SECONDS = int(os.environ.get('AFK_AUTO_MAX_SECONDS', '600'))
+LOBBY_ACTIVITY_IGNORED_EVENTS = {'set_mode'}
 DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2:sha256:260000$82e7gAIa0D6034Qq$a0c9a5ad6028ce6c8798abc1314bc74b099b2441c3f39c3b3e6255ea2156f06b'
 ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', DEFAULT_ADMIN_PASSWORD_HASH)
 DEFAULT_ADMIN_CONSOLE_PASSWORD_HASH = 'scrypt:32768:8:1$37ezeWM6dBx97XH0$733f3b74ee3092ac5422eb19df05ff626cb251150a74ed3e03a6e7dd7799607d18123cf6e4b7d518e78e50c1700240f34c9411eb52761b1f9d695ff71c4309af'
@@ -2658,7 +2668,12 @@ def mark_lobby_activity(sid, now=None):
     player = players.get(sid)
     if not player or player.get('status') != 'lobby':
         return
-    player['last_lobby_activity_at'] = float(now or time.time())
+    ts = float(now or time.time())
+    player['last_lobby_activity_at'] = ts
+    player['next_lobby_afk_check_at'] = ts + random.uniform(
+        max(60, AFK_AUTO_MIN_SECONDS),
+        max(max(60, AFK_AUTO_MIN_SECONDS), AFK_AUTO_MAX_SECONDS),
+    )
 
 
 def _lobby_idle_cleanup_worker():
@@ -2669,25 +2684,32 @@ def _lobby_idle_cleanup_worker():
             except Exception:
                 time.sleep(max(5, int(LOBBY_IDLE_CHECK_SECONDS)))
             now = time.time()
-            stale_sids = []
+            check_sids = []
             with _lock:
                 for sid, player in list(players.items()):
                     if player.get('status') != 'lobby':
                         continue
-                    last_activity = float(player.get('last_lobby_activity_at') or player.get('login_at') or now)
-                    if now - last_activity >= LOBBY_IDLE_TIMEOUT_SECONDS:
-                        stale_sids.append(sid)
-            if not stale_sids:
+                    if sid in PENDING_AFK_CHECKS:
+                        continue
+                    next_at = float(player.get('next_lobby_afk_check_at') or 0)
+                    if not next_at:
+                        mark_lobby_activity(sid, now)
+                        continue
+                    if now >= next_at:
+                        check_sids.append(sid)
+            if not check_sids:
                 continue
-            for sid in stale_sids:
-                try:
-                    socketio.emit('kicked', {'reason': '大厅空闲超过10分钟，已断开连接'}, room=sid)
-                    socketio.server.disconnect(sid)
-                except Exception as exc:
-                    admin_event('error', f'lobby idle disconnect failed for {sid}: {exc}')
-            admin_event('player', f'lobby idle cleanup kicked {len(stale_sids)} player(s)')
+            sent = 0
+            for sid in check_sids:
+                result, error = send_afk_check_to_player(sid, reason='auto_lobby_idle', lobby_only=True)
+                if result:
+                    sent += 1
+                elif error:
+                    admin_event('error', f'auto lobby afk check failed for {sid}: {error}')
+            if sent:
+                admin_event('player', f'auto lobby afk check sent to {sent} player(s)')
         except Exception as exc:
-            admin_event('error', f'lobby idle cleanup worker error: {exc}')
+            admin_event('error', f'lobby afk check worker error: {exc}')
 
 
 def ensure_lobby_idle_cleanup_started():
@@ -2698,7 +2720,65 @@ def ensure_lobby_idle_cleanup_started():
     try:
         socketio.start_background_task(_lobby_idle_cleanup_worker)
     except Exception:
-        threading.Thread(target=_lobby_idle_cleanup_worker, name='lobby-idle-cleanup', daemon=True).start()
+        threading.Thread(target=_lobby_idle_cleanup_worker, name='lobby-afk-check', daemon=True).start()
+
+
+def _afk_check_timeout_worker(sid, request_id, timeout_seconds):
+    try:
+        try:
+            socketio.sleep(max(1, int(timeout_seconds)))
+        except Exception:
+            time.sleep(max(1, int(timeout_seconds)))
+        should_kick = False
+        nickname = '?'
+        with _lock:
+            pending = PENDING_AFK_CHECKS.get(sid)
+            if pending and pending.get('id') == request_id:
+                PENDING_AFK_CHECKS.pop(sid, None)
+                player = players.get(sid) or {}
+                nickname = player.get('nickname', '?')
+                should_kick = sid in players and not (pending.get('lobby_only') and player.get('status') != 'lobby')
+        if should_kick:
+            socketio.emit('kicked', {'reason': '挂机检测超时，已断开连接'}, room=sid)
+            socketio.server.disconnect(sid)
+            admin_event('player', f'afk check timed out: {nickname} sid={sid}')
+    except Exception as exc:
+        admin_event('error', f'afk check timeout worker failed: {exc}')
+
+
+def send_afk_check_to_player(sid, reason='admin command', timeout_seconds=None, lobby_only=False):
+    timeout_seconds = int(timeout_seconds or AFK_CHECK_TIMEOUT_SECONDS)
+    now = time.time()
+    request_id = secrets.token_urlsafe(12)
+    with _lock:
+        player = players.get(sid)
+        if not player:
+            return None, '未找到在线玩家'
+        nickname = player.get('nickname', '?')
+        PENDING_AFK_CHECKS[sid] = {
+            'id': request_id,
+            'created_at': now,
+            'expires_at': now + timeout_seconds,
+            'reason': reason,
+            'min_ms': AFK_CHECK_HOLD_MIN_MS,
+            'max_ms': AFK_CHECK_HOLD_MAX_MS,
+            'lobby_only': bool(lobby_only),
+        }
+    payload = {
+        'id': request_id,
+        'timeout_seconds': timeout_seconds,
+        'expires_at': now + timeout_seconds,
+        'min_ms': AFK_CHECK_HOLD_MIN_MS,
+        'max_ms': AFK_CHECK_HOLD_MAX_MS,
+        'reason': reason,
+    }
+    socketio.emit('afk_check', payload, room=sid)
+    try:
+        socketio.start_background_task(_afk_check_timeout_worker, sid, request_id, timeout_seconds)
+    except Exception:
+        threading.Thread(target=_afk_check_timeout_worker, args=(sid, request_id, timeout_seconds), daemon=True).start()
+    admin_event('admin', f'afk check sent to {nickname} sid={sid} reason={reason}')
+    return {'nickname': nickname, 'sid': sid, 'request_id': request_id, 'timeout_seconds': timeout_seconds}, None
 
 
 def _friend_request_cleanup_worker():
@@ -3913,7 +3993,7 @@ def socket_guard(event_name, data=None, *, require_player=True, allow_empty=Fals
         else:
             _security_illegal(sid, event_name, '操作过于频繁', emit_error=emit_error, severity='high')
         return None
-    if player and player.get('status') == 'lobby':
+    if player and player.get('status') == 'lobby' and event_name not in LOBBY_ACTIVITY_IGNORED_EVENTS:
         mark_lobby_activity(sid)
     return payload
 
@@ -4540,6 +4620,8 @@ def register_v2_loadout_cards(v2_loadout):
             copy_count=_v2_int(resource.get('copy_count', 0), 0),
             swift_value=_v2_int(resource.get('swift_value', 0), 0),
             magic_swift_value=_v2_int(resource.get('magic_swift_value', 0), 0),
+            fission_level=max(1, _v2_int(resource.get('fission_level', _v2_int(resource.get('fission_count', 0), 0) + 1), 1)),
+            fusion_level=max(1, _v2_int(resource.get('fusion_level', resource.get('fusion_multiplier', 1)), 1)),
             damage=_v2_int(resource.get('damage', 0), 0),
             hits=_v2_int(resource.get('hits', 1), 1),
         )
@@ -5900,11 +5982,12 @@ ADMIN_COMMAND_TREE = {
     },
     'player': {
         'summary': '玩家与账号',
-        'usage': 'player <list|get|kick|mute|ban|unban|password|role|dew> ...',
+        'usage': 'player <list|get|kick|afkcheck|mute|ban|unban|password|role|dew> ...',
         'children': {
             'list': {'summary': '列出在线玩家', 'usage': 'player list'},
             'get': {'summary': '查看在线玩家或注册账号详情', 'usage': 'player get <sid|昵称|ID|注册顺序|用户名>'},
             'kick': {'summary': '踢出在线玩家', 'usage': 'player kick <sid|昵称>'},
+            'afkcheck': {'summary': '向在线玩家发送挂机检测', 'usage': 'player afkcheck <sid|昵称|all> [confirm] [原因]'},
             'mute': {'summary': '禁言在线玩家', 'usage': 'player mute <sid|昵称> [秒数]'},
             'ban': {'summary': '封禁账号并踢下线', 'usage': 'player ban <ID|注册顺序|用户名> [秒数] [原因]'},
             'unban': {'summary': '解除账号封禁', 'usage': 'player unban <ID|注册顺序|用户名>'},
@@ -6035,6 +6118,8 @@ ADMIN_LEGACY_COMMANDS = {
     'rebuildstats': 'storage rebuildstats',
     'broadcast': 'chat broadcast',
     'kick': 'player kick',
+    'afkcheck': 'player afkcheck',
+    'afk': 'player afkcheck',
     'mutechat': 'player mute',
     'userpass': 'player password',
     'banuser': 'player ban',
@@ -6140,6 +6225,7 @@ def _translate_structured_admin_command(parts):
         ('player', 'list'): ['players'],
         ('player', 'get'): ['playerget', *rest],
         ('player', 'kick'): ['kick', *rest],
+        ('player', 'afkcheck'): ['afkcheck', *rest],
         ('player', 'mute'): ['mutechat', *rest],
         ('player', 'ban'): ['banuser', *rest],
         ('player', 'unban'): ['unbanuser', *rest],
@@ -7504,6 +7590,46 @@ def execute_admin_command(line):
         broadcast_lobby()
         admin_event('admin', f'kicked {nickname}')
         return {'success': True, 'output': f'已踢出 {nickname}'}
+    if cmd in ('afkcheck', 'afk'):
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), '<sid|昵称|all> [confirm] [原因]')}
+        target = parts[1]
+        extra = parts[2:]
+        confirmed = any(str(part).lower() in ('confirm', '--confirm', '-y', '确认') for part in extra)
+        reason_parts = [part for part in extra if str(part).lower() not in ('confirm', '--confirm', '-y', '确认')]
+        reason = ' '.join(reason_parts).strip() or 'admin command'
+        with _lock:
+            if target.lower() in ('all', '*', 'online', 'all-online', '全部'):
+                target_sids = list(players.keys())
+            else:
+                sid = find_player_sid(target)
+                target_sids = [sid] if sid else []
+            if not target_sids:
+                return {'success': False, 'output': f"未找到玩家：{target}"}
+            non_lobby = [
+                (sid, (players.get(sid) or {}).get('nickname', '?'), (players.get(sid) or {}).get('status', '?'))
+                for sid in target_sids
+                if (players.get(sid) or {}).get('status') != 'lobby'
+            ]
+        if non_lobby and not confirmed:
+            sample = ', '.join(f'{name}({status})' for _sid, name, status in non_lobby[:8])
+            more = f' 等 {len(non_lobby)} 人' if len(non_lobby) > 8 else ''
+            return {
+                'success': False,
+                'output': f'目标中包含非大厅玩家：{sample}{more}。\n若确认要发送，请追加 confirm，例如：player afkcheck {target} confirm {reason}',
+            }
+        sent = []
+        failed = []
+        for sid in target_sids:
+            result, error = send_afk_check_to_player(sid, reason=reason)
+            if error:
+                failed.append(f'{sid}:{error}')
+            else:
+                sent.append(result['nickname'])
+        output = f"已向 {len(sent)} 名玩家发送挂机检测：{', '.join(sent[:12])}{'...' if len(sent) > 12 else ''}"
+        if failed:
+            output += f"\n失败 {len(failed)} 个：{'; '.join(failed[:5])}"
+        return {'success': bool(sent), 'output': output}
     if cmd in ('mutechat', 'mute'):
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), '<sid|昵称> [秒数]')}
@@ -7650,8 +7776,8 @@ def admin_completions(line):
         if translated:
             return admin_completions(translated + (' ' if trailing_space else ''))
         return []
-    if cmd in ('kick', 'playerget', 'diagnose-player') and position == 1:
-        values = []
+    if cmd in ('kick', 'playerget', 'diagnose-player', 'afkcheck', 'afk') and position == 1:
+        values = ['all'] if cmd in ('afkcheck', 'afk') else []
         with _lock:
             for sid, p in players.items():
                 values.append(p.get('nickname', ''))
@@ -11078,6 +11204,8 @@ def api_cards():
             'swift_value': getattr(card_def, 'swift_value', 0),
             'magic_swift_value': getattr(card_def, 'magic_swift_value', 0),
             'power_value': getattr(card_def, 'power_value', 0),
+            'fission_level': getattr(card_def, 'fission_level', 1),
+            'fusion_level': getattr(card_def, 'fusion_level', 1),
             'image': image_url,
             'image_url': image_url,
             'upgraded_image': upgraded_image_url,
@@ -11595,6 +11723,52 @@ def on_latency_report(data=None):
     record_socket_latency(sid, rtt_ms, transport)
 
 
+@socketio.on('afk_check_response')
+def on_afk_check_response(data=None):
+    data = socket_guard('afk_check_response', data, require_player=True, allow_empty=False, emit_error=False)
+    if data is None:
+        return
+    sid = request.sid
+    request_id = str(data.get('id') or '')
+    try:
+        hold_ms = int(data.get('hold_ms') or 0)
+    except Exception:
+        hold_ms = 0
+    now = time.time()
+    result_payload = None
+    passed = False
+    nickname = '?'
+    with _lock:
+        pending = PENDING_AFK_CHECKS.get(sid)
+        player = players.get(sid)
+        nickname = (player or {}).get('nickname', '?')
+        if not pending or pending.get('id') != request_id:
+            result_payload = {'success': False, 'retry': False, 'message': '挂机检测已失效'}
+        elif now > float(pending.get('expires_at') or 0):
+            PENDING_AFK_CHECKS.pop(sid, None)
+            result_payload = {'success': False, 'retry': False, 'message': '挂机检测已超时'}
+        else:
+            min_ms = int(pending.get('min_ms') or AFK_CHECK_HOLD_MIN_MS)
+            max_ms = int(pending.get('max_ms') or AFK_CHECK_HOLD_MAX_MS)
+            if hold_ms < min_ms:
+                result_payload = {'success': False, 'retry': True, 'message': '按得太短了，请重试'}
+            elif hold_ms > max_ms:
+                result_payload = {'success': False, 'retry': True, 'message': '按得太久了，请重试'}
+            else:
+                PENDING_AFK_CHECKS.pop(sid, None)
+                if player and player.get('status') == 'lobby':
+                    player['last_lobby_activity_at'] = now
+                    player['next_lobby_afk_check_at'] = now + random.uniform(
+                        max(60, AFK_AUTO_MIN_SECONDS),
+                        max(max(60, AFK_AUTO_MIN_SECONDS), AFK_AUTO_MAX_SECONDS),
+                    )
+                result_payload = {'success': True, 'message': '挂机检测已通过'}
+                passed = True
+    emit('afk_check_result', result_payload or {'success': False, 'retry': False, 'message': '挂机检测失败'})
+    if passed:
+        admin_event('player', f'afk check passed: {nickname} sid={sid} hold_ms={hold_ms}')
+
+
 @socketio.on('skin_look')
 def on_skin_look(data=None):
     sid = request.sid
@@ -11829,6 +12003,10 @@ def on_login(data):
             admin_event('player', f'login restored reconnect metadata room={reconnect_room.room_id}', sid=reconnect_old_sid, room_id=reconnect_room.room_id)
         initial_status = 'reconnecting' if reconnect_room else 'lobby'
         login_now = time.time()
+        next_lobby_afk_check_at = login_now + random.uniform(
+            max(60, AFK_AUTO_MIN_SECONDS),
+            max(max(60, AFK_AUTO_MIN_SECONDS), AFK_AUTO_MAX_SECONDS),
+        )
         players[sid] = {
             'nickname': name,
             'ip': _client_ip(),
@@ -11836,6 +12014,7 @@ def on_login(data):
             'status': initial_status,
             'login_at': login_now,
             'last_lobby_activity_at': login_now,
+            'next_lobby_afk_check_at': next_lobby_afk_check_at,
             'mods_hash': loadout['mods_hash'],
             'loadout_hash': loadout['loadout_hash'],
             'v2_loadout_hash': loadout.get('v2_loadout_hash', ''),

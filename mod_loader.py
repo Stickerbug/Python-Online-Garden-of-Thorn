@@ -319,6 +319,8 @@ class ModCard:
         self.copy_count = max(0, int(data.get('copy_count', 0)))
         self.swift_value = max(0, int(data.get('swift_value', 0)))
         self.magic_swift_value = max(0, int(data.get('magic_swift_value', 0)))
+        self.fission_level = max(1, int(data.get('fission_level', data.get('fission_count', 0) + 1) or 1))
+        self.fusion_level = max(1, int(data.get('fusion_level', data.get('fusion_multiplier', 1)) or 1))
 
     def to_dict(self) -> dict:
         return {
@@ -349,6 +351,8 @@ class ModCard:
             'copy_count': self.copy_count,
             'swift_value': self.swift_value,
             'magic_swift_value': self.magic_swift_value,
+            'fission_level': self.fission_level,
+            'fusion_level': self.fusion_level,
         }
 
     def to_card_def(self):
@@ -382,6 +386,8 @@ class ModCard:
             copy_count=self.copy_count,
             swift_value=self.swift_value,
             magic_swift_value=self.magic_swift_value,
+            fission_level=self.fission_level,
+            fusion_level=self.fusion_level,
             damage=self.damage,
             hits=self.hits,
             trigger_cost_m=self.trigger_cost_m,

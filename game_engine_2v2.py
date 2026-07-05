@@ -778,7 +778,11 @@ class GameEngine2v2(GameEngine):
             return
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
-        if getattr(self, '_skip_current_turn_after_start', False) or ps.health <= 0:
+        if getattr(self, '_skip_current_turn_after_start', False):
+            self._skip_current_turn_after_start = False
+            self._end_player_turn(player_id)
+            return
+        if ps.health <= 0:
             self._advance_turn()
             return
         if not self.game_over:
@@ -1363,9 +1367,10 @@ class GameEngine2v2(GameEngine):
             self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
             # Overload: deduct E at turn start, then clear
             if ps.overload > 0:
-                deduct = min(ps.overload, ps.elixir)
-                ps.elixir -= deduct
-                self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
+                if not self._is_status_immune(player_id):
+                    deduct = min(ps.overload, ps.elixir)
+                    ps.elixir -= deduct
+                    self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
                 ps.overload = 0
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
             ps.gain_elixir(2)
@@ -1448,7 +1453,11 @@ class GameEngine2v2(GameEngine):
         self._check_game_over()
         if self.game_over:
             return
-        if getattr(self, '_skip_current_turn_after_start', False) or ps.health <= 0:
+        if getattr(self, '_skip_current_turn_after_start', False):
+            self._skip_current_turn_after_start = False
+            self._end_player_turn(player_id)
+            return
+        if ps.health <= 0:
             self._advance_turn()
             return
         self.phase = 'action'
@@ -1488,9 +1497,10 @@ class GameEngine2v2(GameEngine):
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
             if ps.overload > 0:
-                deduct = min(ps.overload, ps.elixir)
-                ps.elixir -= deduct
-                self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
+                if not self._is_status_immune(player_id):
+                    deduct = min(ps.overload, ps.elixir)
+                    ps.elixir -= deduct
+                    self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
                 ps.overload = 0
         if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
             ps.gain_elixir(2)
@@ -1571,6 +1581,12 @@ class GameEngine2v2(GameEngine):
             self.log_msg(f"{self.pn(player_id)}被跳过本回合")
             self._skip_current_turn_after_start = True
         self._check_game_over()
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
+        if getattr(self, '_skip_current_turn_after_start', False):
+            self._skip_current_turn_after_start = False
+            self._end_player_turn(player_id)
+            return
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
                            is_battery: bool = False, is_precision: bool = False,

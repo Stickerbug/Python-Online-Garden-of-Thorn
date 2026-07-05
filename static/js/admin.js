@@ -701,7 +701,7 @@ function renderDraftStats(data) {
   }
   table.innerHTML = `
     <table>
-      <thead><tr><th>范围</th><th>模式</th><th>卡牌</th><th>类型</th><th>抽取率</th><th>抽到胜率</th><th>抽取</th><th>刷出</th><th>${winnerOnly ? '胜者选中' : '抽到胜利'}</th><th>抽到局数</th><th>最近更新</th></tr></thead>
+      <thead><tr><th>范围</th><th>模式</th><th>卡牌</th><th>类型</th><th>抽取率</th><th>抽到胜率</th><th>胜者选择率</th><th>抽取</th><th>刷出</th><th>${winnerOnly ? '胜者选中' : '抽到胜利'}</th><th>抽到局数</th><th>最近更新</th></tr></thead>
       <tbody>
         ${items.map((item) => `
           <tr>
@@ -714,6 +714,7 @@ function renderDraftStats(data) {
             <td>${escapeHtml(cardTypeLabel(item.card_type))}</td>
             <td class="admin-data">${escapeHtml(formatPercent(item.pick_rate || 0))}</td>
             <td class="admin-data">${escapeHtml(formatPercent(item.card_win_rate || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatPercent(item.winner_pick_rate || 0))}</td>
             <td class="admin-data">${escapeHtml(formatNumber(item.picked_count || 0))}</td>
             <td class="admin-data">${escapeHtml(formatNumber(item.shown_count || 0))}</td>
             <td class="admin-data">${escapeHtml(formatNumber(item.win_games || 0))}</td>

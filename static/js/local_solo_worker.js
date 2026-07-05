@@ -1534,6 +1534,7 @@ class LocalSoloEngine {
         const opp = this.players[oppId];
         this._antennae_reveal[playerId] = null;
         this.runZoneOwnerTurnStartEvents(playerId);
+        this.runOceanAutoCardsTurnStart(playerId);
         this.runTimedEffectsForTurn(playerId);
         this.applyJungleTurnStartStatuses(playerId);
         this.players.forEach(owner => {
@@ -4225,6 +4226,65 @@ class LocalSoloEngine {
         if (log) this.logMsg(log);
     }
 
+    effect_ocean_sapphire_mark(playerId, card, params, log, choice) {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        if (targetId < 0 || targetId >= this.players.length) return;
+        const ps = this.players[playerId];
+        const iid = choice && choice.target_instance_id != null ? toInt(choice.target_instance_id, -1) : -1;
+        const chosen = iid >= 0 ? ps.findHandCard(iid) : null;
+        if (!chosen || chosen.card_type !== 'thorn') return;
+        const idx = ps.hand.indexOf(chosen);
+        if (idx < 0) return;
+        ps.hand.splice(idx, 1);
+        chosen.instance_flags.add('exile');
+        ps.exile.push(chosen);
+        const entries = Array.isArray(ps.custom_vars.ocean_auto_cards) ? ps.custom_vars.ocean_auto_cards : [];
+        entries.push({
+            def_id: chosen.def_id,
+            target_id: targetId,
+            swift_value: toInt(chosen.swift_value, 0),
+            magic_swift_value: toInt(chosen.magic_swift_value, 0),
+            exile: true,
+            no_auto: true,
+        });
+        ps.custom_vars.ocean_auto_cards = entries;
+        this.logMsg(log || `${this.pn(playerId)}的蓝宝石放逐1张攻击牌`);
+    }
+
+    runOceanAutoCardsTurnStart(playerId) {
+        const ps = this.players[playerId];
+        const entries = ps && Array.isArray(ps.custom_vars.ocean_auto_cards) ? ps.custom_vars.ocean_auto_cards : [];
+        if (!entries.length) return;
+        entries.forEach(entry => {
+            if (this.game_over || this.phase !== 'action') return;
+            const targetId = toInt(entry && entry.target_id, -1);
+            const target = this.players[targetId];
+            if (!target || targetId === playerId || toInt(target.health, 0) <= 0 || target.untargetable) return;
+            const defId = String(entry.def_id || '');
+            if (!defId || !cardDef(defId)) return;
+            const tempCard = new LocalCard(defId);
+            tempCard.instance_flags.add('exile');
+            tempCard.instance_flags.add('ocean_no_auto');
+            const swift = Math.max(0, toInt(entry.swift_value, 0));
+            const magicSwift = Math.max(0, toInt(entry.magic_swift_value, 0));
+            if (swift > 0) {
+                tempCard.swift_value = swift;
+                tempCard.instance_flags.add('swift');
+            }
+            if (magicSwift > 0) {
+                tempCard.magic_swift_value = magicSwift;
+                tempCard.instance_flags.add('magic_swift');
+            }
+            if (tempCard.cost_e > ps.elixir || tempCard.cost_m > ps.magic) return;
+            ps.addToHand(tempCard, { triggerEnterHand: false });
+            this.playCard(playerId, tempCard.instance_id, {
+                target_player: targetId,
+                target_player_id: targetId,
+                target_id: targetId,
+            });
+        });
+    }
+
     effect_remove_status(playerId, card, params, log, choice) {
         this.effect_status_remove_named(playerId, card, { ...params, status: params.status || params.id || params.name }, log, choice);
     }
@@ -4558,6 +4618,17 @@ class LocalSoloEngine {
         this.logMsg(`${this.pn(playerId)}的电网效果：抽${count}张牌，受到${total}电伤`);
     }
 
+    iterEquipmentTargetingPlayer(playerId) {
+        const out = [];
+        this.players.forEach((ownerState, ownerId) => {
+            (ownerState.equipment || []).forEach(eq => {
+                const effectTarget = toInt(eq && (eq.effect_target ?? eq.owner), ownerId);
+                if (effectTarget === playerId) out.push({ ownerId, eq });
+            });
+        });
+        return out;
+    }
+
     dealDirectDamage(playerId, amount, source = '', sourceId = null, damageMeta = null) {
         const ps = this.players[playerId];
         if (!ps || (ps.invincible && !this.isStatusImmune(playerId))) {
@@ -4660,7 +4731,7 @@ class LocalSoloEngine {
             try {
                 this.checkYggdrasil(targetId);
                 if (dmg > 0) {
-                    [...ps.equipment].forEach(eq => {
+                    this.iterEquipmentTargetingPlayer(targetId).forEach(({ ownerId, eq }) => {
                         if (this.hasCardEvent(eq.card_def, 'damage_taken')) {
                             this.runCardEvent(targetId, eq.card_instance, 'damage_taken', null, {
                                 event: 'damage_taken',
@@ -4668,7 +4739,7 @@ class LocalSoloEngine {
                                 target_id: targetId,
                                 damage: dmg,
                                 selected_equipment_instance_id: eq.card_instance && eq.card_instance.instance_id,
-                                selected_equipment_owner_id: targetId,
+                                selected_equipment_owner_id: ownerId,
                             });
                         } else if (eq.def_id === 'Battery') {
                             const dealt = this.dealDirectDamage(attackerId, 3, '电池电击', targetId, {
@@ -4861,18 +4932,20 @@ class LocalSoloEngine {
             this.logMsg(`${this.pn(ownerId)}的装备保护抵消了摧毁！`);
             return false;
         }
+        const effectTarget = Math.max(0, Math.min(this.players.length - 1, toInt(eq.effect_target ?? eq.owner ?? ownerId, ownerId)));
         if (this.hasCardEvent(eq.card_def, 'equipment_destroy')) {
             this.runCardEvent(ownerId, eq.card_instance, 'equipment_destroy', null, {
                 event: 'equipment_destroy',
                 source_id: ownerId,
-                target_id: ownerId,
+                target_id: effectTarget,
+                equipment_owner_id: ownerId,
             });
         }
         this.cleanupEquipmentDerivedEffects(ownerId, eq);
         ps.equipment.splice(ps.equipment.indexOf(eq), 1);
         if (eq.card_instance.flags.has('exile')) ps.exile.push(eq.card_instance);
         else this.discardCard(ps, eq.card_instance);
-        this.dispatchCardEvent('equipment_destroyed', ownerId, eq.card_instance, ownerId, eq, ownerId);
+        this.dispatchCardEvent('equipment_destroyed', ownerId, eq.card_instance, effectTarget, eq, ownerId);
         return true;
     }
 
@@ -5588,7 +5661,16 @@ onmessage = event => {
         }
         if (message.type === 'solo_play_card') {
             const pidx = engine.current_player;
-            const result = engine.playCard(pidx, message.payload && message.payload.card_instance_id, message.payload && message.payload.choice);
+            const payload = message.payload || {};
+            const targetPlayerId = toInt(payload.target_player_id, -1);
+            let choice = payload.choice;
+            if (targetPlayerId >= 0) {
+                choice = { ...(choice && typeof choice === 'object' ? choice : {}) };
+                if (choice.target_player == null) choice.target_player = targetPlayerId;
+                if (choice.target_player_id == null) choice.target_player_id = targetPlayerId;
+                if (choice.target_id == null) choice.target_id = targetPlayerId;
+            }
+            const result = engine.playCard(pidx, payload.card_instance_id, choice);
             if (result.needs_response) {
                 if (engine.tutorial && pidx === 0) {
                     engine.handleResponse(1, null);

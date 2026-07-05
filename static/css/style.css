@@ -5380,7 +5380,7 @@ body {
   border-top: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
   background: color-mix(in srgb, var(--bg-card) 86%, var(--bg-primary));
   justify-content: stretch;
-  gap: 6px;
+  gap: 0;
 }
 
 .battle-log .battle-log-chat-row input {
@@ -5388,6 +5388,8 @@ body {
   width: auto;
   min-width: 0;
   max-width: none;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .battle-log .battle-log-chat-row .game-chat-channel {
@@ -5396,8 +5398,18 @@ body {
 }
 
 .battle-log .battle-log-chat-row .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   white-space: nowrap;
+  word-break: keep-all;
+  line-height: 1;
+  min-width: 46px;
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  justify-self: end;
 }
 
 .controls-right input {
@@ -6465,6 +6477,20 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   padding-bottom: 1.3cqi;
 }
 
+.card.card-ocean-compact .card-effect {
+  font-size: 7.72cqi;
+  line-height: 1.135;
+  padding-top: 2.55cqi;
+  padding-bottom: 1.25cqi;
+}
+
+.card.card-ocean-magic-pearl .card-effect {
+  font-size: 6.92cqi;
+  line-height: 1.085;
+  padding-top: 2.1cqi;
+  padding-bottom: 0.95cqi;
+}
+
 .card.card-effect-slightly-small .card-effect {
   font-size: 7.72cqi;
   line-height: 1.15;
@@ -6616,6 +6642,22 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
 
 .card-token.tag-magic-swift {
   color: #6C5CE7;
+}
+
+.card-token.tag-charge {
+  color: #4BA3FF;
+}
+
+.card-token.tag-ocean-blinded {
+  color: #2C3E50;
+}
+
+.card-token.tag-wide-strike {
+  color: #1F9D8A;
+}
+
+.card-token.tag-self-target {
+  color: #B02A37;
 }
 
 .card-hold-preview {
@@ -7101,6 +7143,14 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   color: #795548;
 }
 
+.card-token.status-blood-debt {
+  color: #8E1B2A;
+}
+
+.card-token.status-unable-counter {
+  color: #536878;
+}
+
 .card-token.status-immune {
   color: #16A085;
 }
@@ -7366,6 +7416,30 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   color: #8D6E63;
   background: rgba(141, 110, 99, 0.15);
   border-color: rgba(141, 110, 99, 0.3);
+}
+
+.card-flag.charge {
+  color: #4BA3FF;
+  background: rgba(75, 163, 255, 0.15);
+  border-color: rgba(75, 163, 255, 0.32);
+}
+
+.card-flag.ocean-blinded {
+  color: #2C3E50;
+  background: rgba(44, 62, 80, 0.12);
+  border-color: rgba(44, 62, 80, 0.25);
+}
+
+.card-flag.wide-strike {
+  color: #1F9D8A;
+  background: rgba(31, 157, 138, 0.14);
+  border-color: rgba(31, 157, 138, 0.32);
+}
+
+.card-flag.self-target {
+  color: #B02A37;
+  background: rgba(176, 42, 55, 0.14);
+  border-color: rgba(176, 42, 55, 0.32);
 }
 
 .card-flag.custom {
@@ -9113,6 +9187,121 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   padding: 8px 20px;
   font-size: 14px;
   min-width: 80px;
+}
+
+.afk-check-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.56);
+  animation: overlayFadeIn 150ms ease-out both;
+}
+
+.afk-check-dialog {
+  width: min(88vw, 390px);
+  padding: 24px 24px 22px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--text-primary);
+  animation: modalPopIn 230ms cubic-bezier(.18,.88,.22,1.12) both;
+}
+
+.afk-check-title {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.afk-check-desc {
+  max-width: 310px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+#afk-check-countdown {
+  display: inline-block;
+  min-width: 4ch;
+  font-variant-numeric: tabular-nums;
+  color: var(--thorn);
+  font-weight: 800;
+}
+
+.afk-check-button {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  border: 3px solid var(--border-color);
+  border-radius: 50%;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg-primary) 84%, var(--border-color));
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  box-shadow: var(--shadow-md), inset 0 0 0 0 transparent;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+.afk-check-button::before {
+  content: "";
+  position: absolute;
+  inset: 13px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+}
+
+.afk-check-button.afk-check-holding {
+  transform: scale(0.96);
+  border-color: var(--thorn);
+  background: color-mix(in srgb, var(--thorn) 18%, var(--bg-card));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--thorn) 16%, transparent), var(--shadow-md);
+}
+
+.afk-check-button.afk-check-ready {
+  border-color: var(--bloom);
+  background: color-mix(in srgb, var(--bloom) 34%, var(--bg-card));
+  box-shadow:
+    0 0 0 7px color-mix(in srgb, var(--bloom) 28%, transparent),
+    0 0 26px color-mix(in srgb, var(--bloom) 52%, transparent),
+    var(--shadow-md);
+}
+
+.afk-check-core {
+  position: relative;
+  z-index: 1;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.afk-check-status {
+  min-height: 22px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.afk-check-status.afk-check-error {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.afk-check-status.afk-check-ok {
+  color: var(--bloom);
+  font-weight: 800;
 }
 
 .v2-ui-modal {
@@ -14185,7 +14374,8 @@ html[data-ui-style="minimal"] .btn-end-turn {
   width: min(260px, 96%);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 5px;
+  column-gap: 0;
+  row-gap: 0;
   align-items: center;
 }
 
@@ -14215,16 +14405,36 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 .classic-chat-row input {
   padding: 0 8px;
+  width: 100%;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .classic-chat-row select {
   max-width: 74px;
   padding: 0 4px;
+  margin-right: 5px;
 }
 
 .classic-chat-row .classic-mini-btn {
-  min-height: 32px;
-  padding-inline: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  width: 52px;
+  min-width: 52px;
+  padding-inline: 0;
+  flex: 0 0 52px;
+  font-size: 11px;
+  line-height: 1;
+  border-radius: 6px;
+  white-space: nowrap;
+  word-break: keep-all;
+  justify-self: end;
+  margin-left: -1px;
+  text-align: center;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .classic-extra-controls {
@@ -14489,6 +14699,21 @@ html[data-ui-style="minimal"] .btn-end-turn {
   }
   .classic-mini-btn {
     white-space: nowrap;
+  }
+
+  #btn-classic-game-chat-send {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    min-width: 50px;
+    flex-basis: 50px;
+    font-size: 10px;
+    line-height: 1;
+    white-space: nowrap;
+    word-break: keep-all;
+    text-align: center;
+    margin-left: -1px;
   }
 }
 
@@ -15409,6 +15634,18 @@ html[data-ui-style="minimal"] .btn-end-turn {
   animation-delay: var(--equip-orbit-delay, 0s);
 }
 
+.classic-equip-visual::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 10px;
+  pointer-events: none;
+  opacity: 0;
+  border: 2px solid transparent;
+  box-shadow: none;
+  transition: opacity 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
 .classic-avatar-stack:hover .classic-equip-visual,
 .classic-equip-chip:hover .classic-equip-visual {
   animation-play-state: paused;
@@ -15438,9 +15675,26 @@ html[data-ui-style="minimal"] .btn-end-turn {
   filter: drop-shadow(0 3px 6px rgba(36,48,66,0.22)) drop-shadow(0 0 7px rgba(255, 214, 102, 0.82));
 }
 
+.classic-equip-chip.is-triggerable .classic-equip-visual::after {
+  opacity: 1;
+  border-color: rgba(126, 76, 30, 0.92);
+  box-shadow: 0 0 0 1px rgba(255, 223, 145, 0.42), 0 0 9px rgba(126, 76, 30, 0.28);
+}
+
+.classic-equip-chip.is-trigger-selected .classic-equip-visual::after,
+.classic-equip-chip.is-triggerable:hover .classic-equip-visual::after {
+  border-color: rgba(165, 95, 36, 0.98);
+  box-shadow: 0 0 0 2px rgba(255, 222, 138, 0.56), 0 0 16px rgba(165, 95, 36, 0.42);
+}
+
 .classic-equip-chip.is-trigger-unavailable {
   cursor: not-allowed;
   opacity: 0.58;
+}
+
+.classic-equip-chip.is-trigger-unavailable .classic-equip-visual::after {
+  border-color: rgba(126, 76, 30, 0.42);
+  box-shadow: none;
 }
 
 .classic-equip-chip.is-trigger-unavailable .equip-icon {
@@ -16355,10 +16609,20 @@ html[data-ui-style="minimal"] .btn-end-turn {
   }
 
   .battle-log .battle-log-chat-row .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: 24px;
     padding: 3px 7px;
     font-size: 10px;
     border-radius: 5px;
+    min-width: 46px;
+    line-height: 1;
+    white-space: nowrap;
+    word-break: keep-all;
+    margin-left: -1px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
   }
 
   .controls-bar {
@@ -16447,6 +16711,24 @@ html[data-ui-style="minimal"] .btn-end-turn {
     min-height: 44px;
     border-radius: 10px;
     font-size: 14px;
+  }
+
+  #btn-classic-game-chat-send {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 26px;
+    width: 50px;
+    min-width: 50px;
+    flex-basis: 50px;
+    padding-inline: 0;
+    font-size: 10px;
+    line-height: 1;
+    white-space: nowrap;
+    word-break: keep-all;
+    justify-self: end;
+    text-align: center;
+    margin-left: -1px;
   }
 }
 
@@ -16559,7 +16841,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
   .controls-group #btn-urf-sell,
   .controls-group #btn-solo-next-draw,
   .controls-group #btn-solo-edit,
-  .classic-mini-btn {
+  .classic-extra-controls .classic-mini-btn {
     width: 38px !important;
     min-width: 38px !important;
     max-width: 38px !important;
@@ -16589,7 +16871,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
   .controls-group #btn-urf-sell::before,
   .controls-group #btn-solo-next-draw::before,
   .controls-group #btn-solo-edit::before,
-  .classic-mini-btn::before {
+  .classic-extra-controls .classic-mini-btn::before {
     width: 24px !important;
     height: 24px !important;
     margin: 0 !important;
@@ -16607,7 +16889,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
   .controls-group #btn-urf-sell,
   .controls-group #btn-solo-next-draw,
   .controls-group #btn-solo-edit,
-  .classic-mini-btn {
+  .classic-extra-controls .classic-mini-btn {
     width: 34px !important;
     min-width: 34px !important;
     max-width: 34px !important;
@@ -16630,6 +16912,378 @@ html[data-ui-style="minimal"] .btn-end-turn {
     height: 21px !important;
     flex-basis: 21px;
   }
+}
+
+/* Classic mobile stage: keep the exact 4:3 battle canvas and only scale/rotate
+   the whole canvas.  No responsive stretching is allowed here. */
+@media (hover: none) and (pointer: coarse) {
+  html[data-ui-style="classic"] #view-game {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--classic-stage, #f9faf6);
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: min(100vw, calc(100vh * 16 / 9));
+    height: min(100vh, calc(100vw * 9 / 16));
+    aspect-ratio: 16 / 9;
+    min-height: 0;
+    max-width: none;
+    max-height: none;
+    transform: translate(-50%, -50%);
+    transform-origin: center center;
+    grid-template-columns: clamp(74px, 7vw, 112px) minmax(0, 1fr) clamp(220px, 22vw, 340px);
+    grid-template-rows: clamp(42px, 5vh, 58px) minmax(0, 1fr) clamp(154px, 25vh, 245px);
+    grid-template-areas:
+      "hud hud hud"
+      "rail stage log"
+      "hand hand end";
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-left-rail,
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-log-drawer {
+    display: flex;
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-top-title {
+    grid-template-columns: clamp(74px, 7vw, 112px) minmax(0, 1fr) clamp(220px, 22vw, 340px);
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-stage {
+    grid-template-columns: minmax(210px, 1fr) minmax(160px, 0.55fr) minmax(210px, 1fr);
+    gap: clamp(10px, 1.4vw, 26px);
+    padding: clamp(10px, 1.2vw, 20px) clamp(22px, 3vw, 58px) 0;
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden).is-2v2 .classic-stage {
+    width: min(82vw, 920px);
+    height: min(58vh, 390px);
+    display: grid;
+    grid-template-columns: minmax(118px, 1.25fr) minmax(96px, 0.6fr) minmax(118px, 1.25fr);
+    grid-template-rows: minmax(110px, 1fr) minmax(110px, 1fr);
+    column-gap: clamp(8px, 1.2vw, 18px);
+    row-gap: clamp(6px, 1vh, 14px);
+    padding: 0;
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-fighter {
+    --classic-fighter-scale: 0.91;
+    gap: 7px;
+    padding: 6px 8px;
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden).is-2v2 .classic-fighter {
+    --classic-fighter-scale: 0.7;
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-intent-badge,
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-fighter-piles {
+    display: flex;
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-status-ring {
+    max-height: none;
+    overflow: visible;
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-fan {
+    overflow: visible;
+    justify-content: center;
+    padding: 4px clamp(24px, 3vw, 60px) 12px;
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card {
+    width: clamp(84px, min(8.1vw, 21vh), 132px);
+    margin-inline: clamp(-20px, -1.45vw, -7px);
+    transform: translateY(var(--fan-y, 0)) rotate(var(--fan-rot, 0));
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card:hover:not(.is-selected) .classic-fan-card-inner.card {
+    transform: translateY(-48px) rotate(var(--fan-rot-inverse, 0deg)) scale(1.2);
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card.is-selected .classic-fan-card-inner.card {
+    transform: rotate(var(--fan-rot-inverse, 0deg)) scale(1);
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-command-panel {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-extra-controls {
+    flex-wrap: wrap;
+    overflow: visible;
+    justify-content: center;
+    max-width: none;
+  }
+
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-end-turn {
+    width: min(210px, 92%);
+    min-height: 76px;
+    font-size: 16px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) {
+    width: min(100vh, calc(100vw * 16 / 9));
+    height: min(100vw, calc(100vh * 9 / 16));
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--classic-stage, #f9faf6);
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 1600px;
+  height: 900px;
+  min-width: 1600px;
+  min-height: 900px;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: 16 / 9;
+  transform: translate(-50%, -50%) rotate(var(--classic-mobile-rotate, 0deg)) scale(var(--classic-mobile-scale, 1));
+  transform-origin: center center;
+  grid-template-columns: 132px minmax(0, 1fr) 330px;
+  grid-template-rows: 54px minmax(0, 1fr) 240px;
+  grid-template-areas:
+    "hud hud hud"
+    "rail stage log"
+    "hand hand end";
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-top-title {
+  grid-template-columns: 132px minmax(0, 1fr) 330px;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-left-rail,
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-log-drawer {
+  display: flex;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-left-rail {
+  display: grid;
+  grid-template-columns: 46px 46px;
+  justify-content: center;
+  column-gap: 12px;
+  padding-inline: 12px;
+  min-width: 0;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-resource-block {
+  width: 46px;
+  min-width: 46px;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-stage {
+  grid-template-columns: minmax(210px, 1fr) minmax(160px, 0.55fr) minmax(210px, 1fr);
+  gap: 18px;
+  padding: 15px 38px 0;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden).is-2v2 .classic-stage {
+  width: 1050px;
+  height: 410px;
+  display: grid;
+  grid-template-columns: minmax(118px, 1.25fr) minmax(96px, 0.6fr) minmax(118px, 1.25fr);
+  grid-template-rows: minmax(110px, 1fr) minmax(110px, 1fr);
+  column-gap: 18px;
+  row-gap: 14px;
+  padding: 0;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-fighter {
+  --classic-fighter-scale: 0.91;
+  gap: 7px;
+  padding: 6px 8px;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden).is-2v2 .classic-fighter {
+  --classic-fighter-scale: 0.7;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-intent-badge,
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-fighter-piles {
+  display: flex;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-status-ring {
+  max-height: none;
+  overflow: visible;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-fan {
+  overflow: visible;
+  justify-content: center;
+  padding: 4px 38px 12px;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card {
+  width: 104px;
+  margin-inline: -18px;
+  transform: translateY(var(--fan-y, 0)) rotate(var(--fan-rot, 0));
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card:hover:not(.is-selected) .classic-fan-card-inner.card {
+  transform: translateY(-48px) rotate(var(--fan-rot-inverse, 0deg)) scale(1.2);
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card.is-selected .classic-fan-card-inner.card {
+  transform: rotate(var(--fan-rot-inverse, 0deg)) scale(1);
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-command-panel {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-extra-controls {
+  flex-wrap: wrap;
+  overflow: visible;
+  justify-content: center;
+  max-width: none;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-extra-controls .classic-mini-btn {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 25px !important;
+  padding: 4px 7px !important;
+  gap: 4px !important;
+  font-size: 10.5px !important;
+  line-height: 1.2 !important;
+  flex: 0 1 auto;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-end-turn {
+  width: min(210px, 92%);
+  min-height: 76px;
+  font-size: 16px;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] .term-intro-overlay {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  width: 1600px;
+  height: 900px;
+  min-width: 1600px;
+  min-height: 900px;
+  padding: 36px;
+  transform: translate(-50%, -50%) rotate(var(--classic-mobile-rotate, 0deg)) scale(var(--classic-mobile-scale, 1));
+  transform-origin: center center;
+  background: rgba(0, 0, 0, 0.68);
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] .term-intro-dialog {
+  width: min(920px, calc(1600px - 72px));
+  max-height: min(660px, calc(900px - 72px));
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] .term-intro-panel {
+  max-height: min(560px, calc(900px - 128px));
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .game-container {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 1600px;
+  height: 900px;
+  min-width: 1600px;
+  min-height: 900px;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: 16 / 9;
+  transform: translate(-50%, -50%) rotate(var(--classic-mobile-rotate, 0deg)) scale(var(--classic-mobile-scale, 1));
+  transform-origin: center center;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-rows: minmax(150px, auto) minmax(0, 1fr) minmax(230px, auto);
+  column-gap: 8px;
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .opp-section,
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .player-section {
+  max-height: none;
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .middle-section {
+  min-height: 0 !important;
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .battle-log {
+  min-height: 0;
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .battle-log .log-content {
+  min-height: 0;
+  font-size: 13px;
+  line-height: 1.36;
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .hand-area {
+  max-height: none;
+  overflow: visible;
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .controls-bar {
+  min-height: 54px;
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .mobile-play-confirm {
+  position: absolute;
+  bottom: 18px;
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] .term-intro-overlay {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  width: 1600px;
+  height: 900px;
+  min-width: 1600px;
+  min-height: 900px;
+  padding: 36px;
+  transform: translate(-50%, -50%) rotate(var(--classic-mobile-rotate, 0deg)) scale(var(--classic-mobile-scale, 1));
+  transform-origin: center center;
+  background: rgba(0, 0, 0, 0.68);
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] .term-intro-dialog {
+  width: min(920px, calc(1600px - 72px));
+  max-height: min(660px, calc(900px - 72px));
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] .term-intro-panel {
+  max-height: min(560px, calc(900px - 128px));
 }
 
 /* Final override: chips embedded in card effect text follow the surrounding

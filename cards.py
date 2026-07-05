@@ -115,6 +115,8 @@ class CardDef:
     copy_count: int = 0
     swift_value: int = 0
     magic_swift_value: int = 0
+    fission_level: int = 1
+    fusion_level: int = 1
     damage: int = 0
     hits: int = 1
     trigger_cost_m: int = 0
@@ -159,6 +161,8 @@ class CardInstance:
     power_value: int = 0
     temp_swift_value: int = 0
     temp_heavy_value: int = 0
+    charge_value: int = 0
+    hand_blind_turns: int = 0
     extra_hits: int = 0
     setup_modifiers: Set[str] = field(default_factory=set)
 
@@ -168,6 +172,15 @@ class CardInstance:
             return
         self.fission_level = clamp_card_layer(self.fission_level)
         self.fusion_level = clamp_card_layer(self.fusion_level)
+        try:
+            card_def = CARD_DEFS.get(self.def_id)
+            if card_def:
+                if self.fission_level <= 1:
+                    self.fission_level = clamp_card_layer(getattr(card_def, 'fission_level', 1) or 1)
+                if self.fusion_level <= 1:
+                    self.fusion_level = clamp_card_layer(getattr(card_def, 'fusion_level', 1) or 1)
+        except Exception:
+            pass
         self.fission_count = max(0, self.fission_level - 1)
         self.extra_hits = clamp_card_extra_hits(self.extra_hits)
         defs = globals().get('CARD_DEFS')
@@ -231,6 +244,9 @@ class CardInstance:
             'power_value': self.power_value,
             'temp_swift_value': self.temp_swift_value,
             'temp_heavy_value': self.temp_heavy_value,
+            'charge_value': self.charge_value,
+            'hand_blind_turns': self.hand_blind_turns,
+            'blind_level': 1 if self.hand_blind_turns > 0 else 0,
             'extra_hits': clamp_card_extra_hits(self.extra_hits),
             'setup_modifiers': list(self.setup_modifiers) if self.setup_modifiers else [],
         }
@@ -257,6 +273,8 @@ class CardInstance:
             power_value=max(0, int(d.get('power_value', 0))),
             temp_swift_value=max(0, int(d.get('temp_swift_value', 0))),
             temp_heavy_value=max(0, int(d.get('temp_heavy_value', 0))),
+            charge_value=max(0, int(d.get('charge_value', 0))),
+            hand_blind_turns=max(0, int(d.get('hand_blind_turns', d.get('blind_level', 0)))),
             extra_hits=clamp_card_extra_hits(d.get('extra_hits', 0)),
             setup_modifiers=set(str(x) for x in (d.get('setup_modifiers') or []) if x),
         )
@@ -282,6 +300,8 @@ class CardInstance:
             power_value=self.power_value,
             temp_swift_value=self.temp_swift_value,
             temp_heavy_value=self.temp_heavy_value,
+            charge_value=self.charge_value,
+            hand_blind_turns=self.hand_blind_turns,
             extra_hits=clamp_card_extra_hits(self.extra_hits),
             setup_modifiers=set(self.setup_modifiers),
         )
