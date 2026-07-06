@@ -467,6 +467,7 @@ const I18N = {
         prediction_target_modal_desc: 'Damage and effect prediction will use this target locally. Actual play target is unchanged.',
         classic_play_center: 'Click the stage to play',
         classic_target_enemy: 'Click opponent to play',
+        classic_target_any: 'Click a target to play',
         classic_target_self: 'Click yourself to play',
         classic_equip_stage: 'Click your side to equip',
         cannot_play: 'Cannot Play', enemy_attack: 'Enemy Attack', enemy_skill: 'Enemy Skill', enemy_destroy_equip: ', destroys equipment',
@@ -536,6 +537,8 @@ const I18N = {
         app_subtitle: 'LAN card battle',
         nickname_placeholder: 'Enter nickname',
         message_placeholder: 'Type a message...',
+        chat_day_yesterday: 'Yesterday',
+        chat_day_before_yesterday: 'The day before yesterday',
         server_placeholder: 'Leave empty for default server',
         server_hint: 'Default server: {0} (leave empty to use default)',
         init_cards_mods: 'Loading cards and mods (/api/cards)...',
@@ -586,6 +589,7 @@ I18N.zh = { ...I18N.en,
     prediction_target_modal_desc: '只修改本地伤害预测，不会改变实际出牌目标。',
     classic_play_center: '点击战场打出',
     classic_target_enemy: '点击对手使用',
+    classic_target_any: '点击目标使用',
     classic_target_self: '点击自己使用',
     classic_equip_stage: '点击己方装备',
     use_card: '使用', insufficient_resources: '资源不足', choose_attack_for: '为 {0} 选择攻击牌', choose_equip_for: '选择装备牌',
@@ -668,6 +672,8 @@ I18N.zh = { ...I18N.en,
     app_subtitle: '在线联机卡牌对战',
     nickname_placeholder: '输入昵称',
     message_placeholder: '输入消息...',
+    chat_day_yesterday: '昨天',
+    chat_day_before_yesterday: '前天',
     server_placeholder: '留空使用默认服务器',
     server_hint: '默认服务器：{0}（留空则使用默认服务器）',
     init_cards_mods: '加载卡牌与模组（/api/cards）...',
@@ -737,6 +743,8 @@ I18N.fr = { ...I18N.en,
     app_subtitle: 'Combat de cartes en réseau local',
     nickname_placeholder: 'Saisir un pseudo',
     message_placeholder: 'Saisir un message...',
+    chat_day_yesterday: 'hier',
+    chat_day_before_yesterday: 'avant-hier',
     hand_deck_zero_opp: 'Main:0 Deck:0',
     hand_deck_zero_you: 'Main:0 Deck:0 Défausse:0',
     rotate_hint_sub: 'Passez en mode paysage',
@@ -808,6 +816,8 @@ I18N.ja = { ...I18N.en,
     app_subtitle: 'LANカード対戦',
     nickname_placeholder: 'ニックネームを入力',
     message_placeholder: 'メッセージを入力...',
+    chat_day_yesterday: '昨日',
+    chat_day_before_yesterday: '一昨日',
     hand_deck_zero_opp: '手札:0 デッキ:0',
     hand_deck_zero_you: '手札:0 デッキ:0 捨て札:0',
     rotate_hint_sub: '横向きにしてください',
@@ -1341,7 +1351,11 @@ Object.assign(I18N.en, {
     friend_auto_added: '{0} added you as a friend',
     social: 'Social', social_login_hint: 'Sign in to use social settings.',
     social_accept_requests: 'Accept friend requests', social_search_nickname: 'Allow adding me by nickname',
-    social_search_id: 'Allow adding me by ID', social_settings_saved: 'Social settings saved',
+    social_search_id: 'Allow adding me by ID', social_allow_guest_spectators: 'Allow guest spectators',
+    social_settings_saved: 'Social settings saved',
+    feedback: 'Feedback', feedback_send: 'Send Feedback', feedback_staff: 'View Feedback',
+    feedback_login_required: 'Sign in to send feedback.', feedback_empty: 'No feedback yet.',
+    feedback_staff_empty: 'No player feedback.', feedback_sent: 'Feedback sent',
     last_login: 'Last seen: {0}', win_rate: 'Win rate: {0}%', recent_matches: 'Recent matches',
     friend_profile: 'Profile', direct_messages: 'Direct Messages'
 });
@@ -1354,7 +1368,11 @@ Object.assign(I18N.zh, {
     friend_auto_added: '{0}已加你为好友',
     social: '社交', social_login_hint: '登录账号后可以使用社交设置。',
     social_accept_requests: '接受好友请求', social_search_nickname: '允许通过昵称添加我',
-    social_search_id: '允许通过ID添加我', social_settings_saved: '社交设置已保存',
+    social_search_id: '允许通过ID添加我', social_allow_guest_spectators: '允许游客观战',
+    social_settings_saved: '社交设置已保存',
+    feedback: '反馈', feedback_send: '发送反馈', feedback_staff: '查看反馈',
+    feedback_login_required: '登录账号后可以发送反馈。', feedback_empty: '暂无反馈。',
+    feedback_staff_empty: '暂无玩家反馈。', feedback_sent: '反馈已发送',
     last_login: '上次下线：{0}', win_rate: '胜率：{0}%', recent_matches: '最近对局',
     friend_profile: '资料', direct_messages: '私信'
 });
@@ -1367,7 +1385,11 @@ Object.assign(I18N.fr, {
     friend_auto_added: '{0} vous a ajouté en ami',
     social: 'Social', social_login_hint: 'Connectez-vous pour utiliser les réglages sociaux.',
     social_accept_requests: 'Accepter les demandes', social_search_nickname: 'Autoriser par pseudo',
-    social_search_id: 'Autoriser par ID', social_settings_saved: 'Réglages enregistrés',
+    social_search_id: 'Autoriser par ID', social_allow_guest_spectators: 'Autoriser les spectateurs invités',
+    social_settings_saved: 'Réglages enregistrés',
+    feedback: 'Feedback', feedback_send: 'Envoyer', feedback_staff: 'Voir les feedbacks',
+    feedback_login_required: 'Connectez-vous pour envoyer un feedback.', feedback_empty: 'Aucun feedback.',
+    feedback_staff_empty: 'Aucun feedback joueur.', feedback_sent: 'Feedback envoyé',
     last_login: 'Dernière activité : {0}', win_rate: 'Taux de victoire : {0}%', recent_matches: 'Parties récentes',
     friend_profile: 'Profil', direct_messages: 'Messages'
 });
@@ -1380,7 +1402,11 @@ Object.assign(I18N.ja, {
     friend_auto_added: '{0}があなたをフレンドに追加しました',
     social: 'ソーシャル', social_login_hint: 'ログインするとソーシャル設定を使えます。',
     social_accept_requests: 'フレンド申請を受け取る', social_search_nickname: '名前で追加を許可',
-    social_search_id: 'IDで追加を許可', social_settings_saved: '設定を保存しました',
+    social_search_id: 'IDで追加を許可', social_allow_guest_spectators: 'ゲスト観戦を許可',
+    social_settings_saved: '設定を保存しました',
+    feedback: 'フィードバック', feedback_send: '送信', feedback_staff: '確認',
+    feedback_login_required: 'ログインすると送信できます。', feedback_empty: 'まだありません。',
+    feedback_staff_empty: 'プレイヤー feedback はありません。', feedback_sent: '送信しました',
     last_login: '最終退出: {0}', win_rate: '勝率: {0}%', recent_matches: '最近の対戦',
     friend_profile: 'プロフィール', direct_messages: 'DM'
 });
@@ -3389,6 +3415,10 @@ const dmMessageLastFetchAt = new Map();
 let dmThreadsLastFetchAt = 0;
 const dmFailureBackoff = { threads: 0, messages: new Map() };
 const socialEndpointRequestTimes = new Map();
+let feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [] };
+let activeFeedbackTab = 'send';
+let activeFeedbackThreadId = null;
+let activeFeedbackStaffView = false;
 let activeSocialFriendId = null;
 let activeSocialSection = 'friends';
 let activeSocialRequestId = null;
@@ -3906,8 +3936,22 @@ function updateClassicMobileCanvas() {
     const rotate = height > width;
     const fitW = rotate ? CLASSIC_MOBILE_CANVAS_H : CLASSIC_MOBILE_CANVAS_W;
     const fitH = rotate ? CLASSIC_MOBILE_CANVAS_W : CLASSIC_MOBILE_CANVAS_H;
-    const scale = Math.min(width / fitW, height / fitH);
-    root.style.setProperty('--classic-mobile-scale', String(Math.max(0.1, Math.min(1, scale))));
+    const containScale = Math.min(width / fitW, height / fitH);
+    const coverScale = Math.max(width / fitW, height / fitH);
+    const aspect = Math.max(width, height) / Math.max(1, Math.min(width, height));
+    const targetAspect = CLASSIC_MOBILE_CANVAS_W / CLASSIC_MOBILE_CANVAS_H;
+    const aspectDelta = Math.abs(aspect - targetAspect) / targetAspect;
+    // On touch devices the battle canvas is a fixed 16:9 stage.  Use contain
+    // for narrow screens so controls never get cropped, but allow a small
+    // cover-style boost on near-16:9 devices and tablets so the stage does not
+    // sit timidly in the middle with unused space.
+    let scale = containScale;
+    if (aspectDelta < 0.16) {
+        scale = Math.min(coverScale, containScale * 1.08);
+    } else if (Math.max(width, height) >= 1180) {
+        scale = Math.min(containScale * 1.1, 1.28);
+    }
+    root.style.setProperty('--classic-mobile-scale', String(Math.max(0.1, Math.min(1.35, scale))));
     root.style.setProperty('--classic-mobile-rotate', rotate ? '90deg' : '0deg');
 }
 
@@ -4049,6 +4093,14 @@ function updateStaticText() {
     if (settingsMods) settingsMods.textContent = UI.settings_mods;
     const settingsSocial = $('settings-section-social');
     if (settingsSocial) settingsSocial.textContent = UI.social;
+    const feedbackBtn = $('btn-open-feedback');
+    if (feedbackBtn) feedbackBtn.textContent = UI.feedback;
+    const feedbackTitle = $('feedback-title');
+    if (feedbackTitle) feedbackTitle.textContent = UI.feedback;
+    const feedbackSendTab = $('feedback-tab-send');
+    if (feedbackSendTab) feedbackSendTab.textContent = UI.feedback_send;
+    const feedbackStaffTab = $('feedback-tab-staff');
+    if (feedbackStaffTab) feedbackStaffTab.textContent = UI.feedback_staff;
     const settingsAudio = $('settings-section-audio');
     if (settingsAudio) settingsAudio.textContent = UI.settings_audio || '音频';
     const audioEnabledLabel = $('settings-label-audio-enabled');
@@ -4073,6 +4125,8 @@ function updateStaticText() {
     if (searchNickLabel) searchNickLabel.textContent = UI.social_search_nickname;
     const searchIdLabel = $('settings-label-searchable-by-player-id');
     if (searchIdLabel) searchIdLabel.textContent = UI.social_search_id;
+    const allowGuestSpectatorsLabel = $('settings-label-allow-guest-spectators');
+    if (allowGuestSpectatorsLabel) allowGuestSpectatorsLabel.textContent = UI.social_allow_guest_spectators;
     const settingsOfficialMods = $('settings-label-official-mods');
     if (settingsOfficialMods) settingsOfficialMods.textContent = UI.official_mods;
     const settingsCommunityMods = $('settings-label-community-mods');
@@ -5628,7 +5682,7 @@ function getAllStatusDefs() {
         { key: 'blind', label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。回合开始生效后，清空失明。', color: '#2C3E50' },
         { key: 'heal_block', label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%）。拥有者每治疗一次，层数减少1；状态免疫存在时仍会减少层数，但不会降低治疗。', color: '#E84393' },
         { key: 'weakness', label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
-        { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
+        { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点魔法伤害，回合结束时层数下取整减半。', color: '#922B21' },
         { key: 'fragment', label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
         { key: 'magic_blocked', label: '魔力封锁', desc: '存在时，不能打出带有魔力消耗的卡牌。回合结束时层数-1。', color: COLORS.magic_text },
         { key: 'root_status', iconKey: 'root_status', label: '树根', desc: '增加护甲；受到物理伤害时减少1层。产生它的树根装备离场时，会清除对应树根。', color: '#6E8B3D' },
@@ -6334,6 +6388,17 @@ function getEquipmentTriggerTargetOptions(cardDef, cardInst = null) {
     return { includeSelf: true, candidates: 'all', aliveOnly: true };
 }
 
+function getClassicTouchCardTargetOptions(cardDict, cardDef) {
+    if (!cardDict || !cardDef) return null;
+    if (cardHasSelfOnlyFlag(cardDict, cardDef) && cardDef.card_type !== 'thorn') {
+        return { includeSelf: true, candidates: 'self', aliveOnly: true };
+    }
+    if (cardNeedsPlayerTarget(cardDef, cardDict)) {
+        return getCardTargetPickOptions(cardDef);
+    }
+    return null;
+}
+
 function classicCanTriggerEquipmentFromElement(elementId, cardDef, cardInst = null) {
     const targetId = classicFighterElementIdToPlayerId(elementId);
     if (targetId == null) return false;
@@ -6519,6 +6584,28 @@ async function selectClassicPlayCard(cardInstanceId, event = null) {
     renderClassicBattle(gameState);
     syncPlayerRegionTargets(gameState);
     scheduleClassicAimCurveUpdate();
+    const touchTargetOptions = isTouchPlayMode() ? getClassicTouchCardTargetOptions(cardDict, cardDef) : null;
+    if (touchTargetOptions) {
+        classicTargetPickInFlight = true;
+        try {
+            const targets = getPlayerTargetOptions(touchTargetOptions);
+            if (!targets.length) {
+                flashStatus(UI.no_selectable_player || UI.no_valid_target || '没有可选中的玩家', 2200, 'error');
+                clearSelectedPlayCard();
+                return false;
+            }
+            const targetId = await choosePlayerTargetOnBoard(UI.choose_target || UI.select_target || 'Choose target', targets);
+            if (targetId == null || targetId < 0) {
+                clearSelectedPlayCard();
+                return false;
+            }
+            const id = selectedPlayCardId;
+            if (id != null) await onPlayCard(id, { confirmed: true, targetPlayerId: targetId });
+            return true;
+        } finally {
+            classicTargetPickInFlight = false;
+        }
+    }
     return true;
 }
 
@@ -6556,6 +6643,27 @@ async function selectClassicTriggerEquipment(cardInst, cardDef, event = null) {
     renderClassicBattle(gameState);
     syncPlayerRegionTargets(gameState);
     scheduleClassicAimCurveUpdate();
+    if (isTouchPlayMode()) {
+        classicTargetPickInFlight = true;
+        try {
+            const targets = getPlayerTargetOptions(getEquipmentTriggerTargetOptions(cardDef, cardInst));
+            if (!targets.length) {
+                flashStatus(UI.no_selectable_player || UI.no_valid_target || '没有可选中的玩家', 2200, 'error');
+                clearSelectedPlayCard();
+                return false;
+            }
+            const targetId = await choosePlayerTargetOnBoard(UI.choose_target || UI.select_target || 'Choose target', targets);
+            if (targetId == null || targetId < 0) {
+                clearSelectedPlayCard();
+                return false;
+            }
+            const ok = await triggerEquipmentInstance(cardInst, cardDef, { targetPlayerId: targetId });
+            if (ok) clearSelectedPlayCard({ skipRender: true });
+            return ok;
+        } finally {
+            classicTargetPickInFlight = false;
+        }
+    }
     return true;
 }
 
@@ -6579,6 +6687,7 @@ function classicCanPlayFromElement(elementId) {
     const selfOnly = isClassicSelfOnlyCard(card);
     const role = getClassicPlayRole(card);
     if (elementId === 'classic-play-lane') return !selfOnly && role === 'stage';
+    if (role === 'target') return classicCardCanTargetPlayer(card, classicFighterElementIdToPlayerId(elementId));
     if (elementId === 'classic-fighter-enemy' || elementId === 'classic-fighter-enemy-2') return role === 'enemy';
     if (elementId === 'classic-fighter-ally') return !selfOnly && (role === 'self' || role === 'equip' || role === 'enemy');
     if (elementId === 'classic-fighter-self') return selfOnly || role === 'self' || role === 'equip';
@@ -7679,10 +7788,18 @@ function cardHasSublimeFlag(cardDict, cardDef = null) {
     return effective.has('sublime') || effective.has('vanilla:sublime') || effective.has('tag_sublime') || effective.has('tag_vanilla:sublime');
 }
 
+function cardHasWideStrikeFlag(cardDict, cardDef = null) {
+    const resolvedDef = cardDef || getCardDef(cardDict && cardDict.def_id);
+    const { effective } = getEffectiveCardFlagSets(cardDict || {}, resolvedDef || {});
+    return effective.has('wide_strike') || effective.has('tag_wide_strike') || effective.has('ocean:wide_strike') || effective.has('tag_ocean:wide_strike');
+}
+
 function shouldDisplayCardFlag(flag, options = {}) {
     const normalized = normalizeCardFlag(flag);
     if (!normalized) return false;
     if (normalized === 'infinite_exclude') return !!options.showSystemFlags;
+    if (normalized === 'ocean_spikeball_boosted') return !!options.showSystemFlags;
+    if (normalized === 'multi_petal_fission') return !!options.showSystemFlags;
     return true;
 }
 
@@ -7863,7 +7980,7 @@ function createClassicCardTile(cardDict, options = {}) {
     const hideTypeByBlind = blindLevel >= 2;
     const typeColor = getCardBlindDisplayColor(cardDef, blindLevel);
     const costs = getCardDisplayCosts(cardDict, cardDef, ownerState);
-    const imageUrl = cardDict.image || cardDict.image_url || cardDef.image || cardDef.image_url || `/static/cards/${encodeURIComponent(defId)}.webp`;
+    const imageUrl = getCardArtUrl(cardDict, cardDef) || `/static/cards/${encodeURIComponent(defId)}.webp`;
     tile.dataset.defId = defId;
     if (cardDict.instance_id != null) tile.dataset.instanceId = String(cardDict.instance_id);
     tile.classList.add(`classic-card-tile-${cardDef.card_type || 'unknown'}`);
@@ -8096,6 +8213,7 @@ function getAttackDamageBaseInfo(cardDict, cardDef) {
     });
     if (v2DamageStep) {
         const params = v2DamageStep.params || v2DamageStep;
+        if (stepLooksLikeElectricDamage(params)) return null;
         const amount = firstNumericEffectValue(params.amount);
         const hits = firstNumericEffectValue(params.hits);
         if (amount != null) {
@@ -8713,7 +8831,7 @@ function stepLooksLikeElectricDamage(params = {}) {
     return tag.includes('electric') || tag.includes('battery') || tag.includes('电');
 }
 
-function collectTargetPredictionFromV2Steps(prediction, steps, context = null) {
+function collectTargetPredictionFromV2Steps(prediction, steps, context = null, options = {}) {
     const localContext = context || {
         lastDamage: prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0),
         lastPositiveHits: prediction.target.damageHits.filter(value => Number(value || 0) > 0).length,
@@ -8726,20 +8844,23 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null) {
             const branch = predictionConditionLikelyTrue(step.condition || params.condition, localContext)
                 ? (step.then || params.then || [])
                 : (step.else || params.else || []);
-            collectTargetPredictionFromV2Steps(prediction, branch, localContext);
+            collectTargetPredictionFromV2Steps(prediction, branch, localContext, options);
             return;
         }
-        if (op !== 'direct_damage' && op !== 'deal_direct_damage') return;
+        if (op !== 'direct_damage' && op !== 'deal_direct_damage' && op !== 'deal_damage' && op !== 'damage') return;
         if (!effectTargetIsPredictionTarget(params.target || 'target')) return;
+        const isElectric = stepLooksLikeElectricDamage(params);
+        if (options.skipPhysicalDamage && !isElectric) return;
         const amount = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.amount, localContext)));
         if (amount <= 0) return;
-        if (stepLooksLikeElectricDamage(params)) {
-            prediction.target.electricHits.push(amount);
+        const hits = Math.max(1, Math.floor(evalPredictionNumberExpr(params.hits ?? 1, localContext)));
+        if (isElectric) {
+            for (let i = 0; i < hits; i++) prediction.target.electricHits.push(amount);
         } else {
-            prediction.target.damageHits.push(amount);
+            for (let i = 0; i < hits; i++) prediction.target.damageHits.push(amount);
         }
-        localContext.lastDamage = amount;
-        localContext.lastPositiveHits = amount > 0 ? 1 : 0;
+        localContext.lastDamage = amount * hits;
+        localContext.lastPositiveHits = amount > 0 ? hits : 0;
     });
 }
 
@@ -8837,7 +8958,7 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     collectSelfPredictionFromEffects(result, cardDict, cardDef, attackerState, positiveHitCount);
     const onPlay = cardDef.v2_events && cardDef.v2_events.on_play;
     const steps = onPlay && (onPlay.steps || onPlay);
-    collectTargetPredictionFromV2Steps(result, steps);
+    collectTargetPredictionFromV2Steps(result, steps, null, { skipPhysicalDamage: cardDef.card_type === 'thorn' });
     collectSelfPredictionFromV2Steps(result, steps, attackerState, positiveHitCount);
     addKnownSelfPrediction(result, cardDict, cardDef, attackerState);
     collectSelfStatusDamagePrediction(result, cardDef, attackerState);
@@ -9437,7 +9558,7 @@ function getStatusIntroItem(statusInfo) {
         toxic_poison: { label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31' },
         heal_block: { label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%）。拥有者每治疗一次，层数减少1；状态免疫存在时仍会减少层数，但不会降低治疗。', color: '#E84393' },
         weakness: { label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
-        bleed: { label: UI.status_bleed, desc: '打出攻击牌时受到层数点物理伤害，回合结束时层数下取整减半。', color: '#922B21' },
+        bleed: { label: UI.status_bleed, desc: '打出攻击牌时受到层数点魔法伤害，回合结束时层数下取整减半。', color: '#922B21' },
         fragment: { label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
         blood_debt: { label: '血债', desc: '受到物理伤害时效果清除，攻击者获得等同于血债层数的E。', color: '#8E1B2A' },
         unable_counter: { label: '无法反制', desc: '从左到右将层数张反制牌置入弃牌堆，然后减少对应层数。若层数不为0，抽到反制牌时自动将其置入弃牌堆并降低层数。', color: '#536878' },
@@ -9476,7 +9597,7 @@ function getStatusIntroItem(statusInfo) {
         toxic_poison: { label: lt({ zh: '剧毒', en: 'Toxic Poison', fr: 'Poison virulent', ja: '劇毒' }), desc: lt({ zh: builtIns.toxic_poison.desc, en: 'After Poison resolves, applies that many additional P.', fr: 'Après la résolution du Poison, applique autant de P supplémentaires.', ja: '毒の解決後、同じ層数のPを追加付与します。' }) },
         heal_block: { label: UI.status_heal_block, desc: lt({ zh: builtIns.heal_block.desc, en: 'Reduces life healing by 50% per stack, up to 100%. Each time the owner is healed, stacks decrease by 1. With Status Immunity, stacks still decrease but healing is not reduced.', fr: 'Réduit les soins de vie de 50% par charge, jusqu’à 100%. Chaque soin reçu par le propriétaire réduit les charges de 1. Avec Immunité aux états, les charges diminuent quand même mais le soin n’est pas réduit.', ja: '生命回復を1層ごとに50%、最大100%減らします。所持者が回復するたびに1層減ります。状態免疫中も層は減りますが、回復量は減りません。' }) },
         weakness: { label: UI.status_weakness, desc: lt({ zh: builtIns.weakness.desc, en: 'Your physical damage dealt to others is reduced by 20% per stack, up to 60%. Loses 1 stack at your turn end.', fr: 'Vos dégâts physiques infligés aux autres sont réduits de 20% par charge, jusqu’à 60%. Perd 1 charge à la fin de votre tour.', ja: '自分が他人に与える物理ダメージを1層ごとに20%、最大60%減らします。自分ターン終了時に1層減ります。' }) },
-        bleed: { label: UI.status_bleed, desc: lt({ zh: builtIns.bleed.desc, en: 'When you play a Thorn card, take physical damage equal to its stacks. At turn end, stacks halve rounded down.', fr: 'Quand vous jouez une carte Thorn, subissez des dégâts physiques égaux aux charges. À la fin du tour, les charges sont divisées par deux arrondies à l’inférieur.', ja: 'Thornカードを使う時、層数分の物理ダメージを受けます。ターン終了時に切り捨てで半減します。' }) },
+        bleed: { label: UI.status_bleed, desc: lt({ zh: builtIns.bleed.desc, en: 'When you play a Thorn card, take magic damage equal to its stacks. At turn end, stacks halve rounded down.', fr: 'Quand vous jouez une carte Thorn, subissez des dégâts magiques égaux aux charges. À la fin du tour, les charges sont divisées par deux arrondies à l’inférieur.', ja: 'Thornカードを使う時、層数分の魔法ダメージを受けます。ターン終了時に切り捨てで半減します。' }) },
         fragment: { label: UI.status_fragment, desc: lt({ zh: builtIns.fragment.desc, en: 'Gains Fragment stacks. At 4 stacks, you may spend 4 stacks to add Thor’s Hammer to hand.', fr: 'Gagne des fragments. À 4 charges, vous pouvez en dépenser 4 pour ajouter Thor’s Hammer à la main.', ja: '碎片層数を得ます。4層で4層消費し、雷神之锤を手札に加えられます。' }) },
     };
     ['jungle:fragile', 'jungle:shield', 'jungle:turn_heal_turns', 'jungle:turn_magic_turns', 'jungle:root_status', 'jungle:toxic_poison', 'ocean:blood_debt', 'ocean:unable_counter'].forEach(fullKey => {
@@ -12609,6 +12730,7 @@ function cacheAccount(user) {
                 accept_friend_requests: user.accept_friend_requests !== false,
                 searchable_by_nickname: user.searchable_by_nickname !== false,
                 searchable_by_player_id: user.searchable_by_player_id !== false,
+                allow_guest_spectators: user.allow_guest_spectators === true,
                 skin: normalizeSkinConfig(user.skin || {}),
                 warnings: Array.isArray(user.warnings) ? user.warnings : [],
             };
@@ -12685,6 +12807,11 @@ function renderAccountState() {
     renderAccountMode();
     updateCommunityUploadState();
     renderCommunityModList();
+    if (!currentAccount) {
+        feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [] };
+        activeFeedbackThreadId = null;
+        updateFeedbackBadge();
+    }
     if (activeViewId === 'view-skin') syncSkinFormFromCurrent();
 }
 
@@ -12758,7 +12885,10 @@ async function refreshAuthMe() {
         currentAccount = currentAccount || loadCachedAccount();
     }
     renderAccountState();
-    if (currentAccount) loadFriends(false);
+    if (currentAccount) {
+        loadFriends(false);
+        loadFeedbackSummary();
+    }
 }
 
 async function onAccountLogin() {
@@ -13275,6 +13405,36 @@ function renderSocialSelectorList() {
     el.innerHTML = friends.length ? friends.map(item => friendCardHtml(item, 'friend')).join('') : `<div class="friend-empty">${escapeHtml(UI.friend_empty)}</div>`;
 }
 
+function findDmThreadByUserId(userId) {
+    const id = String(userId || '');
+    if (!id) return null;
+    return (Array.isArray(dmData.threads) ? dmData.threads : []).find(thread => {
+        const user = thread && thread.user ? thread.user : {};
+        return String(user.id || '') === id;
+    }) || null;
+}
+
+function findDmThreadById(threadId) {
+    const id = String(threadId || '');
+    if (!id) return null;
+    return (Array.isArray(dmData.threads) ? dmData.threads : []).find(thread => String(thread.thread_id || '') === id) || null;
+}
+
+function clearDmUnreadForThread(threadId) {
+    const tid = String(threadId || '');
+    if (!tid || !Array.isArray(dmData.threads)) return;
+    let removed = 0;
+    dmData.threads = dmData.threads.map(thread => {
+        if (String(thread.thread_id || '') !== tid) return thread;
+        removed = Number(thread.unread_count || 0);
+        return { ...thread, unread_count: 0 };
+    });
+    if (removed > 0) {
+        dmData.unread_count = Math.max(0, Number(dmData.unread_count || 0) - removed);
+    }
+    updateFriendsBadge();
+}
+
 function renderUnifiedRequestsList() {
     const el = $('friend-requests-list');
     if (!el) return;
@@ -13321,7 +13481,17 @@ function showSocialDetailTab(tabName = 'friends') {
     });
     renderSocialSelectorList();
     if (tab === 'dm') {
-        loadDmThreads(true, { force: true });
+        loadDmThreads(true, { force: true }).then(() => {
+            if (activeDmThreadId) {
+                openDmThread(activeDmThreadId, { markRead: true, force: true });
+            } else if (activeDmTargetUserId) {
+                const thread = findDmThreadByUserId(activeDmTargetUserId);
+                if (thread) openDmThread(thread.thread_id, { markRead: true, force: true });
+                else renderDmMessages();
+            } else {
+                renderDmMessages();
+            }
+        });
     }
 }
 
@@ -13497,10 +13667,27 @@ function renderDmMessages() {
     const fragment = document.createDocumentFragment();
     (Array.isArray(activeDmMessages) ? activeDmMessages : []).forEach(msg => {
         const row = document.createElement('div');
-        row.className = Number(msg.sender_user_id) === Number(currentUserId) ? 'dm-message self' : 'dm-message other';
+        const self = Number(msg.sender_user_id) === Number(currentUserId);
+        row.className = self ? 'dm-message self' : 'dm-message other';
         const bubble = document.createElement('div');
         bubble.className = 'dm-bubble';
-        bubble.textContent = msg.message || '';
+        const meta = document.createElement('div');
+        meta.className = `dm-sender-name ${feedbackNameClass(msg.sender_role)}`;
+        const activeThread = findDmThreadById(activeDmThreadId);
+        const nameText = self
+            ? (msg.sender_name || currentAccount?.display_name || currentAccount?.username || '')
+            : (msg.sender_name || activeThread?.user?.username || $('dm-chat-title')?.textContent?.replace(/^与\s*/, '').replace(/\s*的私信$/, '') || '');
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = nameText;
+        meta.appendChild(nameSpan);
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'dm-message-time';
+        timeSpan.textContent = formatLobbyChatSeparator({ created_at: msg.created_at });
+        meta.appendChild(timeSpan);
+        const text = document.createElement('div');
+        text.textContent = msg.message || '';
+        bubble.appendChild(meta);
+        bubble.appendChild(text);
         row.appendChild(bubble);
         fragment.appendChild(row);
     });
@@ -13664,7 +13851,10 @@ async function openDmThread(threadId, options = {}) {
         activeDmMessages = Array.isArray(data.messages) ? data.messages : [];
         const title = $('dm-chat-title');
         if (title) title.textContent = data.user && data.user.username ? `与 ${data.user.username} 的私信` : '私信';
-        dmData.unread_count = Number(data.unread_count || 0);
+        if (markRead) clearDmUnreadForThread(activeDmThreadId);
+        dmData.unread_count = Object.prototype.hasOwnProperty.call(data, 'unread_count')
+            ? Number(data.unread_count || 0)
+            : Number(dmData.unread_count || 0);
         renderDmThreads();
         renderDmMessages();
         renderFriendDetailProfile();
@@ -13685,18 +13875,31 @@ async function openDmThread(threadId, options = {}) {
     return promise;
 }
 
-function startDmToUser(userId, username = '') {
-    activeDmThreadId = null;
-    activeDmTargetUserId = userId || null;
+async function startDmToUser(userId, username = '') {
+    const uid = userId || null;
+    activeDmTargetUserId = uid;
     activeDmTargetIdentifier = '';
-    if (userId) activeSocialFriendId = String(userId);
-    activeDmMessages = [];
-    const title = $('dm-chat-title');
-    if (title) title.textContent = username ? `给 ${username} 发私信` : '新私信';
-    renderDmThreads();
-    renderDmMessages();
-    renderFriendDetailProfile();
+    if (uid) activeSocialFriendId = String(uid);
     toggleSocialDetailModal(true, 'dm');
+    let thread = findDmThreadByUserId(uid);
+    if (!thread) {
+        await loadDmThreads(true, { force: true });
+        thread = findDmThreadByUserId(uid);
+    }
+    if (thread) {
+        activeDmThreadId = thread.thread_id;
+        clearDmUnreadForThread(activeDmThreadId);
+        renderDmThreads();
+        await openDmThread(activeDmThreadId, { markRead: true, force: true });
+    } else {
+        activeDmThreadId = null;
+        activeDmMessages = [];
+        const title = $('dm-chat-title');
+        if (title) title.textContent = username ? `给 ${username} 发私信` : '新私信';
+        renderDmThreads();
+        renderDmMessages();
+        renderFriendDetailProfile();
+    }
     const input = $('dm-message-input');
     if (input) input.focus();
 }
@@ -13743,6 +13946,247 @@ async function sendDmMessage() {
     } catch (err) {
         setFriendsError(err.message || UI.account_error);
     }
+}
+
+function formatDateTimeShort(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value || '-');
+    return date.toLocaleString(currentLang === 'zh' ? 'zh-CN' : (currentLang === 'ja' ? 'ja-JP' : (currentLang === 'fr' ? 'fr-FR' : 'en-US')), {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    });
+}
+
+function feedbackNameClass(role) {
+    const key = String(role || '').toLowerCase();
+    if (key === 'admin') return 'admin-name';
+    if (key === 'staff') return 'bloom-name';
+    if (key === 'contributor') return 'guard-name';
+    if (key === 'sponsor') return 'thorn-name';
+    return '';
+}
+
+function updateFeedbackBadge() {
+    const btn = $('btn-open-feedback');
+    if (!btn) return;
+    const count = Number(feedbackState.unread_count || 0);
+    if (count > 0) {
+        btn.dataset.badge = count > 99 ? '99+' : String(count);
+        btn.classList.add('has-badge');
+    } else {
+        delete btn.dataset.badge;
+        btn.classList.remove('has-badge');
+    }
+}
+
+async function loadFeedbackSummary() {
+    if (!currentAccount) {
+        feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [] };
+        updateFeedbackBadge();
+        return;
+    }
+    try {
+        const data = await authRequest('/api/feedback/summary', undefined, { timeoutMs: 5000 });
+        feedbackState.is_staff = !!data.is_staff;
+        feedbackState.unread_count = Number(data.unread_count || 0);
+        updateFeedbackBadge();
+    } catch (_) {
+        updateFeedbackBadge();
+    }
+}
+
+function renderFeedbackThreads() {
+    const list = $('feedback-thread-list');
+    if (!list) return;
+    const items = Array.isArray(feedbackState.threads) ? feedbackState.threads : [];
+    if (!currentAccount) {
+        list.innerHTML = `<div class="friend-empty">${escapeHtml(UI.feedback_login_required || '登录账号后可以发送反馈。')}</div>`;
+        return;
+    }
+    if (!items.length) {
+        list.innerHTML = `<div class="friend-empty">${escapeHtml(activeFeedbackStaffView ? (UI.feedback_staff_empty || '暂无玩家反馈。') : (UI.feedback_empty || '暂无反馈。'))}</div>`;
+        return;
+    }
+    list.innerHTML = items.map(item => {
+        const active = String(item.id) === String(activeFeedbackThreadId);
+        const user = item.user || {};
+        const title = item.title || item.last_message || `#${item.id}`;
+        const status = item.status === 'closed' ? '已关闭' : (item.status === 'pending' ? '已回复' : '未处理');
+        return `
+          <button class="feedback-thread-item${active ? ' active' : ''}" type="button" data-feedback-thread="${escapeHtml(item.id)}">
+            <span class="feedback-thread-title">${item.unread ? '<span class="feedback-dot"></span>' : ''}${escapeHtml(title)}</span>
+            <span class="feedback-thread-meta">${escapeHtml(activeFeedbackStaffView ? (user.username || '-') : status)} · ${escapeHtml(formatDateTimeShort(item.updated_at || item.created_at || ''))}</span>
+            <span class="feedback-thread-preview">${escapeHtml(item.last_message || '')}</span>
+          </button>`;
+    }).join('');
+}
+
+function renderFeedbackMessages() {
+    const list = $('feedback-message-list');
+    if (!list) return;
+    if (!currentAccount) {
+        list.innerHTML = `<div class="friend-empty">${escapeHtml(UI.feedback_login_required || '登录账号后可以发送反馈。')}</div>`;
+        return;
+    }
+    const messages = Array.isArray(feedbackState.messages) ? feedbackState.messages : [];
+    if (!activeFeedbackThreadId && !messages.length) {
+        list.innerHTML = `<div class="friend-empty">${escapeHtml(activeFeedbackStaffView ? '选择一条玩家反馈。' : '填写内容后发送新的反馈。')}</div>`;
+        return;
+    }
+    const currentUserId = currentAccount && currentAccount.id;
+    list.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    messages.forEach(msg => {
+        const self = Number(msg.sender_user_id) === Number(currentUserId);
+        const row = document.createElement('div');
+        row.className = `feedback-message ${self ? 'self' : 'other'}`;
+        const bubble = document.createElement('div');
+        bubble.className = 'feedback-bubble';
+        const meta = document.createElement('div');
+        meta.className = `feedback-sender ${feedbackNameClass(msg.sender_role)}`;
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = msg.sender_name || (self ? (currentAccount.username || '') : '-');
+        meta.appendChild(nameSpan);
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'feedback-message-time';
+        timeSpan.textContent = formatLobbyChatSeparator({ created_at: msg.created_at });
+        meta.appendChild(timeSpan);
+        const text = document.createElement('div');
+        text.className = 'feedback-text';
+        text.textContent = msg.message || '';
+        bubble.appendChild(meta);
+        bubble.appendChild(text);
+        row.appendChild(bubble);
+        fragment.appendChild(row);
+    });
+    list.appendChild(fragment);
+    list.scrollTop = list.scrollHeight;
+}
+
+function renderFeedbackModal() {
+    const staffTab = $('feedback-tab-staff');
+    if (staffTab) staffTab.classList.toggle('hidden', !feedbackState.is_staff);
+    document.querySelectorAll('[data-feedback-tab]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.feedbackTab === activeFeedbackTab);
+    });
+    activeFeedbackStaffView = activeFeedbackTab === 'staff';
+    const category = $('feedback-category');
+    const titleInput = $('feedback-title-input');
+    const statusSelect = $('feedback-status-select');
+    if (category) category.classList.toggle('hidden', activeFeedbackStaffView || !!activeFeedbackThreadId);
+    if (titleInput) titleInput.classList.toggle('hidden', activeFeedbackStaffView || !!activeFeedbackThreadId);
+    if (statusSelect) statusSelect.classList.toggle('hidden', !activeFeedbackStaffView || !activeFeedbackThreadId);
+    renderFeedbackThreads();
+    renderFeedbackMessages();
+    updateFeedbackBadge();
+}
+
+async function loadFeedbackThreads(staffView = false) {
+    if (!currentAccount) {
+        feedbackState.threads = [];
+        feedbackState.messages = [];
+        renderFeedbackModal();
+        return;
+    }
+    try {
+        const data = await authRequest(`/api/feedback/threads?staff=${staffView ? '1' : '0'}&limit=50`, undefined, { timeoutMs: 7000 });
+        feedbackState.is_staff = !!data.is_staff;
+        feedbackState.unread_count = Number(data.unread_count || 0);
+        feedbackState.threads = Array.isArray(data.items) ? data.items : [];
+        if (!activeFeedbackThreadId && feedbackState.threads.length && staffView) {
+            activeFeedbackThreadId = feedbackState.threads[0].id;
+            await openFeedbackThread(activeFeedbackThreadId);
+            return;
+        }
+        renderFeedbackModal();
+    } catch (err) {
+        const box = $('feedback-error');
+        if (box) box.textContent = err.message || UI.account_error;
+    }
+}
+
+async function openFeedbackThread(threadId) {
+    if (!threadId) return;
+    activeFeedbackThreadId = threadId;
+    try {
+        const data = await authRequest(`/api/feedback/messages?thread_id=${encodeURIComponent(threadId)}&limit=100&mark_read=1`, undefined, { timeoutMs: 7000 });
+        feedbackState.is_staff = !!data.is_staff;
+        feedbackState.unread_count = Number(data.unread_count || 0);
+        feedbackState.messages = Array.isArray(data.messages) ? data.messages : [];
+        const thread = data.thread || {};
+        const statusSelect = $('feedback-status-select');
+        if (statusSelect && thread.status) statusSelect.value = thread.status;
+        renderFeedbackModal();
+    } catch (err) {
+        const box = $('feedback-error');
+        if (box) box.textContent = err.message || UI.account_error;
+    }
+}
+
+async function sendFeedbackMessage() {
+    const input = $('feedback-message-input');
+    const text = (input?.value || '').trim();
+    const box = $('feedback-error');
+    if (box) box.textContent = '';
+    if (!currentAccount) {
+        if (box) box.textContent = UI.feedback_login_required || '登录账号后可以发送反馈。';
+        return;
+    }
+    if (!text) return;
+    const payload = { text };
+    if (activeFeedbackThreadId) payload.thread_id = activeFeedbackThreadId;
+    else {
+        payload.category = $('feedback-category')?.value || 'other';
+        payload.title = ($('feedback-title-input')?.value || '').trim();
+    }
+    try {
+        const data = await authRequest('/api/feedback/send', payload, { timeoutMs: 7000 });
+        if (input) input.value = '';
+        activeFeedbackThreadId = data.thread?.id || data.thread_id || activeFeedbackThreadId;
+        feedbackState.is_staff = !!data.is_staff;
+        feedbackState.unread_count = Number(data.unread_count || 0);
+        feedbackState.messages = Array.isArray(data.messages) ? data.messages : [];
+        await loadFeedbackThreads(activeFeedbackStaffView);
+        if (activeFeedbackThreadId) await openFeedbackThread(activeFeedbackThreadId);
+        if (box) box.textContent = UI.feedback_sent || '反馈已发送';
+    } catch (err) {
+        if (box) box.textContent = err.message || UI.account_error;
+    }
+}
+
+async function updateFeedbackStatus() {
+    if (!activeFeedbackThreadId || !feedbackState.is_staff) return;
+    const status = $('feedback-status-select')?.value || 'open';
+    try {
+        const data = await authRequest('/api/feedback/status', { thread_id: activeFeedbackThreadId, status }, { timeoutMs: 7000 });
+        feedbackState.messages = Array.isArray(data.messages) ? data.messages : feedbackState.messages;
+        await loadFeedbackThreads(true);
+        await openFeedbackThread(activeFeedbackThreadId);
+    } catch (err) {
+        const box = $('feedback-error');
+        if (box) box.textContent = err.message || UI.account_error;
+    }
+}
+
+async function toggleFeedbackModal(show) {
+    const modal = $('feedback-modal');
+    if (!modal) return;
+    modal.classList.toggle('hidden', !show);
+    if (!show) return;
+    activeFeedbackTab = feedbackState.is_staff && activeFeedbackTab === 'staff' ? 'staff' : 'send';
+    activeFeedbackStaffView = activeFeedbackTab === 'staff';
+    if (!currentAccount) {
+        feedbackState.threads = [];
+        feedbackState.messages = [];
+        renderFeedbackModal();
+        return;
+    }
+    await loadFeedbackSummary();
+    await loadFeedbackThreads(activeFeedbackStaffView);
 }
 
 async function addFriendFromInput() {
@@ -13830,12 +14274,13 @@ function renderSocialSettings() {
         ['settings-accept-friend-requests', 'accept_friend_requests'],
         ['settings-searchable-by-nickname', 'searchable_by_nickname'],
         ['settings-searchable-by-player-id', 'searchable_by_player_id'],
+        ['settings-allow-guest-spectators', 'allow_guest_spectators'],
     ];
     ids.forEach(([id, key]) => {
         const input = $(id);
         if (!input) return;
         input.disabled = !currentAccount;
-        input.checked = currentAccount ? currentAccount[key] !== false : true;
+        input.checked = currentAccount ? (key === 'allow_guest_spectators' ? currentAccount[key] === true : currentAccount[key] !== false) : key !== 'allow_guest_spectators';
     });
     const hint = $('settings-social-login-hint');
     if (hint) hint.classList.toggle('hidden', !!currentAccount);
@@ -13850,6 +14295,7 @@ async function saveSocialSettings() {
         accept_friend_requests: !!$('settings-accept-friend-requests')?.checked,
         searchable_by_nickname: !!$('settings-searchable-by-nickname')?.checked,
         searchable_by_player_id: !!$('settings-searchable-by-player-id')?.checked,
+        allow_guest_spectators: !!$('settings-allow-guest-spectators')?.checked,
     };
     const status = $('settings-social-status');
     try {
@@ -17256,13 +17702,25 @@ function applyClassicResourcePreview(card = null, ownerState = null) {
 function getClassicPlayRole(card) {
     const type = card && card.card_type;
     if (type === 'thorn') return 'enemy';
-    if (type === 'root') return 'equip';
+    const cardDef = card && (card.cardDef || getCardDef(card.def_id || ''));
+    if (type === 'root') {
+        return cardNeedsPlayerTarget(cardDef, card && (card.raw || card)) ? 'target' : 'equip';
+    }
+    if (cardNeedsPlayerTarget(cardDef, card && (card.raw || card))) return 'target';
     if (type === 'bloom') {
-        const cardDef = card.cardDef || getCardDef(card.def_id || '');
         if (cardEffectTargetsEnemy(cardDef)) return 'enemy';
         return 'self';
     }
     return 'stage';
+}
+
+function classicCardCanTargetPlayer(card, playerId) {
+    if (!card) return false;
+    const pid = normalizePlayerId(playerId);
+    if (pid == null) return false;
+    const cardDef = card.cardDef || getCardDef(card.def_id || '');
+    const targets = getPlayerTargetOptions(getCardTargetPickOptions(cardDef));
+    return targets.some(target => normalizePlayerId(target && target.id) === pid);
 }
 
 function cardEffectTargetsEnemy(cardDef) {
@@ -17294,6 +17752,7 @@ function getClassicPlayHint(card) {
     if (isClassicSelfOnlyCard(card)) return UI.classic_target_self || UI.classic_play_center || UI.drag_to_play;
     const role = getClassicPlayRole(card);
     if (role === 'enemy') return UI.classic_target_enemy || UI.drag_to_play;
+    if (role === 'target') return UI.classic_target_any || UI.target_pick_hint || UI.drag_to_play;
     if (role === 'self') return UI.classic_target_self || UI.drag_to_play;
     if (role === 'equip') return UI.classic_equip_stage || UI.drag_to_play;
     return UI.classic_play_center || UI.drag_to_play;
@@ -17311,6 +17770,7 @@ function renderClassicPlayLane(vm) {
     lane.classList.toggle('is-equip-role', role === 'equip');
     lane.classList.toggle('is-self-role', role === 'self');
     lane.classList.toggle('is-enemy-role', role === 'enemy');
+    lane.classList.toggle('is-target-role', role === 'target');
     const text = selected ? getClassicPlayHint(selected) : (UI.classic_select_card || UI.drag_to_play);
     lane.innerHTML = `
         <div class="classic-lane-mark" aria-hidden="true"></div>
@@ -17437,7 +17897,8 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
     const hpPct = player.maxHp > 0 ? Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100)) : 0;
     const role = getClassicPlayRole(selectedCard);
     const selfOnly = isClassicSelfOnlyCard(selectedCard);
-    const isHardTarget = !!selectedCard && !selfOnly && (role === side || (role === 'enemy' && side === 'enemy') || (role === 'self' && side === 'self'));
+    const isAnyTarget = !!selectedCard && !selfOnly && role === 'target' && classicCardCanTargetPlayer(selectedCard, player.id);
+    const isHardTarget = !!selectedCard && !selfOnly && (isAnyTarget || role === side || (role === 'enemy' && side === 'enemy') || (role === 'self' && side === 'self'));
     const isSelfOnlyTarget = !!selectedCard && selfOnly && side === 'self';
     const isSoftTarget = (!!selectedCard && !selfOnly && role === 'equip' && side === 'self') || isSelfOnlyTarget;
     container.classList.toggle('is-current', !!player.isCurrent);
@@ -19640,6 +20101,7 @@ async function chooseEnemyTarget(title) {
 function cardNeedsPlayerTarget(cardDef, cardDict = null) {
     const gs = gameState || {};
     if (!cardDef) return false;
+    if (cardHasWideStrikeFlag(cardDict || {}, cardDef)) return false;
     if (cardHasSelfOnlyFlag(cardDict || {}, cardDef) && cardDef.card_type !== 'thorn') return false;
     if (cardDef.card_type === 'guard') return false;
     if (cardDef.card_type === 'thorn') return gs.mode === '2v2';
@@ -20706,13 +21168,57 @@ function appendChatTextWithMentions(parent, text, mentions = [], ownMentionToken
     if (last < raw.length) parent.appendChild(document.createTextNode(raw.slice(last)));
 }
 
+function parseChatTimeValue(value) {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function localDateKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function dayStart(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function formatLobbyDate(date) {
+    if (currentLang === 'zh') {
+        return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+    }
+    if (currentLang === 'ja') {
+        return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+    }
+    if (currentLang === 'fr') {
+        return date.toLocaleDateString('fr-FR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    }
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function formatLobbyChatSeparator(entry = {}) {
+    const date = parseChatTimeValue(entry.time || entry.created_at || entry.createdAt);
+    const fallback = entry.display_time || entry.displayTime || '';
+    if (!date) return fallback;
+    const timeText = date.toLocaleTimeString(currentLang === 'zh' ? 'zh-CN' : (currentLang === 'ja' ? 'ja-JP' : (currentLang === 'fr' ? 'fr-FR' : 'en-US')), {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    });
+    const now = new Date();
+    if (localDateKey(date) === localDateKey(now)) return timeText;
+    const daysAgo = Math.round((dayStart(now).getTime() - dayStart(date).getTime()) / 86400000);
+    if (daysAgo === 1) return `${t('chat_day_yesterday')} ${timeText}`;
+    if (daysAgo === 2) return `${t('chat_day_before_yesterday')} ${timeText}`;
+    return `${formatLobbyDate(date)} ${timeText}`;
+}
+
 function appendLobbyChatEntry(entry = {}) {
     const container = $('lobby-chat-log');
     if (!container) return;
     if (entry.type === 'time') {
         const timeEl = document.createElement('div');
         timeEl.className = 'chat-time-separator';
-        timeEl.textContent = entry.display_time || entry.displayTime || '';
+        timeEl.textContent = formatLobbyChatSeparator(entry);
         container.appendChild(timeEl);
         container.scrollTop = container.scrollHeight;
         return;
@@ -20757,7 +21263,7 @@ function renderLobbyChatHistory(data = {}) {
     const container = $('lobby-chat-log');
     if (!container) return;
     const items = Array.isArray(data.items) ? data.items : [];
-    const signature = JSON.stringify(items.map(entry => [
+    const signature = JSON.stringify([currentLang, items.map(entry => [
         entry && entry.type,
         entry && entry.id,
         entry && entry.time,
@@ -20768,7 +21274,7 @@ function renderLobbyChatHistory(data = {}) {
         entry && entry.chat_channel,
         entry && entry.system,
         entry && JSON.stringify(entry.mentions || []),
-    ]));
+    ])]);
     if (signature === lobbyChatHistorySignature) return;
     lobbyChatHistorySignature = signature;
     container.innerHTML = '';
@@ -22042,7 +22548,9 @@ async function showChoiceUI(data) {
             const attacks = ((gameState.you || {}).hand || []).filter(c => {
                 if (!c || c.instance_id === cardDict.instance_id || cardHasSublimeFlag(c)) return false;
                 const cd = getCardDef(c.def_id);
-                return cd && cd.card_type === 'thorn';
+                if (!cd || cd.card_type !== 'thorn') return false;
+                const { effective } = getEffectiveCardFlagSets(c || {}, cd || {});
+                return !effective.has('unique') && !effective.has('exile');
             });
             if (!attacks.length) {
                 gameAlert(UI.notice, UI.no_attack_cards || '没有攻击牌');
@@ -22069,11 +22577,15 @@ async function showChoiceUI(data) {
             if (sel >= 0 && sel < oppEq.length) choiceResult = { target_instance_id: oppEq[sel].card_instance.instance_id };
         }
     } else if (choiceType === 'choose_card_to_discard') {
-        const otherCards = (gameState.you || {}).hand || [];
+        const otherCards = ((gameState.you || {}).hand || []).filter(c => (
+            c && c.instance_id !== cardDict.instance_id && !cardHasSublimeFlag(c)
+        ));
         if (otherCards.length) {
             const options = otherCards.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_discard_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < otherCards.length) choiceResult = { target_instance_id: otherCards[sel].instance_id };
+        } else if (choiceParams.continue_on_cancel) {
+            choiceResult = { cancelled: true };
         }
     } else if (choiceType === 'choose_card_from_deck') {
         const deck = (gameState.you || {}).deck || [];
@@ -24116,6 +24628,23 @@ async function init() {
     });
     window.addEventListener('pagehide', stopSocialNetworkActivity);
     window.addEventListener('beforeunload', stopSocialNetworkActivity);
+    if ($('btn-open-feedback')) $('btn-open-feedback').addEventListener('click', () => toggleFeedbackModal(true));
+    if ($('btn-feedback-close')) $('btn-feedback-close').addEventListener('click', () => toggleFeedbackModal(false));
+    document.querySelectorAll('[data-feedback-tab]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            activeFeedbackTab = btn.dataset.feedbackTab || 'send';
+            activeFeedbackThreadId = null;
+            feedbackState.messages = [];
+            await loadFeedbackThreads(activeFeedbackTab === 'staff');
+        });
+    });
+    if ($('btn-feedback-send')) $('btn-feedback-send').addEventListener('click', sendFeedbackMessage);
+    if ($('feedback-message-input')) {
+        $('feedback-message-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendFeedbackMessage();
+        });
+    }
+    if ($('feedback-status-select')) $('feedback-status-select').addEventListener('change', updateFeedbackStatus);
     if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
     if ($('btn-friends-popover-close')) $('btn-friends-popover-close').addEventListener('click', () => toggleFriendsPopover(false));
     if ($('btn-social-detail-close')) $('btn-social-detail-close').addEventListener('click', () => toggleSocialDetailModal(false));
@@ -24178,6 +24707,10 @@ async function init() {
         if (dmThreadBtn) {
             event.preventDefault();
             toggleSocialDetailModal(true, 'dm');
+            activeDmThreadId = dmThreadBtn.dataset.dmThread;
+            clearDmUnreadForThread(dmThreadBtn.dataset.dmThread);
+            renderDmThreads();
+            renderSocialSelectorList();
             openDmThread(dmThreadBtn.dataset.dmThread, { markRead: true, force: true });
             return;
         }
@@ -24185,6 +24718,12 @@ async function init() {
         if (dmUserBtn) {
             event.preventDefault();
             startDmToUser(dmUserBtn.dataset.dmOpenUser, dmUserBtn.dataset.dmOpenName || '');
+            return;
+        }
+        const feedbackThreadBtn = event.target.closest('[data-feedback-thread]');
+        if (feedbackThreadBtn) {
+            event.preventDefault();
+            openFeedbackThread(feedbackThreadBtn.dataset.feedbackThread);
         }
     });
     if ($('btn-account-replays-refresh')) $('btn-account-replays-refresh').addEventListener('click', loadAccountReplays);
@@ -24285,7 +24824,7 @@ async function init() {
     if ($('settings-tab-social')) $('settings-tab-social').addEventListener('click', () => setSettingsTab('social'));
     if ($('settings-tab-audio')) $('settings-tab-audio').addEventListener('click', () => setSettingsTab('audio'));
     bindAudioSettingsControls();
-    ['settings-accept-friend-requests', 'settings-searchable-by-nickname', 'settings-searchable-by-player-id'].forEach((id) => {
+    ['settings-accept-friend-requests', 'settings-searchable-by-nickname', 'settings-searchable-by-player-id', 'settings-allow-guest-spectators'].forEach((id) => {
         const input = $(id);
         if (input) input.addEventListener('change', saveSocialSettings);
     });

@@ -257,6 +257,44 @@
     </div>
   </div>
 </div>
+<div id="feedback-modal" class="feedback-modal hidden">
+  <div class="feedback-inner">
+    <div class="account-popover-head">
+      <div id="feedback-title" class="account-popover-title">反馈</div>
+      <button id="btn-feedback-close" class="account-close-btn" type="button">×</button>
+    </div>
+    <div class="feedback-tabs">
+      <button id="feedback-tab-send" class="feedback-tab active" type="button" data-feedback-tab="send">发送反馈</button>
+      <button id="feedback-tab-staff" class="feedback-tab hidden" type="button" data-feedback-tab="staff">查看反馈</button>
+    </div>
+    <div class="feedback-body">
+      <aside id="feedback-thread-list" class="feedback-thread-list"></aside>
+      <section class="feedback-chat">
+        <div class="feedback-compose-row">
+          <select id="feedback-category" aria-label="反馈分类">
+            <option value="bug">Bug</option>
+            <option value="suggestion">建议</option>
+            <option value="account">账号问题</option>
+            <option value="report">举报/纠纷</option>
+            <option value="other">其他</option>
+          </select>
+          <input id="feedback-title-input" type="text" maxlength="80" placeholder="标题">
+          <select id="feedback-status-select" class="hidden" aria-label="反馈状态">
+            <option value="open">未处理</option>
+            <option value="pending">已回复</option>
+            <option value="closed">已关闭</option>
+          </select>
+        </div>
+        <div id="feedback-message-list" class="feedback-message-list"></div>
+        <div class="feedback-input-row">
+          <input id="feedback-message-input" type="text" maxlength="200" placeholder="输入反馈内容...">
+          <button id="btn-feedback-send" class="mini-btn" type="button">发送</button>
+        </div>
+        <p id="feedback-error" class="error-text"></p>
+      </section>
+    </div>
+  </div>
+</div>
 <div id="view-skin" class="view hidden">
   <div class="skin-editor-page">
     <div class="skin-editor-panel">
@@ -341,6 +379,7 @@
 <button id="btn-solo-training" class="btn btn-magic">单人训练场</button>
 </div>
 <div class="form-row login-utility-row">
+<button id="btn-open-feedback" class="btn-settings">反馈</button>
 <button id="btn-open-about" class="btn-settings">关于</button>
 </div>
 </div>
@@ -789,6 +828,10 @@
 <input type="checkbox" id="settings-searchable-by-player-id" checked>
 <label id="settings-label-searchable-by-player-id" for="settings-searchable-by-player-id">允许通过ID添加我</label>
 </div>
+<div class="settings-check-row">
+<input type="checkbox" id="settings-allow-guest-spectators">
+<label id="settings-label-allow-guest-spectators" for="settings-allow-guest-spectators">允许游客观战</label>
+</div>
 <p id="settings-social-status" class="info-text"></p>
 </div>
 <div id="settings-page-audio" class="settings-page settings-section hidden">
@@ -859,6 +902,9 @@
 <h4 id="credits-design-title">设计</h4>
 <p>Eric</p>
 <p>NetherDog</p>
+<p>Stickerbug</p>
+<p>champion</p>
+<p>huanxiang0273</p>
 </section>
 <section>
 <h4 id="credits-art-title">美工</h4>
@@ -874,7 +920,7 @@
 <section>
 <h4 id="credits-special-title">特别鸣谢</h4>
 <p>CommonGoldIngot</p>
-<p>2EX7427</p>
+<p>RESTART</p>
 </section>
 </div>
 <div class="settings-footer">

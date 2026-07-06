@@ -1467,6 +1467,10 @@ body {
   line-height: 1.45;
 }
 
+.friend-empty {
+  padding: 8px 10px;
+}
+
 .friend-notice {
   color: var(--bloom);
   font-weight: 800;
@@ -1693,7 +1697,7 @@ body {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 7px;
-  padding: 8px;
+  padding: 10px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   background: var(--bg-secondary, #f5f1e8);
@@ -1712,6 +1716,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 4px;
 }
 
 .dm-message {
@@ -1747,6 +1752,7 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
+  align-items: stretch;
 }
 
 .dm-input-row input {
@@ -1862,7 +1868,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-right: 2px;
+  padding: 2px 4px 2px 2px;
 }
 
 .friend-section-title.compact {
@@ -1884,6 +1890,7 @@ body {
   height: 100%;
   min-height: 0;
   overflow: auto;
+  padding: 10px;
   background: var(--bg-primary, #fffaf0);
 }
 
@@ -1893,10 +1900,201 @@ body {
 
 .social-detail-content .dm-layout {
   grid-template-columns: minmax(0, 1fr);
+  min-height: 100%;
 }
 
 .social-detail-content .dm-thread-list {
   display: none;
+}
+
+.feedback-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 4210;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(20, 24, 28, 0.36);
+  backdrop-filter: blur(3px);
+}
+
+.feedback-modal.hidden {
+  display: none;
+}
+
+.feedback-inner {
+  width: min(900px, calc(100vw - 28px));
+  height: min(620px, calc(100vh - 44px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary, #f5f1e8);
+  box-shadow: var(--shadow-lg);
+}
+
+.feedback-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.feedback-tab {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  padding: 7px 12px;
+  font-family: var(--font-main);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.feedback-tab.active {
+  color: var(--text-primary);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.feedback-body {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.feedback-thread-list,
+.feedback-chat {
+  min-height: 0;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+}
+
+.feedback-thread-list {
+  overflow: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.feedback-thread-item {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  text-align: left;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.feedback-thread-item.active {
+  border-color: var(--bloom);
+}
+
+.feedback-thread-title,
+.feedback-thread-meta,
+.feedback-thread-preview {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feedback-thread-title {
+  font-weight: 900;
+}
+
+.feedback-thread-meta,
+.feedback-thread-preview {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.feedback-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #d93636;
+  vertical-align: middle;
+}
+
+.feedback-chat {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+  padding: 8px;
+}
+
+.feedback-compose-row,
+.feedback-input-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.feedback-message-list {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+}
+
+.feedback-message,
+.dm-message {
+  display: flex;
+}
+
+.feedback-message.self,
+.dm-message.self {
+  justify-content: flex-end;
+}
+
+.feedback-bubble,
+.dm-bubble {
+  max-width: min(76%, 520px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  padding: 7px 9px;
+  overflow-wrap: anywhere;
+}
+
+.feedback-message.self .feedback-bubble,
+.dm-message.self .dm-bubble {
+  background: color-mix(in srgb, var(--bloom) 14%, var(--bg-card));
+}
+
+.feedback-sender,
+.dm-sender-name {
+  margin-bottom: 3px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--text-muted);
+}
+
+.feedback-message-time,
+.dm-message-time {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  opacity: 0.68;
+}
+
+.feedback-text {
+  white-space: pre-wrap;
 }
 
 .friend-detail-profile {
@@ -1904,7 +2102,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 12px;
+  padding: 14px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   background: var(--bg-primary);
@@ -2722,6 +2920,7 @@ body {
 }
 
 .login-utility-row .btn-settings {
+  position: relative;
   width: min(220px, 100%);
   min-width: 0;
   white-space: nowrap;
@@ -2729,6 +2928,24 @@ body {
 
 #btn-open-about::before {
   display: none;
+}
+
+#btn-open-feedback.has-badge::after {
+  content: attr(data-badge);
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #d93636;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--bg-primary);
 }
 
 .home-footer {
@@ -8521,6 +8738,34 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   }
 }
 
+@keyframes combatFloatRiseMobileCanvas {
+  0% {
+    opacity: 0;
+    transform: translate(-92%, -36%) rotate(var(--classic-mobile-rotate, 0deg)) scale(0.72);
+    filter: brightness(1.25);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(calc(-92% + var(--float-x-enter, 0px)), -58%) rotate(var(--classic-mobile-rotate, 0deg)) scale(1.16);
+    filter: brightness(1.18);
+  }
+  24% {
+    opacity: 1;
+    transform: translate(calc(-92% + var(--float-x, 0px)), -72%) rotate(var(--classic-mobile-rotate, 0deg)) scale(0.98);
+    filter: brightness(1);
+  }
+  72% {
+    opacity: 1;
+    transform: translate(calc(-92% + var(--float-x, 0px)), -114%) rotate(var(--classic-mobile-rotate, 0deg)) scale(1);
+    filter: brightness(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-92% + var(--float-x, 0px)), -154%) rotate(var(--classic-mobile-rotate, 0deg)) scale(0.94);
+    filter: brightness(0.96);
+  }
+}
+
 .log-entry {
   padding: 1px 0;
   word-break: break-word;
@@ -9421,6 +9666,24 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   0% { opacity: 0; transform: translate(-50%, calc(-50% + 12px)) scale(0.94); filter: saturate(0.96); }
   62% { opacity: 1; transform: translate(-50%, calc(-50% - 2px)) scale(1.025); filter: saturate(1.03); }
   100% { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: saturate(1); }
+}
+
+@keyframes centeredPanelPopInMobileCanvas {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 12px)) rotate(var(--classic-mobile-rotate, 0deg)) scale(calc(var(--classic-mobile-scale, 1) * 0.94));
+    filter: saturate(0.96);
+  }
+  62% {
+    opacity: 1;
+    transform: translate(-50%, calc(-50% - 2px)) rotate(var(--classic-mobile-rotate, 0deg)) scale(calc(var(--classic-mobile-scale, 1) * 1.025));
+    filter: saturate(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(var(--classic-mobile-rotate, 0deg)) scale(var(--classic-mobile-scale, 1));
+    filter: saturate(1);
+  }
 }
 
 @keyframes popoverDropIn {
@@ -16914,8 +17177,9 @@ html[data-ui-style="minimal"] .btn-end-turn {
   }
 }
 
-/* Classic mobile stage: keep the exact 4:3 battle canvas and only scale/rotate
-   the whole canvas.  No responsive stretching is allowed here. */
+/* Classic mobile stage: keep a fixed 16:9 battle canvas and scale/rotate the
+   whole canvas.  Internal touch-only sizing below makes the layout readable
+   without distorting card proportions. */
 @media (hover: none) and (pointer: coarse) {
   html[data-ui-style="classic"] #view-game {
     position: fixed;
@@ -17109,13 +17373,13 @@ html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:n
 }
 
 html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-fighter {
-  --classic-fighter-scale: 0.91;
-  gap: 7px;
-  padding: 6px 8px;
+  --classic-fighter-scale: 0.96;
+  gap: 8px;
+  padding: 5px 7px;
 }
 
 html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden).is-2v2 .classic-fighter {
-  --classic-fighter-scale: 0.7;
+  --classic-fighter-scale: 0.74;
 }
 
 html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-intent-badge,
@@ -17135,8 +17399,8 @@ html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:n
 }
 
 html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card {
-  width: 104px;
-  margin-inline: -18px;
+  width: 116px;
+  margin-inline: -22px;
   transform: translateY(var(--fan-y, 0)) rotate(var(--fan-rot, 0));
 }
 
@@ -17156,6 +17420,17 @@ html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:n
   padding: 8px 12px;
 }
 
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-log-drawer,
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-log-drawer input,
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-log-drawer button {
+  font-size: 15px;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-log-content {
+  font-size: 14px;
+  line-height: 1.38;
+}
+
 html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-extra-controls {
   flex-wrap: wrap;
   overflow: visible;
@@ -17171,15 +17446,15 @@ html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:n
   min-height: 25px !important;
   padding: 4px 7px !important;
   gap: 4px !important;
-  font-size: 10.5px !important;
+  font-size: 11.5px !important;
   line-height: 1.2 !important;
   flex: 0 1 auto;
 }
 
 html.classic-mobile-canvas[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-end-turn {
-  width: min(210px, 92%);
-  min-height: 76px;
-  font-size: 16px;
+  width: min(230px, 94%);
+  min-height: 86px;
+  font-size: 18px;
 }
 
 html.classic-mobile-canvas[data-ui-style="classic"] .term-intro-overlay {
@@ -17225,9 +17500,9 @@ html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .game-container {
   aspect-ratio: 16 / 9;
   transform: translate(-50%, -50%) rotate(var(--classic-mobile-rotate, 0deg)) scale(var(--classic-mobile-scale, 1));
   transform-origin: center center;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  grid-template-rows: minmax(150px, auto) minmax(0, 1fr) minmax(230px, auto);
-  column-gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 390px;
+  grid-template-rows: minmax(160px, auto) minmax(0, 1fr) minmax(250px, auto);
+  column-gap: 10px;
 }
 
 html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .opp-section,
@@ -17245,8 +17520,8 @@ html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .battle-log {
 
 html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .battle-log .log-content {
   min-height: 0;
-  font-size: 13px;
-  line-height: 1.36;
+  font-size: 14.5px;
+  line-height: 1.4;
 }
 
 html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .hand-area {
@@ -17254,8 +17529,18 @@ html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .hand-area {
   overflow: visible;
 }
 
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .hand-area .card {
+  width: clamp(62px, min(calc((100% - 34px) / var(--hand-card-slots, 7.35)), calc((100vh - 240px) * 63 / 88)), 156px);
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .player-section,
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .opp-section,
 html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .controls-bar {
-  min-height: 54px;
+  font-size: 15px;
+}
+
+html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .controls-bar {
+  min-height: 62px;
 }
 
 html.minimal-mobile-canvas[data-ui-style="minimal"] #view-game .mobile-play-confirm {
@@ -17284,6 +17569,82 @@ html.minimal-mobile-canvas[data-ui-style="minimal"] .term-intro-dialog {
 
 html.minimal-mobile-canvas[data-ui-style="minimal"] .term-intro-panel {
   max-height: min(560px, calc(900px - 128px));
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] #modal.active,
+html.classic-mobile-canvas[data-ui-style="classic"] .modal.active,
+html.classic-mobile-canvas[data-ui-style="classic"] .afk-check-overlay,
+html.classic-mobile-canvas[data-ui-style="classic"] .game-alert.active,
+html.classic-mobile-canvas[data-ui-style="classic"] .game-prompt.active,
+html.classic-mobile-canvas[data-ui-style="classic"] .tutorial-overlay:not(.hidden),
+html.classic-mobile-canvas[data-ui-style="classic"] .account-replay-setup-overlay:not(.hidden),
+html.minimal-mobile-canvas[data-ui-style="minimal"] #modal.active,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .modal.active,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .afk-check-overlay,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .game-alert.active,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .game-prompt.active,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .tutorial-overlay:not(.hidden),
+html.minimal-mobile-canvas[data-ui-style="minimal"] .account-replay-setup-overlay:not(.hidden) {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  width: 1600px;
+  height: 900px;
+  min-width: 1600px;
+  min-height: 900px;
+  transform: translate(-50%, -50%) rotate(var(--classic-mobile-rotate, 0deg)) scale(var(--classic-mobile-scale, 1));
+  transform-origin: center center;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] .response-panel.visible,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .response-panel.visible {
+  transform: translate(-50%, -50%) rotate(var(--classic-mobile-rotate, 0deg)) scale(var(--classic-mobile-scale, 1));
+  transform-origin: center center;
+  animation-name: centeredPanelPopInMobileCanvas;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] .action-toast.active,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .action-toast.active {
+  transform: translate(-50%, 0) rotate(var(--classic-mobile-rotate, 0deg)) scale(var(--classic-mobile-scale, 1));
+  transform-origin: center top;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] .target-picker-overlay,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .target-picker-overlay,
+html.classic-mobile-canvas[data-ui-style="classic"] .card-drop-overlay,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .card-drop-overlay {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  width: 1600px;
+  height: 900px;
+  min-width: 1600px;
+  min-height: 900px;
+  transform: translate(-50%, -50%) rotate(var(--classic-mobile-rotate, 0deg)) scale(var(--classic-mobile-scale, 1));
+  transform-origin: center center;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] .target-picker-panel,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .target-picker-panel {
+  width: min(460px, calc(1600px - 56px));
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] .mobile-play-confirm,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .mobile-play-confirm {
+  transform: rotate(var(--classic-mobile-rotate, 0deg)) scale(var(--classic-mobile-scale, 1));
+  transform-origin: center center;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] .floating-card-preview,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .floating-card-preview {
+  transform: rotate(var(--classic-mobile-rotate, 0deg));
+  transform-origin: center center;
+}
+
+html.classic-mobile-canvas[data-ui-style="classic"] .combat-float,
+html.minimal-mobile-canvas[data-ui-style="minimal"] .combat-float {
+  animation-name: combatFloatRiseMobileCanvas;
+  transform-origin: center center;
 }
 
 /* Final override: chips embedded in card effect text follow the surrounding

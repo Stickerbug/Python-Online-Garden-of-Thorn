@@ -383,6 +383,8 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN searchable_by_nickname INTEGER DEFAULT 1')
         if 'searchable_by_player_id' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN searchable_by_player_id INTEGER DEFAULT 1')
+        if 'allow_guest_spectators' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN allow_guest_spectators INTEGER DEFAULT 0')
         if 'false_report_count' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN false_report_count INTEGER DEFAULT 0')
         if 'skin_json' not in existing_columns:
@@ -714,6 +716,66 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_weekly_rate ON card_draft_win_stats_weekly(week_start, win_games, picked_games)')
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS opening_event_pick_stats (
+                mode TEXT NOT NULL,
+                event_id TEXT NOT NULL,
+                shown_count INTEGER NOT NULL DEFAULT 0,
+                picked_count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (mode, event_id)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_opening_event_pick_stats_mode ON opening_event_pick_stats(mode)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_opening_event_pick_stats_rate ON opening_event_pick_stats(picked_count, shown_count)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS opening_event_win_stats (
+                mode TEXT NOT NULL,
+                event_id TEXT NOT NULL,
+                picked_games INTEGER NOT NULL DEFAULT 0,
+                win_games INTEGER NOT NULL DEFAULT 0,
+                draw_games INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (mode, event_id)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_opening_event_win_stats_mode ON opening_event_win_stats(mode)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_opening_event_win_stats_rate ON opening_event_win_stats(win_games, picked_games)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS opening_event_pick_stats_weekly (
+                week_start TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                event_id TEXT NOT NULL,
+                shown_count INTEGER NOT NULL DEFAULT 0,
+                picked_count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (week_start, mode, event_id)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_opening_event_pick_stats_weekly_week_mode ON opening_event_pick_stats_weekly(week_start, mode)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_opening_event_pick_stats_weekly_rate ON opening_event_pick_stats_weekly(week_start, picked_count, shown_count)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS opening_event_win_stats_weekly (
+                week_start TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                event_id TEXT NOT NULL,
+                picked_games INTEGER NOT NULL DEFAULT 0,
+                win_games INTEGER NOT NULL DEFAULT 0,
+                draw_games INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (week_start, mode, event_id)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_opening_event_win_stats_weekly_week_mode ON opening_event_win_stats_weekly(week_start, mode)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_opening_event_win_stats_weekly_rate ON opening_event_win_stats_weekly(week_start, win_games, picked_games)')
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 reporter_user_id INTEGER NOT NULL,
@@ -858,6 +920,44 @@ def init_db():
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_dm_messages_thread ON dm_messages(thread_id, created_at)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_dm_messages_recipient ON dm_messages(recipient_user_id, read_at, created_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS feedback_threads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                category TEXT,
+                title TEXT,
+                status TEXT DEFAULT 'open',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                user_read_at TEXT,
+                staff_read_at TEXT,
+                closed_at TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_threads_user ON feedback_threads(user_id, updated_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_threads_status ON feedback_threads(status, updated_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS feedback_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                thread_id INTEGER NOT NULL,
+                sender_user_id INTEGER NOT NULL,
+                sender_name TEXT NOT NULL,
+                sender_role TEXT,
+                message TEXT NOT NULL,
+                normalized_message TEXT,
+                risk_level INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                hidden INTEGER DEFAULT 0,
+                FOREIGN KEY(thread_id) REFERENCES feedback_threads(id) ON DELETE CASCADE,
+                FOREIGN KEY(sender_user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_messages_thread ON feedback_messages(thread_id, created_at)')
         conn.commit()
 
 
@@ -977,6 +1077,7 @@ def row_to_user(row):
         'accept_friend_requests': bool(row['accept_friend_requests']) if 'accept_friend_requests' in row.keys() else True,
         'searchable_by_nickname': bool(row['searchable_by_nickname']) if 'searchable_by_nickname' in row.keys() else True,
         'searchable_by_player_id': bool(row['searchable_by_player_id']) if 'searchable_by_player_id' in row.keys() else True,
+        'allow_guest_spectators': bool(row['allow_guest_spectators']) if 'allow_guest_spectators' in row.keys() else False,
         'false_report_count': int(row['false_report_count'] or 0) if 'false_report_count' in row.keys() else 0,
         'banned': bool(row['banned']) if 'banned' in row.keys() else False,
         'ban_reason': row['ban_reason'] if 'ban_reason' in row.keys() else None,
@@ -1846,6 +1947,7 @@ def list_lobby_chat_entries(beta_mode=False, limit=500):
             'type': 'chat',
             'id': row['id'],
             'message_id': row['id'],
+            'user_id': row['sender_user_id'],
             'nickname': row['sender_name'] or '',
             'text': row['message'] or '',
             'chat_channel': row['channel'] or 'public',
@@ -2628,6 +2730,21 @@ CARD_DRAFT_STAT_SORTS = {
 }
 
 
+OPENING_EVENT_STAT_SORTS = {
+    'mode': 'mode',
+    'event_id': 'event_id',
+    'shown_count': 'shown_count',
+    'picked_count': 'picked_count',
+    'pick_rate': 'CASE WHEN shown_count > 0 THEN CAST(picked_count AS REAL) / shown_count ELSE 0 END',
+    'picked_games': 'picked_games',
+    'win_games': 'win_games',
+    'draw_games': 'draw_games',
+    'event_win_rate': 'CASE WHEN picked_games > 0 THEN CAST(win_games AS REAL) / picked_games ELSE 0 END',
+    'winner_pick_rate': 'CASE WHEN picked_count > 0 THEN CAST(win_games AS REAL) / picked_count ELSE 0 END',
+    'updated_at': 'updated_at',
+}
+
+
 def record_card_draft_pick(mode, option_ids, picked_id):
     mode_key = str(mode or '').strip()
     if mode_key not in ('1v1', '2v2'):
@@ -2723,6 +2840,124 @@ def record_card_draft_counts(mode, card_counts):
                 updated_at = excluded.updated_at
             ''',
             [(week_start, mode_key, card_id, shown_inc, picked_inc, now) for card_id, shown_inc, picked_inc in rows],
+        )
+        conn.commit()
+    return True
+
+
+def record_opening_event_pick_counts(mode, event_counts):
+    mode_key = str(mode or '').strip()
+    if mode_key not in ('1v1', '2v2') or not isinstance(event_counts, dict):
+        return False
+    rows = []
+    for raw_id, counts in event_counts.items():
+        event_id = str(raw_id or '').strip()
+        if not event_id:
+            continue
+        if isinstance(counts, dict):
+            shown_inc = counts.get('shown', 0)
+            picked_inc = counts.get('picked', 0)
+        else:
+            try:
+                shown_inc, picked_inc = counts
+            except Exception:
+                continue
+        try:
+            shown_inc = int(shown_inc or 0)
+            picked_inc = int(picked_inc or 0)
+        except (TypeError, ValueError):
+            continue
+        if shown_inc <= 0 and picked_inc <= 0:
+            continue
+        rows.append((event_id, shown_inc, picked_inc))
+    if not rows:
+        return False
+    now = utc_now()
+    week_start = current_week_start()
+    with get_db_connection() as conn:
+        conn.executemany(
+            '''
+            INSERT INTO opening_event_pick_stats (mode, event_id, shown_count, picked_count, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(mode, event_id) DO UPDATE SET
+                shown_count = shown_count + excluded.shown_count,
+                picked_count = picked_count + excluded.picked_count,
+                updated_at = excluded.updated_at
+            ''',
+            [(mode_key, event_id, shown_inc, picked_inc, now) for event_id, shown_inc, picked_inc in rows],
+        )
+        conn.executemany(
+            '''
+            INSERT INTO opening_event_pick_stats_weekly (week_start, mode, event_id, shown_count, picked_count, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(week_start, mode, event_id) DO UPDATE SET
+                shown_count = shown_count + excluded.shown_count,
+                picked_count = picked_count + excluded.picked_count,
+                updated_at = excluded.updated_at
+            ''',
+            [(week_start, mode_key, event_id, shown_inc, picked_inc, now) for event_id, shown_inc, picked_inc in rows],
+        )
+        conn.commit()
+    return True
+
+
+def record_opening_event_win_result(mode, player_event_ids, winner_indices=None, result='finished'):
+    mode_key = str(mode or '').strip()
+    if mode_key not in ('1v1', '2v2') or not isinstance(player_event_ids, (list, tuple)):
+        return False
+    winner_set = set()
+    for raw_idx in winner_indices or []:
+        try:
+            winner_set.add(int(raw_idx))
+        except (TypeError, ValueError):
+            continue
+    is_draw = str(result or '').lower() == 'draw'
+    rows = {}
+    for pidx, raw_event_id in enumerate(player_event_ids):
+        event_id = str(raw_event_id or '').strip()
+        if not event_id or event_id.lower() == 'none':
+            continue
+        picked_inc, win_inc, draw_inc = rows.get(event_id, (0, 0, 0))
+        picked_inc += 1
+        if is_draw:
+            draw_inc += 1
+        elif pidx in winner_set:
+            win_inc += 1
+        rows[event_id] = (picked_inc, win_inc, draw_inc)
+    if not rows:
+        return False
+    now = utc_now()
+    week_start = current_week_start()
+    with get_db_connection() as conn:
+        conn.executemany(
+            '''
+            INSERT INTO opening_event_win_stats (mode, event_id, picked_games, win_games, draw_games, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(mode, event_id) DO UPDATE SET
+                picked_games = picked_games + excluded.picked_games,
+                win_games = win_games + excluded.win_games,
+                draw_games = draw_games + excluded.draw_games,
+                updated_at = excluded.updated_at
+            ''',
+            [
+                (mode_key, event_id, picked_inc, win_inc, draw_inc, now)
+                for event_id, (picked_inc, win_inc, draw_inc) in rows.items()
+            ],
+        )
+        conn.executemany(
+            '''
+            INSERT INTO opening_event_win_stats_weekly (week_start, mode, event_id, picked_games, win_games, draw_games, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(week_start, mode, event_id) DO UPDATE SET
+                picked_games = picked_games + excluded.picked_games,
+                win_games = win_games + excluded.win_games,
+                draw_games = draw_games + excluded.draw_games,
+                updated_at = excluded.updated_at
+            ''',
+            [
+                (week_start, mode_key, event_id, picked_inc, win_inc, draw_inc, now)
+                for event_id, (picked_inc, win_inc, draw_inc) in rows.items()
+            ],
         )
         conn.commit()
     return True
@@ -3108,6 +3343,164 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
         'limit': safe_limit,
         'offset': safe_offset,
         'sort': sort_key if sort_key in CARD_DRAFT_STAT_SORTS else 'pick_rate',
+        'order': 'asc' if direction == 'ASC' else 'desc',
+        'merge_modes': merge,
+        'scope': scope_key,
+        'week_start': selected_week,
+        'winner_only': winner_filter,
+    }
+
+
+def list_opening_event_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0, merge_modes=False, scope='total', week_start=None, winner_only=False):
+    mode_key = str(mode or '').strip()
+    sort_key = str(sort or 'pick_rate')
+    sort_expr = OPENING_EVENT_STAT_SORTS.get(sort_key, OPENING_EVENT_STAT_SORTS['pick_rate'])
+    direction = 'ASC' if str(order or '').lower() == 'asc' else 'DESC'
+    try:
+        safe_limit = max(1, min(int(limit), 1000))
+    except (TypeError, ValueError):
+        safe_limit = 300
+    try:
+        safe_offset = max(0, int(offset))
+    except (TypeError, ValueError):
+        safe_offset = 0
+    merge = bool(merge_modes)
+    mode_filter = mode_key if mode_key in ('1v1', '2v2') else ''
+    mode_where = 'WHERE mode = ?' if mode_filter else ''
+    mode_params = [mode_filter] if mode_filter else []
+    scope_key = 'week' if str(scope or '').lower() in ('week', 'weekly') else 'total'
+    pick_table = 'opening_event_pick_stats_weekly' if scope_key == 'week' else 'opening_event_pick_stats'
+    win_table = 'opening_event_win_stats_weekly' if scope_key == 'week' else 'opening_event_win_stats'
+    winner_filter = bool(winner_only)
+    selected_week = week_start_for_iso(week_start) if scope_key == 'week' else ''
+    if scope_key == 'week':
+        if mode_filter:
+            mode_where = 'WHERE week_start = ? AND mode = ?'
+            mode_params = [selected_week, mode_filter]
+        else:
+            mode_where = 'WHERE week_start = ?'
+            mode_params = [selected_week]
+    order_clause = f'{sort_expr} {direction}, shown_count DESC, event_id ASC'
+    with get_db_connection() as conn:
+        if merge:
+            base_query = f'''
+                WITH picks AS (
+                    SELECT
+                        'merged' AS mode,
+                        event_id,
+                        SUM(shown_count) AS shown_count,
+                        SUM(picked_count) AS picked_count,
+                        MAX(updated_at) AS updated_at
+                    FROM {pick_table}
+                    {mode_where}
+                    GROUP BY event_id
+                ),
+                wins AS (
+                    SELECT
+                        'merged' AS mode,
+                        event_id,
+                        SUM(picked_games) AS picked_games,
+                        SUM(win_games) AS win_games,
+                        SUM(draw_games) AS draw_games,
+                        MAX(updated_at) AS win_updated_at
+                    FROM {win_table}
+                    {mode_where}
+                    GROUP BY event_id
+                )
+                SELECT
+                    {'wins.mode' if winner_filter else 'picks.mode'} AS mode,
+                    {'wins.event_id' if winner_filter else 'picks.event_id'} AS event_id,
+                    COALESCE(picks.shown_count, 0) AS shown_count,
+                    COALESCE(picks.picked_count, 0) AS picked_count,
+                    COALESCE(picks.updated_at, '') AS updated_at,
+                    COALESCE(wins.picked_games, 0) AS picked_games,
+                    COALESCE(wins.win_games, 0) AS win_games,
+                    COALESCE(wins.draw_games, 0) AS draw_games,
+                    COALESCE(wins.win_updated_at, '') AS win_updated_at,
+                    CASE WHEN COALESCE(picks.shown_count, 0) > 0 THEN CAST(COALESCE(picks.picked_count, 0) AS REAL) / picks.shown_count * 100 ELSE 0 END AS pick_rate,
+                    CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS event_win_rate,
+                    CASE WHEN COALESCE(picks.picked_count, 0) > 0 THEN CAST(COALESCE(wins.win_games, 0) AS REAL) / picks.picked_count * 100 ELSE 0 END AS winner_pick_rate
+                FROM {'wins LEFT JOIN picks ON picks.event_id = wins.event_id WHERE wins.win_games > 0' if winner_filter else 'picks LEFT JOIN wins ON wins.event_id = picks.event_id'}
+            '''
+            params = mode_params + mode_params
+        else:
+            pick_mode_where = mode_where.replace('week_start', 'picks.week_start').replace('mode', 'picks.mode')
+            if winner_filter:
+                wins_mode_where = mode_where.replace('week_start', 'wins.week_start').replace('mode', 'wins.mode')
+                winner_where = f'{wins_mode_where} AND wins.win_games > 0' if wins_mode_where else 'WHERE wins.win_games > 0'
+                base_query = f'''
+                    SELECT
+                        wins.mode,
+                        wins.event_id,
+                        COALESCE(picks.shown_count, 0) AS shown_count,
+                        COALESCE(picks.picked_count, 0) AS picked_count,
+                        COALESCE(picks.updated_at, '') AS updated_at,
+                        COALESCE(wins.picked_games, 0) AS picked_games,
+                        COALESCE(wins.win_games, 0) AS win_games,
+                        COALESCE(wins.draw_games, 0) AS draw_games,
+                        COALESCE(wins.updated_at, '') AS win_updated_at,
+                        CASE WHEN COALESCE(picks.shown_count, 0) > 0 THEN CAST(COALESCE(picks.picked_count, 0) AS REAL) / picks.shown_count * 100 ELSE 0 END AS pick_rate,
+                        CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS event_win_rate,
+                        CASE WHEN COALESCE(picks.picked_count, 0) > 0 THEN CAST(COALESCE(wins.win_games, 0) AS REAL) / picks.picked_count * 100 ELSE 0 END AS winner_pick_rate
+                    FROM {win_table} AS wins
+                    LEFT JOIN {pick_table} AS picks
+                        ON picks.mode = wins.mode AND picks.event_id = wins.event_id
+                        {'AND picks.week_start = wins.week_start' if scope_key == 'week' else ''}
+                    {winner_where}
+                '''
+            else:
+                base_query = f'''
+                    SELECT
+                        picks.mode,
+                        picks.event_id,
+                        picks.shown_count,
+                        picks.picked_count,
+                        picks.updated_at,
+                        COALESCE(wins.picked_games, 0) AS picked_games,
+                        COALESCE(wins.win_games, 0) AS win_games,
+                        COALESCE(wins.draw_games, 0) AS draw_games,
+                        COALESCE(wins.updated_at, '') AS win_updated_at,
+                        CASE WHEN picks.shown_count > 0 THEN CAST(picks.picked_count AS REAL) / picks.shown_count * 100 ELSE 0 END AS pick_rate,
+                        CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS event_win_rate,
+                        CASE WHEN picks.picked_count > 0 THEN CAST(COALESCE(wins.win_games, 0) AS REAL) / picks.picked_count * 100 ELSE 0 END AS winner_pick_rate
+                    FROM {pick_table} AS picks
+                    LEFT JOIN {win_table} AS wins
+                        ON wins.mode = picks.mode AND wins.event_id = picks.event_id
+                        {'AND wins.week_start = picks.week_start' if scope_key == 'week' else ''}
+                    {pick_mode_where}
+                '''
+            params = mode_params
+        total = conn.execute(f'SELECT COUNT(*) FROM ({base_query})', params).fetchone()[0]
+        rows = conn.execute(
+            f'''
+            SELECT * FROM ({base_query})
+            ORDER BY {order_clause}
+            LIMIT ? OFFSET ?
+            ''',
+            params + [safe_limit, safe_offset],
+        ).fetchall()
+    return {
+        'items': [
+            {
+                'mode': row['mode'],
+                'event_id': row['event_id'],
+                'shown_count': row['shown_count'],
+                'picked_count': row['picked_count'],
+                'pick_rate': round(float(row['pick_rate'] or 0), 2),
+                'picked_games': row['picked_games'],
+                'win_games': row['win_games'],
+                'draw_games': row['draw_games'],
+                'event_win_rate': round(float(row['event_win_rate'] or 0), 2),
+                'winner_pick_rate': round(float(row['winner_pick_rate'] or 0), 2),
+                'updated_at': row['updated_at'],
+                'win_updated_at': row['win_updated_at'],
+            }
+            for row in rows
+        ],
+        'total': total,
+        'limit': safe_limit,
+        'offset': safe_offset,
+        'sort': sort_key if sort_key in OPENING_EVENT_STAT_SORTS else 'pick_rate',
         'order': 'asc' if direction == 'ASC' else 'desc',
         'merge_modes': merge,
         'scope': scope_key,
@@ -3535,6 +3928,7 @@ def get_user_social_settings(user_id):
         'accept_friend_requests': bool(user.get('accept_friend_requests')),
         'searchable_by_nickname': bool(user.get('searchable_by_nickname')),
         'searchable_by_player_id': bool(user.get('searchable_by_player_id')),
+        'allow_guest_spectators': bool(user.get('allow_guest_spectators')),
     }
 
 
@@ -3547,6 +3941,7 @@ def update_user_social_settings(user_id, settings):
         'accept_friend_requests',
         'searchable_by_nickname',
         'searchable_by_player_id',
+        'allow_guest_spectators',
     }
     updates = []
     params = []
@@ -3870,14 +4265,27 @@ def _get_or_create_dm_thread(conn, user_a, user_b):
     return conn.execute('SELECT * FROM dm_threads WHERE id = ?', (cur.lastrowid,)).fetchone()
 
 
-def _dm_message_row_to_dict(row):
+def _dm_message_row_to_dict(row, conn=None):
     if row is None:
         return None
+    sender_name = ''
+    sender_role = 'none'
+    if conn is not None:
+        try:
+            sender = conn.execute('SELECT * FROM users WHERE id = ?', (int(row['sender_user_id']),)).fetchone()
+            if sender is not None:
+                sender_name = sender['username'] or ''
+                sender_role = _role_type_for_user_conn(conn, sender['id'])
+        except Exception:
+            sender_name = ''
+            sender_role = 'none'
     return {
         'id': row['id'],
         'thread_id': row['thread_id'],
         'sender_user_id': row['sender_user_id'],
         'recipient_user_id': row['recipient_user_id'],
+        'sender_name': sender_name,
+        'sender_role': sender_role,
         'message': row['message'],
         'risk_level': row['risk_level'],
         'created_at': row['created_at'],
@@ -4013,7 +4421,7 @@ def get_dm_messages(user_id, thread_id, mark_read=True, limit=50):
             'thread_id': tid,
             'user': _basic_social_user(other),
             'friend_status': _friendship_status(conn, uid, other_id),
-            'messages': [_dm_message_row_to_dict(row) for row in reversed(rows)],
+            'messages': [_dm_message_row_to_dict(row, conn) for row in reversed(rows)],
             'unread_count': unread_count,
         }, None
 
@@ -4079,8 +4487,331 @@ def send_dm_message(sender_user_id, target_identifier=None, target_user_id=None,
         row = conn.execute('SELECT * FROM dm_messages WHERE id = ?', (cur.lastrowid,)).fetchone()
         data, _ = get_dm_messages(sender_id, thread['id'], mark_read=False, limit=100)
         data = data or {}
-        data['sent_message'] = _dm_message_row_to_dict(row)
+        data['sent_message'] = _dm_message_row_to_dict(row, conn)
         return data, None
+
+
+FEEDBACK_CATEGORIES = {'bug', 'suggestion', 'account', 'report', 'other'}
+FEEDBACK_STATUSES = {'open', 'pending', 'closed'}
+
+
+def _role_type_for_user_conn(conn, user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return 'none'
+    row = conn.execute('SELECT role_type, visible FROM user_roles WHERE user_id = ?', (uid,)).fetchone()
+    if row is None or not bool(row['visible']):
+        return 'none'
+    role = str(row['role_type'] or 'none').strip().lower()
+    return role if role in ROLE_TYPES else 'none'
+
+
+def feedback_is_staff(user_id):
+    with get_db_connection() as conn:
+        return _role_type_for_user_conn(conn, user_id) in {'admin', 'staff'}
+
+
+def _feedback_user(conn, user_id):
+    row = conn.execute('SELECT * FROM users WHERE id = ?', (int(user_id),)).fetchone()
+    if row is None or _user_row_is_deleted(row):
+        return None
+    data = _basic_social_user(row)
+    role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (int(user_id),)).fetchone()
+    if role_row is not None and bool(role_row['visible']):
+        data.update({
+            'role_type': str(role_row['role_type'] or 'none').strip().lower(),
+            'role_title': role_row['title'] or '',
+            'role_color': role_row['color'] or '',
+        })
+    else:
+        data.update({'role_type': 'none', 'role_title': '', 'role_color': ''})
+    return data
+
+
+def _feedback_thread_to_dict(conn, row, viewer_user_id=None, staff_view=False):
+    if row is None:
+        return None
+    owner = _feedback_user(conn, row['user_id'])
+    last = conn.execute(
+        '''
+        SELECT * FROM feedback_messages
+        WHERE thread_id = ? AND hidden = 0
+        ORDER BY id DESC LIMIT 1
+        ''',
+        (row['id'],),
+    ).fetchone()
+    if staff_view:
+        read_at = row['staff_read_at'] or ''
+        unread_row = conn.execute(
+            '''
+            SELECT 1 FROM feedback_messages
+            WHERE thread_id = ? AND hidden = 0 AND sender_user_id = ?
+              AND (? = '' OR created_at > ?)
+            LIMIT 1
+            ''',
+            (row['id'], row['user_id'], read_at, read_at),
+        ).fetchone()
+    else:
+        read_at = row['user_read_at'] or ''
+        unread_row = conn.execute(
+            '''
+            SELECT 1 FROM feedback_messages
+            WHERE thread_id = ? AND hidden = 0 AND sender_user_id <> ?
+              AND (? = '' OR created_at > ?)
+            LIMIT 1
+            ''',
+            (row['id'], int(viewer_user_id or row['user_id']), read_at, read_at),
+        ).fetchone()
+    return {
+        'id': row['id'],
+        'user_id': row['user_id'],
+        'user': owner,
+        'category': row['category'] or 'other',
+        'title': row['title'] or '',
+        'status': row['status'] or 'open',
+        'created_at': row['created_at'],
+        'updated_at': row['updated_at'],
+        'closed_at': row['closed_at'],
+        'last_message': last['message'] if last is not None else '',
+        'last_message_at': last['created_at'] if last is not None else row['updated_at'],
+        'unread': unread_row is not None,
+    }
+
+
+def _feedback_message_to_dict(row):
+    if row is None:
+        return None
+    return {
+        'id': row['id'],
+        'thread_id': row['thread_id'],
+        'sender_user_id': row['sender_user_id'],
+        'sender_name': row['sender_name'],
+        'sender_role': row['sender_role'] or 'none',
+        'message': row['message'],
+        'risk_level': int(row['risk_level'] or 0),
+        'created_at': row['created_at'],
+        'hidden': bool(row['hidden']),
+    }
+
+
+def feedback_unread_count(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return 0
+    with get_db_connection() as conn:
+        is_staff = _role_type_for_user_conn(conn, uid) in {'admin', 'staff'}
+        if is_staff:
+            rows = conn.execute(
+                '''
+                SELECT t.id, t.user_id, COALESCE(t.staff_read_at, '') AS read_at
+                FROM feedback_threads t
+                WHERE t.status <> 'closed'
+                '''
+            ).fetchall()
+            count = 0
+            for row in rows:
+                found = conn.execute(
+                    '''
+                    SELECT 1 FROM feedback_messages
+                    WHERE thread_id = ? AND hidden = 0 AND sender_user_id = ?
+                      AND (? = '' OR created_at > ?)
+                    LIMIT 1
+                    ''',
+                    (row['id'], row['user_id'], row['read_at'], row['read_at']),
+                ).fetchone()
+                if found is not None:
+                    count += 1
+            return count
+        row = conn.execute(
+            '''
+            SELECT COUNT(*) AS count
+            FROM feedback_messages m
+            JOIN feedback_threads t ON t.id = m.thread_id
+            WHERE t.user_id = ? AND m.sender_user_id <> ? AND m.hidden = 0
+              AND (t.user_read_at IS NULL OR m.created_at > t.user_read_at)
+            ''',
+            (uid, uid),
+        ).fetchone()
+        return int(row['count'] or 0) if row else 0
+
+
+def list_feedback_threads(user_id, staff_view=False, status='', limit=50):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    safe_limit = max(1, min(int(limit or 50), 100))
+    with get_db_connection() as conn:
+        viewer = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if viewer is None or _user_row_is_deleted(viewer):
+            return None, '请先登录账号'
+        can_staff = _role_type_for_user_conn(conn, uid) in {'admin', 'staff'}
+        if staff_view and not can_staff:
+            return None, '权限不足'
+        status_key = str(status or '').strip().lower()
+        params = []
+        where = []
+        if staff_view:
+            if status_key in FEEDBACK_STATUSES:
+                where.append('status = ?')
+                params.append(status_key)
+        else:
+            where.append('user_id = ?')
+            params.append(uid)
+        where_sql = f"WHERE {' AND '.join(where)}" if where else ''
+        rows = conn.execute(
+            f'''
+            SELECT * FROM feedback_threads
+            {where_sql}
+            ORDER BY updated_at DESC, id DESC
+            LIMIT ?
+            ''',
+            (*params, safe_limit),
+        ).fetchall()
+        items = [_feedback_thread_to_dict(conn, row, viewer_user_id=uid, staff_view=staff_view) for row in rows]
+        return {
+            'items': [item for item in items if item],
+            'is_staff': can_staff,
+            'unread_count': feedback_unread_count(uid),
+        }, None
+
+
+def get_feedback_messages(user_id, thread_id, mark_read=True, limit=100):
+    try:
+        uid = int(user_id)
+        tid = int(thread_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    safe_limit = max(1, min(int(limit or 100), 200))
+    with get_db_connection() as conn:
+        thread = conn.execute('SELECT * FROM feedback_threads WHERE id = ?', (tid,)).fetchone()
+        if thread is None:
+            return None, '反馈不存在'
+        can_staff = _role_type_for_user_conn(conn, uid) in {'admin', 'staff'}
+        is_owner = int(thread['user_id']) == uid
+        if not is_owner and not can_staff:
+            return None, '权限不足'
+        if mark_read:
+            now = utc_now()
+            if can_staff and not is_owner:
+                conn.execute('UPDATE feedback_threads SET staff_read_at = ? WHERE id = ?', (now, tid))
+            elif is_owner:
+                conn.execute('UPDATE feedback_threads SET user_read_at = ? WHERE id = ?', (now, tid))
+        rows = conn.execute(
+            '''
+            SELECT * FROM feedback_messages
+            WHERE thread_id = ? AND hidden = 0
+            ORDER BY id DESC
+            LIMIT ?
+            ''',
+            (tid, safe_limit),
+        ).fetchall()
+        conn.commit()
+        return {
+            'thread': _feedback_thread_to_dict(conn, thread, viewer_user_id=uid, staff_view=can_staff and not is_owner),
+            'messages': [_feedback_message_to_dict(row) for row in reversed(rows)],
+            'is_staff': can_staff,
+            'unread_count': feedback_unread_count(uid),
+        }, None
+
+
+def send_feedback_message(user_id, text, thread_id=None, category='other', title='', normalized_message='', risk_level=0):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    message = str(text or '').strip()
+    if not message:
+        return None, '消息不能为空'
+    category_key = str(category or 'other').strip().lower()
+    if category_key not in FEEDBACK_CATEGORIES:
+        category_key = 'other'
+    saved_thread_id = None
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if user is None or _user_row_is_deleted(user):
+            return None, '请先登录账号'
+        role = _role_type_for_user_conn(conn, uid)
+        can_staff = role in {'admin', 'staff'}
+        now = utc_now()
+        thread = None
+        if thread_id not in (None, ''):
+            try:
+                tid = int(thread_id)
+            except (TypeError, ValueError):
+                return None, '反馈不存在'
+            thread = conn.execute('SELECT * FROM feedback_threads WHERE id = ?', (tid,)).fetchone()
+            if thread is None:
+                return None, '反馈不存在'
+            if int(thread['user_id']) != uid and not can_staff:
+                return None, '权限不足'
+        if thread is None:
+            if can_staff:
+                return None, '请选择一条反馈后回复'
+            safe_title = str(title or '').strip()[:80] or message[:40]
+            cur = conn.execute(
+                '''
+                INSERT INTO feedback_threads (user_id, category, title, status, created_at, updated_at, user_read_at)
+                VALUES (?, ?, ?, 'open', ?, ?, ?)
+                ''',
+                (uid, category_key, safe_title, now, now, now),
+            )
+            thread = conn.execute('SELECT * FROM feedback_threads WHERE id = ?', (cur.lastrowid,)).fetchone()
+        sender_name = str(user['username'] or '')[:80]
+        conn.execute(
+            '''
+            INSERT INTO feedback_messages (
+                thread_id, sender_user_id, sender_name, sender_role, message,
+                normalized_message, risk_level, created_at, hidden
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+            ''',
+            (
+                thread['id'], uid, sender_name, role, message,
+                str(normalized_message or '')[:1000],
+                int(risk_level or 0), now,
+            ),
+        )
+        next_status = 'pending' if can_staff else 'open'
+        conn.execute(
+            '''
+            UPDATE feedback_threads
+            SET updated_at = ?, status = ?, user_read_at = CASE WHEN user_id = ? THEN ? ELSE user_read_at END,
+                staff_read_at = CASE WHEN user_id <> ? THEN ? ELSE staff_read_at END
+            WHERE id = ?
+            ''',
+            (now, next_status, uid, now, uid, now, thread['id']),
+        )
+        conn.commit()
+        saved_thread_id = int(thread['id'])
+    return get_feedback_messages(uid, saved_thread_id, mark_read=False)
+
+
+def update_feedback_status(user_id, thread_id, status):
+    try:
+        uid = int(user_id)
+        tid = int(thread_id)
+    except (TypeError, ValueError):
+        return None, '参数错误'
+    status_key = str(status or '').strip().lower()
+    if status_key not in FEEDBACK_STATUSES:
+        return None, '状态不正确'
+    with get_db_connection() as conn:
+        if _role_type_for_user_conn(conn, uid) not in {'admin', 'staff'}:
+            return None, '权限不足'
+        row = conn.execute('SELECT * FROM feedback_threads WHERE id = ?', (tid,)).fetchone()
+        if row is None:
+            return None, '反馈不存在'
+        now = utc_now()
+        conn.execute(
+            'UPDATE feedback_threads SET status = ?, updated_at = ?, closed_at = ? WHERE id = ?',
+            (status_key, now, now if status_key == 'closed' else None, tid),
+        )
+        conn.commit()
+        data, error = get_feedback_messages(uid, tid, mark_read=False)
+        return data, error
 
 
 def save_match_summary(summary):

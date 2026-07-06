@@ -85,7 +85,10 @@ from db import (
     dm_unread_count,
     find_user_for_admin,
     format_duration_zh,
+    feedback_is_staff,
+    feedback_unread_count,
     get_dm_messages,
+    get_feedback_messages,
     get_admin_user_detail,
     get_chat_message_with_context,
     get_db_connection,
@@ -102,9 +105,11 @@ from db import (
     list_friends,
     list_lobby_chat_entries,
     list_dm_threads,
+    list_feedback_threads,
     list_leaderboard,
     list_user_gr_snapshots,
     list_card_draft_stats,
+    list_opening_event_stats,
     list_ip_bans,
     list_reports,
     list_user_roles,
@@ -118,6 +123,8 @@ from db import (
     record_chat_message,
     record_card_draft_counts,
     record_card_draft_win_result,
+    record_opening_event_pick_counts,
+    record_opening_event_win_result,
     rebuild_card_draft_win_stats_from_matches,
     rebuild_gr_from_matches,
     rebuild_user_stats_from_matches,
@@ -131,12 +138,14 @@ from db import (
     list_admin_users,
     save_match_summary,
     send_dm_message,
+    send_feedback_message,
     set_ip_ban,
     set_user_mute,
     spend_user_thorn_dew,
     soft_delete_user,
     update_user_skin,
     update_user_social_settings,
+    update_feedback_status,
     verify_remember_token,
     verify_user,
 )
@@ -257,7 +266,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260705-2'
+GTN_STATIC_CACHE_BUST = 'ui-20260706-feedback-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -574,6 +583,15 @@ _LEADERBOARD_CACHE_SECONDS = 300
 _LEADERBOARD_CACHE = {}
 _LEADERBOARD_SELF_RANK_CACHE = {}
 _LEADERBOARD_CACHE_LOCK = threading.Lock()
+
+
+def clear_leaderboard_cache():
+    try:
+        with _LEADERBOARD_CACHE_LOCK:
+            _LEADERBOARD_CACHE.clear()
+            _LEADERBOARD_SELF_RANK_CACHE.clear()
+    except Exception as exc:
+        print(f"[leaderboard] clear cache failed: {exc}", flush=True)
 _ADMIN_API_SLOW_MS = _env_float('GTN_ADMIN_API_SLOW_MS', 1000)
 _SOCKET_ACTION_SLOW_MS = _env_float('GTN_SOCKET_ACTION_SLOW_MS', 500)
 _ROOM_ACTION_LOCK_WAIT_SECONDS = _env_float('GTN_ROOM_ACTION_LOCK_WAIT_SECONDS', 0.25)
@@ -604,6 +622,7 @@ DRAFT_STATS_FLUSH_SECONDS = _env_float('GTN_DRAFT_STATS_FLUSH_SECONDS', 5)
 DRAFT_STATS_FLUSH_MAX_PENDING = _env_int('GTN_DRAFT_STATS_FLUSH_MAX_PENDING', 200)
 _DRAFT_STATS_LOCK = threading.Lock()
 _DRAFT_STATS_PENDING = {}
+_OPENING_EVENT_STATS_PENDING = {}
 _DRAFT_STATS_PENDING_EVENTS = 0
 _DRAFT_STATS_WORKER_STARTED = False
 LAST_SEEN_FLUSH_SECONDS = _env_float('GTN_LAST_SEEN_FLUSH_SECONDS', 10)
@@ -809,6 +828,10 @@ def admin_match_record(room, result='finished'):
                 cards = []
             player_draft_cards.append(list(cards or []) if isinstance(cards, (list, tuple, set)) else [])
         summary['draft_card_ids_by_player'] = player_draft_cards
+        summary['opening_event_ids_by_player'] = [
+            str(event_id) if event_id is not None else ''
+            for event_id in (getattr(e, 'opening_event_picks', []) or [])[:len(names)]
+        ]
         summary['winner_player_indices'] = stats_winner_player_indices
         if getattr(e, 'game_over', False):
             replay_actions = getattr(room, '_replay_actions', []) or []
@@ -848,6 +871,12 @@ def admin_match_record(room, result='finished'):
                     record_card_draft_win_result(
                         room.mode,
                         player_draft_cards,
+                        stats_winner_player_indices,
+                        'draw' if stats_result == 'draw' else 'finished',
+                    )
+                    record_opening_event_win_result(
+                        room.mode,
+                        summary.get('opening_event_ids_by_player') or [],
                         stats_winner_player_indices,
                         'draw' if stats_result == 'draw' else 'finished',
                     )
@@ -2126,6 +2155,57 @@ def _lobby_chat_time_label(ts):
     return datetime.fromtimestamp(ts, timezone(timedelta(hours=8))).strftime('%H:%M')
 
 
+def _chat_item_ts(item, default=None):
+    default = time.time() if default is None else float(default)
+    if isinstance(item, dict):
+        for key in ('ts', 'time', 'created_at', 'createdAt'):
+            value = item.get(key)
+            if value is None or value == '':
+                continue
+            try:
+                if isinstance(value, (int, float)):
+                    return float(value)
+                return datetime.fromisoformat(str(value).replace('Z', '+00:00')).timestamp()
+            except Exception:
+                continue
+    return default
+
+
+def restore_lobby_chat_item_locked(item, beta_mode=False):
+    if not isinstance(item, dict) or item.get('type') != 'chat':
+        return
+    cache = _lobby_chat_cache_locked(beta_mode)
+    chat_payload = refresh_chat_special_fields(item)
+    chat_payload['type'] = 'chat'
+    chat_payload['beta_mode'] = bool(beta_mode)
+    item_ts = _chat_item_ts(chat_payload)
+    chat_payload['ts'] = item_ts
+    chat_payload['time'] = datetime.fromtimestamp(item_ts, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
+    chat_payload.setdefault('repeat_count', 1)
+    last = cache[-1] if cache else None
+    last_chat = last if isinstance(last, dict) and last.get('type') == 'chat' else None
+    idle = item_ts - float((last_chat or {}).get('ts', item_ts))
+    if (
+        last_chat is not None
+        and idle >= 0
+        and idle < CHAT_IDLE_SEPARATOR_SECONDS
+        and _chat_entry_signature(last_chat) == _chat_entry_signature(chat_payload)
+    ):
+        last_chat['repeat_count'] = int(last_chat.get('repeat_count') or 1) + int(chat_payload.get('repeat_count') or 1)
+        last_chat['time'] = chat_payload['time']
+        last_chat['ts'] = item_ts
+        return
+    if last_chat is not None and idle >= CHAT_IDLE_SEPARATOR_SECONDS:
+        cache.append({
+            'type': 'time',
+            'id': _lobby_chat_next_id_locked(beta_mode),
+            'time': chat_payload['time'],
+            'display_time': _lobby_chat_time_label(item_ts),
+            'ts': item_ts,
+        })
+    cache.append(chat_payload)
+
+
 def lobby_chat_would_fold_locked(payload, now=None, beta_mode=False):
     now = time.time() if now is None else float(now)
     cache = _lobby_chat_cache_locked(beta_mode)
@@ -2203,7 +2283,7 @@ def load_persisted_lobby_chat_cache():
                 for item in list_lobby_chat_entries(beta_mode=beta_mode, limit=CHAT_CACHE_LIMIT):
                     if not isinstance(item, dict) or item.get('type') != 'chat':
                         continue
-                    cache.append(copy.deepcopy(item))
+                    restore_lobby_chat_item_locked(item, beta_mode)
                     try:
                         max_id = max(max_id, int(item.get('id') or 0))
                     except (TypeError, ValueError):
@@ -2387,7 +2467,6 @@ def get_special_account_profile(username):
             profile = get_user_role_profile(username)
             if profile:
                 return profile
-            return None
         except Exception as exc:
             admin_event('error', f'failed to load account role for {username}: {exc}')
     lower = str(username or '').strip().lower()
@@ -2412,6 +2491,27 @@ def special_public_fields(player_or_profile):
     }
 
 
+def refresh_chat_special_fields(chat_payload):
+    payload = copy.deepcopy(chat_payload or {})
+    if not isinstance(payload, dict):
+        return {}
+    if payload.get('console_player'):
+        payload.update(special_public_fields(console_chat_payload(payload.get('text', ''))))
+        return payload
+    if payload.get('system'):
+        return payload
+    profile = None
+    identifier = payload.get('user_id') or payload.get('sender_user_id') or payload.get('nickname')
+    if identifier:
+        profile = get_special_account_profile(identifier)
+    if profile:
+        payload.update(special_public_fields(profile))
+        payload['nickname'] = profile.get('display_name') or payload.get('nickname', '')
+    else:
+        payload.update(special_public_fields({}))
+    return payload
+
+
 def make_room_player_profile(source=None, sid=None, player_index=-1, room=None):
     source = source or {}
     nickname = source.get('nickname') or source.get('name') or ''
@@ -2431,6 +2531,7 @@ def make_room_player_profile(source=None, sid=None, player_index=-1, room=None):
         'user_id': source.get('user_id'),
         'account_player_id': source.get('account_player_id') or '',
         'is_registered_user': bool(source.get('is_registered_user')),
+        'allow_guest_spectators': bool(source.get('allow_guest_spectators')),
         'mod_source': source.get('mod_source', 'official'),
         'disabled_mods': list(source.get('disabled_mods', []) or []),
         'mods_list': list(source.get('mods_list', []) or []),
@@ -2466,6 +2567,14 @@ def player_special_fields(sid, room=None):
 def room_player_nickname(room, sid, fallback='?'):
     profile = room_player_profile(room, sid)
     return profile.get('nickname') or fallback
+
+
+def room_allows_guest_spectators(room):
+    for psid in list(getattr(room, 'player_sids', []) or []):
+        profile = room_player_profile(room, psid)
+        if not bool(profile.get('allow_guest_spectators')):
+            return False
+    return True
 
 
 def is_admin_player_secret(raw):
@@ -3346,6 +3455,10 @@ def _auto_select_opening_event_locked(room, pidx):
     event_id = first.get('id')
     if not engine.select_opening_event(pidx, event_id):
         return False
+    try:
+        enqueue_opening_event_pick(room.mode, [str(ev.get('id')) for ev in options if ev and ev.get('id') is not None], event_id)
+    except Exception as exc:
+        admin_event('error', f'auto opening event stats enqueue failed: {exc}', room_id=room.room_id)
     record_room_replay_action(room, 'select_opening_event', pidx, {
         'event_id': event_id,
         'sub_choice': None,
@@ -4326,6 +4439,7 @@ def _apply_report_moderation_action(report_detail, moderation_action, duration_s
         except (TypeError, ValueError):
             duration = None
         user, _ = admin_set_user_ban(target, True, note, duration_seconds=duration)
+        clear_leaderboard_cache()
         status = get_user_ban_status(user_id=(user or {}).get('id'), username=target_username) if user else {'banned': True, 'reason': note, 'remaining_seconds': duration, 'permanent': duration is None}
         for sid in _online_sids_for_user(target_user_id, target_username):
             socketio.emit('server_error', {'message': ban_error_payload(status).get('reason', '账号已被封禁')}, room=sid)
@@ -5314,18 +5428,52 @@ def enqueue_card_draft_pick(mode, option_ids, picked_id):
     return True
 
 
+def enqueue_opening_event_pick(mode, option_ids, picked_id):
+    global _DRAFT_STATS_PENDING_EVENTS
+    if not DB_AVAILABLE:
+        return False
+    mode_key = str(mode or '').strip()
+    if mode_key not in ('1v1', '2v2'):
+        return False
+    picked = str(picked_id or '').strip()
+    if not picked:
+        return False
+    counts = {}
+    for raw_id in option_ids or []:
+        event_id = str(raw_id or '').strip()
+        if not event_id:
+            continue
+        counts[event_id] = counts.get(event_id, 0) + 1
+    if not counts:
+        return False
+    with _DRAFT_STATS_LOCK:
+        bucket = _OPENING_EVENT_STATS_PENDING.setdefault(mode_key, {})
+        for event_id, shown_inc in counts.items():
+            current = bucket.setdefault(event_id, [0, 0])
+            current[0] += int(shown_inc)
+            if event_id == picked:
+                current[1] += 1
+        _DRAFT_STATS_PENDING_EVENTS += 1
+    start_draft_stats_worker()
+    if _DRAFT_STATS_PENDING_EVENTS >= DRAFT_STATS_FLUSH_MAX_PENDING:
+        flush_draft_stats_async()
+    return True
+
+
 def _drain_draft_stats_pending():
     global _DRAFT_STATS_PENDING_EVENTS
     with _DRAFT_STATS_LOCK:
         pending = {mode: {card_id: list(counts) for card_id, counts in cards.items()} for mode, cards in _DRAFT_STATS_PENDING.items()}
+        event_pending = {mode: {event_id: list(counts) for event_id, counts in events.items()} for mode, events in _OPENING_EVENT_STATS_PENDING.items()}
         _DRAFT_STATS_PENDING.clear()
+        _OPENING_EVENT_STATS_PENDING.clear()
         _DRAFT_STATS_PENDING_EVENTS = 0
-    return pending
+    return pending, event_pending
 
 
 def flush_draft_stats_once():
-    pending = _drain_draft_stats_pending()
-    if not pending:
+    pending, event_pending = _drain_draft_stats_pending()
+    if not pending and not event_pending:
         return 0
     written = 0
     for mode, card_counts in pending.items():
@@ -5338,6 +5486,18 @@ def flush_draft_stats_once():
                 bucket = _DRAFT_STATS_PENDING.setdefault(mode, {})
                 for card_id, counts in card_counts.items():
                     current = bucket.setdefault(card_id, [0, 0])
+                    current[0] += int((counts or [0, 0])[0] or 0)
+                    current[1] += int((counts or [0, 0])[1] or 0)
+    for mode, event_counts in event_pending.items():
+        try:
+            if record_opening_event_pick_counts(mode, event_counts):
+                written += len(event_counts)
+        except Exception as exc:
+            admin_event('error', f'opening event stats flush failed: {exc}')
+            with _DRAFT_STATS_LOCK:
+                bucket = _OPENING_EVENT_STATS_PENDING.setdefault(mode, {})
+                for event_id, counts in event_counts.items():
+                    current = bucket.setdefault(event_id, [0, 0])
                     current[0] += int((counts or [0, 0])[0] or 0)
                     current[1] += int((counts or [0, 0])[1] or 0)
     return written
@@ -7547,6 +7707,7 @@ def execute_admin_command(line):
         user, error = admin_set_user_ban(parts[1], True, reason, duration_seconds=duration)
         if error:
             return {'success': False, 'output': error}
+        clear_leaderboard_cache()
         status = get_user_ban_status(user_id=user['id'])
         kicked = []
         with _lock:
@@ -7572,6 +7733,7 @@ def execute_admin_command(line):
         user, error = admin_set_user_ban(parts[1], False, '')
         if error:
             return {'success': False, 'output': error}
+        clear_leaderboard_cache()
         admin_event('admin', f"unbanned account {user['username']}#{user['id']}")
         return {'success': True, 'output': f"已解除账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 的封禁。"}
     if cmd == 'kick':
@@ -9896,6 +10058,7 @@ def handling_user_ban(user_id):
     user, error = admin_set_user_ban(user_id, banned, reason, duration_seconds=duration_seconds or None)
     if error:
         return _json_error(error, 400)
+    clear_leaderboard_cache()
     kicked = []
     if banned:
         status = get_user_ban_status(user_id=user.get('id'), username=user.get('username')) if user else {'banned': True}
@@ -10362,6 +10525,44 @@ def admin_draft_stats():
         item['quality'] = card_def.quality if card_def else ''
     log_admin_api_timing(
         '/api/admin/draft-stats',
+        (time.perf_counter() - started) * 1000,
+        rows=len(data.get('items') or []),
+        total=data.get('total'),
+        limit=data.get('limit'),
+    )
+    return jsonify({'success': True, **data})
+
+
+@app.route('/api/admin/opening-event-stats')
+def admin_opening_event_stats():
+    started = time.perf_counter()
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        data = list_opening_event_stats(
+            mode=request.args.get('mode', ''),
+            sort=request.args.get('sort', 'pick_rate'),
+            order=request.args.get('order', 'desc'),
+            limit=request.args.get('limit', 300),
+            offset=request.args.get('offset', 0),
+            merge_modes=str(request.args.get('merge_modes', '')).lower() in ('1', 'true', 'yes', 'on'),
+            scope=request.args.get('scope', 'total'),
+            week_start=request.args.get('week_start'),
+            winner_only=str(request.args.get('winner_only', '')).lower() in ('1', 'true', 'yes', 'on'),
+        )
+    except Exception as exc:
+        admin_event('error', f'admin opening event stats failed: {exc}')
+        log_admin_api_timing('/api/admin/opening-event-stats', (time.perf_counter() - started) * 1000, error=type(exc).__name__)
+        return jsonify({'success': False, 'error': '配装统计数据库不可用'}), 500
+    for item in data.get('items', []):
+        event = GameEngine.OPENING_EVENTS.get(int(item.get('event_id'))) if str(item.get('event_id')).isdigit() else None
+        if not event:
+            event = {'name_cn': item.get('event_id'), 'name_en': item.get('event_id')}
+        item['name_cn'] = event.get('name_cn') or event.get('name') or item.get('event_id')
+        item['name_en'] = event.get('name_en') or event.get('name') or item.get('event_id')
+        item['description'] = event.get('desc') or event.get('description') or ''
+    log_admin_api_timing(
+        '/api/admin/opening-event-stats',
         (time.perf_counter() - started) * 1000,
         rows=len(data.get('items') or []),
         total=data.get('total'),
@@ -10995,6 +11196,140 @@ def api_social_settings_update():
         return jsonify({'success': False, 'error': error}), 400
     user = get_user_by_id(user_id)
     return jsonify({'success': True, 'settings': settings, 'user': auth_user_payload(user)})
+
+
+@app.route('/api/feedback/summary')
+def api_feedback_summary():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    try:
+        return jsonify({
+            'success': True,
+            'is_staff': bool(feedback_is_staff(user_id)),
+            'unread_count': int(feedback_unread_count(user_id) or 0),
+        })
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/feedback/threads')
+def api_feedback_threads():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    staff_view = str(request.args.get('staff') or '').lower() in ('1', 'true', 'yes')
+    try:
+        limit = max(1, min(int(request.args.get('limit', 50) or 50), 100))
+    except Exception:
+        limit = 50
+    try:
+        data, error = list_feedback_threads(
+            user_id,
+            staff_view=staff_view,
+            status=request.args.get('status', ''),
+            limit=limit,
+        )
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, **(data or {})})
+
+
+@app.route('/api/feedback/messages')
+def api_feedback_messages():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    try:
+        limit = max(1, min(int(request.args.get('limit', 100) or 100), 200))
+    except Exception:
+        limit = 100
+    mark_read = str(request.args.get('mark_read', '1')).lower() in ('1', 'true', 'yes')
+    try:
+        data, error = get_feedback_messages(user_id, request.args.get('thread_id'), mark_read=mark_read, limit=limit)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, **(data or {})})
+
+
+@app.route('/api/feedback/send', methods=['POST'])
+def api_feedback_send():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, user, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    muted, mute_info = is_user_muted_db(user_id)
+    if muted:
+        remaining = 0
+        try:
+            until_dt = datetime.fromisoformat(str(mute_info.get('muted_until') or '').replace('Z', '+00:00'))
+            remaining = max(0, int((until_dt - datetime.now(timezone.utc)).total_seconds()))
+        except Exception:
+            remaining = 0
+        return jsonify({'success': False, **muted_error_payload(remaining)}), 403
+    exempt = _chat_exempt_from_user_id(user_id)
+    if not exempt:
+        if not rate_limiter(f'feedback:{user_id}:fast', limit=1, window=2):
+            return jsonify({'success': False, 'error': '发送过快'}), 429
+        if not rate_limiter(f'feedback:{user_id}:minute', limit=8, window=60):
+            return jsonify({'success': False, 'error': '发送过快'}), 429
+    data = request.get_json(silent=True) or {}
+    try:
+        text, chat_risk = _validate_chat_text_for_sender(data.get('text', ''), exempt=exempt)
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    if not text:
+        return jsonify({'success': False, 'error': '消息不能为空'}), 400
+    risk_level = int(chat_risk.get('risk_level') or 0)
+    if str(chat_risk.get('risk_action') or '') == 'reject_mute' or risk_level >= 4:
+        try:
+            set_user_mute(user_id, user or '', 300, 'severe feedback risk', 'system')
+        except Exception as exc:
+            admin_event('error', f'failed to persist severe feedback mute: {exc}')
+        return jsonify({'success': False, **muted_error_payload(300, message='消息包含高风险内容，已被拦截并临时禁言')}), 403
+    try:
+        result, error = send_feedback_message(
+            user_id,
+            text,
+            thread_id=data.get('thread_id'),
+            category=data.get('category', 'other'),
+            title=data.get('title', ''),
+            normalized_message=chat_risk.get('normalized_message') or normalize_message(text),
+            risk_level=risk_level,
+        )
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, **(result or {})})
+
+
+@app.route('/api/feedback/status', methods=['POST'])
+def api_feedback_status():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    try:
+        result, error = update_feedback_status(user_id, data.get('thread_id'), data.get('status'))
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, **(result or {})})
 
 
 @app.route('/api/social/dm/threads')
@@ -12030,6 +12365,7 @@ def on_login(data):
             'user_id': user_id,
             'account_player_id': account_user.get('player_id') if account_user else '',
             'is_registered_user': is_registered_user,
+            'allow_guest_spectators': bool(account_user.get('allow_guest_spectators')) if account_user else False,
             'season_gr': account_user.get('season_gr') if account_user else None,
             'total_gr': account_user.get('total_gr') if account_user else None,
             'mod_source': community_fields.get('mod_source', 'official'),
@@ -12790,6 +13126,11 @@ def on_invite(data):
     except ValueError as exc:
         _security_illegal(sid, 'invite', str(exc))
         return
+    target_name = '?'
+    inviter_name = '?'
+    inviter_mode = '1v1'
+    match_sids = [sid, target_sid]
+    mod_mismatch_payload = None
     with _lock:
         if sid not in players or target_sid not in players:
             _security_illegal(sid, 'invite', '目标玩家不存在', severity='low')
@@ -12819,39 +13160,72 @@ def on_invite(data):
             inviter_label = ', '.join(inviter_mods) if inviter_mods else 'no mods'
             target_label = ', '.join(target_mods) if target_mods else 'no mods'
             message = f'模组组合不一致，无法开始对局。你：{inviter_label}；对方：{target_label}'
-            emit_mod_mismatch(sid, target, message)
+            mod_mismatch_payload = {
+                'message': message,
+                'reason': 'mod_mismatch',
+                'your_mods': player_mod_match_payload(inviter),
+                'other_mods': player_mod_match_payload(target),
+            }
+        else:
+            inviter_name = inviter.get('nickname', '?')
+            target_name = target.get('nickname', '?')
+    if mod_mismatch_payload is not None:
+        socketio.emit('mod_mismatch', mod_mismatch_payload, room=sid)
+        socketio.emit('server_error', {'message': mod_mismatch_payload['message'], 'reason': 'mod_mismatch'}, room=sid)
+        return
+
+    inviter_gr_preview = gr_preview_payload_for_sids(inviter_mode, match_sids, sid)
+    target_gr_preview = gr_preview_payload_for_sids(inviter_mode, match_sids, target_sid)
+    if not bool(data.get('confirmed')):
+        socketio.emit('invite_confirm_required', {
+            'target_sid': target_sid,
+            'target_name': target_name,
+            'mode': inviter_mode,
+            'gr_preview_text': inviter_gr_preview.get('text', ''),
+            'gr_preview': inviter_gr_preview,
+        }, room=sid)
+        return
+
+    with _lock:
+        if sid not in players or target_sid not in players:
+            emit('server_error', {'message': '目标玩家不存在'})
             return
-        inviter_name = players[sid]['nickname']
-        match_sids = [sid, target_sid]
-        inviter_gr_preview = gr_preview_payload_for_sids(inviter_mode, match_sids, sid)
-        target_gr_preview = gr_preview_payload_for_sids(inviter_mode, match_sids, target_sid)
-        if not bool(data.get('confirmed')):
-            socketio.emit('invite_confirm_required', {
-                'target_sid': target_sid,
-                'target_name': target.get('nickname', '?'),
-                'mode': inviter_mode,
-                'gr_preview_text': inviter_gr_preview.get('text', ''),
-                'gr_preview': inviter_gr_preview,
-            }, room=sid)
+        if sid in invites:
+            return
+        inviter = players[sid]
+        target = players[target_sid]
+        if target.get('status') != 'lobby':
+            emit('server_error', {'message': '目标玩家不在大厅'})
+            return
+        if not same_runtime_scope_players(inviter, target):
+            emit('server_error', {'message': runtime_scope_mismatch_message()})
+            return
+        if inviter.get('mode', '1v1') != inviter_mode or target.get('mode', '1v1') != inviter_mode:
+            emit('server_error', {'message': '双方模式不一致，无法邀请'})
+            return
+        if player_loadout_hash(inviter) != player_loadout_hash(target):
+            emit('server_error', {'message': '模组组合不一致，无法开始对局', 'reason': 'mod_mismatch'})
             return
         invites[sid] = target_sid
-        if inviter_gr_preview.get('text'):
-            socketio.emit('invite_gr_preview', {'text': inviter_gr_preview.get('text'), 'gr_preview': inviter_gr_preview}, room=sid)
-        result = socketio.emit('invite_received', {
-            'inviter_sid': sid,
-            'inviter_name': inviter_name,
-            'gr_preview_text': target_gr_preview.get('text', ''),
-            'gr_preview': target_gr_preview,
-        }, room=target_sid)
+        inviter_name = inviter.get('nickname', inviter_name)
 
-        def _invite_timeout(inviter_sid):
-            with _lock:
-                if inviter_sid in invites:
-                    del invites[inviter_sid]
+    if inviter_gr_preview.get('text'):
+        socketio.emit('invite_gr_preview', {'text': inviter_gr_preview.get('text'), 'gr_preview': inviter_gr_preview}, room=sid)
+    socketio.emit('invite_received', {
+        'inviter_sid': sid,
+        'inviter_name': inviter_name,
+        'gr_preview_text': target_gr_preview.get('text', ''),
+        'gr_preview': target_gr_preview,
+    }, room=target_sid)
 
-        timer = threading.Timer(30.0, _invite_timeout, args=[sid])
-        timer.daemon = True
-        timer.start()
+    def _invite_timeout(inviter_sid):
+        with _lock:
+            if inviter_sid in invites:
+                del invites[inviter_sid]
+
+    timer = threading.Timer(30.0, _invite_timeout, args=[sid])
+    timer.daemon = True
+    timer.start()
 
 
 @socketio.on('accept_invite')
@@ -13056,6 +13430,7 @@ def on_chat(data):
         'is_spectator': is_spectator,
         'risk_level': risk_level,
         'risk_action': risk_action,
+        'user_id': player_snapshot.get('user_id'),
     }
     if matched_rules:
         chat_data['matched_rules'] = matched_rules[:5]
@@ -13199,13 +13574,14 @@ def on_chat(data):
     chat_message_id = None
     if DB_AVAILABLE and record_room_key:
         try:
+            persisted_chat_payload = refresh_chat_special_fields(chat_data)
             chat_message_id = record_chat_message(
                 record_room_key,
                 record_channel,
                 player_snapshot.get('user_id'),
                 nickname,
                 text,
-                normalized_message,
+                json.dumps(persisted_chat_payload, ensure_ascii=False, separators=(',', ':')),
                 risk_level,
                 hidden=False,
             )
@@ -13320,8 +13696,10 @@ def on_select_opening_event(data):
         engine = room.engine
         if event_id is None:
             return
+        option_ids = [str(ev.get('id')) for ev in (getattr(engine, 'opening_event_options', [[]])[pidx] or []) if ev and ev.get('id') is not None]
         success = engine.select_opening_event(pidx, event_id)
         if success:
+            enqueue_opening_event_pick(room.mode, option_ids, event_id)
             _reset_pregame_deadline(room, pidx, 'event_select')
             if sub_choice:
                 engine.opening_event_sub_choices[pidx] = sub_choice
@@ -14801,6 +15179,9 @@ def on_spectate(data):
             return
         if _player_matches_room_participant(room, player.get('nickname')):
             emit('server_error', {'message': '请返回自己的对局，不能观战自己的对局'})
+            return
+        if not player.get('user_id') and not room_allows_guest_spectators(room):
+            emit('server_error', {'message': '本场对局有玩家开启了禁止游客观战'})
             return
         phase = room.engine.phase
         if phase in ('draft', 'event_select', 'event_reveal'):

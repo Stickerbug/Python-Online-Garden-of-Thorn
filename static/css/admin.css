@@ -999,6 +999,16 @@ button {
   font-size: 16px;
 }
 
+.section-title h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.section-title.compact-title {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
 .admin-table {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -1010,7 +1020,8 @@ button {
   border-collapse: collapse;
 }
 
-#draft-stats-table table {
+#draft-stats-table table,
+#opening-event-stats-table table {
   min-width: 1080px;
 }
 
@@ -1463,7 +1474,8 @@ button {
     min-width: 820px;
   }
 
-  #draft-stats-table table {
+  #draft-stats-table table,
+  #opening-event-stats-table table {
     min-width: 1080px;
   }
 

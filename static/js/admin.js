@@ -630,6 +630,12 @@ function draftStatsQuery() {
   return params;
 }
 
+function openingEventStatsQuery() {
+  const params = draftStatsQuery();
+  if (params.get('sort') === 'card_id') params.set('sort', 'event_id');
+  return params;
+}
+
 function updateDraftWinnerOnlyButton() {
   const button = $('draft-stats-winner-only');
   if (!button) return;
@@ -640,6 +646,7 @@ function updateDraftWinnerOnlyButton() {
 
 async function loadDraftStats() {
   const table = $('draft-stats-table');
+  const eventTable = $('opening-event-stats-table');
   if (!table) return;
   const requestSeq = ++draftStatsRequestSeq;
   updateDraftWinnerOnlyButton();
@@ -647,13 +654,21 @@ async function loadDraftStats() {
     if (!draftStatsState.items.length) {
       table.innerHTML = '<div class="log-item">正在读取抽牌统计。</div>';
     }
-    const data = await api(`/api/admin/draft-stats?${draftStatsQuery().toString()}`);
+    if (eventTable && !eventTable.dataset.loaded) {
+      eventTable.innerHTML = '<div class="log-item">正在读取配装统计。</div>';
+    }
+    const [data, eventData] = await Promise.all([
+      api(`/api/admin/draft-stats?${draftStatsQuery().toString()}`),
+      eventTable ? api(`/api/admin/opening-event-stats?${openingEventStatsQuery().toString()}`) : Promise.resolve(null),
+    ]);
     if (requestSeq !== draftStatsRequestSeq) return;
     draftStatsState = data;
     renderDraftStats(draftStatsState);
+    if (eventData) renderOpeningEventStats(eventData);
   } catch (error) {
     if (requestSeq !== draftStatsRequestSeq) return;
     table.innerHTML = `<div class="log-item error">抽牌统计加载失败：${escapeHtml(error.message)}</div>`;
+    if (eventTable) eventTable.innerHTML = `<div class="log-item error">配装统计加载失败：${escapeHtml(error.message)}</div>`;
   }
 }
 
@@ -714,6 +729,45 @@ function renderDraftStats(data) {
             <td>${escapeHtml(cardTypeLabel(item.card_type))}</td>
             <td class="admin-data">${escapeHtml(formatPercent(item.pick_rate || 0))}</td>
             <td class="admin-data">${escapeHtml(formatPercent(item.card_win_rate || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatPercent(item.winner_pick_rate || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatNumber(item.picked_count || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatNumber(item.shown_count || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatNumber(item.win_games || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatNumber(item.picked_games || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatAdminTime(item.updated_at))}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderOpeningEventStats(data) {
+  const items = data.items || [];
+  const count = $('opening-event-stats-count');
+  const scopeLabel = data.scope === 'week' ? `本周 ${data.week_start || ''}` : '总计';
+  const winnerOnly = !!data.winner_only;
+  if (count) count.textContent = `${scopeLabel}${winnerOnly ? ' · 胜者' : ''} · ${items.length}/${data.total || 0}`;
+  const table = $('opening-event-stats-table');
+  if (!table) return;
+  table.dataset.loaded = '1';
+  if (!items.length) {
+    table.innerHTML = '<div class="log-item">暂无配装统计。统计会在玩家完成配装选择后写入。</div>';
+    return;
+  }
+  table.innerHTML = `
+    <table>
+      <thead><tr><th>范围</th><th>模式</th><th>配装</th><th>选取率</th><th>胜率</th><th>胜者选取率</th><th>选取</th><th>出现</th><th>${winnerOnly ? '胜者选中' : '选中胜利'}</th><th>选中局数</th><th>最近更新</th></tr></thead>
+      <tbody>
+        ${items.map((item) => `
+          <tr>
+            <td>${escapeHtml(scopeLabel)}</td>
+            <td>${escapeHtml(item.mode === 'merged' ? '合并' : (item.mode || '-'))}</td>
+            <td>
+              <strong>${escapeHtml(item.name_cn || item.event_id || '-')}</strong>
+              <span class="muted"> ${escapeHtml(item.event_id || '')}</span>
+              ${item.description ? `<div class="muted">${escapeHtml(item.description)}</div>` : ''}
+            </td>
+            <td class="admin-data">${escapeHtml(formatPercent(item.pick_rate || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatPercent(item.event_win_rate || 0))}</td>
             <td class="admin-data">${escapeHtml(formatPercent(item.winner_pick_rate || 0))}</td>
             <td class="admin-data">${escapeHtml(formatNumber(item.picked_count || 0))}</td>
             <td class="admin-data">${escapeHtml(formatNumber(item.shown_count || 0))}</td>

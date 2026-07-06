@@ -189,6 +189,11 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                 dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision, attacker_id=source, source_card=card)
             except TypeError:
                 dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
+            if hasattr(engine, "_last_damage_value"):
+                try:
+                    engine._last_damage_value[target_id] = int(dealt or 0)
+                except Exception:
+                    pass
             total += int(dealt or 0)
             try:
                 hit_values = getattr(engine, "_last_positive_damage_hits", [])
@@ -227,6 +232,11 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                 )
             except TypeError:
                 dealt = engine._deal_direct_damage(target_id, amount, source_text, source)
+            if hasattr(engine, "_last_damage_value"):
+                try:
+                    engine._last_damage_value[target_id] = int(dealt or 0)
+                except Exception:
+                    pass
             total += int(dealt or 0)
         context["last_damage"] = total
         return {"success": True, "last_damage": total}
@@ -1610,9 +1620,10 @@ def _engine_effect_from_step(
     if isinstance(body, list):
         params["body"] = [_engine_effect_from_step(engine, context, child, defer_values=True) for child in body if isinstance(child, dict)]
         params.setdefault("effects", params["body"])
-    for target_key in ("target", "targets", "owner", "effect_target", "target_player"):
-        if target_key in params:
-            params[target_key] = _engine_target_selector(engine, context, params[target_key])
+    if not defer_values:
+        for target_key in ("target", "targets", "owner", "effect_target", "target_player"):
+            if target_key in params:
+                params[target_key] = _engine_target_selector(engine, context, params[target_key])
     return {
         "type": resolved_effect_type,
         "params": params,

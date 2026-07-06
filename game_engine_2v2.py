@@ -705,6 +705,8 @@ class GameEngine2v2(GameEngine):
         )
 
     def _card_requires_target(self, card: CardInstance) -> bool:
+        if 'wide_strike' in self._effective_card_flags(card):
+            return False
         if card.card_type == 'guard':
             return False
         if self._card_is_self_only(card) and card.card_type != 'thorn':
@@ -1326,9 +1328,16 @@ class GameEngine2v2(GameEngine):
         early_owner_turn_start_equipment = self._run_owner_turn_start_action_status_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        early_owner_turn_start_equipment |= self._run_magic_yucca_pre_draw_equipment(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
         self._defer_turn_start_death_checks = True
-        turn_will_be_skipped = bool(ps.skip_turn) and not self._is_status_immune(player_id)
-        if ps.skip_turn > 0:
+        forced_turn_skip = bool(getattr(ps, 'forced_skip_turn', 0))
+        turn_will_be_skipped = forced_turn_skip or (bool(ps.skip_turn) and not self._is_status_immune(player_id))
+        turn_skip_reason = 'forced' if forced_turn_skip else ('stunned' if turn_will_be_skipped else '')
+        if forced_turn_skip:
+            ps.forced_skip_turn = max(0, int(getattr(ps, 'forced_skip_turn', 0)) - 1)
+        if not forced_turn_skip and ps.skip_turn > 0:
             ps.skip_turn = max(0, int(ps.skip_turn) - 1)
         if self.round_num > 1:
             sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
@@ -1338,6 +1347,7 @@ class GameEngine2v2(GameEngine):
             if self._queue_foresight_replace_choice(player_id, draw_count, 'turn_start_2v2'):
                 self._pending_turn_start_2v2_state = {
                     'turn_will_be_skipped': turn_will_be_skipped,
+                    'turn_skip_reason': turn_skip_reason,
                     'early_owner_turn_start_equipment': set(early_owner_turn_start_equipment),
                 }
                 return
@@ -1363,6 +1373,8 @@ class GameEngine2v2(GameEngine):
                         if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
                             aura_delta += self._eval_int(owner_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
             elixir_recovery = max(0, ELIXIR_RECOVERY - ps.enemy_e_reduction + aura_delta)
+            if self.opening_event_picks[player_id] == 6:
+                elixir_recovery += 1
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
             # Overload: deduct E at turn start, then clear
@@ -1372,8 +1384,6 @@ class GameEngine2v2(GameEngine):
                     ps.elixir -= deduct
                     self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
                 ps.overload = 0
-        if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
-            ps.gain_elixir(2)
         for owner_state in self.players:
             for eq in getattr(owner_state, 'equipment', []):
                 eq.uses_this_turn = 0
@@ -1448,7 +1458,10 @@ class GameEngine2v2(GameEngine):
                 self._on_player_death(player_id)
             self._check_game_over()
         if turn_will_be_skipped:
-            self.log_msg(f"{self.pn(player_id)}被跳过本回合")
+            if turn_skip_reason == 'stunned':
+                self.log_msg(f"{self.pn(player_id)}被眩晕，跳过本回合！")
+            else:
+                self.log_msg(f"{self.pn(player_id)}被跳过本回合")
             self._skip_current_turn_after_start = True
         self._check_game_over()
         if self.game_over:
@@ -1469,6 +1482,7 @@ class GameEngine2v2(GameEngine):
         ps = self.players[player_id]
         early_owner_turn_start_equipment = set(state.get('early_owner_turn_start_equipment') or set())
         turn_will_be_skipped = bool(state.get('turn_will_be_skipped'))
+        turn_skip_reason = str(state.get('turn_skip_reason') or ('stunned' if turn_will_be_skipped else ''))
         self._defer_turn_start_death_checks = True
         if self.round_num > 1:
             draw_count = max(0, int((foresight_result or {}).get('draw_count', 0) or 0))
@@ -1494,6 +1508,8 @@ class GameEngine2v2(GameEngine):
                         if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
                             aura_delta += self._eval_int(owner_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
             elixir_recovery = max(0, ELIXIR_RECOVERY - ps.enemy_e_reduction + aura_delta)
+            if self.opening_event_picks[player_id] == 6:
+                elixir_recovery += 1
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
             if ps.overload > 0:
@@ -1502,8 +1518,6 @@ class GameEngine2v2(GameEngine):
                     ps.elixir -= deduct
                     self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
                 ps.overload = 0
-        if self.opening_event_picks[player_id] == 6 and self.round_num <= 3:
-            ps.gain_elixir(2)
         for owner_state in self.players:
             for eq in getattr(owner_state, 'equipment', []):
                 eq.uses_this_turn = 0
@@ -1578,7 +1592,10 @@ class GameEngine2v2(GameEngine):
                 self._on_player_death(player_id)
             self._check_game_over()
         if turn_will_be_skipped:
-            self.log_msg(f"{self.pn(player_id)}被跳过本回合")
+            if turn_skip_reason == 'stunned':
+                self.log_msg(f"{self.pn(player_id)}被眩晕，跳过本回合！")
+            else:
+                self.log_msg(f"{self.pn(player_id)}被跳过本回合")
             self._skip_current_turn_after_start = True
         self._check_game_over()
         if self.game_over or getattr(self, 'pending_v2_ui', None):
@@ -1812,6 +1829,8 @@ class GameEngine2v2(GameEngine):
             target_card = self._resolve_card_ref(player_id, target_str.get('card'), None)
             owner_id, _, _ = self._find_card_location(target_card)
             return player_id if owner_id is None else owner_id
+        if isinstance(target_str, int):
+            return target_str if self._is_valid_effect_target(player_id, target_str) else -1
         if target_str in ('choice_target', 'selected_target', 'chosen_target'):
             target_id = self._selected_choice_target(player_id)
             return target_id if self._is_valid_effect_target(player_id, target_id) else -1
@@ -1834,8 +1853,6 @@ class GameEngine2v2(GameEngine):
                     return selected
         if target_str is None or target_str == '' or target_str == 'self':
             return player_id if self._is_valid_effect_target(player_id, player_id) else -1
-        if isinstance(target_str, int):
-            return target_str if self._is_valid_effect_target(player_id, target_str) else -1
         if target_str == 'enemy':
             enemies = self.get_enemies(player_id)
             for enemy_id in enemies:
@@ -1870,6 +1887,8 @@ class GameEngine2v2(GameEngine):
         return self._effect_tree_uses_event_target(event_def)
 
     def _resolve_targets(self, player_id, target_str):
+        if isinstance(target_str, int):
+            return [target_str] if self._is_valid_effect_target(player_id, target_str) else []
         if isinstance(target_str, dict) and target_str.get('ref') == 'card_owner':
             tid = self._resolve_target(player_id, target_str)
             return [] if tid < 0 else [tid]
