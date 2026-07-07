@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <defs>
+    <style>
+      .st0 {
+        fill: #fff;
+        stroke: #f7f8f8;
+        stroke-width: 10px;
+      }
+
+      .st0, .st1 {
+        stroke-miterlimit: 10;
+      }
+
+      .st1 {
+        fill: #83c767;
+        stroke: #68bd72;
+        stroke-width: 15px;
+      }
+    </style>
+  </defs>
+  <rect class="st1" x="7.09" y="7.09" width="269.29" height="269.29" rx="22.68" ry="22.68"/>
+  <path class="st0" d="M142.04,62.51l24.85,50.35,55.57,8.08-40.21,39.2,9.49,55.35-49.7-26.13-49.7,26.13,9.49-55.35-40.21-39.2,55.57-8.08,24.85-50.35Z"/>
+</svg>

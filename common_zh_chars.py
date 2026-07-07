@@ -1,9 +1,6 @@
-"""Shared common Chinese character set for font subsetting.
-
-The GB2312 level-1 Hanzi block contains 3,755 commonly used Simplified
-Chinese characters. It is a practical baseline for GTN UI/community text:
-large enough to avoid obvious missing glyphs, but still much smaller than a
-full CJK font.
+"""
+GB2312 level-1 汉字区包含 3755 个简体汉字。
+这是 GTN 字体子集化的基础区域。
 """
 
 from functools import lru_cache

@@ -45,6 +45,22 @@ CARD_FLAG_ALIASES = {
     'swift': 'swift',
     'stealth': 'stealth',
     'revealed': 'revealed',
+    'wide_strike': 'wide_strike',
+    'tag_wide_strike': 'wide_strike',
+    'waves': 'wide_strike',
+    'tag_waves': 'wide_strike',
+    'ocean:wide_strike': 'wide_strike',
+    'tag_ocean:wide_strike': 'wide_strike',
+    'tag_ocean_wide_strike': 'wide_strike',
+    'self_target': 'self_target',
+    'tag_self_target': 'self_target',
+    'blade': 'self_target',
+    'tag_blade': 'self_target',
+    'ocean:self_target': 'self_target',
+    'tag_ocean:self_target': 'self_target',
+    'tag_ocean_self_target': 'self_target',
+    '自刃': 'self_target',
+    '广域打击': 'wide_strike',
 }
 
 # Known vanilla flags that can be referenced by namespace-prefixed tags
@@ -54,7 +70,7 @@ _VANILLA_FLAGS = {
     'infinite_exclude', 'rebound', 'copy', 'unique',
     'swift', 'stealth', 'revealed', 'rebound', 'nothingness',
     'team_limited', 'team_unique', 'power', 'magic_swift',
-    'temp_swift', 'temp_heavy',
+    'temp_swift', 'temp_heavy', 'wide_strike', 'self_target',
 }
 
 
@@ -400,7 +416,8 @@ _reg(CardDef('Mimic', 'Mimic', '拟态', 0, 0, 'bloom', 2, 'Common',
 
 _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 0, 'Super',
              '神奇的树叶。可以使人死而复生。',
-             '回复目标20H；自身受到致命伤害时将H设为5，抽3张牌，清除所有效果，无敌直到下一个自己回合结束，放逐此牌；可以选择一个阵亡玩家复活，并触发此效果'))
+             '回复目标20H；自身受到致命伤害时将H设为5，抽3张牌，清除所有效果，无敌直到下一个自己回合结束，放逐此牌；可以选择一个阵亡玩家复活，并触发此效果',
+             flags={'sublime'}))
 
 _reg(CardDef('Leaf', 'Leaf', '叶子', 1, 0, 'root', 5, 'Common',
              '基础的装备之一，可以回复生命亦可造成伤害。',

@@ -71,6 +71,7 @@ from db import (
     admin_set_user_role,
     admin_snapshot_user_gr,
     adjust_user_thorn_dew,
+    award_match_thorn_dew,
     add_friend_request,
     apply_gr_match_result,
     change_username,
@@ -101,6 +102,8 @@ from db import (
     get_user_by_id,
     get_user_role_profile,
     get_user_by_username,
+    get_user_thorn_dew_center,
+    get_user_achievement_center,
     is_user_muted_db,
     list_friends,
     list_lobby_chat_entries,
@@ -114,12 +117,14 @@ from db import (
     list_reports,
     list_user_roles,
     list_user_thorn_dew_transactions,
+    claim_user_daily_checkin,
     begin_user_online_session,
     mark_user_last_seen,
     mark_friend_notifications_read_for_user,
     normalize_skin_config,
     normalize_username_key,
     preview_gr_match_result,
+    process_match_achievements,
     record_chat_message,
     record_card_draft_counts,
     record_card_draft_win_result,
@@ -196,7 +201,7 @@ BUILTIN_SETUP_CARD_IDS = {'ManaOrb'}
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
 PVP_MODES = ('1v1', '2v2', 'urf', 'random_deck')
 DUEL_INVITE_MODES = ('1v1', 'urf', 'random_deck')
-CHAT_CACHE_LIMIT = 500
+CHAT_CACHE_LIMIT = 1000
 
 try:
     merged = merge_mod_cards_to_card_defs()
@@ -266,7 +271,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260706-feedback-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260708-achievement-toast-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -713,6 +718,81 @@ set_mod_runtime_error_logger(
 )
 
 
+def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
+    flags = {}
+    try:
+        engine = getattr(room, 'engine', None)
+        if engine is None:
+            return flags
+        mode = getattr(room, 'mode', '')
+        for pidx in winner_player_indices or []:
+            if not (0 <= pidx < len(player_user_ids)):
+                continue
+            uid = player_user_ids[pidx]
+            if uid is None:
+                continue
+            user_flags = []
+            ps = engine.players[pidx] if hasattr(engine, 'players') and pidx < len(engine.players) else None
+            if mode == '1v1' and ps is not None and (
+                bool(getattr(ps, 'invincible', False))
+                or bool(getattr(ps, 'bandage_active', False))
+                or bool(getattr(ps, 'bandage_death_pending', False))
+            ):
+                user_flags.append('flag_backwater_win')
+            if ps is not None:
+                try:
+                    min_health = int(getattr(ps, 'achievement_min_health', getattr(ps, 'health', 999)) or 999)
+                except (TypeError, ValueError):
+                    min_health = 999
+                if min_health <= 5 and not bool(getattr(ps, 'achievement_invincible_triggered', False)):
+                    user_flags.append('flag_one_hp_win')
+                if bool(getattr(ps, 'achievement_yggdrasil_revived', False)):
+                    user_flags.append('flag_revive_leaf_win')
+                if not bool(getattr(ps, 'achievement_played_thorn', False)):
+                    user_flags.append('flag_no_thorn_win')
+            flags[str(uid)] = user_flags
+    except Exception as exc:
+        admin_event('error', f'achievement flag collection failed: {exc}')
+    return flags
+
+
+def emit_achievement_unlocks(room, achievement_result):
+    try:
+        unlocked = (achievement_result or {}).get('unlocked') or []
+        if not unlocked:
+            return
+        by_user = {}
+        for item in unlocked:
+            try:
+                uid = int(item.get('user_id'))
+            except (TypeError, ValueError):
+                continue
+            by_user.setdefault(uid, []).append({
+                'id': item.get('id') or '',
+                'name_cn': item.get('name_cn') or item.get('id') or '',
+                'name_en': item.get('name_en') or item.get('name_cn') or item.get('id') or '',
+                'description_cn': item.get('description_cn') or '',
+                'description_en': item.get('description_en') or item.get('description_cn') or '',
+                'hidden': bool(item.get('hidden')),
+                'reward_dew': int(item.get('reward_dew') or 0),
+            })
+        if not by_user:
+            return
+        for sid in getattr(room, 'player_sids', []) or []:
+            player = players.get(sid)
+            if not player:
+                continue
+            try:
+                uid = int(player.get('user_id') or 0)
+            except (TypeError, ValueError):
+                continue
+            items = by_user.get(uid)
+            if items:
+                socketio.emit('achievement_unlocked', {'items': items}, room=sid)
+    except Exception as exc:
+        admin_event('error', f'achievement unlock emit failed: {exc}', room_id=getattr(room, 'room_id', None))
+
+
 def admin_match_record(room, result='finished'):
     try:
         if getattr(room, '_history_recorded', False):
@@ -833,6 +913,7 @@ def admin_match_record(room, result='finished'):
             for event_id in (getattr(e, 'opening_event_picks', []) or [])[:len(names)]
         ]
         summary['winner_player_indices'] = stats_winner_player_indices
+        summary['achievement_flags_by_user'] = build_match_achievement_flags(room, player_user_ids, stats_winner_player_indices)
         if getattr(e, 'game_over', False):
             replay_actions = getattr(room, '_replay_actions', []) or []
             if not replay_actions or replay_actions[-1].get('type') != 'game_over':
@@ -846,6 +927,11 @@ def admin_match_record(room, result='finished'):
         if DB_AVAILABLE:
             try:
                 match_id = save_match_summary(summary)
+                try:
+                    dew_result = award_match_thorn_dew(match_id, summary)
+                    summary['thorn_dew_result'] = dew_result
+                except Exception as dew_exc:
+                    admin_event('error', f'failed to award thorn dew: {dew_exc}')
                 save_replay_snapshot(
                     match_id,
                     {**summary, 'replay': replay_data, 'community_mod_snapshots': community_snapshots},
@@ -865,6 +951,13 @@ def admin_match_record(room, result='finished'):
                         'applied': False,
                         'reason': ranking_invalid_reason or 'not_valid_for_ranking',
                     }
+                if valid_for_ranking and result == 'finished' and getattr(e, 'game_over', False):
+                    try:
+                        achievement_result = process_match_achievements(match_id, summary)
+                        summary['achievement_result'] = achievement_result
+                        emit_achievement_unlocks(room, achievement_result)
+                    except Exception as ach_exc:
+                        admin_event('error', f'failed to process achievements: {ach_exc}')
                 if result == 'finished' and getattr(e, 'game_over', False):
                     add_user_play_seconds(registered_user_ids, duration_seconds)
                 if result == 'finished' and getattr(e, 'game_over', False) and room.mode in ('1v1', '2v2'):
@@ -1657,23 +1750,46 @@ def _resolve_disconnect_blockers(room, player_index):
     return changed
 
 
-def _force_2v2_disconnect_death(room, player_index, nickname, reason='断线超时'):
-    e = room.engine
-    if room.mode != '2v2' or player_index < 0 or player_index >= len(getattr(e, 'players', [])):
+def _force_player_death_ignoring_saves(room, player_index, nickname='', reason='强制死亡', log=True, check_game_over=True):
+    """Set a player to dead without triggering Bandage, Yggdrasil, or invincible saves."""
+    e = getattr(room, 'engine', None)
+    if e is None or player_index < 0 or player_index >= len(getattr(e, 'players', [])):
         return False
     ps = e.players[player_index]
-    was_alive = ps.health > 0
+    was_alive = int(getattr(ps, 'health', 0) or 0) > 0
     ps.health = 0
     ps.invincible = False
     ps.bandage_active = False
     ps.bandage_death_pending = False
-    ps.skip_turn = False
-    if hasattr(e, '_on_player_death'):
-        e._on_player_death(player_index)
-    elif hasattr(e, '_check_game_over'):
-        e._check_game_over()
-    if was_alive:
-        e.log_msg(f"{nickname}{reason}，已判定阵亡。")
+    ps.skip_turn = 0
+    if hasattr(e, '_clear_invincible_state'):
+        try:
+            e._clear_invincible_state(player_index)
+        except Exception:
+            ps.invincible = False
+    old_ygg_check = getattr(e, '_yggdrasil_check', True)
+    try:
+        e._yggdrasil_check = False
+        if getattr(room, 'mode', None) == '2v2' and hasattr(e, '_on_player_death'):
+            e._on_player_death(player_index)
+        elif check_game_over and hasattr(e, '_check_game_over'):
+            e._check_game_over()
+    finally:
+        e._yggdrasil_check = old_ygg_check
+    ps.health = 0
+    ps.invincible = False
+    ps.bandage_active = False
+    ps.bandage_death_pending = False
+    if log and was_alive:
+        e.log_msg(f"{nickname or e.pn(player_index)}{reason}，已判定阵亡。")
+    return was_alive
+
+
+def _force_2v2_disconnect_death(room, player_index, nickname, reason='断线超时'):
+    e = room.engine
+    if room.mode != '2v2' or player_index < 0 or player_index >= len(getattr(e, 'players', [])):
+        return False
+    was_alive = _force_player_death_ignoring_saves(room, player_index, nickname, reason, log=True)
     if not getattr(e, 'game_over', False) and getattr(e, 'current_player', None) == player_index:
         advance = getattr(e, '_advance_turn', None)
         if callable(advance):
@@ -1916,6 +2032,7 @@ def _finish_room_by_forfeit(room, player_index, nickname, reason='中途退出')
         losing_team = _room_team_for_player(room, player_index)
         if losing_team < 0:
             return False
+        _force_player_death_ignoring_saves(room, player_index, nickname, reason, log=False, check_game_over=False)
         winning_team = 1 - losing_team
         e.game_over = True
         e.winning_team = winning_team
@@ -1924,6 +2041,7 @@ def _finish_room_by_forfeit(room, player_index, nickname, reason='中途退出')
         e.log_msg(f"{nickname}{reason}，队伍{winning_team + 1}获胜！")
         return True
     winner = 1 - player_index
+    _force_player_death_ignoring_saves(room, player_index, nickname, reason, log=False, check_game_over=False)
     e.game_over = True
     e.winner = winner
     e.phase = 'game_over'
@@ -3029,7 +3147,20 @@ def _pending_interaction_watchdog_worker():
                             admin_event('error', f'auto_cancel_pending_v2_ui failed room={room.room_id}: {exc}', room_id=room.room_id)
                             engine.pending_v2_ui = None
                         pending_emits.append(('state', room))
-            for kind, room in pending_emits:
+                    for old_sid, dc_info in list((getattr(room, 'disconnected_players', {}) or {}).items()):
+                        try:
+                            disconnected_at = float(dc_info.get('disconnect_time') or now)
+                        except Exception:
+                            disconnected_at = now
+                        if now - disconnected_at >= RECONNECT_TIMEOUT_SECONDS:
+                            admin_event('warning', f'reconnect_timeout watchdog room={room.room_id} sid={old_sid}', room_id=room.room_id)
+                            pending_emits.append(('reconnect_timeout', room.room_id, old_sid))
+            for item in pending_emits:
+                kind = item[0]
+                if kind == 'reconnect_timeout':
+                    reconnect_timeout(item[1], item[2])
+                    continue
+                room = item[1]
                 if kind == 'response':
                     emit_pending_response_requests(room)
                 broadcast_game_state(room)
@@ -7834,8 +7965,10 @@ def execute_admin_command(line):
             room = rooms[room_id]
             e = room.engine
             if winner_token in ('draw', '-1'):
-                for ps in e.players:
-                    ps.health = 0
+                _clear_room_pending_on_forfeit(room)
+                for pidx in range(len(e.players)):
+                    _force_player_death_ignoring_saves(room, pidx, e.pn(pidx), '被管理员强制结束', log=False, check_game_over=False)
+                _set_room_draw(room, '管理员强制结束：平局')
             else:
                 winner = parse_int_token(winner_token, 'winner')
                 if room.mode == '2v2':
@@ -7843,12 +7976,12 @@ def execute_admin_command(line):
                         return {'success': False, 'output': '2v2 的胜者必须是队伍 0、队伍 1 或 draw'}
                     losing_team = 1 - winner
                     for pidx in e.teams[losing_team]:
-                        e.players[pidx].health = 0
+                        _force_player_death_ignoring_saves(room, pidx, e.pn(pidx), '被管理员强制结束', log=False, check_game_over=False)
                 else:
                     if winner not in (0, 1):
                         return {'success': False, 'output': '胜者必须是 0、1 或 draw'}
-                    e.players[1 - winner].health = 0
-            e._check_game_over()
+                    _force_player_death_ignoring_saves(room, 1 - winner, e.pn(1 - winner), '被管理员强制结束', log=False, check_game_over=False)
+                e._check_game_over()
             admin_match_record(room, result='admin_endgame')
             broadcast_game_state(room)
         admin_event('admin', f'endgame room {room_id} winner={winner_token}')
@@ -8193,15 +8326,22 @@ def set_room_player_attr(room_id, pidx, key, val):
         ps = e.players[pidx]
         if not hasattr(ps, attr):
             return False, f'玩家没有属性：{attr}'
-        setattr(ps, attr, val)
         if key == 'h':
-            ps.base_max_health = max(ps.base_max_health, val)
-            ps.max_health = max(ps.max_health, val)
-            e._check_game_over()
+            if val <= 0:
+                _force_player_death_ignoring_saves(room, pidx, e.pn(pidx), '被管理员强制设为0H', log=True)
+            else:
+                setattr(ps, attr, val)
+                ps.base_max_health = max(ps.base_max_health, val)
+                ps.max_health = max(ps.max_health, val)
+                e._check_game_over()
         elif key == 'e':
+            setattr(ps, attr, val)
             ps.max_elixir = max(ps.max_elixir, val)
         elif key == 'm':
+            setattr(ps, attr, val)
             ps.max_magic = max(ps.max_magic, val)
+        else:
+            setattr(ps, attr, val)
         broadcast_game_state(room)
     return True, f'已设置房间 {room_id} 的玩家 {pidx}：{key}={val}'
 
@@ -11020,6 +11160,68 @@ def api_auth_me():
     return response
 
 
+@app.route('/api/thorn-dew')
+def api_thorn_dew():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    try:
+        center = get_user_thorn_dew_center(user.get('id'))
+        return jsonify({'success': True, **center})
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'thorn dew center failed: {exc}')
+        return jsonify({'success': False, 'error': '后台暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'thorn dew center failed: {exc}')
+        return jsonify({'success': False, 'error': '荆露信息加载失败'}), 500
+
+
+@app.route('/api/thorn-dew/checkin', methods=['POST'])
+def api_thorn_dew_checkin():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    try:
+        center, error = claim_user_daily_checkin(user.get('id'))
+        if error:
+            return jsonify({'success': False, 'error': error, **(center or {})})
+        fresh = get_user_by_id(user.get('id')) or user
+        _set_account_session(fresh)
+        return jsonify({'success': True, **(center or {}), 'user': auth_user_payload(fresh)})
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'thorn dew checkin failed: {exc}')
+        return jsonify({'success': False, 'error': '后台暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'thorn dew checkin failed: {exc}')
+        return jsonify({'success': False, 'error': '签到失败'}), 500
+
+
+@app.route('/api/achievements')
+def api_achievements():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    lang = str(request.args.get('lang') or session.get('lang') or 'zh').lower()
+    if lang not in {'zh', 'en', 'fr', 'ja'}:
+        lang = 'zh'
+    try:
+        achievements = get_user_achievement_center(user.get('id'), lang=lang)
+        dew = get_user_thorn_dew_center(user.get('id'))
+        return jsonify({'success': True, **achievements, 'dew': dew})
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'achievements failed: {exc}')
+        return jsonify({'success': False, 'error': '后台暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'achievements failed: {exc}')
+        return jsonify({'success': False, 'error': '成就加载失败'}), 500
+
+
 @app.route('/api/leaderboard')
 def api_leaderboard():
     if not DB_AVAILABLE:
@@ -11477,12 +11679,13 @@ def api_cards():
         community_fields, community_mod = resolve_community_loadout(request.args)
     except Exception as exc:
         return _json_error(str(exc), 400)
+    include_all_mods = str(request.args.get('include_all_mods', '')).strip().lower() in {'1', 'true', 'yes', 'all'}
     loadout = build_mod_loadout(
         disabled_mods,
         community_mod=community_mod,
         community_hash=community_fields.get('community_mod_hash', ''),
     )
-    allowed_card_ids = loadout['allowed_card_ids']
+    allowed_card_ids = set(CARD_DEFS.keys()) if include_all_mods else loadout['allowed_card_ids']
     card_mod_sources = get_card_mod_sources([])
     if community_mod:
         selected_hashes = {
@@ -11564,8 +11767,9 @@ def api_opening_events():
         community_fields, community_mod = resolve_community_loadout(request.args)
     except Exception as exc:
         return _json_error(str(exc), 400)
+    include_all_mods = str(request.args.get('include_all_mods', '')).strip().lower() in {'1', 'true', 'yes', 'all'}
     loadout = build_mod_loadout(
-        request.args.get('disabled_mods', ''),
+        '' if include_all_mods else request.args.get('disabled_mods', ''),
         community_mod=community_mod,
         community_hash=community_fields.get('community_mod_hash', ''),
     )
@@ -11930,7 +12134,7 @@ def admin_endgame(room_id):
         room = rooms[room_id]
         e = room.engine
         loser = 1 - winner
-        e.players[loser].health = 0
+        _force_player_death_ignoring_saves(room, loser, e.pn(loser), '被管理员强制结束', log=False, check_game_over=False)
         e._check_game_over()
         admin_match_record(room, result='admin_endgame')
         broadcast_game_state(room)
@@ -14825,6 +15029,8 @@ def on_end_turn(data):
                 _clear_room_action_timer(room)
                 _sync_room_action_timer_after_state_change(room)
         broadcast_game_state(room)
+        if result.get('success') and getattr(engine, 'pending_response', None):
+            emit_or_resolve_pending_response(room, reason='end_turn')
         if result.get('success'):
             emit_turn_timer_update(room)
         if not result.get('success'):

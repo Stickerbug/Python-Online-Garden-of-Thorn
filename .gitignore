@@ -224,3 +224,7 @@ __marimo__/
 
 # Runtime cache extracted from .gtnmod packages.
 static/assets/mod-card-art/
+
+# Local/source audio material; ship only optimized runtime files.
+temp music folder/
+static/audio/music/source-pending/

@@ -33,6 +33,48 @@ GR_SOFT_RESET_MAX = 1250
 GR_SEASON_MIN_GAMES = 8
 GR_TOTAL_MIN_GAMES = 20
 GR_2V2_FACTOR = 0.85
+THORN_DEW_TIMEZONE = timezone(timedelta(hours=8))
+THORN_DEW_SIGNIN_REWARDS = (40, 45, 50, 55, 60, 70, 100)
+THORN_DEW_MODE_REWARDS = {
+    '1v1': 30,
+    '2v2': 40,
+    'random_deck': 25,
+    'urf': 25,
+}
+THORN_DEW_WIN_BONUS = 15
+THORN_DEW_DRAW_BONUS = 8
+ACHIEVEMENT_TYPES = {
+    'milestone': {'color': '#5aa469'},
+    'battle': {'color': '#b94d5a'},
+    'mode': {'color': '#5278b8'},
+    'social': {'color': '#b08a33'},
+    'hidden': {'color': '#7257a8'},
+}
+ACHIEVEMENT_DEFS = [
+    {'id': 'games_10', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 I', 'name_en': 'Gardener Path I', 'description_cn': '完成10场有效对局。', 'description_en': 'Complete 10 valid matches.', 'target': 10, 'metric': 'games_played', 'reward_dew': 80},
+    {'id': 'games_20', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 II', 'name_en': 'Gardener Path II', 'description_cn': '完成20场有效对局。', 'description_en': 'Complete 20 valid matches.', 'target': 20, 'metric': 'games_played', 'reward_dew': 120},
+    {'id': 'games_50', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 III', 'name_en': 'Gardener Path III', 'description_cn': '完成50场有效对局。', 'description_en': 'Complete 50 valid matches.', 'target': 50, 'metric': 'games_played', 'reward_dew': 180},
+    {'id': 'games_100', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 IV', 'name_en': 'Gardener Path IV', 'description_cn': '完成100场有效对局。', 'description_en': 'Complete 100 valid matches.', 'target': 100, 'metric': 'games_played', 'reward_dew': 260},
+    {'id': 'games_200', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 V', 'name_en': 'Gardener Path V', 'description_cn': '完成200场有效对局。', 'description_en': 'Complete 200 valid matches.', 'target': 200, 'metric': 'games_played', 'reward_dew': 400},
+    {'id': 'games_500', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 VI', 'name_en': 'Gardener Path VI', 'description_cn': '完成500场有效对局。', 'description_en': 'Complete 500 valid matches.', 'target': 500, 'metric': 'games_played', 'reward_dew': 800},
+    {'id': 'games_1000', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 VII', 'name_en': 'Gardener Path VII', 'description_cn': '完成1000场有效对局。', 'description_en': 'Complete 1000 valid matches.', 'target': 1000, 'metric': 'games_played', 'reward_dew': 1500},
+    {'id': 'wins_10', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 I', 'name_en': 'Blooming Wins I', 'description_cn': '赢得10场有效对局。', 'description_en': 'Win 10 valid matches.', 'target': 10, 'metric': 'wins', 'reward_dew': 100},
+    {'id': 'wins_20', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 II', 'name_en': 'Blooming Wins II', 'description_cn': '赢得20场有效对局。', 'description_en': 'Win 20 valid matches.', 'target': 20, 'metric': 'wins', 'reward_dew': 160},
+    {'id': 'wins_50', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 III', 'name_en': 'Blooming Wins III', 'description_cn': '赢得50场有效对局。', 'description_en': 'Win 50 valid matches.', 'target': 50, 'metric': 'wins', 'reward_dew': 250},
+    {'id': 'wins_100', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 IV', 'name_en': 'Blooming Wins IV', 'description_cn': '赢得100场有效对局。', 'description_en': 'Win 100 valid matches.', 'target': 100, 'metric': 'wins', 'reward_dew': 450},
+    {'id': 'wins_200', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 V', 'name_en': 'Blooming Wins V', 'description_cn': '赢得200场有效对局。', 'description_en': 'Win 200 valid matches.', 'target': 200, 'metric': 'wins', 'reward_dew': 800},
+    {'id': 'wins_500', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 VI', 'name_en': 'Blooming Wins VI', 'description_cn': '赢得500场有效对局。', 'description_en': 'Win 500 valid matches.', 'target': 500, 'metric': 'wins', 'reward_dew': 1600},
+    {'id': 'first_win', 'type': 'battle', 'name_cn': '第一朵花', 'name_en': 'First Bloom', 'description_cn': '赢得第一场有效对局。', 'description_en': 'Win your first valid match.', 'target': 1, 'metric': 'wins', 'reward_dew': 80},
+    {'id': 'first_1v1_win', 'type': 'mode', 'name_cn': '单挑胜者', 'name_en': 'Duel Winner', 'description_cn': '赢得一场1v1对局。', 'description_en': 'Win a 1v1 match.', 'target': 1, 'metric': 'mode_1v1_win', 'reward_dew': 100},
+    {'id': 'first_2v2_win', 'type': 'mode', 'name_cn': '共同花园', 'name_en': 'Shared Garden', 'description_cn': '赢得一场2v2对局。', 'description_en': 'Win a 2v2 match.', 'target': 1, 'metric': 'mode_2v2_win', 'reward_dew': 120},
+    {'id': 'first_random_deck_win', 'type': 'mode', 'name_cn': '随机也赢', 'name_en': 'Random Winner', 'description_cn': '赢得一场随机卡组对局。', 'description_en': 'Win a Random Deck match.', 'target': 1, 'metric': 'mode_random_deck_win', 'reward_dew': 100},
+    {'id': 'first_urf_win', 'type': 'mode', 'name_cn': '火力压制', 'name_en': 'Firepower Victory', 'description_cn': '赢得一场无限火力对局。', 'description_en': 'Win an Infinite Fire match.', 'target': 1, 'metric': 'mode_urf_win', 'reward_dew': 100},
+    {'id': 'backwater_win', 'type': 'battle', 'name_cn': '背水一战', 'name_en': 'Last Stand', 'description_cn': '1v1中，在无敌时击败对手。', 'description_en': 'In 1v1, defeat your opponent while invincible.', 'target': 1, 'metric': 'flag_backwater_win', 'reward_dew': 200},
+    {'id': 'revive_leaf_win', 'type': 'battle', 'name_cn': '复苏之叶', 'name_en': 'Leaf of Revival', 'description_cn': '用世界树之叶复活玩家，并最终获胜。', 'description_en': 'Revive a player with Yggdrasil and win.', 'target': 1, 'metric': 'flag_revive_leaf_win', 'reward_dew': 300},
+    {'id': 'no_thorn_win', 'type': 'hidden', 'hidden': True, 'name_cn': '不靠攻击', 'name_en': 'No Thorns Needed', 'description_cn': '赢得一局，且自己全局没有打出Thorn牌。', 'description_en': 'Win a match without playing Thorn cards.', 'target': 1, 'metric': 'flag_no_thorn_win', 'reward_dew': 250},
+    {'id': 'one_hp_win', 'type': 'battle', 'name_cn': '起死回生', 'name_en': 'Back from the Brink', 'description_cn': '本局中曾经H降到5或以下，且没有触发过无敌，最后赢得对局。', 'description_en': 'Drop to 5 H or lower during a match without triggering invincibility, then win.', 'target': 1, 'metric': 'flag_one_hp_win', 'reward_dew': 220},
+]
+ACHIEVEMENT_DEF_MAP = {item['id']: item for item in ACHIEVEMENT_DEFS}
 _DM_MARK_READ_LAST_AT = {}
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
 ROLE_TYPES = {'admin', 'staff', 'contributor', 'sponsor', 'none'}
@@ -478,6 +520,37 @@ def init_db():
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_currency_tx_user ON user_currency_transactions(user_id, id DESC)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_currency_tx_created ON user_currency_transactions(created_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS user_daily_checkins (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                checkin_date TEXT NOT NULL,
+                streak_day INTEGER NOT NULL DEFAULT 1,
+                reward INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                UNIQUE(user_id, checkin_date),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_daily_checkins_user_date ON user_daily_checkins(user_id, checkin_date DESC)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS user_achievements (
+                user_id INTEGER NOT NULL,
+                achievement_id TEXT NOT NULL,
+                progress INTEGER NOT NULL DEFAULT 0,
+                unlocked INTEGER NOT NULL DEFAULT 0,
+                unlocked_at TEXT,
+                reward_claimed INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY(user_id, achievement_id),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_user_achievements_unlocked ON user_achievements(user_id, unlocked, unlocked_at DESC)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS remember_tokens (
@@ -1244,6 +1317,476 @@ def list_user_thorn_dew_transactions(user_id, limit=30):
             }
             for row in rows
         ]
+
+
+def _thorn_dew_now():
+    return datetime.now(THORN_DEW_TIMEZONE)
+
+
+def _thorn_dew_date(value=None):
+    dt = value or _thorn_dew_now()
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(THORN_DEW_TIMEZONE).date().isoformat()
+
+
+def _thorn_dew_day_bounds_utc(date_text=None):
+    try:
+        local_date = datetime.strptime(str(date_text or _thorn_dew_date()), '%Y-%m-%d').date()
+    except Exception:
+        local_date = _thorn_dew_now().date()
+    start_local = datetime(local_date.year, local_date.month, local_date.day, tzinfo=THORN_DEW_TIMEZONE)
+    end_local = start_local + timedelta(days=1)
+    return utc_iso(start_local.astimezone(timezone.utc)), utc_iso(end_local.astimezone(timezone.utc))
+
+
+def _currency_source_exists(conn, user_id, source_type, source_id):
+    row = conn.execute(
+        '''
+        SELECT id FROM user_currency_transactions
+        WHERE user_id = ? AND currency = 'thorn_dew' AND source_type = ? AND source_id = ?
+        LIMIT 1
+        ''',
+        (int(user_id), str(source_type or ''), str(source_id or '')),
+    ).fetchone()
+    return row is not None
+
+
+def _thorn_dew_daily_multiplier(count_before):
+    count = max(0, int(count_before or 0))
+    if count < 10:
+        return 1.0
+    if count < 20:
+        return 0.5
+    return 0.2
+
+
+def _thorn_dew_same_opponent_multiplier(count_before):
+    count = max(0, int(count_before or 0))
+    if count < 8:
+        return 1.0
+    if count < 15:
+        return 0.8
+    if count < 25:
+        return 0.5
+    return 0.25
+
+
+def get_user_thorn_dew_center(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return {'balance': _thorn_dew_payload(None), 'checked_in_today': False, 'today': _thorn_dew_date(), 'transactions': []}
+    today = _thorn_dew_date()
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', (uid,)).fetchone()
+        if user is None:
+            return {'balance': _thorn_dew_payload(None), 'checked_in_today': False, 'today': today, 'transactions': []}
+        checkin = conn.execute(
+            'SELECT * FROM user_daily_checkins WHERE user_id = ? AND checkin_date = ?',
+            (uid, today),
+        ).fetchone()
+        last = conn.execute(
+            'SELECT * FROM user_daily_checkins WHERE user_id = ? ORDER BY checkin_date DESC LIMIT 1',
+            (uid,),
+        ).fetchone()
+        next_streak = 1
+        if last is not None:
+            try:
+                last_date = datetime.strptime(last['checkin_date'], '%Y-%m-%d').date()
+                if last_date == (_thorn_dew_now().date() - timedelta(days=1)):
+                    next_streak = int(last['streak_day'] or 0) + 1
+                elif last_date == _thorn_dew_now().date():
+                    next_streak = int(last['streak_day'] or 1)
+            except Exception:
+                next_streak = 1
+        reward_index = (max(1, next_streak) - 1) % len(THORN_DEW_SIGNIN_REWARDS)
+        return {
+            'balance': _thorn_dew_payload(user),
+            'today': today,
+            'checked_in_today': checkin is not None,
+            'streak_day': int(checkin['streak_day'] or 0) if checkin else int(next_streak),
+            'next_checkin_reward': int(THORN_DEW_SIGNIN_REWARDS[reward_index]),
+            'checkin_rewards': list(THORN_DEW_SIGNIN_REWARDS),
+            'match_rewards': dict(THORN_DEW_MODE_REWARDS),
+            'win_bonus': int(THORN_DEW_WIN_BONUS),
+            'draw_bonus': int(THORN_DEW_DRAW_BONUS),
+            'transactions': list_user_thorn_dew_transactions(uid, limit=20),
+        }
+
+
+def claim_user_daily_checkin(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '账号无效'
+    today = _thorn_dew_date()
+    now = utc_now()
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', (uid,)).fetchone()
+        if user is None:
+            return None, '账号不存在'
+        existing = conn.execute(
+            'SELECT * FROM user_daily_checkins WHERE user_id = ? AND checkin_date = ?',
+            (uid, today),
+        ).fetchone()
+        if existing is not None:
+            return get_user_thorn_dew_center(uid), '今天已经签到过了'
+        yesterday = (_thorn_dew_now().date() - timedelta(days=1)).isoformat()
+        prev = conn.execute(
+            'SELECT * FROM user_daily_checkins WHERE user_id = ? AND checkin_date = ?',
+            (uid, yesterday),
+        ).fetchone()
+        streak = int(prev['streak_day'] or 0) + 1 if prev is not None else 1
+        reward = int(THORN_DEW_SIGNIN_REWARDS[(streak - 1) % len(THORN_DEW_SIGNIN_REWARDS)])
+        free_before = max(0, int(user['thorn_dew_free'] or 0))
+        paid_before = max(0, int(user['thorn_dew_paid'] or 0))
+        free_after = free_before + reward
+        conn.execute(
+            'INSERT INTO user_daily_checkins (user_id, checkin_date, streak_day, reward, created_at) VALUES (?, ?, ?, ?, ?)',
+            (uid, today, streak, reward, now),
+        )
+        conn.execute('UPDATE users SET thorn_dew_free = ? WHERE id = ?', (free_after, uid))
+        conn.execute(
+            '''
+            INSERT INTO user_currency_transactions (
+                user_id, currency, free_delta, paid_delta, reason, source_type, source_id,
+                balance_free_after, balance_paid_after, admin_username, created_at
+            )
+            VALUES (?, 'thorn_dew', ?, 0, ?, 'daily_checkin', ?, ?, ?, '', ?)
+            ''',
+            (uid, reward, f'每日签到 第{streak}天', today, free_after, paid_before, now),
+        )
+        conn.commit()
+    return get_user_thorn_dew_center(uid), None
+
+
+def award_match_thorn_dew(match_id, summary):
+    if not summary or summary.get('result') not in ('win', 'draw'):
+        return {'awarded': [], 'skipped': 'result'}
+    if not summary.get('valid_for_ranking', True):
+        return {'awarded': [], 'skipped': summary.get('ranking_invalid_reason') or 'not_valid'}
+    try:
+        mid = int(match_id)
+    except (TypeError, ValueError):
+        return {'awarded': [], 'skipped': 'match_id'}
+    mode = str(summary.get('mode') or '').strip()
+    base = int(THORN_DEW_MODE_REWARDS.get(mode, 20))
+    player_ids = summary.get('player_ids') or []
+    winner_ids = {int(uid) for uid in (summary.get('winner_user_ids') or []) if uid is not None}
+    is_draw = summary.get('result') == 'draw'
+    registered_ids = []
+    for uid in player_ids:
+        if uid is None:
+            continue
+        try:
+            registered_ids.append(int(uid))
+        except (TypeError, ValueError):
+            continue
+    if not registered_ids:
+        return {'awarded': [], 'skipped': 'no_registered'}
+    today = _thorn_dew_date()
+    day_start, day_end = _thorn_dew_day_bounds_utc(today)
+    now = utc_now()
+    awarded = []
+    with get_db_connection() as conn:
+        for uid in registered_ids:
+            source_type = 'match_reward'
+            opponents = sorted(str(other) for other in registered_ids if other != uid)
+            opp_hash = hashlib.sha256(','.join(opponents).encode('utf-8')).hexdigest()[:12] if opponents else 'solo'
+            source_id = f'match:{mid}:u:{uid}:opp:{opp_hash}'
+            if _currency_source_exists(conn, uid, source_type, source_id):
+                continue
+            user = conn.execute('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', (uid,)).fetchone()
+            if user is None:
+                continue
+            daily_count = conn.execute(
+                '''
+                SELECT COUNT(*) FROM user_currency_transactions
+                WHERE user_id = ? AND currency = 'thorn_dew' AND source_type = 'match_reward'
+                  AND created_at >= ? AND created_at < ?
+                ''',
+                (uid, day_start, day_end),
+            ).fetchone()[0]
+            same_count = conn.execute(
+                '''
+                SELECT COUNT(*) FROM user_currency_transactions
+                WHERE user_id = ? AND currency = 'thorn_dew' AND source_type = 'match_reward'
+                  AND source_id LIKE ? AND created_at >= ? AND created_at < ?
+                ''',
+                (uid, f'%:opp:{opp_hash}', day_start, day_end),
+            ).fetchone()[0]
+            bonus = THORN_DEW_DRAW_BONUS if is_draw else (THORN_DEW_WIN_BONUS if uid in winner_ids else 0)
+            raw_amount = base + int(bonus)
+            multiplier = min(_thorn_dew_daily_multiplier(daily_count), _thorn_dew_same_opponent_multiplier(same_count))
+            amount = max(1, int(math.floor(raw_amount * multiplier)))
+            free_before = max(0, int(user['thorn_dew_free'] or 0))
+            paid_before = max(0, int(user['thorn_dew_paid'] or 0))
+            free_after = free_before + amount
+            reason = f'有效对局奖励 {mode}'
+            if bonus:
+                reason += ' 平局' if is_draw else ' 胜利'
+            if multiplier < 1:
+                reason += f' ×{multiplier:g}'
+            conn.execute('UPDATE users SET thorn_dew_free = ? WHERE id = ?', (free_after, uid))
+            conn.execute(
+                '''
+                INSERT INTO user_currency_transactions (
+                    user_id, currency, free_delta, paid_delta, reason, source_type, source_id,
+                    balance_free_after, balance_paid_after, admin_username, created_at
+                )
+                VALUES (?, 'thorn_dew', ?, 0, ?, ?, ?, ?, ?, '', ?)
+                ''',
+                (uid, amount, reason, source_type, source_id, free_after, paid_before, now),
+            )
+            awarded.append({'user_id': uid, 'amount': amount, 'multiplier': multiplier, 'reason': reason})
+        conn.commit()
+    return {'awarded': awarded, 'skipped': None}
+
+
+def _achievement_public_payload(defn, row=None, lang='zh', progress_override=None):
+    target = int(defn.get('target') or 1)
+    row_progress = int(row['progress'] or 0) if row else 0
+    if progress_override is not None:
+        try:
+            row_progress = max(row_progress, int(progress_override or 0))
+        except (TypeError, ValueError):
+            pass
+    unlocked = bool(row and int(row['unlocked'] or 0)) or row_progress >= target
+    hidden = bool(defn.get('hidden'))
+    progress = row_progress
+    type_key = str(defn.get('type') or 'milestone')
+    if hidden and not unlocked:
+        suffix = 'cn' if lang == 'zh' else 'en'
+        return {
+            'id': defn['id'],
+            'hidden': True,
+            'unlocked': False,
+            'type': 'hidden',
+            'type_color': ACHIEVEMENT_TYPES['hidden']['color'],
+            'series': defn.get('series') or '',
+            'name': defn.get(f'name_{suffix}') or defn.get('name_cn') or defn['id'],
+            'description': '？',
+            'true_description': defn.get(f'description_{suffix}') or defn.get('description_cn') or '',
+            'progress': 0,
+            'target': 1,
+            'reward_dew': int(defn.get('reward_dew') or 0),
+            'unlocked_at': None,
+        }
+    suffix = 'cn' if lang == 'zh' else 'en'
+    return {
+        'id': defn['id'],
+        'hidden': hidden,
+        'unlocked': unlocked,
+        'type': type_key,
+        'type_color': ACHIEVEMENT_TYPES.get(type_key, ACHIEVEMENT_TYPES['milestone'])['color'],
+        'series': defn.get('series') or '',
+        'name': defn.get(f'name_{suffix}') or defn.get('name_cn') or defn['id'],
+        'description': defn.get(f'description_{suffix}') or defn.get('description_cn') or '',
+        'true_description': defn.get(f'description_{suffix}') or defn.get('description_cn') or '',
+        'progress': min(progress, target),
+        'target': target,
+        'reward_dew': int(defn.get('reward_dew') or 0),
+        'unlocked_at': row['unlocked_at'] if row else None,
+    }
+
+
+def get_user_achievement_center(user_id, lang='zh'):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return {'achievements': [], 'unlocked_count': 0, 'total_count': len(ACHIEVEMENT_DEFS)}
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        rows = conn.execute(
+            'SELECT * FROM user_achievements WHERE user_id = ?',
+            (uid,),
+        ).fetchall()
+        row_map = {row['achievement_id']: row for row in rows}
+        cumulative_metrics = {}
+        if user is not None:
+            cumulative_metrics = {
+                'games_played': int(user['games_played'] or 0),
+                'wins': int(user['wins'] or 0),
+                'losses': int(user['losses'] or 0),
+                'draws': int(user['draws'] or 0),
+            }
+        items = [
+            _achievement_public_payload(
+                defn,
+                row_map.get(defn['id']),
+                lang=lang,
+                progress_override=cumulative_metrics.get(str(defn.get('metric') or '')),
+            )
+            for defn in ACHIEVEMENT_DEFS
+        ]
+        items.sort(key=lambda item: (item['type'] == 'hidden', not item['unlocked'], item['type'], item.get('series') or item['id'], item['id']))
+        return {
+            'achievements': items,
+            'unlocked_count': sum(1 for item in items if item['unlocked']),
+            'total_count': len(items),
+            'type_colors': {key: value['color'] for key, value in ACHIEVEMENT_TYPES.items()},
+        }
+
+
+def _unlock_achievement_conn(conn, user_id, achievement_id, progress=None, now=None):
+    defn = ACHIEVEMENT_DEF_MAP.get(str(achievement_id or ''))
+    if not defn:
+        return None
+    uid = int(user_id)
+    now = now or utc_now()
+    target = int(defn.get('target') or 1)
+    progress_value = max(target, int(progress if progress is not None else target))
+    row = conn.execute(
+        'SELECT * FROM user_achievements WHERE user_id = ? AND achievement_id = ?',
+        (uid, defn['id']),
+    ).fetchone()
+    if row and int(row['unlocked'] or 0):
+        if progress_value > int(row['progress'] or 0):
+            conn.execute(
+                'UPDATE user_achievements SET progress = ?, updated_at = ? WHERE user_id = ? AND achievement_id = ?',
+                (progress_value, now, uid, defn['id']),
+            )
+        return None
+    if row:
+        conn.execute(
+            '''
+            UPDATE user_achievements
+            SET progress = ?, unlocked = 1, unlocked_at = ?, reward_claimed = 1, updated_at = ?
+            WHERE user_id = ? AND achievement_id = ?
+            ''',
+            (progress_value, now, now, uid, defn['id']),
+        )
+    else:
+        conn.execute(
+            '''
+            INSERT INTO user_achievements (user_id, achievement_id, progress, unlocked, unlocked_at, reward_claimed, updated_at)
+            VALUES (?, ?, ?, 1, ?, 1, ?)
+            ''',
+            (uid, defn['id'], progress_value, now, now),
+        )
+    reward = int(defn.get('reward_dew') or 0)
+    if reward > 0 and not _currency_source_exists(conn, uid, 'achievement', defn['id']):
+        user = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        if user is not None:
+            free_before = max(0, int(user['thorn_dew_free'] or 0))
+            paid_before = max(0, int(user['thorn_dew_paid'] or 0))
+            free_after = free_before + reward
+            conn.execute('UPDATE users SET thorn_dew_free = ? WHERE id = ?', (free_after, uid))
+            conn.execute(
+                '''
+                INSERT INTO user_currency_transactions (
+                    user_id, currency, free_delta, paid_delta, reason, source_type, source_id,
+                    balance_free_after, balance_paid_after, admin_username, created_at
+                )
+                VALUES (?, 'thorn_dew', ?, 0, ?, 'achievement', ?, ?, ?, '', ?)
+                ''',
+                (uid, reward, f"成就：{defn.get('name_cn') or defn['id']}", defn['id'], free_after, paid_before, now),
+            )
+    return {
+        'id': defn['id'],
+        'name_cn': defn.get('name_cn'),
+        'name_en': defn.get('name_en'),
+        'description_cn': defn.get('description_cn') or '',
+        'description_en': defn.get('description_en') or '',
+        'hidden': bool(defn.get('hidden')),
+        'reward_dew': reward,
+    }
+
+
+def _update_achievement_progress_conn(conn, user_id, defn, value, now):
+    uid = int(user_id)
+    target = int(defn.get('target') or 1)
+    current = max(0, int(value or 0))
+    row = conn.execute(
+        'SELECT * FROM user_achievements WHERE user_id = ? AND achievement_id = ?',
+        (uid, defn['id']),
+    ).fetchone()
+    if row and int(row['unlocked'] or 0):
+        if current > int(row['progress'] or 0):
+            conn.execute(
+                'UPDATE user_achievements SET progress = ?, updated_at = ? WHERE user_id = ? AND achievement_id = ?',
+                (current, now, uid, defn['id']),
+            )
+        return None
+    if current >= target:
+        return _unlock_achievement_conn(conn, uid, defn['id'], current, now)
+    if row:
+        if current > int(row['progress'] or 0):
+            conn.execute(
+                'UPDATE user_achievements SET progress = ?, updated_at = ? WHERE user_id = ? AND achievement_id = ?',
+                (current, now, uid, defn['id']),
+            )
+    else:
+        conn.execute(
+            'INSERT INTO user_achievements (user_id, achievement_id, progress, unlocked, updated_at) VALUES (?, ?, ?, 0, ?)',
+            (uid, defn['id'], current, now),
+        )
+    return None
+
+
+def process_match_achievements(match_id, summary):
+    if not summary or not summary.get('valid_for_ranking', True):
+        return {'unlocked': [], 'skipped': 'not_valid'}
+    player_ids = []
+    for uid in summary.get('player_ids') or []:
+        if uid is None:
+            continue
+        try:
+            player_ids.append(int(uid))
+        except (TypeError, ValueError):
+            continue
+    if not player_ids:
+        return {'unlocked': [], 'skipped': 'no_registered'}
+    winner_ids = {int(uid) for uid in (summary.get('winner_user_ids') or []) if uid is not None}
+    mode = str(summary.get('mode') or '')
+    flags_by_user = summary.get('achievement_flags_by_user') or {}
+    unlocked = []
+    now = utc_now()
+    with get_db_connection() as conn:
+        user_rows = {
+            int(row['id']): row
+            for row in conn.execute(
+                f"SELECT * FROM users WHERE id IN ({','.join(['?'] * len(set(player_ids)))})",
+                tuple(sorted(set(player_ids))),
+            ).fetchall()
+        }
+        for uid in sorted(set(player_ids)):
+            user = user_rows.get(uid)
+            if user is None:
+                continue
+            metrics = {
+                'games_played': int(user['games_played'] or 0),
+                'wins': int(user['wins'] or 0),
+                'losses': int(user['losses'] or 0),
+                'draws': int(user['draws'] or 0),
+                'mode_1v1_played': 1 if mode == '1v1' else 0,
+                'mode_1v1_win': 1 if mode == '1v1' and uid in winner_ids else 0,
+                'mode_2v2_played': 1 if mode == '2v2' else 0,
+                'mode_2v2_win': 1 if mode == '2v2' and uid in winner_ids else 0,
+                'mode_urf_played': 1 if mode == 'urf' else 0,
+                'mode_urf_win': 1 if mode == 'urf' and uid in winner_ids else 0,
+                'mode_random_deck_played': 1 if mode == 'random_deck' else 0,
+                'mode_random_deck_win': 1 if mode == 'random_deck' and uid in winner_ids else 0,
+            }
+            for defn in ACHIEVEMENT_DEFS:
+                metric = defn.get('metric')
+                if not metric or str(defn.get('type')) == 'hidden':
+                    continue
+                result = _update_achievement_progress_conn(conn, uid, defn, metrics.get(metric, 0), now)
+                if result:
+                    unlocked.append({'user_id': uid, **result})
+            user_flags = flags_by_user.get(str(uid)) or flags_by_user.get(uid) or []
+            if isinstance(user_flags, dict):
+                user_flags = [key for key, value in user_flags.items() if value]
+            for flag in user_flags:
+                for defn in ACHIEVEMENT_DEFS:
+                    if defn.get('metric') == str(flag):
+                        result = _unlock_achievement_conn(conn, uid, defn['id'], 1, now)
+                        if result:
+                            unlocked.append({'user_id': uid, **result})
+        conn.commit()
+    return {'unlocked': unlocked, 'skipped': None}
 
 
 def _soft_reset_gr(value):
@@ -4748,8 +5291,6 @@ def send_feedback_message(user_id, text, thread_id=None, category='other', title
             if int(thread['user_id']) != uid and not can_staff:
                 return None, '权限不足'
         if thread is None:
-            if can_staff:
-                return None, '请选择一条反馈后回复'
             safe_title = str(title or '').strip()[:80] or message[:40]
             cur = conn.execute(
                 '''

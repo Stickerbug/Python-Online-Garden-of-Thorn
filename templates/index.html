@@ -2,7 +2,7 @@
 <html lang="zh-CN" data-theme="light" data-ui-style="minimal">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content">
 <title>Garden of Thorn 荆棘花园</title>
 <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
@@ -55,6 +55,7 @@
 <button id="btn-account-top" class="top-icon-btn account-top-btn" type="button" aria-label="账号"><img src="/static/assets/ui-icons/account.svg" alt="" aria-hidden="true"><span class="top-icon-label">账号</span></button>
 <button id="btn-changelog-top" class="top-icon-btn changelog-top-btn" type="button" aria-label="更新日志"><img src="/static/assets/ui-icons/log.svg" alt="" aria-hidden="true"><span class="top-icon-label">更新日志</span></button>
 <button id="btn-skin-top" class="top-icon-btn skin-top-btn" type="button" aria-label="皮肤"><img src="/static/assets/ui-icons/skins.svg" alt="" aria-hidden="true"><span class="top-icon-label">皮肤</span></button>
+<button id="btn-achievements-top" class="top-icon-btn achievements-top-btn" type="button" aria-label="成就"><img src="/static/assets/ui-icons/achievements.svg" alt="" aria-hidden="true"><span class="top-icon-label">成就</span></button>
 <button id="btn-card-gallery" class="top-icon-btn gallery-top-btn" type="button" aria-label="图鉴"><img src="/static/assets/ui-icons/gallery.svg" alt="" aria-hidden="true"><span class="top-icon-label">图鉴</span></button>
 <button id="btn-replays-top" class="top-icon-btn replay-top-btn" type="button" aria-label="回放"><img src="/static/assets/ui-icons/replay.svg" alt="" aria-hidden="true"><span class="top-icon-label">回放</span></button>
 <button id="btn-friends-top" class="top-icon-btn friends-top-btn hidden" type="button" aria-label="好友"><img src="/static/assets/ui-icons/friends.svg" alt="" aria-hidden="true"><span class="top-icon-label">好友</span></button>
@@ -177,6 +178,23 @@
   </div>
   <div id="leaderboard-list" class="leaderboard-list"></div>
 </div>
+<div id="achievements-popover" class="account-popover achievements-popover hidden">
+  <div class="account-popover-head">
+    <div id="achievements-popover-title" class="account-popover-title">成就与荆露</div>
+    <button id="btn-achievements-popover-close" class="account-close-btn" type="button">×</button>
+  </div>
+  <div id="achievements-summary" class="account-replay-sub">登录后查看成就。</div>
+  <div class="achievement-tabs account-mode-tabs">
+    <button class="account-mode-tab active" type="button" data-achievement-tab="dew">荆露</button>
+    <button class="account-mode-tab" type="button" data-achievement-tab="daily">签到</button>
+    <button class="account-mode-tab" type="button" data-achievement-tab="achievements">成就</button>
+    <button class="account-mode-tab" type="button" data-achievement-tab="tasks">每日任务</button>
+  </div>
+  <div id="achievements-dew-panel" class="achievement-tab-panel"></div>
+  <div id="achievements-daily-panel" class="achievement-tab-panel hidden"></div>
+  <div id="achievements-list" class="achievements-list"></div>
+  <div id="achievements-tasks-panel" class="achievement-tab-panel hidden"></div>
+</div>
 <div id="friends-popover" class="account-popover friends-popover hidden">
   <div class="account-popover-head">
     <div id="friends-popover-title" class="account-popover-title">好友</div>
@@ -287,7 +305,7 @@
         </div>
         <div id="feedback-message-list" class="feedback-message-list"></div>
         <div class="feedback-input-row">
-          <input id="feedback-message-input" type="text" maxlength="200" placeholder="输入反馈内容...">
+          <textarea id="feedback-message-input" maxlength="200" rows="3" placeholder="输入反馈内容..."></textarea>
           <button id="btn-feedback-send" class="mini-btn" type="button">发送</button>
         </div>
         <p id="feedback-error" class="error-text"></p>
@@ -849,6 +867,16 @@
 <label id="settings-label-volume-music" for="settings-volume-music">背景音乐</label>
 <input id="settings-volume-music" type="range" min="0" max="100" step="1" value="80">
 <output id="settings-volume-music-value" for="settings-volume-music">80%</output>
+</div>
+<div class="settings-volume-row">
+<label id="settings-label-volume-menuMusic" for="settings-volume-menuMusic">主页/大厅音乐</label>
+<input id="settings-volume-menuMusic" type="range" min="0" max="100" step="1" value="70">
+<output id="settings-volume-menuMusic-value" for="settings-volume-menuMusic">70%</output>
+</div>
+<div class="settings-volume-row">
+<label id="settings-label-volume-battleMusic" for="settings-volume-battleMusic">对局音乐</label>
+<input id="settings-volume-battleMusic" type="range" min="0" max="100" step="1" value="65">
+<output id="settings-volume-battleMusic-value" for="settings-volume-battleMusic">65%</output>
 </div>
 <div class="settings-volume-row">
 <label id="settings-label-volume-ui" for="settings-volume-ui">按钮</label>

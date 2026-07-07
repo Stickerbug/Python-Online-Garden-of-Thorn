@@ -31,3 +31,21 @@
 - 许可证：Creative Commons Zero 1.0 Universal (CC0)
 - 在 GTN 中的用途：替换和补充伤害、灼烧、中毒、回复、资源、反制、装备、回合开始等战斗音效。
 - 说明：OpenGameArt 页面标注该包为 CC0；本项目只选取其中少量较小的 OGG 文件，避免增加过多带宽负担。
+
+## PeriTune - Frosylva
+
+- 来源：<https://peritune.com/blog/2026/06/26/frosylva/>
+- 作者：PeriTune / むつき醒
+- 本地路径：`static/audio/music/frosylva.webm`
+- 许可证/使用条款：PeriTune 免费音乐素材使用条款
+- 在 GTN 中的用途：主页和大厅背景音乐。
+- 说明：PeriTune 条款允许免费使用、商用使用和加工；本项目仍保留来源说明，便于后续审计和替换。
+
+## 临时待授权战斗音乐 - Petal Dance ~ Petal Phantasm
+
+- 来源：<https://www.youtube.com/watch?v=1s_wdcC56FQ>
+- 本地路径：`static/audio/music/battle-petal-phantasm.ogg`
+- 源文件路径：`static/audio/music/source-pending/petal-dance-petal-phantasm.wav`
+- 当前状态：正在取得许可。
+- 在 GTN 中的用途：临时战斗背景音乐槽位。
+- 说明：该曲目为 Deltarune / Touhou Remix，正式长期使用前应确认授权或替换为明确可用于游戏分发的原创/授权曲目。

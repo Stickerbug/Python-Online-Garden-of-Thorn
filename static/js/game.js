@@ -21,9 +21,13 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_audio_enabled',
     'gtn_audio_master',
     'gtn_audio_music',
+    'gtn_audio_menu_music',
+    'gtn_audio_battle_music',
     'gtn_audio_ui',
     'gtn_audio_sfx',
     'gtn_audio_settings_v3',
+    'gtn_audio_settings_v4',
+    'gtn_music_notice_v1',
     'gtn_skin_config',
     'gtn_server',
     'gtn_disabled_mods',
@@ -84,6 +88,8 @@ const AUDIO_DEFAULTS = Object.freeze({
     enabled: true,
     master: 80,
     music: 80,
+    menuMusic: 70,
+    battleMusic: 65,
     ui: 80,
     sfx: 80,
 });
@@ -91,9 +97,11 @@ const AUDIO_STORAGE_KEYS = Object.freeze({
     enabled: 'gtn_audio_enabled',
     master: 'gtn_audio_master',
     music: 'gtn_audio_music',
+    menuMusic: 'gtn_audio_menu_music',
+    battleMusic: 'gtn_audio_battle_music',
     ui: 'gtn_audio_ui',
     sfx: 'gtn_audio_sfx',
-    version: 'gtn_audio_settings_v3',
+    version: 'gtn_audio_settings_v4',
 });
 const AUDIO_GROUPS = Object.freeze({
     ui_click: 'ui',
@@ -164,6 +172,15 @@ const AUDIO_FILE_SOURCES = Object.freeze({
     equip: '/static/audio/sfx/battle/equip.ogg',
     turn_start: '/static/audio/sfx/battle/turn_start_gem_1.ogg',
 });
+const AUDIO_MUSIC_SOURCES = Object.freeze({
+    menu: '/static/audio/music/frosylva.webm',
+    battle: '/static/audio/music/battle-petal-phantasm.ogg',
+});
+const AUDIO_MUSIC_SCENE_MULTIPLIERS = Object.freeze({
+    menu: 0.05,
+    lobby: 0.03,
+    battle: 0.05,
+});
 let audioSettings = { ...AUDIO_DEFAULTS };
 let audioContext = null;
 let audioUnlocked = false;
@@ -173,6 +190,13 @@ let audioFileUnavailable = Object.create(null);
 let audioLogMatchKey = '';
 let audioLastLogTotal = 0;
 let audioPreloaded = false;
+let currentMusicScene = '';
+let currentMusicAudio = null;
+let currentMusicSrc = '';
+let musicAudioBySrc = Object.create(null);
+let musicFadeTimers = new WeakMap();
+let musicSceneUpdateTimer = null;
+const MUSIC_NOTICE_KEY = 'gtn_music_notice_v1';
 
 function clampPercent(value, fallback = 100) {
     const n = Number(value);
@@ -181,20 +205,27 @@ function clampPercent(value, fallback = 100) {
 }
 
 function loadAudioSettings() {
-    const hasV3 = localStorage.getItem(AUDIO_STORAGE_KEYS.version) === '3';
-    const storedValues = ['master', 'music', 'ui', 'sfx'].map(key => Number(localStorage.getItem(AUDIO_STORAGE_KEYS[key])));
-    const wasAccidentallySilent = !hasV3 && storedValues.some(Number.isFinite) && storedValues.every(value => value === 0);
-    if (!hasV3 || wasAccidentallySilent) {
+    const hasV4 = localStorage.getItem(AUDIO_STORAGE_KEYS.version) === '4';
+    const storedValues = ['master', 'music', 'menuMusic', 'battleMusic', 'ui', 'sfx'].map(key => Number(localStorage.getItem(AUDIO_STORAGE_KEYS[key])));
+    const wasAccidentallySilent = !hasV4 && storedValues.some(Number.isFinite) && storedValues.every(value => value === 0);
+    if (!hasV4 || wasAccidentallySilent) {
         Object.entries(AUDIO_DEFAULTS).forEach(([key, value]) => {
             if (key === 'enabled') localStorage.setItem(AUDIO_STORAGE_KEYS.enabled, value ? '1' : '0');
-            else localStorage.setItem(AUDIO_STORAGE_KEYS[key], String(value));
+            else if (localStorage.getItem(AUDIO_STORAGE_KEYS[key]) == null || wasAccidentallySilent) localStorage.setItem(AUDIO_STORAGE_KEYS[key], String(value));
         });
-        localStorage.setItem(AUDIO_STORAGE_KEYS.version, '3');
+        if (!hasV4) {
+            ['menuMusic', 'battleMusic'].forEach((key) => {
+                localStorage.setItem(AUDIO_STORAGE_KEYS[key], String(AUDIO_DEFAULTS[key]));
+            });
+        }
+        localStorage.setItem(AUDIO_STORAGE_KEYS.version, '4');
     }
     audioSettings = {
         enabled: localStorage.getItem(AUDIO_STORAGE_KEYS.enabled) !== '0',
         master: clampPercent(localStorage.getItem(AUDIO_STORAGE_KEYS.master), AUDIO_DEFAULTS.master),
         music: clampPercent(localStorage.getItem(AUDIO_STORAGE_KEYS.music), AUDIO_DEFAULTS.music),
+        menuMusic: clampPercent(localStorage.getItem(AUDIO_STORAGE_KEYS.menuMusic), AUDIO_DEFAULTS.menuMusic),
+        battleMusic: clampPercent(localStorage.getItem(AUDIO_STORAGE_KEYS.battleMusic), AUDIO_DEFAULTS.battleMusic),
         ui: clampPercent(localStorage.getItem(AUDIO_STORAGE_KEYS.ui), AUDIO_DEFAULTS.ui),
         sfx: clampPercent(localStorage.getItem(AUDIO_STORAGE_KEYS.sfx), AUDIO_DEFAULTS.sfx),
     };
@@ -204,11 +235,12 @@ function loadAudioSettings() {
 function saveAudioSettings(partial = {}) {
     audioSettings = { ...audioSettings, ...partial };
     localStorage.setItem(AUDIO_STORAGE_KEYS.enabled, audioSettings.enabled ? '1' : '0');
-    localStorage.setItem(AUDIO_STORAGE_KEYS.version, '3');
-    ['master', 'music', 'ui', 'sfx'].forEach((key) => {
+    localStorage.setItem(AUDIO_STORAGE_KEYS.version, '4');
+    ['master', 'music', 'menuMusic', 'battleMusic', 'ui', 'sfx'].forEach((key) => {
         localStorage.setItem(AUDIO_STORAGE_KEYS[key], String(clampPercent(audioSettings[key], AUDIO_DEFAULTS[key])));
     });
     syncAudioSettingsUi();
+    updateBackgroundMusic();
 }
 
 function perceivedAudioGain(value) {
@@ -216,15 +248,30 @@ function perceivedAudioGain(value) {
     return ratio * ratio;
 }
 
+function getMusicGain(scene = currentMusicScene) {
+    if (!audioSettings.enabled) return 0;
+    const sceneKey = scene === 'battle' ? 'battleMusic' : 'menuMusic';
+    return perceivedAudioGain(audioSettings.master)
+        * perceivedAudioGain(audioSettings.music)
+        * perceivedAudioGain(audioSettings[sceneKey])
+        * Math.max(0, Number(AUDIO_MUSIC_SCENE_MULTIPLIERS[scene] ?? 0.2));
+}
+
 function getAudioGain(group) {
     if (!audioSettings.enabled) return 0;
-    const groupKey = group === 'music' ? 'music' : group === 'ui' ? 'ui' : 'sfx';
+    if (group === 'music') return getMusicGain(currentMusicScene || 'menu');
+    const groupKey = group === 'ui' ? 'ui' : 'sfx';
     return perceivedAudioGain(audioSettings.master) * perceivedAudioGain(audioSettings[groupKey]);
 }
 
 function audioFileVolumeFromGain(gainValue) {
     if (gainValue <= 0) return 0;
     return Math.max(0, Math.min(1, Math.sqrt(gainValue) * 0.2875));
+}
+
+function audioMusicVolumeFromGain(gainValue) {
+    if (gainValue <= 0) return 0;
+    return Math.max(0, Math.min(1, Math.sqrt(gainValue) * 0.42));
 }
 
 function getAudioContext() {
@@ -240,6 +287,161 @@ function unlockAudio() {
     if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
     audioUnlocked = true;
     preloadAudioFiles();
+    updateBackgroundMusic();
+}
+
+function shouldShowMusicNotice() {
+    try {
+        return !!localStorage.getItem('gtn_seen_intro') && localStorage.getItem(MUSIC_NOTICE_KEY) !== '1';
+    } catch (_) {
+        return false;
+    }
+}
+
+function acknowledgeMusicNoticeAndPlay() {
+    try { localStorage.setItem(MUSIC_NOTICE_KEY, '1'); } catch (_) {}
+    unlockAudio();
+}
+
+function maybeShowMusicNotice() {
+    if (!shouldShowMusicNotice()) return false;
+    gameAlert(
+        UI.music_notice_title || UI.notice || '提示',
+        UI.music_notice_message || '本版本加入了主界面音乐。如果你有减小噪音的需求，请先调低设备音量。',
+        [{ text: UI.confirm || UI.ok || '确认', cls: 'btn-primary', action: acknowledgeMusicNoticeAndPlay }],
+    );
+    return true;
+}
+
+function fadeMusicAudio(audio, targetVolume, durationMs = 650, onDone = null) {
+    if (!audio) {
+        if (onDone) onDone();
+        return;
+    }
+    const previousTimer = musicFadeTimers.get(audio);
+    if (previousTimer) {
+        window.clearInterval(previousTimer);
+        musicFadeTimers.delete(audio);
+    }
+    const start = Number(audio.volume || 0);
+    const target = Math.max(0, Math.min(1, Number(targetVolume || 0)));
+    const started = performance.now();
+    const timer = window.setInterval(() => {
+        const t = Math.min(1, (performance.now() - started) / Math.max(1, durationMs));
+        const eased = 1 - Math.pow(1 - t, 3);
+        audio.volume = start + (target - start) * eased;
+        if (t >= 1) {
+            window.clearInterval(timer);
+            musicFadeTimers.delete(audio);
+            audio.volume = target;
+            if (onDone) onDone();
+        }
+    }, 40);
+    musicFadeTimers.set(audio, timer);
+}
+
+function isMenuMusicSrc(src = '') {
+    return src === AUDIO_MUSIC_SOURCES.menu;
+}
+
+function prepareMusicAudio(src, scene) {
+    if (!src) return null;
+    let audio = musicAudioBySrc[src];
+    if (!audio) {
+        audio = new Audio(src);
+        audio.preload = scene === 'battle' ? 'metadata' : 'auto';
+        audio.volume = 0;
+        musicAudioBySrc[src] = audio;
+        if (isMenuMusicSrc(src)) {
+            audio.loop = false;
+            audio.addEventListener('timeupdate', () => {
+                if (audio.dataset.gtnLoopFading === '1') return;
+                const duration = Number(audio.duration || 0);
+                if (!Number.isFinite(duration) || duration <= 8) return;
+                if (duration - Number(audio.currentTime || 0) > 5.2) return;
+                audio.dataset.gtnLoopFading = '1';
+                fadeMusicAudio(audio, 0, 4800, () => {
+                    if (currentMusicAudio !== audio || !isMenuMusicSrc(currentMusicSrc)) {
+                        delete audio.dataset.gtnLoopFading;
+                        return;
+                    }
+                    try { audio.currentTime = 0; } catch (_) {}
+                    delete audio.dataset.gtnLoopFading;
+                    const sceneForGain = currentMusicScene || 'menu';
+                    fadeMusicAudio(audio, audioMusicVolumeFromGain(getMusicGain(sceneForGain)), 1200);
+                });
+            });
+        } else {
+            audio.loop = true;
+        }
+    }
+    audio.loop = !isMenuMusicSrc(src);
+    return audio;
+}
+
+function getTargetMusicScene() {
+    const view = String(activeViewId || '');
+    if (view === 'view-game' || view === 'view-draft' || view === 'view-event-select' || view === 'view-gameover') return 'battle';
+    if (view === 'view-lobby') return 'lobby';
+    return 'menu';
+}
+
+function scheduleBackgroundMusicUpdate() {
+    if (musicSceneUpdateTimer) window.clearTimeout(musicSceneUpdateTimer);
+    musicSceneUpdateTimer = window.setTimeout(() => {
+        musicSceneUpdateTimer = null;
+        updateBackgroundMusic();
+    }, 80);
+}
+
+function updateBackgroundMusic() {
+    const scene = getTargetMusicScene();
+    const src = AUDIO_MUSIC_SOURCES[scene] || AUDIO_MUSIC_SOURCES.menu;
+    if (!src || audioFileUnavailable[src] || !audioUnlocked || !audioSettings.enabled || getMusicGain(scene) <= 0) {
+        const oldAudio = currentMusicAudio;
+        if (oldAudio) fadeMusicAudio(oldAudio, 0, 500, () => {
+            try { oldAudio.pause(); } catch (_) {}
+        });
+        currentMusicAudio = null;
+        currentMusicSrc = '';
+        currentMusicScene = scene;
+        return;
+    }
+    const volume = audioMusicVolumeFromGain(getMusicGain(scene));
+    if (currentMusicAudio && currentMusicSrc === src) {
+        currentMusicScene = scene;
+        fadeMusicAudio(currentMusicAudio, volume, 300);
+        if (currentMusicAudio.paused) currentMusicAudio.play().catch(() => {});
+        return;
+    }
+    const oldAudio = currentMusicAudio;
+    const nextAudio = prepareMusicAudio(src, scene);
+    if (!nextAudio) return;
+    if (nextAudio.ended) {
+        try { nextAudio.currentTime = 0; } catch (_) {}
+    }
+    nextAudio.volume = 0;
+    currentMusicAudio = nextAudio;
+    currentMusicSrc = src;
+    currentMusicScene = scene;
+    nextAudio.play().then(() => {
+        fadeMusicAudio(nextAudio, volume, 850);
+        if (oldAudio) fadeMusicAudio(oldAudio, 0, 650, () => {
+            try {
+                oldAudio.pause();
+            } catch (_) {}
+        });
+    }).catch((err) => {
+        const blocked = err && /NotAllowedError|AbortError|interrupted/i.test(String(err.name || err.message || err));
+        if (blocked) {
+            audioUnlocked = false;
+        } else {
+            audioFileUnavailable[src] = true;
+        }
+        currentMusicAudio = oldAudio || null;
+        currentMusicSrc = oldAudio ? Object.keys(musicAudioBySrc).find(key => musicAudioBySrc[key] === oldAudio) || '' : '';
+        currentMusicScene = oldAudio ? currentMusicScene : '';
+    });
 }
 
 function playProceduralAudio(name, options = {}) {
@@ -331,7 +533,7 @@ function playSfxAudioRepeated(name, count, options = {}) {
 function syncAudioSettingsUi() {
     const enabled = $('settings-audio-enabled');
     if (enabled) enabled.checked = !!audioSettings.enabled;
-    ['master', 'music', 'ui', 'sfx'].forEach((key) => {
+    ['master', 'music', 'menuMusic', 'battleMusic', 'ui', 'sfx'].forEach((key) => {
         const input = $(`settings-volume-${key}`);
         const output = $(`settings-volume-${key}-value`);
         const value = clampPercent(audioSettings[key], AUDIO_DEFAULTS[key]);
@@ -348,7 +550,7 @@ function bindAudioSettingsControls() {
         saveAudioSettings({ enabled: enabled.checked });
         playUiAudio(enabled.checked ? 'ui_open' : 'ui_close');
     });
-    ['master', 'music', 'ui', 'sfx'].forEach((key) => {
+    ['master', 'music', 'menuMusic', 'battleMusic', 'ui', 'sfx'].forEach((key) => {
         const input = $(`settings-volume-${key}`);
         if (!input) return;
         input.addEventListener('input', () => {
@@ -370,9 +572,19 @@ function bindAudioSettingsControls() {
 function initAudioSystem() {
     loadAudioSettings();
     syncAudioSettingsUi();
+    const unlockOnGesture = () => {
+        if (shouldShowMusicNotice()) return;
+        ['pointerdown', 'keydown', 'touchstart'].forEach((eventName) => {
+            document.removeEventListener(eventName, unlockOnGesture, true);
+        });
+        unlockAudio();
+    };
     ['pointerdown', 'keydown', 'touchstart'].forEach((eventName) => {
-        document.addEventListener(eventName, unlockAudio, { once: true, passive: true });
+        document.addEventListener(eventName, unlockOnGesture, { passive: true, capture: true });
     });
+    window.setTimeout(() => {
+        if (!shouldShowMusicNotice()) unlockAudio();
+    }, 0);
     document.addEventListener('click', (event) => {
         if (!event.target || event.defaultPrevented) return;
         const target = event.target.closest('button, .settings-tab, .mode-tab, .choice-card-token, .top-nav-icon-btn, .btn');
@@ -488,8 +700,8 @@ const I18N = {
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic', status_armor: 'Armor',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_immune: 'Status Immune', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Blind', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_temp_swift: 'Temporary Swift', flag_temp_heavy: 'Temporary Heavy', flag_stealth: 'Stealth', flag_revealed: 'Revealed', flag_sublime: 'Sublime', flag_team_limited: 'Team Limited', flag_team_unique: 'Team Unique', flag_power: 'Power', flag_magic_swift: 'Magic Swift',
-        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_temp_swift: 'Temporary Swift', tag_temp_heavy: 'Temporary Heavy', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_sublime: 'Sublime', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_temp_swift: 'Temporary Swift', flag_temp_heavy: 'Temporary Heavy', flag_stealth: 'Stealth', flag_revealed: 'Revealed', flag_sublime: 'Sublime', flag_team_limited: 'Team Limited', flag_team_unique: 'Team Unique', flag_power: 'Power', flag_magic_swift: 'Magic Swift', flag_wide_strike: 'Wide Strike', flag_self_target: 'Self-target', flag_charge: 'Charge', flag_ocean_blinded: 'Obscured',
+        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_temp_swift: 'Temporary Swift', tag_temp_heavy: 'Temporary Heavy', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_sublime: 'Sublime', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift', tag_wide_strike: 'Wide Strike', tag_self_target: 'Self-target', tag_charge: 'Charge', tag_ocean_blinded: 'Obscured',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
@@ -499,7 +711,7 @@ const I18N = {
         lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', start_draft: 'Start Draft', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
         card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard', fusion_layer: 'Fusion', fission_layer: 'Fission',
         settings_title: 'Settings', settings_appearance: 'Appearance', settings_theme: 'Theme', settings_lang: 'Language', settings_mods: 'Mods', settings_audio: 'Audio', settings_theme_light: 'Light', settings_theme_dark: 'Dark',
-        settings_audio_enabled: 'Enable audio', settings_volume_master: 'Master volume', settings_volume_music: 'Music', settings_volume_ui: 'Buttons', settings_volume_sfx: 'Effects', settings_audio_test: 'Test sound', settings_audio_hint: 'Volume uses a perceived loudness curve, so slider changes feel closer to what you hear.',
+        settings_audio_enabled: 'Enable audio', settings_volume_master: 'Master volume', settings_volume_music: 'Music', settings_volume_menu_music: 'Home/Lobby music', settings_volume_battle_music: 'Battle music', settings_volume_ui: 'Buttons', settings_volume_sfx: 'Effects', settings_audio_test: 'Test sound', settings_audio_hint: 'Music starts after your first click or key press.', music_notice_title: 'Music Added', music_notice_message: 'This version adds home-screen music. If you need less noise, please lower your device volume first.',
         no_games: 'No ongoing games', back_to_home: 'Back to Home', settings_btn: 'Settings', settings_server: 'Server', settings_server_addr: 'Address', not_your_turn: 'Not your turn',
         counter_insufficient: 'Tip: counter cards are not affordable', default_status: 'Garden of Thorn', game_loading: 'Loading...', server_no_response: 'Server is not responding. Check the connection or refresh.',
         spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat', solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training', clear_deck: 'Clear Deck',
@@ -615,7 +827,7 @@ I18N.zh = { ...I18N.en,
     round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
     select_event_desc: '选择一个配装倾向', start_draft: '开始选牌', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
     settings_title: '设置', settings_appearance: '外观', settings_theme: '主题', settings_lang: '语言', settings_mods: '模组', settings_audio: '音频', settings_theme_light: '明亮', settings_theme_dark: '黑暗',
-    settings_audio_enabled: '启用音频', settings_volume_master: '主音量', settings_volume_music: '背景音乐', settings_volume_ui: '按钮', settings_volume_sfx: '效果', settings_audio_test: '测试音效', settings_audio_hint: '音量使用体感曲线，滑块变化会更接近人耳感受到的大小。',
+    settings_audio_enabled: '启用音频', settings_volume_master: '主音量', settings_volume_music: '背景音乐', settings_volume_menu_music: '主页/大厅音乐', settings_volume_battle_music: '对局音乐', settings_volume_ui: '按钮', settings_volume_sfx: '效果', settings_audio_test: '测试音效', settings_audio_hint: '音乐会在首次点击或按键后开始播放。', music_notice_title: '音乐提示', music_notice_message: '本版本加入了主界面音乐。如果你有减小噪音的需求，请先调低设备音量。',
     no_games: '暂无进行中的对局', back_to_home: '返回主页', settings_btn: '设置', settings_server: '服务器', settings_server_addr: '地址', not_your_turn: '还没轮到你',
     counter_insufficient: '提示：当前没有可支付的反制牌', default_status: 'Garden of Thorn', game_loading: '加载中...', server_no_response: '服务器没有响应，请检查连接或刷新页面。',
     spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线：{0}', chat_title: '聊天',
@@ -728,7 +940,7 @@ I18N.fr = { ...I18N.en,
     select_event_desc: "Choisir un événement de départ", opponent_selected: 'Adversaire a choisi', opponent_selecting: 'Adversaire choisit...',
     card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard',
     settings_title: 'Paramètres', settings_appearance: 'Apparence', settings_theme: 'Thème', settings_lang: 'Langue', settings_mods: 'Mods', settings_audio: 'Audio', settings_theme_light: 'Clair', settings_theme_dark: 'Sombre',
-    settings_audio_enabled: 'Activer l’audio', settings_volume_master: 'Volume général', settings_volume_music: 'Musique', settings_volume_ui: 'Boutons', settings_volume_sfx: 'Effets', settings_audio_test: 'Tester le son', settings_audio_hint: 'Le volume suit une courbe de loudness perçu pour mieux correspondre à l’oreille.',
+    settings_audio_enabled: 'Activer l’audio', settings_volume_master: 'Volume général', settings_volume_music: 'Musique', settings_volume_menu_music: 'Accueil/Salon', settings_volume_battle_music: 'Combat', settings_volume_ui: 'Boutons', settings_volume_sfx: 'Effets', settings_audio_test: 'Tester le son', settings_audio_hint: 'La musique démarre après le premier clic ou appui.', music_notice_title: 'Musique ajoutée', music_notice_message: 'Cette version ajoute une musique d’accueil. Si vous voulez moins de bruit, baissez d’abord le volume de votre appareil.',
     no_games: 'Aucune partie en cours', back_to_home: "Retour à l'accueil", settings_btn: 'Paramètres', settings_server: 'Serveur', settings_server_addr: 'Adresse',
     not_your_turn: "Ce n'est pas votre tour", counter_insufficient: 'Conseil : Ressources insuffisantes pour les cartes de contre', default_status: 'Garden of Thorn',
     game_loading: 'Chargement...', server_no_response: 'Le serveur ne répond pas. Vérifiez votre connexion.',
@@ -801,7 +1013,7 @@ I18N.ja = { ...I18N.en,
     select_event_desc: 'オープニングイベントを選択', opponent_selected: '相手が選択済み', opponent_selecting: '相手が選択中...',
     card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard',
     settings_title: '設定', settings_appearance: '外観', settings_theme: 'テーマ', settings_lang: '言語', settings_mods: 'Mod', settings_audio: '音声', settings_theme_light: 'ライト', settings_theme_dark: 'ダーク',
-    settings_audio_enabled: '音声を有効化', settings_volume_master: 'マスター音量', settings_volume_music: 'BGM', settings_volume_ui: 'ボタン', settings_volume_sfx: '効果音', settings_audio_test: 'テスト再生', settings_audio_hint: '音量は体感カーブを使い、耳で感じる変化に近づけています。',
+    settings_audio_enabled: '音声を有効化', settings_volume_master: 'マスター音量', settings_volume_music: 'BGM', settings_volume_menu_music: 'ホーム/ロビーBGM', settings_volume_battle_music: '対戦BGM', settings_volume_ui: 'ボタン', settings_volume_sfx: '効果音', settings_audio_test: 'テスト再生', settings_audio_hint: '音楽は最初のクリックまたはキー入力後に再生されます。', music_notice_title: '音楽のお知らせ', music_notice_message: 'このバージョンではホーム画面の音楽が追加されました。音量が気になる場合は、先に端末の音量を下げてください。',
     no_games: '進行中の対戦なし', back_to_home: 'ホームに戻る', settings_btn: '設定', settings_server: 'サーバー', settings_server_addr: 'アドレス',
     not_your_turn: 'あなたのターンではありません', counter_insufficient: 'ヒント：カウンターに必要なリソースが不足しています', default_status: 'Garden of Thorn',
     game_loading: '読み込み中...', server_no_response: 'サーバーが応答しません。接続を確認してください。',
@@ -1273,6 +1485,7 @@ Object.assign(I18N.en, {
     account_password_confirm: 'Confirm Password', account_old_password: 'Current Password', account_new_password: 'New Password',
     account_new_password_confirm: 'Confirm New Password', account_change_password: 'Change Password', account_password_changed: 'Password changed',
     account_change_username: 'Change Username', account_info: 'Account Info', account_online_time: 'Total Match Time', thorn_dew: 'Thorn Dew', account_delete: 'Delete Account', stats: 'Stats',
+    achievements: 'Achievements', achievements_title: 'Achievements & Thorn Dew', achievements_empty: 'No achievements yet.', achievements_hidden: 'Hidden achievement. Unlock it to reveal.',
     leaderboard: 'Leaderboard', leaderboard_note: 'Ranked by Garden Rating. Season board needs 8 ranked games; total board needs 20.', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...', leaderboard_next_refresh: 'Refresh in {0}', leaderboard_gr: 'GR', leaderboard_season: 'Season', leaderboard_total: 'All-time', leaderboard_raw_rate: 'Win %',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
@@ -1284,6 +1497,7 @@ Object.assign(I18N.zh, {
     account_password_confirm: '确认密码', account_old_password: '原密码', account_new_password: '新密码',
     account_new_password_confirm: '确认新密码', account_change_password: '修改密码', account_password_changed: '密码已修改',
     account_change_username: '修改用户名', account_info: '账号信息', account_online_time: '总对局时长', thorn_dew: '荆露', account_delete: '注销账户', stats: '统计',
+    achievements: '成就', achievements_title: '成就与荆露', achievements_empty: '暂无成就。', achievements_hidden: '隐藏成就，达成后揭晓。',
     leaderboard: '排行榜', leaderboard_note: '排行按照花阶分计算。赛季榜需本赛季至少8场计分对局，总榜需至少20场计分对局。', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...', leaderboard_next_refresh: '刷新倒计时 {0}', leaderboard_gr: '花阶分', leaderboard_season: '赛季榜', leaderboard_total: '总榜', leaderboard_raw_rate: '胜率',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
@@ -1295,6 +1509,7 @@ Object.assign(I18N.fr, {
     account_password_confirm: 'Confirmer', account_old_password: 'Mot de passe actuel', account_new_password: 'Nouveau mot de passe',
     account_new_password_confirm: 'Confirmer le nouveau', account_change_password: 'Changer le mot de passe', account_password_changed: 'Mot de passe changé',
     account_change_username: 'Changer le nom', account_info: 'Compte', account_online_time: 'Temps total en match', thorn_dew: 'Rosée d’épines',
+    achievements: 'Succès', achievements_title: 'Succès et Rosée', achievements_empty: 'Aucun succès.', achievements_hidden: 'Succès caché.',
     account_delete: 'Supprimer le compte', stats: 'Stats',
     leaderboard: 'Classement', leaderboard_note: 'Classement par Garden Rating. Saison: 8 parties classées; total: 20.', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...', leaderboard_next_refresh: 'Actualisation {0}', leaderboard_gr: 'GR', leaderboard_season: 'Saison', leaderboard_total: 'Total', leaderboard_raw_rate: 'Victoire',
     account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
@@ -1307,6 +1522,7 @@ Object.assign(I18N.ja, {
     account_password_confirm: '確認', account_old_password: '現在のパスワード', account_new_password: '新しいパスワード',
     account_new_password_confirm: '新しい確認', account_change_password: 'パスワード変更', account_password_changed: '変更しました',
     account_change_username: 'ユーザー名変更', account_info: 'アカウント情報', account_online_time: '総対戦時間', thorn_dew: 'ソーンデュー',
+    achievements: '実績', achievements_title: '実績とソーンデュー', achievements_empty: '実績はありません。', achievements_hidden: '隠し実績です。',
     account_delete: 'アカウント削除', stats: '統計',
     leaderboard: 'ランキング', leaderboard_note: 'Garden Ratingで順位を計算します。シーズン榜は8戦、総合榜は20戦以上が必要です。', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...', leaderboard_next_refresh: '更新まで {0}', leaderboard_gr: 'GR', leaderboard_season: 'シーズン', leaderboard_total: '総合', leaderboard_raw_rate: '勝率',
     account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
@@ -2260,6 +2476,33 @@ const CARD_FLAG_ALIASES = {
     'troll_cards:unique': 'unique',
     'tag_troll_cards:swift': 'swift',
     'troll_cards:swift': 'swift',
+    精准: 'precision',
+    放逐: 'exile',
+    不可叠加: 'non_stackable',
+    不可摧毁: 'indestructible',
+    萌芽: 'sprout',
+    共生: 'symbiosis',
+    吸引: 'attract',
+    虚无: 'void',
+    不选择目标: 'self_only',
+    仅自己可用: 'self_only',
+    不可取消: 'uncancellable',
+    无限火力移除: 'infinite_exclude',
+    回转: 'rebound',
+    副本: 'copy',
+    唯一: 'unique',
+    迅捷: 'swift',
+    暂时迅捷: 'temp_swift',
+    暂时沉重: 'temp_heavy',
+    隐匿: 'stealth',
+    被揭示: 'revealed',
+    崇高: 'sublime',
+    威力: 'power',
+    魔力迅捷: 'magic_swift',
+    广域打击: 'wide_strike',
+    自刃: 'self_target',
+    电荷: 'charge',
+    蒙蔽: 'ocean_blinded',
     symbiosys: 'symbiosis',
     symbiosy: 'symbiosis',
     tag_symbiosys: 'symbiosis',
@@ -2535,10 +2778,12 @@ function parseInlineCardMarker(text) {
         .filter(Boolean);
     const defId = parts.shift();
     if (!defId) return null;
+    const modifierText = parts.join('|');
     return {
         raw: marker[0],
         defId,
-        modifierText: parts.join('|'),
+        modifierText,
+        cardDict: buildInlineCardDict(defId, modifierText),
     };
 }
 
@@ -2905,7 +3150,7 @@ function colorizeCardText(value) {
         }
         const cardMarker = parseInlineCardMarker(rest);
         if (cardMarker) {
-            html += inlineCardChipHtml(buildInlineCardDict(cardMarker.defId, cardMarker.modifierText));
+            html += inlineCardChipHtml(cardMarker.cardDict || buildInlineCardDict(cardMarker.defId, cardMarker.modifierText));
             i += cardMarker.raw.length;
             continue;
         }
@@ -3400,6 +3645,15 @@ let currentAccount = loadCachedAccount();
 let accountMode = 'login';
 let accountPanelTab = 'info';
 let accountWarningTimer = null;
+let thornDewCenter = null;
+let thornDewLoading = false;
+let achievementCenter = null;
+let achievementLoading = false;
+let achievementLoadError = '';
+let achievementActiveTab = 'dew';
+let achievementToastQueue = [];
+let achievementToastActive = false;
+let achievementToastTimer = null;
 let socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
 let friendsMessageTimer = null;
 let dmData = { threads: [], unread_count: 0 };
@@ -3465,6 +3719,8 @@ let afkCheckTimer = null;
 let afkCheckHoldTimer = null;
 let skinSaveInFlight = false;
 let CARD_DEFS = {};
+let GALLERY_CARD_DEFS = null;
+let GALLERY_OPENING_EVENTS = null;
 let activeCardDataCacheKey = '';
 let activeOpeningEventsCacheKey = '';
 let gameState = {};
@@ -3659,6 +3915,9 @@ let classicTargetPickInFlight = false;
 let classicBackquoteHeld = false;
 const CLASSIC_MOBILE_CANVAS_W = 1600;
 const CLASSIC_MOBILE_CANVAS_H = 900;
+let battleMobileStableViewport = null;
+let battleMobileInputFocus = false;
+let battleMobileFocusTimer = null;
 let actionToastTimer = null;
 let combatFloatSeq = 0;
 const localSoloRuntime = {
@@ -3908,11 +4167,32 @@ function applyUiStyle(style) {
     updateClassicMobileCanvas();
 }
 
-function getClassicViewportSize() {
+function isBattleTextInputFocused() {
+    const el = document.activeElement;
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    const tag = String(el.tagName || '').toLowerCase();
+    if (tag === 'textarea' || tag === 'select') return true;
+    if (tag !== 'input') return false;
+    const type = String(el.getAttribute('type') || 'text').toLowerCase();
+    return !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(type);
+}
+
+function readClassicViewportSize() {
     const vv = window.visualViewport;
     const width = Math.max(1, Math.floor((vv && vv.width) || window.innerWidth || document.documentElement.clientWidth || 1));
     const height = Math.max(1, Math.floor((vv && vv.height) || window.innerHeight || document.documentElement.clientHeight || 1));
     return { width, height };
+}
+
+function getClassicViewportSize(options = {}) {
+    const raw = readClassicViewportSize();
+    const inputFocused = battleMobileInputFocus || isBattleTextInputFocused();
+    if (inputFocused && battleMobileStableViewport && !options.force) {
+        return battleMobileStableViewport;
+    }
+    battleMobileStableViewport = raw;
+    return raw;
 }
 
 function shouldUseBattleMobileCanvas() {
@@ -3927,9 +4207,13 @@ function updateClassicMobileCanvas() {
     const useCanvas = shouldUseBattleMobileCanvas();
     root.classList.toggle('classic-mobile-canvas', useCanvas && currentUiStyle === 'classic');
     root.classList.toggle('minimal-mobile-canvas', useCanvas && currentUiStyle === 'minimal');
+    root.classList.toggle('battle-mobile-input-focus', useCanvas && (battleMobileInputFocus || isBattleTextInputFocused()));
     if (!useCanvas) {
         root.style.removeProperty('--classic-mobile-scale');
         root.style.removeProperty('--classic-mobile-rotate');
+        root.style.removeProperty('--battle-mobile-vw');
+        root.style.removeProperty('--battle-mobile-vh');
+        battleMobileStableViewport = null;
         return;
     }
     const { width, height } = getClassicViewportSize();
@@ -3951,8 +4235,28 @@ function updateClassicMobileCanvas() {
     } else if (Math.max(width, height) >= 1180) {
         scale = Math.min(containScale * 1.1, 1.28);
     }
+    root.style.setProperty('--battle-mobile-vw', `${width}px`);
+    root.style.setProperty('--battle-mobile-vh', `${height}px`);
     root.style.setProperty('--classic-mobile-scale', String(Math.max(0.1, Math.min(1.35, scale))));
     root.style.setProperty('--classic-mobile-rotate', rotate ? '90deg' : '0deg');
+}
+
+function onBattleMobileInputFocusIn(e) {
+    const target = e && e.target;
+    if (!target || !target.matches || !target.matches('#game-chat-input, #classic-game-chat-input, #phase-chat-input, #lobby-chat-input, input, textarea, select, [contenteditable="true"]')) return;
+    battleMobileInputFocus = true;
+    if (!battleMobileStableViewport) battleMobileStableViewport = readClassicViewportSize();
+    if (battleMobileFocusTimer) clearTimeout(battleMobileFocusTimer);
+    updateClassicMobileCanvas();
+}
+
+function onBattleMobileInputFocusOut() {
+    if (battleMobileFocusTimer) clearTimeout(battleMobileFocusTimer);
+    battleMobileFocusTimer = setTimeout(() => {
+        battleMobileInputFocus = false;
+        battleMobileStableViewport = null;
+        updateClassicMobileCanvas();
+    }, 260);
 }
 
 function updateUiStyleAvailability() {
@@ -4109,6 +4413,10 @@ function updateStaticText() {
     if (audioMasterLabel) audioMasterLabel.textContent = UI.settings_volume_master || '主音量';
     const audioMusicLabel = $('settings-label-volume-music');
     if (audioMusicLabel) audioMusicLabel.textContent = UI.settings_volume_music || '背景音乐';
+    const audioMenuMusicLabel = $('settings-label-volume-menuMusic');
+    if (audioMenuMusicLabel) audioMenuMusicLabel.textContent = UI.settings_volume_menu_music || '主页/大厅音乐';
+    const audioBattleMusicLabel = $('settings-label-volume-battleMusic');
+    if (audioBattleMusicLabel) audioBattleMusicLabel.textContent = UI.settings_volume_battle_music || '对局音乐';
     const audioUiLabel = $('settings-label-volume-ui');
     if (audioUiLabel) audioUiLabel.textContent = UI.settings_volume_ui || '按钮';
     const audioSfxLabel = $('settings-label-volume-sfx');
@@ -4231,6 +4539,17 @@ function updateStaticText() {
     setIconButtonLabel('btn-changelog-top', UI.about_changelog || '更新日志');
     setIconButtonLabel('btn-card-gallery', UI.card_gallery || UI.gallery || '图鉴');
     setIconButtonLabel('btn-replays-top', UI.account_replays || UI.replay || '回放');
+    setIconButtonLabel('btn-achievements-top', UI.achievements || '成就');
+    const achievementsTopText = document.querySelector('#btn-achievements-top .top-icon-text');
+    if (achievementsTopText) achievementsTopText.textContent = UI.achievements || '成就';
+    const achievementsTitle = $('achievements-popover-title');
+    if (achievementsTitle) achievementsTitle.textContent = UI.achievements_title || '成就与荆露';
+    document.querySelectorAll('[data-achievement-tab]').forEach(btn => {
+        const tab = btn.dataset.achievementTab || '';
+        const zhLabels = { dew: '荆露', daily: '签到', achievements: '成就', tasks: '每日任务' };
+        const enLabels = { dew: 'Thorn Dew', daily: 'Check-in', achievements: 'Achievements', tasks: 'Daily Tasks' };
+        btn.textContent = (currentLang === 'zh' ? zhLabels[tab] : enLabels[tab]) || btn.textContent;
+    });
     const changelogTitle = $('changelog-popover-title');
     if (changelogTitle) changelogTitle.textContent = UI.about_changelog || '更新日志';
     if (changelogCache && Array.isArray(changelogCache.items) && !$('changelog-popover')?.classList.contains('hidden')) {
@@ -4654,6 +4973,8 @@ function updateTopActionButtons(viewId = activeViewId) {
     if (galleryTop) galleryTop.classList.toggle('hidden', !onHome);
     const replayTop = $('btn-replays-top');
     if (replayTop) replayTop.classList.toggle('hidden', !onHome);
+    const achievementsTop = $('btn-achievements-top');
+    if (achievementsTop) achievementsTop.classList.toggle('hidden', !onHome);
     const leaderboardTop = $('btn-leaderboard-top');
     if (leaderboardTop) leaderboardTop.classList.toggle('hidden', !onHome);
 }
@@ -4670,6 +4991,7 @@ function showView(viewId) {
     }
     updateClassicMobileCanvas();
     updateTopActionButtons(viewId);
+    scheduleBackgroundMusicUpdate();
     if (viewId !== 'view-login') {
         toggleAccountPopover(false);
         toggleFriendsPopover(false);
@@ -4808,7 +5130,7 @@ function rulesTypeSpan(type, label) {
 }
 
 function rulesCardLink(id, type) {
-    const cd = CARD_DEFS[id];
+    const cd = getCardDef(id);
     const label = cd ? getCardName(cd) : id;
     return `<a class="rules-card-link ${type}" data-card="${escapeHtml(id)}">${escapeHtml(label)}</a>`;
 }
@@ -5063,6 +5385,7 @@ function toggleChangelogPopover(force) {
     pop.classList.toggle('hidden', !shouldOpen);
     if (shouldOpen) {
         toggleLeaderboardPopover(false);
+        toggleAchievementsPopover(false);
         if (typeof toggleAccountPopover === 'function') toggleAccountPopover(false);
         if (typeof toggleFriendsPopover === 'function') toggleFriendsPopover(false);
         Promise.resolve(loadChangelog()).then(markChangelogRead);
@@ -5180,17 +5503,22 @@ function setGalleryMode(mode) {
 
 async function showCardGallery(selectedId = null, mode = 'cards') {
     try {
-        await ensureCardDataForCurrentMods();
+        await Promise.all([
+            fetchGalleryCardDefs({ force: true }),
+            fetchGalleryOpeningEvents({ force: true }),
+        ]);
     } catch (err) {
-        console.warn('[mods] failed to refresh card data before gallery:', err);
+        console.warn('[mods] failed to refresh all card data before gallery:', err);
     }
     phase = 'gallery';
+    gallerySelectedModKeys = null;
     setGalleryMode(mode);
     const backBtn = $('btn-gallery-back');
     if (backBtn) backBtn.textContent = galleryReturnToRules ? UI.gallery_back_rules : UI.back_to_home;
     if (selectedId) gallerySelectedId = selectedId;
-    if (!gallerySelectedId || !isVisibleLoadoutCardDef(CARD_DEFS[gallerySelectedId])) {
-        gallerySelectedId = Object.keys(CARD_DEFS).filter(id => isVisibleLoadoutCardDef(CARD_DEFS[id])).sort(compareGalleryCards)[0] || null;
+    const defs = getGalleryCardDefs();
+    if (!gallerySelectedId || !isPublicCardDef(defs[gallerySelectedId])) {
+        gallerySelectedId = Object.keys(defs).filter(id => isPublicCardDef(defs[id])).sort(compareGalleryCards)[0] || null;
     }
     showView('view-card-gallery');
     renderCardGallery();
@@ -5263,10 +5591,13 @@ function getGalleryFlagEnglishLabel(flag) {
 
 function getGalleryFlagUsers(flag) {
     const normalized = normalizeCardFlag(flag);
-    const defs = Object.values(CARD_DEFS).filter(isPublicCardDef);
+    const defs = Object.values(getGalleryCardDefs()).filter(isPublicCardDef);
     if (normalized === 'fusion_layer') return defs.filter(cd => cd && cd.id === 'Fusion');
     if (normalized === 'fission_layer') return defs.filter(cd => cd && cd.id === 'Fission');
-    return defs.filter(cd => normalizeFlagList(cd.flags || []).includes(normalized));
+    return defs.filter(cd => {
+        const allFlags = [...normalizeFlagList(cd.flags || []), ...normalizeFlagList(cd.tags || [])];
+        return allFlags.includes(normalized);
+    });
 }
 
 const GALLERY_CARD_TYPE_ORDER = { thorn: 0, bloom: 1, guard: 2, root: 3 };
@@ -5296,8 +5627,9 @@ function localizedModDescriptionFromFields(obj, fallback = '') {
 }
 
 function compareGalleryCards(a, b) {
-    const ca = typeof a === 'string' ? CARD_DEFS[a] : a;
-    const cb = typeof b === 'string' ? CARD_DEFS[b] : b;
+    const defs = getGalleryCardDefs();
+    const ca = typeof a === 'string' ? defs[a] : a;
+    const cb = typeof b === 'string' ? defs[b] : b;
     if (!ca && !cb) return String(a || '').localeCompare(String(b || ''), 'en');
     if (!ca) return 1;
     if (!cb) return -1;
@@ -5356,14 +5688,16 @@ function getGalleryCardModLabel(cd) {
 
 function getGalleryModOptions() {
     const map = new Map();
-    Object.values(CARD_DEFS).filter(isPublicCardDef).forEach(cd => {
+    Object.values(getGalleryCardDefs()).filter(isPublicCardDef).forEach(cd => {
         const key = getGalleryCardModKey(cd);
         if (!map.has(key)) {
             map.set(key, {
                 key,
                 label: getGalleryCardModLabel(cd),
+                filename: cd.source_mod_is_vanilla ? VANILLA_MOD_FILENAME : String(cd.source_mod_filename || key),
                 sortName: cd.source_mod_is_vanilla ? '000' : String(cd.source_mod_name_en || cd.source_mod_sort_name || cd.source_mod_name || cd.source_mod_filename || key).toLowerCase(),
                 isVanilla: !!cd.source_mod_is_vanilla,
+                isCommunity: !!cd.source_mod_is_community,
                 count: 0,
             });
         }
@@ -5380,8 +5714,26 @@ function getGalleryTypeOptions() {
         key: type,
         label: getCardTypeLabel(type) || type,
         color: CARD_TYPE_COLORS[type] || COLORS.text_primary,
-        count: Object.values(CARD_DEFS).filter(cd => isPublicCardDef(cd) && cd.card_type === type).length,
+        count: Object.values(getGalleryCardDefs()).filter(cd => isPublicCardDef(cd) && cd.card_type === type).length,
     }));
+}
+
+function getDefaultGallerySelectedModKeys(modOptions = getGalleryModOptions()) {
+    const disabled = new Set(getDisabledMods().map(item => String(item || '')));
+    const selectedCommunity = new Set((getCommunityModSelection().community_mods || []).map(mod => String(mod.sha256 || '').toLowerCase()));
+    const selected = modOptions
+        .filter(item => {
+            if (!item) return false;
+            if (item.isCommunity) {
+                const key = String(item.key || '').toLowerCase();
+                const filename = String(item.filename || '').toLowerCase();
+                return selectedCommunity.has(key) || selectedCommunity.has(filename);
+            }
+            if (item.isVanilla) return !disabled.has(VANILLA_MOD_FILENAME);
+            return !disabled.has(item.filename || item.key);
+        })
+        .map(item => item.key);
+    return new Set(selected);
 }
 
 function ensureGalleryCardFilterState() {
@@ -5389,7 +5741,7 @@ function ensureGalleryCardFilterState() {
     const typeKeys = getGalleryTypeOptions().map(item => item.key);
     const shouldInitMods = !(gallerySelectedModKeys instanceof Set);
     const shouldInitTypes = !(gallerySelectedTypeKeys instanceof Set);
-    if (shouldInitMods) gallerySelectedModKeys = new Set(modKeys);
+    if (shouldInitMods) gallerySelectedModKeys = getDefaultGallerySelectedModKeys();
     if (shouldInitTypes) gallerySelectedTypeKeys = new Set(typeKeys);
     gallerySelectedModKeys = new Set([...gallerySelectedModKeys].filter(key => modKeys.includes(key)));
     gallerySelectedTypeKeys = new Set([...gallerySelectedTypeKeys].filter(key => typeKeys.includes(key)));
@@ -5401,7 +5753,7 @@ function getAllGalleryFlags() {
         const normalized = normalizeCardFlag(flag);
         if (normalized) flags.add(normalized);
     });
-    Object.values(CARD_DEFS).filter(isPublicCardDef).forEach(cd => (cd.flags || []).forEach(flag => {
+    Object.values(getGalleryCardDefs()).filter(isPublicCardDef).forEach(cd => [...(cd.flags || []), ...(cd.tags || [])].forEach(flag => {
         const normalized = normalizeCardFlag(flag);
         if (normalized) flags.add(normalized);
     }));
@@ -5463,14 +5815,15 @@ function renderCardGallery() {
             renderCardGallery();
         });
     });
-    const ids = Object.keys(CARD_DEFS)
-        .filter(id => isVisibleLoadoutCardDef(CARD_DEFS[id]))
+    const defs = getGalleryCardDefs();
+    const ids = Object.keys(defs)
+        .filter(id => isPublicCardDef(defs[id]))
         .filter(id => {
-            const cd = CARD_DEFS[id];
+            const cd = defs[id];
             if (!cd) return false;
             if (!gallerySelectedModKeys.has(getGalleryCardModKey(cd))) return false;
             if (!gallerySelectedTypeKeys.has(cd.card_type)) return false;
-            return !q || cardSearchText(id).includes(q);
+            return !q || cardSearchText(id, defs).includes(q);
         })
         .sort(compareGalleryCards);
     detail.innerHTML = `
@@ -5511,7 +5864,7 @@ function renderCardGallery() {
         const fragment = document.createDocumentFragment();
         ids.forEach(id => {
             if (renderToken !== galleryCardRenderToken) return;
-            const cd = CARD_DEFS[id];
+            const cd = defs[id];
             if (!cd) return;
             const cardDict = makeGalleryCardPreviewDict(cd);
             const wrap = document.createElement('button');
@@ -5595,7 +5948,7 @@ function renderTagGallery(list, detail, q) {
 function renderOpeningEventGallery(list, detail, q) {
     list.className = 'gallery-card-list';
     detail.className = 'gallery-detail';
-    const events = (openingEvents || []).filter(ev => {
+    const events = getGalleryOpeningEvents().filter(ev => {
         const text = [
             ev.id,
             getLocalizedEventText(ev, 'name'),
@@ -5659,7 +6012,6 @@ function getAllStatusDefs() {
     const builtInList = [
         { key: 'poison', label: UI.status_poison, desc: termLib.P ? termLib.P.desc : '', color: COLORS.poison },
         { key: 'fire', label: UI.status_fire, desc: termLib.F ? termLib.F.desc : '', color: COLORS.fire },
-        { key: 'armor', label: UI.status_armor || '护甲', desc: termLib.A ? termLib.A.desc : '', color: COLORS.armor_text },
         { key: 'toxic', label: UI.status_toxic, desc: termLib.toxic ? termLib.toxic.desc : '', color: '#6C3483' },
         { key: 'triangle', label: UI.status_triangle || '三角形', desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
         { key: 'nazar', label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
@@ -5667,7 +6019,7 @@ function getAllStatusDefs() {
         { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         { key: 'invincible', label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
         { key: 'dodge', label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
-        { key: 'status_immune', label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。', color: '#16A085' },
+        { key: 'status_immune', label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。护甲不是状态，不会被状态免疫影响。', color: '#16A085' },
         { key: 'stunned', label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         { key: 'attack_blocked', label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         { key: 'attack_only', label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
@@ -5927,6 +6279,71 @@ function clearActionToast() {
         toast.className = 'action-toast hidden';
         toast.textContent = '';
     }
+}
+
+function achievementToastText(item = {}) {
+    const zh = currentLang === 'zh';
+    return {
+        name: zh ? (item.name_cn || item.name || item.id || '') : (item.name_en || item.name_cn || item.name || item.id || ''),
+        description: zh ? (item.description_cn || item.description || '') : (item.description_en || item.description_cn || item.description || ''),
+    };
+}
+
+function ensureAchievementToastElement() {
+    let toast = $('achievement-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'achievement-toast';
+        toast.className = 'achievement-toast hidden';
+        toast.innerHTML = `
+            <div class="achievement-toast-kicker"></div>
+            <div class="achievement-toast-name"></div>
+            <div class="achievement-toast-desc"></div>
+        `;
+        document.body.appendChild(toast);
+    }
+    return toast;
+}
+
+function showNextAchievementToast() {
+    if (achievementToastActive) return;
+    const item = achievementToastQueue.shift();
+    if (!item) return;
+    const toast = ensureAchievementToastElement();
+    const text = achievementToastText(item);
+    const kicker = toast.querySelector('.achievement-toast-kicker');
+    const name = toast.querySelector('.achievement-toast-name');
+    const desc = toast.querySelector('.achievement-toast-desc');
+    if (kicker) kicker.textContent = currentLang === 'zh' ? '成就已完成！' : 'Achievement Unlocked!';
+    if (name) name.textContent = text.name || 'Achievement';
+    if (desc) desc.textContent = text.description || (item.hidden ? '?' : '');
+    if (achievementToastTimer) {
+        clearTimeout(achievementToastTimer);
+        achievementToastTimer = null;
+    }
+    achievementToastActive = true;
+    toast.classList.remove('hidden');
+    toast.classList.remove('active');
+    playUiAudio('ui_open', { throttleMs: 0, volumeScale: 0.72, playbackRate: 1.08 });
+    requestAnimationFrame(() => toast.classList.add('active'));
+    achievementToastTimer = setTimeout(() => {
+        toast.classList.remove('active');
+        achievementToastTimer = setTimeout(() => {
+            toast.classList.add('hidden');
+            achievementToastActive = false;
+            achievementToastTimer = null;
+            showNextAchievementToast();
+        }, 240);
+    }, 4400);
+}
+
+function enqueueAchievementToasts(items = []) {
+    const list = Array.isArray(items) ? items : [items];
+    const valid = list.filter(item => item && (item.name_cn || item.name_en || item.id));
+    if (!valid.length) return;
+    achievementToastQueue.push(...valid);
+    achievementCenter = null;
+    showNextAchievementToast();
 }
 
 async function copyPlainText(text) {
@@ -7218,6 +7635,43 @@ async function refreshCardDefsFromServer({ silent = false } = {}) {
     }
 }
 
+function buildGalleryModQueryString() {
+    const params = new URLSearchParams();
+    params.set('include_all_mods', '1');
+    params.set('disabled_mods', '');
+    const community = getCommunityModSelection();
+    params.set('mod_source', community.mod_source);
+    if (community.mod_source === 'community') {
+        params.set('community_mods', JSON.stringify(community.community_mods));
+    }
+    return params.toString();
+}
+
+async function fetchGalleryCardDefs({ force = false } = {}) {
+    if (!force && GALLERY_CARD_DEFS && Object.keys(GALLERY_CARD_DEFS).length) return GALLERY_CARD_DEFS;
+    const resp = await fetch(`/api/cards?${buildGalleryModQueryString()}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const nextDefs = await resp.json();
+    GALLERY_CARD_DEFS = nextDefs && typeof nextDefs === 'object' ? nextDefs : {};
+    return GALLERY_CARD_DEFS;
+}
+
+function getGalleryOpeningEvents() {
+    if (Array.isArray(GALLERY_OPENING_EVENTS) && GALLERY_OPENING_EVENTS.length) {
+        return GALLERY_OPENING_EVENTS;
+    }
+    return openingEvents || [];
+}
+
+async function fetchGalleryOpeningEvents({ force = false } = {}) {
+    if (!force && Array.isArray(GALLERY_OPENING_EVENTS) && GALLERY_OPENING_EVENTS.length) return GALLERY_OPENING_EVENTS;
+    const resp = await fetch(`/api/opening-events?${buildGalleryModQueryString()}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    GALLERY_OPENING_EVENTS = Array.isArray(data.events) ? data.events : [];
+    return GALLERY_OPENING_EVENTS;
+}
+
 async function fetchOpeningEvents(options = {}) {
     const useCache = options.useCache !== false;
     const background = !!options.background;
@@ -7275,18 +7729,30 @@ function setCustomRegistries(tags, statuses) {
     });
 }
 
+function getCardDefSource() {
+    if (phase === 'gallery' && GALLERY_CARD_DEFS && Object.keys(GALLERY_CARD_DEFS).length) {
+        return GALLERY_CARD_DEFS;
+    }
+    return CARD_DEFS;
+}
+
+function getGalleryCardDefs() {
+    return (GALLERY_CARD_DEFS && Object.keys(GALLERY_CARD_DEFS).length) ? GALLERY_CARD_DEFS : CARD_DEFS;
+}
+
 function getCardDef(defId) {
-    if (CARD_DEFS[defId]) return CARD_DEFS[defId];
+    const defs = getCardDefSource();
+    if (defs[defId]) return defs[defId];
     const raw = String(defId || '');
     if (raw.includes(':')) {
         const local = raw.split(':').pop();
-        if (CARD_DEFS[local]) return CARD_DEFS[local];
+        if (defs[local]) return defs[local];
         const pascal = local
             .split(/[_-]+/)
             .filter(Boolean)
             .map(part => part.charAt(0).toUpperCase() + part.slice(1))
             .join('');
-        if (CARD_DEFS[pascal]) return CARD_DEFS[pascal];
+        if (defs[pascal]) return defs[pascal];
     }
     return null;
 }
@@ -9234,7 +9700,7 @@ function getTermIntroLibrary() {
         D: { label: lt({ zh: 'D：物理伤害(Damage)', en: 'D: Physical Damage', fr: 'D : dégâts physiques', ja: 'D：物理ダメージ' }), desc: lt({ zh: '会受护甲、装备、闪避和反制影响。只有实际造成伤害，才会触发淬毒、尖牙回血等效果。', en: 'Affected by armor, equipment, dodges, and counters. Effects such as Toxic or Fang healing only trigger when damage is actually dealt.', fr: 'Affecté par l’armure, les équipements, l’esquive et les contres. Toxic ou le soin de Fang ne se déclenchent que si des dégâts sont réellement infligés.', ja: '護甲、装備、回避、反制の影響を受けます。実際にダメージを与えた時だけ淬毒や牙の回復などが発動します。' }), color: COLORS.damage },
         electric_damage: { label: lt({ zh: '电伤：电击伤害(Electric Damage)', en: 'Electric Damage', fr: 'Dégâts électriques', ja: '電撃ダメージ' }), desc: `${lt({ zh: '一种类似于物理伤害的魔法伤害。', en: 'A kind of magic damage that behaves similarly to physical damage. ', fr: 'Un type de dégâts magiques qui se comporte comme des dégâts physiques. ', ja: '物理ダメージに近い挙動をする魔法ダメージです。' })}${magicDamageDesc}`, color: COLORS.damage },
         magic_damage: { label: lt({ zh: '魔法伤害(Magic Damage)', en: 'Magic Damage', fr: 'Dégâts magiques', ja: '魔法ダメージ' }), desc: magicDamageDesc, color: COLORS.magic },
-        A: { label: lt({ zh: 'A：护甲(Armor)', en: 'A: Armor', fr: 'A : armure', ja: 'A：護甲' }), desc: lt({ zh: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。', en: 'Reduces D. It does not reduce magic damage from Poison, Burn, or similar states.', fr: 'Réduit D. Ne réduit pas les dégâts magiques du Poison, de la Brûlure ou des états similaires.', ja: 'D を軽減します。中毒、灼烧などの魔法ダメージは軽減しません。' }), color: COLORS.armor_text },
+        A: { label: lt({ zh: 'A：护甲(Armor)', en: 'A: Armor', fr: 'A : armure', ja: 'A：護甲' }), desc: lt({ zh: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。护甲不是状态，不受状态免疫影响。', en: 'Reduces D. It does not reduce magic damage from Poison, Burn, or similar states. Armor is not a status and is not affected by Status Immune.', fr: 'Réduit D. Ne réduit pas les dégâts magiques du Poison, de la Brûlure ou des états similaires. L’armure n’est pas un statut et n’est pas affectée par l’immunité aux statuts.', ja: 'D を軽減します。中毒、灼烧などの魔法ダメージは軽減しません。護甲は状態ではなく、状態免疫の影響を受けません。' }), color: COLORS.armor_text },
         P: { label: lt({ zh: 'P：中毒(Poison)', en: 'P: Poison', fr: 'P : poison', ja: 'P：毒' }), desc: lt({ zh: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', en: 'At your turn start, take magic damage equal to current P. If you survive, P halves rounded down, e.g. 10P→5P, 5P→2P.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au P actuel. Si vous survivez, P est divisé par deux arrondi à l’inférieur, ex. 10P→5P, 5P→2P.', ja: '自分のターン開始時、現在の P と同じ魔法ダメージを受けます。生存していれば P は切り捨てで半減します。例：10P→5P、5P→2P。' }), color: COLORS.poison },
         F: { label: lt({ zh: 'F：灼烧(Fire)', en: 'F: Burn', fr: 'F : brûlure', ja: 'F：火傷' }), desc: lt({ zh: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 10 回合及以上后，每回合开始时对所有玩家施加1层灼烧。', en: 'At your turn start, take magic damage equal to current F. Burn stacks do not decrease. From round 10 onward, all players gain 1 Burn at each turn start.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au F actuel. Les charges de Brûlure ne diminuent pas. À partir du tour 10, tous les joueurs gagnent 1 Brûlure au début de chaque tour.', ja: '自分のターン開始時、現在の F と同じ魔法ダメージを受けます。火傷は減少しません。10ラウンド以降、各ターン開始時に全員へ火傷1層を付与します。' }), color: COLORS.fire },
         toxic: { label: `${UI.status_toxic || 'Toxic'}(Toxic)`, desc: lt({ zh: '造成实际 D 后，对目标施加与淬毒层数相同的 P 层数。伤害被完全挡住时不会触发。', en: 'After actually dealing D, apply P equal to Toxic stacks. It does not trigger if all damage is blocked.', fr: 'Après avoir réellement infligé D, applique P égal aux charges de Toxique. Ne se déclenche pas si tous les dégâts sont bloqués.', ja: '実際に D を与えた後、淬毒層数と同じ P を付与します。ダメージが完全に防がれた場合は発動しません。' }), color: '#6C3483' },
@@ -9397,10 +9863,15 @@ function collectCardIntroTerms(cardDict) {
     flags.forEach(flag => {
         if (shouldDisplayCardFlag(flag)) addFlagIntroItem(items, seen, flag);
     });
+    [
+        ...(normalizeFlagList(cardDef.tags || [])),
+        ...(normalizeFlagList(cardDict && cardDict.tags || [])),
+        ...(normalizeFlagList(cardDict && cardDict.flags || [])),
+    ].forEach(flag => {
+        if (shouldDisplayCardFlag(flag)) addFlagIntroItem(items, seen, flag);
+    });
     const rawText = [
-        getCardName(cardDef),
         getCardEffectText(cardDef),
-        getCardDescriptionText(cardDef),
         getCardTriggerText(cardDef),
         getCardIntroTriggerText(cardDef),
         cardDef.effect_text,
@@ -9410,21 +9881,16 @@ function collectCardIntroTerms(cardDict) {
         cardDef.trigger_effect_text_cn,
         cardDef.trigger_effect_text_en,
         cardDict && cardDict.effect_text,
-        cardDict && cardDict.description,
         cardDict && cardDict.trigger_effect_text,
         (cardDef.flags || []).join(' '),
         (cardDef.tags || []).join(' '),
-        (() => {
-            try { return JSON.stringify(cardDef.v2_events || cardDef.events || {}); }
-            catch (_) { return ''; }
-        })(),
     ].filter(Boolean).join(' ');
     const probes = [
-        [/(\d+\s*D|物理伤害|physical damage|D\b)/i, 'D'],
-        [/(\+\s*\d+\s*A|护甲|armor|A\b)/i, 'A'],
-        [/(\d+\s*(?:P|层P)|中毒|Poison)/i, 'P'],
-        [/(\d+\s*(?:F|层F)|灼烧|Burn)/i, 'F'],
-        [/(\d+\s*电伤|电击伤害|电伤|Electric Damage)/i, 'electric_damage'],
+        [/(\[\[icon:D\]\]|\d+\s*D|物理伤害|physical damage)/i, 'D'],
+        [/(\[\[icon:A\]\]|\+\s*\d+\s*A|护甲|armor)/i, 'A'],
+        [/(\[\[icon:P\]\]|\d+\s*(?:P|层P)|中毒|Poison)/i, 'P'],
+        [/(\[\[icon:F\]\]|\d+\s*(?:F|层F)|灼烧|Burn)/i, 'F'],
+        [/(\[\[icon:electric_damage\]\]|\d+\s*电伤|电击伤害|电伤|Electric Damage)/i, 'electric_damage'],
         [/(魔法伤害|Magic Damage)/i, 'magic_damage'],
         [/(淬毒|(?:^|[^A-Za-z_])Toxic(?!\s*Poison|[A-Za-z_])|["'](?:toxic|apply_toxic)["'])/i, 'toxic'],
         [/(抽牌|牌堆|draw|deck)/i, 'deck'],
@@ -9435,12 +9901,12 @@ function collectCardIntroTerms(cardDict) {
         [/(手牌上限|hand limit)/i, 'hand_limit'],
         [/(爆费|上限)/i, 'overcap'],
         [/(同名|共生|same-name)/i, 'same_name_penalty'],
-        [/(被揭示|revealed)/i, 'revealed'],
-        [/(崇高|sublime)/i, 'sublime'],
     ];
     probes.forEach(([re, key]) => {
         if (re.test(rawText)) addTermIntroItem(items, seen, key);
     });
+    if (/(被揭示|revealed)/i.test(rawText)) addFlagIntroItem(items, seen, 'revealed');
+    if (/(崇高|sublime)/i.test(rawText)) addFlagIntroItem(items, seen, 'sublime');
     if (/(放逐|exile)/i.test(rawText)) {
         addFlagIntroItem(items, seen, 'exile');
     }
@@ -9449,7 +9915,7 @@ function collectCardIntroTerms(cardDict) {
         [/护盾|Shield|jungle:shield/i, 'jungle:shield'],
         [/魔力回合回复|Turn Magic Regen|jungle:turn_magic_turns|turn_magic/i, 'jungle:turn_magic_turns'],
         [/回合回复|Turn Heal|jungle:turn_heal_turns|turn_heal/i, 'jungle:turn_heal_turns'],
-        [/树根|Root(?!牌| card)|jungle:root_status|root_status/i, 'jungle:root_status'],
+        [/树根|jungle:root_status|root_status/i, 'jungle:root_status'],
         [/剧毒|Toxic Poison|jungle:toxic_poison|toxic_poison/i, 'jungle:toxic_poison'],
         [/滞留|Stagnation|stagnation/i, 'stagnation'],
         [/失明|Blind|blind/i, 'blind'],
@@ -9529,8 +9995,8 @@ function getStatusIntroItem(statusInfo) {
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
         dodge: { label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
-        status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。', color: '#16A085' },
-        immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。', color: '#16A085' },
+        status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。护甲不是状态，不会被状态免疫影响。', color: '#16A085' },
+        immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。护甲不是状态，不会被状态免疫影响。', color: '#16A085' },
         stunned: { label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         attack_blocked: { label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
@@ -9573,7 +10039,7 @@ function getStatusIntroItem(statusInfo) {
         equip_protect: { label: UI.status_equip_protect, desc: lt({ zh: builtIns.equip_protect.desc, en: 'Prevents equipment from being destroyed by destroy effects.', fr: 'Empêche un équipement d’être détruit par les effets de destruction.', ja: '装備が破壊効果で破壊されるのを防ぎます。' }) },
         invincible: { label: UI.status_invincible, desc: lt({ zh: builtIns.invincible.desc, en: 'While invincible, damage does not cause defeat.', fr: 'Pendant l’invincibilité, les dégâts ne provoquent pas la défaite.', ja: '無敵中はダメージで敗北しません。' }) },
         dodge: { label: UI.status_dodge || 'Dodge', desc: lt({ zh: builtIns.dodge.desc, en: 'When physical damage would be taken, lose 1 stack to prevent that hit. If the source card has Precision, prevent only half of the damage. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Quand des dégâts physiques devraient être subis, perdez 1 charge pour annuler ce coup. Si la carte source a Précision, seule la moitié des dégâts est annulée. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: '物理ダメージを受ける時、1層減らしてそのダメージを防ぎます。発生源カードがPrecisionを持つ場合、防ぐのは半分だけです。状態免疫中は蓄積できますが発動も消費もされません。' }) },
-        status_immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。' }) },
+        status_immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends. Armor is not a state and is not affected by Status Immune.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite. L’armure n’est pas un état et n’est pas affectée.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。護甲は状態ではなく、状態免疫の影響を受けません。' }) },
         immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。' }) },
         stunned: { label: UI.status_stunned, desc: lt({ zh: builtIns.stunned.desc, en: 'At your turn, lose 1 stack and skip active actions. Passive equipment still works.', fr: 'À votre tour, perdez 1 charge et sautez vos actions actives. Les équipements passifs fonctionnent encore.', ja: '自分のターンに1層減り、能動行動をスキップします。装備の受動効果は通常通りです。' }) },
         attack_blocked: { label: UI.status_attack_blocked, desc: lt({ zh: builtIns.attack_blocked.desc, en: 'You cannot play Thorn cards while this effect lasts.', fr: 'Vous ne pouvez pas jouer de cartes Thorn tant que cet effet dure.', ja: '効果中、Thornカードを使用できません。' }) },
@@ -10020,6 +10486,23 @@ function attachTermIntroToStatus(anchor, statusInfo) {
     if (!anchor || !statusInfo) return;
     if (getOwnBlindLevel() >= 3) return;
     attachTermIntroLongPress(anchor, () => showTermIntroForStatus(statusInfo));
+}
+
+function attachTermIntroToTermKey(anchor, key = '') {
+    if (!anchor || !key) return;
+    attachTermIntroLongPress(anchor, () => showTermIntroForTokenKey(key, anchor));
+    if (anchor.classList && anchor.classList.contains('armor-meter') && anchor.dataset.armorTermClickBound !== '1') {
+        anchor.dataset.armorTermClickBound = '1';
+        anchor.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (anchor.dataset.termIntroSuppressClick === '1') {
+                delete anchor.dataset.termIntroSuppressClick;
+                return;
+            }
+            showTermIntroForTokenKey(key, anchor);
+        });
+    }
 }
 
 function renderChoiceOptionContent(container, option, index, config = {}) {
@@ -10530,6 +11013,10 @@ function connectSocket(serverUrl) {
         if (!document.hidden && (isFriendsPopoverOpen() || isSocialDetailOpen())) {
             loadDmThreads(true);
         }
+    });
+    bindSocketEvent('achievement_unlocked', (data = {}) => {
+        enqueueAchievementToasts(data.items || data.achievements || []);
+        if (!$('achievements-popover')?.classList.contains('hidden')) loadAchievementCenter(true);
     });
     bindSocketEvent('invite_received', (data) => {
         debugLog('[client] invite_received:', data);
@@ -11466,6 +11953,359 @@ function renderGrMiniChart(history) {
             <span><i class="total"></i>${escapeHtml(currentLang === 'zh' ? '总分' : 'Total')} ${escapeHtml(formatGrValue(last.total))}</span>
         </div>
     `;
+}
+
+function thornDewDeltaText(tx) {
+    const free = Number(tx.free_delta || 0) || 0;
+    const paid = Number(tx.paid_delta || 0) || 0;
+    const total = free + paid;
+    if (total > 0) return `+${total}`;
+    return String(total);
+}
+
+function thornDewCenterHtml(user) {
+    const free = Math.max(0, Number(user?.thorn_dew_free || 0) || 0);
+    const paid = Math.max(0, Number(user?.thorn_dew_paid || 0) || 0);
+    const total = Math.max(0, Number(user?.thorn_dew_total ?? (free + paid)) || 0);
+    const center = thornDewCenter || {};
+    const txs = Array.isArray(center.transactions) ? center.transactions.slice(0, 5) : [];
+    const txHtml = txs.length
+        ? txs.map(tx => `
+            <div class="thorn-dew-tx">
+                <span class="${(Number(tx.free_delta || 0) + Number(tx.paid_delta || 0)) >= 0 ? 'gain' : 'spend'}">${escapeHtml(thornDewDeltaText(tx))}</span>
+                <span>${escapeHtml(tx.reason || tx.source_type || '')}</span>
+            </div>
+        `).join('')
+        : `<div class="account-replay-sub">${escapeHtml(currentLang === 'zh' ? '暂无荆露记录' : 'No Thorn Dew records yet')}</div>`;
+    return `
+        <div class="thorn-dew-card">
+            <div class="thorn-dew-head">
+                <div>
+                    <div class="thorn-dew-title">${escapeHtml(UI.thorn_dew || '荆露')}</div>
+                    <div class="thorn-dew-balance">${escapeHtml(total)}</div>
+                    <div class="thorn-dew-sub">${escapeHtml(currentLang === 'zh' ? '可用于未来兑换内容' : 'Available for future rewards')}</div>
+                </div>
+            </div>
+            <div class="thorn-dew-tx-list">${txHtml}</div>
+        </div>
+    `;
+}
+
+function thornDewCheckinHtml() {
+    const center = thornDewCenter || {};
+    const checked = !!center.checked_in_today;
+    const streak = Math.max(1, Number(center.streak_day || 1) || 1);
+    const rewards = Array.isArray(center.checkin_rewards) && center.checkin_rewards.length
+        ? center.checkin_rewards.map(item => Math.max(0, Number(item || 0) || 0))
+        : [40, 45, 50, 55, 60, 70, 100];
+    const reward = Math.max(0, Number(center.next_checkin_reward || rewards[(streak - 1) % rewards.length] || 40) || 40);
+    const dayIndex = (Math.max(1, streak) - 1) % rewards.length;
+    const pct = checked ? 100 : Math.max(8, Math.min(96, dayIndex / Math.max(1, rewards.length - 1) * 100));
+    const dayLabel = currentLang === 'zh' ? `连续第 ${streak} 天` : `Streak day ${streak}`;
+    return `
+        <div class="thorn-dew-card">
+            <div class="thorn-dew-head">
+                <div>
+                    <div class="thorn-dew-title">${escapeHtml(currentLang === 'zh' ? '签到' : 'Check-in')}</div>
+                    <div class="thorn-dew-sub">${escapeHtml(dayLabel)}</div>
+                </div>
+                <button id="btn-thorn-dew-checkin-daily" class="btn btn-primary" type="button" ${checked || thornDewLoading ? 'disabled' : ''}>
+                    ${escapeHtml(checked ? (currentLang === 'zh' ? '今日已签到' : 'Checked In') : (currentLang === 'zh' ? `签到 +${reward}` : `Check In +${reward}`))}
+                </button>
+            </div>
+            <div class="thorn-dew-progress-wrap">
+                <div class="thorn-dew-progress-meta">
+                    <span>${escapeHtml(currentLang === 'zh' ? `今天可获得 ${reward} 荆露` : `Today: ${reward} Thorn Dew`)}</span>
+                    <span>${escapeHtml(checked ? (currentLang === 'zh' ? '已完成' : 'Done') : (currentLang === 'zh' ? '待领取' : 'Ready'))}</span>
+                </div>
+                <div class="thorn-dew-progress"><div class="thorn-dew-progress-fill" style="width:${pct.toFixed(1)}%"></div></div>
+                <div class="thorn-dew-reward-track">
+                    ${rewards.map((value, idx) => `
+                        <div class="thorn-dew-day ${idx === dayIndex ? 'is-current' : ''}">
+                            <div>${escapeHtml(currentLang === 'zh' ? `第${idx + 1}天` : `D${idx + 1}`)}</div>
+                            <div>+${escapeHtml(value)}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function thornDewDailyTasksHtml() {
+    const center = thornDewCenter || {};
+    const rewards = center.match_rewards && typeof center.match_rewards === 'object' ? center.match_rewards : {};
+    const winBonus = Number(center.win_bonus || 0) || 0;
+    const drawBonus = Number(center.draw_bonus || 0) || 0;
+    const rows = [
+        ['1v1', rewards['1v1'] ?? 30],
+        ['2v2', rewards['2v2'] ?? 40],
+        [UI.mode_random_deck || '随机卡组', rewards.random_deck ?? 25],
+        [UI.mode_urf || '无限火力', rewards.urf ?? 25],
+    ];
+    const lines = [
+        [
+            currentLang === 'zh' ? '有效对局' : 'Valid Matches',
+            rows.map(([label, value]) => `${label} +${value}`).join(currentLang === 'zh' ? '　' : ' / '),
+        ],
+        [
+            currentLang === 'zh' ? '胜场奖励' : 'Result Bonus',
+            currentLang === 'zh' ? `胜利 +${winBonus}　平局 +${drawBonus}` : `Win +${winBonus} / Draw +${drawBonus}`,
+        ],
+        [
+            currentLang === 'zh' ? '每日节奏' : 'Daily Pace',
+            currentLang === 'zh' ? '每天前10局完整获得，之后奖励逐步降低' : 'First 10 matches each day give full rewards; later rewards scale down',
+        ],
+        [
+            currentLang === 'zh' ? '即将开放' : 'Coming Soon',
+            currentLang === 'zh' ? '更多每日任务和限时加成会继续加入' : 'More daily tasks and limited boosts will arrive later',
+        ],
+    ];
+    return `
+        <div class="daily-task-grid">
+            ${lines.map(([title, desc]) => `
+                <div class="daily-task-card">
+                    <div class="daily-task-title">${escapeHtml(title)}</div>
+                    <div class="daily-task-desc">${escapeHtml(desc)}</div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+async function loadThornDewCenter(force = false) {
+    if (!currentAccount || thornDewLoading) return;
+    if (!force && thornDewCenter) return;
+    thornDewLoading = true;
+    try {
+        const data = await authRequest('/api/thorn-dew', undefined, { timeoutMs: 5000 });
+        thornDewCenter = data;
+    } catch (_) {
+        thornDewCenter = thornDewCenter || null;
+    } finally {
+        thornDewLoading = false;
+        renderAccountInfoPanel(currentAccount);
+    }
+}
+
+async function onThornDewCheckin() {
+    if (!currentAccount || thornDewLoading) return;
+    thornDewLoading = true;
+    renderAccountInfoPanel(currentAccount);
+    try {
+        const data = await authRequest('/api/thorn-dew/checkin', {}, { timeoutMs: 5000 });
+        thornDewCenter = data;
+        if (achievementCenter && data) achievementCenter.dew = data;
+        if (data.user) {
+            currentAccount = data.user;
+            cacheAccount(currentAccount);
+        }
+        setAccountError(currentLang === 'zh' ? '签到成功' : 'Checked in');
+    } catch (err) {
+        setAccountError(err.message || UI.account_error);
+    } finally {
+        thornDewLoading = false;
+        renderAccountState();
+        if (!$('achievements-popover')?.classList.contains('hidden')) renderAchievementCenter();
+    }
+}
+
+function achievementTypeLabel(type) {
+    if (currentLang !== 'zh') {
+        return {
+            milestone: 'Milestone',
+            battle: 'Battle',
+            mode: 'Mode',
+            social: 'Social',
+            hidden: 'Hidden',
+        }[type] || type || '';
+    }
+    return {
+        milestone: '里程碑',
+        battle: '战斗',
+        mode: '模式',
+        social: '社交',
+        hidden: '隐藏',
+    }[type] || type || '';
+}
+
+function achievementBaseName(name = '') {
+    return String(name || '').replace(/\s+[IVXLCDM]+$/i, '').replace(/[一二三四五六七八九十]+$/, '').trim() || String(name || '');
+}
+
+function groupAchievementItems(items) {
+    const output = [];
+    const used = new Set();
+    items.forEach((item, index) => {
+        if (used.has(index)) return;
+        const series = String(item.series || '');
+        if (!series || item.type !== 'milestone') {
+            output.push({ ...item, grouped_items: [item] });
+            used.add(index);
+            return;
+        }
+        const group = [];
+        items.forEach((candidate, candidateIndex) => {
+            if (used.has(candidateIndex)) return;
+            if (candidate.type === 'milestone' && String(candidate.series || '') === series) {
+                group.push(candidate);
+                used.add(candidateIndex);
+            }
+        });
+        group.sort((a, b) => (Number(a.target || 0) || 0) - (Number(b.target || 0) || 0));
+        const progress = Math.max(...group.map(entry => Number(entry.progress || 0) || 0), 0);
+        const next = group.find(entry => !entry.unlocked) || group[group.length - 1] || item;
+        const top = group[group.length - 1] || item;
+        const unlockedCount = group.filter(entry => entry.unlocked).length;
+        const nextTarget = Number(next.target || top.target || 1) || 1;
+        const topTarget = Number(top.target || next.target || 1) || 1;
+        const stageText = unlockedCount >= group.length
+            ? (currentLang === 'zh'
+                ? `全部阶段完成，最高进度 ${progress}/${topTarget}`
+                : `All stages complete, best progress ${progress}/${topTarget}`)
+            : (currentLang === 'zh'
+                ? `阶段 ${unlockedCount}/${group.length}，下一阶段 ${Math.min(progress, nextTarget)}/${nextTarget}`
+                : `Stage ${unlockedCount}/${group.length}, next stage ${Math.min(progress, nextTarget)}/${nextTarget}`);
+        output.push({
+            ...next,
+            id: `series:${series}`,
+            name: achievementBaseName(group[0]?.name || next.name),
+            description: stageText,
+            progress,
+            target: nextTarget,
+            series_target: topTarget,
+            unlocked: unlockedCount >= group.length,
+            reward_dew: next.unlocked ? top.reward_dew : next.reward_dew,
+            grouped_items: group,
+        });
+    });
+    return output;
+}
+
+function renderAchievementCenter() {
+    const summary = $('achievements-summary');
+    const list = $('achievements-list');
+    const dewPanel = $('achievements-dew-panel');
+    const dailyPanel = $('achievements-daily-panel');
+    const tasksPanel = $('achievements-tasks-panel');
+    if (!summary || !list || !dewPanel || !dailyPanel || !tasksPanel) return;
+    document.querySelectorAll('[data-achievement-tab]').forEach(btn => {
+        btn.classList.toggle('active', (btn.dataset.achievementTab || 'dew') === achievementActiveTab);
+    });
+    dewPanel.classList.toggle('hidden', achievementActiveTab !== 'dew');
+    dailyPanel.classList.toggle('hidden', achievementActiveTab !== 'daily');
+    list.classList.toggle('hidden', achievementActiveTab !== 'achievements');
+    tasksPanel.classList.toggle('hidden', achievementActiveTab !== 'tasks');
+    if (!currentAccount) {
+        summary.textContent = UI.account_need_login || '请先登录账号';
+        dewPanel.innerHTML = '';
+        dailyPanel.innerHTML = '';
+        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.account_need_login || '请先登录账号')}</div>`;
+        tasksPanel.innerHTML = '';
+        return;
+    }
+    const data = achievementCenter || {};
+    const items = Array.isArray(data.achievements) ? data.achievements : [];
+    summary.textContent = `${UI.achievements || '成就'} ${Number(data.unlocked_count || 0)}/${Number(data.total_count || items.length || 0)}`;
+    if (data.dew) {
+        const oldCenter = thornDewCenter;
+        thornDewCenter = data.dew;
+        dewPanel.innerHTML = thornDewCenterHtml(currentAccount);
+        thornDewCenter = oldCenter || data.dew;
+    } else {
+        dewPanel.innerHTML = thornDewCenterHtml(currentAccount);
+    }
+    dailyPanel.innerHTML = thornDewCheckinHtml();
+    tasksPanel.innerHTML = thornDewDailyTasksHtml();
+    const dailyCheckinBtn = dailyPanel.querySelector('#btn-thorn-dew-checkin-daily');
+    if (dailyCheckinBtn) dailyCheckinBtn.onclick = onThornDewCheckin;
+    if (achievementLoadError) {
+        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(achievementLoadError)}</div>`;
+        return;
+    }
+    if ((achievementLoading || !achievementCenter) && !items.length) {
+        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.leaderboard_loading || '正在加载...')}</div>`;
+        return;
+    }
+    if (!items.length) {
+        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.achievements_empty || '暂无成就。')}</div>`;
+        return;
+    }
+    const displayItems = groupAchievementItems(items);
+    list.innerHTML = displayItems.map(item => {
+        const progress = Math.max(0, Number(item.progress || 0) || 0);
+        const target = Math.max(1, Number(item.target || item.series_target || 1) || 1);
+        const pct = item.unlocked ? 100 : Math.max(0, Math.min(100, progress / target * 100));
+        const color = item.type_color || '#5aa469';
+        return `
+            <div class="achievement-item ${item.unlocked ? 'unlocked' : ''} ${item.hidden ? 'is-hidden' : ''}" style="--achievement-color:${escapeHtml(color)}">
+                <div class="achievement-main">
+                    <div class="achievement-head">
+                        <span class="achievement-type">${escapeHtml(achievementTypeLabel(item.type))}</span>
+                        <span class="achievement-name">${escapeHtml(item.name || '???')}</span>
+                    </div>
+                    <div class="achievement-desc">${escapeHtml(item.description || '')}</div>
+                </div>
+                <div class="achievement-side">
+                    <span class="achievement-reward">+${escapeHtml(item.reward_dew || 0)} ${escapeHtml(UI.thorn_dew || '荆露')}</span>
+                    <span class="achievement-foot">${item.unlocked ? escapeHtml(item.unlocked_at || (currentLang === 'zh' ? '已完成' : 'Done')) : `${escapeHtml(progress)}/${escapeHtml(target)}`}</span>
+                </div>
+                <div class="achievement-progress" aria-hidden="true"><div class="achievement-progress-fill" style="width:${pct.toFixed(1)}%"></div></div>
+            </div>
+        `;
+    }).join('');
+}
+
+function setAchievementTab(tab) {
+    achievementActiveTab = ['dew', 'daily', 'achievements', 'tasks'].includes(tab) ? tab : 'dew';
+    renderAchievementCenter();
+}
+
+async function loadAchievementCenter(force = false) {
+    if (!currentAccount) {
+        achievementCenter = null;
+        achievementLoadError = '';
+        renderAchievementCenter();
+        return;
+    }
+    if (!force && achievementCenter) {
+        renderAchievementCenter();
+        return;
+    }
+    achievementLoading = true;
+    achievementLoadError = '';
+    renderAchievementCenter();
+    try {
+        achievementCenter = await authRequest(`/api/achievements?lang=${encodeURIComponent(currentLang || 'zh')}`, undefined, { timeoutMs: 6000 });
+        if (achievementCenter && achievementCenter.dew) thornDewCenter = achievementCenter.dew;
+    } catch (err) {
+        const rawMessage = String(err?.message || '').trim();
+        if (!rawMessage || rawMessage === (UI.account_error || '账号错误')) {
+            achievementLoadError = currentLang === 'zh'
+                ? '成就加载失败，请重新登录或稍后再试'
+                : 'Achievements failed to load. Please sign in again or try later.';
+        } else {
+            achievementLoadError = rawMessage;
+        }
+    } finally {
+        achievementLoading = false;
+        renderAchievementCenter();
+    }
+}
+
+function toggleAchievementsPopover(force) {
+    const pop = $('achievements-popover');
+    if (!pop) return;
+    const show = force === undefined ? pop.classList.contains('hidden') : !!force;
+    pop.classList.toggle('hidden', !show);
+    if (show) {
+        toggleAccountPopover(false);
+        toggleFriendsPopover(false);
+        toggleStatsPopover(false);
+        toggleLeaderboardPopover(false);
+        toggleChangelogPopover(false);
+        loadAchievementCenter(false);
+    }
 }
 
 function renderAccountInfoPanel(user) {
@@ -12878,12 +13718,14 @@ async function authRequest(path, body, options = {}) {
 }
 
 async function refreshAuthMe() {
+    const previousId = currentAccount && currentAccount.id;
     try {
         const data = await authRequest('/api/auth/me');
         currentAccount = data.authenticated ? data.user : null;
     } catch (_) {
         currentAccount = currentAccount || loadCachedAccount();
     }
+    if ((currentAccount && currentAccount.id) !== previousId) thornDewCenter = null;
     renderAccountState();
     if (currentAccount) {
         loadFriends(false);
@@ -12900,6 +13742,7 @@ async function onAccountLogin() {
     try {
         const data = await authRequest('/api/auth/login', { username, password });
         currentAccount = data.user || null;
+        thornDewCenter = null;
         accountMode = 'login';
         clearAccountPasswordInputs();
         renderAccountState();
@@ -12922,6 +13765,7 @@ async function onAccountRegister() {
     try {
         const data = await authRequest('/api/auth/register', { username, password, password_confirm: passwordConfirm });
         currentAccount = data.user || null;
+        thornDewCenter = null;
         accountMode = 'login';
         clearAccountPasswordInputs();
         renderAccountState();
@@ -13032,6 +13876,7 @@ async function onAccountLogout() {
         await authRequest('/api/auth/logout', {});
     } catch (_) {}
     currentAccount = null;
+    thornDewCenter = null;
     socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
     dmData = { threads: [], unread_count: 0 };
     activeDmThreadId = null;
@@ -13071,6 +13916,7 @@ function toggleAccountPopover(force) {
     if (show) {
         toggleStatsPopover(false);
         toggleLeaderboardPopover(false);
+        toggleAchievementsPopover(false);
         refreshAuthMe().then(() => {
             if (currentAccount) loadAccountReplays();
         });
@@ -13088,6 +13934,7 @@ function toggleStatsPopover(force) {
         toggleAccountPopover(false);
         toggleFriendsPopover(false);
         toggleLeaderboardPopover(false);
+        toggleAchievementsPopover(false);
         refreshAuthMe().then(() => {
             if (currentAccount) loadAccountReplays();
         });
@@ -13265,6 +14112,7 @@ function toggleLeaderboardPopover(force) {
         toggleAccountPopover(false);
         toggleFriendsPopover(false);
         toggleStatsPopover(false);
+        toggleAchievementsPopover(false);
         loadLeaderboard();
         startLeaderboardRefreshTimer();
     } else if (leaderboardRefreshTimerId) {
@@ -15094,8 +15942,8 @@ function getBuiltinCardPinyinSearchText(cd) {
     return [...new Set(parts.filter(Boolean))].join(' ');
 }
 
-function cardSearchText(defId) {
-    const cd = getCardDef(defId);
+function cardSearchText(defId, defs = null) {
+    const cd = defs && defs[defId] ? defs[defId] : getCardDef(defId);
     if (!cd) return defId.toLowerCase();
     const flagText = normalizeFlagList([...(normalizeFlagList(cd.flags || [])), ...(normalizeFlagList(cd.tags || []))]).map(flag => {
         const current = getFlagLabel(flag);
@@ -17015,11 +17863,13 @@ function updateModeSpecificControls(gs) {
     const playZone = $('play-zone');
     const controlsRight = document.querySelector('.controls-right');
 
-    const showSoloNextDraw = inSoloGame && !inTutorial && !gameOver && !isSpectating && !replayMode;
-    const showSoloEdit = inSoloGame && !inTutorial && !isSpectating && !replayMode;
-    const showSpectateControls = !!isSpectating;
-    const showGameControls = !isSpectating && !replayMode;
-    const showPlayZone = !isSpectating;
+    const readonlyBattle = !!(isSpectating || gs?.spectating || replayMode || gs?.replay_mode);
+    const activeSpectating = !!(isSpectating || gs?.spectating);
+    const showSoloNextDraw = inSoloGame && !inTutorial && !gameOver && !readonlyBattle;
+    const showSoloEdit = inSoloGame && !inTutorial && !readonlyBattle;
+    const showSpectateControls = activeSpectating;
+    const showGameControls = !readonlyBattle;
+    const showPlayZone = !readonlyBattle;
 
     if (soloNextDrawBtn) {
         soloNextDrawBtn.classList.toggle('hidden', !showSoloNextDraw);
@@ -17046,17 +17896,17 @@ function updateModeSpecificControls(gs) {
         viewDiscardBtn.style.display = showViewDiscard ? '' : 'none';
     }
     if (spectateViewDeckBtn) {
-        const showSpectateViewDeck = isSpectating && gs?.mode !== 'urf';
+        const showSpectateViewDeck = activeSpectating && gs?.mode !== 'urf';
         spectateViewDeckBtn.classList.toggle('hidden', !showSpectateViewDeck);
         spectateViewDeckBtn.style.display = showSpectateViewDeck ? '' : 'none';
     }
     if (spectateViewDiscardBtn) {
-        const showSpectateViewDiscard = isSpectating && gs?.mode !== 'urf';
+        const showSpectateViewDiscard = activeSpectating && gs?.mode !== 'urf';
         spectateViewDiscardBtn.classList.toggle('hidden', !showSpectateViewDiscard);
         spectateViewDiscardBtn.style.display = showSpectateViewDiscard ? '' : 'none';
     }
     if (urfReplaceBtn) {
-        const show = gs?.mode === 'urf' && !isSpectating && !gameOver;
+        const show = gs?.mode === 'urf' && !readonlyBattle && !gameOver;
         urfReplaceBtn.textContent = UI.urf_replace || '替换手牌';
         urfReplaceBtn.title = '';
         urfReplaceBtn.classList.toggle('hidden', !show);
@@ -17064,7 +17914,7 @@ function updateModeSpecificControls(gs) {
         urfReplaceBtn.disabled = !isMyTurn() || isActionBusy({ includeAnimation: false }) || !gs?.urf_replace_available;
     }
     if (urfSellBtn) {
-        const show = gs?.mode === 'urf' && !isSpectating && !gameOver;
+        const show = gs?.mode === 'urf' && !readonlyBattle && !gameOver;
         const sellableEquipment = ((gs.you || {}).equipment || []).filter(isUrfEquipmentSellable);
         urfSellBtn.textContent = UI.urf_sell || '售卖装备';
         urfSellBtn.title = '';
@@ -17079,7 +17929,7 @@ function updateModeSpecificControls(gs) {
     const switchBtn = $('btn-switch-perspective');
     if (switchBtn) {
         const count = Array.isArray(gs?.spectate_players) ? gs.spectate_players.length : 0;
-        const showSwitch = isSpectating && count > 1;
+        const showSwitch = activeSpectating && count > 1;
         switchBtn.dataset.dynamic = showSwitch ? '1' : '';
         switchBtn.classList.toggle('hidden', !showSwitch);
         switchBtn.style.display = showSwitch ? '' : 'none';
@@ -17365,7 +18215,10 @@ function isClassic2v2State(gs) {
 
 function shouldUseClassicBattle(gs) {
     if (!isClassicBattleUiStyle() || !gs) return false;
-    return ['action', 'draw', 'response', 'choice', 'game_over'].includes(gs.phase);
+    if (['action', 'draw', 'response', 'choice', 'game_over'].includes(gs.phase)) return true;
+    const readonlyBattle = !!(gs.spectating || gs.replay_mode || isSpectating || replayMode);
+    if (!readonlyBattle) return false;
+    return !!(gs.you || gs.opponent || (Array.isArray(gs.spectate_players) && gs.spectate_players.length));
 }
 
 function setLeaderboardScope(scope) {
@@ -17583,6 +18436,11 @@ function attachClassicStatusIntros(container) {
             fg: tag.style.color || '',
             title: tag.title || '',
         });
+    });
+    container.querySelectorAll('.armor-meter[data-term-key]').forEach(meter => {
+        delete meter.dataset.termIntroBound;
+        delete meter.dataset.termIntroSuppressClick;
+        attachTermIntroToTermKey(meter, meter.dataset.termKey || 'A');
     });
 }
 
@@ -17895,6 +18753,7 @@ function showClassicHoverInfo(card, anchor) {
 function renderClassicFighter(container, player, side, selectedCard = null, masks = {}) {
     if (!container) return;
     const hpPct = player.maxHp > 0 ? Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100)) : 0;
+    const armorValue = Math.max(0, Number(player.armor || 0) + getPlayerRootArmorValue(player.raw || {}));
     const role = getClassicPlayRole(selectedCard);
     const selfOnly = isClassicSelfOnlyCard(selectedCard);
     const isAnyTarget = !!selectedCard && !selfOnly && role === 'target' && classicCardCanTargetPlayer(selectedCard, player.id);
@@ -17923,6 +18782,10 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
                 <div class="classic-hp-track"><div class="classic-hp-fill" style="width:${hpPct}%"></div></div>
                 <div class="classic-hp-text">${player.hp}/${player.maxHp}</div>
             </div>
+            <button class="armor-meter classic-armor-meter${armorValue > 0 && !masks.maskResources ? '' : ' hidden'}" type="button" data-term-key="A" data-term-label="${escapeHtml(UI.status_armor || '护甲')}" data-term-color="${escapeHtml(COLORS.armor_text)}" data-status-value="${armorValue}" title="${escapeHtml(UI.status_armor || '护甲')}: ${armorValue}">
+                <img class="armor-meter-icon" src="/static/assets/status-icons/armor.svg" alt="" aria-hidden="true">
+                <span class="armor-meter-value">${escapeHtml(String(armorValue))}</span>
+            </button>
         </div>
         ${renderClassicPileCounters(player, side, masks)}
         <div class="classic-status-ring">${renderClassicStatusList(player)}</div>
@@ -18149,7 +19012,7 @@ function renderGame(data) {
         } else {
             gameContainer.classList.remove('mode-2v2');
         }
-        gameContainer.classList.toggle('mode-spectate', !!isSpectating);
+        gameContainer.classList.toggle('mode-spectate', !!(isSpectating || gs.spectating || replayMode || gs.replay_mode));
         gameContainer.classList.toggle('mode-tutorial', !!gs.tutorial || tutorialMode);
         gameContainer.classList.toggle('mode-solo', !!gs.solo);
         gameContainer.classList.toggle('mode-urf', gs.mode === 'urf');
@@ -18338,12 +19201,13 @@ function renderPlayerBars(containerId, playerData) {
     const isSelf = pid != null && pid === normalizePlayerId(gameState && gameState.your_id);
     const masked = (isSelf && blindLevel >= 2) || (!isSelf && blindLevel >= 3);
     container.classList.toggle('blind-resource-masked', masked);
+    const armorValue = Math.max(0, Number(playerData && playerData.armor || 0) + getPlayerRootArmorValue(playerData));
     const bars = [
         { key: 'health', cur: playerData.health || 0, max: playerData.max_health || 100, color: COLORS.health, bg: COLORS.health_bg, label: 'H', icon: 'hit-point', title: 'H' },
         { key: 'elixir', cur: playerData.elixir || 0, max: playerData.max_elixir || 10, color: COLORS.elixir, bg: COLORS.elixir_bg, label: 'E', icon: 'elixir', title: 'E' },
         { key: 'magic', cur: playerData.magic || 0, max: playerData.max_magic || 10, color: COLORS.magic, bg: COLORS.magic_bg, label: 'M', icon: 'magic', title: 'M' },
     ];
-    if (container.children.length !== bars.length) {
+    if (container.querySelectorAll('.bar-wrapper').length !== bars.length || !container.querySelector('.armor-meter')) {
         container.innerHTML = '';
         bars.forEach(bar => {
             const wrapper = document.createElement('div');
@@ -18361,6 +19225,17 @@ function renderPlayerBars(containerId, playerData) {
             `;
             container.appendChild(wrapper);
         });
+        const armor = document.createElement('button');
+        armor.type = 'button';
+        armor.className = 'armor-meter';
+        armor.dataset.termKey = 'A';
+        armor.dataset.termLabel = UI.status_armor || '护甲';
+        armor.dataset.termColor = COLORS.armor_text;
+        armor.innerHTML = `
+            <img class="armor-meter-icon" src="/static/assets/status-icons/armor.svg" alt="" aria-hidden="true">
+            <span class="armor-meter-value">0</span>
+        `;
+        container.appendChild(armor);
     }
     const wrappers = container.querySelectorAll('.bar-wrapper');
     bars.forEach((bar, i) => {
@@ -18373,6 +19248,28 @@ function renderPlayerBars(containerId, playerData) {
         if (text) text.textContent = masked ? '?' : `${bar.cur}/${bar.max}`;
         wrappers[i].classList.toggle('blind-masked', masked);
     });
+    const armorMeter = container.querySelector('.armor-meter');
+    if (armorMeter) {
+        const shown = armorValue > 0 && !masked;
+        armorMeter.classList.toggle('hidden', !shown);
+        armorMeter.dataset.statusValue = String(armorValue);
+        armorMeter.title = `${UI.status_armor || '护甲'}: ${armorValue}`;
+        const valueEl = armorMeter.querySelector('.armor-meter-value');
+        if (valueEl) valueEl.textContent = String(armorValue);
+        delete armorMeter.dataset.termIntroBound;
+        delete armorMeter.dataset.termIntroSuppressClick;
+        attachTermIntroToTermKey(armorMeter, 'A');
+    }
+}
+
+function getPlayerRootArmorValue(playerData = {}) {
+    const customStatuses = (playerData.custom_statuses && typeof playerData.custom_statuses === 'object') ? playerData.custom_statuses : {};
+    const keys = ['jungle:root', 'jungle:root_status', 'root_status'];
+    for (const key of keys) {
+        const value = Number(customStatuses[key] || 0);
+        if (Number.isFinite(value) && value > 0) return value;
+    }
+    return 0;
 }
 
 function setIconCounter(el, iconName, value, label = '') {
@@ -18416,7 +19313,6 @@ function renderStatusTags(containerId, playerData) {
     const rootArmor = customCount('jungle:root', 'jungle:root_status', 'root_status');
     if (p.poison > 0) tags.push({ key: 'poison', name: UI.status_poison, abbr: 'P', val: p.poison, fg: COLORS.poison, bg: COLORS.poison_bg });
     if (p.fire > 0) tags.push({ key: 'fire', name: UI.status_fire, abbr: 'F', val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
-    if (Number(p.armor || 0) + rootArmor > 0) tags.push({ key: 'armor', name: UI.status_armor || '护甲', abbr: 'A', val: Number(p.armor || 0) + rootArmor, fg: COLORS.armor_text, bg: COLORS.armor_bg });
     if (p.toxic > 0) tags.push({ key: 'toxic', name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
     if (p.triangle_stacks > 0) tags.push({ key: 'triangle', name: UI.status_triangle, abbr: '△', val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
     if (p.nazar_active) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
@@ -20415,7 +21311,7 @@ function appendBattleLogTextWithCardChips(parent, text) {
         const rest = raw.slice(cursor);
         const marker = parseInlineCardMarker(rest);
         if (marker) {
-            appendBattleLogCardChip(parent, marker.defId, buildInlineCardDict(marker.defId, marker.modifierText));
+            appendBattleLogCardChip(parent, marker.defId, marker.cardDict || buildInlineCardDict(marker.defId, marker.modifierText));
             cursor += marker.raw.length;
             usedChip = true;
             continue;
@@ -21884,12 +22780,12 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
         if (sel < 0) return false;
         return { target_instance_id: others[sel].instance_id };
     } else if (defId === 'Chromosome') {
-        const discard = (gameState.you || {}).discard || [];
+        const discard = ((gameState.you || {}).discard || []).filter(c => !cardHasSublimeFlag(c));
         if (!discard.length) { gameAlert(UI.notice, UI.discard_empty); return false; }
         const options = discard.map(c => cardChoiceOption(c));
         const sel = await simpleChoice(UI.choose_from_discard_for.replace('{0}', sourceCardName), options);
         if (sel < 0) return false;
-        return { target_def_id: discard[sel].def_id };
+        return { target_instance_id: discard[sel].instance_id, target_def_id: discard[sel].def_id };
     } else if (defId === 'Sewage') {
         const targetData = targetPlayerId >= 0 ? getPlayerDataById(targetPlayerId) : (gameState.opponent || {});
         const oppEq = targetData.equipment || [];
@@ -21929,6 +22825,7 @@ function multiChoice(title, options, config = {}) {
         const el = $('game-prompt');
         if (!el) { resolve([]); return; }
         if (!options.length) { resolve([]); return; }
+        cleanupGamePromptTransientButtons();
         const min = Number(config.min ?? config.min_count ?? 1);
         const max = Number(config.max || config.max_count || options.length);
         const cancellable = config.cancellable !== false;
@@ -21948,7 +22845,7 @@ function multiChoice(title, options, config = {}) {
         optsEl.innerHTML = '';
         const selected = new Set();
         const confirmBtn = document.createElement('button');
-        confirmBtn.className = 'btn btn-primary';
+        confirmBtn.className = 'btn btn-primary game-prompt-transient-btn';
         const updateConfirm = () => {
             const count = selected.size;
             const ok = count >= min && count <= max;
@@ -21971,30 +22868,27 @@ function multiChoice(title, options, config = {}) {
             };
             optsEl.appendChild(div);
         });
-        confirmBtn.onclick = () => {
-            if (confirmBtn.classList.contains('disabled')) return;
+        const finish = (value) => {
             removeFloatingCardPreview();
             el.classList.remove('active');
-            resolve(Array.from(selected).sort((a, b) => a - b));
+            cleanupGamePromptTransientButtons();
+            resolve(value);
+        };
+        confirmBtn.onclick = () => {
+            if (confirmBtn.classList.contains('disabled')) return;
+            finish(Array.from(selected).sort((a, b) => a - b));
         };
         // Place confirm button next to cancel button in the buttons row
         const cancelBtn = $('game-prompt-cancel');
         cancelBtn.textContent = UI.cancel;
         cancelBtn.classList.toggle('hidden', !cancellable);
         cancelBtn.style.display = cancellable ? '' : 'none';
-        cancelBtn.onclick = () => { removeFloatingCardPreview(); el.classList.remove('active'); resolve([]); };
+        cancelBtn.onclick = () => finish([]);
         // Insert confirm after cancel in the buttons row
         const buttonsRow = cancelBtn.parentNode;
-        if (confirmBtn.parentNode) confirmBtn.parentNode.removeChild(confirmBtn);
         buttonsRow.appendChild(confirmBtn);
-        const cleanup = () => {
-            if (confirmBtn.parentNode) confirmBtn.parentNode.removeChild(confirmBtn);
-        };
         updateConfirm();
         el.classList.add('active');
-        // Cleanup on resolve
-        const origResolve = resolve;
-        resolve = (val) => { cleanup(); origResolve(val); };
     });
 }
 
@@ -22014,8 +22908,11 @@ function showResponseUI(data) {
     let hasAffordable = false;
     const cardCosts = counterCards.map(cc => {
         const ccDef = getCardDef(cc.def_id);
-        const costE = cc.cost_e_override != null ? cc.cost_e_override : (ccDef ? ccDef.cost_e : 0);
-        const costM = cc.cost_m_override != null ? cc.cost_m_override : (ccDef ? ccDef.cost_m : 0);
+        const displayCosts = ccDef
+            ? getCardDisplayCosts(cc, ccDef, you)
+            : { totalE: Number(cc.cost_e || cc.cost_e_override || 0), totalM: Number(cc.cost_m || cc.cost_m_override || 0) };
+        const costE = Math.max(0, Math.floor(Number(displayCosts.totalE || 0)));
+        const costM = Math.max(0, Math.floor(Number(displayCosts.totalM || 0)));
         const canAfford = costE <= myElixir && costM <= myMagic;
         if (canAfford) hasAffordable = true;
         return { cc, ccDef, costE, costM, canAfford };
@@ -22588,7 +23485,7 @@ async function showChoiceUI(data) {
             choiceResult = { cancelled: true };
         }
     } else if (choiceType === 'choose_card_from_deck') {
-        const deck = (gameState.you || {}).deck || [];
+        const deck = ((gameState.you || {}).deck || []).filter(c => !cardHasSublimeFlag(c));
         if (!deck.length) {
             gameAlert(UI.notice, UI.deck_empty);
             choiceResult = { cancelled: true };
@@ -22596,10 +23493,10 @@ async function showChoiceUI(data) {
         else {
             const options = deck.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_deck_for.replace('{0}', cardName)), options, choicePromptConfig);
-            if (sel >= 0 && sel < deck.length) choiceResult = { target_def_id: deck[sel].def_id };
+            if (sel >= 0 && sel < deck.length) choiceResult = { target_instance_id: deck[sel].instance_id, target_def_id: deck[sel].def_id };
         }
     } else if (choiceType === 'choose_card_from_discard') {
-        const discard = (gameState.you || {}).discard || [];
+        const discard = ((gameState.you || {}).discard || []).filter(c => !cardHasSublimeFlag(c));
         if (!discard.length) {
             gameAlert(UI.notice, UI.discard_empty);
             choiceResult = { cancelled: true };
@@ -22607,7 +23504,7 @@ async function showChoiceUI(data) {
         else {
             const options = discard.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_discard_for.replace('{0}', cardName)), options, choicePromptConfig);
-            if (sel >= 0 && sel < discard.length) choiceResult = { target_def_id: discard[sel].def_id };
+            if (sel >= 0 && sel < discard.length) choiceResult = { target_instance_id: discard[sel].instance_id, target_def_id: discard[sel].def_id };
         }
     } else if (choiceType === 'choose_same_attacks_from_hand') {
         const attacks = ((gameState.you || {}).hand || []).filter(c => {
@@ -24613,6 +25510,11 @@ async function init() {
     if ($('btn-changelog-top')) $('btn-changelog-top').addEventListener('click', openChangelog);
     if ($('btn-changelog-popover-close')) $('btn-changelog-popover-close').addEventListener('click', () => toggleChangelogPopover(false));
     if ($('btn-replays-top')) $('btn-replays-top').addEventListener('click', () => toggleStatsPopover());
+    if ($('btn-achievements-top')) $('btn-achievements-top').addEventListener('click', () => toggleAchievementsPopover());
+    if ($('btn-achievements-popover-close')) $('btn-achievements-popover-close').addEventListener('click', () => toggleAchievementsPopover(false));
+    document.querySelectorAll('[data-achievement-tab]').forEach((btn) => {
+        btn.addEventListener('click', () => setAchievementTab(btn.dataset.achievementTab || 'dew'));
+    });
     if ($('btn-leaderboard-top')) $('btn-leaderboard-top').addEventListener('click', () => toggleLeaderboardPopover());
     document.querySelectorAll('[data-leaderboard-scope]').forEach((btn) => {
         btn.addEventListener('click', () => setLeaderboardScope(btn.dataset.leaderboardScope || 'season'));
@@ -24641,7 +25543,10 @@ async function init() {
     if ($('btn-feedback-send')) $('btn-feedback-send').addEventListener('click', sendFeedbackMessage);
     if ($('feedback-message-input')) {
         $('feedback-message-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') sendFeedbackMessage();
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                sendFeedbackMessage();
+            }
         });
     }
     if ($('feedback-status-select')) $('feedback-status-select').addEventListener('change', updateFeedbackStatus);
@@ -25047,7 +25952,11 @@ async function init() {
     setupFullscreenPrompt();
     bootLoader.done();
     document.getElementById('app').style.visibility = 'visible';
-    if (!localStorage.getItem('gtn_seen_intro')) {
+    const hasSeenIntro = !!localStorage.getItem('gtn_seen_intro');
+    if (hasSeenIntro) {
+        window.setTimeout(maybeShowMusicNotice, 180);
+    }
+    if (!hasSeenIntro) {
         setTimeout(() => openRulesModal({ firstVisit: true }), 250);
     }
 }
@@ -25090,6 +25999,8 @@ if (window.__GTN_CARD_EXPORTER_RENDERER__) {
         window.visualViewport.addEventListener('scroll', updateClassicMobileCanvas);
     }
     window.addEventListener('orientationchange', () => setTimeout(updateClassicMobileCanvas, 80));
+    document.addEventListener('focusin', onBattleMobileInputFocusIn, true);
+    document.addEventListener('focusout', onBattleMobileInputFocusOut, true);
     debugLog('[LOAD] game.js loaded, onEndTurn=', typeof onEndTurn);
 }
 

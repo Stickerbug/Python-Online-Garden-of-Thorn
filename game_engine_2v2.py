@@ -310,6 +310,10 @@ class GameEngine2v2(GameEngine):
             ps.base_max_health = BASE_MAX_HEALTH
             ps.elixir = INITIAL_ELIXIR
             ps.magic = INITIAL_MAGIC
+            ps.achievement_min_health = ps.health
+            ps.achievement_invincible_triggered = False
+            ps.achievement_played_thorn = False
+            ps.achievement_yggdrasil_revived = False
         for pid in range(4):
             self._enforce_unique_cards_for_player(pid)
         self._enforce_team_unique_cards()
@@ -569,12 +573,14 @@ class GameEngine2v2(GameEngine):
             counter_card = responder.find_hand_card(card_instance_id)
             if counter_card is None:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
-            if counter_card.cost_e > responder.elixir or counter_card.cost_m > responder.magic:
+            counter_cost_e = int(getattr(counter_card, 'cost_e', 0) or 0)
+            counter_cost_m = int(getattr(counter_card, 'cost_m', 0) or 0)
+            if counter_cost_e > responder.elixir or counter_cost_m > responder.magic:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             if not self._card_can_counter(counter_card, card):
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
-            self._spend_resource(responder_id, 'elixir', counter_card.cost_e, counter_card)
-            self._spend_resource(responder_id, 'magic', counter_card.cost_m, counter_card)
+            self._spend_resource(responder_id, 'elixir', counter_cost_e, counter_card)
+            self._spend_resource(responder_id, 'magic', counter_cost_m, counter_card)
             counter_removed = responder.remove_hand_card(card_instance_id)
             if counter_removed is None:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
@@ -789,6 +795,7 @@ class GameEngine2v2(GameEngine):
             return
         if not self.game_over:
             self.phase = 'action'
+            self._run_ocean_auto_cards_turn_start(player_id)
             self._continue_honey_control_if_needed(player_id)
 
 
@@ -858,6 +865,8 @@ class GameEngine2v2(GameEngine):
         if card.card_type == 'bloom':
             responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
         elif self._would_heal(card):
+            responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
+        elif 'wide_strike' in self._effective_card_flags(card) and card.card_type == 'thorn':
             responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
         elif self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0:
             responder_ids = [target_id]
@@ -992,6 +1001,8 @@ class GameEngine2v2(GameEngine):
         self._spend_resource(player_id, 'magic', card.cost_m, card)
         ps.remove_hand_card(card_instance_id)
         ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
+        if getattr(card, 'card_type', '') == 'thorn':
+            ps.achievement_played_thorn = True
         ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', card_instance_id) or card_instance_id))
         self._apply_magic_acceleration_after_play(player_id, card)
         self._active_choice = choice if isinstance(choice, dict) else {}
@@ -1010,6 +1021,8 @@ class GameEngine2v2(GameEngine):
                 if card.card_type == 'bloom':
                     responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
                 elif self._would_heal(card):
+                    responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
+                elif 'wide_strike' in self._effective_card_flags(card) and card.card_type == 'thorn':
                     responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
                 elif self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0:
                     responder_ids = [target_id]
@@ -1323,7 +1336,7 @@ class GameEngine2v2(GameEngine):
         if ps.shovel_active:
             ps.shovel_active = False
             ps.untargetable = False
-            self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
+            self.log_msg(f"{self.pn(player_id)}的不可选中效果结束")
         self._clear_turn_start_action_statuses(player_id)
         early_owner_turn_start_equipment = self._run_owner_turn_start_action_status_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):

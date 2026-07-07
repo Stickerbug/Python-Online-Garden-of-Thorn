@@ -34,3 +34,12 @@ Audio direction:
 
 When adding downloaded assets, keep files small and include license/source notes
 in `THIRD_PARTY_NOTICES.md`.
+
+Current music slots:
+
+- `music/frosylva.webm`: menu/lobby placeholder BGM from PeriTune.
+- `music/battle-petal-phantasm.ogg`: compressed temporary battle BGM slot.
+- `music/source-pending/petal-dance-petal-phantasm.wav`: original pending source
+  file while permission/replacement is being handled. This file is intentionally
+  isolated in `source-pending/` so it can be removed or replaced without touching
+  the music playback code.

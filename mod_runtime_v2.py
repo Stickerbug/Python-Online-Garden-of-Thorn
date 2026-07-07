@@ -649,9 +649,11 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         index = _to_int(eval_v2_value(engine, context, expr.get("index", 1))) - 1
         chosen_cards = context.get("chosen_cards")
         if isinstance(chosen_cards, list) and 0 <= index < len(chosen_cards):
-            return chosen_cards[index]
+            chosen = chosen_cards[index]
+            return chosen if _card_selectable_by_action(engine, chosen) else None
         if 0 <= index < len(ids):
-            return _find_card_by_instance_id(engine, ids[index])
+            found = _find_card_by_instance_id(engine, ids[index])
+            return found if _card_selectable_by_action(engine, found) else None
         return None
     if op == "status_stack":
         target = resolve_v2_target(engine, context, expr.get("target", "target"))
@@ -690,6 +692,17 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
     if text in ("event_source", "source_id", "last_actor", "damage_source"):
         return int(context.get("source_id", context.get("damage_source", context.get("source_player", 0))))
     if text == "target":
+        wide_targets = context.get("wide_strike_targets")
+        if isinstance(wide_targets, list):
+            targets = []
+            for target_id in wide_targets:
+                try:
+                    target_id = int(target_id)
+                except Exception:
+                    continue
+                if _valid_player(engine, target_id):
+                    targets.append(target_id)
+            return targets
         return int(context.get("target_player", _enemy_id(engine, int(context.get("source_player", 0)))))
     if text == "enemy":
         explicit_target = _explicit_target_id(engine, context)
@@ -735,13 +748,14 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
     if text in ("chosen_card", "selected_card", "choice_card"):
         chosen = context.get("selected_card") or context.get("chosen_card")
         if chosen is not None:
-            return chosen
+            return chosen if _card_selectable_by_action(engine, chosen) else None
         action = context.get("current_action") if isinstance(context.get("current_action"), dict) else {}
         choice = action.get("choice") if isinstance(action.get("choice"), dict) else action
         instance_id = choice.get("target_instance_id")
         if instance_id is None and isinstance(choice.get("target_instance_ids"), list) and choice.get("target_instance_ids"):
             instance_id = choice.get("target_instance_ids")[0]
-        return _find_card_by_instance_id(engine, instance_id) if instance_id is not None else None
+        found = _find_card_by_instance_id(engine, instance_id) if instance_id is not None else None
+        return found if _card_selectable_by_action(engine, found) else None
     if text in ("last_created_card", "created_card", "last_copied_card"):
         instance_id = context.get("last_created_card_instance_id")
         if instance_id is None:
@@ -1331,6 +1345,24 @@ def _find_card_by_instance_id(engine, instance_id: Any):
             if getattr(card, "instance_id", None) == target_instance_id:
                 return card
     return None
+
+
+def _card_selectable_by_action(engine, card: Any) -> bool:
+    if card is None:
+        return False
+    fn = getattr(engine, "_card_selectable_by_action", None)
+    if callable(fn):
+        try:
+            return bool(fn(card))
+        except Exception:
+            return False
+    fn = getattr(engine, "_card_is_sublime", None)
+    if callable(fn):
+        try:
+            return not bool(fn(card))
+        except Exception:
+            return False
+    return True
 
 
 def _find_equipment_by_instance_id(engine, instance_id: Any):

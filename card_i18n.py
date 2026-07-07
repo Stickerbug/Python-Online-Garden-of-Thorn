@@ -267,7 +267,7 @@ OPENING_EVENT_I18N = {
     },
     6: {
         'name': _t('能量涌动', 'Energy Surge', 'Poussée d’énergie', 'Surto de Energia', 'Всплеск энергии', 'エネルギー奔流'),
-        'desc': _t('前三回合开始时额外回复2E', 'At the start of the first three turns, recover an extra 2E', 'Au début des trois premiers tours, récupérez 2E supplémentaires', 'No início dos três primeiros turnos, recupere 2E extra', 'В начале первых трёх ходов восстановите дополнительно 2E', '最初の3ターン開始時、追加で2E回復'),
+        'desc': _t('每回合多回复1[[icon:E]]', 'Recover 1 extra [[icon:E]] each turn', 'Récupérez 1 [[icon:E]] supplémentaire à chaque tour', 'Recupere 1 [[icon:E]] extra a cada turno', 'Каждый ход восстанавливайте на 1 [[icon:E]] больше', '毎ターン追加で1[[icon:E]]回復'),
     },
     7: {
         'name': _t('先手压制', 'Opening Pressure', 'Pression initiale', 'Pressão Inicial', 'Стартовое давление', '先手圧制'),
@@ -275,7 +275,7 @@ OPENING_EVENT_I18N = {
     },
     9: {
         'name': _t('多重瓣', 'Multi-Petal', 'Multi-pétale', 'Multi-Pétala', 'Много лепестков', '多重子弁'),
-        'desc': _t('所有有不少于2子瓣的卡牌+1子瓣，最大生命值+10', 'Cards with at least 2 petals gain +1 petal; max health +10', 'Les cartes avec au moins 2 pétales gagnent +1 pétale ; santé max +10', 'Cartas com pelo menos 2 pétalas ganham +1 pétala; vida máxima +10', 'Карты с минимум 2 лепестками получают +1 лепесток; макс. здоровье +10', '2子弁以上のカードは子弁+1。最大生命値+10'),
+        'desc': _t('多子瓣牌子瓣+1，将5张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'Multi-petal cards gain +1 petal; shuffle 5 [[card:Dust|flag=exile]] into your deck in random order', 'Les cartes à pétales multiples gagnent +1 pétale ; mélangez 5 [[card:Dust|flag=exile]] dans votre deck', 'Cartas de múltiplas pétalas ganham +1 pétala; embaralhe 5 [[card:Dust|flag=exile]] no seu deck', 'Карты с несколькими лепестками получают +1 лепесток; замешайте 5 [[card:Dust|flag=exile]] в колоду', '多子弁カードは子弁+1。5枚の[[card:Dust|flag=exile]]をランダムに山札へ混ぜる'),
     },
     10: {
         'name': _t('魔力加速', 'Magic Acceleration', 'Accélération magique', 'Aceleração Mágica', 'Ускорение магии', '魔力加速'),
