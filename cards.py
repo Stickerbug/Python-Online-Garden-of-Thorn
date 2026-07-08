@@ -354,6 +354,10 @@ _reg(CardDef('Wing', 'Wing', '翅膀', 3, 0, 'thorn', 5, 'Common',
 _reg(CardDef('Light', 'Light', '轻', 0, 0, 'thorn', 5, 'Common',
              '轻如鸿毛，却能伤人两次。', '造成2D×2（2子瓣）'))
 
+_reg(CardDef('Dust', 'Dust', '灰尘', 1, 0, 'thorn', 0, 'Common',
+             '轻轻一吹，四散无踪。', '造成1D×2（2子瓣）',
+             flags={'symbiosis'}))
+
 _reg(CardDef('Fang', 'Fang', '尖牙', 2, 0, 'thorn', 5, 'Common',
              '吸取对手的生命来为你回复。', '对目标造成8D；造成伤害时，回复自己造成伤害80%(向下取整)的H'))
 

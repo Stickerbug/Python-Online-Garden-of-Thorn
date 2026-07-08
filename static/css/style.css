@@ -7113,24 +7113,44 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   color: var(--text-primary) !important;
 }
 
+.blind-resource-hidden,
+.blind-resource-masked .bar-wrapper.blind-resource-hidden {
+  display: none !important;
+}
+
+html.blind-level-2 .card-prediction-part.elixir,
+html.blind-level-2 .card-prediction-part.magic,
+html.blind-level-3 .card-prediction-part.elixir,
+html.blind-level-3 .card-prediction-part.magic,
+html.blind-level-4 .card-prediction-part.elixir,
+html.blind-level-4 .card-prediction-part.magic {
+  display: none !important;
+}
+
 .battle-log.blind-log-masked,
 .classic-log-drawer.blind-log-masked {
   position: relative;
   background: rgba(105, 112, 120, 0.16) !important;
-  overflow: hidden;
 }
 
 .battle-log.blind-log-masked .log-content,
 .classic-log-drawer.blind-log-masked .classic-log-content {
-  color: transparent !important;
-  text-shadow: none !important;
+  position: relative;
   user-select: none;
-  opacity: 0 !important;
   pointer-events: none;
+  background: rgba(138, 144, 150, 0.92);
+  overflow: hidden;
 }
 
-.battle-log.blind-log-masked::before,
-.classic-log-drawer.blind-log-masked::before {
+.battle-log.blind-log-masked .log-content > *,
+.classic-log-drawer.blind-log-masked .classic-log-content > * {
+  color: transparent !important;
+  text-shadow: none !important;
+  opacity: 0 !important;
+}
+
+.battle-log.blind-log-masked .log-content::before,
+.classic-log-drawer.blind-log-masked .classic-log-content::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -7139,8 +7159,8 @@ html[data-ui-style="minimal"] .card.card-blinded-deep.guard::before,
   pointer-events: none;
 }
 
-.battle-log.blind-log-masked::after,
-.classic-log-drawer.blind-log-masked::after {
+.battle-log.blind-log-masked .log-content::after,
+.classic-log-drawer.blind-log-masked .classic-log-content::after {
   content: "?";
   position: absolute;
   inset: 0;

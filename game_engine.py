@@ -3326,7 +3326,7 @@ class GameEngine:
             ps.max_health -= 20
             ps.base_max_health -= 20
             ps.health -= 20
-            self._note_achievement_health(pid)
+            self._note_achievement_health(player_id)
             if not self._card_allowed('Yggdrasil'):
                 return
             if sub and 'yggdrasil_convert_def_id' in sub:
@@ -3346,7 +3346,7 @@ class GameEngine:
             ps.max_health -= 10
             ps.base_max_health -= 10
             ps.health = min(ps.health, ps.max_health)
-            self._note_achievement_health(pid)
+            self._note_achievement_health(player_id)
             ps.custom_vars['setup_magic_acceleration'] = 1
             self.log_msg(f"{self.pn(player_id)}【魔力加速】：最大生命值-10，打出不消耗M的牌后回复1M")
 
@@ -4509,7 +4509,7 @@ class GameEngine:
         flags = self._effective_card_flags(card)
         if 'precision' in flags:
             return False
-        if 'stealth' in flags:
+        if self._card_blocks_response(card):
             return False
         opp = self.players[1 - player_id]
         if any(self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'any' for c in opp.hand):
@@ -4544,7 +4544,7 @@ class GameEngine:
         flags = self._effective_card_flags(card)
         if 'precision' not in flags:
             return False
-        if 'stealth' in flags:
+        if self._card_blocks_response(card):
             return False
         opp = self.players[1 - player_id]
         for c in opp.hand:
@@ -8702,7 +8702,7 @@ class GameEngine:
         try:
             payload = card.to_dict()
             payload.pop('instance_id', None)
-            hidden_log_flags = {'ocean_spikeball_boosted', 'multi_petal_fission'}
+            hidden_log_flags = {'ocean_no_auto', 'ocean_spikeball_boosted', 'multi_petal_fission'}
             payload['instance_flags'] = [
                 flag for flag in (payload.get('instance_flags') or [])
                 if normalize_card_flag(flag) not in hidden_log_flags
@@ -8729,6 +8729,9 @@ class GameEngine:
         flags.update(normalize_card_flags(getattr(target_card, 'instance_flags', set()) or set()))
         flags.difference_update(normalize_card_flags(getattr(target_card, 'disabled_flags', set()) or set()))
         return flags
+
+    def _card_blocks_response(self, card: Optional[CardInstance]) -> bool:
+        return 'stealth' in self._effective_card_flags(card)
 
     def _wide_strike_target_ids(self, player_id: int, card: Optional[CardInstance]) -> List[int]:
         flags = self._effective_card_flags(card)

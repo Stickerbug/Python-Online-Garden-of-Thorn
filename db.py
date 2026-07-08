@@ -1598,6 +1598,18 @@ def get_user_achievement_center(user_id, lang='zh'):
         return {'achievements': [], 'unlocked_count': 0, 'total_count': len(ACHIEVEMENT_DEFS)}
     with get_db_connection() as conn:
         user = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        now = utc_now()
+        unlocked_rows = conn.execute(
+            'SELECT achievement_id FROM user_achievements WHERE user_id = ? AND unlocked = 1',
+            (uid,),
+        ).fetchall()
+        changed = False
+        for row in unlocked_rows:
+            defn = ACHIEVEMENT_DEF_MAP.get(str(row['achievement_id'] or ''))
+            if defn and _award_achievement_reward_conn(conn, uid, defn, now):
+                changed = True
+        if changed:
+            conn.commit()
         rows = conn.execute(
             'SELECT * FROM user_achievements WHERE user_id = ?',
             (uid,),
@@ -1629,6 +1641,36 @@ def get_user_achievement_center(user_id, lang='zh'):
         }
 
 
+def _award_achievement_reward_conn(conn, user_id, defn, now=None):
+    uid = int(user_id)
+    reward = int(defn.get('reward_dew') or 0)
+    if reward <= 0 or _currency_source_exists(conn, uid, 'achievement', defn['id']):
+        return False
+    now = now or utc_now()
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+    if user is None:
+        return False
+    free_before = max(0, int(user['thorn_dew_free'] or 0))
+    paid_before = max(0, int(user['thorn_dew_paid'] or 0))
+    free_after = free_before + reward
+    conn.execute('UPDATE users SET thorn_dew_free = ? WHERE id = ?', (free_after, uid))
+    conn.execute(
+        '''
+        INSERT INTO user_currency_transactions (
+            user_id, currency, free_delta, paid_delta, reason, source_type, source_id,
+            balance_free_after, balance_paid_after, admin_username, created_at
+        )
+        VALUES (?, 'thorn_dew', ?, 0, ?, 'achievement', ?, ?, ?, '', ?)
+        ''',
+        (uid, reward, f"成就：{defn.get('name_cn') or defn['id']}", defn['id'], free_after, paid_before, now),
+    )
+    conn.execute(
+        'UPDATE user_achievements SET reward_claimed = 1, updated_at = ? WHERE user_id = ? AND achievement_id = ?',
+        (now, uid, defn['id']),
+    )
+    return True
+
+
 def _unlock_achievement_conn(conn, user_id, achievement_id, progress=None, now=None):
     defn = ACHIEVEMENT_DEF_MAP.get(str(achievement_id or ''))
     if not defn:
@@ -1647,6 +1689,7 @@ def _unlock_achievement_conn(conn, user_id, achievement_id, progress=None, now=N
                 'UPDATE user_achievements SET progress = ?, updated_at = ? WHERE user_id = ? AND achievement_id = ?',
                 (progress_value, now, uid, defn['id']),
             )
+        _award_achievement_reward_conn(conn, uid, defn, now)
         return None
     if row:
         conn.execute(
@@ -1666,23 +1709,7 @@ def _unlock_achievement_conn(conn, user_id, achievement_id, progress=None, now=N
             (uid, defn['id'], progress_value, now, now),
         )
     reward = int(defn.get('reward_dew') or 0)
-    if reward > 0 and not _currency_source_exists(conn, uid, 'achievement', defn['id']):
-        user = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
-        if user is not None:
-            free_before = max(0, int(user['thorn_dew_free'] or 0))
-            paid_before = max(0, int(user['thorn_dew_paid'] or 0))
-            free_after = free_before + reward
-            conn.execute('UPDATE users SET thorn_dew_free = ? WHERE id = ?', (free_after, uid))
-            conn.execute(
-                '''
-                INSERT INTO user_currency_transactions (
-                    user_id, currency, free_delta, paid_delta, reason, source_type, source_id,
-                    balance_free_after, balance_paid_after, admin_username, created_at
-                )
-                VALUES (?, 'thorn_dew', ?, 0, ?, 'achievement', ?, ?, ?, '', ?)
-                ''',
-                (uid, reward, f"成就：{defn.get('name_cn') or defn['id']}", defn['id'], free_after, paid_before, now),
-            )
+    _award_achievement_reward_conn(conn, uid, defn, now)
     return {
         'id': defn['id'],
         'name_cn': defn.get('name_cn'),

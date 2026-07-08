@@ -197,7 +197,7 @@ DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = {
     'Troll Cards.gtnmod',
     'Thorn Cards.gtnmod',
 }
-BUILTIN_SETUP_CARD_IDS = {'ManaOrb'}
+BUILTIN_SETUP_CARD_IDS = {'ManaOrb', 'Light', 'Dust', 'Yggdrasil'}
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
 PVP_MODES = ('1v1', '2v2', 'urf', 'random_deck')
 DUEL_INVITE_MODES = ('1v1', 'urf', 'random_deck')
@@ -15065,27 +15065,40 @@ def on_surrender(data):
                 emit('server_error', {'message': '你不是该对局的玩家'})
                 return
             engine = room.engine
+            def finalize_surrender(skip_reason=None):
+                result = engine.surrender(pidx)
+                if result.get('success'):
+                    replay_payload = {'result': result}
+                    if skip_reason:
+                        replay_payload['teammate_consent_skipped'] = skip_reason
+                    record_room_replay_action(room, 'surrender', pidx, replay_payload)
+                    broadcast_game_state(room)
+                    for psid in room.player_sids:
+                        if psid in players:
+                            socketio.emit('game_phase', {'phase': 'game_over'}, room=psid)
+                else:
+                    emit('server_error', {'message': result.get('error', '投降失败')})
+                return result
+
             if room.mode == '2v2':
                 teammate_id = engine.get_teammate(pidx) if hasattr(engine, 'get_teammate') else -1
                 if teammate_id < 0 or teammate_id >= len(room.player_sids):
                     emit('server_error', {'message': 'Surrender requires a teammate'})
                     return
                 teammate_sid = room.player_sids[teammate_id]
-                if teammate_id in getattr(room, 'disconnect_timeout_defeated', set()):
-                    result = engine.surrender(pidx)
-                    if result.get('success'):
-                        record_room_replay_action(room, 'surrender', pidx, {
-                            'result': result,
-                            'teammate_consent_skipped': 'disconnect_timeout_defeated',
-                        })
-                        broadcast_game_state(room)
-                        for psid in room.player_sids:
-                            if psid in players:
-                                socketio.emit('game_phase', {'phase': 'game_over'}, room=psid)
-                    else:
-                        emit('server_error', {'message': result.get('error', '投降失败')})
+                teammate_offline = teammate_sid not in players or teammate_sid in room.disconnected_players
+                teammate_dead = False
+                try:
+                    teammate_dead = engine.players[teammate_id].health <= 0
+                except Exception:
+                    teammate_dead = teammate_id in getattr(room, 'disconnect_timeout_defeated', set())
+                if teammate_offline and teammate_dead:
+                    skip_reason = 'dead_teammate_offline'
+                    if teammate_id in getattr(room, 'disconnect_timeout_defeated', set()):
+                        skip_reason = 'disconnect_timeout_defeated'
+                    finalize_surrender(skip_reason=skip_reason)
                     return
-                if teammate_sid not in players or teammate_sid in room.disconnected_players:
+                if teammate_offline:
                     emit('server_error', {'message': 'Teammate is not online'})
                     return
                 now = time.time()
@@ -15106,15 +15119,7 @@ def on_surrender(data):
                     'from_name': player.get('nickname', f'Player {pidx + 1}'),
                 }, room=teammate_sid)
                 return
-            result = engine.surrender(pidx)
-            if result.get('success'):
-                record_room_replay_action(room, 'surrender', pidx, {'result': result})
-                broadcast_game_state(room)
-                for psid in room.player_sids:
-                    if psid in players:
-                        socketio.emit('game_phase', {'phase': 'game_over'}, room=psid)
-            else:
-                emit('server_error', {'message': result.get('error', '投降失败')})
+            finalize_surrender()
     except Exception as e:
         import traceback
         traceback.print_exc()

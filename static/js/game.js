@@ -1907,27 +1907,27 @@ Object.assign(I18N.ja, {
 });
 
 Object.assign(I18N.en, {
-    confirm_team_surrender: 'Request teammate approval to surrender?',
+    confirm_team_surrender: 'Request teammate approval to surrender?\nIf your teammate is defeated and offline, approval is skipped.',
     surrender_consent_title: 'Surrender Request',
     surrender_consent_msg: '{0} wants to surrender. Agree?',
     surrender_accept_countdown: 'Agree ({0})',
     surrender_waiting_teammate: 'Waiting for teammate to approve surrender',
     surrender_declined: 'Teammate declined surrender',
     surrender_confirmed: 'Teammate agreed to surrender',
-    surrender_teammate_offline: 'Teammate is not online',
+    surrender_teammate_offline: 'Teammate is not online. A living teammate must approve surrender.',
     surrender_pending: 'A surrender request is already pending',
     surrender_no_pending: 'No pending surrender request',
     tomato_layer: 'Layers',
 });
 Object.assign(I18N.zh, {
-    confirm_team_surrender: '请求队友同意投降？',
+    confirm_team_surrender: '请求队友同意投降？\n若队友已阵亡且不在线，将不需要队友同意。',
     surrender_consent_title: '投降确认',
     surrender_consent_msg: '{0} 想要投降，是否同意？',
     surrender_accept_countdown: '同意（{0}）',
     surrender_waiting_teammate: '等待队友同意投降',
     surrender_declined: '队友拒绝投降',
     surrender_confirmed: '队友已同意投降',
-    surrender_teammate_offline: '队友不在线，无法投降',
+    surrender_teammate_offline: '队友不在线；队友仍存活时必须同意才能投降',
     surrender_pending: '已有待确认的投降请求',
     surrender_no_pending: '没有待确认的投降请求',
     tomato_layer: '层数',
@@ -2526,6 +2526,11 @@ const CARD_FLAG_ALIASES = {
     tag_multi_petal_fission: '',
     'gtn:multi_petal_fission': '',
     'tag_gtn:multi_petal_fission': '',
+    ocean_no_auto: 'ocean_no_auto',
+    flag_ocean_no_auto: 'ocean_no_auto',
+    tag_ocean_no_auto: 'ocean_no_auto',
+    'ocean:no_auto': 'ocean_no_auto',
+    'tag_ocean:no_auto': 'ocean_no_auto',
 };
 
 const _VANILLA_FLAGS = new Set([
@@ -8263,6 +8268,7 @@ function cardHasWideStrikeFlag(cardDict, cardDef = null) {
 function shouldDisplayCardFlag(flag, options = {}) {
     const normalized = normalizeCardFlag(flag);
     if (!normalized) return false;
+    if (normalized === 'ocean_no_auto') return !!options.showSystemFlags;
     if (normalized === 'infinite_exclude') return !!options.showSystemFlags;
     if (normalized === 'ocean_spikeball_boosted') return !!options.showSystemFlags;
     if (normalized === 'multi_petal_fission') return !!options.showSystemFlags;
@@ -8369,6 +8375,8 @@ function createCardChoiceChip(cardDict, options = {}) {
         const fallback = {
             ManaOrb: { name: currentLang === 'zh' ? '魔法球' : 'Mana Orb', type: 'bloom' },
             Light: { name: currentLang === 'zh' ? '轻' : 'Light', type: 'thorn' },
+            Dust: { name: currentLang === 'zh' ? '灰尘' : 'Dust', type: 'thorn' },
+            Yggdrasil: { name: currentLang === 'zh' ? '世界树之叶' : 'Yggdrasil', type: 'bloom' },
         }[String(defId)] || null;
         const typeColor = fallback ? (CARD_TYPE_COLORS[fallback.type] || COLORS.text_primary) : COLORS.text_primary;
         const name = document.createElement('span');
@@ -18447,12 +18455,14 @@ function attachClassicStatusIntros(container) {
 function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e', masked = false) {
     if (!container) return;
     container.classList.toggle('blind-resource-masked', !!masked);
+    const block = container.closest('.classic-resource-block');
+    if (block) block.classList.toggle('blind-resource-hidden', !!masked);
     if (masked) {
         container.dataset.current = '?';
         container.dataset.max = '?';
         container.dataset.spend = '0';
         container.style.removeProperty('--classic-resource-slots');
-        container.textContent = '?';
+        container.innerHTML = '';
         return;
     }
     const cur = Math.max(0, Number(current) || 0);
@@ -18545,16 +18555,17 @@ function getClassicResourcePreviewCard(vm = null) {
 function applyClassicResourcePreview(card = null, ownerState = null) {
     const root = $('battle-classic');
     const you = ownerState || ((gameState && gameState.you) || {});
+    const masked = getOwnBlindLevel() >= 2;
     const preview = card || null;
-    const costE = preview ? Number(preview.cost_e || 0) : 0;
-    const costM = preview ? Number(preview.cost_m || 0) : 0;
-    const missing = !!preview && (costE > Number(you.elixir || 0) || costM > Number(you.magic || 0));
+    const costE = (!masked && preview) ? Number(preview.cost_e || 0) : 0;
+    const costM = (!masked && preview) ? Number(preview.cost_m || 0) : 0;
+    const missing = !masked && !!preview && (costE > Number(you.elixir || 0) || costM > Number(you.magic || 0));
     if (root) {
-        root.classList.toggle('has-resource-preview', !!preview);
+        root.classList.toggle('has-resource-preview', !masked && !!preview);
         root.classList.toggle('has-missing-resource', missing);
     }
-    renderClassicResourceOrbs($('classic-e-orbs'), you.elixir, you.max_elixir, costE, 'e');
-    renderClassicResourceOrbs($('classic-m-orbs'), you.magic, you.max_magic, costM, 'm');
+    renderClassicResourceOrbs($('classic-e-orbs'), you.elixir, you.max_elixir, costE, 'e', masked);
+    renderClassicResourceOrbs($('classic-m-orbs'), you.magic, you.max_magic, costM, 'm', masked);
 }
 
 function getClassicPlayRole(card) {
@@ -19247,6 +19258,7 @@ function renderPlayerBars(containerId, playerData) {
         if (fill) fill.style.width = masked ? '0%' : pct + '%';
         if (text) text.textContent = masked ? '?' : `${bar.cur}/${bar.max}`;
         wrappers[i].classList.toggle('blind-masked', masked);
+        wrappers[i].classList.toggle('blind-resource-hidden', masked && bar.key !== 'health');
     });
     const armorMeter = container.querySelector('.armor-meter');
     if (armorMeter) {

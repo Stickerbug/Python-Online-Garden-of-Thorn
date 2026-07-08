@@ -544,6 +544,8 @@ class GameEngine2v2(GameEngine):
 
 
     def _card_can_counter(self, counter_card: CardInstance, played_card: CardInstance) -> bool:
+        if self._card_blocks_response(played_card):
+            return False
         played_def = played_card.card_def
         if counter_card.card_def.response_trigger == 'any':
             return True
@@ -1258,7 +1260,7 @@ class GameEngine2v2(GameEngine):
         flags = self._effective_card_flags(card)
         if 'precision' in flags:
             return False
-        if 'stealth' in flags:
+        if self._card_blocks_response(card):
             return False
         target_id = self._selected_effect_target(player_id, getattr(self, '_active_choice', None))
         equipment_destroy_responders = self._equipment_destroy_response_player_ids(player_id, card, getattr(self, '_active_choice', None))
@@ -1299,7 +1301,7 @@ class GameEngine2v2(GameEngine):
         flags = self._effective_card_flags(card)
         if 'precision' not in flags:
             return False
-        if 'stealth' in flags:
+        if self._card_blocks_response(card):
             return False
         target_id = self._selected_effect_target(player_id, getattr(self, '_active_choice', None))
         if not self._is_valid_player_id(target_id) or not self.is_enemy(player_id, target_id):
