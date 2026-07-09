@@ -12200,6 +12200,47 @@ function achievementTypeLabel(type) {
     }[type] || type || '';
 }
 
+function formatAchievementUnlockedTime(value) {
+    if (!value) return currentLang === 'zh' ? '已完成' : 'Done';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value || '');
+    const locale = currentLang === 'zh'
+        ? 'zh-CN'
+        : (currentLang === 'ja' ? 'ja-JP' : (currentLang === 'fr' ? 'fr-FR' : 'en-US'));
+    try {
+        if (currentLang === 'zh' || currentLang === 'ja') {
+            return new Intl.DateTimeFormat(locale, {
+                timeZone: 'Asia/Shanghai',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+            }).format(date);
+        }
+        return new Intl.DateTimeFormat(locale, {
+            timeZone: 'Asia/Shanghai',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+        }).format(date);
+    } catch (err) {
+        return date.toLocaleString(locale, {
+            timeZone: 'Asia/Shanghai',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+        });
+    }
+}
+
 function achievementBaseName(name = '') {
     return String(name || '').replace(/\s+[IVXLCDM]+$/i, '').replace(/[一二三四五六七八九十]+$/, '').trim() || String(name || '');
 }
@@ -12319,7 +12360,7 @@ function renderAchievementCenter() {
                 </div>
                 <div class="achievement-side">
                     <span class="achievement-reward">+${escapeHtml(item.reward_dew || 0)} ${escapeHtml(UI.thorn_dew || '荆露')}</span>
-                    <span class="achievement-foot">${item.unlocked ? escapeHtml(item.unlocked_at || (currentLang === 'zh' ? '已完成' : 'Done')) : `${escapeHtml(progress)}/${escapeHtml(target)}`}</span>
+                    <span class="achievement-foot">${item.unlocked ? escapeHtml(formatAchievementUnlockedTime(item.unlocked_at)) : `${escapeHtml(progress)}/${escapeHtml(target)}`}</span>
                 </div>
                 <div class="achievement-progress" aria-hidden="true"><div class="achievement-progress-fill" style="width:${pct.toFixed(1)}%"></div></div>
             </div>
