@@ -206,7 +206,12 @@ class PlayerState:
         self.achievement_max_same_name_streak: int = 0
         self.achievement_max_enemy_poison: int = 0
         self.achievement_max_enemy_fire: int = 0
+        self.achievement_max_enemy_poison_fire_min: int = 0
         self.achievement_max_enemy_status_types: int = 0
+        self.achievement_min_enemy_card_total: int = 999999
+        self.achievement_counter_successes: int = 0
+        self.achievement_equipment_destroyed: int = 0
+        self.achievement_max_equipment_count: int = 0
         self.achievement_death_round = None
         self.achievement_self_caused_death: bool = False
         self.turn_start_snapshot: Dict[str, int] = {
@@ -309,7 +314,12 @@ class PlayerState:
             'achievement_max_same_name_streak': self.achievement_max_same_name_streak,
             'achievement_max_enemy_poison': self.achievement_max_enemy_poison,
             'achievement_max_enemy_fire': self.achievement_max_enemy_fire,
+            'achievement_max_enemy_poison_fire_min': self.achievement_max_enemy_poison_fire_min,
             'achievement_max_enemy_status_types': self.achievement_max_enemy_status_types,
+            'achievement_min_enemy_card_total': self.achievement_min_enemy_card_total,
+            'achievement_counter_successes': self.achievement_counter_successes,
+            'achievement_equipment_destroyed': self.achievement_equipment_destroyed,
+            'achievement_max_equipment_count': self.achievement_max_equipment_count,
             'achievement_death_round': self.achievement_death_round,
             'achievement_self_caused_death': self.achievement_self_caused_death,
             'turn_start_snapshot': dict(self.turn_start_snapshot),
@@ -417,7 +427,12 @@ class PlayerState:
         ps.achievement_max_same_name_streak = int(d.get('achievement_max_same_name_streak', 0) or 0)
         ps.achievement_max_enemy_poison = int(d.get('achievement_max_enemy_poison', 0) or 0)
         ps.achievement_max_enemy_fire = int(d.get('achievement_max_enemy_fire', 0) or 0)
+        ps.achievement_max_enemy_poison_fire_min = int(d.get('achievement_max_enemy_poison_fire_min', 0) or 0)
         ps.achievement_max_enemy_status_types = int(d.get('achievement_max_enemy_status_types', 0) or 0)
+        ps.achievement_min_enemy_card_total = int(d.get('achievement_min_enemy_card_total', 999999) or 999999)
+        ps.achievement_counter_successes = int(d.get('achievement_counter_successes', 0) or 0)
+        ps.achievement_equipment_destroyed = int(d.get('achievement_equipment_destroyed', 0) or 0)
+        ps.achievement_max_equipment_count = int(d.get('achievement_max_equipment_count', 0) or 0)
         death_round = d.get('achievement_death_round', None)
         ps.achievement_death_round = None if death_round is None else int(death_round)
         ps.achievement_self_caused_death = bool(d.get('achievement_self_caused_death', False))
@@ -787,10 +802,72 @@ class GameEngine:
         except Exception:
             pass
 
+    def _achievement_is_enemy(self, source_id: int, target_id: int) -> bool:
+        if source_id == target_id:
+            return False
+        try:
+            if hasattr(self, 'get_enemies'):
+                return target_id in self.get_enemies(source_id)
+        except Exception:
+            pass
+        return len(getattr(self, 'players', []) or []) == 2
+
+    def _achievement_visible_card_total(self, player_id: int) -> int:
+        if not (0 <= player_id < len(self.players)):
+            return 0
+        ps = self.players[player_id]
+        try:
+            return int(len(ps.hand) + len(ps.deck) + len(ps.discard))
+        except Exception:
+            return 0
+
+    def _note_achievement_enemy_card_total(self, target_id: int):
+        if not (0 <= target_id < len(self.players)):
+            return
+        total = self._achievement_visible_card_total(target_id)
+        for source_id, source in enumerate(self.players):
+            if self._achievement_is_enemy(source_id, target_id):
+                try:
+                    current = int(getattr(source, 'achievement_min_enemy_card_total', 999999) or 999999)
+                    source.achievement_min_enemy_card_total = min(current, total)
+                except Exception:
+                    pass
+
+    def _note_achievement_equipment_count(self, player_id: int):
+        if not (0 <= player_id < len(self.players)):
+            return
+        try:
+            ps = self.players[player_id]
+            ps.achievement_max_equipment_count = max(
+                int(getattr(ps, 'achievement_max_equipment_count', 0) or 0),
+                len(getattr(ps, 'equipment', []) or []),
+            )
+        except Exception:
+            pass
+
+    def _note_achievement_equipment_destroyed(self, source_id: Optional[int]):
+        if source_id is None or not (0 <= source_id < len(self.players)):
+            return
+        try:
+            ps = self.players[source_id]
+            ps.achievement_equipment_destroyed = int(getattr(ps, 'achievement_equipment_destroyed', 0) or 0) + 1
+        except Exception:
+            pass
+
+    def _note_achievement_counter_success(self, player_id: int):
+        if not (0 <= player_id < len(self.players)):
+            return
+        try:
+            ps = self.players[player_id]
+            ps.achievement_counter_successes = int(getattr(ps, 'achievement_counter_successes', 0) or 0) + 1
+        except Exception:
+            pass
+
     def _note_achievement_status_peak(self, target_id: int):
         if not (0 <= target_id < len(self.players)):
             return
         target = self.players[target_id]
+        self._note_achievement_enemy_card_total(target_id)
         try:
             status_types = 0
             builtin_values = [
@@ -823,6 +900,10 @@ class GameEngine:
                         int(getattr(source, 'achievement_max_enemy_fire', 0) or 0),
                         int(getattr(target, 'fire', 0) or 0),
                     )
+                    source.achievement_max_enemy_poison_fire_min = max(
+                        int(getattr(source, 'achievement_max_enemy_poison_fire_min', 0) or 0),
+                        min(int(getattr(target, 'poison', 0) or 0), int(getattr(target, 'fire', 0) or 0)),
+                    )
                     source.achievement_max_enemy_status_types = max(
                         int(getattr(source, 'achievement_max_enemy_status_types', 0) or 0),
                         int(status_types or 0),
@@ -850,7 +931,12 @@ class GameEngine:
         ps.achievement_max_same_name_streak = 0
         ps.achievement_max_enemy_poison = 0
         ps.achievement_max_enemy_fire = 0
+        ps.achievement_max_enemy_poison_fire_min = 0
         ps.achievement_max_enemy_status_types = 0
+        ps.achievement_min_enemy_card_total = 999999
+        ps.achievement_counter_successes = 0
+        ps.achievement_equipment_destroyed = 0
+        ps.achievement_max_equipment_count = len(getattr(ps, 'equipment', []) or [])
         ps.achievement_death_round = None
         ps.achievement_self_caused_death = False
 
@@ -3699,6 +3785,7 @@ class GameEngine:
             return
         ps = self.players[player_id]
         ps.custom_vars['electric_web_draw_damage'] = 0
+        self._clear_electric_web_draw_records_for_target(player_id)
         self._set_custom_status_value(player_id, 'jungle:fragile', 0)
         self._set_custom_status_value(player_id, 'fragile', 0)
         immune = self._is_status_immune(player_id)
@@ -3750,10 +3837,48 @@ class GameEngine:
         if not (0 <= target_id < len(self.players)):
             return
         amount = self._eval_int(player_id, params.get('amount', 2), card, 2)
+        amount = max(0, amount)
         self.players[target_id].custom_vars['electric_web_draw_damage'] = (
             int(self.players[target_id].custom_vars.get('electric_web_draw_damage', 0) or 0)
-            + max(0, amount)
+            + amount
         )
+        eq = self._find_equipment_for_card(player_id, card)
+        if eq is not None:
+            eq.custom_vars['electric_web_armed_target'] = target_id
+            eq.custom_vars['electric_web_armed_amount'] = (
+                int(eq.custom_vars.get('electric_web_armed_amount', 0) or 0) + amount
+            )
+
+    def _cleanup_electric_web_draw_damage(self, eq: EquipmentInstance) -> None:
+        if eq is None:
+            return
+        try:
+            target_id = int((getattr(eq, 'custom_vars', {}) or {}).get('electric_web_armed_target', -1))
+            amount = int((getattr(eq, 'custom_vars', {}) or {}).get('electric_web_armed_amount', 0) or 0)
+        except Exception:
+            target_id = -1
+            amount = 0
+        if amount > 0 and 0 <= target_id < len(self.players):
+            current = int(self.players[target_id].custom_vars.get('electric_web_draw_damage', 0) or 0)
+            self.players[target_id].custom_vars['electric_web_draw_damage'] = max(0, current - amount)
+        if hasattr(eq, 'custom_vars'):
+            eq.custom_vars['electric_web_armed_target'] = -1
+            eq.custom_vars['electric_web_armed_amount'] = 0
+
+    def _clear_electric_web_draw_records_for_target(self, target_id: int) -> None:
+        if not (0 <= target_id < len(self.players)):
+            return
+        for ps in self.players:
+            for eq in getattr(ps, 'equipment', []) or []:
+                if not self._equipment_is(eq, 'ElectricWeb', 'factory:electricweb'):
+                    continue
+                try:
+                    armed_target = int((getattr(eq, 'custom_vars', {}) or {}).get('electric_web_armed_target', -1))
+                except Exception:
+                    armed_target = -1
+                if armed_target == target_id:
+                    eq.custom_vars['electric_web_armed_target'] = -1
+                    eq.custom_vars['electric_web_armed_amount'] = 0
 
     def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None,
                             damage_type: Optional[str] = None, damage_tag: Optional[str] = None):
@@ -4863,6 +4988,7 @@ class GameEngine:
             if counter_removed is None:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}进行反制！")
+            self._note_achievement_counter_success(responder_id)
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
             self._game_over_defer_depth += 1
             try:
@@ -5091,6 +5217,10 @@ class GameEngine:
     def _discard_card(self, ps, card: CardInstance):
         reset_card_for_discard(card)
         ps.discard.append(card)
+        try:
+            self._note_achievement_enemy_card_total(ps.player_id)
+        except Exception:
+            pass
 
     def _record_ocean_active_discard(self, player_id: int, amount: int = 1):
         if not self._valid_player_id(player_id):
@@ -5498,6 +5628,7 @@ class GameEngine:
     def _atomic_counter_dodge(self, player_id, card, params, log, choice, context):
         amount = params.get('amount', 1)
         self.players[player_id].dodge += amount
+        self._note_achievement_status_peak(player_id)
         self.log_msg(log or f"{self.pn(player_id)}获得{amount}闪避")
 
     def _atomic_counter_nazar(self, player_id, card, params, log, choice, context):
@@ -5518,6 +5649,7 @@ class GameEngine:
             return
         amount = params.get('amount', 1)
         self.players[player_id].equipment_protection += amount
+        self._note_achievement_status_peak(player_id)
         self.log_msg(log or f"{self.pn(player_id)}获得{amount}装备保护")
 
     def _atomic_add_equipment_armor(self, player_id, card, params, log, choice, context):
@@ -5550,6 +5682,7 @@ class GameEngine:
         if self._status_application_blocked(1 - player_id, 'attack_blocked'):
             return
         opp.attack_blocked = max(opp.attack_blocked, duration)
+        self._note_achievement_status_peak(1 - player_id)
         self.log_msg(log or f"{self.pn(1 - player_id)}无法使用攻击牌")
 
     def _atomic_counter_set_invincible_then_die(self, player_id, card, params, log, choice, context):
@@ -5570,21 +5703,25 @@ class GameEngine:
     def _atomic_equip_reduce_enemy_draw(self, player_id, card, params, log, choice, context):
         amount = params.get('amount', 1)
         self.players[1 - player_id].sluggish += amount
+        self._note_achievement_status_peak(1 - player_id)
         self.log_msg(log or f"敌方获得{amount}层迟缓")
 
     def _atomic_equip_reduce_enemy_e(self, player_id, card, params, log, choice, context):
         amount = params.get('amount', 1)
         self.players[1 - player_id].overload += amount
+        self._note_achievement_status_peak(1 - player_id)
         self.log_msg(log or f"敌方获得{amount}层超载")
 
     def _atomic_equip_reduce_own_draw(self, player_id, card, params, log, choice, context):
         amount = params.get('amount', 1)
         self.players[player_id].sluggish += amount
+        self._note_achievement_status_peak(player_id)
         self.log_msg(log or f"{self.pn(player_id)}获得{amount}层迟缓")
 
     def _atomic_equip_reduce_own_e(self, player_id, card, params, log, choice, context):
         amount = params.get('amount', 1)
         self.players[player_id].overload += amount
+        self._note_achievement_status_peak(player_id)
         self.log_msg(log or f"{self.pn(player_id)}获得{amount}层超载")
 
     def _atomic_equip_add_toxic(self, player_id, card, params, log, choice, context):
@@ -5592,6 +5729,7 @@ class GameEngine:
         if self._status_application_blocked(1 - player_id, 'toxic'):
             return
         self.players[1 - player_id].toxic += amount
+        self._note_achievement_status_peak(1 - player_id)
         self.log_msg(log or f"敌方+{amount}淬毒")
 
     def _atomic_equip_set_health(self, player_id, card, params, log, choice, context):
@@ -5891,7 +6029,7 @@ class GameEngine:
             eq = ts.find_equipment(getattr(target_card, 'instance_id', None)) if target_card is not None else None
             if eq is not None:
                 eq_name = eq.card_def.name_cn
-                destroyed = self._destroy_equipment(target_id, eq)
+                destroyed = self._destroy_equipment(target_id, eq, source_id=player_id)
                 if destroyed:
                     self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(target_id)}的{eq_name}")
                 elif log:
@@ -5915,7 +6053,7 @@ class GameEngine:
         for pid in [0, 1]:
             for eq in self.players[pid].equipment[:]:
                 eq_name = eq.card_def.name_cn
-                if self._destroy_equipment(pid, eq):
+                if self._destroy_equipment(pid, eq, source_id=player_id):
                     self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(pid)}的{eq_name}")
                 elif log:
                     self.log_msg(log)
@@ -5977,6 +6115,7 @@ class GameEngine:
         if self._status_application_blocked(target_id, 'skip_turn'):
             return
         self.players[target_id].skip_turn += amount
+        self._note_achievement_status_peak(target_id)
         self.log_msg(log or f"{self.pn(target_id)}+{amount}层眩晕")
 
     def _atomic_extra_turn(self, player_id, card, params, log, choice, context):
@@ -6856,7 +6995,7 @@ class GameEngine:
         if choice and 'target_instance_id' in choice:
             eq = opp.find_equipment(choice['target_instance_id'])
             if eq and 'indestructible' not in eq.card_instance.flags:
-                destroyed = self._destroy_equipment(1 - player_id, eq)
+                destroyed = self._destroy_equipment(1 - player_id, eq, source_id=player_id)
                 if destroyed:
                     self.log_msg(f"{self.pn(player_id)}使用污水！摧毁了敌方的{eq.card_def.name_cn}")
                 else:
@@ -6867,7 +7006,7 @@ class GameEngine:
             destroyable = [e for e in opp.equipment if 'indestructible' not in e.card_instance.flags]
             if destroyable:
                 eq = destroyable[0]
-                destroyed = self._destroy_equipment(1 - player_id, eq)
+                destroyed = self._destroy_equipment(1 - player_id, eq, source_id=player_id)
                 if destroyed:
                     self.log_msg(f"{self.pn(player_id)}使用污水！摧毁了敌方的{eq.card_def.name_cn}")
                 else:
@@ -6881,7 +7020,7 @@ class GameEngine:
             p = self.players[pid]
             to_destroy = [e for e in p.equipment if 'indestructible' not in e.card_instance.flags]
             for eq in to_destroy:
-                destroyed = self._destroy_equipment(pid, eq)
+                destroyed = self._destroy_equipment(pid, eq, source_id=player_id)
                 if destroyed:
                     destroyed_count += 1
                     self.log_msg(f"魔法污水摧毁了{self.pn(pid)}的{eq.card_def.name_cn}")
@@ -7029,6 +7168,8 @@ class GameEngine:
         effect_target_id = self._equipment_effect_target_id(eq, owner_id)
         if self._equipment_is(eq, 'Disc', 'vanilla:disc'):
             self.players[effect_target_id].armor = max(0, self.players[effect_target_id].armor - 2)
+        if self._equipment_is(eq, 'ElectricWeb', 'factory:electricweb'):
+            self._cleanup_electric_web_draw_damage(eq)
 
         is_pill = self._equipment_is(eq, 'Pill', 'troll_cards:pill', 'vanilla:pill')
         has_destroy_script = self._has_card_event(eq.card_def, 'equipment_destroy')
@@ -7099,6 +7240,8 @@ class GameEngine:
             self._discard_card(ps, eq.card_instance)
         self._refresh_equipment_derived_player_flags(owner_id)
         self._refresh_hand_limit_bonuses()
+        self._note_achievement_equipment_destroyed(source_id)
+        self._note_achievement_equipment_count(owner_id)
         self._dispatch_card_event('equipment_destroyed', owner_id if source_id is None else source_id,
                                   eq.card_instance, target_id=owner_id,
                                   equipment=eq, equipment_owner_id=owner_id)
@@ -10337,6 +10480,7 @@ class GameEngine:
                         effect_target = equip_owner_id
                     self.players[effect_target].armor += 2
                 equip_owner.equipment.append(eq)
+                self._note_achievement_equipment_count(equip_owner_id)
                 self._refresh_hand_limit_bonuses()
                 self.log_msg(f"{self.pn(equip_owner_id)}装备了{card.name_cn}")
             if hasattr(card, '_placed_as_equipment'):
@@ -10406,6 +10550,7 @@ class GameEngine:
                 if 0 <= selected_target < len(self.players):
                     eq.effect_target = selected_target
             owner.equipment.append(eq)
+            self._note_achievement_equipment_count(owner_id)
             self._refresh_hand_limit_bonuses()
             self.log_msg(log or f"{self.pn(owner_id)}装备了{target_card.name_cn}")
         if target_card is card:
@@ -10443,6 +10588,7 @@ class GameEngine:
             else:
                 eq.effect_target = owner_id
             self.players[owner_id].equipment.append(eq)
+            self._note_achievement_equipment_count(owner_id)
             self._refresh_hand_limit_bonuses()
             self._remember_created_card(new_card, context if isinstance(context, dict) else None)
             self.log_msg(log or f"{self.pn(owner_id)}获得装备{card_def.name_cn}")
@@ -10895,7 +11041,7 @@ class GameEngine:
             eq = ts.equipment[0]
         if eq is not None:
             eq_name = eq.card_def.name_cn
-            if self._destroy_equipment(target_id, eq):
+            if self._destroy_equipment(target_id, eq, source_id=player_id):
                 self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(target_id)}的{eq_name}")
             elif log:
                 self.log_msg(log)
@@ -10909,7 +11055,7 @@ class GameEngine:
             return
         eq = random.choice(pool)
         eq_name = eq.card_def.name_cn
-        if self._destroy_equipment(target_id, eq):
+        if self._destroy_equipment(target_id, eq, source_id=player_id):
             self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(target_id)}的{eq_name}")
         elif log:
             self.log_msg(log)
@@ -10921,7 +11067,7 @@ class GameEngine:
         for eq in list(self.players[target_id].equipment):
             if 'indestructible' not in eq.card_instance.flags:
                 eq_name = eq.card_def.name_cn
-                if self._destroy_equipment(target_id, eq):
+                if self._destroy_equipment(target_id, eq, source_id=player_id):
                     self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(target_id)}的{eq_name}")
                 elif log:
                     self.log_msg(log)
@@ -10932,7 +11078,7 @@ class GameEngine:
             for eq in list(self.players[tid].equipment):
                 if 'indestructible' not in eq.card_instance.flags:
                     eq_name = eq.card_def.name_cn
-                    if self._destroy_equipment(tid, eq):
+                    if self._destroy_equipment(tid, eq, source_id=player_id):
                         destroyed_count += 1
                         self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(tid)}的{eq_name}")
                     elif log:
@@ -11058,6 +11204,7 @@ class GameEngine:
             return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].armor += amount
+        self._note_achievement_status_peak(target_id)
         self.log_msg(log or f"{self.pn(target_id)}获得{amount}护甲")
 
     def _atomic_gain_dodge(self, player_id, card, params, log, choice, context):
@@ -11066,6 +11213,7 @@ class GameEngine:
             return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].dodge += amount
+        self._note_achievement_status_peak(target_id)
         self.log_msg(log or f"{self.pn(target_id)}获得{amount}闪避")
 
     def _atomic_apply_poison(self, player_id, card, params, log, choice, context):
@@ -11077,6 +11225,7 @@ class GameEngine:
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].poison += amount
         self._normalize_status_value(self.players[target_id], 'poison')
+        self._note_achievement_status_peak(target_id)
         self.log_msg(log or f"{self.pn(target_id)}+{amount}中毒")
 
     def _atomic_apply_burn(self, player_id, card, params, log, choice, context):
@@ -11088,6 +11237,7 @@ class GameEngine:
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].fire += amount
         self._normalize_status_value(self.players[target_id], 'fire')
+        self._note_achievement_status_peak(target_id)
         self.log_msg(log or f"{self.pn(target_id)}+{amount}灼烧")
 
     def _atomic_apply_toxic(self, player_id, card, params, log, choice, context):
@@ -11099,6 +11249,7 @@ class GameEngine:
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].toxic += amount
         self._normalize_status_value(self.players[target_id], 'toxic')
+        self._note_achievement_status_peak(target_id)
         self.log_msg(log or f"{self.pn(target_id)}+{amount}淬毒")
 
     def _atomic_apply_jungle_status(self, player_id, card, params, log, choice, context):
@@ -11200,6 +11351,7 @@ class GameEngine:
         if params.get('also_poison'):
             self.players[target_id].poison += amount
             self._normalize_status_value(self.players[target_id], 'poison')
+            self._note_achievement_status_peak(target_id)
         label = str(params.get('label') or '剧毒')
         if params.get('also_poison'):
             self.log_msg(log or f"{self.pn(target_id)}+{amount}层{label}和{amount}P")
@@ -11566,6 +11718,7 @@ class GameEngine:
             if amount <= 0:
                 continue
             self.players[target_id].sluggish += amount
+            self._note_achievement_status_peak(target_id)
             self.log_msg(log or f"{self.pn(target_id)}下个回合少抽{amount}张牌")
 
     def _apply_ocean_blood_debt_after_physical_damage(self, target_id: int, attacker_id: int):

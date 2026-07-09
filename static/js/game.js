@@ -2708,16 +2708,15 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'status-untargetable', re: /^(?:[+-]?\d+层无法选中|无法选中[:：]?[+-]?\d+层?)/i },
     { cls: 'status-magic-nazar', re: /^(?:[+-]?\d+层魔法邪眼|魔法邪眼[:：]?[+-]?\d+层?)/i },
     { cls: 'toxic', re: /^(?:\d+层淬毒|\d+\s*(?:Toxic|Toxique|Tóxico|Токсин)|淬毒\d+)/i },
-    { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*F(?![A-Za-z0-9])|F(?![A-Za-z0-9])|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/ },
-    { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P(?![A-Za-z0-9])|P(?![A-Za-z0-9])|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/ },
+    { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*F(?![A-Za-z0-9])|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/ },
+    { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P(?![A-Za-z0-9])|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/ },
     { cls: 'damage', re: /^(?:[+-]?(?:\d+|x|X)\s*(?:点)?(?:电伤|电伤害|电击伤害)(?:[×x]\d+)?|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/ },
     { cls: 'heal', re: /^造成伤害\d+%(?:\([^)]+\)|（[^）]+）)的H/ },
     { cls: 'armor', re: /^[+-]?\d+A/ },
     { cls: 'armor', re: /^护甲/ },
     { cls: 'heal', re: /^[+]?\d+H(?![A-Za-z0-9])/ },
-    { cls: 'health', re: /^H(?![A-Za-z0-9])/ },
-    { cls: 'elixir', re: /^[+-]?(?:\d+E|E)(?![A-Za-z0-9])/ },
-    { cls: 'magic', re: /^[+-]?(?:\d+M|M)(?![A-Za-z0-9])/ },
+    { cls: 'elixir', re: /^[+-]?\d+E(?![A-Za-z0-9])/ },
+    { cls: 'magic', re: /^[+-]?\d+M(?![A-Za-z0-9])/ },
 ];
 
 function buildInlineCardDict(defId, modifierText = '') {
@@ -2782,9 +2781,14 @@ function buildInlineCardDict(defId, modifierText = '') {
 }
 
 function parseInlineCardMarker(text) {
-    const marker = String(text || '').match(/^\[\[card:([^\r\n]*?)\]\]/i);
-    if (!marker || !marker[1]) return null;
-    const parts = marker[1]
+    const source = String(text || '');
+    if (!source.toLowerCase().startsWith('[[card:')) return null;
+    const closeIndex = source.indexOf(']]', 7);
+    if (closeIndex < 0) return null;
+    const raw = source.slice(0, closeIndex + 2);
+    const body = source.slice(7, closeIndex);
+    if (!body) return null;
+    const parts = body
         .split('|')
         .map(part => part.trim())
         .filter(Boolean);
@@ -2792,7 +2796,7 @@ function parseInlineCardMarker(text) {
     if (!defId) return null;
     const modifierText = parts.join('|');
     return {
-        raw: marker[0],
+        raw,
         defId,
         modifierText,
         cardDict: buildInlineCardDict(defId, modifierText),
@@ -6319,6 +6323,18 @@ function achievementToastText(item = {}) {
     };
 }
 
+function achievementDisplayColor(item = {}) {
+    if (item && item.type_color) return String(item.type_color);
+    const type = String((item && item.type) || '').toLowerCase();
+    return {
+        milestone: '#5aa469',
+        battle: '#c46a42',
+        mode: '#4f86c6',
+        social: '#b48a31',
+        hidden: '#7257a8',
+    }[type] || '#5aa469';
+}
+
 function ensureAchievementToastElement() {
     let toast = $('achievement-toast');
     if (!toast) {
@@ -6341,6 +6357,7 @@ function showNextAchievementToast() {
     if (!item) return;
     const toast = ensureAchievementToastElement();
     const text = achievementToastText(item);
+    toast.style.setProperty('--achievement-color', achievementDisplayColor(item));
     const kicker = toast.querySelector('.achievement-toast-kicker');
     const name = toast.querySelector('.achievement-toast-name');
     const desc = toast.querySelector('.achievement-toast-desc');
@@ -8099,6 +8116,13 @@ function createCardElement(cardDict, options = {}) {
     if (cardDef.ui_effect_size === 'slightly_small') {
         el.classList.add('card-effect-slightly-small');
     }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['Triangle', 'Fang', 'Sawblade', 'Tomato', 'MagicTomato'])
+        || ['三角形', '尖牙', '锯片', '番茄', '魔法番茄'].includes(cardDef.name_cn)) {
+        el.classList.add('card-effect-tiny-small');
+    }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['MagicPoisonStinger']) || cardDef.name_cn === '魔法毒刺') {
+        el.classList.add('card-effect-extra-small');
+    }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Grapes', 'MagicGrapes', 'Peas', 'MagicPeas'])
         || ['葡萄', '魔法葡萄', '豌豆', '魔法豌豆'].includes(cardDef.name_cn)) {
         el.classList.add('card-petal-copy');
@@ -8350,6 +8374,7 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     const powerValue = Number(cardDef.power_value || cardDict.power_value || 0);
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
+    const chargeValue = Number(cardDict.charge_value || 0);
     effective.forEach(flag => {
         if (flag === 'swift' && swiftValue > 0) return;
         if (flag === 'temp_swift' && tempSwiftValue > 0) return;
@@ -8357,6 +8382,7 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
         if (flag === 'magic_swift' && magicSwiftValue > 0) return;
         if (flag === 'power' && powerValue > 0) return;
         if (flag === 'copy' && copyCount > 0) return;
+        if (flag === 'charge' && chargeValue > 0) return;
         if (base.has(flag)) return;
         if (!shouldDisplayCardFlag(flag)) return;
         if (hideSet && hideSet.has(normalizeCardFlag(flag))) return;
@@ -8385,6 +8411,9 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     }
     if (copyCount > 0) {
         parts.push(cardFlagHtml('copy', `${UI.tag_copy || 'Copy'}: ${copyCount}`));
+    }
+    if (chargeValue > 0) {
+        parts.push(cardFlagHtml('charge', `${UI.tag_charge || '电荷'}: ${chargeValue}`));
     }
     const equipmentCountersHtml = equipmentCounterFlagHtml(cardDict);
     if (equipmentCountersHtml) parts.push(equipmentCountersHtml);
@@ -9754,7 +9783,9 @@ function getTermIntroLibrary() {
         magic_swift: { label: UI.tag_magic_swift || 'Magic Swift', desc: lt({ zh: 'M 花费减少对应层数，最低为 0M。', en: 'Reduces M cost by its value, minimum 0M.', fr: 'Réduit le coût M de sa valeur, minimum 0M.', ja: 'M コストを値だけ減らします。最低0M。' }), color: '#6C5CE7' },
         temp_swift: { label: UI.tag_temp_swift || 'Temporary Swift', desc: lt({ zh: '本次打出时 E 花费减少对应层数，打出后清除。', en: 'Reduces E cost for this play only, then clears after being played.', fr: 'Réduit le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを減らし、使用後に消えます。' }), color: '#0EA5E9' },
         temp_heavy: { label: UI.tag_temp_heavy || 'Temporary Heavy', desc: lt({ zh: '本次打出时 E 花费增加对应层数，打出后清除。', en: 'Increases E cost for this play only, then clears after being played.', fr: 'Augmente le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを増やし、使用後に消えます。' }), color: '#795548' },
+        nazar: { label: UI.status_nazar || lt({ zh: '邪眼', en: 'Nazar', fr: 'Nazar', ja: 'ナザール' }), desc: lt({ zh: '存在时，自己所受≤9的物理伤害变为1。若受到≥10的物理伤害，则将其减少9，且层数-1。', en: 'While present, physical damage you take that is 9 or less becomes 1. Physical damage of 10 or more is reduced by 9, then this loses 1 stack.', fr: 'Tant qu’il existe, les dégâts physiques subis de 9 ou moins deviennent 1. Les dégâts physiques de 10 ou plus sont réduits de 9, puis cet état perd 1 charge.', ja: '存在中、自分が受ける9以下の物理ダメージは1になります。10以上の物理ダメージは9減少し、その後1層減ります。' }), color: COLORS.magic },
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: lt({ zh: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', en: 'While present, an enemy skill card that actually costs 1E or less is negated, then this loses 1 stack.', fr: 'Tant qu’il existe, une compétence ennemie coûtant réellement 1E ou moins est annulée, puis perd 1 charge.', ja: '存在中、敵が実際に1E以下消費する技能カードを無効にし、その後1層減ります。' }), color: COLORS.magic },
+        dodge: { label: UI.status_dodge || lt({ zh: '闪避', en: 'Dodge', fr: 'Esquive', ja: '回避' }), desc: lt({ zh: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', en: 'When physical damage would be taken, lose 1 stack to prevent that hit. If the source card has Precision, prevent only half of the damage. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Quand des dégâts physiques devraient être subis, perdez 1 charge pour annuler ce coup. Si la carte source a Précision, seule la moitié des dégâts est annulée. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: '物理ダメージを受ける時、1層減らしてそのダメージを防ぎます。発生源カードがPrecisionを持つ場合、防ぐのは半分だけです。状態免疫中は蓄積できますが発動も消費もされません。' }), color: COLORS.guard },
         equipment_armor: { label: lt({ zh: '装备护甲', en: 'Equipment Armor', fr: 'Armure d’équipement', ja: '装備護甲' }), desc: lt({ zh: '存在时，若装备将被摧毁，则使该装备不被摧毁，并消耗1层装备护甲。玩家回合结束时，该玩家所有装备的装备护甲-1。', en: 'If the equipment would be destroyed, prevent that destruction and consume 1 Equipment Armor. At the end of a player turn, all that player’s equipment loses 1 Equipment Armor.', fr: 'Si l’équipement devait être détruit, empêche cette destruction et consomme 1 Armure d’équipement. À la fin du tour d’un joueur, tout son équipement perd 1 Armure d’équipement.', ja: '装備が破壊される時、それを防ぎ装備護甲を1層消費します。プレイヤーのターン終了時、そのプレイヤーの全装備の装備護甲が1層減ります。' }), color: COLORS.indestructible },
         fusion_layer: { label: UI.fusion_layer || 'Fusion', desc: lt({ zh: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。打出后恢复为 1。', en: 'Amplifies attack damage. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after being played.', fr: 'Amplifie les dégâts d’attaque. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 après avoir été jouée.', ja: '攻撃ダメージを増やします。各命中は切り上げ(基礎ダメージ×聚变/裂变)。使用後に1へ戻ります。' }), color: '#8E44AD' },
         fission_layer: { label: UI.fission_layer || 'Fission', desc: lt({ zh: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。打出后恢复为 1。', en: 'Splits an attack into multiple hits. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after being played.', fr: 'Divise une attaque en plusieurs coups. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 après avoir été jouée.', ja: '攻撃を複数回命中に分けます。各命中は切り上げ(基礎ダメージ×聚变/裂变)。使用後に1へ戻ります。' }), color: '#2874A6' },
@@ -9948,6 +9979,12 @@ function collectCardIntroTerms(cardDict) {
         [/回合回复|Turn Heal|jungle:turn_heal_turns|turn_heal/i, 'jungle:turn_heal_turns'],
         [/树根|jungle:root_status|root_status/i, 'jungle:root_status'],
         [/剧毒|Toxic Poison|jungle:toxic_poison|toxic_poison/i, 'jungle:toxic_poison'],
+        [/三角形|Triangle|triangle/i, 'triangle'],
+        [/闪避|Dodge|dodge/i, 'dodge'],
+        [/装备保护|Equip Protect|equip_protect/i, 'equip_protect'],
+        [/无敌|Invincible|invincible/i, 'invincible'],
+        [/无法选中|Untargetable|untargetable/i, 'untargetable'],
+        [/绷带|Bandage|bandage/i, 'bandage'],
         [/滞留|Stagnation|stagnation/i, 'stagnation'],
         [/失明|Blind|blind/i, 'blind'],
         [/预知|Foresight|foresight/i, 'foresight'],
@@ -9963,11 +10000,13 @@ function collectCardIntroTerms(cardDict) {
         [/超载|Overload|overload/i, 'overload'],
         [/迟缓|Sluggish|sluggish/i, 'sluggish'],
         [/魔法邪眼|Magic Nazar|magic_nazar/i, 'magic_nazar'],
+        [/(^|[^魔法])邪眼|\bNazar\b|(?:^|[^A-Za-z_])nazar(?:$|[^A-Za-z_])/i, 'nazar'],
         [/血债|Blood Debt|blood_debt|ocean:blood_debt/i, 'blood_debt'],
         [/无法反制|Unable to Counter|unable_counter|ocean:unable_counter/i, 'unable_counter'],
     ];
     statusProbes.forEach(([re, key]) => {
         if (!re.test(rawText) || seen.has(`status:${key}`)) return;
+        if (key === 'nazar' && /(魔法邪眼|Magic Nazar|magic_nazar)/i.test(rawText) && !/(^|[^魔法])邪眼/.test(rawText)) return;
         const statusItem = getStatusIntroItem({ key });
         addTermIntroItem(items, seen, `status:${key}`, statusItem);
     });
@@ -10066,6 +10105,7 @@ function getStatusIntroItem(statusInfo) {
         toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc },
         armor: { label: UI.status_armor || 'Armor', desc: getTermIntroLibrary().A.desc },
         triangle: { label: UI.status_triangle, desc: lt({ zh: builtIns.triangle.desc, en: 'Each stack increases later Triangle damage, up to 4. With Fission, each hit recalculates using the current stack count.', fr: 'Chaque charge augmente les dégâts suivants de Triangle, jusqu’à 4. Avec Fission, chaque coup est recalculé avec les charges actuelles.', ja: '各層が以後の三角形ダメージを増やし、上限は4層です。裂变時は各命中ごとに現在層数で再計算します。' }) },
+        nazar: { label: UI.status_nazar || 'Nazar', desc: getTermIntroLibrary().nazar.desc },
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: getTermIntroLibrary().magic_nazar.desc },
         equip_protect: { label: UI.status_equip_protect, desc: lt({ zh: builtIns.equip_protect.desc, en: 'Prevents equipment from being destroyed by destroy effects.', fr: 'Empêche un équipement d’être détruit par les effets de destruction.', ja: '装備が破壊効果で破壊されるのを防ぎます。' }) },
         invincible: { label: UI.status_invincible, desc: lt({ zh: builtIns.invincible.desc, en: 'While invincible, damage does not cause defeat.', fr: 'Pendant l’invincibilité, les dégâts ne provoquent pas la défaite.', ja: '無敵中はダメージで敗北しません。' }) },
@@ -12267,7 +12307,7 @@ function renderAchievementCenter() {
         const progress = Math.max(0, Number(item.progress || 0) || 0);
         const target = Math.max(1, Number(item.target || item.series_target || 1) || 1);
         const pct = item.unlocked ? 100 : Math.max(0, Math.min(100, progress / target * 100));
-        const color = item.type_color || '#5aa469';
+        const color = achievementDisplayColor(item);
         return `
             <div class="achievement-item ${item.unlocked ? 'unlocked' : ''} ${item.hidden ? 'is-hidden' : ''}" style="--achievement-color:${escapeHtml(color)}">
                 <div class="achievement-main">
@@ -17769,6 +17809,7 @@ function syncRoomChatHistory(data = {}) {
         matchKey,
         history.items.map(item => [
             item && item.id,
+            item && (item.message_id || item.messageId),
             item && item.time,
             item && item.nickname,
             item && item.text,

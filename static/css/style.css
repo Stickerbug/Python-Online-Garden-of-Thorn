@@ -7296,6 +7296,20 @@ html.blind-level-4 .card-prediction-part.magic {
   padding-bottom: 1.5cqi;
 }
 
+.card.card-effect-tiny-small .card-effect {
+  font-size: 8.35cqi;
+  line-height: 1.17;
+  padding-top: 3.1cqi;
+  padding-bottom: 1.7cqi;
+}
+
+.card.card-effect-extra-small .card-effect {
+  font-size: 6.95cqi;
+  line-height: 1.1;
+  padding-top: 2.15cqi;
+  padding-bottom: 1cqi;
+}
+
 .card.card-petal-copy .card-effect {
   font-size: 8.1cqi;
   line-height: 1.2;
@@ -8598,10 +8612,10 @@ html.blind-level-4 .card-prediction-part.magic {
   z-index: 3920;
   width: min(420px, calc(100vw - 36px));
   transform: translate(-50%, -18px) scale(0.96);
-  border: 1px solid color-mix(in srgb, #5aa469 46%, var(--border-light));
-  border-left: 6px solid #5aa469;
+  border: 1px solid color-mix(in srgb, var(--achievement-color, #5aa469) 46%, var(--border-light));
+  border-left: 6px solid var(--achievement-color, #5aa469);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--bg-card) 92%, #dff2d6);
+  background: color-mix(in srgb, var(--bg-card) 86%, var(--achievement-color, #5aa469));
   color: var(--text-primary);
   box-shadow: var(--shadow-lg);
   padding: 10px 14px 11px;
@@ -8621,7 +8635,7 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 .achievement-toast-kicker {
-  color: #4d8e51;
+  color: var(--achievement-color, #5aa469);
   font-size: 11px;
   font-weight: 900;
   line-height: 1.2;

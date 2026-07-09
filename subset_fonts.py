@@ -122,9 +122,8 @@ def collect_chars_from_files():
         content = read_text_file(fpath)
         added = add_text_chars(chars, content)
         fsize = os.path.getsize(fpath)
-        ja_chars_in_file = sum(1 for c in content if 0x3040 <= ord(c) <= 0x309F or 0x30A0 <= ord(c) <= 0x30FF)
         rel = os.path.relpath(fpath, PROJECT_DIR)
-        print(f'  [{added:+d}] {rel} ({fsize/1024:.0f}KB, 日文字符: {ja_chars_in_file})')
+        print(f'  [{added:+d}] {rel} ({fsize/1024:.0f}KB)')
         scanned += 1
     for root, dirs, files in os.walk(PROJECT_DIR):
         dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]

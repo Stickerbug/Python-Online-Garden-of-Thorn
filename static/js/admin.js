@@ -352,7 +352,7 @@ async function loadGameChat() {
   if (!$('admin-game-chat-log') || activeAdminTab !== 'game-chat' || !adminPageVisible() || gameChatRequestInFlight) return;
   gameChatRequestInFlight = true;
   try {
-    const data = await api('/api/admin/game-chat?limit=50');
+    const data = await api('/api/admin/game-chat?limit=500');
     renderGameChat(data);
   } catch (err) {
     const log = $('admin-game-chat-log');

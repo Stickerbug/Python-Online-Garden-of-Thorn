@@ -2101,6 +2101,9 @@ class LocalSoloEngine {
         if (this.cardIs(eq.card_instance || eq, 'Disc', 'vanilla:disc')) {
             targetState.armor = Math.max(0, toInt(targetState.armor, 0) - 2);
         }
+        if (this.cardIs(eq.card_instance || eq, 'ElectricWeb', 'factory:electricweb')) {
+            this.cleanupElectricWebDrawDamage(eq);
+        }
         if (
             this.cardIs(eq.card_instance || eq, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge')
             && !this.hasOtherSpongeTargeting(effectTarget, eq)
@@ -2122,6 +2125,33 @@ class LocalSoloEngine {
             this.setCustomStatusAliasGroup(effectTarget, 'jungle:root_status', ['jungle:root_status', 'jungle:root', 'root_status'], Math.max(0, current - rootLayers));
             eq.custom_vars.jungle_root_layers = 0;
         }
+    }
+
+    cleanupElectricWebDrawDamage(eq) {
+        if (!eq) return;
+        eq.custom_vars = eq.custom_vars || {};
+        const targetId = toInt(eq.custom_vars.electric_web_armed_target, -1);
+        const amount = toInt(eq.custom_vars.electric_web_armed_amount, 0);
+        if (amount > 0 && this.players[targetId]) {
+            const current = toInt(this.players[targetId].custom_vars.electric_web_draw_damage, 0);
+            this.players[targetId].custom_vars.electric_web_draw_damage = Math.max(0, current - amount);
+        }
+        eq.custom_vars.electric_web_armed_target = -1;
+        eq.custom_vars.electric_web_armed_amount = 0;
+    }
+
+    clearElectricWebDrawRecordsForTarget(targetId) {
+        if (!this.players[targetId]) return;
+        this.players.forEach(ps => {
+            (ps.equipment || []).forEach(eq => {
+                if (!eq || !this.cardIs(eq.card_instance || eq, 'ElectricWeb', 'factory:electricweb')) return;
+                eq.custom_vars = eq.custom_vars || {};
+                if (toInt(eq.custom_vars.electric_web_armed_target, -1) === targetId) {
+                    eq.custom_vars.electric_web_armed_target = -1;
+                    eq.custom_vars.electric_web_armed_amount = 0;
+                }
+            });
+        });
     }
 
     hasOtherSpongeTargeting(targetId, excludeEq = null) {
@@ -2329,6 +2359,7 @@ class LocalSoloEngine {
         const ps = this.players[playerId];
         if (!ps) return;
         ps.custom_vars.electric_web_draw_damage = 0;
+        this.clearElectricWebDrawRecordsForTarget(playerId);
         ps['jungle:fragile'] = 0;
         ps.fragile = 0;
         const shield = this.customStatusValue(playerId, 'jungle:shield', 'shield');
@@ -4406,10 +4437,17 @@ class LocalSoloEngine {
         const targetId = this.resolveTarget(playerId, params.target || 'target', choice);
         const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 2, card, 2, choice));
         if (!this.players[targetId]) return;
-        this.players[targetId].custom_vars.electric_web_draw_damage = Math.max(
-            toInt(this.players[targetId].custom_vars.electric_web_draw_damage, 0),
-            amount
+        this.players[targetId].custom_vars.electric_web_draw_damage = (
+            toInt(this.players[targetId].custom_vars.electric_web_draw_damage, 0) + amount
         );
+        const eq = this.findEquipmentForCard(playerId, card);
+        if (eq) {
+            eq.custom_vars = eq.custom_vars || {};
+            eq.custom_vars.electric_web_armed_target = targetId;
+            eq.custom_vars.electric_web_armed_amount = (
+                toInt(eq.custom_vars.electric_web_armed_amount, 0) + amount
+            );
+        }
     }
 
     effect_add_status(playerId, card, params, log, choice) {

@@ -591,6 +591,7 @@ class GameEngine2v2(GameEngine):
             if counter_removed is None:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}进行反制！")
+            self._note_achievement_counter_success(responder_id)
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
             self._game_over_defer_depth += 1
             try:
@@ -867,34 +868,51 @@ class GameEngine2v2(GameEngine):
         return super().resolve_choice(player_id, choice)
 
     def _check_card_response_after_choice(self, player_id: int, card: CardInstance, choice: Optional[dict]) -> Optional[dict]:
-        prev_choice = getattr(self, '_active_choice', None)
-        if isinstance(choice, dict):
-            self._active_choice = choice
-        try:
-            needs_response = self._check_response_needed(player_id, card)
-            needs_precision_response = self._check_precision_response_needed(player_id, card)
-        finally:
-            self._active_choice = prev_choice
-        if not (needs_response or needs_precision_response):
+        pending = self._build_pending_response_for_card(player_id, card, choice)
+        if pending is None:
             return None
-        target_id = self._selected_effect_target(player_id, choice)
-        equipment_destroy_responders = self._equipment_destroy_response_player_ids(player_id, card, choice)
-        if card.card_type == 'bloom':
-            responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
-        elif self._would_heal(card):
-            responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
-        elif 'wide_strike' in self._effective_card_flags(card) and card.card_type == 'thorn':
-            responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
-        elif self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0:
-            responder_ids = [target_id]
+        self.pending_response = pending
+        return {'success': True, 'needs_response': True, 'card': card.to_dict()}
+
+    def _response_target_ids_for_card(self, player_id: int, card: CardInstance, choice: Optional[dict] = None) -> List[int]:
+        if card is None:
+            return []
+        if 'wide_strike' in self._effective_card_flags(card):
+            return self._wide_strike_target_ids(player_id, card)
+        if getattr(card, 'card_type', '') == 'thorn':
+            target_id = self._selected_attack_target(player_id, choice)
         else:
-            responder_ids = []
-        responder_ids = list(dict.fromkeys([*responder_ids, *equipment_destroy_responders]))
+            target_id = self._selected_effect_target(player_id, choice)
+        return [target_id] if self._is_valid_player_id(target_id) else []
+
+    def _build_pending_response_for_card(self, player_id: int, card: CardInstance, choice: Optional[dict] = None) -> Optional[dict]:
+        flags = self._effective_card_flags(card)
+        if self._card_blocks_response(card):
+            return None
+        target_ids = self._response_target_ids_for_card(player_id, card, choice)
+        target_id = target_ids[0] if target_ids else self._selected_effect_target(player_id, choice)
+        equipment_destroy_responders = self._equipment_destroy_response_player_ids(player_id, card, choice)
         counter_cards = []
         has_payable_counter = False
+        enemy_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
+        if 'precision' in flags:
+            responder_ids = list(dict.fromkeys([tid for tid in target_ids if self.is_enemy(player_id, tid)]))
+        else:
+            responder_ids = list(dict.fromkeys([*enemy_ids, *target_ids, *equipment_destroy_responders]))
+
         for responder_id in responder_ids:
+            if not self._is_valid_player_id(responder_id) or self.players[responder_id].health <= 0:
+                continue
             for c in self.players[responder_id].hand:
-                if self._card_can_counter(c, card, responder_id=responder_id, target_player_id=target_id):
+                if 'precision' in flags and getattr(c.card_def, 'response_trigger', '') != 'thorn':
+                    continue
+                target_match = any(
+                    self._card_can_counter(c, card, responder_id=responder_id, target_player_id=tid)
+                    for tid in (target_ids or [target_id])
+                )
+                if not target_match and responder_id in equipment_destroy_responders:
+                    target_match = self._card_can_counter(c, card, responder_id=responder_id, target_player_id=responder_id)
+                if target_match:
                     if self._can_pay_counter_card(responder_id, c):
                         has_payable_counter = True
                     counter_cards.append({
@@ -906,15 +924,14 @@ class GameEngine2v2(GameEngine):
                     })
         if not has_payable_counter:
             return None
-        self.pending_response = {
+        return {
             'player_id': player_id,
             'target_player_id': target_id,
             'card': card.to_dict(),
             'original_choice': choice,
             'counter_cards': counter_cards,
-            'is_precision': needs_precision_response and not needs_response,
+            'is_precision': 'precision' in flags,
         }
-        return {'success': True, 'needs_response': True, 'card': card.to_dict()}
 
     def _equipment_destroy_response_player_ids(self, player_id: int, card: Optional[CardInstance], choice: Optional[dict] = None) -> List[int]:
         if card is None or not self._would_destroy_equipment(card):
@@ -1028,46 +1045,10 @@ class GameEngine2v2(GameEngine):
                 result = self._execute_card_effect(player_id, card, choice)
                 self._enforce_unique_cards_for_all()
                 return result
-            needs_response = self._check_response_needed(player_id, card)
-            needs_precision_response = self._check_precision_response_needed(player_id, card)
-            if needs_response or needs_precision_response:
-                target_id = self._selected_effect_target(player_id, choice)
-                counter_cards = []
-                has_payable_counter = False
-                equipment_destroy_responders = self._equipment_destroy_response_player_ids(player_id, card, choice)
-                if card.card_type == 'bloom':
-                    responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
-                elif self._would_heal(card):
-                    responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
-                elif 'wide_strike' in self._effective_card_flags(card) and card.card_type == 'thorn':
-                    responder_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
-                elif self._is_valid_player_id(target_id) and self.is_enemy(player_id, target_id) and self.players[target_id].health > 0:
-                    responder_ids = [target_id]
-                else:
-                    responder_ids = []
-                responder_ids = list(dict.fromkeys([*responder_ids, *equipment_destroy_responders]))
-                for responder_id in responder_ids:
-                    for c in self.players[responder_id].hand:
-                        if self._card_can_counter(c, card, responder_id=responder_id, target_player_id=target_id):
-                            if self._can_pay_counter_card(responder_id, c):
-                                has_payable_counter = True
-                            counter_cards.append({
-                                'instance_id': c.instance_id,
-                                'def_id': c.def_id,
-                                'cost_e_override': c.cost_e_override,
-                                'cost_m_override': c.cost_m_override,
-                                'responder_id': responder_id,
-                            })
-                if has_payable_counter:
-                    self.pending_response = {
-                        'player_id': player_id,
-                        'target_player_id': target_id,
-                        'card': card.to_dict(),
-                        'original_choice': choice,
-                        'counter_cards': counter_cards,
-                        'is_precision': needs_precision_response and not needs_response,
-                    }
-                    return {'success': True, 'needs_response': True, 'card': card.to_dict()}
+            pending_response = self._build_pending_response_for_card(player_id, card, choice)
+            if pending_response is not None:
+                self.pending_response = pending_response
+                return {'success': True, 'needs_response': True, 'card': card.to_dict()}
             result = self._execute_card_effect(player_id, card, choice)
             self._enforce_unique_cards_for_all()
             return result

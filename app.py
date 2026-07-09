@@ -131,6 +131,7 @@ from db import (
     record_opening_event_pick_counts,
     record_opening_event_win_result,
     rebuild_card_draft_win_stats_from_matches,
+    backfill_achievements_from_matches,
     backfill_match_thorn_dew_from_matches,
     rebuild_gr_from_matches,
     rebuild_user_stats_from_matches,
@@ -203,6 +204,8 @@ REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
 PVP_MODES = ('1v1', '2v2', 'urf', 'random_deck')
 DUEL_INVITE_MODES = ('1v1', 'urf', 'random_deck')
 CHAT_CACHE_LIMIT = 1000
+LOBBY_CHAT_VISIBLE_LIMIT = 300
+ADMIN_GAME_CHAT_VISIBLE_LIMIT = 500
 
 try:
     merged = merge_mod_cards_to_card_defs()
@@ -789,12 +792,28 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
                     user_flags.append('flag_poison_30')
                 if int(getattr(ps, 'achievement_max_enemy_status_types', 0) or 0) >= 6:
                     user_flags.append('flag_enemy_6_statuses')
+                if int(getattr(ps, 'achievement_equipment_destroyed', 0) or 0) >= 7:
+                    user_flags.append('flag_equipment_destroy_7')
+                if int(getattr(ps, 'achievement_counter_successes', 0) or 0) >= 6:
+                    user_flags.append('flag_counter_6')
+                if int(getattr(ps, 'achievement_max_enemy_poison_fire_min', 0) or 0) >= 15:
+                    user_flags.append('flag_poison_fire_dual_15')
+                if int(getattr(ps, 'achievement_min_enemy_card_total', 999999) or 999999) <= 10:
+                    user_flags.append('flag_enemy_cards_10')
+                if int(getattr(ps, 'achievement_max_equipment_count', 0) or 0) >= 4:
+                    user_flags.append('flag_max_equipment_5')
                 if bool(getattr(ps, 'achievement_self_caused_death', False)):
                     user_flags.append('flag_self_caused_death')
                 if is_winner and mode == '1v1':
                     enemies = [eid for eid in range(len(engine.players)) if eid != pidx]
                     if any(int(getattr(engine.players[eid], 'health', 1) or 0) == 0 for eid in enemies):
                         user_flags.append('flag_perfect_zero_win')
+                    if (
+                        any(int(getattr(engine.players[eid], 'health', 1) or 0) <= 0 for eid in enemies)
+                        and int(getattr(ps, 'elixir', 0) or 0) == 0
+                        and int(getattr(ps, 'magic', 0) or 0) == 0
+                    ):
+                        user_flags.append('flag_1v1_zero_resources_win')
                 if is_winner and mode == '2v2' and hasattr(engine, 'teams') and hasattr(engine, 'team_of'):
                     try:
                         team = engine.teams[engine.team_of(pidx)]
@@ -1008,7 +1027,7 @@ def admin_match_record(room, result='finished'):
                         'applied': False,
                         'reason': ranking_invalid_reason or 'not_valid_for_ranking',
                     }
-                if valid_for_ranking and result == 'finished' and getattr(e, 'game_over', False):
+                if result == 'finished' and getattr(e, 'game_over', False):
                     try:
                         achievement_result = process_match_achievements(match_id, summary)
                         summary['achievement_result'] = achievement_result
@@ -2353,7 +2372,7 @@ def _lobby_chat_next_id_locked(beta_mode=False):
     return LOBBY_CHAT_SEQUENCE[key]
 
 
-def _lobby_chat_recent_locked(limit=100, beta_mode=None):
+def _lobby_chat_recent_locked(limit=LOBBY_CHAT_VISIBLE_LIMIT, beta_mode=None):
     if beta_mode is None:
         items = []
         for cache in LOBBY_CHAT_CACHE.values():
@@ -2366,7 +2385,7 @@ def _lobby_chat_recent_locked(limit=100, beta_mode=None):
     return [copy.deepcopy(item) for item in items]
 
 
-def _lobby_chat_history_payload_locked(limit=100, beta_mode=False):
+def _lobby_chat_history_payload_locked(limit=LOBBY_CHAT_VISIBLE_LIMIT, beta_mode=False):
     cache = _lobby_chat_cache_locked(beta_mode)
     return {
         'items': _lobby_chat_recent_locked(limit, beta_mode),
@@ -2477,7 +2496,7 @@ def append_lobby_chat_locked(payload, now=None, beta_mode=False):
     return True
 
 
-def lobby_chat_history_payloads_locked(limit=100, beta_mode=None):
+def lobby_chat_history_payloads_locked(limit=LOBBY_CHAT_VISIBLE_LIMIT, beta_mode=None):
     histories = {}
     payloads = []
     for sid, player in players.items():
@@ -2568,7 +2587,7 @@ def append_admin_game_chat_locked(payload, now=None, scope='global', room_id=Non
     return True
 
 
-def admin_game_chat_recent_locked(limit=300):
+def admin_game_chat_recent_locked(limit=ADMIN_GAME_CHAT_VISIBLE_LIMIT):
     items = list(ADMIN_GAME_CHAT_CACHE)
     if limit and limit > 0:
         items = items[-limit:]
@@ -2594,7 +2613,7 @@ def _room_chat_visible_player_ids(room, recipients):
 
 def append_room_chat_locked(room, payload, now=None, recipients=None, spectator_visible=False, pregame=False):
     if room is None:
-        return False
+        return None
     now = time.time() if now is None else float(now)
     if not hasattr(room, 'chat_history') or room.chat_history is None:
         room.chat_history = deque(maxlen=CHAT_CACHE_LIMIT)
@@ -2624,10 +2643,23 @@ def append_room_chat_locked(room, payload, now=None, recipients=None, spectator_
         last_chat['repeat_count'] = int(last_chat.get('repeat_count') or 1) + 1
         last_chat['time'] = chat_payload['time']
         last_chat['ts'] = now
-        return False
+        return last_chat.get('id')
     chat_payload['id'] = _room_chat_next_id_locked(room)
     room.chat_history.append(chat_payload)
-    return True
+    return chat_payload.get('id')
+
+
+def update_room_chat_message_id_locked(room, local_chat_id, message_id):
+    if room is None or local_chat_id is None or not message_id:
+        return False
+    for entry in reversed(list(getattr(room, 'chat_history', []) or [])):
+        if not isinstance(entry, dict):
+            continue
+        if entry.get('id') == local_chat_id:
+            entry['message_id'] = message_id
+            entry['messageId'] = message_id
+            return True
+    return False
 
 
 def room_chat_history_for_sid(room, sid=None, spectator=False, limit=CHAT_CACHE_LIMIT):
@@ -6461,12 +6493,13 @@ ADMIN_COMMAND_TREE = {
     },
     'storage': {
         'summary': '数据、统计与回放',
-        'usage': 'storage <summary|draftstats|rebuildstats|dewbackfill> ...',
+        'usage': 'storage <summary|draftstats|rebuildstats|dewbackfill|achievementbackfill> ...',
         'children': {
             'summary': {'summary': '查看数据库、回放和快照占用', 'usage': 'storage summary'},
             'draftstats': {'summary': '查看卡牌选牌抽取率统计', 'usage': 'storage draftstats [1v1|2v2]'},
             'rebuildstats': {'summary': '按永久 matches 摘要重算账号战绩和总对局时长', 'usage': 'storage rebuildstats confirm'},
             'dewbackfill': {'summary': '按历史 matches 摘要补发旧对局荆露', 'usage': 'storage dewbackfill <preview|confirm>'},
+            'achievementbackfill': {'summary': '按历史 matches 摘要补发可重算成就', 'usage': 'storage achievementbackfill <preview|confirm>'},
         },
     },
     'report': {
@@ -6516,6 +6549,9 @@ ADMIN_LEGACY_COMMANDS = {
     'rebuildstats': 'storage rebuildstats',
     'dewbackfill': 'storage dewbackfill',
     'backfilldew': 'storage dewbackfill',
+    'achievementbackfill': 'storage achievementbackfill',
+    'backfillachievements': 'storage achievementbackfill',
+    'achievementsbackfill': 'storage achievementbackfill',
     'broadcast': 'chat broadcast',
     'kick': 'player kick',
     'afkcheck': 'player afkcheck',
@@ -6666,6 +6702,7 @@ def _translate_structured_admin_command(parts):
         ('storage', 'draftstats'): ['draftstats', *rest],
         ('storage', 'rebuildstats'): ['rebuildstats', *rest],
         ('storage', 'dewbackfill'): ['dewbackfill', *rest],
+        ('storage', 'achievementbackfill'): ['achievementbackfill', *rest],
         ('report', 'suspicious'): ['suspicious', *rest],
         ('diagnose', 'server'): ['diagnose-server'],
         ('diagnose', 'room'): ['diagnose-room', *rest],
@@ -7077,6 +7114,33 @@ def admin_dew_backfill_output(result):
     return '\n'.join(lines)
 
 
+def admin_achievement_backfill_output(result):
+    dry_run = bool(result.get('dry_run'))
+    lines = [
+        '成就历史补发预览' if dry_run else '成就历史补发已完成',
+        f"扫描对局：{result.get('matches_seen', 0)}",
+        f"含成就标记的对局：{result.get('matches_with_flags', 0)}",
+        f"可补发的一次性成就事件：{result.get('flag_events_seen', 0)}",
+        f"已解锁成就：{result.get('unlocked', 0)}",
+        f"跳过无成就标记对局：{result.get('skipped_no_flags', 0)}",
+        f"跳过累计型隐藏成就事件：{result.get('incremental_flags_skipped', 0)}",
+        f"错误：{result.get('skipped_errors', 0)}",
+    ]
+    examples = result.get('examples') or []
+    if examples:
+        lines.append('')
+        lines.append('示例：')
+        for item in examples[:8]:
+            if item.get('unlocked'):
+                lines.append(f"  match#{item.get('match_id')}: {', '.join(str(v) for v in item.get('unlocked') or [])}")
+            else:
+                lines.append(f"  match#{item.get('match_id')}: {item.get('events', 0)} 个可补事件")
+    if dry_run:
+        lines.append('')
+        lines.append('确认补发请输入：/storage achievementbackfill confirm')
+    return '\n'.join(lines)
+
+
 def _short_hash(value, length=12):
     text = str(value or '')
     return text[:length] if text else '-'
@@ -7466,7 +7530,7 @@ def send_system_broadcast(message):
         append_lobby_chat_locked(payload, now, beta_mode=False)
         append_lobby_chat_locked(payload, now, beta_mode=True)
         append_admin_game_chat_locked(payload, now, scope='system')
-        lobby_history_payloads = lobby_chat_history_payloads_locked(100)
+        lobby_history_payloads = lobby_chat_history_payloads_locked(LOBBY_CHAT_VISIBLE_LIMIT)
         recipients = [(sid, p.get('status')) for sid, p in players.items()]
     if DB_AVAILABLE:
         for beta_mode in (False, True):
@@ -7845,6 +7909,29 @@ def execute_admin_command(line):
                 admin_event('error', f'thorn dew backfill failed: {exc}')
                 return {'success': False, 'output': f'荆露补发失败：{exc}'}
         return {'success': False, 'output': command_error(raw, len(parts[0]) + 1, 'storage dewbackfill <preview|confirm>')}
+    if cmd in ('achievementbackfill', 'backfillachievements', 'achievementsbackfill', '补发成就'):
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        sub = parts[1].lower() if len(parts) > 1 else 'preview'
+        if sub in ('preview', 'dryrun', 'dry-run', '试算', '预览'):
+            try:
+                result = backfill_achievements_from_matches(dry_run=True)
+                return {'success': True, 'output': admin_achievement_backfill_output(result)}
+            except Exception as exc:
+                admin_event('error', f'achievement backfill preview failed: {exc}')
+                return {'success': False, 'output': f'成就补发预览失败：{exc}'}
+        if sub in ('confirm', '确认'):
+            try:
+                result = backfill_achievements_from_matches(dry_run=False)
+                admin_event(
+                    'admin',
+                    f"achievement backfill confirmed matches={result.get('matches_with_flags', 0)} unlocked={result.get('unlocked', 0)}"
+                )
+                return {'success': True, 'output': admin_achievement_backfill_output(result)}
+            except Exception as exc:
+                admin_event('error', f'achievement backfill failed: {exc}')
+                return {'success': False, 'output': f'成就补发失败：{exc}'}
+        return {'success': False, 'output': command_error(raw, len(parts[0]) + 1, 'storage achievementbackfill <preview|confirm>')}
     if cmd == 'broadcast':
         msg = raw[len(parts[0]):].strip()
         if not msg:
@@ -8559,7 +8646,7 @@ def _build_lobby_update_payloads_locked():
                 'ongoing_games': get_ongoing_games(beta_mode),
                 'teams': team_list_for_scope(beta_mode),
                 'mode_counts': mode_counts_for_scope(beta_mode),
-                'chat_history': _lobby_chat_history_payload_locked(100, beta_mode),
+                'chat_history': _lobby_chat_history_payload_locked(LOBBY_CHAT_VISIBLE_LIMIT, beta_mode),
             }
         return scope_payload_cache[key]
 
@@ -12212,9 +12299,9 @@ def admin_broadcast():
 def admin_game_chat():
     started = time.perf_counter()
     try:
-        limit = max(1, min(int(request.args.get('limit', 50)), 100))
+        limit = max(1, min(int(request.args.get('limit', ADMIN_GAME_CHAT_VISIBLE_LIMIT)), ADMIN_GAME_CHAT_VISIBLE_LIMIT))
     except (TypeError, ValueError):
-        limit = 50
+        limit = ADMIN_GAME_CHAT_VISIBLE_LIMIT
     with _lock:
         items = admin_game_chat_recent_locked(limit)
         total_cached = len(ADMIN_GAME_CHAT_CACHE)
@@ -12239,7 +12326,7 @@ def admin_game_chat_send():
         append_lobby_chat_locked(payload, now, beta_mode=False)
         append_lobby_chat_locked(payload, now, beta_mode=True)
         append_admin_game_chat_locked(payload, now, scope='console')
-        lobby_history_payloads = lobby_chat_history_payloads_locked(100)
+        lobby_history_payloads = lobby_chat_history_payloads_locked(LOBBY_CHAT_VISIBLE_LIMIT)
         recipients = [(sid, p.get('status')) for sid, p in players.items()]
     if DB_AVAILABLE:
         for beta_mode in (False, True):
@@ -13829,6 +13916,7 @@ def on_chat(data):
     security_severity = 'medium'
     room_scope = None
     room_scope_id = None
+    room_chat_local_id = None
 
     if not _lock.acquire(timeout=0.2):
         admin_event('warning', 'chat route skipped: global lock busy')
@@ -13878,7 +13966,7 @@ def on_chat(data):
                 room_scope = 'room'
                 room_scope_id = room.room_id
                 append_admin_game_chat_locked(chat_data, now, scope='room', room_id=room.room_id)
-                append_room_chat_locked(
+                room_chat_local_id = append_room_chat_locked(
                     room,
                     chat_data,
                     now,
@@ -13901,7 +13989,7 @@ def on_chat(data):
                 room_scope = 'spectate'
                 room_scope_id = room.room_id
                 append_admin_game_chat_locked(chat_data, now, scope='spectate', room_id=room.room_id)
-                append_room_chat_locked(
+                room_chat_local_id = append_room_chat_locked(
                     room,
                     chat_data,
                     now,
@@ -13939,7 +14027,7 @@ def on_chat(data):
                     record_channel = 'public'
                     append_lobby_chat_locked(chat_data, now, beta_mode=beta_mode)
                     append_admin_game_chat_locked(chat_data, now, scope='lobby')
-                    lobby_payloads = lobby_chat_history_payloads_locked(100, beta_mode=beta_mode)
+                    lobby_payloads = lobby_chat_history_payloads_locked(LOBBY_CHAT_VISIBLE_LIMIT, beta_mode=beta_mode)
     finally:
         _lock.release()
 
@@ -13967,6 +14055,15 @@ def on_chat(data):
             admin_event('error', f'failed to record chat message: {exc}')
     if chat_message_id:
         chat_data['message_id'] = chat_message_id
+        if room_scope in ('room', 'spectate') and room_scope_id is not None and room_chat_local_id is not None:
+            if _lock.acquire(timeout=0.2):
+                try:
+                    cached_room = rooms.get(room_scope_id)
+                    update_room_chat_message_id_locked(cached_room, room_chat_local_id, chat_message_id)
+                finally:
+                    _lock.release()
+            else:
+                admin_event('warning', f'chat message id cache update skipped: lock busy room={room_scope_id}')
 
     if lobby_payloads is not None:
         emit_lobby_chat_history_payloads(lobby_payloads)

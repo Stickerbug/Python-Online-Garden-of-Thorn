@@ -87,6 +87,12 @@ ACHIEVEMENT_DEFS = [
     {'id': 'heal_100', 'type': 'battle', 'name_cn': '重生', 'name_en': 'Rebirth', 'description_cn': '在一局中累计回复100点或更多H。', 'description_en': 'Heal 100 or more H in one match.', 'target': 1, 'metric': 'flag_heal_100', 'reward_dew': 400},
     {'id': 'same_name_streak_5', 'type': 'battle', 'name_cn': '重影', 'name_en': 'Afterimage', 'description_cn': '连续打出5张除轻以外的同名卡牌。', 'description_en': 'Play 5 cards with the same name in a row, excluding Light.', 'target': 1, 'metric': 'flag_same_name_streak_5', 'reward_dew': 500},
     {'id': 'perfect_zero_win_5', 'series': 'perfect_zero', 'type': 'battle', 'name_cn': '完美击杀', 'name_en': 'Perfect Kill', 'description_cn': '1v1中，使敌方H正好等于0获胜5次。', 'description_en': 'In 1v1, win with the enemy H exactly 0 five times.', 'target': 5, 'metric': 'flag_perfect_zero_win', 'reward_dew': 800},
+    {'id': 'scrap_destroyer', 'type': 'battle', 'name_cn': '破铜烂铁', 'name_en': 'Scrap Breaker', 'description_cn': '1局内摧毁7个或更多装备。', 'description_en': 'Destroy 7 or more equipment in one match.', 'target': 1, 'metric': 'flag_equipment_destroy_7', 'reward_dew': 550},
+    {'id': 'early_prevention', 'type': 'battle', 'name_cn': '防微杜渐', 'name_en': 'Early Prevention', 'description_cn': '一局内反制6次或更多。', 'description_en': 'Counter 6 or more times in one match.', 'target': 1, 'metric': 'flag_counter_6', 'reward_dew': 800},
+    {'id': 'poison_fire_dual', 'type': 'battle', 'name_cn': '毒火双修', 'name_en': 'Poison and Fire', 'description_cn': '使一名敌方玩家同时拥有至少15层中毒和15层灼烧。', 'description_en': 'Make an enemy have at least 15 Poison and 15 Fire at the same time.', 'target': 1, 'metric': 'flag_poison_fire_dual_15', 'reward_dew': 750},
+    {'id': 'barren_field', 'type': 'battle', 'name_cn': '寸草不生', 'name_en': 'Barren Field', 'description_cn': '使一名敌方玩家的手牌、抽牌堆、弃牌堆合计为10张或更少。', 'description_en': 'Make an enemy have 10 or fewer cards total in hand, deck, and discard.', 'target': 1, 'metric': 'flag_enemy_cards_10', 'reward_dew': 650},
+    {'id': 'deep_roots', 'type': 'hidden', 'hidden': True, 'name_cn': '根系发达', 'name_en': 'Deep Roots', 'description_cn': '同时装备4个或更多装备。', 'description_en': 'Have 4 or more equipment at the same time.', 'target': 1, 'metric': 'flag_max_equipment_5', 'reward_dew': 500},
+    {'id': 'calculated_finish', 'type': 'hidden', 'hidden': True, 'name_cn': '精打细算', 'name_en': 'Calculated Finish', 'description_cn': '1v1中，对手死亡时自己的E和M均为0。', 'description_en': 'In 1v1, win while your E and M are both 0 when the opponent dies.', 'target': 1, 'metric': 'flag_1v1_zero_resources_win', 'reward_dew': 750},
     {'id': 'enemy_6_statuses', 'type': 'hidden', 'hidden': True, 'name_cn': '狂乱的鸡尾酒', 'name_en': 'Mad Cocktail', 'description_cn': '使一名敌方玩家同时拥有6个或更多不同状态。', 'description_en': 'Make an enemy have 6 or more different statuses at once.', 'target': 1, 'metric': 'flag_enemy_6_statuses', 'reward_dew': 700},
 ]
 ACHIEVEMENT_DEF_MAP = {item['id']: item for item in ACHIEVEMENT_DEFS}
@@ -584,6 +590,18 @@ def init_db():
             '''
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_user_achievements_unlocked ON user_achievements(user_id, unlocked, unlocked_at DESC)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS achievement_match_events (
+                match_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                achievement_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(match_id, user_id, achievement_id)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_achievement_match_events_user ON achievement_match_events(user_id, achievement_id)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS remember_tokens (
@@ -1968,9 +1986,31 @@ def _update_achievement_progress_conn(conn, user_id, defn, value, now):
     return None
 
 
-def process_match_achievements(match_id, summary):
-    if not summary or not summary.get('valid_for_ranking', True):
-        return {'unlocked': [], 'skipped': 'not_valid'}
+def _record_achievement_match_event_conn(conn, match_id, user_id, achievement_id, now=None):
+    try:
+        mid = int(match_id)
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return True
+    aid = str(achievement_id or '')
+    if not aid:
+        return True
+    try:
+        conn.execute(
+            '''
+            INSERT INTO achievement_match_events (match_id, user_id, achievement_id, created_at)
+            VALUES (?, ?, ?, ?)
+            ''',
+            (mid, uid, aid, now or utc_now()),
+        )
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+
+def process_match_achievements(match_id, summary, allow_incremental_flags=True):
+    if not summary:
+        return {'unlocked': [], 'skipped': 'no_summary'}
     player_ids = []
     for uid in summary.get('player_ids') or []:
         if uid is None:
@@ -2027,6 +2067,10 @@ def process_match_achievements(match_id, summary):
                     if defn.get('metric') == str(flag):
                         target = int(defn.get('target') or 1)
                         if target > 1:
+                            if not allow_incremental_flags:
+                                continue
+                            if not _record_achievement_match_event_conn(conn, match_id, uid, defn['id'], now):
+                                continue
                             row = conn.execute(
                                 'SELECT progress FROM user_achievements WHERE user_id = ? AND achievement_id = ?',
                                 (uid, defn['id']),
@@ -2039,6 +2083,75 @@ def process_match_achievements(match_id, summary):
                             unlocked.append({'user_id': uid, **result})
         conn.commit()
     return {'unlocked': unlocked, 'skipped': None}
+
+
+def backfill_achievements_from_matches(dry_run=True, limit=None):
+    result = {
+        'dry_run': bool(dry_run),
+        'matches_seen': 0,
+        'matches_with_flags': 0,
+        'flag_events_seen': 0,
+        'unlocked': 0,
+        'skipped_no_flags': 0,
+        'skipped_errors': 0,
+        'incremental_flags_skipped': 0,
+        'examples': [],
+    }
+    query = 'SELECT id, summary_json FROM matches ORDER BY id ASC'
+    params = ()
+    if limit is not None:
+        try:
+            safe_limit = max(1, min(10000, int(limit)))
+            query += ' LIMIT ?'
+            params = (safe_limit,)
+        except (TypeError, ValueError):
+            pass
+    with get_db_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+        for row in rows:
+            result['matches_seen'] += 1
+            match_id = int(row['id'])
+            summary = _safe_json_loads(row['summary_json'], {})
+            flags_by_user = summary.get('achievement_flags_by_user') or {}
+            if not isinstance(flags_by_user, dict) or not flags_by_user:
+                result['skipped_no_flags'] += 1
+                continue
+            result['matches_with_flags'] += 1
+            one_shot_events = 0
+            incremental_events = 0
+            for _uid_key, flags in flags_by_user.items():
+                if isinstance(flags, dict):
+                    flags = [key for key, value in flags.items() if value]
+                if not isinstance(flags, (list, tuple, set)):
+                    continue
+                for flag in flags:
+                    for defn in ACHIEVEMENT_DEFS:
+                        if defn.get('metric') != str(flag):
+                            continue
+                        if int(defn.get('target') or 1) > 1:
+                            incremental_events += 1
+                        else:
+                            one_shot_events += 1
+            result['flag_events_seen'] += one_shot_events
+            result['incremental_flags_skipped'] += incremental_events
+            if one_shot_events <= 0:
+                continue
+            if dry_run:
+                if len(result['examples']) < 8:
+                    result['examples'].append({'match_id': match_id, 'events': one_shot_events})
+                continue
+            try:
+                processed = process_match_achievements(match_id, summary, allow_incremental_flags=False)
+                unlocked = processed.get('unlocked') or []
+                result['unlocked'] += len(unlocked)
+                if unlocked and len(result['examples']) < 8:
+                    result['examples'].append({
+                        'match_id': match_id,
+                        'unlocked': [item.get('id') or item.get('achievement_id') for item in unlocked],
+                    })
+            except Exception:
+                result['skipped_errors'] += 1
+    return result
 
 
 def _soft_reset_gr(value):
