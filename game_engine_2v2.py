@@ -310,10 +310,7 @@ class GameEngine2v2(GameEngine):
             ps.base_max_health = BASE_MAX_HEALTH
             ps.elixir = INITIAL_ELIXIR
             ps.magic = INITIAL_MAGIC
-            ps.achievement_min_health = ps.health
-            ps.achievement_invincible_triggered = False
-            ps.achievement_played_thorn = False
-            ps.achievement_yggdrasil_revived = False
+            self._reset_achievement_match_stats(i)
         for pid in range(4):
             self._enforce_unique_cards_for_player(pid)
         self._enforce_team_unique_cards()
@@ -326,8 +323,8 @@ class GameEngine2v2(GameEngine):
                 ps.elixir = FIRST_PLAYER_ELIXIR
                 hand_size = FIRST_PLAYER_HAND_SIZE
                 if i in self._first_pressure_effective_players:
-                    hand_size = 4
-                    ps.elixir += 3
+                    hand_size = 5
+                    ps.elixir = 7
                 if self.opening_event_picks[i] == 5:
                     hand_size = max(0, hand_size - 1)
                 ps.draw_cards(hand_size)
@@ -543,10 +540,17 @@ class GameEngine2v2(GameEngine):
 
 
 
-    def _card_can_counter(self, counter_card: CardInstance, played_card: CardInstance) -> bool:
+    def _card_can_counter(
+            self,
+            counter_card: CardInstance,
+            played_card: CardInstance,
+            responder_id: Optional[int] = None,
+            target_player_id: Optional[int] = None) -> bool:
         if self._card_blocks_response(played_card):
             return False
         played_def = played_card.card_def
+        if counter_card.card_def.response_trigger == 'targeted':
+            return responder_id is not None and target_player_id is not None and int(responder_id) == int(target_player_id)
         if counter_card.card_def.response_trigger == 'any':
             return True
         if played_def.card_type == 'thorn' and counter_card.card_def.response_trigger == 'thorn':
@@ -579,7 +583,7 @@ class GameEngine2v2(GameEngine):
             counter_cost_m = int(getattr(counter_card, 'cost_m', 0) or 0)
             if counter_cost_e > responder.elixir or counter_cost_m > responder.magic:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
-            if not self._card_can_counter(counter_card, card):
+            if not self._card_can_counter(counter_card, card, responder_id=responder_id, target_player_id=pending.get('target_player_id')):
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             self._spend_resource(responder_id, 'elixir', counter_cost_e, counter_card)
             self._spend_resource(responder_id, 'magic', counter_cost_m, counter_card)
@@ -604,7 +608,17 @@ class GameEngine2v2(GameEngine):
                     return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
                 if self._card_is(counter_removed, 'MagicBubble', 'vanilla:magicbubble'):
                     self.negated_card = True
-                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+                if self._card_is(counter_removed, 'Cucumber', 'ocean:cucumber'):
+                    old_untargetable = bool(getattr(responder, 'untargetable', False))
+                    responder.untargetable = False
+                    try:
+                        result = self._execute_card_effect(player_id, card, choice)
+                    finally:
+                        responder.untargetable = old_untargetable
+                    self._apply_cucumber_counter_after_response(responder_id)
+                else:
+                    result = self._execute_card_effect(player_id, card, choice)
+                return self._after_response_result(player_id, result)
             finally:
                 self._game_over_defer_depth -= 1
                 self._check_game_over()
@@ -776,6 +790,7 @@ class GameEngine2v2(GameEngine):
         self._start_player_turn(self.turn_order[0])
 
     def _start_player_turn(self, player_id: int):
+        self._reset_achievement_turn_stats(player_id)
         self.current_player = player_id
         self._refresh_hand_limit_bonuses()
         ps = self.players[player_id]
@@ -879,7 +894,7 @@ class GameEngine2v2(GameEngine):
         has_payable_counter = False
         for responder_id in responder_ids:
             for c in self.players[responder_id].hand:
-                if self._card_can_counter(c, card):
+                if self._card_can_counter(c, card, responder_id=responder_id, target_player_id=target_id):
                     if self._can_pay_counter_card(responder_id, c):
                         has_payable_counter = True
                     counter_cards.append({
@@ -1033,7 +1048,7 @@ class GameEngine2v2(GameEngine):
                 responder_ids = list(dict.fromkeys([*responder_ids, *equipment_destroy_responders]))
                 for responder_id in responder_ids:
                     for c in self.players[responder_id].hand:
-                        if self._card_can_counter(c, card):
+                        if self._card_can_counter(c, card, responder_id=responder_id, target_player_id=target_id):
                             if self._can_pay_counter_card(responder_id, c):
                                 has_payable_counter = True
                             counter_cards.append({
@@ -1116,9 +1131,10 @@ class GameEngine2v2(GameEngine):
         actual = self._apply_universal_damage_shields(player_id, actual, source_id, source, resolved_damage_type)
         if actual <= 0:
             return 0
+        old_health = ps.health
         ps.health -= actual
         self._record_damage(player_id, actual, source_id)
-        self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={ps.health}）")
+        self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={old_health}→{ps.health}）")
         self._run_v2_after_damage_hooks(damage_context, actual)
         if not getattr(self, '_defer_turn_start_death_checks', False):
             self._check_yggdrasil(player_id)
@@ -1348,13 +1364,17 @@ class GameEngine2v2(GameEngine):
             return
         self._defer_turn_start_death_checks = True
         forced_turn_skip = bool(getattr(ps, 'forced_skip_turn', 0))
-        turn_will_be_skipped = forced_turn_skip or (bool(ps.skip_turn) and not self._is_status_immune(player_id))
-        turn_skip_reason = 'forced' if forced_turn_skip else ('stunned' if turn_will_be_skipped else '')
+        ocean_action_skip = int(ps.custom_vars.get('ocean_action_skip_turns', 0) or 0)
+        turn_will_be_skipped = forced_turn_skip or ocean_action_skip > 0 or (bool(ps.skip_turn) and not self._is_status_immune(player_id))
+        turn_skip_reason = 'forced' if forced_turn_skip else ('ocean_action' if ocean_action_skip > 0 else ('stunned' if turn_will_be_skipped else ''))
         if forced_turn_skip:
             ps.forced_skip_turn = max(0, int(getattr(ps, 'forced_skip_turn', 0)) - 1)
+        if ocean_action_skip > 0:
+            ps.custom_vars['ocean_action_skip_turns'] = ocean_action_skip - 1
         if not forced_turn_skip and ps.skip_turn > 0:
             ps.skip_turn = max(0, int(ps.skip_turn) - 1)
-        if self.round_num > 1:
+        skip_draw_recovery = turn_skip_reason == 'ocean_action'
+        if self.round_num > 1 and not skip_draw_recovery:
             sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
             draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - sluggish_reduction)
             if ps.enemy_draw_reduction > 0:
@@ -1440,9 +1460,12 @@ class GameEngine2v2(GameEngine):
                 if self._equipment_turn_start_key(eq) in early_owner_turn_start_equipment:
                     continue
                 handled = False
+                if self._has_card_event(eq.card_def, 'target_turn_start'):
+                    handled = self._run_card_event(owner_id, eq.card_instance, 'target_turn_start', None,
+                                                   {'source_id': owner_id, 'target_id': player_id})
                 if self._has_card_event(eq.card_def, 'owner_turn_start'):
                     handled = self._run_card_event(owner_id, eq.card_instance, 'owner_turn_start', None,
-                                                   {'source_id': owner_id, 'target_id': player_id})
+                                                   {'source_id': owner_id, 'target_id': player_id}) or handled
                 if handled or eq.card_def.effects:
                     continue
                 if eq.corruption_active:
@@ -1574,9 +1597,12 @@ class GameEngine2v2(GameEngine):
                 if self._equipment_turn_start_key(eq) in early_owner_turn_start_equipment:
                     continue
                 handled = False
+                if self._has_card_event(eq.card_def, 'target_turn_start'):
+                    handled = self._run_card_event(owner_id, eq.card_instance, 'target_turn_start', None,
+                                                   {'source_id': owner_id, 'target_id': player_id})
                 if self._has_card_event(eq.card_def, 'owner_turn_start'):
                     handled = self._run_card_event(owner_id, eq.card_instance, 'owner_turn_start', None,
-                                                   {'source_id': owner_id, 'target_id': player_id})
+                                                   {'source_id': owner_id, 'target_id': player_id}) or handled
                 if handled or eq.card_def.effects:
                     continue
                 if eq.corruption_active:
@@ -1673,14 +1699,12 @@ class GameEngine2v2(GameEngine):
             dmg = self._apply_damage_dealt_equipment_multiplier(dmg, attacker_id)
             if plank_blocks_attack:
                 dmg = 0
-            if dmg > 0 and ps.nazar_active and not immune:
+            nazar_stacks = 0 if immune else self._nazar_status_value(target_id)
+            if dmg > 0 and nazar_stacks > 0:
                 original_dmg = dmg
                 dmg = max(1, dmg - 9)
                 if original_dmg >= 10:
-                    ps.nazar_big_hits += 1
-                    if ps.nazar_big_hits >= 2:
-                        ps.nazar_active = False
-                        ps.nazar_big_hits = 0
+                    self._set_nazar_status_value(target_id, nazar_stacks - 1)
             damage_context = self._v2_damage_context(
                 target_id,
                 dmg,
@@ -1749,7 +1773,13 @@ class GameEngine2v2(GameEngine):
                             eq.card_instance,
                             'damage_taken',
                             None,
-                            {'source_id': attacker_id, 'target_id': target_id, 'damage': dmg},
+                            {
+                                'source_id': attacker_id,
+                                'target_id': target_id,
+                                'damage': dmg,
+                                'selected_equipment_instance_id': eq.card_instance.instance_id,
+                                'selected_equipment_owner_id': owner_id,
+                            },
                         ):
                             continue
                         if eq.def_id == 'Battery' and attacker_id >= 0:
@@ -1762,10 +1792,12 @@ class GameEngine2v2(GameEngine):
                                 self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
                             else:
                                 self.log_msg(f"{self.pn(target_id)}的电池触发，但{self.pn(attacker_id)}未受到电伤")
-                        elif eq.def_id == 'MagicBattery' and ps.magic_battery_m_this_turn < 3:
-                            ps.gain_magic(1)
-                            ps.magic_battery_m_this_turn += 1
-                            self.log_msg(f"{self.pn(target_id)}的魔法电池效果：+1M")
+                        elif eq.def_id == 'MagicBattery':
+                            owner_state = self.players[owner_id]
+                            if owner_state.magic_battery_m_this_turn < 3:
+                                owner_state.gain_magic(1)
+                                owner_state.magic_battery_m_this_turn += 1
+                                self.log_msg(f"{self.pn(owner_id)}的魔法电池效果：+1M")
             finally:
                 self._game_over_defer_depth -= 1
             if ps.health <= 0:

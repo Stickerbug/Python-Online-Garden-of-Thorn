@@ -13,6 +13,8 @@ REPLAY_VERSION = 1
 DEFAULT_RETENTION_DAYS = int(os.environ.get('GTN_REPLAY_RETENTION_DAYS', '90') or 90)
 CLEANUP_HOUR = int(os.environ.get('GTN_CLEANUP_HOUR', '4') or 4)
 CLEANUP_MINUTE = int(os.environ.get('GTN_CLEANUP_MINUTE', '30') or 30)
+MAX_REPLAY_COMPRESSED_BYTES = int(os.environ.get('GTN_REPLAY_MAX_COMPRESSED_BYTES', '1800000') or 1800000)
+MAX_REPLAY_STORED_ACTIONS = int(os.environ.get('GTN_REPLAY_MAX_STORED_ACTIONS', '900') or 900)
 REPLAY_ITEM_COLUMNS = '''
     id, match_id, created_at, mode, player_names_json, winner_name, winner_index,
     round_num, duration_ms, replay_version, replay_sha256, replay_size,
@@ -42,6 +44,83 @@ _OPENING_EVENT_NAMES_CN = {
 
 def _json_bytes(data):
     return json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+
+
+def _compact_replay_state(state):
+    if not isinstance(state, dict):
+        return {}
+    return {
+        'compact': True,
+        'mode': state.get('mode') or '',
+        'phase': state.get('phase') or '',
+        'round_num': state.get('round_num') or state.get('round') or 0,
+        'current_player': state.get('current_player'),
+        'game_over': bool(state.get('game_over')),
+        'winner': state.get('winner'),
+        'winning_team': state.get('winning_team'),
+        'player_names': state.get('player_names') or [],
+    }
+
+
+def _copy_replay_frame(frame, *, keep_state=True, compact_state=False):
+    if not isinstance(frame, dict):
+        return frame
+    copied = dict(frame)
+    state = copied.get('state')
+    if keep_state:
+        if compact_state:
+            copied['state'] = _compact_replay_state(state)
+    else:
+        copied.pop('state', None)
+    return copied
+
+
+def _encode_replay_for_storage(replay):
+    replay = dict(replay or {})
+    replay.setdefault('meta', {})
+    keyframes = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
+    actions = replay.get('actions') if isinstance(replay.get('actions'), list) else []
+
+    def encoded(candidate):
+        raw = _json_bytes(candidate)
+        return raw, zlib.compress(raw, level=6)
+
+    raw, compressed = encoded(replay)
+    if len(compressed) <= MAX_REPLAY_COMPRESSED_BYTES:
+        return raw, compressed, False
+
+    replay['meta'] = dict(replay.get('meta') or {})
+    replay['meta']['truncated'] = True
+    replay['meta']['truncated_reason'] = 'replay_size_limit'
+
+    # Keep exact keyframes, but compact most action states. This preserves the
+    # playable outline of long replays without letting a single long match hold
+    # hundreds of full public-state snapshots in SQLite.
+    compacted_actions = []
+    for index, action in enumerate(actions):
+        keep_state = index < 80 or index == len(actions) - 1 or index % 12 == 0
+        compact_state = keep_state and index >= 80
+        compacted_actions.append(_copy_replay_frame(action, keep_state=keep_state, compact_state=compact_state))
+    replay['actions'] = compacted_actions
+    raw, compressed = encoded(replay)
+    if len(compressed) <= MAX_REPLAY_COMPRESSED_BYTES:
+        return raw, compressed, True
+
+    # If the action list itself is huge, retain the beginning and ending around
+    # the decisive section. The match summary remains intact in matches.
+    if len(compacted_actions) > MAX_REPLAY_STORED_ACTIONS:
+        head_count = max(120, MAX_REPLAY_STORED_ACTIONS // 3)
+        tail_count = max(120, MAX_REPLAY_STORED_ACTIONS - head_count)
+        replay['actions'] = compacted_actions[:head_count] + compacted_actions[-tail_count:]
+        replay['meta']['actions_truncated_from'] = len(compacted_actions)
+        raw, compressed = encoded(replay)
+    if len(compressed) <= MAX_REPLAY_COMPRESSED_BYTES:
+        return raw, compressed, True
+
+    replay['keyframes'] = [_copy_replay_frame(frame, keep_state=True, compact_state=True) for frame in keyframes[:20]]
+    replay['actions'] = [_copy_replay_frame(action, keep_state=False) for action in replay.get('actions', [])]
+    raw, compressed = encoded(replay)
+    return raw, compressed, True
 
 
 def _sha256_bytes(data):
@@ -233,9 +312,10 @@ def save_replay_snapshot(match_id, summary, *, card_defs=None, game_version='', 
         'keyframes': keyframes,
         'actions': actions,
     }
-    raw = _json_bytes(replay)
-    compressed = zlib.compress(raw, level=6)
+    raw, compressed, storage_truncated = _encode_replay_for_storage(replay)
     digest = _sha256_bytes(raw)
+    if storage_truncated:
+        replay = json.loads(raw.decode('utf-8'))
     created_at = data.get('ended_at') or utc_now()
     with get_db_connection() as conn:
         card_hash = _store_card_snapshot(conn, card_defs, game_version=game_version, git_sha=git_sha)
@@ -808,19 +888,26 @@ def _build_timeline_from_replay(replay):
     keyframes = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
     actions = replay.get('actions') if isinstance(replay.get('actions'), list) else []
     timeline = [_build_setup_summary_frame(keyframes, actions)]
+    last_state = timeline[0].get('state') or {}
     for index, frame in enumerate(keyframes):
         if isinstance(frame, dict) and not _is_replay_setup_noise_frame(frame):
+            state = _merge_replay_frame_state(last_state, frame.get('state'))
+            if state:
+                last_state = state
             timeline.append({
                 'i': len(timeline),
                 't': int(frame.get('t') or 0),
                 'phase': frame.get('phase') or 'summary',
                 'round': frame.get('round') or 0,
                 'current_player': frame.get('current_player'),
-                'state': frame.get('state') or {},
+                'state': state,
                 'log': [],
             })
     for action in actions:
         if isinstance(action, dict) and not _is_replay_setup_noise_action(action):
+            state = _merge_replay_frame_state(last_state, action.get('state'))
+            if state:
+                last_state = state
             timeline.append({
                 'i': len(timeline),
                 't': int(action.get('t') or 0),
@@ -828,13 +915,23 @@ def _build_timeline_from_replay(replay):
                 'round': action.get('round') or 0,
                 'current_player': action.get('current_player'),
                 'action': action,
-                'state': action.get('state') or {},
+                'state': state,
                 'log': [],
             })
     timeline.sort(key=lambda item: (0 if item.get('phase') == 'setup_summary' else 1, item.get('t', 0), item.get('i', 0)))
     for index, item in enumerate(timeline):
         item['i'] = index
     return timeline
+
+
+def _merge_replay_frame_state(previous_state, frame_state):
+    if not isinstance(frame_state, dict) or not frame_state:
+        return previous_state or {}
+    if frame_state.get('compact') and isinstance(previous_state, dict):
+        merged = dict(previous_state)
+        merged.update(frame_state)
+        return merged
+    return frame_state
 
 
 def _build_timeline_index(replay):
@@ -873,7 +970,7 @@ def _build_timeline_index(replay):
     return refs
 
 
-def _materialize_timeline_ref(replay, ref, display_index):
+def _materialize_timeline_ref(replay, ref, display_index, fallback_state=None):
     kind = ref.get('kind')
     if kind == 'setup':
         keyframes = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
@@ -887,7 +984,7 @@ def _materialize_timeline_ref(replay, ref, display_index):
             'phase': frame.get('phase') or 'summary',
             'round': frame.get('round') or 0,
             'current_player': frame.get('current_player'),
-            'state': frame.get('state') or {},
+            'state': frame.get('state') or fallback_state or {},
             'log': [],
         }
     else:
@@ -899,7 +996,7 @@ def _materialize_timeline_ref(replay, ref, display_index):
             'round': action.get('round') or 0,
             'current_player': action.get('current_player'),
             'action': action,
-            'state': action.get('state') or {},
+            'state': action.get('state') or fallback_state or {},
             'log': [],
         }
     item['i'] = display_index
@@ -908,10 +1005,30 @@ def _materialize_timeline_ref(replay, ref, display_index):
 
 def _materialize_timeline_slice(replay, refs, offset, limit):
     end = min(len(refs), offset + limit)
-    return [
-        _materialize_timeline_ref(replay, refs[index], index)
-        for index in range(offset, end)
-    ]
+    timeline = []
+    last_state = _build_setup_summary_frame(
+        replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else [],
+        replay.get('actions') if isinstance(replay.get('actions'), list) else [],
+    ).get('state') or {}
+    for index in range(0, end):
+        ref = refs[index]
+        if index < offset:
+            source = None
+            if ref.get('kind') == 'frame':
+                frames = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
+                source = frames[int(ref.get('source_index') or 0)] if int(ref.get('source_index') or 0) < len(frames) else None
+            elif ref.get('kind') == 'action':
+                actions = replay.get('actions') if isinstance(replay.get('actions'), list) else []
+                source = actions[int(ref.get('source_index') or 0)] if int(ref.get('source_index') or 0) < len(actions) else None
+            if isinstance(source, dict) and source.get('state'):
+                last_state = _merge_replay_frame_state(last_state, source.get('state'))
+            continue
+        item = _materialize_timeline_ref(replay, ref, index, last_state)
+        if item.get('state'):
+            last_state = _merge_replay_frame_state(last_state, item.get('state'))
+            item['state'] = last_state
+        timeline.append(item)
+    return timeline
 
 
 def _timeline_cache_store(replay_id, replay_sha, replay, **extra):

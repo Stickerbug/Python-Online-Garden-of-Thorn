@@ -17848,14 +17848,14 @@ button.armor-meter:focus-visible {
    whole canvas.  Internal touch-only sizing below makes the layout readable
    without distorting card proportions. */
 @media (hover: none) and (pointer: coarse) {
-  html[data-ui-style="classic"] #view-game {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game {
     position: fixed;
     inset: 0;
     overflow: hidden;
     background: var(--classic-stage, #f9faf6);
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) {
     position: fixed;
     left: 50%;
     top: 50%;
@@ -17875,22 +17875,22 @@ button.armor-meter:focus-visible {
       "hand hand end";
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-left-rail,
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-log-drawer {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-left-rail,
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-log-drawer {
     display: flex;
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-top-title {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-top-title {
     grid-template-columns: clamp(74px, 7vw, 112px) minmax(0, 1fr) clamp(220px, 22vw, 340px);
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-stage {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-stage {
     grid-template-columns: minmax(210px, 1fr) minmax(160px, 0.55fr) minmax(210px, 1fr);
     gap: clamp(10px, 1.4vw, 26px);
     padding: clamp(10px, 1.2vw, 20px) clamp(22px, 3vw, 58px) 0;
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden).is-2v2 .classic-stage {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden).is-2v2 .classic-stage {
     width: min(82vw, 920px);
     height: min(58vh, 390px);
     display: grid;
@@ -17901,47 +17901,47 @@ button.armor-meter:focus-visible {
     padding: 0;
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-fighter {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-fighter {
     --classic-fighter-scale: 0.91;
     gap: 7px;
     padding: 6px 8px;
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden).is-2v2 .classic-fighter {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden).is-2v2 .classic-fighter {
     --classic-fighter-scale: 0.7;
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-intent-badge,
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-fighter-piles {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-intent-badge,
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-fighter-piles {
     display: flex;
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-status-ring {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-status-ring {
     max-height: none;
     overflow: visible;
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-fan {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-fan {
     overflow: visible;
     justify-content: center;
     padding: 4px clamp(24px, 3vw, 60px) 12px;
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card {
     width: clamp(84px, min(8.1vw, 21vh), 132px);
     margin-inline: clamp(-20px, -1.45vw, -7px);
     transform: translateY(var(--fan-y, 0)) rotate(var(--fan-rot, 0));
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card:hover:not(.is-selected) .classic-fan-card-inner.card {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card:hover:not(.is-selected) .classic-fan-card-inner.card {
     transform: translateY(-48px) rotate(var(--fan-rot-inverse, 0deg)) scale(1.2);
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card.is-selected .classic-fan-card-inner.card {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-hand-card.is-selected .classic-fan-card-inner.card {
     transform: rotate(var(--fan-rot-inverse, 0deg)) scale(1);
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-command-panel {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-command-panel {
     flex-direction: column;
     align-items: stretch;
     justify-content: center;
@@ -17949,14 +17949,14 @@ button.armor-meter:focus-visible {
     padding: 8px 12px;
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-extra-controls {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-extra-controls {
     flex-wrap: wrap;
     overflow: visible;
     justify-content: center;
     max-width: none;
   }
 
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-end-turn {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) .classic-end-turn {
     width: min(210px, 92%);
     min-height: 76px;
     font-size: 16px;
@@ -17964,7 +17964,7 @@ button.armor-meter:focus-visible {
 }
 
 @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
-  html[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) {
+  html.landscape-mode-enabled[data-ui-style="classic"] #view-game .battle-classic:not(.hidden) {
     width: min(100vh, calc(100vw * 16 / 9));
     height: min(100vw, calc(100vh * 9 / 16));
     transform: translate(-50%, -50%) rotate(90deg);

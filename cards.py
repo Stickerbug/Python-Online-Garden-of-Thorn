@@ -479,11 +479,11 @@ _reg(CardDef('Bubble', 'Bubble', '泡泡', 2, 0, 'guard', 10, 'Common',
              response_trigger='thorn'))
 
 _reg(CardDef('Nazar', 'Nazar', '邪眼护符', 5, 0, 'guard', 3, 'Common',
-             '邪眼的力量似乎为你减免了大部分伤害。', '所有物理伤害减少9(最少减至1)，受到两次10点及以上物理伤害后效果消失（敌方使用攻击牌时）',
+             '邪眼的力量似乎为你减免了大部分伤害。', '获得2层邪眼  响应：被作为攻击牌目标',
              response_trigger='thorn'))
 
-_reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 0, 3, 'guard', 3, 'Common',
-             '有魔力的护符，让敌方的高耗技能化为虚无。', '响应：敌方使用技能牌；获得2层魔法邪眼。存在时，敌方使用3E及以上技能牌无效，然后减少1层',
+_reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 1, 0, 'guard', 3, 'Common',
+             '有魔力的护符，让敌方的低耗技能化为虚无。', '获得2层魔法邪眼  响应：敌方使用技能牌',
              response_trigger='bloom'))
 
 _reg(CardDef('GoldenNazar', 'Golden Nazar', '黄金邪眼', 4, 0, 'guard', 5, 'Unusual',

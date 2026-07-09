@@ -18,6 +18,7 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_hidden_features_enabled',
     'gtn_show_english_card_names',
     'gtn_show_card_images',
+    'gtn_landscape_mode',
     'gtn_audio_enabled',
     'gtn_audio_master',
     'gtn_audio_music',
@@ -1420,6 +1421,10 @@ Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card na
 Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称', settings_show_card_images: '显示卡牌图片', no_selectable_player: '没有可选中的玩家' });
 Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes', settings_show_card_images: 'Afficher les images des cartes', no_selectable_player: 'Aucun joueur ciblable' });
 Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示', settings_show_card_images: 'カード画像を表示', no_selectable_player: '選択可能なプレイヤーがいません' });
+Object.assign(I18N.en, { settings_landscape_mode: 'Enable landscape mode' });
+Object.assign(I18N.zh, { settings_landscape_mode: '开启横屏模式' });
+Object.assign(I18N.fr, { settings_landscape_mode: 'Activer le mode paysage' });
+Object.assign(I18N.ja, { settings_landscape_mode: '横画面モードを有効化' });
 Object.assign(I18N.en, { official_mods: 'Official Mods', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found', mod_beta_warning: 'In testing, not recommended' });
 Object.assign(I18N.zh, { official_mods: '官方模组', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组', mod_beta_warning: '测试中，不推荐使用' });
 Object.assign(I18N.fr, { mod_beta_warning: 'En test, déconseillé' });
@@ -2082,6 +2087,8 @@ let currentLang = normalizeLang(localStorage.getItem('gtn_lang') || 'zh');
 if (localStorage.getItem('gtn_lang') !== currentLang) localStorage.setItem('gtn_lang', currentLang);
 let showEnglishCardNames = localStorage.getItem('gtn_show_english_card_names') !== '0';
 let showCardImages = localStorage.getItem('gtn_show_card_images') !== '0';
+let landscapeModeEnabled = localStorage.getItem('gtn_landscape_mode') === '1';
+document.documentElement.classList.toggle('landscape-mode-enabled', landscapeModeEnabled);
 const UI_STYLE_MIGRATION_KEY = 'gtn_ui_style_v2_migrated';
 const HIDDEN_FEATURES_KEY = 'gtn_hidden_features_enabled';
 function hiddenFeaturesEnabled() {
@@ -3393,7 +3400,7 @@ Object.assign(LOG_TEXT.ja, { battery_counter: '\u96fb\u6c60\u53cd\u6483' });
 const LOG_FALLBACK_REPLACE = {
     en: [
         ['受到螫针影响，能量回复-1', 'is affected by Stinger: energy recovery -1'],
-        ['中毒减半为', 'Poison halves to '], ['获得邪眼护符效果', 'gains Nazar effect'], ['获得1层装备保护', 'gains 1 Equip Protect'],
+        ['中毒减半为', 'Poison halves to '], ['获得2层邪眼', 'gains 2 Nazar'], ['获得邪眼护符效果', 'gains Nazar effect'], ['获得1层装备保护', 'gains 1 Equip Protect'],
         ['获得1层闪避', 'gains 1 Dodge'], ['获得2点护甲', 'gains 2 armor'], ['获得无敌', 'gains Invincible'],
         ['无法使用攻击牌', 'cannot use attack cards'], ['仅可使用攻击牌', 'can only use attack cards'], ['无法使用卡牌', 'cannot use cards'],
         ['每回合少抽', 'draws '], ['每回合能量回复', 'energy recovery per round '], ['每回合魔力回复', 'magic recovery per round '], ['每回合抽牌数', 'draw count per round '],
@@ -3408,7 +3415,7 @@ const LOG_FALLBACK_REPLACE = {
     ],
     fr: [
         ['受到螫针影响，能量回复-1', 'subit Stinger : récupération E -1'], ['中毒减半为', 'Poison réduit à '],
-        ['获得邪眼护符效果', 'gagne Nazar'], ['获得1层装备保护', 'gagne 1 protection équipement'], ['获得1层闪避', 'gagne 1 esquive'],
+        ['获得2层邪眼', 'gagne 2 Nazar'], ['获得邪眼护符效果', 'gagne Nazar'], ['获得1层装备保护', 'gagne 1 protection équipement'], ['获得1层闪避', 'gagne 1 esquive'],
         ['获得2点护甲', 'gagne 2 armure'], ['获得无敌', 'gagne invincible'], ['无法使用攻击牌', 'ne peut pas utiliser de cartes Thorn'],
         ['仅可使用攻击牌', 'ne peut utiliser que des cartes Thorn'], ['无法使用卡牌', 'ne peut pas utiliser de cartes'],
         ['被摧毁', 'est détruit'], ['被放逐', 'est exilé'], ['因虚无被放逐', 'est exilé par Void'], ['装备保护抵消了摧毁', 'protection équipement annule la destruction'],
@@ -3418,7 +3425,7 @@ const LOG_FALLBACK_REPLACE = {
     ],
     ru: [
         ['受到螫针影响，能量回复-1', 'под действием Stinger: восстановление E -1'], ['中毒减半为', 'яд уменьшается до '],
-        ['获得邪眼护符效果', 'получает Nazar'], ['获得1层装备保护', 'получает 1 защиту экипировки'], ['获得1层闪避', 'получает 1 уклонение'],
+        ['获得2层邪眼', 'получает 2 Nazar'], ['获得邪眼护符效果', 'получает Nazar'], ['获得1层装备保护', 'получает 1 защиту экипировки'], ['获得1层闪避', 'получает 1 уклонение'],
         ['获得2点护甲', 'получает 2 брони'], ['获得无敌', 'получает неуязвимость'], ['无法使用攻击牌', 'не может использовать Thorn'],
         ['仅可使用攻击牌', 'может использовать только Thorn'], ['无法使用卡牌', 'не может использовать карты'], ['被摧毁', 'уничтожено'], ['被放逐', 'изгнано'],
         ['因虚无被放逐', 'изгнано Void'], ['装备保护抵消了摧毁', 'защита экипировки блокировала уничтожение'],
@@ -3427,7 +3434,7 @@ const LOG_FALLBACK_REPLACE = {
         ['层中毒', ' яд'], ['层灼烧', ' ожог'], ['层闪避', ' уклонение'], ['层装备保护', ' защита экипировки'], ['回合', ' раундов'], ['张牌', ' карт']
     ],
     ja: [
-        ['受到螫针影响，能量回复-1', 'Stingerの影響：E回復-1'], ['中毒减半为', '毒が半減して'], ['获得邪眼护符效果', 'Nazar効果を得る'],
+        ['受到螫针影响，能量回复-1', 'Stingerの影響：E回復-1'], ['中毒减半为', '毒が半減して'], ['获得2层邪眼', '邪眼を2層得る'], ['获得邪眼护符效果', 'Nazar効果を得る'],
         ['获得1层装备保护', '装備保護1を得る'], ['获得1层闪避', '回避1を得る'], ['获得2点护甲', '装甲2を得る'], ['获得无敌', '無敵を得る'],
         ['无法使用攻击牌', 'Thornカードを使用不可'], ['仅可使用攻击牌', 'Thornカードのみ使用可'], ['无法使用卡牌', 'カードを使用不可'],
         ['被摧毁', 'は破壊された'], ['被放逐', 'は追放された'], ['因虚无被放逐', 'はVoidで追放された'], ['装备保护抵消了摧毁', '装備保護が破壊を防いだ'],
@@ -3697,6 +3704,7 @@ let accountReplayTotalFrames = 0;
 let accountReplayLoading = false;
 let accountReplayLoadToken = 0;
 let accountReplayControlsCollapsed = false;
+let accountReplayFrameFetches = new Map();
 let replayMode = false;
 const DEFAULT_SKIN_CONFIG = Object.freeze({ primary_color: '#FFE763', eye_shape: 'oval' });
 const SKIN_EYE_SHAPES = new Set(['oval', 'rectangle', 'diamond', 'hexagon']);
@@ -4172,6 +4180,19 @@ function applyUiStyle(style) {
     updateClassicMobileCanvas();
 }
 
+function updateLandscapeModeInput() {
+    const input = $('settings-landscape-mode');
+    if (input) input.checked = !!landscapeModeEnabled;
+    document.documentElement.classList.toggle('landscape-mode-enabled', !!landscapeModeEnabled);
+}
+
+function applyLandscapeMode(value) {
+    landscapeModeEnabled = !!value;
+    localStorage.setItem('gtn_landscape_mode', landscapeModeEnabled ? '1' : '0');
+    updateLandscapeModeInput();
+    updateClassicMobileCanvas();
+}
+
 function isBattleTextInputFocused() {
     const el = document.activeElement;
     if (!el) return false;
@@ -4201,6 +4222,7 @@ function getClassicViewportSize(options = {}) {
 }
 
 function shouldUseBattleMobileCanvas() {
+    if (!landscapeModeEnabled) return false;
     if (activeViewId !== 'view-game') return false;
     if (currentUiStyle !== 'classic' && currentUiStyle !== 'minimal') return false;
     const coarse = !!(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
@@ -4464,8 +4486,11 @@ function updateStaticText() {
     if (settingsEnglishNameLabel) settingsEnglishNameLabel.textContent = UI.settings_show_english_card_names;
     const settingsCardImagesLabel = $('settings-label-show-card-images');
     if (settingsCardImagesLabel) settingsCardImagesLabel.textContent = UI.settings_show_card_images;
+    const settingsLandscapeModeLabel = $('settings-label-landscape-mode');
+    if (settingsLandscapeModeLabel) settingsLandscapeModeLabel.textContent = UI.settings_landscape_mode;
     updateEnglishNameSettingVisibility();
     updateCardImageSettingInput();
+    updateLandscapeModeInput();
     const themeSelect = $('settings-theme-select');
     if (themeSelect) {
         themeSelect.options[0].textContent = UI.settings_theme_light;
@@ -6019,8 +6044,8 @@ function getAllStatusDefs() {
         { key: 'fire', label: UI.status_fire, desc: termLib.F ? termLib.F.desc : '', color: COLORS.fire },
         { key: 'toxic', label: UI.status_toxic, desc: termLib.toxic ? termLib.toxic.desc : '', color: '#6C3483' },
         { key: 'triangle', label: UI.status_triangle || '三角形', desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
-        { key: 'nazar', label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
-        { key: 'magic_nazar', label: '魔法邪眼', desc: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', color: COLORS.magic },
+        { key: 'nazar', label: UI.status_nazar, desc: '存在时，自己所受≤9的物理伤害变为1。若受到≥10的物理伤害，则将其减少9，且层数-1。', color: COLORS.magic },
+        { key: 'magic_nazar', label: '魔法邪眼', desc: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', color: COLORS.magic },
         { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         { key: 'invincible', label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
         { key: 'dodge', label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
@@ -8661,7 +8686,7 @@ const ATTACK_DAMAGE_FALLBACKS = {
     Claw: { amount: 5, hits: 1 },
     Rice: { amount: 6, hits: 1 },
     Glass: { amount: 5, hits: 1 },
-    MagicGlass: { amount: 4, hits: 1 },
+    MagicGlass: { amount: 1, hits: 3 },
     Tomato: { amount: 8, hits: 1 },
 };
 
@@ -9018,8 +9043,10 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
     const weakness = attackerImmune ? 0 : Math.max(0, Number(attackerState && attackerState.weakness || 0));
     const plankBlocks = predictionPlayerHasEquipment(targetState, 'Plank', 'jungle:plank')
         && Number(cardDict && cardDict.cost_e || cardDef && cardDef.cost_e || 0) <= 1;
-    let nazarActive = immune ? false : !!(targetState && targetState.nazar_active);
-    let nazarBigHits = Math.max(0, Number(targetState && targetState.nazar_big_hits || 0));
+    let nazarStacks = immune ? 0 : getPredictionCustomStatusValue(targetState, 'nazar', '邪眼', 'Nazar');
+    if (!immune && targetState && targetState.nazar_active) {
+        nazarStacks += Math.max(0, 2 - Math.max(0, Number(targetState.nazar_big_hits || 0)));
+    }
     const corruptionMult = 1.5 ** countActiveCorruptionEquipment();
     const dizzyMult = 1 + 0.5 * countDizzyEquipmentForPrediction(attackerState);
     const cutterBonus = countCutterEquipmentForPrediction(attackerState);
@@ -9045,15 +9072,11 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
         if (corruptionMult > 1) dmg = Math.ceil(dmg * corruptionMult);
         if (cutterBonus > 0) dmg += cutterBonus * 2;
         if (plankBlocks) dmg = 0;
-        if (nazarActive) {
+        if (nazarStacks > 0) {
             const original = dmg;
             dmg = Math.max(1, dmg - 9);
             if (original >= 10) {
-                nazarBigHits += 1;
-                if (nazarBigHits >= 2) {
-                    nazarActive = false;
-                    nazarBigHits = 0;
-                }
+                nazarStacks = Math.max(0, nazarStacks - 1);
             }
         }
         if (weakness > 0) {
@@ -9731,7 +9754,7 @@ function getTermIntroLibrary() {
         magic_swift: { label: UI.tag_magic_swift || 'Magic Swift', desc: lt({ zh: 'M 花费减少对应层数，最低为 0M。', en: 'Reduces M cost by its value, minimum 0M.', fr: 'Réduit le coût M de sa valeur, minimum 0M.', ja: 'M コストを値だけ減らします。最低0M。' }), color: '#6C5CE7' },
         temp_swift: { label: UI.tag_temp_swift || 'Temporary Swift', desc: lt({ zh: '本次打出时 E 花费减少对应层数，打出后清除。', en: 'Reduces E cost for this play only, then clears after being played.', fr: 'Réduit le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを減らし、使用後に消えます。' }), color: '#0EA5E9' },
         temp_heavy: { label: UI.tag_temp_heavy || 'Temporary Heavy', desc: lt({ zh: '本次打出时 E 花费增加对应层数，打出后清除。', en: 'Increases E cost for this play only, then clears after being played.', fr: 'Augmente le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを増やし、使用後に消えます。' }), color: '#795548' },
-        magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: lt({ zh: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', en: 'While present, an enemy skill card that actually costs at least 3E is negated, then this loses 1 stack.', fr: 'Tant qu’il existe, une compétence ennemie coûtant réellement au moins 3E est annulée, puis perd 1 charge.', ja: '存在中、敵が実際に3E以上消費する技能カードを無効にし、その後1層減ります。' }), color: COLORS.magic },
+        magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: lt({ zh: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', en: 'While present, an enemy skill card that actually costs 1E or less is negated, then this loses 1 stack.', fr: 'Tant qu’il existe, une compétence ennemie coûtant réellement 1E ou moins est annulée, puis perd 1 charge.', ja: '存在中、敵が実際に1E以下消費する技能カードを無効にし、その後1層減ります。' }), color: COLORS.magic },
         equipment_armor: { label: lt({ zh: '装备护甲', en: 'Equipment Armor', fr: 'Armure d’équipement', ja: '装備護甲' }), desc: lt({ zh: '存在时，若装备将被摧毁，则使该装备不被摧毁，并消耗1层装备护甲。玩家回合结束时，该玩家所有装备的装备护甲-1。', en: 'If the equipment would be destroyed, prevent that destruction and consume 1 Equipment Armor. At the end of a player turn, all that player’s equipment loses 1 Equipment Armor.', fr: 'Si l’équipement devait être détruit, empêche cette destruction et consomme 1 Armure d’équipement. À la fin du tour d’un joueur, tout son équipement perd 1 Armure d’équipement.', ja: '装備が破壊される時、それを防ぎ装備護甲を1層消費します。プレイヤーのターン終了時、そのプレイヤーの全装備の装備護甲が1層減ります。' }), color: COLORS.indestructible },
         fusion_layer: { label: UI.fusion_layer || 'Fusion', desc: lt({ zh: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。打出后恢复为 1。', en: 'Amplifies attack damage. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after being played.', fr: 'Amplifie les dégâts d’attaque. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 après avoir été jouée.', ja: '攻撃ダメージを増やします。各命中は切り上げ(基礎ダメージ×聚变/裂变)。使用後に1へ戻ります。' }), color: '#8E44AD' },
         fission_layer: { label: UI.fission_layer || 'Fission', desc: lt({ zh: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。打出后恢复为 1。', en: 'Splits an attack into multiple hits. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after being played.', fr: 'Divise une attaque en plusieurs coups. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 après avoir été jouée.', ja: '攻撃を複数回命中に分けます。各命中は切り上げ(基礎ダメージ×聚变/裂变)。使用後に1へ戻ります。' }), color: '#2874A6' },
@@ -9998,8 +10021,8 @@ function getStatusIntroItem(statusInfo) {
         toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc, color: '#6C3483' },
         armor: { label: UI.status_armor || '护甲', desc: getTermIntroLibrary().A.desc, color: COLORS.armor_text },
         triangle: { label: UI.status_triangle, desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
-        nazar: { label: UI.status_nazar, desc: '受到较小 D 时回复生命；达到条件后会消耗层数。', color: COLORS.magic },
-        magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗3E及以上的技能牌无效，然后减少1层。', color: COLORS.magic },
+        nazar: { label: UI.status_nazar, desc: '存在时，自己所受≤9的物理伤害变为1。若受到≥10的物理伤害，则将其减少9，且层数-1。', color: COLORS.magic },
+        magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
         dodge: { label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
@@ -13363,19 +13386,50 @@ async function fetchAccountReplayFrames(replayId, offset, limit) {
     return data;
 }
 
+async function ensureAccountReplayFrame(index) {
+    const replayId = accountReplayData && accountReplayData.id;
+    const safeIndex = Math.max(0, Number(index) || 0);
+    if (!replayId || accountReplayTimeline[safeIndex]) return accountReplayTimeline[safeIndex] || null;
+    const chunkSize = 80;
+    const offset = Math.max(0, Math.floor(safeIndex / chunkSize) * chunkSize);
+    const key = `${replayId}:${offset}:${chunkSize}`;
+    if (!accountReplayFrameFetches.has(key)) {
+        accountReplayFrameFetches.set(key, fetchAccountReplayFrames(replayId, offset, chunkSize)
+            .catch((err) => {
+                console.warn('[replay] frame fetch failed', err);
+                throw err;
+            })
+            .finally(() => {
+                accountReplayFrameFetches.delete(key);
+            }));
+    }
+    try {
+        await accountReplayFrameFetches.get(key);
+    } catch (_) {
+        return null;
+    }
+    renderAccountReplayPlaybackBar();
+    return accountReplayTimeline[safeIndex] || null;
+}
+
 async function continueAccountReplayLoading(replayId, startOffset, token) {
     const chunkSize = 80;
     let offset = Math.max(0, Number(startOffset) || 0);
-    while (token === accountReplayLoadToken && offset < accountReplayTotalFrames) {
-        const data = await fetchAccountReplayFrames(replayId, offset, chunkSize);
-        offset = Math.max(offset + chunkSize, Number(data.offset || offset) + (Array.isArray(data.timeline) ? data.timeline.length : 0));
-        renderAccountReplayPlaybackBar();
-        if (!accountReplayTimeline[accountReplayFrameIndex]) renderAccountReplayFrame();
-        await new Promise(resolve => setTimeout(resolve, 0));
-    }
-    if (token === accountReplayLoadToken) {
-        accountReplayLoading = false;
-        renderAccountReplayPlaybackBar();
+    try {
+        while (token === accountReplayLoadToken && offset < accountReplayTotalFrames) {
+            const data = await fetchAccountReplayFrames(replayId, offset, chunkSize);
+            offset = Math.max(offset + chunkSize, Number(data.offset || offset) + (Array.isArray(data.timeline) ? data.timeline.length : 0));
+            renderAccountReplayPlaybackBar();
+            if (!accountReplayTimeline[accountReplayFrameIndex]) renderAccountReplayFrame();
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    } catch (err) {
+        console.warn('[replay] background frame loading stopped', err);
+    } finally {
+        if (token === accountReplayLoadToken) {
+            accountReplayLoading = false;
+            renderAccountReplayPlaybackBar();
+        }
     }
 }
 
@@ -13419,9 +13473,12 @@ function renderAccountReplayFrame() {
     }
 }
 
-function stepAccountReplay(delta) {
+async function stepAccountReplay(delta) {
     if (!accountReplayTimeline.length && !accountReplayTotalFrames) return;
     accountReplayFrameIndex = Math.max(0, Math.min((accountReplayTotalFrames || accountReplayTimeline.length) - 1, accountReplayFrameIndex + delta));
+    if (!accountReplayTimeline[accountReplayFrameIndex]) {
+        await ensureAccountReplayFrame(accountReplayFrameIndex);
+    }
     renderAccountReplayFrame();
 }
 
@@ -13435,25 +13492,28 @@ function switchAccountReplayPerspective() {
     renderAccountReplayFrame();
 }
 
-function playAccountReplay() {
+async function playAccountReplay() {
     stopAccountReplayPlayback();
     const totalFrames = accountReplayTotalFrames || accountReplayTimeline.length;
     if (!totalFrames || accountReplayFrameIndex >= totalFrames - 1) return;
     if (accountReplaySpeed === 'instant') {
         accountReplayFrameIndex = totalFrames - 1;
+        if (!accountReplayTimeline[accountReplayFrameIndex]) {
+            await ensureAccountReplayFrame(accountReplayFrameIndex);
+        }
         renderAccountReplayFrame();
         return;
     }
-    const current = accountReplayTimeline[accountReplayFrameIndex] || {};
-    const next = accountReplayTimeline[accountReplayFrameIndex + 1] || null;
-    if (!next && accountReplayLoading) {
-        accountReplayTimer = setTimeout(playAccountReplay, 180);
-        return;
+    if (!accountReplayTimeline[accountReplayFrameIndex]) {
+        await ensureAccountReplayFrame(accountReplayFrameIndex);
     }
+    const current = accountReplayTimeline[accountReplayFrameIndex] || {};
+    let next = accountReplayTimeline[accountReplayFrameIndex + 1] || null;
+    if (!next) next = await ensureAccountReplayFrame(accountReplayFrameIndex + 1);
     if (!next) return;
     const delay = Math.max(80, ((Number(next.t) || 0) - (Number(current.t) || 0)) / Number(accountReplaySpeed || 1));
-    accountReplayTimer = setTimeout(() => {
-        stepAccountReplay(1);
+    accountReplayTimer = setTimeout(async () => {
+        await stepAccountReplay(1);
         playAccountReplay();
     }, delay);
 }
@@ -13475,6 +13535,7 @@ async function openAccountReplay(replayId) {
     const output = $('account-replay-frame');
     accountReplayData = { id: replayId };
     accountReplayTimeline = [];
+    accountReplayFrameFetches.clear();
     accountReplayTotalFrames = 0;
     accountReplayFrameIndex = 0;
     accountReplayPerspective = 0;
@@ -13521,6 +13582,7 @@ function closeAccountReplayModal() {
     replayMode = false;
     accountReplayData = null;
     accountReplayTimeline = [];
+    accountReplayFrameFetches.clear();
     accountReplayFrameIndex = 0;
     accountReplayPerspective = 0;
     accountReplayTotalFrames = 0;
@@ -19327,7 +19389,9 @@ function renderStatusTags(containerId, playerData) {
     if (p.fire > 0) tags.push({ key: 'fire', name: UI.status_fire, abbr: 'F', val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
     if (p.toxic > 0) tags.push({ key: 'toxic', name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
     if (p.triangle_stacks > 0) tags.push({ key: 'triangle', name: UI.status_triangle, abbr: '△', val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
-    if (p.nazar_active) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: 'Nz', val: `${p.nazar_big_hits || 0}/2`, fg: COLORS.magic_text, bg: COLORS.magic_bg });
+    let nazarStacks = customCount('nazar', '邪眼', 'Nazar');
+    if (p.nazar_active) nazarStacks += Math.max(0, 2 - Math.max(0, Number(p.nazar_big_hits || 0)));
+    if (nazarStacks > 0) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: currentLang === 'zh' ? '邪眼' : 'Nz', val: nazarStacks, fg: COLORS.magic_text, bg: COLORS.magic_bg });
     const magicNazar = customCount('magic_nazar');
     if (magicNazar > 0) {
         const info = getStatusIntroItem({ key: 'magic_nazar' });
@@ -19383,7 +19447,7 @@ function renderStatusTags(containerId, playerData) {
         if (count > 0) tags.push({ key: info.keys[0], iconKey: info.iconKey, name: info.name, abbr: info.abbr, val: count, fg: info.fg, bg: info.bg, title: info.title });
     });
     if (customStatuses && typeof customStatuses === 'object') {
-            const builtinKeys = new Set(['poison','fire','toxic','dodge','armor','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:root','jungle:root_status','root_status','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
+            const builtinKeys = new Set(['poison','fire','toxic','dodge','armor','nazar','邪眼','Nazar','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:root','jungle:root_status','root_status','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
         Object.entries(customStatuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;
@@ -23708,6 +23772,16 @@ async function showChoiceUI(data) {
             if (selected.length > 0) choiceResult = { selected_instance_ids: selected.map(i => handCards[i].instance_id) };
             else choiceResult = { selected_instance_ids: [] };
         }
+    } else if (choiceType === 'magic_salt_reflect') {
+        const msg = choiceParams.message || data.message || '';
+        const sel = await simpleChoice(choiceTitle(choiceParams.title || '魔法盐'), [
+            choiceParams.ok_text || '支付并反伤',
+            choiceParams.cancel_text || UI.cancel || '取消',
+        ], {
+            ...choicePromptConfig,
+            message: msg,
+        });
+        if (sel >= 0) choiceResult = { confirmed: sel === 0, accepted: sel === 0 };
     } else if (choiceType === 'confirm') {
         const sel = await simpleChoice(choiceTitle(UI.notice || 'Confirm'), [
             choiceParams.ok_text || UI.ok || 'OK',
@@ -25780,6 +25854,11 @@ async function init() {
     if (cardImagesToggle) {
         cardImagesToggle.checked = showCardImages;
         cardImagesToggle.addEventListener('change', (e) => applyShowCardImages(e.target.checked));
+    }
+    const landscapeModeToggle = $('settings-landscape-mode');
+    if (landscapeModeToggle) {
+        landscapeModeToggle.checked = landscapeModeEnabled;
+        landscapeModeToggle.addEventListener('change', (e) => applyLandscapeMode(e.target.checked));
     }
     $('btn-lobby-back').addEventListener('click', () => {
         phase = 'login';

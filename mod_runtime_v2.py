@@ -67,6 +67,11 @@ ADVANCED_ATOMIC_OPS = {
     "jungle_root_gain", "jungle_root_remove_owned", "plank_immunity",
     "magic_relic_trigger", "electric_web_arm",
     "yin_yang_effect", "flower_burst",
+    "draw_to_hand_limit", "magic_salt_reflect", "third_eye_precision_or_hidden",
+    "grant_temp_swift_highest_e", "delayed_blind_next_turn",
+    "delayed_reveal_hand_next_turn", "ocean_spikeball_damage",
+    "ocean_magic_coral_tick", "ocean_for_each_selectable_target",
+    "ocean_charge_self_damage",
 }
 
 ATOMIC_OP_ALIASES = {
@@ -195,12 +200,41 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                 except Exception:
                     pass
             total += int(dealt or 0)
+            target_positive_hits = 0
             try:
                 hit_values = getattr(engine, "_last_positive_damage_hits", [])
-                positive_hits += int(hit_values[target_id] if isinstance(hit_values, list) and target_id < len(hit_values) else 0)
+                target_positive_hits = int(hit_values[target_id] if isinstance(hit_values, list) and target_id < len(hit_values) else 0)
+                positive_hits += target_positive_hits
             except Exception:
                 if int(dealt or 0) > 0:
+                    target_positive_hits = 1
                     positive_hits += 1
+            on_hit = params.get("on_hit")
+            if int(dealt or 0) > 0 and isinstance(on_hit, list):
+                hit_count = max(1, int(target_positive_hits or 1))
+                for hit_index in range(hit_count):
+                    child_context = dict(context)
+                    child_vars = dict(context.get("vars") if isinstance(context.get("vars"), dict) else {})
+                    child_context.update({
+                        "event": "on_hit",
+                        "source_player": source,
+                        "target_player": target_id,
+                        "source_id": source,
+                        "target_id": target_id,
+                        "damage": int(dealt or 0),
+                        "damage_amount": int(dealt or 0),
+                        "last_damage": int(dealt or 0),
+                        "hit_index": hit_index,
+                        "vars": child_vars,
+                    })
+                    child_vars.update({
+                        "source_id": source,
+                        "target_id": target_id,
+                        "damage": int(dealt or 0),
+                        "last_damage": int(dealt or 0),
+                        "hit_index": hit_index,
+                    })
+                    run_v2_steps(engine, child_context, on_hit)
         context["last_damage"] = total
         context["last_positive_hits"] = positive_hits
         context.setdefault("vars", {})["last_positive_hits"] = positive_hits
@@ -1414,6 +1448,31 @@ def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str) 
         return
     if _status_application_blocked_by_immunity(engine, player_id, status_id, amount, op):
         return
+    if status_key in ("nazar", "邪眼", "Nazar"):
+        getter = getattr(engine, "_nazar_status_value", None)
+        before = int(getter(player_id) or 0) if callable(getter) else int(getattr(ps, "custom_statuses", {}).get("nazar", 0) or 0)
+        if op == "remove_status":
+            value = max(0, before - max(1, amount))
+        elif op == "set_status":
+            value = max(0, amount)
+        else:
+            value = max(0, before + amount)
+        setter = getattr(engine, "_set_nazar_status_value", None)
+        if callable(setter):
+            setter(player_id, value)
+        else:
+            ps.custom_statuses = getattr(ps, "custom_statuses", {})
+            ps.custom_statuses["nazar"] = value
+        after = int(getter(player_id) or 0) if callable(getter) else int(getattr(ps, "custom_statuses", {}).get("nazar", 0) or 0)
+        delta = after - before
+        label = _status_label(status_id)
+        if op == "add_status" and delta:
+            engine.log_msg(f"{engine.pn(player_id)}+{abs(delta)}层{label}")
+        elif op == "remove_status" and delta:
+            engine.log_msg(f"{engine.pn(player_id)}-{abs(delta)}层{label}")
+        elif op == "set_status":
+            engine.log_msg(f"{engine.pn(player_id)}的{label}变为{after}层")
+        return
     attr = _builtin_status_attr(status_id)
     before = _status_stack(engine, player_id, status_id)
     if attr:
@@ -1478,6 +1537,11 @@ def _status_stack(engine, player_id: int, status_id: str) -> int:
     ps = engine.players[player_id]
     if status_key in ("status_immune", "immune", "状态免疫"):
         return 1 if any(int(getattr(ps, "custom_statuses", {}).get(key, 0) or 0) > 0 for key in ("status_immune", "immune", "状态免疫")) else 0
+    if status_key in ("nazar", "邪眼", "Nazar"):
+        getter = getattr(engine, "_nazar_status_value", None)
+        if callable(getter):
+            return int(getter(player_id) or 0)
+        return int(getattr(ps, "custom_statuses", {}).get("nazar", 0) or 0)
     attr = _builtin_status_attr(status_id)
     if attr:
         return int(getattr(ps, attr, 0) or 0)
@@ -1531,6 +1595,9 @@ def _status_label(status_id: str) -> str:
         "burn": "灼烧",
         "f": "灼烧",
         "toxic": "淬毒",
+        "nazar": "邪眼",
+        "Nazar": "邪眼",
+        "邪眼": "邪眼",
         "vulnerable": "易伤",
         "armor": "护甲",
         "dodge": "闪避",
@@ -1551,6 +1618,12 @@ def _status_label(status_id: str) -> str:
         "禁攻": "禁攻",
         "attack_only": "仅攻击",
         "仅攻击": "仅攻击",
+        "magic_blocked": "魔力封锁",
+        "魔力封锁": "魔力封锁",
+        "unable_counter": "无法反制",
+        "无法反制": "无法反制",
+        "blood_debt": "血债",
+        "血债": "血债",
         "untargetable": "无法选中",
         "无法选中": "无法选中",
         "status_immune": "状态免疫",

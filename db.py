@@ -51,28 +51,43 @@ ACHIEVEMENT_TYPES = {
     'hidden': {'color': '#7257a8'},
 }
 ACHIEVEMENT_DEFS = [
-    {'id': 'games_10', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 I', 'name_en': 'Gardener Path I', 'description_cn': '完成10场有效对局。', 'description_en': 'Complete 10 valid matches.', 'target': 10, 'metric': 'games_played', 'reward_dew': 80},
-    {'id': 'games_20', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 II', 'name_en': 'Gardener Path II', 'description_cn': '完成20场有效对局。', 'description_en': 'Complete 20 valid matches.', 'target': 20, 'metric': 'games_played', 'reward_dew': 120},
-    {'id': 'games_50', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 III', 'name_en': 'Gardener Path III', 'description_cn': '完成50场有效对局。', 'description_en': 'Complete 50 valid matches.', 'target': 50, 'metric': 'games_played', 'reward_dew': 180},
-    {'id': 'games_100', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 IV', 'name_en': 'Gardener Path IV', 'description_cn': '完成100场有效对局。', 'description_en': 'Complete 100 valid matches.', 'target': 100, 'metric': 'games_played', 'reward_dew': 260},
-    {'id': 'games_200', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 V', 'name_en': 'Gardener Path V', 'description_cn': '完成200场有效对局。', 'description_en': 'Complete 200 valid matches.', 'target': 200, 'metric': 'games_played', 'reward_dew': 400},
-    {'id': 'games_500', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 VI', 'name_en': 'Gardener Path VI', 'description_cn': '完成500场有效对局。', 'description_en': 'Complete 500 valid matches.', 'target': 500, 'metric': 'games_played', 'reward_dew': 800},
-    {'id': 'games_1000', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 VII', 'name_en': 'Gardener Path VII', 'description_cn': '完成1000场有效对局。', 'description_en': 'Complete 1000 valid matches.', 'target': 1000, 'metric': 'games_played', 'reward_dew': 1500},
-    {'id': 'wins_10', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 I', 'name_en': 'Blooming Wins I', 'description_cn': '赢得10场有效对局。', 'description_en': 'Win 10 valid matches.', 'target': 10, 'metric': 'wins', 'reward_dew': 100},
-    {'id': 'wins_20', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 II', 'name_en': 'Blooming Wins II', 'description_cn': '赢得20场有效对局。', 'description_en': 'Win 20 valid matches.', 'target': 20, 'metric': 'wins', 'reward_dew': 160},
-    {'id': 'wins_50', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 III', 'name_en': 'Blooming Wins III', 'description_cn': '赢得50场有效对局。', 'description_en': 'Win 50 valid matches.', 'target': 50, 'metric': 'wins', 'reward_dew': 250},
-    {'id': 'wins_100', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 IV', 'name_en': 'Blooming Wins IV', 'description_cn': '赢得100场有效对局。', 'description_en': 'Win 100 valid matches.', 'target': 100, 'metric': 'wins', 'reward_dew': 450},
-    {'id': 'wins_200', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 V', 'name_en': 'Blooming Wins V', 'description_cn': '赢得200场有效对局。', 'description_en': 'Win 200 valid matches.', 'target': 200, 'metric': 'wins', 'reward_dew': 800},
-    {'id': 'wins_500', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 VI', 'name_en': 'Blooming Wins VI', 'description_cn': '赢得500场有效对局。', 'description_en': 'Win 500 valid matches.', 'target': 500, 'metric': 'wins', 'reward_dew': 1600},
-    {'id': 'first_win', 'type': 'battle', 'name_cn': '第一朵花', 'name_en': 'First Bloom', 'description_cn': '赢得第一场有效对局。', 'description_en': 'Win your first valid match.', 'target': 1, 'metric': 'wins', 'reward_dew': 80},
-    {'id': 'first_1v1_win', 'type': 'mode', 'name_cn': '单挑胜者', 'name_en': 'Duel Winner', 'description_cn': '赢得一场1v1对局。', 'description_en': 'Win a 1v1 match.', 'target': 1, 'metric': 'mode_1v1_win', 'reward_dew': 100},
-    {'id': 'first_2v2_win', 'type': 'mode', 'name_cn': '共同花园', 'name_en': 'Shared Garden', 'description_cn': '赢得一场2v2对局。', 'description_en': 'Win a 2v2 match.', 'target': 1, 'metric': 'mode_2v2_win', 'reward_dew': 120},
-    {'id': 'first_random_deck_win', 'type': 'mode', 'name_cn': '随机也赢', 'name_en': 'Random Winner', 'description_cn': '赢得一场随机卡组对局。', 'description_en': 'Win a Random Deck match.', 'target': 1, 'metric': 'mode_random_deck_win', 'reward_dew': 100},
-    {'id': 'first_urf_win', 'type': 'mode', 'name_cn': '火力压制', 'name_en': 'Firepower Victory', 'description_cn': '赢得一场无限火力对局。', 'description_en': 'Win an Infinite Fire match.', 'target': 1, 'metric': 'mode_urf_win', 'reward_dew': 100},
-    {'id': 'backwater_win', 'type': 'battle', 'name_cn': '背水一战', 'name_en': 'Last Stand', 'description_cn': '1v1中，在无敌时击败对手。', 'description_en': 'In 1v1, defeat your opponent while invincible.', 'target': 1, 'metric': 'flag_backwater_win', 'reward_dew': 200},
-    {'id': 'revive_leaf_win', 'type': 'battle', 'name_cn': '复苏之叶', 'name_en': 'Leaf of Revival', 'description_cn': '用世界树之叶复活玩家，并最终获胜。', 'description_en': 'Revive a player with Yggdrasil and win.', 'target': 1, 'metric': 'flag_revive_leaf_win', 'reward_dew': 300},
-    {'id': 'no_thorn_win', 'type': 'hidden', 'hidden': True, 'name_cn': '不靠攻击', 'name_en': 'No Thorns Needed', 'description_cn': '赢得一局，且自己全局没有打出Thorn牌。', 'description_en': 'Win a match without playing Thorn cards.', 'target': 1, 'metric': 'flag_no_thorn_win', 'reward_dew': 250},
-    {'id': 'one_hp_win', 'type': 'battle', 'name_cn': '起死回生', 'name_en': 'Back from the Brink', 'description_cn': '本局中曾经H降到5或以下，且没有触发过无敌，最后赢得对局。', 'description_en': 'Drop to 5 H or lower during a match without triggering invincibility, then win.', 'target': 1, 'metric': 'flag_one_hp_win', 'reward_dew': 220},
+    {'id': 'games_10', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 I', 'name_en': 'Gardener Path I', 'description_cn': '完成10场有效对局。', 'description_en': 'Complete 10 valid matches.', 'target': 10, 'metric': 'games_played', 'reward_dew': 200},
+    {'id': 'games_20', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 II', 'name_en': 'Gardener Path II', 'description_cn': '完成20场有效对局。', 'description_en': 'Complete 20 valid matches.', 'target': 20, 'metric': 'games_played', 'reward_dew': 300},
+    {'id': 'games_50', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 III', 'name_en': 'Gardener Path III', 'description_cn': '完成50场有效对局。', 'description_en': 'Complete 50 valid matches.', 'target': 50, 'metric': 'games_played', 'reward_dew': 500},
+    {'id': 'games_100', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 IV', 'name_en': 'Gardener Path IV', 'description_cn': '完成100场有效对局。', 'description_en': 'Complete 100 valid matches.', 'target': 100, 'metric': 'games_played', 'reward_dew': 800},
+    {'id': 'games_200', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 V', 'name_en': 'Gardener Path V', 'description_cn': '完成200场有效对局。', 'description_en': 'Complete 200 valid matches.', 'target': 200, 'metric': 'games_played', 'reward_dew': 1200},
+    {'id': 'games_500', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 VI', 'name_en': 'Gardener Path VI', 'description_cn': '完成500场有效对局。', 'description_en': 'Complete 500 valid matches.', 'target': 500, 'metric': 'games_played', 'reward_dew': 2000},
+    {'id': 'games_1000', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 VII', 'name_en': 'Gardener Path VII', 'description_cn': '完成1000场有效对局。', 'description_en': 'Complete 1000 valid matches.', 'target': 1000, 'metric': 'games_played', 'reward_dew': 3500},
+    {'id': 'wins_10', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 I', 'name_en': 'Blooming Wins I', 'description_cn': '赢得10场有效对局。', 'description_en': 'Win 10 valid matches.', 'target': 10, 'metric': 'wins', 'reward_dew': 250},
+    {'id': 'wins_20', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 II', 'name_en': 'Blooming Wins II', 'description_cn': '赢得20场有效对局。', 'description_en': 'Win 20 valid matches.', 'target': 20, 'metric': 'wins', 'reward_dew': 400},
+    {'id': 'wins_50', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 III', 'name_en': 'Blooming Wins III', 'description_cn': '赢得50场有效对局。', 'description_en': 'Win 50 valid matches.', 'target': 50, 'metric': 'wins', 'reward_dew': 700},
+    {'id': 'wins_100', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 IV', 'name_en': 'Blooming Wins IV', 'description_cn': '赢得100场有效对局。', 'description_en': 'Win 100 valid matches.', 'target': 100, 'metric': 'wins', 'reward_dew': 1100},
+    {'id': 'wins_200', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 V', 'name_en': 'Blooming Wins V', 'description_cn': '赢得200场有效对局。', 'description_en': 'Win 200 valid matches.', 'target': 200, 'metric': 'wins', 'reward_dew': 1800},
+    {'id': 'wins_500', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 VI', 'name_en': 'Blooming Wins VI', 'description_cn': '赢得500场有效对局。', 'description_en': 'Win 500 valid matches.', 'target': 500, 'metric': 'wins', 'reward_dew': 3000},
+    {'id': 'first_win', 'type': 'battle', 'name_cn': '第一朵花', 'name_en': 'First Bloom', 'description_cn': '赢得第一场有效对局。', 'description_en': 'Win your first valid match.', 'target': 1, 'metric': 'wins', 'reward_dew': 150},
+    {'id': 'first_1v1_win', 'type': 'mode', 'name_cn': '单挑胜者', 'name_en': 'Duel Winner', 'description_cn': '赢得一场1v1对局。', 'description_en': 'Win a 1v1 match.', 'target': 1, 'metric': 'mode_1v1_win', 'reward_dew': 200},
+    {'id': 'first_2v2_win', 'type': 'mode', 'name_cn': '共同花园', 'name_en': 'Shared Garden', 'description_cn': '赢得一场2v2对局。', 'description_en': 'Win a 2v2 match.', 'target': 1, 'metric': 'mode_2v2_win', 'reward_dew': 250},
+    {'id': 'first_random_deck_win', 'type': 'mode', 'name_cn': '随机也赢', 'name_en': 'Random Winner', 'description_cn': '赢得一场随机卡组对局。', 'description_en': 'Win a Random Deck match.', 'target': 1, 'metric': 'mode_random_deck_win', 'reward_dew': 200},
+    {'id': 'first_urf_win', 'type': 'mode', 'name_cn': '火力压制', 'name_en': 'Firepower Victory', 'description_cn': '赢得一场无限火力对局。', 'description_en': 'Win an Infinite Fire match.', 'target': 1, 'metric': 'mode_urf_win', 'reward_dew': 200},
+    {'id': 'backwater_win', 'type': 'battle', 'name_cn': '背水一战', 'name_en': 'Last Stand', 'description_cn': '1v1中，在无敌时击败对手。', 'description_en': 'In 1v1, defeat your opponent while invincible.', 'target': 1, 'metric': 'flag_backwater_win', 'reward_dew': 700},
+    {'id': 'revive_leaf_win', 'type': 'battle', 'name_cn': '复苏之叶', 'name_en': 'Leaf of Revival', 'description_cn': '用世界树之叶复活玩家，并最终获胜。', 'description_en': 'Revive a player with Yggdrasil and win.', 'target': 1, 'metric': 'flag_revive_leaf_win', 'reward_dew': 700},
+    {'id': 'no_thorn_win', 'type': 'battle', 'name_cn': '不靠攻击', 'name_en': 'No Thorns Needed', 'description_cn': '赢得一局，且自己全局没有打出Thorn牌。', 'description_en': 'Win a match without playing Thorn cards.', 'target': 1, 'metric': 'flag_no_thorn_win', 'reward_dew': 500},
+    {'id': 'one_hp_win', 'type': 'battle', 'name_cn': '起死回生', 'name_en': 'Back from the Brink', 'description_cn': '本局中曾经H降到5或以下，且没有触发过无敌，最后赢得对局。', 'description_en': 'Drop to 5 H or lower during a match without triggering invincibility, then win.', 'target': 1, 'metric': 'flag_one_hp_win', 'reward_dew': 600},
+    {'id': 'last_one_win', 'type': 'battle', 'name_cn': '最后一人', 'name_en': 'Last One Standing', 'description_cn': '2v2中，队友前6回合阵亡后最终获胜。', 'description_en': 'In 2v2, win after your teammate is defeated within the first 6 rounds.', 'target': 1, 'metric': 'flag_last_one_win', 'reward_dew': 700},
+    {'id': 'fire_30', 'type': 'battle', 'name_cn': '烧开水', 'name_en': 'Boiling Point', 'description_cn': '使一名敌方玩家拥有30或更多层灼烧。', 'description_en': 'Make an enemy have 30 or more Fire.', 'target': 1, 'metric': 'flag_fire_30', 'reward_dew': 400},
+    {'id': 'poison_30', 'type': 'battle', 'name_cn': '绝命毒师', 'name_en': 'Poison Master', 'description_cn': '使一名敌方玩家拥有30或更多层中毒。', 'description_en': 'Make an enemy have 30 or more Poison.', 'target': 1, 'metric': 'flag_poison_30', 'reward_dew': 400},
+    {'id': 'one_hit_60', 'type': 'battle', 'name_cn': '一击必杀', 'name_en': 'One-Hit Strike', 'description_cn': '一击造成60点或更多实际伤害。', 'description_en': 'Deal 60 or more actual damage in one hit.', 'target': 1, 'metric': 'flag_one_hit_60', 'reward_dew': 500},
+    {'id': 'self_caused_death', 'type': 'battle', 'name_cn': '自刎归天', 'name_en': 'Self-Made End', 'description_cn': '因自己出牌导致的反伤或效果伤害死亡。', 'description_en': 'Die from reflected or effect damage caused by your own play.', 'target': 1, 'metric': 'flag_self_caused_death', 'reward_dew': 300},
+    {'id': 'blitz_win', 'type': 'battle', 'name_cn': '闪电战', 'name_en': 'Blitz', 'description_cn': '在4回合内结束战斗并获胜。', 'description_en': 'Win within 4 rounds.', 'target': 1, 'metric': 'flag_blitz_win', 'reward_dew': 500},
+    {'id': 'a_plus_win', 'type': 'battle', 'name_cn': 'A+', 'name_en': 'A+', 'description_cn': '获胜时H大于等于开局时H。', 'description_en': 'Win with H at least equal to your starting H.', 'target': 1, 'metric': 'flag_a_plus_win', 'reward_dew': 400},
+    {'id': 'first_five_rounds_clean', 'type': 'battle', 'name_cn': '潇洒的花花', 'name_en': 'Graceful Flower', 'description_cn': '对局前5回合H没有降低，并最终获胜。', 'description_en': 'Win after keeping your H from dropping during the first 5 rounds.', 'target': 1, 'metric': 'flag_first_five_rounds_clean', 'reward_dew': 450},
+    {'id': 'fifteen_cards_turn', 'type': 'battle', 'name_cn': '无限？', 'name_en': 'Infinite?', 'description_cn': '一回合内打出15张或更多牌。', 'description_en': 'Play 15 or more cards in one turn.', 'target': 1, 'metric': 'flag_15_cards_turn', 'reward_dew': 600},
+    {'id': 'fifteen_e_turn', 'type': 'battle', 'name_cn': '永恒', 'name_en': 'Eternity', 'description_cn': '一回合内回复15点或更多E。', 'description_en': 'Gain 15 or more E in one turn.', 'target': 1, 'metric': 'flag_15e_turn', 'reward_dew': 350},
+    {'id': 'same_card_10', 'type': 'battle', 'name_cn': '钟爱', 'name_en': 'Favorite', 'description_cn': '在一场游戏中使用同一张卡牌10次或更多。', 'description_en': 'Use the same card instance 10 or more times in one match.', 'target': 1, 'metric': 'flag_same_card_10', 'reward_dew': 700},
+    {'id': 'heal_100', 'type': 'battle', 'name_cn': '重生', 'name_en': 'Rebirth', 'description_cn': '在一局中累计回复100点或更多H。', 'description_en': 'Heal 100 or more H in one match.', 'target': 1, 'metric': 'flag_heal_100', 'reward_dew': 400},
+    {'id': 'same_name_streak_5', 'type': 'battle', 'name_cn': '重影', 'name_en': 'Afterimage', 'description_cn': '连续打出5张除轻以外的同名卡牌。', 'description_en': 'Play 5 cards with the same name in a row, excluding Light.', 'target': 1, 'metric': 'flag_same_name_streak_5', 'reward_dew': 500},
+    {'id': 'perfect_zero_win_5', 'series': 'perfect_zero', 'type': 'battle', 'name_cn': '完美击杀', 'name_en': 'Perfect Kill', 'description_cn': '1v1中，使敌方H正好等于0获胜5次。', 'description_en': 'In 1v1, win with the enemy H exactly 0 five times.', 'target': 5, 'metric': 'flag_perfect_zero_win', 'reward_dew': 800},
+    {'id': 'enemy_6_statuses', 'type': 'hidden', 'hidden': True, 'name_cn': '狂乱的鸡尾酒', 'name_en': 'Mad Cocktail', 'description_cn': '使一名敌方玩家同时拥有6个或更多不同状态。', 'description_en': 'Make an enemy have 6 or more different statuses at once.', 'target': 1, 'metric': 'flag_enemy_6_statuses', 'reward_dew': 700},
 ]
 ACHIEVEMENT_DEF_MAP = {item['id']: item for item in ACHIEVEMENT_DEFS}
 _DM_MARK_READ_LAST_AT = {}
@@ -157,6 +172,24 @@ def utc_now_dt():
 
 def utc_iso(value):
     return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+
+
+def _parse_utc_datetime(value):
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        text = str(value or '').strip()
+        if not text:
+            return datetime.now(timezone.utc).replace(microsecond=0)
+        if text.endswith('Z'):
+            text = text[:-1] + '+00:00'
+        try:
+            dt = datetime.fromisoformat(text)
+        except Exception:
+            return datetime.now(timezone.utc).replace(microsecond=0)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).replace(microsecond=0)
 
 
 def current_week_start():
@@ -1352,6 +1385,22 @@ def _currency_source_exists(conn, user_id, source_type, source_id):
     return row is not None
 
 
+def _achievement_currency_awarded(conn, user_id, achievement_id):
+    source_id = str(achievement_id or '')
+    row = conn.execute(
+        '''
+        SELECT COALESCE(SUM(free_delta + paid_delta), 0) AS total
+        FROM user_currency_transactions
+        WHERE user_id = ?
+          AND currency = 'thorn_dew'
+          AND source_type = 'achievement'
+          AND (source_id = ? OR source_id LIKE ?)
+        ''',
+        (int(user_id), source_id, f'{source_id}:topup:%'),
+    ).fetchone()
+    return int((row['total'] if row else 0) or 0)
+
+
 def _thorn_dew_daily_multiplier(count_before):
     count = max(0, int(count_before or 0))
     if count < 10:
@@ -1461,7 +1510,7 @@ def claim_user_daily_checkin(user_id):
     return get_user_thorn_dew_center(uid), None
 
 
-def award_match_thorn_dew(match_id, summary):
+def award_match_thorn_dew(match_id, summary, award_time=None):
     if not summary or summary.get('result') not in ('win', 'draw'):
         return {'awarded': [], 'skipped': 'result'}
     if not summary.get('valid_for_ranking', True):
@@ -1485,9 +1534,10 @@ def award_match_thorn_dew(match_id, summary):
             continue
     if not registered_ids:
         return {'awarded': [], 'skipped': 'no_registered'}
-    today = _thorn_dew_date()
+    award_dt = _parse_utc_datetime(award_time) if award_time else datetime.now(timezone.utc)
+    today = _thorn_dew_date(award_dt)
     day_start, day_end = _thorn_dew_day_bounds_utc(today)
-    now = utc_now()
+    now = utc_iso(award_dt)
     awarded = []
     with get_db_connection() as conn:
         for uid in registered_ids:
@@ -1542,6 +1592,153 @@ def award_match_thorn_dew(match_id, summary):
             awarded.append({'user_id': uid, 'amount': amount, 'multiplier': multiplier, 'reason': reason})
         conn.commit()
     return {'awarded': awarded, 'skipped': None}
+
+
+def _estimate_match_thorn_dew_awards_for_conn(conn, match_id, summary, award_time=None):
+    if not summary or summary.get('result') not in ('win', 'draw'):
+        return {'awarded': [], 'skipped': 'result'}
+    if not summary.get('valid_for_ranking', True):
+        return {'awarded': [], 'skipped': summary.get('ranking_invalid_reason') or 'not_valid'}
+    try:
+        mid = int(match_id)
+    except (TypeError, ValueError):
+        return {'awarded': [], 'skipped': 'match_id'}
+    mode = str(summary.get('mode') or '').strip()
+    base = int(THORN_DEW_MODE_REWARDS.get(mode, 20))
+    player_ids = summary.get('player_ids') or []
+    winner_ids = {int(uid) for uid in (summary.get('winner_user_ids') or []) if uid is not None}
+    is_draw = summary.get('result') == 'draw'
+    registered_ids = []
+    for uid in player_ids:
+        if uid is None:
+            continue
+        try:
+            registered_ids.append(int(uid))
+        except (TypeError, ValueError):
+            continue
+    if not registered_ids:
+        return {'awarded': [], 'skipped': 'no_registered'}
+    award_dt = _parse_utc_datetime(award_time) if award_time else datetime.now(timezone.utc)
+    today = _thorn_dew_date(award_dt)
+    day_start, day_end = _thorn_dew_day_bounds_utc(today)
+    awarded = []
+    for uid in registered_ids:
+        source_type = 'match_reward'
+        opponents = sorted(str(other) for other in registered_ids if other != uid)
+        opp_hash = hashlib.sha256(','.join(opponents).encode('utf-8')).hexdigest()[:12] if opponents else 'solo'
+        source_id = f'match:{mid}:u:{uid}:opp:{opp_hash}'
+        if _currency_source_exists(conn, uid, source_type, source_id):
+            continue
+        user = conn.execute('SELECT id FROM users WHERE id = ? AND deleted_at IS NULL', (uid,)).fetchone()
+        if user is None:
+            continue
+        daily_count = conn.execute(
+            '''
+            SELECT COUNT(*) FROM user_currency_transactions
+            WHERE user_id = ? AND currency = 'thorn_dew' AND source_type = 'match_reward'
+              AND created_at >= ? AND created_at < ?
+            ''',
+            (uid, day_start, day_end),
+        ).fetchone()[0]
+        same_count = conn.execute(
+            '''
+            SELECT COUNT(*) FROM user_currency_transactions
+            WHERE user_id = ? AND currency = 'thorn_dew' AND source_type = 'match_reward'
+              AND source_id LIKE ? AND created_at >= ? AND created_at < ?
+            ''',
+            (uid, f'%:opp:{opp_hash}', day_start, day_end),
+        ).fetchone()[0]
+        bonus = THORN_DEW_DRAW_BONUS if is_draw else (THORN_DEW_WIN_BONUS if uid in winner_ids else 0)
+        raw_amount = base + int(bonus)
+        multiplier = min(_thorn_dew_daily_multiplier(daily_count), _thorn_dew_same_opponent_multiplier(same_count))
+        amount = max(1, int(math.floor(raw_amount * multiplier)))
+        awarded.append({'user_id': uid, 'amount': amount, 'multiplier': multiplier, 'source_id': source_id})
+    return {'awarded': awarded, 'skipped': None}
+
+
+def _prepare_match_thorn_dew_summary(conn, row, user_ids, username_key_to_id):
+    summary = _safe_json_loads(row['summary_json'], {})
+    if not isinstance(summary, dict):
+        summary = {}
+    summary = dict(summary)
+    summary['mode'] = str(row['mode'] or summary.get('mode') or '').strip()
+    raw_result = str(row['result'] or summary.get('result') or '').lower()
+    summary['result'] = 'draw' if raw_result == 'draw' else ('win' if raw_result in ('win', 'finished') else raw_result)
+    summary['winner_index'] = row['winner_index'] if row['winner_index'] is not None else summary.get('winner_index')
+    summary['ended_at'] = row['ended_at'] or summary.get('ended_at') or row['started_at'] or summary.get('started_at') or utc_now()
+    summary['started_at'] = row['started_at'] or summary.get('started_at') or summary['ended_at']
+    summary['duration_seconds'] = row['duration_seconds'] or summary.get('duration_seconds') or 0
+    normalized_player_ids, recovered = _match_player_ids_for_stats(conn, row, user_ids, username_key_to_id)
+    if normalized_player_ids:
+        summary['player_ids'] = normalized_player_ids
+    winner_ids, is_draw = _match_winner_user_ids_for_stats(row, summary, normalized_player_ids)
+    summary['winner_user_ids'] = sorted(winner_ids)
+    if is_draw:
+        summary['result'] = 'draw'
+        summary['winner_index'] = -1
+    return summary, recovered
+
+
+def backfill_match_thorn_dew_from_matches(dry_run=True, limit=None):
+    result = {
+        'dry_run': bool(dry_run),
+        'matches_seen': 0,
+        'matches_awarded': 0,
+        'transactions': 0,
+        'total_dew': 0,
+        'recovered_player_refs': 0,
+        'skipped': {},
+        'errors': [],
+    }
+    query = 'SELECT * FROM matches ORDER BY id ASC'
+    params = ()
+    if limit is not None:
+        try:
+            limit_int = max(1, int(limit))
+            query += ' LIMIT ?'
+            params = (limit_int,)
+        except (TypeError, ValueError):
+            pass
+    with get_db_connection() as conn:
+        user_columns = {row['name'] for row in conn.execute('PRAGMA table_info(users)').fetchall()}
+        user_where = 'WHERE deleted_at IS NULL' if 'deleted_at' in user_columns else ''
+        user_rows = conn.execute(f'SELECT id, username FROM users {user_where}').fetchall()
+        user_ids = {int(row['id']) for row in user_rows}
+        username_key_to_id = {}
+        for user_row in user_rows:
+            key = normalize_username_key(user_row['username'])
+            if key and key not in username_key_to_id:
+                username_key_to_id[key] = int(user_row['id'])
+        rows = conn.execute(query, params).fetchall()
+        prepared_rows = []
+        for row in rows:
+            summary, recovered = _prepare_match_thorn_dew_summary(conn, row, user_ids, username_key_to_id)
+            result['recovered_player_refs'] += recovered
+            prepared_rows.append((row['id'], row['ended_at'] or row['started_at'] or summary.get('ended_at') or summary.get('started_at'), summary))
+    estimate_conn = get_db_connection() if dry_run else None
+    try:
+        for match_id, award_time, summary in prepared_rows:
+            result['matches_seen'] += 1
+            try:
+                if dry_run:
+                    award_result = _estimate_match_thorn_dew_awards_for_conn(estimate_conn, match_id, summary, award_time=award_time)
+                else:
+                    award_result = award_match_thorn_dew(match_id, summary, award_time=award_time)
+            except Exception as exc:
+                result['errors'].append({'match_id': match_id, 'error': str(exc)})
+                continue
+            awards = award_result.get('awarded') or []
+            if awards:
+                result['matches_awarded'] += 1
+                result['transactions'] += len(awards)
+                result['total_dew'] += sum(int(item.get('amount') or 0) for item in awards)
+            else:
+                key = str(award_result.get('skipped') or 'already_awarded')
+                result['skipped'][key] = result['skipped'].get(key, 0) + 1
+    finally:
+        if estimate_conn is not None:
+            estimate_conn.close()
+    return result
 
 
 def _achievement_public_payload(defn, row=None, lang='zh', progress_override=None):
@@ -1623,6 +1820,19 @@ def get_user_achievement_center(user_id, lang='zh'):
                 'losses': int(user['losses'] or 0),
                 'draws': int(user['draws'] or 0),
             }
+            for defn in ACHIEVEMENT_DEFS:
+                metric = str(defn.get('metric') or '')
+                if metric in cumulative_metrics:
+                    result = _update_achievement_progress_conn(conn, uid, defn, cumulative_metrics.get(metric, 0), now)
+                    if result:
+                        changed = True
+            if changed:
+                conn.commit()
+                rows = conn.execute(
+                    'SELECT * FROM user_achievements WHERE user_id = ?',
+                    (uid,),
+                ).fetchall()
+                row_map = {row['achievement_id']: row for row in rows}
         items = [
             _achievement_public_payload(
                 defn,
@@ -1644,7 +1854,9 @@ def get_user_achievement_center(user_id, lang='zh'):
 def _award_achievement_reward_conn(conn, user_id, defn, now=None):
     uid = int(user_id)
     reward = int(defn.get('reward_dew') or 0)
-    if reward <= 0 or _currency_source_exists(conn, uid, 'achievement', defn['id']):
+    already_awarded = _achievement_currency_awarded(conn, uid, defn['id'])
+    reward_delta = max(0, reward - already_awarded)
+    if reward_delta <= 0:
         return False
     now = now or utc_now()
     user = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
@@ -1652,8 +1864,12 @@ def _award_achievement_reward_conn(conn, user_id, defn, now=None):
         return False
     free_before = max(0, int(user['thorn_dew_free'] or 0))
     paid_before = max(0, int(user['thorn_dew_paid'] or 0))
-    free_after = free_before + reward
+    free_after = free_before + reward_delta
     conn.execute('UPDATE users SET thorn_dew_free = ? WHERE id = ?', (free_after, uid))
+    source_id = defn['id'] if already_awarded <= 0 else f"{defn['id']}:topup:{reward}"
+    reason = f"成就：{defn.get('name_cn') or defn['id']}"
+    if already_awarded > 0:
+        reason += '（奖励补差）'
     conn.execute(
         '''
         INSERT INTO user_currency_transactions (
@@ -1662,7 +1878,7 @@ def _award_achievement_reward_conn(conn, user_id, defn, now=None):
         )
         VALUES (?, 'thorn_dew', ?, 0, ?, 'achievement', ?, ?, ?, '', ?)
         ''',
-        (uid, reward, f"成就：{defn.get('name_cn') or defn['id']}", defn['id'], free_after, paid_before, now),
+        (uid, reward_delta, reason, source_id, free_after, paid_before, now),
     )
     conn.execute(
         'UPDATE user_achievements SET reward_claimed = 1, updated_at = ? WHERE user_id = ? AND achievement_id = ?',
@@ -1809,7 +2025,16 @@ def process_match_achievements(match_id, summary):
             for flag in user_flags:
                 for defn in ACHIEVEMENT_DEFS:
                     if defn.get('metric') == str(flag):
-                        result = _unlock_achievement_conn(conn, uid, defn['id'], 1, now)
+                        target = int(defn.get('target') or 1)
+                        if target > 1:
+                            row = conn.execute(
+                                'SELECT progress FROM user_achievements WHERE user_id = ? AND achievement_id = ?',
+                                (uid, defn['id']),
+                            ).fetchone()
+                            current = int(row['progress'] or 0) if row else 0
+                            result = _update_achievement_progress_conn(conn, uid, defn, current + 1, now)
+                        else:
+                            result = _unlock_achievement_conn(conn, uid, defn['id'], 1, now)
                         if result:
                             unlocked.append({'user_id': uid, **result})
         conn.commit()

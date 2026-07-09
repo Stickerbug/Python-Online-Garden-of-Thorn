@@ -118,7 +118,7 @@ CARD_I18N = {
     'Nazar': {
         'name': _t('邪眼护符', 'Nazar', 'Nazar', 'Nazar', 'Назар', 'ナザール'),
         'desc': _t('邪眼的力量似乎为你减免了大部分伤害。', 'The power of the evil eye seems to reduce most of the damage for you.', 'Le pouvoir du mauvais œil semble réduire la majeure partie des dégâts.', 'O poder do mau-olhado parece reduzir a maior parte do dano.', 'Сила сглаза, кажется, снижает большую часть урона.', '邪眼の力が大半のダメージを軽減してくれるようだ。'),
-        'effect': _t('所有物理伤害减少9(最少减至1)，受到两次10点及以上物理伤害后效果消失  响应：被作为攻击牌目标', 'Reduce all physical damage by 9 (minimum 1); expires after taking two physical hits of 10 or more. Response: you are targeted by an attack card', 'Réduit tous les dégâts physiques de 9 (minimum 1) ; expire après deux coups physiques de 10 ou plus. Réponse : vous êtes ciblé par une carte d’attaque', 'Reduz todo dano físico em 9 (mínimo 1); expira após dois golpes físicos de 10 ou mais. Resposta: você é alvo de uma carta de ataque', 'Уменьшает весь физический урон на 9 (минимум до 1); исчезает после двух физических ударов по 10 или больше. Ответ: вы стали целью карты атаки', '全ての物理ダメージを9減らす（最低1）。10以上の物理ダメージを2回受けると効果消失。反応：攻撃カードの対象になった時'),
+        'effect': _t('获得2层邪眼  响应：被作为攻击牌目标', 'Gain 2 Nazar. Response: you are targeted by an attack card', 'Gagne 2 Nazar. Réponse : vous êtes ciblé par une carte d’attaque', 'Ganha 2 Nazar. Resposta: você é alvo de uma carta de ataque', 'Получить 2 Назара. Ответ: вы стали целью карты атаки', '邪眼を2層得る。反応：攻撃カードの対象になった時'),
     },
     'MagicLeaf': {
         'name': _t('魔法叶', 'Magic Leaf', 'Feuille magique', 'Folha Mágica', 'Магический лист', '魔法の葉'),
@@ -259,7 +259,7 @@ OPENING_EVENT_I18N = {
     },
     4: {
         'name': _t('烈焰预兆', 'Flame Omen', 'Présage de flammes', 'Presságio Flamejante', 'Огненное знамение', '烈炎の兆し'),
-        'desc': _t('开局对所有敌方玩家施加2层灼烧', 'At game start, apply 2 Burn to all enemy players', 'Au début de la partie, applique 2 Brûlure à tous les joueurs ennemis', 'No início da partida, aplica 2 Queima a todos os jogadores inimigos', 'В начале игры наложите 2 Горения на всех вражеских игроков', '開始時、敵プレイヤー全員に灼焼2を付与'),
+        'desc': _t('开局对所有敌方玩家施加3层灼烧', 'At game start, apply 3 Burn to all enemy players', 'Au début de la partie, applique 3 Brûlure à tous les joueurs ennemis', 'No início da partida, aplica 3 Queima a todos os jogadores inimigos', 'В начале игры наложите 3 Горения на всех вражеских игроков', '開始時、敵プレイヤー全員に灼焼3を付与'),
     },
     5: {
         'name': _t('命运抽签', 'Fated Draw', 'Pioche du destin', 'Compra do Destino', 'Жребий судьбы', '運命のドロー'),
@@ -271,7 +271,7 @@ OPENING_EVENT_I18N = {
     },
     7: {
         'name': _t('先手压制', 'Opening Pressure', 'Pression initiale', 'Pressão Inicial', 'Стартовое давление', '先手圧制'),
-        'desc': _t('必定先手(对面未选同事件时)，先手多回复3E抽4张牌', 'You go first unless the opponent chose the same event; the first player recovers 3E more and draws 4 cards', 'Vous commencez sauf si l’adversaire a choisi le même événement ; le premier joueur récupère 3E de plus et pioche 4 cartes', 'Você começa, a menos que o oponente tenha escolhido o mesmo evento; o primeiro jogador recupera 3E a mais e compra 4 cartas', 'Вы ходите первым, если противник не выбрал то же событие; первый игрок восстанавливает на 3E больше и берёт 4 карты', '相手が同じイベントを選んでいなければ必ず先手。先手は追加で3E回復し、4枚引く'),
+        'desc': _t('必定先手(对面未选同事件时)，先手回复7E并抽5张牌', 'You go first unless the opponent chose the same event; the first player recovers to 7E and draws 5 cards', 'Vous commencez sauf si l’adversaire a choisi le même événement ; le premier joueur récupère jusqu’à 7E et pioche 5 cartes', 'Você começa, a menos que o oponente tenha escolhido o mesmo evento; o primeiro jogador recupera até 7E e compra 5 cartas', 'Вы ходите первым, если противник не выбрал то же событие; первый игрок восстанавливается до 7E и берёт 5 карт', '相手が同じイベントを選んでいなければ必ず先手。先手は7Eまで回復し、5枚引く'),
     },
     9: {
         'name': _t('多重瓣', 'Multi-Petal', 'Multi-pétale', 'Multi-Pétala', 'Много лепестков', '多重子弁'),

@@ -131,6 +131,7 @@ from db import (
     record_opening_event_pick_counts,
     record_opening_event_win_result,
     rebuild_card_draft_win_stats_from_matches,
+    backfill_match_thorn_dew_from_matches,
     rebuild_gr_from_matches,
     rebuild_user_stats_from_matches,
     rebuild_user_play_seconds_from_matches,
@@ -271,7 +272,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260708-achievement-toast-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260708-static-alias-fix-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -725,7 +726,8 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
         if engine is None:
             return flags
         mode = getattr(room, 'mode', '')
-        for pidx in winner_player_indices or []:
+        winner_set = {int(v) for v in (winner_player_indices or [])}
+        for pidx in range(len(player_user_ids or [])):
             if not (0 <= pidx < len(player_user_ids)):
                 continue
             uid = player_user_ids[pidx]
@@ -733,7 +735,8 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
                 continue
             user_flags = []
             ps = engine.players[pidx] if hasattr(engine, 'players') and pidx < len(engine.players) else None
-            if mode == '1v1' and ps is not None and (
+            is_winner = pidx in winner_set
+            if is_winner and mode == '1v1' and ps is not None and (
                 bool(getattr(ps, 'invincible', False))
                 or bool(getattr(ps, 'bandage_active', False))
                 or bool(getattr(ps, 'bandage_death_pending', False))
@@ -741,15 +744,69 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
                 user_flags.append('flag_backwater_win')
             if ps is not None:
                 try:
+                    engine._note_achievement_status_peak(pidx)
+                except Exception:
+                    pass
+                try:
                     min_health = int(getattr(ps, 'achievement_min_health', getattr(ps, 'health', 999)) or 999)
                 except (TypeError, ValueError):
                     min_health = 999
-                if min_health <= 5 and not bool(getattr(ps, 'achievement_invincible_triggered', False)):
+                try:
+                    start_health = int((getattr(ps, 'match_start_snapshot', {}) or {}).get('health', getattr(ps, 'max_health', 0)) or 0)
+                except (TypeError, ValueError):
+                    start_health = 0
+                try:
+                    final_health = int(getattr(ps, 'health', 0) or 0)
+                except (TypeError, ValueError):
+                    final_health = 0
+                if is_winner and min_health <= 5 and not bool(getattr(ps, 'achievement_invincible_triggered', False)):
                     user_flags.append('flag_one_hp_win')
-                if bool(getattr(ps, 'achievement_yggdrasil_revived', False)):
+                if is_winner and bool(getattr(ps, 'achievement_yggdrasil_revived', False)):
                     user_flags.append('flag_revive_leaf_win')
-                if not bool(getattr(ps, 'achievement_played_thorn', False)):
+                if is_winner and not bool(getattr(ps, 'achievement_played_thorn', False)):
                     user_flags.append('flag_no_thorn_win')
+                if is_winner and final_health >= start_health > 0:
+                    user_flags.append('flag_a_plus_win')
+                if is_winner and min_health >= start_health > 0 and int(getattr(engine, 'round_num', 0) or 0) >= 5:
+                    user_flags.append('flag_first_five_rounds_clean')
+                if is_winner and int(getattr(engine, 'round_num', 0) or 0) <= 4:
+                    user_flags.append('flag_blitz_win')
+                if int(getattr(ps, 'achievement_max_single_damage_dealt', 0) or 0) >= 60:
+                    user_flags.append('flag_one_hit_60')
+                if int(getattr(ps, 'achievement_max_cards_played_turn', 0) or 0) >= 15:
+                    user_flags.append('flag_15_cards_turn')
+                if int(getattr(ps, 'achievement_max_turn_elixir_gained', 0) or 0) >= 15:
+                    user_flags.append('flag_15e_turn')
+                if int(getattr(ps, 'achievement_total_healed', 0) or 0) >= 100:
+                    user_flags.append('flag_heal_100')
+                if int(getattr(ps, 'achievement_max_same_instance_plays', 0) or 0) >= 10:
+                    user_flags.append('flag_same_card_10')
+                if int(getattr(ps, 'achievement_max_same_name_streak', 0) or 0) >= 5:
+                    user_flags.append('flag_same_name_streak_5')
+                if int(getattr(ps, 'achievement_max_enemy_fire', 0) or 0) >= 30:
+                    user_flags.append('flag_fire_30')
+                if int(getattr(ps, 'achievement_max_enemy_poison', 0) or 0) >= 30:
+                    user_flags.append('flag_poison_30')
+                if int(getattr(ps, 'achievement_max_enemy_status_types', 0) or 0) >= 6:
+                    user_flags.append('flag_enemy_6_statuses')
+                if bool(getattr(ps, 'achievement_self_caused_death', False)):
+                    user_flags.append('flag_self_caused_death')
+                if is_winner and mode == '1v1':
+                    enemies = [eid for eid in range(len(engine.players)) if eid != pidx]
+                    if any(int(getattr(engine.players[eid], 'health', 1) or 0) == 0 for eid in enemies):
+                        user_flags.append('flag_perfect_zero_win')
+                if is_winner and mode == '2v2' and hasattr(engine, 'teams') and hasattr(engine, 'team_of'):
+                    try:
+                        team = engine.teams[engine.team_of(pidx)]
+                        if any(
+                            mate != pidx
+                            and getattr(engine.players[mate], 'achievement_death_round', None) is not None
+                            and int(getattr(engine.players[mate], 'achievement_death_round') or 999) <= 6
+                            for mate in team
+                        ):
+                            user_flags.append('flag_last_one_win')
+                    except Exception:
+                        pass
             flags[str(uid)] = user_flags
     except Exception as exc:
         admin_event('error', f'achievement flag collection failed: {exc}')
@@ -1108,6 +1165,9 @@ def replay_item_visible_to_current_user(item, admin_context=False):
 
 REPLAY_MAX_ACTIONS = int(os.environ.get('GTN_REPLAY_MAX_ACTIONS', '1500') or 1500)
 REPLAY_MAX_STATE_BYTES = int(os.environ.get('GTN_REPLAY_MAX_STATE_BYTES', '750000') or 750000)
+REPLAY_MAX_FULL_STATE_FRAMES = int(os.environ.get('GTN_REPLAY_MAX_FULL_STATE_FRAMES', '260') or 260)
+REPLAY_MAX_TOTAL_STATE_BYTES = int(os.environ.get('GTN_REPLAY_MAX_TOTAL_STATE_BYTES', '18000000') or 18000000)
+REPLAY_COMPACT_STATE_INTERVAL = max(1, int(os.environ.get('GTN_REPLAY_COMPACT_STATE_INTERVAL', '8') or 8))
 
 
 def _replay_strip_private_logs(value):
@@ -1189,18 +1249,62 @@ def _replay_capture_state(room):
     return safe
 
 
+def _replay_compact_state(room):
+    engine = getattr(room, 'engine', None)
+    if engine is None:
+        return {}
+    return {
+        'compact': True,
+        'mode': getattr(room, 'mode', ''),
+        'phase': getattr(engine, 'phase', ''),
+        'round_num': _replay_round(engine),
+        'current_player': getattr(engine, 'current_player', None),
+        'game_over': bool(getattr(engine, 'game_over', False)),
+        'winner': getattr(engine, 'winner', None),
+        'winning_team': getattr(engine, 'winning_team', None),
+        'player_names': list(getattr(engine, 'player_names', []) or []),
+    }
+
+
+def _replay_state_size(state):
+    try:
+        return len(json.dumps(state, ensure_ascii=False, default=str).encode('utf-8'))
+    except Exception:
+        return 0
+
+
+def _replay_capture_budgeted_state(room, frame_index):
+    full_frames = int(getattr(room, '_replay_full_state_frames', 0) or 0)
+    total_bytes = int(getattr(room, '_replay_state_bytes', 0) or 0)
+    allow_full = full_frames < REPLAY_MAX_FULL_STATE_FRAMES and total_bytes < REPLAY_MAX_TOTAL_STATE_BYTES
+    if not allow_full and frame_index % REPLAY_COMPACT_STATE_INTERVAL != 0:
+        room._replay_truncated = True
+        return _replay_compact_state(room)
+    state = _replay_capture_state(room)
+    state_bytes = _replay_state_size(state)
+    if allow_full and total_bytes + state_bytes <= REPLAY_MAX_TOTAL_STATE_BYTES:
+        room._replay_full_state_frames = full_frames + 1
+        room._replay_state_bytes = total_bytes + state_bytes
+        return state
+    room._replay_truncated = True
+    return _replay_compact_state(room)
+
+
 def reset_room_replay(room):
     now = time.time()
     room._replay_zero_at = now
     room._replay_keyframes = []
     room._replay_actions = []
     room._replay_truncated = False
+    room._replay_full_state_frames = 0
+    room._replay_state_bytes = 0
 
 
 def record_room_replay_keyframe(room, label='state'):
     try:
         if getattr(room, '_history_recorded', False):
             return
+        frame_index = len(getattr(room, '_replay_keyframes', []) or []) + len(getattr(room, '_replay_actions', []) or [])
         frame = {
             'i': len(getattr(room, '_replay_keyframes', []) or []),
             't': _replay_elapsed_ms(room),
@@ -1208,7 +1312,7 @@ def record_room_replay_keyframe(room, label='state'):
             'phase': getattr(room.engine, 'phase', ''),
             'round': _replay_round(room.engine),
             'current_player': getattr(room.engine, 'current_player', None),
-            'state': _replay_capture_state(room),
+            'state': _replay_capture_budgeted_state(room, frame_index),
         }
         room._replay_keyframes.append(frame)
     except Exception as exc:
@@ -1253,7 +1357,7 @@ def record_room_replay_action(room, action_type, actor=None, payload=None):
             'round': _replay_round(room.engine),
             'current_player': getattr(room.engine, 'current_player', None),
             'payload': _replay_payload(payload or {}),
-            'state': _replay_capture_state(room),
+            'state': _replay_capture_budgeted_state(room, len(actions)),
         }
         actions.append(action)
     except Exception as exc:
@@ -1266,6 +1370,8 @@ def room_replay_data(room):
         'actions': getattr(room, '_replay_actions', []) or [],
         'truncated': bool(getattr(room, '_replay_truncated', False)),
         'max_actions': REPLAY_MAX_ACTIONS,
+        'state_bytes': int(getattr(room, '_replay_state_bytes', 0) or 0),
+        'full_state_frames': int(getattr(room, '_replay_full_state_frames', 0) or 0),
     }
 
 
@@ -6355,11 +6461,12 @@ ADMIN_COMMAND_TREE = {
     },
     'storage': {
         'summary': '数据、统计与回放',
-        'usage': 'storage <summary|draftstats|rebuildstats> ...',
+        'usage': 'storage <summary|draftstats|rebuildstats|dewbackfill> ...',
         'children': {
             'summary': {'summary': '查看数据库、回放和快照占用', 'usage': 'storage summary'},
             'draftstats': {'summary': '查看卡牌选牌抽取率统计', 'usage': 'storage draftstats [1v1|2v2]'},
             'rebuildstats': {'summary': '按永久 matches 摘要重算账号战绩和总对局时长', 'usage': 'storage rebuildstats confirm'},
+            'dewbackfill': {'summary': '按历史 matches 摘要补发旧对局荆露', 'usage': 'storage dewbackfill <preview|confirm>'},
         },
     },
     'report': {
@@ -6407,6 +6514,8 @@ ADMIN_LEGACY_COMMANDS = {
     'history': 'room history',
     'draftstats': 'storage draftstats',
     'rebuildstats': 'storage rebuildstats',
+    'dewbackfill': 'storage dewbackfill',
+    'backfilldew': 'storage dewbackfill',
     'broadcast': 'chat broadcast',
     'kick': 'player kick',
     'afkcheck': 'player afkcheck',
@@ -6556,6 +6665,7 @@ def _translate_structured_admin_command(parts):
         ('storage', 'summary'): ['storagesummary'],
         ('storage', 'draftstats'): ['draftstats', *rest],
         ('storage', 'rebuildstats'): ['rebuildstats', *rest],
+        ('storage', 'dewbackfill'): ['dewbackfill', *rest],
         ('report', 'suspicious'): ['suspicious', *rest],
         ('diagnose', 'server'): ['diagnose-server'],
         ('diagnose', 'room'): ['diagnose-room', *rest],
@@ -6937,6 +7047,33 @@ def admin_rating_rebuild_output(result, dry_run=True):
     if dry_run:
         lines.append('')
         lines.append('确认覆盖当前花阶分请输入：/rating rebuild confirm')
+    return '\n'.join(lines)
+
+
+def admin_dew_backfill_output(result):
+    dry_run = bool(result.get('dry_run'))
+    lines = [
+        '荆露历史补发预览' if dry_run else '荆露历史补发已完成',
+        f"扫描对局：{result.get('matches_seen', 0)}",
+        f"可补发/已补发对局：{result.get('matches_awarded', 0)}",
+        f"补发流水：{result.get('transactions', 0)}",
+        f"荆露合计：{result.get('total_dew', 0)}",
+        f"昵称恢复账号引用：{result.get('recovered_player_refs', 0)}",
+    ]
+    skipped = result.get('skipped') or {}
+    if skipped:
+        lines.append('跳过原因：' + '，'.join(f"{k}={v}" for k, v in sorted(skipped.items())))
+    errors = result.get('errors') or []
+    if errors:
+        lines.append('')
+        lines.append(f"错误：{len(errors)} 条")
+        for item in errors[:8]:
+            lines.append(f"  match#{item.get('match_id')}: {item.get('error')}")
+        if len(errors) > 8:
+            lines.append(f"  ... 另有 {len(errors) - 8} 条")
+    if dry_run:
+        lines.append('')
+        lines.append('确认补发请输入：/storage dewbackfill confirm')
     return '\n'.join(lines)
 
 
@@ -7684,6 +7821,30 @@ def execute_admin_command(line):
         except Exception as exc:
             admin_event('error', f'rebuild user stats failed: {exc}')
             return {'success': False, 'output': f'重算失败：{exc}'}
+    if cmd in ('dewbackfill', 'backfilldew', '补发荆露'):
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        sub = parts[1].lower() if len(parts) > 1 else 'preview'
+        if sub in ('preview', 'dryrun', 'dry-run', '试算', '预览'):
+            try:
+                result = backfill_match_thorn_dew_from_matches(dry_run=True)
+                return {'success': True, 'output': admin_dew_backfill_output(result)}
+            except Exception as exc:
+                admin_event('error', f'thorn dew backfill preview failed: {exc}')
+                return {'success': False, 'output': f'荆露补发预览失败：{exc}'}
+        if sub in ('confirm', '确认'):
+            try:
+                result = backfill_match_thorn_dew_from_matches(dry_run=False)
+                admin_event(
+                    'admin',
+                    f"thorn dew backfill confirmed matches={result.get('matches_awarded', 0)} "
+                    f"tx={result.get('transactions', 0)} total={result.get('total_dew', 0)}"
+                )
+                return {'success': True, 'output': admin_dew_backfill_output(result)}
+            except Exception as exc:
+                admin_event('error', f'thorn dew backfill failed: {exc}')
+                return {'success': False, 'output': f'荆露补发失败：{exc}'}
+        return {'success': False, 'output': command_error(raw, len(parts[0]) + 1, 'storage dewbackfill <preview|confirm>')}
     if cmd == 'broadcast':
         msg = raw[len(parts[0]):].strip()
         if not msg:
@@ -9281,6 +9442,7 @@ def _response_trigger_types_for_card(engine, played_card):
                     add('heal')
             except Exception:
                 pass
+        add('targeted')
         add('any')
     return trigger_types
 
@@ -12623,7 +12785,19 @@ def on_login(data):
             'old_sid': reconnect_old_sid,
             'opponent_nickname': opponent_nickname,
         })
-    join_room(sid)
+    try:
+        join_room(sid)
+    except KeyError:
+        # The browser can disconnect between login validation and the room join.
+        # Treat it as a stale login attempt instead of letting Flask-SocketIO
+        # raise through the handler and add noise during network instability.
+        try:
+            with _lock:
+                players.pop(sid, None)
+        except Exception:
+            pass
+        admin_event('player', 'login aborted: socket disconnected before lobby join', sid=sid)
+        return
     login_payload = {
         'sid': sid,
         'nickname': name,
