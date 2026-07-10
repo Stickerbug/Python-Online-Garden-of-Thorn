@@ -4,7 +4,7 @@ import json
 import base64
 import re
 import copy
-from typing import List, Dict, Optional, Tuple, Set
+from typing import Any, List, Dict, Optional, Tuple, Set
 from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DRAFT_REROLLS,
     HAND_LIMIT, DRAW_PER_TURN, ELIXIR_RECOVERY, BASE_MAX_HEALTH,
