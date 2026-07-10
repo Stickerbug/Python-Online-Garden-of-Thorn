@@ -701,8 +701,8 @@ const I18N = {
         equip_info: '{0} ({1} turns)', equip_corruption: '[Corrupted]', equip_trigger_cost: '{0} Trigger: {1}E', status_poison: 'Poison', status_fire: 'Burn', status_toxic: 'Toxic', status_armor: 'Armor',
         status_triangle: 'Triangle', status_dodge: 'Dodge', status_nazar: 'Nazar', status_equip_protect: 'Equip Protect', status_invincible: 'Invincible', status_immune: 'Status Immune', status_stunned: 'Stunned',
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Blind', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
-        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_temp_swift: 'Temporary Swift', flag_temp_heavy: 'Temporary Heavy', flag_stealth: 'Stealth', flag_revealed: 'Revealed', flag_sublime: 'Sublime', flag_team_limited: 'Team Limited', flag_team_unique: 'Team Unique', flag_power: 'Power', flag_magic_swift: 'Magic Swift', flag_wide_strike: 'Wide Strike', flag_self_target: 'Self-target', flag_charge: 'Charge', flag_ocean_blinded: 'Obscured',
-        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_temp_swift: 'Temporary Swift', tag_temp_heavy: 'Temporary Heavy', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_sublime: 'Sublime', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift', tag_wide_strike: 'Wide Strike', tag_self_target: 'Self-target', tag_charge: 'Charge', tag_ocean_blinded: 'Obscured',
+        flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_temp_swift: 'Temporary Swift', flag_temp_heavy: 'Temporary Heavy', flag_temp_magic_heavy: 'Temporary Magic Heavy', flag_floating: 'Floating', flag_stealth: 'Stealth', flag_revealed: 'Revealed', flag_sublime: 'Sublime', flag_team_limited: 'Team Limited', flag_team_unique: 'Team Unique', flag_power: 'Power', flag_magic_swift: 'Magic Swift', flag_wide_strike: 'Wide Strike', flag_self_target: 'Self-target', flag_charge: 'Charge', flag_ocean_blinded: 'Obscured',
+        tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_temp_swift: 'Temporary Swift', tag_temp_heavy: 'Temporary Heavy', tag_temp_magic_heavy: 'Temporary Magic Heavy', tag_floating: 'Floating', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_sublime: 'Sublime', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift', tag_wide_strike: 'Wide Strike', tag_self_target: 'Self-target', tag_charge: 'Charge', tag_ocean_blinded: 'Obscured',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
@@ -820,7 +820,7 @@ I18N.zh = { ...I18N.en,
     status_equip_protect: '装备保护', status_invincible: '无敌', status_immune: '状态免疫', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_sublime: '崇高', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷', flag_wide_strike: '广域打击', flag_self_target: '自刃', flag_charge: '电荷', flag_ocean_blinded: '蒙蔽',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_temp_magic_heavy: '暂时魔力沉重', flag_floating: '漂浮', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_sublime: '崇高', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷', flag_wide_strike: '广域打击', flag_self_target: '自刃', flag_charge: '电荷', flag_ocean_blinded: '蒙蔽',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张手牌丢弃，然后抽对应张牌', foresight_replace_confirm: '替换',
@@ -864,7 +864,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_sublime: '崇高', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷', tag_wide_strike: '广域打击', tag_self_target: '自刃', tag_charge: '电荷', tag_ocean_blinded: '蒙蔽',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_temp_magic_heavy: '暂时魔力沉重', tag_floating: '漂浮', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_sublime: '崇高', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷', tag_wide_strike: '广域打击', tag_self_target: '自刃', tag_charge: '电荷', tag_ocean_blinded: '蒙蔽',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
@@ -2417,6 +2417,8 @@ const CARD_FLAG_STYLES = {
     swift: { label: '', fg: '#0984e3', bg: 'rgba(9,132,227,0.15)', cls: 'swift' },
     temp_swift: { label: '', fg: '#0EA5E9', bg: 'rgba(14,165,233,0.15)', cls: 'temp-swift' },
     temp_heavy: { label: '', fg: '#795548', bg: 'rgba(121,85,72,0.15)', cls: 'temp-heavy' },
+    temp_magic_heavy: { label: '', fg: '#7A5CFF', bg: 'rgba(122,92,255,0.16)', cls: 'temp-magic-heavy' },
+    floating: { label: '', fg: '#1687B8', bg: 'rgba(22,135,184,0.15)', cls: 'floating' },
     magic_swift: { label: '', fg: '#6C5CE7', bg: 'rgba(108,92,231,0.15)', cls: 'magic-swift' },
     power: { label: '', fg: '#C0392B', bg: 'rgba(192,57,43,0.14)', cls: 'power' },
     team_limited: { label: '', fg: '#607D3B', bg: 'rgba(96,125,59,0.15)', cls: 'team-limited' },
@@ -2450,6 +2452,8 @@ const CARD_FLAG_TERM_COLORS = {
     swift: '#0984e3',
     temp_swift: '#0EA5E9',
     temp_heavy: '#795548',
+    temp_magic_heavy: '#7A5CFF',
+    floating: '#1687B8',
     magic_swift: '#6C5CE7',
     power: '#C0392B',
     team_limited: '#607D3B',
@@ -2501,9 +2505,13 @@ const CARD_FLAG_ALIASES = {
     迅捷: 'swift',
     暂时迅捷: 'temp_swift',
     暂时沉重: 'temp_heavy',
+    暂时魔力沉重: 'temp_magic_heavy',
+    漂浮: 'floating',
     隐匿: 'stealth',
     被揭示: 'revealed',
     崇高: 'sublime',
+    队伍限定: 'team_limited',
+    队伍独一: 'team_unique',
     威力: 'power',
     魔力迅捷: 'magic_swift',
     广域打击: 'wide_strike',
@@ -2538,13 +2546,23 @@ const CARD_FLAG_ALIASES = {
     tag_ocean_no_auto: 'ocean_no_auto',
     'ocean:no_auto': 'ocean_no_auto',
     'tag_ocean:no_auto': 'ocean_no_auto',
+    preserve_ocean: '',
+    flag_preserve_ocean: '',
+    tag_preserve_ocean: '',
+    'ocean:preserve_ocean': '',
+    'tag_ocean:preserve_ocean': '',
+    preserve_fission: '',
+    flag_preserve_fission: '',
+    tag_preserve_fission: '',
+    'ocean:preserve_fission': '',
+    'tag_ocean:preserve_fission': '',
 };
 
 const _VANILLA_FLAGS = new Set([
     'precision', 'exile', 'non_stackable', 'indestructible', 'sprout',
     'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
     'infinite_exclude', 'rebound', 'copy', 'unique',
-    'swift', 'temp_swift', 'temp_heavy', 'stealth', 'revealed', 'sublime', 'team_limited', 'team_unique',
+    'swift', 'temp_swift', 'temp_heavy', 'temp_magic_heavy', 'floating', 'stealth', 'revealed', 'sublime', 'team_limited', 'team_unique',
     'power', 'magic_swift',
     'charge', 'ocean_blinded', 'wide_strike', 'self_target',
 ]);
@@ -2658,6 +2676,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'tag-magic-swift', re: /^(?:魔力迅捷|Magic Swift)(?::[+-]?\d+)?/i },
     { cls: 'tag-temp-swift', re: /^(?:暂时迅捷|Temporary Swift)(?::[+-]?\d+)?/i },
     { cls: 'tag-temp-heavy', re: /^(?:暂时沉重|Temporary Heavy)(?::[+-]?\d+)?/i },
+    { cls: 'tag-temp-magic-heavy', re: /^(?:暂时魔力沉重|Temporary Magic Heavy)(?::[+-]?\d+)?/i },
     { cls: 'tag-precision', re: /^(?:精准|Precision)/i },
     { cls: 'tag-exile', re: /^(?:放逐|Exile)/i },
     { cls: 'tag-sprout', re: /^(?:萌芽|Sprout)/i },
@@ -2673,6 +2692,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'tag-sublime', re: /^(?:崇高|Sublime)/i },
     { cls: 'tag-power', re: /^(?:威力|Power)(?::[+-]?\d+)?/i },
     { cls: 'tag-charge', re: /^(?:电荷|Charge)(?::[+-]?\d+)?/i },
+    { cls: 'tag-floating', re: /^(?:漂浮|Floating)/i },
     { cls: 'tag-ocean-blinded', re: /^(?:蒙蔽|Obscured)/i },
     { cls: 'tag-wide-strike', re: /^(?:广域打击|Wide Strike)/i },
     { cls: 'tag-self-target', re: /^(?:自刃|Self-cut)/i },
@@ -3262,6 +3282,7 @@ function getCardTextTokenTermKey(cls, text = '') {
         'tag-magic-swift': 'flag:magic_swift',
         'tag-temp-swift': 'flag:temp_swift',
         'tag-temp-heavy': 'flag:temp_heavy',
+        'tag-temp-magic-heavy': 'flag:temp_magic_heavy',
         'tag-precision': 'flag:precision',
         'tag-exile': 'flag:exile',
         'tag-sprout': 'flag:sprout',
@@ -3276,6 +3297,7 @@ function getCardTextTokenTermKey(cls, text = '') {
         'tag-revealed': 'flag:revealed',
         'tag-power': 'flag:power',
         'tag-charge': 'flag:charge',
+        'tag-floating': 'flag:floating',
         'tag-ocean-blinded': 'flag:ocean_blinded',
         'tag-wide-strike': 'flag:wide_strike',
         'tag-self-target': 'flag:self_target',
@@ -3738,6 +3760,13 @@ let skinSaveInFlight = false;
 let CARD_DEFS = {};
 let GALLERY_CARD_DEFS = null;
 let GALLERY_OPENING_EVENTS = null;
+let galleryDataLoadPromise = null;
+let galleryDataLoadedAt = 0;
+let settingsModsLoadPromise = null;
+let settingsModsLoadedAt = 0;
+let settingsCommunityModsLoadPromise = null;
+let settingsCommunityModsLoadedAt = 0;
+let settingsLoadSeq = 0;
 let activeCardDataCacheKey = '';
 let activeOpeningEventsCacheKey = '';
 let gameState = {};
@@ -5536,26 +5565,33 @@ function setGalleryMode(mode) {
 }
 
 async function showCardGallery(selectedId = null, mode = 'cards') {
-    try {
-        await Promise.all([
-            fetchGalleryCardDefs({ force: true }),
-            fetchGalleryOpeningEvents({ force: true }),
-        ]);
-    } catch (err) {
-        console.warn('[mods] failed to refresh all card data before gallery:', err);
-    }
     phase = 'gallery';
     gallerySelectedModKeys = null;
     setGalleryMode(mode);
     const backBtn = $('btn-gallery-back');
     if (backBtn) backBtn.textContent = galleryReturnToRules ? UI.gallery_back_rules : UI.back_to_home;
     if (selectedId) gallerySelectedId = selectedId;
+    showView('view-card-gallery');
+    const list = $('gallery-card-list');
+    const detail = $('gallery-detail');
+    if (list && detail && (!GALLERY_CARD_DEFS || !Object.keys(GALLERY_CARD_DEFS).length)) {
+        list.className = 'gallery-card-list';
+        detail.className = 'gallery-detail';
+        list.innerHTML = '';
+        detail.innerHTML = `<p class="gallery-no-items">${escapeHtml(UI.game_loading || '加载中...')}</p>`;
+    } else {
+        renderCardGallery();
+    }
+    try {
+        await ensureGalleryDataLoaded();
+    } catch (err) {
+        console.warn('[mods] failed to refresh all card data before gallery:', err);
+    }
+    if (getVisibleViewId() !== 'view-card-gallery') return;
     const defs = getGalleryCardDefs();
     if (!gallerySelectedId || !isPublicCardDef(defs[gallerySelectedId])) {
         gallerySelectedId = Object.keys(defs).filter(id => isPublicCardDef(defs[id])).sort(compareGalleryCards)[0] || null;
     }
-    showView('view-card-gallery');
-    renderCardGallery();
     requestAnimationFrame(() => {
         if (getVisibleViewId() === 'view-card-gallery') renderCardGallery();
     });
@@ -5563,6 +5599,7 @@ async function showCardGallery(selectedId = null, mode = 'cards') {
 
 function getCustomTagDef(flag) {
     const normalized = normalizeCardFlag(flag);
+    if (CARD_FLAG_STYLES[normalized] || GALLERY_MECHANIC_FLAGS.has(normalized)) return null;
     return (CUSTOM_TAG_DEFS && CUSTOM_TAG_DEFS[normalized]) || null;
 }
 
@@ -5785,13 +5822,22 @@ function getAllGalleryFlags() {
     const flags = new Set(Object.keys(CARD_FLAG_STYLES));
     Object.keys(CUSTOM_TAG_DEFS || {}).forEach(flag => {
         const normalized = normalizeCardFlag(flag);
-        if (normalized) flags.add(normalized);
+        if (normalized && shouldDisplayCardFlag(normalized, { showSystemFlags: false })) flags.add(normalized);
     });
     Object.values(getGalleryCardDefs()).filter(isPublicCardDef).forEach(cd => [...(cd.flags || []), ...(cd.tags || [])].forEach(flag => {
         const normalized = normalizeCardFlag(flag);
-        if (normalized) flags.add(normalized);
+        if (normalized && shouldDisplayCardFlag(normalized, { showSystemFlags: false })) flags.add(normalized);
     }));
     return [...flags].sort((a, b) => getFlagLabel(a).localeCompare(getFlagLabel(b)));
+}
+
+let galleryRenderTimer = null;
+function scheduleRenderCardGallery(delay = 80) {
+    if (galleryRenderTimer) clearTimeout(galleryRenderTimer);
+    galleryRenderTimer = setTimeout(() => {
+        galleryRenderTimer = null;
+        if (getVisibleViewId() === 'view-card-gallery') renderCardGallery();
+    }, delay);
 }
 
 function renderCardGallery() {
@@ -5834,11 +5880,11 @@ function renderCardGallery() {
     `;
     list.querySelector('[data-gallery-mod-action="all"]')?.addEventListener('click', () => {
         gallerySelectedModKeys = new Set(modOptions.map(item => item.key));
-        renderCardGallery();
+        scheduleRenderCardGallery(20);
     });
     list.querySelector('[data-gallery-mod-action="none"]')?.addEventListener('click', () => {
         gallerySelectedModKeys = new Set();
-        renderCardGallery();
+        scheduleRenderCardGallery(20);
     });
     list.querySelectorAll('[data-gallery-mod]').forEach(input => {
         input.addEventListener('change', () => {
@@ -5846,7 +5892,7 @@ function renderCardGallery() {
             if (!(gallerySelectedModKeys instanceof Set)) gallerySelectedModKeys = new Set();
             if (input.checked) gallerySelectedModKeys.add(key);
             else gallerySelectedModKeys.delete(key);
-            renderCardGallery();
+            scheduleRenderCardGallery(20);
         });
     });
     const defs = getGalleryCardDefs();
@@ -5895,42 +5941,54 @@ function renderCardGallery() {
         grid.innerHTML = `<p class="gallery-no-items">${escapeHtml(UI.gallery_no_items)}</p>`;
     } else {
         grid.textContent = '';
-        const fragment = document.createDocumentFragment();
-        ids.forEach(id => {
+        const renderBatch = (start = 0) => {
             if (renderToken !== galleryCardRenderToken) return;
-            const cd = defs[id];
-            if (!cd) return;
-            const cardDict = makeGalleryCardPreviewDict(cd);
-            const wrap = document.createElement('button');
-            wrap.type = 'button';
-            wrap.className = 'gallery-card-tile';
-            wrap.title = getCardName(cd);
-            const cardEl = createCardElement(cardDict, { small: false, disableIntro: true });
-            wrap.appendChild(cardEl);
-            const openIntro = (event) => {
-                if (event) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
-                showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(wrap) });
-            };
-            const toggleIntro = (event) => {
-                if (event) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
-                if (isTermIntroOverlayVisible()) {
-                    hideTermIntroOverlay();
-                    return;
-                }
-                showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(wrap) });
-            };
-            wrap.addEventListener('click', openIntro);
-            wrap.addEventListener('contextmenu', toggleIntro);
-            fragment.appendChild(wrap);
+            const fragment = document.createDocumentFragment();
+            const end = Math.min(ids.length, start + 18);
+            for (let i = start; i < end; i += 1) {
+                const id = ids[i];
+                const cd = defs[id];
+                if (!cd) continue;
+                const cardDict = makeGalleryCardPreviewDict(cd);
+                const wrap = document.createElement('button');
+                wrap.type = 'button';
+                wrap.className = 'gallery-card-tile';
+                wrap.title = getCardName(cd);
+                const cardEl = createCardElement(cardDict, { small: false, disableIntro: true });
+                wrap.appendChild(cardEl);
+                const openIntro = (event) => {
+                    if (event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                    showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(wrap) });
+                };
+                const toggleIntro = (event) => {
+                    if (event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                    if (isTermIntroOverlayVisible()) {
+                        hideTermIntroOverlay();
+                        return;
+                    }
+                    showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(wrap) });
+                };
+                wrap.addEventListener('click', openIntro);
+                wrap.addEventListener('contextmenu', toggleIntro);
+                fragment.appendChild(wrap);
+            }
+            grid.appendChild(fragment);
+            if (end < ids.length) {
+                requestAnimationFrame(() => renderBatch(end));
+            }
+        };
+        requestAnimationFrame(() => {
+            if (renderToken === galleryCardRenderToken) {
+                renderBatch(0);
+                if (grid) grid.scrollTop = 0;
+            }
         });
-        grid.appendChild(fragment);
-        grid.scrollTop = 0;
     }
     detail.querySelectorAll('[data-gallery-type]').forEach(input => {
         input.addEventListener('change', () => {
@@ -5938,7 +5996,7 @@ function renderCardGallery() {
             if (!(gallerySelectedTypeKeys instanceof Set)) gallerySelectedTypeKeys = new Set();
             if (input.checked) gallerySelectedTypeKeys.add(key);
             else gallerySelectedTypeKeys.delete(key);
-            renderCardGallery();
+            scheduleRenderCardGallery(20);
         });
     });
 }
@@ -6057,7 +6115,7 @@ function getAllStatusDefs() {
         { key: 'stunned', label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         { key: 'attack_blocked', label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         { key: 'attack_only', label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
-        { key: 'untargetable', label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。', color: '#1A5276' },
+        { key: 'untargetable', label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。自己回合开始时层数-1。', color: '#1A5276' },
         { key: 'bandage', label: UI.status_bandage, desc: '受到致命伤害后无敌直到自己下个回合结束，然后死亡。', color: '#1E8449' },
         { key: 'sponge', label: UI.status_sponge, desc: '海绵相关的临时状态，会影响下一次结算。', color: '#6C3483' },
         { key: 'sluggish', label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
@@ -6381,7 +6439,7 @@ function showNextAchievementToast() {
             achievementToastTimer = null;
             showNextAchievementToast();
         }, 240);
-    }, 4400);
+    }, 3400);
 }
 
 function enqueueAchievementToasts(items = []) {
@@ -7719,6 +7777,26 @@ async function fetchGalleryOpeningEvents({ force = false } = {}) {
     return GALLERY_OPENING_EVENTS;
 }
 
+async function ensureGalleryDataLoaded({ force = false } = {}) {
+    const now = Date.now();
+    const hasData = GALLERY_CARD_DEFS && Object.keys(GALLERY_CARD_DEFS).length
+        && Array.isArray(GALLERY_OPENING_EVENTS) && GALLERY_OPENING_EVENTS.length;
+    if (!force && hasData && now - galleryDataLoadedAt < 5 * 60 * 1000) {
+        return { cards: GALLERY_CARD_DEFS, events: GALLERY_OPENING_EVENTS };
+    }
+    if (!force && galleryDataLoadPromise) return galleryDataLoadPromise;
+    galleryDataLoadPromise = Promise.all([
+        fetchGalleryCardDefs({ force }),
+        fetchGalleryOpeningEvents({ force }),
+    ]).then(([cards, events]) => {
+        galleryDataLoadedAt = Date.now();
+        return { cards, events };
+    }).finally(() => {
+        galleryDataLoadPromise = null;
+    });
+    return galleryDataLoadPromise;
+}
+
 async function fetchOpeningEvents(options = {}) {
     const useCache = options.useCache !== false;
     const background = !!options.background;
@@ -7895,6 +7973,10 @@ function cardMatchesAnyLocalId(cardDict, cardDef, values) {
     return getCardLocalIds(cardDict, cardDef).some(id => wanted.has(id));
 }
 
+function isVoidPlaceholderCard(cardDict, cardDef) {
+    return cardMatchesAnyLocalId(cardDict || {}, cardDef || {}, ['Void', 'void:void']);
+}
+
 function getFlagLabel(flag) {
     const normalized = normalizeCardFlag(flag);
     const custom = getCustomTagDef(normalized);
@@ -7917,6 +7999,7 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
     const magicSwiftValue = Number(cardDef.magic_swift_value || cardDict.magic_swift_value || 0);
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
+    const tempMagicHeavyValue = Number(cardDict.temp_magic_heavy_value || 0);
     const effectiveBaseE = Math.max(0, baseE + tempHeavyValue - mimicDiscount - swiftValue - tempSwiftValue);
     let extraE = flags.has('symbiosis') ? 0 : dup;
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Bamboo', 'jungle:bamboo'])) {
@@ -7924,7 +8007,7 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
         extraE -= hand.filter(c => c && c !== cardDict && cardMatchesAnyLocalId(c, getCardDef(c.def_id || ''), ['Bamboo', 'jungle:bamboo'])).length;
     }
     const totalE = Math.max(0, effectiveBaseE + extraE);
-    const totalM = Math.max(0, baseM - Math.max(0, magicSwiftValue));
+    const totalM = Math.max(0, baseM + Math.max(0, tempMagicHeavyValue) - Math.max(0, magicSwiftValue));
     return { totalE, totalM, flags };
 }
 
@@ -8164,6 +8247,7 @@ function createCardElement(cardDict, options = {}) {
     const powerValue = Number(cardDef.power_value || cardDict.power_value || 0);
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
+    const tempMagicHeavyValue = Number(cardDict.temp_magic_heavy_value || 0);
     const copyCount = Number(cardDef.copy_count || 0);
     el.style.setProperty('--card-frame-color', displayTypeColor);
     el.dataset.instanceId = cardDict.instance_id;
@@ -8174,6 +8258,7 @@ function createCardElement(cardDict, options = {}) {
         if (flag === 'temp_swift' && tempSwiftValue > 0) continue;
         if (flag === 'temp_heavy' && tempHeavyValue > 0) continue;
         if (flag === 'magic_swift' && magicSwiftValue > 0) continue;
+        if (flag === 'temp_magic_heavy' && tempMagicHeavyValue > 0) continue;
         if (flag === 'power' && powerValue > 0) continue;
         if (flag === 'copy' && copyCount > 0) continue;
         if (!shouldDisplayCardFlag(flag, { showSystemFlags: showAllFlags })) continue;
@@ -8208,6 +8293,9 @@ function createCardElement(cardDict, options = {}) {
     if (!blinded && magicSwiftValue > 0) {
         flagsHtml += `<span class="card-flag magic-swift">${escapeHtml(UI.tag_magic_swift || 'Magic Swift')}: ${magicSwiftValue}</span>`;
     }
+    if (!blinded && tempMagicHeavyValue > 0) {
+        flagsHtml += `<span class="card-flag temp-magic-heavy">${escapeHtml(UI.tag_temp_magic_heavy || '暂时魔力沉重')}: ${tempMagicHeavyValue}</span>`;
+    }
     if (!blinded && powerValue > 0) {
         flagsHtml += `<span class="card-flag power">${escapeHtml(UI.tag_power || 'Power')}: ${powerValue}</span>`;
     }
@@ -8222,6 +8310,8 @@ function createCardElement(cardDict, options = {}) {
         ownerState: predictionOptions.ownerState || cardOwnerState,
         attackerState: predictionOptions.attackerState || cardOwnerState,
     });
+    const displayCostE = isVoidPlaceholderCard(cardDict, cardDef) ? '?' : totalE;
+    const displayCostM = isVoidPlaceholderCard(cardDict, cardDef) ? '?' : totalM;
     const bottomHtml = (predictionHtml || flagsHtml)
         ? `<div class="card-bottom-zone ${predictionHtml ? 'has-prediction' : ''}">
                 ${predictionHtml || ''}
@@ -8230,9 +8320,9 @@ function createCardElement(cardDict, options = {}) {
         : '';
     el.innerHTML = `
         <div class="card-costs">
-            <span class="cost-e">${blinded ? '?' : totalE}</span>
+            <span class="cost-e">${blinded ? '?' : displayCostE}</span>
             <span class="card-name" style="color:${displayTypeColor}">${escapeHtml(cardName)}</span>
-            <span class="cost-m">${blinded ? '?' : totalM}</span>
+            <span class="cost-m">${blinded ? '?' : displayCostM}</span>
         </div>
         ${englishName ? `<div class="card-english-name" style="color:${displayTypeColor}">${escapeHtml(englishName)}</div>` : ''}
         ${cardArtHtml}
@@ -8374,12 +8464,14 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     const powerValue = Number(cardDef.power_value || cardDict.power_value || 0);
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
+    const tempMagicHeavyValue = Number(cardDict.temp_magic_heavy_value || 0);
     const chargeValue = Number(cardDict.charge_value || 0);
     effective.forEach(flag => {
         if (flag === 'swift' && swiftValue > 0) return;
         if (flag === 'temp_swift' && tempSwiftValue > 0) return;
         if (flag === 'temp_heavy' && tempHeavyValue > 0) return;
         if (flag === 'magic_swift' && magicSwiftValue > 0) return;
+        if (flag === 'temp_magic_heavy' && tempMagicHeavyValue > 0) return;
         if (flag === 'power' && powerValue > 0) return;
         if (flag === 'copy' && copyCount > 0) return;
         if (flag === 'charge' && chargeValue > 0) return;
@@ -8405,6 +8497,9 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     }
     if (magicSwiftValue > 0) {
         parts.push(cardFlagHtml('magic_swift', `${UI.tag_magic_swift || 'Magic Swift'}: ${magicSwiftValue}`));
+    }
+    if (tempMagicHeavyValue > 0) {
+        parts.push(cardFlagHtml('temp_magic_heavy', `${UI.tag_temp_magic_heavy || '暂时魔力沉重'}: ${tempMagicHeavyValue}`));
     }
     if (powerValue > 0) {
         parts.push(cardFlagHtml('power', `${UI.tag_power || 'Power'}: ${powerValue}`));
@@ -8621,7 +8716,8 @@ function getMimicSpecialCostForCard(cardDict) {
     const magicSwift = Math.max(0, Math.floor(Number(cardDict.magic_swift_value || 0)));
     const tempSwift = Math.max(0, Math.floor(Number(cardDict.temp_swift_value || 0)));
     const tempHeavy = Math.max(0, Math.floor(Number(cardDict.temp_heavy_value || 0)));
-    return Math.ceil((fusionExtra + fissionExtra + power + swift + magicSwift + tempSwift + tempHeavy) / 2);
+    const tempMagicHeavy = Math.max(0, Math.floor(Number(cardDict.temp_magic_heavy_value || 0)));
+    return Math.ceil((fusionExtra + fissionExtra + power + swift + magicSwift + tempSwift + tempHeavy + tempMagicHeavy) / 2);
 }
 
 function getAvailableElixirForMimicChoice(sourceCard, ownerState = null) {
@@ -9783,6 +9879,8 @@ function getTermIntroLibrary() {
         magic_swift: { label: UI.tag_magic_swift || 'Magic Swift', desc: lt({ zh: 'M 花费减少对应层数，最低为 0M。', en: 'Reduces M cost by its value, minimum 0M.', fr: 'Réduit le coût M de sa valeur, minimum 0M.', ja: 'M コストを値だけ減らします。最低0M。' }), color: '#6C5CE7' },
         temp_swift: { label: UI.tag_temp_swift || 'Temporary Swift', desc: lt({ zh: '本次打出时 E 花费减少对应层数，打出后清除。', en: 'Reduces E cost for this play only, then clears after being played.', fr: 'Réduit le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを減らし、使用後に消えます。' }), color: '#0EA5E9' },
         temp_heavy: { label: UI.tag_temp_heavy || 'Temporary Heavy', desc: lt({ zh: '本次打出时 E 花费增加对应层数，打出后清除。', en: 'Increases E cost for this play only, then clears after being played.', fr: 'Augmente le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを増やし、使用後に消えます。' }), color: '#795548' },
+        temp_magic_heavy: { label: UI.tag_temp_magic_heavy || 'Temporary Magic Heavy', desc: lt({ zh: '本次打出时 M 花费增加对应层数，打出后清除。', en: 'Increases M cost for this play only, then clears after being played.', fr: 'Augmente le coût M pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ M コストを増やし、使用後に消えます。' }), color: '#7A5CFF' },
+        floating: { label: UI.tag_floating || 'Floating', desc: lt({ zh: '打出后若本应进入弃牌堆，则洗入抽牌堆随机位置。', en: 'After being played, if it would enter discard, it is shuffled into the deck instead.', fr: 'Après utilisation, si elle devait aller dans la défausse, elle est mélangée dans le deck à la place.', ja: '使用後、本来捨て札に行く場合、代わりに山札へランダムに戻ります。' }), color: '#1687B8' },
         nazar: { label: UI.status_nazar || lt({ zh: '邪眼', en: 'Nazar', fr: 'Nazar', ja: 'ナザール' }), desc: lt({ zh: '存在时，自己所受≤9的物理伤害变为1。若受到≥10的物理伤害，则将其减少9，且层数-1。', en: 'While present, physical damage you take that is 9 or less becomes 1. Physical damage of 10 or more is reduced by 9, then this loses 1 stack.', fr: 'Tant qu’il existe, les dégâts physiques subis de 9 ou moins deviennent 1. Les dégâts physiques de 10 ou plus sont réduits de 9, puis cet état perd 1 charge.', ja: '存在中、自分が受ける9以下の物理ダメージは1になります。10以上の物理ダメージは9減少し、その後1層減ります。' }), color: COLORS.magic },
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: lt({ zh: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', en: 'While present, an enemy skill card that actually costs 1E or less is negated, then this loses 1 stack.', fr: 'Tant qu’il existe, une compétence ennemie coûtant réellement 1E ou moins est annulée, puis perd 1 charge.', ja: '存在中、敵が実際に1E以下消費する技能カードを無効にし、その後1層減ります。' }), color: COLORS.magic },
         dodge: { label: UI.status_dodge || lt({ zh: '闪避', en: 'Dodge', fr: 'Esquive', ja: '回避' }), desc: lt({ zh: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', en: 'When physical damage would be taken, lose 1 stack to prevent that hit. If the source card has Precision, prevent only half of the damage. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Quand des dégâts physiques devraient être subis, perdez 1 charge pour annuler ce coup. Si la carte source a Précision, seule la moitié des dégâts est annulée. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: '物理ダメージを受ける時、1層減らしてそのダメージを防ぎます。発生源カードがPrecisionを持つ場合、防ぐのは半分だけです。状態免疫中は蓄積できますが発動も消費もされません。' }), color: COLORS.guard },
@@ -9853,6 +9951,8 @@ function getIntroFlagDescription(flag, custom = null) {
         magic_swift: lt({ zh: 'M花费减少X，最少为0。', en: 'M cost is reduced by X, minimum 0.', fr: 'Le coût M est réduit de X, minimum 0.', ja: 'M コストをX減らします。最低0。' }),
         temp_swift: lt({ zh: '本次打出时E花费减少X，打出后清除。', en: 'For this play only, E cost is reduced by X; clears after being played.', fr: 'Pour ce jeu seulement, le coût E est réduit de X ; disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストをX減らし、使用後に消えます。' }),
         temp_heavy: lt({ zh: '本次打出时E花费增加X，打出后清除。', en: 'For this play only, E cost is increased by X; clears after being played.', fr: 'Pour ce jeu seulement, le coût E augmente de X ; disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストをX増やし、使用後に消えます。' }),
+        temp_magic_heavy: getTermIntroLibrary().temp_magic_heavy.desc,
+        floating: getTermIntroLibrary().floating.desc,
         power: lt({ zh: '此牌造成的每段D增加。多段D会按段数把威力向上分配。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }),
         team_limited: lt({ zh: '只在一队至少2名玩家的模式出现；单人训练场可选，但没有实际意义。', en: 'Appears only in modes where a team has at least 2 players. In training it can appear but has no practical effect.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. En entraînement, elle peut apparaître mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ出ます。訓練場では出ても実質効果はありません。' }),
         team_unique: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose it, one copy is kept at random and extras are exiled.', fr: 'Si plusieurs coéquipiers la choisissent, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }),
@@ -9889,7 +9989,7 @@ function buildCardIntroSummaryHtml(cardDef) {
     if (!triggerText && !descriptionText) return '';
     return `
         <section class="term-intro-summary">
-            ${descriptionText ? `<div class="term-intro-flavor">${escapeHtml(descriptionText)}</div>` : ''}
+            ${descriptionText ? `<div class="term-intro-flavor">${colorizeCardText(descriptionText)}</div>` : ''}
             ${triggerText ? `<div class="term-intro-summary-block">
                 <div class="term-intro-summary-label">触发</div>
                 <div class="term-intro-summary-text">${colorizeCardText(triggerText)}</div>
@@ -10017,10 +10117,16 @@ function collectCardIntroTerms(cardDict) {
         [/(魔力迅捷|magic swift|magic_swift|magic_swift_value)/i, 'magic_swift'],
         [/(暂时迅捷|temporary swift|temp_swift|temp_swift_value)/i, 'temp_swift'],
         [/(暂时沉重|temporary heavy|temp_heavy|temp_heavy_value)/i, 'temp_heavy'],
+        [/(暂时魔力沉重|temporary magic heavy|temp_magic_heavy|temp_magic_heavy_value)/i, 'temp_magic_heavy'],
         [/(威力|power|power_value)/i, 'power'],
         [/(隐匿|stealth|tag["']?\s*[:=]\s*["']?stealth)/i, 'stealth'],
         [/(萌芽|sprout|tag["']?\s*[:=]\s*["']?sprout)/i, 'sprout'],
         [/(共生|symbiosis|tag["']?\s*[:=]\s*["']?symbiosis)/i, 'symbiosis'],
+        [/(广域打击|wide strike|wide_strike)/i, 'wide_strike'],
+        [/(自刃|self[-_ ]?target|self-cut)/i, 'self_target'],
+        [/(漂浮|floating)/i, 'floating'],
+        [/(队伍限定|team limited|team_limited)/i, 'team_limited'],
+        [/(队伍独一|team unique|team_unique)/i, 'team_unique'],
     ];
     effectFlagProbes.forEach(([re, flag]) => {
         if (re.test(rawText)) addFlagIntroItem(items, seen, flag);
@@ -10071,7 +10177,7 @@ function getStatusIntroItem(statusInfo) {
         attack_blocked: { label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         magic_blocked: { label: '魔力封锁', desc: '存在时，不能打出带有魔力消耗的卡牌。回合结束时层数-1。', color: COLORS.magic_text },
-        untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。', color: '#1A5276' },
+        untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。自己回合开始时层数-1。', color: '#1A5276' },
         bandage: { label: UI.status_bandage, desc: '受到致命伤害后无敌直到自己下个回合结束，然后死亡。', color: '#1E8449' },
         sponge: { label: UI.status_sponge, desc: '表示海绵的存在。', color: '#6C3483' },
         sluggish: { label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
@@ -10118,7 +10224,7 @@ function getStatusIntroItem(statusInfo) {
         magic_blocked: { label: lt({ zh: '魔力封锁', en: 'Magic Lock', fr: 'Verrou magique', ja: '魔力封鎖' }), desc: lt({ zh: builtIns.magic_blocked.desc, en: 'You cannot play cards with M cost while this effect lasts. Loses 1 stack at turn end.', fr: 'Vous ne pouvez pas jouer de cartes coûtant M tant que cet effet dure. Perd 1 charge en fin de tour.', ja: '効果中、M消費のあるカードを使用できません。ターン終了時に1層減ります。' }) },
         blood_debt: { label: lt({ zh: '血债', en: 'Blood Debt', fr: 'Dette de sang', ja: '血債' }), desc: lt({ zh: builtIns.blood_debt.desc, en: 'When physical damage is taken, this effect clears and the attacker gains E equal to its stacks.', fr: 'Quand des dégâts physiques sont subis, cet effet disparaît et l’attaquant gagne E égal aux charges.', ja: '物理ダメージを受けるとこの効果は消え、攻撃者は層数分のEを得ます。' }) },
         unable_counter: { label: lt({ zh: '无法反制', en: 'Unable to Counter', fr: 'Contre impossible', ja: '反制不能' }), desc: lt({ zh: builtIns.unable_counter.desc, en: 'Discards counter cards from left to right equal to its stacks, then reduces those stacks. If stacks remain, drawn counter cards are discarded and reduce stacks.', fr: 'Défausse de gauche à droite autant de contres que de charges, puis réduit ces charges. S’il en reste, les contres piochés sont défaussés et réduisent les charges.', ja: '層数分だけ左から反制牌を弃牌に置き、その分層数を減らします。層数が残る間、引いた反制牌も弃牌に置かれ層数が減ります。' }) },
-        untargetable: { label: UI.status_untargetable, desc: lt({ zh: builtIns.untargetable.desc, en: 'Cannot be selected by some targeted effects.', fr: 'Ne peut pas être choisi par certains effets ciblés.', ja: '一部の対象指定効果で選べません。' }) },
+        untargetable: { label: UI.status_untargetable, desc: lt({ zh: builtIns.untargetable.desc, en: 'Cannot be selected by some targeted effects. Loses 1 stack at the start of your turn.', fr: 'Ne peut pas être choisi par certains effets ciblés. Perd 1 charge au début de votre tour.', ja: '一部の対象指定効果で選べません。自分ターン開始時に1層減ります。' }) },
         bandage: { label: UI.status_bandage, desc: lt({ zh: builtIns.bandage.desc, en: 'After lethal damage, become invincible until your next turn ends, then die.', fr: 'Après des dégâts mortels, devient invincible jusqu’à la fin de votre prochain tour, puis meurt.', ja: '致命ダメージ後、次の自分ターン終了まで無敵になり、その後死亡します。' }) },
         sluggish: { label: UI.status_sluggish, desc: lt({ zh: builtIns.sluggish.desc, en: 'Draw that many fewer cards each turn.', fr: 'Pioche autant de cartes en moins à chaque tour.', ja: '毎ターンその層数分だけドローが減ります。' }) },
         overload: { label: UI.status_overload, desc: lt({ zh: builtIns.overload.desc, en: 'At turn start, lose E equal to its stacks down to 0, then clear it.', fr: 'Au début du tour, perdez E égal aux charges jusqu’à 0, puis l’état disparaît.', ja: 'ターン開始時、層数分のEを0まで失い、その後消えます。' }) },
@@ -10320,7 +10426,7 @@ function renderTermIntroItems(items) {
     return items.map(item => `
         <article class="term-intro-item" style="--term-color:${escapeHtml(item.color || COLORS.text_primary)}">
             <div class="term-intro-item-title">${renderInlineIconHtml(item.iconKey || '', item.label)}<span>${escapeHtml(item.label)}</span></div>
-            <div class="term-intro-item-desc">${escapeHtml(item.desc || '')}</div>
+            <div class="term-intro-item-desc">${colorizeCardText(item.desc || '')}</div>
         </article>
     `).join('');
 }
@@ -19490,7 +19596,7 @@ function renderStatusTags(containerId, playerData) {
     if (attackBlocked > 0) tags.push({ key: 'attack_blocked', name: UI.status_attack_blocked, abbr: '禁攻', val: attackBlocked, fg: '#C0392B', bg: '#FDEDEC' });
     if (attackOnly > 0) tags.push({ key: 'attack_only', name: UI.status_attack_only, abbr: 'TOnly', val: attackOnly, fg: '#D35400', bg: '#FEF5E7' });
     if (magicBlocked > 0) tags.push({ key: 'magic_blocked', name: '魔力封锁', abbr: '封M', val: magicBlocked, fg: COLORS.magic_text, bg: COLORS.magic_bg });
-    if (p.untargetable) tags.push({ key: 'untargetable', name: UI.status_untargetable, abbr: 'Unt', val: '', fg: '#1A5276', bg: '#EBF5FB' });
+    if (Number(p.untargetable || 0) > 0) tags.push({ key: 'untargetable', name: UI.status_untargetable, abbr: 'Unt', val: Number(p.untargetable || 0), fg: '#1A5276', bg: '#EBF5FB' });
     if (p.bandage_active) tags.push({ key: 'bandage', name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
     if (p.sponge_active) tags.push({ key: 'sponge', name: UI.status_sponge, abbr: 'Spg', val: '', fg: '#6C3483', bg: '#F4ECF7' });
     if (p.sluggish > 0) tags.push({ key: 'sluggish', name: UI.status_sluggish, abbr: 'Slg', val: p.sluggish, fg: '#E67E22', bg: '#FEF5E7' });
@@ -20881,9 +20987,10 @@ function getCardTargetPickOptions(cardDef) {
         return { includeSelf: true, candidates: 'self', aliveOnly: true };
     }
     if (cardDef.card_type === 'thorn') {
+        const allowsSelf = getEffectiveCardFlagSets({}, cardDef || {}).effective.has('self_target');
         return {
-            includeSelf: false,
-            candidates: gameState.mode === '2v2' ? 'enemy,teammate' : 'enemy',
+            includeSelf: allowsSelf,
+            candidates: `${gameState.mode === '2v2' ? 'enemy,teammate' : 'enemy'}${allowsSelf ? ',self' : ''}`,
             aliveOnly: true,
         };
     }
@@ -21157,8 +21264,13 @@ function cardNeedsPlayerTarget(cardDef, cardDict = null) {
     if (!cardDef) return false;
     if (cardHasWideStrikeFlag(cardDict || {}, cardDef)) return false;
     if (cardHasSelfOnlyFlag(cardDict || {}, cardDef) && cardDef.card_type !== 'thorn') return false;
+    const cardId = String(cardDef.id || cardDef.def_id || cardDef.legacy_id || '').toLowerCase();
+    if (['sapphire', 'ocean:sapphire'].includes(cardId)) return false;
     if (cardDef.card_type === 'guard') return false;
-    if (cardDef.card_type === 'thorn') return gs.mode === '2v2';
+    if (cardDef.card_type === 'thorn') {
+        const allowsSelf = getEffectiveCardFlagSets(cardDict || {}, cardDef || {}).effective.has('self_target');
+        return gs.mode === '2v2' || allowsSelf;
+    }
     if (cardDef.card_type === 'root') {
         return (
             cardPlayRequestsTarget(cardDef)
@@ -22852,7 +22964,8 @@ async function onPlayCard(cardInstanceId, options = {}) {
     const cardDef = getCardDef(cardDict.def_id);
     if (cardDef && cardDef.card_type === 'thorn' && gameState && gameState.mode !== '2v2') {
         const opponent = gameState.opponent || {};
-        if (opponent.untargetable && !isStatusImmune(opponent)) {
+        const flags = getEffectiveCardFlagSets(cardDict || {}, cardDef || {}).effective;
+        if (!flags.has('self_target') && !flags.has('wide_strike') && opponent.untargetable && !isStatusImmune(opponent)) {
             flashStatus(UI.no_selectable_player || '没有可选中的玩家', 2200, 'error');
             return;
         }
@@ -24363,7 +24476,23 @@ function getDeckViewerPlayer() {
 function getPileViewerPlayers(pileType = 'deck') {
     if (!gameState) return [];
     const self = getDeckViewerPlayer();
-    return self ? [self] : [];
+    const players = [];
+    const seen = new Set();
+    const addPlayer = (player) => {
+        if (!player) return;
+        const pid = normalizePlayerId(player.player_id);
+        const key = pid != null ? `p${pid}` : JSON.stringify(player.name || player.nickname || '');
+        if (seen.has(key)) return;
+        seen.add(key);
+        players.push(player);
+    };
+    addPlayer(self);
+    const orderedKey = pileType === 'discard' ? 'discard_ordered' : 'deck_ordered';
+    [gameState.you, gameState.teammate, gameState.opponent, gameState.opponent2]
+        .forEach(player => {
+            if (player && Array.isArray(player[orderedKey])) addPlayer(player);
+        });
+    return players;
 }
 
 function getPileViewerName(player) {
@@ -24809,6 +24938,7 @@ function renderSettingsTabs() {
 }
 
 function closeSettings() {
+    settingsLoadSeq += 1;
     const panel = $('settings-panel');
     if (panel) panel.classList.add('hidden');
 }
@@ -24817,15 +24947,33 @@ async function loadSettingsMods() {
     const listEl = $('settings-mods-list');
     const noModsEl = $('settings-no-mods');
     if (!listEl) return;
+    const seq = ++settingsLoadSeq;
+    const panel = $('settings-panel');
+    const cacheFresh = settingsModsLoadedAt && Date.now() - settingsModsLoadedAt < 30 * 1000;
+    if (Array.isArray(settingsMods) && settingsMods.length && cacheFresh) {
+        renderOfficialModList();
+        renderModSourceControls();
+        if (settingsActiveModTab === 'community') loadSettingsCommunityMods();
+        return;
+    }
     try {
-        const resp = await fetch('/api/mods');
-        const mods = await resp.json();
+        if (!settingsModsLoadPromise) {
+            settingsModsLoadPromise = fetch('/api/mods')
+                .then(resp => resp.json())
+                .finally(() => {
+                    settingsModsLoadPromise = null;
+                });
+        }
+        const mods = await settingsModsLoadPromise;
+        if (seq !== settingsLoadSeq || (panel && panel.classList.contains('hidden'))) return;
         settingsMods = mods || [];
+        settingsModsLoadedAt = Date.now();
     } catch (e) {
+        if (seq !== settingsLoadSeq || (panel && panel.classList.contains('hidden'))) return;
         settingsMods = [];
     }
     renderOfficialModList();
-    loadSettingsCommunityMods();
+    if (settingsActiveModTab === 'community') loadSettingsCommunityMods();
     renderModSourceControls();
 }
 
@@ -25277,16 +25425,33 @@ async function loadSettingsCommunityMods() {
     const noModsEl = $('settings-no-community-mods');
     const statusEl = $('settings-community-status');
     if (!listEl) return;
+    const seq = settingsLoadSeq;
+    const panel = $('settings-panel');
+    const cacheFresh = settingsCommunityModsLoadedAt && Date.now() - settingsCommunityModsLoadedAt < 30 * 1000;
+    if (Array.isArray(settingsCommunityMods) && settingsCommunityMods.length && cacheFresh) {
+        renderCommunityModList();
+        renderCommunityCurrent();
+        return;
+    }
     try {
-        const resp = await fetch('/api/community-mods');
-        const data = await resp.json();
+        if (!settingsCommunityModsLoadPromise) {
+            settingsCommunityModsLoadPromise = fetch('/api/community-mods')
+                .then(resp => resp.json())
+                .finally(() => {
+                    settingsCommunityModsLoadPromise = null;
+                });
+        }
+        const data = await settingsCommunityModsLoadPromise;
+        if (seq !== settingsLoadSeq || (panel && panel.classList.contains('hidden'))) return;
         settingsCommunityMods = Array.isArray(data) ? data : (data.mods || []);
+        settingsCommunityModsLoadedAt = Date.now();
         const available = new Set(settingsCommunityMods.map(mod => mod.sha256).filter(Boolean));
         const selected = getCommunityModSelection().community_mods || [];
         const pruned = selected.filter(mod => available.has(mod.sha256));
         if (selected.length !== pruned.length) setSelectedCommunityMods(pruned);
         if (statusEl) statusEl.textContent = data && data.error ? data.error : '';
     } catch (e) {
+        if (seq !== settingsLoadSeq || (panel && panel.classList.contains('hidden'))) return;
         settingsCommunityMods = [];
         if (statusEl) statusEl.textContent = e.message || String(e);
     }
@@ -25886,9 +26051,12 @@ async function init() {
         if (e.key === 'Enter') onLogin();
     });
     bindClickOnce('btn-open-settings', openSettings);
-    $('btn-settings-close').addEventListener('click', async () => {
-        await saveDisabledMods();
+    $('btn-settings-close').addEventListener('click', () => {
         closeSettings();
+        saveDisabledMods().catch((err) => {
+            console.warn('Failed to save settings on close:', err);
+            flashStatus(UI.operation_failed || '操作失败', 1800, 'error');
+        });
     });
     if ($('btn-lobby-settings')) $('btn-lobby-settings').addEventListener('click', () => openSettings({ hideServer: true }));
     if ($('settings-tab-appearance')) $('settings-tab-appearance').addEventListener('click', () => setSettingsTab('appearance'));
@@ -26054,11 +26222,11 @@ async function init() {
     $('btn-solo-save').addEventListener('click', saveSoloDecks);
     $('btn-solo-start').addEventListener('click', startSoloTraining);
     $('btn-solo-back').addEventListener('click', () => showView('view-login'));
-    if ($('gallery-search')) $('gallery-search').addEventListener('input', renderCardGallery);
-    if ($('gallery-tab-cards')) $('gallery-tab-cards').addEventListener('click', () => { setGalleryMode('cards'); gallerySelectedId = null; renderCardGallery(); });
-    if ($('gallery-tab-tags')) $('gallery-tab-tags').addEventListener('click', () => { setGalleryMode('tags'); gallerySelectedId = null; renderCardGallery(); });
-    if ($('gallery-tab-events')) $('gallery-tab-events').addEventListener('click', () => { setGalleryMode('events'); gallerySelectedId = null; renderCardGallery(); });
-    if ($('gallery-tab-statuses')) $('gallery-tab-statuses').addEventListener('click', () => { setGalleryMode('statuses'); gallerySelectedId = null; renderCardGallery(); });
+    if ($('gallery-search')) $('gallery-search').addEventListener('input', () => scheduleRenderCardGallery(120));
+    if ($('gallery-tab-cards')) $('gallery-tab-cards').addEventListener('click', () => { setGalleryMode('cards'); gallerySelectedId = null; scheduleRenderCardGallery(20); });
+    if ($('gallery-tab-tags')) $('gallery-tab-tags').addEventListener('click', () => { setGalleryMode('tags'); gallerySelectedId = null; scheduleRenderCardGallery(20); });
+    if ($('gallery-tab-events')) $('gallery-tab-events').addEventListener('click', () => { setGalleryMode('events'); gallerySelectedId = null; scheduleRenderCardGallery(20); });
+    if ($('gallery-tab-statuses')) $('gallery-tab-statuses').addEventListener('click', () => { setGalleryMode('statuses'); gallerySelectedId = null; scheduleRenderCardGallery(20); });
     if ($('btn-open-rules')) $('btn-open-rules').addEventListener('click', () => openAbout());
     if ($('btn-gallery-back')) $('btn-gallery-back').addEventListener('click', () => {
         if (galleryReturnToRules) {

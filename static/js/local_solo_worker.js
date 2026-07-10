@@ -28,11 +28,23 @@ const CARD_FLAG_ALIASES = {
     'thorn_cards_supplement_1:sticky': 'sticky',
     'tag_thorn_cards_supplement_1_sticky': 'sticky',
     'thorn_cards_supplement_1_sticky': 'sticky',
+    'temp_magic_heavy': 'temp_magic_heavy',
+    'tag_temp_magic_heavy': 'temp_magic_heavy',
+    'void:temp_magic_heavy': 'temp_magic_heavy',
+    'tag_void:temp_magic_heavy': 'temp_magic_heavy',
+    'tag_void_temp_magic_heavy': 'temp_magic_heavy',
+    '暂时魔力沉重': 'temp_magic_heavy',
+    'floating': 'floating',
+    'tag_floating': 'floating',
+    'void:floating': 'floating',
+    'tag_void:floating': 'floating',
+    'tag_void_floating': 'floating',
+    '漂浮': 'floating',
 };
 const VANILLA_FLAGS = new Set([
     'precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis',
     'attract', 'void', 'self_only', 'uncancellable', 'infinite_exclude', 'rebound',
-    'copy', 'unique', 'swift', 'stealth', 'revealed',
+    'copy', 'unique', 'swift', 'stealth', 'revealed', 'temp_magic_heavy', 'floating',
 ]);
 
 class ModLoopBreak extends Error {}
@@ -377,6 +389,7 @@ class LocalCard {
         this.power_value = Math.max(0, toInt(source.power_value, 0));
         this.temp_swift_value = Math.max(0, toInt(source.temp_swift_value, 0));
         this.temp_heavy_value = Math.max(0, toInt(source.temp_heavy_value, 0));
+        this.temp_magic_heavy_value = Math.max(0, toInt(source.temp_magic_heavy_value, 0));
         this.extra_hits = Math.max(0, toInt(source.extra_hits, 0));
         this.setup_modifiers = new Set(source.setup_modifiers || []);
         if (this.def_id === 'Tomato') {
@@ -402,7 +415,7 @@ class LocalCard {
 
     get cost_m() {
         const base = this.cost_m_override != null ? this.cost_m_override : toInt(this.def().cost_m, 0);
-        return Math.max(0, base - Math.max(0, toInt(this.magic_swift_value, 0)));
+        return Math.max(0, base + Math.max(0, toInt(this.temp_magic_heavy_value, 0)) - Math.max(0, toInt(this.magic_swift_value, 0)));
     }
 
     get flags() {
@@ -438,6 +451,7 @@ class LocalCard {
             power_value: this.power_value,
             temp_swift_value: this.temp_swift_value,
             temp_heavy_value: this.temp_heavy_value,
+            temp_magic_heavy_value: this.temp_magic_heavy_value,
             extra_hits: this.extra_hits,
             setup_modifiers: Array.from(this.setup_modifiers),
             durability: this.durability,
@@ -1808,6 +1822,9 @@ class LocalSoloEngine {
         if (choiceType === 'choose_same_attacks_from_hand') {
             return Array.isArray(choice.target_instance_ids) && choice.target_instance_ids.length > 0;
         }
+        if (choiceType === 'choose_ocean_sapphire') {
+            return this.choiceTargetFromChoice(choice) >= 0 && choice.target_instance_id != null;
+        }
         if ([
             'choose_attack_from_hand', 'choose_card_from_hand', 'choose_card_to_discard',
             'choose_from_deck', 'choose_from_discard', 'choose_from_exile',
@@ -2931,7 +2948,7 @@ class LocalSoloEngine {
         if (!target) return 0;
         const fusionExtra = Math.max(0, toInt(target.fusion_level, 1) - 1);
         const fissionExtra = Math.max(0, toInt(target.fission_level, 1) - 1);
-        const layered = ['swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value']
+        const layered = ['swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value']
             .reduce((sum, key) => sum + Math.max(0, toInt(target[key], 0)), 0);
         return Math.ceil((fusionExtra + fissionExtra + layered) / 2);
     }
@@ -3803,6 +3820,7 @@ class LocalSoloEngine {
             power_value: 'power',
             temp_swift_value: 'temp_swift',
             temp_heavy_value: 'temp_heavy',
+            temp_magic_heavy_value: 'temp_magic_heavy',
         };
         const flag = mapping[prop];
         if (!flag) return;
@@ -3930,7 +3948,7 @@ class LocalSoloEngine {
             copy.fusion_multiplier = copy.fusion_level;
             copy.fission_level = halfExtra(target.fission_level, 1);
             copy.fission_count = Math.max(0, copy.fission_level - 1);
-            ['swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value'].forEach(key => {
+            ['swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value'].forEach(key => {
                 copy[key] = Math.ceil(Math.max(0, toInt(target[key], 0)) / 2);
             });
             if (copy.swift_value > 0) copy.instance_flags.add('swift');
@@ -3938,6 +3956,7 @@ class LocalSoloEngine {
             if (copy.power_value > 0) copy.instance_flags.add('power');
             if (copy.temp_swift_value > 0) copy.instance_flags.add('temp_swift');
             if (copy.temp_heavy_value > 0) copy.instance_flags.add('temp_heavy');
+            if (copy.temp_magic_heavy_value > 0) copy.instance_flags.add('temp_magic_heavy');
         } else {
             this.applySetupModifiersToCard(playerId, copy);
         }
@@ -5211,6 +5230,7 @@ class LocalSoloEngine {
         card.power_value = 0;
         card.temp_swift_value = 0;
         card.temp_heavy_value = 0;
+        card.temp_magic_heavy_value = 0;
         card.instance_flags.delete('power');
         card.instance_flags.delete('temp_swift');
         card.instance_flags.delete('temp_heavy');
@@ -5429,7 +5449,8 @@ class LocalSoloEngine {
         if (this.pending_response) return { success: false, error: '等待对手反制响应' };
         if (card.def().card_type === 'thorn') {
             const targetId = this.resolveTarget(playerId, choice && choice.target_player_id != null ? choice.target_player_id : 'enemy');
-            if (targetId < 0 || targetId >= this.players.length || targetId === playerId) {
+            const allowsSelf = card.flags && card.flags.has('self_target');
+            if (targetId < 0 || targetId >= this.players.length || (targetId === playerId && !allowsSelf)) {
                 return { success: false, error: '没有可选中的玩家' };
             }
         }

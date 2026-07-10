@@ -8206,6 +8206,12 @@ html.blind-level-4 .card-prediction-part.magic {
   border-color: rgba(121, 85, 72, 0.3);
 }
 
+.card-flag.temp-magic-heavy {
+  color: #7A5CFF;
+  background: rgba(122, 92, 255, 0.16);
+  border-color: rgba(122, 92, 255, 0.34);
+}
+
 .card-flag.magic-swift {
   color: #6C5CE7;
   background: rgba(108, 92, 231, 0.15);
@@ -8240,6 +8246,12 @@ html.blind-level-4 .card-prediction-part.magic {
   color: #2C3E50;
   background: rgba(44, 62, 80, 0.12);
   border-color: rgba(44, 62, 80, 0.25);
+}
+
+.card-flag.floating {
+  color: #1687B8;
+  background: rgba(22, 135, 184, 0.15);
+  border-color: rgba(22, 135, 184, 0.32);
 }
 
 .card-flag.wide-strike {

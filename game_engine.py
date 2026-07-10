@@ -89,10 +89,12 @@ def reset_card_after_play(card: CardInstance):
     card.power_value = 0
     card.temp_swift_value = 0
     card.temp_heavy_value = 0
+    card.temp_magic_heavy_value = 0
     card.hand_blind_turns = 0
     card.instance_flags.discard('power')
     card.instance_flags.discard('temp_swift')
     card.instance_flags.discard('temp_heavy')
+    card.instance_flags.discard('temp_magic_heavy')
     card.instance_flags.discard('ocean_spikeball_boosted')
     card.instance_flags.discard('wide_strike')
     if card.card_type == 'thorn':
@@ -155,7 +157,7 @@ class PlayerState:
         self.bandage_active: bool = False
         self.bandage_death_pending: bool = False
         self.attack_blocked: int = 0
-        self.untargetable: bool = False
+        self.untargetable: int = 0
         self.sponge_active: bool = False
         self.shovel_active: bool = False
         self.sluggish: int = 0
@@ -212,6 +214,7 @@ class PlayerState:
         self.achievement_counter_successes: int = 0
         self.achievement_equipment_destroyed: int = 0
         self.achievement_max_equipment_count: int = 0
+        self.achievement_max_armor: int = self.armor
         self.achievement_death_round = None
         self.achievement_self_caused_death: bool = False
         self.turn_start_snapshot: Dict[str, int] = {
@@ -320,6 +323,7 @@ class PlayerState:
             'achievement_counter_successes': self.achievement_counter_successes,
             'achievement_equipment_destroyed': self.achievement_equipment_destroyed,
             'achievement_max_equipment_count': self.achievement_max_equipment_count,
+            'achievement_max_armor': self.achievement_max_armor,
             'achievement_death_round': self.achievement_death_round,
             'achievement_self_caused_death': self.achievement_self_caused_death,
             'turn_start_snapshot': dict(self.turn_start_snapshot),
@@ -365,7 +369,14 @@ class PlayerState:
         ps.bandage_active = d.get('bandage_active', False)
         ps.bandage_death_pending = d.get('bandage_death_pending', False)
         ps.attack_blocked = d.get('attack_blocked', 0)
-        ps.untargetable = d.get('untargetable', False)
+        raw_untargetable = d.get('untargetable', 0)
+        if isinstance(raw_untargetable, bool):
+            ps.untargetable = 1 if raw_untargetable else 0
+        else:
+            try:
+                ps.untargetable = max(0, int(raw_untargetable or 0))
+            except (TypeError, ValueError):
+                ps.untargetable = 0
         ps.sponge_active = d.get('sponge_active', False)
         ps.shovel_active = d.get('shovel_active', False)
         ps.sluggish = d.get('sluggish', 0)
@@ -433,6 +444,7 @@ class PlayerState:
         ps.achievement_counter_successes = int(d.get('achievement_counter_successes', 0) or 0)
         ps.achievement_equipment_destroyed = int(d.get('achievement_equipment_destroyed', 0) or 0)
         ps.achievement_max_equipment_count = int(d.get('achievement_max_equipment_count', 0) or 0)
+        ps.achievement_max_armor = int(d.get('achievement_max_armor', getattr(ps, 'armor', 0)) or 0)
         death_round = d.get('achievement_death_round', None)
         ps.achievement_death_round = None if death_round is None else int(death_round)
         ps.achievement_self_caused_death = bool(d.get('achievement_self_caused_death', False))
@@ -485,7 +497,12 @@ class PlayerState:
             for e in self.equipment
             if e.def_id == 'GoldenLeaf' and getattr(e, 'effect_target', self.player_id) == self.player_id
         )
-        return HAND_LIMIT + own_golden_leaf + max(0, int(getattr(self, 'extra_hand_limit_bonus', 0)))
+        air_penalty = sum(
+            1
+            for c in getattr(self, 'hand', []) or []
+            if getattr(c, 'def_id', '') in ('void:air', 'Air')
+        )
+        return max(0, HAND_LIMIT + own_golden_leaf + max(0, int(getattr(self, 'extra_hand_limit_bonus', 0))) - air_penalty)
 
     def zero_e_cards_ignore_hand_limit(self) -> bool:
         return bool(getattr(self, 'external_zero_e_ignore_hand_limit', False)) or any(
@@ -516,6 +533,19 @@ class PlayerState:
         callback = getattr(self, '_enter_hand_callback', None)
         if trigger_enter_hand and callback:
             callback(self.player_id, card)
+        while self.rule_hand_size() > self.hand_limit() and self.hand:
+            attract_new = 'attract' in getattr(card, 'flags', set())
+            non_attract = [c for c in self.hand if c is not card and 'attract' not in getattr(c, 'flags', set())]
+            if attract_new and non_attract:
+                overflow_card = non_attract[0]
+            else:
+                overflow_card = card if card in self.hand else self.hand[0]
+            if overflow_card in self.hand:
+                self.hand.remove(overflow_card)
+                reset_card_for_discard(overflow_card)
+                self.discard.append(overflow_card)
+            else:
+                break
 
     def draw_cards(self, count: int) -> List[CardInstance]:
         drawn = []
@@ -869,6 +899,13 @@ class GameEngine:
         target = self.players[target_id]
         self._note_achievement_enemy_card_total(target_id)
         try:
+            target.achievement_max_armor = max(
+                int(getattr(target, 'achievement_max_armor', 0) or 0),
+                int(getattr(target, 'armor', 0) or 0),
+            )
+        except Exception:
+            pass
+        try:
             status_types = 0
             builtin_values = [
                 getattr(target, 'poison', 0), getattr(target, 'fire', 0), getattr(target, 'dodge', 0),
@@ -937,6 +974,7 @@ class GameEngine:
         ps.achievement_counter_successes = 0
         ps.achievement_equipment_destroyed = 0
         ps.achievement_max_equipment_count = len(getattr(ps, 'equipment', []) or [])
+        ps.achievement_max_armor = max(0, int(getattr(ps, 'armor', 0) or 0))
         ps.achievement_death_round = None
         ps.achievement_self_caused_death = False
 
@@ -1070,8 +1108,8 @@ class GameEngine:
             '装备保护': ps.equipment_protection,
             'invincible': 1 if ps.invincible else 0,
             '无敌': 1 if ps.invincible else 0,
-            'untargetable': 1 if ps.untargetable else 0,
-            '不可选中': 1 if ps.untargetable else 0,
+            'untargetable': int(getattr(ps, 'untargetable', 0) or 0),
+            '不可选中': int(getattr(ps, 'untargetable', 0) or 0),
             '邪眼': self._nazar_status_value(target_id),
             'Nazar': self._nazar_status_value(target_id),
             'nazar': self._nazar_status_value(target_id),
@@ -2974,13 +3012,15 @@ class GameEngine:
             opp_data['revealed_tag_cards'] = opp_revealed
         log_start = 0
         self._mark_log_visible()
-        # Goggles: show deck+discard order for players with goggles enabled
-        if hasattr(self, '_goggles_players') and for_player in self._goggles_players:
-            you_data = self.players[for_player].to_dict(include_private=True)
+        # Goggles: the viewer may inspect ordered deck/discard for the chosen target.
+        goggles_targets = self._goggles_view_targets_for(for_player)
+        if opponent in goggles_targets:
+            opp_data['deck_ordered'] = [c.to_dict() for c in self.players[opponent].deck]
+            opp_data['discard_ordered'] = [c.to_dict() for c in self.players[opponent].discard]
+        you_data = self.players[for_player].to_dict(include_private=True)
+        if for_player in goggles_targets:
             you_data['deck_ordered'] = [c.to_dict() for c in self.players[for_player].deck]
             you_data['discard_ordered'] = [c.to_dict() for c in self.players[for_player].discard]
-        else:
-            you_data = self.players[for_player].to_dict(include_private=True)
         return {
             'phase': self.phase,
             'current_player': self.current_player,
@@ -4444,7 +4484,7 @@ class GameEngine:
         except Exception:
             fission_extra = 0
         layered_extra = 0
-        for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value'):
+        for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value'):
             try:
                 layered_extra += max(0, int(getattr(target, attr, 0) or 0))
             except Exception:
@@ -4481,7 +4521,7 @@ class GameEngine:
         copy_card.fusion_multiplier = float(copy_card.fusion_level)
         copy_card.fission_level = clamp_card_layer(half_extra(getattr(target, 'fission_level', 1), 1))
         copy_card.fission_count = max(0, copy_card.fission_level - 1)
-        for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value'):
+        for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value'):
             try:
                 setattr(copy_card, attr, int(math.ceil(max(0, int(getattr(target, attr, 0) or 0)) / 2)))
             except Exception:
@@ -4496,6 +4536,8 @@ class GameEngine:
             copy_card.instance_flags.add('temp_swift')
         if getattr(copy_card, 'temp_heavy_value', 0) > 0:
             copy_card.instance_flags.add('temp_heavy')
+        if getattr(copy_card, 'temp_magic_heavy_value', 0) > 0:
+            copy_card.instance_flags.add('temp_magic_heavy')
         return copy_card
 
     def _enforce_unique_cards_for_player(self, player_id: int, preferred_card: Optional[CardInstance] = None):
@@ -4850,6 +4892,7 @@ class GameEngine:
         total_e = max(0, card.cost_e + extra_e)
         card._paid_e_this_play = int(total_e)
         card._paid_m_this_play = int(card.cost_m)
+        ps.custom_vars['void_current_previous_def_id'] = str(ps.custom_vars.get('void_last_played_def_id', '') or '')
         self._spend_resource(player_id, 'elixir', total_e, card)
         self._spend_resource(player_id, 'magic', card.cost_m, card)
         ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
@@ -4866,6 +4909,8 @@ class GameEngine:
         if response_result:
             return response_result
         result = self._execute_card_effect(player_id, card, choice)
+        ps.custom_vars['void_last_played_def_id'] = getattr(card, 'def_id', '')
+        ps.custom_vars.pop('void_current_previous_def_id', None)
         self._enforce_unique_cards_for_all()
         return result
 
@@ -4995,6 +5040,8 @@ class GameEngine:
                 self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
                 is_precision = pending.get('is_precision', False)
                 if self._card_is(counter_removed, 'Bubble', 'vanilla:bubble'):
+                    if self._is_status_immune(responder_id):
+                        return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
                     if is_precision:
                         self._execute_card_effect_half_damage(player_id, card, choice)
                         if not self._is_status_immune(responder_id):
@@ -5007,8 +5054,8 @@ class GameEngine:
                 if self._card_is(counter_removed, 'MagicBubble', 'vanilla:magicbubble'):
                     self.negated_card = True
                 if self._card_is(counter_removed, 'Cucumber', 'ocean:cucumber'):
-                    old_untargetable = bool(getattr(responder, 'untargetable', False))
-                    responder.untargetable = False
+                    old_untargetable = max(0, int(getattr(responder, 'untargetable', 0) or 0))
+                    responder.untargetable = 0
                     try:
                         result = self._execute_card_effect(player_id, card, choice)
                     finally:
@@ -5142,6 +5189,7 @@ class GameEngine:
                     'target_player_explicit': True,
                     'original_card_instance_id': getattr(original_card, 'instance_id', None),
                     'original_card_def_id': getattr(original_card, 'def_id', ''),
+                    'original_card': original_card,
                     'incoming_damage': int((pending_damage_prediction or {}).get('total') or 0),
                     'first_damage': int((pending_damage_prediction or {}).get('first_hit') or ((pending_damage_prediction or {}).get('parts') or [0])[0] or 0),
                     'first_hit_damage': int((pending_damage_prediction or {}).get('first_hit') or ((pending_damage_prediction or {}).get('parts') or [0])[0] or 0),
@@ -5208,7 +5256,7 @@ class GameEngine:
             return
         if self._status_application_blocked(responder_id, 'untargetable'):
             return
-        self.players[responder_id].untargetable = True
+        self.players[responder_id].untargetable = max(0, int(getattr(self.players[responder_id], 'untargetable', 0) or 0)) + 1
         self.log_msg(f"{self.pn(responder_id)}获得1层无法选中")
 
     def _reset_one_shot_attack_attrs(self, card: CardInstance):
@@ -5599,7 +5647,7 @@ class GameEngine:
     def _atomic_set_untargetable(self, player_id, card, params, log, choice, context):
         if self._status_application_blocked(player_id, 'untargetable'):
             return
-        self.players[player_id].untargetable = True
+        self.players[player_id].untargetable = max(0, int(getattr(self.players[player_id], 'untargetable', 0) or 0)) + 1
         self.players[player_id].shovel_active = True
         self.log_msg(log or f"{self.pn(player_id)}无法被攻击选中")
 
@@ -6194,7 +6242,7 @@ class GameEngine:
         keep.fusion_multiplier = float(keep.fusion_level)
         keep.fission_count = keep.fission_level - 1
 
-        for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value'):
+        for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value'):
             setattr(keep, attr, max(0, max(int(getattr(c, attr, 0) or 0) for c in cards)))
 
         # Layered special-effect tags remain active if any merged card had them.
@@ -6206,6 +6254,7 @@ class GameEngine:
             'power_value': 'power',
             'temp_swift_value': 'temp_swift',
             'temp_heavy_value': 'temp_heavy',
+            'temp_magic_heavy_value': 'temp_magic_heavy',
         }
         for attr, flag in layer_flag_by_attr.items():
             if int(getattr(keep, attr, 0) or 0) > 0:
@@ -6417,13 +6466,32 @@ class GameEngine:
     def _atomic_goggles_enable(self, player_id, card, params, log, choice, context):
         """Enable deck+discard ordered viewing for player (Goggles)."""
         target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
-        if not hasattr(self, '_goggles_players'):
-            self._goggles_players = set()
-        self._goggles_players.add(target_id)
+        if not hasattr(self, '_goggles_views') or not isinstance(getattr(self, '_goggles_views', None), dict):
+            self._goggles_views = {}
+        self._goggles_views.setdefault(player_id, set()).add(target_id)
         if log:
             self.log_msg(log)
         else:
             self.log_msg(f"{self.pn(player_id)}给{self.pn(target_id)}启用了牌堆查看")
+
+    def _goggles_view_targets_for(self, viewer_id: int) -> Set[int]:
+        targets: Set[int] = set()
+        views = getattr(self, '_goggles_views', None)
+        if isinstance(views, dict):
+            raw_targets = views.get(viewer_id, set())
+            if isinstance(raw_targets, (set, list, tuple)):
+                for tid in raw_targets:
+                    try:
+                        tid_int = int(tid)
+                    except (TypeError, ValueError):
+                        continue
+                    if 0 <= tid_int < len(self.players):
+                        targets.add(tid_int)
+        # Backward compatibility for older in-memory games before the mapping fix.
+        legacy = getattr(self, '_goggles_players', None)
+        if isinstance(legacy, set) and viewer_id in legacy:
+            targets.add(viewer_id)
+        return targets
 
     def _atomic_reveal_tag_hand(self, player_id, card, params, log, choice, context):
         """Reveal opponent hand cards that have a specific tag. Also adds revealed_tag_cards to state."""
@@ -7322,8 +7390,7 @@ class GameEngine:
         void_cards = [c for c in ps.hand if 'void' in c.flags]
         for c in void_cards:
             ps.hand.remove(c)
-            ps.exile.append(c)
-            self.log_msg(f"{self.pn(player_id)}的{c.name_cn}因虚无被放逐")
+            self._void_exile_card(player_id, c)
         self._decay_action_limit_status(player_id, 'attack_blocked', 'attack_blocked', '禁攻')
         self._decay_action_limit_status(player_id, 'attack_only', 'attack_only', '仅攻击')
         self._decay_action_limit_status(player_id, 'magic_blocked', 'magic_blocked', '魔力封锁')
@@ -7341,6 +7408,39 @@ class GameEngine:
             self._start_player_turn(other)
         else:
             self._end_round()
+
+    def _void_exile_card(self, owner_id: int, card: CardInstance):
+        if not (0 <= owner_id < len(self.players)) or card is None:
+            return
+        ps = self.players[owner_id]
+        if card not in ps.exile:
+            ps.exile.append(card)
+        self.log_msg(f"{self.pn(owner_id)}的{card.name_cn}因虚无被放逐")
+        context = {
+            'event': 'void_exile',
+            'current_event': 'void_exile',
+            'source_id': owner_id,
+            'target_id': owner_id,
+            'void_exiled_card': card,
+        }
+        if self._has_card_event(getattr(card, 'card_def', None), 'on_void_exile'):
+            self._run_card_event(owner_id, card, 'on_void_exile', None, context)
+        # Singularity listens globally for cards exiled by Void.
+        for eq_owner_id, owner in enumerate(getattr(self, 'players', []) or []):
+            for eq in list(getattr(owner, 'equipment', []) or []):
+                if not self._equipment_is(eq, 'void:singularity', 'Singularity'):
+                    continue
+                target_id = int(getattr(eq, 'effect_target', eq_owner_id))
+                if not self._valid_player_id(target_id):
+                    continue
+                self._deal_direct_damage(
+                    target_id,
+                    2,
+                    '奇点',
+                    eq_owner_id,
+                    damage_type=DAMAGE_TYPE_MAGIC,
+                    damage_tag=DAMAGE_TAG_BATTERY,
+                )
 
     def _run_owner_turn_end_equipment(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
@@ -9899,10 +9999,13 @@ class GameEngine:
         self._apply_jungle_turn_start_statuses(player_id)
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
+        untargetable_layers = max(0, int(getattr(ps, 'untargetable', 0) or 0))
+        if untargetable_layers > 0:
+            ps.untargetable = max(0, untargetable_layers - 1)
+            if ps.untargetable <= 0:
+                self.log_msg(f"{self.pn(player_id)}的不可选中效果结束")
         if ps.shovel_active:
             ps.shovel_active = False
-            ps.untargetable = False
-            self.log_msg(f"{self.pn(player_id)}的不可选中效果结束")
         self._clear_turn_start_action_statuses(player_id)
         early_owner_turn_start_equipment = self._run_owner_turn_start_action_status_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
@@ -10228,6 +10331,11 @@ class GameEngine:
                     power = 0
             if power > 0:
                 dmg += int(math.ceil(power / max(1, int(hits or 1))))
+            if 0 <= attacker_id < len(self.players):
+                multiplier = float(getattr(self.players[attacker_id], 'damage_multiplier', 1.0) or 1.0)
+                if multiplier != 1.0:
+                    dmg = int(math.ceil(dmg * multiplier))
+                    self.players[attacker_id].damage_multiplier = 1.0
             if self.halve_next_attack:
                 dmg = math.ceil(dmg / 2)
             elif precision_dodged:
@@ -10479,6 +10587,7 @@ class GameEngine:
                     if not (0 <= effect_target < len(self.players)):
                         effect_target = equip_owner_id
                     self.players[effect_target].armor += 2
+                    self._note_achievement_status_peak(effect_target)
                 equip_owner.equipment.append(eq)
                 self._note_achievement_equipment_count(equip_owner_id)
                 self._refresh_hand_limit_bonuses()
@@ -10490,6 +10599,12 @@ class GameEngine:
         elif 'rebound' in card.flags:
             ps.add_to_hand(card)
             self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因回转回到手中")
+        elif 'floating' in card.flags:
+            owner_id, zone_name, _ = self._find_card_location(card)
+            if owner_id is None or zone_name is None:
+                insert_at = random.randint(0, len(ps.deck)) if ps.deck else 0
+                ps.deck.insert(insert_at, card)
+                self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因漂浮洗入抽牌堆")
         elif 'exile' in card.flags:
             owner_id, zone_name, _ = self._find_card_location(card)
             if owner_id is None or zone_name is None:
@@ -10512,6 +10627,11 @@ class GameEngine:
         self._check_game_over()
         if getattr(self, 'pending_v2_ui', None):
             result['needs_v2_ui'] = True
+        try:
+            ps.custom_vars['void_last_played_def_id'] = getattr(card, 'def_id', '')
+            ps.custom_vars.pop('void_current_previous_def_id', None)
+        except Exception:
+            pass
         return result
 
     def _atomic_place_as_equip(self, player_id, card, params, log, choice, context):
@@ -10765,7 +10885,7 @@ class GameEngine:
         elif prop == 'extra_hits':
             value = clamp_card_extra_hits(value)
         elif prop in ('mimic_discount', 'cost_e_override', 'cost_m_override', 'bonus_damage', 'return_to_hand_turns',
-                      'held_turns', 'swift_value', 'magic_swift_value', 'power_value', 'temp_swift_value', 'temp_heavy_value'):
+                      'held_turns', 'swift_value', 'magic_swift_value', 'power_value', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value'):
             value = max(0, value)
         if getattr(target_card, 'def_id', '') == 'Tomato':
             if prop == 'held_turns':
@@ -10776,7 +10896,7 @@ class GameEngine:
                 value = min(18, value)
         if prop in ('fusion_level', 'fission_level', 'extra_hits', 'mimic_discount', 'cost_e_override', 'cost_m_override',
                     'bonus_damage', 'return_to_hand_turns', 'held_turns', 'swift_value', 'magic_swift_value',
-                    'power_value', 'temp_swift_value', 'temp_heavy_value'):
+                    'power_value', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value'):
             setattr(target_card, prop, value)
             if prop == 'fusion_level':
                 target_card.fusion_multiplier = float(value)
@@ -10817,6 +10937,13 @@ class GameEngine:
                 else:
                     target_card.instance_flags.discard('temp_heavy')
                     target_card.disabled_flags.add('temp_heavy')
+            elif prop == 'temp_magic_heavy_value':
+                if value > 0:
+                    target_card.instance_flags.add('temp_magic_heavy')
+                    target_card.disabled_flags.discard('temp_magic_heavy')
+                else:
+                    target_card.instance_flags.discard('temp_magic_heavy')
+                    target_card.disabled_flags.add('temp_magic_heavy')
         return target_card
 
     def _get_card_property_numeric_value(self, target_card, prop):
@@ -11796,6 +11923,400 @@ class GameEngine:
         self.players[player_id].custom_vars['ocean_auto_cards'] = entries
         self.log_msg(log or f"{self.pn(player_id)}的蓝宝石放逐1张攻击牌")
 
+    def _void_zone_cards(self, target_id: int, zone: str) -> List[CardInstance]:
+        if not self._valid_player_id(target_id):
+            return []
+        ps = self.players[target_id]
+        zone_name = str(zone or 'hand')
+        if zone_name == 'deck':
+            return list(getattr(ps, 'deck', []) or [])
+        if zone_name == 'discard':
+            return list(getattr(ps, 'discard', []) or [])
+        if zone_name == 'exile':
+            return list(getattr(ps, 'exile', []) or [])
+        return list(getattr(ps, 'hand', []) or [])
+
+    def _void_selected_card(self, target_id: int, zone: str, choice) -> Optional[CardInstance]:
+        if not isinstance(choice, dict):
+            return None
+        try:
+            iid = int(choice.get('target_instance_id'))
+        except Exception:
+            iid = -1
+        if iid < 0:
+            return None
+        for c in self._void_zone_cards(target_id, zone):
+            if getattr(c, 'instance_id', None) == iid and self._card_selectable_by_action(c):
+                return c
+        return None
+
+    def _void_remove_card_from_zone(self, target_id: int, card: CardInstance) -> bool:
+        if not self._valid_player_id(target_id) or card is None:
+            return False
+        ps = self.players[target_id]
+        for zone in (ps.hand, ps.deck, ps.discard, ps.exile):
+            if card in zone:
+                zone.remove(card)
+                return True
+        return False
+
+    def _void_add_card_to_deck_random(self, target_id: int, card: CardInstance):
+        if not self._valid_player_id(target_id) or card is None:
+            return
+        deck = self.players[target_id].deck
+        deck.insert(random.randint(0, len(deck)) if deck else 0, card)
+
+    def _void_weighted_card_id(self, card_type: Optional[str] = None, exclude: Optional[Set[str]] = None) -> Optional[str]:
+        exclude = exclude or set()
+        weighted = []
+        for def_id, card_def in CARD_DEFS.items():
+            if def_id in exclude or def_id == ERROR_CARD_ID:
+                continue
+            if card_type and getattr(card_def, 'card_type', '') != card_type:
+                continue
+            if int(getattr(card_def, 'count', 0) or 0) <= 0:
+                continue
+            if 'sublime' in normalize_card_flags(getattr(card_def, 'flags', set()) or set()):
+                continue
+            weighted.extend([def_id] * max(1, int(getattr(card_def, 'count', 0) or 0)))
+        return random.choice(weighted) if weighted else None
+
+    def _void_resolve_card_def_id(self, raw_id: Any) -> Optional[str]:
+        text = str(raw_id or '').strip()
+        if not text:
+            return None
+        if text in CARD_DEFS:
+            return text
+        for def_id, card_def in CARD_DEFS.items():
+            resource = getattr(card_def, 'v2_resource', {}) or {}
+            known = {
+                str(resource.get('id', '') or ''),
+                str(resource.get('legacy_id', '') or ''),
+                str(resource.get('runtime_id', '') or ''),
+                str(getattr(card_def, 'id', '') or ''),
+            }
+            if text in known:
+                return def_id
+        path = text.split(':', 1)[1] if ':' in text else text
+        pascal = ''.join(part.capitalize() for part in path.replace('-', '_').split('_') if part)
+        return pascal if pascal in CARD_DEFS else None
+
+    def _atomic_void_exile_target_hand(self, player_id, card, params, log, choice, context):
+        for target_id in self._resolve_targets(player_id, params.get('target', 'target')):
+            if not self._valid_player_id(target_id):
+                continue
+            cards = [c for c in list(self.players[target_id].hand) if self._card_selectable_by_action(c)]
+            for hand_card in cards:
+                self.players[target_id].hand.remove(hand_card)
+                self.players[target_id].exile.append(hand_card)
+            amount = len(cards)
+            if amount > 0:
+                self.players[target_id].weakness = max(0, int(getattr(self.players[target_id], 'weakness', 0) or 0)) + amount
+                self.log_msg(log or f"{self.pn(target_id)}被放逐{amount}张手牌并获得{amount}层虚弱")
+
+    def _atomic_void_move_selected_card(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        from_zone = str(params.get('from_zone', 'discard'))
+        to_zone = str(params.get('to_zone', 'deck_top'))
+        selected = self._void_selected_card(target_id, from_zone, choice)
+        if selected is None:
+            self.log_msg(log or f"{self.pn(player_id)}没有选择可用的牌")
+            return
+        self._void_remove_card_from_zone(target_id, selected)
+        if to_zone == 'deck_top':
+            self.players[target_id].deck.insert(0, selected)
+        elif to_zone == 'deck_random':
+            self._void_add_card_to_deck_random(target_id, selected)
+        elif to_zone == 'hand':
+            self.players[target_id].add_to_hand(selected)
+        elif to_zone == 'exile':
+            self.players[target_id].exile.append(selected)
+        else:
+            self.players[target_id].discard.append(selected)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_give_selected_hand_flag(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        selected = self._void_selected_card(target_id, 'hand', choice)
+        if selected is None:
+            self.log_msg(log or f"{self.pn(player_id)}没有选择可用的牌")
+            return
+        flag = normalize_card_flag(params.get('flag', 'floating'))
+        if flag:
+            selected.instance_flags.add(flag)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_add_card_to_deck(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        def_id = self._void_resolve_card_def_id(self._resolve_card_id_ref(player_id, params.get('def_id', 'void:air'), card))
+        if not self._valid_player_id(target_id) or def_id not in CARD_DEFS:
+            return
+        new_card = CardInstance(def_id)
+        flags = normalize_card_flags(params.get('flags', []))
+        new_card.instance_flags.update(flags)
+        self._apply_setup_modifiers_to_card(target_id, new_card)
+        if params.get('position') == 'random':
+            self._void_add_card_to_deck_random(target_id, new_card)
+        else:
+            self.players[target_id].deck.insert(0, new_card)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_copy_response_card(self, player_id, card, params, log, choice, context):
+        original = (context or {}).get('original_card') if isinstance(context, dict) else None
+        if not isinstance(original, CardInstance):
+            return
+        copy_card = original.copy()
+        copy_card.instance_flags.add('exile')
+        self.players[player_id].add_to_hand(copy_card)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_antimatter_damage(self, player_id, card, params, log, choice, context):
+        last_def = str(self.players[player_id].custom_vars.get('void_current_previous_def_id', self.players[player_id].custom_vars.get('void_last_played_def_id', '')) or '')
+        if last_def in ('void:antimatter', 'Antimatter'):
+            card.instance_flags.add('exile')
+            card.instance_flags.add('wide_strike')
+        amount = self._eval_int(player_id, params.get('amount', 10), card, 10)
+        if 'wide_strike' in self._effective_card_flags(card):
+            for target_id in range(len(self.players)):
+                if not self._target_can_be_selected(player_id, target_id, allow_self='self_target' in self._effective_card_flags(card)):
+                    continue
+                self.deal_attack_damage(target_id, amount, 1, attacker_id=player_id, source_card=card)
+        else:
+            self._atomic_deal_damage(player_id, card, {'target': 'target', 'amount': amount}, log, choice, context)
+
+    def _atomic_void_damage_all_except_self(self, player_id, card, params, log, choice, context):
+        amount = self._eval_int(player_id, params.get('amount', 25), card, 25)
+        for target_id in range(len(self.players)):
+            if target_id == player_id:
+                continue
+            if not self._target_can_be_selected(player_id, target_id, allow_self=False):
+                continue
+            self.deal_attack_damage(target_id, amount, 1, attacker_id=player_id, source_card=card)
+
+    def _atomic_void_quantum_randomize(self, player_id, card, params, log, choice, context):
+        max_cost = self._eval_int(player_id, params.get('max_cost', 3), card, 3)
+        for hand_card in list(self.players[player_id].hand):
+            if int(getattr(hand_card.card_def, 'cost_e', 0) or 0) <= max_cost:
+                hand_card.cost_e_override = random.randint(0, max_cost)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_satan_swap(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id) or target_id == player_id:
+            return
+        a, b = self.players[player_id], self.players[target_id]
+        a_h, a_e, a_m = a.health, a.elixir, a.magic
+        b_h, b_e, b_m = b.health, b.elixir, b.magic
+        a.health, a.elixir, a.magic = min(b_h, a.max_health), min(b_e, a.max_elixir), min(b_m, a.max_magic)
+        b.health, b.elixir, b.magic = min(a_h, b.max_health), min(a_e, b.max_elixir), min(a_m, b.max_magic)
+        self.log_msg(log or f"{self.pn(player_id)}与{self.pn(target_id)}交换了H/E/M")
+
+    def _atomic_void_turn_count_damage(self, player_id, card, params, log, choice, context):
+        base = self._eval_int(player_id, params.get('base', 6), card, 6)
+        per = self._eval_int(player_id, params.get('per', 4), card, 4)
+        played = getattr(self.players[player_id], 'cards_played_this_turn', {}) or {}
+        count = max(0, sum(int(v or 0) for v in played.values()) - 1)
+        amount = max(0, base + per * count)
+        self._atomic_deal_damage(player_id, card, {'target': params.get('target', 'target'), 'amount': amount}, log, choice, context)
+
+    def _atomic_void_magic_relativity_damage_end(self, player_id, card, params, log, choice, context):
+        base = self._eval_int(player_id, params.get('base', 28), card, 28)
+        per = self._eval_int(player_id, params.get('per', -5), card, -5)
+        played = getattr(self.players[player_id], 'cards_played_this_turn', {}) or {}
+        count = max(0, sum(int(v or 0) for v in played.values()) - 1)
+        amount = max(0, base + per * count)
+        self._atomic_deal_damage(player_id, card, {'target': params.get('target', 'target'), 'amount': amount}, log, choice, context)
+        self.end_turn(player_id)
+
+    def _atomic_void_exile_selected_card(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        zone = str(params.get('zone', 'hand'))
+        selected = self._void_selected_card(target_id, zone, choice)
+        if selected is None:
+            self.log_msg(log or f"{self.pn(player_id)}没有选择可用的牌")
+            return
+        self._void_remove_card_from_zone(target_id, selected)
+        self.players[target_id].exile.append(selected)
+        add_def = params.get('add_def_id')
+        if add_def:
+            def_id = self._void_resolve_card_def_id(self._resolve_card_id_ref(player_id, add_def, card))
+            if def_id in CARD_DEFS:
+                new_card = CardInstance(def_id)
+                self._apply_setup_modifiers_to_card(target_id, new_card)
+                if zone == 'deck':
+                    self._void_add_card_to_deck_random(target_id, new_card)
+                else:
+                    self.players[target_id].add_to_hand(new_card)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_add_temp_heavy_to_hand(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        amount = max(0, self._eval_int(player_id, params.get('amount', 1), card, 1))
+        prop = str(params.get('kind', 'e'))
+        for hand_card in list(self.players[target_id].hand):
+            if prop == 'm':
+                hand_card.temp_magic_heavy_value = max(0, int(getattr(hand_card, 'temp_magic_heavy_value', 0) or 0)) + amount
+                hand_card.instance_flags.add('temp_magic_heavy')
+            else:
+                hand_card.temp_heavy_value = max(0, int(getattr(hand_card, 'temp_heavy_value', 0) or 0)) + amount
+                hand_card.instance_flags.add('temp_heavy')
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_add_void_to_hand(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not self._valid_player_id(target_id):
+            return
+        new_card = CardInstance(self._void_resolve_card_def_id('void:void') or ERROR_CARD_ID)
+        self.players[target_id].add_to_hand(new_card)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_kitty_auto_play(self, player_id, card, params, log, choice, context):
+        if not self._valid_player_id(player_id):
+            return
+        owner = self.players[player_id]
+        if int(getattr(owner, 'skip_turn', 0) or 0) > 0 or int(getattr(owner, 'forced_skip_turn', 0) or 0) > 0:
+            return
+        candidates = [pid for pid in range(len(self.players)) if pid != player_id and self.players[pid].health > 0]
+        if not candidates:
+            return
+        actor_id = random.choice(candidates)
+        actor = self.players[actor_id]
+        top_card = next((c for c in list(actor.deck) if self._card_selectable_by_action(c)), None)
+        if top_card is None or not self._card_payable_now(actor_id, top_card):
+            return
+        flags = self._effective_card_flags(top_card)
+        target_id = -1
+        if top_card.card_type == 'thorn':
+            target_id = self._first_auto_attack_target(actor_id)
+            if target_id < 0:
+                return
+        elif 'self_only' not in flags and (self._v2_play_requires_choice_target(top_card) or self._root_play_requires_owner_target(top_card)):
+            target_id = self._first_auto_attack_target(actor_id)
+            if target_id < 0:
+                return
+        if top_card not in actor.deck:
+            return
+        actor.deck.remove(top_card)
+        actor.add_to_hand(top_card, trigger_enter_hand=False)
+        auto_choice = {'target_player_id': target_id, 'target_player': target_id, 'target_id': target_id} if target_id >= 0 else {}
+        self.log_msg(log or f"小猫使{self.pn(actor_id)}自动打出{top_card.name_cn}")
+        if len(getattr(self, 'players', []) or []) > 2 and target_id >= 0:
+            self.play_card(actor_id, top_card.instance_id, target_player_id=target_id, choice=auto_choice)
+        else:
+            self.play_card(actor_id, top_card.instance_id, auto_choice)
+
+    def _atomic_void_transform_own_cards(self, player_id, card, params, log, choice, context):
+        ps = self.players[player_id]
+        for zone in (ps.hand, ps.deck, ps.discard):
+            for idx, old in enumerate(list(zone)):
+                new_id = self._void_weighted_card_id(getattr(old.card_def, 'card_type', ''), exclude={getattr(old, 'def_id', '')})
+                if not new_id:
+                    continue
+                new_card = CardInstance(new_id)
+                self._apply_setup_modifiers_to_card(player_id, new_card)
+                zone[idx] = new_card
+        for eq in list(ps.equipment):
+            new_id = self._void_weighted_card_id('root', exclude={getattr(eq, 'def_id', '')})
+            if not new_id:
+                continue
+            armor = getattr(eq, 'armor', 0)
+            target = getattr(eq, 'effect_target', player_id)
+            eq.card_instance = CardInstance(new_id)
+            eq.armor = armor
+            flags = self._effective_card_flags(eq.card_instance)
+            eq.effect_target = player_id if 'self_only' in flags else target
+        self._refresh_hand_limit_bonuses()
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_magic_corruption(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        new_card = CardInstance(self._void_resolve_card_def_id('Corruption') or self._void_resolve_card_def_id('vanilla:corruption') or ERROR_CARD_ID)
+        eq = EquipmentInstance(new_card, target_id)
+        eq.effect_target = target_id
+        eq.corruption_active = True
+        self.players[target_id].equipment.append(eq)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_soap_wide_strike(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        for zone in (self.players[target_id].hand, self.players[target_id].deck, self.players[target_id].discard):
+            for target_card in zone:
+                if getattr(target_card.card_def, 'card_type', '') == 'thorn':
+                    target_card.instance_flags.add('wide_strike')
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_magic_wing_damage(self, player_id, card, params, log, choice, context):
+        extra_limit = max(0, self._eval_int(player_id, params.get('extra_limit', 4), card, 4))
+        spend = min(extra_limit, int(getattr(self.players[player_id], 'magic', 0) or 0))
+        if spend > 0:
+            self._spend_resource(player_id, 'magic', spend, card)
+        amount = self._eval_int(player_id, params.get('base', 4), card, 4) + spend * self._eval_int(player_id, params.get('per', 4), card, 4)
+        self._atomic_deal_damage(player_id, card, {'target': params.get('target', 'target'), 'amount': amount}, log, choice, context)
+
+    def _atomic_void_toggle_void_hand(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        for hand_card in list(self.players[target_id].hand):
+            if 'void' in self._effective_card_flags(hand_card):
+                hand_card.instance_flags.discard('void')
+                hand_card.disabled_flags.add('void')
+            else:
+                hand_card.instance_flags.add('void')
+                hand_card.disabled_flags.discard('void')
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_set_void_all_cards(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        enabled = bool(params.get('enabled', True))
+        ps = self.players[target_id]
+        for zone in (ps.hand, ps.deck, ps.discard):
+            for zone_card in list(zone):
+                if enabled:
+                    zone_card.instance_flags.add('void')
+                    zone_card.disabled_flags.discard('void')
+                else:
+                    zone_card.instance_flags.discard('void')
+                    zone_card.disabled_flags.add('void')
+        if log:
+            self.log_msg(log)
+
+    def _atomic_void_scythe_damage(self, player_id, card, params, log, choice, context):
+        base = self._eval_int(player_id, params.get('base', 40), card, 40)
+        per = self._eval_int(player_id, params.get('per_hand', 5), card, 5)
+        remaining = max(0, len(getattr(self.players[player_id], 'hand', []) or []))
+        amount = max(0, base - per * remaining)
+        self._atomic_deal_damage(player_id, card, {'target': params.get('target', 'target'), 'amount': amount}, log, choice, context)
+
+    def _atomic_void_puppeteer(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        ps = self.players[target_id]
+        ps.honey_control_turns = max(1, int(getattr(ps, 'honey_control_turns', 0) or 0) + 1)
+        ps.damage_multiplier = max(float(getattr(ps, 'damage_multiplier', 1.0) or 1.0), 1.5)
+        ps.custom_vars['honey_lowest_enemy'] = True
+        if log:
+            self.log_msg(log)
+
     def _run_ocean_auto_cards_turn_start(self, player_id: int):
         if not self._valid_player_id(player_id):
             return
@@ -12194,3 +12715,4 @@ class GameEngine:
                                   target_id=opp_id, equipment=eq, equipment_owner_id=player_id)
         self._check_game_over()
         return {'success': True, 'target_player_id': target_id}
+

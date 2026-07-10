@@ -155,6 +155,15 @@ input:focus, select:focus, textarea:focus {
   font-weight: 600;
   line-height: 1.35;
 }
+.report-list-evidence {
+  margin-top: 5px;
+  padding: 6px 7px;
+  border-left: 3px solid var(--primary);
+  background: #f7faff;
+  color: #222832;
+  line-height: 1.35;
+  word-break: break-word;
+}
 .badge {
   display: inline-flex;
   align-items: center;
@@ -240,6 +249,71 @@ input:focus, select:focus, textarea:focus {
   border-radius: 4px;
   margin: 8px 0;
   padding: 8px;
+}
+.evidence-readable {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #f9fbff;
+  padding: 10px;
+  margin: 12px 0;
+}
+.evidence-readable h3 {
+  margin: 6px 0 7px;
+}
+.evidence-message {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  font-size: 15px;
+}
+.context-list {
+  display: grid;
+  gap: 6px;
+}
+.context-line {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  padding: 6px 8px;
+}
+.context-line.focus {
+  border-color: var(--primary);
+  background: #eef4ff;
+}
+.context-meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.compact-kv {
+  display: grid;
+  gap: 4px;
+  color: var(--text);
+}
+.ip-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #fff;
+  padding: 2px 6px;
+}
+.ip-history-card {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fafbfc;
+  padding: 8px;
+  margin: 8px 0;
+}
+.ip-history-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ip-related {
+  margin-top: 4px;
 }
 .json-details summary {
   cursor: pointer;

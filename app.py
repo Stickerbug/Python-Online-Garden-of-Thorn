@@ -114,6 +114,7 @@ from db import (
     list_card_draft_stats,
     list_opening_event_stats,
     list_ip_bans,
+    list_user_recent_ips,
     list_reports,
     list_user_roles,
     list_user_thorn_dew_transactions,
@@ -124,8 +125,10 @@ from db import (
     normalize_skin_config,
     normalize_username_key,
     preview_gr_match_result,
+    process_live_achievement_flags,
     process_match_achievements,
     record_chat_message,
+    record_user_ip_event,
     record_card_draft_counts,
     record_card_draft_win_result,
     record_opening_event_pick_counts,
@@ -766,7 +769,23 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
                     user_flags.append('flag_one_hp_win')
                 if is_winner and bool(getattr(ps, 'achievement_yggdrasil_revived', False)):
                     user_flags.append('flag_revive_leaf_win')
-                if is_winner and not bool(getattr(ps, 'achievement_played_thorn', False)):
+                enemy_defeated_for_win = False
+                try:
+                    if mode == '2v2' and hasattr(engine, 'team_of'):
+                        own_team = engine.team_of(pidx)
+                        enemy_indices = [
+                            idx for idx in range(len(engine.players))
+                            if idx != pidx and engine.team_of(idx) != own_team
+                        ]
+                    else:
+                        enemy_indices = [idx for idx in range(len(engine.players)) if idx != pidx]
+                    enemy_defeated_for_win = any(
+                        int(getattr(engine.players[idx], 'health', 1) or 0) <= 0
+                        for idx in enemy_indices
+                    )
+                except Exception:
+                    enemy_defeated_for_win = False
+                if is_winner and enemy_defeated_for_win and not bool(getattr(ps, 'achievement_played_thorn', False)):
                     user_flags.append('flag_no_thorn_win')
                 if is_winner and final_health >= start_health > 0:
                     user_flags.append('flag_a_plus_win')
@@ -802,6 +821,8 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
                     user_flags.append('flag_enemy_cards_10')
                 if int(getattr(ps, 'achievement_max_equipment_count', 0) or 0) >= 4:
                     user_flags.append('flag_max_equipment_5')
+                if int(getattr(ps, 'achievement_max_armor', 0) or 0) >= 20:
+                    user_flags.append('flag_armor_20')
                 if bool(getattr(ps, 'achievement_self_caused_death', False)):
                     user_flags.append('flag_self_caused_death')
                 if is_winner and mode == '1v1':
@@ -832,6 +853,113 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
     return flags
 
 
+LIVE_ACHIEVEMENT_FLAGS = {
+    'flag_one_hit_60',
+    'flag_15_cards_turn',
+    'flag_15e_turn',
+    'flag_heal_100',
+    'flag_same_card_10',
+    'flag_same_name_streak_5',
+    'flag_fire_30',
+    'flag_poison_30',
+    'flag_enemy_6_statuses',
+    'flag_equipment_destroy_7',
+    'flag_counter_6',
+    'flag_poison_fire_dual_15',
+    'flag_enemy_cards_10',
+    'flag_max_equipment_5',
+    'flag_armor_20',
+    'flag_self_caused_death',
+}
+
+
+def build_live_achievement_flags(room):
+    flags = {}
+    try:
+        engine = getattr(room, 'engine', None)
+        if engine is None or getattr(engine, 'game_over', False):
+            return flags
+        for pidx, psid in enumerate(getattr(room, 'player_sids', []) or []):
+            profile = room_player_profile(room, psid)
+            uid = profile.get('user_id')
+            if uid is None:
+                continue
+            ps = engine.players[pidx] if hasattr(engine, 'players') and pidx < len(engine.players) else None
+            if ps is None:
+                continue
+            try:
+                engine._note_achievement_status_peak(pidx)
+            except Exception:
+                pass
+            user_flags = []
+            if int(getattr(ps, 'achievement_max_single_damage_dealt', 0) or 0) >= 60:
+                user_flags.append('flag_one_hit_60')
+            if int(getattr(ps, 'achievement_max_cards_played_turn', 0) or 0) >= 15:
+                user_flags.append('flag_15_cards_turn')
+            if int(getattr(ps, 'achievement_max_turn_elixir_gained', 0) or 0) >= 15:
+                user_flags.append('flag_15e_turn')
+            if int(getattr(ps, 'achievement_total_healed', 0) or 0) >= 100:
+                user_flags.append('flag_heal_100')
+            if int(getattr(ps, 'achievement_max_same_instance_plays', 0) or 0) >= 10:
+                user_flags.append('flag_same_card_10')
+            if int(getattr(ps, 'achievement_max_same_name_streak', 0) or 0) >= 5:
+                user_flags.append('flag_same_name_streak_5')
+            if int(getattr(ps, 'achievement_max_enemy_fire', 0) or 0) >= 30:
+                user_flags.append('flag_fire_30')
+            if int(getattr(ps, 'achievement_max_enemy_poison', 0) or 0) >= 30:
+                user_flags.append('flag_poison_30')
+            if int(getattr(ps, 'achievement_max_enemy_status_types', 0) or 0) >= 6:
+                user_flags.append('flag_enemy_6_statuses')
+            if int(getattr(ps, 'achievement_equipment_destroyed', 0) or 0) >= 7:
+                user_flags.append('flag_equipment_destroy_7')
+            if int(getattr(ps, 'achievement_counter_successes', 0) or 0) >= 6:
+                user_flags.append('flag_counter_6')
+            if int(getattr(ps, 'achievement_max_enemy_poison_fire_min', 0) or 0) >= 15:
+                user_flags.append('flag_poison_fire_dual_15')
+            if int(getattr(ps, 'achievement_min_enemy_card_total', 999999) or 999999) <= 10:
+                user_flags.append('flag_enemy_cards_10')
+            if int(getattr(ps, 'achievement_max_equipment_count', 0) or 0) >= 4:
+                user_flags.append('flag_max_equipment_5')
+            if int(getattr(ps, 'achievement_max_armor', 0) or 0) >= 20:
+                user_flags.append('flag_armor_20')
+            if bool(getattr(ps, 'achievement_self_caused_death', False)):
+                user_flags.append('flag_self_caused_death')
+            if user_flags:
+                flags[str(int(uid))] = user_flags
+    except Exception as exc:
+        admin_event('error', f'live achievement flag collection failed: {exc}', room_id=getattr(room, 'room_id', None))
+    return flags
+
+
+def check_live_achievements(room):
+    if not DB_AVAILABLE or room is None:
+        return
+    try:
+        raw_flags = build_live_achievement_flags(room)
+        if not raw_flags:
+            return
+        seen = getattr(room, '_live_achievement_flags_seen', None)
+        if seen is None:
+            seen = set()
+            room._live_achievement_flags_seen = seen
+        pending = {}
+        for uid, flags in raw_flags.items():
+            for flag in flags:
+                if flag not in LIVE_ACHIEVEMENT_FLAGS:
+                    continue
+                key = (str(uid), str(flag))
+                if key in seen:
+                    continue
+                seen.add(key)
+                pending.setdefault(str(uid), []).append(str(flag))
+        if not pending:
+            return
+        result = process_live_achievement_flags(pending)
+        emit_achievement_unlocks(room, result)
+    except Exception as exc:
+        admin_event('error', f'live achievement check failed: {exc}', room_id=getattr(room, 'room_id', None))
+
+
 def emit_achievement_unlocks(room, achievement_result):
     try:
         unlocked = (achievement_result or {}).get('unlocked') or []
@@ -849,6 +977,8 @@ def emit_achievement_unlocks(room, achievement_result):
                 'name_en': item.get('name_en') or item.get('name_cn') or item.get('id') or '',
                 'description_cn': item.get('description_cn') or '',
                 'description_en': item.get('description_en') or item.get('description_cn') or '',
+                'type': item.get('type') or ('hidden' if item.get('hidden') else ''),
+                'type_color': item.get('type_color') or item.get('color') or '',
                 'hidden': bool(item.get('hidden')),
                 'reward_dew': int(item.get('reward_dew') or 0),
             })
@@ -8947,6 +9077,8 @@ def _broadcast_game_state_now(room):
         admin_match_record(room)
         room._history_recorded = True
         admin_event('game', f'room {room.room_id} finished')
+    elif not room.engine.game_over:
+        check_live_achievements(room)
     for pidx, sid in enumerate(room.player_sids):
         if sid not in players:
             continue
@@ -10421,6 +10553,14 @@ def handling_users():
         online = _admin_online_user_map()
     for user in data.get('users', []):
         user['online'] = online.get(str(user.get('username', '')).lower())
+        try:
+            user['recent_ips'] = list_user_recent_ips(user.get('id'), limit=5)
+        except Exception:
+            user['recent_ips'] = []
+        if user.get('online') and user['online'].get('ip'):
+            ip = str(user['online'].get('ip') or '').strip()
+            if ip and not any(item.get('ip') == ip for item in user['recent_ips']):
+                user['recent_ips'].insert(0, {'ip': ip, 'last_seen_at': iso_now(), 'count': 0, 'related_users': []})
         user.pop('skin', None)
     log_admin_api_timing(
         '/api/handling/users',
@@ -11216,6 +11356,10 @@ def api_auth_register():
     if error:
         return jsonify({'success': False, 'error': error}), 400
     begin_user_online_session(user.get('id'))
+    try:
+        record_user_ip_event(user.get('id'), user.get('username'), ip, source='register')
+    except Exception as exc:
+        admin_event('warning', f'record register ip failed: {exc}')
     user = get_user_by_id(user.get('id')) or user
     _set_account_session(user)
     return _attach_remember_cookie(jsonify({'success': True, 'user': auth_user_payload(user)}), user)
@@ -11244,6 +11388,10 @@ def api_auth_login():
         return jsonify({'success': False, 'error': error}), 401
     clear_auth_login_failures(ip)
     begin_user_online_session(user.get('id'))
+    try:
+        record_user_ip_event(user.get('id'), user.get('username'), ip, source='login')
+    except Exception as exc:
+        admin_event('warning', f'record login ip failed: {exc}')
     user = get_user_by_id(user.get('id')) or user
     _set_account_session(user)
     return _attach_remember_cookie(jsonify({'success': True, 'user': auth_user_payload(user)}), user)

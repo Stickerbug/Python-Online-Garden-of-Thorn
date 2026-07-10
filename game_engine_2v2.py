@@ -134,6 +134,7 @@ class GameEngine2v2(GameEngine):
         self._refresh_hand_limit_bonuses()
         teammate_id = self.get_teammate(for_player)
         enemy_ids = self.get_all_enemies(for_player)
+        goggles_targets = self._goggles_view_targets_for(for_player)
 
         opp_data_list = []
         for eid in enemy_ids:
@@ -152,6 +153,9 @@ class GameEngine2v2(GameEngine):
             ]
             if revealed_tag_cards:
                 ed['revealed_tag_cards'] = revealed_tag_cards
+            if eid in goggles_targets:
+                ed['deck_ordered'] = [c.to_dict() for c in self.players[eid].deck]
+                ed['discard_ordered'] = [c.to_dict() for c in self.players[eid].discard]
             opp_data_list.append(ed)
 
         teammate_data = None
@@ -182,10 +186,16 @@ class GameEngine2v2(GameEngine):
                         ed['discard'] = self._visible_card_dicts(self.players[target_id].discard, for_player, target_id, choice_list=True)
                     if ct == 'choose_from_exile' or zone == 'exile':
                         ed['exile'] = self._visible_card_dicts(self.players[target_id].exile, for_player, target_id, choice_list=True)
+            if teammate_id in goggles_targets:
+                teammate_data['deck_ordered'] = [c.to_dict() for c in self.players[teammate_id].deck]
+                teammate_data['discard_ordered'] = [c.to_dict() for c in self.players[teammate_id].discard]
 
         log_start = 0
         self._mark_log_visible()
         you_data = self.players[for_player].to_dict(include_private=True)
+        if for_player in goggles_targets:
+            you_data['deck_ordered'] = [c.to_dict() for c in self.players[for_player].deck]
+            you_data['discard_ordered'] = [c.to_dict() for c in self.players[for_player].discard]
         return {
             'phase': self.phase,
             'current_player': self.current_player,
@@ -452,8 +462,7 @@ class GameEngine2v2(GameEngine):
         void_cards = [c for c in ps.hand if 'void' in c.flags]
         for c in void_cards:
             ps.hand.remove(c)
-            ps.exile.append(c)
-            self.log_msg(f"{self.pn(player_id)}的{c.name_cn}因虚无被放逐")
+            self._void_exile_card(player_id, c)
         self._decay_action_limit_status(player_id, 'attack_blocked', 'attack_blocked', '禁攻')
         self._decay_action_limit_status(player_id, 'attack_only', 'attack_only', '仅攻击')
         self._decay_action_limit_status(player_id, 'magic_blocked', 'magic_blocked', '魔力封锁')
@@ -598,6 +607,8 @@ class GameEngine2v2(GameEngine):
                 self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
                 is_precision = pending.get('is_precision', False)
                 if self._card_is(counter_removed, 'Bubble', 'vanilla:bubble'):
+                    if self._is_status_immune(responder_id):
+                        return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
                     if is_precision:
                         self._execute_card_effect_half_damage(player_id, card, choice)
                         if not self._is_status_immune(responder_id):
@@ -610,8 +621,8 @@ class GameEngine2v2(GameEngine):
                 if self._card_is(counter_removed, 'MagicBubble', 'vanilla:magicbubble'):
                     self.negated_card = True
                 if self._card_is(counter_removed, 'Cucumber', 'ocean:cucumber'):
-                    old_untargetable = bool(getattr(responder, 'untargetable', False))
-                    responder.untargetable = False
+                    old_untargetable = max(0, int(getattr(responder, 'untargetable', 0) or 0))
+                    responder.untargetable = 0
                     try:
                         result = self._execute_card_effect(player_id, card, choice)
                     finally:
@@ -898,7 +909,7 @@ class GameEngine2v2(GameEngine):
         if 'precision' in flags:
             responder_ids = list(dict.fromkeys([tid for tid in target_ids if self.is_enemy(player_id, tid)]))
         else:
-            responder_ids = list(dict.fromkeys([*enemy_ids, *target_ids, *equipment_destroy_responders]))
+            responder_ids = list(dict.fromkeys([*enemy_ids, *equipment_destroy_responders]))
 
         for responder_id in responder_ids:
             if not self._is_valid_player_id(responder_id) or self.players[responder_id].health <= 0:
@@ -983,9 +994,21 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': 'Waiting for mod UI response'}
         if ('self_only' in card.flags and card.card_type != 'thorn') or card.card_type == 'guard':
             target_player_id = player_id
-        elif self._card_requires_target(card) and card.card_type == 'thorn' and target_player_id == player_id:
+        elif (self._card_requires_target(card)
+              and card.card_type == 'thorn'
+              and target_player_id == player_id
+              and 'self_target' not in self._effective_card_flags(card)):
             return {'success': False, 'error': '攻击牌不能选择自己作为目标'}
-        elif self._card_requires_target(card) and card.card_type == 'thorn' and not self._is_valid_attack_target(player_id, target_player_id):
+        elif (self._card_requires_target(card)
+              and card.card_type == 'thorn'
+              and not (
+                  self._is_valid_attack_target(player_id, target_player_id)
+                  or (
+                      target_player_id == player_id
+                      and 'self_target' in self._effective_card_flags(card)
+                      and self.players[player_id].health > 0
+                  )
+              )):
             return {'success': False, 'error': '没有可选中的玩家'}
         elif self._card_requires_target(card):
             allow_dead_target = self._card_is(card, 'Yggdrasil', 'vanilla:yggdrasil')
@@ -1332,10 +1355,13 @@ class GameEngine2v2(GameEngine):
         self._apply_jungle_turn_start_statuses(player_id)
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
+        untargetable_layers = max(0, int(getattr(ps, 'untargetable', 0) or 0))
+        if untargetable_layers > 0:
+            ps.untargetable = max(0, untargetable_layers - 1)
+            if ps.untargetable <= 0:
+                self.log_msg(f"{self.pn(player_id)}的不可选中效果结束")
         if ps.shovel_active:
             ps.shovel_active = False
-            ps.untargetable = False
-            self.log_msg(f"{self.pn(player_id)}的不可选中效果结束")
         self._clear_turn_start_action_statuses(player_id)
         early_owner_turn_start_equipment = self._run_owner_turn_start_action_status_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):

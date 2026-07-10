@@ -61,6 +61,19 @@ CARD_FLAG_ALIASES = {
     'tag_ocean_self_target': 'self_target',
     '自刃': 'self_target',
     '广域打击': 'wide_strike',
+    'floating': 'floating',
+    'tag_floating': 'floating',
+    'void:floating': 'floating',
+    'tag_void:floating': 'floating',
+    'tag_void_floating': 'floating',
+    '漂浮': 'floating',
+    'temp_magic_heavy': 'temp_magic_heavy',
+    'tag_temp_magic_heavy': 'temp_magic_heavy',
+    'void:temp_magic_heavy': 'temp_magic_heavy',
+    'tag_void:temp_magic_heavy': 'temp_magic_heavy',
+    'tag_void_temp_magic_heavy': 'temp_magic_heavy',
+    '暂时魔力沉重': 'temp_magic_heavy',
+    '吸附': 'attract',
 }
 
 # Known vanilla flags that can be referenced by namespace-prefixed tags
@@ -70,7 +83,8 @@ _VANILLA_FLAGS = {
     'infinite_exclude', 'rebound', 'copy', 'unique',
     'swift', 'stealth', 'revealed', 'rebound', 'nothingness',
     'team_limited', 'team_unique', 'power', 'magic_swift',
-    'temp_swift', 'temp_heavy', 'wide_strike', 'self_target',
+    'temp_swift', 'temp_heavy', 'temp_magic_heavy', 'wide_strike', 'self_target',
+    'floating',
 }
 
 
@@ -177,6 +191,7 @@ class CardInstance:
     power_value: int = 0
     temp_swift_value: int = 0
     temp_heavy_value: int = 0
+    temp_magic_heavy_value: int = 0
     charge_value: int = 0
     hand_blind_turns: int = 0
     extra_hits: int = 0
@@ -226,7 +241,8 @@ class CardInstance:
     @property
     def cost_m(self) -> int:
         base = self.cost_m_override if self.cost_m_override is not None else self.card_def.cost_m
-        return max(0, base - max(0, int(self.magic_swift_value or 0)))
+        temp_magic_heavy = max(0, int(self.temp_magic_heavy_value or 0))
+        return max(0, base + temp_magic_heavy - max(0, int(self.magic_swift_value or 0)))
 
     @property
     def card_type(self) -> str:
@@ -260,6 +276,7 @@ class CardInstance:
             'power_value': self.power_value,
             'temp_swift_value': self.temp_swift_value,
             'temp_heavy_value': self.temp_heavy_value,
+            'temp_magic_heavy_value': self.temp_magic_heavy_value,
             'charge_value': self.charge_value,
             'hand_blind_turns': self.hand_blind_turns,
             'blind_level': 1 if self.hand_blind_turns > 0 else 0,
@@ -289,6 +306,7 @@ class CardInstance:
             power_value=max(0, int(d.get('power_value', 0))),
             temp_swift_value=max(0, int(d.get('temp_swift_value', 0))),
             temp_heavy_value=max(0, int(d.get('temp_heavy_value', 0))),
+            temp_magic_heavy_value=max(0, int(d.get('temp_magic_heavy_value', 0))),
             charge_value=max(0, int(d.get('charge_value', 0))),
             hand_blind_turns=max(0, int(d.get('hand_blind_turns', d.get('blind_level', 0)))),
             extra_hits=clamp_card_extra_hits(d.get('extra_hits', 0)),
@@ -316,6 +334,7 @@ class CardInstance:
             power_value=self.power_value,
             temp_swift_value=self.temp_swift_value,
             temp_heavy_value=self.temp_heavy_value,
+            temp_magic_heavy_value=self.temp_magic_heavy_value,
             charge_value=self.charge_value,
             hand_blind_turns=self.hand_blind_turns,
             extra_hits=clamp_card_extra_hits(self.extra_hits),

@@ -227,6 +227,8 @@ function renderList() {
       title.appendChild(el('span', `badge ${item.status || ''}`, item.status || '-'));
       row.appendChild(title);
       row.appendChild(el('div', 'report-list-reason', reportReasonText(item)));
+      const readable = evidenceSummaryText(item);
+      if (readable) row.appendChild(el('div', 'report-list-evidence', readable));
       row.appendChild(el('div', 'muted', `举报对象：${reportObjectText(item)} · ${fmtTime(item.created_at)}`));
       const risk = el('span', `badge risk-${item.risk_level || 0}`, `risk ${item.risk_level || 0}`);
       row.appendChild(risk);
@@ -279,10 +281,93 @@ function reportObjectText(report) {
   return report.object_id ? `${type} ${report.object_id}` : type;
 }
 
+function evidenceSummaryText(report) {
+  const summary = report && report.evidence_summary;
+  if (!summary) return '';
+  const message = summary.message;
+  if (message && message.message) {
+    return `消息：${message.sender_name || '未知'}：${message.message}`;
+  }
+  if (summary.player) {
+    return `玩家：${summary.player.username || summary.player.player_id || '-'}`;
+  }
+  if (summary.match) {
+    const players = Array.isArray(summary.match.players) ? summary.match.players.join(' / ') : '';
+    return `对局：${summary.match.mode || '-'} ${players}`;
+  }
+  if (summary.room) {
+    return `房间：${summary.room.room_id || summary.room.mode || '-'}`;
+  }
+  if (summary.request) {
+    return `请求：${summary.request.path || summary.request.endpoint || '-'}`;
+  }
+  return '';
+}
+
 function reportReasonText(report) {
   const category = report.category || '-';
   const reason = String(report.reason_text || '').trim();
   return reason ? `${category}：${reason}` : category;
+}
+
+function prepareIpBan(ip, reason = '') {
+  const value = String(ip || '').trim();
+  if (!value) return;
+  $('ip-input').value = value;
+  $('ip-reason').value = reason;
+  switchTab('ip');
+  setText('summary', `准备封禁 IP ${value}`);
+}
+
+function appendEvidenceSummary(parent, report) {
+  const summary = report && report.evidence_summary;
+  if (!summary) return false;
+  let added = false;
+  const wrap = el('div', 'evidence-readable');
+
+  if (summary.message && summary.message.message) {
+    const message = summary.message;
+    wrap.appendChild(el('h3', '', '被举报消息'));
+    wrap.appendChild(el('div', 'context-meta', `${message.sender_name || '未知'} · ${message.channel || '-'} · ${fmtTime(message.created_at)}`));
+    wrap.appendChild(el('div', 'evidence-message', message.message));
+    added = true;
+  }
+
+  if (Array.isArray(summary.context) && summary.context.length) {
+    wrap.appendChild(el('h3', '', '聊天上下文'));
+    const list = el('div', 'context-list');
+    summary.context.forEach((line) => {
+      const row = el('div', `context-line ${summary.message && String(line.id) === String(summary.message.id) ? 'focus' : ''}`.trim());
+      row.appendChild(el('div', 'context-meta', `${line.sender_name || '未知'} · ${fmtTime(line.created_at)}`));
+      row.appendChild(el('div', '', line.message || ''));
+      list.appendChild(row);
+    });
+    wrap.appendChild(list);
+    added = true;
+  }
+
+  if (summary.player || summary.room || summary.match || summary.request) {
+    wrap.appendChild(el('h3', '', '关联信息'));
+    const info = el('div', 'compact-kv');
+    if (summary.player) {
+      info.appendChild(el('div', '', `玩家：${summary.player.username || '-'} ${summary.player.player_id || ''}`));
+    }
+    if (summary.room) {
+      info.appendChild(el('div', '', `房间：${summary.room.room_id || '-'} ${summary.room.mode || ''}`));
+    }
+    if (summary.match) {
+      const players = Array.isArray(summary.match.players) ? summary.match.players.join(' / ') : '';
+      info.appendChild(el('div', '', `对局：${summary.match.mode || '-'} ${players}`));
+    }
+    if (summary.request) {
+      info.appendChild(el('div', '', `请求：${summary.request.path || summary.request.endpoint || '-'}`));
+    }
+    wrap.appendChild(info);
+    added = true;
+  }
+
+  if (added) parent.appendChild(wrap);
+  return added;
 }
 
 function updateReportActionHints(report) {
@@ -358,20 +443,23 @@ function renderReportDetail(report) {
   const history = report.reporter_history || {};
   addKv(detail, '举报者历史', `属实 ${history.accepted || 0} / 驳回 ${history.rejected || 0} / 恶意 ${history.abusive || 0}`);
 
-  detail.appendChild(el('h3', '', '证据'));
+  if (!appendEvidenceSummary(detail, report)) {
+    detail.appendChild(el('div', 'muted', '暂无可直接展示的证据摘要。'));
+  }
+
+  detail.appendChild(el('h3', '', '原始证据'));
   (report.evidence || []).forEach((ev) => {
     const box = el('div', 'evidence');
     box.appendChild(el('div', 'mono muted', `${ev.evidence_type || '-'} · ${fmtTime(ev.created_at)}`));
     appendCollapsedJson(box, '查看 JSON 证据', ev.data || {});
     const maybeIp = findIpInEvidence(ev.data);
     if (maybeIp) {
-      const btn = el('button', 'btn small danger', `封禁 IP ${maybeIp}`);
-      btn.addEventListener('click', () => {
-        $('ip-input').value = maybeIp;
-        $('ip-reason').value = `举报 #${report.id}`;
-        switchTab('ip');
-      });
-      box.appendChild(btn);
+      const actions = el('div', 'inline-actions');
+      actions.appendChild(el('span', 'mono ip-chip', maybeIp));
+      const btn = el('button', 'btn small danger', '封禁此 IP');
+      btn.addEventListener('click', () => prepareIpBan(maybeIp, `举报 #${report.id}`));
+      actions.appendChild(btn);
+      box.appendChild(actions);
     }
     detail.appendChild(box);
   });
@@ -445,6 +533,30 @@ function renderUserDetail(user) {
   if (user.banned) {
     addKv(detail, '封禁原因', user.ban_reason || '-');
     addKv(detail, '封禁到期', user.ban_until ? fmtTime(user.ban_until) : '永久', true);
+  }
+  detail.appendChild(el('h3', '', '最近 IP'));
+  const ips = Array.isArray(user.recent_ips) ? user.recent_ips : [];
+  if (!ips.length) {
+    detail.appendChild(el('div', 'muted', '暂无 IP 记录。'));
+  } else {
+    ips.forEach((item) => {
+      const box = el('div', 'ip-history-card');
+      const main = el('div', 'ip-history-main');
+      main.appendChild(el('span', 'mono ip-chip', item.ip || '-'));
+      const btn = el('button', 'btn small danger', '封禁此 IP');
+      btn.addEventListener('click', () => prepareIpBan(item.ip, `玩家 ${user.username || user.id}`));
+      main.appendChild(btn);
+      box.appendChild(main);
+      box.appendChild(el('div', 'muted', `最后出现：${fmtTime(item.last_seen_at)} · 记录 ${item.count || 0} 次`));
+      const related = Array.isArray(item.related_users)
+        ? item.related_users.filter((u) => String(u.user_id || u.id) !== String(user.id))
+        : [];
+      if (related.length) {
+        const names = related.slice(0, 6).map((u) => `${u.username || '未知'}#${u.user_id || u.id || '-'}`).join('、');
+        box.appendChild(el('div', 'muted ip-related', `关联账号：${names}`));
+      }
+      detail.appendChild(box);
+    });
   }
   const actions = el('div', 'inline-actions');
   if (user.banned) {

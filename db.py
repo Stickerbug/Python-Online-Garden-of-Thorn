@@ -71,7 +71,7 @@ ACHIEVEMENT_DEFS = [
     {'id': 'first_urf_win', 'type': 'mode', 'name_cn': '火力压制', 'name_en': 'Firepower Victory', 'description_cn': '赢得一场无限火力对局。', 'description_en': 'Win an Infinite Fire match.', 'target': 1, 'metric': 'mode_urf_win', 'reward_dew': 200},
     {'id': 'backwater_win', 'type': 'battle', 'name_cn': '背水一战', 'name_en': 'Last Stand', 'description_cn': '1v1中，在无敌时击败对手。', 'description_en': 'In 1v1, defeat your opponent while invincible.', 'target': 1, 'metric': 'flag_backwater_win', 'reward_dew': 700},
     {'id': 'revive_leaf_win', 'type': 'battle', 'name_cn': '复苏之叶', 'name_en': 'Leaf of Revival', 'description_cn': '用世界树之叶复活玩家，并最终获胜。', 'description_en': 'Revive a player with Yggdrasil and win.', 'target': 1, 'metric': 'flag_revive_leaf_win', 'reward_dew': 700},
-    {'id': 'no_thorn_win', 'type': 'battle', 'name_cn': '不靠攻击', 'name_en': 'No Thorns Needed', 'description_cn': '赢得一局，且自己全局没有打出Thorn牌。', 'description_en': 'Win a match without playing Thorn cards.', 'target': 1, 'metric': 'flag_no_thorn_win', 'reward_dew': 500},
+    {'id': 'no_thorn_win', 'type': 'battle', 'name_cn': '不靠攻击', 'name_en': 'No Thorns Needed', 'description_cn': '赢得一局，自己全局没有打出Thorn牌，且对方没有投降。', 'description_en': 'Win a match without playing Thorn cards and without the opponent surrendering.', 'target': 1, 'metric': 'flag_no_thorn_win', 'reward_dew': 500},
     {'id': 'one_hp_win', 'type': 'battle', 'name_cn': '起死回生', 'name_en': 'Back from the Brink', 'description_cn': '本局中曾经H降到5或以下，且没有触发过无敌，最后赢得对局。', 'description_en': 'Drop to 5 H or lower during a match without triggering invincibility, then win.', 'target': 1, 'metric': 'flag_one_hp_win', 'reward_dew': 600},
     {'id': 'last_one_win', 'type': 'battle', 'name_cn': '最后一人', 'name_en': 'Last One Standing', 'description_cn': '2v2中，队友前6回合阵亡后最终获胜。', 'description_en': 'In 2v2, win after your teammate is defeated within the first 6 rounds.', 'target': 1, 'metric': 'flag_last_one_win', 'reward_dew': 700},
     {'id': 'fire_30', 'type': 'battle', 'name_cn': '烧开水', 'name_en': 'Boiling Point', 'description_cn': '使一名敌方玩家拥有30或更多层灼烧。', 'description_en': 'Make an enemy have 30 or more Fire.', 'target': 1, 'metric': 'flag_fire_30', 'reward_dew': 400},
@@ -80,7 +80,7 @@ ACHIEVEMENT_DEFS = [
     {'id': 'self_caused_death', 'type': 'battle', 'name_cn': '自刎归天', 'name_en': 'Self-Made End', 'description_cn': '因自己出牌导致的反伤或效果伤害死亡。', 'description_en': 'Die from reflected or effect damage caused by your own play.', 'target': 1, 'metric': 'flag_self_caused_death', 'reward_dew': 300},
     {'id': 'blitz_win', 'type': 'battle', 'name_cn': '闪电战', 'name_en': 'Blitz', 'description_cn': '在4回合内结束战斗并获胜。', 'description_en': 'Win within 4 rounds.', 'target': 1, 'metric': 'flag_blitz_win', 'reward_dew': 500},
     {'id': 'a_plus_win', 'type': 'battle', 'name_cn': 'A+', 'name_en': 'A+', 'description_cn': '获胜时H大于等于开局时H。', 'description_en': 'Win with H at least equal to your starting H.', 'target': 1, 'metric': 'flag_a_plus_win', 'reward_dew': 400},
-    {'id': 'first_five_rounds_clean', 'type': 'battle', 'name_cn': '潇洒的花花', 'name_en': 'Graceful Flower', 'description_cn': '对局前5回合H没有降低，并最终获胜。', 'description_en': 'Win after keeping your H from dropping during the first 5 rounds.', 'target': 1, 'metric': 'flag_first_five_rounds_clean', 'reward_dew': 450},
+    {'id': 'first_five_rounds_clean', 'type': 'battle', 'name_cn': '完美潇洒的花花', 'name_en': 'Graceful Flower', 'description_cn': '对局前5回合H没有降低，并最终获胜。', 'description_en': 'Win after keeping your H from dropping during the first 5 rounds.', 'target': 1, 'metric': 'flag_first_five_rounds_clean', 'reward_dew': 450},
     {'id': 'fifteen_cards_turn', 'type': 'battle', 'name_cn': '无限？', 'name_en': 'Infinite?', 'description_cn': '一回合内打出15张或更多牌。', 'description_en': 'Play 15 or more cards in one turn.', 'target': 1, 'metric': 'flag_15_cards_turn', 'reward_dew': 600},
     {'id': 'fifteen_e_turn', 'type': 'battle', 'name_cn': '永恒', 'name_en': 'Eternity', 'description_cn': '一回合内回复15点或更多E。', 'description_en': 'Gain 15 or more E in one turn.', 'target': 1, 'metric': 'flag_15e_turn', 'reward_dew': 350},
     {'id': 'same_card_10', 'type': 'battle', 'name_cn': '钟爱', 'name_en': 'Favorite', 'description_cn': '在一场游戏中使用同一张卡牌10次或更多。', 'description_en': 'Use the same card instance 10 or more times in one match.', 'target': 1, 'metric': 'flag_same_card_10', 'reward_dew': 700},
@@ -91,6 +91,7 @@ ACHIEVEMENT_DEFS = [
     {'id': 'early_prevention', 'type': 'battle', 'name_cn': '防微杜渐', 'name_en': 'Early Prevention', 'description_cn': '一局内反制6次或更多。', 'description_en': 'Counter 6 or more times in one match.', 'target': 1, 'metric': 'flag_counter_6', 'reward_dew': 800},
     {'id': 'poison_fire_dual', 'type': 'battle', 'name_cn': '毒火双修', 'name_en': 'Poison and Fire', 'description_cn': '使一名敌方玩家同时拥有至少15层中毒和15层灼烧。', 'description_en': 'Make an enemy have at least 15 Poison and 15 Fire at the same time.', 'target': 1, 'metric': 'flag_poison_fire_dual_15', 'reward_dew': 750},
     {'id': 'barren_field', 'type': 'battle', 'name_cn': '寸草不生', 'name_en': 'Barren Field', 'description_cn': '使一名敌方玩家的手牌、抽牌堆、弃牌堆合计为10张或更少。', 'description_en': 'Make an enemy have 10 or fewer cards total in hand, deck, and discard.', 'target': 1, 'metric': 'flag_enemy_cards_10', 'reward_dew': 650},
+    {'id': 'over_defense', 'type': 'battle', 'name_cn': '过度防御', 'name_en': 'Over Defense', 'description_cn': '对局中，自己曾经拥有20或更多层护甲。', 'description_en': 'Have 20 or more Armor at any point in a match.', 'target': 1, 'metric': 'flag_armor_20', 'reward_dew': 450},
     {'id': 'deep_roots', 'type': 'hidden', 'hidden': True, 'name_cn': '根系发达', 'name_en': 'Deep Roots', 'description_cn': '同时装备4个或更多装备。', 'description_en': 'Have 4 or more equipment at the same time.', 'target': 1, 'metric': 'flag_max_equipment_5', 'reward_dew': 500},
     {'id': 'calculated_finish', 'type': 'hidden', 'hidden': True, 'name_cn': '精打细算', 'name_en': 'Calculated Finish', 'description_cn': '1v1中，对手死亡时自己的E和M均为0。', 'description_en': 'In 1v1, win while your E and M are both 0 when the opponent dies.', 'target': 1, 'metric': 'flag_1v1_zero_resources_win', 'reward_dew': 750},
     {'id': 'enemy_6_statuses', 'type': 'hidden', 'hidden': True, 'name_cn': '狂乱的鸡尾酒', 'name_en': 'Mad Cocktail', 'description_cn': '使一名敌方玩家同时拥有6个或更多不同状态。', 'description_en': 'Make an enemy have 6 or more different statuses at once.', 'target': 1, 'metric': 'flag_enemy_6_statuses', 'reward_dew': 700},
@@ -518,6 +519,20 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_stats ON users(games_played, wins, losses, draws)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_season_gr ON users(gr_season_id, season_gr, season_ranked_games)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_total_gr ON users(total_gr, total_ranked_games)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS user_ip_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                username TEXT,
+                ip TEXT NOT NULL,
+                source TEXT,
+                created_at TEXT NOT NULL
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_user_ip_events_user ON user_ip_events(user_id, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_user_ip_events_ip ON user_ip_events(ip, created_at)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS user_roles (
@@ -1238,6 +1253,77 @@ def row_to_admin_user(row):
     return user
 
 
+def record_user_ip_event(user_id, username='', ip='', source='auth'):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return False
+    token = str(ip or '').strip()[:80]
+    if not token:
+        return False
+    now = utc_now()
+    try:
+        with get_db_connection() as conn:
+            row = conn.execute('SELECT username FROM users WHERE id = ?', (uid,)).fetchone()
+            if row is None:
+                return False
+            conn.execute(
+                '''
+                INSERT INTO user_ip_events (user_id, username, ip, source, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ''',
+                (uid, str(username or row['username'] or '')[:80], token, str(source or 'auth')[:40], now),
+            )
+            conn.commit()
+            return True
+    except sqlite3.OperationalError:
+        return False
+
+
+def list_user_recent_ips(user_id, limit=5):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return []
+    safe_limit = max(1, min(int(limit or 5), 10))
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            '''
+            SELECT ip, MAX(created_at) AS last_seen_at, COUNT(*) AS count
+            FROM user_ip_events
+            WHERE user_id = ?
+            GROUP BY ip
+            ORDER BY last_seen_at DESC
+            LIMIT ?
+            ''',
+            (uid, safe_limit),
+        ).fetchall()
+        items = []
+        for row in rows:
+            related = conn.execute(
+                '''
+                SELECT u.id, u.username, MAX(e.created_at) AS last_seen_at
+                FROM user_ip_events e
+                JOIN users u ON u.id = e.user_id
+                WHERE e.ip = ? AND e.user_id != ?
+                GROUP BY u.id
+                ORDER BY last_seen_at DESC
+                LIMIT 5
+                ''',
+                (row['ip'], uid),
+            ).fetchall()
+            items.append({
+                'ip': row['ip'],
+                'last_seen_at': row['last_seen_at'],
+                'count': int(row['count'] or 0),
+                'related_users': [
+                    {'id': r['id'], 'username': r['username'], 'last_seen_at': r['last_seen_at']}
+                    for r in related
+                ],
+            })
+        return items
+
+
 def _thorn_dew_payload(row_or_user):
     if row_or_user is None:
         return {'free': 0, 'paid': 0, 'total': 0}
@@ -1950,6 +2036,11 @@ def _unlock_achievement_conn(conn, user_id, achievement_id, progress=None, now=N
         'name_en': defn.get('name_en'),
         'description_cn': defn.get('description_cn') or '',
         'description_en': defn.get('description_en') or '',
+        'type': defn.get('type') or ('hidden' if defn.get('hidden') else 'milestone'),
+        'type_color': ACHIEVEMENT_TYPES.get(
+            defn.get('type') or ('hidden' if defn.get('hidden') else 'milestone'),
+            ACHIEVEMENT_TYPES['milestone'],
+        )['color'],
         'hidden': bool(defn.get('hidden')),
         'reward_dew': reward,
     }
@@ -2081,6 +2172,42 @@ def process_match_achievements(match_id, summary, allow_incremental_flags=True):
                             result = _unlock_achievement_conn(conn, uid, defn['id'], 1, now)
                         if result:
                             unlocked.append({'user_id': uid, **result})
+        conn.commit()
+    return {'unlocked': unlocked, 'skipped': None}
+
+
+def process_live_achievement_flags(flags_by_user):
+    """Unlock single-step in-match achievements as soon as their flag is reached."""
+    if not flags_by_user:
+        return {'unlocked': [], 'skipped': 'no_flags'}
+    unlocked = []
+    now = utc_now()
+    with get_db_connection() as conn:
+        for raw_uid, raw_flags in (flags_by_user or {}).items():
+            try:
+                uid = int(raw_uid)
+            except (TypeError, ValueError):
+                continue
+            if not uid:
+                continue
+            if isinstance(raw_flags, dict):
+                flags = [key for key, value in raw_flags.items() if value]
+            elif isinstance(raw_flags, (list, tuple, set)):
+                flags = list(raw_flags)
+            else:
+                flags = [raw_flags]
+            for flag in flags:
+                flag = str(flag or '')
+                if not flag:
+                    continue
+                for defn in ACHIEVEMENT_DEFS:
+                    if defn.get('metric') != flag:
+                        continue
+                    if int(defn.get('target') or 1) != 1:
+                        continue
+                    result = _unlock_achievement_conn(conn, uid, defn['id'], 1, now)
+                    if result:
+                        unlocked.append({'user_id': uid, **result})
         conn.commit()
     return {'unlocked': unlocked, 'skipped': None}
 
@@ -3013,6 +3140,64 @@ def _row_to_report(row):
     }
 
 
+def _report_evidence_summary_from_items(evidence_items):
+    summary = {}
+    for ev in evidence_items or []:
+        data = ev.get('data') if isinstance(ev, dict) else None
+        if not isinstance(data, dict):
+            continue
+        ev_type = str(ev.get('evidence_type') or '')
+        if ev_type == 'chat_context':
+            message = data.get('message') or {}
+            context = data.get('context') or []
+            if isinstance(message, dict):
+                summary['message'] = {
+                    'id': message.get('id'),
+                    'sender_name': message.get('sender_name') or message.get('sender_username') or '',
+                    'message': message.get('message') or '',
+                    'channel': message.get('channel') or '',
+                    'room_id': message.get('room_id') or '',
+                    'risk_level': message.get('risk_level') or 0,
+                    'created_at': message.get('created_at') or '',
+                }
+            if isinstance(context, list):
+                summary['context'] = [
+                    {
+                        'id': item.get('id'),
+                        'sender_name': item.get('sender_name') or '',
+                        'message': item.get('message') or '',
+                        'channel': item.get('channel') or '',
+                        'created_at': item.get('created_at') or '',
+                    }
+                    for item in context[:16]
+                    if isinstance(item, dict)
+                ]
+        elif ev_type == 'match_summary' and 'match' not in summary:
+            summary['match'] = data
+        elif ev_type == 'active_room' and 'room' not in summary:
+            summary['room'] = data
+        elif ev_type == 'player_snapshot' and 'player' not in summary:
+            summary['player'] = data
+        elif ev_type == 'request' and 'request' not in summary:
+            summary['request'] = data
+    return summary
+
+
+def _report_evidence_summary_for_conn(conn, report_id):
+    rows = conn.execute(
+        'SELECT evidence_type, data_json, created_at FROM report_evidence WHERE report_id = ? ORDER BY id ASC',
+        (report_id,),
+    ).fetchall()
+    items = []
+    for row in rows:
+        try:
+            data = json.loads(row['data_json'] or '{}')
+        except Exception:
+            data = {}
+        items.append({'evidence_type': row['evidence_type'], 'data': data, 'created_at': row['created_at']})
+    return _report_evidence_summary_from_items(items)
+
+
 def create_report_entry(
     reporter_user_id,
     object_type,
@@ -3124,8 +3309,13 @@ def list_reports(status='pending', limit=50, offset=0):
             f'SELECT * FROM reports {where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
             params + [limit, offset],
         ).fetchall()
+        items = []
+        for row in rows:
+            item = _row_to_report(row)
+            item['evidence_summary'] = _report_evidence_summary_for_conn(conn, row['id'])
+            items.append(item)
         return {
-            'items': [_row_to_report(row) for row in rows],
+            'items': items,
             'total': total,
             'limit': limit,
             'offset': offset,
@@ -3159,11 +3349,12 @@ def get_report_detail(report_id):
             {
                 'id': ev['id'],
                 'evidence_type': ev['evidence_type'],
-                'data': json.loads(ev['data_json'] or '{}'),
+                'data': _safe_json_loads(ev['data_json'], {}),
                 'created_at': ev['created_at'],
             }
             for ev in evidence_rows
         ]
+        data['evidence_summary'] = _report_evidence_summary_from_items(data['evidence'])
         data['actions'] = [
             {
                 'id': action['id'],
