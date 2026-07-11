@@ -801,7 +801,7 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
                     user_flags.append('flag_15e_turn')
                 if int(getattr(ps, 'achievement_total_healed', 0) or 0) >= 100:
                     user_flags.append('flag_heal_100')
-                if int(getattr(ps, 'achievement_max_same_instance_plays', 0) or 0) >= 10:
+                if int(getattr(ps, 'achievement_max_same_instance_plays', 0) or 0) >= 7:
                     user_flags.append('flag_same_card_10')
                 if int(getattr(ps, 'achievement_max_same_name_streak', 0) or 0) >= 5:
                     user_flags.append('flag_same_name_streak_5')
@@ -900,7 +900,7 @@ def build_live_achievement_flags(room):
                 user_flags.append('flag_15e_turn')
             if int(getattr(ps, 'achievement_total_healed', 0) or 0) >= 100:
                 user_flags.append('flag_heal_100')
-            if int(getattr(ps, 'achievement_max_same_instance_plays', 0) or 0) >= 10:
+            if int(getattr(ps, 'achievement_max_same_instance_plays', 0) or 0) >= 7:
                 user_flags.append('flag_same_card_10')
             if int(getattr(ps, 'achievement_max_same_name_streak', 0) or 0) >= 5:
                 user_flags.append('flag_same_name_streak_5')

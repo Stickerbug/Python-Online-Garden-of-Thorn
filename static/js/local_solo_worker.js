@@ -4535,11 +4535,18 @@ class LocalSoloEngine {
             }
             if (tempCard.cost_e > ps.elixir || tempCard.cost_m > ps.magic) return;
             ps.addToHand(tempCard, { triggerEnterHand: false });
-            const result = this.playCard(playerId, tempCard.instance_id, {
-                target_player: targetId,
-                target_player_id: targetId,
-                target_id: targetId,
-            });
+            const previousAutoActor = this.allowOutOfTurnAutoPlayFor;
+            this.allowOutOfTurnAutoPlayFor = playerId;
+            let result = null;
+            try {
+                result = this.playCard(playerId, tempCard.instance_id, {
+                    target_player: targetId,
+                    target_player_id: targetId,
+                    target_id: targetId,
+                });
+            } finally {
+                this.allowOutOfTurnAutoPlayFor = previousAutoActor;
+            }
             const idx = ps.hand.indexOf(tempCard);
             if (idx >= 0 && !(result && (result.needs_choice || result.needs_v2_ui))) ps.hand.splice(idx, 1);
             if (result && (result.needs_response || result.needs_choice || result.needs_v2_ui)) return;
@@ -5377,7 +5384,7 @@ class LocalSoloEngine {
         if (def.card_type === 'guard' && !hasScriptEntry(def, 'play') && !(def.effects || []).length) {
             return [false, '反制牌只能通过响应机制使用'];
         }
-        if (this.phase !== 'action' || this.current_player !== playerId) return [false, '不是你的回合'];
+        if (this.phase !== 'action' || (this.current_player !== playerId && this.allowOutOfTurnAutoPlayFor !== playerId)) return [false, '不是你的回合'];
         if (this.actionLimitStatusValue(playerId, 'attack_blocked', 'attack_blocked', '禁攻') > 0 && def.card_type === 'thorn') return [false, '本回合无法使用攻击牌'];
         if (this.actionLimitStatusValue(playerId, 'attack_only', 'attack_only', '仅攻击') > 0 && def.card_type !== 'thorn') return [false, '本回合只能使用攻击牌'];
         if (ps.shovel_active) return [false, '链子效果中，无法使用卡牌'];

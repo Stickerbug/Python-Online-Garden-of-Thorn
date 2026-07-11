@@ -8193,6 +8193,15 @@ function createCardElement(cardDict, options = {}) {
         || ['珍珠', '魔法珍珠', '尖刺球', '蓝宝石'].includes(cardDef.name_cn)) {
         el.classList.add('card-ocean-compact');
     }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, [
+        'Singularity', 'Scar', 'Scythe', 'Antimatter', 'MagicWing',
+        'MagicZodiac', 'Relativity', 'Zodiac', 'Puppeteer', 'Kitty',
+    ]) || [
+        '奇点', '疤痕', '镰刀', '反物质', '魔法翅膀',
+        '魔法星座', '相对论', '星座', '傀儡架台', '小猫',
+    ].includes(cardDef.name_cn)) {
+        el.classList.add('card-void-compact');
+    }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['MagicPearl']) || cardDef.name_cn === '魔法珍珠') {
         el.classList.add('card-ocean-magic-pearl');
     }
@@ -21586,16 +21595,33 @@ function appendBattleLogTextWithCardChips(parent, text) {
             usedChip = true;
             continue;
         }
+        const nextMarkerIndex = raw.toLowerCase().indexOf('[[card:', cursor);
         let best = null;
         for (const candidate of candidates) {
             const idx = raw.indexOf(candidate.text, cursor);
             if (idx < 0) continue;
+            // Never let fuzzy card-name matching consume text inside an explicit
+            // [[card:...|flag=...]] marker. Otherwise the card id is replaced
+            // first and the marker modifiers leak into the battle log.
+            if (nextMarkerIndex >= 0 && idx >= nextMarkerIndex) continue;
             if (isInsideBattleLogProtectedRange(idx, candidate.text.length, protectedRanges)) continue;
             if (!isBattleLogCardNameBoundary(raw, idx, candidate.text.length, candidate.text)) continue;
             if (isBattleLogCardNameContextBlocked(raw, idx, candidate.text.length, candidate)) continue;
             if (!isBattleLogCardNameContextAllowed(raw, idx, candidate.text.length, candidate)) continue;
             if (!best || idx < best.index || (idx === best.index && candidate.text.length > best.text.length)) {
                 best = { ...candidate, index: idx };
+            }
+        }
+        if (nextMarkerIndex >= 0 && (!best || nextMarkerIndex < best.index)) {
+            if (nextMarkerIndex > cursor) {
+                appendColorizedLogText(parent, raw.slice(cursor, nextMarkerIndex));
+            }
+            const markerAtIndex = parseInlineCardMarker(raw.slice(nextMarkerIndex));
+            if (markerAtIndex) {
+                appendBattleLogCardChip(parent, markerAtIndex.defId, markerAtIndex.cardDict || buildInlineCardDict(markerAtIndex.defId, markerAtIndex.modifierText));
+                cursor = nextMarkerIndex + markerAtIndex.raw.length;
+                usedChip = true;
+                continue;
             }
         }
         if (!best) {
@@ -25004,6 +25030,9 @@ function createSettingsModCaret(kind, key, expanded) {
 const BETA_TESTING_MOD_IDS = new Set([
     'Ocean Cards Addition.gtnmod',
     'ocean',
+    'Void Card Addition.gtnmod',
+    'void',
+    'Void Card Addition',
 ]);
 
 function isBetaTestingMod(mod) {

@@ -804,20 +804,6 @@ class GameEngine:
         except Exception:
             pass
         try:
-            instance_id = int(getattr(card, 'instance_id', 0) or 0)
-            if instance_id:
-                counts = getattr(ps, 'achievement_same_instance_play_counts', None)
-                if not isinstance(counts, dict):
-                    counts = {}
-                    ps.achievement_same_instance_play_counts = counts
-                counts[instance_id] = int(counts.get(instance_id, 0) or 0) + 1
-                ps.achievement_max_same_instance_plays = max(
-                    int(getattr(ps, 'achievement_max_same_instance_plays', 0) or 0),
-                    counts[instance_id],
-                )
-        except Exception:
-            pass
-        try:
             def_id = str(getattr(card, 'def_id', '') or '')
             is_light = def_id.lower().endswith(':light') or def_id.lower() == 'light'
             if def_id and not is_light and def_id == str(getattr(ps, 'achievement_last_played_def_id', '') or ''):
@@ -828,6 +814,26 @@ class GameEngine:
             ps.achievement_max_same_name_streak = max(
                 int(getattr(ps, 'achievement_max_same_name_streak', 0) or 0),
                 int(getattr(ps, 'achievement_last_played_def_count', 0) or 0),
+            )
+        except Exception:
+            pass
+
+    def _note_achievement_card_discarded(self, player_id: int, card: Optional[CardInstance]):
+        if card is None or not (0 <= player_id < len(self.players)):
+            return
+        try:
+            instance_id = int(getattr(card, 'instance_id', 0) or 0)
+            if not instance_id:
+                return
+            ps = self.players[player_id]
+            counts = getattr(ps, 'achievement_same_instance_play_counts', None)
+            if not isinstance(counts, dict):
+                counts = {}
+                ps.achievement_same_instance_play_counts = counts
+            counts[instance_id] = int(counts.get(instance_id, 0) or 0) + 1
+            ps.achievement_max_same_instance_plays = max(
+                int(getattr(ps, 'achievement_max_same_instance_plays', 0) or 0),
+                counts[instance_id],
             )
         except Exception:
             pass
@@ -899,9 +905,14 @@ class GameEngine:
         target = self.players[target_id]
         self._note_achievement_enemy_card_total(target_id)
         try:
+            root_armor = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
+        except Exception:
+            root_armor = 0
+        try:
+            total_armor = max(0, int(getattr(target, 'armor', 0) or 0) + int(root_armor or 0))
             target.achievement_max_armor = max(
                 int(getattr(target, 'achievement_max_armor', 0) or 0),
-                int(getattr(target, 'armor', 0) or 0),
+                total_armor,
             )
         except Exception:
             pass
@@ -974,7 +985,11 @@ class GameEngine:
         ps.achievement_counter_successes = 0
         ps.achievement_equipment_destroyed = 0
         ps.achievement_max_equipment_count = len(getattr(ps, 'equipment', []) or [])
-        ps.achievement_max_armor = max(0, int(getattr(ps, 'armor', 0) or 0))
+        try:
+            root_armor = self._custom_status_value(player_id, 'jungle:root', 'jungle:root_status', 'root_status')
+        except Exception:
+            root_armor = 0
+        ps.achievement_max_armor = max(0, int(getattr(ps, 'armor', 0) or 0) + int(root_armor or 0))
         ps.achievement_death_round = None
         ps.achievement_self_caused_death = False
 
@@ -4057,8 +4072,7 @@ class GameEngine:
         if card not in ps.hand:
             return False
         ps.hand.remove(card)
-        reset_card_for_discard(card)
-        ps.discard.append(card)
+        self._discard_card(ps, card)
         self._set_unable_counter_value(player_id, stacks - 1)
         self.log_msg(f"{self.pn(player_id)}因无法反制将{card.name_cn}置入弃牌堆")
         return True
@@ -4075,8 +4089,7 @@ class GameEngine:
             if not self._is_counter_card(card):
                 continue
             ps.hand.remove(card)
-            reset_card_for_discard(card)
-            ps.discard.append(card)
+            self._discard_card(ps, card)
             discarded += 1
             stacks -= 1
         if discarded:
@@ -4372,7 +4385,8 @@ class GameEngine:
         card_def = card.card_def
         if card_def.card_type == 'guard' and not self._has_script_entry(card_def, 'play') and not card_def.effects and not self._card_has_v2_event(card_def, 'on_play'):
             return False, "反制牌只能通过响应机制使用"
-        if self.phase != 'action' or self.current_player != player_id:
+        auto_play_actor = getattr(self, '_allow_out_of_turn_auto_play_for', None)
+        if self.phase != 'action' or (self.current_player != player_id and auto_play_actor != player_id):
             return False, "不是你的回合"
         immune = self._is_status_immune(player_id)
         if self._action_limit_status_value(player_id, 'attack_blocked', 'attack_blocked', '禁攻') > 0 and card_def.card_type == 'thorn' and not immune:
@@ -5269,6 +5283,7 @@ class GameEngine:
     def _discard_card(self, ps, card: CardInstance):
         reset_card_for_discard(card)
         ps.discard.append(card)
+        self._note_achievement_card_discarded(ps.player_id, card)
         try:
             self._note_achievement_enemy_card_total(ps.player_id)
         except Exception:
@@ -5337,7 +5352,7 @@ class GameEngine:
                 if card.instance_id not in selected_set:
                     continue
                 ps.hand.remove(card)
-                ps.discard.append(card)
+                self._discard_card(ps, card)
                 discarded += 1
                 self._record_ocean_active_discard(player_id, 1)
                 if discarded >= select_limit:
@@ -7028,7 +7043,7 @@ class GameEngine:
             target = ps.find_hand_card(choice['target_instance_id'])
             if target and self._card_selectable_by_action(target):
                 ps.remove_hand_card(target.instance_id)
-                ps.discard.append(target)
+                self._discard_card(ps, target)
                 ps.draw_cards(1)
                 self.log_msg(f"{self.pn(player_id)}使用辣椒，弃1张并抽1张牌")
         else:
@@ -10842,7 +10857,7 @@ class GameEngine:
             target = ps.find_hand_card(choice['target_instance_id'])
             if target and self._card_selectable_by_action(target) and getattr(target, 'instance_id', None) != getattr(card, 'instance_id', None):
                 ps.hand.remove(target)
-                ps.discard.append(target)
+                self._discard_card(ps, target)
                 discarded = True
         ps.draw_cards(1)
         if self._is_chilli_card(card):
@@ -11504,6 +11519,7 @@ class GameEngine:
         _, eq = self._find_equipment_by_card_instance_id(getattr(card, 'instance_id', None))
         if eq is not None:
             eq.custom_vars['jungle_root_layers'] = int(eq.custom_vars.get('jungle_root_layers', 0) or 0) + amount
+        self._note_achievement_status_peak(owner_id)
         self.log_msg(log or f"{self.pn(owner_id)}获得{amount}层树根")
 
     def _atomic_jungle_root_remove_owned(self, player_id, card, params, log, choice, context):
@@ -12042,12 +12058,14 @@ class GameEngine:
         elif to_zone == 'exile':
             self.players[target_id].exile.append(selected)
         else:
-            self.players[target_id].discard.append(selected)
+            self._discard_card(self.players[target_id], selected)
         if log:
             self.log_msg(log)
 
     def _atomic_void_give_selected_hand_flag(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not self._valid_player_id(target_id):
+            return
         selected = self._void_selected_card(target_id, 'hand', choice)
         if selected is None:
             self.log_msg(log or f"{self.pn(player_id)}没有选择可用的牌")
@@ -12235,10 +12253,12 @@ class GameEngine:
         actor.add_to_hand(top_card, trigger_enter_hand=False)
         auto_choice = {'target_player_id': target_id, 'target_player': target_id, 'target_id': target_id} if target_id >= 0 else {}
         self.log_msg(log or f"小猫使{self.pn(actor_id)}自动打出{top_card.name_cn}")
-        if len(getattr(self, 'players', []) or []) > 2 and target_id >= 0:
-            self.play_card(actor_id, top_card.instance_id, target_player_id=target_id, choice=auto_choice)
-        else:
+        previous_auto_actor = getattr(self, '_allow_out_of_turn_auto_play_for', None)
+        self._allow_out_of_turn_auto_play_for = actor_id
+        try:
             self.play_card(actor_id, top_card.instance_id, auto_choice)
+        finally:
+            self._allow_out_of_turn_auto_play_for = previous_auto_actor
 
     def _atomic_void_transform_own_cards(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
@@ -12375,10 +12395,15 @@ class GameEngine:
                 continue
             ps.add_to_hand(temp_card, trigger_enter_hand=False)
             auto_choice = {'target_player_id': target_id, 'target_player': target_id, 'target_id': target_id}
-            if len(getattr(self, 'players', []) or []) > 2:
-                result = self.play_card(player_id, temp_card.instance_id, target_id, auto_choice)
-            else:
-                result = self.play_card(player_id, temp_card.instance_id, auto_choice)
+            previous_auto_actor = getattr(self, '_allow_out_of_turn_auto_play_for', None)
+            self._allow_out_of_turn_auto_play_for = player_id
+            try:
+                if len(getattr(self, 'players', []) or []) > 2:
+                    result = self.play_card(player_id, temp_card.instance_id, target_id, auto_choice)
+                else:
+                    result = self.play_card(player_id, temp_card.instance_id, auto_choice)
+            finally:
+                self._allow_out_of_turn_auto_play_for = previous_auto_actor
             if temp_card in ps.hand and not result.get('needs_choice') and not result.get('needs_v2_ui'):
                 ps.hand.remove(temp_card)
             if not result.get('success') and not result.get('needs_response') and not result.get('needs_choice') and not result.get('needs_v2_ui'):

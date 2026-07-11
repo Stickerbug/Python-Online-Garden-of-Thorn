@@ -7282,6 +7282,13 @@ html.blind-level-4 .card-prediction-part.magic {
   padding-bottom: 1.25cqi;
 }
 
+.card.card-void-compact .card-effect {
+  font-size: 7.42cqi;
+  line-height: 1.12;
+  padding-top: 2.4cqi;
+  padding-bottom: 1.15cqi;
+}
+
 .card.card-ocean-magic-pearl .card-effect {
   font-size: 6.92cqi;
   line-height: 1.085;
