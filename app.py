@@ -819,6 +819,15 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
                     user_flags.append('flag_poison_fire_dual_15')
                 if int(getattr(ps, 'achievement_min_enemy_card_total', 999999) or 999999) <= 10:
                     user_flags.append('flag_enemy_cards_10')
+                if mode == '2v2' and (
+                    bool(getattr(ps, 'achievement_team_double_resources', False))
+                    or _achievement_team_double_resources(engine, pidx)
+                ):
+                    user_flags.append('flag_team_double_resources')
+                if int(getattr(ps, 'achievement_max_enemy_attack_blocked', 0) or 0) >= 5:
+                    user_flags.append('flag_enemy_attack_blocked_5')
+                if int(getattr(ps, 'achievement_max_untargetable', 0) or 0) >= 3:
+                    user_flags.append('flag_untargetable_3')
                 if int(getattr(ps, 'achievement_max_equipment_count', 0) or 0) >= 4:
                     user_flags.append('flag_max_equipment_5')
                 if int(getattr(ps, 'achievement_max_armor', 0) or 0) >= 20:
@@ -853,6 +862,45 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
     return flags
 
 
+def _achievement_team_double_resources(engine, pidx):
+    try:
+        if engine is None or not hasattr(engine, 'team_of') or not hasattr(engine, 'teams'):
+            return False
+        own_team_id = engine.team_of(pidx)
+        own_team = list(engine.teams[own_team_id])
+        enemy_team = [
+            idx for idx in range(len(getattr(engine, 'players', []) or []))
+            if idx not in own_team and engine.team_of(idx) != own_team_id
+        ]
+        if not own_team or not enemy_team:
+            return False
+
+        def _sum_stat(indices, attr):
+            total = 0
+            for idx in indices:
+                try:
+                    value = int(getattr(engine.players[idx], attr, 0) or 0)
+                except (TypeError, ValueError):
+                    value = 0
+                total += max(0, value)
+            return total
+
+        achieved = (
+            _sum_stat(own_team, 'health') >= 2 * _sum_stat(enemy_team, 'health')
+            and _sum_stat(own_team, 'elixir') >= 2 * _sum_stat(enemy_team, 'elixir')
+            and _sum_stat(own_team, 'magic') >= 2 * _sum_stat(enemy_team, 'magic')
+        )
+        if achieved:
+            for idx in own_team:
+                try:
+                    engine.players[idx].achievement_team_double_resources = True
+                except Exception:
+                    pass
+        return achieved
+    except Exception:
+        return False
+
+
 LIVE_ACHIEVEMENT_FLAGS = {
     'flag_one_hit_60',
     'flag_15_cards_turn',
@@ -867,6 +915,9 @@ LIVE_ACHIEVEMENT_FLAGS = {
     'flag_counter_6',
     'flag_poison_fire_dual_15',
     'flag_enemy_cards_10',
+    'flag_team_double_resources',
+    'flag_enemy_attack_blocked_5',
+    'flag_untargetable_3',
     'flag_max_equipment_5',
     'flag_armor_20',
     'flag_self_caused_death',
@@ -918,6 +969,15 @@ def build_live_achievement_flags(room):
                 user_flags.append('flag_poison_fire_dual_15')
             if int(getattr(ps, 'achievement_min_enemy_card_total', 999999) or 999999) <= 10:
                 user_flags.append('flag_enemy_cards_10')
+            if getattr(room, 'mode', '') == '2v2' and (
+                bool(getattr(ps, 'achievement_team_double_resources', False))
+                or _achievement_team_double_resources(engine, pidx)
+            ):
+                user_flags.append('flag_team_double_resources')
+            if int(getattr(ps, 'achievement_max_enemy_attack_blocked', 0) or 0) >= 5:
+                user_flags.append('flag_enemy_attack_blocked_5')
+            if int(getattr(ps, 'achievement_max_untargetable', 0) or 0) >= 3:
+                user_flags.append('flag_untargetable_3')
             if int(getattr(ps, 'achievement_max_equipment_count', 0) or 0) >= 4:
                 user_flags.append('flag_max_equipment_5')
             if int(getattr(ps, 'achievement_max_armor', 0) or 0) >= 20:
@@ -997,6 +1057,91 @@ def emit_achievement_unlocks(room, achievement_result):
                 socketio.emit('achievement_unlocked', {'items': items}, room=sid)
     except Exception as exc:
         admin_event('error', f'achievement unlock emit failed: {exc}', room_id=getattr(room, 'room_id', None))
+
+
+def _format_achievement_unlocked_items(unlocked):
+    items = []
+    for item in unlocked or []:
+        items.append({
+            'id': item.get('id') or '',
+            'name_cn': item.get('name_cn') or item.get('id') or '',
+            'name_en': item.get('name_en') or item.get('name_cn') or item.get('id') or '',
+            'description_cn': item.get('description_cn') or '',
+            'description_en': item.get('description_en') or item.get('description_cn') or '',
+            'type': item.get('type') or ('hidden' if item.get('hidden') else ''),
+            'type_color': item.get('type_color') or item.get('color') or '',
+            'hidden': bool(item.get('hidden')),
+            'reward_dew': int(item.get('reward_dew') or 0),
+        })
+    return items
+
+
+def _positive_int(value):
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+SOLO_STATUS_TOTAL_ATTRS = (
+    'poison', 'fire', 'dodge', 'toxic', 'triangle_stacks', 'overload',
+    'foresight', 'fracture', 'stagnation', 'blind', 'heal_block',
+    'weakness', 'bleed', 'skip_turn', 'attack_blocked', 'attack_only',
+    'magic_blocked', 'honey_control_turns', 'untargetable',
+)
+SOLO_STATUS_TOTAL_EXCLUDED_CUSTOM_KEYS = {
+    'jungle:root', 'jungle:root_status', 'root_status',
+    'equipment_protection', 'armor',
+}
+
+
+def _solo_player_status_stack_total(ps):
+    total = 0
+    for attr in SOLO_STATUS_TOTAL_ATTRS:
+        total += _positive_int(getattr(ps, attr, 0))
+    if bool(getattr(ps, 'invincible', False)):
+        total += 1
+    if bool(getattr(ps, 'bandage_active', False)):
+        total += 1
+    if bool(getattr(ps, 'bandage_death_pending', False)):
+        total += 1
+    custom = getattr(ps, 'custom_statuses', {}) or {}
+    if isinstance(custom, dict):
+        for key, value in custom.items():
+            if str(key) in SOLO_STATUS_TOTAL_EXCLUDED_CUSTOM_KEYS:
+                continue
+            total += _positive_int(value)
+    return total
+
+
+def check_solo_achievements(sid, engine):
+    if not DB_AVAILABLE or not sid or engine is None or sid in tutorial_sessions:
+        return
+    player = players.get(sid) or {}
+    try:
+        uid = int(player.get('user_id') or 0)
+    except (TypeError, ValueError):
+        uid = 0
+    if uid <= 0:
+        return
+    try:
+        total = sum(_solo_player_status_stack_total(ps) for ps in getattr(engine, 'players', []) or [])
+        if total < 25:
+            return
+        seen = getattr(engine, '_solo_achievement_flags_seen', None)
+        if seen is None:
+            seen = set()
+            engine._solo_achievement_flags_seen = seen
+        key = (uid, 'flag_solo_status_25')
+        if key in seen:
+            return
+        seen.add(key)
+        result = process_live_achievement_flags({str(uid): ['flag_solo_status_25']})
+        items = _format_achievement_unlocked_items((result or {}).get('unlocked') or [])
+        if items:
+            socketio.emit('achievement_unlocked', {'items': items}, room=sid)
+    except Exception as exc:
+        admin_event('error', f'solo achievement check failed: {exc}')
 
 
 def admin_match_record(room, result='finished'):
@@ -9167,6 +9312,12 @@ def _room_state_broadcast_worker(room):
                 finally:
                     if acquired_action_lock:
                         action_lock.release()
+                if not getattr(room, '_live_achievement_checking', False):
+                    room._live_achievement_checking = True
+                    try:
+                        check_live_achievements(room)
+                    finally:
+                        room._live_achievement_checking = False
             except Exception as exc:
                 admin_event('error', f'room state broadcast failed room={getattr(room, "room_id", "?")}: {exc}', room_id=getattr(room, 'room_id', None))
             with room.state_broadcast_lock:
@@ -9596,6 +9747,7 @@ def send_solo_state(sid, perspective=None):
     owner_skin = players.get(sid, {}).get('skin') if sid in players else None
     inject_solo_skins(state, owner_skin=owner_skin, perspective=perspective)
     state['solo'] = True
+    check_solo_achievements(sid, engine)
     socketio.emit('solo_state', state, room=sid)
     # Check if engine has a pending choice (e.g. foresight_replace) and send choice_request
     pending = getattr(engine, 'pending_choice', None)

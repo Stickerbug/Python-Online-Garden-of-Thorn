@@ -2648,12 +2648,7 @@ function hasCardTriggerContent(cardDef) {
 }
 
 function getCardIntroTriggerText(cardDef) {
-    if (!hasCardTriggerContent(cardDef)) return '';
-    const triggerText = getCardTriggerText(cardDef) || '';
-    if (!triggerText) return '';
-    const effectText = getCardEffectText(cardDef) || '';
-    if (normalizeCardIntroText(triggerText) === normalizeCardIntroText(effectText)) return '';
-    return triggerText;
+    return '';
 }
 
 function escapeHtml(value) {
@@ -10098,7 +10093,7 @@ function collectCardIntroTerms(cardDict) {
         [/失明|Blind|blind/i, 'blind'],
         [/预知|Foresight|foresight/i, 'foresight'],
         [/破损|Fracture|fracture/i, 'fracture'],
-        [/眩晕|Stun|stunned|skip_turn/i, 'stunned'],
+        [/眩晕|Stun|stunned|dizzy|skip_turn/i, 'stunned'],
         [/禁攻|禁止攻击|attack_blocked/i, 'attack_blocked'],
         [/仅攻击|attack_only/i, 'attack_only'],
         [/魔力封锁|magic_blocked/i, 'magic_blocked'],
@@ -19598,7 +19593,8 @@ function renderStatusTags(containerId, playerData) {
     if (p.invincible) tags.push({ key: 'invincible', name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
     const statusImmune = customCount('status_immune', 'immune', '状态免疫');
     if (statusImmune > 0) tags.push({ key: 'status_immune', name: UI.status_immune || '状态免疫', abbr: '免疫', val: '', fg: '#16A085', bg: '#E8F8F5' });
-    if (p.skip_turn > 0) tags.push({ key: 'stunned', name: UI.status_stunned, abbr: 'Stn', val: p.skip_turn, fg: COLORS.damage, bg: COLORS.damage_bg });
+    const stunnedStacks = Math.max(Number(p.skip_turn || 0), customCount('dizzy', 'stunned', 'skip_turn', '眩晕'));
+    if (stunnedStacks > 0) tags.push({ key: 'stunned', name: UI.status_stunned, abbr: 'Stn', val: stunnedStacks, fg: COLORS.damage, bg: COLORS.damage_bg });
     const attackBlocked = Math.max(Number(p.attack_blocked || 0), customCount('attack_blocked', '禁攻'));
     const attackOnly = Math.max(Number(p.attack_only || 0), customCount('attack_only', '仅攻击'));
     const magicBlocked = customCount('magic_blocked', '魔力封锁');
@@ -19644,7 +19640,7 @@ function renderStatusTags(containerId, playerData) {
         if (count > 0) tags.push({ key: info.keys[0], iconKey: info.iconKey, name: info.name, abbr: info.abbr, val: count, fg: info.fg, bg: info.bg, title: info.title });
     });
     if (customStatuses && typeof customStatuses === 'object') {
-            const builtinKeys = new Set(['poison','fire','toxic','dodge','armor','nazar','邪眼','Nazar','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','stunned','skip_turn','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:root','jungle:root_status','root_status','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
+            const builtinKeys = new Set(['poison','fire','toxic','dodge','armor','nazar','邪眼','Nazar','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','dizzy','stunned','skip_turn','眩晕','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:root','jungle:root_status','root_status','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
         Object.entries(customStatuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;

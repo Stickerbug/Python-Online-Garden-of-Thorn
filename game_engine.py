@@ -210,6 +210,13 @@ class PlayerState:
         self.achievement_max_enemy_fire: int = 0
         self.achievement_max_enemy_poison_fire_min: int = 0
         self.achievement_max_enemy_status_types: int = 0
+        self.achievement_attack_blocked_received: int = 0
+        self.achievement_last_attack_blocked_value: int = int(self.attack_blocked)
+        self.achievement_max_enemy_attack_blocked: int = 0
+        self.achievement_untargetable_received: int = 0
+        self.achievement_last_untargetable_value: int = int(self.untargetable)
+        self.achievement_max_untargetable: int = int(self.untargetable)
+        self.achievement_team_double_resources: bool = False
         self.achievement_min_enemy_card_total: int = 999999
         self.achievement_counter_successes: int = 0
         self.achievement_equipment_destroyed: int = 0
@@ -319,6 +326,13 @@ class PlayerState:
             'achievement_max_enemy_fire': self.achievement_max_enemy_fire,
             'achievement_max_enemy_poison_fire_min': self.achievement_max_enemy_poison_fire_min,
             'achievement_max_enemy_status_types': self.achievement_max_enemy_status_types,
+            'achievement_attack_blocked_received': self.achievement_attack_blocked_received,
+            'achievement_last_attack_blocked_value': self.achievement_last_attack_blocked_value,
+            'achievement_max_enemy_attack_blocked': self.achievement_max_enemy_attack_blocked,
+            'achievement_untargetable_received': self.achievement_untargetable_received,
+            'achievement_last_untargetable_value': self.achievement_last_untargetable_value,
+            'achievement_max_untargetable': self.achievement_max_untargetable,
+            'achievement_team_double_resources': self.achievement_team_double_resources,
             'achievement_min_enemy_card_total': self.achievement_min_enemy_card_total,
             'achievement_counter_successes': self.achievement_counter_successes,
             'achievement_equipment_destroyed': self.achievement_equipment_destroyed,
@@ -440,6 +454,13 @@ class PlayerState:
         ps.achievement_max_enemy_fire = int(d.get('achievement_max_enemy_fire', 0) or 0)
         ps.achievement_max_enemy_poison_fire_min = int(d.get('achievement_max_enemy_poison_fire_min', 0) or 0)
         ps.achievement_max_enemy_status_types = int(d.get('achievement_max_enemy_status_types', 0) or 0)
+        ps.achievement_attack_blocked_received = int(d.get('achievement_attack_blocked_received', 0) or 0)
+        ps.achievement_last_attack_blocked_value = int(d.get('achievement_last_attack_blocked_value', getattr(ps, 'attack_blocked', 0)) or 0)
+        ps.achievement_max_enemy_attack_blocked = int(d.get('achievement_max_enemy_attack_blocked', 0) or 0)
+        ps.achievement_untargetable_received = int(d.get('achievement_untargetable_received', 0) or 0)
+        ps.achievement_last_untargetable_value = int(d.get('achievement_last_untargetable_value', getattr(ps, 'untargetable', 0)) or 0)
+        ps.achievement_max_untargetable = int(d.get('achievement_max_untargetable', getattr(ps, 'untargetable', 0)) or 0)
+        ps.achievement_team_double_resources = bool(d.get('achievement_team_double_resources', False))
         ps.achievement_min_enemy_card_total = int(d.get('achievement_min_enemy_card_total', 999999) or 999999)
         ps.achievement_counter_successes = int(d.get('achievement_counter_successes', 0) or 0)
         ps.achievement_equipment_destroyed = int(d.get('achievement_equipment_destroyed', 0) or 0)
@@ -917,6 +938,33 @@ class GameEngine:
         except Exception:
             pass
         try:
+            current_attack_blocked = max(0, int(getattr(target, 'attack_blocked', 0) or 0))
+            last_attack_blocked = max(0, int(getattr(target, 'achievement_last_attack_blocked_value', current_attack_blocked) or 0))
+            if current_attack_blocked > last_attack_blocked:
+                target.achievement_attack_blocked_received = (
+                    int(getattr(target, 'achievement_attack_blocked_received', 0) or 0)
+                    + current_attack_blocked - last_attack_blocked
+                )
+            target.achievement_last_attack_blocked_value = current_attack_blocked
+        except Exception:
+            pass
+        try:
+            current_untargetable = max(0, int(getattr(target, 'untargetable', 0) or 0))
+            last_untargetable = max(0, int(getattr(target, 'achievement_last_untargetable_value', current_untargetable) or 0))
+            if current_untargetable > last_untargetable:
+                target.achievement_untargetable_received = (
+                    int(getattr(target, 'achievement_untargetable_received', 0) or 0)
+                    + current_untargetable - last_untargetable
+                )
+            target.achievement_last_untargetable_value = current_untargetable
+            target.achievement_max_untargetable = max(
+                int(getattr(target, 'achievement_max_untargetable', 0) or 0),
+                int(getattr(target, 'achievement_untargetable_received', 0) or 0),
+                current_untargetable,
+            )
+        except Exception:
+            pass
+        try:
             status_types = 0
             builtin_values = [
                 getattr(target, 'poison', 0), getattr(target, 'fire', 0), getattr(target, 'dodge', 0),
@@ -956,6 +1004,10 @@ class GameEngine:
                         int(getattr(source, 'achievement_max_enemy_status_types', 0) or 0),
                         int(status_types or 0),
                     )
+                    source.achievement_max_enemy_attack_blocked = max(
+                        int(getattr(source, 'achievement_max_enemy_attack_blocked', 0) or 0),
+                        int(getattr(target, 'achievement_attack_blocked_received', 0) or 0),
+                    )
             except Exception:
                 pass
 
@@ -981,6 +1033,13 @@ class GameEngine:
         ps.achievement_max_enemy_fire = 0
         ps.achievement_max_enemy_poison_fire_min = 0
         ps.achievement_max_enemy_status_types = 0
+        ps.achievement_attack_blocked_received = 0
+        ps.achievement_last_attack_blocked_value = max(0, int(getattr(ps, 'attack_blocked', 0) or 0))
+        ps.achievement_max_enemy_attack_blocked = 0
+        ps.achievement_untargetable_received = 0
+        ps.achievement_last_untargetable_value = max(0, int(getattr(ps, 'untargetable', 0) or 0))
+        ps.achievement_max_untargetable = max(0, int(getattr(ps, 'untargetable', 0) or 0))
+        ps.achievement_team_double_resources = False
         ps.achievement_min_enemy_card_total = 999999
         ps.achievement_counter_successes = 0
         ps.achievement_equipment_destroyed = 0
@@ -1150,6 +1209,7 @@ class GameEngine:
             'fragment_stacks': ps.fragment_stacks,
             '碎片': ps.fragment_stacks,
             'stunned': ps.skip_turn,
+            'dizzy': ps.skip_turn,
             'skip_turn': ps.skip_turn,
             '眩晕': ps.skip_turn,
         }
@@ -4846,19 +4906,28 @@ class GameEngine:
 
     def _check_card_response_after_choice(self, player_id: int, card: CardInstance, choice: Optional[dict]) -> Optional[dict]:
         prev_choice = getattr(self, '_active_choice', None)
+        prev_preview = getattr(self, '_pending_response_preview', None)
         if isinstance(choice, dict):
             self._active_choice = choice
+        response_target_id = self._choice_target_from_choice(choice, 1 - player_id)
+        if not (0 <= response_target_id < len(self.players)):
+            response_target_id = 1 - player_id
+        self._pending_response_preview = {
+            'card': card.to_dict(),
+            'player_id': player_id,
+            'target_player_id': response_target_id,
+            'original_choice': choice,
+            'is_precision': 'precision' in card.flags,
+        }
         try:
             needs_response = self._check_response_needed(player_id, card)
             if not needs_response:
                 needs_response = self._check_precision_response_needed(player_id, card)
         finally:
             self._active_choice = prev_choice
+            self._pending_response_preview = prev_preview
         if not needs_response:
             return None
-        response_target_id = self._choice_target_from_choice(choice, 1 - player_id)
-        if not (0 <= response_target_id < len(self.players)):
-            response_target_id = 1 - player_id
         self.pending_response = {
             'card': card.to_dict(),
             'player_id': player_id,
@@ -4942,33 +5011,42 @@ class GameEngine:
         opp = self.players[1 - player_id]
         if target_id == 1 - player_id:
             for c in opp.hand:
-                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'targeted':
+                if (
+                    self._can_pay_counter_card(1 - player_id, c)
+                    and c.card_def.response_trigger == 'targeted'
+                    and self._counter_card_can_counter_pending(1 - player_id, c)
+                ):
                     return True
-        if any(self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'any' for c in opp.hand):
+        if any(
+            self._can_pay_counter_card(1 - player_id, c)
+            and c.card_def.response_trigger == 'any'
+            and self._counter_card_can_counter_pending(1 - player_id, c)
+            for c in opp.hand
+        ):
             return True
         if card.card_type == 'thorn':
             for c in opp.hand:
-                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'thorn':
+                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'thorn' and self._counter_card_can_counter_pending(1 - player_id, c):
                     return True
         if card.card_type == 'bloom':
             for c in opp.hand:
-                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'bloom':
+                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'bloom' and self._counter_card_can_counter_pending(1 - player_id, c):
                     return True
         if card.card_type == 'root':
             for c in opp.hand:
-                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'root':
+                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'root' and self._counter_card_can_counter_pending(1 - player_id, c):
                     return True
         if card.card_type == 'guard':
             for c in opp.hand:
-                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'guard':
+                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'guard' and self._counter_card_can_counter_pending(1 - player_id, c):
                     return True
         if self._would_destroy_equipment(card):
             for c in opp.hand:
-                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'equipment_destroy':
+                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'equipment_destroy' and self._counter_card_can_counter_pending(1 - player_id, c):
                     return True
         if self._would_heal(card):
             for c in opp.hand:
-                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'heal':
+                if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'heal' and self._counter_card_can_counter_pending(1 - player_id, c):
                     return True
         return False
 
@@ -4992,6 +5070,42 @@ class GameEngine:
             return False
         ps = self.players[player_id]
         return int(getattr(card, 'cost_e', 0) or 0) <= int(ps.elixir or 0) and int(getattr(card, 'cost_m', 0) or 0) <= int(ps.magic or 0)
+
+    def _is_magic_antimatter_card(self, card: Optional[CardInstance]) -> bool:
+        return self._card_is(card, 'MagicAntimatter', 'void:magic_antimatter') or getattr(card, 'def_id', '') == 'MagicAntimatter'
+
+    def _pending_response_would_be_lethal_for(self, player_id: int) -> bool:
+        pending = self.pending_response or getattr(self, '_pending_response_preview', None)
+        if pending is None or not (0 <= player_id < len(self.players)):
+            return False
+        if int(getattr(self.players[player_id], 'health', 0) or 0) <= 0:
+            return False
+        try:
+            sim = copy.deepcopy(self)
+            if sim.pending_response is None:
+                preview = getattr(sim, '_pending_response_preview', None)
+                if preview is not None:
+                    sim.pending_response = preview
+            if sim.pending_response is None or not (0 <= player_id < len(sim.players)):
+                return False
+            before = int(getattr(sim.players[player_id], 'health', 0) or 0)
+            if before <= 0:
+                return False
+            sim.handle_response(player_id, None)
+            after = int(getattr(sim.players[player_id], 'health', before) or 0)
+            return after <= 0
+        except Exception:
+            return False
+
+    def _counter_card_can_counter_pending(self, player_id: int, counter_card: CardInstance) -> bool:
+        if self._is_magic_antimatter_card(counter_card):
+            pending = self.pending_response or getattr(self, '_pending_response_preview', None) or {}
+            try:
+                source_id = int(pending.get('player_id', -1))
+            except Exception:
+                source_id = -1
+            return source_id != player_id and self._pending_response_would_be_lethal_for(player_id)
+        return True
 
     def _would_destroy_equipment(self, card: CardInstance) -> bool:
         return card.def_id in ('Sewage', 'MagicSewage')
@@ -5029,7 +5143,9 @@ class GameEngine:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             can_respond = False
             played_card_def = card.card_def
-            if played_card_def.card_type == 'thorn' and counter_card.card_def.response_trigger == 'thorn':
+            if not self._counter_card_can_counter_pending(responder_id, counter_card):
+                can_respond = False
+            elif played_card_def.card_type == 'thorn' and counter_card.card_def.response_trigger == 'thorn':
                 can_respond = True
             elif played_card_def.card_type == 'bloom' and counter_card.card_def.response_trigger == 'bloom':
                 can_respond = True
@@ -5275,6 +5391,7 @@ class GameEngine:
         if self._status_application_blocked(responder_id, 'untargetable'):
             return
         self.players[responder_id].untargetable = max(0, int(getattr(self.players[responder_id], 'untargetable', 0) or 0)) + 1
+        self._note_achievement_status_peak(responder_id)
         self.log_msg(f"{self.pn(responder_id)}获得1层无法选中")
 
     def _reset_one_shot_attack_attrs(self, card: CardInstance):
@@ -5668,6 +5785,7 @@ class GameEngine:
             return
         self.players[player_id].untargetable = max(0, int(getattr(self.players[player_id], 'untargetable', 0) or 0)) + 1
         self.players[player_id].shovel_active = True
+        self._note_achievement_status_peak(player_id)
         self.log_msg(log or f"{self.pn(player_id)}无法被攻击选中")
 
     def _atomic_block_enemy_attacks(self, player_id, card, params, log, choice, context):
@@ -5676,6 +5794,7 @@ class GameEngine:
         if self._status_application_blocked(1 - player_id, 'attack_blocked'):
             return
         opp.attack_blocked = max(opp.attack_blocked, duration)
+        self._note_achievement_status_peak(1 - player_id)
         self.log_msg(log or f"{self.pn(1 - player_id)}无法使用攻击牌{duration}回合")
 
     def _atomic_force_enemy_attacks_only(self, player_id, card, params, log, choice, context):
@@ -7503,7 +7622,11 @@ class GameEngine:
 
     def get_counter_cards(self, player_id: int, trigger_type: str) -> List[CardInstance]:
         ps = self.players[player_id]
-        return [c for c in ps.hand if c.card_def.response_trigger == trigger_type]
+        return [
+            c for c in ps.hand
+            if c.card_def.response_trigger == trigger_type
+            and self._counter_card_can_counter_pending(player_id, c)
+        ]
 
     def get_attack_cards_in_hand(self, player_id: int) -> List[CardInstance]:
         return [c for c in self.players[player_id].hand if c.card_type == 'thorn']
@@ -9887,6 +10010,8 @@ class GameEngine:
                     break
             if found is None:
                 continue
+            if not self._card_selectable_by_action(found):
+                continue
             if str(getattr(found, 'def_id', '') or '') in ('factory:cogwheel', 'Cogwheel'):
                 continue
             if exclude_def_id and str(getattr(found, 'def_id', '') or '') == exclude_def_id:
@@ -9909,7 +10034,7 @@ class GameEngine:
             return False
         action_statuses = {
             'sluggish', '迟缓', 'foresight', '预知', 'blind', '失明',
-            'stunned', 'skip_turn', '眩晕', 'attack_blocked', '禁攻',
+            'stunned', 'dizzy', 'skip_turn', '眩晕', 'attack_blocked', '禁攻',
             'attack_only', '仅攻击', 'magic_blocked', '魔力封锁',
         }
         if isinstance(value, dict):
@@ -10435,17 +10560,7 @@ class GameEngine:
                 self._check_yggdrasil(target_id)
                 if dmg > 0 and not is_battery:
                     for equipment_owner_id, eq in list(self._iter_equipment_targeting_player(target_id)):
-                        if self._has_card_event(eq.card_def, 'damage_taken') and self._run_card_event(
-                                target_id, eq.card_instance, 'damage_taken', None,
-                                {
-                                    'source_id': attacker_id,
-                                    'target_id': target_id,
-                                    'damage': dmg,
-                                    'selected_equipment_instance_id': eq.card_instance.instance_id,
-                                    'selected_equipment_owner_id': equipment_owner_id,
-                                }):
-                            continue
-                        if eq.def_id == 'Battery':
+                        if self._card_is(eq.card_instance, 'Battery', 'vanilla:battery'):
                             dealt = self._deal_direct_damage(
                                 attacker_id, 3, '电池电击', target_id,
                                 damage_type=DAMAGE_TYPE_MAGIC,
@@ -10455,12 +10570,23 @@ class GameEngine:
                                 self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
                             else:
                                 self.log_msg(f"{self.pn(target_id)}的电池触发，但{self.pn(attacker_id)}未受到电伤")
-                        elif eq.def_id == 'MagicBattery':
+                        elif self._card_is(eq.card_instance, 'MagicBattery', 'vanilla:magicbattery'):
                             owner_state = self.players[equipment_owner_id]
                             if owner_state.magic_battery_m_this_turn < 3:
                                 owner_state.gain_magic(1)
                                 owner_state.magic_battery_m_this_turn += 1
+                                owner_state.custom_vars['魔法电池本回合回魔'] = owner_state.magic_battery_m_this_turn
                                 self.log_msg(f"{self.pn(equipment_owner_id)}的魔法电池效果：+1M")
+                        elif self._has_card_event(eq.card_def, 'damage_taken') and self._run_card_event(
+                                target_id, eq.card_instance, 'damage_taken', None,
+                                {
+                                    'source_id': attacker_id,
+                                    'target_id': target_id,
+                                    'damage': dmg,
+                                    'selected_equipment_instance_id': eq.card_instance.instance_id,
+                                    'selected_equipment_owner_id': equipment_owner_id,
+                                }):
+                            continue
             finally:
                 self._game_over_defer_depth -= 1
             self._check_game_over()
@@ -10496,6 +10622,8 @@ class GameEngine:
                 self._discard_card(ps, card)
             self._dispatch_card_event('card_used', player_id, card, target_id=player_id, choice=choice)
             self._run_v2_play_hook('after_play_card', player_id, card, choice)
+            result['countered'] = True
+            result['negated'] = True
             return result
         # Magic Nazar: check for magic_nazar status on opponent
         if card.card_type == 'bloom':
@@ -11994,9 +12122,13 @@ class GameEngine:
 
     def _void_weighted_card_id(self, card_type: Optional[str] = None, exclude: Optional[Set[str]] = None) -> Optional[str]:
         exclude = exclude or set()
+        allowed_ids = getattr(self, 'allowed_card_ids', None)
+        allowed_ids = set(allowed_ids or []) if allowed_ids is not None else None
         weighted = []
         for def_id, card_def in CARD_DEFS.items():
             if def_id in exclude or def_id == ERROR_CARD_ID:
+                continue
+            if allowed_ids is not None and def_id not in allowed_ids:
                 continue
             if card_type and getattr(card_def, 'card_type', '') != card_type:
                 continue
@@ -12450,7 +12582,7 @@ class GameEngine:
                 ps.bleed += amount
             elif status in ('fragment', 'fragment_stacks', '碎片'):
                 ps.fragment_stacks += amount
-            elif status in ('stunned', 'skip_turn', '眩晕'):
+            elif status in ('stunned', 'dizzy', 'skip_turn', '眩晕'):
                 ps.skip_turn += amount
             elif status in self._unable_counter_keys():
                 self._add_custom_status_value(tid, 'ocean:unable_counter', amount)
@@ -12504,7 +12636,7 @@ class GameEngine:
                 ps.bleed = 0
             elif status in ('fragment', 'fragment_stacks', '碎片'):
                 ps.fragment_stacks = 0
-            elif status in ('stunned', 'skip_turn', '眩晕'):
+            elif status in ('stunned', 'dizzy', 'skip_turn', '眩晕'):
                 ps.skip_turn = 0
             elif status in self._unable_counter_keys():
                 for key in self._unable_counter_keys():

@@ -45,6 +45,7 @@ const VANILLA_FLAGS = new Set([
     'precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis',
     'attract', 'void', 'self_only', 'uncancellable', 'infinite_exclude', 'rebound',
     'copy', 'unique', 'swift', 'stealth', 'revealed', 'temp_magic_heavy', 'floating',
+    'sublime',
 ]);
 
 class ModLoopBreak extends Error {}
@@ -213,6 +214,16 @@ function cardDef(defId) {
 function cardName(defId) {
     const def = cardDef(defId);
     return def ? (def.name_cn || def.name_en || def.id) : defId;
+}
+
+function cardIsSublime(card) {
+    if (!card) return false;
+    const flags = card.flags instanceof Set ? card.flags : new Set(normalizeCardFlags(card.flags || []));
+    return flags.has('sublime') || flags.has('vanilla:sublime') || flags.has('tag_sublime') || flags.has('exalted');
+}
+
+function cardSelectableByAction(card) {
+    return !!card && !cardIsSublime(card);
 }
 
 function parseJsonish(value) {
@@ -1690,7 +1701,7 @@ class LocalSoloEngine {
         if (depth > 30 || value == null) return false;
         const actionStatuses = new Set([
             'sluggish', '迟缓', 'foresight', '预知', 'blind', '失明',
-            'stunned', 'skip_turn', '眩晕', 'attack_blocked', '禁攻',
+            'stunned', 'dizzy', 'skip_turn', '眩晕', 'attack_blocked', '禁攻',
             'attack_only', '仅攻击', 'magic_blocked', '魔力封锁',
         ]);
         if (Array.isArray(value)) return value.some(v => this.effectTreeContainsActionStatus(v, depth + 1));
@@ -3413,6 +3424,393 @@ class LocalSoloEngine {
         if (log) this.logMsg(log);
     }
 
+    voidChoiceTarget(playerId, params = {}) {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        if (targetId >= 0 && targetId < this.players.length) return targetId;
+        return this.resolveTarget(playerId, 'enemy');
+    }
+
+    voidDealAttackDamage(playerId, card, amount, params = {}) {
+        const targetId = this.voidChoiceTarget(playerId, params);
+        if (targetId < 0 || targetId >= this.players.length) return 0;
+        const finalAmount = this.modifiedAttackDamage(Math.max(0, toInt(amount, 0)), card);
+        const isPrecision = !!(params.is_precision || params.precision) || !!(card && card.flags && card.flags.has('precision'));
+        this._incoming_damage_hint[targetId] = finalAmount;
+        const dealt = this.dealAttackDamage(targetId, finalAmount, 1, isPrecision, playerId, card);
+        this._last_damage_value[targetId] = dealt;
+        return dealt;
+    }
+
+    voidPlayedCountBeforeCurrent(playerId) {
+        const played = (this.players[playerId] && this.players[playerId].cards_played_this_turn) || {};
+        return Math.max(0, Object.values(played).reduce((sum, value) => sum + toInt(value, 0), 0) - 1);
+    }
+
+    effect_void_turn_count_damage(playerId, card, params, log = '') {
+        const base = this.evalInt(playerId, params.base ?? 6, card, 6);
+        const per = this.evalInt(playerId, params.per ?? 4, card, 4);
+        this.voidDealAttackDamage(playerId, card, Math.max(0, base + per * this.voidPlayedCountBeforeCurrent(playerId)), params);
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_magic_relativity_damage_end(playerId, card, params, log = '') {
+        const base = this.evalInt(playerId, params.base ?? 28, card, 28);
+        const per = this.evalInt(playerId, params.per ?? -5, card, -5);
+        this.voidDealAttackDamage(playerId, card, Math.max(0, base + per * this.voidPlayedCountBeforeCurrent(playerId)), params);
+        if (log) this.logMsg(log);
+        this.endTurn(playerId);
+    }
+
+    effect_void_scythe_damage(playerId, card, params, log = '') {
+        const base = this.evalInt(playerId, params.base ?? 40, card, 40);
+        const per = this.evalInt(playerId, params.per_hand ?? 5, card, 5);
+        const remaining = Math.max(0, ((this.players[playerId] || {}).hand || []).length);
+        this.voidDealAttackDamage(playerId, card, Math.max(0, base - per * remaining), params);
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_magic_wing_damage(playerId, card, params, log = '') {
+        const limit = Math.max(0, this.evalInt(playerId, params.extra_limit ?? 4, card, 4));
+        const spend = Math.min(limit, Math.max(0, toInt((this.players[playerId] || {}).magic, 0)));
+        if (spend > 0) this.spendResource(playerId, 'magic', spend, card);
+        const base = this.evalInt(playerId, params.base ?? 4, card, 4);
+        const per = this.evalInt(playerId, params.per ?? 4, card, 4);
+        this.voidDealAttackDamage(playerId, card, base + spend * per, params);
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_antimatter_damage(playerId, card, params, log = '') {
+        const ps = this.players[playerId];
+        const lastDef = String((ps && (ps.custom_vars.void_current_previous_def_id || ps.custom_vars.void_last_played_def_id)) || '');
+        if (lastDef === 'Antimatter' || lastDef === 'void:antimatter') {
+            card.instance_flags.add('exile');
+            card.instance_flags.add('wide_strike');
+        }
+        const amount = this.evalInt(playerId, params.amount ?? 10, card, 10);
+        if (card.flags.has('wide_strike')) {
+            this.oceanSelectableTargets(playerId, { allowSelf: card.flags.has('self_target'), enemiesOnly: false }).forEach(targetId => {
+                const finalAmount = this.modifiedAttackDamage(amount, card);
+                this._incoming_damage_hint[targetId] = finalAmount;
+                this.dealAttackDamage(targetId, finalAmount, 1, card.flags.has('precision'), playerId, card);
+            });
+        } else {
+            this.voidDealAttackDamage(playerId, card, amount, params);
+        }
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_damage_all_except_self(playerId, card, params, log = '') {
+        const amount = this.evalInt(playerId, params.amount ?? 25, card, 25);
+        this.players.forEach((ps, targetId) => {
+            if (targetId === playerId || !ps || toInt(ps.health, 0) <= 0 || ps.untargetable) return;
+            const finalAmount = this.modifiedAttackDamage(amount, card);
+            this._incoming_damage_hint[targetId] = finalAmount;
+            this.dealAttackDamage(targetId, finalAmount, 1, card && card.flags && card.flags.has('precision'), playerId, card);
+        });
+        if (log) this.logMsg(log);
+    }
+
+    voidResolveCardId(playerId, value, fallback = ERROR_CARD_ID, card = null) {
+        const raw = this.resolveCardIdRef(playerId, value || fallback, card) || String(value || fallback || '');
+        if (cardDef(raw)) return raw;
+        const lowered = raw.toLowerCase();
+        const fromNamespace = lowered.includes(':')
+            ? lowered.split(':').pop().split(/[_\-\s]+/).filter(Boolean).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('')
+            : '';
+        return Object.keys(cardDefs).find(id => {
+            const def = cardDef(id) || {};
+            return id.toLowerCase() === lowered
+                || String(def.legacy_id || '').toLowerCase() === lowered
+                || (fromNamespace && id.toLowerCase() === fromNamespace.toLowerCase());
+        }) || fallback;
+    }
+
+    voidZoneList(targetId, zoneName) {
+        const ps = this.players[targetId];
+        if (!ps) return [];
+        if (zoneName === 'equipment') return ps.equipment.map(eq => eq.card_instance).filter(Boolean);
+        return (ps[zoneName] || []).filter(Boolean);
+    }
+
+    voidSelectedZoneCard(targetId, zoneName, choice = null) {
+        const zone = this.voidZoneList(targetId, zoneName);
+        const selectedId = choice && choice.target_instance_id != null ? toInt(choice.target_instance_id, -1) : -1;
+        if (selectedId >= 0) {
+            const found = zone.find(card => card.instance_id === selectedId);
+            if (found && !found.flags.has('exalted')) return found;
+        }
+        const selectedDef = choice && choice.target_def_id ? String(choice.target_def_id) : '';
+        if (selectedDef) {
+            const found = zone.find(card => card.def_id === selectedDef && cardSelectableByAction(card));
+            if (found) return found;
+        }
+        return zone.find(card => cardSelectableByAction(card)) || null;
+    }
+
+    effect_void_add_void_to_hand(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const target = this.players[targetId];
+        if (!target || !target.canAddToHand()) return;
+        const defId = this.voidResolveCardId(playerId, params.card || 'Void', 'Void', card);
+        const newCard = new LocalCard(defId);
+        target.addToHand(newCard);
+        this._last_created_card_instance_id = newCard.instance_id;
+        this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_add_card_to_deck(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const target = this.players[targetId];
+        if (!target) return;
+        const defId = this.voidResolveCardId(playerId, params.card || params.card_id || params.def_id || 'Void', 'Void', card);
+        const newCard = new LocalCard(defId);
+        this.applySetupModifiersToCard(targetId, newCard);
+        if (params.position === 'random') target.deck.splice(Math.floor(Math.random() * (target.deck.length + 1)), 0, newCard);
+        else if (params.position === 'bottom') target.deck.push(newCard);
+        else target.deck.unshift(newCard);
+        this._last_created_card_instance_id = newCard.instance_id;
+        this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_exile_target_hand(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        const ps = this.players[targetId];
+        if (!ps) return;
+        const exiled = ps.hand.filter(handCard => !handCard.flags.has('exalted'));
+        ps.hand = ps.hand.filter(handCard => handCard.flags.has('exalted'));
+        exiled.forEach(handCard => ps.exile.push(handCard));
+        if (exiled.length > 0) {
+            const current = this.customStatusValue(targetId, 'jungle:vulnerable', 'vulnerable');
+            this.setCustomStatusAliasGroup(targetId, 'jungle:vulnerable', ['jungle:vulnerable', 'vulnerable'], current + exiled.length);
+        }
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_move_selected_card(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        const fromZone = String(params.from_zone || params.zone || 'discard');
+        const toZone = String(params.to_zone || 'deck_top');
+        const selected = this.voidSelectedZoneCard(targetId, fromZone, this._active_choice || {});
+        if (!selected) return;
+        const loc = this.removeCardFromCurrentZone(selected);
+        if (!loc) return;
+        const ps = this.players[targetId] || this.players[loc.ownerId];
+        if (!ps) return;
+        if (toZone === 'hand') ps.addToHand(selected);
+        else if (toZone === 'discard') this.discardCard(ps, selected);
+        else if (toZone === 'exile') ps.exile.push(selected);
+        else if (toZone === 'deck_bottom') ps.deck.push(selected);
+        else if (toZone === 'deck_random') ps.deck.splice(Math.floor(Math.random() * (ps.deck.length + 1)), 0, selected);
+        else ps.deck.unshift(selected);
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_give_selected_hand_flag(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const selected = this.voidSelectedZoneCard(targetId, 'hand', this._active_choice || {});
+        const flag = normalizeCardFlag(params.flag || 'floating');
+        if (selected && flag) selected.instance_flags.add(flag);
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_copy_response_card(playerId, card, params, log = '') {
+        const original = this.resolveCardRef(playerId, { ref: 'event_card' }, card) || (this._active_effect_context || {}).original_card;
+        if (!original || !this.players[playerId].canAddToHand()) return;
+        const copy = original.copy ? original.copy() : new LocalCard(original.def_id);
+        copy.instance_flags.add('exile');
+        this.players[playerId].addToHand(copy);
+        this._last_created_card_instance_id = copy.instance_id;
+        this._active_effect_context.last_created_card_instance_id = copy.instance_id;
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_add_temp_heavy_to_hand(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'self');
+        const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 1, card, 1));
+        const kind = String(params.kind || 'e');
+        (this.players[targetId]?.hand || []).forEach(handCard => {
+            if (kind === 'm') {
+                handCard.temp_magic_heavy_value = toInt(handCard.temp_magic_heavy_value, 0) + amount;
+                handCard.instance_flags.add('temp_magic_heavy');
+            } else {
+                handCard.temp_heavy_value = toInt(handCard.temp_heavy_value, 0) + amount;
+                handCard.instance_flags.add('temp_heavy');
+            }
+        });
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_quantum_randomize(playerId, card, params, log = '') {
+        const maxCost = Math.max(0, this.evalInt(playerId, params.max_cost ?? 3, card, 3));
+        (this.players[playerId]?.hand || []).forEach(handCard => {
+            if (toInt(handCard.def().cost_e, 0) <= maxCost) handCard.cost_e_override = Math.floor(Math.random() * (maxCost + 1));
+        });
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_toggle_void_hand(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        (this.players[targetId]?.hand || []).forEach(handCard => {
+            if (handCard.flags.has('void')) {
+                handCard.instance_flags.delete('void');
+                handCard.disabled_flags.add('void');
+            } else {
+                handCard.instance_flags.add('void');
+                handCard.disabled_flags.delete('void');
+            }
+        });
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_set_void_all_cards(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        const enabled = params.enabled !== false;
+        const ps = this.players[targetId];
+        if (!ps) return;
+        ['hand', 'deck', 'discard'].forEach(zone => {
+            ps[zone].forEach(zoneCard => {
+                if (enabled) {
+                    zoneCard.instance_flags.add('void');
+                    zoneCard.disabled_flags.delete('void');
+                } else {
+                    zoneCard.instance_flags.delete('void');
+                    zoneCard.disabled_flags.add('void');
+                }
+            });
+        });
+        if (log) this.logMsg(log);
+    }
+
+    voidWeightedCardId(cardType, exclude = new Set()) {
+        const pool = [];
+        Object.entries(cardDefs).forEach(([id, def]) => {
+            if (!def || def.card_type !== cardType || exclude.has(id)) return;
+            const weight = Math.max(0, toInt(def.count, 0));
+            for (let i = 0; i < weight; i += 1) pool.push(id);
+        });
+        if (!pool.length) return '';
+        return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    effect_void_transform_own_cards(playerId, card, params, log = '') {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        ['hand', 'deck', 'discard'].forEach(zoneName => {
+            ps[zoneName].forEach((oldCard, idx) => {
+                const newId = this.voidWeightedCardId(oldCard.card_type, new Set([oldCard.def_id]));
+                if (!newId) return;
+                const newCard = new LocalCard(newId);
+                this.applySetupModifiersToCard(playerId, newCard);
+                ps[zoneName][idx] = newCard;
+            });
+        });
+        ps.equipment.forEach(eq => {
+            const oldCard = eq.card_instance;
+            const newId = this.voidWeightedCardId('root', new Set([oldCard.def_id]));
+            if (!newId) return;
+            const armor = eq.armor;
+            const target = eq.effect_target;
+            eq.card_instance = new LocalCard(newId);
+            this.applySetupModifiersToCard(playerId, eq.card_instance);
+            eq.armor = armor;
+            eq.effect_target = eq.card_instance.flags.has('self_only') ? playerId : target;
+        });
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_satan_swap(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        if (targetId < 0 || targetId >= this.players.length || targetId === playerId) return;
+        const a = this.players[playerId];
+        const b = this.players[targetId];
+        const ah = a.health, ae = a.elixir, am = a.magic;
+        a.health = Math.min(b.health, a.max_health);
+        a.elixir = Math.min(b.elixir, a.max_elixir);
+        a.magic = Math.min(b.magic, a.max_magic);
+        b.health = Math.min(ah, b.max_health);
+        b.elixir = Math.min(ae, b.max_elixir);
+        b.magic = Math.min(am, b.max_magic);
+        this.logMsg(log || `${this.pn(playerId)}与${this.pn(targetId)}交换了H/E/M`);
+    }
+
+    effect_void_exile_selected_card(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        const zone = String(params.zone || 'hand');
+        const selected = this.voidSelectedZoneCard(targetId, zone, this._active_choice || {});
+        if (!selected) return;
+        const loc = this.removeCardFromCurrentZone(selected);
+        if (loc) this.players[loc.ownerId].exile.push(selected);
+        const addDef = params.add_def_id || params.add_card || '';
+        if (addDef) {
+            const newId = this.voidResolveCardId(playerId, addDef, ERROR_CARD_ID, card);
+            const newCard = new LocalCard(newId);
+            this.applySetupModifiersToCard(targetId, newCard);
+            if (zone === 'deck') this.players[targetId].deck.splice(Math.floor(Math.random() * (this.players[targetId].deck.length + 1)), 0, newCard);
+            else this.players[targetId].addToHand(newCard);
+        }
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_magic_corruption(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        const ps = this.players[targetId];
+        if (!ps) return;
+        const newId = this.voidResolveCardId(playerId, 'Corruption', 'Corruption', card);
+        const newCard = new LocalCard(newId);
+        const eq = new LocalEquipment(newCard, targetId);
+        eq.effect_target = targetId;
+        eq.corruption_active = true;
+        ps.equipment.push(eq);
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_kitty_auto_play(playerId, card, params, log = '') {
+        const owner = this.players[playerId];
+        if (!owner || toInt(owner.skip_turn, 0) > 0 || toInt(owner.forced_skip_turn, 0) > 0) return;
+        const candidates = this.players.map((ps, id) => ({ ps, id })).filter(({ ps, id }) => id !== playerId && ps && toInt(ps.health, 0) > 0);
+        if (!candidates.length) return;
+        const actorId = candidates[Math.floor(Math.random() * candidates.length)].id;
+        const actor = this.players[actorId];
+        const topCard = (actor.deck || []).find(deckCard => !deckCard.flags.has('exalted'));
+        if (!topCard || !this.canPlayCard(actorId, topCard)[0]) return;
+        let targetId = -1;
+        if (topCard.card_type === 'thorn' || (!topCard.flags.has('self_only') && (this.cardNeedsChoice(topCard) || topCard.card_type !== 'guard'))) {
+            targetId = 1 - actorId;
+            if (!this.players[targetId] || toInt(this.players[targetId].health, 0) <= 0 || this.players[targetId].untargetable) return;
+        }
+        const idx = actor.deck.indexOf(topCard);
+        if (idx < 0) return;
+        actor.deck.splice(idx, 1);
+        actor.addToHand(topCard, { triggerEnterHand: false });
+        const autoChoice = targetId >= 0 ? { target_player: targetId, target_player_id: targetId, target_id: targetId } : {};
+        this.logMsg(log || `小猫使${this.pn(actorId)}自动打出${cardName(topCard.def_id)}`);
+        this.playCard(actorId, topCard.instance_id, autoChoice);
+    }
+
+    effect_void_soap_wide_strike(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        const ps = this.players[targetId];
+        if (!ps) return;
+        ['hand', 'deck', 'discard'].forEach(zone => {
+            ps[zone].forEach(zoneCard => {
+                if (zoneCard.card_type === 'thorn') zoneCard.instance_flags.add('wide_strike');
+            });
+        });
+        if (log) this.logMsg(log);
+    }
+
+    effect_void_puppeteer(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        const ps = this.players[targetId];
+        if (!ps) return;
+        ps.honey_control_turns = Math.max(1, toInt(ps.honey_control_turns, 0) + 1);
+        ps.custom_vars.void_puppeteer_damage_multiplier = Math.max(Number(ps.custom_vars.void_puppeteer_damage_multiplier || 1), 1.5);
+        ps.custom_vars.honey_lowest_enemy = true;
+        if (log) this.logMsg(log);
+    }
+
     effect_ocean_spikeball_damage(playerId, card, params, log) {
         const ps = this.players[playerId];
         const handCount = ps ? ps.hand.length : 0;
@@ -4368,7 +4766,7 @@ class LocalSoloEngine {
             this.setNazarStatusValue(targetId, this.nazarStatusValue(targetId) + amount);
             return;
         }
-        const aliases = { burn: 'fire', vulnus: 'vulnerable', stunned: 'skip_turn', '眩晕': 'skip_turn', '禁攻': 'attack_blocked' };
+        const aliases = { burn: 'fire', vulnus: 'vulnerable', stunned: 'skip_turn', dizzy: 'skip_turn', '眩晕': 'skip_turn', '禁攻': 'attack_blocked' };
         const prop = aliases[status] || status;
         this.players[targetId][prop] = toInt(this.players[targetId][prop], 0) + amount;
     }
@@ -5053,16 +5451,7 @@ class LocalSoloEngine {
                 this.checkYggdrasil(targetId);
                 if (dmg > 0) {
                     this.iterEquipmentTargetingPlayer(targetId).forEach(({ ownerId, eq }) => {
-                        if (this.hasCardEvent(eq.card_def, 'damage_taken')) {
-                            this.runCardEvent(targetId, eq.card_instance, 'damage_taken', null, {
-                                event: 'damage_taken',
-                                source_id: attackerId,
-                                target_id: targetId,
-                                damage: dmg,
-                                selected_equipment_instance_id: eq.card_instance && eq.card_instance.instance_id,
-                                selected_equipment_owner_id: ownerId,
-                            });
-                        } else if (eq.def_id === 'Battery') {
+                        if (this.cardIs(eq.card_instance || eq, 'Battery', 'vanilla:battery')) {
                             const dealt = this.dealDirectDamage(attackerId, 3, '电池电击', targetId, {
                                 damage_type: 'magic',
                                 damage_tag: 'gtn:battery',
@@ -5072,7 +5461,7 @@ class LocalSoloEngine {
                             } else {
                                 this.logMsg(`${this.pn(targetId)}的电池触发，但${this.pn(attackerId)}未受到电伤`);
                             }
-                        } else if (eq.def_id === 'MagicBattery') {
+                        } else if (this.cardIs(eq.card_instance || eq, 'MagicBattery', 'vanilla:magicbattery')) {
                             const ownerState = this.players[ownerId];
                             if (ownerState && ownerState.magic_battery_m_this_turn < 3) {
                                 ownerState.gainMagic(1);
@@ -5080,6 +5469,15 @@ class LocalSoloEngine {
                                 ownerState.custom_vars['魔法电池本回合回魔'] = ownerState.magic_battery_m_this_turn;
                                 this.logMsg(`${this.pn(ownerId)}的魔法电池效果：+1M`);
                             }
+                        } else if (this.hasCardEvent(eq.card_def, 'damage_taken')) {
+                            this.runCardEvent(targetId, eq.card_instance, 'damage_taken', null, {
+                                event: 'damage_taken',
+                                source_id: attackerId,
+                                target_id: targetId,
+                                damage: dmg,
+                                selected_equipment_instance_id: eq.card_instance && eq.card_instance.instance_id,
+                                selected_equipment_owner_id: ownerId,
+                            });
                         }
                     });
                 }
@@ -5500,6 +5898,8 @@ class LocalSoloEngine {
             if (card.flags.has('exile')) ps.exile.push(card);
             else this.discardCard(ps, card);
             this.dispatchCardEvent('card_used', playerId, card, playerId, null, null, choice);
+            result.countered = true;
+            result.negated = true;
             return result;
         }
         this.negated_card = false;
@@ -5965,7 +6365,7 @@ class LocalSoloEngine {
                     break;
                 }
             }
-            if (!found || !ps.canAddToHand()) return;
+            if (!found || !cardSelectableByAction(found) || !ps.canAddToHand()) return;
             if (['factory:cogwheel', 'Cogwheel'].includes(String(found.def_id || ''))) return;
             if (excludeDefId && String(found.def_id || '') === excludeDefId) return;
             zone.splice(zone.indexOf(found), 1);

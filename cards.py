@@ -459,7 +459,7 @@ _reg(CardDef('Battery', 'Battery', '电池', 3, 0, 'root', 5, 'Common',
 
 _reg(CardDef('MagicLeaf', 'Magic Leaf', '魔法叶', 1, 0, 'root', 5, 'Common',
              '不再能造成伤害了，但它可以回复魔力。',
-             '自己回合开始时+1M；触发：4M，选择目标造成12D，然后摧毁自身',
+             '自己回合开始时+1M；可花费4M，触发：选择目标造成12D，然后摧毁自身',
              trigger_cost_e=0, trigger_cost_m=4, trigger_effect_text='选择目标造成12D，然后摧毁自身'))
 
 _reg(CardDef('MagicYucca', 'Magic Yucca', '魔法丝兰', 4, 0, 'root', 5, 'Common',
@@ -511,7 +511,7 @@ _reg(CardDef('GoldenNazar', 'Golden Nazar', '黄金邪眼', 4, 0, 'guard', 5, 'U
              response_trigger='equipment_destroy'))
 
 _reg(CardDef('MagicBubble', 'Magic Bubble', '魔法泡泡', 0, 4, 'guard', 3, 'Common',
-             '泡泡的魔法版本。', '使目标使用的技能牌失效一次  响应：敌方使用技能牌',
+             '泡泡的魔法版本。', '使所响应的技能牌失效  响应：敌方使用技能牌',
              response_trigger='bloom'))
 
 

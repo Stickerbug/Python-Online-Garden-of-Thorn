@@ -92,7 +92,7 @@ CARD_I18N = {
     'Leaf': {
         'name': _t('叶子', 'Leaf', 'Feuille', 'Folha', 'Лист', '葉'),
         'desc': _t('基础的装备之一，可以回复生命亦可造成伤害。', 'One of the basic equipments; it can restore health and also deal damage.', 'Un équipement de base ; il peut restaurer de la vie et infliger des dégâts.', 'Um equipamento básico; pode restaurar vida e também causar dano.', 'Базовое снаряжение: лечит и может наносить урон.', '基本装備のひとつ。生命を回復し、ダメージも与えられる。'),
-        'effect': _t('自己回合开始时+2H 触发：1E，若已装备一回合则可摧毁此装备，造成8D', 'At your turn start +2H. Trigger: 1E; if equipped for one turn, you may destroy this equipment to deal 8D', 'Au début de votre tour +2H. Déclenchement : 1E ; si équipé depuis un tour, vous pouvez détruire cet équipement pour infliger 8D', 'No início do seu turno +2H. Acionar: 1E; se equipado por um turno, você pode destruir este equipamento para causar 8D', 'В начале вашего хода +2H. Активация: 1E; если снаряжено один ход, можно уничтожить это снаряжение и нанести 8D', '自分のターン開始時+2H。発動：1E。1ターン装備済みならこの装備を破壊して8Dを与えられる'),
+        'effect': _t('自己回合开始时+2H 若已装备一回合，可花费1E，触发：摧毁此装备，造成8D', 'At your turn start +2H. Trigger: 1E; if equipped for one turn, you may destroy this equipment to deal 8D', 'Au début de votre tour +2H. Déclenchement : 1E ; si équipé depuis un tour, vous pouvez détruire cet équipement pour infliger 8D', 'No início do seu turno +2H. Acionar: 1E; se equipado por um turno, você pode destruir este equipamento para causar 8D', 'В начале вашего хода +2H. Активация: 1E; если снаряжено один ход, можно уничтожить это снаряжение и нанести 8D', '自分のターン開始時+2H。発動：1E。1ターン装備済みならこの装備を破壊して8Dを与えられる'),
         'trigger': _t('若已装备一回合则可摧毁此装备，造成8D', 'If equipped for one turn, you may destroy this equipment to deal 8D', 'Si équipé depuis un tour, vous pouvez détruire cet équipement pour infliger 8D', 'Se equipado por um turno, você pode destruir este equipamento para causar 8D', 'Если снаряжено один ход, можно уничтожить это снаряжение и нанести 8D', '1ターン装備済みならこの装備を破壊して8Dを与えられる'),
     },
     'Yucca': {
@@ -123,7 +123,7 @@ CARD_I18N = {
     'MagicLeaf': {
         'name': _t('魔法叶', 'Magic Leaf', 'Feuille magique', 'Folha Mágica', 'Магический лист', '魔法の葉'),
         'desc': _t('不再能造成伤害了，但它可以回复魔力。', 'It can no longer deal damage, but it can restore magic.', 'Elle ne peut plus infliger de dégâts, mais elle peut restaurer de la magie.', 'Não causa mais dano, mas pode restaurar magia.', 'Больше не наносит урон, но восстанавливает магию.', 'もうダメージは与えられないが、魔力を回復できる。'),
-        'effect': _t('自己回合开始时+1M；触发：4M，选择目标造成12D，然后摧毁自身', 'At your turn start +1M. Trigger: 4M; choose a target, deal 12D, then destroy itself', 'Au début de votre tour +1M. Déclenchement : 4M ; choisissez une cible, infligez 12D, puis détruisez cette carte', 'No início do seu turno +1M. Acionar: 4M; escolha um alvo, cause 12D e destrua este equipamento', 'В начале вашего хода +1M. Активация: 4M; выберите цель, нанесите 12D, затем уничтожьте это снаряжение', '自分のターン開始時+1M。発動：4M、対象を選び12Dを与え、その後自身を破壊'),
+        'effect': _t('自己回合开始时+1M；可花费4M，触发：选择目标造成12D，然后摧毁自身', 'At your turn start +1M. Trigger: 4M; choose a target, deal 12D, then destroy itself', 'Au début de votre tour +1M. Déclenchement : 4M ; choisissez une cible, infligez 12D, puis détruisez cette carte', 'No início do seu turno +1M. Acionar: 4M; escolha um alvo, cause 12D e destrua este equipamento', 'В начале вашего хода +1M. Активация: 4M; выберите цель, нанесите 12D, затем уничтожьте это снаряжение', '自分のターン開始時+1M。発動：4M、対象を選び12Dを与え、その後自身を破壊'),
     },
     'ManaOrb': {
         'name': _t('魔法球', 'Mana Orb', 'Orbe de mana', 'Orbe de Mana', 'Сфера маны', 'マナオーブ'),
@@ -223,7 +223,7 @@ CARD_I18N = {
     'MagicBubble': {
         'name': _t('魔法泡泡', 'Magic Bubble', 'Bulle magique', 'Bolha Mágica', 'Магический пузырь', '魔法の泡'),
         'desc': _t('泡泡的魔法版本。', 'The magical version of Bubble.', 'La version magique de Bulle.', 'A versão mágica de Bolha.', 'Магическая версия Пузыря.', '泡の魔法版。'),
-        'effect': _t('使目标使用的技能牌失效一次  响应：敌方使用技能牌', 'Negate the target skill card once. Response: enemy uses a skill card', 'Annule une fois la carte de compétence de la cible. Réponse : l’ennemi joue une carte de compétence', 'Anula uma vez a carta de habilidade do alvo. Resposta: inimigo usa uma carta de habilidade', 'Отменяет карту навыка цели один раз. Ответ: враг использует карту навыка', '対象が使用する技能カードを1回無効化する。反応：敵が技能カードを使用'),
+        'effect': _t('使所响应的技能牌失效  响应：敌方使用技能牌', 'Negate the responded skill card. Response: enemy uses a skill card', 'Annule la carte de compétence à laquelle vous répondez. Réponse : l’ennemi joue une carte de compétence', 'Anula a carta de habilidade respondida. Resposta: inimigo usa uma carta de habilidade', 'Отменяет карту навыка, на которую отвечаете. Ответ: враг использует карту навыка', '反応した技能カードを無効化する。反応：敵が技能カードを使用'),
     },
     'Mark': {
         'name': _t('标记', 'Mark', 'Marque', 'Marca', 'Метка', '標記'),

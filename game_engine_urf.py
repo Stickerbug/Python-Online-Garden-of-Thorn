@@ -104,6 +104,9 @@ class InfinitePlayerState(PlayerState):
         super().__init__(player_id)
         self._infinite_engine = engine
 
+    def hand_limit(self) -> int:
+        return URF_HAND_LIMIT
+
     def _draw_one_infinite(self, card_type: Optional[str] = None) -> Optional[CardInstance]:
         return self._infinite_engine.create_infinite_card(card_type)
 
@@ -223,7 +226,7 @@ class GameEngineInfiniteFire(GameEngine):
             for _ in range(count):
                 card = self.create_infinite_card(card_type)
                 if card:
-                    ps.add_to_hand(card)
+                    self.add_card_to_urf_hand(ps.player_id, card, log=False)
 
     def start_draft(self):
         self.start_game()

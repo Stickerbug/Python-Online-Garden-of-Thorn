@@ -559,7 +559,20 @@ class GameEngine2v2(GameEngine):
             return False
         played_def = played_card.card_def
         if counter_card.card_def.response_trigger == 'targeted':
-            return responder_id is not None and target_player_id is not None and int(responder_id) == int(target_player_id)
+            if responder_id is None or target_player_id is None or int(responder_id) != int(target_player_id):
+                return False
+            if self._is_magic_antimatter_card(counter_card):
+                prev_preview = getattr(self, '_pending_response_preview', None)
+                try:
+                    preview = dict(prev_preview or {})
+                    preview.setdefault('card', played_card.to_dict())
+                    preview.setdefault('player_id', -1)
+                    preview['target_player_id'] = int(responder_id)
+                    self._pending_response_preview = preview
+                    return self._counter_card_can_counter_pending(int(responder_id), counter_card)
+                finally:
+                    self._pending_response_preview = prev_preview
+            return True
         if counter_card.card_def.response_trigger == 'any':
             return True
         if played_def.card_type == 'thorn' and counter_card.card_def.response_trigger == 'thorn':
@@ -592,7 +605,8 @@ class GameEngine2v2(GameEngine):
             counter_cost_m = int(getattr(counter_card, 'cost_m', 0) or 0)
             if counter_cost_e > responder.elixir or counter_cost_m > responder.magic:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
-            if not self._card_can_counter(counter_card, card, responder_id=responder_id, target_player_id=pending.get('target_player_id')):
+            validation_target_id = responder_id if self._is_magic_antimatter_card(counter_card) else pending.get('target_player_id')
+            if not self._card_can_counter(counter_card, card, responder_id=responder_id, target_player_id=validation_target_id):
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             self._spend_resource(responder_id, 'elixir', counter_cost_e, counter_card)
             self._spend_resource(responder_id, 'magic', counter_cost_m, counter_card)
@@ -660,7 +674,11 @@ class GameEngine2v2(GameEngine):
 
     def get_counter_cards(self, player_id: int, trigger_type: str) -> List[CardInstance]:
         ps = self.players[player_id]
-        return [c for c in ps.hand if c.card_def.response_trigger == trigger_type]
+        return [
+            c for c in ps.hand
+            if c.card_def.response_trigger == trigger_type
+            and self._counter_card_can_counter_pending(player_id, c)
+        ]
 
     def get_enemy_equipment(self, player_id: int) -> List[EquipmentInstance]:
         result = []
@@ -902,6 +920,14 @@ class GameEngine2v2(GameEngine):
             return None
         target_ids = self._response_target_ids_for_card(player_id, card, choice)
         target_id = target_ids[0] if target_ids else self._selected_effect_target(player_id, choice)
+        prev_preview = getattr(self, '_pending_response_preview', None)
+        self._pending_response_preview = {
+            'player_id': player_id,
+            'target_player_id': target_id,
+            'card': card.to_dict(),
+            'original_choice': choice,
+            'is_precision': 'precision' in flags,
+        }
         equipment_destroy_responders = self._equipment_destroy_response_player_ids(player_id, card, choice)
         counter_cards = []
         has_payable_counter = False
@@ -911,28 +937,31 @@ class GameEngine2v2(GameEngine):
         else:
             responder_ids = list(dict.fromkeys([*enemy_ids, *equipment_destroy_responders]))
 
-        for responder_id in responder_ids:
-            if not self._is_valid_player_id(responder_id) or self.players[responder_id].health <= 0:
-                continue
-            for c in self.players[responder_id].hand:
-                if 'precision' in flags and getattr(c.card_def, 'response_trigger', '') != 'thorn':
+        try:
+            for responder_id in responder_ids:
+                if not self._is_valid_player_id(responder_id) or self.players[responder_id].health <= 0:
                     continue
-                target_match = any(
-                    self._card_can_counter(c, card, responder_id=responder_id, target_player_id=tid)
-                    for tid in (target_ids or [target_id])
-                )
-                if not target_match and responder_id in equipment_destroy_responders:
-                    target_match = self._card_can_counter(c, card, responder_id=responder_id, target_player_id=responder_id)
-                if target_match:
-                    if self._can_pay_counter_card(responder_id, c):
-                        has_payable_counter = True
-                    counter_cards.append({
-                        'instance_id': c.instance_id,
-                        'def_id': c.def_id,
-                        'cost_e_override': c.cost_e_override,
-                        'cost_m_override': c.cost_m_override,
-                        'responder_id': responder_id,
-                    })
+                for c in self.players[responder_id].hand:
+                    if 'precision' in flags and getattr(c.card_def, 'response_trigger', '') != 'thorn':
+                        continue
+                    target_match = any(
+                        self._card_can_counter(c, card, responder_id=responder_id, target_player_id=tid)
+                        for tid in (target_ids or [target_id])
+                    )
+                    if not target_match and responder_id in equipment_destroy_responders:
+                        target_match = self._card_can_counter(c, card, responder_id=responder_id, target_player_id=responder_id)
+                    if target_match:
+                        if self._can_pay_counter_card(responder_id, c):
+                            has_payable_counter = True
+                        counter_cards.append({
+                            'instance_id': c.instance_id,
+                            'def_id': c.def_id,
+                            'cost_e_override': c.cost_e_override,
+                            'cost_m_override': c.cost_m_override,
+                            'responder_id': responder_id,
+                        })
+        finally:
+            self._pending_response_preview = prev_preview
         if not has_payable_counter:
             return None
         return {
@@ -1788,7 +1817,24 @@ class GameEngine2v2(GameEngine):
                         if getattr(eq, 'effect_target', owner_id) == target_id
                     ]
                     for owner_id, eq in target_equipment:
-                        if self._has_card_event(eq.card_def, 'damage_taken') and self._run_card_event(
+                        if self._card_is(eq.card_instance, 'Battery', 'vanilla:battery') and attacker_id >= 0:
+                            dealt = self._deal_direct_damage(
+                                attacker_id, 3, '电池电击', target_id,
+                                damage_type=DAMAGE_TYPE_MAGIC,
+                                damage_tag=DAMAGE_TAG_BATTERY,
+                            )
+                            if dealt > 0:
+                                self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
+                            else:
+                                self.log_msg(f"{self.pn(target_id)}的电池触发，但{self.pn(attacker_id)}未受到电伤")
+                        elif self._card_is(eq.card_instance, 'MagicBattery', 'vanilla:magicbattery'):
+                            owner_state = self.players[owner_id]
+                            if owner_state.magic_battery_m_this_turn < 3:
+                                owner_state.gain_magic(1)
+                                owner_state.magic_battery_m_this_turn += 1
+                                owner_state.custom_vars['魔法电池本回合回魔'] = owner_state.magic_battery_m_this_turn
+                                self.log_msg(f"{self.pn(owner_id)}的魔法电池效果：+1M")
+                        elif self._has_card_event(eq.card_def, 'damage_taken') and self._run_card_event(
                             target_id,
                             eq.card_instance,
                             'damage_taken',
@@ -1802,22 +1848,6 @@ class GameEngine2v2(GameEngine):
                             },
                         ):
                             continue
-                        if eq.def_id == 'Battery' and attacker_id >= 0:
-                            dealt = self._deal_direct_damage(
-                                attacker_id, 3, '电池电击', target_id,
-                                damage_type=DAMAGE_TYPE_MAGIC,
-                                damage_tag=DAMAGE_TAG_BATTERY,
-                            )
-                            if dealt > 0:
-                                self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
-                            else:
-                                self.log_msg(f"{self.pn(target_id)}的电池触发，但{self.pn(attacker_id)}未受到电伤")
-                        elif eq.def_id == 'MagicBattery':
-                            owner_state = self.players[owner_id]
-                            if owner_state.magic_battery_m_this_turn < 3:
-                                owner_state.gain_magic(1)
-                                owner_state.magic_battery_m_this_turn += 1
-                                self.log_msg(f"{self.pn(owner_id)}的魔法电池效果：+1M")
             finally:
                 self._game_over_defer_depth -= 1
             if ps.health <= 0:
