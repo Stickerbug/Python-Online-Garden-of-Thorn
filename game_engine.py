@@ -3813,6 +3813,10 @@ class GameEngine:
                 if result.get('needs_response') or self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
                     return
             ps.honey_control_turns = 0
+            try:
+                ps.custom_vars.pop('void_puppeteer_damage_multiplier', None)
+            except Exception:
+                pass
             if not self.game_over and self.phase == 'action' and self.current_player == player_id:
                 self.log_msg(f"蜂蜜控制结束：{self.pn(player_id)}自动结束回合")
                 self._end_player_turn(player_id)
@@ -10336,6 +10340,12 @@ class GameEngine:
                 if multiplier != 1.0:
                     dmg = int(math.ceil(dmg * multiplier))
                     self.players[attacker_id].damage_multiplier = 1.0
+                try:
+                    puppeteer_multiplier = float((getattr(self.players[attacker_id], 'custom_vars', {}) or {}).get('void_puppeteer_damage_multiplier', 1.0) or 1.0)
+                except Exception:
+                    puppeteer_multiplier = 1.0
+                if puppeteer_multiplier != 1.0:
+                    dmg = int(math.ceil(dmg * puppeteer_multiplier))
             if self.halve_next_attack:
                 dmg = math.ceil(dmg / 2)
             elif precision_dodged:
@@ -12086,7 +12096,24 @@ class GameEngine:
                     continue
                 self.deal_attack_damage(target_id, amount, 1, attacker_id=player_id, source_card=card)
         else:
-            self._atomic_deal_damage(player_id, card, {'target': 'target', 'amount': amount}, log, choice, context)
+            target_id = -1
+            if isinstance(context, dict):
+                try:
+                    target_id = int(context.get('target_player', context.get('target_id', -1)))
+                except Exception:
+                    target_id = -1
+            if not self._valid_player_id(target_id):
+                try:
+                    target_id = self._selected_attack_target(player_id, choice)
+                except Exception:
+                    target_id = -1
+            if not self._valid_player_id(target_id):
+                target_id = self._resolve_target(player_id, 'enemy')
+            if not self._valid_player_id(target_id):
+                return
+            is_precision = 'precision' in self._effective_card_flags(card)
+            amount = self._modified_attack_damage(amount, card)
+            self.deal_attack_damage(target_id, amount, 1, is_precision=is_precision, attacker_id=player_id, source_card=card)
 
     def _atomic_void_damage_all_except_self(self, player_id, card, params, log, choice, context):
         amount = self._eval_int(player_id, params.get('amount', 25), card, 25)
@@ -12312,7 +12339,7 @@ class GameEngine:
             return
         ps = self.players[target_id]
         ps.honey_control_turns = max(1, int(getattr(ps, 'honey_control_turns', 0) or 0) + 1)
-        ps.damage_multiplier = max(float(getattr(ps, 'damage_multiplier', 1.0) or 1.0), 1.5)
+        ps.custom_vars['void_puppeteer_damage_multiplier'] = max(float(ps.custom_vars.get('void_puppeteer_damage_multiplier', 1.0) or 1.0), 1.5)
         ps.custom_vars['honey_lowest_enemy'] = True
         if log:
             self.log_msg(log)

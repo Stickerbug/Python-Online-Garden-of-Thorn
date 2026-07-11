@@ -1698,6 +1698,13 @@ class GameEngine2v2(GameEngine):
                 except Exception:
                     power = 0
             dmg = amount + int(math.ceil(power / max(1, int(hits or 1))))
+            if 0 <= attacker_id < len(self.players):
+                try:
+                    puppeteer_multiplier = float((getattr(self.players[attacker_id], 'custom_vars', {}) or {}).get('void_puppeteer_damage_multiplier', 1.0) or 1.0)
+                except Exception:
+                    puppeteer_multiplier = 1.0
+                if puppeteer_multiplier != 1.0:
+                    dmg = int(math.ceil(dmg * puppeteer_multiplier))
             if self.halve_next_attack:
                 dmg = math.ceil(dmg / 2)
             elif precision_dodged:
