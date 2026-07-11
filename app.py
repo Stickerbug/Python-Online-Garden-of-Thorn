@@ -819,9 +819,9 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
                     user_flags.append('flag_poison_fire_dual_15')
                 if int(getattr(ps, 'achievement_min_enemy_card_total', 999999) or 999999) <= 10:
                     user_flags.append('flag_enemy_cards_10')
-                if mode == '2v2' and (
+                if mode != '2v2' and (
                     bool(getattr(ps, 'achievement_team_double_resources', False))
-                    or _achievement_team_double_resources(engine, pidx)
+                    or _achievement_duel_double_resources(engine, pidx)
                 ):
                     user_flags.append('flag_team_double_resources')
                 if int(getattr(ps, 'achievement_max_enemy_attack_blocked', 0) or 0) >= 5:
@@ -862,40 +862,30 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
     return flags
 
 
-def _achievement_team_double_resources(engine, pidx):
+def _achievement_duel_double_resources(engine, pidx):
     try:
-        if engine is None or not hasattr(engine, 'team_of') or not hasattr(engine, 'teams'):
+        if engine is None or len(getattr(engine, 'players', []) or []) != 2:
             return False
-        own_team_id = engine.team_of(pidx)
-        own_team = list(engine.teams[own_team_id])
-        enemy_team = [
-            idx for idx in range(len(getattr(engine, 'players', []) or []))
-            if idx not in own_team and engine.team_of(idx) != own_team_id
-        ]
-        if not own_team or not enemy_team:
+        if pidx not in (0, 1):
             return False
+        enemy_idx = 1 - int(pidx)
 
-        def _sum_stat(indices, attr):
-            total = 0
-            for idx in indices:
-                try:
-                    value = int(getattr(engine.players[idx], attr, 0) or 0)
-                except (TypeError, ValueError):
-                    value = 0
-                total += max(0, value)
-            return total
+        def _stat(idx, attr):
+            try:
+                return max(0, int(getattr(engine.players[idx], attr, 0) or 0))
+            except (TypeError, ValueError):
+                return 0
 
         achieved = (
-            _sum_stat(own_team, 'health') >= 2 * _sum_stat(enemy_team, 'health')
-            and _sum_stat(own_team, 'elixir') >= 2 * _sum_stat(enemy_team, 'elixir')
-            and _sum_stat(own_team, 'magic') >= 2 * _sum_stat(enemy_team, 'magic')
+            _stat(pidx, 'health') >= 2 * _stat(enemy_idx, 'health')
+            and _stat(pidx, 'elixir') >= 2 * _stat(enemy_idx, 'elixir')
+            and _stat(pidx, 'magic') >= 2 * _stat(enemy_idx, 'magic')
         )
         if achieved:
-            for idx in own_team:
-                try:
-                    engine.players[idx].achievement_team_double_resources = True
-                except Exception:
-                    pass
+            try:
+                engine.players[pidx].achievement_team_double_resources = True
+            except Exception:
+                pass
         return achieved
     except Exception:
         return False
@@ -969,9 +959,9 @@ def build_live_achievement_flags(room):
                 user_flags.append('flag_poison_fire_dual_15')
             if int(getattr(ps, 'achievement_min_enemy_card_total', 999999) or 999999) <= 10:
                 user_flags.append('flag_enemy_cards_10')
-            if getattr(room, 'mode', '') == '2v2' and (
+            if getattr(room, 'mode', '') != '2v2' and (
                 bool(getattr(ps, 'achievement_team_double_resources', False))
-                or _achievement_team_double_resources(engine, pidx)
+                or _achievement_duel_double_resources(engine, pidx)
             ):
                 user_flags.append('flag_team_double_resources')
             if int(getattr(ps, 'achievement_max_enemy_attack_blocked', 0) or 0) >= 5:
