@@ -3802,7 +3802,7 @@ class GameEngine:
                         break
                 if next_card is None:
                     break
-                self.log_msg(f"蜂蜜控制：{self.pn(player_id)}自动打出{next_card.name_cn}")
+                self.log_msg(f"自动控制：{self.pn(player_id)}自动打出{next_card.name_cn}")
                 auto_choice = {'target_player_id': target_id, 'target_player': target_id, 'target_id': target_id}
                 if len(getattr(self, 'players', []) or []) > 2:
                     result = self.play_card(player_id, next_card.instance_id, target_player_id=target_id, choice=auto_choice)
@@ -3818,7 +3818,7 @@ class GameEngine:
             except Exception:
                 pass
             if not self.game_over and self.phase == 'action' and self.current_player == player_id:
-                self.log_msg(f"蜂蜜控制结束：{self.pn(player_id)}自动结束回合")
+                self.log_msg(f"自动控制结束：{self.pn(player_id)}自动结束回合")
                 self._end_player_turn(player_id)
         finally:
             self._honey_control_running = False
@@ -6390,7 +6390,7 @@ class GameEngine:
             int(getattr(self.players[target_id], 'honey_control_turns', 0) or 0),
             duration,
         )
-        self.log_msg(log or f"{self.pn(player_id)}用蜂蜜控制了{self.pn(target_id)}下回合的行动")
+        self.log_msg(log or f"{self.pn(player_id)}使{self.pn(target_id)}下回合进入自动控制")
 
     def _atomic_assembler_effect(self, player_id, card, params, log, choice, context):
         """Assembler: choose a hand card to exile, then random effect."""
