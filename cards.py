@@ -44,6 +44,7 @@ CARD_FLAG_ALIASES = {
     'unique': 'unique',
     'swift': 'swift',
     'stealth': 'stealth',
+    'hidden': 'stealth',
     'revealed': 'revealed',
     'wide_strike': 'wide_strike',
     'tag_wide_strike': 'wide_strike',

@@ -6312,7 +6312,7 @@ class GameEngine:
         if target_card is None:
             return
         if 'precision' in self._effective_card_flags(target_card):
-            target_card.instance_flags.add('hidden')
+            target_card.instance_flags.add('stealth')
             applied = '隐匿'
         else:
             target_card.instance_flags.add('precision')

@@ -1652,6 +1652,12 @@ class GameEngine2v2(GameEngine):
             self._skip_current_turn_after_start = False
             self._end_player_turn(player_id)
             return
+        if ps.health <= 0:
+            self._advance_turn()
+            return
+        self.phase = 'action'
+        self._run_ocean_auto_cards_turn_start(player_id)
+        self._continue_honey_control_if_needed(player_id)
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
                            is_battery: bool = False, is_precision: bool = False,
