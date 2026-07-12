@@ -605,7 +605,7 @@ class GameEngine2v2(GameEngine):
             counter_cost_m = int(getattr(counter_card, 'cost_m', 0) or 0)
             if counter_cost_e > responder.elixir or counter_cost_m > responder.magic:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
-            validation_target_id = responder_id if self._is_magic_antimatter_card(counter_card) else pending.get('target_player_id')
+            validation_target_id = responder_id
             if not self._card_can_counter(counter_card, card, responder_id=responder_id, target_player_id=validation_target_id):
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             self._spend_resource(responder_id, 'elixir', counter_cost_e, counter_card)
@@ -931,11 +931,13 @@ class GameEngine2v2(GameEngine):
         equipment_destroy_responders = self._equipment_destroy_response_player_ids(player_id, card, choice)
         counter_cards = []
         has_payable_counter = False
-        enemy_ids = [enemy_id for enemy_id in self.get_all_enemies(player_id) if self.players[enemy_id].health > 0]
-        if 'precision' in flags:
-            responder_ids = list(dict.fromkeys([tid for tid in target_ids if self.is_enemy(player_id, tid)]))
-        else:
-            responder_ids = list(dict.fromkeys([*enemy_ids, *equipment_destroy_responders]))
+        target_responders = [
+            tid for tid in target_ids
+            if self._is_valid_player_id(tid)
+            and self.is_enemy(player_id, tid)
+            and self.players[tid].health > 0
+        ]
+        responder_ids = list(dict.fromkeys([*target_responders, *equipment_destroy_responders]))
 
         try:
             for responder_id in responder_ids:

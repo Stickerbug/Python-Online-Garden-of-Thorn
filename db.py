@@ -98,7 +98,7 @@ ACHIEVEMENT_DEFS = [
     {'id': 'deep_roots', 'type': 'hidden', 'hidden': True, 'name_cn': '根系发达', 'name_en': 'Deep Roots', 'description_cn': '同时装备4个或更多装备。', 'description_en': 'Have 4 or more equipment at the same time.', 'target': 1, 'metric': 'flag_max_equipment_5', 'reward_dew': 500},
     {'id': 'calculated_finish', 'type': 'hidden', 'hidden': True, 'name_cn': '精打细算', 'name_en': 'Calculated Finish', 'description_cn': '1v1中，对手死亡时自己的E和M均为0。', 'description_en': 'In 1v1, win while your E and M are both 0 when the opponent dies.', 'target': 1, 'metric': 'flag_1v1_zero_resources_win', 'reward_dew': 750},
     {'id': 'enemy_6_statuses', 'type': 'hidden', 'hidden': True, 'name_cn': '狂乱的鸡尾酒', 'name_en': 'Mad Cocktail', 'description_cn': '使一名敌方玩家同时拥有6个或更多不同状态。', 'description_en': 'Make an enemy have 6 or more different statuses at once.', 'target': 1, 'metric': 'flag_enemy_6_statuses', 'reward_dew': 700},
-    {'id': 'solo_status_25', 'type': 'hidden', 'hidden': True, 'name_cn': '为什么会变成这样呢？', 'name_en': 'How Did It Come to This?', 'description_cn': '在单人训练场，使双方玩家状态总数为25或更多。', 'description_en': 'In Solo Training, make both players have 25 or more total status stacks.', 'target': 1, 'metric': 'flag_solo_status_25', 'reward_dew': 600},
+    {'id': 'solo_status_25', 'type': 'hidden', 'hidden': True, 'name_cn': '为什么会变成这样呢？', 'name_en': 'How Did It Come to This?', 'description_cn': '在单人训练场，使双方玩家状态总数为25或更多。', 'description_en': 'In Solo Training, make both players have 25 or more total status types.', 'target': 1, 'metric': 'flag_solo_status_25', 'reward_dew': 600},
 ]
 ACHIEVEMENT_DEF_MAP = {item['id']: item for item in ACHIEVEMENT_DEFS}
 _DM_MARK_READ_LAST_AT = {}

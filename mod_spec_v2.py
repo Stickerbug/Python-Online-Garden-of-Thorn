@@ -357,6 +357,19 @@ VALID_LOGIC_OPS = {
     "void_set_void_all_cards",
     "void_scythe_damage",
     "void_puppeteer",
+    "hel_add_luck",
+    "hel_add_crit_multiplier",
+    "hel_apply_blazing_fire",
+    "hel_lucky_attack",
+    "hel_card_attack",
+    "hel_chip_attack",
+    "hel_blood_dice",
+    "hel_magic_dice_attack",
+    "hel_trigger_fire_once",
+    "hel_magic_gunpowder",
+    "hel_fire_by_equipment",
+    "hel_bugatti_draw",
+    "hel_magic_clover_trigger",
 }
 
 VALID_EVENT_HOOKS = {

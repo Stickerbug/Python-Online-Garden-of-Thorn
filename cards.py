@@ -379,7 +379,7 @@ _reg(CardDef('Dust', 'Dust', '灰尘', 1, 0, 'thorn', 0, 'Common',
              flags={'symbiosis'}))
 
 _reg(CardDef('Fang', 'Fang', '尖牙', 2, 0, 'thorn', 5, 'Common',
-             '吸取对手的生命来为你回复。', '对目标造成8D；造成伤害时，回复自己造成伤害80%(向下取整)的H'))
+             '吸取对手的生命来为你回复。', '对目标造成8D；造成实际伤害时，回复自己向下取整(实际伤害×80%)的H'))
 
 _reg(CardDef('Triangle', 'Triangle', '三角形', 2, 0, 'thorn', 8, 'Common',
              '量变引起质变。', '造成(6+3×三角形层数)D；造成伤害时获得1层三角形，上限4层'))
@@ -397,7 +397,7 @@ _reg(CardDef('Fission', 'Fission', '裂变', 0, 0, 'bloom', 2, 'Common',
              upgraded_image='assets/cards/fission+1.svg', upgraded_image_url='assets/cards/fission+1.svg'))
 
 _reg(CardDef('Fusion', 'Fusion', '聚变', 0, 0, 'bloom', 2, 'Common',
-             '将相同的攻击聚合为一击。', '选择手中2张同名攻击牌，将它们的聚变层数相加，裂变层数取最大值，变为一张牌',
+             '将相同的攻击聚合为一击。', '选择自己手中2张同名攻击牌，将其聚变层数相加，其他特殊效果层数分别保留最大值，合并为1张牌',
              flags={'self_only'},
              image='card-art/Fusion.svg', image_url='card-art/Fusion.svg'))
 
@@ -418,7 +418,7 @@ _reg(CardDef('ManaOrb', 'Mana Orb', '魔法球', 1, 0, 'bloom', 5, 'Common',
              '孕育魔力的小球。', '+3M'))
 
 _reg(CardDef('Coffee', 'Coffee', '咖啡', 0, 0, 'bloom', 5, 'Common',
-             '可以用来提神，当然，小心耐药性。', '+1E，第一次使用额外+1E'))
+             '可以用来提神，当然，小心耐药性。', '回复目标1E；目标本局第一次受到此效果时，额外回复1E'))
 
 _reg(CardDef('Chilli', 'Chilli', '辣椒', 0, 0, 'bloom', 5, 'Common',
              '太过辛辣，让你不得不用一张牌解辣。', '丢弃一张牌，然后抽一张牌',
@@ -435,12 +435,12 @@ _reg(CardDef('MagicSewage', 'Magic Sewage', '魔法污水', 0, 6, 'bloom', 3, 'C
              flags={'self_only'}))
 
 _reg(CardDef('Mimic', 'Mimic', '拟态', 0, 0, 'bloom', 2, 'Common',
-             '完美模仿。', '将一张手牌的复制加入手中',
+             '完美模仿。', '选择自己1张手牌，额外消耗其特殊效果超出初始值的层数总和一半的E（向上取整）；将其费用不变、特殊效果层数减半（向上取整）的复制加入手中',
              flags={'exile', 'self_only'}))
 
 _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 0, 'Super',
              '神奇的树叶。可以使人死而复生。',
-             '回复目标20H；自身受到致命伤害时将H设为5，抽3张牌，清除所有效果，无敌直到下一个自己回合结束，放逐此牌；可以选择一个阵亡玩家复活，并触发此效果',
+             '回复目标20H；自身受到致命伤害时，将自身H设为5，抽3张牌，清除所有效果，无敌直到下一个自己回合结束，并放逐此牌；打出时可以选择阵亡玩家，使其复活并触发上述效果',
              flags={'sublime'}))
 
 _reg(CardDef('Leaf', 'Leaf', '叶子', 1, 0, 'root', 5, 'Common',
@@ -455,18 +455,18 @@ _reg(CardDef('Disc', 'Disc', '圆盘', 3, 0, 'root', 3, 'Common',
              '坚实的护盾，减免来袭的伤害。', '+2A', flags={'non_stackable'}))
 
 _reg(CardDef('Battery', 'Battery', '电池', 3, 0, 'root', 5, 'Common',
-             '受击时会漏电。', '受到物理伤害时，对攻击者造成3电伤'))
+             '受击时会漏电。', '目标受到D时，对攻击者造成3电伤'))
 
 _reg(CardDef('MagicLeaf', 'Magic Leaf', '魔法叶', 1, 0, 'root', 5, 'Common',
              '不再能造成伤害了，但它可以回复魔力。',
-             '自己回合开始时+1M；可花费4M，触发：选择目标造成12D，然后摧毁自身',
+             '目标回合开始时，回复目标1M；可花费4M，触发：选择目标，对其造成12D，并摧毁本装备',
              trigger_cost_e=0, trigger_cost_m=4, trigger_effect_text='选择目标造成12D，然后摧毁自身'))
 
 _reg(CardDef('MagicYucca', 'Magic Yucca', '魔法丝兰', 4, 0, 'root', 5, 'Common',
-             '生成更多魔力。', '魔力上限+5；装备时和自己回合开始时，将一张[魔法球][共生+放逐+虚无]加入手牌'))
+             '生成更多魔力。', '装备存在时，目标M上限+5；使用时及目标回合开始抽牌前，将一张[魔法球][共生+放逐+虚无]加入目标手牌'))
 
 _reg(CardDef('MagicBattery', 'Magic Battery', '魔法电池', 3, 0, 'root', 3, 'Common',
-             '每次受击都会激发魔力涌动。', '受到物理伤害时+1M(每回合上限3M)'))
+             '每次受击都会激发魔力涌动。', '装备存在时，每当目标受到D，回复装备拥有者1M，每回合最多回复3M'))
 
 _reg(CardDef('Powder', 'Powder', '粉末', 4, 0, 'root', 5, 'Common',
              '使你加快速度的神秘粉末。', '自己回合开始时+2E'))
@@ -475,7 +475,7 @@ _reg(CardDef('GoldenLeaf', 'Golden Leaf', '黄金叶', 3, 0, 'root', 5, 'Common'
              '这闪亮的叶子能为你带来额外的抽牌机会。', '手牌爆牌上限+1；自己回合开始时多抽一张牌'))
 
 _reg(CardDef('MagicGoldenLeaf', 'Magic Golden Leaf', '魔法黄金叶', 0, 6, 'root', 3, 'Epic',
-             '闪耀的叶片将魔力收束成更大的空间。', '目标手中所有0E卡牌不占用手牌上限'))
+             '闪耀的叶片将魔力收束成更大的空间。', '装备存在时，目标手中所有0E卡牌不占用手牌上限'))
 
 _reg(CardDef('Pincer', 'Pincer', '螫针', 4, 0, 'root', 3, 'Common',
              '毒素可以减缓对手行动，但小心别划伤自己。', '装备时，每回合对目标施加1层超载'))
@@ -499,11 +499,11 @@ _reg(CardDef('Bubble', 'Bubble', '泡泡', 2, 0, 'guard', 10, 'Common',
              response_trigger='thorn'))
 
 _reg(CardDef('Nazar', 'Nazar', '邪眼护符', 5, 0, 'guard', 3, 'Common',
-             '邪眼的力量似乎为你减免了大部分伤害。', '获得2层邪眼  响应：被作为攻击牌目标',
+             '邪眼的力量似乎为你减免了大部分伤害。', '使自己获得2层邪眼  响应：被作为攻击牌目标',
              response_trigger='thorn'))
 
 _reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 1, 0, 'guard', 3, 'Common',
-             '有魔力的护符，让敌方的低耗技能化为虚无。', '获得2层魔法邪眼  响应：敌方使用技能牌',
+             '有魔力的护符，让敌方的低耗技能化为虚无。', '使自己获得2层魔法邪眼  响应：敌方使用技能牌',
              response_trigger='bloom'))
 
 _reg(CardDef('GoldenNazar', 'Golden Nazar', '黄金邪眼', 4, 0, 'guard', 5, 'Unusual',

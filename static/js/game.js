@@ -197,6 +197,8 @@ let currentMusicSrc = '';
 let musicAudioBySrc = Object.create(null);
 let musicFadeTimers = new WeakMap();
 let musicSceneUpdateTimer = null;
+let musicRequestSeq = 0;
+let audioLastUnlockAttemptAt = 0;
 const MUSIC_NOTICE_KEY = 'gtn_music_notice_v1';
 
 function clampPercent(value, fallback = 100) {
@@ -284,6 +286,9 @@ function getAudioContext() {
 }
 
 function unlockAudio() {
+    const now = performance.now();
+    if (audioUnlocked && currentMusicAudio && !currentMusicAudio.paused && now - audioLastUnlockAttemptAt < 500) return;
+    audioLastUnlockAttemptAt = now;
     const ctx = getAudioContext();
     if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
     audioUnlocked = true;
@@ -341,10 +346,6 @@ function fadeMusicAudio(audio, targetVolume, durationMs = 650, onDone = null) {
     musicFadeTimers.set(audio, timer);
 }
 
-function isMenuMusicSrc(src = '') {
-    return src === AUDIO_MUSIC_SOURCES.menu;
-}
-
 function prepareMusicAudio(src, scene) {
     if (!src) return null;
     let audio = musicAudioBySrc[src];
@@ -352,31 +353,10 @@ function prepareMusicAudio(src, scene) {
         audio = new Audio(src);
         audio.preload = scene === 'battle' ? 'metadata' : 'auto';
         audio.volume = 0;
+        audio.loop = true;
         musicAudioBySrc[src] = audio;
-        if (isMenuMusicSrc(src)) {
-            audio.loop = false;
-            audio.addEventListener('timeupdate', () => {
-                if (audio.dataset.gtnLoopFading === '1') return;
-                const duration = Number(audio.duration || 0);
-                if (!Number.isFinite(duration) || duration <= 8) return;
-                if (duration - Number(audio.currentTime || 0) > 5.2) return;
-                audio.dataset.gtnLoopFading = '1';
-                fadeMusicAudio(audio, 0, 4800, () => {
-                    if (currentMusicAudio !== audio || !isMenuMusicSrc(currentMusicSrc)) {
-                        delete audio.dataset.gtnLoopFading;
-                        return;
-                    }
-                    try { audio.currentTime = 0; } catch (_) {}
-                    delete audio.dataset.gtnLoopFading;
-                    const sceneForGain = currentMusicScene || 'menu';
-                    fadeMusicAudio(audio, audioMusicVolumeFromGain(getMusicGain(sceneForGain)), 1200);
-                });
-            });
-        } else {
-            audio.loop = true;
-        }
     }
-    audio.loop = !isMenuMusicSrc(src);
+    audio.loop = true;
     return audio;
 }
 
@@ -396,11 +376,13 @@ function scheduleBackgroundMusicUpdate() {
 }
 
 function updateBackgroundMusic() {
+    const requestId = ++musicRequestSeq;
     const scene = getTargetMusicScene();
     const src = AUDIO_MUSIC_SOURCES[scene] || AUDIO_MUSIC_SOURCES.menu;
     if (!src || audioFileUnavailable[src] || !audioUnlocked || !audioSettings.enabled || getMusicGain(scene) <= 0) {
         const oldAudio = currentMusicAudio;
         if (oldAudio) fadeMusicAudio(oldAudio, 0, 500, () => {
+            if (requestId !== musicRequestSeq && currentMusicAudio === oldAudio) return;
             try { oldAudio.pause(); } catch (_) {}
         });
         currentMusicAudio = null;
@@ -412,7 +394,14 @@ function updateBackgroundMusic() {
     if (currentMusicAudio && currentMusicSrc === src) {
         currentMusicScene = scene;
         fadeMusicAudio(currentMusicAudio, volume, 300);
-        if (currentMusicAudio.paused) currentMusicAudio.play().catch(() => {});
+        if (currentMusicAudio.paused) {
+            const sameAudio = currentMusicAudio;
+            sameAudio.play().catch((err) => {
+                if (currentMusicAudio !== sameAudio) return;
+                const blocked = err && /NotAllowedError/i.test(String(err.name || err.message || err));
+                if (blocked) audioUnlocked = false;
+            });
+        }
         return;
     }
     const oldAudio = currentMusicAudio;
@@ -426,13 +415,16 @@ function updateBackgroundMusic() {
     currentMusicSrc = src;
     currentMusicScene = scene;
     nextAudio.play().then(() => {
+        if (requestId !== musicRequestSeq || currentMusicAudio !== nextAudio) return;
         fadeMusicAudio(nextAudio, volume, 850);
         if (oldAudio) fadeMusicAudio(oldAudio, 0, 650, () => {
+            if (currentMusicAudio === oldAudio) return;
             try {
                 oldAudio.pause();
             } catch (_) {}
         });
     }).catch((err) => {
+        if (requestId !== musicRequestSeq || currentMusicAudio !== nextAudio) return;
         const blocked = err && /NotAllowedError|AbortError|interrupted/i.test(String(err.name || err.message || err));
         if (blocked) {
             audioUnlocked = false;
@@ -575,12 +567,9 @@ function initAudioSystem() {
     syncAudioSettingsUi();
     const unlockOnGesture = () => {
         if (shouldShowMusicNotice()) return;
-        ['pointerdown', 'keydown', 'touchstart'].forEach((eventName) => {
-            document.removeEventListener(eventName, unlockOnGesture, true);
-        });
         unlockAudio();
     };
-    ['pointerdown', 'keydown', 'touchstart'].forEach((eventName) => {
+    ['pointerdown', 'keydown', 'touchstart', 'click'].forEach((eventName) => {
         document.addEventListener(eventName, unlockOnGesture, { passive: true, capture: true });
     });
     window.setTimeout(() => {
@@ -820,7 +809,7 @@ I18N.zh = { ...I18N.en,
     status_equip_protect: '装备保护', status_invincible: '无敌', status_immune: '状态免疫', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸引', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_temp_magic_heavy: '暂时魔力沉重', flag_floating: '漂浮', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_sublime: '崇高', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷', flag_wide_strike: '广域打击', flag_self_target: '自刃', flag_charge: '电荷', flag_ocean_blinded: '蒙蔽',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸附', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_temp_magic_heavy: '暂时魔力沉重', flag_floating: '漂浮', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_sublime: '崇高', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷', flag_wide_strike: '广域打击', flag_self_target: '自刃', flag_charge: '电荷', flag_ocean_blinded: '蒙蔽',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张手牌丢弃，然后抽对应张牌', foresight_replace_confirm: '替换',
@@ -864,7 +853,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸引', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_temp_magic_heavy: '暂时魔力沉重', tag_floating: '漂浮', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_sublime: '崇高', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷', tag_wide_strike: '广域打击', tag_self_target: '自刃', tag_charge: '电荷', tag_ocean_blinded: '蒙蔽',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸附', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_temp_magic_heavy: '暂时魔力沉重', tag_floating: '漂浮', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_sublime: '崇高', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷', tag_wide_strike: '广域打击', tag_self_target: '自刃', tag_charge: '电荷', tag_ocean_blinded: '蒙蔽',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
@@ -1140,38 +1129,50 @@ Object.assign(I18N.zh, {
     credits_developer: '开发者', credits_design: '设计', credits_art: '美工', credits_special: '特别鸣谢',
     rules_intro_title: '游戏介绍', rules_type_thorn: '攻击(Thorn)', rules_type_bloom: '技能(Bloom)', rules_type_root: '装备(Root)', rules_type_guard: '反制(Guard)',
     rules_goal_title: '基本目标',
-    rules_goal_text: 'Garden of Thorn 荆棘花园 是多人卡牌对战游戏。一般情况下，你的目标是通过使用四类牌：{thorn}、{bloom}、{root}和{guard}，让对方阵营的 H 降到 0，同时保护自己和队友的 H。',
+    rules_goal_text: 'Garden of Thorn 荆棘花园 是回合制卡牌对战游戏。你需要管理 H、E、M、手牌、状态和装备，利用{thorn}、{bloom}、{root}和{guard}建立优势。除特殊规则外，使敌方玩家全部阵亡即可获胜。',
     rules_resources_title: '资源',
-    rules_resources_text: 'H(Health) 是生命。H 降到 0 时，玩家通常会失去继续行动的能力；在 2v2 中，一方全部玩家阵亡才会判负。E(Elixir) 是能量，大多数卡牌消耗 E。M(Magic) 是魔力，部分魔法牌消耗 M。通常只有在自己的回合开始时，玩家才会抽牌并回复资源。',
+    rules_resource_health: '生命', rules_resource_elixir: '能量', rules_resource_magic: '魔力',
+    rules_resources_text: '{health}降到0时玩家阵亡。{elixir}用于支付大多数卡牌；{magic}用于支付魔法牌。回合开始时会依次结算状态与装备效果，再按规则回复资源、抽牌；上限、迟缓、超载等效果会改变实际结果。',
     rules_types_title: '卡牌类型',
-    rules_types_text: '{thornRaw} 是攻击牌，用于造成直接伤害，例如 {basic}、{bone}。{bloomRaw} 是技能牌，用于回复、施加状态、调整资源或改变局面，例如 {fire}。{rootRaw} 是装备牌，打出后提供持续效果或可触发效果，例如 {leaf}。{guardRaw} 是反制牌，不能像普通手牌一样主动打出，需要在对方行动满足条件时响应。',
+    rules_types_text: '{thornRaw} 是攻击牌，主要造成伤害，例如 {basic}、{bone}。{bloomRaw} 是技能牌，用于回复、施加状态、移动卡牌或改变资源，例如 {fire}。{rootRaw} 是装备牌，使用后留在使用者的装备栏，并按箭头指向的目标产生持续或触发效果，例如 {leaf}。{guardRaw} 是反制牌，只在响应条件满足时进入反制窗口，例如 {bubble}。',
     rules_flow_title: '回合流程',
-    rules_flow_text: '正常模式通常先进行选牌，再选择配装倾向，然后进入对局。轮到你时，系统会处理回合开始效果、抽牌和资源回复。之后你可以打出手牌，或触发已经装备至少一回合且满足条件的装备。完成行动后，点击结束回合，将行动权交给下一位玩家。2v2 中回合顺序会在两队之间交替；玩家阵亡不会改变既定顺序，但阵亡玩家的回合会被跳过。',
+    rules_flow_text: '标准对局依次进行配装选择与公开、选牌、配装处理和开局抽牌。进入行动阶段后，轮到你的回合才可主动出牌或触发满足条件的装备；需要目标时，从高亮的合法玩家中选择。行动完成后结束回合。等待反制、其他玩家选择或断线重连时，当前玩家的回合时间会暂停。',
+    rules_target_title: '出牌与目标',
+    rules_target_text: '选择手牌后，系统会按卡牌规则直接结算或要求选择目标。攻击牌通常选择可攻击的敌方；回复、状态和装备效果可按卡面选择自己、队友或敌方。装备始终显示在使用者的装备栏，箭头表示效果目标。反制牌不能在自己的行动阶段主动使用，只能在反制窗口中选择。',
+    rules_modes_title: '对局模式',
+    rules_mode_1v1_title: '1v1',
+    rules_mode_1v1_text: '两名玩家进行标准对决。双方选择配装与卡牌并完成开局处理后轮流行动；攻击通常指向对手，其他效果按卡面选择目标。先使对手阵亡的一方获胜。这是学习目标、资源、反制、装备和状态结算的主要模式。',
+    rules_mode_2v2_title: '2v2',
+    rules_mode_2v2_text: '四名玩家分成两队，按既定顺序轮流行动。卡牌可能选择敌方、自己或队友；反制只由符合响应范围的玩家使用。玩家阵亡后跳过其回合，但仍可能被复活；一队全部阵亡时另一队获胜。',
+    rules_mode_urf_title: '无限火力',
+    rules_mode_urf_text: '1v1快速模式，不进行配装和选牌。双方从当前模组的加权随机牌池获得手牌，牌库不会耗尽；每回合可替换1张手牌，并可售卖1件可售装备。手牌上限为10，装备上限为3，部分会破坏模式循环的牌不会进入牌池。',
+    rules_mode_random_title: '随机卡组',
+    rules_mode_random_text: '1v1随机构筑模式，不进行配装和选牌。系统按当前模组与卡牌权重生成一套15张牌的卡组，其中包含6张攻击、4张技能、3张装备和2张反制；双方使用完全相同的这套卡组进行标准对决。',
     rules_keywords_title: '常见关键词',
-    rules_keywords_text: '<b>放逐</b>表示卡牌打出或结算后进入放逐区，通常不会再回到牌堆或弃牌堆。<b>精准</b>表示攻击被闪避响应时改为造成一半伤害。<b>不可摧毁</b>表示装备不能被摧毁效果破坏。<b>萌芽</b>表示抽到该牌时会额外抽牌。<b>共生</b>表示该牌不受同名卡连续使用费用惩罚。部分模式或模组可能加入额外关键词，以实际卡牌显示为准。',
+    rules_keywords_text: '<b>放逐</b>使牌进入放逐区，通常不再返回牌堆。<b>精准</b>使攻击遇到闪避时仍造成一半伤害。<b>不可摧毁</b>使装备不受普通摧毁效果影响。<b>萌芽</b>在牌进入手牌时触发额外抽牌。<b>共生</b>使牌不受连续使用同名牌的费用增加。其他标签、状态和特殊效果可从卡牌说明或图鉴查看。',
     rules_examples_title: '示例',
-    rules_examples_text: '{stinger} 是高伤害精准攻击；{sewage} 可以摧毁装备；{bubble} 可以响应攻击并提供闪避。点击示例卡牌名可在图鉴中查看对应卡牌。',
+    rules_examples_text: '{stinger} 是带精准的攻击；{sewage} 用于摧毁装备；{bubble} 可在被攻击时反制并使自己获得闪避。',
     rules_skip_confirm_title: '提示',
     rules_skip_confirm_msg: '你确认要跳过游戏介绍吗？\n可以在 关于>游戏玩法 中再次打开此界面。',
     gallery_back_rules: '返回介绍', gallery_explanation: '说明',
-    tag_desc_precision: '攻击类关键词。精准攻击被闪避响应时不会完全失效，而是改为造成一半伤害。',
-    tag_desc_exile: '结算去向关键词。带有此标签的卡牌在打出或结算后进入放逐区，而不是进入弃牌堆。',
-    tag_desc_non_stackable: '装备类关键词。该效果可以多次装备，但同类效果不会重复叠加；多个副本主要用于在部分装备被摧毁后保留后续副本。',
-    tag_desc_indestructible: '装备类关键词。该牌作为装备时不能被摧毁效果破坏；玩家死亡时也会保留不可摧毁装备。',
-    tag_desc_sprout: '抽牌类关键词。抽到带有萌芽的牌时，会额外抽牌；若手牌已满，仍遵循正常爆牌/弃牌规则。',
-    tag_desc_symbiosis: '费用类关键词。该牌不受同名卡连续使用费用惩罚，适合在同一回合多次使用。',
-    tag_desc_attract: '手牌上限关键词。手牌满时，带有吸引的牌会优先挤掉没有吸引的牌，减少关键牌爆掉的风险。',
-    tag_desc_void: '回合结束关键词。带有虚无的牌如果留在手牌中，会在回合结束时被放逐。',
-    tag_desc_self_only: '目标选择关键词。打出这张牌时不弹出目标选择窗口，效果会按卡牌自身规则结算。',
-    tag_desc_uncancellable: '选择限制关键词。该牌弹出选择窗口时不显示取消按钮，玩家必须完成选择。用于避免通过0消耗选择牌窗口查看隐藏信息后取消，例如磁铁查看敌方手牌。',
-    tag_desc_infinite_exclude: '模式限制关键词。该牌不会进入无限火力的随机牌库，用于排除与该模式机制冲突的牌。',
-    tag_desc_copy: '抽牌关键词。当此牌进入手中时，将层数张放逐复制加入手中。',
-    tag_desc_unique: '牌库关键词。整场对局自己总牌库中仅允许出现一张，多余的将被放逐。',
-    tag_desc_swift: '费用关键词。此牌的E消耗减少X（最低0E）。',
-    tag_desc_rebound: '结算去向关键词。带有回转的牌打出并结算后，会立即回到使用者手牌。',
-    tag_desc_stealth: '响应关键词。此牌不会触发对手的响应窗口。',
-    tag_desc_revealed: '可见性关键词。此牌在手中时永久对对手展示。',
-    tag_desc_sublime: '选择限制关键词。此牌无法被除使用外的行为选中。',
+    tag_desc_precision: '精准攻击被闪避时不会完全失效，而是改为造成一半伤害。',
+    tag_desc_exile: '此牌打出或结算后进入放逐区，而不是弃牌堆。',
+    tag_desc_non_stackable: '同类效果不会重复叠加；多个副本只用于在部分装备离场后保留后续副本。',
+    tag_desc_indestructible: '此牌作为装备时不能被普通摧毁效果破坏。',
+    tag_desc_sprout: '此牌进入手牌时触发对应的萌芽效果。',
+    tag_desc_symbiosis: '此牌不受同名卡连续使用费用惩罚。',
+    tag_desc_attract: '爆牌时，此牌优先挤掉没有吸附的手牌。',
+    tag_desc_void: '此牌在回合结束时仍留在手中，则进入放逐区。',
+    tag_desc_self_only: '打出此牌时不进入目标选择，效果按卡牌自身规则结算。',
+    tag_desc_uncancellable: '此牌弹出选择窗口时不能取消，玩家必须完成选择。',
+    tag_desc_infinite_exclude: '此牌不会进入无限火力的随机牌库。',
+    tag_desc_copy: '此牌进入手中时，将对应层数张带有放逐的复制加入手中。',
+    tag_desc_unique: '同一玩家不能同时保留多张同名唯一牌，多余实例会被放逐。',
+    tag_desc_swift: '此牌的E花费减少X，最低为0E。',
+    tag_desc_rebound: '此牌打出并结算后立即回到使用者手中，并经历一次弃牌堆清理。',
+    tag_desc_stealth: '此牌不会触发任何反制窗口。',
+    tag_desc_revealed: '此牌在手中时对其他玩家展示；崇高仍优先隐藏。',
+    tag_desc_sublime: '此牌无法被除打出外的行为选中。',
     tag_desc_default: '模组或扩展标签。该标签的具体含义由对应模组或卡牌效果定义。'
 });
 
@@ -1181,17 +1182,29 @@ Object.assign(I18N.en, {
     credits_developer: 'Developer', credits_design: 'Design', credits_art: 'Art', credits_special: 'Special Thanks',
     rules_intro_title: 'Game Introduction', rules_type_thorn: 'Thorn attacks', rules_type_bloom: 'Bloom skills', rules_type_root: 'Root equipment', rules_type_guard: 'Guard counters',
     rules_goal_title: 'Goal',
-    rules_goal_text: 'Garden of Thorn 荆棘花园 is a multiplayer card battle game. In most modes, your goal is to use four card types: {thorn}, {bloom}, {root}, and {guard}, reduce the opposing side’s H to 0, and protect your own side’s H.',
+    rules_goal_text: 'Garden of Thorn is a turn-based card battle game. Manage H, E, M, cards, states, and equipment while using {thorn}, {bloom}, {root}, and {guard} to build an advantage. Unless a special rule says otherwise, defeat every enemy player to win.',
     rules_resources_title: 'Resources',
-    rules_resources_text: 'H(Health) is life. When H reaches 0, that player usually loses the ability to act; in 2v2, a side loses only when all of its players are defeated. E(Elixir) is energy and pays for most cards. M(Magic) pays for some magic cards. Usually, a player draws cards and recovers resources only at the start of their own turn.',
+    rules_resource_health: 'Health', rules_resource_elixir: 'Elixir', rules_resource_magic: 'Magic',
+    rules_resources_text: 'A player is defeated when {health} reaches 0. {elixir} pays for most cards, while {magic} pays for magic cards. At turn start, states and equipment resolve before resources and draws; limits, Sluggish, Overload, and other effects can change the result.',
     rules_types_title: 'Card Types',
-    rules_types_text: '{thornRaw} cards deal direct damage, such as {basic} and {bone}. {bloomRaw} cards heal, apply states, adjust resources, or change the board, such as {fire}. {rootRaw} cards provide ongoing or triggered effects after being played, such as {leaf}. {guardRaw} cards are counters; they are not played like normal hand cards and respond only when an opponent’s action meets their condition.',
+    rules_types_text: '{thornRaw} cards mainly deal damage, such as {basic} and {bone}. {bloomRaw} cards heal, apply states, move cards, or change resources, such as {fire}. {rootRaw} cards remain in the user’s equipment area and apply ongoing or triggered effects to the arrow target, such as {leaf}. {guardRaw} cards appear only in a response window when their condition is met, such as {bubble}.',
     rules_flow_title: 'Turn Flow',
-    rules_flow_text: 'A normal match usually starts with drafting cards, choosing opening events, and then entering battle. On your turn, start-of-turn effects, draws, and resource recovery resolve first. Then you may play hand cards or trigger equipment that has been equipped for at least one turn and meets its condition. End your turn to pass action to the next player. In 2v2, turns alternate between teams; defeated players do not change the order, but their turns are skipped.',
+    rules_flow_text: 'A standard match proceeds through loadout selection and reveal, card drafting, loadout choices, and the opening draw. During battle, only the active player may play cards or trigger eligible equipment. Select a highlighted legal player when a target is required, then end the turn when finished. The active timer pauses for responses, other players’ choices, and reconnect waits.',
+    rules_target_title: 'Cards and Targets',
+    rules_target_text: 'After selecting a hand card, it either resolves directly or asks for a target. Attacks usually target legal enemies; healing, states, and equipment may target yourself, allies, or enemies as written. Equipment always stays in its user’s equipment area, while its arrow shows the effect target. Guard cards are chosen only in response windows.',
+    rules_modes_title: 'Game Modes',
+    rules_mode_1v1_title: '1v1',
+    rules_mode_1v1_text: 'A standard duel between two players. After loadouts, drafting, and setup, players alternate turns. Attacks usually target the opponent, while other cards follow their target text. The first player to defeat the opponent wins.',
+    rules_mode_2v2_title: '2v2',
+    rules_mode_2v2_text: 'Four players form two teams and act in a fixed order. Cards may target enemies, yourself, or allies, and only players inside a response card’s range may counter. Defeated players skip turns but may be revived. A team loses when all its players are defeated.',
+    rules_mode_urf_title: 'Infinite Fire',
+    rules_mode_urf_text: 'A fast 1v1 mode without loadouts or drafting. Both players draw from an endless weighted pool built from the selected mods. Once per turn, replace one hand card and sell one eligible equipment. Hand limit is 10, equipment limit is 3, and cards that break the mode loop are excluded.',
+    rules_mode_random_title: 'Random Deck',
+    rules_mode_random_text: 'A 1v1 mode without loadouts or drafting. The game creates one weighted 15-card deck from the selected mods: 6 Thorn, 4 Bloom, 3 Root, and 2 Guard cards. Both players use the exact same deck under standard battle rules.',
     rules_keywords_title: 'Common Keywords',
     rules_keywords_text: '<b>Exile</b> means the card goes to exile after being played or resolved instead of the discard pile. <b>Precision</b> means if the attack is dodged, it deals half damage instead of failing completely. <b>Indestructible</b> means equipment cannot be destroyed by destroy effects. <b>Sprout</b> draws extra cards when drawn. <b>Symbiosis</b> ignores same-name card cost penalties. Some modes or mods may add more keywords; the card text is authoritative.',
     rules_examples_title: 'Examples',
-    rules_examples_text: '{stinger} is a high-damage Precision attack; {sewage} can destroy equipment; {bubble} can respond to attacks and grant Dodge. Click an example card name to open it in the compendium.',
+    rules_examples_text: '{stinger} is a Precision attack; {sewage} destroys equipment; {bubble} responds to an attack and grants Dodge.',
     rules_skip_confirm_title: 'Notice',
     rules_skip_confirm_msg: 'Skip the game introduction?\nYou can open it again from About > How to Play.',
     gallery_back_rules: 'Back to Introduction', gallery_explanation: 'Explanation',
@@ -1240,15 +1253,27 @@ Object.assign(I18N.fr, {
     rules_goal_title: 'Objectif',
     rules_goal_text: 'Garden of Thorn 荆棘花园 est un jeu de cartes multijoueur. Dans la plupart des modes, votre objectif est d’utiliser quatre types de cartes : {thorn}, {bloom}, {root} et {guard}, afin de réduire le H du camp adverse à 0 tout en protégeant votre camp.',
     rules_resources_title: 'Ressources',
-    rules_resources_text: 'H(Health) représente la vie. À 0 H, un joueur perd généralement sa capacité d’agir ; en 2v2, un camp perd seulement lorsque tous ses joueurs sont vaincus. E(Elixir) paie la plupart des cartes. M(Magic) paie certaines cartes magiques. En général, un joueur pioche et récupère des ressources uniquement au début de son propre tour.',
+    rules_resource_health: 'Vie', rules_resource_elixir: 'Élixir', rules_resource_magic: 'Magie',
+    rules_resources_text: 'Un joueur est vaincu lorsque {health} atteint 0. {elixir} paie la plupart des cartes, tandis que {magic} paie les cartes magiques. Au début du tour, les états et équipements se résolvent avant la récupération et la pioche.',
     rules_types_title: 'Types de cartes',
     rules_types_text: 'Les cartes {thornRaw} infligent des dégâts directs, comme {basic} et {bone}. Les cartes {bloomRaw} soignent, appliquent des états, modifient les ressources ou changent la situation, comme {fire}. Les cartes {rootRaw} fournissent des effets continus ou déclenchés après avoir été jouées, comme {leaf}. Les cartes {guardRaw} sont des contres : elles répondent à une action adverse qui remplit leur condition.',
     rules_flow_title: 'Déroulement',
-    rules_flow_text: 'Un match normal commence par le draft, le choix des événements de départ, puis le combat. À votre tour, les effets de début de tour, la pioche et la récupération se résolvent d’abord. Vous pouvez ensuite jouer des cartes ou déclencher un équipement équipé depuis au moins un tour. Terminez votre tour pour passer au joueur suivant. En 2v2, les tours alternent entre les équipes ; les joueurs vaincus ne changent pas l’ordre, mais leur tour est sauté.',
+    rules_flow_text: 'Un match standard suit la sélection et la révélation des équipements initiaux, le draft, les choix liés à ces équipements, puis la pioche initiale. Pendant le combat, seul le joueur actif peut jouer une carte ou déclencher un équipement disponible. Lorsqu’une cible est requise, choisissez un joueur légal en surbrillance. Le temps du joueur actif est suspendu pendant les réponses, les choix adverses et les reconnexions.',
+    rules_target_title: 'Cartes et cibles',
+    rules_target_text: 'Après avoir choisi une carte, elle se résout directement ou demande une cible. Les attaques visent généralement un ennemi légal ; soins, états et équipements suivent le texte de la carte. Un équipement reste toujours dans la zone de son utilisateur, et sa flèche indique la cible de l’effet. Les cartes Guard ne sont choisies que dans une fenêtre de réponse.',
+    rules_modes_title: 'Modes de jeu',
+    rules_mode_1v1_title: '1v1',
+    rules_mode_1v1_text: 'Duel standard entre deux joueurs. Après la préparation et le draft, les joueurs agissent à tour de rôle. Le premier à vaincre son adversaire gagne.',
+    rules_mode_2v2_title: '2v2',
+    rules_mode_2v2_text: 'Quatre joueurs forment deux équipes et jouent dans un ordre fixe. Les cartes peuvent viser ennemis, soi-même ou alliés selon leur texte. Un joueur vaincu saute ses tours mais peut être ressuscité. Une équipe perd lorsque tous ses joueurs sont vaincus.',
+    rules_mode_urf_title: 'Feu infini',
+    rules_mode_urf_text: 'Mode 1v1 rapide sans préparation ni draft. Les cartes viennent d’une réserve aléatoire pondérée et inépuisable créée avec les mods sélectionnés. Une fois par tour, vous pouvez remplacer une carte et vendre un équipement valide. La main est limitée à 10 cartes et les équipements à 3.',
+    rules_mode_random_title: 'Deck aléatoire',
+    rules_mode_random_text: 'Mode 1v1 sans préparation ni draft. Le jeu crée un deck pondéré de 15 cartes : 6 Thorn, 4 Bloom, 3 Root et 2 Guard. Les deux joueurs utilisent exactement le même deck.',
     rules_keywords_title: 'Mots-clés courants',
     rules_keywords_text: '<b>Exil</b> signifie que la carte va dans l’exil après avoir été jouée ou résolue. <b>Précision</b> signifie qu’une attaque esquivée inflige la moitié des dégâts. <b>Indestructible</b> signifie qu’un équipement ne peut pas être détruit par les effets de destruction. <b>Germination</b> pioche des cartes supplémentaires quand la carte est piochée. <b>Symbiose</b> ignore les pénalités de coût des cartes de même nom. Le texte de la carte fait foi.',
     rules_examples_title: 'Exemples',
-    rules_examples_text: '{stinger} est une attaque Précision à gros dégâts ; {sewage} peut détruire un équipement ; {bubble} peut répondre aux attaques et donner Esquive. Cliquez sur un nom de carte pour l’ouvrir dans le compendium.',
+    rules_examples_text: '{stinger} est une attaque Précision ; {sewage} détruit les équipements ; {bubble} répond à une attaque et donne Esquive.',
     rules_skip_confirm_title: 'Notice',
     rules_skip_confirm_msg: 'Passer la présentation du jeu ?\nVous pourrez la rouvrir dans À propos > Règles.',
     gallery_title: 'Encyclopédie', gallery_cards: 'Cartes', gallery_tags: 'Tags', gallery_events: 'Événements de départ',
@@ -1282,15 +1307,27 @@ Object.assign(I18N.ja, {
     rules_goal_title: '基本目標',
     rules_goal_text: 'Garden of Thorn 荆棘花园 はマルチプレイヤーカード対戦ゲームです。多くのモードでは、{thorn}、{bloom}、{root}、{guard}の4種類のカードを使い、相手側の H を 0 にしながら自分側の H を守ることが目標です。',
     rules_resources_title: 'リソース',
-    rules_resources_text: 'H(Health) は生命です。H が 0 になると通常そのプレイヤーは行動できなくなります。2v2 では、片側の全プレイヤーが倒れたときに敗北します。E(Elixir) は多くのカードの支払いに使います。M(Magic) は一部の魔法カードに使います。通常、ドローとリソース回復は自分のターン開始時だけ行われます。',
+    rules_resource_health: '生命', rules_resource_elixir: 'エネルギー', rules_resource_magic: '魔力',
+    rules_resources_text: '{health}が0になるとプレイヤーは倒れます。{elixir}は多くのカード、{magic}は魔法カードの支払いに使います。ターン開始時は、状態と装備の効果を処理してから、リソース回復とドローを行います。',
     rules_types_title: 'カードタイプ',
     rules_types_text: '{thornRaw} は直接ダメージを与えるカードで、例は {basic}、{bone} です。{bloomRaw} は回復、状態付与、リソース調整などを行うカードで、例は {fire} です。{rootRaw} は使用後に継続効果や発動効果を持つカードで、例は {leaf} です。{guardRaw} は相手の行動が条件を満たしたときに反応するカウンターです。',
     rules_flow_title: 'ターンの流れ',
-    rules_flow_text: '通常モードでは、カード選択、開局イベント選択、その後に対局へ入ります。自分のターンでは、ターン開始効果、ドロー、リソース回復が先に処理されます。その後、手札を使ったり、1ターン以上装備され条件を満たす装備を発動できます。行動後はターン終了を押して次のプレイヤーへ移ります。2v2 ではチーム間で交互に進み、倒れたプレイヤーは順番を変えず、そのターンだけ飛ばされます。',
+    rules_flow_text: '標準対局は、配装の選択と公開、カード選択、配装処理、初期ドローの順に進みます。対局中は手番プレイヤーだけが手札を使い、条件を満たす装備を発動できます。対象が必要な場合は、強調表示された選択可能なプレイヤーを選びます。反制、他プレイヤーの選択、再接続待ちの間は手番時間が停止します。',
+    rules_target_title: 'カードと対象',
+    rules_target_text: '手札を選ぶと、直接解決するか対象選択に入ります。攻撃は通常選択可能な敵を対象にし、回復・状態・装備はカード本文に従います。装備は常に使用者の装備欄に残り、矢印が効果対象を示します。Guard は反制画面でのみ選択できます。',
+    rules_modes_title: '対局モード',
+    rules_mode_1v1_title: '1v1',
+    rules_mode_1v1_text: '2人で行う標準対局です。配装、カード選択、準備の後に交互に行動し、先に相手を倒した側が勝利します。',
+    rules_mode_2v2_title: '2v2',
+    rules_mode_2v2_text: '4人が2チームに分かれ、決められた順番で行動します。カード本文に従って敵、自分、味方を対象にできます。倒れたプレイヤーの手番は飛ばされますが、復活することがあります。チーム全員が倒れると敗北です。',
+    rules_mode_urf_title: '無限火力',
+    rules_mode_urf_text: '配装とカード選択を行わない高速1v1です。選択中のModから作られた、重み付きで枯渇しないランダムカードプールを使います。各ターンに手札1枚を交換し、売却可能な装備1個を売れます。手札上限は10、装備上限は3です。',
+    rules_mode_random_title: 'ランダムデッキ',
+    rules_mode_random_text: '配装とカード選択を行わない1v1です。選択中のModから、Thorn 6枚、Bloom 4枚、Root 3枚、Guard 2枚の計15枚を生成し、両プレイヤーが同じデッキを使います。',
     rules_keywords_title: '主なキーワード',
     rules_keywords_text: '<b>追放</b>は、プレイまたは解決後に捨て札ではなく追放領域へ行くことを示します。<b>精密</b>は、回避されたときに半分のダメージを与えることを示します。<b>破壊不可</b>は破壊効果で装備が破壊されないことを示します。<b>萌芽</b>は引いたときに追加ドローします。<b>共生</b>は同名カードの費用ペナルティを受けません。最終的な効果はカード本文を優先します。',
     rules_examples_title: '例',
-    rules_examples_text: '{stinger} は高ダメージの精密攻撃です。{sewage} は装備を破壊できます。{bubble} は攻撃に反応して回避を得ます。カード名をクリックすると図鑑で確認できます。',
+    rules_examples_text: '{stinger} は精密攻撃です。{sewage} は装備を破壊します。{bubble} は攻撃に反応して回避を得ます。',
     rules_skip_confirm_title: '確認',
     rules_skip_confirm_msg: 'ゲーム紹介をスキップしますか？\n概要 > 遊び方 から再度開けます。',
     gallery_title: '図鑑', gallery_cards: 'カード', gallery_tags: 'タグ', gallery_events: '開局イベント',
@@ -2300,7 +2337,11 @@ async function openReportDialog(config = {}) {
     const objectType = String(config.objectType || config.object_type || '');
     const objectId = String(config.objectId || config.object_id || '');
     if (!objectType || !objectId) {
-        flashStatus(UI.operation_failed, 2200, 'error');
+        const message = currentLang === 'zh'
+            ? '举报对象已失效，请刷新后重试。'
+            : 'The report target is no longer available. Please refresh and try again.';
+        console.warn('Report dialog opened without a valid target:', config);
+        gameAlert(UI.report || 'Report', message);
         return;
     }
     const categories = REPORT_CATEGORIES[objectType] || ['other'];
@@ -2493,6 +2534,7 @@ const CARD_FLAG_ALIASES = {
     不可摧毁: 'indestructible',
     萌芽: 'sprout',
     共生: 'symbiosis',
+    吸附: 'attract',
     吸引: 'attract',
     虚无: 'void',
     不选择目标: 'self_only',
@@ -2676,7 +2718,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'tag-exile', re: /^(?:放逐|Exile)/i },
     { cls: 'tag-sprout', re: /^(?:萌芽|Sprout)/i },
     { cls: 'tag-symbiosis', re: /^(?:共生|Symbiosis)/i },
-    { cls: 'tag-attract', re: /^(?:吸引|Attract)/i },
+    { cls: 'tag-attract', re: /^(?:吸附|吸引|Attract)/i },
     { cls: 'tag-void', re: /^(?:虚无|Void)/i },
     { cls: 'tag-rebound', re: /^(?:回转|Rebound)/i },
     { cls: 'tag-copy', re: /^(?:副本|Copy)(?::[+-]?\d+)?/i },
@@ -2693,6 +2735,8 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'tag-self-target', re: /^(?:自刃|Self-cut)/i },
     { cls: 'status-blood-debt', re: /^(?:[+-]?\d+层血债|血债[:：]?[+-]?\d+层?)/i },
     { cls: 'status-unable-counter', re: /^(?:[+-]?\d+层无法反制|无法反制[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-luck', re: /^(?:[+-]?\d+层幸运|幸运[:：]?[+-]?\d+层?|幸运)/i },
+    { cls: 'status-crit', re: /^(?:暴击倍率[:：]?\s*[×x]?\d+(?:\.\d+)?|暴击[:：]?\s*[×x]?\d+(?:\.\d+)?|暴击倍率|暴击|Critical|Crit)/i },
     { cls: 'status-toxic-poison', re: /^(?:[+-]?\d+层剧毒|剧毒[:：]?[+-]?\d+层?|剧毒[×x][+-]?\d+层?)/i },
     { cls: 'status-sluggish', re: /^(?:[+-]?\d+层迟缓|迟缓[:：]?[+-]?\d+层?)/i },
     { cls: 'status-fragile', re: /^(?:(?:\([^)]*\)|（[^）]*）)层易损|[+-]?\d+层易损|易损[:：]?[+-]?\d+层?)/i },
@@ -2722,6 +2766,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'magic', re: /^(?:[+-]?\d+层魔力封锁|魔力封锁[:：]?[+-]?\d+层?)/i },
     { cls: 'status-untargetable', re: /^(?:[+-]?\d+层无法选中|无法选中[:：]?[+-]?\d+层?)/i },
     { cls: 'status-magic-nazar', re: /^(?:[+-]?\d+层魔法邪眼|魔法邪眼[:：]?[+-]?\d+层?)/i },
+    { cls: 'equipment-armor', re: /^(?:[+-]?\d+层装备护甲|装备护甲[:：]?[+-]?\d+层?|装备护甲|Equipment Armor)/i },
     { cls: 'toxic', re: /^(?:\d+层淬毒|\d+\s*(?:Toxic|Toxique|Tóxico|Токсин)|淬毒\d+)/i },
     { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*F(?![A-Za-z0-9])|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/ },
     { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P(?![A-Za-z0-9])|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/ },
@@ -3140,6 +3185,11 @@ function colorizeCardText(value) {
     let i = 0;
     while (i < text.length) {
         const rest = text.slice(i);
+        if (rest.startsWith('  响应：') || rest.startsWith('  响应:')) {
+            html += '&nbsp;&nbsp;';
+            i += 2;
+            continue;
+        }
         const damageFromPoisonMarker = rest.match(/^\[\[icon:P\]\]((?:层数两倍的|层数的两倍|层数等同的|层数相同的))\[\[icon:(D|electric_damage)\]\]/i);
         if (damageFromPoisonMarker && damageFromPoisonMarker[1] && damageFromPoisonMarker[2]) {
             const damageIconKey = damageFromPoisonMarker[2];
@@ -3706,6 +3756,7 @@ let feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [
 let activeFeedbackTab = 'send';
 let activeFeedbackThreadId = null;
 let activeFeedbackStaffView = false;
+let feedbackCollapsedGroups = { open: false, pending: false, closed: true };
 let activeSocialFriendId = null;
 let activeSocialSection = 'friends';
 let activeSocialRequestId = null;
@@ -3831,6 +3882,12 @@ function invalidateChoiceRequest() {
     choicePending = false;
     choiceData = {};
     choiceRequestSeq += 1;
+    const responsePanel = $('response-panel');
+    if (responsePanel && responsePanel.classList.contains('magic-salt-response-panel')) {
+        responsePanel.innerHTML = '';
+        responsePanel.classList.add('hidden');
+        responsePanel.classList.remove('visible', 'magic-salt-response-panel');
+    }
 }
 let localPregameTimerSnapshot = null;
 
@@ -5153,17 +5210,42 @@ let gallerySelectedModKeys = null;
 let gallerySelectedTypeKeys = null;
 let galleryCardRenderToken = 0;
 
-function bindRulesCardLinks(root) {
+function bindRulesCardChips(root) {
     if (!root) return;
-    root.querySelectorAll('[data-card]').forEach(link => {
-        link.onclick = () => {
-            const body = link.closest('#rules-body, #about-rules-body, .rules-body');
-            if (body) rulesScrollTop = body.scrollTop;
-            galleryReturnToRules = true;
-            hideModal();
-            closeAbout();
-            showCardGallery(link.getAttribute('data-card'));
+    root.querySelectorAll('.rules-card-chip[data-rules-card-chip="1"]').forEach(chip => {
+        if (chip.dataset.rulesCardBound === '1') return;
+        chip.dataset.rulesCardBound = '1';
+        let cardDict = null;
+        try {
+            cardDict = JSON.parse(chip.dataset.cardDict || '{}');
+        } catch (_) {
+            cardDict = null;
+        }
+        if (!cardDict || !cardDict.def_id) return;
+        attachFloatingCardPreview(chip, cardDict);
+        const showIntro = (event) => {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(chip) });
         };
+        const toggleIntro = (event) => {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            if (isTermIntroOverlayVisible()) {
+                hideTermIntroOverlay();
+                return;
+            }
+            showIntro();
+        };
+        chip.addEventListener('click', showIntro);
+        chip.addEventListener('contextmenu', toggleIntro);
+        chip.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') showIntro(event);
+        });
     });
 }
 
@@ -5187,10 +5269,24 @@ function rulesTypeSpan(type, label) {
     return `<span class="rules-type ${type}">${escapeHtml(label)}</span>`;
 }
 
-function rulesCardLink(id, type) {
+function rulesResourceTerm(iconKey, code, label, type) {
+    return `<span class="rules-resource-term rules-resource-${escapeHtml(type)}">${renderInlineIconHtml(iconKey, code)}<strong>${escapeHtml(code)}</strong><span>${escapeHtml(label)}</span></span>`;
+}
+
+function rulesCardChip(id) {
     const cd = getCardDef(id);
-    const label = cd ? getCardName(cd) : id;
-    return `<a class="rules-card-link ${type}" data-card="${escapeHtml(id)}">${escapeHtml(label)}</a>`;
+    if (!cd) return `<span>${escapeHtml(id)}</span>`;
+    const cardDict = buildInlineCardDict(id, '');
+    const chip = createCardChoiceChip(cardDict, { hideInstanceOnlyFlags: false });
+    chip.classList.add('inline-card-chip', 'inline-card-chip-compact', 'rules-card-chip');
+    chip.dataset.rulesCardChip = '1';
+    chip.dataset.cardDict = JSON.stringify(cardDict);
+    chip.setAttribute('role', 'button');
+    chip.setAttribute('tabindex', '0');
+    chip.setAttribute('aria-label', getCardName(cd));
+    delete chip.dataset.termIntroBound;
+    delete chip.dataset.choiceChipBound;
+    return chip.outerHTML;
 }
 
 function getRulesTemplateValues() {
@@ -5203,17 +5299,20 @@ function getRulesTemplateValues() {
         bloom,
         root,
         guard,
+        health: rulesResourceTerm('H', 'H', UI.rules_resource_health || 'Health', 'health'),
+        elixir: rulesResourceTerm('E', 'E', UI.rules_resource_elixir || 'Elixir', 'elixir'),
+        magic: rulesResourceTerm('M', 'M', UI.rules_resource_magic || 'Magic', 'magic'),
         thornRaw: rulesTypeSpan('thorn', 'Thorn'),
         bloomRaw: rulesTypeSpan('bloom', 'Bloom'),
         rootRaw: rulesTypeSpan('root', 'Root'),
         guardRaw: rulesTypeSpan('guard', 'Guard'),
-        basic: rulesCardLink('Basic', 'thorn'),
-        bone: rulesCardLink('Bone', 'thorn'),
-        fire: rulesCardLink('Fire', 'bloom'),
-        leaf: rulesCardLink('Leaf', 'root'),
-        stinger: rulesCardLink('Stinger', 'thorn'),
-        sewage: rulesCardLink('Sewage', 'bloom'),
-        bubble: rulesCardLink('Bubble', 'guard'),
+        basic: rulesCardChip('Basic'),
+        bone: rulesCardChip('Bone'),
+        fire: rulesCardChip('Fire'),
+        leaf: rulesCardChip('Leaf'),
+        stinger: rulesCardChip('Stinger'),
+        sewage: rulesCardChip('Sewage'),
+        bubble: rulesCardChip('Bubble'),
     };
 }
 
@@ -5229,6 +5328,27 @@ function renderRulesBodyHtml() {
         <p>${paragraph('rules_types_text')}</p>
         <h4>${escapeHtml(UI.rules_flow_title)}</h4>
         <p>${paragraph('rules_flow_text')}</p>
+        <h4>${escapeHtml(UI.rules_target_title)}</h4>
+        <p>${paragraph('rules_target_text')}</p>
+        <h4>${escapeHtml(UI.rules_modes_title)}</h4>
+        <div class="rules-mode-list">
+            <section class="rules-mode-item">
+                <h5>${escapeHtml(UI.rules_mode_1v1_title)}</h5>
+                <p>${paragraph('rules_mode_1v1_text')}</p>
+            </section>
+            <section class="rules-mode-item">
+                <h5>${escapeHtml(UI.rules_mode_2v2_title)}</h5>
+                <p>${paragraph('rules_mode_2v2_text')}</p>
+            </section>
+            <section class="rules-mode-item">
+                <h5>${escapeHtml(UI.rules_mode_urf_title)}</h5>
+                <p>${paragraph('rules_mode_urf_text')}</p>
+            </section>
+            <section class="rules-mode-item">
+                <h5>${escapeHtml(UI.rules_mode_random_title)}</h5>
+                <p>${paragraph('rules_mode_random_text')}</p>
+            </section>
+        </div>
         <h4>${escapeHtml(UI.rules_keywords_title)}</h4>
         <p>${paragraph('rules_keywords_text')}</p>
         <h4>${escapeHtml(UI.rules_examples_title)}</h4>
@@ -5241,7 +5361,7 @@ function renderAboutRulesBody() {
     if (!aboutBody) return;
     aboutBody.innerHTML = renderRulesBodyHtml();
     ensureTutorialButtons();
-    bindRulesCardLinks(aboutBody);
+    bindRulesCardChips(aboutBody);
 }
 
 function ensureTutorialButtons() {
@@ -5428,7 +5548,7 @@ function openAbout() {
     setAboutPage('rules');
     ensureTutorialButtons();
     const body = $('about-rules-body');
-    bindRulesCardLinks(body);
+    bindRulesCardChips(body);
     if (body && rulesScrollTop) requestAnimationFrame(() => { body.scrollTop = rulesScrollTop; });
 }
 
@@ -6086,6 +6206,8 @@ function getAllStatusDefs() {
         'magic_blocked',
         '魔力封锁',
         'ocean:blood_debt',
+        'hel:luck',
+        'hel:blazing_fire',
         'troll_cards:magic_blocked',
     ]);
     const statusGalleryAliases = new Map([
@@ -6095,6 +6217,8 @@ function getAllStatusDefs() {
         ['ocean:blood_debt', 'blood_debt'],
         ['troll_cards:magic_blocked', 'magic_blocked'],
         ['ocean:unable_counter', 'unable_counter'],
+        ['hel:luck', 'luck'],
+        ['hel:blazing_fire', 'blazing_fire'],
     ]);
     const builtInList = [
         { key: 'poison', label: UI.status_poison, desc: termLib.P ? termLib.P.desc : '', color: COLORS.poison },
@@ -6124,14 +6248,16 @@ function getAllStatusDefs() {
         { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点魔法伤害，回合结束时层数下取整减半。', color: '#922B21' },
         { key: 'fragment', label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
         { key: 'magic_blocked', label: '魔力封锁', desc: '存在时，不能打出带有魔力消耗的卡牌。回合结束时层数-1。', color: COLORS.magic_text },
-        { key: 'root_status', iconKey: 'root_status', label: '树根', desc: '增加护甲；受到物理伤害时减少1层。产生它的树根装备离场时，会清除对应树根。', color: '#6E8B3D' },
-        { key: 'blood_debt', iconKey: 'blood_debt', label: '血债', desc: '受到物理伤害时效果清除，攻击者获得等同于血债层数的E。', color: '#8E1B2A' },
+        { key: 'root_status', iconKey: 'root_status', label: '树根', desc: '树根层数显示在对应装备上，并计入目标护甲；目标受到[[icon:D]]时，对应装备减少1层树根。', color: '#6E8B3D' },
+        { key: 'blood_debt', iconKey: 'blood_debt', label: '血债', desc: '受到[[icon:D]]时清除；攻击者获得等同于血债层数的[[icon:E]]。', color: '#8E1B2A' },
         { key: 'unable_counter', label: '无法反制', desc: '从左到右将层数张反制牌置入弃牌堆，然后减少对应层数。若层数不为0，抽到反制牌时自动将其置入弃牌堆并降低层数。', color: '#536878' },
+        { key: 'luck', iconKey: 'luck', label: '幸运', desc: '即将造成一段[[icon:D]]时，若幸运层数不少于该段减伤前伤害，则消耗等量幸运，使该段伤害暴击。', color: '#63B85C', source: 'vanilla' },
+        { key: 'blazing_fire', iconKey: 'blazing_fire', label: '烈火', desc: '自己回合开始时，对自己施加等同于烈火层数的[[icon:F]]；不自动减少。', color: '#FF5D2E', source: 'vanilla' },
         { key: 'jungle:fragile', label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A', source: 'vanilla' },
         { key: 'jungle:shield', label: '护盾', desc: '受到伤害时先消耗护盾层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。', color: '#2E7D7D', source: 'vanilla' },
-        { key: 'jungle:turn_heal_turns', iconKey: 'turn_heal', label: '回合回复', desc: '写作“回合回复:X;Y”。出现和回合开始时回复Y点H，然后X减少1；X为0时消失。', color: '#F48FB1', source: 'vanilla' },
-        { key: 'jungle:turn_magic_turns', iconKey: 'turn_magic', label: '魔力回合回复', desc: '写作“魔力回合回复:X;Y”。出现和回合开始时回复Y点M，然后X减少1；X为0时消失。', color: COLORS.magic, source: 'vanilla' },
-        { key: 'jungle:toxic_poison', iconKey: 'toxic_poison', label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31', source: 'vanilla' },
+        { key: 'jungle:turn_heal_turns', iconKey: 'turn_heal', label: '回合回复', desc: '回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:H]]，然后X-1；X为0时移除。', color: '#F48FB1', source: 'vanilla' },
+        { key: 'jungle:turn_magic_turns', iconKey: 'turn_magic', label: '魔力回合回复', desc: '魔力回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:M]]，然后X-1；X为0时移除。', color: COLORS.magic, source: 'vanilla' },
+        { key: 'jungle:toxic_poison', iconKey: 'toxic_poison', label: '剧毒', desc: '中毒结算后，对自己施加等同于剧毒层数的[[icon:P]]；不自动减少。', color: '#5E8C31', source: 'vanilla' },
     ];
     builtInList.forEach(s => result.set(s.key, { ...s, source: s.source || 'vanilla' }));
     if (CUSTOM_STATUS_DEFS && typeof CUSTOM_STATUS_DEFS === 'object') {
@@ -6160,10 +6286,10 @@ const STATUS_ICON_BASE = '/static/assets/status-icons/';
 const STATUS_ICON_KEYS = new Set([
     'armor', 'attack_blocked', 'attack_only', 'bandage', 'bleed', 'blind', 'blood_debt', 'dodge', 'equip_protect',
     'fire', 'foresight', 'fracture', 'fragile', 'fragment', 'heal_block',
-    'invincible', 'magic_blocked', 'magic_nazar', 'nazar', 'overload', 'poison',
+    'invincible', 'luck', 'magic_blocked', 'magic_nazar', 'nazar', 'overload', 'poison',
     'root_status', 'shield', 'sluggish', 'sponge', 'stagnation', 'status_immune',
     'stunned', 'toxic_poison', 'toxic', 'triangle', 'turn_heal', 'turn_magic',
-    'unable_counter',
+    'unable_counter', 'blazing_fire',
     'untargetable', 'weakness'
 ]);
 
@@ -6251,7 +6377,7 @@ function openRulesModal({ firstVisit = false } = {}) {
     modal.classList.add('active');
     const body = $('rules-body');
     if (body && rulesScrollTop) body.scrollTop = rulesScrollTop;
-    bindRulesCardLinks(content);
+    bindRulesCardChips(content);
     const close = $('btn-rules-close');
     if (close) close.onclick = () => {
         localStorage.setItem('gtn_seen_intro', '1');
@@ -8210,6 +8336,17 @@ function createCardElement(cardDict, options = {}) {
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['MagicPoisonStinger']) || cardDef.name_cn === '魔法毒刺') {
         el.classList.add('card-effect-extra-small');
     }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['Dice', 'PokerCard', 'PokerChip', 'Domino', 'Gunpowder', 'MagicDice'])
+        || ['骰子', '纸牌', '筹码', '骨牌', '火药', '魔法骰子'].includes(cardDef.name_cn)) {
+        el.classList.add('card-hel-compact');
+    }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['PokerCard', 'PokerChip'])
+        || ['纸牌', '筹码'].includes(cardDef.name_cn)) {
+        el.classList.add('card-hel-extra-compact');
+    }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['PokerCard']) || cardDef.name_cn === '纸牌') {
+        el.classList.add('card-hel-poker-card');
+    }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Grapes', 'MagicGrapes', 'Peas', 'MagicPeas'])
         || ['葡萄', '魔法葡萄', '豌豆', '魔法豌豆'].includes(cardDef.name_cn)) {
         el.classList.add('card-petal-copy');
@@ -8947,10 +9084,18 @@ function getClawDamageHits(cardDict, attackerState, targetState, info) {
 
 function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {}) {
     const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
-    const info = getAttackDamageBaseInfo(cardDict || {}, cardDef);
+    let info = getAttackDamageBaseInfo(cardDict || {}, cardDef);
     if (!info) return [];
     if ((cardDict.def_id || cardDef.id || '') === 'Claw') {
         return getClawDamageHits(cardDict || {}, attackerState || {}, targetState || {}, info);
+    }
+    if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Date', 'date', 'desert_cards_addition:date'])) {
+        const maxHealth = readPlayerHealthValue(attackerState, ['max_health', 'maxHp', 'maxH', 'max_h'], 0);
+        const health = readPlayerHealthValue(attackerState, ['health', 'hp', 'h'], maxHealth);
+        info = {
+            ...info,
+            amount: maxHealth > 0 && health <= maxHealth * 0.4 ? 16 : 8,
+        };
     }
     const fusion = clampClientCardLayer(cardDict.fusion_level || 1);
     const fission = clampClientCardLayer(cardDict.fission_level || 1);
@@ -9272,6 +9417,15 @@ function pushPositiveValue(list, value, count = 1) {
     for (let i = 0; i < times; i++) list.push(amount);
 }
 
+function pushLifestealPredictionValues(list, damageHits, ratio, recipientState) {
+    const rate = Number(ratio);
+    if (!Array.isArray(damageHits) || !Number.isFinite(rate) || rate <= 0) return;
+    damageHits.forEach(hit => {
+        const healed = Math.floor(Math.max(0, Number(hit || 0)) * rate);
+        pushPositiveValue(list, applyHealBlockToPrediction(healed, recipientState));
+    });
+}
+
 function pushDamageValue(list, value, count = 1) {
     const amount = Math.max(0, Math.ceil(Number(value || 0)));
     const rawCount = Number(count);
@@ -9317,7 +9471,11 @@ function collectSelfPredictionFromEffects(prediction, cardDict, cardDef, selfSta
         const type = effect.type || effect.op;
         const params = effect.params || effect;
         if (type === 'lifesteal_damage') {
-            pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(firstNumericEffectValue(params.heal) || 4, selfState), positiveHitCount);
+            if (params.heal_percent != null || params.ratio != null) {
+                pushLifestealPredictionValues(prediction.self.heal, prediction.target.damageHits, Number(params.heal_percent ?? params.ratio ?? 0), selfState);
+            } else {
+                pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(firstNumericEffectValue(params.heal) || 4, selfState), positiveHitCount);
+            }
             return;
         }
         if (type === 'direct_damage' || type === 'deal_direct_damage') {
@@ -9353,6 +9511,35 @@ function evalPredictionNumberExpr(expr, context = {}) {
     if (op === 'const' || op === 'number') return evalPredictionNumberExpr(expr.value ?? expr.amount ?? 0, context);
     if (op === 'last_damage') return Number(context.lastDamage || 0);
     if (op === 'last_positive_hits') return Number(context.lastPositiveHits || 0);
+    if (op === 'player_stat') {
+        const target = String(expr.target || expr.player || 'self').toLowerCase();
+        const stat = String(expr.stat || expr.property || expr.value || '').toLowerCase();
+        const state = target === 'target' || target === 'enemy' || target === 'choice_target'
+            ? (context.targetState || {})
+            : (context.ownerState || context.selfState || context.attackerState || {});
+        const aliases = {
+            h: 'health',
+            hp: 'health',
+            health: 'health',
+            max_h: 'max_health',
+            max_hp: 'max_health',
+            maxhealth: 'max_health',
+            max_health: 'max_health',
+            e: 'elixir',
+            energy: 'elixir',
+            elixir: 'elixir',
+            max_e: 'max_elixir',
+            max_elixir: 'max_elixir',
+            m: 'magic',
+            mana: 'magic',
+            magic: 'magic',
+            max_m: 'max_magic',
+            max_magic: 'max_magic',
+            armor: 'armor',
+        };
+        const key = aliases[stat] || stat;
+        return Number(state && state[key] != null ? state[key] : 0) || 0;
+    }
     if (['add', 'sub', 'mul', 'div', '+', '-', '*', '/', 'min', 'max'].includes(op)) {
         const mathOp = { '+': 'add', '-': 'sub', '*': 'mul', '/': 'div' }[op] || op;
         const values = Array.isArray(expr.values) ? expr.values : [expr.a, expr.b];
@@ -9372,6 +9559,16 @@ function evalPredictionNumberExpr(expr, context = {}) {
 function predictionConditionLikelyTrue(cond, context = {}) {
     if (!cond || typeof cond !== 'object') return false;
     const op = String(cond.op || cond.type || '').toLowerCase();
+    if (['>', '>=', '<', '<=', '==', '!=', 'gt', 'gte', 'lt', 'lte', 'eq', 'ne'].includes(op)) {
+        const a = evalPredictionNumberExpr(cond.a ?? cond.left, context);
+        const b = evalPredictionNumberExpr(cond.b ?? cond.right, context);
+        if (op === '>' || op === 'gt') return a > b;
+        if (op === '>=' || op === 'gte') return a >= b;
+        if (op === '<' || op === 'lt') return a < b;
+        if (op === '<=' || op === 'lte') return a <= b;
+        if (op === '!=' || op === 'ne') return a !== b;
+        return a === b;
+    }
     if (op === 'compare' || op === 'comparison') {
         const a = evalPredictionNumberExpr(cond.a ?? cond.left, context);
         const b = evalPredictionNumberExpr(cond.b ?? cond.right, context);
@@ -9391,6 +9588,9 @@ function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positive
     const localContext = context || {
         lastDamage: prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0),
         lastPositiveHits: positiveHitCount,
+        ownerState: selfState || {},
+        attackerState: selfState || {},
+        selfState: selfState || {},
     };
     (Array.isArray(steps) ? steps : []).forEach(step => {
         if (!step || typeof step !== 'object') return;
@@ -9409,10 +9609,11 @@ function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positive
             return;
         }
         if (op === 'lifesteal_damage') {
-            const heal = params.heal_percent != null || params.ratio != null
-                ? Math.floor(localContext.lastDamage * Number(params.heal_percent ?? params.ratio ?? 0))
-                : (firstNumericEffectValue(params.heal) || 4);
-            pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(heal, selfState), params.heal_percent != null || params.ratio != null ? 1 : positiveHitCount);
+            if (params.heal_percent != null || params.ratio != null) {
+                pushLifestealPredictionValues(prediction.self.heal, prediction.target.damageHits, Number(params.heal_percent ?? params.ratio ?? 0), selfState);
+            } else {
+                pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(firstNumericEffectValue(params.heal) || 4, selfState), positiveHitCount);
+            }
             return;
         }
         if (op === 'direct_damage' || op === 'deal_direct_damage') {
@@ -9461,6 +9662,10 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
     const localContext = context || {
         lastDamage: prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0),
         lastPositiveHits: prediction.target.damageHits.filter(value => Number(value || 0) > 0).length,
+        ownerState: options.ownerState || options.attackerState || {},
+        attackerState: options.attackerState || options.ownerState || {},
+        selfState: options.ownerState || options.attackerState || {},
+        targetState: options.targetState || {},
     };
     (Array.isArray(steps) ? steps : []).forEach(step => {
         if (!step || typeof step !== 'object') return;
@@ -9471,6 +9676,31 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
                 ? (step.then || params.then || [])
                 : (step.else || params.else || []);
             collectTargetPredictionFromV2Steps(prediction, branch, localContext, options);
+            return;
+        }
+        if (op === 'void_magic_wing_damage') {
+            const base = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.base ?? 4, localContext)));
+            const per = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.per ?? 4, localContext)));
+            const extraLimit = Math.max(0, Math.floor(evalPredictionNumberExpr(params.extra_limit ?? 4, localContext)));
+            const ownerState = options.ownerState || options.attackerState || {};
+            const cardCostM = Math.max(0, Number(options.cardCostM || 0));
+            const availableMagic = Math.max(0, Number(ownerState.magic || ownerState.m || 0) - cardCostM);
+            const spend = Math.min(extraLimit, availableMagic);
+            const amount = base + spend * per;
+            if (amount > 0) {
+                prediction.target.damageHits.push(amount);
+                localContext.lastDamage = amount;
+                localContext.lastPositiveHits = 1;
+            }
+            return;
+        }
+        if (op === 'void_antimatter_damage') {
+            const amount = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.amount ?? 10, localContext)));
+            if (amount > 0) {
+                prediction.target.damageHits.push(amount);
+                localContext.lastDamage = amount;
+                localContext.lastPositiveHits = 1;
+            }
             return;
         }
         if (op !== 'direct_damage' && op !== 'deal_direct_damage' && op !== 'deal_damage' && op !== 'damage') return;
@@ -9517,7 +9747,7 @@ function addKnownSelfPrediction(prediction, cardDict, cardDef, selfState) {
     const positiveHitCount = prediction.target.damageHits.filter(v => Number(v) > 0).length;
     switch (cardDict.def_id) {
         case 'Fang':
-            if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(4, selfState), positiveHitCount);
+            if (!prediction.self.heal.length) pushLifestealPredictionValues(prediction.self.heal, prediction.target.damageHits, 0.8, selfState);
             break;
         case 'Fries':
             if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(12, selfState));
@@ -9555,6 +9785,9 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     if (!gameState || !cardDict || !cardDict.def_id) return result;
     const cardDef = getCardDef(cardDict.def_id);
     if (!cardDef) return result;
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['PokerCard']) || cardDef.name_cn === '纸牌') {
+        return result;
+    }
     const attackerState = options.attackerState || options.ownerState || getCardOwnerStateForPrediction(cardDict) || gameState.you || {};
     const targetState = options.targetState || getDefaultPredictionTargetState(cardDict, attackerState);
     const hasDamageOverride = Object.prototype.hasOwnProperty.call(options, 'damageHits');
@@ -9584,7 +9817,13 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     collectSelfPredictionFromEffects(result, cardDict, cardDef, attackerState, positiveHitCount);
     const onPlay = cardDef.v2_events && cardDef.v2_events.on_play;
     const steps = onPlay && (onPlay.steps || onPlay);
-    collectTargetPredictionFromV2Steps(result, steps, null, { skipPhysicalDamage: cardDef.card_type === 'thorn' });
+    collectTargetPredictionFromV2Steps(result, steps, null, {
+        skipPhysicalDamage: cardDef.card_type === 'thorn',
+        ownerState: attackerState,
+        attackerState,
+        targetState,
+        cardCostM: getCardDisplayCosts(cardDict, cardDef, attackerState).totalM,
+    });
     collectSelfPredictionFromV2Steps(result, steps, attackerState, positiveHitCount);
     addKnownSelfPrediction(result, cardDict, cardDef, attackerState);
     collectSelfStatusDamagePrediction(result, cardDef, attackerState);
@@ -9860,6 +10099,7 @@ function getTermIntroLibrary() {
         D: { label: lt({ zh: 'D：物理伤害(Damage)', en: 'D: Physical Damage', fr: 'D : dégâts physiques', ja: 'D：物理ダメージ' }), desc: lt({ zh: '会受护甲、装备、闪避和反制影响。只有实际造成伤害，才会触发淬毒、尖牙回血等效果。', en: 'Affected by armor, equipment, dodges, and counters. Effects such as Toxic or Fang healing only trigger when damage is actually dealt.', fr: 'Affecté par l’armure, les équipements, l’esquive et les contres. Toxic ou le soin de Fang ne se déclenchent que si des dégâts sont réellement infligés.', ja: '護甲、装備、回避、反制の影響を受けます。実際にダメージを与えた時だけ淬毒や牙の回復などが発動します。' }), color: COLORS.damage },
         electric_damage: { label: lt({ zh: '电伤：电击伤害(Electric Damage)', en: 'Electric Damage', fr: 'Dégâts électriques', ja: '電撃ダメージ' }), desc: `${lt({ zh: '一种类似于物理伤害的魔法伤害。', en: 'A kind of magic damage that behaves similarly to physical damage. ', fr: 'Un type de dégâts magiques qui se comporte comme des dégâts physiques. ', ja: '物理ダメージに近い挙動をする魔法ダメージです。' })}${magicDamageDesc}`, color: COLORS.damage },
         magic_damage: { label: lt({ zh: '魔法伤害(Magic Damage)', en: 'Magic Damage', fr: 'Dégâts magiques', ja: '魔法ダメージ' }), desc: magicDamageDesc, color: COLORS.magic },
+        crit: { label: lt({ zh: '暴击', en: 'Critical', fr: 'Critique', ja: 'クリティカル' }), desc: lt({ zh: '使一次物理伤害乘以暴击倍率。初始暴击倍率为×1.5，部分效果可以提高倍率。', en: 'Multiplies one physical damage hit by the critical multiplier. The base multiplier is ×1.5, and some effects can raise it.', fr: 'Multiplie un coup de dégâts physiques par le multiplicateur critique. Le multiplicateur de base est ×1,5, certains effets peuvent l’augmenter.', ja: '1回の物理ダメージに暴击倍率を掛けます。基本倍率は×1.5で、一部効果で上昇します。' }), color: '#D4AC0D' },
         A: { label: lt({ zh: 'A：护甲(Armor)', en: 'A: Armor', fr: 'A : armure', ja: 'A：護甲' }), desc: lt({ zh: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。护甲不是状态，不受状态免疫影响。', en: 'Reduces D. It does not reduce magic damage from Poison, Burn, or similar states. Armor is not a status and is not affected by Status Immune.', fr: 'Réduit D. Ne réduit pas les dégâts magiques du Poison, de la Brûlure ou des états similaires. L’armure n’est pas un statut et n’est pas affectée par l’immunité aux statuts.', ja: 'D を軽減します。中毒、灼烧などの魔法ダメージは軽減しません。護甲は状態ではなく、状態免疫の影響を受けません。' }), color: COLORS.armor_text },
         P: { label: lt({ zh: 'P：中毒(Poison)', en: 'P: Poison', fr: 'P : poison', ja: 'P：毒' }), desc: lt({ zh: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', en: 'At your turn start, take magic damage equal to current P. If you survive, P halves rounded down, e.g. 10P→5P, 5P→2P.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au P actuel. Si vous survivez, P est divisé par deux arrondi à l’inférieur, ex. 10P→5P, 5P→2P.', ja: '自分のターン開始時、現在の P と同じ魔法ダメージを受けます。生存していれば P は切り捨てで半減します。例：10P→5P、5P→2P。' }), color: COLORS.poison },
         F: { label: lt({ zh: 'F：灼烧(Fire)', en: 'F: Burn', fr: 'F : brûlure', ja: 'F：火傷' }), desc: lt({ zh: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 10 回合及以上后，每回合开始时对所有玩家施加1层灼烧。', en: 'At your turn start, take magic damage equal to current F. Burn stacks do not decrease. From round 10 onward, all players gain 1 Burn at each turn start.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au F actuel. Les charges de Brûlure ne diminuent pas. À partir du tour 10, tous les joueurs gagnent 1 Brûlure au début de chaque tour.', ja: '自分のターン開始時、現在の F と同じ魔法ダメージを受けます。火傷は減少しません。10ラウンド以降、各ターン開始時に全員へ火傷1層を付与します。' }), color: COLORS.fire },
@@ -9872,14 +10112,14 @@ function getTermIntroLibrary() {
         response: { label: UI.counter || lt({ zh: '反制', en: 'Counter', fr: 'Contre', ja: '反制' }), desc: lt({ zh: '对方行动满足条件时会出现响应机会。反制能改变对方行动的结果。', en: 'A response chance appears when an opponent action meets its condition. Counters can change that action’s result.', fr: 'Une fenêtre de réponse apparaît quand l’action adverse remplit la condition. Un contre peut modifier le résultat.', ja: '相手の行動が条件を満たすと応答機会が出ます。反制はその結果を変えます。' }), color: CARD_TYPE_COLORS.guard },
         same_name_penalty: { label: lt({ zh: '同名卡惩罚', en: 'Same-name penalty', fr: 'Pénalité de même nom', ja: '同名カードペナルティ' }), desc: lt({ zh: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', en: 'Playing the same card name repeatedly in one turn costs extra E. Symbiosis ignores it.', fr: 'Jouer plusieurs fois le même nom pendant un tour coûte du E supplémentaire. Symbiose l’ignore.', ja: '同一ターンに同名カードを繰り返すと追加 E が必要です。共生は無視します。' }), color: COLORS.elixir },
         revealed: { label: UI.tag_revealed || lt({ zh: '被揭示', en: 'Revealed', fr: 'Révélé', ja: '公開' }), desc: lt({ zh: '在手中时永久对对手展示。', en: 'While in hand, this card is always visible to opponents.', fr: 'Tant qu’elle est en main, cette carte reste visible pour les adversaires.', ja: '手札にある間、相手に常に見えます。' }), color: '#E74C3C' },
-        sublime: { label: UI.tag_sublime || lt({ zh: '崇高', en: 'Sublime', fr: 'Sublime', ja: '崇高' }), desc: lt({ zh: '带有此标签的卡牌，无法被除使用外的行为选中。', en: 'Cards with this tag cannot be selected by actions other than playing them.', fr: 'Les cartes avec ce tag ne peuvent pas être choisies par des actions autres que leur utilisation.', ja: 'このタグを持つカードは、使用以外の行動では選択できません。' }), color: '#9A7A12' },
-        charge: { label: UI.tag_charge || lt({ zh: '电荷', en: 'Charge', fr: 'Charge', ja: '電荷' }), desc: lt({ zh: '此卡牌打出时对自己造成等同于层数的电伤；持有者回合开始时减少1层。', en: 'When this card is played, it deals electric damage to its owner equal to its stacks; at the owner’s turn start, it loses 1 stack.', fr: 'Quand cette carte est jouée, elle inflige à son propriétaire des dégâts électriques égaux à ses charges ; au début du tour du propriétaire, elle perd 1 charge.', ja: 'このカードを使う時、層数分の電撃ダメージを自分に与えます。所持者のターン開始時に1層減ります。' }), color: '#4BA3FF' },
+        sublime: { label: UI.tag_sublime || lt({ zh: '崇高', en: 'Sublime', fr: 'Sublime', ja: '崇高' }), desc: lt({ zh: '带有此标签的牌无法被除打出外的行为选中。', en: 'Cards with this tag cannot be selected by actions other than playing them.', fr: 'Les cartes avec ce tag ne peuvent pas être choisies par des actions autres que leur utilisation.', ja: 'このタグを持つカードは、使用以外の行動では選択できません。' }), color: '#9A7A12' },
+        charge: { label: UI.tag_charge || lt({ zh: '电荷', en: 'Charge', fr: 'Charge', ja: '電荷' }), desc: lt({ zh: '带有此效果的牌打出时，对自己造成等同于电荷层数的电伤；持有者回合开始时，电荷层数-1。', en: 'When this card is played, it deals electric damage to its owner equal to its stacks; at the owner’s turn start, it loses 1 stack.', fr: 'Quand cette carte est jouée, elle inflige à son propriétaire des dégâts électriques égaux à ses charges ; au début du tour du propriétaire, elle perd 1 charge.', ja: 'このカードを使う時、層数分の電撃ダメージを自分に与えます。所持者のターン開始時に1層減ります。' }), color: '#4BA3FF' },
         ocean_blinded: { label: UI.tag_ocean_blinded || lt({ zh: '蒙蔽', en: 'Obscured', fr: 'Obscurci', ja: '蒙蔽' }), desc: lt({ zh: '这张牌在自己手中时只能看到问号；持有者下个回合结束，或离开手牌区时失效。', en: 'While in its owner’s hand, this card is shown as unknown. It clears at that owner’s next turn end or when the card leaves hand.', fr: 'Tant qu’elle est dans la main de son propriétaire, cette carte apparaît inconnue. Se dissipe à la fin du prochain tour du propriétaire ou quand elle quitte la main.', ja: '所持者の手札にある間、このカードは不明表示になります。次の所持者ターン終了時、または手札を離れると消えます。' }), color: '#2C3E50' },
-        wide_strike: { label: UI.tag_wide_strike || lt({ zh: '广域打击', en: 'Wide Strike', fr: 'Frappe large', ja: '広域打撃' }), desc: lt({ zh: '使用时同时对所有当前可选取对象生效，不再单独选择目标。', en: 'When played, affects all currently selectable targets at once instead of choosing one target.', fr: 'À l’utilisation, affecte toutes les cibles actuellement sélectionnables au lieu d’en choisir une.', ja: '使用時、個別に対象を選ばず、現在選択可能な全対象へ同時に効果を与えます。' }), color: '#1F9D8A' },
+        wide_strike: { label: UI.tag_wide_strike || lt({ zh: '广域打击', en: 'Wide Strike', fr: 'Frappe large', ja: '広域打撃' }), desc: lt({ zh: '使用时分别对所有可选中目标生效，不进入目标选择。', en: 'When played, affects all currently selectable targets at once instead of choosing one target.', fr: 'À l’utilisation, affecte toutes les cibles actuellement sélectionnables au lieu d’en choisir une.', ja: '使用時、個別に対象を選ばず、現在選択可能な全対象へ同時に効果を与えます。' }), color: '#1F9D8A' },
         self_target: { label: UI.tag_self_target || lt({ zh: '自刃', en: 'Self-cut', fr: 'Auto-ciblage', ja: '自刃' }), desc: lt({ zh: '这张攻击牌可以选择自己为目标。', en: 'This Thorn card can choose its owner as a target.', fr: 'Cette carte Thorn peut choisir son propriétaire comme cible.', ja: 'この攻撃カードは自分を対象にできます。' }), color: '#B02A37' },
-        team_limited: { label: UI.tag_team_limited || 'Team Limited', desc: lt({ zh: '只会出现在一队至少 2 名玩家的模式；单人训练场可选，但没有实际意义。', en: 'Appears only in modes where a team has at least 2 players. It can be selected in training but has no practical effect there.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. Sélectionnable en entraînement, mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ意味があります。訓練場では選べますが実質効果はありません。' }), color: '#607D3B' },
-        team_unique: { label: UI.tag_team_unique || 'Team Unique', desc: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose this card, one copy is kept at random and the extras are exiled.', fr: 'Si plusieurs coéquipiers choisissent cette carte, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }), color: '#8D6E63' },
-        power: { label: UI.tag_power || 'Power', desc: lt({ zh: '此牌造成的每段 D 增加。若是多段 D，会按段数把威力向上分配。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }), color: '#C0392B' },
+        team_limited: { label: UI.tag_team_limited || 'Team Limited', desc: lt({ zh: '只在每队至少2名玩家的模式出现；单人训练场可出现但不生效。', en: 'Appears only in modes where a team has at least 2 players. It can be selected in training but has no practical effect there.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. Sélectionnable en entraînement, mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ意味があります。訓練場では選べますが実質効果はありません。' }), color: '#607D3B' },
+        team_unique: { label: UI.tag_team_unique || 'Team Unique', desc: lt({ zh: '同队若多人选择同名队伍独一牌，随机保留1张，其余放逐。', en: 'If multiple teammates choose this card, one copy is kept at random and the extras are exiled.', fr: 'Si plusieurs coéquipiers choisissent cette carte, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }), color: '#8D6E63' },
+        power: { label: UI.tag_power || 'Power', desc: lt({ zh: '此牌造成的物理伤害增加对应层数；多段伤害的每段增加向上取整(威力/段数)D。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }), color: '#C0392B' },
         magic_swift: { label: UI.tag_magic_swift || 'Magic Swift', desc: lt({ zh: 'M 花费减少对应层数，最低为 0M。', en: 'Reduces M cost by its value, minimum 0M.', fr: 'Réduit le coût M de sa valeur, minimum 0M.', ja: 'M コストを値だけ減らします。最低0M。' }), color: '#6C5CE7' },
         temp_swift: { label: UI.tag_temp_swift || 'Temporary Swift', desc: lt({ zh: '本次打出时 E 花费减少对应层数，打出后清除。', en: 'Reduces E cost for this play only, then clears after being played.', fr: 'Réduit le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを減らし、使用後に消えます。' }), color: '#0EA5E9' },
         temp_heavy: { label: UI.tag_temp_heavy || 'Temporary Heavy', desc: lt({ zh: '本次打出时 E 花费增加对应层数，打出后清除。', en: 'Increases E cost for this play only, then clears after being played.', fr: 'Augmente le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを増やし、使用後に消えます。' }), color: '#795548' },
@@ -9943,7 +10183,7 @@ function getIntroFlagDescription(flag, custom = null) {
         indestructible: lt({ zh: '作为装备时不会被摧毁效果破坏；玩家死亡时也不会被清除。', en: 'As equipment, cannot be destroyed by destroy effects and is not cleared when the player dies.', fr: 'En tant qu’équipement, ne peut pas être détruit par les effets de destruction et n’est pas retiré à la mort du joueur.', ja: '装備中、破壊効果で破壊されず、プレイヤー死亡時にも消えません。' }),
         sprout: lt({ zh: '抽到时会额外抽牌。手牌满时仍然会爆牌。', en: 'When drawn, draws extra cards. Hand overflow can still happen.', fr: 'Quand elle est piochée, pioche des cartes supplémentaires. La main peut quand même déborder.', ja: '引いた時、追加でカードを引きます。手札超過は起こります。' }),
         symbiosis: lt({ zh: '同一回合重复使用同名卡时，不会受到同名卡费用惩罚。', en: 'Ignores the extra E cost from playing the same card name repeatedly in one turn.', fr: 'Ignore le coût E supplémentaire lié aux cartes de même nom jouées plusieurs fois dans le même tour.', ja: '同一ターンの同名カード追加Eコストを無視します。' }),
-        attract: lt({ zh: '爆牌时，会优先挤掉没有吸引的牌。', en: 'During hand overflow, cards without Attract are pushed out first.', fr: 'Lors d’un débordement de main, les cartes sans Attraction sont retirées en premier.', ja: '手札超過時、吸引を持たないカードが先に押し出されます。' }),
+        attract: lt({ zh: '爆牌时，此牌优先挤掉没有吸附的手牌。', en: 'During hand overflow, cards without Attract are pushed out first.', fr: 'Lors d’un débordement de main, les cartes sans Attraction sont retirées en premier.', ja: '手札超過時、吸引を持たないカードが先に押し出されます。' }),
         void: lt({ zh: '回合结束仍留在手牌中时，会进入放逐区。', en: 'If still in hand at turn end, it is exiled.', fr: 'Si elle reste en main à la fin du tour, elle est exilée.', ja: 'ターン終了時に手札に残っていると放逐されます。' }),
         self_only: lt({ zh: '打出时不选择目标；效果按这张牌自身规则结算。', en: 'No target is selected when played; it resolves by its own rules.', fr: 'Aucune cible n’est choisie au jeu ; la carte se résout selon ses propres règles.', ja: '使用時に対象を選ばず、カード固有のルールで解決します。' }),
         uncancellable: lt({ zh: '相关选择窗口不能取消，避免免费查看隐藏信息后退出选择。', en: 'Its choice window cannot be cancelled, preventing free hidden-information checks.', fr: 'La fenêtre de choix ne peut pas être annulée, pour éviter de consulter gratuitement des informations cachées.', ja: '選択ウィンドウをキャンセルできず、隠し情報の無料確認を防ぎます。' }),
@@ -10053,16 +10293,17 @@ function collectCardIntroTerms(cardDict) {
     ].filter(Boolean).join(' ');
     const probes = [
         [/(\[\[icon:D\]\]|\d+\s*D|物理伤害|physical damage)/i, 'D'],
+        [/(装备护甲|equipment armor)/i, 'equipment_armor'],
         [/(\[\[icon:A\]\]|\+\s*\d+\s*A|护甲|armor)/i, 'A'],
         [/(\[\[icon:P\]\]|\d+\s*(?:P|层P)|中毒|Poison)/i, 'P'],
         [/(\[\[icon:F\]\]|\d+\s*(?:F|层F)|灼烧|Burn)/i, 'F'],
         [/(\[\[icon:electric_damage\]\]|\d+\s*电伤|电击伤害|电伤|Electric Damage)/i, 'electric_damage'],
         [/(魔法伤害|Magic Damage)/i, 'magic_damage'],
+        [/(暴击|critical|crit multiplier|crit_multiplier|暴击倍率)/i, 'crit'],
         [/(淬毒|(?:^|[^A-Za-z_])Toxic(?!\s*Poison|[A-Za-z_])|["'](?:toxic|apply_toxic)["'])/i, 'toxic'],
         [/(抽牌|牌堆|draw|deck)/i, 'deck'],
         [/(弃牌|discard)/i, 'discard'],
         [/(反制|counter|Guard)/i, 'response'],
-        [/(装备护甲|equipment armor)/i, 'equipment_armor'],
         [/(爆牌|overflow)/i, 'overdraw'],
         [/(手牌上限|hand limit)/i, 'hand_limit'],
         [/(爆费|上限)/i, 'overcap'],
@@ -10107,6 +10348,8 @@ function collectCardIntroTerms(cardDict) {
         [/(^|[^魔法])邪眼|\bNazar\b|(?:^|[^A-Za-z_])nazar(?:$|[^A-Za-z_])/i, 'nazar'],
         [/血债|Blood Debt|blood_debt|ocean:blood_debt/i, 'blood_debt'],
         [/无法反制|Unable to Counter|unable_counter|ocean:unable_counter/i, 'unable_counter'],
+        [/幸运|Luck|hel:luck/i, 'luck'],
+        [/烈火|Blazing Fire|hel:blazing_fire/i, 'blazing_fire'],
     ];
     statusProbes.forEach(([re, key]) => {
         if (!re.test(rawText) || seen.has(`status:${key}`)) return;
@@ -10194,20 +10437,22 @@ function getStatusIntroItem(statusInfo) {
         fragile: { label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A' },
         'jungle:shield': { label: '护盾', desc: '受到伤害时先消耗护盾层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。', color: '#2E7D7D' },
         shield: { label: '护盾', desc: '受到伤害时先消耗护盾层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。', color: '#2E7D7D' },
-        'jungle:turn_heal_turns': { label: '回合回复', desc: '写作“回合回复:X;Y”。出现和回合开始时回复Y点H，然后X减少1；X为0时消失。', color: '#F48FB1' },
-        turn_heal: { label: '回合回复', desc: '写作“回合回复:X;Y”。出现和回合开始时回复Y点H，然后X减少1；X为0时消失。', color: '#F48FB1' },
-        'jungle:turn_magic_turns': { label: '魔力回合回复', desc: '写作“魔力回合回复:X;Y”。出现和回合开始时回复Y点M，然后X减少1；X为0时消失。', color: '#6C5CE7' },
-        turn_magic: { label: '魔力回合回复', desc: '写作“魔力回合回复:X;Y”。出现和回合开始时回复Y点M，然后X减少1；X为0时消失。', color: '#6C5CE7' },
-        'jungle:root_status': { label: '树根', desc: '增加护甲；受到物理伤害时减少1层。产生它的树根装备离场时，会清除对应树根。', color: '#6E8B3D' },
-        root_status: { label: '树根', desc: '增加护甲；受到物理伤害时减少1层。产生它的树根装备离场时，会清除对应树根。', color: '#6E8B3D' },
-        'jungle:toxic_poison': { label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31' },
-        toxic_poison: { label: '剧毒', desc: '中毒结算后，额外施加对应层数的中毒。', color: '#5E8C31' },
+        'jungle:turn_heal_turns': { label: '回合回复', desc: '回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:H]]，然后X-1；X为0时移除。', color: '#F48FB1' },
+        turn_heal: { label: '回合回复', desc: '回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:H]]，然后X-1；X为0时移除。', color: '#F48FB1' },
+        'jungle:turn_magic_turns': { label: '魔力回合回复', desc: '魔力回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:M]]，然后X-1；X为0时移除。', color: '#6C5CE7' },
+        turn_magic: { label: '魔力回合回复', desc: '魔力回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:M]]，然后X-1；X为0时移除。', color: '#6C5CE7' },
+        'jungle:root_status': { label: '树根', desc: '树根层数显示在对应装备上，并计入目标护甲；目标受到[[icon:D]]时，对应装备减少1层树根。', color: '#6E8B3D' },
+        root_status: { label: '树根', desc: '树根层数显示在对应装备上，并计入目标护甲；目标受到[[icon:D]]时，对应装备减少1层树根。', color: '#6E8B3D' },
+        'jungle:toxic_poison': { label: '剧毒', desc: '中毒结算后，对自己施加等同于剧毒层数的[[icon:P]]；不自动减少。', color: '#5E8C31' },
+        toxic_poison: { label: '剧毒', desc: '中毒结算后，对自己施加等同于剧毒层数的[[icon:P]]；不自动减少。', color: '#5E8C31' },
         heal_block: { label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%）。拥有者每治疗一次，层数减少1；状态免疫存在时仍会减少层数，但不会降低治疗。', color: '#E84393' },
         weakness: { label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         bleed: { label: UI.status_bleed, desc: '打出攻击牌时受到层数点魔法伤害，回合结束时层数下取整减半。', color: '#922B21' },
         fragment: { label: UI.status_fragment, desc: '获得碎片层数；达到4层时可消耗4层将雷神之锤加入手中。', color: '#795548' },
-        blood_debt: { label: '血债', desc: '受到物理伤害时效果清除，攻击者获得等同于血债层数的E。', color: '#8E1B2A' },
+        blood_debt: { label: '血债', desc: '受到[[icon:D]]时清除；攻击者获得等同于血债层数的[[icon:E]]。', color: '#8E1B2A' },
         unable_counter: { label: '无法反制', desc: '从左到右将层数张反制牌置入弃牌堆，然后减少对应层数。若层数不为0，抽到反制牌时自动将其置入弃牌堆并降低层数。', color: '#536878' },
+        luck: { label: '幸运', desc: '即将造成一段[[icon:D]]时，若幸运层数不少于该段减伤前伤害，则消耗等量幸运，使该段伤害暴击。', color: '#63B85C', iconKey: 'luck' },
+        blazing_fire: { label: '烈火', desc: '自己回合开始时，对自己施加等同于烈火层数的[[icon:F]]；不自动减少。', color: '#FF5D2E', iconKey: 'blazing_fire' },
     };
     const localizedStatusTerms = {
         poison: { label: UI.status_poison, desc: getTermIntroLibrary().P.desc },
@@ -15092,6 +15337,29 @@ function updateFeedbackBadge() {
     }
 }
 
+function feedbackStatusLabel(status) {
+    const key = String(status || '').toLowerCase();
+    if (key === 'closed') return currentLang === 'zh' ? '已关闭' : (currentLang === 'ja' ? '終了' : (currentLang === 'fr' ? 'Fermé' : 'Closed'));
+    if (key === 'pending') return currentLang === 'zh' ? '已回复' : (currentLang === 'ja' ? '返信済み' : (currentLang === 'fr' ? 'Répondu' : 'Replied'));
+    return currentLang === 'zh' ? '未处理' : (currentLang === 'ja' ? '未対応' : (currentLang === 'fr' ? 'Ouvert' : 'Open'));
+}
+
+function feedbackStaffGroups(items = []) {
+    const groups = [
+        { key: 'open', label: feedbackStatusLabel('open'), items: [] },
+        { key: 'pending', label: feedbackStatusLabel('pending'), items: [] },
+        { key: 'closed', label: feedbackStatusLabel('closed'), items: [] },
+    ];
+    const byKey = Object.fromEntries(groups.map(group => [group.key, group]));
+    (Array.isArray(items) ? items : []).forEach(item => {
+        const key = ['open', 'pending', 'closed'].includes(String(item.status || '').toLowerCase())
+            ? String(item.status || '').toLowerCase()
+            : 'open';
+        byKey[key].items.push(item);
+    });
+    return groups;
+}
+
 async function loadFeedbackSummary() {
     if (!currentAccount) {
         feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [] };
@@ -15120,18 +15388,35 @@ function renderFeedbackThreads() {
         list.innerHTML = `<div class="friend-empty">${escapeHtml(activeFeedbackStaffView ? (UI.feedback_staff_empty || '暂无玩家反馈。') : (UI.feedback_empty || '暂无反馈。'))}</div>`;
         return;
     }
-    list.innerHTML = items.map(item => {
+    const renderItem = (item) => {
         const active = String(item.id) === String(activeFeedbackThreadId);
         const user = item.user || {};
         const title = item.title || item.last_message || `#${item.id}`;
-        const status = item.status === 'closed' ? '已关闭' : (item.status === 'pending' ? '已回复' : '未处理');
+        const status = feedbackStatusLabel(item.status);
         return `
           <button class="feedback-thread-item${active ? ' active' : ''}" type="button" data-feedback-thread="${escapeHtml(item.id)}">
             <span class="feedback-thread-title">${item.unread ? '<span class="feedback-dot"></span>' : ''}${escapeHtml(title)}</span>
-            <span class="feedback-thread-meta">${escapeHtml(activeFeedbackStaffView ? (user.username || '-') : status)} · ${escapeHtml(formatDateTimeShort(item.updated_at || item.created_at || ''))}</span>
+            <span class="feedback-thread-meta">${escapeHtml(activeFeedbackStaffView ? `${user.username || '-'} · ${status}` : status)} · ${escapeHtml(formatDateTimeShort(item.updated_at || item.created_at || ''))}</span>
             <span class="feedback-thread-preview">${escapeHtml(item.last_message || '')}</span>
           </button>`;
-    }).join('');
+    };
+    if (activeFeedbackStaffView) {
+        list.innerHTML = feedbackStaffGroups(items).map(group => {
+            const collapsed = !!feedbackCollapsedGroups[group.key];
+            const rows = collapsed ? '' : group.items.map(renderItem).join('');
+            return `
+              <section class="feedback-thread-group feedback-thread-group-${escapeHtml(group.key)}${collapsed ? ' collapsed' : ''}">
+                <button class="feedback-thread-group-title" type="button" data-feedback-group-toggle="${escapeHtml(group.key)}">
+                  <span class="feedback-thread-group-arrow">${collapsed ? '>' : 'v'}</span>
+                  <span>${escapeHtml(group.label)}</span>
+                  <span>${escapeHtml(group.items.length)}</span>
+                </button>
+                ${rows || (collapsed ? '' : `<div class="feedback-thread-group-empty">${escapeHtml(UI.feedback_staff_empty || '暂无玩家反馈。')}</div>`)}
+              </section>`;
+        }).join('');
+        return;
+    }
+    list.innerHTML = items.map(renderItem).join('');
 }
 
 function renderFeedbackMessages() {
@@ -15202,7 +15487,20 @@ async function loadFeedbackThreads(staffView = false) {
         return;
     }
     try {
-        const data = await authRequest(`/api/feedback/threads?staff=${staffView ? '1' : '0'}&limit=50`, undefined, { timeoutMs: 7000 });
+        let data;
+        if (staffView) {
+            const statuses = ['open', 'pending', 'closed'];
+            const results = await Promise.all(statuses.map(status =>
+                authRequest(`/api/feedback/threads?staff=1&status=${encodeURIComponent(status)}&limit=30`, undefined, { timeoutMs: 7000 })
+            ));
+            data = {
+                is_staff: results.some(item => item && item.is_staff),
+                unread_count: Math.max(...results.map(item => Number(item && item.unread_count || 0)), 0),
+                items: results.flatMap(item => Array.isArray(item && item.items) ? item.items : []),
+            };
+        } else {
+            data = await authRequest('/api/feedback/threads?staff=0&limit=50', undefined, { timeoutMs: 7000 });
+        }
         feedbackState.is_staff = !!data.is_staff;
         feedbackState.unread_count = Number(data.unread_count || 0);
         feedbackState.threads = Array.isArray(data.items) ? data.items : [];
@@ -19631,14 +19929,20 @@ function renderStatusTags(containerId, playerData) {
     const jungleStatusDisplay = [
         { keys: ['jungle:fragile', 'fragile'], iconKey: 'fragile', name: '易损', abbr: '易损', fg: '#8E5A2A', bg: '#F7EFE8', title: '护甲降低对应层数；若降为负数，会使物理伤害增加。自己回合开始时清除。' },
         { keys: ['jungle:shield', 'shield'], iconKey: 'shield', name: '护盾', abbr: '护盾', fg: '#2E7D7D', bg: '#E8F6F6', title: '消耗层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。' },
-        { keys: ['jungle:toxic_poison', 'toxic_poison'], iconKey: 'toxic_poison', name: '剧毒', abbr: '剧毒', fg: '#5E8C31', bg: '#EEF6E7', title: '中毒结算后施加对应层数的中毒。' },
-        { keys: ['ocean:blood_debt', 'blood_debt', '血债'], iconKey: 'blood_debt', name: '血债', abbr: '血债', fg: '#8E1B2A', bg: '#FDEDEC', title: '受到物理伤害时效果清除，攻击者获得等同于血债层数的E。' },
+        { keys: ['jungle:toxic_poison', 'toxic_poison'], iconKey: 'toxic_poison', name: '剧毒', abbr: '剧毒', fg: '#5E8C31', bg: '#EEF6E7', title: '中毒结算后，对自己施加等同于剧毒层数的P；不自动减少。' },
+        { keys: ['ocean:blood_debt', 'blood_debt', '血债'], iconKey: 'blood_debt', name: '血债', abbr: '血债', fg: '#8E1B2A', bg: '#FDEDEC', title: '受到D时清除；攻击者获得等同于血债层数的E。' },
         { keys: ['ocean:unable_counter', 'unable_counter', '无法反制'], iconKey: 'unable_counter', name: '无法反制', abbr: '反制封锁', fg: '#536878', bg: '#EEF2F3', title: '从左到右将层数张反制牌置入弃牌堆，然后减少对应层数。若层数不为0，抽到反制牌时自动将其置入弃牌堆并降低层数。' },
+        { keys: ['hel:luck', 'luck', '幸运'], iconKey: 'luck', name: '幸运', abbr: '幸运', fg: '#63B85C', bg: '#ECF8EA', title: '即将造成一段D时，若幸运层数不少于该段减伤前伤害，则消耗等量幸运，使该段伤害暴击。' },
+        { keys: ['hel:blazing_fire', 'blazing_fire', '烈火'], iconKey: 'blazing_fire', name: '烈火', abbr: '烈火', fg: '#FF5D2E', bg: '#FFF0EA', title: '自己回合开始时，对自己施加等同于烈火层数的F；不自动减少。' },
     ];
     jungleStatusDisplay.forEach((info) => {
         const count = customStatusSum(...info.keys);
         if (count > 0) tags.push({ key: info.keys[0], iconKey: info.iconKey, name: info.name, abbr: info.abbr, val: count, fg: info.fg, bg: info.bg, title: info.title });
     });
+    const critMultiplier = Number((p.custom_vars && p.custom_vars.hel_crit_multiplier) || 0);
+    if (Number.isFinite(critMultiplier) && critMultiplier > 0 && Math.abs(critMultiplier - 1.5) > 0.001) {
+        tags.push({ key: 'crit', name: '暴击', abbr: '暴击', val: `${critMultiplier}×`, fg: '#D4AC0D', bg: '#FFF8DB', title: getTermIntroLibrary().crit.desc });
+    }
     if (customStatuses && typeof customStatuses === 'object') {
             const builtinKeys = new Set(['poison','fire','toxic','dodge','armor','nazar','邪眼','Nazar','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','dizzy','stunned','skip_turn','眩晕','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:root','jungle:root_status','root_status','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
         Object.entries(customStatuses).forEach(([name, value]) => {
@@ -23356,6 +23660,88 @@ function onRespond(cardInstanceId) {
     emitModeEvent('solo_response', 'response', { card_instance_id: cardInstanceId });
 }
 
+function showMagicSaltReflectResponseUI(data = {}, choiceParams = {}) {
+    removeFloatingCardPreview();
+    const container = $('response-panel');
+    if (!container) {
+        return Promise.resolve({ confirmed: false, accepted: false });
+    }
+    const cardDict = data.card || choiceParams.card || { def_id: 'MagicSalt' };
+    const you = gameState && gameState.you ? gameState.you : {};
+    const costM = Math.max(0, Math.floor(Number(choiceParams.cost_m || 1)));
+    const canAfford = Math.max(0, Number(you.magic || 0)) >= costM;
+    const reflect = Math.max(0, Math.ceil(Number(choiceParams.reflect || 0)));
+    const attackerId = normalizePlayerId(choiceParams.attacker_id);
+    const attacker = attackerId == null ? null : getPlayerDataById(attackerId);
+    const attackerName = attacker && attacker.name ? attacker.name : (choiceParams.attacker_name || '');
+
+    container.innerHTML = '';
+    container.classList.remove('hidden');
+    container.classList.add('visible', 'magic-salt-response-panel');
+
+    const title = document.createElement('div');
+    title.className = 'response-label response-title';
+    title.textContent = choiceParams.title || '魔法盐';
+    container.appendChild(title);
+
+    const label = document.createElement('div');
+    label.className = 'response-label response-trigger-label';
+    const prefix = document.createElement('span');
+    prefix.className = 'response-trigger-prefix';
+    prefix.textContent = attackerName
+        ? `${attackerName}造成伤害后可触发:`
+        : '受到伤害后可触发:';
+    label.appendChild(prefix);
+    label.appendChild(createCardChoiceChip(cardDict));
+    if (reflect > 0) {
+        const preview = document.createElement('span');
+        preview.className = 'counter-damage-reduction magic-salt-reflect-preview';
+        preview.textContent = `反弹${reflect}D`;
+        label.appendChild(preview);
+    }
+    container.appendChild(label);
+
+    const btnRow = document.createElement('div');
+    btnRow.className = 'response-btn-row';
+
+    const useBtn = document.createElement('button');
+    useBtn.className = 'btn counter-card-btn ' + (canAfford ? 'btn-primary' : 'btn-counter-disabled');
+    useBtn.appendChild(createCardChoiceChip(cardDict));
+    const cost = document.createElement('span');
+    cost.className = 'counter-card-cost';
+    cost.innerHTML = renderResourceCostInline(0, costM, { bracket: true });
+    useBtn.appendChild(cost);
+    if (reflect > 0) {
+        const effect = document.createElement('span');
+        effect.className = 'counter-damage-reduction magic-salt-reflect-preview';
+        effect.textContent = `反弹${reflect}D`;
+        useBtn.appendChild(effect);
+    }
+    useBtn.disabled = !canAfford;
+    btnRow.appendChild(useBtn);
+    container.appendChild(btnRow);
+
+    const passBtn = document.createElement('button');
+    passBtn.className = 'btn btn-danger';
+    passBtn.textContent = choiceParams.cancel_text || '不触发';
+    container.appendChild(passBtn);
+
+    return new Promise(resolve => {
+        const finish = (accepted) => {
+            removeFloatingCardPreview();
+            container.innerHTML = '';
+            container.classList.add('hidden');
+            container.classList.remove('visible', 'magic-salt-response-panel');
+            resolve({ confirmed: !!accepted, accepted: !!accepted });
+        };
+        useBtn.onclick = () => {
+            if (!canAfford) return;
+            finish(true);
+        };
+        passBtn.onclick = () => finish(false);
+    });
+}
+
 function showAllyConsentUI(data) {
     if (isSpectating || !socket) return;
     removeFloatingCardPreview();
@@ -23728,6 +24114,18 @@ async function showChoiceUI(data) {
             const sel = await simpleChoice(choiceTitle(UI.choose_attack_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < attacks.length) choiceResult = { target_instance_id: attacks[sel].instance_id };
         }
+    } else if (choiceType === 'hel_card_suit') {
+        const suits = Array.isArray(choiceParams.options) && choiceParams.options.length
+            ? choiceParams.options
+            : ['heart', 'diamond', 'spade', 'club'];
+        const labels = Array.isArray(choiceParams.labels) && choiceParams.labels.length
+            ? choiceParams.labels
+            : ['♥', '♦', '♠', '♣'];
+        const sel = await simpleChoice(choiceTitle('选择花色'), labels.map((label, i) => ({
+            label,
+            value: suits[i] || suits[0],
+        })), choicePromptConfig);
+        if (sel >= 0 && sel < suits.length) choiceResult = { hel_suit: suits[sel] };
     } else if (choiceType === 'choose_ocean_sapphire') {
         const targetId = await choosePlayerTarget(choiceTitle(UI.choose_target || UI.select_target || 'Choose target'), {
             includeSelf: true,
@@ -23990,15 +24388,7 @@ async function showChoiceUI(data) {
             else choiceResult = { selected_instance_ids: [] };
         }
     } else if (choiceType === 'magic_salt_reflect') {
-        const msg = choiceParams.message || data.message || '';
-        const sel = await simpleChoice(choiceTitle(choiceParams.title || '魔法盐'), [
-            choiceParams.ok_text || '支付并反伤',
-            choiceParams.cancel_text || UI.cancel || '取消',
-        ], {
-            ...choicePromptConfig,
-            message: msg,
-        });
-        if (sel >= 0) choiceResult = { confirmed: sel === 0, accepted: sel === 0 };
+        choiceResult = await showMagicSaltReflectResponseUI(data, choiceParams);
     } else if (choiceType === 'confirm') {
         const sel = await simpleChoice(choiceTitle(UI.notice || 'Confirm'), [
             choiceParams.ok_text || UI.ok || 'OK',
@@ -25029,6 +25419,9 @@ const BETA_TESTING_MOD_IDS = new Set([
     'Void Card Addition.gtnmod',
     'void',
     'Void Card Addition',
+    'Hel Cards Addition.gtnmod',
+    'hel',
+    'Hel Cards Addition',
 ]);
 
 function isBetaTestingMod(mod) {
@@ -25721,7 +26114,16 @@ async function saveDisabledMods() {
         });
         showActionToast(tf('mod_selection_force_vanilla'), 2800, 'error');
     }
-    localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
+    try {
+        localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
+    } catch (err) {
+        const message = currentLang === 'zh'
+            ? '浏览器禁止本地存储，无法保存模组设置。请检查隐私模式或站点存储权限。'
+            : 'The browser blocked local storage, so mod settings could not be saved. Check private mode or site storage permissions.';
+        flashStatus(message, 4200, 'error');
+        console.warn('Failed to persist disabled mods:', err);
+        return;
+    }
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
         localStorage.removeItem('gtn_server');
@@ -25730,6 +26132,11 @@ async function saveDisabledMods() {
     await refreshCardsAfterModSettingsConfirmed();
     if (socket && socket.connected && phase === 'lobby') {
         socket.emit('update_mod_settings', { disabled_mods: disabled, ...getCommunityModSelection() });
+    } else {
+        showActionToast(UI.save_success, 1600, 'success');
+        if (phase === 'lobby') {
+            console.warn('Saved mod settings locally, but socket is not connected; server loadout will update after re-entering the lobby.');
+        }
     }
 }
 
@@ -25981,6 +26388,16 @@ async function init() {
         if (dmUserBtn) {
             event.preventDefault();
             startDmToUser(dmUserBtn.dataset.dmOpenUser, dmUserBtn.dataset.dmOpenName || '');
+            return;
+        }
+        const feedbackGroupBtn = event.target.closest('[data-feedback-group-toggle]');
+        if (feedbackGroupBtn) {
+            event.preventDefault();
+            const key = String(feedbackGroupBtn.dataset.feedbackGroupToggle || '');
+            if (key) {
+                feedbackCollapsedGroups[key] = !feedbackCollapsedGroups[key];
+                renderFeedbackThreads();
+            }
             return;
         }
         const feedbackThreadBtn = event.target.closest('[data-feedback-thread]');

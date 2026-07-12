@@ -2339,6 +2339,46 @@ body {
   gap: 6px;
 }
 
+.feedback-thread-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.feedback-thread-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: left;
+  cursor: pointer;
+}
+
+.feedback-thread-group-title span:last-child {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.feedback-thread-group-arrow {
+  width: 12px;
+  color: var(--bloom);
+  text-align: center;
+}
+
+.feedback-thread-group-empty {
+  padding: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .feedback-thread-item {
   width: 100%;
   border: 1px solid transparent;
@@ -4078,24 +4118,84 @@ body {
   font-weight: 400;
 }
 
-.rules-type.thorn,
-.rules-card-link.thorn {
+.rules-type.thorn {
   color: var(--thorn);
 }
 
-.rules-type.bloom,
-.rules-card-link.bloom {
+.rules-type.bloom {
   color: var(--bloom);
 }
 
-.rules-type.root,
-.rules-card-link.root {
+.rules-type.root {
   color: var(--root);
 }
 
-.rules-type.guard,
-.rules-card-link.guard {
+.rules-type.guard {
   color: var(--guard);
+}
+
+.rules-resource-term {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18em;
+  margin: 0 0.12em;
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+.rules-resource-term .inline-token-icon-wrap {
+  width: 1.28em;
+  height: 1.28em;
+  flex: 0 0 1.28em;
+  vertical-align: -0.22em;
+}
+
+.rules-resource-term strong {
+  font-family: var(--font-card);
+  font-weight: 700;
+}
+
+.rules-resource-term > span:last-child::before {
+  content: "（";
+}
+
+.rules-resource-term > span:last-child::after {
+  content: "）";
+}
+
+.rules-resource-health { color: var(--health); }
+.rules-resource-elixir { color: var(--elixir); }
+.rules-resource-magic { color: var(--magic); }
+
+.rules-mode-list {
+  display: grid;
+  gap: 10px;
+  margin: 2px 0 4px;
+}
+
+.rules-mode-item {
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid color-mix(in srgb, var(--border-color) 78%, var(--text-secondary));
+}
+
+.rules-mode-item h5 {
+  margin: 0 0 2px;
+  font-size: 1em;
+  color: var(--text-primary);
+}
+
+.rules-mode-item p {
+  margin: 0;
+}
+
+.rules-card-chip {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.rules-card-chip:focus-visible {
+  outline: 2px solid var(--guard);
+  outline-offset: 2px;
 }
 
 @media (max-width: 720px) {
@@ -7317,6 +7417,27 @@ html.blind-level-4 .card-prediction-part.magic {
   padding-bottom: 1cqi;
 }
 
+.card.card-hel-compact .card-effect {
+  font-size: 8.15cqi;
+  line-height: 1.16;
+  padding-top: 2.8cqi;
+  padding-bottom: 1.45cqi;
+}
+
+.card.card-hel-extra-compact .card-effect {
+  font-size: 7.25cqi;
+  line-height: 1.12;
+  padding-top: 2.3cqi;
+  padding-bottom: 1.05cqi;
+}
+
+.card.card-hel-poker-card .card-effect {
+  font-size: 6.3cqi;
+  line-height: 1.07;
+  padding-top: 1.85cqi;
+  padding-bottom: 0.8cqi;
+}
+
 .card.card-petal-copy .card-effect {
   font-size: 8.1cqi;
   line-height: 1.2;
@@ -7924,6 +8045,10 @@ html.blind-level-4 .card-prediction-part.magic {
   color: var(--color-magic);
 }
 
+.card-token.equipment-armor {
+  color: var(--color-indestructible, #B8860B);
+}
+
 .card-token.status-bleed {
   color: #922B21;
 }
@@ -7968,6 +8093,14 @@ html.blind-level-4 .card-prediction-part.magic {
 
 .card-token.status-unable-counter {
   color: #536878;
+}
+
+.card-token.status-luck {
+  color: #63B85C;
+}
+
+.card-token.status-crit {
+  color: #D4AC0D;
 }
 
 .card-token.status-immune {
@@ -17429,7 +17562,8 @@ button.armor-meter:focus-visible {
 .term-intro-panel .inline-card-chip.choice-card-token,
 .gallery-detail-info .inline-card-chip.choice-card-token,
 .card-hold-preview .inline-card-chip.choice-card-token,
-.choice-option-text .inline-card-chip.choice-card-token {
+.choice-option-text .inline-card-chip.choice-card-token,
+.rules-body .inline-card-chip.choice-card-token {
   --chip-font-size: 0.96em;
   --chip-gap: 0.26em;
   --chip-name-pad-y: 0.02em;
@@ -17453,7 +17587,8 @@ button.armor-meter:focus-visible {
 .term-intro-panel .inline-card-chip .choice-card-name,
 .gallery-detail-info .inline-card-chip .choice-card-name,
 .card-hold-preview .inline-card-chip .choice-card-name,
-.choice-option-text .inline-card-chip .choice-card-name {
+.choice-option-text .inline-card-chip .choice-card-name,
+.rules-body .inline-card-chip .choice-card-name {
   max-width: min(16em, 64vw);
   min-height: 1.16em;
   line-height: 1.02;
@@ -17462,7 +17597,8 @@ button.armor-meter:focus-visible {
 .term-intro-panel .inline-card-chip .choice-card-extra-cost,
 .gallery-detail-info .inline-card-chip .choice-card-extra-cost,
 .card-hold-preview .inline-card-chip .choice-card-extra-cost,
-.choice-option-text .inline-card-chip .choice-card-extra-cost {
+.choice-option-text .inline-card-chip .choice-card-extra-cost,
+.rules-body .inline-card-chip .choice-card-extra-cost {
   padding: 0.02em 0.34em;
   font-size: 0.9em;
   line-height: 1.02;
@@ -17471,7 +17607,8 @@ button.armor-meter:focus-visible {
 .term-intro-panel .inline-card-chip .choice-card-flags .card-flag,
 .gallery-detail-info .inline-card-chip .choice-card-flags .card-flag,
 .card-hold-preview .inline-card-chip .choice-card-flags .card-flag,
-.choice-option-text .inline-card-chip .choice-card-flags .card-flag {
+.choice-option-text .inline-card-chip .choice-card-flags .card-flag,
+.rules-body .inline-card-chip .choice-card-flags .card-flag {
   line-height: 1;
 }
 

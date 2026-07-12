@@ -278,7 +278,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260708-static-alias-fix-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260713-card-text-unification-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -1085,10 +1085,11 @@ SOLO_STATUS_TOTAL_EXCLUDED_CUSTOM_KEYS = {
 }
 
 
-def _solo_player_status_stack_total(ps):
+def _solo_player_status_type_count(ps):
     total = 0
     for attr in SOLO_STATUS_TOTAL_ATTRS:
-        total += _positive_int(getattr(ps, attr, 0))
+        if _positive_int(getattr(ps, attr, 0)) > 0:
+            total += 1
     if bool(getattr(ps, 'invincible', False)):
         total += 1
     if bool(getattr(ps, 'bandage_active', False)):
@@ -1100,7 +1101,8 @@ def _solo_player_status_stack_total(ps):
         for key, value in custom.items():
             if str(key) in SOLO_STATUS_TOTAL_EXCLUDED_CUSTOM_KEYS:
                 continue
-            total += _positive_int(value)
+            if _positive_int(value) > 0:
+                total += 1
     return total
 
 
@@ -1115,7 +1117,7 @@ def check_solo_achievements(sid, engine):
     if uid <= 0:
         return
     try:
-        total = sum(_solo_player_status_stack_total(ps) for ps in getattr(engine, 'players', []) or [])
+        total = sum(_solo_player_status_type_count(ps) for ps in getattr(engine, 'players', []) or [])
         if total < 25:
             return
         seen = getattr(engine, '_solo_achievement_flags_seen', None)
@@ -4628,6 +4630,13 @@ def socket_guard(event_name, data=None, *, require_player=True, allow_empty=Fals
         return None
     player = _security_player_for_sid(sid)
     if require_player and sid not in players:
+        if event_name == 'update_mod_settings':
+            emit('mod_settings_updated', {
+                'ok': False,
+                'reason': '连接已失效，请重新进入大厅后再保存模组设置。',
+                'disabled_mods': [],
+            })
+            return None
         _security_illegal(sid, event_name, '玩家未登录', emit_error=emit_error)
         return None
     if not allow_empty and data is None:
@@ -4635,6 +4644,13 @@ def socket_guard(event_name, data=None, *, require_player=True, allow_empty=Fals
         return None
     exempt = is_chat_limit_exempt(player) if event_name == 'chat' else bool(player.get('is_admin_player'))
     if not _socket_rate_allowed(sid, event_name, exempt=exempt):
+        if event_name == 'update_mod_settings':
+            emit('mod_settings_updated', {
+                'ok': False,
+                'reason': '模组设置操作过于频繁，请稍后再试。',
+                'disabled_mods': player.get('disabled_mods', []) if player else [],
+            })
+            return None
         if event_name in SOFT_REJECT_EVENT_NAMES:
             soft_reject(sid, event_name, 'ACTION_TOO_FAST')
         else:
@@ -13264,11 +13280,16 @@ def on_set_mode(data):
 @measure_socket_action('update_mod_settings')
 def on_update_mod_settings(data):
     sid = request.sid
-    data = socket_guard('update_mod_settings', data, require_player=True, allow_empty=True)
+    data = socket_guard('update_mod_settings', data, require_player=False, allow_empty=True)
     if data is None:
         return
     with _lock:
         if sid not in players:
+            emit('mod_settings_updated', {
+                'ok': False,
+                'reason': '连接已失效，请重新进入大厅后再保存模组设置。',
+                'disabled_mods': [],
+            })
             return
         player = players[sid]
         if player.get('status') not in ('lobby', 'reconnecting'):
@@ -13290,6 +13311,11 @@ def on_update_mod_settings(data):
         return
     with _lock:
         if sid not in players:
+            emit('mod_settings_updated', {
+                'ok': False,
+                'reason': '连接已失效，请重新进入大厅后再保存模组设置。',
+                'disabled_mods': current_disabled_mods,
+            })
             return
         player = players[sid]
         if player.get('status') not in ('lobby', 'reconnecting'):

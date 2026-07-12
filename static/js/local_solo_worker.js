@@ -1050,7 +1050,7 @@ class LocalSoloEngine {
                 if (entry === keep || entry.card.instance_id === keep.card.instance_id) return;
                 const idx = entry.zone.indexOf(entry.card);
                 if (idx >= 0) entry.zone.splice(idx, 1);
-                ps.exile.push(entry.card);
+                this.putCardInExile(playerId, entry.card);
                 this.logMsg(`${this.pn(playerId)}的唯一牌${cardName(entry.card.def_id)}多余副本被放逐`);
             });
         });
@@ -1929,6 +1929,49 @@ class LocalSoloEngine {
             result.hand_cards = this.players[targetId].hand.map(c => c.toDict());
         }
         return result;
+    }
+
+    defaultAutoChoiceForPending(pending) {
+        if (!pending) return null;
+        const playerId = toInt(pending.player_id, 0);
+        const type = String(pending.choice_type || '');
+        const targetId = pending.target_player_id != null ? toInt(pending.target_player_id, 1 - playerId) : (1 - playerId);
+        const choice = targetId >= 0 ? { target_player: targetId, target_player_id: targetId, target_id: targetId } : {};
+        const card = pending.card ? LocalCard.fromDict(pending.card) : null;
+        if (type === 'choose_target') return choice;
+        if (type === 'confirm') return { ...choice, confirmed: true, accepted: true };
+        if (type === 'choose_cards_from_hand' || type === 'choose_same_attacks_from_hand') {
+            const maxCount = Math.max(1, toInt((pending.choice_params || {}).max_count || (pending.choice_params || {}).count || 1, 1));
+            const currentId = card ? card.instance_id : -1;
+            const cards = this.players[playerId].hand.filter(c => c.instance_id !== currentId && !c.flags.has('exalted') && (type !== 'choose_same_attacks_from_hand' || c.card_type === 'thorn'));
+            return { ...choice, target_instance_ids: cards.slice(0, maxCount).map(c => c.instance_id) };
+        }
+        const zoneMap = {
+            choose_attack_from_hand: 'hand',
+            choose_card_from_hand: 'hand',
+            choose_card_to_discard: 'hand',
+            choose_from_enemy_hand: 'hand',
+            choose_from_deck: 'deck',
+            choose_from_discard: 'discard',
+            choose_from_exile: 'exile',
+        };
+        if (zoneMap[type]) {
+            const ownerId = ['choose_from_enemy_hand', 'choose_card_from_hand', 'choose_from_deck', 'choose_from_discard', 'choose_from_exile'].includes(type) ? targetId : playerId;
+            const zone = (this.players[ownerId] && this.players[ownerId][zoneMap[type]]) || [];
+            let selected = zone.find(c => c && !c.flags.has('exalted') && (!card || c.instance_id !== card.instance_id));
+            if (type === 'choose_attack_from_hand') selected = zone.find(c => c && c.card_type === 'thorn' && !c.flags.has('exalted') && (!card || c.instance_id !== card.instance_id));
+            return selected ? { ...choice, target_instance_id: selected.instance_id } : null;
+        }
+        if (type === 'choose_ocean_sapphire') {
+            const selected = this.players[playerId].hand.find(c => c.card_type === 'thorn' && !c.flags.has('exalted') && (!card || c.instance_id !== card.instance_id));
+            return selected ? { ...choice, target_instance_id: selected.instance_id } : null;
+        }
+        if (type === 'choose_equipment' || type === 'choose_enemy_equipment') {
+            const ownerId = type === 'choose_enemy_equipment' ? targetId : playerId;
+            const eq = this.players[ownerId] && this.players[ownerId].equipment[0];
+            return eq && eq.card_instance ? { ...choice, target_instance_id: eq.card_instance.instance_id } : null;
+        }
+        return choice;
     }
 
     checkCardResponseAfterChoice(playerId, card, choice) {
@@ -3484,18 +3527,9 @@ class LocalSoloEngine {
         const lastDef = String((ps && (ps.custom_vars.void_current_previous_def_id || ps.custom_vars.void_last_played_def_id)) || '');
         if (lastDef === 'Antimatter' || lastDef === 'void:antimatter') {
             card.instance_flags.add('exile');
-            card.instance_flags.add('wide_strike');
         }
         const amount = this.evalInt(playerId, params.amount ?? 10, card, 10);
-        if (card.flags.has('wide_strike')) {
-            this.oceanSelectableTargets(playerId, { allowSelf: card.flags.has('self_target'), enemiesOnly: false }).forEach(targetId => {
-                const finalAmount = this.modifiedAttackDamage(amount, card);
-                this._incoming_damage_hint[targetId] = finalAmount;
-                this.dealAttackDamage(targetId, finalAmount, 1, card.flags.has('precision'), playerId, card);
-            });
-        } else {
-            this.voidDealAttackDamage(playerId, card, amount, params);
-        }
+        this.voidDealAttackDamage(playerId, card, amount, params);
         if (log) this.logMsg(log);
     }
 
@@ -3580,7 +3614,7 @@ class LocalSoloEngine {
         if (!ps) return;
         const exiled = ps.hand.filter(handCard => !handCard.flags.has('exalted'));
         ps.hand = ps.hand.filter(handCard => handCard.flags.has('exalted'));
-        exiled.forEach(handCard => ps.exile.push(handCard));
+        exiled.forEach(handCard => this.putCardInExile(targetId, handCard));
         if (exiled.length > 0) {
             const current = this.customStatusValue(targetId, 'jungle:vulnerable', 'vulnerable');
             this.setCustomStatusAliasGroup(targetId, 'jungle:vulnerable', ['jungle:vulnerable', 'vulnerable'], current + exiled.length);
@@ -3600,7 +3634,7 @@ class LocalSoloEngine {
         if (!ps) return;
         if (toZone === 'hand') ps.addToHand(selected);
         else if (toZone === 'discard') this.discardCard(ps, selected);
-        else if (toZone === 'exile') ps.exile.push(selected);
+        else if (toZone === 'exile') this.putCardInExile(targetId, selected);
         else if (toZone === 'deck_bottom') ps.deck.push(selected);
         else if (toZone === 'deck_random') ps.deck.splice(Math.floor(Math.random() * (ps.deck.length + 1)), 0, selected);
         else ps.deck.unshift(selected);
@@ -3741,7 +3775,7 @@ class LocalSoloEngine {
         const selected = this.voidSelectedZoneCard(targetId, zone, this._active_choice || {});
         if (!selected) return;
         const loc = this.removeCardFromCurrentZone(selected);
-        if (loc) this.players[loc.ownerId].exile.push(selected);
+        if (loc) this.putCardInExile(loc.ownerId, selected);
         const addDef = params.add_def_id || params.add_card || '';
         if (addDef) {
             const newId = this.voidResolveCardId(playerId, addDef, ERROR_CARD_ID, card);
@@ -3774,7 +3808,7 @@ class LocalSoloEngine {
         const actorId = candidates[Math.floor(Math.random() * candidates.length)].id;
         const actor = this.players[actorId];
         const topCard = (actor.deck || []).find(deckCard => !deckCard.flags.has('exalted'));
-        if (!topCard || !this.canPlayCard(actorId, topCard)[0]) return;
+        if (!topCard) return;
         let targetId = -1;
         if (topCard.card_type === 'thorn' || (!topCard.flags.has('self_only') && (this.cardNeedsChoice(topCard) || topCard.card_type !== 'guard'))) {
             targetId = 1 - actorId;
@@ -3786,7 +3820,19 @@ class LocalSoloEngine {
         actor.addToHand(topCard, { triggerEnterHand: false });
         const autoChoice = targetId >= 0 ? { target_player: targetId, target_player_id: targetId, target_id: targetId } : {};
         this.logMsg(log || `小猫使${this.pn(actorId)}自动打出${cardName(topCard.def_id)}`);
-        this.playCard(actorId, topCard.instance_id, autoChoice);
+        const prevAutoActor = this.allowOutOfTurnAutoPlayFor;
+        const prevAutoChoice = this._auto_resolve_choices_for;
+        const prevAutoNoCost = this._auto_play_no_cost_for;
+        this.allowOutOfTurnAutoPlayFor = actorId;
+        this._auto_resolve_choices_for = actorId;
+        this._auto_play_no_cost_for = actorId;
+        try {
+            this.playCard(actorId, topCard.instance_id, autoChoice);
+        } finally {
+            this.allowOutOfTurnAutoPlayFor = prevAutoActor;
+            this._auto_resolve_choices_for = prevAutoChoice;
+            this._auto_play_no_cost_for = prevAutoNoCost;
+        }
     }
 
     effect_void_soap_wide_strike(playerId, card, params, log = '') {
@@ -4341,10 +4387,10 @@ class LocalSoloEngine {
         const copy = target.copy();
         copy.instance_id = randintId();
         if (card && card.def_id === 'Mimic') {
-            const halfExtra = (value, base = 0) => base + Math.ceil(Math.max(0, toInt(value, base) - base) / 2);
-            copy.fusion_level = halfExtra(target.fusion_level, 1);
+            const halfLayer = value => Math.max(1, Math.ceil(Math.max(1, toInt(value, 1)) / 2));
+            copy.fusion_level = halfLayer(target.fusion_level);
             copy.fusion_multiplier = copy.fusion_level;
-            copy.fission_level = halfExtra(target.fission_level, 1);
+            copy.fission_level = halfLayer(target.fission_level);
             copy.fission_count = Math.max(0, copy.fission_level - 1);
             ['swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value'].forEach(key => {
                 copy[key] = Math.ceil(Math.max(0, toInt(target[key], 0)) / 2);
@@ -4489,7 +4535,7 @@ class LocalSoloEngine {
     effect_move_to_exile(playerId, card, params) {
         const target = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
         const loc = this.removeCardFromCurrentZone(target);
-        if (loc) this.players[loc.ownerId].exile.push(target);
+        if (loc) this.putCardInExile(loc.ownerId, target);
     }
 
     effect_assembler_effect(playerId, card, params, log, choice) {
@@ -4500,7 +4546,7 @@ class LocalSoloEngine {
             const targetCard = this.players[playerId].findHandCard(selectedId);
             if (targetCard) {
                 this.players[playerId].hand = this.players[playerId].hand.filter(c => c.instance_id !== targetCard.instance_id);
-                this.players[playerId].exile.push(targetCard);
+                this.putCardInExile(playerId, targetCard);
                 this.logMsg(`${this.pn(playerId)}放逐了${cardName(targetCard.def_id)}`);
             }
             const roll = Math.floor(Math.random() * 3);
@@ -4892,7 +4938,7 @@ class LocalSoloEngine {
         if (idx < 0) return;
         ps.hand.splice(idx, 1);
         chosen.instance_flags.add('exile');
-        ps.exile.push(chosen);
+        this.putCardInExile(playerId, chosen);
         const entries = Array.isArray(ps.custom_vars.ocean_auto_cards) ? ps.custom_vars.ocean_auto_cards : [];
         entries.push({
             def_id: chosen.def_id,
@@ -5551,7 +5597,7 @@ class LocalSoloEngine {
             if (options.exileFromHand) {
                 const idx = ps.hand.findIndex(c => c.instance_id === card.instance_id);
                 if (idx >= 0) ps.hand.splice(idx, 1);
-                ps.exile.push(card);
+                this.putCardInExile(targetId, card);
             } else if (options.exilePlayedCard) {
                 card.instance_flags.add('exile');
             }
@@ -5648,6 +5694,24 @@ class LocalSoloEngine {
         ps.discard.push(card);
     }
 
+    isVoidAntimatter(card) {
+        if (!card) return false;
+        const id = String(card.def_id || '');
+        const def = card.def && card.def();
+        const legacy = String((def && def.legacy_id) || '');
+        return id === 'Antimatter' || id === 'void:antimatter' || legacy === 'Antimatter';
+    }
+
+    putCardInExile(ownerId, card, trigger = true) {
+        const ps = this.players[ownerId];
+        if (!ps || !card) return;
+        const alreadyExiled = ps.exile.includes(card);
+        if (!alreadyExiled) ps.exile.push(card);
+        if (trigger && !alreadyExiled && this.isVoidAntimatter(card)) {
+            this.effect_void_damage_all_except_self(ownerId, card, { amount: 10 });
+        }
+    }
+
     destroyEquipment(ownerId, eq) {
         const ps = this.players[ownerId];
         if (!eq || !ps.equipment.includes(eq)) return false;
@@ -5673,7 +5737,7 @@ class LocalSoloEngine {
         }
         this.cleanupEquipmentDerivedEffects(ownerId, eq);
         ps.equipment.splice(ps.equipment.indexOf(eq), 1);
-        if (eq.card_instance.flags.has('exile')) ps.exile.push(eq.card_instance);
+        if (eq.card_instance.flags.has('exile')) this.putCardInExile(ownerId, eq.card_instance);
         else this.discardCard(ps, eq.card_instance);
         this.dispatchCardEvent('equipment_destroyed', ownerId, eq.card_instance, effectTarget, eq, ownerId);
         return true;
@@ -5859,17 +5923,37 @@ class LocalSoloEngine {
                 return { success: false, error: '没有可选中的玩家' };
             }
         }
+        if (this._auto_resolve_choices_for === playerId && this.cardNeedsChoice(card) && !this.choiceSatisfiesRequest(card, choice)) {
+            const choiceRequest = this.getChoiceRequest(card, choice);
+            const choiceParams = (choiceRequest && choiceRequest.params) || {};
+            const choiceType = this.choiceTypeForEffect(choiceRequest);
+            let choiceTargetId = null;
+            if (choiceRequest && choiceRequest.type === 'request_card') {
+                choiceTargetId = this.resolveTarget(playerId, choiceParams.target || 'self');
+            }
+            const pendingPreview = {
+                card: card.toDict(),
+                player_id: playerId,
+                choice_type: choiceType,
+                choice_params: choiceParams,
+                target_player_id: choiceTargetId != null ? choiceTargetId : (choice && (choice.target_player_id ?? choice.target_player ?? choice.target_id)),
+            };
+            const generated = this.defaultAutoChoiceForPending(pendingPreview);
+            if (generated) choice = { ...(choice || {}), ...generated };
+        }
         const [canPlay, reason] = this.canPlayCard(playerId, card);
-        if (!canPlay) return { success: false, error: reason };
+        const autoNoCost = this._auto_play_no_cost_for === playerId;
+        if (!canPlay && !(autoNoCost && (String(reason).includes('能量不足') || String(reason).includes('魔力不足')))) return { success: false, error: reason };
         if (this.cardNeedsChoice(card) && !this.choiceSatisfiesRequest(card, choice)) {
             const queued = this.queueCardChoice(playerId, card, choice, false);
             if (queued) return queued;
         }
-        const totalE = Math.max(0, card.cost_e + this.getExtraEForCard(playerId, card));
+        const totalE = autoNoCost ? 0 : Math.max(0, card.cost_e + this.getExtraEForCard(playerId, card));
+        const totalM = autoNoCost ? 0 : card.cost_m;
         card._paid_e_this_play = totalE;
-        card._paid_m_this_play = card.cost_m;
+        card._paid_m_this_play = totalM;
         this.spendResource(playerId, 'elixir', totalE, card);
-        this.spendResource(playerId, 'magic', card.cost_m, card);
+        this.spendResource(playerId, 'magic', totalM, card);
         ps.cards_played_this_turn[card.def_id] = toInt(ps.cards_played_this_turn[card.def_id], 0) + 1;
         const removed = ps.removeHandCard(instanceId);
         if (!removed) return { success: false, error: '移出手牌失败' };
@@ -5895,7 +5979,7 @@ class LocalSoloEngine {
             this.logCardPlay(playerId, card);
             this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}被魔法泡泡反制，失效！`);
             this.resetCardAfterPlay(card);
-            if (card.flags.has('exile')) ps.exile.push(card);
+            if (card.flags.has('exile')) this.putCardInExile(playerId, card);
             else this.discardCard(ps, card);
             this.dispatchCardEvent('card_used', playerId, card, playerId, null, null, choice);
             result.countered = true;
@@ -5914,7 +5998,7 @@ class LocalSoloEngine {
                 if (opponent.custom_statuses.magic_nazar <= 0) delete opponent.custom_statuses.magic_nazar;
                 this.logMsg(`${this.pn(opponentId)}的魔法邪眼使${this.pn(playerId)}的${cardName(card.def_id)}失效`);
                 this.resetCardAfterPlay(card);
-                if (card.flags.has('exile')) ps.exile.push(card);
+                if (card.flags.has('exile')) this.putCardInExile(playerId, card);
                 else this.discardCard(ps, card);
                 this.dispatchCardEvent('card_used', playerId, card, playerId, null, null, choice);
                 return result;
@@ -5950,6 +6034,13 @@ class LocalSoloEngine {
             this.applyCardEffect(playerId, card, choice);
         }
         if (this.pending_choice) {
+            if (this._auto_resolve_choices_for === playerId) {
+                const autoChoice = this.defaultAutoChoiceForPending(this.pending_choice);
+                if (autoChoice) {
+                    const autoResult = this.resolveChoice(playerId, autoChoice);
+                    if (!this.pending_choice) return autoResult || { success: true };
+                }
+            }
             if (this.pending_choice.choice_type !== 'magic_salt_reflect') {
                 const keepPaidChoice = this.pending_choice.choice_type === 'choose_ocean_sapphire';
                 if (keepPaidChoice) {
@@ -5996,7 +6087,7 @@ class LocalSoloEngine {
             this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}因回转回到手中`);
         } else if (card.flags.has('exile')) {
             const loc = this.findCardLocation(card);
-            if (!loc) ps.exile.push(card);
+            if (!loc) this.putCardInExile(playerId, card);
             this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}被放逐`);
         } else {
             const loc = this.findCardLocation(card);
@@ -6214,7 +6305,7 @@ class LocalSoloEngine {
             }
         }
         this.resetCardAfterPlay(counterCard);
-        if (counterCard.flags.has('exile')) this.players[responderId].exile.push(counterCard);
+        if (counterCard.flags.has('exile')) this.putCardInExile(responderId, counterCard);
         else this.discardCard(this.players[responderId], counterCard);
         this.dispatchCardEvent('card_used', responderId, counterCard, originalPlayerId == null ? responderId : originalPlayerId);
     }
@@ -6298,8 +6389,12 @@ class LocalSoloEngine {
         [...ps.hand].forEach(card => {
             if (card.flags.has('void')) {
                 ps.hand.splice(ps.hand.indexOf(card), 1);
-                ps.exile.push(card);
+                const alreadyExiled = ps.exile.includes(card);
+                this.putCardInExile(playerId, card, false);
                 this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}因虚无被放逐`);
+                if (!alreadyExiled && this.isVoidAntimatter(card)) {
+                    this.effect_void_damage_all_except_self(playerId, card, { amount: 10 });
+                }
             }
         });
         this.decayActionLimitStatus(playerId, 'attack_blocked', 'attack_blocked', '禁攻');
