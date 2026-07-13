@@ -287,7 +287,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260713-replay-delta-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260713-sewers-card-text-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -5369,6 +5369,7 @@ def register_v2_loadout_cards(v2_loadout):
             fusion_level=max(1, _v2_int(resource.get('fusion_level', resource.get('fusion_multiplier', 1)), 1)),
             damage=_v2_int(resource.get('damage', 0), 0),
             hits=_v2_int(resource.get('hits', 1), 1),
+            ui_effect_size=str(resource.get('ui_effect_size') or ''),
         )
         CARD_DEFS[runtime_id] = card_def
         registered.append(runtime_id)
@@ -10527,6 +10528,7 @@ def api_card_exporter_cards():
             'image_url': image_url,
             'upgraded_image': upgraded_image_url,
             'upgraded_image_url': upgraded_image_url,
+            'ui_effect_size': getattr(card_def, 'ui_effect_size', ''),
         }
         payload.update(card_text(def_id, payload))
         cards.append(payload)
@@ -12422,6 +12424,7 @@ def api_cards():
             'image_url': image_url,
             'upgraded_image': upgraded_image_url,
             'upgraded_image_url': upgraded_image_url,
+            'ui_effect_size': getattr(card_def, 'ui_effect_size', ''),
         }
         if getattr(card_def, 'v2_mod_id', ''):
             card_payload['v2_mod_id'] = getattr(card_def, 'v2_mod_id', '')

@@ -151,6 +151,7 @@ class CardDef:
     damage: int = 0
     hits: int = 1
     trigger_cost_m: int = 0
+    ui_effect_size: str = ''
 
     @property
     def display_name(self) -> str:

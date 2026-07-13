@@ -175,6 +175,7 @@ def _card_defs_snapshot(card_defs):
             'scripts': getattr(cd, 'scripts', {}) or {},
             'response_title': getattr(cd, 'response_title', ''),
             'response_content': getattr(cd, 'response_content', ''),
+            'ui_effect_size': getattr(cd, 'ui_effect_size', ''),
         })
     return {'cards': cards}
 
