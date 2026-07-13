@@ -2774,6 +2774,67 @@ def find_user_for_admin(identifier):
         return row_to_user(row)
 
 
+def admin_change_username(identifier, new_username):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, '账号不存在'
+    name = sanitize_username(new_username)
+    ok, error = validate_username(name)
+    if not ok:
+        return None, error
+    now = utc_now()
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
+        if row is None or ('deleted_at' in row.keys() and row['deleted_at']):
+            return None, '账号不存在'
+        existing = _find_user_row_by_username_key(conn, name)
+        if existing is not None and int(existing['id']) != int(user['id']):
+            return None, '用户名已存在'
+        conn.execute(
+            'UPDATE users SET username = ?, username_lower = ?, last_username_change_at = ? WHERE id = ?',
+            (name, normalize_username_key(name), now, user['id']),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
+        _ensure_builtin_role_for_row(conn, row)
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
+        return row_to_user(row), None
+
+
+def list_achievement_definitions():
+    return [dict(item) for item in ACHIEVEMENT_DEFS]
+
+
+def admin_grant_user_achievement(identifier, achievement_id):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, '账号不存在'
+    aid = str(achievement_id or '').strip()
+    defn = ACHIEVEMENT_DEF_MAP.get(aid)
+    if not defn:
+        return None, '成就不存在'
+    now = utc_now()
+    with get_db_connection() as conn:
+        before = conn.execute(
+            'SELECT unlocked FROM user_achievements WHERE user_id = ? AND achievement_id = ?',
+            (user['id'], aid),
+        ).fetchone()
+        already_unlocked = bool(before and int(before['unlocked'] or 0))
+        unlocked = _unlock_achievement_conn(conn, user['id'], aid, now=now)
+        conn.commit()
+        row = conn.execute(
+            'SELECT * FROM user_achievements WHERE user_id = ? AND achievement_id = ?',
+            (user['id'], aid),
+        ).fetchone()
+        achievement = unlocked or _achievement_public_payload(defn, row=row, lang='zh')
+    return {
+        'user': find_user_for_admin(user['id']) or user,
+        'achievement': achievement,
+        'newly_unlocked': not already_unlocked,
+    }, None
+
+
 def admin_change_user_password(identifier, new_password):
     user = find_user_for_admin(identifier)
     if not user:

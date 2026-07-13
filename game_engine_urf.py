@@ -345,6 +345,12 @@ class GameEngineInfiniteFire(GameEngine):
             ps.shovel_active = False
             ps.untargetable = False
             self.log_msg(f"{self.pn(player_id)}的铲子效果结束")
+        # Infinite Fire has no normal turn draw, so sluggish has no draw to
+        # modify. Settle it here instead of leaving the status indefinitely.
+        self._clear_sluggish_after_draw(player_id)
+        # Keep old rooms and cards added through mode-specific paths from
+        # retaining unable-counter stacks alongside an eligible guard card.
+        self._apply_unable_counter_to_current_hand(player_id)
         self._clear_turn_start_action_statuses(player_id)
         early_owner_turn_start_equipment = self._run_owner_turn_start_action_status_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
@@ -365,69 +371,82 @@ class GameEngineInfiniteFire(GameEngine):
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
-        if ps.poison > 0:
-            self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
-            if self.game_over or ps.health <= 0:
-                return
-            self._decay_poison_after_turn_start(player_id)
-            self._apply_toxic_poison_after_poison_settlement(player_id)
-        if ps.fire > 0:
-            self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
-            if self.game_over or ps.health <= 0:
-                return
-        if self.round_num > 1:
-            elixir_recovery = ELIXIR_RECOVERY
-            for eq in list(opp.equipment):
-                if eq.card_def.effects:
-                    for effect in eq.card_def.effects:
-                        if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
-                            elixir_recovery += self._eval_int(opp_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
+        self._defer_turn_start_death_checks = True
+        try:
+            if ps.poison > 0:
+                if not self._is_status_immune(player_id):
+                    self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
+                self._decay_poison_after_turn_start(player_id)
+                self._apply_toxic_poison_after_poison_settlement(player_id)
+            if ps.fire > 0 and not self._is_status_immune(player_id):
+                self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
+            if self.round_num > 1:
+                elixir_recovery = ELIXIR_RECOVERY
+                for eq in list(opp.equipment):
+                    if eq.card_def.effects:
+                        for effect in eq.card_def.effects:
+                            if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
+                                elixir_recovery += self._eval_int(opp_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
+                        continue
+                    if eq.def_id == 'Pincer':
+                        ps.overload += 1
+                        self.log_msg(f"{self.pn(player_id)}被螫针施加1层超载")
+                elixir_recovery = max(0, elixir_recovery - ps.enemy_e_reduction)
+                ps.gain_elixir(elixir_recovery)
+                self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
+            # Overload: deduct E at turn start, then clear
+            if ps.overload > 0:
+                if not self._is_status_immune(player_id):
+                    deduct = min(ps.overload, ps.elixir)
+                    ps.elixir -= deduct
+                    self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
+                ps.overload = 0
+            for owner_state in self.players:
+                for eq in getattr(owner_state, 'equipment', []):
+                    eq.uses_this_turn = 0
+            for owner_id, eq in self._iter_equipment_targeting_player(player_id):
+                eq_key = self._equipment_turn_start_key(eq)
+                if eq_key not in early_owner_turn_start_equipment:
+                    eq.turns_equipped += 1
+                else:
                     continue
-                if eq.def_id == 'Pincer':
-                    ps.overload += 1
-                    self.log_msg(f"{self.pn(player_id)}被螫针施加1层超载")
-            elixir_recovery = max(0, elixir_recovery - ps.enemy_e_reduction)
-            ps.gain_elixir(elixir_recovery)
-            self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
-        # Overload: deduct E at turn start, then clear
-        if ps.overload > 0:
-            deduct = min(ps.overload, ps.elixir)
-            ps.elixir -= deduct
-            self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
-            ps.overload = 0
-        for owner_state in self.players:
-            for eq in getattr(owner_state, 'equipment', []):
-                eq.uses_this_turn = 0
-        for eq in list(ps.equipment):
-            eq_key = self._equipment_turn_start_key(eq)
-            if eq_key not in early_owner_turn_start_equipment:
-                eq.turns_equipped += 1
-            else:
-                continue
-            effect_target_id = int(getattr(eq, 'effect_target', player_id))
-            if not (0 <= effect_target_id < len(self.players)):
-                effect_target_id = player_id
-            if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
-                    player_id, eq.card_instance, 'owner_turn_start', None,
-                    {'source_id': player_id, 'target_id': effect_target_id}):
-                continue
-            if eq.def_id == 'Leaf':
-                ps.heal(2)
-                self.log_msg(f"{self.pn(player_id)}的叶子效果：+2H")
-            elif eq.def_id == 'Yucca':
-                self._apply_yucca_turn_start_heal(player_id)
-            elif eq.def_id == 'MagicLeaf':
-                ps.gain_magic(1)
-                self.log_msg(f"{self.pn(player_id)}的魔法叶效果：+1M")
-            elif eq.def_id == 'MagicYucca':
-                ps.gain_magic(2)
-                self.log_msg(f"{self.pn(player_id)}的魔法丝兰效果：+2M")
-            elif eq.def_id == 'Powder':
-                ps.gain_elixir(2)
-                self.log_msg(f"{self.pn(player_id)}的粉末效果：+2E")
-            elif eq.def_id == 'GoldenLeaf':
-                self._draw_cards_with_v2_hooks(player_id, DRAW_PER_TURN, 'golden_leaf')
-                self.log_msg(f"{self.pn(player_id)}的黄金叶效果：补充手牌")
+                effect_target_id = int(getattr(eq, 'effect_target', owner_id))
+                if not (0 <= effect_target_id < len(self.players)):
+                    effect_target_id = player_id
+                if self._has_card_event(eq.card_def, 'target_turn_start') and self._run_card_event(
+                        owner_id, eq.card_instance, 'target_turn_start', None,
+                        {'source_id': owner_id, 'target_id': effect_target_id}):
+                    continue
+                if self._has_card_event(eq.card_def, 'owner_turn_start') and self._run_card_event(
+                        owner_id, eq.card_instance, 'owner_turn_start', None,
+                        {'source_id': owner_id, 'target_id': effect_target_id}):
+                    continue
+                if eq.def_id == 'Leaf':
+                    ps.heal(2)
+                    self.log_msg(f"{self.pn(player_id)}的叶子效果：+2H")
+                elif eq.def_id == 'Yucca':
+                    self._apply_yucca_turn_start_heal(player_id)
+                elif eq.def_id == 'MagicLeaf':
+                    ps.gain_magic(1)
+                    self.log_msg(f"{self.pn(player_id)}的魔法叶效果：+1M")
+                elif eq.def_id == 'MagicYucca':
+                    ps.gain_magic(2)
+                    self.log_msg(f"{self.pn(player_id)}的魔法丝兰效果：+2M")
+                elif eq.def_id == 'Powder':
+                    ps.gain_elixir(2)
+                    self.log_msg(f"{self.pn(player_id)}的粉末效果：+2E")
+                elif eq.def_id == 'GoldenLeaf':
+                    self._draw_cards_with_v2_hooks(player_id, DRAW_PER_TURN, 'golden_leaf')
+                    self.log_msg(f"{self.pn(player_id)}的黄金叶效果：补充手牌")
+            if not self.game_over:
+                self._apply_jungle_turn_start_regen(player_id)
+        finally:
+            self._defer_turn_start_death_checks = False
+        if ps.health <= 0:
+            self._check_yggdrasil(player_id)
+            self._check_game_over()
+            if self.game_over:
+                return
         # Foresight: allow replacing cards from hand
         if ps.foresight > 0 and ps.hand:
             max_replace = min(ps.foresight, len(ps.hand))

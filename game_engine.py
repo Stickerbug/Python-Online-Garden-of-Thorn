@@ -684,10 +684,11 @@ class GameEngine:
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手回复7E并抽5张牌', 'position': 3},
         9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将5张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
         10: {'id': 10, 'name': '魔力加速', 'desc': '每打出2张牌回复1[[icon:M]]', 'position': 1},
+        11: {'id': 11, 'name': '花序编排', 'desc': '选择自己牌库中的3张牌，按选择顺序移至抽牌堆顶', 'position': 2},
     }
     OPENING_EVENT_ORDER = {
         1: 10, 2: 20, 3: 30, 8: 40,
-        9: 45, 10: 48, 4: 50, 5: 60, 6: 70, 7: 80,
+        9: 45, 10: 48, 4: 50, 5: 60, 11: 65, 6: 70, 7: 80,
     }
     OPENING_EVENT_COLORS = {
         1: '#3FA66B',
@@ -700,6 +701,7 @@ class GameEngine:
         8: '#5A8FCF',
         9: '#B86AA2',
         10: '#4E8FCF',
+        11: '#6F8F5B',
     }
     MAGIC_CARD_POOL = ['MagicBone', 'MagicStinger', 'MagicSewage', 'MagicNazar', 'MagicBubble']
 
@@ -1513,26 +1515,28 @@ class GameEngine:
 
     def _sewers_trigger_vampire_fangs(self, player_id: int, card: Optional[CardInstance], choice) -> None:
         for selected_id in self._sewers_selected_player_targets(player_id, card, choice):
-            owner = self.players[selected_id]
-            for eq in list(getattr(owner, 'equipment', []) or []):
-                if not self._card_is(eq.card_instance, 'VampireFang', 'sewers:vampire_fang'):
-                    continue
-                target_id = self._equipment_effect_target_id(eq, selected_id)
-                if not (0 <= target_id < len(self.players)):
-                    continue
-                target = self.players[target_id]
-                before = int(getattr(target, 'health', 0) or 0)
-                target.heal(3)
-                healed = max(0, int(getattr(target, 'health', 0) or 0) - before)
-                if healed > 0:
-                    self.log_msg(f"{self.pn(selected_id)}的吸血鬼尖牙使{self.pn(target_id)}回复{healed}H")
+            for owner_id, owner in enumerate(self.players):
+                for eq in list(getattr(owner, 'equipment', []) or []):
+                    if not self._card_is(eq.card_instance, 'VampireFang', 'sewers:vampire_fang'):
+                        continue
+                    target_id = self._equipment_effect_target_id(eq, owner_id)
+                    if target_id != selected_id:
+                        continue
+                    target = self.players[target_id]
+                    before = int(getattr(target, 'health', 0) or 0)
+                    target.heal(3)
+                    healed = max(0, int(getattr(target, 'health', 0) or 0) - before)
+                    if healed > 0:
+                        self.log_msg(f"{self.pn(owner_id)}的吸血鬼尖牙使{self.pn(target_id)}回复{healed}H")
 
     def _sewers_grow_clay_power(self, target_id: int, amount: int) -> None:
         if amount < 8 or not (0 <= target_id < len(self.players)):
             return
         for hand_card in list(getattr(self.players[target_id], 'hand', []) or []):
             if self._card_is(hand_card, 'Clay', 'sewers:clay'):
-                hand_card.power_value = max(0, int(getattr(hand_card, 'power_value', 0) or 0) + 3)
+                hand_card.power_value = min(18, max(0, int(getattr(hand_card, 'power_value', 0) or 0)) + 3)
+                hand_card.instance_flags.add('power')
+                hand_card.disabled_flags.discard('power')
 
     def _sewers_is_confusion_card(self, card: Optional[CardInstance]) -> bool:
         if card is None:
@@ -3615,8 +3619,8 @@ class GameEngine:
         if event_id is None:
             return False
         sub = self.opening_event_sub_choices[player_id]
-        # Events 2 (magic conversion), 3 (light conversion), 5 (fated draw), 8 (yggdrasil) need sub-choices
-        if str(event_id) in ('2', '3', '5', '8') and not sub:
+        # Built-in events with post-draft setup choices.
+        if str(event_id) in ('2', '3', '5', '8', '11') and not sub:
             return True
         # Check v2 events that need sub-choices
         resource = (getattr(self, 'v2_opening_event_defs', {}) or {}).get(str(event_id))
@@ -3742,6 +3746,19 @@ class GameEngine:
                 str(CARD_DEFS[did].name_en or did).lower(),
             )
         )
+
+    def opening_event_topdeck_candidates(self, player_id: int) -> List[str]:
+        if not (0 <= player_id < len(self.players)):
+            return []
+        candidates = []
+        for def_id in list(self.draft_picks[player_id] or []):
+            def_id = str(def_id or '')
+            if not def_id or not self._card_allowed(def_id) or def_id not in CARD_DEFS:
+                continue
+            card = CardInstance(def_id=def_id)
+            if self._card_selectable_by_action(card):
+                candidates.append(def_id)
+        return candidates
 
     def _card_total_hits(self, card: CardInstance, base_hits: Optional[int] = None) -> int:
         base = int(base_hits if base_hits is not None else getattr(card.card_def, 'hits', 1) or 1)
@@ -3869,13 +3886,6 @@ class GameEngine:
                     return True
             return False
 
-        def replace_first_non_yggdrasil() -> bool:
-            for idx in range(len(cards) - 1, -1, -1):
-                if getattr(cards[idx], 'def_id', None) != 'Yggdrasil':
-                    cards[idx] = self._apply_setup_modifiers_to_card(player_id, CardInstance(def_id='Yggdrasil'))
-                    return True
-            return False
-
         event_id = self.opening_event_picks[player_id]
         sub = self.opening_event_sub_choices[player_id]
         if not self._is_builtin_opening_event(event_id):
@@ -3907,10 +3917,7 @@ class GameEngine:
                 return [c.to_dict() for c in cards]
             target_def = sub.get('yggdrasil_convert_def_id') if isinstance(sub, dict) else None
             if target_def:
-                if not replace_first(target_def, self._apply_setup_modifiers_to_card(player_id, CardInstance(def_id='Yggdrasil'))):
-                    replace_first_non_yggdrasil()
-            else:
-                replace_first_non_yggdrasil()
+                replace_first(target_def, self._apply_setup_modifiers_to_card(player_id, CardInstance(def_id='Yggdrasil')))
         elif event_id == 5 and isinstance(sub, dict):
             for def_id in list(sub.get('add_def_ids') or sub.get('def_ids') or [])[:1]:
                 if self._card_allowed_for_fated_draw(str(def_id)):
@@ -4007,6 +4014,21 @@ class GameEngine:
             ps.custom_vars['setup_magic_acceleration'] = 1
             ps.custom_vars['setup_magic_acceleration_play_count'] = 0
             self.log_msg(f"{self.pn(player_id)}【魔力加速】：每打出2张牌回复1M")
+        elif event_id == 11:
+            selected_def_ids = []
+            if isinstance(sub, dict):
+                selected_def_ids = list(sub.get('topdeck_def_ids') or sub.get('def_ids') or [])[:3]
+            moved = []
+            for def_id in selected_def_ids:
+                index = next((
+                    idx for idx, deck_card in enumerate(ps.deck)
+                    if deck_card.def_id == str(def_id) and self._card_selectable_by_action(deck_card)
+                ), -1)
+                if index >= 0:
+                    moved.append(ps.deck.pop(index))
+            if moved:
+                ps.deck[0:0] = moved
+            self.log_msg(f"{self.pn(player_id)}【花序编排】：{len(moved)}张牌移至抽牌堆顶")
 
     def _apply_v2_opening_event(self, player_id: int, event_id) -> bool:
         if event_id is None:
@@ -5638,6 +5660,8 @@ class GameEngine:
             counter_removed = responder.remove_hand_card(card_instance_id)
             if counter_removed is None:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+            if self._card_is(card, 'Broccoli', 'sewers:broccoli'):
+                card._sewers_was_countered_this_play = True
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}{self._card_log_marker(counter_removed)}进行反制！")
             self._note_achievement_counter_success(responder_id)
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
@@ -7027,7 +7051,6 @@ class GameEngine:
 
     def _atomic_assembler_effect(self, player_id, card, params, log, choice, context):
         """Assembler: choose a hand card to exile, then random effect."""
-        ps = self.players[player_id]
         target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
         if not self._valid_player_id(target_id):
             return
@@ -7038,11 +7061,12 @@ class GameEngine:
             if not self._valid_player_id(target_id):
                 return
             target_ps = self.players[target_id]
-            target = ps.find_hand_card(choice['target_instance_id'])
-            if target:
-                ps.hand.remove(target)
-                self._put_card_in_exile(player_id, target)
-                self.log_msg(f"{self.pn(player_id)}放逐了{target.name_cn}")
+            target = target_ps.find_hand_card(choice['target_instance_id'])
+            if target is None or not self._card_selectable_by_action(target):
+                return
+            target_ps.hand.remove(target)
+            self._put_card_in_exile(target_id, target)
+            self.log_msg(f"{self.pn(player_id)}用重构机放逐了{self.pn(target_id)}的{target.name_cn}")
             # Random effect
             import random as _random
             roll = _random.randint(1, 3)
@@ -7068,16 +7092,23 @@ class GameEngine:
                 self.log_msg(f"{self.pn(player_id)}的重构机：{self.pn(target_id)}获得2层碎片和1张碎片")
         else:
             # Phase 1: show choice
-            hand_cards = [c.to_dict() for c in ps.hand if c.instance_id != card.instance_id]
+            hand_cards = self._visible_card_dicts(
+                [c for c in target_ps.hand if c.instance_id != card.instance_id],
+                player_id,
+                target_id,
+                choice_list=True,
+            )
             if hand_cards:
                 self.pending_choice = {
                     'player_id': player_id,
                     'choice_type': 'choose_card_from_hand',
+                    'choice_params': {'cancellable': False},
                     'card': card.to_dict(),
                     'hand_cards': hand_cards,
-                    'message': '重构机：选择一张手牌放逐',
+                    'message': f'重构机：选择{self.pn(target_id)}的一张手牌放逐',
                     'target_player_id': target_id,
                     'original_choice': {'target_player_id': target_id},
+                    'already_paid': True,
                 }
 
     def _atomic_request_reorder_deck(self, player_id, card, params, log, choice, context):
@@ -9858,6 +9889,11 @@ class GameEngine:
             'current_event': event_name,
             'current_action': {'choice': choice or {}, **extra_context},
         }
+        # Cross-target equipment events run from the affected player's context,
+        # but costs and choices still belong to the equipment owner.
+        for equipment_key in ('selected_equipment_instance_id', 'selected_equipment_owner_id'):
+            if equipment_key in extra_context:
+                context[equipment_key] = extra_context[equipment_key]
         if event_name == 'on_play' and 'wide_strike' in self._effective_card_flags(card):
             wide_targets = self._wide_strike_target_ids(player_id, card)
             context['wide_strike_targets'] = wide_targets
@@ -10477,7 +10513,7 @@ class GameEngine:
         ps = self.players[player_id]
         immune = self._is_status_immune(player_id)
         cleared = []
-        for attr, label in (('blind', '失明'),):
+        for attr, label in (('blind', '失明'), ('dodge', '闪避')):
             value = int(getattr(ps, attr, 0) or 0)
             if value <= 0:
                 continue
@@ -13068,11 +13104,8 @@ class GameEngine:
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
         if not (0 <= target_id < len(self.players)):
             return
-        target = self.players[target_id]
-        dodge_before = max(0, int(getattr(target, 'dodge', 0) or 0))
         self.deal_attack_damage(target_id, 10, 1, attacker_id=player_id, source_card=card)
-        dodge_after = max(0, int(getattr(target, 'dodge', 0) or 0))
-        if dodge_after < dodge_before:
+        if bool(getattr(card, '_sewers_was_countered_this_play', False)):
             self.deal_attack_damage(target_id, 3, 2, attacker_id=player_id, source_card=card)
 
     def _atomic_sewers_blood_rose(self, player_id, card, params, log, choice, context):
@@ -13083,23 +13116,22 @@ class GameEngine:
             target_id,
             3,
             1,
-            is_precision=True,
             attacker_id=player_id,
             source_card=card,
         )
-        owner = self.players[player_id]
-        before = int(getattr(owner, 'health', 0) or 0)
-        owner.heal(max(0, int(dealt or 0)) * 4)
-        healed = max(0, int(getattr(owner, 'health', 0) or 0) - before)
-        if healed > 0:
-            self.log_msg(f"{self.pn(player_id)}回复{healed}H")
+        actual_damage = max(0, int(dealt or 0))
+        if actual_damage > 0:
+            effects = [{
+                'type': 'status_add_named',
+                'params': {'target': 'target', 'status': 'blind', 'amount': 1},
+            }]
+            self._register_timed_effect(player_id, target_id, 'target_turn_start', 1, effects, card)
         target = self.players[target_id]
-        target.blind = max(0, int(getattr(target, 'blind', 0) or 0)) + 1
-        self._normalize_status_value(target, 'blind')
-        self._note_achievement_status_peak(target_id)
-        if target.hand and not self._is_status_immune(target_id):
-            random.shuffle(target.hand)
-            self.log_msg(f"{self.pn(target_id)}因失明打乱手牌")
+        before = int(getattr(target, 'health', 0) or 0)
+        target.heal(actual_damage * 4)
+        healed = max(0, int(getattr(target, 'health', 0) or 0) - before)
+        if healed > 0:
+            self.log_msg(f"{self.pn(target_id)}回复{healed}H")
 
     def _atomic_hel_add_luck(self, player_id, card, params, log, choice, context):
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)

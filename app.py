@@ -70,7 +70,9 @@ from r2_mods import (
 from db import (
     DB_PATH,
     add_user_play_seconds,
+    admin_change_username,
     admin_clear_user_role,
+    admin_grant_user_achievement,
     admin_adjust_user_gr,
     admin_change_user_password,
     admin_set_user_gr,
@@ -153,6 +155,7 @@ from db import (
     increment_user_stats,
     init_db,
     list_admin_users,
+    list_achievement_definitions,
     save_match_summary,
     send_dm_message,
     send_feedback_message,
@@ -287,7 +290,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260713-wide-strike-targets-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260714-card-effect-size-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -4036,6 +4039,9 @@ def _default_event_sub_choice(engine, pidx):
             if str(def_id) != 'Yggdrasil':
                 return {'yggdrasil_convert_def_id': str(def_id)}
         return {}
+    if event_id == '11':
+        candidates = list(engine.opening_event_topdeck_candidates(pidx)) if hasattr(engine, 'opening_event_topdeck_candidates') else []
+        return {'topdeck_def_ids': candidates[:3]}
     return {}
 
 
@@ -6805,22 +6811,153 @@ ADMIN_COMMAND_TREE = {
         'children': {},
     },
     'player': {
-        'summary': '玩家与账号',
-        'usage': 'player <list|get|kick|afkcheck|mute|ban|unban|password|role|dew> ...',
+        'summary': '在线玩家与连接',
+        'usage': 'player <list|get|kick|afkcheck> ...',
         'children': {
             'list': {'summary': '列出在线玩家', 'usage': 'player list'},
             'get': {'summary': '查看在线玩家或注册账号详情', 'usage': 'player get <sid|昵称|ID|注册顺序|用户名>'},
             'kick': {'summary': '踢出在线玩家', 'usage': 'player kick <sid|昵称>'},
             'afkcheck': {'summary': '向在线玩家发送挂机检测', 'usage': 'player afkcheck <sid|昵称|all> [confirm] [原因]'},
-            'mute': {'summary': '禁言在线玩家', 'usage': 'player mute <sid|昵称> [秒数]'},
-            'ban': {'summary': '封禁账号并踢下线', 'usage': 'player ban <ID|注册顺序|用户名> [秒数] [原因]'},
-            'unban': {'summary': '解除账号封禁', 'usage': 'player unban <ID|注册顺序|用户名>'},
-            'password': {'summary': '管理员修改账号密码', 'usage': 'player password <ID|注册顺序|用户名> <新密码>'},
-            'role': {'summary': '管理账号身份', 'usage': 'player role list|get|set|clear ...'},
-            'dew': {'summary': '管理荆露', 'usage': 'player dew get|add|addpaid|spend|tx <ID|注册顺序|用户名> [数量] [原因]'},
+        },
+    },
+    'account': {
+        'summary': '账号与持久数据',
+        'usage': 'account <get|username|password|achievement|dew|rating|role|ban|unban> ...',
+        'children': {
+            'get': {'summary': '查看注册账号详情', 'usage': 'account get <ID|注册顺序|用户名>'},
+            'username': {'summary': '修改账号用户名', 'usage': 'account username <ID|注册顺序|用户名> <新用户名>'},
+            'password': {'summary': '修改账号密码并退出所有设备', 'usage': 'account password <ID|注册顺序|用户名> <新密码>'},
+            'achievement': {
+                'summary': '查看或发放成就',
+                'usage': 'account achievement <list|grant> ...',
+                'children': {
+                    'list': {'summary': '查看账号成就', 'usage': 'account achievement list <账号>'},
+                    'grant': {'summary': '向账号发放成就', 'usage': 'account achievement grant <账号> <成就ID>'},
+                },
+            },
+            'dew': {
+                'summary': '管理荆露',
+                'usage': 'account dew <get|add|addpaid|spend|tx> ...',
+                'children': {
+                    'get': {'summary': '查看余额', 'usage': 'account dew get <账号>'},
+                    'add': {'summary': '增减普通荆露', 'usage': 'account dew add <账号> <数量> [原因]'},
+                    'addpaid': {'summary': '增减充值荆露', 'usage': 'account dew addpaid <账号> <数量> [原因]'},
+                    'spend': {'summary': '扣除荆露', 'usage': 'account dew spend <账号> <数量> [原因]'},
+                    'tx': {'summary': '查看最近流水', 'usage': 'account dew tx <账号>'},
+                },
+            },
+            'rating': {
+                'summary': '管理花阶分',
+                'usage': 'account rating <info|set|add|snapshot> ...',
+                'children': {
+                    'info': {'summary': '查看账号花阶分', 'usage': 'account rating info <账号>'},
+                    'set': {'summary': '设置花阶分', 'usage': 'account rating set <账号> <season|total|both> <数值> [原因]'},
+                    'add': {'summary': '增减花阶分', 'usage': 'account rating add <账号> <season|total|both> <数值> [原因]'},
+                    'snapshot': {'summary': '写入今日分数快照', 'usage': 'account rating snapshot <账号>'},
+                },
+            },
+            'role': {
+                'summary': '管理账号身份',
+                'usage': 'account role <list|get|set|clear> ...',
+                'children': {
+                    'list': {'summary': '列出特殊身份', 'usage': 'account role list [搜索]'},
+                    'get': {'summary': '查看账号身份', 'usage': 'account role get <账号>'},
+                    'set': {'summary': '设置账号身份', 'usage': 'account role set <账号> <身份> [选项]'},
+                    'clear': {'summary': '清除特殊身份', 'usage': 'account role clear <账号>'},
+                },
+            },
+            'ban': {'summary': '封禁账号并踢下线', 'usage': 'account ban <账号> [时长] [原因]'},
+            'unban': {'summary': '解除账号封禁', 'usage': 'account unban <账号>'},
+        },
+    },
+    'game': {
+        'summary': '房间、对局及对局内对象',
+        'usage': 'game <list|info|log|chat|state|history|action|player|pending> ...',
+        'children': {
+            'list': {'summary': '列出当前对局', 'usage': 'game list'},
+            'info': {'summary': '查看房间摘要', 'usage': 'game info <房间ID>'},
+            'log': {'summary': '查看战斗日志', 'usage': 'game log <房间ID> [数量]'},
+            'chat': {'summary': '查看对局聊天', 'usage': 'game chat <房间ID> [数量]'},
+            'state': {'summary': '查看精简状态', 'usage': 'game state <房间ID>'},
+            'history': {'summary': '查看最近历史对局', 'usage': 'game history [数量]'},
+            'action': {
+                'summary': '管理回合与对局',
+                'usage': 'game action <skip|end> ...',
+                'children': {
+                    'skip': {'summary': '跳过当前回合', 'usage': 'game action skip <房间ID>'},
+                    'end': {'summary': '强制结束对局', 'usage': 'game action end <房间ID> <0|1|draw>'},
+                },
+            },
+            'player': {
+                'summary': '修改对局内玩家',
+                'usage': 'game player <房间ID> <玩家序号> <info|resource|status|card> ...',
+                'children': {
+                    'resource': {'summary': '设置或增减H/E/M等数值', 'usage': 'game player <房间> <玩家> resource <set|add> <属性> <数值>'},
+                    'status': {'summary': '查看、设置或清除状态', 'usage': 'game player <房间> <玩家> status <list|get|set|add|remove|clear> [...]'},
+                    'card': {'summary': '查看、加入或删除牌', 'usage': 'game player <房间> <玩家> card <list|add|remove> [...]'},
+                },
+            },
+            'pending': {'summary': '查看待处理操作', 'usage': 'game pending get <房间ID>'},
+        },
+    },
+    'lobby': {
+        'summary': '大厅、聊天与广播',
+        'usage': 'lobby <chat|broadcast> ...',
+        'children': {
+            'chat': {'summary': '查看大厅聊天缓存', 'usage': 'lobby chat [数量]'},
+            'broadcast': {'summary': '发送服务器广播', 'usage': 'lobby broadcast <内容>'},
+        },
+    },
+    'moderation': {
+        'summary': '处罚与安全记录',
+        'usage': 'moderation <mute|ban|unban|ip|report|suspicious> ...',
+        'children': {
+            'mute': {'summary': '禁言在线玩家', 'usage': 'moderation mute <sid|昵称> [时长]'},
+            'ban': {'summary': '封禁账号', 'usage': 'moderation ban <账号> [时长] [原因]'},
+            'unban': {'summary': '解除账号封禁', 'usage': 'moderation unban <账号>'},
+            'ip': {
+                'summary': '管理 IP 封禁',
+                'usage': 'moderation ip <list|ban|unban> ...',
+                'children': {
+                    'list': {'summary': '列出 IP 封禁', 'usage': 'moderation ip list [all]'},
+                    'ban': {'summary': '封禁 IP', 'usage': 'moderation ip ban <IP> [时长秒] [原因]'},
+                    'unban': {'summary': '解除 IP 封禁', 'usage': 'moderation ip unban <IP>'},
+                },
+            },
+            'report': {
+                'summary': '查看或处理举报',
+                'usage': 'moderation report <list|get|resolve> ...',
+                'children': {
+                    'list': {'summary': '列出举报', 'usage': 'moderation report list [pending|resolved|dismissed] [数量]'},
+                    'get': {'summary': '查看举报详情', 'usage': 'moderation report get <举报ID>'},
+                    'resolve': {'summary': '标记举报处理结果', 'usage': 'moderation report resolve <举报ID> <accept|reject|abusive> [备注]'},
+                },
+            },
+            'suspicious': {'summary': '查看可疑安全事件', 'usage': 'moderation suspicious [数量]'},
+        },
+    },
+    'data': {
+        'summary': '统计、回放与数据库维护',
+        'usage': 'data <summary|draftstats|rating|rebuildstats|dewbackfill|achievementbackfill> ...',
+        'children': {
+            'summary': {'summary': '查看数据库、回放和快照占用', 'usage': 'data summary'},
+            'draftstats': {'summary': '查看卡牌选取统计', 'usage': 'data draftstats [1v1|2v2]'},
+            'rating': {
+                'summary': '查看或重建花阶分数据',
+                'usage': 'data rating <season|list|rebuild> ...',
+                'children': {
+                    'season': {'summary': '查看当前赛季', 'usage': 'data rating season'},
+                    'list': {'summary': '查看花阶分排行', 'usage': 'data rating list [season|total] [数量]'},
+                    'rebuild': {'summary': '从历史对局重建花阶分', 'usage': 'data rating rebuild <preview|confirm>'},
+                },
+            },
+            'rebuildstats': {'summary': '重建账号统计', 'usage': 'data rebuildstats confirm'},
+            'dewbackfill': {'summary': '补发历史对局荆露', 'usage': 'data dewbackfill <preview|confirm>'},
+            'achievementbackfill': {'summary': '补发可重算成就', 'usage': 'data achievementbackfill <preview|confirm>'},
         },
     },
     'room': {
+        'hidden': True,
         'summary': '房间与对局',
         'usage': 'room <list|get|players|log|chat|state|skip|end|set|history> ...',
         'children': {
@@ -6837,6 +6974,7 @@ ADMIN_COMMAND_TREE = {
         },
     },
     'card': {
+        'hidden': True,
         'summary': '对局内卡牌操作',
         'usage': 'card <add|remove> ...',
         'children': {
@@ -6845,6 +6983,7 @@ ADMIN_COMMAND_TREE = {
         },
     },
     'mod': {
+        'hidden': True,
         'summary': '模组与卡池',
         'usage': 'mod <list|loadout> ...',
         'children': {
@@ -6853,6 +6992,7 @@ ADMIN_COMMAND_TREE = {
         },
     },
     'rating': {
+        'hidden': True,
         'summary': '花阶分与排行榜',
         'usage': 'rating <season|list|info|set|add|snapshot|rebuild> ...',
         'children': {
@@ -6866,6 +7006,7 @@ ADMIN_COMMAND_TREE = {
         },
     },
     'chat': {
+        'hidden': True,
         'summary': '聊天与广播',
         'usage': 'chat <broadcast|lobby|mute> ...',
         'children': {
@@ -6876,17 +7017,36 @@ ADMIN_COMMAND_TREE = {
     },
     'server': {
         'summary': '服务器状态与维护',
-        'usage': 'server <status|drain|pull|logs|suspicious|clear> ...',
+        'usage': 'server <status|drain|pull|logs|suspicious|mod|diagnose|clear> ...',
         'children': {
             'status': {'summary': '显示服务器摘要', 'usage': 'server status'},
             'drain': {'summary': '设置/查看静默更新排空模式', 'usage': 'server drain [on|off|status]'},
             'pull': {'summary': '手动拉取 GitHub origin/main', 'usage': 'server pull'},
             'logs': {'summary': '查看最近管理事件', 'usage': 'server logs [数量]'},
             'suspicious': {'summary': '查看最近可疑安全事件', 'usage': 'server suspicious [数量]'},
+            'mod': {
+                'summary': '查看模组与加载组合',
+                'usage': 'server mod <list|loadout> ...',
+                'children': {
+                    'list': {'summary': '列出已加载模组', 'usage': 'server mod list'},
+                    'loadout': {'summary': '查看玩家或房间的模组组合', 'usage': 'server mod loadout <玩家|房间ID>'},
+                },
+            },
+            'diagnose': {
+                'summary': '诊断服务器、房间或玩家',
+                'usage': 'server diagnose <server|room|player|stuck> ...',
+                'children': {
+                    'server': {'summary': '诊断服务器', 'usage': 'server diagnose server'},
+                    'room': {'summary': '诊断房间', 'usage': 'server diagnose room <房间ID>'},
+                    'player': {'summary': '诊断玩家', 'usage': 'server diagnose player <玩家|账号>'},
+                    'stuck': {'summary': '列出疑似卡住的房间', 'usage': 'server diagnose stuck'},
+                },
+            },
             'clear': {'summary': '清空终端输出', 'usage': 'server clear'},
         },
     },
     'storage': {
+        'hidden': True,
         'summary': '数据、统计与回放',
         'usage': 'storage <summary|draftstats|rebuildstats|dewbackfill|achievementbackfill> ...',
         'children': {
@@ -6898,6 +7058,7 @@ ADMIN_COMMAND_TREE = {
         },
     },
     'report': {
+        'hidden': True,
         'summary': '举报与安全记录',
         'usage': 'report <suspicious> ...',
         'children': {
@@ -6905,6 +7066,7 @@ ADMIN_COMMAND_TREE = {
         },
     },
     'diagnose': {
+        'hidden': True,
         'summary': '一键诊断',
         'usage': 'diagnose <server|room|player|stuck> ...',
         'children': {
@@ -6915,69 +7077,6 @@ ADMIN_COMMAND_TREE = {
         },
     },
 }
-
-ADMIN_COMMANDS = {
-    'help': 'help [命令] - 显示分层帮助',
-    'player': 'player - 玩家与账号',
-    'room': 'room - 房间与对局',
-    'card': 'card - 对局内卡牌操作',
-    'mod': 'mod - 模组与卡池',
-    'rating': 'rating - 花阶分与排行榜',
-    'chat': 'chat - 聊天与广播',
-    'server': 'server - 服务器状态与维护',
-    'storage': 'storage - 数据、统计与回放',
-    'report': 'report - 举报与安全记录',
-    'diagnose': 'diagnose - 一键诊断',
-}
-
-ADMIN_LEGACY_COMMANDS = {
-    'status': 'server status',
-    'drain': 'server drain',
-    'players': 'player list',
-    'rooms': 'room list',
-    'roomplayers': 'room players',
-    'logs': 'server logs',
-    'suspicious': 'server suspicious',
-    'lobbychat': 'chat lobby',
-    'history': 'room history',
-    'draftstats': 'storage draftstats',
-    'rebuildstats': 'storage rebuildstats',
-    'dewbackfill': 'storage dewbackfill',
-    'backfilldew': 'storage dewbackfill',
-    'achievementbackfill': 'storage achievementbackfill',
-    'backfillachievements': 'storage achievementbackfill',
-    'achievementsbackfill': 'storage achievementbackfill',
-    'broadcast': 'chat broadcast',
-    'kick': 'player kick',
-    'afkcheck': 'player afkcheck',
-    'afk': 'player afkcheck',
-    'mutechat': 'player mute',
-    'userpass': 'player password',
-    'banuser': 'player ban',
-    'banaccount': 'player ban',
-    'unbanuser': 'player unban',
-    'unbanaccount': 'player unban',
-    'role': 'player role',
-    'userrole': 'player role',
-    'dew': 'player dew',
-    'thorndew': 'player dew',
-    'jinglu': 'player dew',
-    '荆露': 'player dew',
-    'gr': 'rating',
-    'gardenrating': 'rating',
-    'garden-rating': 'rating',
-    '花阶分': 'rating',
-    'gitpull': 'server pull',
-    'pullmain': 'server pull',
-    'updatecode': 'server pull',
-    'skip': 'room skip',
-    'endgame': 'room end',
-    'set': 'room set',
-    'givecard': 'card add',
-    'delcard': 'card remove',
-    'clear': 'server clear',
-}
-
 
 def _usage_for_command(command_path):
     node = ADMIN_COMMAND_TREE
@@ -6995,37 +7094,39 @@ def render_admin_help(parts=None):
     if not parts:
         lines = ['可用一级命令：']
         for name, meta in ADMIN_COMMAND_TREE.items():
+            if meta.get('hidden'):
+                continue
             lines.append(f"/{name:<8} {meta.get('summary', '')}")
         lines.append('')
-        lines.append('输入 /help <命令> 查看二级命令，例如：/help card')
+        lines.append('输入 /help <命令> 逐级查看子命令，例如：/help game player')
         return '\n'.join(lines)
+    visible_roots = {name: meta for name, meta in ADMIN_COMMAND_TREE.items() if not meta.get('hidden')}
     first = parts[0]
-    if first not in ADMIN_COMMAND_TREE:
-        suggestion = difflib.get_close_matches(first, ADMIN_COMMAND_TREE.keys(), n=1)
+    if first not in visible_roots:
+        suggestion = difflib.get_close_matches(first, visible_roots.keys(), n=1)
         extra = f"\n你是不是想输入：/{suggestion[0]}" if suggestion else ''
         return f"未知命令：/{first}{extra}"
-    meta = ADMIN_COMMAND_TREE[first]
-    if len(parts) == 1:
-        lines = [f"/{first} - {meta.get('summary', '')}", '', f"用法：/{meta.get('usage', first)}"]
+    meta = visible_roots[first]
+    path = [first]
+    for token in parts[1:]:
         children = meta.get('children', {})
-        if children:
-            lines.extend(['', '子命令：'])
-            for name, child in children.items():
-                lines.append(f"  {name:<12} {child.get('summary', '')}")
-            lines.append('')
-            lines.append(f"输入 /help {first} <子命令> 查看具体用法。")
-        return '\n'.join(lines)
-    second = parts[1]
-    child = meta.get('children', {}).get(second)
-    if not child:
-        suggestion = difflib.get_close_matches(second, meta.get('children', {}).keys(), n=1)
-        extra = f"\n你是不是想输入：/{first} {suggestion[0]}" if suggestion else ''
-        return f"未知子命令：/{first} {second}{extra}"
-    return '\n'.join([
-        f"/{first} {second} - {child.get('summary', '')}",
-        '',
-        f"用法：/{child.get('usage', first + ' ' + second)}",
-    ])
+        child = children.get(token)
+        if not child or child.get('hidden'):
+            visible_children = [name for name, item in children.items() if not item.get('hidden')]
+            suggestion = difflib.get_close_matches(token, visible_children, n=1)
+            extra = f"\n你是不是想输入：/{' '.join(path + [suggestion[0]])}" if suggestion else ''
+            return f"未知子命令：/{' '.join(path + [token])}{extra}"
+        meta = child
+        path.append(token)
+    command_path = ' '.join(path)
+    lines = [f"/{command_path} - {meta.get('summary', '')}", '', f"用法：/{meta.get('usage', command_path)}"]
+    children = {name: item for name, item in meta.get('children', {}).items() if not item.get('hidden')}
+    if children:
+        lines.extend(['', '子命令：'])
+        for name, child in children.items():
+            lines.append(f"  {name:<12} {child.get('summary', '')}")
+        lines.extend(['', f"输入 /help {command_path} <子命令> 继续查看。"])
+    return '\n'.join(lines)
 
 
 def command_error(command, pointer=0, expected='', kind='参数错误'):
@@ -7035,7 +7136,8 @@ def command_error(command, pointer=0, expected='', kind='参数错误'):
 
 
 def unknown_command_error(command, cmd):
-    suggestion = difflib.get_close_matches(cmd, list(ADMIN_COMMAND_TREE.keys()) + list(ADMIN_LEGACY_COMMANDS.keys()), n=1)
+    public_commands = [name for name, meta in ADMIN_COMMAND_TREE.items() if not meta.get('hidden')]
+    suggestion = difflib.get_close_matches(cmd, public_commands, n=1)
     extra = f'\n你是不是想输入：/{suggestion[0]}' if suggestion else ''
     return f'未知命令：/{cmd}{extra}\n输入 /help 查看可用命令。'
 
@@ -7048,7 +7150,8 @@ def _translate_structured_admin_command(parts):
     if not parts:
         return None, None
     cmd = parts[0].lower()
-    if cmd not in ADMIN_COMMAND_TREE or cmd == 'help':
+    meta = ADMIN_COMMAND_TREE.get(cmd)
+    if not meta or meta.get('hidden') or cmd == 'help':
         return None, None
     sub = parts[1].lower() if len(parts) > 1 else ''
     rest = parts[2:]
@@ -7057,55 +7160,118 @@ def _translate_structured_admin_command(parts):
         ('player', 'get'): ['playerget', *rest],
         ('player', 'kick'): ['kick', *rest],
         ('player', 'afkcheck'): ['afkcheck', *rest],
-        ('player', 'mute'): ['mutechat', *rest],
-        ('player', 'ban'): ['banuser', *rest],
-        ('player', 'unban'): ['unbanuser', *rest],
-        ('player', 'password'): ['userpass', *rest],
-        ('player', 'role'): ['role', *rest],
-        ('player', 'dew'): ['dew', *rest],
-        ('room', 'list'): ['rooms'],
-        ('room', 'get'): ['roomget', *rest],
-        ('room', 'players'): ['roomplayers', *rest],
-        ('room', 'log'): ['roomlog', *rest],
-        ('room', 'chat'): ['roomchat', *rest],
-        ('room', 'state'): ['roomstate', *rest],
-        ('room', 'skip'): ['skip', *rest],
-        ('room', 'end'): ['endgame', *rest],
-        ('room', 'set'): ['set', *rest],
-        ('room', 'history'): ['history', *rest],
-        ('card', 'add'): ['givecard', *rest],
-        ('card', 'remove'): ['delcard', *rest],
-        ('mod', 'list'): ['modlist'],
-        ('mod', 'loadout'): ['modloadout', *rest],
-        ('rating', 'season'): ['rating-season'],
-        ('rating', 'list'): ['rating-list', *rest],
-        ('rating', 'info'): ['rating-info', *rest],
-        ('rating', 'set'): ['rating-set', *rest],
-        ('rating', 'add'): ['rating-add', *rest],
-        ('rating', 'snapshot'): ['rating-snapshot', *rest],
-        ('rating', 'rebuild'): ['rating-rebuild', *rest],
-        ('chat', 'broadcast'): ['broadcast', *rest],
-        ('chat', 'lobby'): ['lobbychat', *rest],
-        ('chat', 'mute'): ['mutechat', *rest],
+        ('account', 'get'): ['playerget', *rest],
+        ('account', 'username'): ['userrename', *rest],
+        ('account', 'password'): ['userpass', *rest],
+        ('account', 'dew'): ['dew', *rest],
+        ('account', 'role'): ['role', *rest],
+        ('account', 'ban'): ['banuser', *rest],
+        ('account', 'unban'): ['unbanuser', *rest],
+        ('game', 'list'): ['rooms'],
+        ('game', 'info'): ['roomget', *rest],
+        ('game', 'log'): ['roomlog', *rest],
+        ('game', 'chat'): ['roomchat', *rest],
+        ('game', 'state'): ['roomstate', *rest],
+        ('game', 'history'): ['history', *rest],
+        ('lobby', 'broadcast'): ['broadcast', *rest],
+        ('lobby', 'chat'): ['lobbychat', *rest],
+        ('moderation', 'mute'): ['mutechat', *rest],
+        ('moderation', 'ban'): ['banuser', *rest],
+        ('moderation', 'unban'): ['unbanuser', *rest],
+        ('moderation', 'suspicious'): ['suspicious', *rest],
         ('server', 'status'): ['status'],
         ('server', 'drain'): ['drain', *rest],
         ('server', 'pull'): ['gitpull'],
         ('server', 'logs'): ['logs', *rest],
         ('server', 'suspicious'): ['suspicious', *rest],
         ('server', 'clear'): ['clear'],
-        ('storage', 'summary'): ['storagesummary'],
-        ('storage', 'draftstats'): ['draftstats', *rest],
-        ('storage', 'rebuildstats'): ['rebuildstats', *rest],
-        ('storage', 'dewbackfill'): ['dewbackfill', *rest],
-        ('storage', 'achievementbackfill'): ['achievementbackfill', *rest],
-        ('report', 'suspicious'): ['suspicious', *rest],
-        ('diagnose', 'server'): ['diagnose-server'],
-        ('diagnose', 'room'): ['diagnose-room', *rest],
-        ('diagnose', 'player'): ['diagnose-player', *rest],
-        ('diagnose', 'stuck'): ['diagnose-stuck'],
+        ('data', 'summary'): ['storagesummary'],
+        ('data', 'draftstats'): ['draftstats', *rest],
+        ('data', 'rebuildstats'): ['rebuildstats', *rest],
+        ('data', 'dewbackfill'): ['dewbackfill', *rest],
+        ('data', 'achievementbackfill'): ['achievementbackfill', *rest],
     }
     if not sub:
         return None, render_admin_help([cmd])
+    if cmd == 'account' and sub == 'achievement':
+        action = str(rest[0] if rest else '').lower()
+        args = rest[1:]
+        if action == 'grant':
+            return _quote_admin_parts(['achievementgrant', *args]), None
+        if action == 'list':
+            return _quote_admin_parts(['achievementlist', *args]), None
+        return None, render_admin_help(['account', 'achievement'])
+    if cmd == 'account' and sub == 'rating':
+        action = str(rest[0] if rest else '').lower()
+        args = rest[1:]
+        if action in ('info', 'set', 'add', 'snapshot'):
+            return _quote_admin_parts([f'rating-{action}', *args]), None
+        return None, render_admin_help(['account', 'rating'])
+    if cmd == 'data' and sub == 'rating':
+        action = str(rest[0] if rest else '').lower()
+        args = rest[1:]
+        if action in ('season', 'list', 'rebuild'):
+            return _quote_admin_parts([f'rating-{action}', *args]), None
+        return None, render_admin_help(['data', 'rating'])
+    if cmd == 'server' and sub == 'mod':
+        action = str(rest[0] if rest else '').lower()
+        args = rest[1:]
+        if action == 'list':
+            return 'modlist', None
+        if action == 'loadout':
+            return _quote_admin_parts(['modloadout', *args]), None
+        return None, render_admin_help(['server', 'mod'])
+    if cmd == 'server' and sub == 'diagnose':
+        action = str(rest[0] if rest else '').lower()
+        args = rest[1:]
+        if action in ('server', 'room', 'player', 'stuck'):
+            return _quote_admin_parts([f'diagnose-{action}', *args]), None
+        return None, render_admin_help(['server', 'diagnose'])
+    if cmd == 'moderation' and sub in ('ip', 'report'):
+        action = str(rest[0] if rest else '').lower()
+        args = rest[1:]
+        allowed = ('list', 'ban', 'unban') if sub == 'ip' else ('list', 'get', 'resolve')
+        if action in allowed:
+            return _quote_admin_parts([f'{sub}{action}', *args]), None
+        return None, render_admin_help(['moderation', sub])
+    if cmd == 'game' and sub == 'action':
+        action = str(rest[0] if rest else '').lower()
+        args = rest[1:]
+        if action == 'skip':
+            return _quote_admin_parts(['skip', *args]), None
+        if action == 'end':
+            return _quote_admin_parts(['endgame', *args]), None
+        return None, render_admin_help(['game', 'action'])
+    if cmd == 'game' and sub == 'pending':
+        action = str(rest[0] if rest else '').lower()
+        args = rest[1:]
+        if action == 'get':
+            return _quote_admin_parts(['gamepending', action, *args]), None
+        return None, render_admin_help(['game', 'pending'])
+    if cmd == 'game' and sub == 'player':
+        if len(rest) < 3:
+            return None, render_admin_help(['game', 'player'])
+        room_id, player_index, domain = rest[0], rest[1], str(rest[2]).lower()
+        args = rest[3:]
+        if domain == 'info':
+            return _quote_admin_parts(['gameplayerinfo', room_id, player_index]), None
+        if domain == 'resource' and args:
+            action = str(args[0]).lower()
+            if action == 'set':
+                return _quote_admin_parts(['set', room_id, player_index, *args[1:]]), None
+            if action == 'add':
+                return _quote_admin_parts(['resourceadd', room_id, player_index, *args[1:]]), None
+        if domain == 'status':
+            return _quote_admin_parts(['gamestatus', room_id, player_index, *args]), None
+        if domain == 'card' and args:
+            action = str(args[0]).lower()
+            if action == 'add':
+                return _quote_admin_parts(['givecard', room_id, player_index, *args[1:]]), None
+            if action == 'remove':
+                return _quote_admin_parts(['delcard', room_id, player_index, *args[1:]]), None
+            if action == 'list':
+                return _quote_admin_parts(['gamecardlist', room_id, player_index, *args[1:]]), None
+        return None, render_admin_help(['game', 'player'])
     target = command_map.get((cmd, sub))
     if target is None:
         return None, render_admin_help([cmd, sub])
@@ -7478,7 +7644,7 @@ def admin_rating_rebuild_output(result, dry_run=True):
             )
     if dry_run:
         lines.append('')
-        lines.append('确认覆盖当前花阶分请输入：/rating rebuild confirm')
+        lines.append('确认覆盖当前花阶分请输入：/data rating rebuild confirm')
     return '\n'.join(lines)
 
 
@@ -7505,7 +7671,7 @@ def admin_dew_backfill_output(result):
             lines.append(f"  ... 另有 {len(errors) - 8} 条")
     if dry_run:
         lines.append('')
-        lines.append('确认补发请输入：/storage dewbackfill confirm')
+        lines.append('确认补发请输入：/data dewbackfill confirm')
     return '\n'.join(lines)
 
 
@@ -7532,7 +7698,7 @@ def admin_achievement_backfill_output(result):
                 lines.append(f"  match#{item.get('match_id')}: {item.get('events', 0)} 个可补事件")
     if dry_run:
         lines.append('')
-        lines.append('确认补发请输入：/storage achievementbackfill confirm')
+        lines.append('确认补发请输入：/data achievementbackfill confirm')
     return '\n'.join(lines)
 
 
@@ -7574,6 +7740,43 @@ def _find_online_player_for_admin(token):
         ):
             return psid, player
     return None, None
+
+
+def _sync_admin_username_to_online_players(user):
+    try:
+        user_id = int(user.get('id'))
+    except (TypeError, ValueError, AttributeError):
+        return []
+    username = str(user.get('username') or '').strip()
+    if not username:
+        return []
+    updated_sids = []
+    with _lock:
+        for sid, player in players.items():
+            try:
+                matches = int(player.get('user_id') or 0) == user_id
+            except (TypeError, ValueError):
+                matches = False
+            if not matches:
+                continue
+            player['nickname'] = username
+            player['display_name'] = username
+            updated_sids.append(sid)
+        for room in rooms.values():
+            for player_index, sid in enumerate(getattr(room, 'player_sids', []) or []):
+                profile = players.get(sid) or getattr(room, 'disconnected_players', {}).get(sid) or {}
+                try:
+                    matches = int(profile.get('user_id') or 0) == user_id
+                except (TypeError, ValueError):
+                    matches = False
+                if not matches:
+                    continue
+                profile['nickname'] = username
+                profile['display_name'] = username
+                names = getattr(room.engine, 'player_names', []) or []
+                if player_index < len(names):
+                    names[player_index] = username
+    return updated_sids
 
 
 def _format_online_player_detail(sid, player):
@@ -7875,6 +8078,211 @@ def _admin_card_label(card):
     return f'{name}#{getattr(card, "instance_id", "?")}'
 
 
+ADMIN_RESOURCE_ATTRS = {
+    'h': 'health', 'health': 'health',
+    'maxh': 'max_health', 'max_health': 'max_health',
+    'e': 'elixir', 'elixir': 'elixir',
+    'maxe': 'max_elixir', 'max_elixir': 'max_elixir',
+    'm': 'magic', 'magic': 'magic',
+    'maxm': 'max_magic', 'max_magic': 'max_magic',
+    'armor': 'armor',
+}
+
+ADMIN_STATUS_ATTRS = {
+    'poison': 'poison', '中毒': 'poison',
+    'fire': 'fire', 'burn': 'fire', '灼烧': 'fire',
+    'toxic': 'toxic', '淬毒': 'toxic',
+    'triangle': 'triangle_stacks', 'triangle_stacks': 'triangle_stacks', '三角形': 'triangle_stacks',
+    'dodge': 'dodge', '闪避': 'dodge',
+    'equipment_protection': 'equipment_protection', '装备护甲': 'equipment_protection',
+    'invincible': 'invincible', '无敌': 'invincible',
+    'skip_turn': 'skip_turn', 'dizzy': 'skip_turn', '眩晕': 'skip_turn',
+    'attack_blocked': 'attack_blocked', '禁攻': 'attack_blocked',
+    'untargetable': 'untargetable', '无法选中': 'untargetable',
+    'sluggish': 'sluggish', '迟缓': 'sluggish',
+    'overload': 'overload', '超载': 'overload',
+    'foresight': 'foresight', '预知': 'foresight',
+    'fracture': 'fracture', '破损': 'fracture',
+    'stagnation': 'stagnation', '滞留': 'stagnation',
+    'blind': 'blind', '失明': 'blind',
+    'heal_block': 'heal_block', '禁疗': 'heal_block',
+    'weakness': 'weakness', '虚弱': 'weakness',
+    'bleed': 'bleed', '流血': 'bleed',
+    'fragment': 'fragment_stacks', 'fragment_stacks': 'fragment_stacks', '碎片': 'fragment_stacks',
+}
+
+ADMIN_STATUS_CANONICAL = {
+    attr: next(name for name, mapped in ADMIN_STATUS_ATTRS.items() if mapped == attr and name.isascii())
+    for attr in set(ADMIN_STATUS_ATTRS.values())
+}
+
+
+def _admin_room_player(room_id, pidx):
+    room = rooms.get(int(room_id))
+    if room is None:
+        return None, None, f'不存在房间：{room_id}'
+    try:
+        player_index = int(pidx)
+    except (TypeError, ValueError):
+        return room, None, '玩家序号必须是整数'
+    engine_players = getattr(room.engine, 'players', []) or []
+    if player_index < 0 or player_index >= len(engine_players):
+        return room, None, f'玩家序号必须在 0-{len(engine_players) - 1} 之间'
+    return room, engine_players[player_index], ''
+
+
+def admin_game_player_info_output(room_id, pidx):
+    with _lock:
+        room, ps, error = _admin_room_player(room_id, pidx)
+        if error:
+            return error
+        player_index = int(pidx)
+        player_sids = getattr(room, 'player_sids', []) or []
+        sid = player_sids[player_index] if player_index < len(player_sids) else None
+        name = room_player_nickname(room, sid, f'Player {player_index}')
+        statuses = _admin_status_items(ps)
+        return '\n'.join([
+            f'房间 #{room_id} 玩家 {player_index}: {name}',
+            f'H={ps.health}/{ps.max_health} E={ps.elixir}/{ps.max_elixir} M={ps.magic}/{ps.max_magic} 护甲={ps.armor}',
+            f'手牌={len(ps.hand)} 抽牌堆={len(ps.deck)} 弃牌堆={len(ps.discard)} 放逐区={len(ps.exile)} 装备={len(ps.equipment)}',
+            '状态：' + (', '.join(f'{key}={value}' for key, value in statuses) if statuses else '无'),
+        ])
+
+
+def _admin_status_items(ps):
+    items = []
+    for attr, name in sorted(ADMIN_STATUS_CANONICAL.items(), key=lambda item: item[1]):
+        value = getattr(ps, attr, 0)
+        numeric = int(bool(value)) if isinstance(value, bool) else int(value or 0)
+        if numeric:
+            items.append((name, numeric))
+    for name, value in sorted((getattr(ps, 'custom_statuses', {}) or {}).items()):
+        try:
+            numeric = int(value or 0)
+        except (TypeError, ValueError):
+            continue
+        if numeric:
+            items.append((str(name), numeric))
+    return items
+
+
+def _admin_status_value(ps, status):
+    status_key = str(status or '').strip()
+    attr = ADMIN_STATUS_ATTRS.get(status_key.lower()) or ADMIN_STATUS_ATTRS.get(status_key)
+    if attr:
+        value = getattr(ps, attr, 0)
+        return int(bool(value)) if isinstance(value, bool) else int(value or 0), attr
+    custom = getattr(ps, 'custom_statuses', {}) or {}
+    return int(custom.get(status_key, 0) or 0), None
+
+
+def _set_admin_status_value(engine, ps, status, value):
+    status_key = str(status or '').strip()
+    attr = ADMIN_STATUS_ATTRS.get(status_key.lower()) or ADMIN_STATUS_ATTRS.get(status_key)
+    value = max(0, int(value))
+    if attr:
+        current = getattr(ps, attr, 0)
+        setattr(ps, attr, bool(value) if isinstance(current, bool) else value)
+        if attr == 'invincible' and not value:
+            ps.invincible_until_player = None
+            ps.invincible_granted_round = -1
+            ps.invincible_granted_turn_marker = -1
+        return ADMIN_STATUS_CANONICAL.get(attr, status_key), value
+    ps.custom_statuses = getattr(ps, 'custom_statuses', {}) or {}
+    if status_key in ('status_immune', 'immune', '状态免疫'):
+        for alias in ('status_immune', 'immune', '状态免疫'):
+            ps.custom_statuses.pop(alias, None)
+        if value:
+            ps.custom_statuses['status_immune'] = 1
+        return 'status_immune', 1 if value else 0
+    if value:
+        ps.custom_statuses[status_key] = value
+    else:
+        ps.custom_statuses.pop(status_key, None)
+    try:
+        engine._normalize_status_value(ps, status_key)
+    except Exception:
+        pass
+    return status_key, value
+
+
+def admin_game_status(room_id, pidx, action, status=None, value=None):
+    action = str(action or 'list').lower()
+    with _lock:
+        room, ps, error = _admin_room_player(room_id, pidx)
+        if error:
+            return False, error
+        if action == 'list':
+            items = _admin_status_items(ps)
+            return True, '\n'.join(f'{name}={amount}' for name, amount in items) or '无状态。'
+        if action == 'get':
+            if not status:
+                return False, '缺少状态ID'
+            amount, _attr = _admin_status_value(ps, status)
+            return True, f'{status}={amount}'
+        if action == 'clear':
+            for attr in ADMIN_STATUS_CANONICAL:
+                current = getattr(ps, attr, 0)
+                setattr(ps, attr, False if isinstance(current, bool) else 0)
+            ps.custom_statuses = {}
+            ps.invincible_until_player = None
+            ps.invincible_granted_round = -1
+            ps.invincible_granted_turn_marker = -1
+            changed = '全部状态'
+        elif action in ('set', 'add', 'remove'):
+            if not status:
+                return False, '缺少状态ID'
+            current, _attr = _admin_status_value(ps, status)
+            amount = 1 if value is None else int(value)
+            target = amount if action == 'set' else current + amount if action == 'add' else current - amount
+            normalized, final_value = _set_admin_status_value(room.engine, ps, status, target)
+            changed = f'{normalized}={final_value}'
+        else:
+            return False, '操作必须是 list/get/set/add/remove/clear'
+        record_room_replay_action(room, 'admin_status_change', None, {
+            'player_id': int(pidx), 'action': action, 'status': status, 'value': value,
+        })
+    broadcast_game_state(room)
+    return True, f'已修改房间 {room_id} 玩家 {pidx}：{changed}'
+
+
+def admin_game_card_list_output(room_id, pidx, zone='all'):
+    try:
+        normalized_zone = normalize_admin_card_zone(zone or 'all')
+    except ValueError as exc:
+        return str(exc)
+    with _lock:
+        _room, ps, error = _admin_room_player(room_id, pidx)
+        if error:
+            return error
+        zones = ['hand', 'deck', 'discard', 'exile', 'equipment'] if normalized_zone == 'all' else [normalized_zone]
+        lines = []
+        for zone_name in zones:
+            items = list(_admin_zone_items(ps, zone_name) or [])
+            lines.append(f'[{zone_name}] {len(items)}')
+            lines.extend(f'  #{index} {_admin_card_label(_admin_card_from_item(item))}' for index, item in enumerate(items))
+        return '\n'.join(lines)
+
+
+def admin_game_pending_output(room_id):
+    with _lock:
+        room = rooms.get(int(room_id))
+        if room is None:
+            return f'不存在房间：{room_id}'
+        engine = room.engine
+        payload = {
+            'phase': getattr(engine, 'phase', None),
+            'current_player': getattr(engine, 'current_player', None),
+            'pending_response': getattr(engine, 'pending_response', None),
+            'pending_choice': getattr(engine, 'pending_choice', None),
+            'pending_v2_ui': getattr(engine, 'pending_v2_ui', None),
+            'action_lock': bool(getattr(room, 'action_lock', None) and room.action_lock.locked()),
+            'timer_player': getattr(room, 'action_timer_player', None),
+            'timer_remaining': getattr(room, 'action_timer_remaining', None),
+        }
+    return json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+
+
 def _admin_selector_matches(item, selector):
     card = _admin_card_from_item(item)
     if selector['type'] == 'all':
@@ -7953,7 +8361,7 @@ def send_system_broadcast(message):
     return sent
 
 
-def execute_admin_command(line):
+def execute_admin_command(line, _internal=False):
     raw = (line or '').strip()
     if not raw:
         return {'success': False, 'output': command_error('', 0, '指令')}
@@ -7966,18 +8374,19 @@ def execute_admin_command(line):
     except ValueError as exc:
         return {'success': False, 'output': f'指令解析失败：{exc}'}
     cmd = parts[0].lower()
-    if cmd in ('gr', 'gardenrating', 'garden-rating', '花阶分'):
-        translated_parts = ['rating', *parts[1:]]
-        return execute_admin_command(_quote_admin_parts(translated_parts))
+    public_roots = {
+        name for name, meta in ADMIN_COMMAND_TREE.items()
+        if not meta.get('hidden')
+    }
+    if not _internal and cmd not in public_roots:
+        return {'success': False, 'output': unknown_command_error(raw, cmd)}
     if cmd == 'help':
         return {'success': True, 'output': render_admin_help(parts[1:])}
-    if cmd == 'rating' and len(parts) == 1:
-        return {'success': True, 'output': render_admin_help(['rating'])}
     translated, structured_error = _translate_structured_admin_command(parts)
     if structured_error:
         return {'success': False, 'output': structured_error}
     if translated:
-        return execute_admin_command(translated)
+        return execute_admin_command(translated, _internal=True)
     if cmd == 'clear':
         return {'success': True, 'output': '', 'clear': True}
     if cmd in ('gitpull', 'pullmain', 'updatecode'):
@@ -8050,22 +8459,45 @@ def execute_admin_command(line):
         )}
     if cmd == 'roomget':
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), 'room get <房间ID>')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'game info <房间ID>')}
         return {'success': True, 'output': admin_room_get_output(parse_int_token(parts[1], 'room_id'))}
     if cmd == 'roomlog':
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), 'room log <房间ID> [数量]')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'game log <房间ID> [数量]')}
         count = parse_int_token(parts[2], 'count') if len(parts) > 2 else 40
         return {'success': True, 'output': admin_room_log_output(parse_int_token(parts[1], 'room_id'), count)}
     if cmd == 'roomchat':
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), 'room chat <房间ID> [数量]')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'game chat <房间ID> [数量]')}
         count = parse_int_token(parts[2], 'count') if len(parts) > 2 else 60
         return {'success': True, 'output': admin_room_chat_output(parse_int_token(parts[1], 'room_id'), count)}
     if cmd == 'roomstate':
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), 'room state <房间ID>')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'game state <房间ID>')}
         return {'success': True, 'output': admin_room_state_output(parse_int_token(parts[1], 'room_id'))}
+    if cmd == 'gameplayerinfo':
+        if len(parts) < 3:
+            return {'success': False, 'output': command_error(raw, len(raw), 'game player <房间> <玩家> info')}
+        output = admin_game_player_info_output(parse_int_token(parts[1], 'room_id'), parse_int_token(parts[2], 'player_index'))
+        return {'success': not output.startswith(('不存在房间', '玩家序号')), 'output': output}
+    if cmd == 'gamecardlist':
+        if len(parts) < 3:
+            return {'success': False, 'output': command_error(raw, len(raw), 'game player <房间> <玩家> card list [区域]')}
+        output = admin_game_card_list_output(parts[1], parts[2], parts[3] if len(parts) > 3 else 'all')
+        return {'success': not output.startswith(('不存在房间', '玩家序号', '区域必须')), 'output': output}
+    if cmd == 'gamepending':
+        if len(parts) < 3 or parts[1].lower() != 'get':
+            return {'success': False, 'output': command_error(raw, len(raw), 'game pending get <房间ID>')}
+        output = admin_game_pending_output(parse_int_token(parts[2], 'room_id'))
+        return {'success': not output.startswith('不存在房间'), 'output': output}
+    if cmd == 'gamestatus':
+        if len(parts) < 4:
+            return {'success': False, 'output': command_error(raw, len(raw), 'game player <房间> <玩家> status <list|get|set|add|remove|clear> [...]')}
+        value = parse_int_token(parts[5], 'value') if len(parts) > 5 else None
+        ok, output = admin_game_status(parts[1], parts[2], parts[3], parts[4] if len(parts) > 4 else None, value)
+        if ok and parts[3].lower() not in ('list', 'get'):
+            admin_event('admin', f'game status room={parts[1]} player={parts[2]} action={parts[3]} status={parts[4] if len(parts) > 4 else "-"} value={value}')
+        return {'success': ok, 'output': output}
     if cmd in ('roomplayers', 'rplayers', 'rp'):
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), '<房间ID>')}
@@ -8154,14 +8586,14 @@ def execute_admin_command(line):
         return {'success': True, 'output': admin_rating_list_output(scope, count)}
     if cmd == 'rating-info':
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), 'rating info <ID|注册顺序|用户名>')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'account rating info <账号>')}
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
         user = find_user_for_admin(parts[1])
         return {'success': bool(user), 'output': format_rating_user(user)}
     if cmd in ('rating-set', 'rating-add'):
         if len(parts) < 4:
-            usage = 'rating set <ID|注册顺序|用户名> <season|total|both> <数值> [原因]' if cmd == 'rating-set' else 'rating add <ID|注册顺序|用户名> <season|total|both> <+/-数值> [原因]'
+            usage = 'account rating set <账号> <season|total|both> <数值> [原因]' if cmd == 'rating-set' else 'account rating add <账号> <season|total|both> <+/-数值> [原因]'
             return {'success': False, 'output': command_error(raw, len(raw), usage)}
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
@@ -8178,7 +8610,7 @@ def execute_admin_command(line):
         return {'success': True, 'output': f'已{action_label}花阶分。\n{format_rating_user(user)}'}
     if cmd == 'rating-snapshot':
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), 'rating snapshot <ID|注册顺序|用户名>')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'account rating snapshot <账号>')}
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
         user, error = admin_snapshot_user_gr(parts[1])
@@ -8198,7 +8630,7 @@ def execute_admin_command(line):
                 admin_event('error', f'GR rebuild preview failed: {exc}')
                 return {'success': False, 'output': f'花阶分重建预览失败：{exc}'}
         if action not in ('confirm', '确认'):
-            return {'success': False, 'output': command_error(raw, len(raw), 'rating rebuild <preview|confirm>')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'data rating rebuild <preview|confirm>')}
         try:
             result = rebuild_gr_from_matches(dry_run=False)
             admin_event('admin', f"GR rebuilt from matches counted={result.get('counted_matches')} skipped={result.get('skipped_matches')}")
@@ -8246,7 +8678,7 @@ def execute_admin_command(line):
         ])}
     if cmd == 'diagnose-room':
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), 'diagnose room <房间ID>')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'server diagnose room <房间ID>')}
         rid = parse_int_token(parts[1], 'room_id')
         return {'success': True, 'output': admin_room_get_output(rid) + '\n\n最近日志：\n' + admin_room_log_output(rid, 20)}
     if cmd == 'diagnose-player':
@@ -8262,7 +8694,7 @@ def execute_admin_command(line):
             return {'success': False, 'output': (
                 '这是覆盖式重算，会用 matches 摘要表重建账号战绩和总对局时长。\n'
                 '它不依赖 3 个月回放，但如果未来删除了 matches 摘要，则不能再安全使用。\n'
-                '确认执行请输入：rebuildstats confirm'
+                '确认执行请输入：/data rebuildstats confirm'
             )}
         try:
             result = rebuild_user_stats_from_matches()
@@ -8303,7 +8735,7 @@ def execute_admin_command(line):
             except Exception as exc:
                 admin_event('error', f'thorn dew backfill failed: {exc}')
                 return {'success': False, 'output': f'荆露补发失败：{exc}'}
-        return {'success': False, 'output': command_error(raw, len(parts[0]) + 1, 'storage dewbackfill <preview|confirm>')}
+        return {'success': False, 'output': command_error(raw, len(parts[0]) + 1, 'data dewbackfill <preview|confirm>')}
     if cmd in ('achievementbackfill', 'backfillachievements', 'achievementsbackfill', '补发成就'):
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
@@ -8326,7 +8758,7 @@ def execute_admin_command(line):
             except Exception as exc:
                 admin_event('error', f'achievement backfill failed: {exc}')
                 return {'success': False, 'output': f'成就补发失败：{exc}'}
-        return {'success': False, 'output': command_error(raw, len(parts[0]) + 1, 'storage achievementbackfill <preview|confirm>')}
+        return {'success': False, 'output': command_error(raw, len(parts[0]) + 1, 'data achievementbackfill <preview|confirm>')}
     if cmd == 'broadcast':
         msg = raw[len(parts[0]):].strip()
         if not msg:
@@ -8404,7 +8836,7 @@ def execute_admin_command(line):
         return {'success': False, 'output': command_error(raw, len(raw), 'role list|get|set|clear')}
     if cmd in ('dew', 'thorndew', 'jinglu', '荆露'):
         if len(parts) < 3 or parts[1].lower() not in ('get', 'add', 'addpaid', 'paid', 'spend', 'tx', 'history'):
-            return {'success': False, 'output': command_error(raw, len(raw), 'dew get|add|addpaid|spend|tx <ID|注册顺序|用户名> [数量] [原因]')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'account dew <get|add|addpaid|spend|tx> <账号> [数量] [原因]')}
         sub = parts[1].lower()
         user = find_user_for_admin(parts[2])
         if not user:
@@ -8464,6 +8896,165 @@ def execute_admin_command(line):
         )
         admin_event('admin', f"changed password for account {user['username']}#{user['id']}")
         return {'success': True, 'output': f"已修改账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 的密码。已退出在线设备 {kicked} 个。"}
+    if cmd == 'userrename':
+        if len(parts) < 3:
+            return {'success': False, 'output': command_error(raw, len(raw), 'account username <账号> <新用户名>')}
+        old_user = find_user_for_admin(parts[1])
+        user, error = admin_change_username(parts[1], parts[2])
+        if error:
+            return {'success': False, 'output': error}
+        updated_sids = _sync_admin_username_to_online_players(user)
+        if updated_sids:
+            broadcast_lobby()
+        admin_event(
+            'admin',
+            f"changed username for account #{user['id']} {old_user.get('username') if old_user else parts[1]} -> {user['username']}",
+        )
+        return {
+            'success': True,
+            'output': (
+                f"已将账号用户名修改为 {user['username']}。\n"
+                f"ID:{user.get('player_id') or '-'} 注册顺序：{user['id']} 在线同步：{len(updated_sids)} 个会话。"
+            ),
+        }
+    if cmd == 'achievementgrant':
+        if len(parts) < 3:
+            return {'success': False, 'output': command_error(raw, len(raw), 'account achievement grant <账号> <成就ID>')}
+        result, error = admin_grant_user_achievement(parts[1], parts[2])
+        if error:
+            return {'success': False, 'output': error}
+        user = result['user']
+        achievement = result['achievement']
+        newly_unlocked = bool(result.get('newly_unlocked'))
+        notified = 0
+        if newly_unlocked:
+            items = _format_achievement_unlocked_items([achievement])
+            with _lock:
+                target_sids = [
+                    sid for sid, player in players.items()
+                    if str(player.get('user_id') or '') == str(user.get('id'))
+                ]
+            for sid in target_sids:
+                socketio.emit('achievement_unlocked', {'items': items}, room=sid)
+                notified += 1
+        admin_event(
+            'admin',
+            f"achievement grant user={user['username']}#{user['id']} achievement={achievement.get('id')} newly_unlocked={newly_unlocked}",
+        )
+        state = '已发放' if newly_unlocked else '此前已获得'
+        return {
+            'success': True,
+            'output': (
+                f"{state}成就：{achievement.get('name_cn') or achievement.get('id')} "
+                f"({achievement.get('id')})\n账号：{user['username']} "
+                f"(ID:{user.get('player_id') or '-'} 注册顺序：{user['id']})\n"
+                f"荆露奖励：{int(achievement.get('reward_dew') or 0)} 在线提示：{notified} 个会话。"
+            ),
+        }
+    if cmd == 'achievementlist':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'account achievement list <账号>')}
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        user = find_user_for_admin(parts[1])
+        if not user:
+            return {'success': False, 'output': '账号不存在'}
+        center = get_user_achievement_center(user['id'], lang='zh') or {}
+        items = center.get('achievements') or center.get('items') or []
+        unlocked = [item for item in items if item.get('unlocked') or item.get('completed')]
+        lines = [
+            f"{user.get('username')} (ID:{user.get('player_id') or '-'} 注册顺序：{user.get('id')})",
+            f"成就：{len(unlocked)}/{len(items)}",
+        ]
+        for item in unlocked:
+            lines.append(f"  {item.get('name') or item.get('name_cn') or item.get('id')} ({item.get('id')})")
+        return {'success': True, 'output': '\n'.join(lines)}
+    if cmd == 'iplist':
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        active_only = not (len(parts) > 1 and parts[1].lower() == 'all')
+        data = list_ip_bans(active_only=active_only, limit=50, offset=0)
+        rows = data.get('items') or []
+        lines = [f"IP 封禁：{len(rows)}/{data.get('total', len(rows))}"]
+        for row in rows:
+            state = '生效中' if row.get('active') or row.get('banned') else '已解除'
+            lines.append(f"{row.get('ip')}  {state}  {row.get('reason') or '-'}  {row.get('expires_at') or '永久'}")
+        return {'success': True, 'output': '\n'.join(lines)}
+    if cmd == 'ipban':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'moderation ip ban <IP> [时长秒] [原因]')}
+        duration = None
+        reason_start = 2
+        if len(parts) > 2:
+            try:
+                duration = max(1, int(parts[2]))
+                reason_start = 3
+            except (TypeError, ValueError):
+                duration = None
+        reason = ' '.join(parts[reason_start:]).strip()
+        row, error = set_ip_ban(parts[1], True, reason, duration_seconds=duration, banned_by='console')
+        if error:
+            return {'success': False, 'output': error}
+        kicked = []
+        with _lock:
+            for sid, player in list(players.items()):
+                if str(player.get('ip') or '') == str(parts[1]):
+                    kicked.append(sid)
+                    remove_player_by_admin(sid)
+        for sid in kicked:
+            socketio.emit('server_error', {'message': 'IP 已被封禁'}, room=sid)
+            socketio.emit('kicked', {'reason': 'ip banned'}, room=sid)
+            socketio.server.disconnect(sid)
+        if kicked:
+            broadcast_lobby()
+        admin_event('moderation', f'console banned ip {parts[1]}: {reason or "-"}')
+        return {'success': True, 'output': f'已封禁 IP {parts[1]}，已踢出 {len(kicked)} 个会话。'}
+    if cmd == 'ipunban':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'moderation ip unban <IP>')}
+        _row, error = set_ip_ban(parts[1], False)
+        if error:
+            return {'success': False, 'output': error}
+        admin_event('moderation', f'console unbanned ip {parts[1]}')
+        return {'success': True, 'output': f'已解除 IP {parts[1]} 的封禁。'}
+    if cmd == 'reportlist':
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        status = parts[1].lower() if len(parts) > 1 else 'pending'
+        limit = parse_int_token(parts[2], 'count') if len(parts) > 2 else 30
+        data = list_reports(status=status, limit=max(1, min(limit, 50)), offset=0)
+        rows = data.get('items') or []
+        lines = [f"举报：{len(rows)}/{data.get('total', len(rows))}"]
+        for row in rows:
+            lines.append(
+                f"#{row.get('id')} [{row.get('status')}] {row.get('reporter_username') or '?'} -> "
+                f"{row.get('target_username') or '?'}  {row.get('category') or '-'}  {row.get('reason_text') or '-'}"
+            )
+        return {'success': True, 'output': '\n'.join(lines)}
+    if cmd == 'reportget':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'moderation report get <举报ID>')}
+        detail = get_report_detail(parse_int_token(parts[1], 'report_id'))
+        if not detail:
+            return {'success': False, 'output': '举报不存在'}
+        return {'success': True, 'output': json.dumps(detail, ensure_ascii=False, indent=2, default=str)}
+    if cmd == 'reportresolve':
+        if len(parts) < 3:
+            return {'success': False, 'output': command_error(raw, len(raw), 'moderation report resolve <举报ID> <accept|reject|abusive> [备注]')}
+        action = parts[2].lower()
+        if action not in VALID_REPORT_ACTIONS:
+            return {'success': False, 'output': '处理动作必须是 accept/reject/abusive'}
+        detail, error = resolve_report_entry(
+            parse_int_token(parts[1], 'report_id'),
+            action,
+            moderation_action='none',
+            admin_username='console',
+            note=' '.join(parts[3:]).strip(),
+        )
+        if error:
+            return {'success': False, 'output': error}
+        admin_event('moderation', f'console report #{parts[1]} resolved action={action}')
+        return {'success': True, 'output': f'已处理举报 #{parts[1]}：{action}'}
     if cmd in ('banuser', 'banaccount'):
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> [秒数] [原因]')}
@@ -8552,7 +9143,7 @@ def execute_admin_command(line):
             more = f' 等 {len(non_lobby)} 人' if len(non_lobby) > 8 else ''
             return {
                 'success': False,
-                'output': f'目标中包含非大厅玩家：{sample}{more}。\n若确认要发送，请追加 confirm，例如：player afkcheck {target} confirm {reason}',
+                'output': f'目标中包含非大厅玩家：{sample}{more}。\n若确认要发送，请追加 confirm，例如：/player afkcheck {target} confirm {reason}',
             }
         sent = []
         failed = []
@@ -8582,7 +9173,7 @@ def execute_admin_command(line):
         return {'success': True, 'output': f'已禁言 {nickname} {seconds} 秒。'}
     if cmd == 'skip':
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), '<房间ID>')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'game action skip <房间ID>')}
         room_id = parse_int_token(parts[1], 'room_id')
         with _lock:
             if room_id not in rooms:
@@ -8599,7 +9190,7 @@ def execute_admin_command(line):
         return {'success': True, 'output': f'已跳过房间 {room_id} 的当前行动'}
     if cmd == 'endgame':
         if len(parts) < 3:
-            return {'success': False, 'output': command_error(raw, len(raw), '<房间ID> <winner|draw>')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'game action end <房间ID> <0|1|draw>')}
         room_id = parse_int_token(parts[1], 'room_id')
         winner_token = parts[2].lower()
         with _lock:
@@ -8631,7 +9222,7 @@ def execute_admin_command(line):
         return {'success': True, 'output': f'已强制结束房间 {room_id}'}
     if cmd == 'set':
         if len(parts) < 5:
-            return {'success': False, 'output': command_error(raw, len(raw), '<房间ID> <玩家序号> <属性> <数值>')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'game player <房间> <玩家> resource set <属性> <数值>')}
         room_id = parse_int_token(parts[1], 'room_id')
         pidx = parse_int_token(parts[2], 'player_index')
         key = parts[3].lower()
@@ -8640,9 +9231,20 @@ def execute_admin_command(line):
         if ok:
             admin_event('admin', f'set room {room_id} player {pidx} {key}={val}')
         return {'success': ok, 'output': output}
+    if cmd == 'resourceadd':
+        if len(parts) < 5:
+            return {'success': False, 'output': command_error(raw, len(raw), 'game player <房间> <玩家> resource add <属性> <数值>')}
+        room_id = parse_int_token(parts[1], 'room_id')
+        pidx = parse_int_token(parts[2], 'player_index')
+        key = parts[3].lower()
+        delta = parse_int_token(parts[4], 'value')
+        ok, output = add_room_player_attr(room_id, pidx, key, delta)
+        if ok:
+            admin_event('admin', f'add room {room_id} player {pidx} {key}{delta:+d}')
+        return {'success': ok, 'output': output}
     if cmd in ('givecard', 'addcard', 'give'):
         if len(parts) < 4:
-            return {'success': False, 'output': command_error(raw, len(raw), '<房间ID> <玩家序号> <卡牌ID> [数量] [tags=tag1,tag2] [fusion=层数] [fission=层数]')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'game player <房间> <玩家> card add <卡牌ID> [数量] [tags=...] [fusion=...] [fission=...]')}
         room_id = parse_int_token(parts[1], 'room_id')
         pidx = parse_int_token(parts[2], 'player_index')
         card_id = resolve_admin_card_id(parts[3])
@@ -8659,7 +9261,7 @@ def execute_admin_command(line):
         return {'success': ok, 'output': output}
     if cmd in ('delcard', 'remcard', 'rmcard', 'deletecard'):
         if len(parts) < 5:
-            return {'success': False, 'output': command_error(raw, len(raw), '<房间ID> <玩家序号> <区域> <卡牌ID|all|#序号|instance=ID> [数量|all]')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'game player <房间> <玩家> card remove <区域> <卡牌ID|all|#序号|instance=ID> [数量|all]')}
         room_id = parse_int_token(parts[1], 'room_id')
         pidx = parse_int_token(parts[2], 'player_index')
         try:
@@ -8690,138 +9292,241 @@ def admin_completions(line):
     trailing_space = raw.endswith(' ')
     token = '' if trailing_space else (parts[-1] if parts else '')
     position = len(parts) if trailing_space else max(0, len(parts) - 1)
-    if position == 0:
-        values = list(ADMIN_COMMAND_TREE.keys())
-        return [c for c in values if c.startswith(token.lower())]
-    cmd = parts[0].lower() if parts else ''
-    if cmd in ('gr', 'gardenrating', 'garden-rating', '花阶分'):
-        cmd = 'rating'
-        parts = ['rating', *parts[1:]]
-    if cmd == 'help':
-        if position == 1:
-            values = list(ADMIN_COMMAND_TREE.keys())
-            return [v for v in values if v.startswith(token.lower())]
-        if position == 2 and len(parts) > 1:
-            children = ADMIN_COMMAND_TREE.get(parts[1].lower(), {}).get('children', {})
-            return [v for v in children.keys() if v.startswith(token.lower())]
-        return []
-    if cmd in ADMIN_COMMAND_TREE:
-        if position == 1:
-            values = list(ADMIN_COMMAND_TREE.get(cmd, {}).get('children', {}).keys())
-            return [v for v in values if v.startswith(token.lower())]
-        sub = parts[1].lower() if len(parts) > 1 else ''
-        translated, _err = _translate_structured_admin_command([cmd, sub, *parts[2:]])
-        if translated:
-            return admin_completions(translated + (' ' if trailing_space else ''))
-        return []
-    if cmd in ('kick', 'playerget', 'diagnose-player', 'afkcheck', 'afk') and position == 1:
-        values = ['all'] if cmd in ('afkcheck', 'afk') else []
-        with _lock:
-            for sid, p in players.items():
-                values.append(p.get('nickname', ''))
-                values.append(sid)
-                values.append(p.get('account_player_id', ''))
-        return [v for v in values if v and v.lower().startswith(token.lower())][:20]
-    card_admin_cmds = ('givecard', 'addcard', 'give', 'delcard', 'remcard', 'rmcard', 'deletecard')
-    if cmd in ('skip', 'endgame', 'set', *card_admin_cmds, 'roomplayers', 'rplayers', 'rp', 'roomget', 'roomlog', 'roomchat', 'roomstate', 'diagnose-room') and position == 1:
-        with _lock:
-            values = [str(rid) for rid in rooms.keys()]
-        return [v for v in values if v.startswith(token)]
-    if cmd == 'modloadout' and position == 1:
+    def filtered(values, limit=40):
+        needle = token.lower()
+        seen = set()
+        result = []
+        for value in values:
+            text_value = str(value or '')
+            if not text_value or text_value in seen or not text_value.lower().startswith(needle):
+                continue
+            seen.add(text_value)
+            result.append(text_value)
+            if len(result) >= limit:
+                break
+        return result
+
+    def visible_children(node):
+        return [name for name, meta in (node.get('children', {}) or {}).items() if not meta.get('hidden')]
+
+    def account_values():
+        if not DB_AVAILABLE:
+            return []
+        try:
+            rows = list_admin_users(query=token, sort='username', order='asc', limit=30).get('users', [])
+        except Exception:
+            return []
         values = []
+        for user in rows:
+            values.extend((user.get('player_id'), user.get('id'), user.get('username')))
+        return values
+
+    def online_values(include_all=False):
+        values = ['all'] if include_all else []
         with _lock:
-            values.extend(str(rid) for rid in rooms.keys())
-            for sid, p in players.items():
-                values.append(p.get('nickname', ''))
-                values.append(sid)
-                values.append(p.get('account_player_id', ''))
-        return [v for v in values if v and v.lower().startswith(token.lower())][:30]
-    if cmd in ('givecard', 'addcard', 'give') and position == 3:
-        values = sorted(CARD_DEFS.keys())
-        return [v for v in values if v.lower().startswith(token.lower())][:30]
-    if cmd in ('givecard', 'addcard', 'give') and position >= 4:
-        values = ['tags=', 'fusion=', 'fission=', 'count=']
-        return [v for v in values if v.lower().startswith(token.lower())]
-    if cmd in ('delcard', 'remcard', 'rmcard', 'deletecard') and position == 3:
-        values = ['hand', 'deck', 'discard', 'exile', 'equipment', 'all']
-        return [v for v in values if v.lower().startswith(token.lower())]
-    if cmd in ('delcard', 'remcard', 'rmcard', 'deletecard') and position == 4:
-        values = ['all', 'instance=', 'index=', '#0'] + sorted(CARD_DEFS.keys())
-        return [v for v in values if v.lower().startswith(token.lower())][:30]
-    if cmd in ('delcard', 'remcard', 'rmcard', 'deletecard') and position >= 5:
-        values = ['all', 'count=']
-        return [v for v in values if v.lower().startswith(token.lower())]
-    if cmd in ('role', 'userrole') and position == 1:
-        values = ['list', 'get', 'set', 'clear']
-        return [v for v in values if v.startswith(token.lower())]
-    if cmd in ('role', 'userrole') and position == 2 and len(parts) > 1 and parts[1].lower() in ('get', 'set', 'clear'):
+            for sid, player in players.items():
+                values.extend((player.get('nickname'), sid, player.get('account_player_id')))
+        return values
+
+    def room_values():
+        with _lock:
+            return [str(room_id) for room_id in rooms]
+
+    def room_player_values(room_token):
         try:
-            rows = list_admin_users(query=token, sort='username', order='asc', limit=30).get('users', [])
-            values = []
-            for user in rows:
-                values.append(user.get('player_id', ''))
-                values.append(str(user.get('id')))
-                values.append(user.get('username', ''))
-            return [v for v in values if v and v.lower().startswith(token.lower())][:30]
-        except Exception:
+            room_id = int(room_token)
+        except (TypeError, ValueError):
             return []
-    if cmd in ('role', 'userrole') and position == 3 and len(parts) > 1 and parts[1].lower() == 'set':
-        values = ['staff', 'contributor', 'sponsor']
-        return [v for v in values if v.startswith(token.lower())]
-    if cmd in ('role', 'userrole') and position >= 4 and len(parts) > 1 and parts[1].lower() == 'set':
-        values = ['title=', 'color=bloom', 'color=guard', 'sort=', 'key=', 'direct=', 'chat=']
-        return [v for v in values if v.lower().startswith(token.lower())]
-    if cmd in ('rating-info', 'rating-set', 'rating-add', 'rating-snapshot') and position == 1:
+        with _lock:
+            room = rooms.get(room_id)
+            if not room:
+                return []
+            return [str(index) for index in range(len(getattr(room.engine, 'players', []) or []))]
+
+    def card_values():
+        needle = token.lower()
+        matches = []
+        for card_id, card_def in CARD_DEFS.items():
+            haystacks = (
+                str(card_id).lower(),
+                str(getattr(card_def, 'name_cn', '') or '').lower(),
+                str(getattr(card_def, 'name_en', '') or '').lower(),
+            )
+            if not needle or any(needle in text_value for text_value in haystacks):
+                matches.append(card_id)
+        return sorted(matches)
+
+    def status_values():
+        values = set(ADMIN_STATUS_ATTRS) | {'status_immune'}
         try:
-            rows = list_admin_users(query=token, sort='username', order='asc', limit=30).get('users', [])
-            values = []
-            for user in rows:
-                values.append(user.get('player_id', ''))
-                values.append(str(user.get('id')))
-                values.append(user.get('username', ''))
-            return [v for v in values if v and v.lower().startswith(token.lower())][:30]
+            for mod in load_all_mods():
+                for status in getattr(mod, 'custom_statuses', []) or []:
+                    if not isinstance(status, dict):
+                        continue
+                    values.update(
+                        str(status.get(key) or '').strip()
+                        for key in ('id', 'name_cn')
+                    )
         except Exception:
-            return []
-    if cmd in ('rating-set', 'rating-add') and position == 2:
-        values = ['season', 'total', 'both']
-        return [v for v in values if v.startswith(token.lower())]
-    if cmd == 'rating-list' and position == 1:
-        values = ['season', 'total']
-        return [v for v in values if v.startswith(token.lower())]
-    if cmd == 'rating-rebuild' and position == 1:
-        values = ['preview', 'confirm']
-        return [v for v in values if v.startswith(token.lower())]
-    if cmd in ('dew', 'thorndew', 'jinglu', '荆露') and position == 1:
-        values = ['get', 'add', 'addpaid', 'spend', 'tx']
-        return [v for v in values if v.startswith(token.lower())]
-    if cmd in ('dew', 'thorndew', 'jinglu', '荆露') and position == 2:
-        try:
-            rows = list_admin_users(query=token, sort='username', order='asc', limit=30).get('users', [])
-            values = []
-            for user in rows:
-                values.append(user.get('player_id', ''))
-                values.append(str(user.get('id')))
-                values.append(user.get('username', ''))
-            return [v for v in values if v and v.lower().startswith(token.lower())][:30]
-        except Exception:
-            return []
-    if cmd in ('userpass', 'passwd', 'setpass', 'banuser', 'banaccount', 'unbanuser', 'unbanaccount') and position == 1:
-        try:
-            rows = list_admin_users(query=token, sort='username', order='asc', limit=30).get('users', [])
-            values = []
-            for user in rows:
-                values.append(user.get('player_id', ''))
-                values.append(str(user.get('id')))
-                values.append(user.get('username', ''))
-            return [v for v in values if v and v.lower().startswith(token.lower())][:30]
-        except Exception:
-            return []
-    if cmd == 'set' and position == 3:
-        values = ['h', 'e', 'm', 'armor', 'dodge', 'poison', 'burn', 'toxic', 'vulnerable']
-        return [v for v in values if v.startswith(token.lower())]
-    if cmd == 'endgame' and position == 2:
-        values = ['0', '1', 'draw']
-        return [v for v in values if v.startswith(token.lower())]
+            pass
+        return sorted(value for value in values if value)
+
+    public_roots = [name for name, meta in ADMIN_COMMAND_TREE.items() if not meta.get('hidden')]
+    if position == 0:
+        return filtered(public_roots)
+    cmd = parts[0].lower() if parts else ''
+    if cmd not in public_roots:
+        return []
+
+    if cmd == 'help':
+        node = {'children': {name: ADMIN_COMMAND_TREE[name] for name in public_roots}}
+        for path_part in parts[1:position]:
+            child = (node.get('children', {}) or {}).get(path_part.lower())
+            if not child or child.get('hidden'):
+                return []
+            node = child
+        return filtered(visible_children(node))
+
+    root = ADMIN_COMMAND_TREE[cmd]
+    if position == 1:
+        return filtered(visible_children(root))
+    sub = parts[1].lower() if len(parts) > 1 else ''
+
+    if cmd == 'player' and position == 2:
+        return filtered(online_values(include_all=sub == 'afkcheck'))
+
+    if cmd == 'account':
+        if sub == 'achievement':
+            if position == 2:
+                return filtered(['list', 'grant'])
+            if position == 3:
+                return filtered(account_values())
+            if position == 4 and len(parts) > 2 and parts[2].lower() == 'grant':
+                return filtered([item.get('id') for item in list_achievement_definitions()])
+        if sub == 'rating':
+            if position == 2:
+                return filtered(['info', 'set', 'add', 'snapshot'])
+            if position == 3:
+                return filtered(account_values())
+            if position == 4 and len(parts) > 2 and parts[2].lower() in ('set', 'add'):
+                return filtered(['season', 'total', 'both'])
+        if sub == 'dew':
+            if position == 2:
+                return filtered(['get', 'add', 'addpaid', 'spend', 'tx'])
+            if position == 3:
+                return filtered(account_values())
+        if sub == 'role':
+            if position == 2:
+                return filtered(['list', 'get', 'set', 'clear'])
+            if position == 3 and len(parts) > 2 and parts[2].lower() != 'list':
+                return filtered(account_values())
+            if position == 4 and len(parts) > 2 and parts[2].lower() == 'set':
+                return filtered(['admin', 'staff', 'contributor', 'sponsor'])
+            if position >= 5 and len(parts) > 2 and parts[2].lower() == 'set':
+                return filtered(['title=', 'color=bloom', 'color=guard', 'sort=', 'key=', 'direct=', 'chat='])
+        if sub in ('get', 'username', 'password', 'ban', 'unban') and position == 2:
+            return filtered(account_values())
+
+    if cmd == 'game':
+        room_subcommands = ('info', 'log', 'chat', 'state')
+        if sub in room_subcommands and position == 2:
+            return filtered(room_values())
+        if sub == 'action':
+            if position == 2:
+                return filtered(['skip', 'end'])
+            if position == 3:
+                return filtered(room_values())
+            if position == 4 and len(parts) > 2 and parts[2].lower() == 'end':
+                return filtered(['0', '1', 'draw'])
+        if sub == 'pending':
+            if position == 2:
+                return filtered(['get'])
+            if position == 3:
+                return filtered(room_values())
+        if sub == 'player':
+            if position == 2:
+                return filtered(room_values())
+            if position == 3 and len(parts) > 2:
+                return filtered(room_player_values(parts[2]))
+            if position == 4:
+                return filtered(['info', 'resource', 'status', 'card'])
+            domain = parts[4].lower() if len(parts) > 4 else ''
+            if domain == 'resource':
+                if position == 5:
+                    return filtered(['set', 'add'])
+                if position == 6:
+                    return filtered(['h', 'maxh', 'e', 'maxe', 'm', 'maxm', 'armor'])
+            if domain == 'status':
+                if position == 5:
+                    return filtered(['list', 'get', 'set', 'add', 'remove', 'clear'])
+                if position == 6:
+                    return filtered(status_values())
+            if domain == 'card':
+                action = parts[5].lower() if len(parts) > 5 else ''
+                if position == 5:
+                    return filtered(['list', 'add', 'remove'])
+                if action == 'list' and position == 6:
+                    return filtered(['hand', 'deck', 'discard', 'exile', 'equipment', 'all'])
+                if action == 'add' and position == 6:
+                    return card_values()[:40]
+                if action == 'add' and position >= 7:
+                    return filtered(['count=', 'tags=', 'fusion=', 'fission='])
+                if action == 'remove' and position == 6:
+                    return filtered(['hand', 'deck', 'discard', 'exile', 'equipment', 'all'])
+                if action == 'remove' and position == 7:
+                    special = filtered(['all', 'instance=', 'index=', '#0'])
+                    return (special + card_values())[:40]
+
+    if cmd == 'lobby' and sub == 'chat' and position == 2:
+        return filtered(['50', '100', '300'])
+    if cmd == 'moderation':
+        if sub == 'mute' and position == 2:
+            return filtered(online_values())
+        if sub in ('ban', 'unban') and position == 2:
+            return filtered(account_values())
+        if sub == 'ip':
+            if position == 2:
+                return filtered(['list', 'ban', 'unban'])
+            if position == 3 and len(parts) > 2 and parts[2].lower() == 'list':
+                return filtered(['all'])
+        if sub == 'report':
+            if position == 2:
+                return filtered(['list', 'get', 'resolve'])
+            if position == 3 and len(parts) > 2 and parts[2].lower() == 'list':
+                return filtered(['pending', 'accepted', 'rejected', 'abusive', 'all'])
+            if position == 4 and len(parts) > 2 and parts[2].lower() == 'resolve':
+                return filtered(['accept', 'reject', 'abusive'])
+    if cmd == 'server':
+        if sub == 'drain' and position == 2:
+            return filtered(['status', 'on', 'off'])
+        if sub in ('logs', 'suspicious') and position == 2:
+            return filtered(['20', '50', '100'])
+        if sub == 'mod':
+            if position == 2:
+                return filtered(['list', 'loadout'])
+            if position == 3 and len(parts) > 2 and parts[2].lower() == 'loadout':
+                return filtered([*room_values(), *online_values()])
+        if sub == 'diagnose':
+            if position == 2:
+                return filtered(['server', 'room', 'player', 'stuck'])
+            if position == 3 and len(parts) > 2:
+                action = parts[2].lower()
+                if action == 'room':
+                    return filtered(room_values())
+                if action == 'player':
+                    return filtered([*online_values(), *account_values()])
+    if cmd == 'data':
+        if sub == 'draftstats' and position == 2:
+            return filtered(['1v1', '2v2'])
+        if sub in ('rebuildstats', 'dewbackfill', 'achievementbackfill') and position == 2:
+            return filtered(['preview', 'confirm'] if sub != 'rebuildstats' else ['confirm'])
+        if sub == 'rating':
+            if position == 2:
+                return filtered(['season', 'list', 'rebuild'])
+            if position == 3 and len(parts) > 2 and parts[2].lower() == 'list':
+                return filtered(['season', 'total'])
+            if position == 3 and len(parts) > 2 and parts[2].lower() == 'rebuild':
+                return filtered(['preview', 'confirm'])
     return []
 
 
@@ -8951,12 +9656,7 @@ def delete_room_player_card(room_id, pidx, zone, selector, count):
 
 
 def set_room_player_attr(room_id, pidx, key, val):
-    attr_map = {
-        'h': 'health', 'e': 'elixir', 'm': 'magic',
-        'armor': 'armor', 'dodge': 'dodge', 'poison': 'poison',
-        'burn': 'fire', 'toxic': 'toxic', 'vulnerable': 'vulnerable',
-    }
-    attr = attr_map.get(key)
+    attr = ADMIN_RESOURCE_ATTRS.get(key)
     if not attr:
         return False, f'未知属性：{key}'
     with _lock:
@@ -8969,24 +9669,45 @@ def set_room_player_attr(room_id, pidx, key, val):
         ps = e.players[pidx]
         if not hasattr(ps, attr):
             return False, f'玩家没有属性：{attr}'
-        if key == 'h':
+        if attr == 'health':
             if val <= 0:
                 _force_player_death_ignoring_saves(room, pidx, e.pn(pidx), '被管理员强制设为0H', log=True)
             else:
                 setattr(ps, attr, val)
-                ps.base_max_health = max(ps.base_max_health, val)
                 ps.max_health = max(ps.max_health, val)
                 e._check_game_over()
-        elif key == 'e':
+        elif attr == 'elixir':
             setattr(ps, attr, val)
             ps.max_elixir = max(ps.max_elixir, val)
-        elif key == 'm':
+        elif attr == 'magic':
             setattr(ps, attr, val)
             ps.max_magic = max(ps.max_magic, val)
+        elif attr == 'max_health':
+            ps.max_health = max(1, val)
+            ps.base_max_health = ps.max_health
+            ps.health = min(ps.health, ps.max_health)
+        elif attr == 'max_elixir':
+            ps.max_elixir = max(0, val)
+            ps.elixir = min(ps.elixir, ps.max_elixir)
+        elif attr == 'max_magic':
+            ps.max_magic = max(0, val)
+            ps.magic = min(ps.magic, ps.max_magic)
         else:
-            setattr(ps, attr, val)
+            setattr(ps, attr, max(0, val))
         broadcast_game_state(room)
     return True, f'已设置房间 {room_id} 的玩家 {pidx}：{key}={val}'
+
+
+def add_room_player_attr(room_id, pidx, key, delta):
+    attr = ADMIN_RESOURCE_ATTRS.get(key)
+    if not attr:
+        return False, f'未知属性：{key}'
+    with _lock:
+        room, ps, error = _admin_room_player(room_id, pidx)
+        if error:
+            return False, error
+        current = int(getattr(ps, attr, 0) or 0)
+    return set_room_player_attr(room_id, pidx, key, current + int(delta))
 
 
 def _build_lobby_update_payloads_locked():
@@ -9243,7 +9964,13 @@ def send_event_state(room, pidx):
     if sid not in players:
         return
     engine = room.engine
-    events = engine.opening_event_options[pidx]
+    events = []
+    for event in engine.opening_event_options[pidx]:
+        payload = dict(event) if isinstance(event, dict) else event
+        event_id = payload.get('id') if isinstance(payload, dict) else None
+        if isinstance(payload, dict) and str(event_id).isdigit() and int(event_id) in GameEngine.OPENING_EVENTS:
+            payload = event_text(int(event_id), payload)
+        events.append(payload)
     others_selected = {}
     if room.mode == '2v2':
         for i in range(4):
@@ -9285,9 +10012,12 @@ def _opening_event_by_id(engine, event_id):
     for options in getattr(engine, 'opening_event_options', []) or []:
         for ev in options or []:
             if ev and str(ev.get('id')) == text_id:
-                return ev
+                payload = dict(ev)
+                if text_id.isdigit() and int(text_id) in GameEngine.OPENING_EVENTS:
+                    payload = event_text(int(text_id), payload)
+                return payload
     base = getattr(engine, 'OPENING_EVENTS', {}).get(int(event_id)) if str(event_id).isdigit() else None
-    return dict(base) if base else None
+    return event_text(int(event_id), dict(base)) if base else None
 
 
 def send_event_reveal_state(room, pidx):
@@ -14750,11 +15480,29 @@ def on_submit_event_sub_choice(data):
                 schedule_pregame_state(room, pidx, allow_sub_choice=True)
                 return
             sub_choice = {'add_def_ids': valid_ids}
+        if str(engine.opening_event_picks[pidx]) == '11':
+            raw_ids = []
+            if isinstance(sub_choice, dict):
+                raw_ids = list(sub_choice.get('topdeck_def_ids') or sub_choice.get('def_ids') or [])
+            available = list(engine.opening_event_topdeck_candidates(pidx)) if hasattr(engine, 'opening_event_topdeck_candidates') else []
+            required = min(3, len(available))
+            valid_ids = []
+            remaining = list(available)
+            for def_id in raw_ids[:3]:
+                def_id = str(def_id)
+                if def_id not in remaining:
+                    continue
+                remaining.remove(def_id)
+                valid_ids.append(def_id)
+            if len(valid_ids) != required or len(raw_ids) != required:
+                schedule_pregame_state(room, pidx, allow_sub_choice=True)
+                return
+            sub_choice = {'topdeck_def_ids': valid_ids}
         event_id_text = str(engine.opening_event_picks[pidx])
         # Built-in setup sub-choices are "choose up to N" or have an engine fallback.
         # An empty/null payload is therefore a valid confirmation for them, not a
         # reason to keep the player stuck in the sub-choice UI.
-        if sub_choice is None and event_id_text in ('2', '3', '5', '8'):
+        if sub_choice is None and event_id_text in ('2', '3', '5', '8', '11'):
             sub_choice = {}
         if sub_choice is None and engine.needs_sub_choice(pidx):
             schedule_pregame_state(room, pidx, allow_sub_choice=True)

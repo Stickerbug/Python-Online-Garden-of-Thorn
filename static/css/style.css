@@ -1268,6 +1268,13 @@ body {
   line-height: 1.35;
 }
 
+.achievement-stage {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
 .achievement-side {
   display: flex;
   flex-direction: column;
@@ -7429,10 +7436,25 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 .card.card-yggdrasil {
-  --card-effect-font-scale: 7.35cqi;
-  --card-effect-line-height: 1.13;
-  --card-effect-padding-y: 2.6cqi;
-  --card-effect-padding-bottom: 1.3cqi;
+  --card-effect-font-scale: 7.15cqi;
+  --card-effect-line-height: 1.12;
+  --card-effect-padding-y: 2.5cqi;
+  --card-effect-padding-bottom: 1.2cqi;
+}
+
+.card.card-effect-gentle-small {
+  --card-effect-font-scale: 8.6cqi;
+  --card-effect-line-height: 1.25;
+  --card-effect-padding-y: 5.5cqi;
+  --card-effect-padding-bottom: 2.4cqi;
+}
+
+.card.card-effect-slightly-small.card-light-bulb,
+.card.card-light-bulb {
+  --card-effect-font-scale: 7.48cqi;
+  --card-effect-line-height: 1.14;
+  --card-effect-padding-y: 2.65cqi;
+  --card-effect-padding-bottom: 1.35cqi;
 }
 
 .card.card-ocean-compact {
@@ -17731,6 +17753,11 @@ button.armor-meter:focus-visible {
   border-width: max(1px, calc(1px * var(--teammate-chip-scale)));
   border-radius: calc(2px * var(--teammate-chip-scale));
   font-size: calc(11px * var(--teammate-chip-scale));
+}
+
+.teammate-blind-hand-chip {
+  --chip-scale: 0.86;
+  flex: 0 0 auto;
 }
 
 @media (max-width: 900px), (max-height: 620px), (hover: none) and (pointer: coarse) {

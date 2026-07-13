@@ -1482,6 +1482,15 @@ class LocalSoloEngine {
             ps.custom_vars.setup_magic_acceleration = 1;
             ps.custom_vars.setup_magic_acceleration_play_count = 0;
             this.logMsg(`${this.pn(playerId)}【魔力加速】：每打出2张牌回复1M`);
+        } else if (eventId === 11) {
+            const selectedDefIds = (sub.topdeck_def_ids || sub.def_ids || []).slice(0, 3);
+            const moved = [];
+            selectedDefIds.forEach(defId => {
+                const index = ps.deck.findIndex(card => card.def_id === String(defId) && !card.flags.has('sublime'));
+                if (index >= 0) moved.push(ps.deck.splice(index, 1)[0]);
+            });
+            if (moved.length) ps.deck.unshift(...moved);
+            this.logMsg(`${this.pn(playerId)}【花序编排】：${moved.length}张牌移至抽牌堆顶`);
         }
     }
 
@@ -1745,7 +1754,7 @@ class LocalSoloEngine {
     clearTurnStartActionStatuses(playerId) {
         const ps = this.players[playerId];
         const cleared = [];
-        [['foresight', '预知'], ['blind', '失明']].forEach(([attr, label]) => {
+        [['foresight', '预知'], ['blind', '失明'], ['dodge', '闪避']].forEach(([attr, label]) => {
             if (toInt(ps[attr], 0) <= 0) return;
             if (attr === 'blind' && ps.hand.length && !this.isStatusImmune(playerId)) {
                 shuffle(ps.hand);
@@ -4557,12 +4566,11 @@ class LocalSoloEngine {
         const targetPlayer = this.players[targetId] || this.players[playerId];
         const selectedId = choice && choice.target_instance_id;
         if (selectedId != null) {
-            const targetCard = this.players[playerId].findHandCard(selectedId);
-            if (targetCard) {
-                this.players[playerId].hand = this.players[playerId].hand.filter(c => c.instance_id !== targetCard.instance_id);
-                this.putCardInExile(playerId, targetCard);
-                this.logMsg(`${this.pn(playerId)}放逐了${cardName(targetCard.def_id)}`);
-            }
+            const targetCard = targetPlayer.findHandCard(selectedId);
+            if (!targetCard || !cardSelectableByAction(targetCard)) return;
+            targetPlayer.hand = targetPlayer.hand.filter(c => c.instance_id !== targetCard.instance_id);
+            this.putCardInExile(targetId, targetCard);
+            this.logMsg(`${this.pn(playerId)}用重构机放逐了${this.pn(targetId)}的${cardName(targetCard.def_id)}`);
             const roll = Math.floor(Math.random() * 3);
             if (roll === 0) {
                 const created = new LocalCard('Laser');
@@ -4585,18 +4593,21 @@ class LocalSoloEngine {
             }
             return;
         }
-        const handCards = this.players[playerId].hand
+        const handCards = targetPlayer.hand
             .filter(c => c.instance_id !== card.instance_id)
+            .filter(c => cardSelectableByAction(c))
             .map(c => c.toDict());
         if (!handCards.length) return;
         this.pending_choice = {
             player_id: playerId,
             choice_type: 'choose_card_from_hand',
+            choice_params: { cancellable: false },
             card: card.toDict(),
             hand_cards: handCards,
-            message: '重构机：选择一张手牌放逐',
+            message: `重构机：选择${this.pn(targetId)}的一张手牌放逐`,
             target_player_id: targetId,
             original_choice: { target_player_id: targetId },
+            already_paid: true,
         };
     }
 

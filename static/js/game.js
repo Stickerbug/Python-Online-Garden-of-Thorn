@@ -694,7 +694,7 @@ const I18N = {
         tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_temp_swift: 'Temporary Swift', tag_temp_heavy: 'Temporary Heavy', tag_temp_magic_heavy: 'Temporary Magic Heavy', tag_floating: 'Floating', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_sublime: 'Sublime', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift', tag_wide_strike: 'Wide Strike', tag_self_target: 'Self-target', tag_charge: 'Charge', tag_ocean_blinded: 'Obscured',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
-        choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card',
+        choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card', opening_sequence_title: 'Floral Arrangement', opening_sequence_message: 'Move cards to the top in selection order. The first selected card is drawn first.',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
         foresight_replace_title: 'Foresight', foresight_replace_desc: 'Discard up to {0} cards from your hand, then draw that many cards', foresight_replace_confirm: 'Replace',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
@@ -810,7 +810,7 @@ I18N.zh = { ...I18N.en,
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
     flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸附', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_temp_magic_heavy: '暂时魔力沉重', flag_floating: '漂浮', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_sublime: '崇高', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷', flag_wide_strike: '广域打击', flag_self_target: '自刃', flag_charge: '电荷', flag_ocean_blinded: '蒙蔽',
-    choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌',
+    choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌', opening_sequence_title: '花序编排', opening_sequence_message: '按选择顺序移至抽牌堆顶，最先选择的牌最先抽取。',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张手牌丢弃，然后抽对应张牌', foresight_replace_confirm: '替换',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
@@ -922,7 +922,7 @@ I18N.fr = { ...I18N.en,
     status_sluggish: 'Lenteur', status_overload: 'Surcharge', status_foresight: 'Prévoyance', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Cécité', status_heal_block: 'Anti-soin', status_weakness: 'Faiblesse', status_bleed: 'Saignement', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
     flag_precision: 'Précision', flag_exile: 'Exil', flag_non_stackable: 'Non-cumul', flag_indestructible: 'Indestructible', flag_sprout: 'Pousse', flag_symbiosis: 'Symbiose', flag_copy: 'Copie', flag_unique: 'Unique', flag_swift: 'Rapidité', flag_stealth: 'Furtif', flag_revealed: 'Révélé',
     choose_convert_count: 'Nombre de conversions', choose_magic_card_n: 'Carte magie n°{0}', choose_source_card_n: 'Carte source n°{0}',
-    choose_light_cards: 'Cartes de conversion Lumière', choose_yggdrasil_card: 'Carte Arbre-Monde', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
+    choose_light_cards: 'Cartes de conversion Lumière', choose_yggdrasil_card: 'Carte Arbre-Monde', opening_sequence_title: 'Arrangement floral', opening_sequence_message: 'Placez les cartes au-dessus dans l’ordre choisi. La première sélectionnée sera piochée en premier.', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
     selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Feu infini', mode_random_deck: 'Deck aléatoire',
     hand_deck_info_opp: 'Main:{0} Deck:{1}', hand_deck_discard_info: 'Main:{0} Deck:{1} Défausse:{2}', round_status: 'Tour {0} - {1}',
@@ -995,7 +995,7 @@ I18N.ja = { ...I18N.en,
     status_sluggish: '遅鈍', status_overload: '過負荷', status_foresight: '予知', status_fracture: '破損', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '治療封じ', status_weakness: '虚弱', status_bleed: '出血', status_fragment: '破片', status_fragment_stacks: '破片',
     flag_precision: '精密', flag_exile: '追放', flag_non_stackable: '非スタック', flag_indestructible: '破壊不可', flag_sprout: '発芽', flag_symbiosis: '共生', flag_copy: '複製', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隠密', flag_revealed: '公開',
     choose_convert_count: '変換回数を選択', choose_magic_card_n: 'マジックカード第{0}枚', choose_source_card_n: 'ソースカード第{0}枚',
-    choose_light_cards: '光変換カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
+    choose_light_cards: '光変換カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', opening_sequence_title: '花序編成', opening_sequence_message: '選択順に山札の一番上へ移します。最初に選んだカードを最初に引きます。', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
     selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
     mode_select: 'モード', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '無限火力', mode_random_deck: 'ランダムデッキ',
     hand_deck_info_opp: '手札:{0} デッキ:{1}', hand_deck_discard_info: '手札:{0} デッキ:{1} 捨て札:{2}', round_status: '第{0}ターン - {1}',
@@ -6391,7 +6391,7 @@ function getAllStatusDefs() {
         { key: 'magic_nazar', label: '魔法邪眼', desc: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', color: COLORS.magic },
         { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         { key: 'invincible', label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
-        { key: 'dodge', label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
+        { key: 'dodge', label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。自己回合开始时清空层数。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
         { key: 'status_immune', label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。护甲不是状态，不会被状态免疫影响。', color: '#16A085' },
         { key: 'stunned', label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         { key: 'attack_blocked', label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
@@ -6404,7 +6404,7 @@ function getAllStatusDefs() {
         { key: 'foresight', label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
         { key: 'fracture', label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         { key: 'stagnation', label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
-        { key: 'blind', label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。回合开始生效后，清空失明。', color: '#2C3E50' },
+        { key: 'blind', label: UI.status_blind, desc: '效果存在时，队友无法查看自己的手牌。1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。回合开始生效后，清空失明。', color: '#2C3E50' },
         { key: 'heal_block', label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%）。拥有者每治疗一次，层数减少1；状态免疫存在时仍会减少层数，但不会降低治疗。', color: '#E84393' },
         { key: 'weakness', label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点魔法伤害，回合结束时层数下取整减半。', color: '#922B21' },
@@ -8472,6 +8472,13 @@ function createCardElement(cardDict, options = {}) {
     if (defId === 'Yggdrasil' || cardDef.id === 'Yggdrasil' || cardDef.legacy_id === 'Yggdrasil' || cardDef.name_cn === '世界树之叶') {
         el.classList.add('card-yggdrasil');
     }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['Mimic', 'Leaf', 'Dizzy'])
+        || ['拟态', '叶子', '眩晕'].includes(cardDef.name_cn)) {
+        el.classList.add('card-effect-gentle-small');
+    }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['LightBulb', 'sewers:light_bulb']) || cardDef.name_cn === '灯泡') {
+        el.classList.add('card-light-bulb');
+    }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Pearl', 'MagicPearl', 'Spikeball', 'Sapphire'])
         || ['珍珠', '魔法珍珠', '尖刺球', '蓝宝石'].includes(cardDef.name_cn)) {
         el.classList.add('card-ocean-compact');
@@ -8894,6 +8901,30 @@ function createClassicCardTile(cardDict, options = {}) {
     tile.className = 'classic-card-tile';
     const defId = (cardDict && cardDict.def_id) || '';
     const cardDef = getCardDef(defId);
+    if (cardDict && cardDict.__blind_for_teammate) {
+        const blindLevel = Math.max(1, Math.floor(Number(cardDict.__blind_level || 1)));
+        const hideType = blindLevel >= 2;
+        const cardType = String(cardDict.card_type || '');
+        const typeColor = hideType
+            ? '#7f8c8d'
+            : (CARD_TYPE_COLORS[cardType] || COLORS.text_primary);
+        const displayName = hideType ? '?' : (getCardTypeLabel(cardType) || '?');
+        tile.classList.add('classic-card-tile-blinded');
+        tile.classList.toggle('classic-card-tile-blinded-deep', hideType);
+        if (cardType) tile.classList.add(`classic-card-tile-${cardType}`);
+        tile.style.setProperty('--tile-type-color', typeColor);
+        tile.innerHTML = `
+            <span class="classic-card-tile-inner">
+                <span class="classic-card-tile-costs">
+                    <span class="classic-card-tile-cost cost-e">?</span>
+                    <span class="classic-card-tile-cost cost-m">?</span>
+                </span>
+                <span class="classic-card-tile-name">${escapeHtml(displayName)}</span>
+                <span class="classic-card-tile-art"></span>
+            </span>
+        `;
+        return tile;
+    }
     if (!cardDef || options.faceDown) {
         tile.classList.add('classic-card-tile-back');
         tile.setAttribute('aria-label', UI.card || 'Card');
@@ -8979,6 +9010,10 @@ function createClassicHandTilesRow(player, side) {
         }
     }
     visible.forEach(({ card, hideFlags }) => {
+        if (card && card.__blind_for_teammate) {
+            row.appendChild(createClassicCardTile(card));
+            return;
+        }
         const prediction = getCardPredictionOptionsForOwner(card, player.raw || {});
         row.appendChild(createClassicCardTile(card, {
             hideFlags,
@@ -10289,7 +10324,7 @@ function getTermIntroLibrary() {
         floating: { label: UI.tag_floating || 'Floating', desc: lt({ zh: '打出后若本应进入弃牌堆，则洗入抽牌堆随机位置。', en: 'After being played, if it would enter discard, it is shuffled into the deck instead.', fr: 'Après utilisation, si elle devait aller dans la défausse, elle est mélangée dans le deck à la place.', ja: '使用後、本来捨て札に行く場合、代わりに山札へランダムに戻ります。' }), color: '#1687B8' },
         nazar: { label: UI.status_nazar || lt({ zh: '邪眼', en: 'Nazar', fr: 'Nazar', ja: 'ナザール' }), desc: lt({ zh: '存在时，自己所受≤9的物理伤害变为1。若受到≥10的物理伤害，则将其减少9，且层数-1。', en: 'While present, physical damage you take that is 9 or less becomes 1. Physical damage of 10 or more is reduced by 9, then this loses 1 stack.', fr: 'Tant qu’il existe, les dégâts physiques subis de 9 ou moins deviennent 1. Les dégâts physiques de 10 ou plus sont réduits de 9, puis cet état perd 1 charge.', ja: '存在中、自分が受ける9以下の物理ダメージは1になります。10以上の物理ダメージは9減少し、その後1層減ります。' }), color: COLORS.magic },
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: lt({ zh: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', en: 'While present, an enemy skill card that actually costs 1E or less is negated, then this loses 1 stack.', fr: 'Tant qu’il existe, une compétence ennemie coûtant réellement 1E ou moins est annulée, puis perd 1 charge.', ja: '存在中、敵が実際に1E以下消費する技能カードを無効にし、その後1層減ります。' }), color: COLORS.magic },
-        dodge: { label: UI.status_dodge || lt({ zh: '闪避', en: 'Dodge', fr: 'Esquive', ja: '回避' }), desc: lt({ zh: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', en: 'When physical damage would be taken, lose 1 stack to prevent that hit. If the source card has Precision, prevent only half of the damage. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Quand des dégâts physiques devraient être subis, perdez 1 charge pour annuler ce coup. Si la carte source a Précision, seule la moitié des dégâts est annulée. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: '物理ダメージを受ける時、1層減らしてそのダメージを防ぎます。発生源カードがPrecisionを持つ場合、防ぐのは半分だけです。状態免疫中は蓄積できますが発動も消費もされません。' }), color: COLORS.guard },
+        dodge: { label: UI.status_dodge || lt({ zh: '闪避', en: 'Dodge', fr: 'Esquive', ja: '回避' }), desc: lt({ zh: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。自己回合开始时清空层数。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', en: 'When physical damage would be taken, lose 1 stack to prevent that hit. If the source card has Precision, prevent only half of the damage. Clear all stacks at the start of your turn. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Quand des dégâts physiques devraient être subis, perdez 1 charge pour annuler ce coup. Si la carte source a Précision, seule la moitié des dégâts est annulée. Retirez toutes les charges au début de votre tour. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: '物理ダメージを受ける時、1層減らしてそのダメージを防ぎます。発生源カードがPrecisionを持つ場合、防ぐのは半分だけです。自分のターン開始時に全層を消去します。状態免疫中は蓄積できますが発動も消費もされません。' }), color: COLORS.guard },
         equipment_armor: { label: lt({ zh: '装备护甲', en: 'Equipment Armor', fr: 'Armure d’équipement', ja: '装備護甲' }), desc: lt({ zh: '存在时，若装备将被摧毁，则使该装备不被摧毁，并消耗1层装备护甲。玩家回合结束时，该玩家所有装备的装备护甲-1。', en: 'If the equipment would be destroyed, prevent that destruction and consume 1 Equipment Armor. At the end of a player turn, all that player’s equipment loses 1 Equipment Armor.', fr: 'Si l’équipement devait être détruit, empêche cette destruction et consomme 1 Armure d’équipement. À la fin du tour d’un joueur, tout son équipement perd 1 Armure d’équipement.', ja: '装備が破壊される時、それを防ぎ装備護甲を1層消費します。プレイヤーのターン終了時、そのプレイヤーの全装備の装備護甲が1層減ります。' }), color: COLORS.indestructible },
         fusion_layer: { label: UI.fusion_layer || 'Fusion', desc: lt({ zh: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。打出后恢复为 1。', en: 'Amplifies attack damage. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after being played.', fr: 'Amplifie les dégâts d’attaque. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 après avoir été jouée.', ja: '攻撃ダメージを増やします。各命中は切り上げ(基礎ダメージ×聚变/裂变)。使用後に1へ戻ります。' }), color: '#8E44AD' },
         fission_layer: { label: UI.fission_layer || 'Fission', desc: lt({ zh: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。打出后恢复为 1。', en: 'Splits an attack into multiple hits. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after being played.', fr: 'Divise une attaque en plusieurs coups. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 après avoir été jouée.', ja: '攻撃を複数回命中に分けます。各命中は切り上げ(基礎ダメージ×聚变/裂变)。使用後に1へ戻ります。' }), color: '#2874A6' },
@@ -10579,7 +10614,7 @@ function getStatusIntroItem(statusInfo) {
         magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
-        dodge: { label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
+        dodge: { label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。自己回合开始时清空层数。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
         status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。护甲不是状态，不会被状态免疫影响。', color: '#16A085' },
         immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。护甲不是状态，不会被状态免疫影响。', color: '#16A085' },
         stunned: { label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
@@ -10594,7 +10629,7 @@ function getStatusIntroItem(statusInfo) {
         foresight: { label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
         fracture: { label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         stagnation: { label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
-        blind: { label: UI.status_blind, desc: '1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。回合开始生效后，清空失明。', color: '#2C3E50' },
+        blind: { label: UI.status_blind, desc: '效果存在时，队友无法查看自己的手牌。1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。回合开始生效后，清空失明。', color: '#2C3E50' },
         'jungle:fragile': { label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A' },
         fragile: { label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A' },
         'jungle:shield': { label: '护盾', desc: '受到伤害时先消耗护盾层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。', color: '#2E7D7D' },
@@ -10626,7 +10661,7 @@ function getStatusIntroItem(statusInfo) {
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: getTermIntroLibrary().magic_nazar.desc },
         equip_protect: { label: UI.status_equip_protect, desc: lt({ zh: builtIns.equip_protect.desc, en: 'Prevents equipment from being destroyed by destroy effects.', fr: 'Empêche un équipement d’être détruit par les effets de destruction.', ja: '装備が破壊効果で破壊されるのを防ぎます。' }) },
         invincible: { label: UI.status_invincible, desc: lt({ zh: builtIns.invincible.desc, en: 'While invincible, damage does not cause defeat.', fr: 'Pendant l’invincibilité, les dégâts ne provoquent pas la défaite.', ja: '無敵中はダメージで敗北しません。' }) },
-        dodge: { label: UI.status_dodge || 'Dodge', desc: lt({ zh: builtIns.dodge.desc, en: 'When physical damage would be taken, lose 1 stack to prevent that hit. If the source card has Precision, prevent only half of the damage. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Quand des dégâts physiques devraient être subis, perdez 1 charge pour annuler ce coup. Si la carte source a Précision, seule la moitié des dégâts est annulée. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: '物理ダメージを受ける時、1層減らしてそのダメージを防ぎます。発生源カードがPrecisionを持つ場合、防ぐのは半分だけです。状態免疫中は蓄積できますが発動も消費もされません。' }) },
+        dodge: { label: UI.status_dodge || 'Dodge', desc: lt({ zh: builtIns.dodge.desc, en: 'When physical damage would be taken, lose 1 stack to prevent that hit. If the source card has Precision, prevent only half of the damage. Clear all stacks at the start of your turn. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Quand des dégâts physiques devraient être subis, perdez 1 charge pour annuler ce coup. Si la carte source a Précision, seule la moitié des dégâts est annulée. Retirez toutes les charges au début de votre tour. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: '物理ダメージを受ける時、1層減らしてそのダメージを防ぎます。発生源カードがPrecisionを持つ場合、防ぐのは半分だけです。自分のターン開始時に全層を消去します。状態免疫中は蓄積できますが発動も消費もされません。' }) },
         status_immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends. Armor is not a state and is not affected by Status Immune.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite. L’armure n’est pas un état et n’est pas affectée.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。護甲は状態ではなく、状態免疫の影響を受けません。' }) },
         immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。' }) },
         stunned: { label: UI.status_stunned, desc: lt({ zh: builtIns.stunned.desc, en: 'At your turn, lose 1 stack and skip active actions. Passive equipment still works.', fr: 'À votre tour, perdez 1 charge et sautez vos actions actives. Les équipements passifs fonctionnent encore.', ja: '自分のターンに1層減り、能動行動をスキップします。装備の受動効果は通常通りです。' }) },
@@ -10642,7 +10677,7 @@ function getStatusIntroItem(statusInfo) {
         foresight: { label: UI.status_foresight, desc: lt({ zh: builtIns.foresight.desc, en: 'At turn-start draw, you may discard up to that many hand cards, then draw the same number.', fr: 'Lors de la pioche de début de tour, vous pouvez défausser jusqu’à autant de cartes en main, puis en piocher autant.', ja: 'ターン開始ドロー時、層数まで手札を捨て、その枚数を引けます。' }) },
         fracture: { label: UI.status_fracture, desc: lt({ zh: builtIns.fracture.desc, en: 'Whenever you play a card, lose H equal to its stacks. Clears at your turn end.', fr: 'Chaque fois que vous jouez une carte, perdez H égal aux charges. Disparaît à la fin de votre tour.', ja: 'カードを使うたび層数分Hを失います。自分ターン終了時に消えます。' }) },
         stagnation: { label: UI.status_stagnation, desc: lt({ zh: builtIns.stagnation.desc, en: 'Poison still deals damage at turn start, but P does not halve afterward. Loses 1 stack at your turn end.', fr: 'Le poison inflige toujours ses dégâts au début du tour, mais P n’est pas réduit de moitié ensuite. Perd 1 charge à la fin de votre tour.', ja: 'ターン開始時に毒ダメージは受けますが、その後Pは半減しません。自分ターン終了時に1層減ります。' }) },
-        blind: { label: UI.status_blind, desc: lt({ zh: builtIns.blind.desc, en: 'Higher stacks hide more card and combat information from you. At your turn start, your hand is shuffled, then Blind is cleared.', fr: 'Plus les charges sont élevées, plus les informations de cartes et de combat vous sont cachées. Au début de votre tour, votre main est mélangée, puis Cécité disparaît.', ja: '層数が高いほどカードや戦闘情報が隠れます。自分ターン開始時、手札をシャッフルしてから失明は消えます。' }) },
+        blind: { label: UI.status_blind, desc: lt({ zh: builtIns.blind.desc, en: 'While Blind is active, teammates cannot see your hand. Higher stacks hide more card and combat information from you. At your turn start, your hand is shuffled, then Blind is cleared.', fr: 'Tant que Cécité est active, vos coéquipiers ne peuvent pas voir votre main. Plus les charges sont élevées, plus les informations de cartes et de combat vous sont cachées. Au début de votre tour, votre main est mélangée, puis Cécité disparaît.', ja: '失明中、味方は自分の手札を確認できません。層数が高いほどカードや戦闘情報が隠れます。自分ターン開始時、手札をシャッフルしてから失明は消えます。' }) },
         fragile: { label: lt({ zh: '易损', en: 'Fragile', fr: 'Fragile', ja: '脆弱' }), desc: lt({ zh: builtIns.fragile.desc, en: 'Reduces armor by its stacks. Negative armor increases physical damage taken. Clears at your turn start.', fr: 'Réduit l’armure de ses charges. Une armure négative augmente les dégâts physiques reçus. Disparaît au début de votre tour.', ja: '護甲を層数分減らします。護甲が負なら受ける物理ダメージが増えます。自分ターン開始時に消えます。' }) },
         shield: { label: lt({ zh: '护盾', en: 'Shield', fr: 'Bouclier', ja: 'シールド' }), desc: lt({ zh: builtIns.shield.desc, en: 'Consumes stacks to block that much damage, including magic damage. Halves at your turn start.', fr: 'Consomme ses charges pour bloquer autant de dégâts, y compris magiques. Est divisé par deux au début de votre tour.', ja: '層数を消費して同量のダメージを防ぎます。魔法ダメージも含みます。自分ターン開始時に半減します。' }) },
         turn_heal: { label: lt({ zh: '回合回复', en: 'Turn Heal', fr: 'Soin de tour', ja: 'ターン回復' }), desc: lt({ zh: builtIns.turn_heal.desc, en: 'Shown as Turn Heal:X;Y. When applied and at turn start, heal Y H, then X decreases by 1. Removed at X=0.', fr: 'Affiché Soin de tour:X;Y. À l’application et au début du tour, soigne Y H, puis X diminue de 1. Retiré à X=0.', ja: '回合回复:X;Y と表示。付与時とターン開始時にY H回復し、Xが1減ります。X=0で消えます。' }) },
@@ -12867,7 +12902,8 @@ function groupAchievementItems(items) {
             ...next,
             id: `series:${series}`,
             name: achievementBaseName(group[0]?.name || next.name),
-            description: stageText,
+            description: next.description || group[0]?.description || '',
+            stage_description: stageText,
             progress,
             target: nextTarget,
             series_target: topTarget,
@@ -12942,6 +12978,7 @@ function renderAchievementCenter() {
                         <span class="achievement-name">${escapeHtml(item.name || '???')}</span>
                     </div>
                     <div class="achievement-desc">${escapeHtml(item.description || '')}</div>
+                    ${item.stage_description ? `<div class="achievement-stage">${escapeHtml(item.stage_description)}</div>` : ''}
                 </div>
                 <div class="achievement-side">
                     <span class="achievement-reward">+${escapeHtml(item.reward_dew || 0)} ${escapeHtml(UI.thorn_dew || '荆露')}</span>
@@ -16991,6 +17028,11 @@ function showSetupCardMultiSelect(entries, maxCount, title, config = {}) {
         confirmBtn.style.marginTop = '10px';
 
         function selectedEntries() {
+            if (config.preserveSelectionOrder) {
+                return [...selected]
+                    .map(index => source.find(entry => entry._choiceIndex === index))
+                    .filter(Boolean);
+            }
             return source.filter(entry => selected.has(entry._choiceIndex));
         }
 
@@ -17020,7 +17062,13 @@ function showSetupCardMultiSelect(entries, maxCount, title, config = {}) {
                     row.classList.toggle('selected', selected.has(entry._choiceIndex));
                     row.style.justifyContent = 'flex-start';
                     row.style.minHeight = '34px';
-                    renderChoiceOptionContent(row, cardChoiceOption(entry, { detail: `#${entry._choiceIndex + 1}` }), entry._choiceIndex, { numbered: false });
+                    const selectionIndex = config.preserveSelectionOrder
+                        ? [...selected].indexOf(entry._choiceIndex)
+                        : -1;
+                    const detail = selectionIndex >= 0
+                        ? `${selectionIndex + 1}/${max}`
+                        : `#${entry._choiceIndex + 1}`;
+                    renderChoiceOptionContent(row, cardChoiceOption(entry, { detail }), entry._choiceIndex, { numbered: false });
                     row.onmousedown = (event) => {
                         event.preventDefault();
                     };
@@ -17101,6 +17149,9 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
         const sourceSel = await gamePrompt(`${label} ${UI.choose_yggdrasil_card}`, sourceOptions, { cancellable: false });
         if (sourceSel < 0) return false;
         return { yggdrasil_convert_def_id: deck[sourceSel].def_id };
+    }
+    if (eventId === 11) {
+        return await showOpeningSequenceChoice(deck, `${label} ${UI.opening_sequence_title || '花序编排'}`);
     }
     return null;
 }
@@ -18046,6 +18097,9 @@ async function handleEventSubChoice(data) {
             if (subChoice === false) subChoice = { add_def_ids: [] };
         } else if (String(eventId) === '8') {
             subChoice = await showYggdrasilConversionChoice();
+            if (subChoice === false) subChoice = null;
+        } else if (String(eventId) === '11') {
+            subChoice = await showOpeningSequenceChoice(eventSelectData.draft_picks || [], UI.opening_sequence_title || '花序编排');
             if (subChoice === false) subChoice = null;
         }
         socket.emit('submit_event_sub_choice', { sub_choice: subChoice });
@@ -20091,6 +20145,27 @@ function renderPlayerBars(containerId, playerData) {
     }
 }
 
+async function showOpeningSequenceChoice(deckEntries, title = (UI.opening_sequence_title || '花序编排')) {
+    const candidates = (deckEntries || [])
+        .map(card => typeof card === 'string' ? { def_id: card } : { ...(card || {}) })
+        .filter(card => card.def_id && getCardDef(card.def_id) && !cardHasSublimeFlag(card));
+    const required = Math.min(3, candidates.length);
+    if (!required) return { topdeck_def_ids: [] };
+    const selected = await showSetupCardMultiSelect(
+        candidates,
+        required,
+        title,
+        {
+            min: required,
+            cancellable: false,
+            preserveSelectionOrder: true,
+            message: UI.opening_sequence_message || '按选择顺序移至抽牌堆顶，最先选择的牌最先抽取。',
+        }
+    );
+    if (!selected || selected === false) return false;
+    return { topdeck_def_ids: selected.map(card => card.def_id).slice(0, required) };
+}
+
 function getPlayerCritMultiplier(playerData = {}) {
     const raw = (playerData && playerData.raw && typeof playerData.raw === 'object') ? playerData.raw : playerData;
     const customVars = (raw && raw.custom_vars && typeof raw.custom_vars === 'object') ? raw.custom_vars : {};
@@ -20332,6 +20407,10 @@ function renderTeammateHand(teammateData) {
     container.innerHTML = '';
     const useSpectate2v2Chip = !!(isSpectating && gameState && gameState.mode === '2v2');
     const hand = teammateData.hand || [];
+    if (teammateData.hand_hidden_by_blind) {
+        hand.forEach(card => container.appendChild(createTeammateBlindHandChip(card)));
+        return;
+    }
     if (getOwnBlindLevel() >= 3 && hand.length > 0) {
         appendUnknownHandMarker(container);
         return;
@@ -20344,6 +20423,24 @@ function renderTeammateHand(teammateData) {
         if (isSpectating && !useSpectate2v2Chip) attachFloatingCardPreview(el, card, { prediction, ownerState: teammateData });
         container.appendChild(el);
     });
+}
+
+function createTeammateBlindHandChip(card = {}) {
+    const blindLevel = Math.max(1, Math.floor(Number(card.__blind_level || 1)));
+    const hideType = blindLevel >= 2;
+    const cardType = String(card.card_type || '');
+    const typeColor = hideType
+        ? '#7f8c8d'
+        : (CARD_TYPE_COLORS[cardType] || COLORS.text_primary);
+    const chip = document.createElement('span');
+    chip.className = `choice-card-token teammate-blind-hand-chip choice-card-blinded${hideType ? ' choice-card-blinded-deep' : ''}`;
+    const name = document.createElement('span');
+    name.className = 'choice-card-name';
+    name.style.borderColor = typeColor;
+    name.style.color = typeColor;
+    name.textContent = hideType ? '?' : (getCardTypeLabel(cardType) || '?');
+    chip.appendChild(name);
+    return chip;
 }
 
 function createTeammateHandChip(cardDict, ownerState = null) {
@@ -25833,8 +25930,16 @@ function isSettingsModDetailOpen(kind, key) {
     return localStorage.getItem(settingsModDetailKey(kind, key)) === 'open';
 }
 
-function setSettingsModDetailOpen(kind, key, open) {
+function setSettingsModDetailOpen(kind, key, open, toggleButton = null) {
     localStorage.setItem(settingsModDetailKey(kind, key), open ? 'open' : 'closed');
+    const item = toggleButton?.closest('.settings-mod-item');
+    const details = item?.querySelector('.settings-mod-card-details');
+    if (item && details) {
+        item.classList.toggle('mod-expanded', open);
+        details.classList.toggle('hidden', !open);
+        toggleButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+        return;
+    }
     if (kind === 'community') renderCommunityModList();
     else renderOfficialModList();
 }
@@ -25845,7 +25950,10 @@ function createSettingsModCaret(kind, key, expanded) {
     btn.className = 'settings-mod-item-toggle';
     btn.textContent = '>';
     btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    btn.onclick = () => setSettingsModDetailOpen(kind, key, !expanded);
+    btn.onclick = () => {
+        const open = btn.getAttribute('aria-expanded') !== 'true';
+        setSettingsModDetailOpen(kind, key, open, btn);
+    };
     return btn;
 }
 

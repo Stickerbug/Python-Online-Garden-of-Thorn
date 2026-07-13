@@ -168,6 +168,20 @@ class GameEngine2v2(GameEngine):
                     for_player,
                     teammate_id,
                 )
+            teammate_blind = 0
+            if not self._is_status_immune(teammate_id):
+                teammate_blind = max(0, int(getattr(self.players[teammate_id], 'blind', 0) or 0))
+            if teammate_blind > 0:
+                teammate_data['hand'] = [
+                    {
+                        'card_type': getattr(card, 'card_type', '') if teammate_blind == 1 else '',
+                        '__blind_for_teammate': True,
+                        '__blind_level': teammate_blind,
+                    }
+                    for card in self.players[teammate_id].hand
+                    if card.def_id != ERROR_CARD_ID
+                ]
+                teammate_data['hand_hidden_by_blind'] = True
             if self.pending_choice and self.pending_choice.get('player_id') == for_player:
                 ct = self.pending_choice.get('choice_type', '')
                 target_id = self.pending_choice.get('target_player_id')

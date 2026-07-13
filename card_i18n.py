@@ -281,6 +281,10 @@ OPENING_EVENT_I18N = {
         'name': _t('魔力加速', 'Magic Acceleration', 'Accélération magique', 'Aceleração Mágica', 'Ускорение магии', '魔力加速'),
         'desc': _t('每打出2张牌回复1[[icon:M]]', 'Recover 1[[icon:M]] for every 2 cards you play', 'Récupérez 1[[icon:M]] toutes les 2 cartes jouées', 'Recupere 1[[icon:M]] a cada 2 cartas jogadas', 'Восстанавливайте 1[[icon:M]] за каждые 2 сыгранные карты', 'カードを2枚使用するたびに1[[icon:M]]回復'),
     },
+    11: {
+        'name': _t('花序编排', 'Floral Arrangement', 'Arrangement floral', 'Arranjo Floral', 'Цветочная композиция', '花序編成'),
+        'desc': _t('选择自己牌库中的3张牌，按选择顺序移至抽牌堆顶', 'Choose 3 cards from your deck and move them to the top in the chosen order', 'Choisissez 3 cartes de votre deck et placez-les au-dessus dans l’ordre choisi', 'Escolha 3 cartas do seu deck e mova-as para o topo na ordem escolhida', 'Выберите 3 карты из своей колоды и положите их наверх в выбранном порядке', '自分の山札から3枚を選び、選んだ順に山札の一番上へ移す'),
+    },
 }
 
 
