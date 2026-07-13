@@ -222,6 +222,7 @@ class PlayerState:
         self.achievement_equipment_destroyed: int = 0
         self.achievement_max_equipment_count: int = 0
         self.achievement_max_armor: int = self.armor
+        self.achievement_total_card_plays: int = 0
         self.achievement_death_round = None
         self.achievement_self_caused_death: bool = False
         self.turn_start_snapshot: Dict[str, int] = {
@@ -338,6 +339,7 @@ class PlayerState:
             'achievement_equipment_destroyed': self.achievement_equipment_destroyed,
             'achievement_max_equipment_count': self.achievement_max_equipment_count,
             'achievement_max_armor': self.achievement_max_armor,
+            'achievement_total_card_plays': self.achievement_total_card_plays,
             'achievement_death_round': self.achievement_death_round,
             'achievement_self_caused_death': self.achievement_self_caused_death,
             'turn_start_snapshot': dict(self.turn_start_snapshot),
@@ -466,6 +468,7 @@ class PlayerState:
         ps.achievement_equipment_destroyed = int(d.get('achievement_equipment_destroyed', 0) or 0)
         ps.achievement_max_equipment_count = int(d.get('achievement_max_equipment_count', 0) or 0)
         ps.achievement_max_armor = int(d.get('achievement_max_armor', getattr(ps, 'armor', 0)) or 0)
+        ps.achievement_total_card_plays = int(d.get('achievement_total_card_plays', 0) or 0)
         death_round = d.get('achievement_death_round', None)
         ps.achievement_death_round = None if death_round is None else int(death_round)
         ps.achievement_self_caused_death = bool(d.get('achievement_self_caused_death', False))
@@ -810,7 +813,16 @@ class GameEngine:
             current = int(getattr(ps, 'health', 0) or 0)
             previous = int(getattr(ps, 'achievement_min_health', current))
             ps.achievement_min_health = min(previous, current)
-            if current <= 0 and getattr(ps, 'achievement_death_round', None) is None:
+        except Exception:
+            pass
+
+    def _note_achievement_death(self, player_id: int):
+        if not (0 <= player_id < len(self.players)):
+            return
+        ps = self.players[player_id]
+        self._note_achievement_health(player_id)
+        try:
+            if int(getattr(ps, 'health', 0) or 0) <= 0 and getattr(ps, 'achievement_death_round', None) is None:
                 ps.achievement_death_round = int(getattr(self, 'round_num', 0) or 0)
         except Exception:
             pass
@@ -838,6 +850,14 @@ class GameEngine:
             )
         except Exception:
             pass
+
+    def achievement_total_card_plays(self, player_id: int) -> int:
+        if not (0 <= player_id < len(self.players)):
+            return 0
+        try:
+            return max(0, int(getattr(self.players[player_id], 'achievement_total_card_plays', 0) or 0))
+        except Exception:
+            return 0
 
     def _note_achievement_card_discarded(self, player_id: int, card: Optional[CardInstance]):
         if card is None or not (0 <= player_id < len(self.players)):
@@ -1049,6 +1069,7 @@ class GameEngine:
         except Exception:
             root_armor = 0
         ps.achievement_max_armor = max(0, int(getattr(ps, 'armor', 0) or 0) + int(root_armor or 0))
+        ps.achievement_total_card_plays = 0
         ps.achievement_death_round = None
         ps.achievement_self_caused_death = False
 
@@ -1408,6 +1429,204 @@ class GameEngine:
             self.log_msg(f"{label}效果：{self.pn(player_id)}+{base_healed}H")
         return healed
 
+    def _sewers_card_requires_player_target(self, card: Optional[CardInstance]) -> bool:
+        if card is None:
+            return False
+        flags = self._effective_card_flags(card)
+        if 'wide_strike' in flags or getattr(card, 'card_type', '') == 'guard':
+            return False
+        if self._card_is_self_only(card):
+            return False
+        return bool(
+            getattr(card, 'card_type', '') == 'thorn'
+            or self._v2_play_requires_choice_target(card)
+            or self._root_play_requires_owner_target(card)
+        )
+
+    def _sewers_light_bulb_candidates(self) -> List[int]:
+        candidates = []
+        for target_id, target in enumerate(self.players):
+            if not int((getattr(target, 'custom_vars', {}) or {}).get('sewers_light_bulb_active', 0) or 0):
+                continue
+            if int(getattr(target, 'health', 0) or 0) <= 0:
+                continue
+            if bool(getattr(target, 'untargetable', 0)) and not self._is_status_immune(target_id):
+                continue
+            candidates.append(target_id)
+        return candidates
+
+    def _sewers_forced_target_for_player(self, player_id: int) -> Optional[int]:
+        if not (0 <= player_id < len(self.players)):
+            return None
+        candidates = self._sewers_light_bulb_candidates()
+        ps = self.players[player_id]
+        signature = ','.join(str(pid) for pid in sorted(candidates))
+        if not candidates:
+            ps.custom_vars.pop('sewers_forced_target_id', None)
+            ps.custom_vars.pop('sewers_forced_target_signature', None)
+            return None
+        stored_signature = str(ps.custom_vars.get('sewers_forced_target_signature', '') or '')
+        try:
+            stored_target = int(ps.custom_vars.get('sewers_forced_target_id', -1))
+        except (TypeError, ValueError):
+            stored_target = -1
+        if stored_signature != signature or stored_target not in candidates:
+            stored_target = random.choice(candidates)
+            ps.custom_vars['sewers_forced_target_signature'] = signature
+            ps.custom_vars['sewers_forced_target_id'] = stored_target
+        return stored_target
+
+    def _sewers_forced_target_for_card(self, player_id: int, card: Optional[CardInstance]) -> Optional[int]:
+        if not self._sewers_card_requires_player_target(card):
+            return None
+        return self._sewers_forced_target_for_player(player_id)
+
+    def _sewers_clear_light_bulb_at_turn_start(self, player_id: int) -> None:
+        if not (0 <= player_id < len(self.players)):
+            return
+        self.players[player_id].custom_vars.pop('sewers_light_bulb_active', None)
+
+    def _sewers_apply_forced_target_choice(self, player_id: int, card: Optional[CardInstance], choice):
+        target_id = self._sewers_forced_target_for_card(player_id, card)
+        if target_id is None:
+            return choice, None
+        updated = dict(choice or {})
+        updated['target_player'] = target_id
+        updated['target_player_id'] = target_id
+        updated['target_id'] = target_id
+        return updated, target_id
+
+    def _sewers_selected_player_targets(self, player_id: int, card: Optional[CardInstance], choice) -> List[int]:
+        flags = self._effective_card_flags(card)
+        if 'wide_strike' in flags:
+            return list(self._wide_strike_target_ids(player_id, card))
+        if not self._sewers_card_requires_player_target(card):
+            return []
+        target_id = self._choice_target_from_choice(choice, -1)
+        if target_id < 0 and getattr(card, 'card_type', '') == 'thorn' and len(self.players) == 2:
+            target_id = 1 - player_id
+        return [target_id] if 0 <= target_id < len(self.players) else []
+
+    def _sewers_trigger_vampire_fangs(self, player_id: int, card: Optional[CardInstance], choice) -> None:
+        for selected_id in self._sewers_selected_player_targets(player_id, card, choice):
+            owner = self.players[selected_id]
+            for eq in list(getattr(owner, 'equipment', []) or []):
+                if not self._card_is(eq.card_instance, 'VampireFang', 'sewers:vampire_fang'):
+                    continue
+                target_id = self._equipment_effect_target_id(eq, selected_id)
+                if not (0 <= target_id < len(self.players)):
+                    continue
+                target = self.players[target_id]
+                before = int(getattr(target, 'health', 0) or 0)
+                target.heal(3)
+                healed = max(0, int(getattr(target, 'health', 0) or 0) - before)
+                if healed > 0:
+                    self.log_msg(f"{self.pn(selected_id)}的吸血鬼尖牙使{self.pn(target_id)}回复{healed}H")
+
+    def _sewers_grow_clay_power(self, target_id: int, amount: int) -> None:
+        if amount < 8 or not (0 <= target_id < len(self.players)):
+            return
+        for hand_card in list(getattr(self.players[target_id], 'hand', []) or []):
+            if self._card_is(hand_card, 'Clay', 'sewers:clay'):
+                hand_card.power_value = max(0, int(getattr(hand_card, 'power_value', 0) or 0) + 3)
+
+    def _sewers_is_confusion_card(self, card: Optional[CardInstance]) -> bool:
+        if card is None:
+            return False
+        flags = {str(flag or '').lower() for flag in self._effective_card_flags(card)}
+        return bool(flags.intersection({'confusion', 'sewers:confusion', 'tag_confusion', 'tag_sewers:confusion'}))
+
+    def _sewers_confusion_disguise(self, responder_id: int, played_card) -> Optional[dict]:
+        try:
+            actual = played_card if isinstance(played_card, CardInstance) else CardInstance.from_dict(played_card)
+        except Exception:
+            return None
+        if not self._sewers_is_confusion_card(actual):
+            return None
+        actual_damage = max(0, int(getattr(actual.card_def, 'damage', 0) or 0))
+        actual_hits = max(1, int(getattr(actual.card_def, 'hits', 1) or 1))
+        target_total = actual_damage * actual_hits
+        allowed_ids = getattr(self, 'allowed_card_ids', None)
+        candidates = []
+        best_distance = None
+        for def_id, card_def in CARD_DEFS.items():
+            if def_id in (actual.def_id, ERROR_CARD_ID):
+                continue
+            if allowed_ids is not None and def_id not in allowed_ids:
+                continue
+            weight = max(0, int(getattr(card_def, 'count', 0) or 0))
+            damage = max(0, int(getattr(card_def, 'damage', 0) or 0))
+            hits = max(1, int(getattr(card_def, 'hits', 1) or 1))
+            if getattr(card_def, 'card_type', '') != 'thorn' or weight <= 0 or damage <= 0:
+                continue
+            distance = abs(damage * hits - target_total)
+            if best_distance is None or distance < best_distance:
+                best_distance = distance
+                candidates = [(def_id, weight)]
+            elif distance == best_distance:
+                candidates.append((def_id, weight))
+        if not candidates:
+            return None
+        seed = f"sewers-confusion:{actual.instance_id}:{responder_id}:{self.round_num}:{','.join(d for d, _ in candidates)}"
+        rng = random.Random(seed)
+        total_weight = sum(weight for _, weight in candidates)
+        pick = rng.uniform(0, total_weight)
+        chosen_id = candidates[-1][0]
+        running = 0.0
+        for def_id, weight in candidates:
+            running += weight
+            if pick <= running:
+                chosen_id = def_id
+                break
+        fake = CardInstance(chosen_id).to_dict()
+        fake['instance_id'] = actual.instance_id
+        fake['sewers_confusion_disguise'] = True
+        return fake
+
+    def _public_pending_response(self, for_player: int):
+        pending = getattr(self, 'pending_response', None)
+        if not isinstance(pending, dict):
+            return pending
+        try:
+            source_id = int(pending.get('player_id', -1))
+        except (TypeError, ValueError):
+            source_id = -1
+        is_responder = for_player != source_id
+        counter_entries = pending.get('counter_cards') or []
+        if counter_entries:
+            responder_ids = set()
+            for entry in counter_entries:
+                if not isinstance(entry, dict):
+                    continue
+                try:
+                    responder_ids.add(int(entry.get('responder_id', -1)))
+                except (TypeError, ValueError):
+                    continue
+            is_responder = for_player in responder_ids
+        if not is_responder:
+            return pending
+        disguised = self._sewers_confusion_disguise(for_player, pending.get('card') or {})
+        if not disguised:
+            return pending
+        public = copy.deepcopy(pending)
+        public['card'] = disguised
+        return public
+
+    def build_sewers_confusion_damage_prediction(self, responder_id: int, played_card, counter_cards=None):
+        disguised = self._sewers_confusion_disguise(responder_id, played_card)
+        if not disguised:
+            return self.build_response_damage_prediction(responder_id, counter_cards or [])
+        sim = copy.deepcopy(self)
+        if isinstance(getattr(sim, 'pending_response', None), dict):
+            sim.pending_response = copy.deepcopy(sim.pending_response)
+            sim.pending_response['card'] = disguised
+            try:
+                fake_card = CardInstance.from_dict(disguised)
+                sim.pending_response['is_precision'] = 'precision' in sim._effective_card_flags(fake_card)
+            except Exception:
+                pass
+        return sim.build_response_damage_prediction(responder_id, counter_cards or [])
+
     def _record_damage(self, target_id, amount, source_id=None):
         try:
             amount = int(amount)
@@ -1415,6 +1634,7 @@ class GameEngine:
             amount = 0
         if amount <= 0:
             return
+        self._sewers_grow_clay_power(target_id, amount)
         if 0 <= target_id < len(self.players):
             target = self.players[target_id]
             target.turn_damage_taken += amount
@@ -3111,11 +3331,12 @@ class GameEngine:
             'log': list(self.log),
             'log_start': log_start,
             'log_total': len(self.log),
-            'pending_response': self.pending_response,
+            'pending_response': self._public_pending_response(for_player),
             'pending_choice': self.pending_choice,
             'pending_v2_ui': self._public_v2_ui(for_player),
             'opening_event_picks': self.opening_event_picks,
             'antennae_reveal': self._antennae_reveal[for_player],
+            'forced_target_player_id': self._sewers_forced_target_for_player(for_player),
         }
 
     def start_event_select_first(self):
@@ -3834,7 +4055,11 @@ class GameEngine:
             if ps.health <= 0:
                 self._check_game_over()
                 return
+        self._enter_player_action_phase(player_id)
+
+    def _enter_player_action_phase(self, player_id: int):
         self.phase = 'action'
+        self._run_ocean_auto_cards_turn_start(player_id)
         self._continue_honey_control_if_needed(player_id)
 
     def _first_auto_attack_target(self, player_id: int) -> int:
@@ -5136,6 +5361,7 @@ class GameEngine:
             return {'success': False, 'error': '等待对手反制响应'}
         if getattr(self, 'pending_v2_ui', None) is not None:
             return {'success': False, 'error': 'Waiting for mod UI response'}
+        choice, forced_target_id = self._sewers_apply_forced_target_choice(player_id, card, choice)
         auto_choice_mode = getattr(self, '_auto_resolve_choices_for', None) == player_id
         auto_no_cost = getattr(self, '_auto_play_no_cost_for', None) == player_id
         if auto_choice_mode and self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
@@ -5156,7 +5382,11 @@ class GameEngine:
         card_flags = self._effective_card_flags(card)
         if card.card_type == 'thorn' and 'wide_strike' not in card_flags:
             target_id = self._choice_target_from_choice(choice, 1 - player_id)
-            if not self._target_can_be_selected(player_id, target_id, allow_self=('self_target' in card_flags)):
+            if not self._target_can_be_selected(
+                player_id,
+                target_id,
+                allow_self=('self_target' in card_flags or forced_target_id == target_id),
+            ):
                 return {'success': False, 'error': '没有可选中的玩家'}
         elif 'wide_strike' not in card_flags and (self._v2_play_requires_choice_target(card) or self._root_play_requires_owner_target(card)):
             target_id = self._choice_target_from_choice(choice, -1)
@@ -5198,6 +5428,7 @@ class GameEngine:
         ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', card_instance_id) or card_instance_id))
         self._apply_magic_acceleration_after_play(player_id, card)
         self._atomic_ocean_charge_self_damage(player_id, card, {}, '', choice, {'target_id': player_id})
+        self._sewers_trigger_vampire_fangs(player_id, card, choice)
         response_result = self._check_card_response_after_choice(player_id, card, choice)
         if response_result:
             return response_result
@@ -5838,6 +6069,7 @@ class GameEngine:
                     choice[key] = original_choice[key]
             if 'target_player_id' not in choice and pending.get('target_player_id') is not None:
                 choice['target_player_id'] = pending.get('target_player_id')
+        choice, _ = self._sewers_apply_forced_target_choice(player_id, card, choice)
         self._run_v2_play_hook('before_play_card', player_id, card, choice)
         if getattr(self, 'pending_v2_ui', None) is not None:
             return {'success': True, 'needs_v2_ui': True, 'card': card.to_dict()}
@@ -5857,6 +6089,8 @@ class GameEngine:
                 ps.remove_hand_card(card.instance_id)
             ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', 0) or 0))
             self._apply_magic_acceleration_after_play(player_id, card)
+            self._atomic_ocean_charge_self_damage(player_id, card, {}, '', choice, {'target_id': player_id})
+            self._sewers_trigger_vampire_fangs(player_id, card, choice)
         if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
             result = self._execute_card_effect(player_id, card, choice)
             self._enforce_unique_cards_for_all()
@@ -7545,7 +7779,7 @@ class GameEngine:
             ps.sponge_active = False
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(getattr(owner_state, 'equipment', []) or []):
-                if not self._equipment_is(eq, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge'):
+                if not self._equipment_is(eq, 'Sponge', 'ocean:sponge', 'troll_cards:sponge', 'vanilla:sponge'):
                     continue
                 target_id = self._equipment_effect_target_id(eq, owner_id)
                 if self._status_application_blocked(target_id, 'sponge_active'):
@@ -7582,7 +7816,7 @@ class GameEngine:
             for candidate in getattr(player, 'equipment', []) or []:
                 if candidate is exclude_eq:
                     continue
-                if not self._equipment_is(candidate, 'Pill', 'troll_cards:pill', 'vanilla:pill'):
+                if not self._equipment_is(candidate, 'Pill', 'vanilla:pill', 'troll_cards:pill'):
                     continue
                 if self._equipment_effect_target_id(candidate, owner_id) == target_id:
                     return True
@@ -7595,7 +7829,7 @@ class GameEngine:
             for candidate in getattr(player, 'equipment', []) or []:
                 if candidate is exclude_eq:
                     continue
-                if not self._equipment_is(candidate, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge'):
+                if not self._equipment_is(candidate, 'Sponge', 'ocean:sponge', 'troll_cards:sponge', 'vanilla:sponge'):
                     continue
                 if self._equipment_effect_target_id(candidate, owner_id) == target_id:
                     return True
@@ -7611,14 +7845,14 @@ class GameEngine:
         if self._equipment_is(eq, 'ElectricWeb', 'factory:electricweb'):
             self._cleanup_electric_web_draw_damage(eq)
 
-        is_pill = self._equipment_is(eq, 'Pill', 'troll_cards:pill', 'vanilla:pill')
+        is_pill = self._equipment_is(eq, 'Pill', 'vanilla:pill', 'troll_cards:pill')
         has_destroy_script = self._has_card_event(eq.card_def, 'equipment_destroy')
         if run_destroy_event and has_destroy_script:
             self._run_card_event(owner_id, eq.card_instance, 'equipment_destroy', None,
                                  {'source_id': owner_id, 'target_id': effect_target_id,
                                   'equipment_owner_id': owner_id})
         elif (
-            self._equipment_is(eq, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge')
+            self._equipment_is(eq, 'Sponge', 'ocean:sponge', 'troll_cards:sponge', 'vanilla:sponge')
             and self.players[effect_target_id].sponge_active
             and not self._has_other_sponge_targeting(effect_target_id, exclude_eq=eq)
         ):
@@ -9469,8 +9703,8 @@ class GameEngine:
             'MagicCotton', 'jungle:magic_cotton',
             'Plank', 'jungle:plank',
             'Root', 'jungle:root',
-            'Sponge', 'troll_cards:sponge',
-            'Pill', 'troll_cards:pill',
+            'Sponge', 'ocean:sponge', 'troll_cards:sponge',
+            'Pill', 'vanilla:pill', 'troll_cards:pill',
             'Leaf', 'vanilla:leaf',
             'Yucca', 'vanilla:yucca',
             'Disc', 'vanilla:disc',
@@ -9853,6 +10087,16 @@ class GameEngine:
                              target_id: Optional[int] = None, equipment: Optional[EquipmentInstance] = None,
                              equipment_owner_id: Optional[int] = None, choice: Optional[dict] = None,
                              extra_context: Optional[dict] = None):
+        try:
+            card_user_id = int(source_id)
+        except (TypeError, ValueError):
+            card_user_id = -1
+        if event_name == 'card_used' and event_card is not None and 0 <= card_user_id < len(self.players):
+            ps = self.players[card_user_id]
+            ps.achievement_total_card_plays = max(
+                0,
+                int(getattr(ps, 'achievement_total_card_plays', 0) or 0),
+            ) + 1
         event_card_id = getattr(event_card, 'instance_id', None)
         context = {
             'source_id': source_id,
@@ -10389,6 +10633,7 @@ class GameEngine:
 
     def _apply_turn_start_effects(self, player_id: int):
         ps = self.players[player_id]
+        self._sewers_clear_light_bulb_at_turn_start(player_id)
         opp_id = 1 - player_id
         opp = self.players[opp_id]
         self._save_turn_start_snapshot(player_id)
@@ -10678,9 +10923,7 @@ class GameEngine:
             if ps.health <= 0:
                 self._check_game_over()
                 return
-        self.phase = 'action'
-        self._run_ocean_auto_cards_turn_start(player_id)
-        self._continue_honey_control_if_needed(player_id)
+        self._enter_player_action_phase(player_id)
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
                            is_battery: bool = False, is_precision: bool = False,
@@ -11023,6 +11266,10 @@ class GameEngine:
                 delattr(card, '_placed_as_equipment')
             if hasattr(card, '_placed_as_equipment_owner'):
                 delattr(card, '_placed_as_equipment_owner')
+        elif 'return_to_hand' in card.instance_flags:
+            card.instance_flags.discard('return_to_hand')
+            ps.add_to_hand(card)
+            self.log_msg(f"{self.pn(player_id)}的{card.name_cn}立即回到手中")
         elif 'rebound' in card.flags:
             ps.add_to_hand(card)
             self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因回转回到手中")
@@ -12775,6 +13022,60 @@ class GameEngine:
         if log:
             self.log_msg(log)
 
+    def _atomic_sewers_lotus_heal(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not (0 <= target_id < len(self.players)):
+            return
+        target = self.players[target_id]
+        amount = 5 + max(0, int(getattr(target, 'poison', 0) or 0)) * 2
+        before = int(getattr(target, 'health', 0) or 0)
+        target.heal(amount)
+        healed = max(0, int(getattr(target, 'health', 0) or 0) - before)
+        if healed > 0:
+            self.log_msg(log or f"{self.pn(target_id)}回复{healed}H")
+
+    def _atomic_sewers_activate_light_bulb(self, player_id, card, params, log, choice, context):
+        if not (0 <= player_id < len(self.players)):
+            return
+        self.players[player_id].custom_vars['sewers_light_bulb_active'] = 1
+
+    def _atomic_sewers_broccoli_attack(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not (0 <= target_id < len(self.players)):
+            return
+        target = self.players[target_id]
+        dodge_before = max(0, int(getattr(target, 'dodge', 0) or 0))
+        self.deal_attack_damage(target_id, 10, 1, attacker_id=player_id, source_card=card)
+        dodge_after = max(0, int(getattr(target, 'dodge', 0) or 0))
+        if dodge_after < dodge_before:
+            self.deal_attack_damage(target_id, 3, 2, attacker_id=player_id, source_card=card)
+
+    def _atomic_sewers_blood_rose(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not (0 <= target_id < len(self.players)):
+            return
+        dealt = self.deal_attack_damage(
+            target_id,
+            3,
+            1,
+            is_precision=True,
+            attacker_id=player_id,
+            source_card=card,
+        )
+        owner = self.players[player_id]
+        before = int(getattr(owner, 'health', 0) or 0)
+        owner.heal(max(0, int(dealt or 0)) * 4)
+        healed = max(0, int(getattr(owner, 'health', 0) or 0) - before)
+        if healed > 0:
+            self.log_msg(f"{self.pn(player_id)}回复{healed}H")
+        target = self.players[target_id]
+        target.blind = max(0, int(getattr(target, 'blind', 0) or 0)) + 1
+        self._normalize_status_value(target, 'blind')
+        self._note_achievement_status_peak(target_id)
+        if target.hand and not self._is_status_immune(target_id):
+            random.shuffle(target.hand)
+            self.log_msg(f"{self.pn(target_id)}因失明打乱手牌")
+
     def _atomic_hel_add_luck(self, player_id, card, params, log, choice, context):
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         for target_id in self._resolve_targets(player_id, params.get('target', 'self')):
@@ -12996,7 +13297,9 @@ class GameEngine:
             ps.add_to_hand(temp_card, trigger_enter_hand=False)
             auto_choice = {'target_player_id': target_id, 'target_player': target_id, 'target_id': target_id}
             previous_auto_actor = getattr(self, '_allow_out_of_turn_auto_play_for', None)
+            previous_auto_choice = getattr(self, '_auto_resolve_choices_for', None)
             self._allow_out_of_turn_auto_play_for = player_id
+            self._auto_resolve_choices_for = player_id
             try:
                 if len(getattr(self, 'players', []) or []) > 2:
                     result = self.play_card(player_id, temp_card.instance_id, target_id, auto_choice)
@@ -13004,6 +13307,7 @@ class GameEngine:
                     result = self.play_card(player_id, temp_card.instance_id, auto_choice)
             finally:
                 self._allow_out_of_turn_auto_play_for = previous_auto_actor
+                self._auto_resolve_choices_for = previous_auto_choice
             if temp_card in ps.hand and not result.get('needs_choice') and not result.get('needs_v2_ui'):
                 ps.hand.remove(temp_card)
             if not result.get('success') and not result.get('needs_response') and not result.get('needs_choice') and not result.get('needs_v2_ui'):

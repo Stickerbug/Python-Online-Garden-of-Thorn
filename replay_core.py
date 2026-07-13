@@ -9,11 +9,11 @@ from datetime import datetime, timedelta, timezone
 from db import DB_PATH, get_db_connection, utc_now
 
 
-REPLAY_VERSION = 1
+REPLAY_VERSION = 2
 DEFAULT_RETENTION_DAYS = int(os.environ.get('GTN_REPLAY_RETENTION_DAYS', '90') or 90)
 CLEANUP_HOUR = int(os.environ.get('GTN_CLEANUP_HOUR', '4') or 4)
 CLEANUP_MINUTE = int(os.environ.get('GTN_CLEANUP_MINUTE', '30') or 30)
-MAX_REPLAY_COMPRESSED_BYTES = int(os.environ.get('GTN_REPLAY_MAX_COMPRESSED_BYTES', '1800000') or 1800000)
+MAX_REPLAY_COMPRESSED_BYTES = int(os.environ.get('GTN_REPLAY_MAX_COMPRESSED_BYTES', '4000000') or 4000000)
 MAX_REPLAY_STORED_ACTIONS = int(os.environ.get('GTN_REPLAY_MAX_STORED_ACTIONS', '900') or 900)
 REPLAY_ITEM_COLUMNS = '''
     id, match_id, created_at, mode, player_names_json, winner_name, winner_index,
@@ -29,7 +29,7 @@ _REPLAY_SETUP_ACTION_TYPES = {
     'submit_event_sub_choice',
     'reroll_opening_event',
 }
-_REPLAY_SETUP_PHASES = {'draft', 'event_select', 'event_sub_choice'}
+_REPLAY_SETUP_PHASES = {'draft', 'event_select', 'event_reveal', 'event_sub_choice', 'sub_choice'}
 _OPENING_EVENT_NAMES_CN = {
     '1': '生命强化',
     '2': '魔力转化',
@@ -87,6 +87,22 @@ def _encode_replay_for_storage(replay):
 
     raw, compressed = encoded(replay)
     if len(compressed) <= MAX_REPLAY_COMPRESSED_BYTES:
+        return raw, compressed, False
+
+    uses_deltas = any(
+        isinstance(frame, dict)
+        and isinstance(frame.get('state'), dict)
+        and frame['state'].get('delta') is True
+        for frame in keyframes + actions
+    )
+    if uses_deltas:
+        # Delta frames form one ordered stream. Removing or compacting any frame
+        # makes every following state unreconstructable, so preserve an unusual
+        # oversized replay instead of silently turning its latter half into a
+        # toolbar-only recording.
+        replay['meta'] = dict(replay.get('meta') or {})
+        replay['meta']['size_limit_exceeded'] = True
+        raw, compressed = encoded(replay)
         return raw, compressed, False
 
     replay['meta'] = dict(replay.get('meta') or {})
@@ -715,17 +731,21 @@ def _perspective_for_player(state, player_index):
         return {}
     if 0 <= player_index < len(perspectives) and isinstance(perspectives[player_index], dict):
         return perspectives[player_index]
+    if perspectives and isinstance(perspectives[0], dict):
+        players = perspectives[0].get('spectate_players')
+        if isinstance(players, list) and 0 <= player_index < len(players):
+            return perspectives[0]
     return {}
 
 
 def _player_state_from_perspective(perspective, player_index):
     if not isinstance(perspective, dict):
         return {}
-    if isinstance(perspective.get('you'), dict):
-        return perspective.get('you') or {}
     players = perspective.get('spectate_players')
     if isinstance(players, list) and 0 <= player_index < len(players) and isinstance(players[player_index], dict):
         return players[player_index]
+    if isinstance(perspective.get('you'), dict):
+        return perspective.get('you') or {}
     return {}
 
 
@@ -885,43 +905,38 @@ def _is_replay_setup_noise_action(action):
 
 
 def _build_timeline_from_replay(replay):
-    keyframes = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
-    actions = replay.get('actions') if isinstance(replay.get('actions'), list) else []
-    timeline = [_build_setup_summary_frame(keyframes, actions)]
-    last_state = timeline[0].get('state') or {}
-    for index, frame in enumerate(keyframes):
-        if isinstance(frame, dict) and not _is_replay_setup_noise_frame(frame):
-            state = _merge_replay_frame_state(last_state, frame.get('state'))
-            if state:
-                last_state = state
-            timeline.append({
-                'i': len(timeline),
-                't': int(frame.get('t') or 0),
-                'phase': frame.get('phase') or 'summary',
-                'round': frame.get('round') or 0,
-                'current_player': frame.get('current_player'),
-                'state': state,
-                'log': [],
-            })
-    for action in actions:
-        if isinstance(action, dict) and not _is_replay_setup_noise_action(action):
-            state = _merge_replay_frame_state(last_state, action.get('state'))
-            if state:
-                last_state = state
-            timeline.append({
-                'i': len(timeline),
-                't': int(action.get('t') or 0),
-                'phase': action.get('phase') or '',
-                'round': action.get('round') or 0,
-                'current_player': action.get('current_player'),
-                'action': action,
-                'state': state,
-                'log': [],
-            })
-    timeline.sort(key=lambda item: (0 if item.get('phase') == 'setup_summary' else 1, item.get('t', 0), item.get('i', 0)))
-    for index, item in enumerate(timeline):
-        item['i'] = index
-    return timeline
+    refs = _build_timeline_index(replay)
+    return _materialize_timeline_slice(replay, refs, 0, len(refs))
+
+
+def _apply_replay_state_delta(previous, patch):
+    if not isinstance(patch, dict):
+        return previous
+    if '$set' in patch:
+        return patch.get('$set')
+    if '$list' in patch:
+        spec = patch.get('$list') if isinstance(patch.get('$list'), dict) else {}
+        base = list(previous) if isinstance(previous, list) else []
+        start = max(0, min(len(base), _safe_int(spec.get('start'), 0)))
+        items = spec.get('items') if isinstance(spec.get('items'), list) else []
+        return base[:start] + items
+    if '$items' in patch:
+        base = list(previous) if isinstance(previous, list) else []
+        changes = patch.get('$items') if isinstance(patch.get('$items'), dict) else {}
+        for raw_index, child in changes.items():
+            index = _safe_int(raw_index, -1)
+            if 0 <= index < len(base):
+                base[index] = _apply_replay_state_delta(base[index], child)
+        return base
+    if '$dict' in patch:
+        base = dict(previous) if isinstance(previous, dict) else {}
+        for key in patch.get('$remove') or []:
+            base.pop(key, None)
+        changes = patch.get('$dict') if isinstance(patch.get('$dict'), dict) else {}
+        for key, child in changes.items():
+            base[key] = _apply_replay_state_delta(base.get(key), child)
+        return base
+    return previous
 
 
 def _merge_replay_frame_state(previous_state, frame_state):
@@ -931,6 +946,8 @@ def _merge_replay_frame_state(previous_state, frame_state):
         merged = dict(previous_state)
         merged.update(frame_state)
         return merged
+    if frame_state.get('delta') is True:
+        return _apply_replay_state_delta(previous_state or {}, frame_state.get('patch') or {})
     return frame_state
 
 
@@ -952,6 +969,7 @@ def _build_timeline_index(replay):
                 'kind': 'frame',
                 'source_index': source_index,
                 't': int(frame.get('t') or 0),
+                'seq': _safe_int(frame.get('seq'), -1) if frame.get('seq') is not None else None,
                 'order': order,
                 'sort_phase': 1,
             })
@@ -962,11 +980,19 @@ def _build_timeline_index(replay):
                 'kind': 'action',
                 'source_index': source_index,
                 't': int(action.get('t') or 0),
+                'seq': _safe_int(action.get('seq'), -1) if action.get('seq') is not None else None,
                 'order': order,
                 'sort_phase': 1,
             })
             order += 1
-    refs.sort(key=lambda item: (item.get('sort_phase', 1), item.get('t', 0), item.get('order', 0)))
+    has_sequence = any(item.get('seq') is not None for item in refs if item.get('kind') != 'setup')
+    if has_sequence:
+        refs.sort(key=lambda item: (
+            item.get('sort_phase', 1),
+            item.get('seq') if item.get('seq') is not None else 10 ** 12 + item.get('order', 0),
+        ))
+    else:
+        refs.sort(key=lambda item: (item.get('sort_phase', 1), item.get('t', 0), item.get('order', 0)))
     return refs
 
 

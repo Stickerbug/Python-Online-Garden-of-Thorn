@@ -1446,11 +1446,34 @@ function replayFrameState(frame) {
   return frame && frame.state && typeof frame.state === 'object' ? frame.state : {};
 }
 
+function replayAllPlayers(frame) {
+  const state = replayFrameState(frame);
+  const perspectives = Array.isArray(state.perspectives) ? state.perspectives : [];
+  const canonical = perspectives.find(item => item && Array.isArray(item.spectate_players));
+  if (canonical) return canonical.spectate_players;
+  return perspectives.map(item => item && item.you).filter(Boolean);
+}
+
 function replayPerspective(frame) {
   const state = replayFrameState(frame);
   if (Array.isArray(state.perspectives) && state.perspectives.length) {
-    const index = Math.max(0, Math.min(state.perspectives.length - 1, Number(replayPerspectiveIndex) || 0));
-    return state.perspectives[index] || state.perspectives[0] || {};
+    const players = replayAllPlayers(frame);
+    const index = Math.max(0, Math.min(Math.max(0, players.length - 1), Number(replayPerspectiveIndex) || 0));
+    const source = state.perspectives[index] || state.perspectives[0] || {};
+    if (!players.length) return source;
+    const perspective = { ...source, your_id: index, spectate_perspective: index, you: players[index] || {} };
+    if (players.length >= 4) {
+      const teammateId = index < 2 ? 1 - index : (index === 2 ? 3 : 2);
+      const enemyIds = players.map((_, playerId) => playerId).filter(playerId => playerId !== index && playerId !== teammateId);
+      perspective.teammate_id = teammateId;
+      perspective.enemy_ids = enemyIds;
+      perspective.teammate = players[teammateId] || {};
+      perspective.opponent = players[enemyIds[0]] || {};
+      perspective.opponent2 = players[enemyIds[1]] || {};
+    } else {
+      perspective.opponent = players[index === 0 ? 1 : 0] || {};
+    }
+    return perspective;
   }
   return state || {};
 }
@@ -1470,14 +1493,13 @@ function replayName(frame, playerId, fallback) {
 }
 
 function replayPerspectiveButtons(frame) {
-  const state = replayFrameState(frame);
   const names = replayNames(frame);
-  const perspectives = Array.isArray(state.perspectives) ? state.perspectives : [];
-  if (perspectives.length <= 1) return '';
+  const players = replayAllPlayers(frame);
+  if (players.length <= 1) return '';
   return `
     <div class="admin-replay-perspectives">
-      ${perspectives.map((perspective, index) => {
-        const label = names[index] || perspective.your_name || `P${index + 1}`;
+      ${players.map((player, index) => {
+        const label = names[index] || player.name || `P${index + 1}`;
         return `<button class="row-action${index === replayPerspectiveIndex ? ' active' : ''}" type="button" data-admin-replay-perspective="${index}">${escapeHtml(label)}</button>`;
       }).join('')}
     </div>`;

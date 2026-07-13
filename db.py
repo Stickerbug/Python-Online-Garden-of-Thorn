@@ -58,6 +58,13 @@ ACHIEVEMENT_DEFS = [
     {'id': 'games_200', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 V', 'name_en': 'Gardener Path V', 'description_cn': '完成200场有效对局。', 'description_en': 'Complete 200 valid matches.', 'target': 200, 'metric': 'games_played', 'reward_dew': 1200},
     {'id': 'games_500', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 VI', 'name_en': 'Gardener Path VI', 'description_cn': '完成500场有效对局。', 'description_en': 'Complete 500 valid matches.', 'target': 500, 'metric': 'games_played', 'reward_dew': 2000},
     {'id': 'games_1000', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 VII', 'name_en': 'Gardener Path VII', 'description_cn': '完成1000场有效对局。', 'description_en': 'Complete 1000 valid matches.', 'target': 1000, 'metric': 'games_played', 'reward_dew': 3500},
+    {'id': 'cards_played_100', 'series': 'cards_played', 'type': 'milestone', 'name_cn': '花牌流转 I', 'name_en': 'Cards in Motion I', 'description_cn': '累计成功打出100张牌，无论其打出后进入何处。', 'description_en': 'Successfully play 100 cards, regardless of where they go afterward.', 'target': 100, 'metric': 'cards_played_total', 'reward_dew': 200},
+    {'id': 'cards_played_500', 'series': 'cards_played', 'type': 'milestone', 'name_cn': '花牌流转 II', 'name_en': 'Cards in Motion II', 'description_cn': '累计成功打出500张牌，无论其打出后进入何处。', 'description_en': 'Successfully play 500 cards, regardless of where they go afterward.', 'target': 500, 'metric': 'cards_played_total', 'reward_dew': 600},
+    {'id': 'cards_played_1000', 'series': 'cards_played', 'type': 'milestone', 'name_cn': '花牌流转 III', 'name_en': 'Cards in Motion III', 'description_cn': '累计成功打出1000张牌，无论其打出后进入何处。', 'description_en': 'Successfully play 1,000 cards, regardless of where they go afterward.', 'target': 1000, 'metric': 'cards_played_total', 'reward_dew': 900},
+    {'id': 'cards_played_2000', 'series': 'cards_played', 'type': 'milestone', 'name_cn': '花牌流转 IV', 'name_en': 'Cards in Motion IV', 'description_cn': '累计成功打出2000张牌，无论其打出后进入何处。', 'description_en': 'Successfully play 2,000 cards, regardless of where they go afterward.', 'target': 2000, 'metric': 'cards_played_total', 'reward_dew': 1500},
+    {'id': 'cards_played_5000', 'series': 'cards_played', 'type': 'milestone', 'name_cn': '花牌流转 V', 'name_en': 'Cards in Motion V', 'description_cn': '累计成功打出5000张牌，无论其打出后进入何处。', 'description_en': 'Successfully play 5,000 cards, regardless of where they go afterward.', 'target': 5000, 'metric': 'cards_played_total', 'reward_dew': 2500},
+    {'id': 'cards_played_10000', 'series': 'cards_played', 'type': 'milestone', 'name_cn': '花牌流转 VI', 'name_en': 'Cards in Motion VI', 'description_cn': '累计成功打出10000张牌，无论其打出后进入何处。', 'description_en': 'Successfully play 10,000 cards, regardless of where they go afterward.', 'target': 10000, 'metric': 'cards_played_total', 'reward_dew': 3500},
+    {'id': 'cards_played_20000', 'series': 'cards_played', 'type': 'milestone', 'name_cn': '花牌流转 VII', 'name_en': 'Cards in Motion VII', 'description_cn': '累计成功打出20000张牌，无论其打出后进入何处。', 'description_en': 'Successfully play 20,000 cards, regardless of where they go afterward.', 'target': 20000, 'metric': 'cards_played_total', 'reward_dew': 5000},
     {'id': 'wins_10', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 I', 'name_en': 'Blooming Wins I', 'description_cn': '赢得10场有效对局。', 'description_en': 'Win 10 valid matches.', 'target': 10, 'metric': 'wins', 'reward_dew': 250},
     {'id': 'wins_20', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 II', 'name_en': 'Blooming Wins II', 'description_cn': '赢得20场有效对局。', 'description_en': 'Win 20 valid matches.', 'target': 20, 'metric': 'wins', 'reward_dew': 400},
     {'id': 'wins_50', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 III', 'name_en': 'Blooming Wins III', 'description_cn': '赢得50场有效对局。', 'description_en': 'Win 50 valid matches.', 'target': 50, 'metric': 'wins', 'reward_dew': 700},
@@ -465,6 +472,8 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN player_id TEXT')
         if 'accept_friend_requests' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN accept_friend_requests INTEGER DEFAULT 1')
+        if 'accept_game_invites' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN accept_game_invites INTEGER DEFAULT 1')
         if 'searchable_by_nickname' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN searchable_by_nickname INTEGER DEFAULT 1')
         if 'searchable_by_player_id' not in existing_columns:
@@ -1218,6 +1227,7 @@ def row_to_user(row):
         'losses': row['losses'],
         'draws': row['draws'],
         'accept_friend_requests': bool(row['accept_friend_requests']) if 'accept_friend_requests' in row.keys() else True,
+        'accept_game_invites': bool(row['accept_game_invites']) if 'accept_game_invites' in row.keys() else True,
         'searchable_by_nickname': bool(row['searchable_by_nickname']) if 'searchable_by_nickname' in row.keys() else True,
         'searchable_by_player_id': bool(row['searchable_by_player_id']) if 'searchable_by_player_id' in row.keys() else True,
         'allow_guest_spectators': bool(row['allow_guest_spectators']) if 'allow_guest_spectators' in row.keys() else False,
@@ -2119,6 +2129,7 @@ def process_match_achievements(match_id, summary, allow_incremental_flags=True):
     winner_ids = {int(uid) for uid in (summary.get('winner_user_ids') or []) if uid is not None}
     mode = str(summary.get('mode') or '')
     flags_by_user = summary.get('achievement_flags_by_user') or {}
+    metric_deltas_by_user = summary.get('achievement_metric_deltas_by_user') or {}
     unlocked = []
     now = utc_now()
     with get_db_connection() as conn:
@@ -2154,6 +2165,31 @@ def process_match_achievements(match_id, summary, allow_incremental_flags=True):
                 result = _update_achievement_progress_conn(conn, uid, defn, metrics.get(metric, 0), now)
                 if result:
                     unlocked.append({'user_id': uid, **result})
+            user_metric_deltas = metric_deltas_by_user.get(str(uid)) or metric_deltas_by_user.get(uid) or {}
+            if isinstance(user_metric_deltas, dict):
+                for metric, raw_delta in user_metric_deltas.items():
+                    try:
+                        delta = max(0, int(raw_delta or 0))
+                    except (TypeError, ValueError):
+                        continue
+                    if delta <= 0:
+                        continue
+                    metric = str(metric)
+                    if not _record_achievement_match_event_conn(conn, match_id, uid, f'metric:{metric}', now):
+                        continue
+                    for defn in ACHIEVEMENT_DEFS:
+                        if defn.get('metric') != metric:
+                            continue
+                        existing = conn.execute(
+                            'SELECT progress, unlocked FROM user_achievements WHERE user_id = ? AND achievement_id = ?',
+                            (uid, defn['id']),
+                        ).fetchone()
+                        if existing is not None and int(existing['unlocked'] or 0):
+                            continue
+                        current = int(existing['progress'] or 0) if existing else 0
+                        result = _update_achievement_progress_conn(conn, uid, defn, current + delta, now)
+                        if result:
+                            unlocked.append({'user_id': uid, **result})
             user_flags = flags_by_user.get(str(uid)) or flags_by_user.get(uid) or []
             if isinstance(user_flags, dict):
                 user_flags = [key for key, value in user_flags.items() if value]
@@ -2222,6 +2258,7 @@ def backfill_achievements_from_matches(dry_run=True, limit=None):
         'matches_seen': 0,
         'matches_with_flags': 0,
         'flag_events_seen': 0,
+        'metric_delta_total': 0,
         'unlocked': 0,
         'skipped_no_flags': 0,
         'skipped_errors': 0,
@@ -2244,7 +2281,10 @@ def backfill_achievements_from_matches(dry_run=True, limit=None):
             match_id = int(row['id'])
             summary = _safe_json_loads(row['summary_json'], {})
             flags_by_user = summary.get('achievement_flags_by_user') or {}
-            if not isinstance(flags_by_user, dict) or not flags_by_user:
+            metric_deltas_by_user = summary.get('achievement_metric_deltas_by_user') or {}
+            has_flags = isinstance(flags_by_user, dict) and bool(flags_by_user)
+            has_metric_deltas = isinstance(metric_deltas_by_user, dict) and bool(metric_deltas_by_user)
+            if not has_flags and not has_metric_deltas:
                 result['skipped_no_flags'] += 1
                 continue
             result['matches_with_flags'] += 1
@@ -2265,11 +2305,26 @@ def backfill_achievements_from_matches(dry_run=True, limit=None):
                             one_shot_events += 1
             result['flag_events_seen'] += one_shot_events
             result['incremental_flags_skipped'] += incremental_events
-            if one_shot_events <= 0:
+            metric_delta_total = 0
+            if has_metric_deltas:
+                for deltas in metric_deltas_by_user.values():
+                    if not isinstance(deltas, dict):
+                        continue
+                    for value in deltas.values():
+                        try:
+                            metric_delta_total += max(0, int(value or 0))
+                        except (TypeError, ValueError):
+                            continue
+            result['metric_delta_total'] += metric_delta_total
+            if one_shot_events <= 0 and metric_delta_total <= 0:
                 continue
             if dry_run:
                 if len(result['examples']) < 8:
-                    result['examples'].append({'match_id': match_id, 'events': one_shot_events})
+                    result['examples'].append({
+                        'match_id': match_id,
+                        'events': one_shot_events,
+                        'metric_delta': metric_delta_total,
+                    })
                 continue
             try:
                 processed = process_match_achievements(match_id, summary, allow_incremental_flags=False)
@@ -5029,6 +5084,7 @@ def get_user_social_settings(user_id):
         return None
     return {
         'accept_friend_requests': bool(user.get('accept_friend_requests')),
+        'accept_game_invites': bool(user.get('accept_game_invites', True)),
         'searchable_by_nickname': bool(user.get('searchable_by_nickname')),
         'searchable_by_player_id': bool(user.get('searchable_by_player_id')),
         'allow_guest_spectators': bool(user.get('allow_guest_spectators')),
@@ -5042,6 +5098,7 @@ def update_user_social_settings(user_id, settings):
         return None, '请先登录账号'
     allowed = {
         'accept_friend_requests',
+        'accept_game_invites',
         'searchable_by_nickname',
         'searchable_by_player_id',
         'allow_guest_spectators',
@@ -5134,8 +5191,10 @@ def list_friends(user_id, mark_read=False):
         result = {
             'settings': {
                 'accept_friend_requests': bool(self_row['accept_friend_requests']),
+                'accept_game_invites': bool(self_row['accept_game_invites']) if 'accept_game_invites' in self_row.keys() else True,
                 'searchable_by_nickname': bool(self_row['searchable_by_nickname']),
                 'searchable_by_player_id': bool(self_row['searchable_by_player_id']),
+                'allow_guest_spectators': bool(self_row['allow_guest_spectators']) if 'allow_guest_spectators' in self_row.keys() else False,
             },
             'friends': friends,
             'incoming': incoming,

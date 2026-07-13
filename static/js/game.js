@@ -1609,7 +1609,8 @@ Object.assign(I18N.en, {
     friend_auto_added: '{0} added you as a friend',
     social: 'Social', social_login_hint: 'Sign in to use social settings.',
     social_accept_requests: 'Accept friend requests', social_search_nickname: 'Allow adding me by nickname',
-    social_search_id: 'Allow adding me by ID', social_allow_guest_spectators: 'Allow guest spectators',
+    social_search_id: 'Allow adding me by ID', social_accept_game_invites: 'Accept match invitations', social_allow_guest_spectators: 'Allow guest spectators',
+    social_game_invites_disabled: 'This player has disabled match invitations.',
     social_settings_saved: 'Social settings saved',
     feedback: 'Feedback', feedback_send: 'Send Feedback', feedback_staff: 'View Feedback',
     feedback_login_required: 'Sign in to send feedback.', feedback_empty: 'No feedback yet.',
@@ -1626,7 +1627,8 @@ Object.assign(I18N.zh, {
     friend_auto_added: '{0}已加你为好友',
     social: '社交', social_login_hint: '登录账号后可以使用社交设置。',
     social_accept_requests: '接受好友请求', social_search_nickname: '允许通过昵称添加我',
-    social_search_id: '允许通过ID添加我', social_allow_guest_spectators: '允许游客观战',
+    social_search_id: '允许通过ID添加我', social_accept_game_invites: '接受对局邀请', social_allow_guest_spectators: '允许游客观战',
+    social_game_invites_disabled: '该玩家已关闭对局邀请',
     social_settings_saved: '社交设置已保存',
     feedback: '反馈', feedback_send: '发送反馈', feedback_staff: '查看反馈',
     feedback_login_required: '登录账号后可以发送反馈。', feedback_empty: '暂无反馈。',
@@ -1643,7 +1645,8 @@ Object.assign(I18N.fr, {
     friend_auto_added: '{0} vous a ajouté en ami',
     social: 'Social', social_login_hint: 'Connectez-vous pour utiliser les réglages sociaux.',
     social_accept_requests: 'Accepter les demandes', social_search_nickname: 'Autoriser par pseudo',
-    social_search_id: 'Autoriser par ID', social_allow_guest_spectators: 'Autoriser les spectateurs invités',
+    social_search_id: 'Autoriser par ID', social_accept_game_invites: 'Accepter les invitations de partie', social_allow_guest_spectators: 'Autoriser les spectateurs invités',
+    social_game_invites_disabled: 'Ce joueur a désactivé les invitations de partie.',
     social_settings_saved: 'Réglages enregistrés',
     feedback: 'Feedback', feedback_send: 'Envoyer', feedback_staff: 'Voir les feedbacks',
     feedback_login_required: 'Connectez-vous pour envoyer un feedback.', feedback_empty: 'Aucun feedback.',
@@ -1660,7 +1663,8 @@ Object.assign(I18N.ja, {
     friend_auto_added: '{0}があなたをフレンドに追加しました',
     social: 'ソーシャル', social_login_hint: 'ログインするとソーシャル設定を使えます。',
     social_accept_requests: 'フレンド申請を受け取る', social_search_nickname: '名前で追加を許可',
-    social_search_id: 'IDで追加を許可', social_allow_guest_spectators: 'ゲスト観戦を許可',
+    social_search_id: 'IDで追加を許可', social_accept_game_invites: '対戦招待を受け取る', social_allow_guest_spectators: 'ゲスト観戦を許可',
+    social_game_invites_disabled: 'このプレイヤーは対戦招待を無効にしています。',
     social_settings_saved: '設定を保存しました',
     feedback: 'フィードバック', feedback_send: '送信', feedback_staff: '確認',
     feedback_login_required: 'ログインすると送信できます。', feedback_empty: 'まだありません。',
@@ -3663,6 +3667,7 @@ function translateServerMessage(message) {
     if (message === '能量不足') return UI.error_not_enough_e;
     if (message === '目标无效') return UI.error_target_invalid;
     if (message === '没有可选中的玩家') return UI.no_selectable_player || message;
+    if (message === '该玩家已关闭对局邀请' || message === '对方队伍中有玩家已关闭对局邀请') return UI.social_game_invites_disabled || message;
     if (message === '不能选择自己作为目标') return UI.error_target_self_forbidden || UI.error_target_invalid;
     if (message === '必须选择一名存活玩家') return UI.error_target_alive_required || UI.error_target_invalid;
     if (message === '眩晕效果中，无法使用卡牌') return UI.error_action_blocked;
@@ -3798,6 +3803,8 @@ let socket = null;
 let socketConnectUrl = '';
 let socketCreateSeq = 0;
 let manualDisconnect = false;
+let transientMatchRecovery = null;
+let transientLoginRetryTimer = null;
 let latencyPingTimer = null;
 let activeAfkCheck = null;
 let afkCheckTimer = null;
@@ -3843,6 +3850,8 @@ const DEFAULT_SERVER = (() => {
 })();
 const SERVER_ACTION_TIMEOUT_MS = 6000;
 const SOCKET_CONNECT_TIMEOUT_MS = 5000;
+const SOCKET_MATCH_RECOVERY_MAX_MS = 90000;
+const SOCKET_MATCH_LOGIN_RETRY_MAX_MS = 8000;
 const LEGACY_DEFAULT_SERVER_KEYS = new Set([
     'python-online-garden-of-thorn.onrender.com',
     'gtn.stickerbug.top',
@@ -4545,6 +4554,8 @@ function updateStaticText() {
     if (searchNickLabel) searchNickLabel.textContent = UI.social_search_nickname;
     const searchIdLabel = $('settings-label-searchable-by-player-id');
     if (searchIdLabel) searchIdLabel.textContent = UI.social_search_id;
+    const acceptGameInvitesLabel = $('settings-label-accept-game-invites');
+    if (acceptGameInvitesLabel) acceptGameInvitesLabel.textContent = UI.social_accept_game_invites;
     const allowGuestSpectatorsLabel = $('settings-label-allow-guest-spectators');
     if (allowGuestSpectatorsLabel) allowGuestSpectatorsLabel.textContent = UI.social_allow_guest_spectators;
     const settingsOfficialMods = $('settings-label-official-mods');
@@ -5182,7 +5193,82 @@ function clearNetworkMatchStateForLobby() {
     resetRematchUiState();
 }
 
+function clearTransientMatchRecovery(reason = '') {
+    if (transientLoginRetryTimer) {
+        clearTimeout(transientLoginRetryTimer);
+        transientLoginRetryTimer = null;
+    }
+    if (transientMatchRecovery && reason) {
+        debugLog('[client] match socket recovery finished:', reason);
+    }
+    transientMatchRecovery = null;
+    document.documentElement.classList.remove('socket-recovering');
+}
+
+function hasRecoverableNetworkMatchContext() {
+    if (soloMode || replayMode || isSpectating || phase === 'game_over') return false;
+    if (readActiveMatchRoute()) return true;
+    if (isNetworkMatchPhase(phase)) return true;
+    return ['view-draft', 'view-event-select', 'view-game'].includes(activeViewId || '');
+}
+
+function preserveCurrentMatchRouteForRecovery(previousPhase) {
+    if (readActiveMatchRoute()) return;
+    const candidates = [gameState, draftState, eventSelectData];
+    const source = candidates.find(item => item && item.room_id != null);
+    if (!source) return;
+    rememberActiveMatchRoute({ ...source, phase: source.phase || previousPhase }, 'socket_disconnect');
+}
+
+function beginTransientMatchRecovery(reason = '') {
+    const previousPhase = phase;
+    preserveCurrentMatchRouteForRecovery(previousPhase);
+    if (!transientMatchRecovery) {
+        transientMatchRecovery = {
+            startedAt: Date.now(),
+            previousPhase,
+            previousView: activeViewId,
+            loginAttempts: 0,
+            disconnectReason: String(reason || ''),
+        };
+    }
+    phase = 'reconnecting';
+    markNetworkMatchTransition(`socket_disconnect:${reason || 'transport'}`);
+    document.documentElement.classList.add('socket-recovering');
+    clearPendingServerAction({ keepOptimistic: true });
+    cleanupDragState();
+    updateStatus(UI.reconnecting || UI.reconnect_title || '正在重连…');
+    flashStatus(UI.reconnecting || UI.reconnect_title || '正在重连…', 2400, 'warning');
+}
+
+function isRecoverableTransientLoginFailure(data = {}) {
+    const reason = String(data.reason || data.message || '');
+    return /Nickname already exists|请求过于频繁|登录过于频繁|服务器正在处理|请稍后|temporarily|too frequently/i.test(reason);
+}
+
+function scheduleTransientLoginRetry(data = {}) {
+    if (!transientMatchRecovery || transientLoginRetryTimer) return false;
+    const elapsed = Date.now() - Number(transientMatchRecovery.startedAt || 0);
+    if (elapsed >= SOCKET_MATCH_RECOVERY_MAX_MS) {
+        returnHomeAfterSocketDisconnect(translateLoginReason(data.reason || data.message || UI.reconnect_timeout));
+        return true;
+    }
+    transientMatchRecovery.loginAttempts = Number(transientMatchRecovery.loginAttempts || 0) + 1;
+    const delay = Math.min(
+        SOCKET_MATCH_LOGIN_RETRY_MAX_MS,
+        700 * Math.pow(1.7, Math.max(0, transientMatchRecovery.loginAttempts - 1)),
+    );
+    updateStatus(UI.reconnecting || UI.reconnect_title || '正在重连…');
+    transientLoginRetryTimer = setTimeout(() => {
+        transientLoginRetryTimer = null;
+        if (!transientMatchRecovery) return;
+        if (socket && socket.connected) emitSocketLogin();
+    }, delay);
+    return true;
+}
+
 function returnHomeAfterSocketDisconnect(message = '') {
+    clearTransientMatchRecovery('return_home');
     closeAfkCheckOverlay();
     clearPendingServerAction();
     cleanupDragState();
@@ -5790,8 +5876,6 @@ const GALLERY_CARD_TYPE_ORDER = { thorn: 0, bloom: 1, guard: 2, root: 3 };
 
 const OFFICIAL_MOD_DISPLAY_ORDER = [
     'Vanilla Cards.gtnmod',
-    'Troll Cards.gtnmod',
-    'Thorn Cards.gtnmod',
     'Garden Cards Addition.gtnmod',
     'Factory Cards Addition.gtnmod',
     'Desert Cards Addition.gtnmod',
@@ -5799,12 +5883,11 @@ const OFFICIAL_MOD_DISPLAY_ORDER = [
     'Ocean Cards Addition.gtnmod',
     'Void Card Addition.gtnmod',
     'Hel Cards Addition.gtnmod',
+    'Sewers Cards Addition.gtnmod',
 ];
 
 const OFFICIAL_MOD_DISPLAY_ALIASES = [
     ['vanilla cards.gtnmod', 'vanilla cards', 'garden of thorn vanilla cards'],
-    ['troll cards.gtnmod', 'troll cards'],
-    ['thorn cards.gtnmod', 'thorn cards', 'more thorn cards'],
     ['garden cards addition.gtnmod', 'garden cards addition', 'garden cards'],
     ['factory cards addition.gtnmod', 'factory cards addition', 'factory cards'],
     ['desert cards addition.gtnmod', 'desert cards addition', 'desert cards'],
@@ -5812,13 +5895,14 @@ const OFFICIAL_MOD_DISPLAY_ALIASES = [
     ['ocean cards addition.gtnmod', 'ocean cards addition', 'ocean cards'],
     ['void card addition.gtnmod', 'void card addition', 'void cards addition', 'void cards'],
     ['hel cards addition.gtnmod', 'hel cards addition', 'hel cards'],
+    ['sewers cards addition.gtnmod', 'sewers cards addition', 'sewers cards'],
 ];
 
 const OFFICIAL_MOD_SHORT_NAMES = {
-    zh: ['原版', '捣乱', '更多攻击', '花园', '工厂', '沙漠', '丛林', '海洋', '虚空', '冥界'],
-    en: ['Vanilla', 'Troll', 'More Thorn', 'Garden', 'Factory', 'Desert', 'Jungle', 'Ocean', 'Void', 'Hel'],
-    fr: ['Vanille', 'Farces', 'Plus d’attaques', 'Jardin', 'Usine', 'Désert', 'Jungle', 'Océan', 'Vide', 'Hel'],
-    ja: ['原版', 'いたずら', '攻撃追加', '庭園', '工場', '砂漠', 'ジャングル', '海洋', '虚空', '冥界'],
+    zh: ['原版', '花园', '工厂', '沙漠', '丛林', '海洋', '虚空', '冥界', '管道'],
+    en: ['Vanilla', 'Garden', 'Factory', 'Desert', 'Jungle', 'Ocean', 'Void', 'Hel', 'Sewers'],
+    fr: ['Vanille', 'Jardin', 'Usine', 'Désert', 'Jungle', 'Océan', 'Vide', 'Hel', 'Égouts'],
+    ja: ['原版', '庭園', '工場', '砂漠', 'ジャングル', '海洋', '虚空', '冥界', '下水道'],
 };
 
 function normalizeModDisplayIdentity(value) {
@@ -7115,7 +7199,7 @@ function getClassicTouchCardTargetOptions(cardDict, cardDef) {
         return { includeSelf: true, candidates: 'self', aliveOnly: true };
     }
     if (cardNeedsPlayerTarget(cardDef, cardDict)) {
-        return getCardTargetPickOptions(cardDef);
+        return getCardTargetPickOptions(cardDef, cardDict);
     }
     return null;
 }
@@ -7732,7 +7816,7 @@ function escapeClassToken(value) {
     return String(value || 'default').replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
-const DATA_CACHE_VERSION = 'v8';
+const DATA_CACHE_VERSION = 'v9';
 const loadedCommunityFontSubsets = new Set();
 const communityFontFaceUrls = new Set();
 
@@ -11353,9 +11437,9 @@ function connectSocket(serverUrl) {
     let opts = {
         transports: ['websocket', 'polling'],
         timeout: SOCKET_CONNECT_TIMEOUT_MS,
-        reconnectionAttempts: 5,
+        reconnectionAttempts: 20,
         reconnectionDelay: 400,
-        reconnectionDelayMax: 1600,
+        reconnectionDelayMax: 4000,
         withCredentials: true,
     };
     socket = io(url, opts);
@@ -11367,17 +11451,36 @@ function connectSocket(serverUrl) {
     bindSocketEvent('connect', () => {
         debugLog('[client] socket connected id=', socket.id, 'login nickname=', nickname);
         startLatencyMonitor();
+        if (transientMatchRecovery) {
+            updateStatus(UI.reconnecting || UI.reconnect_title || '正在重连…');
+        }
         emitSocketLogin();
     });
-    bindSocketEvent('disconnect', () => {
-        debugLog('[client] socket disconnected');
+    bindSocketEvent('disconnect', (reason) => {
+        debugLog('[client] socket disconnected reason=', reason);
         stopLatencyMonitor();
         if (manualDisconnect || phase === 'login') {
             manualDisconnect = false;
             return;
         }
+        const serverEndedSocket = reason === 'io server disconnect' || reason === 'io client disconnect';
+        if (!serverEndedSocket && hasRecoverableNetworkMatchContext()) {
+            beginTransientMatchRecovery(reason);
+            return;
+        }
         returnHomeAfterSocketDisconnect(UI.disconnected || '已断开连接');
     });
+    if (socket.io && typeof socket.io.on === 'function') {
+        socket.io.on('reconnect_attempt', (attempt) => {
+            if (!transientMatchRecovery) return;
+            debugLog('[client] match socket reconnect attempt=', attempt);
+            updateStatus(UI.reconnecting || UI.reconnect_title || '正在重连…');
+        });
+        socket.io.on('reconnect_failed', () => {
+            if (!transientMatchRecovery) return;
+            returnHomeAfterSocketDisconnect(UI.reconnect_timeout || UI.disconnected || '重连失败');
+        });
+    }
     bindSocketEvent('connect_error', (err) => {
         debugLog('[client] socket connect_error', err && err.message ? err.message : err);
         setButtonLoading('btn-connect', false);
@@ -11476,6 +11579,7 @@ function connectSocket(serverUrl) {
             updateStatus(UI.reconnecting || UI.reconnect_title || 'Reconnecting...');
             return;
         }
+        if (transientMatchRecovery) clearTransientMatchRecovery('login_returned_lobby');
         phase = 'lobby';
         updateStatus(UI.lobby_status.replace('{0}', nickname));
     });
@@ -11486,6 +11590,11 @@ function connectSocket(serverUrl) {
             window.location.reload();
             return;
         }
+        if (transientMatchRecovery && isRecoverableTransientLoginFailure(data || {})) {
+            scheduleTransientLoginRetry(data || {});
+            return;
+        }
+        clearTransientMatchRecovery('login_failed');
         showView('view-login');
         const err = $('login-error');
         if (err) err.textContent = moderationMessageFromPayload(data, translateLoginReason(data.reason));
@@ -11649,9 +11758,16 @@ function connectSocket(serverUrl) {
         debugLog('[client] game_phase:', data.phase);
         const nextPhase = data.phase;
         if (!data.solo) soloMode = false;
+        if (nextPhase === 'lobby' && transientMatchRecovery) {
+            debugLog('[client] ignored lobby phase while restoring active match');
+            return;
+        }
         if (nextPhase === 'lobby' && isMatchTransitionGuardActive() && Date.now() > allowLobbyTransitionUntil) {
             debugLog('[client] ignored stale game_phase:lobby during match transition, current phase=', phase, 'view=', activeViewId);
             return;
+        }
+        if (nextPhase !== 'lobby' && nextPhase !== 'reconnecting') {
+            clearTransientMatchRecovery(`game_phase:${nextPhase}`);
         }
         if (isNetworkMatchPhase(nextPhase)) markNetworkMatchTransition(`game_phase:${nextPhase}`);
         phase = nextPhase;
@@ -11694,6 +11810,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('draft_state', (data) => {
         if (shouldIgnoreLatePregamePayload(data, 'draft_state')) return;
+        clearTransientMatchRecovery('draft_state');
         markNetworkMatchTransition('draft_state');
         rememberActiveMatchRoute({ ...(data || {}), phase: 'draft' }, 'draft_state');
         const previousDraftState = draftState;
@@ -11778,6 +11895,7 @@ function connectSocket(serverUrl) {
     bindSocketEvent('event_select', (data) => {
         debugLog('[client] event_select');
         if (shouldIgnoreLatePregamePayload(data, 'event_select')) return;
+        clearTransientMatchRecovery('event_select');
         markNetworkMatchTransition('event_select');
         phase = 'event_select';
         rememberActiveMatchRoute({ ...(data || {}), phase: 'event_select' }, 'event_select');
@@ -11794,6 +11912,7 @@ function connectSocket(serverUrl) {
     bindSocketEvent('event_reveal', (data) => {
         debugLog('[client] event_reveal');
         if (shouldIgnoreLatePregamePayload(data, 'event_reveal')) return;
+        clearTransientMatchRecovery('event_reveal');
         markNetworkMatchTransition('event_reveal');
         phase = 'event_reveal';
         rememberActiveMatchRoute({ ...(data || {}), phase: 'event_reveal' }, 'event_reveal');
@@ -11811,6 +11930,7 @@ function connectSocket(serverUrl) {
     bindSocketEvent('event_sub_choice', (data) => {
         debugLog('[client] event_sub_choice');
         if (shouldIgnoreLatePregamePayload(data, 'event_sub_choice')) return;
+        clearTransientMatchRecovery('event_sub_choice');
         markNetworkMatchTransition('event_sub_choice');
         phase = 'event_sub_choice';
         rememberActiveMatchRoute({ ...(data || {}), phase: 'event_sub_choice' }, 'event_sub_choice');
@@ -11838,6 +11958,7 @@ function connectSocket(serverUrl) {
             debugLog('[client] ignored spectate state for inactive room=', data.room_id, 'active=', activeSpectateRoomId);
             return;
         }
+        clearTransientMatchRecovery('state_update');
         const previousGameState = gameState;
         data = preserveGameOverLogState(data, previousGameState);
         rememberTurnTimerSnapshot(data);
@@ -12188,6 +12309,19 @@ function connectSocket(serverUrl) {
         clearOpponentDisconnectModal();
     });
     bindSocketEvent('reconnect_available', (data) => {
+        const savedRoute = readActiveMatchRoute();
+        const savedRoomId = savedRoute && savedRoute.room_id != null ? String(savedRoute.room_id) : '';
+        const offeredRoomId = data && data.room_id != null ? String(data.room_id) : '';
+        const routeMatches = !!savedRoute && (!savedRoomId || !offeredRoomId || savedRoomId === offeredRoomId);
+        if (!isSpectating && (transientMatchRecovery || routeMatches)) {
+            if (!transientMatchRecovery) beginTransientMatchRecovery('saved_match_route');
+            phase = 'reconnecting';
+            transientMatchRecovery.autoAcceptRoomId = offeredRoomId;
+            transientMatchRecovery.autoAcceptSentAt = Date.now();
+            hideModal();
+            socket.emit('reconnect_accept', { room_id: data.room_id, old_sid: data.old_sid });
+            return;
+        }
         phase = 'reconnecting';
         showModal(`
             <h3>${UI.reconnect_title}</h3>
@@ -12207,9 +12341,7 @@ function connectSocket(serverUrl) {
         };
     });
     bindSocketEvent('reconnect_timeout', () => {
-        flashStatus(UI.reconnect_timeout, 3000, 'error');
-        allowLobbyTransition('reconnect_timeout');
-        phase = 'lobby';
+        returnHomeAfterSocketDisconnect(UI.reconnect_timeout || UI.disconnected || '重连超时');
     });
     bindSocketEvent('rematch_requested', (data = {}) => {
         debugLog('[client] rematch_requested');
@@ -15779,6 +15911,7 @@ function renderSocialSettings() {
         ['settings-accept-friend-requests', 'accept_friend_requests'],
         ['settings-searchable-by-nickname', 'searchable_by_nickname'],
         ['settings-searchable-by-player-id', 'searchable_by_player_id'],
+        ['settings-accept-game-invites', 'accept_game_invites'],
         ['settings-allow-guest-spectators', 'allow_guest_spectators'],
     ];
     ids.forEach(([id, key]) => {
@@ -15800,6 +15933,7 @@ async function saveSocialSettings() {
         accept_friend_requests: !!$('settings-accept-friend-requests')?.checked,
         searchable_by_nickname: !!$('settings-searchable-by-nickname')?.checked,
         searchable_by_player_id: !!$('settings-searchable-by-player-id')?.checked,
+        accept_game_invites: !!$('settings-accept-game-invites')?.checked,
         allow_guest_spectators: !!$('settings-allow-guest-spectators')?.checked,
     };
     const status = $('settings-social-status');
@@ -19238,7 +19372,7 @@ function classicCardCanTargetPlayer(card, playerId) {
     const pid = normalizePlayerId(playerId);
     if (pid == null) return false;
     const cardDef = card.cardDef || getCardDef(card.def_id || '');
-    const targets = getPlayerTargetOptions(getCardTargetPickOptions(cardDef));
+    const targets = getPlayerTargetOptions(getCardTargetPickOptions(cardDef, card.raw || card));
     return targets.some(target => normalizePlayerId(target && target.id) === pid);
 }
 
@@ -21370,13 +21504,15 @@ function targetCandidateAllows(role, candidates) {
     return false;
 }
 
-function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true, candidates = 'enemy' } = {}) {
+function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true, candidates = 'enemy', forcedId = null } = {}) {
     if (!gameState) return [];
+    const forcedTargetId = normalizePlayerId(forcedId);
     const out = [];
     const add = (id, data, group, role) => {
         const targetId = normalizePlayerId(id);
-        if (targetId == null || (!includeSelf && targetId === normalizePlayerId(gameState.your_id))) return;
-        if (!targetCandidateAllows(role, candidates)) return;
+        if (targetId == null || (forcedTargetId != null && targetId !== forcedTargetId)) return;
+        if (forcedTargetId == null && !includeSelf && targetId === normalizePlayerId(gameState.your_id)) return;
+        if (forcedTargetId == null && !targetCandidateAllows(role, candidates)) return;
         const stateData = getPlayerDataById(targetId) || data || {};
         const alive = (stateData && Number(stateData.health || 0) > 0);
         if (aliveOnly && !alive) return;
@@ -21425,9 +21561,13 @@ async function choosePlayerTarget(title, opts = {}) {
     return selectedId;
 }
 
-function getCardTargetPickOptions(cardDef) {
+function getCardTargetPickOptions(cardDef, cardDict = null) {
     if (!cardDef || !gameState) {
         return {};
+    }
+    const forcedId = getForcedTargetForCard(cardDef, cardDict);
+    if (forcedId != null) {
+        return { includeSelf: true, candidates: 'all', aliveOnly: true, forcedId };
     }
     const cardId = String(cardDef.id || cardDef.def_id || cardDef.legacy_id || '').toLowerCase();
     if (['yggdrasil', 'vanilla:yggdrasil'].includes(cardId)) {
@@ -21437,7 +21577,7 @@ function getCardTargetPickOptions(cardDef) {
         return { includeSelf: true, candidates: 'self', aliveOnly: true };
     }
     if (cardDef.card_type === 'thorn') {
-        const allowsSelf = getEffectiveCardFlagSets({}, cardDef || {}).effective.has('self_target');
+        const allowsSelf = getEffectiveCardFlagSets(cardDict || {}, cardDef || {}).effective.has('self_target');
         return {
             includeSelf: allowsSelf,
             candidates: `${gameState.mode === '2v2' ? 'enemy,teammate' : 'enemy'}${allowsSelf ? ',self' : ''}`,
@@ -21600,8 +21740,8 @@ function rootCardNeedsPlayTargetByLegacyFields(cardDef) {
         'magiccotton', 'jungle:magic_cotton',
         'plank', 'jungle:plank',
         'root', 'jungle:root',
-        'sponge', 'troll_cards:sponge',
-        'pill', 'troll_cards:pill',
+        'sponge', 'ocean:sponge', 'troll_cards:sponge',
+        'pill', 'vanilla:pill', 'troll_cards:pill',
         'leaf', 'vanilla:leaf',
         'yucca', 'vanilla:yucca',
         'disc', 'vanilla:disc',
@@ -21891,6 +22031,17 @@ function renderBattleUseLogChipLine(el, entry) {
         }
     });
     if (parts.after) appendColorizedLogText(el, parts.after);
+}
+
+function getForcedTargetForCard(cardDef, cardDict = null) {
+    if (!gameState || !cardDef) return null;
+    const forcedId = normalizePlayerId(gameState.forced_target_player_id);
+    if (forcedId == null || cardDef.card_type === 'guard') return null;
+    const flags = getEffectiveCardFlagSets(cardDict || {}, cardDef || {}).effective;
+    if (flags.has('wide_strike')) return null;
+    if (cardHasSelfOnlyFlag(cardDict || {}, cardDef)) return null;
+    if (cardDef.card_type !== 'thorn' && !cardNeedsPlayerTarget(cardDef, cardDict)) return null;
+    return forcedId;
 }
 
 function getBattleCounterTemplateParts(actorName) {
@@ -22963,15 +23114,25 @@ function formatLobbyChatSeparator(entry = {}) {
     return `${formatLobbyDate(date)} ${timeText}`;
 }
 
-function appendLobbyChatEntry(entry = {}) {
+const LOBBY_CHAT_AUTO_SCROLL_THRESHOLD = 24;
+
+function isLobbyChatNearBottom(container) {
+    if (!container) return true;
+    return container.scrollHeight - container.scrollTop - container.clientHeight <= LOBBY_CHAT_AUTO_SCROLL_THRESHOLD;
+}
+
+function appendLobbyChatEntry(entry = {}, options = {}) {
     const container = $('lobby-chat-log');
     if (!container) return;
+    const shouldAutoScroll = options.autoScroll == null
+        ? isLobbyChatNearBottom(container)
+        : Boolean(options.autoScroll);
     if (entry.type === 'time') {
         const timeEl = document.createElement('div');
         timeEl.className = 'chat-time-separator';
         timeEl.textContent = formatLobbyChatSeparator(entry);
         container.appendChild(timeEl);
-        container.scrollTop = container.scrollHeight;
+        if (shouldAutoScroll) container.scrollTop = container.scrollHeight;
         return;
     }
     const el = document.createElement('div');
@@ -23007,7 +23168,7 @@ function appendLobbyChatEntry(entry = {}) {
         }));
     }
     container.appendChild(el);
-    container.scrollTop = container.scrollHeight;
+    if (shouldAutoScroll) container.scrollTop = container.scrollHeight;
 }
 
 function renderLobbyChatHistory(data = {}) {
@@ -23028,9 +23189,16 @@ function renderLobbyChatHistory(data = {}) {
     ])]);
     if (signature === lobbyChatHistorySignature) return;
     lobbyChatHistorySignature = signature;
+    const shouldAutoScroll = isLobbyChatNearBottom(container);
+    const previousScrollTop = container.scrollTop;
     container.innerHTML = '';
-    items.forEach(entry => appendLobbyChatEntry(entry));
-    container.scrollTop = container.scrollHeight;
+    items.forEach(entry => appendLobbyChatEntry(entry, { autoScroll: false }));
+    if (shouldAutoScroll) {
+        container.scrollTop = container.scrollHeight;
+    } else {
+        const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+        container.scrollTop = Math.min(previousScrollTop, maxScrollTop);
+    }
 }
 
 function appendGameChat(nick, text, meta = {}, channelMeta = {}) {
@@ -23557,13 +23725,16 @@ async function onPlayCard(cardInstanceId, options = {}) {
     }
     let targetPlayerId = normalizePlayerId(options.targetPlayerId ?? options.target_player_id);
     if (targetPlayerId == null) targetPlayerId = -1;
-    if (cardHasSelfOnlyFlag(cardDict, cardDef) && (!cardDef || cardDef.card_type !== 'thorn')) {
+    const forcedTargetPlayerId = getForcedTargetForCard(cardDef, cardDict);
+    if (forcedTargetPlayerId != null) {
+        targetPlayerId = forcedTargetPlayerId;
+    } else if (cardHasSelfOnlyFlag(cardDict, cardDef) && (!cardDef || cardDef.card_type !== 'thorn')) {
         targetPlayerId = normalizePlayerId(gameState.your_id);
     } else if (cardNeedsPlayerTarget(cardDef, cardDict) && targetPlayerId < 0) {
         if (tutorialMode) tutorialTargetHintSeen = true;
         targetPlayerId = await choosePlayerTarget(
             UI.choose_target || UI.select_target || 'Choose target',
-            getCardTargetPickOptions(cardDef),
+            getCardTargetPickOptions(cardDef, cardDict),
         );
         if (targetPlayerId < 0) return;
     }
@@ -25436,16 +25607,22 @@ let settingsActiveModTab = ['official', 'community'].includes(localStorage.getIt
     ? localStorage.getItem('gtn_settings_mod_tab')
     : 'official';
 const VANILLA_MOD_FILENAME = 'Vanilla Cards.gtnmod';
-const DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = new Set([
-    VANILLA_MOD_FILENAME,
+const RETIRED_OFFICIAL_MOD_FILENAMES = new Set([
     'Troll Cards.gtnmod',
     'Thorn Cards.gtnmod',
+]);
+const DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = new Set([
+    VANILLA_MOD_FILENAME,
 ]);
 const FALLBACK_DEFAULT_DISABLED_MODS = [
     'Desert Cards Addition.gtnmod',
     'Factory Cards Addition.gtnmod',
     'Garden Cards Addition.gtnmod',
     'Jungle Cards Addition.gtnmod',
+    'Ocean Cards Addition.gtnmod',
+    'Void Card Addition.gtnmod',
+    'Hel Cards Addition.gtnmod',
+    'Sewers Cards Addition.gtnmod',
 ];
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 const COMMUNITY_JSON_MAX_BYTES = 150 * 1024;
@@ -26344,7 +26521,9 @@ function modSelectionHasRequiredTypes(disabled) {
 }
 
 function coerceValidDisabledMods(disabled) {
-    const next = Array.isArray(disabled) ? disabled.filter(Boolean).map(String) : [];
+    const next = Array.isArray(disabled)
+        ? disabled.filter(Boolean).map(String).filter(filename => !RETIRED_OFFICIAL_MOD_FILENAMES.has(filename))
+        : [];
     let forcedVanilla = false;
     if (!modSelectionHasRequiredTypes(next)) {
         const idx = next.indexOf(VANILLA_MOD_FILENAME);
@@ -26767,7 +26946,7 @@ async function init() {
     if ($('settings-tab-social')) $('settings-tab-social').addEventListener('click', () => setSettingsTab('social'));
     if ($('settings-tab-audio')) $('settings-tab-audio').addEventListener('click', () => setSettingsTab('audio'));
     bindAudioSettingsControls();
-    ['settings-accept-friend-requests', 'settings-searchable-by-nickname', 'settings-searchable-by-player-id', 'settings-allow-guest-spectators'].forEach((id) => {
+    ['settings-accept-friend-requests', 'settings-searchable-by-nickname', 'settings-searchable-by-player-id', 'settings-accept-game-invites', 'settings-allow-guest-spectators'].forEach((id) => {
         const input = $(id);
         if (input) input.addEventListener('change', saveSocialSettings);
     });

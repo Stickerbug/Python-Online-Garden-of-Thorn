@@ -25,8 +25,6 @@ _MODS_CACHE: List['Mod'] = []
 # appended here so every list keeps the same stable order.
 OFFICIAL_MOD_DISPLAY_ORDER = (
     'Vanilla Cards.gtnmod',
-    'Troll Cards.gtnmod',
-    'Thorn Cards.gtnmod',
     'Garden Cards Addition.gtnmod',
     'Factory Cards Addition.gtnmod',
     'Desert Cards Addition.gtnmod',
@@ -34,6 +32,7 @@ OFFICIAL_MOD_DISPLAY_ORDER = (
     'Ocean Cards Addition.gtnmod',
     'Void Card Addition.gtnmod',
     'Hel Cards Addition.gtnmod',
+    'Sewers Cards Addition.gtnmod',
 )
 _OFFICIAL_MOD_DISPLAY_RANK = {
     filename.casefold(): index for index, filename in enumerate(OFFICIAL_MOD_DISPLAY_ORDER)

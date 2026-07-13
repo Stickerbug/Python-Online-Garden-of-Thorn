@@ -2176,12 +2176,12 @@ class LocalSoloEngine {
             this.cleanupElectricWebDrawDamage(eq);
         }
         if (
-            this.cardIs(eq.card_instance || eq, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge')
+            this.cardIs(eq.card_instance || eq, 'Sponge', 'ocean:sponge', 'troll_cards:sponge', 'vanilla:sponge')
             && !this.hasOtherSpongeTargeting(effectTarget, eq)
         ) {
             targetState.sponge_active = false;
         }
-        if (this.cardIs(eq.card_instance || eq, 'Pill', 'troll_cards:pill', 'vanilla:pill')) {
+        if (this.cardIs(eq.card_instance || eq, 'Pill', 'vanilla:pill', 'troll_cards:pill')) {
             targetState.custom_statuses = targetState.custom_statuses || {};
             delete targetState.custom_statuses.status_immune;
             delete targetState.custom_statuses.immune;
@@ -2228,7 +2228,7 @@ class LocalSoloEngine {
     hasOtherSpongeTargeting(targetId, excludeEq = null) {
         return this.players.some((ownerState, ownerId) => (ownerState.equipment || []).some(candidate => {
             if (!candidate || candidate === excludeEq) return false;
-            if (!this.cardIs(candidate.card_instance || candidate, 'Sponge', 'troll_cards:sponge', 'vanilla:sponge')) return false;
+            if (!this.cardIs(candidate.card_instance || candidate, 'Sponge', 'ocean:sponge', 'troll_cards:sponge', 'vanilla:sponge')) return false;
             const effectTarget = Math.max(0, Math.min(this.players.length - 1, toInt(candidate.effect_target ?? candidate.owner ?? ownerId, ownerId)));
             return effectTarget === targetId;
         }));

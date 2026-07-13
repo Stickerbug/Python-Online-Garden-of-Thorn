@@ -72,6 +72,8 @@ ADVANCED_ATOMIC_OPS = {
     "delayed_reveal_hand_next_turn", "ocean_spikeball_damage",
     "ocean_magic_coral_tick", "ocean_for_each_selectable_target",
     "ocean_charge_self_damage",
+    "sewers_lotus_heal", "sewers_activate_light_bulb",
+    "sewers_broccoli_attack", "sewers_blood_rose",
 }
 
 ATOMIC_OP_ALIASES = {

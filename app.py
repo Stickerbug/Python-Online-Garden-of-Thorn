@@ -204,10 +204,12 @@ from security import (
 BASE_CARD_IDS = set(CARD_DEFS.keys())
 BASE_CARD_DEFS = copy.deepcopy(CARD_DEFS)
 VANILLA_MOD_FILENAME = 'Vanilla Cards.gtnmod'
-DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = {
-    VANILLA_MOD_FILENAME,
+RETIRED_OFFICIAL_MOD_FILENAMES = {
     'Troll Cards.gtnmod',
     'Thorn Cards.gtnmod',
+}
+DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = {
+    VANILLA_MOD_FILENAME,
 }
 BUILTIN_SETUP_CARD_IDS = {'ManaOrb', 'Light', 'Dust', 'Yggdrasil'}
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
@@ -285,7 +287,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260713-card-text-unification-font-cjk-bold-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260713-replay-delta-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -857,7 +859,7 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
                         if any(
                             mate != pidx
                             and getattr(engine.players[mate], 'achievement_death_round', None) is not None
-                            and int(getattr(engine.players[mate], 'achievement_death_round') or 999) <= 6
+                            and int(getattr(engine.players[mate], 'achievement_death_round')) <= 6
                             for mate in team
                         ):
                             user_flags.append('flag_last_one_win')
@@ -1247,6 +1249,22 @@ def admin_match_record(room, result='finished'):
             'valid_action_counts': getattr(room, '_valid_action_counts', {}) or {},
             'valid_action_counts_by_side': room_valid_actions_by_side(room),
         }
+        cards_played_by_player = []
+        achievement_metric_deltas_by_user = {}
+        for pidx in range(len(names)):
+            try:
+                card_plays = max(0, int(e.achievement_total_card_plays(pidx)))
+            except Exception:
+                ps = e.players[pidx] if pidx < len(getattr(e, 'players', []) or []) else None
+                card_plays = max(0, int(getattr(ps, 'achievement_total_card_plays', 0) or 0)) if ps else 0
+            cards_played_by_player.append(card_plays)
+            uid = player_user_ids[pidx] if pidx < len(player_user_ids) else None
+            if uid is None or card_plays <= 0:
+                continue
+            user_metrics = achievement_metric_deltas_by_user.setdefault(str(uid), {})
+            user_metrics['cards_played_total'] = int(user_metrics.get('cards_played_total', 0) or 0) + card_plays
+        summary['cards_played_by_player'] = cards_played_by_player
+        summary['achievement_metric_deltas_by_user'] = achievement_metric_deltas_by_user
         raw_draft_picks = getattr(e, 'draft_picks', []) or []
         player_draft_cards = []
         for pidx in range(len(names)):
@@ -1461,6 +1479,8 @@ REPLAY_MAX_STATE_BYTES = int(os.environ.get('GTN_REPLAY_MAX_STATE_BYTES', '75000
 REPLAY_MAX_FULL_STATE_FRAMES = int(os.environ.get('GTN_REPLAY_MAX_FULL_STATE_FRAMES', '260') or 260)
 REPLAY_MAX_TOTAL_STATE_BYTES = int(os.environ.get('GTN_REPLAY_MAX_TOTAL_STATE_BYTES', '18000000') or 18000000)
 REPLAY_COMPACT_STATE_INTERVAL = max(1, int(os.environ.get('GTN_REPLAY_COMPACT_STATE_INTERVAL', '8') or 8))
+REPLAY_FULL_STATE_INTERVAL = max(20, int(os.environ.get('GTN_REPLAY_FULL_STATE_INTERVAL', '80') or 80))
+_REPLAY_DELTA_UNCHANGED = object()
 
 
 def _replay_strip_private_logs(value):
@@ -1496,20 +1516,23 @@ def _replay_capture_state(room):
     engine = getattr(room, 'engine', None)
     if engine is None:
         return {}
-    perspectives = []
-    for pidx in range(len(getattr(room, 'player_sids', []) or [])):
-        try:
-            if 'build_spectate_state' in globals():
-                state = build_spectate_state(room, perspective=pidx)
-                state['spectating'] = True
-                state['replay_mode'] = True
-            else:
-                state = engine.get_public_state(pidx)
-                state['your_id'] = pidx
-                state['mode'] = getattr(room, 'mode', '')
-            perspectives.append(state)
-        except Exception as exc:
-            perspectives.append({'error': f'{type(exc).__name__}: {exc}', 'your_id': pidx})
+    try:
+        if 'build_spectate_state' in globals():
+            state = build_spectate_state(room, perspective=0)
+            state['spectating'] = True
+            state['replay_mode'] = True
+            # spectate_players already contains every private player snapshot.
+            # Keeping you/opponent copies for every perspective multiplied long
+            # replay size without adding information.
+            for key in ('you', 'opponent', 'opponent2', 'teammate'):
+                state.pop(key, None)
+            state.pop('room_chat_history', None)
+        else:
+            state = engine.get_public_state(0)
+            state['your_id'] = 0
+            state['mode'] = getattr(room, 'mode', '')
+    except Exception as exc:
+        state = {'error': f'{type(exc).__name__}: {exc}', 'your_id': 0}
     snapshot = {
         'mode': getattr(room, 'mode', ''),
         'phase': getattr(engine, 'phase', ''),
@@ -1519,26 +1542,10 @@ def _replay_capture_state(room):
         'winner': getattr(engine, 'winner', None),
         'winning_team': getattr(engine, 'winning_team', None),
         'player_names': list(getattr(engine, 'player_names', []) or []),
-        'perspectives': perspectives,
+        'perspective_count': len(getattr(room, 'player_sids', []) or []),
+        'perspectives': [state],
     }
     safe = _replay_json_safe(snapshot)
-    try:
-        raw_size = len(json.dumps(safe, ensure_ascii=False, default=str).encode('utf-8'))
-    except Exception:
-        raw_size = 0
-    if raw_size > REPLAY_MAX_STATE_BYTES:
-        return {
-            'truncated': True,
-            'raw_size': raw_size,
-            'mode': snapshot['mode'],
-            'phase': snapshot['phase'],
-            'round_num': snapshot['round_num'],
-            'current_player': snapshot['current_player'],
-            'game_over': snapshot['game_over'],
-            'winner': snapshot['winner'],
-            'winning_team': snapshot['winning_team'],
-            'player_names': snapshot['player_names'],
-        }
     return safe
 
 
@@ -1566,21 +1573,71 @@ def _replay_state_size(state):
         return 0
 
 
+def _replay_state_delta(previous, current):
+    if previous == current:
+        return _REPLAY_DELTA_UNCHANGED
+    if isinstance(previous, dict) and isinstance(current, dict):
+        changed = {}
+        removed = [key for key in previous if key not in current]
+        for key, value in current.items():
+            if key not in previous:
+                changed[key] = {'$set': value}
+                continue
+            child = _replay_state_delta(previous.get(key), value)
+            if child is not _REPLAY_DELTA_UNCHANGED:
+                changed[key] = child
+        patch = {'$dict': changed}
+        if removed:
+            patch['$remove'] = removed
+        return patch
+    if isinstance(previous, list) and isinstance(current, list):
+        if len(previous) == len(current):
+            changed = {}
+            for index, value in enumerate(current):
+                child = _replay_state_delta(previous[index], value)
+                if child is not _REPLAY_DELTA_UNCHANGED:
+                    changed[str(index)] = child
+            return {'$items': changed}
+        prefix = 0
+        limit = min(len(previous), len(current))
+        while prefix < limit and previous[prefix] == current[prefix]:
+            prefix += 1
+        return {'$list': {'start': prefix, 'items': current[prefix:]}}
+    return {'$set': current}
+
+
 def _replay_capture_budgeted_state(room, frame_index):
+    current = _replay_capture_state(room)
+    previous = getattr(room, '_replay_last_state', None)
+    current_phase = str(current.get('phase') or '') if isinstance(current, dict) else ''
+    previous_phase = str(previous.get('phase') or '') if isinstance(previous, dict) else ''
+    setup_phases = {'draft', 'event_select', 'event_reveal', 'event_sub_choice', 'sub_choice'}
+    entering_play = previous_phase in setup_phases and current_phase not in setup_phases
+    force_full = previous is None or entering_play or frame_index % REPLAY_FULL_STATE_INTERVAL == 0
+    stored = current
+    stored_bytes = None
+    is_full = True
+    if not force_full:
+        patch = _replay_state_delta(previous, current)
+        if patch is _REPLAY_DELTA_UNCHANGED:
+            patch = {'$dict': {}}
+        delta = {'delta': True, 'patch': patch}
+        delta_bytes = _replay_state_size(delta)
+        # Ordinary action deltas are tiny. Only serialize the complete snapshot
+        # again when an unusually large replacement might actually be cheaper.
+        if delta_bytes <= REPLAY_MAX_STATE_BYTES or delta_bytes < _replay_state_size(current):
+            stored = delta
+            stored_bytes = delta_bytes
+            is_full = False
+
+    room._replay_last_state = current
     full_frames = int(getattr(room, '_replay_full_state_frames', 0) or 0)
     total_bytes = int(getattr(room, '_replay_state_bytes', 0) or 0)
-    allow_full = full_frames < REPLAY_MAX_FULL_STATE_FRAMES and total_bytes < REPLAY_MAX_TOTAL_STATE_BYTES
-    if not allow_full and frame_index % REPLAY_COMPACT_STATE_INTERVAL != 0:
-        room._replay_truncated = True
-        return _replay_compact_state(room)
-    state = _replay_capture_state(room)
-    state_bytes = _replay_state_size(state)
-    if allow_full and total_bytes + state_bytes <= REPLAY_MAX_TOTAL_STATE_BYTES:
+    state_bytes = stored_bytes if stored_bytes is not None else _replay_state_size(stored)
+    if is_full:
         room._replay_full_state_frames = full_frames + 1
-        room._replay_state_bytes = total_bytes + state_bytes
-        return state
-    room._replay_truncated = True
-    return _replay_compact_state(room)
+    room._replay_state_bytes = total_bytes + state_bytes
+    return stored
 
 
 def reset_room_replay(room):
@@ -1591,21 +1648,30 @@ def reset_room_replay(room):
     room._replay_truncated = False
     room._replay_full_state_frames = 0
     room._replay_state_bytes = 0
+    room._replay_last_state = None
+    room._replay_frame_seq = 0
+
+
+def _next_room_replay_seq(room):
+    seq = int(getattr(room, '_replay_frame_seq', 0) or 0)
+    room._replay_frame_seq = seq + 1
+    return seq
 
 
 def record_room_replay_keyframe(room, label='state'):
     try:
         if getattr(room, '_history_recorded', False):
             return
-        frame_index = len(getattr(room, '_replay_keyframes', []) or []) + len(getattr(room, '_replay_actions', []) or [])
+        seq = _next_room_replay_seq(room)
         frame = {
             'i': len(getattr(room, '_replay_keyframes', []) or []),
+            'seq': seq,
             't': _replay_elapsed_ms(room),
             'label': label,
             'phase': getattr(room.engine, 'phase', ''),
             'round': _replay_round(room.engine),
             'current_player': getattr(room.engine, 'current_player', None),
-            'state': _replay_capture_budgeted_state(room, frame_index),
+            'state': _replay_capture_budgeted_state(room, seq),
         }
         room._replay_keyframes.append(frame)
     except Exception as exc:
@@ -1641,8 +1707,10 @@ def record_room_replay_action(room, action_type, actor=None, payload=None):
         if len(actions) >= REPLAY_MAX_ACTIONS:
             room._replay_truncated = True
             return
+        seq = _next_room_replay_seq(room)
         action = {
             'i': len(actions),
+            'seq': seq,
             't': _replay_elapsed_ms(room),
             'type': action_type,
             'actor': actor,
@@ -1650,7 +1718,7 @@ def record_room_replay_action(room, action_type, actor=None, payload=None):
             'round': _replay_round(room.engine),
             'current_player': getattr(room.engine, 'current_player', None),
             'payload': _replay_payload(payload or {}),
-            'state': _replay_capture_budgeted_state(room, len(actions)),
+            'state': _replay_capture_budgeted_state(room, seq),
         }
         actions.append(action)
     except Exception as exc:
@@ -3107,6 +3175,10 @@ def room_allows_guest_spectators(room):
     return True
 
 
+def player_accepts_game_invites(player):
+    return bool(player) and player.get('accept_game_invites', True) is not False
+
+
 def is_admin_player_secret(raw):
     return False
 
@@ -4236,9 +4308,11 @@ def normalize_disabled_mods(value):
     if value is None:
         return []
     if isinstance(value, str):
-        return [x.strip() for x in value.split(',') if x.strip()]
+        normalized = [x.strip() for x in value.split(',') if x.strip()]
+        return [x for x in normalized if x not in RETIRED_OFFICIAL_MOD_FILENAMES]
     if isinstance(value, (list, tuple, set)):
-        return [str(x).strip() for x in value if str(x).strip()]
+        normalized = [str(x).strip() for x in value if str(x).strip()]
+        return [x for x in normalized if x not in RETIRED_OFFICIAL_MOD_FILENAMES]
     return []
 
 
@@ -5516,12 +5590,15 @@ def emit_match_start_failed(sids, message, reason='mod_mismatch'):
             socketio.emit('match_start_failed', payload, room=psid)
 
 
-def has_reconnect_candidate_locked(nickname='', user_id=None, account_player_id='', beta_mode=False):
+def has_reconnect_candidate_locked(nickname='', user_id=None, account_player_id='', beta_mode=False,
+                                   desired_room_id=None, desired_match_key=''):
     room, old_sid = find_reconnect_candidate_locked(
         nickname=nickname,
         user_id=user_id,
         account_player_id=account_player_id,
         beta_mode=beta_mode,
+        desired_room_id=desired_room_id,
+        desired_match_key=desired_match_key,
     )
     return bool(room and old_sid)
 
@@ -5566,12 +5643,26 @@ def _room_sort_ts(room):
         return 0.0
 
 
-def find_reconnect_candidate_locked(nickname='', user_id=None, account_player_id='', beta_mode=False):
+def find_reconnect_candidate_locked(nickname='', user_id=None, account_player_id='', beta_mode=False,
+                                    desired_room_id=None, desired_match_key=''):
     name_key = normalize_username_key(nickname or '')
     account_player_id = str(account_player_id or '')
+    desired_match_key = str(desired_match_key or '').strip()
+    try:
+        desired_room_id = int(desired_room_id) if desired_room_id not in (None, '') else None
+    except (TypeError, ValueError):
+        desired_room_id = None
     candidates = []
     for room in rooms.values():
         if not _room_can_offer_reconnect(room, beta_mode):
+            continue
+        if desired_room_id is not None and int(getattr(room, 'room_id', -1)) != desired_room_id:
+            continue
+        valid_match_keys = {
+            room_match_key(room),
+            f'room:{getattr(room, "room_id", "")}',
+        }
+        if desired_match_key and desired_match_key not in valid_match_keys:
             continue
         room_ts = _room_sort_ts(room)
         for dc_sid, dc_info in list(getattr(room, 'disconnected_players', {}).items()):
@@ -9776,16 +9867,32 @@ def build_response_request_payload(engine, responder_id, played_card, player_id,
     pending = getattr(engine, 'pending_response', None) or {}
     if target_player_id is None:
         target_player_id = pending.get('target_player_id')
+    display_card = played_card
+    is_confusion_disguise = False
+    disguise_builder = getattr(engine, '_sewers_confusion_disguise', None)
+    if callable(disguise_builder):
+        try:
+            display_card = disguise_builder(responder_id, played_card) or played_card
+            is_confusion_disguise = bool(
+                isinstance(display_card, dict) and display_card.get('sewers_confusion_disguise')
+            )
+        except Exception as exc:
+            admin_event('mod_error', f'confusion response disguise failed: {exc}')
     payload = {
-        'card': played_card,
+        'card': display_card,
         'player_id': player_id,
         'target_player_id': target_player_id,
         'counter_cards': serialized_cards,
     }
     predictor = getattr(engine, 'build_response_damage_prediction', None)
+    if is_confusion_disguise:
+        predictor = getattr(engine, 'build_sewers_confusion_damage_prediction', predictor)
     if callable(predictor):
         try:
-            payload['damage_prediction'] = predictor(responder_id, counter_cards or serialized_cards)
+            if is_confusion_disguise:
+                payload['damage_prediction'] = predictor(responder_id, played_card, counter_cards or serialized_cards)
+            else:
+                payload['damage_prediction'] = predictor(responder_id, counter_cards or serialized_cards)
         except Exception as exc:
             admin_event('mod_error', f'response damage prediction failed: {exc}')
     return payload
@@ -11957,6 +12064,12 @@ def api_social_settings_update():
     settings, error = update_user_social_settings(user_id, data)
     if error:
         return jsonify({'success': False, 'error': error}), 400
+    with _lock:
+        for player in players.values():
+            if player.get('user_id') != user_id:
+                continue
+            player['accept_game_invites'] = bool(settings.get('accept_game_invites', True))
+            player['allow_guest_spectators'] = bool(settings.get('allow_guest_spectators', False))
     user = get_user_by_id(user_id)
     return jsonify({'success': True, 'settings': settings, 'user': auth_user_payload(user)})
 
@@ -12962,6 +13075,9 @@ def on_login(data):
         preferred_mode = validate_str(data.get('mode', '1v1'), max_len=16, name='mode')
         desired_instance_id = validate_str(data.get('desired_instance_id', ''), max_len=96, pattern=r'[A-Za-z0-9_.:\-]*', name='desired_instance_id')
         desired_instance_port = validate_str(data.get('desired_instance_port', ''), max_len=8, pattern=r'[0-9]*', name='desired_instance_port')
+        desired_room_text = validate_str(data.get('desired_room_id', ''), max_len=12, pattern=r'[0-9]*', name='desired_room_id')
+        desired_match_key = validate_str(data.get('desired_match_key', ''), max_len=128, pattern=r'[A-Za-z0-9_.:\-]*', name='desired_match_key')
+        desired_room_id = int(desired_room_text) if desired_room_text else None
     except ValueError as exc:
         _security_illegal(sid, 'login', str(exc), emit_error=False)
         emit('login_fail', {'reason': '登录参数错误'})
@@ -13036,6 +13152,8 @@ def on_login(data):
                     user_id=user_id,
                     account_player_id=account_user.get('player_id') if account_user else '',
                     beta_mode=is_beta_mode,
+                    desired_room_id=desired_room_id,
+                    desired_match_key=desired_match_key,
                 )
             finally:
                 _lock.release()
@@ -13095,6 +13213,8 @@ def on_login(data):
             user_id=user_id,
             account_player_id=account_user.get('player_id') if account_user else '',
             beta_mode=is_beta_mode,
+            desired_room_id=desired_room_id,
+            desired_match_key=desired_match_key,
         )
         if reconnect_room and reconnect_old_sid not in reconnect_room.disconnected_players:
             profile = room_player_profile(reconnect_room, reconnect_old_sid)
@@ -13130,6 +13250,7 @@ def on_login(data):
             'user_id': user_id,
             'account_player_id': account_user.get('player_id') if account_user else '',
             'is_registered_user': is_registered_user,
+            'accept_game_invites': bool(account_user.get('accept_game_invites', True)) if account_user else True,
             'allow_guest_spectators': bool(account_user.get('allow_guest_spectators')) if account_user else False,
             'season_gr': account_user.get('season_gr') if account_user else None,
             'total_gr': account_user.get('total_gr') if account_user else None,
@@ -13239,6 +13360,9 @@ def on_form_team(data):
         if sid not in players or target_sid not in players:
             return
         if players[sid]['status'] != 'lobby' or players[target_sid]['status'] != 'lobby':
+            return
+        if not player_accepts_game_invites(players[target_sid]):
+            emit('server_error', {'message': '该玩家已关闭对局邀请', 'reason': 'game_invites_disabled'})
             return
         if players[sid].get('mode') != '2v2' or players[target_sid].get('mode') != '2v2':
             return
@@ -13469,6 +13593,12 @@ def on_invite_team(data):
             return
         my_team = teams[sid]
         target_team = teams[target_team_leader]
+        if any(
+            member_sid in players and not player_accepts_game_invites(players[member_sid])
+            for member_sid in target_team['members']
+        ):
+            emit('server_error', {'message': '对方队伍中有玩家已关闭对局邀请', 'reason': 'game_invites_disabled'})
+            return
         all_invite_sids = list(my_team['members']) + list(target_team['members'])
         if not same_runtime_scope_sids(all_invite_sids):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
@@ -13798,7 +13928,7 @@ def on_reconnect_accept(data):
             if other_sid != sid and other_sid in players:
                 socketio.emit('opponent_reconnected', {}, room=other_sid)
         send_game_state_to(room, pidx)
-        emit_pending_response_requests(room, only_player_index=pidx)
+        emit_pending_interaction_after_state_change(room, reason='player_reconnected')
     broadcast_lobby()
 
 
@@ -13932,6 +14062,9 @@ def on_invite(data):
         if target['status'] != 'lobby':
             emit('server_error', {'message': '目标玩家不在大厅'})
             return
+        if not player_accepts_game_invites(target):
+            emit('server_error', {'message': '该玩家已关闭对局邀请', 'reason': 'game_invites_disabled'})
+            return
         inviter = players[sid]
         if not same_runtime_scope_players(inviter, target):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
@@ -13979,6 +14112,9 @@ def on_invite(data):
         target = players[target_sid]
         if target.get('status') != 'lobby':
             emit('server_error', {'message': '目标玩家不在大厅'})
+            return
+        if not player_accepts_game_invites(target):
+            emit('server_error', {'message': '该玩家已关闭对局邀请', 'reason': 'game_invites_disabled'})
             return
         if not same_runtime_scope_players(inviter, target):
             emit('server_error', {'message': runtime_scope_mismatch_message()})

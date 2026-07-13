@@ -214,13 +214,14 @@ class GameEngine2v2(GameEngine):
             'log': list(self.log),
             'log_start': log_start,
             'log_total': len(self.log),
-            'pending_response': self.pending_response,
+            'pending_response': self._public_pending_response(for_player),
             'pending_choice': self.pending_choice,
             'pending_v2_ui': self._public_v2_ui(for_player),
             'pending_ally_request': getattr(self, 'pending_ally_request', None),
             'opening_event_picks': self.opening_event_picks,
             'antennae_reveal': self._antennae_reveal[for_player],
             'mode': '2v2',
+            'forced_target_player_id': self._sewers_forced_target_for_player(for_player),
         }
 
     def start_event_select_first(self):
@@ -841,9 +842,7 @@ class GameEngine2v2(GameEngine):
             self._advance_turn()
             return
         if not self.game_over:
-            self.phase = 'action'
-            self._run_ocean_auto_cards_turn_start(player_id)
-            self._continue_honey_control_if_needed(player_id)
+            self._enter_player_action_phase(player_id)
 
 
     def _execute_card_effect(self, player_id: int, card: CardInstance, choice=None) -> dict:
@@ -1023,17 +1022,25 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '等待对手反制响应'}
         if getattr(self, 'pending_v2_ui', None) is not None:
             return {'success': False, 'error': 'Waiting for mod UI response'}
+        choice, forced_target_id = self._sewers_apply_forced_target_choice(player_id, card, choice)
+        if forced_target_id is not None:
+            target_player_id = forced_target_id
         if ('self_only' in card.flags and card.card_type != 'thorn') or card.card_type == 'guard':
             target_player_id = player_id
         elif (self._card_requires_target(card)
               and card.card_type == 'thorn'
               and target_player_id == player_id
-              and 'self_target' not in self._effective_card_flags(card)):
+              and 'self_target' not in self._effective_card_flags(card)
+              and forced_target_id is None):
             return {'success': False, 'error': '攻击牌不能选择自己作为目标'}
         elif (self._card_requires_target(card)
               and card.card_type == 'thorn'
               and not (
                   self._is_valid_attack_target(player_id, target_player_id)
+                  or (
+                      forced_target_id == target_player_id
+                      and self._target_can_be_selected(player_id, target_player_id, allow_self=True)
+                  )
                   or (
                       target_player_id == player_id
                       and 'self_target' in self._effective_card_flags(card)
@@ -1048,6 +1055,9 @@ class GameEngine2v2(GameEngine):
                         or (target_player_id != player_id
                             and bool(getattr(self.players[target_player_id], 'untargetable', False))
                             and not self._is_status_immune(target_player_id))):
+                    return {'success': False, 'error': '没有可选中的玩家'}
+            elif forced_target_id == target_player_id:
+                if not self._target_can_be_selected(player_id, target_player_id, allow_self=True):
                     return {'success': False, 'error': '没有可选中的玩家'}
             elif not self._is_valid_effect_target(player_id, target_player_id):
                 return {'success': False, 'error': '没有可选中的玩家'}
@@ -1093,6 +1103,7 @@ class GameEngine2v2(GameEngine):
             ps.achievement_played_thorn = True
         ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', card_instance_id) or card_instance_id))
         self._apply_magic_acceleration_after_play(player_id, card)
+        self._sewers_trigger_vampire_fangs(player_id, card, choice)
         self._active_choice = choice if isinstance(choice, dict) else {}
         try:
             if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
@@ -1168,6 +1179,7 @@ class GameEngine2v2(GameEngine):
             return 0
         old_health = ps.health
         ps.health -= actual
+        self._note_achievement_health(player_id)
         self._record_damage(player_id, actual, source_id)
         self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={old_health}→{ps.health}）")
         self._run_v2_after_damage_hooks(damage_context, actual)
@@ -1180,6 +1192,7 @@ class GameEngine2v2(GameEngine):
 
     def _on_player_death(self, player_id: int):
         ps = self.players[player_id]
+        self._note_achievement_death(player_id)
         surviving_equip = []
         for eq in ps.equipment:
             if 'indestructible' in eq.card_instance.flags:
@@ -1364,6 +1377,7 @@ class GameEngine2v2(GameEngine):
 
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]
+        self._sewers_clear_light_bulb_at_turn_start(player_id)
         self._antennae_reveal[player_id] = None
         if hasattr(self, '_antennae_reveal_targets'):
             self._antennae_reveal_targets[player_id] = None
@@ -1686,9 +1700,7 @@ class GameEngine2v2(GameEngine):
         if ps.health <= 0:
             self._advance_turn()
             return
-        self.phase = 'action'
-        self._run_ocean_auto_cards_turn_start(player_id)
-        self._continue_honey_control_if_needed(player_id)
+        self._enter_player_action_phase(player_id)
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
                            is_battery: bool = False, is_precision: bool = False,
@@ -1795,6 +1807,7 @@ class GameEngine2v2(GameEngine):
             ):
                 self._prediction_first_attack_damage = int(dmg)
             ps.health -= dmg
+            self._note_achievement_health(target_id)
             total_dealt += dmg
             if dmg > 0:
                 self._last_positive_damage_hits[target_id] += 1
