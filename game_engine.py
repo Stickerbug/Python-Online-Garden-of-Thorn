@@ -10022,26 +10022,11 @@ class GameEngine:
 
     def _wide_strike_target_ids(self, player_id: int, card: Optional[CardInstance]) -> List[int]:
         flags = self._effective_card_flags(card)
-        is_attack = bool(getattr(card, 'card_type', '') == 'thorn')
-        allow_self = 'self_target' in flags or not is_attack
+        allow_self = 'self_target' in flags
         targets: List[int] = []
-        team_of = getattr(self, 'team_of', None)
-        own_team = None
-        if callable(team_of):
-            try:
-                own_team = team_of(player_id)
-            except Exception:
-                own_team = None
         for tid in range(len(getattr(self, 'players', []) or [])):
-            if tid == player_id:
-                if not allow_self:
-                    continue
-            elif is_attack and own_team is not None:
-                try:
-                    if team_of(tid) == own_team:
-                        continue
-                except Exception:
-                    pass
+            if tid == player_id and not allow_self:
+                continue
             if self._target_can_be_selected(player_id, tid, allow_self=allow_self):
                 targets.append(tid)
         return targets
@@ -12359,12 +12344,10 @@ class GameEngine:
         return targets
 
     def _atomic_ocean_for_each_selectable_target(self, player_id, card, params, log, choice, context):
-        is_attack = bool(getattr(card, 'card_type', '') == 'thorn')
-        allow_self = 'self_target' in self._effective_card_flags(card) or not is_attack
         body = params.get('body') or params.get('steps') or []
         if not isinstance(body, list):
             return
-        for target_id in self._ocean_selectable_targets(player_id, allow_self=allow_self, enemies_only=is_attack):
+        for target_id in self._wide_strike_target_ids(player_id, card):
             if self.game_over:
                 break
             child_context = dict(context or {})
@@ -12736,8 +12719,10 @@ class GameEngine:
                 self._put_card_in_exile(target_id, hand_card)
             amount = len(cards)
             if amount > 0:
-                self.players[target_id].weakness = max(0, int(getattr(self.players[target_id], 'weakness', 0) or 0)) + amount
-                self.log_msg(log or f"{self.pn(target_id)}被放逐{amount}张手牌并获得{amount}层虚弱")
+                keys = ('jungle:fragile', 'fragile')
+                current = self._custom_status_value(target_id, *keys)
+                self._set_custom_status_alias_group(target_id, 'jungle:fragile', keys, current + amount)
+                self.log_msg(log or f"{self.pn(target_id)}被放逐{amount}张手牌并获得{amount}层易损")
 
     def _atomic_void_move_selected_card(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'target'))

@@ -1865,12 +1865,14 @@ class LocalSoloEngine {
     }
 
     getChoiceType(card) {
+        if (card && card.flags && card.flags.has('wide_strike')) return '';
         const effect = this.getChoiceRequest(card);
         if (!effect) return '';
         return this.choiceTypeForEffect(effect);
     }
 
     cardNeedsChoice(card) {
+        if (card && card.flags && card.flags.has('wide_strike')) return false;
         return !!this.getChoiceRequest(card);
     }
 
@@ -2035,6 +2037,18 @@ class LocalSoloEngine {
         if (target === 'both' || target === 'all') return [0, 1];
         const tid = this.resolveTarget(playerId, target);
         return tid === -1 ? [] : [tid].filter(id => id >= 0 && id < this.players.length);
+    }
+
+    wideStrikeTargetIds(playerId, card) {
+        const allowSelf = !!(card && card.flags && card.flags.has('self_target'));
+        return this.players
+            .map((ps, targetId) => ({ ps, targetId }))
+            .filter(({ ps, targetId }) => {
+                if (!ps || toInt(ps.health, 0) <= 0) return false;
+                if (targetId === playerId) return allowSelf;
+                return !ps.untargetable || this.isStatusImmune(targetId);
+            })
+            .map(({ targetId }) => targetId);
     }
 
     findCardByInstanceId(instanceId) {
@@ -3437,11 +3451,9 @@ class LocalSoloEngine {
     }
 
     effect_ocean_for_each_selectable_target(playerId, card, params, log, choice) {
-        const isAttack = card && card.card_type === 'thorn';
-        const allowSelf = (card && card.flags && card.flags.has('self_target')) || !isAttack;
         const body = Array.isArray(params.body) ? params.body : (Array.isArray(params.steps) ? params.steps : []);
         if (!body.length) return;
-        const targets = this.oceanSelectableTargets(playerId, { allowSelf, enemiesOnly: isAttack });
+        const targets = this.wideStrikeTargetIds(playerId, card);
         targets.forEach(targetId => {
             if (this.game_over) return;
             const childChoice = { target_player_id: targetId, target_player: targetId, target_id: targetId };
@@ -3615,8 +3627,11 @@ class LocalSoloEngine {
         ps.hand = ps.hand.filter(handCard => handCard.flags.has('exalted'));
         exiled.forEach(handCard => this.putCardInExile(targetId, handCard));
         if (exiled.length > 0) {
-            const current = this.customStatusValue(targetId, 'jungle:vulnerable', 'vulnerable');
-            this.setCustomStatusAliasGroup(targetId, 'jungle:vulnerable', ['jungle:vulnerable', 'vulnerable'], current + exiled.length);
+            const keys = ['jungle:fragile', 'fragile'];
+            const current = this.customStatusValue(targetId, ...keys);
+            this.setCustomStatusAliasGroup(targetId, 'jungle:fragile', keys, current + exiled.length);
+            this.logMsg(log || `${this.pn(targetId)}被放逐${exiled.length}张手牌并获得${exiled.length}层易损`);
+            return;
         }
         if (log) this.logMsg(log);
     }
@@ -5948,10 +5963,16 @@ class LocalSoloEngine {
         }
         if (this.pending_response) return { success: false, error: '等待对手反制响应' };
         if (card.def().card_type === 'thorn') {
-            const targetId = this.resolveTarget(playerId, choice && choice.target_player_id != null ? choice.target_player_id : 'enemy');
-            const allowsSelf = card.flags && card.flags.has('self_target');
-            if (targetId < 0 || targetId >= this.players.length || (targetId === playerId && !allowsSelf)) {
-                return { success: false, error: '没有可选中的玩家' };
+            if (card.flags && card.flags.has('wide_strike')) {
+                if (!this.wideStrikeTargetIds(playerId, card).length) {
+                    return { success: false, error: '没有可选中的玩家' };
+                }
+            } else {
+                const targetId = this.resolveTarget(playerId, choice && choice.target_player_id != null ? choice.target_player_id : 'enemy');
+                const allowsSelf = card.flags && card.flags.has('self_target');
+                if (targetId < 0 || targetId >= this.players.length || (targetId === playerId && !allowsSelf)) {
+                    return { success: false, error: '没有可选中的玩家' };
+                }
             }
         }
         if (this._auto_resolve_choices_for === playerId && this.cardNeedsChoice(card) && !this.choiceSatisfiesRequest(card, choice)) {
@@ -6138,18 +6159,43 @@ class LocalSoloEngine {
         }
         const effects = playEffectsFor(card);
         if (effects.length) {
-            this.runEffectList(playerId, card, effects, choice, {
-                event: 'play',
-                source_id: playerId,
-                target_id: this.resolveTarget(playerId, choice && choice.target_player_id != null ? choice.target_player_id : 'enemy'),
-            });
+            const handlesWideStrikeInternally = effects.some(effect => [
+                'ocean_for_each_selectable_target',
+                'ocean_spikeball_damage',
+            ].includes(String(effect && effect.type || '')));
+            if (card.flags.has('wide_strike') && !handlesWideStrikeInternally) {
+                this.wideStrikeTargetIds(playerId, card).forEach(targetId => {
+                    const targetChoice = {
+                        ...(choice || {}),
+                        target_player_id: targetId,
+                        target_player: targetId,
+                        target_id: targetId,
+                    };
+                    this.runEffectList(playerId, card, effects, targetChoice, {
+                        event: 'play',
+                        source_id: playerId,
+                        target_id: targetId,
+                        target_player: targetId,
+                    });
+                });
+            } else {
+                this.runEffectList(playerId, card, effects, choice, {
+                    event: 'play',
+                    source_id: playerId,
+                    target_id: this.resolveTarget(playerId, choice && choice.target_player_id != null ? choice.target_player_id : 'enemy'),
+                });
+            }
             return;
         }
         if (card.card_type === 'thorn' && toInt(card.damage, 0) > 0) {
-            const targetId = this.resolveTarget(playerId, choice && choice.target_player_id != null ? choice.target_player_id : 'enemy');
             const amount = this.modifiedAttackDamage(toInt(card.damage, 0), card);
             const hits = Math.max(1, toInt(card.hits, 1));
-            this.dealAttackDamage(targetId, amount, hits, card.flags.has('precision'), playerId, card);
+            const targets = card.flags.has('wide_strike')
+                ? this.wideStrikeTargetIds(playerId, card)
+                : [this.resolveTarget(playerId, choice && choice.target_player_id != null ? choice.target_player_id : 'enemy')];
+            targets.forEach(targetId => {
+                this.dealAttackDamage(targetId, amount, hits, card.flags.has('precision'), playerId, card);
+            });
             return;
         }
         this.logMsg(`${this.pn(playerId)}使用了${cardName(card.def_id)}`);
