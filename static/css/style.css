@@ -7372,11 +7372,11 @@ html.blind-level-4 .card-prediction-part.magic {
   line-height: 1.05;
 }
 
-.card.card-assembler .card-effect {
-  font-size: 6.95cqi;
-  line-height: 1.14;
-  padding-top: 2.8cqi;
-  padding-bottom: 1.6cqi;
+.card.card-assembler {
+  --card-effect-font-scale: 5.9cqi;
+  --card-effect-line-height: 1.1;
+  --card-effect-padding-y: 2.8cqi;
+  --card-effect-padding-bottom: 1.6cqi;
 }
 
 .card.card-assembler .inline-card-chip.choice-card-token {
@@ -7393,83 +7393,88 @@ html.blind-level-4 .card-prediction-part.magic {
   line-height: 1;
 }
 
-.card.card-honey .card-effect {
-  font-size: 7.75cqi;
-  line-height: 1.18;
-  padding-top: 3.4cqi;
-  padding-bottom: 2cqi;
+.card.card-honey {
+  --card-effect-font-scale: 7.75cqi;
+  --card-effect-line-height: 1.18;
+  --card-effect-padding-y: 3.4cqi;
+  --card-effect-padding-bottom: 2cqi;
 }
 
-.card.card-fragment .card-effect,
-.card.card-coconut .card-effect {
-  font-size: 7.75cqi;
-  line-height: 1.18;
-  padding-top: 3.2cqi;
-  padding-bottom: 1.8cqi;
+.card.card-fragment,
+.card.card-coconut {
+  --card-effect-font-scale: 7.75cqi;
+  --card-effect-line-height: 1.18;
+  --card-effect-padding-y: 3.2cqi;
+  --card-effect-padding-bottom: 1.8cqi;
 }
 
-.card.card-sponge .card-effect {
-  font-size: 7.35cqi;
-  line-height: 1.14;
-  padding-top: 2.5cqi;
-  padding-bottom: 1.2cqi;
+.card.card-fragment {
+  --card-effect-font-scale: 8.7cqi;
+  --card-effect-line-height: 1.25;
 }
 
-.card.card-relic .card-effect,
-.card.card-jungle-root .card-effect {
-  font-size: 7.95cqi;
-  line-height: 1.16;
-  padding-top: 3cqi;
-  padding-bottom: 1.7cqi;
+.card.card-sponge {
+  --card-effect-font-scale: 7.35cqi;
+  --card-effect-line-height: 1.14;
+  --card-effect-padding-y: 2.5cqi;
+  --card-effect-padding-bottom: 1.2cqi;
 }
 
-.card.card-yggdrasil .card-effect {
-  font-size: 7.35cqi;
-  line-height: 1.13;
-  padding-top: 2.6cqi;
-  padding-bottom: 1.3cqi;
+.card.card-relic,
+.card.card-jungle-root {
+  --card-effect-font-scale: 7.95cqi;
+  --card-effect-line-height: 1.16;
+  --card-effect-padding-y: 3cqi;
+  --card-effect-padding-bottom: 1.7cqi;
 }
 
-.card.card-ocean-compact .card-effect {
-  font-size: 7.72cqi;
-  line-height: 1.135;
-  padding-top: 2.55cqi;
-  padding-bottom: 1.25cqi;
+.card.card-yggdrasil {
+  --card-effect-font-scale: 7.35cqi;
+  --card-effect-line-height: 1.13;
+  --card-effect-padding-y: 2.6cqi;
+  --card-effect-padding-bottom: 1.3cqi;
 }
 
-.card.card-void-compact .card-effect {
-  font-size: 7.42cqi;
-  line-height: 1.12;
-  padding-top: 2.4cqi;
-  padding-bottom: 1.15cqi;
+.card.card-ocean-compact {
+  --card-effect-font-scale: 7.72cqi;
+  --card-effect-line-height: 1.135;
+  --card-effect-padding-y: 2.55cqi;
+  --card-effect-padding-bottom: 1.25cqi;
 }
 
-.card.card-ocean-magic-pearl .card-effect {
-  font-size: 6.92cqi;
-  line-height: 1.085;
-  padding-top: 2.1cqi;
-  padding-bottom: 0.95cqi;
+.card.card-void-compact {
+  --card-effect-font-scale: 7.42cqi;
+  --card-effect-line-height: 1.12;
+  --card-effect-padding-y: 2.4cqi;
+  --card-effect-padding-bottom: 1.15cqi;
 }
 
-.card.card-effect-slightly-small .card-effect {
-  font-size: 7.72cqi;
-  line-height: 1.15;
-  padding-top: 2.8cqi;
-  padding-bottom: 1.5cqi;
+.card.card-ocean-magic-pearl {
+  --card-effect-font-scale: 6.92cqi;
+  --card-effect-line-height: 1.085;
+  --card-effect-padding-y: 2.1cqi;
+  --card-effect-padding-bottom: 0.95cqi;
 }
 
-.card.card-effect-tiny-small .card-effect {
-  font-size: 8.35cqi;
-  line-height: 1.17;
-  padding-top: 3.1cqi;
-  padding-bottom: 1.7cqi;
+.card.card-effect-slightly-small {
+  --card-effect-font-scale: 7.72cqi;
+  --card-effect-line-height: 1.15;
+  --card-effect-padding-y: 2.8cqi;
+  --card-effect-padding-bottom: 1.5cqi;
 }
 
-.card.card-effect-extra-small .card-effect {
-  font-size: 6.95cqi;
-  line-height: 1.1;
-  padding-top: 2.15cqi;
-  padding-bottom: 1cqi;
+.card.card-effect-tiny-small {
+  --card-effect-font-scale: 8.35cqi;
+  --card-effect-line-height: 1.17;
+  --card-effect-padding-y: 3.1cqi;
+  --card-effect-padding-bottom: 1.7cqi;
+}
+
+.card.card-effect-extra-small {
+  --card-effect-font-scale: 6.95cqi;
+  --card-effect-line-height: 1.1;
+  --card-effect-padding-y: 2.15cqi;
+  --card-effect-padding-bottom: 1cqi;
 }
 
 .card.card-hel-compact {
@@ -7499,32 +7504,25 @@ html.blind-level-4 .card-prediction-part.magic {
   --card-effect-padding-bottom: 0.8cqi;
 }
 
-.card.card-hel-compact .card-effect {
-  font-size: var(--card-effect-font-scale);
-  line-height: var(--card-effect-line-height);
-  padding-top: var(--card-effect-padding-y);
-  padding-bottom: var(--card-effect-padding-bottom);
+.card.card-petal-copy {
+  --card-effect-font-scale: 8.1cqi;
+  --card-effect-line-height: 1.2;
+  --card-effect-padding-y: 3.4cqi;
+  --card-effect-padding-bottom: 2cqi;
 }
 
-.card.card-petal-copy .card-effect {
-  font-size: 8.1cqi;
-  line-height: 1.2;
-  padding-top: 3.4cqi;
-  padding-bottom: 2cqi;
+.card.card-magic-grapes {
+  --card-effect-font-scale: 7.65cqi;
+  --card-effect-line-height: 1.17;
+  --card-effect-padding-y: 3cqi;
+  --card-effect-padding-bottom: 1.6cqi;
 }
 
-.card.card-magic-grapes .card-effect {
-  font-size: 7.65cqi;
-  line-height: 1.17;
-  padding-top: 3cqi;
-  padding-bottom: 1.6cqi;
-}
-
-.card.card-magic-peas .card-effect {
-  font-size: 7.35cqi;
-  line-height: 1.13;
-  padding-top: 2.7cqi;
-  padding-bottom: 1.35cqi;
+.card.card-magic-peas {
+  --card-effect-font-scale: 7.35cqi;
+  --card-effect-line-height: 1.13;
+  --card-effect-padding-y: 2.7cqi;
+  --card-effect-padding-bottom: 1.35cqi;
 }
 
 .card-token {
@@ -18688,16 +18686,6 @@ html.battle-mobile-input-focus.minimal-mobile-canvas[data-ui-style="minimal"] #v
   line-height: 1;
   padding: var(--chip-flag-pad-y) var(--chip-flag-pad-x);
   border-radius: var(--chip-flag-radius);
-}
-
-.card.card-fragment .card-effect {
-  font-size: 8.7cqi;
-  line-height: 1.25;
-}
-
-.card.card-assembler .card-effect {
-  font-size: 5.9cqi;
-  line-height: 1.1;
 }
 
 .card.card-assembler .card-effect .inline-card-chip.choice-card-token {
