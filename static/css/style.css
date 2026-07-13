@@ -16,9 +16,9 @@
 }
 
 @font-face {
-  font-family: 'Kreadon Demi';
+  font-family: 'Kreadon CJK';
   src: url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2');
-  font-weight: 700;
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
   unicode-range: U+2E80-30FF, U+31F0-31FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF;
@@ -131,7 +131,7 @@
   --transition-normal: 0.25s ease;
   --transition-slow: 0.4s ease;
   --font-main: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
-  --font-card: 'Kreadon Demi', 'Kreadon', 'Microsoft YaHei', sans-serif;
+  --font-card: 'Kreadon Demi', 'Kreadon CJK', 'Kreadon', 'Microsoft YaHei', sans-serif;
   --gtn-card-border-width: 1.3cqi;
   --gtn-card-radius: 5.5% / 4%;
   --scrollbar-size: 9px;

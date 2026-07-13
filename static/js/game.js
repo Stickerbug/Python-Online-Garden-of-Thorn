@@ -7748,7 +7748,7 @@ html.fonts-loaded-main {
   --font-main: 'Kreadon', 'Kreadon Community', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
 }
 :root {
-  --font-card: 'Kreadon Demi', 'Kreadon', 'Kreadon Community', 'Microsoft YaHei', sans-serif;
+  --font-card: 'Kreadon Demi', 'Kreadon CJK', 'Kreadon', 'Kreadon Community', 'Microsoft YaHei', sans-serif;
 }`;
 }
 
