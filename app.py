@@ -1250,6 +1250,7 @@ def admin_match_record(room, result='finished'):
             'valid_action_counts_by_side': room_valid_actions_by_side(room),
         }
         cards_played_by_player = []
+        dodge_damage_prevented_by_player = []
         achievement_metric_deltas_by_user = {}
         for pidx in range(len(names)):
             try:
@@ -1258,12 +1259,26 @@ def admin_match_record(room, result='finished'):
                 ps = e.players[pidx] if pidx < len(getattr(e, 'players', []) or []) else None
                 card_plays = max(0, int(getattr(ps, 'achievement_total_card_plays', 0) or 0)) if ps else 0
             cards_played_by_player.append(card_plays)
+            ps = e.players[pidx] if pidx < len(getattr(e, 'players', []) or []) else None
+            dodge_prevented = max(
+                0,
+                int(getattr(ps, 'achievement_dodge_damage_prevented', 0) or 0),
+            ) if ps else 0
+            dodge_damage_prevented_by_player.append(dodge_prevented)
             uid = player_user_ids[pidx] if pidx < len(player_user_ids) else None
-            if uid is None or card_plays <= 0:
+            if uid is None:
                 continue
-            user_metrics = achievement_metric_deltas_by_user.setdefault(str(uid), {})
-            user_metrics['cards_played_total'] = int(user_metrics.get('cards_played_total', 0) or 0) + card_plays
+            if card_plays > 0 or dodge_prevented > 0:
+                user_metrics = achievement_metric_deltas_by_user.setdefault(str(uid), {})
+                if card_plays > 0:
+                    user_metrics['cards_played_total'] = int(user_metrics.get('cards_played_total', 0) or 0) + card_plays
+                if dodge_prevented > 0:
+                    user_metrics['dodge_damage_prevented_total'] = (
+                        int(user_metrics.get('dodge_damage_prevented_total', 0) or 0)
+                        + dodge_prevented
+                    )
         summary['cards_played_by_player'] = cards_played_by_player
+        summary['dodge_damage_prevented_by_player'] = dodge_damage_prevented_by_player
         summary['achievement_metric_deltas_by_user'] = achievement_metric_deltas_by_user
         raw_draft_picks = getattr(e, 'draft_picks', []) or []
         player_draft_cards = []

@@ -223,6 +223,7 @@ class PlayerState:
         self.achievement_max_equipment_count: int = 0
         self.achievement_max_armor: int = self.armor
         self.achievement_total_card_plays: int = 0
+        self.achievement_dodge_damage_prevented: int = 0
         self.achievement_death_round = None
         self.achievement_self_caused_death: bool = False
         self.turn_start_snapshot: Dict[str, int] = {
@@ -340,6 +341,7 @@ class PlayerState:
             'achievement_max_equipment_count': self.achievement_max_equipment_count,
             'achievement_max_armor': self.achievement_max_armor,
             'achievement_total_card_plays': self.achievement_total_card_plays,
+            'achievement_dodge_damage_prevented': self.achievement_dodge_damage_prevented,
             'achievement_death_round': self.achievement_death_round,
             'achievement_self_caused_death': self.achievement_self_caused_death,
             'turn_start_snapshot': dict(self.turn_start_snapshot),
@@ -469,6 +471,7 @@ class PlayerState:
         ps.achievement_max_equipment_count = int(d.get('achievement_max_equipment_count', 0) or 0)
         ps.achievement_max_armor = int(d.get('achievement_max_armor', getattr(ps, 'armor', 0)) or 0)
         ps.achievement_total_card_plays = int(d.get('achievement_total_card_plays', 0) or 0)
+        ps.achievement_dodge_damage_prevented = int(d.get('achievement_dodge_damage_prevented', 0) or 0)
         death_round = d.get('achievement_death_round', None)
         ps.achievement_death_round = None if death_round is None else int(death_round)
         ps.achievement_self_caused_death = bool(d.get('achievement_self_caused_death', False))
@@ -1070,6 +1073,7 @@ class GameEngine:
             root_armor = 0
         ps.achievement_max_armor = max(0, int(getattr(ps, 'armor', 0) or 0) + int(root_armor or 0))
         ps.achievement_total_card_plays = 0
+        ps.achievement_dodge_damage_prevented = 0
         ps.achievement_death_round = None
         ps.achievement_self_caused_death = False
 
@@ -1650,6 +1654,21 @@ class GameEngine:
                 int(amount),
             )
         self._trigger_v2_damage_status_events(target_id, source_id, amount)
+
+    def _record_dodge_damage_prevented(self, target_id: int, amount: int):
+        if not (0 <= target_id < len(self.players)):
+            return
+        try:
+            prevented = max(0, int(amount or 0))
+        except (TypeError, ValueError):
+            prevented = 0
+        if prevented <= 0:
+            return
+        ps = self.players[target_id]
+        ps.achievement_dodge_damage_prevented = (
+            max(0, int(getattr(ps, 'achievement_dodge_damage_prevented', 0) or 0))
+            + prevented
+        )
 
     def _get_v2_status_def(self, status_id: str) -> Optional[dict]:
         defs = getattr(self, 'v2_status_defs', {}) or {}
@@ -10963,6 +10982,7 @@ class GameEngine:
                         self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗")
                 else:
                     self.log_msg(f"{self.pn(target_id)}闪避了攻击")
+                    self._record_dodge_damage_prevented(target_id, amount)
                     continue
             if ps.invincible and not immune:
                 self.log_msg(f"{self.pn(target_id)}无敌，免疫伤害")
@@ -10996,9 +11016,14 @@ class GameEngine:
                 if puppeteer_multiplier != 1.0:
                     dmg = int(math.ceil(dmg * puppeteer_multiplier))
             if self.halve_next_attack:
-                dmg = math.ceil(dmg / 2)
+                reduced_dmg = math.ceil(dmg / 2)
+                if precision_dodged:
+                    self._record_dodge_damage_prevented(target_id, dmg - reduced_dmg)
+                dmg = reduced_dmg
             elif precision_dodged:
-                dmg = math.ceil(dmg / 2)
+                reduced_dmg = math.ceil(dmg / 2)
+                self._record_dodge_damage_prevented(target_id, dmg - reduced_dmg)
+                dmg = reduced_dmg
             dmg = self._apply_corruption_multiplier_to_damage(dmg, log=False)
             dmg = self._apply_damage_dealt_equipment_multiplier(dmg, attacker_id)
             if plank_blocks_attack:
