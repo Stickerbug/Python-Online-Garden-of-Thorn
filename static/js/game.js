@@ -21729,7 +21729,6 @@ function rootCardNeedsPlayTargetByLegacyFields(cardDef) {
         'cactus', 'desert_cards_addition:cactus',
         'coconut', 'desert_cards_addition:coconut',
         'uranium', 'factory:uranium',
-        'magicuranium', 'factory:magicuranium',
         'cutter', 'factory:cutter',
         'electricweb', 'factory:electricweb',
         'goggles', 'factory:goggles',

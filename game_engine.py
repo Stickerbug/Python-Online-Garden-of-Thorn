@@ -683,7 +683,7 @@ class GameEngine:
         6: {'id': 6, 'name': '能量涌动', 'desc': '每回合多回复1[[icon:E]]', 'position': 3},
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手回复7E并抽5张牌', 'position': 3},
         9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将5张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
-        10: {'id': 10, 'name': '魔力加速', 'desc': '最大生命值-10，打出一张不消耗M的牌回复1M', 'position': 1},
+        10: {'id': 10, 'name': '魔力加速', 'desc': '每打出2张牌回复1[[icon:M]]', 'position': 1},
     }
     OPENING_EVENT_ORDER = {
         1: 10, 2: 20, 3: 30, 8: 40,
@@ -3824,12 +3824,21 @@ class GameEngine:
         ps = self.players[player_id]
         if int(getattr(ps, 'custom_vars', {}).get('setup_magic_acceleration', 0) or 0) <= 0:
             return
-        if card is not None and int(getattr(card, 'cost_m', 0) or 0) > 0:
-            return
-        before = ps.magic
-        ps.gain_magic(1)
-        if ps.magic != before:
-            self.log_msg(f"{self.pn(player_id)}【魔力加速】：+1M")
+        custom_vars = ps.custom_vars
+        previous_count = int(custom_vars.get('setup_magic_acceleration_play_count', 0) or 0) % 2
+        next_count = previous_count + 1
+        gained = 0
+        if next_count >= 2:
+            next_count = 0
+            before_magic = ps.magic
+            ps.gain_magic(1)
+            gained = max(0, ps.magic - before_magic)
+            if gained:
+                self.log_msg(f"{self.pn(player_id)}【魔力加速】：+1M")
+        custom_vars['setup_magic_acceleration_play_count'] = next_count
+        custom_vars['setup_magic_acceleration_last_before'] = previous_count
+        custom_vars['setup_magic_acceleration_last_gain'] = gained
+        custom_vars['setup_magic_acceleration_last_instance_id'] = int(getattr(card, 'instance_id', 0) or 0)
 
     def _is_builtin_opening_event(self, event_id) -> bool:
         return isinstance(event_id, int) or (isinstance(event_id, str) and event_id.isdigit())
@@ -3995,12 +4004,9 @@ class GameEngine:
         elif event_id == 9:
             self._apply_multi_petal_to_player_deck(player_id)
         elif event_id == 10:
-            ps.max_health -= 10
-            ps.base_max_health -= 10
-            ps.health = min(ps.health, ps.max_health)
-            self._note_achievement_health(player_id)
             ps.custom_vars['setup_magic_acceleration'] = 1
-            self.log_msg(f"{self.pn(player_id)}【魔力加速】：最大生命值-10，打出不消耗M的牌后回复1M")
+            ps.custom_vars['setup_magic_acceleration_play_count'] = 0
+            self.log_msg(f"{self.pn(player_id)}【魔力加速】：每打出2张牌回复1M")
 
     def _apply_v2_opening_event(self, player_id: int, event_id) -> bool:
         if event_id is None:
@@ -5012,15 +5018,25 @@ class GameEngine:
         ps = self.players[player_id]
         if int(getattr(ps, 'custom_vars', {}).get('setup_magic_acceleration', 0) or 0) <= 0:
             return
-        if card is not None and int(getattr(card, 'cost_m', 0) or 0) > 0:
+        custom_vars = ps.custom_vars
+        card_instance_id = int(getattr(card, 'instance_id', 0) or 0)
+        if int(custom_vars.get('setup_magic_acceleration_last_instance_id', -1) or -1) != card_instance_id:
+            return
+        custom_vars['setup_magic_acceleration_play_count'] = int(
+            custom_vars.get('setup_magic_acceleration_last_before', 0) or 0
+        ) % 2
+        gained = max(0, int(custom_vars.get('setup_magic_acceleration_last_gain', 0) or 0))
+        custom_vars.pop('setup_magic_acceleration_last_before', None)
+        custom_vars.pop('setup_magic_acceleration_last_gain', None)
+        custom_vars.pop('setup_magic_acceleration_last_instance_id', None)
+        if gained <= 0:
             return
         msg = f"{self.pn(player_id)}【魔力加速】：+1M"
         for idx in range(len(self.log) - 1, -1, -1):
             if self.log[idx] == msg:
                 del self.log[idx]
-                if ps.magic > 0:
-                    ps.magic -= 1
-                return
+                break
+        ps.magic = max(0, ps.magic - gained)
 
     def _remove_pending_choice_play_log(self, player_id: int, card: CardInstance, play_log_marker: Optional[int] = None):
         if play_log_marker is None:
@@ -9711,7 +9727,6 @@ class GameEngine:
             'Cactus', 'desert_cards_addition:cactus',
             'Coconut', 'desert_cards_addition:coconut',
             'Uranium', 'factory:uranium',
-            'MagicUranium', 'factory:magicuranium',
             'Cutter', 'factory:cutter',
             'ElectricWeb', 'factory:electricweb',
             'Goggles', 'factory:goggles',

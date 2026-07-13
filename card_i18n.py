@@ -279,7 +279,7 @@ OPENING_EVENT_I18N = {
     },
     10: {
         'name': _t('魔力加速', 'Magic Acceleration', 'Accélération magique', 'Aceleração Mágica', 'Ускорение магии', '魔力加速'),
-        'desc': _t('最大生命值-10，打出一张不消耗M的牌回复1M', 'Max health -10; after playing a card that costs no M, recover 1M', 'Santé max -10 ; après avoir joué une carte qui ne coûte pas de M, récupérez 1M', 'Vida máxima -10; depois de jogar uma carta que não custa M, recupere 1M', 'Макс. здоровье -10; после розыгрыша карты без затрат M восстановите 1M', '最大生命値-10。Mを消費しないカードを1枚使用した後、1M回復'),
+        'desc': _t('每打出2张牌回复1[[icon:M]]', 'Recover 1[[icon:M]] for every 2 cards you play', 'Récupérez 1[[icon:M]] toutes les 2 cartes jouées', 'Recupere 1[[icon:M]] a cada 2 cartas jogadas', 'Восстанавливайте 1[[icon:M]] за каждые 2 сыгранные карты', 'カードを2枚使用するたびに1[[icon:M]]回復'),
     },
 }
 

@@ -1479,11 +1479,9 @@ class LocalSoloEngine {
             }
             this.logMsg(`${this.pn(playerId)}【多重瓣】：${changed}张多子瓣牌子瓣+1，${added}张[[card:Dust|flag=exile]]洗入牌库`);
         } else if (eventId === 10) {
-            ps.max_health -= 10;
-            ps.base_max_health -= 10;
-            ps.health = Math.min(ps.health, ps.max_health);
             ps.custom_vars.setup_magic_acceleration = 1;
-            this.logMsg(`${this.pn(playerId)}【魔力加速】：最大生命值-10，打出不消耗M的牌后回复1M`);
+            ps.custom_vars.setup_magic_acceleration_play_count = 0;
+            this.logMsg(`${this.pn(playerId)}【魔力加速】：每打出2张牌回复1M`);
         }
     }
 
@@ -1912,6 +1910,7 @@ class LocalSoloEngine {
         const keepPaidChoice = choiceType === 'choose_ocean_sapphire' || choiceType === 'magic_salt_reflect';
         if (alreadyPaid && !keepPaidChoice) {
             const ps = this.players[playerId];
+            this.undoMagicAccelerationAfterPendingChoice(playerId, card);
             if (!ps.findHandCard(card.instance_id)) ps.hand.unshift(card);
             ps.elixir += this.paidEForRefund(playerId, card);
             ps.magic += card.cost_m;
@@ -5268,10 +5267,42 @@ class LocalSoloEngine {
     applyMagicAccelerationAfterPlay(playerId, card = null) {
         const ps = this.players[playerId];
         if (toInt(ps.custom_vars.setup_magic_acceleration, 0) <= 0) return;
-        if (card && toInt(card.cost_m, 0) > 0) return;
-        const before = ps.magic;
-        ps.gainMagic(1);
-        if (ps.magic !== before) this.logMsg(`${this.pn(playerId)}【魔力加速】：+1M`);
+        const previousCount = Math.abs(toInt(ps.custom_vars.setup_magic_acceleration_play_count, 0)) % 2;
+        let nextCount = previousCount + 1;
+        let gained = 0;
+        if (nextCount >= 2) {
+            nextCount = 0;
+            const beforeMagic = ps.magic;
+            ps.gainMagic(1);
+            gained = Math.max(0, ps.magic - beforeMagic);
+            if (gained > 0) this.logMsg(`${this.pn(playerId)}【魔力加速】：+1M`);
+        }
+        ps.custom_vars.setup_magic_acceleration_play_count = nextCount;
+        ps.custom_vars.setup_magic_acceleration_last_before = previousCount;
+        ps.custom_vars.setup_magic_acceleration_last_gain = gained;
+        ps.custom_vars.setup_magic_acceleration_last_instance_id = toInt(card && card.instance_id, 0);
+    }
+
+    undoMagicAccelerationAfterPendingChoice(playerId, card = null) {
+        const ps = this.players[playerId];
+        if (toInt(ps.custom_vars.setup_magic_acceleration, 0) <= 0) return;
+        const cardInstanceId = toInt(card && card.instance_id, 0);
+        if (toInt(ps.custom_vars.setup_magic_acceleration_last_instance_id, -1) !== cardInstanceId) return;
+        ps.custom_vars.setup_magic_acceleration_play_count = Math.abs(
+            toInt(ps.custom_vars.setup_magic_acceleration_last_before, 0)
+        ) % 2;
+        const gained = Math.max(0, toInt(ps.custom_vars.setup_magic_acceleration_last_gain, 0));
+        delete ps.custom_vars.setup_magic_acceleration_last_before;
+        delete ps.custom_vars.setup_magic_acceleration_last_gain;
+        delete ps.custom_vars.setup_magic_acceleration_last_instance_id;
+        if (gained <= 0) return;
+        const msg = `${this.pn(playerId)}【魔力加速】：+1M`;
+        for (let index = this.log.length - 1; index >= 0; index -= 1) {
+            if (this.log[index] !== msg) continue;
+            this.log.splice(index, 1);
+            break;
+        }
+        ps.magic = Math.max(0, ps.magic - gained);
     }
 
     getCorruptionCount() {
@@ -6046,6 +6077,7 @@ class LocalSoloEngine {
                 if (keepPaidChoice) {
                     this.pending_choice.play_log_marker = playLogMarker;
                 } else {
+                    this.undoMagicAccelerationAfterPendingChoice(playerId, card);
                     const expected = `${this.pn(playerId)}使用了${cardName(card.def_id)}`;
                     if (this.log[playLogMarker] === expected) this.log.splice(playLogMarker, 1);
                     if (!ps.findHandCard(card.instance_id)) {
@@ -6182,6 +6214,7 @@ class LocalSoloEngine {
                 return { success: false, error: '此选择不能取消' };
             }
             if (pending.already_paid) {
+                this.undoMagicAccelerationAfterPendingChoice(playerId, card);
                 const marker = Number.isInteger(pending.play_log_marker) ? pending.play_log_marker : -1;
                 const expected = `${this.pn(playerId)}使用了${cardName(card.def_id)}`;
                 if (marker >= 0 && this.log[marker] === expected) this.log.splice(marker, 1);
