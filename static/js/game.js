@@ -2771,7 +2771,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'fire', re: /^(?:\d+层(?:F|灼烧)|\d+\s*F(?![A-Za-z0-9])|\d+\s*(?:Burn|Brûlure|Brulure|Queima|Горения)|灼焼\d+)/ },
     { cls: 'poison', re: /^(?:\d+层(?:P|中毒)|\d+\s*P(?![A-Za-z0-9])|\d+\s*(?:Poison|Veneno|Яда)|毒\d+)/ },
     { cls: 'damage', re: /^(?:[+-]?(?:\d+|x|X)\s*(?:点)?(?:电伤|电伤害|电击伤害)(?:[×x]\d+)?|\([^)]+\)|（[^）]+）|[+-]?\d+(?:[×x]\d+)?)D(?:[×x]\d+)?/ },
-    { cls: 'heal', re: /^造成伤害\d+%(?:\([^)]+\)|（[^）]+）)的H/ },
+    { cls: 'heal', re: /^(?:造成伤害\d+%(?:\([^)]+\)|（[^）]+）)|向下取整(?:\([^)]*伤害[^)]*\)|（[^）]*伤害[^）]*）))的H/ },
     { cls: 'armor', re: /^[+-]?\d+A/ },
     { cls: 'armor', re: /^护甲/ },
     { cls: 'heal', re: /^[+]?\d+H(?![A-Za-z0-9])/ },
@@ -3095,7 +3095,7 @@ function extractInlineUnitPrefix(sourceText, iconStart, iconKey) {
     })[rawKey] || rawKey;
     const valueAtom = String.raw`(?:\([^)]+\)|（[^）]+）|[+-]?(?:\d+|[a-zA-Z])(?:\.\d+)?|[+-]?\d+%)`;
     const stackValueAtom = String.raw`(?:${valueAtom})(?:\s*层)?`;
-    const healingExpression = String.raw`(?:造成伤害\d+%(?:\([^)]+\)|（[^）]+）)?的|造成伤害的\d+%(?:\([^)]+\)|（[^）]+）)?|造成伤害(?:\([^)]+\)|（[^）]+）)?的)`;
+    const healingExpression = String.raw`(?:造成伤害\d+%(?:\([^)]+\)|（[^）]+）)?的|造成伤害的\d+%(?:\([^)]+\)|（[^）]+）)?|造成伤害(?:\([^)]+\)|（[^）]+）)?的|向下取整(?:\([^)]*伤害[^)]*\)|（[^）]*伤害[^）]*）)的)`;
     const poisonExpression = String.raw`(?:向下取整\([^)]*\)层|向下取整（[^）]*）层|目标所有|所有|对应|施加|获得|去除|减少|增加)`;
     const statusStackExpression = String.raw`(?:[+-]?(?:\d+|[a-zA-Z])(?:\.\d+)?层|[+-]?(?:\d+|[a-zA-Z])(?:\.\d+)?\s*)`;
     const damageExpression = String.raw`(?:层数两倍的|层数的两倍|层数等同的|层数相同的)`;
@@ -5788,6 +5788,84 @@ function getGalleryFlagUsers(flag) {
 
 const GALLERY_CARD_TYPE_ORDER = { thorn: 0, bloom: 1, guard: 2, root: 3 };
 
+const OFFICIAL_MOD_DISPLAY_ORDER = [
+    'Vanilla Cards.gtnmod',
+    'Troll Cards.gtnmod',
+    'Thorn Cards.gtnmod',
+    'Garden Cards Addition.gtnmod',
+    'Factory Cards Addition.gtnmod',
+    'Desert Cards Addition.gtnmod',
+    'Jungle Cards Addition.gtnmod',
+    'Ocean Cards Addition.gtnmod',
+    'Void Card Addition.gtnmod',
+    'Hel Cards Addition.gtnmod',
+];
+
+const OFFICIAL_MOD_DISPLAY_ALIASES = [
+    ['vanilla cards.gtnmod', 'vanilla cards', 'garden of thorn vanilla cards'],
+    ['troll cards.gtnmod', 'troll cards'],
+    ['thorn cards.gtnmod', 'thorn cards', 'more thorn cards'],
+    ['garden cards addition.gtnmod', 'garden cards addition', 'garden cards'],
+    ['factory cards addition.gtnmod', 'factory cards addition', 'factory cards'],
+    ['desert cards addition.gtnmod', 'desert cards addition', 'desert cards'],
+    ['jungle cards addition.gtnmod', 'jungle cards addition', 'jungle cards'],
+    ['ocean cards addition.gtnmod', 'ocean cards addition', 'ocean cards'],
+    ['void card addition.gtnmod', 'void card addition', 'void cards addition', 'void cards'],
+    ['hel cards addition.gtnmod', 'hel cards addition', 'hel cards'],
+];
+
+const OFFICIAL_MOD_SHORT_NAMES = {
+    zh: ['原版', '捣乱', '更多攻击', '花园', '工厂', '沙漠', '丛林', '海洋', '虚空', '冥界'],
+    en: ['Vanilla', 'Troll', 'More Thorn', 'Garden', 'Factory', 'Desert', 'Jungle', 'Ocean', 'Void', 'Hel'],
+    fr: ['Vanille', 'Farces', 'Plus d’attaques', 'Jardin', 'Usine', 'Désert', 'Jungle', 'Océan', 'Vide', 'Hel'],
+    ja: ['原版', 'いたずら', '攻撃追加', '庭園', '工場', '砂漠', 'ジャングル', '海洋', '虚空', '冥界'],
+};
+
+function normalizeModDisplayIdentity(value) {
+    const raw = value && typeof value === 'object'
+        ? (value.filename || value.name_en || value.name || '')
+        : value;
+    return String(raw || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getOfficialModDisplayRank(value) {
+    const identity = normalizeModDisplayIdentity(value);
+    const rank = OFFICIAL_MOD_DISPLAY_ALIASES.findIndex(aliases => aliases.includes(identity));
+    return rank >= 0 ? rank : OFFICIAL_MOD_DISPLAY_ORDER.length;
+}
+
+function getShortModDisplayName(value) {
+    const rank = getOfficialModDisplayRank(value);
+    if (rank < OFFICIAL_MOD_DISPLAY_ORDER.length) {
+        const labels = OFFICIAL_MOD_SHORT_NAMES[currentLang] || OFFICIAL_MOD_SHORT_NAMES.en;
+        return labels[rank] || OFFICIAL_MOD_SHORT_NAMES.en[rank];
+    }
+    return String(value || '').trim();
+}
+
+function formatShortModList(payload = {}) {
+    const names = Array.isArray(payload.mods_list) ? payload.mods_list.filter(Boolean) : [];
+    if (names.length) {
+        return sortModsForDisplay(names.map(name => ({ filename: name, displayName: name })))
+            .map(item => getShortModDisplayName(item.displayName))
+            .filter(Boolean)
+            .join(' / ');
+    }
+    return String(payload.community_mod_name || payload.loadout_hash || '-');
+}
+
+function sortModsForDisplay(mods) {
+    return (Array.isArray(mods) ? mods : [])
+        .map((mod, index) => ({ mod, index }))
+        .sort((a, b) => {
+            const rankA = getOfficialModDisplayRank(a.mod);
+            const rankB = getOfficialModDisplayRank(b.mod);
+            if (rankA !== rankB) return rankA - rankB;
+            return a.index - b.index;
+        })
+        .map(item => item.mod);
+}
+
 function isPublicCardDef(cd) {
     return !!(cd && cd.id !== 'Error' && cd.visible_in_current_loadout !== false);
 }
@@ -5823,6 +5901,9 @@ function compareGalleryCards(a, b) {
     const vb = cb.source_mod_is_vanilla ? 0 : 1;
     if (va !== vb) return va - vb;
     if (va !== 0) {
+        const rankA = getOfficialModDisplayRank(ca.source_mod_filename || ca.source_mod_name_en || ca.source_mod_sort_name || ca.source_mod_name);
+        const rankB = getOfficialModDisplayRank(cb.source_mod_filename || cb.source_mod_name_en || cb.source_mod_sort_name || cb.source_mod_name);
+        if (rankA !== rankB) return rankA - rankB;
         const ma = String(ca.source_mod_name_en || ca.source_mod_sort_name || ca.source_mod_name || ca.source_mod_filename || '').toLowerCase();
         const mb = String(cb.source_mod_name_en || cb.source_mod_sort_name || cb.source_mod_name || cb.source_mod_filename || '').toLowerCase();
         const modCmp = ma.localeCompare(mb, 'en');
@@ -5889,10 +5970,7 @@ function getGalleryModOptions() {
         }
         map.get(key).count += 1;
     });
-    return [...map.values()].sort((a, b) => {
-        if (a.isVanilla !== b.isVanilla) return a.isVanilla ? -1 : 1;
-        return a.sortName.localeCompare(b.sortName, 'en');
-    });
+    return sortModsForDisplay([...map.values()]);
 }
 
 function getGalleryTypeOptions() {
@@ -10917,8 +10995,8 @@ function attachTermIntroToStatus(anchor, statusInfo) {
 function attachTermIntroToTermKey(anchor, key = '') {
     if (!anchor || !key) return;
     attachTermIntroLongPress(anchor, () => showTermIntroForTokenKey(key, anchor));
-    if (anchor.classList && anchor.classList.contains('armor-meter') && anchor.dataset.armorTermClickBound !== '1') {
-        anchor.dataset.armorTermClickBound = '1';
+    if (anchor.classList && (anchor.classList.contains('armor-meter') || anchor.classList.contains('crit-meter')) && anchor.dataset.meterTermClickBound !== '1') {
+        anchor.dataset.meterTermClickBound = '1';
         anchor.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -10957,7 +11035,14 @@ function renderChoiceOptionContent(container, option, index, config = {}) {
     } else {
         const text = document.createElement('span');
         text.className = 'choice-option-text';
-        text.textContent = String(option && typeof option === 'object' && option.text != null ? option.text : (option == null ? '' : option));
+        const optionText = option && typeof option === 'object'
+            ? (option.text != null ? option.text : (option.label != null ? option.label : ''))
+            : (option == null ? '' : option);
+        text.textContent = String(optionText);
+        if (option && typeof option === 'object' && option.suit) {
+            const suit = String(option.suit).replace(/[^a-z_-]/gi, '').toLowerCase();
+            container.classList.add('choice-option-suit', `choice-option-suit-${suit}`);
+        }
         container.appendChild(text);
     }
     if (option && typeof option === 'object' && option.detail) {
@@ -11977,15 +12062,23 @@ function connectSocket(serverUrl) {
         flashStatus(UI.save_failed.replace('{0}', (data && data.reason) || UI.operation_failed), 3200, 'error');
     });
     bindSocketEvent('mod_mismatch', (data = {}) => {
-        const message = translateServerMessage(data.message || UI.mod_mismatch_msg || '模组不一致，无法开始对局');
+        const message = UI.mod_mismatch_msg || '模组不一致，无法开始对局';
+        const yours = data.your_mods || {};
         const other = data.other_mods || {};
-        const otherNames = Array.isArray(other.mods_list) && other.mods_list.length
-            ? other.mods_list.join(' / ')
-            : (other.community_mod_name || other.loadout_hash || '-');
+        const yourNames = formatShortModList(yours);
+        const otherNames = formatShortModList(other);
+        const summaryLabels = currentLang === 'zh'
+            ? { yours: '你', other: '对方' }
+            : currentLang === 'fr'
+                ? { yours: 'Vous', other: 'Adversaire' }
+                : currentLang === 'ja'
+                    ? { yours: '自分', other: '相手' }
+                    : { yours: 'You', other: 'Opponent' };
+        const summarySeparator = ['zh', 'ja'].includes(currentLang) ? '：' : ': ';
         showModal(`
             <h3>${escapeHtml(UI.mod_mismatch_title || '模组不匹配')}</h3>
             <p>${escapeHtml(message)}</p>
-            <p class="muted">${escapeHtml(otherNames)}</p>
+            <p class="muted">${escapeHtml(summaryLabels.yours)}${summarySeparator}${escapeHtml(yourNames)}<br>${escapeHtml(summaryLabels.other)}${summarySeparator}${escapeHtml(otherNames)}</p>
             <div class="modal-buttons">
                 <button class="btn btn-secondary" id="mod-mismatch-cancel">${escapeHtml(UI.cancel || '取消')}</button>
                 <button class="btn btn-primary" id="mod-mismatch-apply">${escapeHtml(UI.mod_match_peer || '匹配对方模组')}</button>
@@ -12025,7 +12118,10 @@ function connectSocket(serverUrl) {
             flashStatus(moderationMessageFromPayload(data, translateServerMessage(data.message)), 3600, 'error');
             return;
         }
-        flashStatus(moderationMessageFromPayload(data, translateServerMessage(data.message)), 3600, 'error');
+        const translatedError = errorCode === 'mod_mismatch'
+            ? (UI.mod_mismatch_msg || '模组不一致，无法开始对局')
+            : translateServerMessage(data.message);
+        flashStatus(moderationMessageFromPayload(data, translatedError), 3600, 'error');
         pendingSpectateRoomId = null;
         clearPendingServerAction();
         pendingPlayCard = null;
@@ -12035,7 +12131,9 @@ function connectSocket(serverUrl) {
         }
     });
     bindSocketEvent('match_start_failed', (data = {}) => {
-        const message = data.message || UI.mod_mismatch_msg || UI.operation_failed;
+        const message = data.reason === 'mod_mismatch'
+            ? (UI.mod_mismatch_msg || '模组不一致，无法开始对局')
+            : (data.message || UI.operation_failed);
         debugLog('[client] match_start_failed:', message);
         if (data.reason !== 'mod_mismatch') hideModal();
         allowLobbyTransition('match_start_failed');
@@ -18997,7 +19095,7 @@ function attachClassicStatusIntros(container) {
             title: tag.title || '',
         });
     });
-    container.querySelectorAll('.armor-meter[data-term-key]').forEach(meter => {
+    container.querySelectorAll('.armor-meter[data-term-key], .crit-meter[data-term-key]').forEach(meter => {
         delete meter.dataset.termIntroBound;
         delete meter.dataset.termIntroSuppressClick;
         attachTermIntroToTermKey(meter, meter.dataset.termKey || 'A');
@@ -19317,6 +19415,9 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
     if (!container) return;
     const hpPct = player.maxHp > 0 ? Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100)) : 0;
     const armorValue = Math.max(0, Number(player.armor || 0) + getPlayerRootArmorValue(player.raw || {}));
+    const critMultiplier = getPlayerCritMultiplier(player.raw || player);
+    const critVisible = critMultiplier != null && !masks.maskResources;
+    const critLabel = (getTermIntroLibrary().crit || {}).label || (currentLang === 'zh' ? '暴击' : 'Critical');
     const role = getClassicPlayRole(selectedCard);
     const selfOnly = isClassicSelfOnlyCard(selectedCard);
     const isAnyTarget = !!selectedCard && !selfOnly && role === 'target' && classicCardCanTargetPlayer(selectedCard, player.id);
@@ -19348,6 +19449,10 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
             <button class="armor-meter classic-armor-meter${armorValue > 0 && !masks.maskResources ? '' : ' hidden'}" type="button" data-term-key="A" data-term-label="${escapeHtml(UI.status_armor || '护甲')}" data-term-color="${escapeHtml(COLORS.armor_text)}" data-status-value="${armorValue}" title="${escapeHtml(UI.status_armor || '护甲')}: ${armorValue}">
                 <img class="armor-meter-icon" src="/static/assets/status-icons/armor.svg" alt="" aria-hidden="true">
                 <span class="armor-meter-value">${escapeHtml(String(armorValue))}</span>
+            </button>
+            <button class="crit-meter classic-crit-meter${critVisible ? '' : ' hidden'}${armorValue > 0 && !masks.maskResources ? '' : ' is-solo'}" type="button" data-term-key="term:crit" data-term-label="${escapeHtml(critLabel)}" data-term-color="#D4AC0D" title="${escapeHtml(critLabel)}: ${escapeHtml(formatCritMultiplier(critMultiplier))}">
+                <span class="crit-meter-label">${escapeHtml(critLabel)}</span>
+                <span class="crit-meter-value">${escapeHtml(formatCritMultiplier(critMultiplier))}</span>
             </button>
         </div>
         ${renderClassicPileCounters(player, side, masks)}
@@ -19765,12 +19870,13 @@ function renderPlayerBars(containerId, playerData) {
     const masked = (isSelf && blindLevel >= 2) || (!isSelf && blindLevel >= 3);
     container.classList.toggle('blind-resource-masked', masked);
     const armorValue = Math.max(0, Number(playerData && playerData.armor || 0) + getPlayerRootArmorValue(playerData));
+    const critMultiplier = getPlayerCritMultiplier(playerData);
     const bars = [
         { key: 'health', cur: playerData.health || 0, max: playerData.max_health || 100, color: COLORS.health, bg: COLORS.health_bg, label: 'H', icon: 'hit-point', title: 'H' },
         { key: 'elixir', cur: playerData.elixir || 0, max: playerData.max_elixir || 10, color: COLORS.elixir, bg: COLORS.elixir_bg, label: 'E', icon: 'elixir', title: 'E' },
         { key: 'magic', cur: playerData.magic || 0, max: playerData.max_magic || 10, color: COLORS.magic, bg: COLORS.magic_bg, label: 'M', icon: 'magic', title: 'M' },
     ];
-    if (container.querySelectorAll('.bar-wrapper').length !== bars.length || !container.querySelector('.armor-meter')) {
+    if (container.querySelectorAll('.bar-wrapper').length !== bars.length || !container.querySelector('.armor-meter') || !container.querySelector('.crit-meter')) {
         container.innerHTML = '';
         bars.forEach(bar => {
             const wrapper = document.createElement('div');
@@ -19799,6 +19905,18 @@ function renderPlayerBars(containerId, playerData) {
             <span class="armor-meter-value">0</span>
         `;
         container.appendChild(armor);
+        const crit = document.createElement('button');
+        const critLabel = (getTermIntroLibrary().crit || {}).label || (currentLang === 'zh' ? '暴击' : 'Critical');
+        crit.type = 'button';
+        crit.className = 'crit-meter hidden';
+        crit.dataset.termKey = 'term:crit';
+        crit.dataset.termLabel = critLabel;
+        crit.dataset.termColor = '#D4AC0D';
+        crit.innerHTML = `
+            <span class="crit-meter-label">${escapeHtml(critLabel)}</span>
+            <span class="crit-meter-value"></span>
+        `;
+        container.appendChild(crit);
     }
     const wrappers = container.querySelectorAll('.bar-wrapper');
     bars.forEach((bar, i) => {
@@ -19824,6 +19942,33 @@ function renderPlayerBars(containerId, playerData) {
         delete armorMeter.dataset.termIntroSuppressClick;
         attachTermIntroToTermKey(armorMeter, 'A');
     }
+    const critMeter = container.querySelector('.crit-meter');
+    if (critMeter) {
+        const shown = critMultiplier != null && !masked;
+        const critLabel = (getTermIntroLibrary().crit || {}).label || (currentLang === 'zh' ? '暴击' : 'Critical');
+        const formatted = formatCritMultiplier(critMultiplier);
+        critMeter.classList.toggle('hidden', !shown);
+        critMeter.title = `${critLabel}: ${formatted}`;
+        const valueEl = critMeter.querySelector('.crit-meter-value');
+        if (valueEl) valueEl.textContent = formatted;
+        delete critMeter.dataset.termIntroBound;
+        delete critMeter.dataset.termIntroSuppressClick;
+        attachTermIntroToTermKey(critMeter, 'term:crit');
+    }
+}
+
+function getPlayerCritMultiplier(playerData = {}) {
+    const raw = (playerData && playerData.raw && typeof playerData.raw === 'object') ? playerData.raw : playerData;
+    const customVars = (raw && raw.custom_vars && typeof raw.custom_vars === 'object') ? raw.custom_vars : {};
+    const value = Number(customVars.hel_crit_multiplier || 0);
+    if (!Number.isFinite(value) || value <= 0 || Math.abs(value - 1.5) <= 0.001) return null;
+    return value;
+}
+
+function formatCritMultiplier(value) {
+    if (!Number.isFinite(Number(value))) return '';
+    const rounded = Math.round(Number(value) * 100) / 100;
+    return `${rounded}×`;
 }
 
 function getPlayerRootArmorValue(playerData = {}) {
@@ -19939,10 +20084,6 @@ function renderStatusTags(containerId, playerData) {
         const count = customStatusSum(...info.keys);
         if (count > 0) tags.push({ key: info.keys[0], iconKey: info.iconKey, name: info.name, abbr: info.abbr, val: count, fg: info.fg, bg: info.bg, title: info.title });
     });
-    const critMultiplier = Number((p.custom_vars && p.custom_vars.hel_crit_multiplier) || 0);
-    if (Number.isFinite(critMultiplier) && critMultiplier > 0 && Math.abs(critMultiplier - 1.5) > 0.001) {
-        tags.push({ key: 'crit', name: '暴击', abbr: '暴击', val: `${critMultiplier}×`, fg: '#D4AC0D', bg: '#FFF8DB', title: getTermIntroLibrary().crit.desc });
-    }
     if (customStatuses && typeof customStatuses === 'object') {
             const builtinKeys = new Set(['poison','fire','toxic','dodge','armor','nazar','邪眼','Nazar','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','dizzy','stunned','skip_turn','眩晕','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:root','jungle:root_status','root_status','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
         Object.entries(customStatuses).forEach(([name, value]) => {
@@ -21752,6 +21893,55 @@ function renderBattleUseLogChipLine(el, entry) {
     if (parts.after) appendColorizedLogText(el, parts.after);
 }
 
+function getBattleCounterTemplateParts(actorName) {
+    const table = LOG_TEXT[currentLang] || LOG_TEXT.en;
+    const template = currentLang === 'zh'
+        ? '{p}使用{card}进行反制！'
+        : (table && table.counter ? table.counter : '{p} counters with {card}');
+    const rendered = template.replace('{p}', actorName || '').replace('{card}', '\u0000');
+    const parts = rendered.split('\u0000');
+    return {
+        before: parts[0] == null ? `${actorName || ''}使用` : parts[0],
+        after: parts.length > 1 ? parts.slice(1).join('') : '',
+    };
+}
+
+function renderBattleCounterLogChipLine(el, entry) {
+    const cards = Array.isArray(entry && entry.cards) && entry.cards.length
+        ? entry.cards
+        : [{
+            card: entry && entry.card,
+            cardDict: (entry && entry.cardDict && typeof entry.cardDict === 'object') ? entry.cardDict : null,
+            count: entry && entry.count,
+        }];
+    const usableCards = cards.map(card => {
+        const cardDict = (card && card.cardDict && typeof card.cardDict === 'object') ? card.cardDict : null;
+        const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(card && card.card);
+        return { ...card, cardDict, defId };
+    }).filter(card => card.defId);
+    if (!usableCards.length) {
+        el.innerHTML = colorizeBattleLogText(stripBattleLogCardMarkers(entry && entry.text ? entry.text : ''));
+        bindInlineCardChips(el, { interactive: true });
+        return;
+    }
+    const parts = getBattleCounterTemplateParts(localizePlayerNameInText(entry.actor || ''));
+    appendColorizedLogText(el, parts.before);
+    usableCards.forEach((card, index) => {
+        if (index > 0) appendColorizedLogText(el, '、');
+        const chip = createCardChoiceChip({ ...(card.cardDict || {}), def_id: card.defId }, { hideInstanceOnlyFlags: false });
+        chip.classList.add('battle-log-card-chip');
+        el.appendChild(chip);
+        const count = Math.max(1, Number(card.count || 1));
+        if (count > 1) {
+            const countSpan = document.createElement('span');
+            countSpan.className = 'battle-log-card-count';
+            countSpan.textContent = `×${count}`;
+            el.appendChild(countSpan);
+        }
+    });
+    if (parts.after) appendColorizedLogText(el, parts.after);
+}
+
 function appendColorizedLogText(parent, text) {
     if (!parent || !text) return;
     const span = document.createElement('span');
@@ -22026,6 +22216,10 @@ function createBattleLogElement(entry) {
         renderBattleUseLogChipLine(el, entry);
         return el;
     }
+    if (entry && entry.kind === 'counter') {
+        renderBattleCounterLogChipLine(el, entry);
+        return el;
+    }
     if (renderBattleLogInlineCardLine(el, line) || (displayLine !== line && renderBattleLogInlineCardLine(el, displayLine))) {
         bindInlineCardChips(el, { interactive: true });
         return el;
@@ -22173,6 +22367,7 @@ function parseBattleUseLogForCompact(line) {
     const rawLine = String(line || '');
     const cardDict = decodeBattleLogCardMarker(rawLine);
     const cleanLine = stripBattleLogCardMarkers(rawLine);
+    if (/进行反制[！!]?(?:\s*×\d+)?$/.test(cleanLine)) return null;
     const match = cleanLine.match(/^(.+?)使用了?([^，]+?)(?: ×(\d+))?$/);
     if (!match) return null;
     const cardText = String(match[2] || '').trim();
@@ -22190,6 +22385,45 @@ function parseBattleUseLogForCompact(line) {
             count: Math.max(1, Number(match[3] || 1)),
         }],
     };
+}
+
+function parseBattleCounterLogForCompact(line) {
+    const rawLine = String(line || '');
+    const cardDict = decodeBattleLogCardMarker(rawLine);
+    const cleanLine = stripBattleLogCardMarkers(rawLine);
+    const match = cleanLine.match(/^(.+?)使用了?(.+?)进行反制[！!]?(?:\s*×(\d+))?$/);
+    if (!match) return null;
+    const cardText = String(match[2] || '').trim();
+    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(cardText);
+    if (!defId) return null;
+    const resolvedCardDict = cardDict || { def_id: defId };
+    const count = Math.max(1, Number(match[3] || 1));
+    return {
+        actor: String(match[1] || ''),
+        card: cardText,
+        cardDict: resolvedCardDict,
+        cardSignature: battleLogCardSignature(resolvedCardDict, cardText),
+        count,
+        cards: [{
+            card: cardText,
+            cardDict: resolvedCardDict,
+            cardSignature: battleLogCardSignature(resolvedCardDict, cardText),
+            count,
+        }],
+    };
+}
+
+function mergeBattleCounterForCompact(target, source) {
+    return mergeBattleUseForCompact(target, source);
+}
+
+function formatBattleCounterLogForCompact(counter) {
+    if (!counter) return '';
+    const cards = Array.isArray(counter.cards) && counter.cards.length
+        ? counter.cards
+        : [{ card: counter.card, count: counter.count }];
+    const cardText = cards.map(item => `${item.card}${Number(item.count || 1) > 1 ? `×${Number(item.count || 1)}` : ''}`).join('、');
+    return `${counter.actor}使用${cardText}进行反制！`;
 }
 
 function mergeBattleUseForCompact(target, source) {
@@ -22313,6 +22547,17 @@ function compactBattleLogLinesForDisplay(log) {
     const output = [];
     const rawLines = Array.isArray(log) ? log.map(line => String(line || '')) : [];
     rawLines.forEach((line, rawIndex) => {
+        const counter = parseBattleCounterLogForCompact(line);
+        if (counter) {
+            const last = output[output.length - 1];
+            if (last && last.kind === 'counter' && last.actor === counter.actor) {
+                mergeBattleCounterForCompact(last, counter);
+                last.rawEnd = rawIndex;
+                return;
+            }
+            output.push({ kind: 'counter', ...counter, rawStart: rawIndex, rawEnd: rawIndex });
+            return;
+        }
         const use = parseBattleUseLogForCompact(line);
         if (use) {
             const last = output[output.length - 1];
@@ -22380,6 +22625,7 @@ function compactBattleLogLinesForDisplay(log) {
     });
     return output.map(entry => {
         if (entry.kind === 'use') return formatBattleUseLogForCompact(entry);
+        if (entry.kind === 'counter') return formatBattleCounterLogForCompact(entry);
         if (entry.kind === 'damage') return formatBattleDamageLogForCompact(entry);
         if (entry.kind === 'post_use') return formatBattlePostUseLogForCompact(entry);
         return entry.text || '';
@@ -22390,6 +22636,17 @@ function compactBattleLogEntriesForDisplay(log) {
     const output = [];
     const rawLines = Array.isArray(log) ? log.map(line => String(line || '')) : [];
     rawLines.forEach((line, rawIndex) => {
+        const counter = parseBattleCounterLogForCompact(line);
+        if (counter) {
+            const last = output[output.length - 1];
+            if (last && last.kind === 'counter' && last.actor === counter.actor) {
+                mergeBattleCounterForCompact(last, counter);
+                last.rawEnd = rawIndex;
+                return;
+            }
+            output.push({ kind: 'counter', ...counter, rawStart: rawIndex, rawEnd: rawIndex });
+            return;
+        }
         const use = parseBattleUseLogForCompact(line);
         if (use) {
             const last = output[output.length - 1];
@@ -22465,11 +22722,13 @@ function compactBattleLogEntriesForDisplay(log) {
         type: 'battle',
         text: entry.kind === 'use'
             ? formatBattleUseLogForCompact(entry)
-            : (entry.kind === 'damage'
-                ? formatBattleDamageLogForCompact(entry)
-                : (entry.kind === 'post_use'
-                    ? formatBattlePostUseLogForCompact(entry)
-                    : `${entry.text || ''}${Number(entry.count || 1) > 1 ? ` ×${Number(entry.count || 1)}` : ''}`)),
+            : (entry.kind === 'counter'
+                ? formatBattleCounterLogForCompact(entry)
+                : (entry.kind === 'damage'
+                    ? formatBattleDamageLogForCompact(entry)
+                    : (entry.kind === 'post_use'
+                        ? formatBattlePostUseLogForCompact(entry)
+                        : `${entry.text || ''}${Number(entry.count || 1) > 1 ? ` ×${Number(entry.count || 1)}` : ''}`))),
         kind: entry.kind,
         actor: entry.actor,
         card: entry.card,
@@ -24120,10 +24379,11 @@ async function showChoiceUI(data) {
             : ['heart', 'diamond', 'spade', 'club'];
         const labels = Array.isArray(choiceParams.labels) && choiceParams.labels.length
             ? choiceParams.labels
-            : ['♥', '♦', '♠', '♣'];
+            : ['♥ 红桃', '♦ 方片', '♠ 黑桃', '♣ 梅花'];
         const sel = await simpleChoice(choiceTitle('选择花色'), labels.map((label, i) => ({
-            label,
+            text: label,
             value: suits[i] || suits[0],
+            suit: suits[i] || suits[0],
         })), choicePromptConfig);
         if (sel >= 0 && sel < suits.length) choiceResult = { hel_suit: suits[sel] };
     } else if (choiceType === 'choose_ocean_sapphire') {
@@ -25463,7 +25723,7 @@ function renderOfficialModList() {
     }
     if (noModsEl) noModsEl.style.display = 'none';
     const disabled = getDisabledMods();
-    settingsMods.forEach((mod, i) => {
+    sortModsForDisplay(settingsMods).forEach((mod, i) => {
         const info = mod.info || {};
         const name = localizedModNameFromFields(info, mod.filename || tf('mod_default_name', i + 1));
         const version = info.version || '';

@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'Kreadon';
-  src: url('/fonts/Kreadon-Regular.subset.woff2?v=2') format('woff2');
+  src: url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: optional;
@@ -8,10 +8,20 @@
 
 @font-face {
   font-family: 'Kreadon Demi';
-  src: url('/fonts/Kreadon-Demi.subset.woff2?v=2') format('woff2');
+  src: url('/fonts/Kreadon-Demi.subset.woff2?v=3') format('woff2');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
+  unicode-range: U+0000-2E7F, U+3100-31EF, U+3200-33FF, U+A000-F8FF, U+FB00-FEFF, U+FFF0-10FFFF;
+}
+
+@font-face {
+  font-family: 'Kreadon Demi';
+  src: url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2E80-30FF, U+31F0-31FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF;
 }
 
 :root {
@@ -6482,6 +6492,51 @@ body {
   text-align: center;
 }
 
+.crit-meter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 64px;
+  height: 24px;
+  padding: 2px 7px;
+  border: 1px solid #D4AC0D;
+  border-radius: 4px;
+  background: #FFF8DB;
+  color: #806800;
+  font-family: var(--font-main);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 1px 2px rgba(35, 45, 45, 0.12);
+}
+
+.crit-meter:active,
+.crit-meter:focus,
+.crit-meter:focus-visible {
+  transform: none;
+  outline: none;
+}
+
+.crit-meter.hidden {
+  display: none !important;
+}
+
+.crit-meter-label {
+  font-weight: 700;
+}
+
+.crit-meter-label::after {
+  content: ":";
+}
+
+.crit-meter-value {
+  min-width: 2em;
+  text-align: center;
+}
+
 [data-theme="dark"] .armor-meter {
   background: color-mix(in srgb, var(--color-armor-bg) 70%, #1d2328);
   border-color: color-mix(in srgb, var(--color-armor) 78%, #ffffff);
@@ -7417,25 +7472,38 @@ html.blind-level-4 .card-prediction-part.magic {
   padding-bottom: 1cqi;
 }
 
+.card.card-hel-compact {
+  --card-effect-font-scale: 8.15cqi;
+  --card-effect-line-height: 1.16;
+  --card-effect-padding-y: 2.8cqi;
+  --card-effect-padding-bottom: 1.45cqi;
+}
+
+[data-theme="dark"] .crit-meter {
+  background: color-mix(in srgb, #FFF8DB 42%, #1d2328);
+  border-color: #E2C34B;
+  color: #FFF1A8;
+}
+
+.card.card-hel-extra-compact {
+  --card-effect-font-scale: 7.25cqi;
+  --card-effect-line-height: 1.12;
+  --card-effect-padding-y: 2.3cqi;
+  --card-effect-padding-bottom: 1.05cqi;
+}
+
+.card.card-hel-poker-card {
+  --card-effect-font-scale: 6.3cqi;
+  --card-effect-line-height: 1.07;
+  --card-effect-padding-y: 1.85cqi;
+  --card-effect-padding-bottom: 0.8cqi;
+}
+
 .card.card-hel-compact .card-effect {
-  font-size: 8.15cqi;
-  line-height: 1.16;
-  padding-top: 2.8cqi;
-  padding-bottom: 1.45cqi;
-}
-
-.card.card-hel-extra-compact .card-effect {
-  font-size: 7.25cqi;
-  line-height: 1.12;
-  padding-top: 2.3cqi;
-  padding-bottom: 1.05cqi;
-}
-
-.card.card-hel-poker-card .card-effect {
-  font-size: 6.3cqi;
-  line-height: 1.07;
-  padding-top: 1.85cqi;
-  padding-bottom: 0.8cqi;
+  font-size: var(--card-effect-font-scale);
+  line-height: var(--card-effect-line-height);
+  padding-top: var(--card-effect-padding-y);
+  padding-bottom: var(--card-effect-padding-bottom);
 }
 
 .card.card-petal-copy .card-effect {
@@ -12170,6 +12238,22 @@ html.blind-level-4 .card-prediction-part.magic {
   border-color: rgba(46, 204, 113, 0.7);
 }
 
+.game-prompt-option.choice-option-suit {
+  justify-content: flex-start;
+  min-height: 44px;
+  font-size: 1.06em;
+}
+
+.game-prompt-option.choice-option-suit-heart,
+.game-prompt-option.choice-option-suit-diamond {
+  color: var(--thorn);
+}
+
+.game-prompt-option.choice-option-suit-spade,
+.game-prompt-option.choice-option-suit-club {
+  color: var(--text-primary);
+}
+
 .game-prompt-option.game-prompt-confirm {
   justify-content: center;
   font-weight: 800;
@@ -13961,8 +14045,8 @@ button:not(:disabled):active,
 .game-container.mode-spectate .card .card-effect,
 .game-container.mode-urf .hand-area .card .card-effect {
   font-size: var(--card-effect-font-scale);
-  line-height: 1.3;
-  padding: var(--card-effect-padding-y) var(--card-effect-padding-x);
+  line-height: var(--card-effect-line-height, 1.3);
+  padding: var(--card-effect-padding-y) var(--card-effect-padding-x) var(--card-effect-padding-bottom, var(--card-effect-padding-y));
 }
 
 .card .card-flags,
@@ -16554,6 +16638,34 @@ button.armor-meter:focus-visible {
 .classic-hp-wrap .classic-armor-meter .armor-meter-icon {
   width: 15px;
   height: 15px;
+}
+
+.classic-hp-wrap .classic-crit-meter {
+  position: absolute;
+  left: calc(100% + 54px);
+  top: 8.5px;
+  transform: translateY(-50%);
+  height: 23px;
+  min-width: 62px;
+  padding-inline: 6px;
+  border-radius: 4px;
+  z-index: 3;
+}
+
+.classic-hp-wrap .classic-crit-meter.is-solo {
+  left: calc(100% + 7px);
+}
+
+.classic-hp-wrap .classic-crit-meter:active,
+.classic-hp-wrap .classic-crit-meter:focus,
+.classic-hp-wrap .classic-crit-meter:focus-visible {
+  transform: translateY(-50%);
+}
+
+.classic-hp-wrap button.classic-crit-meter:not(:disabled):active,
+.classic-hp-wrap button.classic-crit-meter:focus,
+.classic-hp-wrap button.classic-crit-meter:focus-visible {
+  transform: translateY(-50%) !important;
 }
 
 .classic-hp-icon {

@@ -2041,10 +2041,11 @@ class GameEngine:
         return bool(self.log) and len(self.log) > int(getattr(self, '_log_compaction_floor', 0) or 0)
 
     def _is_response_detail_log(self, text: str) -> bool:
+        clean = self._strip_card_log_markers(text)
         return bool(
-            re.fullmatch(r'.+使用泡泡(?:进行反制！?|，.*)', text)
-            or re.fullmatch(r'.+精准牌被闪避反制.*', text)
-            or text == '精准牌被闪避反制，伤害减半！'
+            re.fullmatch(r'.+使用泡泡(?:进行反制！?|，.*)', clean)
+            or re.fullmatch(r'.+精准牌被闪避反制.*', clean)
+            or clean == '精准牌被闪避反制，伤害减半！'
         )
 
     def _move_use_log_before_response_detail(self, text: str) -> bool:
@@ -2085,6 +2086,7 @@ class GameEngine:
         if not self._can_merge_last_log():
             return False
         last = self.log[-1]
+        last_clean = self._strip_card_log_markers(last)
 
         if self._merge_repeated_use_before_damage(text):
             return True
@@ -2102,18 +2104,18 @@ class GameEngine:
         m = re.fullmatch(r'(.+)闪避了攻击！?', text)
         if m:
             responder = m.group(1)
-            if re.fullmatch(rf'{re.escape(responder)}使用泡泡进行反制！?', last):
+            if re.fullmatch(rf'{re.escape(responder)}使用泡泡进行反制！?', last_clean):
                 self.log[-1] = f'{responder}使用泡泡，闪避了攻击'
                 return True
 
         if text == '精准牌被闪避反制，伤害减半！':
-            m = re.fullmatch(r'(.+)使用泡泡进行反制！?', last)
+            m = re.fullmatch(r'(.+)使用泡泡进行反制！?', last_clean)
             if m:
                 self.log[-1] = f'{m.group(1)}使用泡泡，精准攻击伤害减半'
                 return True
         m = re.fullmatch(r'(.+)的精准牌被闪避反制，伤害减半！?', text)
         if m:
-            bubble = re.fullmatch(r'(.+)使用泡泡进行反制！?', last)
+            bubble = re.fullmatch(r'(.+)使用泡泡进行反制！?', last_clean)
             if bubble:
                 self.log[-1] = f'{bubble.group(1)}使用泡泡，{m.group(1)}的精准攻击伤害减半'
                 return True
@@ -4193,7 +4195,7 @@ class GameEngine:
 
     def _hel_apply_blazing_fire_turn_start(self, player_id: int):
         stacks = self._custom_status_value(player_id, *self._hel_blazing_fire_keys())
-        if stacks <= 0:
+        if stacks <= 0 or self._is_status_immune(player_id):
             return
         self.players[player_id].fire += stacks
         self._normalize_status_value(self.players[player_id], 'fire')
@@ -5370,7 +5372,7 @@ class GameEngine:
             counter_removed = responder.remove_hand_card(card_instance_id)
             if counter_removed is None:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
-            self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}进行反制！")
+            self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}{self._card_log_marker(counter_removed)}进行反制！")
             self._note_achievement_counter_success(responder_id)
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
             self._game_over_defer_depth += 1
@@ -8362,6 +8364,26 @@ class GameEngine:
                     yield from self._walk_choice_effects(direct_nested)
 
     def _get_choice_request(self, card: CardInstance, choice: Optional[dict] = None):
+        if self._card_is(card, 'PokerCard', 'hel:poker_card'):
+            suit = str((choice or {}).get('hel_suit') or '') if isinstance(choice, dict) else ''
+            if suit not in ('heart', 'diamond', 'spade', 'club'):
+                owner_id, zone_name, _ = self._find_card_location(card)
+                if owner_id is not None and zone_name == 'hand' and self._hel_luck_value(owner_id) + 4 > 12:
+                    return {
+                        'type': 'request_confirm',
+                        'params': {
+                            'choice_type': 'hel_card_suit',
+                            'title': '选择花色',
+                            'options': ['heart', 'diamond', 'spade', 'club'],
+                            'labels': [
+                                '♥ 红桃：回复自己7H',
+                                '♦ 方片：本次最终伤害+6D',
+                                '♠ 黑桃：抽1张牌',
+                                '♣ 梅花：对目标施加3P',
+                            ],
+                            'cancellable': False,
+                        },
+                    }
         effects = list(self._play_effects_for_card(card) or []) + list(self._v2_play_steps_for_card(card) or [])
         for effect in self._walk_choice_effects(effects):
             effect_type = self._effect_type(effect)
@@ -12825,20 +12847,6 @@ class GameEngine:
                 self._run_effect_list(player_id, card, on_hit, choice, child_context)
 
     def _atomic_hel_card_attack(self, player_id, card, params, log, choice, context):
-        if self._hel_luck_value(player_id) > 12 and not (isinstance(choice, dict) and choice.get('hel_suit')):
-            self.pending_choice = {
-                'card': card.to_dict() if card is not None else None,
-                'player_id': player_id,
-                'choice_type': 'hel_card_suit',
-                'choice_params': {
-                    'title': '选择花色',
-                    'options': ['heart', 'diamond', 'spade', 'club'],
-                    'labels': ['♥ 回复自己7H', '♦ 本次最终伤害+6D', '♠ 抽1张牌', '♣ 对目标施加3P'],
-                },
-                'original_choice': dict(choice) if isinstance(choice, dict) else None,
-                'already_paid': True,
-            }
-            return
         suit = ''
         if isinstance(choice, dict):
             suit = str(choice.get('hel_suit') or '')

@@ -40,7 +40,14 @@ from cards import (
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
     normalize_card_flag, normalize_card_flags,
 )
-from mod_loader import GAME_VERSION, merge_mod_cards_to_card_defs, load_all_mods, get_mod_asset
+from mod_loader import (
+    GAME_VERSION,
+    get_mod_asset,
+    load_all_mods,
+    merge_mod_cards_to_card_defs,
+    mod_display_order_key,
+    sort_mods_for_display,
+)
 from mod_loadout_v2 import build_v2_loadout
 from mod_spec_v2 import sha256_json
 from font_subsets import ensure_community_font_subset
@@ -278,7 +285,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260713-card-text-unification-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260713-card-text-unification-font-cjk-2'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -5317,7 +5324,7 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
     if VANILLA_MOD_FILENAME not in disabled_set:
         allowed_card_ids.update(BUILTIN_SETUP_CARD_IDS)
     v2_mods = []
-    for mod in sorted(mods, key=lambda m: m.filename):
+    for mod in sort_mods_for_display(mods):
         if mod.filename in disabled_set or mod.errors:
             continue
         active_mods.append(mod.info.name if mod.info else mod.filename)
@@ -10417,8 +10424,7 @@ def api_card_exporter_cards():
         payload.update(card_text(def_id, payload))
         cards.append(payload)
     cards.sort(key=lambda c: (
-        0 if c.get('source_mod_is_vanilla') else 1,
-        str(c.get('source_mod_sort_name') or c.get('source_mod_name_en') or c.get('source_mod_name') or '').lower(),
+        mod_display_order_key(c.get('source_mod_filename') or c.get('source_mod_sort_name') or c.get('source_mod_name_en') or c.get('source_mod_name')),
         {'thorn': 0, 'bloom': 1, 'guard': 2, 'root': 3}.get(str(c.get('card_type') or '').lower(), 9),
         str(c.get('id') or '').lower(),
     ))
@@ -13936,11 +13942,7 @@ def on_invite(data):
             emit('server_error', {'message': '双方模式不一致，无法邀请'})
             return
         if player_loadout_hash(inviter) != player_loadout_hash(target):
-            inviter_mods = inviter.get('mods_list', [])
-            target_mods = target.get('mods_list', [])
-            inviter_label = ', '.join(inviter_mods) if inviter_mods else 'no mods'
-            target_label = ', '.join(target_mods) if target_mods else 'no mods'
-            message = f'模组组合不一致，无法开始对局。你：{inviter_label}；对方：{target_label}'
+            message = '模组组合不一致，无法开始对局'
             mod_mismatch_payload = {
                 'message': message,
                 'reason': 'mod_mismatch',

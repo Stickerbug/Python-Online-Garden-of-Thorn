@@ -1,6 +1,6 @@
 @font-face {
   font-family: "Kreadon";
-  src: url("/fonts/Kreadon-Regular.subset.woff2?v=2") format("woff2");
+  src: url("/fonts/Kreadon-Regular.subset.woff2?v=3") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: optional;
@@ -8,10 +8,20 @@
 
 @font-face {
   font-family: "Kreadon Demi";
-  src: url("/fonts/Kreadon-Demi.subset.woff2?v=2") format("woff2");
+  src: url("/fonts/Kreadon-Demi.subset.woff2?v=3") format("woff2");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
+  unicode-range: U+0000-2E7F, U+3100-31EF, U+3200-33FF, U+A000-F8FF, U+FB00-FEFF, U+FFF0-10FFFF;
+}
+
+@font-face {
+  font-family: "Kreadon Demi";
+  src: url("/fonts/Kreadon-Regular.subset.woff2?v=3") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2E80-30FF, U+31F0-31FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF;
 }
 
 :root {

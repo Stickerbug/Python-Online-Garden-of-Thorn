@@ -20,6 +20,38 @@ MODS_DIR = os.path.join(_get_base_dir(), 'mods')
 GAME_VERSION = 'v0.5.17'
 _MODS_CACHE_SIGNATURE = None
 _MODS_CACHE: List['Mod'] = []
+
+# Canonical display order for bundled mods. New bundled mods should be
+# appended here so every list keeps the same stable order.
+OFFICIAL_MOD_DISPLAY_ORDER = (
+    'Vanilla Cards.gtnmod',
+    'Troll Cards.gtnmod',
+    'Thorn Cards.gtnmod',
+    'Garden Cards Addition.gtnmod',
+    'Factory Cards Addition.gtnmod',
+    'Desert Cards Addition.gtnmod',
+    'Jungle Cards Addition.gtnmod',
+    'Ocean Cards Addition.gtnmod',
+    'Void Card Addition.gtnmod',
+    'Hel Cards Addition.gtnmod',
+)
+_OFFICIAL_MOD_DISPLAY_RANK = {
+    filename.casefold(): index for index, filename in enumerate(OFFICIAL_MOD_DISPLAY_ORDER)
+}
+
+
+def mod_display_order_key(value):
+    filename = str(getattr(value, 'filename', value) or '').strip()
+    normalized = filename.casefold()
+    rank = _OFFICIAL_MOD_DISPLAY_RANK.get(normalized)
+    if rank is not None:
+        return (0, rank, '')
+    return (1, len(OFFICIAL_MOD_DISPLAY_ORDER), normalized)
+
+
+def sort_mods_for_display(mods):
+    return sorted(list(mods or []), key=mod_display_order_key)
+
 GTNMOD_MAIN_FILES = ('mod.json', 'gtnmod.json')
 GTNMOD_ASSET_DIRS = ('assets/cards', 'assets/card-art', 'card-art', 'cards')
 GTNMOD_ASSET_EXTS = ('.svg', '.webp', '.png', '.jpg', '.jpeg')
@@ -734,6 +766,7 @@ def load_all_mods(force: bool = False) -> List[Mod]:
         if fname.endswith(('.json', '.gtnmod')):
             mod = load_mod(os.path.join(MODS_DIR, fname))
             mods.append(mod)
+    mods = sort_mods_for_display(mods)
     _MODS_CACHE_SIGNATURE = signature
     _MODS_CACHE = copy.deepcopy(mods)
     return mods

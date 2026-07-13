@@ -37,6 +37,15 @@ EXTRA_RANGES = [
     (0xFF65, 0xFF9F, '半角片假名'),
 ]
 
+CJK_FALLBACK_RANGES = [
+    (0x2E80, 0x30FF),  # CJK radicals, punctuation, Hiragana and Katakana
+    (0x31F0, 0x31FF),  # Katakana phonetic extensions
+    (0x3400, 0x4DBF),  # CJK extension A
+    (0x4E00, 0x9FFF),  # CJK unified ideographs
+    (0xF900, 0xFAFF),  # CJK compatibility ideographs
+    (0xFF00, 0xFFEF),  # Full-width forms and half-width Katakana
+]
+
 
 def should_scan_file(fpath):
     norm = os.path.normcase(os.path.abspath(fpath))
@@ -146,6 +155,19 @@ def extract_string_literals(python_content):
     return strings
 
 
+def font_unicodes(input_path):
+    font = TTFont(input_path, lazy=True)
+    try:
+        return set(font.getBestCmap() or {})
+    finally:
+        font.close()
+
+
+def is_cjk_fallback_char(ch):
+    cp = ord(ch)
+    return any(start <= cp <= end for start, end in CJK_FALLBACK_RANGES)
+
+
 def subset_font(input_path, output_path, chars, flavor='woff2'):
     print(f'  加载字体: {input_path}')
     font = TTFont(input_path)
@@ -162,18 +184,26 @@ def subset_font(input_path, output_path, chars, flavor='woff2'):
 
     subsetter = Subsetter(options=options)
 
-    unicodes = set()
+    requested_unicodes = set()
     for ch in chars:
         cp = ord(ch)
         if cp == 0:
             continue
-        unicodes.add(cp)
+        requested_unicodes.add(cp)
 
-    unicodes.add(0x0000)
+    supported_unicodes = set(font.getBestCmap() or {})
+    unicodes = requested_unicodes & supported_unicodes
+
+    if 0x0000 in supported_unicodes:
+        unicodes.add(0x0000)
 
     subsetter.populate(unicodes=unicodes)
 
-    print(f'  子集化: {len(unicodes)} 个字符')
+    missing_count = len(requested_unicodes - supported_unicodes)
+    print(
+        f'  子集化: 请求 {len(requested_unicodes)}，'
+        f'源字体支持 {len(unicodes)}，缺失 {missing_count} 个字符'
+    )
     subsetter.subset(font)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -242,6 +272,26 @@ def main():
         subset_font(demi_in, demi_out, chars, flavor='woff2')
     else:
         print(f'  [跳过] {demi_in} 不存在')
+
+    print()
+
+    if os.path.exists(regular_in) and os.path.exists(demi_in):
+        regular_supported = font_unicodes(regular_in)
+        demi_supported = font_unicodes(demi_in)
+        demi_cjk_chars = {
+            ch for ch in chars
+            if is_cjk_fallback_char(ch)
+            and ord(ch) in regular_supported
+            and ord(ch) not in demi_supported
+        }
+        print(
+            '  Demi 缺失、可由 Regular 子集补充的中日韩字形: '
+            f'{len(demi_cjk_chars)} 个字符'
+        )
+        if any(ord(ch) == 0x51A5 for ch in demi_cjk_chars):
+            print('  [确认] “冥”(U+51A5) 将由 Regular 子集补充')
+    else:
+        print('  [跳过] 无法检查 Demi 中日韩缺失字形')
 
     print()
     print('[3] 完成!')

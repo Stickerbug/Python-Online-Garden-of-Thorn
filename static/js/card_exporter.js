@@ -334,7 +334,7 @@ async function waitForFonts() {
 async function loadMainFontLikeGame() {
   if (!('FontFace' in window) || !document.fonts) return;
   try {
-    const font = new FontFace('Kreadon', "url('/fonts/Kreadon-Regular.subset.woff2?v=2') format('woff2')", {
+    const font = new FontFace('Kreadon', "url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2')", {
       weight: '400',
       style: 'normal',
     });
